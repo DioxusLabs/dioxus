@@ -2,6 +2,7 @@ use dioxus_core::{BorrowedAttributeValue, ElementId, Mutations, TemplateNode};
 
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::any::Any;
+use std::collections::VecDeque;
 
 use crate::node::{
     ElementNode, FromAnyValue, NodeData, NodeType, OwnedAttributeDiscription, OwnedAttributeValue,
@@ -37,7 +38,7 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
     pub fn new(mut passes: Box<[TypeErasedPass<V>]>) -> RealDom<V> {
         let mut tree = Tree::new();
         let root_id = tree.root();
-        let mut root = tree.get_node(root_id);
+        let root: &mut NodeData<V> = tree.write(root_id).unwrap();
         let mut root_node: NodeData<V> = NodeData::new(NodeType::Element(ElementNode {
             tag: "Root".to_string(),
             namespace: Some("Root".to_string()),
@@ -46,7 +47,7 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
         }));
         root_node.element_id = Some(ElementId(0));
         root_node.node_id = root_id;
-        root.insert(root_node);
+        *root = root_node;
 
         // resolve dependants for each pass
         for i in 1..passes.len() {
@@ -476,6 +477,61 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
             self.mark_parent_added_or_removed(new);
         }
         self.tree.insert_after(id, new);
+    }
+
+    pub fn traverse_depth_first(&self, mut f: impl FnMut(NodeRef<V>)) {
+        let mut stack = vec![self.root()];
+        while let Some(id) = stack.pop() {
+            if let Some(node) = self.get(id) {
+                f(node);
+                if let Some(children) = self.tree.children_ids(id) {
+                    stack.extend(children.iter().copied().rev());
+                }
+            }
+        }
+    }
+
+    pub fn traverse_breadth_first(&self, mut f: impl FnMut(NodeRef<V>)) {
+        let mut queue = VecDeque::new();
+        queue.push_back(self.root());
+        while let Some(id) = queue.pop_front() {
+            if let Some(node) = self.get(id) {
+                f(node);
+                if let Some(children) = self.tree.children_ids(id) {
+                    for id in children {
+                        queue.push_back(id);
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn traverse_depth_first_mut(&mut self, mut f: impl FnMut(NodeMut<V>)) {
+        let mut stack = vec![self.root()];
+        while let Some(id) = stack.pop() {
+            if let Some(children) = self.tree.children_ids(id) {
+                if let Some(node) = self.get_mut(id) {
+                    let node = node;
+                    f(node);
+                    stack.extend(children.iter().copied().rev());
+                }
+            }
+        }
+    }
+
+    pub fn traverse_breadth_first_mut(&mut self, mut f: impl FnMut(NodeMut<V>)) {
+        let mut queue = VecDeque::new();
+        queue.push_back(self.root());
+        while let Some(id) = queue.pop_front() {
+            if let Some(children) = self.tree.children_ids(id) {
+                if let Some(node) = self.get_mut(id) {
+                    f(node);
+                    for id in children {
+                        queue.push_back(id);
+                    }
+                }
+            }
+        }
     }
 }
 

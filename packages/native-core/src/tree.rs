@@ -17,50 +17,6 @@ pub(crate) struct Node {
     height: u16,
 }
 
-pub(crate) struct NodeView<'a> {
-    tree: &'a mut Tree,
-    id: NodeId,
-}
-
-impl NodeView<'_> {
-    pub fn insert<T>(&mut self, data: T)
-    where
-        T: Any,
-    {
-        self.tree.nodes.write_slab::<T>().insert(self.id, data);
-    }
-
-    pub fn get<T>(&self) -> &T
-    where
-        T: Any,
-    {
-        self.tree.nodes.read_slab::<T>().get(self.id).unwrap()
-    }
-
-    pub fn get_mut<T>(&mut self) -> &mut T
-    where
-        T: Any,
-    {
-        self.tree.nodes.write_slab::<T>().get_mut(self.id).unwrap()
-    }
-
-    pub fn height(&self) -> u16 {
-        self.get::<Node>().height
-    }
-
-    pub fn children_ids(&self) -> Vec<NodeId> {
-        self.get::<Node>().children.clone()
-    }
-
-    pub fn parent_id(&self) -> Option<NodeId> {
-        self.get::<Node>().parent
-    }
-
-    pub fn id(&self) -> NodeId {
-        self.id
-    }
-}
-
 #[derive(Debug)]
 pub(crate) struct Tree {
     nodes: AnySlab,
@@ -198,10 +154,6 @@ impl Tree {
         self.set_height(new_id, height);
     }
 
-    pub fn insert<T: Any + Send + Sync>(&mut self, id: NodeId, value: T) {
-        self.nodes.add(id, value);
-    }
-
     pub fn size(&self) -> usize {
         self.nodes.len()
     }
@@ -209,7 +161,6 @@ impl Tree {
     pub fn dynamically_borrowed(&mut self) -> DynamicallyBorrowedTree<'_> {
         DynamicallyBorrowedTree {
             nodes: self.nodes.dynamically_borrowed(),
-            root: self.root,
         }
     }
 
@@ -219,10 +170,6 @@ impl Tree {
 
     pub fn write<T: Any>(&mut self, id: NodeId) -> Option<&mut T> {
         self.nodes.write_slab().get_mut(id)
-    }
-
-    pub fn get_node(&mut self, id: NodeId) -> NodeView<'_> {
-        NodeView { tree: self, id }
     }
 
     pub fn contains(&self, id: NodeId) -> bool {
@@ -248,7 +195,6 @@ impl Tree {
 
 pub(crate) struct DynamicallyBorrowedTree<'a> {
     nodes: DynamiclyBorrowedAnySlabView<'a>,
-    root: NodeId,
 }
 
 impl<'a> DynamicallyBorrowedTree<'a> {
@@ -259,7 +205,7 @@ impl<'a> DynamicallyBorrowedTree<'a> {
         mut f: impl FnMut(TreeStateView),
     ) {
         let nodes_data = self.node_slab();
-        let nodes_data: &SlabStorage<Node> = &*nodes_data;
+        let nodes_data: &SlabStorage<Node> = &nodes_data;
         let mut nodes = FxHashMap::default();
         for id in immutable {
             nodes.insert(id, MaybeRead::Read(self.nodes.get_slab(id).unwrap()));
@@ -268,16 +214,12 @@ impl<'a> DynamicallyBorrowedTree<'a> {
             nodes.insert(id, MaybeRead::Write(self.nodes.get_slab_mut(id).unwrap()));
         }
         {
-            let view = TreeStateView {
-                root: self.root,
-                nodes_data,
-                nodes,
-            };
+            let view = TreeStateView { nodes_data, nodes };
             f(view)
         }
     }
 
-    fn node_slab<'b>(&'b self) -> MappedRwLockReadGuard<'b, SlabStorage<Node>> {
+    fn node_slab(&self) -> MappedRwLockReadGuard<SlabStorage<Node>> {
         RwLockReadGuard::map(self.nodes.get_slab(TypeId::of::<Node>()).unwrap(), |slab| {
             slab.as_any().downcast_ref().unwrap()
         })
@@ -304,7 +246,6 @@ impl<'a, 'b> AnyMapLike<'a> for TreeStateViewEntry<'a, 'b> {
 pub struct TreeStateView<'a, 'b> {
     nodes_data: &'a SlabStorage<Node>,
     nodes: FxHashMap<TypeId, MaybeRead<'a, 'b>>,
-    root: NodeId,
 }
 
 impl<'a, 'b> TreeStateView<'a, 'b> {
@@ -324,10 +265,6 @@ impl<'a, 'b> TreeStateView<'a, 'b> {
                 MaybeRead::Read(_gaurd) => None,
                 MaybeRead::Write(gaurd) => gaurd.as_any_mut().downcast_mut::<SlabStorage<T>>(),
             })
-    }
-
-    fn root(&self) -> NodeId {
-        self.root
     }
 
     pub fn children_ids(&self, id: NodeId) -> Option<Vec<NodeId>> {
@@ -369,33 +306,6 @@ impl<'a, 'b> TreeStateView<'a, 'b> {
 
     pub fn parent<T: Dependancy>(&self, id: NodeId) -> Option<T::ElementBorrowed<'_>> {
         T::borrow_elements_from(self.entry(id))
-    }
-
-    fn traverse_depth_first<T: Dependancy>(&self, mut f: impl FnMut(T::ElementBorrowed<'_>)) {
-        let mut stack = vec![self.root()];
-        while let Some(id) = stack.pop() {
-            if let Some(node) = self.get::<T>(id) {
-                f(node);
-                if let Some(children) = self.children_ids(id) {
-                    stack.extend(children.iter().copied().rev());
-                }
-            }
-        }
-    }
-
-    fn traverse_breadth_first<T: Dependancy>(&self, mut f: impl FnMut(T::ElementBorrowed<'_>)) {
-        let mut queue = VecDeque::new();
-        queue.push_back(self.root());
-        while let Some(id) = queue.pop_front() {
-            if let Some(node) = self.get::<T>(id) {
-                f(node);
-                if let Some(children) = self.children_ids(id) {
-                    for id in children {
-                        queue.push_back(id);
-                    }
-                }
-            }
-        }
     }
 }
 
@@ -583,19 +493,8 @@ impl<T> SlabStorage<T> {
         self.data.get(id.0).and_then(|x| x.as_ref())
     }
 
-    unsafe fn get_unchecked(&self, id: NodeId) -> &T {
-        self.data.get_unchecked(id.0).as_ref().unwrap_unchecked()
-    }
-
     fn get_mut(&mut self, id: NodeId) -> Option<&mut T> {
         self.data.get_mut(id.0).and_then(|x| x.as_mut())
-    }
-
-    unsafe fn get_unchecked_mut(&mut self, id: NodeId) -> &mut T {
-        self.data
-            .get_unchecked_mut(id.0)
-            .as_mut()
-            .unwrap_unchecked()
     }
 
     fn insert(&mut self, id: NodeId, value: T) {
@@ -604,40 +503,6 @@ impl<T> SlabStorage<T> {
             self.data.resize_with(idx + 1, || None);
         }
         self.data[idx] = Some(value);
-    }
-
-    fn get2_mut(&mut self, id1: NodeId, id2: NodeId) -> Option<(&mut T, &mut T)> {
-        assert!(id1 != id2);
-        let (idx1, idx2) = (id1.0, id2.0);
-        let ptr = self.data.as_mut_ptr();
-        let first = unsafe { &mut *ptr.add(idx1) };
-        let second = unsafe { &mut *ptr.add(idx2) };
-        if let (Some(first), Some(second)) = (first, second) {
-            Some((first, second))
-        } else {
-            None
-        }
-    }
-
-    unsafe fn get_many_mut_unchecked(
-        &mut self,
-        ids: impl Iterator<Item = NodeId>,
-    ) -> Option<Vec<&mut T>> {
-        let ptr = self.data.as_mut_ptr();
-        let mut result = Vec::new();
-        for id in ids {
-            let idx = id.0;
-            if idx >= self.data.len() {
-                return None;
-            }
-            let item = unsafe { &mut *ptr.add(idx) };
-            if let Some(item) = item {
-                result.push(item);
-            } else {
-                return None;
-            }
-        }
-        Some(result)
     }
 }
 
@@ -732,19 +597,10 @@ impl AnySlab {
         self.try_write_slab().unwrap()
     }
 
-    fn get_slab_mut_borrow<T: Any>(&mut self) -> &mut SlabStorage<T> {
-        self.data
-            .get_mut(&TypeId::of::<T>())
-            .unwrap()
-            .as_any_mut()
-            .downcast_mut()
-            .unwrap()
-    }
-
     fn get_or_insert_slab_mut<T: Any + Send + Sync>(&mut self) -> &mut SlabStorage<T> {
         self.data
             .entry(TypeId::of::<T>())
-            .or_insert_with(|| Box::new(SlabStorage::<T>::default()))
+            .or_insert_with(|| Box::<SlabStorage<T>>::default())
             .as_any_mut()
             .downcast_mut()
             .unwrap()
@@ -761,10 +617,6 @@ impl AnySlab {
             NodeId(id)
         };
         EntryBuilder { id, inner: self }
-    }
-
-    fn add<T: Any + Send + Sync>(&mut self, id: NodeId, value: T) {
-        self.get_or_insert_slab_mut().insert(id, value);
     }
 
     fn remove(&mut self, id: NodeId) {
