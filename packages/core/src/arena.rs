@@ -88,7 +88,9 @@ impl VirtualDom {
     }
 
     // Drop a scope and all its children
-    pub(crate) fn drop_scope(&mut self, id: ScopeId) {
+    //
+    // Note: This will not remove any ids from the arena
+    pub(crate) fn drop_scope(&mut self, id: ScopeId, recursive: bool) {
         self.dirty_scopes.remove(&DirtyScope {
             height: self.scopes[id.0].height,
             id,
@@ -96,18 +98,13 @@ impl VirtualDom {
 
         self.ensure_drop_safety(id);
 
-        if let Some(root) = self.scopes[id.0].as_ref().try_root_node() {
-            if let RenderReturn::Ready(node) = unsafe { root.extend_lifetime_ref() } {
-                self.drop_scope_inner(node)
+        if recursive {
+            if let Some(root) = self.scopes[id.0].as_ref().try_root_node() {
+                if let RenderReturn::Ready(node) = unsafe { root.extend_lifetime_ref() } {
+                    self.drop_scope_inner(node)
+                }
             }
         }
-        if let Some(root) = unsafe { self.scopes[id.0].as_ref().previous_frame().try_load_node() } {
-            if let RenderReturn::Ready(node) = unsafe { root.extend_lifetime_ref() } {
-                self.drop_scope_inner(node)
-            }
-        }
-
-        self.scopes[id.0].props.take();
 
         let scope = &mut self.scopes[id.0];
 
@@ -121,37 +118,24 @@ impl VirtualDom {
         for task_id in scope.spawned_tasks.borrow_mut().drain() {
             scope.tasks.remove(task_id);
         }
+
+        self.scopes.remove(id.0);
     }
 
     fn drop_scope_inner(&mut self, node: &VNode) {
-        node.clear_listeners();
         node.dynamic_nodes.iter().for_each(|node| match node {
             DynamicNode::Component(c) => {
                 if let Some(f) = c.scope.get() {
-                    self.drop_scope(f);
+                    self.drop_scope(f, true);
                 }
                 c.props.take();
             }
             DynamicNode::Fragment(nodes) => {
                 nodes.iter().for_each(|node| self.drop_scope_inner(node))
             }
-            DynamicNode::Placeholder(t) => {
-                if let Some(id) = t.id.get() {
-                    self.try_reclaim(id);
-                }
-            }
-            DynamicNode::Text(t) => {
-                if let Some(id) = t.id.get() {
-                    self.try_reclaim(id);
-                }
-            }
+            DynamicNode::Placeholder(_) => {}
+            DynamicNode::Text(_) => {}
         });
-
-        for id in &node.root_ids {
-            if id.0 != 0 {
-                self.try_reclaim(id);
-            }
-        }
     }
 
     /// Descend through the tree, removing any borrowed props and listeners

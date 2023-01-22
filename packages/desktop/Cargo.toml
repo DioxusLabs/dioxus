@@ -32,6 +32,7 @@ tokio = { version = "1.16.1", features = [
 webbrowser = "0.8.0"
 infer = "0.11.0"
 dunce = "1.0.2"
+slab = "0.4"
 
 interprocess = { version = "1.1.1", optional = true }
 futures-util = "0.3.25"

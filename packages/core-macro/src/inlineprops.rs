@@ -158,7 +158,7 @@ impl ToTokens for InlinePropsBody {
             #maybe_async #vis fn #ident #fn_generics (#cx_token: Scope<#scope_lifetime #struct_name #generics>) #output
             #where_clause
             {
-                let #struct_name { #(#field_names),* } = &cx.props;
+                let #struct_name { #(#field_names),* } = &#cx_token.props;
                 #block
             }
         });
