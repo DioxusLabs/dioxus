@@ -31,5 +31,4 @@ lightningcss = "1.0.0-alpha.39"
 [dev-dependencies]
 rand = "0.8.5"
 dioxus = { path = "../dioxus", version = "^0.3.0" }
-dioxus-native-core-macro = { path = "../native-core-macro" }
 tokio = { version = "*", features = ["full"] }

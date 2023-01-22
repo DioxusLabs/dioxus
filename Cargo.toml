@@ -17,7 +17,6 @@ members = [
     "packages/rsx",
     "packages/tui",
     "packages/native-core",
-    "packages/native-core-macro",
     "packages/rsx-rosetta",
     "packages/signals",
     "docs/guide",

@@ -7,7 +7,7 @@ use std::collections::VecDeque;
 use crate::node::{
     ElementNode, FromAnyValue, NodeData, NodeType, OwnedAttributeDiscription, OwnedAttributeValue,
 };
-use crate::node_ref::{AttributeMask, NodeMask};
+use crate::node_ref::{AttributeMask, NodeMask, NodeMaskBuilder};
 use crate::passes::{resolve_passes, DirtyNodeStates, TypeErasedPass};
 use crate::tree::{EntryBuilder, NodeId, Tree};
 use crate::{FxDashSet, SendAnyMap};
@@ -64,7 +64,7 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
 
         let mut nodes_updated = FxHashMap::default();
         let root_id = NodeId(0);
-        nodes_updated.insert(root_id, NodeMask::ALL);
+        nodes_updated.insert(root_id, NodeMaskBuilder::ALL.build());
 
         RealDom {
             tree,
@@ -389,7 +389,7 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
     pub fn get_mut(&mut self, id: NodeId) -> Option<NodeMut<'_, V>> {
         self.tree.contains(id).then(|| NodeMut {
             id,
-            dirty: NodeMask::new(),
+            dirty: NodeMask::default(),
             dom: self,
         })
     }
@@ -616,7 +616,7 @@ impl<'a, V: FromAnyValue + Send> NodeMut<'a, V> {
 
     pub fn set_type(&mut self, new: NodeType<V>) {
         self.node_data_mut().node_type = new;
-        self.dirty = NodeMask::ALL;
+        self.dirty = NodeMaskBuilder::ALL.build();
     }
 
     pub fn read<T: Any>(&self) -> Option<&T> {

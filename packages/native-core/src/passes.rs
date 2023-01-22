@@ -7,7 +7,7 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 use crate::node::{FromAnyValue, NodeData};
-use crate::node_ref::NodeView;
+use crate::node_ref::{NodeMaskBuilder, NodeView};
 use crate::real_dom::RealDom;
 use crate::tree::TreeStateView;
 use crate::{FxDashMap, FxDashSet, SendAnyMap};
@@ -116,7 +116,7 @@ pub trait Pass<V: FromAnyValue + Send = ()>: Any {
     type ChildDependencies: Dependancy;
     /// This is a tuple of (T: Any, ..)
     type NodeDependencies: Dependancy;
-    const NODE_MASK: NodeMask;
+    const NODE_MASK: NodeMaskBuilder;
 
     fn pass<'a>(
         &mut self,
@@ -158,13 +158,14 @@ pub trait Pass<V: FromAnyValue + Send = ()>: Any {
         Self: Sized,
     {
         Self::validate();
+        let node_mask = Self::NODE_MASK.build();
         TypeErasedPass {
             this_type_id: TypeId::of::<Self>(),
             combined_dependancy_type_ids: Self::all_dependanices().iter().copied().collect(),
             parent_dependant: !Self::parent_type_ids().is_empty(),
             child_dependant: !Self::child_type_ids().is_empty(),
             dependants: FxHashSet::default(),
-            mask: Self::NODE_MASK,
+            mask: node_mask,
             pass_direction: Self::pass_direction(),
             pass: Box::new(
                 |node_id: NodeId, tree: &mut TreeStateView, context: &SendAnyMap| {
@@ -181,7 +182,7 @@ pub trait Pass<V: FromAnyValue + Send = ()>: Any {
                     let myself = unsafe { &mut *node_raw };
 
                     myself.pass(
-                        NodeView::new(node_data, Self::NODE_MASK),
+                        NodeView::new(node_data, Self::NODE_MASK.build()),
                         node,
                         parent,
                         children,
