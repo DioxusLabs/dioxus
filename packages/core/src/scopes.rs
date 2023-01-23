@@ -129,8 +129,8 @@ pub(crate) struct ScopeSlabEntry<'a> {
 }
 
 impl<'a> ScopeSlabEntry<'a> {
-    pub(crate) fn key(&self) -> usize {
-        self.entry.key()
+    pub(crate) fn key(&self) -> ScopeId {
+        ScopeId(self.entry.key())
     }
 
     pub(crate) fn insert(self, scope: ScopeState) -> &'a ScopeState {
