@@ -37,7 +37,7 @@ log = "0.4.17"
 # Serialize the Edits for use in Webview/Liveview instances
 serde = { version = "1", features = ["derive"], optional = true }
 
-bumpslab = { git = "https://github.com/demonthos/bumpslab", branch = "reduce-unsafe"}
+bumpslab = { git = "https://github.com/jkelleyrtp/bumpslab" }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }
