@@ -73,6 +73,15 @@ pub(crate) struct ScopeSlab {
     entries: Slab<Slot<'static, ScopeState>>,
 }
 
+impl Drop for ScopeSlab {
+    fn drop(&mut self) {
+        // Bump slab doesn't drop its contents, so we need to do it manually
+        for slot in self.entries.drain() {
+            self.slab.remove(slot);
+        }
+    }
+}
+
 impl Default for ScopeSlab {
     fn default() -> Self {
         Self {
