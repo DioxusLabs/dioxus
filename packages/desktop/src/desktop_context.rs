@@ -9,6 +9,7 @@ use crate::Config;
 use crate::WebviewHandler;
 use dioxus_core::ScopeState;
 use dioxus_core::VirtualDom;
+use dioxus_hot_reload::HotReloadMsg;
 use serde_json::Value;
 use slab::Slab;
 use wry::application::event::Event;
@@ -284,6 +285,8 @@ pub enum EventData {
     Poll,
 
     Ipc(IpcMessage),
+
+    HotReloadEvent(HotReloadMsg),
 
     NewWindow,
 
