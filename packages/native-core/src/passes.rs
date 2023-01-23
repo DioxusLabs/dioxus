@@ -374,8 +374,8 @@ pub fn resolve_passes<V: FromAnyValue + Send + Sync>(
     while !pass_indexes_remaining.is_empty() {
         let mut currently_in_use = FxHashSet::<TypeId>::default();
         std::thread::scope(|_| {
-            let mut i = 0;
             let dynamically_borrowed_tree = tree.tree.dynamically_borrowed();
+            let mut i = 0;
             while i < pass_indexes_remaining.len() {
                 let passes_idx = pass_indexes_remaining[i];
                 let pass = &passes[passes_idx];
@@ -387,18 +387,16 @@ pub fn resolve_passes<V: FromAnyValue + Send + Sync>(
                     pass_indexes_remaining.remove(i);
                     resolving.push(pass_id);
                     currently_in_use.insert(pass.this_type_id);
-                    dynamically_borrowed_tree.with_view(
+                    let tree_view = dynamically_borrowed_tree.view(
                         pass.combined_dependancy_type_ids.iter().copied(),
                         [pass.this_type_id],
-                        |tree_view| {
-                            let dirty_nodes = dirty_nodes.clone();
-                            let nodes_updated = nodes_updated.clone();
-                            let ctx = ctx.clone();
-                            // s.spawn(move || {
-                            pass.resolve(tree_view, &dirty_nodes, &nodes_updated, &ctx);
-                            // });
-                        },
                     );
+                    let dirty_nodes = dirty_nodes.clone();
+                    let nodes_updated = nodes_updated.clone();
+                    let ctx = ctx.clone();
+                    // s.spawn(move || {
+                    pass.resolve(tree_view, &dirty_nodes, &nodes_updated, &ctx);
+                    // });
                 } else {
                     i += 1;
                 }

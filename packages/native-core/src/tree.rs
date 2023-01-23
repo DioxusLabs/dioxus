@@ -198,14 +198,12 @@ pub(crate) struct DynamicallyBorrowedTree<'a> {
 }
 
 impl<'a> DynamicallyBorrowedTree<'a> {
-    pub fn with_view(
+    pub fn view(
         &self,
         immutable: impl IntoIterator<Item = TypeId>,
         mutable: impl IntoIterator<Item = TypeId>,
-        mut f: impl FnMut(TreeStateView),
-    ) {
+    ) -> TreeStateView<'_, 'a> {
         let nodes_data = self.node_slab();
-        let nodes_data: &SlabStorage<Node> = &nodes_data;
         let mut nodes = FxHashMap::default();
         for id in immutable {
             nodes.insert(id, MaybeRead::Read(self.nodes.get_slab(id).unwrap()));
@@ -213,10 +211,8 @@ impl<'a> DynamicallyBorrowedTree<'a> {
         for id in mutable {
             nodes.insert(id, MaybeRead::Write(self.nodes.get_slab_mut(id).unwrap()));
         }
-        {
-            let view = TreeStateView { nodes_data, nodes };
-            f(view)
-        }
+
+        TreeStateView { nodes_data, nodes }
     }
 
     fn node_slab(&self) -> MappedRwLockReadGuard<SlabStorage<Node>> {
@@ -244,7 +240,7 @@ impl<'a, 'b> AnyMapLike<'a> for TreeStateViewEntry<'a, 'b> {
 }
 
 pub struct TreeStateView<'a, 'b> {
-    nodes_data: &'a SlabStorage<Node>,
+    nodes_data: MappedRwLockReadGuard<'a, SlabStorage<Node>>,
     nodes: FxHashMap<TypeId, MaybeRead<'a, 'b>>,
 }
 
@@ -440,36 +436,6 @@ fn deletion() {
     assert_eq!(*tree.read::<i32>(parent).unwrap(), 0);
     assert_eq!(tree.read::<i32>(after), None);
 }
-
-// #[test]
-// fn traverse_depth_first() {
-//     let mut tree = Tree::new();
-//     let parent = tree.root();
-//     tree.insert(parent, 0);
-//     let mut child1 = tree.create_node();
-//     child1.insert(1);
-//     let child1 = child1.id();
-//     tree.add_child(parent, child1);
-//     let mut grandchild1 = tree.create_node();
-//     grandchild1.insert(2);
-//     let grandchild1 = grandchild1.id();
-//     tree.add_child(child1, grandchild1);
-//     let mut child2 = tree.create_node();
-//     child2.insert(3);
-//     let child2 = child2.id();
-//     tree.add_child(parent, child2);
-//     let mut grandchild2 = tree.create_node();
-//     grandchild2.insert(4);
-//     let grandchild2 = grandchild2.id();
-//     tree.add_child(child2, grandchild2);
-
-//     let view = tree.state_view::<i32>();
-//     let mut node_count = 0;
-//     view.traverse_depth_first(move |node| {
-//         assert_eq!(*node, node_count);
-//         node_count += 1;
-//     });
-// }
 
 #[derive(Debug)]
 pub(crate) struct SlabStorage<T> {
