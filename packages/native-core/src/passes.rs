@@ -373,8 +373,8 @@ pub fn resolve_passes<V: FromAnyValue + Send + Sync>(
     let mut pass_indexes_remaining: Vec<_> = (0..passes.len()).collect::<Vec<_>>();
     while !pass_indexes_remaining.is_empty() {
         let mut currently_in_use = FxHashSet::<TypeId>::default();
-        std::thread::scope(|_| {
-            let dynamically_borrowed_tree = tree.tree.dynamically_borrowed();
+        let dynamically_borrowed_tree = tree.tree.dynamically_borrowed();
+        std::thread::scope(|s| {
             let mut i = 0;
             while i < pass_indexes_remaining.len() {
                 let passes_idx = pass_indexes_remaining[i];
@@ -394,9 +394,9 @@ pub fn resolve_passes<V: FromAnyValue + Send + Sync>(
                     let dirty_nodes = dirty_nodes.clone();
                     let nodes_updated = nodes_updated.clone();
                     let ctx = ctx.clone();
-                    // s.spawn(move || {
-                    pass.resolve(tree_view, &dirty_nodes, &nodes_updated, &ctx);
-                    // });
+                    s.spawn(move || {
+                        pass.resolve(tree_view, &dirty_nodes, &nodes_updated, &ctx);
+                    });
                 } else {
                     i += 1;
                 }
