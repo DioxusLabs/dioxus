@@ -445,6 +445,41 @@ class Interpreter {
   }
 }
 
+function get_mouse_data(event) {
+  const {
+    altKey,
+    button,
+    buttons,
+    clientX,
+    clientY,
+    ctrlKey,
+    metaKey,
+    offsetX,
+    offsetY,
+    pageX,
+    pageY,
+    screenX,
+    screenY,
+    shiftKey,
+  } = event;
+  return {
+    alt_key: altKey,
+    button: button,
+    buttons: buttons,
+    client_x: clientX,
+    client_y: clientY,
+    ctrl_key: ctrlKey,
+    meta_key: metaKey,
+    offset_x: offsetX,
+    offset_y: offsetY,
+    page_x: pageX,
+    page_y: pageY,
+    screen_x: screenX,
+    screen_y: screenY,
+    shift_key: shiftKey,
+  };
+}
+
 function serialize_event(event) {
   switch (event.type) {
     case "copy":
@@ -523,10 +558,6 @@ function serialize_event(event) {
         values: {},
       };
     }
-    case "click":
-    case "contextmenu":
-    case "doubleclick":
-    case "dblclick":
     case "drag":
     case "dragend":
     case "dragenter":
@@ -534,7 +565,13 @@ function serialize_event(event) {
     case "dragleave":
     case "dragover":
     case "dragstart":
-    case "drop":
+    case "drop": {
+      return { mouse: get_mouse_data(event) };
+    }
+    case "click":
+    case "contextmenu":
+    case "doubleclick":
+    case "dblclick":
     case "mousedown":
     case "mouseenter":
     case "mouseleave":
@@ -542,38 +579,7 @@ function serialize_event(event) {
     case "mouseout":
     case "mouseover":
     case "mouseup": {
-      const {
-        altKey,
-        button,
-        buttons,
-        clientX,
-        clientY,
-        ctrlKey,
-        metaKey,
-        offsetX,
-        offsetY,
-        pageX,
-        pageY,
-        screenX,
-        screenY,
-        shiftKey,
-      } = event;
-      return {
-        alt_key: altKey,
-        button: button,
-        buttons: buttons,
-        client_x: clientX,
-        client_y: clientY,
-        ctrl_key: ctrlKey,
-        meta_key: metaKey,
-        offset_x: offsetX,
-        offset_y: offsetY,
-        page_x: pageX,
-        page_y: pageY,
-        screen_x: screenX,
-        screen_y: screenY,
-        shift_key: shiftKey,
-      };
+      return get_mouse_data(event);
     }
     case "pointerdown":
     case "pointermove":
