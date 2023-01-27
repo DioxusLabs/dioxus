@@ -13,7 +13,6 @@ use dioxus_rsx::{
 use interprocess::local_socket::{LocalSocketListener, LocalSocketStream};
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 
-#[cfg(debug_assertions)]
 pub use dioxus_html::HtmlCtx;
 use serde::{Deserialize, Serialize};
 
