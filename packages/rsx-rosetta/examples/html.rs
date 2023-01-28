@@ -20,5 +20,5 @@ fn main() {
 
     let out = dioxus_autofmt::write_block_out(body).unwrap();
 
-    println!("{}", out);
+    println!("{out}");
 }

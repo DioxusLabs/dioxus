@@ -140,7 +140,7 @@ impl Writer<'_> {
             let mut written = generics.to_token_stream().to_string();
             written.retain(|c| !c.is_whitespace());
 
-            write!(self.out, "{}", written)?;
+            write!(self.out, "{written}")?;
         }
 
         write!(self.out, " {{")?;
@@ -165,7 +165,7 @@ impl Writer<'_> {
             match &field.content {
                 ContentField::ManExpr(exp) => {
                     let out = prettyplease::unparse_expr(exp);
-                    write!(self.out, "{}: {}", name, out)?;
+                    write!(self.out, "{name}: {out}")?;
                 }
                 ContentField::Formatted(s) => {
                     write!(
@@ -179,11 +179,11 @@ impl Writer<'_> {
                     let out = prettyplease::unparse_expr(exp);
                     let mut lines = out.split('\n').peekable();
                     let first = lines.next().unwrap();
-                    write!(self.out, "{}: {}", name, first)?;
+                    write!(self.out, "{name}: {first}")?;
                     for line in lines {
                         self.out.new_line()?;
                         self.out.indented_tab()?;
-                        write!(self.out, "{}", line)?;
+                        write!(self.out, "{line}")?;
                     }
                 }
             }

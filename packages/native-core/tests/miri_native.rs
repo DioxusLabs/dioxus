@@ -20,12 +20,7 @@ impl ParentDepState for BlablaState {
     const NODE_MASK: NodeMask =
         NodeMask::new_with_attrs(AttributeMask::Static(&sorted_str_slice!(["blabla",])));
 
-    fn reduce<'a>(
-        &mut self,
-        _node: NodeView,
-        _parent: Option<(&'a Self,)>,
-        _ctx: &Self::Ctx,
-    ) -> bool {
+    fn reduce(&mut self, _node: NodeView, _parent: Option<(&Self,)>, _ctx: &Self::Ctx) -> bool {
         false
     }
 }

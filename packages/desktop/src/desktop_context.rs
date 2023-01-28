@@ -207,13 +207,12 @@ impl DesktopContext {
                     "method":"eval_result",
                     "params": (
                         function(){{
-                            {}
+                            {code}
                         }}
                     )()
                 }})
             );
-            "#,
-            code
+            "#
         );
 
         if let Err(e) = self.webview.evaluate_script(&script) {

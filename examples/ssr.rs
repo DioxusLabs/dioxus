@@ -27,7 +27,7 @@ fn main() {
     let mut file = String::new();
     let mut renderer = dioxus_ssr::Renderer::default();
     renderer.render_to(&mut file, &vdom).unwrap();
-    println!("{}", file);
+    println!("{file}");
 }
 
 fn app(cx: Scope) -> Element {

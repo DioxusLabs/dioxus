@@ -115,10 +115,7 @@ impl RinkWidget for &TuiNode {
                 [0, 1] => Direction::Down,
                 [0, -1] => Direction::Up,
                 [a, b] => {
-                    panic!(
-                        "draw({:?} {:?} {:?}) {}, {} no cell adjacent",
-                        before, current, after, a, b
-                    )
+                    panic!("draw({before:?} {current:?} {after:?}) {a}, {b} no cell adjacent")
                 }
             };
             let end_dir = match [after[0] - current[0], after[1] - current[1]] {
@@ -127,10 +124,7 @@ impl RinkWidget for &TuiNode {
                 [0, 1] => Direction::Down,
                 [0, -1] => Direction::Up,
                 [a, b] => {
-                    panic!(
-                        "draw({:?} {:?} {:?}) {}, {} no cell adjacent",
-                        before, current, after, a, b
-                    )
+                    panic!("draw({before:?} {current:?} {after:?}) {a}, {b} no cell adjacent")
                 }
             };
 
@@ -151,10 +145,7 @@ impl RinkWidget for &TuiNode {
                 [Direction::Left, Direction::Up] => symbols.bottom_right,
                 [Direction::Left, Direction::Right] => symbols.horizontal,
                 [Direction::Left, Direction::Down] => symbols.top_right,
-                _ => panic!(
-                    "{:?} {:?} {:?} cannont connect cell to itself",
-                    before, current, after
-                ),
+                _ => panic!("{before:?} {current:?} {after:?} cannont connect cell to itself"),
             }
             .to_string();
             buf.set(

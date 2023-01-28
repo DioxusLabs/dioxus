@@ -39,7 +39,7 @@ async fn main() {
             }),
         );
 
-    println!("Listening on http://{}", addr);
+    println!("Listening on http://{addr}");
 
     axum::Server::bind(&addr.to_string().parse().unwrap())
         .serve(app.into_make_service())
