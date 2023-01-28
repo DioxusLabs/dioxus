@@ -1,7 +1,6 @@
 use crate::{
     node::{ElementNode, FromAnyValue, NodeType},
-    passes::{AnyMapLike, TypeErasedPass},
-    real_dom::RealDom,
+    real_dom::{NodeImmutable, RealDom},
     NodeId,
 };
 use dioxus_core::{Mutation, Mutations};
@@ -72,10 +71,10 @@ impl PersistantElementIter {
 
     /// remove stale element refreneces
     /// returns true if the focused element is removed
-    pub fn prune<S: State<V>, V: FromAnyValue>(
+    pub fn prune<V: FromAnyValue + Send + Sync>(
         &mut self,
         mutations: &Mutations,
-        rdom: &RealDom<S, V>,
+        rdom: &RealDom<V>,
     ) -> bool {
         let mut changed = false;
         let ids_removed: Vec<_> = mutations
@@ -102,7 +101,7 @@ impl PersistantElementIter {
         // if a child is removed or inserted before or at the current element, update the child index
         for (el_id, child_idx) in self.stack.iter_mut() {
             if let NodePosition::InChild(child_idx) = child_idx {
-                if let Some(children) = &rdom.children_ids(*el_id) {
+                if let Some(children) = &rdom.get(*el_id).unwrap().child_ids() {
                     for m in &mutations.edits {
                         match m {
                             Mutation::Remove { id } => {
@@ -133,7 +132,7 @@ impl PersistantElementIter {
     }
 
     /// get the next element
-    pub fn next<S: State<V>, V: FromAnyValue>(&mut self, rdom: &RealDom<S, V>) -> ElementProduced {
+    pub fn next<V: FromAnyValue + Send + Sync>(&mut self, rdom: &RealDom<V>) -> ElementProduced {
         if self.stack.is_empty() {
             let id = NodeId(0);
             let new = (id, NodePosition::AtNode);
@@ -142,9 +141,9 @@ impl PersistantElementIter {
         } else {
             let (last, old_child_idx) = self.stack.last_mut().unwrap();
             let node = rdom.get(*last).unwrap();
-            match &node.node_data.node_type {
+            match &node.node_data().node_type {
                 NodeType::Element(ElementNode { .. }) => {
-                    let children = rdom.children_ids(*last).unwrap();
+                    let children = node.child_ids().unwrap();
                     *old_child_idx = old_child_idx.map(|i| i + 1);
                     // if we have children, go to the next child
                     let child_idx = old_child_idx.get_or_insert(0);
@@ -154,7 +153,7 @@ impl PersistantElementIter {
                     } else {
                         let id = children[child_idx];
                         if let NodeType::Element(ElementNode { .. }) =
-                            rdom.get(id).unwrap().node_data.node_type
+                            rdom.get(id).unwrap().node_data().node_type
                         {
                             self.stack.push((id, NodePosition::AtNode));
                         }
@@ -171,19 +170,17 @@ impl PersistantElementIter {
     }
 
     /// get the previous element
-    pub fn prev<S: State<V> + Send, V: FromAnyValue>(
-        &mut self,
-        rdom: &RealDom<S, V>,
-    ) -> ElementProduced {
+    pub fn prev<V: FromAnyValue + Send + Sync>(&mut self, rdom: &RealDom<V>) -> ElementProduced {
         // recursively add the last child element to the stack
-        fn push_back<S: State<V> + Send, V: FromAnyValue>(
+        fn push_back<V: FromAnyValue + Send + Sync>(
             stack: &mut smallvec::SmallVec<[(NodeId, NodePosition); 5]>,
             new_node: NodeId,
-            rdom: &RealDom<S, V>,
+            rdom: &RealDom<V>,
         ) -> NodeId {
-            match &rdom[new_node].node_data.node_type {
+            let node = rdom.get(new_node).unwrap();
+            match &node.node_data().node_type {
                 NodeType::Element(ElementNode { .. }) => {
-                    let children = rdom.children_ids(new_node).unwrap();
+                    let children = node.child_ids().unwrap();
                     if children.is_empty() {
                         new_node
                     } else {
@@ -199,10 +196,10 @@ impl PersistantElementIter {
             ElementProduced::Looped(push_back(&mut self.stack, new_node, rdom))
         } else {
             let (last, old_child_idx) = self.stack.last_mut().unwrap();
-            let node = &rdom[*last];
-            match &node.node_data.node_type {
+            let node = rdom.get(*last).unwrap();
+            match &node.node_data().node_type {
                 NodeType::Element(ElementNode { .. }) => {
-                    let children = rdom.children_ids(*last).unwrap();
+                    let children = node.child_ids().unwrap();
                     // if we have children, go to the next child
                     if let NodePosition::InChild(0) = old_child_idx {
                         ElementProduced::Progressed(self.pop())
@@ -240,23 +237,6 @@ impl PersistantElementIter {
     }
 }
 
-#[derive(Default, Clone, Debug)]
-struct Empty {}
-impl AnyMapLike for Empty {
-    fn get<T: std::any::Any>(&self) -> Option<&T> {
-        None
-    }
-
-    fn get_mut<T: std::any::Any>(&mut self) -> Option<&mut T> {
-        None
-    }
-}
-impl State for Empty {
-    fn create_passes() -> Box<[TypeErasedPass<Self>]> {
-        Box::new([])
-    }
-}
-
 #[test]
 #[allow(unused_variables)]
 fn traverse() {
@@ -279,7 +259,7 @@ fn traverse() {
     let mut vdom = VirtualDom::new(Base);
     let mutations = vdom.rebuild();
 
-    let mut rdom: RealDom<Empty> = RealDom::new();
+    let mut rdom: RealDom = RealDom::new(Box::new([]));
 
     let _to_update = rdom.apply_mutations(mutations);
 
@@ -378,7 +358,7 @@ fn persist_removes() {
     }
     let mut vdom = VirtualDom::new(Base);
 
-    let mut rdom: RealDom<Empty> = RealDom::new();
+    let mut rdom: RealDom = RealDom::new(Box::new([]));
 
     let build = vdom.rebuild();
     println!("{:#?}", build);
@@ -460,7 +440,7 @@ fn persist_instertions_before() {
     }
     let mut vdom = VirtualDom::new(Base);
 
-    let mut rdom: RealDom<Empty> = RealDom::new();
+    let mut rdom: RealDom = RealDom::new(Box::new([]));
 
     let build = vdom.rebuild();
     let _to_update = rdom.apply_mutations(build);
@@ -516,7 +496,7 @@ fn persist_instertions_after() {
     }
     let mut vdom = VirtualDom::new(Base);
 
-    let mut rdom: RealDom<Empty> = RealDom::new();
+    let mut rdom: RealDom = RealDom::new(Box::new([]));
 
     let build = vdom.rebuild();
     let _to_update = rdom.apply_mutations(build);

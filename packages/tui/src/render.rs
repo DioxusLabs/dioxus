@@ -1,18 +1,24 @@
-use dioxus_native_core::tree::TreeView;
+use dioxus_native_core::{real_dom::NodeImmutable, NodeRef, RealDom};
 use std::io::Stdout;
 use taffy::{
     geometry::Point,
     prelude::{Dimension, Layout, Size},
     Taffy,
 };
-use tui::{backend::CrosstermBackend, layout::Rect, style::Color};
+use tui::{
+    backend::CrosstermBackend,
+    layout::Rect,
+    style::{Color, Style},
+};
 
 use crate::{
+    focus::Focused,
+    layout::TaffyLayout,
     layout_to_screen_space,
     style::{RinkColor, RinkStyle},
-    style_attributes::{BorderEdge, BorderStyle},
+    style_attributes::{BorderEdge, BorderStyle, StyleModifier},
     widget::{RinkBuffer, RinkCell, RinkWidget, WidgetWithContext},
-    Config, TuiDom, TuiNode,
+    Config,
 };
 
 const RADIUS_MULTIPLIER: [f32; 2] = [1.0, 0.5];
@@ -20,20 +26,22 @@ const RADIUS_MULTIPLIER: [f32; 2] = [1.0, 0.5];
 pub(crate) fn render_vnode(
     frame: &mut tui::Frame<CrosstermBackend<Stdout>>,
     layout: &Taffy,
-    rdom: &TuiDom,
-    node: &TuiNode,
+    rdom: &RealDom,
+    node: NodeRef,
     cfg: Config,
     parent_location: Point<f32>,
 ) {
     use dioxus_native_core::node::NodeType;
 
-    if let NodeType::Placeholder = &node.node_data.node_type {
+    if let NodeType::Placeholder = &node.node_type() {
         return;
     }
 
     let Layout {
         mut location, size, ..
-    } = layout.layout(node.state.layout.node.unwrap()).unwrap();
+    } = layout
+        .layout(node.get::<TaffyLayout>().unwrap().node.unwrap())
+        .unwrap();
     location.x += parent_location.x;
     location.y += parent_location.y;
 
@@ -44,7 +52,7 @@ pub(crate) fn render_vnode(
     let width = layout_to_screen_space(fx + width).round() as u16 - x;
     let height = layout_to_screen_space(fy + height).round() as u16 - y;
 
-    match &node.node_data.node_type {
+    match node.node_type() {
         NodeType::Text(text) => {
             #[derive(Default)]
             struct Label<'a> {
@@ -65,7 +73,7 @@ pub(crate) fn render_vnode(
 
             let label = Label {
                 text,
-                style: node.state.style.core,
+                style: node.get::<StyleModifier>().unwrap().core,
             };
             let area = Rect::new(x, y, width, height);
 
@@ -82,15 +90,15 @@ pub(crate) fn render_vnode(
                 frame.render_widget(WidgetWithContext::new(node, cfg), area);
             }
 
-            for c in rdom.children_ids(node.node_data.node_id).unwrap() {
-                render_vnode(frame, layout, rdom, &rdom[*c], cfg, location);
+            for c in node.children().unwrap() {
+                render_vnode(frame, layout, rdom, c, cfg, location);
             }
         }
         NodeType::Placeholder => unreachable!(),
     }
 }
 
-impl RinkWidget for &TuiNode {
+impl RinkWidget for NodeRef<'_> {
     fn render(self, area: Rect, mut buf: RinkBuffer<'_>) {
         use tui::symbols::line::*;
 
@@ -275,10 +283,10 @@ impl RinkWidget for &TuiNode {
         for x in area.left()..area.right() {
             for y in area.top()..area.bottom() {
                 let mut new_cell = RinkCell::default();
-                if let Some(c) = self.state.style.core.bg {
+                if let Some(c) = self.get::<StyleModifier>().unwrap().core.bg {
                     new_cell.bg = c;
                 }
-                if self.state.focused {
+                if self.get::<Focused>().unwrap().0 {
                     new_cell.bg.alpha = 100;
                     new_cell.bg.color = new_cell.bg.blend(Color::White);
                 }
@@ -286,7 +294,9 @@ impl RinkWidget for &TuiNode {
             }
         }
 
-        let borders = &self.state.style.modifier.borders;
+        let style = self.get::<StyleModifier>().unwrap();
+
+        let borders = &style.modifier.borders;
 
         let last_edge = &borders.left;
         let current_edge = &borders.top;
@@ -303,7 +313,7 @@ impl RinkWidget for &TuiNode {
                 (last_r * RADIUS_MULTIPLIER[0]) as u16,
                 (last_r * RADIUS_MULTIPLIER[1]) as u16,
             ];
-            let color = current_edge.color.or(self.state.style.core.fg);
+            let color = current_edge.color.or(style.core.fg);
             let mut new_cell = RinkCell::default();
             if let Some(c) = color {
                 new_cell.fg = c;
@@ -338,7 +348,7 @@ impl RinkWidget for &TuiNode {
                 (last_r * RADIUS_MULTIPLIER[0]) as u16,
                 (last_r * RADIUS_MULTIPLIER[1]) as u16,
             ];
-            let color = current_edge.color.or(self.state.style.core.fg);
+            let color = current_edge.color.or(style.core.fg);
             let mut new_cell = RinkCell::default();
             if let Some(c) = color {
                 new_cell.fg = c;
@@ -373,7 +383,7 @@ impl RinkWidget for &TuiNode {
                 (last_r * RADIUS_MULTIPLIER[0]) as u16,
                 (last_r * RADIUS_MULTIPLIER[1]) as u16,
             ];
-            let color = current_edge.color.or(self.state.style.core.fg);
+            let color = current_edge.color.or(style.core.fg);
             let mut new_cell = RinkCell::default();
             if let Some(c) = color {
                 new_cell.fg = c;
@@ -408,7 +418,7 @@ impl RinkWidget for &TuiNode {
                 (last_r * RADIUS_MULTIPLIER[0]) as u16,
                 (last_r * RADIUS_MULTIPLIER[1]) as u16,
             ];
-            let color = current_edge.color.or(self.state.style.core.fg);
+            let color = current_edge.color.or(style.core.fg);
             let mut new_cell = RinkCell::default();
             if let Some(c) = color {
                 new_cell.fg = c;

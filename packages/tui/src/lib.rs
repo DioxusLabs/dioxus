@@ -6,6 +6,7 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use dioxus_core::*;
+use dioxus_native_core::{node_ref::NodeMaskBuilder, real_dom::NodeImmutable, Pass};
 use dioxus_native_core::{real_dom::RealDom, FxDashSet, NodeId, NodeMask, SendAnyMap};
 use focus::FocusState;
 use futures::{
@@ -13,6 +14,7 @@ use futures::{
     pin_mut, StreamExt,
 };
 use futures_channel::mpsc::unbounded;
+use layout::TaffyLayout;
 use query::Query;
 use std::rc::Rc;
 use std::{
@@ -101,7 +103,9 @@ pub fn launch_cfg_with_props<Props: 'static>(app: Component<Props>, props: Props
     }
 
     let cx = dom.base_scope();
-    let rdom = Rc::new(RefCell::new(RealDom::new()));
+    let rdom = Rc::new(RefCell::new(RealDom::new(Box::new([
+        TaffyLayout::to_type_erased(),
+    ]))));
     let taffy = Arc::new(Mutex::new(Taffy::new()));
     cx.provide_context(state);
     cx.provide_context(TuiContext { tx: event_tx_clone });
@@ -136,7 +140,7 @@ fn render_vdom(
     mut event_reciever: UnboundedReceiver<InputEvent>,
     handler: RinkInputHandler,
     cfg: Config,
-    rdom: Rc<RefCell<TuiDom>>,
+    rdom: Rc<RefCell<RealDom>>,
     taffy: Arc<Mutex<Taffy>>,
     mut register_event: impl FnMut(crossterm::event::Event),
 ) -> Result<()> {
@@ -177,10 +181,16 @@ fn render_vdom(
 
                 if !to_rerender.is_empty() || updated {
                     updated = false;
-                    fn resize(dims: Rect, taffy: &mut Taffy, rdom: &TuiDom) {
+                    fn resize(dims: Rect, taffy: &mut Taffy, rdom: &RealDom) {
                         let width = screen_to_layout_space(dims.width);
                         let height = screen_to_layout_space(dims.height);
-                        let root_node = rdom[NodeId(0)].state.layout.node.unwrap();
+                        let root_node = rdom
+                            .get(NodeId(0))
+                            .unwrap()
+                            .get::<TaffyLayout>()
+                            .unwrap()
+                            .node
+                            .unwrap();
 
                         // the root node fills the entire area
 
@@ -204,7 +214,7 @@ fn render_vdom(
                             let mut taffy = taffy.lock().expect("taffy lock poisoned");
                             // size is guaranteed to not change when rendering
                             resize(frame.size(), &mut taffy, &rdom);
-                            let root = &rdom[NodeId(0)];
+                            let root = rdom.get(NodeId(0)).unwrap();
                             render::render_vnode(frame, &taffy, &rdom, root, cfg, Point::ZERO);
                         })?;
                         execute!(terminal.backend_mut(), RestorePosition, Show).unwrap();
@@ -277,8 +287,9 @@ fn render_vdom(
                     any_map.insert(taffy.clone());
                     let (new_to_rerender, dirty) = rdom.update_state(any_map);
                     to_rerender = new_to_rerender;
+                    let text_mask = NodeMaskBuilder::new().with_text().build();
                     for (id, mask) in dirty {
-                        if mask.overlaps(&NodeMask::new().with_text()) {
+                        if mask.overlaps(&text_mask) {
                             to_rerender.insert(id);
                         }
                     }

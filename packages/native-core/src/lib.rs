@@ -4,6 +4,7 @@ use std::hash::BuildHasherDefault;
 pub use node_ref::NodeMask;
 pub use passes::AnyMapLike;
 pub use passes::{Dependancy, Pass, TypeErasedPass};
+pub use real_dom::{NodeMut, NodeRef, RealDom};
 use rustc_hash::FxHasher;
 pub use tree::NodeId;
 

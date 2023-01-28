@@ -1,15 +1,17 @@
-use crate::{node::PreventDefault, TuiDom};
+use crate::node::PreventDefault;
 
 use dioxus_native_core::{
-    tree::TreeView,
+    node_ref::{AttributeMaskBuilder, NodeMaskBuilder},
+    real_dom::{NodeImmutable, NodeMutable},
     utils::{ElementProduced, PersistantElementIter},
-    NodeId, Pass, SendAnyMap,
+    Dependancy, NodeId, Pass, RealDom, SendAnyMap,
 };
-use dioxus_native_core_macro::sorted_str_slice;
 
 use std::{cmp::Ordering, num::NonZeroU16};
 
-use dioxus_native_core::node_ref::{AttributeMask, NodeMask, NodeView};
+use dioxus_native_core::node_ref::NodeView;
+
+pub struct Focused(pub bool);
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) enum FocusLevel {
@@ -62,8 +64,9 @@ pub(crate) struct Focus {
 }
 
 impl Pass for Focus {
-    const NODE_MASK: NodeMask =
-        NodeMask::new_with_attrs(AttributeMask::Static(FOCUS_ATTRIBUTES)).with_listeners();
+    const NODE_MASK: NodeMaskBuilder = NodeMaskBuilder::new()
+        .with_attrs(AttributeMaskBuilder::Some(FOCUS_ATTRIBUTES))
+        .with_listeners();
 
     type ParentDependencies = ();
     type ChildDependencies = ();
@@ -72,18 +75,10 @@ impl Pass for Focus {
     fn pass<'a>(
         &mut self,
         node_view: NodeView,
-        _: <Self::NodeDependencies as dioxus_native_core::Dependancy>::ElementBorrowed<'a>,
-        _: Option<
-            <Self::ParentDependencies as dioxus_native_core::Dependancy>::ElementBorrowed<'a>,
-        >,
-        _: Option<
-            impl Iterator<
-                Item = <Self::ChildDependencies as dioxus_native_core::Dependancy>::ElementBorrowed<
-                    'a,
-                >,
-            >,
-        >,
-        _: &SendAnyMap,
+        node: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
+        parent: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
+        children: Option<Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>>,
+        context: &SendAnyMap,
     ) -> bool {
         let new = Focus {
             level: if let Some(a) = node_view
@@ -128,8 +123,8 @@ impl Pass for Focus {
     }
 }
 
-const FOCUS_EVENTS: &[&str] = &sorted_str_slice!(["keydown", "keypress", "keyup"]);
-const FOCUS_ATTRIBUTES: &[&str] = &sorted_str_slice!(["tabindex"]);
+const FOCUS_EVENTS: &[&str] = &["keydown", "keypress", "keyup"];
+const FOCUS_ATTRIBUTES: &[&str] = &["tabindex"];
 
 #[derive(Default)]
 pub(crate) struct FocusState {
@@ -141,9 +136,11 @@ pub(crate) struct FocusState {
 
 impl FocusState {
     /// Returns true if the focus has changed.
-    pub fn progress(&mut self, rdom: &mut TuiDom, forward: bool) -> bool {
+    pub fn progress(&mut self, rdom: &mut RealDom, forward: bool) -> bool {
         if let Some(last) = self.last_focused_id {
-            if rdom[last].state.prevent_default == PreventDefault::KeyDown {
+            if rdom.get(last).unwrap().get::<PreventDefault>().copied()
+                == Some(PreventDefault::KeyDown)
+            {
                 return false;
             }
         }
@@ -165,7 +162,7 @@ impl FocusState {
                 if forward {
                     // find the closest focusable element after the current level
                     rdom.traverse_depth_first(|n| {
-                        let node_level = n.state.focus.level;
+                        let node_level = n.get::<Focus>().unwrap().level;
                         if node_level != *focus_level
                             && node_level.focusable()
                             && node_level > *focus_level
@@ -182,7 +179,7 @@ impl FocusState {
                 } else {
                     // find the closest focusable element before the current level
                     rdom.traverse_depth_first(|n| {
-                        let node_level = n.state.focus.level;
+                        let node_level = n.get::<Focus>().unwrap().level;
                         if node_level != *focus_level
                             && node_level.focusable()
                             && node_level < *focus_level
@@ -219,7 +216,7 @@ impl FocusState {
                 loop_marker_id = Some(new_id);
             }
 
-            let current_level = rdom[new_id].state.focus.level;
+            let current_level = rdom.get(new_id).unwrap().get::<Focus>().unwrap().level;
             let after_previous_focused = if forward {
                 current_level >= *focus_level
             } else {
@@ -233,12 +230,16 @@ impl FocusState {
         }
 
         if let Some(id) = next_focus {
-            if !rdom[id].state.focus.level.focusable() {
+            let mut node = rdom.get_mut_raw(id).unwrap();
+            if !node.get::<Focus>().unwrap().level.focusable() {
                 panic!()
             }
-            rdom[id].state.focused = true;
+            let focused = node.get_mut::<Focused>().unwrap();
+            focused.0 = true;
             if let Some(old) = self.last_focused_id.replace(id) {
-                rdom[old].state.focused = false;
+                let mut old = rdom.get_mut_raw(old).unwrap();
+                let focused = old.get_mut::<Focused>().unwrap();
+                focused.0 = false;
             }
             // reset the position to the currently focused element
             while self.focus_iter.next(rdom).id() != id {}
@@ -249,8 +250,8 @@ impl FocusState {
         false
     }
 
-    pub(crate) fn prune(&mut self, mutations: &dioxus_core::Mutations, rdom: &TuiDom) {
-        fn remove_children(to_prune: &mut [&mut Option<NodeId>], rdom: &TuiDom, removed: NodeId) {
+    pub(crate) fn prune(&mut self, mutations: &dioxus_core::Mutations, rdom: &RealDom) {
+        fn remove_children(to_prune: &mut [&mut Option<NodeId>], rdom: &RealDom, removed: NodeId) {
             for opt in to_prune.iter_mut() {
                 if let Some(id) = opt {
                     if *id == removed {
@@ -258,8 +259,9 @@ impl FocusState {
                     }
                 }
             }
-            if let Some(children) = &rdom.children_ids(removed) {
-                for child in *children {
+            let node = rdom.get(removed).unwrap();
+            if let Some(children) = node.child_ids() {
+                for child in children {
                     remove_children(to_prune, rdom, *child);
                 }
             }
@@ -284,13 +286,14 @@ impl FocusState {
         }
     }
 
-    pub(crate) fn set_focus(&mut self, rdom: &mut TuiDom, id: NodeId) {
+    pub(crate) fn set_focus(&mut self, rdom: &mut RealDom, id: NodeId) {
         if let Some(old) = self.last_focused_id.replace(id) {
-            rdom[old].state.focused = false;
+            let mut node = rdom.get_mut_raw(old).unwrap();
+            node.get_mut::<Focused>().unwrap().0 = false;
         }
-        let state = &mut rdom[id].state;
-        state.focused = true;
-        self.focus_level = state.focus.level;
+        let mut node = &mut rdom.get_mut_raw(id).unwrap();
+        node.get_mut::<Focused>().unwrap().0 = true;
+        self.focus_level = node.get::<Focus>().unwrap().level;
         // reset the position to the currently focused element
         while self.focus_iter.next(rdom).id() != id {}
         self.dirty = true;

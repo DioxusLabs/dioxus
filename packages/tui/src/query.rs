@@ -5,13 +5,14 @@ use std::{
 };
 
 use dioxus_core::ElementId;
+use dioxus_native_core::{real_dom::NodeImmutable, RealDom};
 use taffy::{
     geometry::Point,
     prelude::{Layout, Size},
     Taffy,
 };
 
-use crate::{layout_to_screen_space, TuiDom};
+use crate::{layout::TaffyLayout, layout_to_screen_space};
 
 /// Allows querying the layout of nodes after rendering. It will only provide a correct value after a node is rendered.
 /// Provided as a root context for all tui applictions.
@@ -46,7 +47,7 @@ use crate::{layout_to_screen_space, TuiDom};
 /// ```
 #[derive(Clone)]
 pub struct Query {
-    pub(crate) rdom: Rc<RefCell<TuiDom>>,
+    pub(crate) rdom: Rc<RefCell<RealDom>>,
     pub(crate) stretch: Arc<Mutex<Taffy>>,
 }
 
@@ -61,13 +62,13 @@ impl Query {
 }
 
 pub struct ElementRef<'a> {
-    inner: Ref<'a, TuiDom>,
+    inner: Ref<'a, RealDom>,
     stretch: MutexGuard<'a, Taffy>,
     id: ElementId,
 }
 
 impl<'a> ElementRef<'a> {
-    fn new(inner: Ref<'a, TuiDom>, stretch: MutexGuard<'a, Taffy>, id: ElementId) -> Self {
+    fn new(inner: Ref<'a, RealDom>, stretch: MutexGuard<'a, Taffy>, id: ElementId) -> Self {
         Self { inner, stretch, id }
     }
 
@@ -85,7 +86,15 @@ impl<'a> ElementRef<'a> {
     pub fn layout(&self) -> Option<Layout> {
         let layout = self
             .stretch
-            .layout(self.inner[self.id].state.layout.node.ok()?)
+            .layout(
+                self.inner
+                    .get(self.id)
+                    .unwrap()
+                    .get::<TaffyLayout>()
+                    .unwrap()
+                    .node
+                    .ok()?,
+            )
             .ok();
         layout.map(|layout| Layout {
             order: layout.order,

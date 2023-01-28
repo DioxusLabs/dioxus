@@ -1,23 +1,18 @@
 use crate::focus::Focus;
 use crate::layout::TaffyLayout;
 use crate::style_attributes::StyleModifier;
-use dioxus_native_core::{real_dom::RealDom, Dependancy, Pass, SendAnyMap};
-use dioxus_native_core_macro::{sorted_str_slice, AnyMapLike, State};
+use dioxus_native_core::{node_ref::NodeView, Dependancy, Pass, SendAnyMap};
 
-pub(crate) type TuiDom = RealDom<NodeState>;
-pub(crate) type TuiNode = dioxus_native_core::node::Node<NodeState>;
-
-#[derive(Debug, Clone, State, AnyMapLike, Default)]
+#[derive(Debug, Clone, Default)]
 pub(crate) struct NodeState {
     pub layout: TaffyLayout,
     pub style: StyleModifier,
     pub prevent_default: PreventDefault,
     pub focus: Focus,
-    #[skip]
     pub focused: bool,
 }
 
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Debug, Clone, Copy)]
 pub(crate) enum PreventDefault {
     Focus,
     KeyPress,
@@ -47,23 +42,20 @@ impl Pass for PreventDefault {
     type ChildDependencies = ();
     type NodeDependencies = ();
 
-    const NODE_MASK: dioxus_native_core::node_ref::NodeMask =
-        dioxus_native_core::node_ref::NodeMask::new_with_attrs(
-            dioxus_native_core::node_ref::AttributeMask::Static(&sorted_str_slice!([
-                "dioxus-prevent-default"
-            ])),
-        )
-        .with_listeners();
+    const NODE_MASK: dioxus_native_core::node_ref::NodeMaskBuilder =
+        dioxus_native_core::node_ref::NodeMaskBuilder::new()
+            .with_attrs(dioxus_native_core::node_ref::AttributeMaskBuilder::Some(&[
+                "dioxus-prevent-default",
+            ]))
+            .with_listeners();
 
     fn pass<'a>(
         &mut self,
-        node_view: dioxus_native_core::node_ref::NodeView,
-        _: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
-        _: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
-        _: Option<
-            impl Iterator<Item = <Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>,
-        >,
-        _: &SendAnyMap,
+        node_view: NodeView,
+        node: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
+        parent: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
+        children: Option<Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>>,
+        context: &SendAnyMap,
     ) -> bool {
         let new = match node_view.attributes().and_then(|mut attrs| {
             attrs

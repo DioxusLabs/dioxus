@@ -32,10 +32,9 @@
 use dioxus_native_core::{
     layout_attributes::parse_value,
     node::OwnedAttributeView,
-    node_ref::{AttributeMask, NodeMask, NodeView},
-    Pass, SendAnyMap,
+    node_ref::{AttributeMaskBuilder, NodeMaskBuilder, NodeView},
+    Dependancy, Pass, SendAnyMap,
 };
-use dioxus_native_core_macro::sorted_str_slice;
 use taffy::prelude::*;
 
 use crate::style::{RinkColor, RinkStyle};
@@ -52,24 +51,17 @@ impl Pass for StyleModifier {
     type NodeDependencies = ();
 
     // todo: seperate each attribute into it's own class
-    const NODE_MASK: NodeMask =
-        NodeMask::new_with_attrs(AttributeMask::Static(SORTED_STYLE_ATTRS)).with_element();
+    const NODE_MASK: NodeMaskBuilder = NodeMaskBuilder::new()
+        .with_attrs(AttributeMaskBuilder::Some(SORTED_STYLE_ATTRS))
+        .with_element();
 
     fn pass<'a>(
         &mut self,
         node_view: NodeView,
-        _: <Self::NodeDependencies as dioxus_native_core::Dependancy>::ElementBorrowed<'a>,
-        parent: Option<
-            <Self::ParentDependencies as dioxus_native_core::Dependancy>::ElementBorrowed<'a>,
-        >,
-        _: Option<
-            impl Iterator<
-                Item = <Self::ChildDependencies as dioxus_native_core::Dependancy>::ElementBorrowed<
-                    'a,
-                >,
-            >,
-        >,
-        _: &SendAnyMap,
+        node: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
+        parent: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
+        children: Option<Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>>,
+        context: &SendAnyMap,
     ) -> bool {
         let mut new = StyleModifier::default();
         if parent.is_some() {
@@ -615,7 +607,7 @@ fn apply_transition(_name: &str, _value: &str, _style: &mut StyleModifier) {
     todo!()
 }
 
-const SORTED_STYLE_ATTRS: &[&str] = &sorted_str_slice!([
+const SORTED_STYLE_ATTRS: &[&str] = &[
     "animation",
     "animation-delay",
     "animation-direction",
@@ -816,5 +808,5 @@ const SORTED_STYLE_ATTRS: &[&str] = &sorted_str_slice!([
     "text-justify",
     "text-overflow",
     "text-shadow",
-    "text-transform"
-]);
+    "text-transform",
+];

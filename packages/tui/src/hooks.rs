@@ -2,8 +2,8 @@ use crossterm::event::{
     Event as TermEvent, KeyCode as TermKeyCode, KeyModifiers, MouseButton, MouseEventKind,
 };
 use dioxus_core::*;
-use dioxus_native_core::tree::TreeView;
-use dioxus_native_core::NodeId;
+use dioxus_native_core::real_dom::NodeImmutable;
+use dioxus_native_core::{NodeId, NodeRef, RealDom};
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use dioxus_html::geometry::euclid::{Point2D, Rect, Size2D};
@@ -23,8 +23,9 @@ use std::{
 use taffy::geometry::{Point, Size};
 use taffy::{prelude::Layout, Taffy};
 
+use crate::focus::{Focus, Focused};
+use crate::layout::TaffyLayout;
 use crate::{layout_to_screen_space, FocusState};
-use crate::{TuiDom, TuiNode};
 
 pub(crate) struct Event {
     pub id: ElementId,
@@ -173,7 +174,7 @@ impl InnerInputState {
         evts: &mut Vec<EventCore>,
         resolved_events: &mut Vec<Event>,
         layout: &Taffy,
-        dom: &mut TuiDom,
+        dom: &mut RealDom,
     ) {
         let previous_mouse = self.mouse.clone();
 
@@ -201,7 +202,7 @@ impl InnerInputState {
             // elements with listeners will always have a element id
             if let Some(id) = self.focus_state.last_focused_id {
                 let element = dom.get(id).unwrap();
-                if let Some(id) = element.node_data.element_id {
+                if let Some(id) = element.node_data().element_id {
                     resolved_events.push(Event {
                         name: "focus",
                         id,
@@ -218,7 +219,7 @@ impl InnerInputState {
             }
             if let Some(id) = old_focus {
                 let element = dom.get(id).unwrap();
-                if let Some(id) = element.node_data.element_id {
+                if let Some(id) = element.node_data().element_id {
                     resolved_events.push(Event {
                         name: "focusout",
                         id,
@@ -239,7 +240,7 @@ impl InnerInputState {
         previous_mouse: Option<MouseData>,
         resolved_events: &mut Vec<Event>,
         layout: &Taffy,
-        dom: &mut TuiDom,
+        dom: &mut RealDom,
     ) {
         fn layout_contains_point(layout: &Layout, point: ScreenPoint) -> bool {
             let Point { x, y } = layout.location;
@@ -262,17 +263,17 @@ impl InnerInputState {
             data: Rc<dyn Any>,
             will_bubble: &mut FxHashSet<NodeId>,
             resolved_events: &mut Vec<Event>,
-            node: &TuiNode,
-            dom: &TuiDom,
+            node: NodeRef,
+            dom: &RealDom,
         ) {
             // only trigger event if the event was not triggered already by a child
-            let id = node.node_data.node_id;
+            let id = node.node_data().node_id;
             if will_bubble.insert(id) {
-                let mut parent = dom.parent(id);
+                let mut parent = Some(node);
                 while let Some(current_parent) = parent {
-                    let parent_id = current_parent.node_data.node_id;
+                    let parent_id = current_parent.node_data().node_id;
                     will_bubble.insert(parent_id);
-                    parent = dom.parent(parent_id);
+                    parent = current_parent.parent_id().and_then(|id| dom.get(id));
                 }
                 if let Some(id) = node.mounted_id() {
                     resolved_events.push(Event {
@@ -564,11 +565,13 @@ impl InnerInputState {
             if was_released {
                 let mut focus_id = None;
                 dom.traverse_depth_first(|node| {
-                    let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
+                    let node_layout = layout
+                        .layout(node.get::<TaffyLayout>().unwrap().node.unwrap())
+                        .unwrap();
                     let currently_contains = layout_contains_point(node_layout, new_pos);
 
-                    if currently_contains && node.state.focus.level.focusable() {
-                        focus_id = Some(node.node_data.node_id);
+                    if currently_contains && node.get::<Focus>().unwrap().level.focusable() {
+                        focus_id = Some(node.node_data().node_id);
                     }
                 });
                 if let Some(id) = focus_id {
@@ -583,13 +586,18 @@ impl InnerInputState {
     // }
 }
 
-fn get_abs_layout(node: &TuiNode, dom: &TuiDom, taffy: &Taffy) -> Layout {
-    let mut node_layout = *taffy.layout(node.state.layout.node.unwrap()).unwrap();
+fn get_abs_layout(node: NodeRef, dom: &RealDom, taffy: &Taffy) -> Layout {
+    let mut node_layout = *taffy
+        .layout(node.get::<TaffyLayout>().unwrap().node.unwrap())
+        .unwrap();
     let mut current = node;
 
-    while let Some(parent) = dom.parent(current.node_data.node_id) {
+    while let Some(parent) = current.parent_id() {
+        let parent = dom.get(parent).unwrap();
         current = parent;
-        let parent_layout = taffy.layout(parent.state.layout.node.unwrap()).unwrap();
+        let parent_layout = taffy
+            .layout(parent.get::<TaffyLayout>().unwrap().node.unwrap())
+            .unwrap();
         node_layout.location.x += parent_layout.location.x;
         node_layout.location.y += parent_layout.location.y;
     }
@@ -632,11 +640,11 @@ impl RinkInputHandler {
         )
     }
 
-    pub(crate) fn prune(&self, mutations: &dioxus_core::Mutations, rdom: &TuiDom) {
+    pub(crate) fn prune(&self, mutations: &dioxus_core::Mutations, rdom: &RealDom) {
         self.state.borrow_mut().focus_state.prune(mutations, rdom);
     }
 
-    pub(crate) fn get_events(&self, layout: &Taffy, dom: &mut TuiDom) -> Vec<Event> {
+    pub(crate) fn get_events(&self, layout: &Taffy, dom: &mut RealDom) -> Vec<Event> {
         let mut resolved_events = Vec::new();
 
         (*self.state).borrow_mut().update(
@@ -680,7 +688,7 @@ impl RinkInputHandler {
         for (event, datas) in hm {
             for node in dom.get_listening_sorted(event) {
                 for data in &datas {
-                    if node.state.focused {
+                    if node.get::<Focused>().unwrap().0 {
                         if let Some(id) = node.mounted_id() {
                             resolved_events.push(Event {
                                 name: event,

@@ -4,9 +4,8 @@ use dioxus_native_core::layout_attributes::{
     apply_layout_attributes_cfg, BorderWidths, LayoutConfigeration,
 };
 use dioxus_native_core::node::OwnedAttributeView;
-use dioxus_native_core::node_ref::{AttributeMask, NodeMask, NodeView};
-use dioxus_native_core::{Pass, SendAnyMap};
-use dioxus_native_core_macro::sorted_str_slice;
+use dioxus_native_core::node_ref::{AttributeMaskBuilder, NodeMaskBuilder, NodeView};
+use dioxus_native_core::{Dependancy, Pass, SendAnyMap};
 use taffy::prelude::*;
 
 use crate::{screen_to_layout_space, unit_to_layout_space};
@@ -48,23 +47,16 @@ impl Pass for TaffyLayout {
     type ParentDependencies = ();
     type NodeDependencies = ();
 
-    const NODE_MASK: NodeMask =
-        NodeMask::new_with_attrs(AttributeMask::Static(SORTED_LAYOUT_ATTRS)).with_text();
+    const NODE_MASK: NodeMaskBuilder = NodeMaskBuilder::new()
+        .with_attrs(AttributeMaskBuilder::Some(SORTED_LAYOUT_ATTRS))
+        .with_text();
 
     fn pass<'a>(
         &mut self,
         node_view: NodeView,
-        _: <Self::NodeDependencies as dioxus_native_core::Dependancy>::ElementBorrowed<'a>,
-        _: Option<
-            <Self::ParentDependencies as dioxus_native_core::Dependancy>::ElementBorrowed<'a>,
-        >,
-        children: Option<
-            impl Iterator<
-                Item = <Self::ChildDependencies as dioxus_native_core::Dependancy>::ElementBorrowed<
-                    'a,
-                >,
-            >,
-        >,
+        node: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
+        parent: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
+        children: Option<Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>>,
         ctx: &SendAnyMap,
     ) -> bool {
         let mut changed = false;
@@ -203,7 +195,7 @@ impl Pass for TaffyLayout {
 }
 
 // these are the attributes in layout_attiributes in native-core
-const SORTED_LAYOUT_ATTRS: &[&str] = &sorted_str_slice!([
+const SORTED_LAYOUT_ATTRS: &[&str] = &[
     "align-content",
     "align-items",
     "align-self",
@@ -355,5 +347,5 @@ const SORTED_LAYOUT_ATTRS: &[&str] = &sorted_str_slice!([
     "word-break",
     "word-spacing",
     "word-wrap",
-    "z-index"
-]);
+    "z-index",
+];

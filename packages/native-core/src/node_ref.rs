@@ -262,15 +262,16 @@ impl NodeMaskBuilder {
     /// A node mask with no parts visible.
     pub const NONE: Self = Self::new();
     /// A node mask with every part visible.
-    pub const ALL: Self = Self::new_with_attrs(AttributeMaskBuilder::All)
+    pub const ALL: Self = Self::new()
+        .with_attrs(AttributeMaskBuilder::All)
         .with_text()
         .with_element()
         .with_listeners();
 
-    /// Create a new node mask with the given attributes
-    pub const fn new_with_attrs(attritutes: AttributeMaskBuilder) -> Self {
+    /// Create a empty node mask
+    pub const fn new() -> Self {
         Self {
-            attritutes,
+            attritutes: AttributeMaskBuilder::Some(&[]),
             tag: false,
             namespace: false,
             text: false,
@@ -278,9 +279,10 @@ impl NodeMaskBuilder {
         }
     }
 
-    /// Create a empty node mask
-    pub const fn new() -> Self {
-        Self::new_with_attrs(AttributeMaskBuilder::Some(&[]))
+    /// Allow the mask to view the given attributes
+    pub const fn with_attrs(mut self, attritutes: AttributeMaskBuilder) -> Self {
+        self.attritutes = attritutes;
+        self
     }
 
     /// Allow the mask to view the tag

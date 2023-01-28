@@ -164,11 +164,11 @@ impl Tree {
         }
     }
 
-    pub fn read<T: Any>(&self, id: NodeId) -> Option<&T> {
+    pub fn get<T: Any>(&self, id: NodeId) -> Option<&T> {
         self.nodes.read_slab().get(id)
     }
 
-    pub fn write<T: Any>(&mut self, id: NodeId) -> Option<&mut T> {
+    pub fn get_mut<T: Any>(&mut self, id: NodeId) -> Option<&mut T> {
         self.nodes.write_slab().get_mut(id)
     }
 
@@ -184,8 +184,8 @@ impl Tree {
         self.get_node_data(id).parent
     }
 
-    pub fn children_ids(&self, id: NodeId) -> Option<Vec<NodeId>> {
-        Some(self.get_node_data(id).children.clone())
+    pub fn children_ids(&self, id: NodeId) -> Option<&[NodeId]> {
+        Some(&self.get_node_data(id).children)
     }
 
     pub fn height(&self, id: NodeId) -> Option<u16> {
