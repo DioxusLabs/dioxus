@@ -311,7 +311,7 @@ impl Parse for Dependency {
                 input
                     .parse::<Ident>()
                     .ok()
-                    .filter(|i: &Ident| format!("{}", i) != "NONE")
+                    .filter(|i: &Ident| i != "NONE")
                     .map(|i| vec![i])
             })
             .unwrap_or_default();

@@ -426,7 +426,7 @@ fn creation() {
     let child = tree.create_node(0);
     tree.add_child(parent, child);
 
-    println!("Tree: {:#?}", tree);
+    println!("Tree: {tree:#?}");
     assert_eq!(tree.size(), 2);
     assert_eq!(tree.height(parent), Some(0));
     assert_eq!(tree.height(child), Some(1));
@@ -448,7 +448,7 @@ fn insertion() {
     let after = tree.create_node(3);
     tree.insert_after(child, after);
 
-    println!("Tree: {:#?}", tree);
+    println!("Tree: {tree:#?}");
     assert_eq!(tree.size(), 4);
     assert_eq!(tree.height(parent), Some(0));
     assert_eq!(tree.height(child), Some(1));
@@ -475,7 +475,7 @@ fn deletion() {
     let after = tree.create_node(3);
     tree.insert_after(child, after);
 
-    println!("Tree: {:#?}", tree);
+    println!("Tree: {tree:#?}");
     assert_eq!(tree.size(), 4);
     assert_eq!(tree.height(parent), Some(0));
     assert_eq!(tree.height(child), Some(1));
@@ -492,7 +492,7 @@ fn deletion() {
 
     tree.remove(child);
 
-    println!("Tree: {:#?}", tree);
+    println!("Tree: {tree:#?}");
     assert_eq!(tree.size(), 3);
     assert_eq!(tree.height(parent), Some(0));
     assert_eq!(tree.height(before), Some(1));
@@ -507,7 +507,7 @@ fn deletion() {
 
     tree.remove(before);
 
-    println!("Tree: {:#?}", tree);
+    println!("Tree: {tree:#?}");
     assert_eq!(tree.size(), 2);
     assert_eq!(tree.height(parent), Some(0));
     assert_eq!(tree.height(after), Some(1));
@@ -519,7 +519,7 @@ fn deletion() {
 
     tree.remove(after);
 
-    println!("Tree: {:#?}", tree);
+    println!("Tree: {tree:#?}");
     assert_eq!(tree.size(), 1);
     assert_eq!(tree.height(parent), Some(0));
     assert_eq!(*tree.get(parent).unwrap(), 0);
@@ -562,7 +562,7 @@ fn get_node_children_mut() {
     for (i, child) in children.enumerate() {
         assert_eq!(*child, i + 1);
     }
-    println!("Parent: {:#?}", parent);
+    println!("Parent: {parent:#?}");
 }
 
 #[test]
@@ -574,7 +574,7 @@ fn get_many_mut_unchecked() {
 
     let all =
         unsafe { slab.get_many_mut_unchecked([parent, child, grandchild].into_iter()) }.unwrap();
-    println!("All: {:#?}", all);
+    println!("All: {all:#?}");
 }
 
 #[derive(Debug)]

@@ -82,7 +82,7 @@ fn app(cx: Scope) -> Element {
                                     onclick: move |_| {
                                         let temp = calc_val(val.as_str());
                                         if temp > 0.0 {
-                                            val.set(format!("-{}", temp));
+                                            val.set(format!("-{temp}"));
                                         } else {
                                             val.set(format!("{}", temp.abs()));
                                         }

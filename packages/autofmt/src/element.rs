@@ -224,7 +224,7 @@ impl Writer<'_> {
             }
             ElementAttr::AttrExpression { name, value } => {
                 let out = prettyplease::unparse_expr(value);
-                write!(self.out, "{}: {}", name, out)?;
+                write!(self.out, "{name}: {out}")?;
             }
 
             ElementAttr::CustomAttrText { name, value } => {
@@ -250,13 +250,13 @@ impl Writer<'_> {
                 // a one-liner for whatever reason
                 // Does not need a new line
                 if lines.peek().is_none() {
-                    write!(self.out, "{}: {}", name, first)?;
+                    write!(self.out, "{name}: {first}")?;
                 } else {
-                    writeln!(self.out, "{}: {}", name, first)?;
+                    writeln!(self.out, "{name}: {first}")?;
 
                     while let Some(line) = lines.next() {
                         self.out.indented_tab()?;
-                        write!(self.out, "{}", line)?;
+                        write!(self.out, "{line}")?;
                         if lines.peek().is_none() {
                             write!(self.out, "")?;
                         } else {

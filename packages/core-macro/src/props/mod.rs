@@ -323,7 +323,7 @@ mod field_info {
                                 let tokenized_code = TokenStream::from_str(&code.value())?;
                                 self.default = Some(
                                     syn::parse(tokenized_code.into())
-                                        .map_err(|e| Error::new_spanned(code, format!("{}", e)))?,
+                                        .map_err(|e| Error::new_spanned(code, format!("{e}")))?,
                                 );
                             } else {
                                 return Err(Error::new_spanned(assign.right, "Expected string"));
@@ -332,7 +332,7 @@ mod field_info {
                         }
                         _ => Err(Error::new_spanned(
                             &assign,
-                            format!("Unknown parameter {:?}", name),
+                            format!("Unknown parameter {name:?}"),
                         )),
                     }
                 }
@@ -503,11 +503,11 @@ mod struct_info {
                 builder_attr,
                 builder_name: syn::Ident::new(&builder_name, proc_macro2::Span::call_site()),
                 conversion_helper_trait_name: syn::Ident::new(
-                    &format!("{}_Optional", builder_name),
+                    &format!("{builder_name}_Optional"),
                     proc_macro2::Span::call_site(),
                 ),
                 core: syn::Ident::new(
-                    &format!("{}_core", builder_name),
+                    &format!("{builder_name}_core"),
                     proc_macro2::Span::call_site(),
                 ),
             })
@@ -594,7 +594,6 @@ Finally, call `.build()` to create the instance of `{name}`.
                     None => {
                         let doc = format!(
                         "Builder for [`{name}`] instances.\n\nSee [`{name}::builder()`] for more info.",
-                        name = name
                     );
                         quote!(#[doc = #doc])
                     }
@@ -709,9 +708,9 @@ Finally, call `.build()` to create the instance of `{name}`.
             });
             let reconstructing = self.included_fields().map(|f| f.name);
 
-            let &FieldInfo {
-                name: ref field_name,
-                ty: ref field_type,
+            let FieldInfo {
+                name: field_name,
+                ty: field_type,
                 ..
             } = field;
             let mut ty_generics: Vec<syn::GenericArgument> = self
@@ -810,7 +809,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                 ),
                 proc_macro2::Span::call_site(),
             );
-            let repeated_fields_error_message = format!("Repeated field {}", field_name);
+            let repeated_fields_error_message = format!("Repeated field {field_name}");
 
             Ok(quote! {
                 #[allow(dead_code, non_camel_case_types, missing_docs)]
@@ -929,7 +928,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                 ),
                 proc_macro2::Span::call_site(),
             );
-            let early_build_error_message = format!("Missing required field {}", field_name);
+            let early_build_error_message = format!("Missing required field {field_name}");
 
             Ok(quote! {
                 #[doc(hidden)]
@@ -1037,7 +1036,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                         // I’d prefer “a” or “an” to “its”, but determining which is grammatically
                         // correct is roughly impossible.
                         let doc =
-                            format!("Finalise the builder and create its [`{}`] instance", name);
+                            format!("Finalise the builder and create its [`{name}`] instance");
                         quote!(#[doc = #doc])
                     }
                 }
@@ -1132,7 +1131,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                         }
                         _ => Err(Error::new_spanned(
                             &assign,
-                            format!("Unknown parameter {:?}", name),
+                            format!("Unknown parameter {name:?}"),
                         )),
                     }
                 }
@@ -1146,7 +1145,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                         }
                         _ => Err(Error::new_spanned(
                             &path,
-                            format!("Unknown parameter {:?}", name),
+                            format!("Unknown parameter {name:?}"),
                         )),
                     }
                 }
@@ -1161,7 +1160,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                         let call_func = quote!(#call_func);
                         Error::new_spanned(
                             &call.func,
-                            format!("Illegal builder setting group {}", call_func),
+                            format!("Illegal builder setting group {call_func}"),
                         )
                     })?;
                     match subsetting_name.as_str() {
@@ -1173,7 +1172,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                         }
                         _ => Err(Error::new_spanned(
                             &call.func,
-                            format!("Illegal builder setting group name {}", subsetting_name),
+                            format!("Illegal builder setting group name {subsetting_name}"),
                         )),
                     }
                 }
