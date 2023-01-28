@@ -7,7 +7,7 @@ use crossterm::{
 };
 use dioxus_core::*;
 use dioxus_native_core::{node_ref::NodeMaskBuilder, real_dom::NodeImmutable, Pass};
-use dioxus_native_core::{real_dom::RealDom, FxDashSet, NodeId, NodeMask, SendAnyMap};
+use dioxus_native_core::{real_dom::RealDom, FxDashSet, NodeId, SendAnyMap};
 use focus::FocusState;
 use futures::{
     channel::mpsc::{UnboundedReceiver, UnboundedSender},
@@ -30,8 +30,8 @@ mod config;
 mod focus;
 mod hooks;
 mod layout;
-mod node;
 pub mod prelude;
+mod prevent_default;
 pub mod query;
 mod render;
 mod style;
@@ -41,7 +41,6 @@ mod widgets;
 
 pub use config::*;
 pub use hooks::*;
-pub(crate) use node::*;
 
 // the layout space has a multiplier of 10 to minimize rounding errors
 pub(crate) fn screen_to_layout_space(screen: u16) -> f32 {
@@ -215,7 +214,7 @@ fn render_vdom(
                             // size is guaranteed to not change when rendering
                             resize(frame.size(), &mut taffy, &rdom);
                             let root = rdom.get(NodeId(0)).unwrap();
-                            render::render_vnode(frame, &taffy, &rdom, root, cfg, Point::ZERO);
+                            render::render_vnode(frame, &taffy, root, cfg, Point::ZERO);
                         })?;
                         execute!(terminal.backend_mut(), RestorePosition, Show).unwrap();
                     } else {

@@ -54,8 +54,8 @@ impl Pass for TaffyLayout {
     fn pass<'a>(
         &mut self,
         node_view: NodeView,
-        node: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
-        parent: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
+        _: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
+        _: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
         children: Option<Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>>,
         ctx: &SendAnyMap,
     ) -> bool {

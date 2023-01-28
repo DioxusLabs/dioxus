@@ -1,15 +1,11 @@
-use dioxus_native_core::{real_dom::NodeImmutable, NodeRef, RealDom};
+use dioxus_native_core::{real_dom::NodeImmutable, NodeRef};
 use std::io::Stdout;
 use taffy::{
     geometry::Point,
     prelude::{Dimension, Layout, Size},
     Taffy,
 };
-use tui::{
-    backend::CrosstermBackend,
-    layout::Rect,
-    style::{Color, Style},
-};
+use tui::{backend::CrosstermBackend, layout::Rect, style::Color};
 
 use crate::{
     focus::Focused,
@@ -26,7 +22,6 @@ const RADIUS_MULTIPLIER: [f32; 2] = [1.0, 0.5];
 pub(crate) fn render_vnode(
     frame: &mut tui::Frame<CrosstermBackend<Stdout>>,
     layout: &Taffy,
-    rdom: &RealDom,
     node: NodeRef,
     cfg: Config,
     parent_location: Point<f32>,
@@ -91,7 +86,7 @@ pub(crate) fn render_vnode(
             }
 
             for c in node.children().unwrap() {
-                render_vnode(frame, layout, rdom, c, cfg, location);
+                render_vnode(frame, layout, c, cfg, location);
             }
         }
         NodeType::Placeholder => unreachable!(),
@@ -123,10 +118,7 @@ impl RinkWidget for NodeRef<'_> {
                 [0, 1] => Direction::Down,
                 [0, -1] => Direction::Up,
                 [a, b] => {
-                    panic!(
-                        "draw({:?} {:?} {:?}) {}, {} no cell adjacent",
-                        before, current, after, a, b
-                    )
+                    panic!("draw({before:?} {current:?} {after:?}) {a}, {b} no cell adjacent")
                 }
             };
             let end_dir = match [after[0] - current[0], after[1] - current[1]] {
@@ -135,10 +127,7 @@ impl RinkWidget for NodeRef<'_> {
                 [0, 1] => Direction::Down,
                 [0, -1] => Direction::Up,
                 [a, b] => {
-                    panic!(
-                        "draw({:?} {:?} {:?}) {}, {} no cell adjacent",
-                        before, current, after, a, b
-                    )
+                    panic!("draw({before:?} {current:?} {after:?}) {a}, {b} no cell adjacent")
                 }
             };
 
@@ -159,10 +148,7 @@ impl RinkWidget for NodeRef<'_> {
                 [Direction::Left, Direction::Up] => symbols.bottom_right,
                 [Direction::Left, Direction::Right] => symbols.horizontal,
                 [Direction::Left, Direction::Down] => symbols.top_right,
-                _ => panic!(
-                    "{:?} {:?} {:?} cannont connect cell to itself",
-                    before, current, after
-                ),
+                _ => panic!("{before:?} {current:?} {after:?} cannont connect cell to itself"),
             }
             .to_string();
             buf.set(

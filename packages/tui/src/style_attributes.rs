@@ -58,10 +58,10 @@ impl Pass for StyleModifier {
     fn pass<'a>(
         &mut self,
         node_view: NodeView,
-        node: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
+        _: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
         parent: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
-        children: Option<Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>>,
-        context: &SendAnyMap,
+        _: Option<Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>>,
+        _: &SendAnyMap,
     ) -> bool {
         let mut new = StyleModifier::default();
         if parent.is_some() {

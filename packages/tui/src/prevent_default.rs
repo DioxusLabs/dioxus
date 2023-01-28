@@ -1,16 +1,4 @@
-use crate::focus::Focus;
-use crate::layout::TaffyLayout;
-use crate::style_attributes::StyleModifier;
 use dioxus_native_core::{node_ref::NodeView, Dependancy, Pass, SendAnyMap};
-
-#[derive(Debug, Clone, Default)]
-pub(crate) struct NodeState {
-    pub layout: TaffyLayout,
-    pub style: StyleModifier,
-    pub prevent_default: PreventDefault,
-    pub focus: Focus,
-    pub focused: bool,
-}
 
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub(crate) enum PreventDefault {
@@ -52,10 +40,10 @@ impl Pass for PreventDefault {
     fn pass<'a>(
         &mut self,
         node_view: NodeView,
-        node: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
-        parent: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
-        children: Option<Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>>,
-        context: &SendAnyMap,
+        _: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
+        _: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
+        _: Option<Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>>,
+        _: &SendAnyMap,
     ) -> bool {
         let new = match node_view.attributes().and_then(|mut attrs| {
             attrs

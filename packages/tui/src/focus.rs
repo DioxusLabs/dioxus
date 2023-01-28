@@ -1,4 +1,4 @@
-use crate::node::PreventDefault;
+use crate::prevent_default::PreventDefault;
 
 use dioxus_native_core::{
     node_ref::{AttributeMaskBuilder, NodeMaskBuilder},
@@ -75,10 +75,10 @@ impl Pass for Focus {
     fn pass<'a>(
         &mut self,
         node_view: NodeView,
-        node: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
-        parent: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
-        children: Option<Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>>,
-        context: &SendAnyMap,
+        _: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
+        _: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
+        _: Option<Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>>,
+        _: &SendAnyMap,
     ) -> bool {
         let new = Focus {
             level: if let Some(a) = node_view
@@ -291,7 +291,7 @@ impl FocusState {
             let mut node = rdom.get_mut_raw(old).unwrap();
             node.get_mut::<Focused>().unwrap().0 = false;
         }
-        let mut node = &mut rdom.get_mut_raw(id).unwrap();
+        let mut node = rdom.get_mut_raw(id).unwrap();
         node.get_mut::<Focused>().unwrap().0 = true;
         self.focus_level = node.get::<Focus>().unwrap().level;
         // reset the position to the currently focused element
