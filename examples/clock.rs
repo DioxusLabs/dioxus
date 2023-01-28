@@ -18,7 +18,7 @@ fn app(cx: Scope) -> Element {
         loop {
             tokio::time::sleep(std::time::Duration::from_millis(100)).await;
             count += 1;
-            println!("current: {}", count);
+            println!("current: {count}");
         }
     });
 

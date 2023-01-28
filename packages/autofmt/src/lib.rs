@@ -102,7 +102,7 @@ pub fn fmt_file(contents: &str) -> Vec<FormattedBlock> {
             && matches!(body.roots[0], BodyNode::RawExpr(_) | BodyNode::Text(_));
 
         if formatted.len() <= 80 && !formatted.contains('\n') && !body_is_solo_expr {
-            formatted = format!(" {} ", formatted);
+            formatted = format!(" {formatted} ");
         }
 
         end_span = span.end();

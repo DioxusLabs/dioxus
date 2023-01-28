@@ -120,7 +120,7 @@ mod tests {
     fn app(cx: Scope, name: String) -> Element {
         let task = use_coroutine(cx, |mut rx: UnboundedReceiver<i32>| async move {
             while let Some(msg) = rx.next().await {
-                println!("got message: {}", msg);
+                println!("got message: {msg}");
             }
         });
 
@@ -133,7 +133,7 @@ mod tests {
 
     async fn view_task(mut rx: UnboundedReceiver<i32>) {
         while let Some(msg) = rx.next().await {
-            println!("got message: {}", msg);
+            println!("got message: {msg}");
         }
     }
 

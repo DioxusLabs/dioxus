@@ -13,7 +13,7 @@ fn app(cx: Scope) -> Element {
             .await
             .unwrap();
 
-        println!("{:#?}, ", res);
+        println!("{res:#?}, ");
     });
 
     cx.render(rsx! {

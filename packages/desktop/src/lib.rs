@@ -326,5 +326,5 @@ fn send_edits(edits: Mutations, webview: &WebView) {
     let serialized = serde_json::to_string(&edits).unwrap();
 
     // todo: use SSE and binary data to send the edits with lower overhead
-    _ = webview.evaluate_script(&format!("window.interpreter.handleEdits({})", serialized));
+    _ = webview.evaluate_script(&format!("window.interpreter.handleEdits({serialized})"));
 }
