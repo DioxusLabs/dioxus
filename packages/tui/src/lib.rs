@@ -1,3 +1,4 @@
+use crate::focus::Focus;
 use anyhow::Result;
 use crossterm::{
     cursor::{MoveTo, RestorePosition, SavePosition, Show},
@@ -15,6 +16,7 @@ use futures::{
 };
 use futures_channel::mpsc::unbounded;
 use layout::TaffyLayout;
+use prevent_default::PreventDefault;
 use query::Query;
 use std::rc::Rc;
 use std::{
@@ -22,6 +24,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 use std::{io, time::Duration};
+use style_attributes::StyleModifier;
 use taffy::Taffy;
 pub use taffy::{geometry::Point, prelude::*};
 use tui::{backend::CrosstermBackend, layout::Rect, Terminal};
@@ -104,6 +107,9 @@ pub fn launch_cfg_with_props<Props: 'static>(app: Component<Props>, props: Props
     let cx = dom.base_scope();
     let rdom = Rc::new(RefCell::new(RealDom::new(Box::new([
         TaffyLayout::to_type_erased(),
+        Focus::to_type_erased(),
+        StyleModifier::to_type_erased(),
+        PreventDefault::to_type_erased(),
     ]))));
     let taffy = Arc::new(Mutex::new(Taffy::new()));
     cx.provide_context(state);
