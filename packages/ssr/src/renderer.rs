@@ -124,7 +124,7 @@ impl Renderer {
                     }
                 },
 
-                Segment::PreRendered(contents) => write!(buf, "{}", contents)?,
+                Segment::PreRendered(contents) => write!(buf, "{contents}")?,
             }
         }
 

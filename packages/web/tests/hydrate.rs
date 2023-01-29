@@ -58,7 +58,7 @@ fn rehydrates() {
         .unwrap()
         .body()
         .unwrap()
-        .set_inner_html(&format!("<div id='main'>{}</div>", out));
+        .set_inner_html(&format!("<div id='main'>{out}</div>"));
 
     dioxus_web::launch_cfg(app, Config::new().hydrate(true));
 }

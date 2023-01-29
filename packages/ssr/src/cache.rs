@@ -60,11 +60,11 @@ impl StringCache {
                 ..
             } => {
                 cur_path.push(root_idx);
-                write!(chain, "<{}", tag)?;
+                write!(chain, "<{tag}")?;
                 for attr in *attrs {
                     match attr {
                         TemplateAttribute::Static { name, value, .. } => {
-                            write!(chain, " {}=\"{}\"", name, value)?;
+                            write!(chain, " {name}=\"{value}\"")?;
                         }
                         TemplateAttribute::Dynamic { id: index } => {
                             chain.segments.push(Segment::Attr(*index))
@@ -78,11 +78,11 @@ impl StringCache {
                     for child in *children {
                         Self::recurse(child, cur_path, root_idx, chain)?;
                     }
-                    write!(chain, "</{}>", tag)?;
+                    write!(chain, "</{tag}>")?;
                 }
                 cur_path.pop();
             }
-            TemplateNode::Text { text } => write!(chain, "{}", text)?,
+            TemplateNode::Text { text } => write!(chain, "{text}")?,
             TemplateNode::Dynamic { id: idx } | TemplateNode::DynamicText { id: idx } => {
                 chain.segments.push(Segment::Node(*idx))
             }

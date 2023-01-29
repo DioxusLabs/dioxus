@@ -361,7 +361,7 @@ fn persist_removes() {
     let mut rdom: RealDom = RealDom::new(Box::new([]));
 
     let build = vdom.rebuild();
-    println!("{:#?}", build);
+    println!("{build:#?}");
     let _to_update = rdom.apply_mutations(build);
 
     // this will end on the node that is removed
@@ -393,7 +393,7 @@ fn persist_removes() {
 
     vdom.mark_dirty(ScopeId(0));
     let update = vdom.render_immediate();
-    println!("{:#?}", update);
+    println!("{update:#?}");
     iter1.prune(&update, &rdom);
     iter2.prune(&update, &rdom);
     let _to_update = rdom.apply_mutations(update);

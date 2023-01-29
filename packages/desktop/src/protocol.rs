@@ -11,15 +11,14 @@ fn module_loader(root_name: &str) -> String {
 <script>
     {INTERPRETER_JS}
 
-    let rootname = "{}";
+    let rootname = "{root_name}";
     let root = window.document.getElementById(rootname);
     if (root != null) {{
         window.interpreter = new Interpreter(root);
         window.ipc.postMessage(serializeIpcMessage("initialize"));
     }}
 </script>
-"#,
-        root_name
+"#
     )
 }
 

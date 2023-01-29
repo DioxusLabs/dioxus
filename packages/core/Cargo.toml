@@ -1,6 +1,6 @@
 [package]
 name = "dioxus-core"
-version = "0.3.0"
+version = "0.3.1"
 authors = ["Jonathan Kelley"]
 edition = "2018"
 description = "Core functionality for Dioxus - a concurrent renderer-agnostic Virtual DOM for interactive user experiences"
@@ -23,7 +23,9 @@ rustc-hash = "1.1.0"
 # Used in diffing
 longest-increasing-subsequence = "0.1.0"
 
-futures-util = { version = "0.3", default-features = false, features = ["alloc"]}
+futures-util = { version = "0.3", default-features = false, features = [
+    "alloc",
+] }
 
 slab = "0.4"
 
@@ -36,6 +38,8 @@ log = "0.4.17"
 
 # Serialize the Edits for use in Webview/Liveview instances
 serde = { version = "1", features = ["derive"], optional = true }
+
+bumpslab = { version = "0.2.0" }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }

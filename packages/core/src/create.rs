@@ -535,7 +535,7 @@ impl<'b> VirtualDom {
         }
 
         // If running the scope has collected some leaves and *this* component is a boundary, then handle the suspense
-        let boundary = match self.scopes[scope.0].has_context::<Rc<SuspenseContext>>() {
+        let boundary = match self.scopes[scope].has_context::<Rc<SuspenseContext>>() {
             Some(boundary) => boundary,
             _ => return created,
         };
@@ -544,7 +544,7 @@ impl<'b> VirtualDom {
         let new_id = self.next_element(new, parent.template.get().node_paths[idx]);
 
         // Now connect everything to the boundary
-        self.scopes[scope.0].placeholder.set(Some(new_id));
+        self.scopes[scope].placeholder.set(Some(new_id));
 
         // This involves breaking off the mutations to this point, and then creating a new placeholder for the boundary
         // Note that we break off dynamic mutations only - since static mutations aren't rendered immediately
@@ -583,7 +583,7 @@ impl<'b> VirtualDom {
         let new_id = self.next_element(template, template.template.get().node_paths[idx]);
 
         // Set the placeholder of the scope
-        self.scopes[scope.0].placeholder.set(Some(new_id));
+        self.scopes[scope].placeholder.set(Some(new_id));
 
         // Since the placeholder is already in the DOM, we don't create any new nodes
         self.mutations.push(AssignId {

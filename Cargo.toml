@@ -19,6 +19,7 @@ members = [
     "packages/native-core",
     "packages/rsx-rosetta",
     "packages/signals",
+    "packages/hot-reload",
     "docs/guide",
 ]
 

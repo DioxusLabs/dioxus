@@ -14,9 +14,10 @@ license = "MIT/Apache-2.0"
 
 [dependencies]
 dioxus = { path = "../dioxus", version = "^0.3.0" }
-dioxus-core = { path = "../core", version = "^0.3.0" }
+dioxus-core = { path = "../core", version = "^0.3.0", features = ["serialize"] }
 dioxus-html = { path = "../html", version = "^0.3.0" }
 dioxus-native-core = { path = "../native-core", version = "^0.2.0" }
+dioxus-hot-reload = { path = "../hot-reload", optional = true }
 
 tui = "0.17.0"
 crossterm = "0.23.0"
@@ -37,3 +38,7 @@ criterion = "0.3.5"
 [[bench]]
 name = "update"
 harness = false
+
+[features]
+default = ["hot-reload"]
+hot-reload = ["dioxus-hot-reload"]

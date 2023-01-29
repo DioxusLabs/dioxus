@@ -316,7 +316,7 @@ fn creation() {
 
     tree.add_child(parent_id, child_id);
 
-    println!("Tree: {:#?}", tree);
+    println!("Tree: {tree:#?}");
     assert_eq!(tree.size(), 2);
     assert_eq!(tree.height(parent_id), Some(0));
     assert_eq!(tree.height(child_id), Some(1));
@@ -346,7 +346,7 @@ fn insertion() {
     let after = after.id();
     tree.insert_after(child, after);
 
-    println!("Tree: {:#?}", tree);
+    println!("Tree: {tree:#?}");
     assert_eq!(tree.size(), 4);
     assert_eq!(tree.height(parent), Some(0));
     assert_eq!(tree.height(child), Some(1));
@@ -381,7 +381,7 @@ fn deletion() {
     let after = after.id();
     tree.insert_after(child, after);
 
-    println!("Tree: {:#?}", tree);
+    println!("Tree: {tree:#?}");
     assert_eq!(tree.size(), 4);
     assert_eq!(tree.height(parent), Some(0));
     assert_eq!(tree.height(child), Some(1));
@@ -399,7 +399,7 @@ fn deletion() {
 
     tree.remove(child);
 
-    println!("Tree: {:#?}", tree);
+    println!("Tree: {tree:#?}");
     assert_eq!(tree.size(), 3);
     assert_eq!(tree.height(parent), Some(0));
     assert_eq!(tree.height(before), Some(1));
@@ -415,7 +415,7 @@ fn deletion() {
 
     tree.remove(before);
 
-    println!("Tree: {:#?}", tree);
+    println!("Tree: {tree:#?}");
     assert_eq!(tree.size(), 2);
     assert_eq!(tree.height(parent), Some(0));
     assert_eq!(tree.height(after), Some(1));
@@ -428,7 +428,7 @@ fn deletion() {
 
     tree.remove(after);
 
-    println!("Tree: {:#?}", tree);
+    println!("Tree: {tree:#?}");
     assert_eq!(tree.size(), 1);
     assert_eq!(tree.height(parent), Some(0));
     assert_eq!(tree.children_ids(parent).unwrap(), &[]);

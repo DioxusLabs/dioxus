@@ -8,11 +8,11 @@ fn formatting_compiles() {
     // escape sequences work
     assert_eq!(
         format_args_f!("{x:?} {{}}}}").to_string(),
-        format!("{:?} {{}}}}", x)
+        format!("{x:?} {{}}}}")
     );
     assert_eq!(
         format_args_f!("{{{{}} {x:?}").to_string(),
-        format!("{{{{}} {:?}", x)
+        format!("{{{{}} {x:?}")
     );
 
     // paths in formating works
@@ -27,6 +27,6 @@ fn formatting_compiles() {
     // allows duplicate format args
     assert_eq!(
         format_args_f!("{x:?} {x:?}").to_string(),
-        format!("{:?} {:?}", x, x)
+        format!("{x:?} {x:?}")
     );
 }

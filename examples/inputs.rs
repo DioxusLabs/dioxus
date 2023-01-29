@@ -42,7 +42,7 @@ fn app(cx: Scope) -> Element {
                 // so the value of our input event will be either huey, dewey, louie, or true/false (because of the checkboxe)
                 // be mindful in grouping inputs together, as they will all be handled by the same event handler
                 oninput: move |evt| {
-                    println!("{:?}", evt);
+                    println!("{evt:?}");
                 },
                 div {
                     input {
@@ -104,7 +104,7 @@ fn app(cx: Scope) -> Element {
                     name: "pdf",
                     r#type: "checkbox",
                     oninput: move |evt| {
-                        println!("{:?}", evt);
+                        println!("{evt:?}");
                     },
                 }
                 label {
@@ -121,7 +121,7 @@ fn app(cx: Scope) -> Element {
                         r#type: "{field}",
                         value: "{value}",
                         oninput: move |evt: FormEvent| {
-                            println!("{:?}", evt);
+                            println!("{evt:?}");
                         },
                     }
                     label {
