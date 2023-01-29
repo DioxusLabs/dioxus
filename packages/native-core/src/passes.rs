@@ -109,7 +109,7 @@ impl DirtyNodeStates {
     }
 }
 
-pub trait Pass<V: FromAnyValue + Send = ()>: Any {
+pub trait Pass<V: FromAnyValue + Send + Sync = ()>: Any + Send + Sync {
     /// This is a tuple of (T: Any, ..)
     type ParentDependencies: Dependancy;
     /// This is a tuple of (T: Any, ..)
@@ -299,17 +299,17 @@ pub enum PassDirection {
 type PassCallback = Box<dyn Fn(NodeId, &mut TreeStateView, &SendAnyMap) -> bool + Send + Sync>;
 
 pub trait AnyMapLike<'a> {
-    fn get<T: Any>(self) -> Option<&'a T>;
+    fn get<T: Any + Sync + Send>(self) -> Option<&'a T>;
 }
 
 impl<'a> AnyMapLike<'a> for &'a AnyMap {
-    fn get<T: Any>(self) -> Option<&'a T> {
+    fn get<T: Any + Sync + Send>(self) -> Option<&'a T> {
         self.get()
     }
 }
 
 impl<'a> AnyMapLike<'a> for &'a SendAnyMap {
-    fn get<T: Any>(self) -> Option<&'a T> {
+    fn get<T: Any + Sync + Send>(self) -> Option<&'a T> {
         todo!()
     }
 }
@@ -327,7 +327,7 @@ pub trait Dependancy {
 
 macro_rules! impl_dependancy {
     ($($t:ident),*) => {
-        impl< $($t: Any),* > Dependancy for ($($t,)*) {
+        impl< $($t: Any + Send + Sync),* > Dependancy for ($($t,)*) {
             type ElementBorrowed<'a> = ($(&'a $t,)*) where Self: 'a;
 
             #[allow(unused_variables, clippy::unused_unit, non_snake_case)]
@@ -423,7 +423,7 @@ pub fn resolve_passes<V: FromAnyValue + Send + Sync>(
 //     }
 
 //     impl AnyMapLike for Number {
-//         fn get<T: Any>(&self) -> Option<&T> {
+//         fn get<T: Any+Sync+Send>(&self) -> Option<&T> {
 //             if TypeId::of::<Self>() == TypeId::of::<T>() {
 //                 Some(unsafe { &*(self as *const Self as *const T) })
 //             } else {
@@ -431,7 +431,7 @@ pub fn resolve_passes<V: FromAnyValue + Send + Sync>(
 //             }
 //         }
 
-//         fn get_mut<T: Any>(&mut self) -> Option<&mut T> {
+//         fn get_mut<T: Any+Sync+Send>(&mut self) -> Option<&mut T> {
 //             if TypeId::of::<Self>() == TypeId::of::<T>() {
 //                 Some(unsafe { &mut *(self as *mut Self as *mut T) })
 //             } else {
@@ -530,7 +530,7 @@ pub fn resolve_passes<V: FromAnyValue + Send + Sync>(
 //     }
 
 //     impl AnyMapLike for NumberState {
-//         fn get<T: Any>(&self) -> Option<&T> {
+//         fn get<T: Any+Sync+Send>(&self) -> Option<&T> {
 //             if TypeId::of::<AddNumber>() == TypeId::of::<T>() {
 //                 Some(unsafe { &*(&self.add_number as *const AddNumber as *const T) })
 //             } else if TypeId::of::<SubtractNumber>() == TypeId::of::<T>() {
@@ -540,7 +540,7 @@ pub fn resolve_passes<V: FromAnyValue + Send + Sync>(
 //             }
 //         }
 
-//         fn get_mut<T: Any>(&mut self) -> Option<&mut T> {
+//         fn get_mut<T: Any+Sync+Send>(&mut self) -> Option<&mut T> {
 //             if TypeId::of::<AddNumber>() == TypeId::of::<T>() {
 //                 Some(unsafe { &mut *(&mut self.add_number as *mut AddNumber as *mut T) })
 //             } else if TypeId::of::<SubtractNumber>() == TypeId::of::<T>() {
@@ -636,7 +636,7 @@ pub fn resolve_passes<V: FromAnyValue + Send + Sync>(
 //     }
 
 //     impl AnyMapLike for NumberState {
-//         fn get<T: Any>(&self) -> Option<&T> {
+//         fn get<T: Any+Sync+Send>(&self) -> Option<&T> {
 //             if TypeId::of::<AddNumber>() == TypeId::of::<T>() {
 //                 Some(unsafe { &*(&self.add_number as *const AddNumber as *const T) })
 //             } else if TypeId::of::<SubtractNumber>() == TypeId::of::<T>() {
@@ -646,7 +646,7 @@ pub fn resolve_passes<V: FromAnyValue + Send + Sync>(
 //             }
 //         }
 
-//         fn get_mut<T: Any>(&mut self) -> Option<&mut T> {
+//         fn get_mut<T: Any+Sync+Send>(&mut self) -> Option<&mut T> {
 //             if TypeId::of::<AddNumber>() == TypeId::of::<T>() {
 //                 Some(unsafe { &mut *(&mut self.add_number as *mut AddNumber as *mut T) })
 //             } else if TypeId::of::<SubtractNumber>() == TypeId::of::<T>() {
@@ -718,7 +718,7 @@ pub fn resolve_passes<V: FromAnyValue + Send + Sync>(
 //     }
 
 //     impl AnyMapLike for NumberState {
-//         fn get<T: Any>(&self) -> Option<&T> {
+//         fn get<T: Any+Sync+Send>(&self) -> Option<&T> {
 //             if TypeId::of::<AddNumber>() == TypeId::of::<T>() {
 //                 Some(unsafe { &*(&self.add_number as *const AddNumber as *const T) })
 //             } else {
@@ -726,7 +726,7 @@ pub fn resolve_passes<V: FromAnyValue + Send + Sync>(
 //             }
 //         }
 
-//         fn get_mut<T: Any>(&mut self) -> Option<&mut T> {
+//         fn get_mut<T: Any+Sync+Send>(&mut self) -> Option<&mut T> {
 //             if TypeId::of::<AddNumber>() == TypeId::of::<T>() {
 //                 Some(unsafe { &mut *(&mut self.add_number as *mut AddNumber as *mut T) })
 //             } else {

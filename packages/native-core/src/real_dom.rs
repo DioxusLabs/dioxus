@@ -37,6 +37,7 @@ pub struct RealDom<V: FromAnyValue + Send + Sync = ()> {
 impl<V: FromAnyValue + Send + Sync> RealDom<V> {
     pub fn new(mut passes: Box<[TypeErasedPass<V>]>) -> RealDom<V> {
         let mut tree = Tree::new();
+        tree.insert_slab::<NodeData<V>>();
         let root_id = tree.root();
         let root: &mut NodeData<V> = tree.get_mut(root_id).unwrap();
         let mut root_node: NodeData<V> = NodeData::new(NodeType::Element(ElementNode {
@@ -579,7 +580,7 @@ pub trait NodeImmutable<V: FromAnyValue + Send + Sync>: Sized {
         &self.node_data().node_type
     }
 
-    fn get<T: Any>(&self) -> Option<&T> {
+    fn get<T: Any + Sync + Send>(&self) -> Option<&T> {
         self.real_dom().tree.get(self.id())
     }
 
@@ -611,7 +612,7 @@ pub trait NodeImmutable<V: FromAnyValue + Send + Sync>: Sized {
 }
 
 pub trait NodeMutable<V: FromAnyValue + Send + Sync>: Sized + NodeImmutable<V> {
-    fn get_mut<T: Any>(&mut self) -> Option<&mut T>;
+    fn get_mut<T: Any + Sync + Send>(&mut self) -> Option<&mut T>;
 }
 
 #[derive(Clone, Copy)]
@@ -647,7 +648,7 @@ impl<'a, V: FromAnyValue + Send + Sync> NodeImmutable<V> for NodeMut<'a, V> {
 }
 
 impl<'a, V: FromAnyValue + Send + Sync> NodeMutable<V> for NodeMut<'a, V> {
-    fn get_mut<T: Any>(&mut self) -> Option<&mut T> {
+    fn get_mut<T: Any + Sync + Send>(&mut self) -> Option<&mut T> {
         todo!("get_mut with mark as dirty")
     }
 }
@@ -781,7 +782,7 @@ impl<'a, V: FromAnyValue + Send + Sync> NodeImmutable<V> for NodeMutRaw<'a, V> {
 }
 
 impl<'a, V: FromAnyValue + Send + Sync> NodeMutable<V> for NodeMutRaw<'a, V> {
-    fn get_mut<T: Any>(&mut self) -> Option<&mut T> {
+    fn get_mut<T: Any + Sync + Send>(&mut self) -> Option<&mut T> {
         self.dom.tree.get_mut::<T>(self.id)
     }
 }

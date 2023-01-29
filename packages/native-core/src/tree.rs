@@ -36,6 +36,10 @@ impl Tree {
         Self { nodes, root }
     }
 
+    pub(crate) fn insert_slab<T: Any + Send + Sync>(&mut self) {
+        self.nodes.get_or_insert_slab_mut::<T>();
+    }
+
     fn node_slab(&self) -> &SlabStorage<Node> {
         self.nodes.read_slab()
     }
@@ -164,11 +168,11 @@ impl Tree {
         }
     }
 
-    pub fn get<T: Any>(&self, id: NodeId) -> Option<&T> {
+    pub fn get<T: Any + Sync + Send>(&self, id: NodeId) -> Option<&T> {
         self.nodes.read_slab().get(id)
     }
 
-    pub fn get_mut<T: Any>(&mut self, id: NodeId) -> Option<&mut T> {
+    pub fn get_mut<T: Any + Sync + Send>(&mut self, id: NodeId) -> Option<&mut T> {
         self.nodes.write_slab().get_mut(id)
     }
 
@@ -234,7 +238,7 @@ pub struct TreeStateViewEntry<'a, 'b> {
 }
 
 impl<'a, 'b> AnyMapLike<'a> for TreeStateViewEntry<'a, 'b> {
-    fn get<T: Any>(self) -> Option<&'a T> {
+    fn get<T: Any + Sync + Send>(self) -> Option<&'a T> {
         self.view.get_slab().and_then(|slab| slab.get(self.id))
     }
 }
@@ -245,7 +249,7 @@ pub struct TreeStateView<'a, 'b> {
 }
 
 impl<'a, 'b> TreeStateView<'a, 'b> {
-    fn get_slab<T: Any>(&self) -> Option<&SlabStorage<T>> {
+    fn get_slab<T: Any + Sync + Send>(&self) -> Option<&SlabStorage<T>> {
         self.nodes
             .get(&TypeId::of::<T>())
             .and_then(|gaurd| match gaurd {
@@ -254,7 +258,7 @@ impl<'a, 'b> TreeStateView<'a, 'b> {
             })
     }
 
-    fn get_slab_mut<T: Any>(&mut self) -> Option<&mut SlabStorage<T>> {
+    fn get_slab_mut<T: Any + Sync + Send>(&mut self) -> Option<&mut SlabStorage<T>> {
         self.nodes
             .get_mut(&TypeId::of::<T>())
             .and_then(|gaurd| match gaurd {
@@ -279,11 +283,11 @@ impl<'a, 'b> TreeStateView<'a, 'b> {
         T::borrow_elements_from(self.entry(id))
     }
 
-    pub fn get_single<T: Any>(&self, id: NodeId) -> Option<&T> {
+    pub fn get_single<T: Any + Sync + Send>(&self, id: NodeId) -> Option<&T> {
         self.get_slab().and_then(|slab| slab.get(id))
     }
 
-    pub fn get_mut<T: Any>(&mut self, id: NodeId) -> Option<&mut T> {
+    pub fn get_mut<T: Any + Sync + Send>(&mut self, id: NodeId) -> Option<&mut T> {
         self.get_slab_mut().and_then(|slab| slab.get_mut(id))
     }
 
@@ -543,23 +547,23 @@ impl AnySlab {
         }
     }
 
-    fn try_read_slab<T: Any>(&self) -> Option<&SlabStorage<T>> {
+    fn try_read_slab<T: Any + Sync + Send>(&self) -> Option<&SlabStorage<T>> {
         self.data
             .get(&TypeId::of::<T>())
             .map(|x| x.as_any().downcast_ref().unwrap())
     }
 
-    fn read_slab<T: Any>(&self) -> &SlabStorage<T> {
+    fn read_slab<T: Any + Sync + Send>(&self) -> &SlabStorage<T> {
         self.try_read_slab().unwrap()
     }
 
-    fn try_write_slab<T: Any>(&mut self) -> Option<&mut SlabStorage<T>> {
+    fn try_write_slab<T: Any + Sync + Send>(&mut self) -> Option<&mut SlabStorage<T>> {
         self.data
             .get_mut(&TypeId::of::<T>())
             .map(|x| x.as_any_mut().downcast_mut().unwrap())
     }
 
-    fn write_slab<T: Any>(&mut self) -> &mut SlabStorage<T> {
+    fn write_slab<T: Any + Sync + Send>(&mut self) -> &mut SlabStorage<T> {
         self.try_write_slab().unwrap()
     }
 
@@ -624,11 +628,11 @@ impl EntryBuilder<'_> {
             .insert(self.id, value);
     }
 
-    pub fn get<T: Any>(&self) -> Option<&T> {
+    pub fn get<T: Any + Sync + Send>(&self) -> Option<&T> {
         self.inner.read_slab().get(self.id)
     }
 
-    pub fn get_mut<T: Any>(&mut self) -> Option<&mut T> {
+    pub fn get_mut<T: Any + Sync + Send>(&mut self) -> Option<&mut T> {
         self.inner.write_slab().get_mut(self.id)
     }
 
