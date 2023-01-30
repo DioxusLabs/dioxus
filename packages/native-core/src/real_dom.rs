@@ -1,7 +1,7 @@
 use dioxus_core::{BorrowedAttributeValue, ElementId, Mutations, TemplateNode};
 
 use rustc_hash::{FxHashMap, FxHashSet};
-use std::any::Any;
+use std::any::{Any, TypeId};
 use std::collections::VecDeque;
 
 use crate::node::{
@@ -26,11 +26,8 @@ pub struct RealDom<V: FromAnyValue + Send + Sync = ()> {
     stack: Vec<NodeId>,
     templates: FxHashMap<String, Vec<NodeId>>,
     pub(crate) passes: Box<[TypeErasedPass<V>]>,
-    pub(crate) nodes_updated: FxHashMap<NodeId, NodeMask>,
-    passes_updated: DirtyNodeStates,
-    parent_changed_nodes: FxHashSet<NodeId>,
-    child_changed_nodes: FxHashSet<NodeId>,
-    nodes_created: FxHashSet<NodeId>,
+    passes_updated: FxHashMap<NodeId, FxHashSet<TypeId>>,
+    nodes_updated: FxHashMap<NodeId, NodeMask>,
     phantom: std::marker::PhantomData<V>,
 }
 
@@ -38,8 +35,10 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
     pub fn new(mut passes: Box<[TypeErasedPass<V>]>) -> RealDom<V> {
         let mut tree = Tree::new();
         tree.insert_slab::<NodeData<V>>();
+        for pass in passes.iter() {
+            (pass.create)(&mut tree);
+        }
         let root_id = tree.root();
-        let root: &mut NodeData<V> = tree.get_mut(root_id).unwrap();
         let mut root_node: NodeData<V> = NodeData::new(NodeType::Element(ElementNode {
             tag: "Root".to_string(),
             namespace: Some("Root".to_string()),
@@ -48,7 +47,7 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
         }));
         root_node.element_id = Some(ElementId(0));
         root_node.node_id = root_id;
-        *root = root_node;
+        tree.insert(root_id, root_node);
 
         // resolve dependants for each pass
         for i in 1..passes.len() {
@@ -63,8 +62,11 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
             }
         }
 
+        let mut passes_updated = FxHashMap::default();
         let mut nodes_updated = FxHashMap::default();
+
         let root_id = NodeId(0);
+        passes_updated.insert(root_id, passes.iter().map(|x| x.this_type_id).collect());
         nodes_updated.insert(root_id, NodeMaskBuilder::ALL.build());
 
         RealDom {
@@ -74,21 +76,42 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
             stack: vec![root_id],
             templates: FxHashMap::default(),
             passes,
+            passes_updated,
             nodes_updated,
-            passes_updated: DirtyNodeStates::default(),
-            parent_changed_nodes: FxHashSet::default(),
-            child_changed_nodes: FxHashSet::default(),
-            nodes_created: FxHashSet::default(),
             phantom: std::marker::PhantomData,
         }
     }
 
+    fn mark_dirty(&mut self, node_id: NodeId, mask: NodeMask) {
+        self.passes_updated.entry(node_id).or_default().extend(
+            self.passes
+                .iter()
+                .filter_map(|x| x.mask.overlaps(&mask).then_some(x.this_type_id)),
+        );
+        let nodes_updated = &mut self.nodes_updated;
+        if let Some(node) = nodes_updated.get_mut(&node_id) {
+            *node = node.union(&mask);
+        } else {
+            nodes_updated.insert(node_id, mask);
+        }
+    }
+
     fn mark_parent_added_or_removed(&mut self, node_id: NodeId) {
-        self.parent_changed_nodes.insert(node_id);
+        let hm = self.passes_updated.entry(node_id).or_default();
+        for pass in &*self.passes {
+            if pass.parent_dependant {
+                hm.insert(pass.this_type_id);
+            }
+        }
     }
 
     fn mark_child_changed(&mut self, node_id: NodeId) {
-        self.child_changed_nodes.insert(node_id);
+        let hm = self.passes_updated.entry(node_id).or_default();
+        for pass in &*self.passes {
+            if pass.child_dependant {
+                hm.insert(pass.this_type_id);
+            }
+        }
     }
 
     pub fn element_to_node_id(&self, element_id: ElementId) -> NodeId {
@@ -121,12 +144,15 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
     ) -> EntryBuilder<'_> {
         let mut node_entry = self.tree.create_node();
         let node_id = node_entry.id();
+        if mark_dirty {
+            self.passes_updated
+                .entry(node_id)
+                .or_default()
+                .extend(self.passes.iter().map(|x| x.this_type_id));
+        }
         node.node_id = node_id;
         node.element_id = id;
         node_entry.insert(node);
-        if mark_dirty {
-            self.nodes_created.insert(node_id);
-        }
         node_entry
     }
 
@@ -414,43 +440,14 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
         &mut self,
         ctx: SendAnyMap,
     ) -> (FxDashSet<NodeId>, FxHashMap<NodeId, NodeMask>) {
-        let dirty_nodes = std::mem::take(&mut self.passes_updated);
+        let passes = std::mem::take(&mut self.passes_updated);
         let nodes_updated = std::mem::take(&mut self.nodes_updated);
-        for (&node, mask) in &nodes_updated {
+        let dirty_nodes = DirtyNodeStates::default();
+        for (node_id, passes) in passes {
             // remove any nodes that were created and then removed in the same mutations from the dirty nodes list
-            if let Some(height) = self.tree.height(node) {
-                for pass in &*self.passes {
-                    if mask.overlaps(&pass.mask) {
-                        dirty_nodes.insert(pass.this_type_id, node, height);
-                    }
-                }
-            }
-        }
-        for node in std::mem::take(&mut self.child_changed_nodes) {
-            // remove any nodes that were created and then removed in the same mutations from the dirty nodes list
-            if let Some(height) = self.tree.height(node) {
-                for pass in &*self.passes {
-                    if pass.child_dependant {
-                        dirty_nodes.insert(pass.this_type_id, node, height);
-                    }
-                }
-            }
-        }
-        for node in std::mem::take(&mut self.parent_changed_nodes) {
-            // remove any nodes that were created and then removed in the same mutations from the dirty nodes list
-            if let Some(height) = self.tree.height(node) {
-                for pass in &*self.passes {
-                    if pass.parent_dependant {
-                        dirty_nodes.insert(pass.this_type_id, node, height);
-                    }
-                }
-            }
-        }
-        for node in std::mem::take(&mut self.nodes_created) {
-            // remove any nodes that were created and then removed in the same mutations from the dirty nodes list
-            if let Some(height) = self.tree.height(node) {
-                for pass in &*self.passes {
-                    dirty_nodes.insert(pass.this_type_id, node, height);
+            if let Some(height) = self.tree.height(node_id) {
+                for pass in passes {
+                    dirty_nodes.insert(pass, node_id, height);
                 }
             }
         }
@@ -681,12 +678,7 @@ impl<V: FromAnyValue + Send + Sync> Drop for NodeMut<'_, V> {
     fn drop(&mut self) {
         let node_id = self.node_data().node_id;
         let mask = std::mem::take(&mut self.dirty);
-        let nodes_updated = &mut self.dom.nodes_updated;
-        if let Some(node) = nodes_updated.get_mut(&node_id) {
-            *node = node.union(&mask);
-        } else {
-            nodes_updated.insert(node_id, mask);
-        }
+        self.dom.mark_dirty(node_id, mask);
     }
 }
 

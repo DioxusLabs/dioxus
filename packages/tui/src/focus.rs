@@ -121,6 +121,18 @@ impl Pass for Focus {
             false
         }
     }
+
+    fn create<'a>(
+        node_view: NodeView<()>,
+        node: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
+        parent: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
+        children: Option<Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>>,
+        context: &SendAnyMap,
+    ) -> Self {
+        let mut myself = Self::default();
+        myself.pass(node_view, node, parent, children, context);
+        myself
+    }
 }
 
 const FOCUS_EVENTS: &[&str] = &["keydown", "keypress", "keyup"];

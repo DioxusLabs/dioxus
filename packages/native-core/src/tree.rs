@@ -176,6 +176,10 @@ impl Tree {
         self.nodes.write_slab().get_mut(id)
     }
 
+    pub fn insert<T: Any + Sync + Send>(&mut self, id: NodeId, value: T) {
+        self.nodes.write_slab().insert(id, value);
+    }
+
     pub fn contains(&self, id: NodeId) -> bool {
         self.nodes.contains(id)
     }
@@ -210,9 +214,11 @@ impl<'a> DynamicallyBorrowedTree<'a> {
         let nodes_data = self.node_slab();
         let mut nodes = FxHashMap::default();
         for id in immutable {
+            println!("reading {id:?}");
             nodes.insert(id, MaybeRead::Read(self.nodes.get_slab(id).unwrap()));
         }
         for id in mutable {
+            println!("writing {id:?}");
             nodes.insert(id, MaybeRead::Write(self.nodes.get_slab_mut(id).unwrap()));
         }
 
@@ -249,7 +255,7 @@ pub struct TreeStateView<'a, 'b> {
 }
 
 impl<'a, 'b> TreeStateView<'a, 'b> {
-    fn get_slab<T: Any + Sync + Send>(&self) -> Option<&SlabStorage<T>> {
+    pub fn get_slab<T: Any + Sync + Send>(&self) -> Option<&SlabStorage<T>> {
         self.nodes
             .get(&TypeId::of::<T>())
             .and_then(|gaurd| match gaurd {
@@ -258,7 +264,7 @@ impl<'a, 'b> TreeStateView<'a, 'b> {
             })
     }
 
-    fn get_slab_mut<T: Any + Sync + Send>(&mut self) -> Option<&mut SlabStorage<T>> {
+    pub fn get_slab_mut<T: Any + Sync + Send>(&mut self) -> Option<&mut SlabStorage<T>> {
         self.nodes
             .get_mut(&TypeId::of::<T>())
             .and_then(|gaurd| match gaurd {
@@ -442,7 +448,7 @@ fn deletion() {
 }
 
 #[derive(Debug)]
-pub(crate) struct SlabStorage<T> {
+pub struct SlabStorage<T> {
     data: Vec<Option<T>>,
 }
 
@@ -467,12 +473,43 @@ impl<T> SlabStorage<T> {
         self.data.get_mut(id.0).and_then(|x| x.as_mut())
     }
 
+    pub fn entry(&mut self, id: NodeId) -> SlabEntry<'_, T> {
+        let idx = id.0;
+        if idx >= self.data.len() {
+            self.data.resize_with(idx + 1, || None);
+        }
+        SlabEntry {
+            value: &mut self.data[idx],
+        }
+    }
+
     fn insert(&mut self, id: NodeId, value: T) {
         let idx = id.0;
         if idx >= self.data.len() {
             self.data.resize_with(idx + 1, || None);
         }
         self.data[idx] = Some(value);
+    }
+}
+
+pub struct SlabEntry<'a, T> {
+    pub value: &'a mut Option<T>,
+}
+
+impl<'a, T> SlabEntry<'a, T> {
+    pub fn or_insert_with<F: FnOnce() -> T>(self, f: F) -> &'a mut T {
+        self.value.get_or_insert_with(f)
+    }
+
+    pub fn or_insert(self, value: T) -> &'a mut T {
+        self.value.get_or_insert(value)
+    }
+
+    pub fn or_default(self) -> &'a mut T
+    where
+        T: Default,
+    {
+        self.value.get_or_insert_with(Default::default)
     }
 }
 

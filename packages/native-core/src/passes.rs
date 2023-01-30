@@ -9,7 +9,7 @@ use std::sync::Arc;
 use crate::node::{FromAnyValue, NodeData};
 use crate::node_ref::{NodeMaskBuilder, NodeView};
 use crate::real_dom::RealDom;
-use crate::tree::TreeStateView;
+use crate::tree::{SlabEntry, Tree, TreeStateView};
 use crate::{FxDashMap, FxDashSet, SendAnyMap};
 use crate::{NodeId, NodeMask};
 
@@ -76,12 +76,16 @@ impl DirtyNodeStates {
         let (&height, values) = dirty_read
             .iter()
             .find(|(_, values)| values.contains_key(&pass_id))?;
-        let mut dirty = values.get_mut(&pass_id)?;
-        let node_id = dirty.pop()?;
-        if dirty.is_empty() {
-            values.remove(&pass_id);
-        }
+        let node_id = {
+            let mut dirty = values.get_mut(&pass_id)?;
+            let node_id = dirty.pop()?;
+            if dirty.is_empty() {
+                values.remove(&pass_id);
+            }
+            node_id
+        };
         if values.is_empty() {
+            drop(dirty_read);
             let mut dirty_write = self.dirty.write();
             dirty_write.remove(&height);
         }
@@ -126,6 +130,14 @@ pub trait Pass<V: FromAnyValue + Send + Sync = ()>: Any + Send + Sync {
         children: Option<Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>>,
         context: &SendAnyMap,
     ) -> bool;
+
+    fn create<'a>(
+        node_view: NodeView<V>,
+        node: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
+        parent: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
+        children: Option<Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>>,
+        context: &SendAnyMap,
+    ) -> Self;
 
     fn validate() {
         // no type can be a child and parent dependency
@@ -172,24 +184,38 @@ pub trait Pass<V: FromAnyValue + Send + Sync = ()>: Any + Send + Sync {
                     debug_assert!(!Self::NodeDependencies::type_ids()
                         .iter()
                         .any(|id| *id == TypeId::of::<Self>()));
+                    println!("passing: {node_id:?}");
                     // get all of the states from the tree view
                     // Safety: No node has itself as a parent or child.
-                    let node_raw = tree.get_mut::<Self>(node_id).unwrap() as *mut Self;
+                    let myself: SlabEntry<'static, Self> = unsafe {
+                        std::mem::transmute(tree.get_slab_mut::<Self>().unwrap().entry(node_id))
+                    };
                     let node_data = tree.get_single::<NodeData<V>>(node_id).unwrap();
                     let node = tree.get::<Self::NodeDependencies>(node_id).unwrap();
                     let children = tree.children::<Self::ChildDependencies>(node_id);
                     let parent = tree.parent::<Self::ParentDependencies>(node_id);
-                    let myself = unsafe { &mut *node_raw };
 
-                    myself.pass(
-                        NodeView::new(node_data, Self::NODE_MASK.build()),
-                        node,
-                        parent,
-                        children,
-                        context,
-                    )
+                    if myself.value.is_none() {
+                        *myself.value = Some(Self::create(
+                            NodeView::new(node_data, Self::NODE_MASK.build()),
+                            node,
+                            parent,
+                            children,
+                            context,
+                        ));
+                        true
+                    } else {
+                        myself.value.as_mut().unwrap().pass(
+                            NodeView::new(node_data, Self::NODE_MASK.build()),
+                            node,
+                            parent,
+                            children,
+                            context,
+                        )
+                    }
                 },
             ) as PassCallback,
+            create: Box::new(|tree: &mut Tree| tree.insert_slab::<Self>()) as CreatePassCallback,
             phantom: PhantomData,
         }
     }
@@ -238,6 +264,7 @@ pub struct TypeErasedPass<V: FromAnyValue + Send = ()> {
     pub(crate) dependants: FxHashSet<TypeId>,
     pub(crate) mask: NodeMask,
     pass: PassCallback,
+    pub(crate) create: CreatePassCallback,
     pub(crate) pass_direction: PassDirection,
     phantom: PhantomData<V>,
 }
@@ -297,6 +324,7 @@ pub enum PassDirection {
 }
 
 type PassCallback = Box<dyn Fn(NodeId, &mut TreeStateView, &SendAnyMap) -> bool + Send + Sync>;
+type CreatePassCallback = Box<dyn Fn(&mut Tree) + Send + Sync>;
 
 pub trait AnyMapLike<'a> {
     fn get<T: Any + Sync + Send>(self) -> Option<&'a T>;
@@ -388,7 +416,11 @@ pub fn resolve_passes<V: FromAnyValue + Send + Sync>(
                     resolving.push(pass_id);
                     currently_in_use.insert(pass.this_type_id);
                     let tree_view = dynamically_borrowed_tree.view(
-                        pass.combined_dependancy_type_ids.iter().copied(),
+                        pass.combined_dependancy_type_ids
+                            .iter()
+                            .filter(|id| **id != pass.this_type_id)
+                            .copied()
+                            .chain(std::iter::once(TypeId::of::<NodeData<V>>())),
                         [pass.this_type_id],
                     );
                     let dirty_nodes = dirty_nodes.clone();
