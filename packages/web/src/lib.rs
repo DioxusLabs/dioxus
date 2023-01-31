@@ -198,8 +198,9 @@ pub async fn run_with_props<T: 'static>(root: fn(Scope<T>) -> Element, root_prop
             // todo: we need to split rebuild and initialize into two phases
             // it's a waste to produce edits just to get the vdom loaded
 
-            // we need to save the templates in case hydration fails
             let templates = dom.rebuild().templates;
+            websys_dom.load_templates(&templates);
+
             if let Err(err) = websys_dom.rehydrate(&dom) {
                 log::error!(
                     "Rehydration failed {:?}. Rebuild DOM into element from scratch",
@@ -209,7 +210,6 @@ pub async fn run_with_props<T: 'static>(root: fn(Scope<T>) -> Element, root_prop
 
                 let edits = dom.rebuild();
 
-                websys_dom.load_templates(&templates);
                 websys_dom.load_templates(&edits.templates);
                 websys_dom.apply_edits(edits.edits);
             }
