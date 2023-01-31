@@ -22,9 +22,11 @@ use crate::Config;
 
 pub struct WebsysDom {
     document: Document,
+    #[allow(dead_code)]
+    pub(crate) root: Element,
     templates: FxHashMap<String, u32>,
     max_template_id: u32,
-    interpreter: Channel,
+    pub(crate) interpreter: Channel,
 }
 
 pub struct UiEvent {
@@ -72,10 +74,14 @@ impl WebsysDom {
                 }
             }));
 
-        dioxus_interpreter_js::initilize(root.unchecked_into(), handler.as_ref().unchecked_ref());
+        dioxus_interpreter_js::initilize(
+            root.clone().unchecked_into(),
+            handler.as_ref().unchecked_ref(),
+        );
         handler.forget();
         Self {
             document,
+            root,
             interpreter,
             templates: FxHashMap::default(),
             max_template_id: 0,
