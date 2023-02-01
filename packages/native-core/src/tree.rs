@@ -48,6 +48,10 @@ impl Tree {
         self.node_slab().get(id).unwrap()
     }
 
+    pub fn try_get_node_data(&self, id: NodeId) -> Option<&Node> {
+        self.node_slab().get(id)
+    }
+
     fn node_slab_mut(&mut self) -> &mut SlabStorage<Node> {
         self.nodes.write_slab()
     }
@@ -189,15 +193,15 @@ impl Tree {
     }
 
     pub fn parent_id(&self, id: NodeId) -> Option<NodeId> {
-        self.get_node_data(id).parent
+        self.try_get_node_data(id).and_then(|node| node.parent)
     }
 
     pub fn children_ids(&self, id: NodeId) -> Option<&[NodeId]> {
-        Some(&self.get_node_data(id).children)
+        self.try_get_node_data(id).map(|node| &*node.children)
     }
 
     pub fn height(&self, id: NodeId) -> Option<u16> {
-        Some(self.get_node_data(id).height)
+        self.try_get_node_data(id).map(|node| node.height)
     }
 }
 
@@ -515,7 +519,9 @@ impl<'a, T> SlabEntry<'a, T> {
 
 impl<T: 'static + Send + Sync> AnySlabStorageImpl for SlabStorage<T> {
     fn remove(&mut self, id: NodeId) {
-        self.data[id.0].take();
+        if let Some(entry) = self.data.get_mut(id.0) {
+            let _ = entry.take();
+        }
     }
 
     fn as_any(&self) -> &dyn Any {
