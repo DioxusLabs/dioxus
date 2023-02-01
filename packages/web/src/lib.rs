@@ -62,6 +62,8 @@ mod cache;
 mod cfg;
 mod dom;
 mod hot_reload;
+#[cfg(feature = "hydrate")]
+mod rehydrate;
 mod util;
 
 // Currently disabled since it actually slows down immediate rendering
@@ -179,17 +181,40 @@ pub async fn run_with_props<T: 'static>(root: fn(Scope<T>) -> Element, root_prop
         wasm_bindgen::intern(s);
     }
 
-    let _should_hydrate = cfg.hydrate;
-
     let (tx, mut rx) = futures_channel::mpsc::unbounded();
+
+    #[cfg(feature = "hydrate")]
+    let should_hydrate = cfg.hydrate;
+    #[cfg(not(feature = "hydrate"))]
+    let should_hydrate = false;
 
     let mut websys_dom = dom::WebsysDom::new(cfg, tx);
 
     log::info!("rebuilding app");
 
-    // if should_hydrate {
-    // } else {
-    {
+    if should_hydrate {
+        #[cfg(feature = "hydrate")]
+        {
+            // todo: we need to split rebuild and initialize into two phases
+            // it's a waste to produce edits just to get the vdom loaded
+
+            let templates = dom.rebuild().templates;
+            websys_dom.load_templates(&templates);
+
+            if let Err(err) = websys_dom.rehydrate(&dom) {
+                log::error!(
+                    "Rehydration failed {:?}. Rebuild DOM into element from scratch",
+                    &err
+                );
+                websys_dom.root.set_text_content(None);
+
+                let edits = dom.rebuild();
+
+                websys_dom.load_templates(&edits.templates);
+                websys_dom.apply_edits(edits.edits);
+            }
+        }
+    } else {
         let edits = dom.rebuild();
 
         websys_dom.load_templates(&edits.templates);
@@ -249,30 +274,3 @@ pub async fn run_with_props<T: 'static>(root: fn(Scope<T>) -> Element, root_prop
         websys_dom.apply_edits(edits.edits);
     }
 }
-
-// if should_hydrate {
-//     // todo: we need to split rebuild and initialize into two phases
-//     // it's a waste to produce edits just to get the vdom loaded
-//     let _ = dom.rebuild();
-
-//     #[cfg(feature = "hydrate")]
-//     #[allow(unused_variables)]
-//     if let Err(err) = websys_dom.rehydrate(&dom) {
-//         log::error!(
-//             "Rehydration failed {:?}. Rebuild DOM into element from scratch",
-//             &err
-//         );
-
-//         websys_dom.root.set_text_content(None);
-
-//         // errrrr we should split rebuild into two phases
-//         // one that initializes things and one that produces edits
-//         let edits = dom.rebuild();
-
-//         websys_dom.apply_edits(edits.edits);
-//     }
-// } else {
-//     let edits = dom.rebuild();
-//     websys_dom.apply_edits(edits.template_mutations);
-//     websys_dom.apply_edits(edits.edits);
-// }
