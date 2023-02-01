@@ -91,9 +91,6 @@ impl Pass for TaffyLayout {
                     attribute, value, ..
                 } in attributes
                 {
-                    assert!(SORTED_LAYOUT_ATTRS
-                        .binary_search(&attribute.name.as_ref())
-                        .is_ok());
                     if let Some(text) = value.as_text() {
                         apply_layout_attributes_cfg(
                             &attribute.name,

@@ -688,7 +688,8 @@ impl RinkInputHandler {
         for (event, datas) in hm {
             for node in dom.get_listening_sorted(event) {
                 for data in &datas {
-                    if node.get::<Focused>().unwrap().0 {
+                    let focused = node.get::<Focused>();
+                    if focused.is_some() && focused.unwrap().0 {
                         if let Some(id) = node.mounted_id() {
                             resolved_events.push(Event {
                                 name: event,

@@ -160,36 +160,6 @@ pub struct NodeMask {
 }
 
 impl NodeMask {
-    pub fn from_node(node: &NodeType) -> Self {
-        match node {
-            NodeType::Text { .. } => NodeMaskBuilder::new().with_text().build(),
-            NodeType::Element(ElementNode {
-                tag: _,
-                namespace: _,
-                attributes,
-                listeners,
-            }) => Self {
-                attritutes: AttributeMask::Some(
-                    attributes
-                        .keys()
-                        .map(|key| key.name.as_str().into())
-                        .collect(),
-                ),
-                namespace: true,
-                tag: true,
-                text: false,
-                listeners: !listeners.is_empty(),
-            },
-            NodeType::Placeholder => Self {
-                attritutes: AttributeMask::default(),
-                tag: true,
-                namespace: true,
-                text: false,
-                listeners: false,
-            },
-        }
-    }
-
     /// Check if two masks overlap
     pub fn overlaps(&self, other: &Self) -> bool {
         (self.tag && other.tag)

@@ -246,8 +246,7 @@ impl FocusState {
             if !node.get::<Focus>().unwrap().level.focusable() {
                 panic!()
             }
-            let focused = node.get_mut::<Focused>().unwrap();
-            focused.0 = true;
+            node.insert(Focused(true));
             if let Some(old) = self.last_focused_id.replace(id) {
                 let mut old = rdom.get_mut_raw(old).unwrap();
                 let focused = old.get_mut::<Focused>().unwrap();
@@ -304,7 +303,7 @@ impl FocusState {
             node.get_mut::<Focused>().unwrap().0 = false;
         }
         let mut node = rdom.get_mut_raw(id).unwrap();
-        node.get_mut::<Focused>().unwrap().0 = true;
+        node.insert(Focused(true));
         self.focus_level = node.get::<Focus>().unwrap().level;
         // reset the position to the currently focused element
         while self.focus_iter.next(rdom).id() != id {}

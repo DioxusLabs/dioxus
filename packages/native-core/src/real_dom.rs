@@ -610,6 +610,7 @@ pub trait NodeImmutable<V: FromAnyValue + Send + Sync>: Sized {
 
 pub trait NodeMutable<V: FromAnyValue + Send + Sync>: Sized + NodeImmutable<V> {
     fn get_mut<T: Any + Sync + Send>(&mut self) -> Option<&mut T>;
+    fn insert<T: Any + Sync + Send>(&mut self, value: T);
 }
 
 #[derive(Clone, Copy)]
@@ -647,6 +648,10 @@ impl<'a, V: FromAnyValue + Send + Sync> NodeImmutable<V> for NodeMut<'a, V> {
 impl<'a, V: FromAnyValue + Send + Sync> NodeMutable<V> for NodeMut<'a, V> {
     fn get_mut<T: Any + Sync + Send>(&mut self) -> Option<&mut T> {
         todo!("get_mut with mark as dirty")
+    }
+
+    fn insert<T: Any + Sync + Send>(&mut self, _: T) {
+        todo!("insert with mark as dirty")
     }
 }
 
@@ -776,5 +781,9 @@ impl<'a, V: FromAnyValue + Send + Sync> NodeImmutable<V> for NodeMutRaw<'a, V> {
 impl<'a, V: FromAnyValue + Send + Sync> NodeMutable<V> for NodeMutRaw<'a, V> {
     fn get_mut<T: Any + Sync + Send>(&mut self) -> Option<&mut T> {
         self.dom.tree.get_mut::<T>(self.id)
+    }
+
+    fn insert<T: Any + Sync + Send>(&mut self, value: T) {
+        self.dom.tree.insert(self.id, value);
     }
 }

@@ -191,7 +191,6 @@ pub trait Pass<V: FromAnyValue + Send + Sync = ()>: Any + Send + Sync {
                     debug_assert!(!Self::NodeDependencies::type_ids()
                         .iter()
                         .any(|id| *id == TypeId::of::<Self>()));
-                    println!("passing: {node_id:?}");
                     // get all of the states from the tree view
                     // Safety: No node has itself as a parent or child.
                     let myself: SlabEntry<'static, Self> = unsafe {

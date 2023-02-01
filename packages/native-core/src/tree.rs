@@ -173,15 +173,17 @@ impl Tree {
     }
 
     pub fn get<T: Any + Sync + Send>(&self, id: NodeId) -> Option<&T> {
-        self.nodes.read_slab().get(id)
+        self.nodes.try_read_slab().and_then(|slab| slab.get(id))
     }
 
     pub fn get_mut<T: Any + Sync + Send>(&mut self, id: NodeId) -> Option<&mut T> {
-        self.nodes.write_slab().get_mut(id)
+        self.nodes
+            .try_write_slab()
+            .and_then(|slab| slab.get_mut(id))
     }
 
     pub fn insert<T: Any + Sync + Send>(&mut self, id: NodeId, value: T) {
-        self.nodes.write_slab().insert(id, value);
+        self.nodes.get_or_insert_slab_mut().insert(id, value);
     }
 
     pub fn contains(&self, id: NodeId) -> bool {
@@ -218,11 +220,9 @@ impl<'a> DynamicallyBorrowedTree<'a> {
         let nodes_data = self.node_slab();
         let mut nodes = FxHashMap::default();
         for id in immutable {
-            println!("reading {id:?}");
             nodes.insert(id, MaybeRead::Read(self.nodes.get_slab(id).unwrap()));
         }
         for id in mutable {
-            println!("writing {id:?}");
             nodes.insert(id, MaybeRead::Write(self.nodes.get_slab_mut(id).unwrap()));
         }
 

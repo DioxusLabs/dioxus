@@ -272,7 +272,8 @@ impl RinkWidget for NodeRef<'_> {
                 if let Some(c) = self.get::<StyleModifier>().unwrap().core.bg {
                     new_cell.bg = c;
                 }
-                if self.get::<Focused>().unwrap().0 {
+                let focused = self.get::<Focused>();
+                if focused.is_some() && focused.unwrap().0 {
                     new_cell.bg.alpha = 100;
                     new_cell.bg.color = new_cell.bg.blend(Color::White);
                 }
