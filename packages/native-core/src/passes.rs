@@ -1,4 +1,5 @@
 use anymap::AnyMap;
+use core::panic;
 use parking_lot::RwLock;
 use rustc_hash::FxHashSet;
 use std::any::{Any, TypeId};
@@ -80,6 +81,7 @@ impl DirtyNodeStates {
             let mut dirty = values.get_mut(&pass_id)?;
             let node_id = dirty.pop()?;
             if dirty.is_empty() {
+                drop(dirty);
                 values.remove(&pass_id);
             }
             node_id
@@ -99,12 +101,17 @@ impl DirtyNodeStates {
             .iter()
             .rev()
             .find(|(_, values)| values.contains_key(&pass_id))?;
-        let mut dirty = values.get_mut(&pass_id)?;
-        let node_id = dirty.pop()?;
-        if dirty.is_empty() {
-            values.remove(&pass_id);
-        }
+        let node_id = {
+            let mut dirty = values.get_mut(&pass_id)?;
+            let node_id = dirty.pop()?;
+            if dirty.is_empty() {
+                drop(dirty);
+                values.remove(&pass_id);
+            }
+            node_id
+        };
         if values.is_empty() {
+            drop(dirty_read);
             let mut dirty_write = self.dirty.write();
             dirty_write.remove(&height);
         }
