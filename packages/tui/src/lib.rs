@@ -126,7 +126,7 @@ pub fn launch_cfg_with_props<Props: 'static>(app: Component<Props>, props: Props
         rdom.apply_mutations(mutations);
         let mut any_map = SendAnyMap::new();
         any_map.insert(taffy.clone());
-        let _ = rdom.update_state(any_map);
+        let _ = rdom.update_state(any_map, false);
     }
 
     render_vdom(
@@ -320,7 +320,7 @@ fn render_vdom(
                     // update the style and layout
                     let mut any_map = SendAnyMap::new();
                     any_map.insert(taffy.clone());
-                    let (new_to_rerender, dirty) = rdom.update_state(any_map);
+                    let (new_to_rerender, dirty) = rdom.update_state(any_map, false);
                     to_rerender = new_to_rerender;
                     let text_mask = NodeMaskBuilder::new().with_text().build();
                     for (id, mask) in dirty {

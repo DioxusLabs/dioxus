@@ -380,6 +380,7 @@ pub fn resolve_passes<V: FromAnyValue + Send + Sync>(
     tree: &mut RealDom<V>,
     dirty_nodes: DirtyNodeStates,
     ctx: SendAnyMap,
+    parallel: bool,
 ) -> FxDashSet<NodeId> {
     let passes = &tree.passes;
     let mut resolved_passes: FxHashSet<TypeId> = FxHashSet::default();
@@ -414,9 +415,13 @@ pub fn resolve_passes<V: FromAnyValue + Send + Sync>(
                     let dirty_nodes = dirty_nodes.clone();
                     let nodes_updated = nodes_updated.clone();
                     let ctx = ctx.clone();
-                    s.spawn(move |_| {
+                    if parallel {
+                        s.spawn(move |_| {
+                            pass.resolve(tree_view, &dirty_nodes, &nodes_updated, &ctx);
+                        });
+                    } else {
                         pass.resolve(tree_view, &dirty_nodes, &nodes_updated, &ctx);
-                    });
+                    }
                 } else {
                     i += 1;
                 }

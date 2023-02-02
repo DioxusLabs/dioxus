@@ -439,6 +439,7 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
     pub fn update_state(
         &mut self,
         ctx: SendAnyMap,
+        parallel: bool,
     ) -> (FxDashSet<NodeId>, FxHashMap<NodeId, NodeMask>) {
         let passes = std::mem::take(&mut self.passes_updated);
         let nodes_updated = std::mem::take(&mut self.nodes_updated);
@@ -452,7 +453,10 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
             }
         }
 
-        (resolve_passes(self, dirty_nodes, ctx), nodes_updated)
+        (
+            resolve_passes(self, dirty_nodes, ctx, parallel),
+            nodes_updated,
+        )
     }
 
     fn remove(&mut self, id: NodeId) {
