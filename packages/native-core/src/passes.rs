@@ -1,7 +1,7 @@
 use anymap::AnyMap;
 use core::panic;
 use parking_lot::RwLock;
-use rustc_hash::FxHashSet;
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::any::{Any, TypeId};
 use std::collections::BTreeMap;
 use std::marker::PhantomData;
@@ -11,7 +11,7 @@ use crate::node::{FromAnyValue, NodeData};
 use crate::node_ref::{NodeMaskBuilder, NodeView};
 use crate::real_dom::RealDom;
 use crate::tree::{SlabEntry, Tree, TreeStateView};
-use crate::{FxDashMap, FxDashSet, SendAnyMap};
+use crate::{FxDashSet, SendAnyMap};
 use crate::{NodeId, NodeMask};
 
 #[derive(Default)]
@@ -47,76 +47,58 @@ impl DirtyNodes {
     }
 }
 
-#[derive(Default, Clone)]
+#[derive(Clone)]
 pub struct DirtyNodeStates {
-    dirty: Arc<RwLock<BTreeMap<u16, FxDashMap<TypeId, DirtyNodes>>>>,
+    dirty: Arc<FxHashMap<TypeId, RwLock<BTreeMap<u16, DirtyNodes>>>>,
 }
 
 impl DirtyNodeStates {
+    pub fn with_passes(passes: impl Iterator<Item = TypeId>) -> Self {
+        let mut dirty = FxHashMap::default();
+        for pass in passes {
+            dirty.insert(pass, RwLock::new(BTreeMap::new()));
+        }
+        Self {
+            dirty: Arc::new(dirty),
+        }
+    }
+
     pub fn insert(&self, pass_id: TypeId, node_id: NodeId, height: u16) {
-        let mut dirty = self.dirty.write();
-        if let Some(dirty) = dirty.get_mut(&height) {
-            if let Some(mut entry) = dirty.get_mut(&pass_id) {
-                entry.add_node(node_id);
-            } else {
-                let mut entry = DirtyNodes::default();
-                entry.add_node(node_id);
-                dirty.insert(pass_id, entry);
-            }
+        let btree = self.dirty.get(&pass_id).unwrap();
+        let mut write = btree.write();
+        if let Some(entry) = write.get_mut(&height) {
+            entry.add_node(node_id);
         } else {
             let mut entry = DirtyNodes::default();
             entry.add_node(node_id);
-            let hm = FxDashMap::default();
-            hm.insert(pass_id, entry);
-            dirty.insert(height, hm);
+            write.insert(height, entry);
         }
     }
 
     fn pop_front(&self, pass_id: TypeId) -> Option<(u16, NodeId)> {
-        let dirty_read = self.dirty.read();
-        let (&height, values) = dirty_read
-            .iter()
-            .find(|(_, values)| values.contains_key(&pass_id))?;
-        let node_id = {
-            let mut dirty = values.get_mut(&pass_id)?;
-            let node_id = dirty.pop()?;
-            if dirty.is_empty() {
-                drop(dirty);
-                values.remove(&pass_id);
-            }
-            node_id
-        };
-        if values.is_empty() {
-            drop(dirty_read);
-            let mut dirty_write = self.dirty.write();
-            dirty_write.remove(&height);
+        let mut values = self.dirty.get(&pass_id)?.write();
+        let mut value = values.first_entry()?;
+        let height = *value.key();
+        let ids = value.get_mut();
+        let id = ids.pop()?;
+        if ids.is_empty() {
+            value.remove_entry();
         }
 
-        Some((height, node_id))
+        Some((height, id))
     }
 
     fn pop_back(&self, pass_id: TypeId) -> Option<(u16, NodeId)> {
-        let dirty_read = self.dirty.read();
-        let (&height, values) = dirty_read
-            .iter()
-            .rev()
-            .find(|(_, values)| values.contains_key(&pass_id))?;
-        let node_id = {
-            let mut dirty = values.get_mut(&pass_id)?;
-            let node_id = dirty.pop()?;
-            if dirty.is_empty() {
-                drop(dirty);
-                values.remove(&pass_id);
-            }
-            node_id
-        };
-        if values.is_empty() {
-            drop(dirty_read);
-            let mut dirty_write = self.dirty.write();
-            dirty_write.remove(&height);
+        let mut values = self.dirty.get(&pass_id)?.write();
+        let mut value = values.last_entry()?;
+        let height = *value.key();
+        let ids = value.get_mut();
+        let id = ids.pop()?;
+        if ids.is_empty() {
+            value.remove_entry();
         }
 
-        Some((height, node_id))
+        Some((height, id))
     }
 }
 
@@ -184,10 +166,10 @@ pub trait Pass<V: FromAnyValue + Send + Sync = ()>: Any + Send + Sync {
             parent_dependant: !Self::parent_type_ids().is_empty(),
             child_dependant: !Self::child_type_ids().is_empty(),
             dependants: FxHashSet::default(),
-            mask: node_mask,
+            mask: node_mask.clone(),
             pass_direction: Self::pass_direction(),
             pass: Box::new(
-                |node_id: NodeId, tree: &mut TreeStateView, context: &SendAnyMap| {
+                move |node_id: NodeId, tree: &mut TreeStateView, context: &SendAnyMap| {
                     debug_assert!(!Self::NodeDependencies::type_ids()
                         .iter()
                         .any(|id| *id == TypeId::of::<Self>()));
@@ -203,7 +185,7 @@ pub trait Pass<V: FromAnyValue + Send + Sync = ()>: Any + Send + Sync {
 
                     if myself.value.is_none() {
                         *myself.value = Some(Self::create(
-                            NodeView::new(node_data, Self::NODE_MASK.build()),
+                            NodeView::new(node_data, &node_mask),
                             node,
                             parent,
                             children,
@@ -212,7 +194,7 @@ pub trait Pass<V: FromAnyValue + Send + Sync = ()>: Any + Send + Sync {
                         true
                     } else {
                         myself.value.as_mut().unwrap().pass(
-                            NodeView::new(node_data, Self::NODE_MASK.build()),
+                            NodeView::new(node_data, &node_mask),
                             node,
                             parent,
                             children,
@@ -290,7 +272,7 @@ impl<V: FromAnyValue + Send> TypeErasedPass<V> {
                         nodes_updated.insert(id);
                         for id in tree.children_ids(id).unwrap() {
                             for dependant in &self.dependants {
-                                dirty.insert(*dependant, id, height + 1);
+                                dirty.insert(*dependant, *id, height + 1);
                             }
                         }
                     }

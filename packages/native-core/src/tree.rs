@@ -277,8 +277,8 @@ impl<'a, 'b> TreeStateView<'a, 'b> {
             })
     }
 
-    pub fn children_ids(&self, id: NodeId) -> Option<Vec<NodeId>> {
-        self.nodes_data.get(id).map(|node| node.children.clone())
+    pub fn children_ids(&self, id: NodeId) -> Option<&[NodeId]> {
+        self.nodes_data.get(id).map(|node| &*node.children)
     }
 
     pub fn parent_id(&self, id: NodeId) -> Option<NodeId> {

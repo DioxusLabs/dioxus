@@ -442,7 +442,7 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
     ) -> (FxDashSet<NodeId>, FxHashMap<NodeId, NodeMask>) {
         let passes = std::mem::take(&mut self.passes_updated);
         let nodes_updated = std::mem::take(&mut self.nodes_updated);
-        let dirty_nodes = DirtyNodeStates::default();
+        let dirty_nodes = DirtyNodeStates::with_passes(self.passes.iter().map(|p| p.this_type_id));
         for (node_id, passes) in passes {
             // remove any nodes that were created and then removed in the same mutations from the dirty nodes list
             if let Some(height) = self.tree.height(node_id) {

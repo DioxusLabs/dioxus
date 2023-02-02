@@ -10,12 +10,12 @@ use crate::{
 #[derive(Debug)]
 pub struct NodeView<'a, V: FromAnyValue = ()> {
     inner: &'a NodeData<V>,
-    mask: NodeMask,
+    mask: &'a NodeMask,
 }
 
 impl<'a, V: FromAnyValue> NodeView<'a, V> {
     /// Create a new NodeView from a VNode, and mask.
-    pub fn new(node: &'a NodeData<V>, view: NodeMask) -> Self {
+    pub fn new(node: &'a NodeData<V>, view: &'a NodeMask) -> Self {
         Self {
             inner: node,
             mask: view,
