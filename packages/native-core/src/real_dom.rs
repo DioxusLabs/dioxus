@@ -329,31 +329,11 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
                 }
                 NewEventListener { name, id } => {
                     let node_id = self.element_to_node_id(id);
-                    let mut node = self.get_mut(node_id).unwrap();
-                    if let NodeTypeMut::Element(mut element) = node.node_type_mut() {
-                        element.listeners_mut().insert(name.to_string());
-                        drop(node);
-                        match self.nodes_listening.get_mut(name) {
-                            Some(hs) => {
-                                hs.insert(node_id);
-                            }
-                            None => {
-                                let mut hs = FxHashSet::default();
-                                hs.insert(node_id);
-                                self.nodes_listening.insert(name.to_string(), hs);
-                            }
-                        }
-                    }
+                    self.add_event_listener(node_id, name);
                 }
                 RemoveEventListener { id, name } => {
                     let node_id = self.element_to_node_id(id);
-                    {
-                        let mut node = self.get_mut(node_id).unwrap();
-                        if let NodeTypeMut::Element(mut element) = node.node_type_mut() {
-                            element.listeners_mut().remove(name);
-                        }
-                    }
-                    self.nodes_listening.get_mut(name).unwrap().remove(&node_id);
+                    self.remove_event_listener(node_id, name);
                 }
                 Remove { id } => {
                     let node_id = self.element_to_node_id(id);
@@ -369,7 +349,7 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
 
     /// Find all nodes that are listening for an event, sorted by there height in the dom progressing starting at the bottom and progressing up.
     /// This can be useful to avoid creating duplicate events.
-    pub fn get_listening_sorted(&self, event: &'static str) -> Vec<NodeRef<V>> {
+    pub fn get_listening_sorted(&self, event: &str) -> Vec<NodeRef<V>> {
         if let Some(nodes) = self.nodes_listening.get(event) {
             let mut listening: Vec<_> = nodes
                 .iter()
@@ -488,6 +468,34 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
             self.mark_parent_added_or_removed(new);
         }
         self.tree.insert_after(id, new);
+    }
+
+    pub fn add_event_listener(&mut self, id: NodeId, event: &str) {
+        let mut node = self.get_mut(id).unwrap();
+        if let NodeTypeMut::Element(mut element) = node.node_type_mut() {
+            element.listeners_mut().insert(event.to_string());
+            drop(node);
+            match self.nodes_listening.get_mut(event) {
+                Some(hs) => {
+                    hs.insert(id);
+                }
+                None => {
+                    let mut hs = FxHashSet::default();
+                    hs.insert(id);
+                    self.nodes_listening.insert(event.to_string(), hs);
+                }
+            }
+        }
+    }
+
+    pub fn remove_event_listener(&mut self, id: NodeId, event: &str) {
+        {
+            let mut node = self.get_mut(id).unwrap();
+            if let NodeTypeMut::Element(mut element) = node.node_type_mut() {
+                element.listeners_mut().remove(event);
+            }
+        }
+        self.nodes_listening.get_mut(event).unwrap().remove(&id);
     }
 
     pub fn traverse_depth_first(&self, mut f: impl FnMut(NodeRef<V>)) {
