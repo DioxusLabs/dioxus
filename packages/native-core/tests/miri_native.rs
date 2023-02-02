@@ -1,11 +1,9 @@
 use dioxus::prelude::*;
-use dioxus_core::*;
 use dioxus_native_core::{
-    node_ref::{AttributeMask, AttributeMaskBuilder, NodeMaskBuilder, NodeView},
+    node_ref::{AttributeMaskBuilder, NodeMaskBuilder, NodeView},
     real_dom::RealDom,
-    Dependancy, NodeMask, Pass, SendAnyMap,
+    Dependancy, Pass, SendAnyMap,
 };
-use std::cell::Cell;
 use std::sync::{Arc, Mutex};
 use tokio::time::sleep;
 
@@ -25,7 +23,7 @@ impl Pass for BlablaState {
 
     fn pass<'a>(
         &mut self,
-        node_view: NodeView,
+        _: NodeView,
         _: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
         parent: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
         _: Option<Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>>,

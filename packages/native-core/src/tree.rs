@@ -338,8 +338,8 @@ fn creation() {
     assert_eq!(tree.parent_id(child_id).unwrap(), parent_id);
     assert_eq!(tree.children_ids(parent_id).unwrap(), &[child_id]);
 
-    assert_eq!(*tree.read::<i32>(parent_id).unwrap(), 1);
-    assert_eq!(*tree.read::<i32>(child_id).unwrap(), 0);
+    assert_eq!(*tree.get::<i32>(parent_id).unwrap(), 1);
+    assert_eq!(*tree.get::<i32>(child_id).unwrap(), 0);
 }
 
 #[test]
@@ -371,10 +371,10 @@ fn insertion() {
     assert_eq!(tree.parent_id(after).unwrap(), parent);
     assert_eq!(tree.children_ids(parent).unwrap(), &[before, child, after]);
 
-    assert_eq!(*tree.read::<i32>(parent).unwrap(), 0);
-    assert_eq!(*tree.read::<i32>(before).unwrap(), 1);
-    assert_eq!(*tree.read::<i32>(child).unwrap(), 2);
-    assert_eq!(*tree.read::<i32>(after).unwrap(), 3);
+    assert_eq!(*tree.get::<i32>(parent).unwrap(), 0);
+    assert_eq!(*tree.get::<i32>(before).unwrap(), 1);
+    assert_eq!(*tree.get::<i32>(child).unwrap(), 2);
+    assert_eq!(*tree.get::<i32>(after).unwrap(), 3);
 }
 
 #[test]
@@ -406,10 +406,10 @@ fn deletion() {
     assert_eq!(tree.parent_id(after).unwrap(), parent);
     assert_eq!(tree.children_ids(parent).unwrap(), &[before, child, after]);
 
-    assert_eq!(*tree.read::<i32>(parent).unwrap(), 0);
-    assert_eq!(*tree.read::<i32>(before).unwrap(), 1);
-    assert_eq!(*tree.read::<i32>(child).unwrap(), 2);
-    assert_eq!(*tree.read::<i32>(after).unwrap(), 3);
+    assert_eq!(*tree.get::<i32>(parent).unwrap(), 0);
+    assert_eq!(*tree.get::<i32>(before).unwrap(), 1);
+    assert_eq!(*tree.get::<i32>(child).unwrap(), 2);
+    assert_eq!(*tree.get::<i32>(after).unwrap(), 3);
 
     tree.remove(child);
 
@@ -422,10 +422,10 @@ fn deletion() {
     assert_eq!(tree.parent_id(after).unwrap(), parent);
     assert_eq!(tree.children_ids(parent).unwrap(), &[before, after]);
 
-    assert_eq!(*tree.read::<i32>(parent).unwrap(), 0);
-    assert_eq!(*tree.read::<i32>(before).unwrap(), 1);
-    assert_eq!(tree.read::<i32>(child), None);
-    assert_eq!(*tree.read::<i32>(after).unwrap(), 3);
+    assert_eq!(*tree.get::<i32>(parent).unwrap(), 0);
+    assert_eq!(*tree.get::<i32>(before).unwrap(), 1);
+    assert_eq!(tree.get::<i32>(child), None);
+    assert_eq!(*tree.get::<i32>(after).unwrap(), 3);
 
     tree.remove(before);
 
@@ -436,9 +436,9 @@ fn deletion() {
     assert_eq!(tree.parent_id(after).unwrap(), parent);
     assert_eq!(tree.children_ids(parent).unwrap(), &[after]);
 
-    assert_eq!(*tree.read::<i32>(parent).unwrap(), 0);
-    assert_eq!(tree.read::<i32>(before), None);
-    assert_eq!(*tree.read::<i32>(after).unwrap(), 3);
+    assert_eq!(*tree.get::<i32>(parent).unwrap(), 0);
+    assert_eq!(tree.get::<i32>(before), None);
+    assert_eq!(*tree.get::<i32>(after).unwrap(), 3);
 
     tree.remove(after);
 
@@ -447,8 +447,8 @@ fn deletion() {
     assert_eq!(tree.height(parent), Some(0));
     assert_eq!(tree.children_ids(parent).unwrap(), &[]);
 
-    assert_eq!(*tree.read::<i32>(parent).unwrap(), 0);
-    assert_eq!(tree.read::<i32>(after), None);
+    assert_eq!(*tree.get::<i32>(parent).unwrap(), 0);
+    assert_eq!(tree.get::<i32>(after), None);
 }
 
 #[derive(Debug)]
@@ -703,81 +703,4 @@ fn remove() {
 
     assert!(slab.read_slab::<i32>().get(node1_id).is_none());
     assert_eq!(slab.len(), 1);
-}
-
-#[test]
-fn get_many_mut_unchecked() {
-    let mut slab = AnySlab::new();
-    let mut parent = slab.insert();
-    parent.insert(0i32);
-    let parent = parent.id();
-    let mut child = slab.insert();
-    child.insert(1i32);
-    let child = child.id();
-    let mut grandchild = slab.insert();
-    grandchild.insert(2i32);
-    let grandchild = grandchild.id();
-    assert_eq!(slab.len(), 3);
-    println!("ids: {:#?}", [parent, child, grandchild]);
-
-    {
-        let i32_slab = slab.write_slab::<i32>();
-        let all =
-            unsafe { i32_slab.get_many_mut_unchecked([parent, child, grandchild].into_iter()) }
-                .unwrap();
-        assert_eq!(all, [&mut 0, &mut 1, &mut 2]);
-    }
-
-    {
-        let i32_slab = slab.write_slab::<i32>();
-        assert!(
-            unsafe { i32_slab.get_many_mut_unchecked([NodeId(3), NodeId(100)].into_iter()) }
-                .is_none()
-        )
-    }
-}
-
-#[test]
-fn get_many_many_mut_unchecked() {
-    let mut slab = AnySlab::new();
-    let mut parent = slab.insert();
-    parent.insert(0i32);
-    parent.insert("0");
-    let parent = parent.id();
-    let mut child = slab.insert();
-    child.insert(1i32);
-    child.insert("1");
-    let child = child.id();
-    let mut grandchild = slab.insert();
-    grandchild.insert(2i32);
-    grandchild.insert("2");
-    let grandchild = grandchild.id();
-    println!("ids: {:#?}", [parent, child, grandchild]);
-
-    println!("slab: {:#?}", slab);
-
-    let num_entries = slab.write_slab::<i32>();
-
-    let all_num = unsafe {
-        num_entries
-            .as_any_mut()
-            .downcast_mut::<SlabStorage<i32>>()
-            .unwrap()
-            .get_many_mut_unchecked([parent, child, grandchild].into_iter())
-    }
-    .unwrap();
-
-    assert_eq!(all_num, [&mut 0, &mut 1, &mut 2]);
-    let str_entries = slab.write_slab::<&str>();
-
-    let all_str = unsafe {
-        str_entries
-            .as_any_mut()
-            .downcast_mut::<SlabStorage<&str>>()
-            .unwrap()
-            .get_many_mut_unchecked([parent, child, grandchild].into_iter())
-    }
-    .unwrap();
-
-    assert_eq!(all_str, [&mut "0", &mut "1", &mut "2"]);
 }
