@@ -28,6 +28,8 @@ hashbrown = { version = "0.13.2", features = ["raw"] }
 # for parsing attributes
 lightningcss = "1.0.0-alpha.39"
 
+rayon = "1.6.1"
+
 [dev-dependencies]
 rand = "0.8.5"
 dioxus = { path = "../dioxus", version = "^0.3.0" }
