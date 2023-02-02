@@ -360,7 +360,7 @@ impl<S: State<V>, V: FromAnyValue> RealDom<S, V> {
 
     /// Find all nodes that are listening for an event, sorted by there height in the dom progressing starting at the bottom and progressing up.
     /// This can be useful to avoid creating duplicate events.
-    pub fn get_listening_sorted(&self, event: &'static str) -> Vec<&Node<S, V>> {
+    pub fn get_listening_sorted(&self, event: &str) -> Vec<&Node<S, V>> {
         if let Some(nodes) = self.nodes_listening.get(event) {
             let mut listening: Vec<_> = nodes.iter().map(|id| &self[*id]).collect();
             listening.sort_by(|n1, n2| {
