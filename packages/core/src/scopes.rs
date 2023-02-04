@@ -477,8 +477,10 @@ impl<'src> ScopeState {
         let mut props = self.borrowed_props.borrow_mut();
         for node in element.dynamic_nodes {
             if let DynamicNode::Component(comp) = node {
-                let unbounded = unsafe { std::mem::transmute(comp as *const VComponent) };
-                props.push(unbounded);
+                if !comp.static_props {
+                    let unbounded = unsafe { std::mem::transmute(comp as *const VComponent) };
+                    props.push(unbounded);
+                }
             }
         }
 
