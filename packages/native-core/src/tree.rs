@@ -659,7 +659,7 @@ impl AnySlab {
     }
 }
 
-pub struct EntryBuilder<'a> {
+pub(crate) struct EntryBuilder<'a> {
     id: NodeId,
     inner: &'a mut AnySlab,
 }
@@ -669,18 +669,6 @@ impl EntryBuilder<'_> {
         self.inner
             .get_or_insert_slab_mut::<T>()
             .insert(self.id, value);
-    }
-
-    pub fn get<T: Any + Sync + Send>(&self) -> Option<&T> {
-        self.inner.read_slab().get(self.id)
-    }
-
-    pub fn get_mut<T: Any + Sync + Send>(&mut self) -> Option<&mut T> {
-        self.inner.write_slab().get_mut(self.id)
-    }
-
-    pub fn remove(self) {
-        self.inner.remove(self.id);
     }
 
     pub fn id(&self) -> NodeId {

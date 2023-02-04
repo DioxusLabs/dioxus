@@ -1,42 +1,38 @@
-use dioxus_core::ElementId;
 use rustc_hash::FxHashSet;
 
 use crate::{
-    node::{ElementNode, FromAnyValue, NodeData, NodeType, OwnedAttributeView},
+    node::{ElementNode, FromAnyValue, NodeType, OwnedAttributeView},
     NodeId,
 };
 
 /// A view into a [VNode] with limited access.
 #[derive(Debug)]
 pub struct NodeView<'a, V: FromAnyValue = ()> {
-    inner: &'a NodeData<V>,
+    id: NodeId,
+    inner: &'a NodeType<V>,
     mask: &'a NodeMask,
 }
 
 impl<'a, V: FromAnyValue> NodeView<'a, V> {
     /// Create a new NodeView from a VNode, and mask.
-    pub fn new(node: &'a NodeData<V>, view: &'a NodeMask) -> Self {
+    pub fn new(id: NodeId, node: &'a NodeType<V>, view: &'a NodeMask) -> Self {
         Self {
             inner: node,
             mask: view,
+            id,
         }
-    }
-
-    /// Get the id of the node
-    pub fn id(&self) -> Option<ElementId> {
-        self.inner.element_id
     }
 
     /// Get the node id of the node
     pub fn node_id(&self) -> NodeId {
-        self.inner.node_id
+        self.id
     }
 
     /// Get the tag of the node if the tag is enabled in the mask
     pub fn tag(&self) -> Option<&'a str> {
         self.mask
             .tag
-            .then_some(match &self.inner.node_type {
+            .then_some(match &self.inner {
                 NodeType::Element(ElementNode { tag, .. }) => Some(&**tag),
                 _ => None,
             })
@@ -47,7 +43,7 @@ impl<'a, V: FromAnyValue> NodeView<'a, V> {
     pub fn namespace(&self) -> Option<&'a str> {
         self.mask
             .namespace
-            .then_some(match &self.inner.node_type {
+            .then_some(match &self.inner {
                 NodeType::Element(ElementNode { namespace, .. }) => namespace.as_deref(),
                 _ => None,
             })
@@ -58,7 +54,7 @@ impl<'a, V: FromAnyValue> NodeView<'a, V> {
     pub fn attributes<'b>(
         &'b self,
     ) -> Option<impl Iterator<Item = OwnedAttributeView<'a, V>> + 'b> {
-        match &self.inner.node_type {
+        match &self.inner {
             NodeType::Element(ElementNode { attributes, .. }) => Some(
                 attributes
                     .iter()
@@ -76,7 +72,7 @@ impl<'a, V: FromAnyValue> NodeView<'a, V> {
     pub fn text(&self) -> Option<&str> {
         self.mask
             .text
-            .then_some(match &self.inner.node_type {
+            .then_some(match &self.inner {
                 NodeType::Text(text) => Some(&**text),
                 _ => None,
             })
@@ -86,7 +82,7 @@ impl<'a, V: FromAnyValue> NodeView<'a, V> {
     /// Get the listeners if it is enabled in the mask
     pub fn listeners(&self) -> Option<impl Iterator<Item = &'a str> + '_> {
         if self.mask.listeners {
-            match &self.inner.node_type {
+            match &self.inner {
                 NodeType::Element(ElementNode { listeners, .. }) => {
                     Some(listeners.iter().map(|l| &**l))
                 }

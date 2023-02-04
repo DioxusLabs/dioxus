@@ -1,20 +1,8 @@
-use crate::tree::NodeId;
-use dioxus_core::{AnyValue, BorrowedAttributeValue, ElementId};
 use rustc_hash::{FxHashMap, FxHashSet};
-use std::fmt::Debug;
+use std::{any::Any, fmt::Debug};
 
 #[derive(Debug, Clone)]
-pub struct NodeData<V: FromAnyValue = ()> {
-    /// The id of the node
-    pub node_id: NodeId,
-    /// The id of the node in the vdom.
-    pub element_id: Option<ElementId>,
-    /// Additional inforation specific to the node type
-    pub node_type: NodeType<V>,
-}
-
-#[derive(Debug, Clone)]
-pub struct ElementNode<V: FromAnyValue> {
+pub struct ElementNode<V: FromAnyValue = ()> {
     pub tag: String,
     pub namespace: Option<String>,
     pub attributes: FxHashMap<OwnedAttributeDiscription, OwnedAttributeValue<V>>,
@@ -27,21 +15,6 @@ pub enum NodeType<V: FromAnyValue = ()> {
     Text(String),
     Element(ElementNode<V>),
     Placeholder,
-}
-
-impl<V: FromAnyValue> NodeData<V> {
-    pub(crate) fn new(node_type: NodeType<V>) -> Self {
-        NodeData {
-            element_id: None,
-            node_type,
-            node_id: NodeId(0),
-        }
-    }
-
-    /// get the mounted id of the node
-    pub fn mounted_id(&self) -> Option<ElementId> {
-        self.element_id
-    }
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
@@ -72,11 +45,11 @@ pub enum OwnedAttributeValue<V: FromAnyValue = ()> {
 }
 
 pub trait FromAnyValue: Clone + 'static {
-    fn from_any_value(value: &dyn AnyValue) -> Self;
+    fn from_any_value(value: &dyn Any) -> Self;
 }
 
 impl FromAnyValue for () {
-    fn from_any_value(_: &dyn AnyValue) -> Self {}
+    fn from_any_value(_: &dyn Any) -> Self {}
 }
 
 impl<V: FromAnyValue> Debug for OwnedAttributeValue<V> {
@@ -91,15 +64,16 @@ impl<V: FromAnyValue> Debug for OwnedAttributeValue<V> {
     }
 }
 
-impl<V: FromAnyValue> From<BorrowedAttributeValue<'_>> for OwnedAttributeValue<V> {
-    fn from(value: BorrowedAttributeValue<'_>) -> Self {
+#[cfg(feature = "dioxus")]
+impl<V: FromAnyValue> From<dioxus_core::BorrowedAttributeValue<'_>> for OwnedAttributeValue<V> {
+    fn from(value: dioxus_core::BorrowedAttributeValue<'_>) -> Self {
         match value {
-            BorrowedAttributeValue::Text(text) => Self::Text(text.to_string()),
-            BorrowedAttributeValue::Float(float) => Self::Float(float),
-            BorrowedAttributeValue::Int(int) => Self::Int(int),
-            BorrowedAttributeValue::Bool(bool) => Self::Bool(bool),
-            BorrowedAttributeValue::Any(any) => Self::Custom(V::from_any_value(&*any)),
-            BorrowedAttributeValue::None => panic!("None attribute values result in removing the attribute, not converting it to a None value.")
+            dioxus_core::BorrowedAttributeValue::Text(text) => Self::Text(text.to_string()),
+            dioxus_core::BorrowedAttributeValue::Float(float) => Self::Float(float),
+            dioxus_core::BorrowedAttributeValue::Int(int) => Self::Int(int),
+            dioxus_core::BorrowedAttributeValue::Bool(bool) => Self::Bool(bool),
+            dioxus_core::BorrowedAttributeValue::Any(any) => Self::Custom(V::from_any_value(any.as_any())),
+            dioxus_core::BorrowedAttributeValue::None => panic!("None attribute values result in removing the attribute, not converting it to a None value.")
         }
     }
 }

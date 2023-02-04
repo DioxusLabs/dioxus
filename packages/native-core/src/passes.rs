@@ -7,7 +7,7 @@ use std::collections::BTreeMap;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use crate::node::{FromAnyValue, NodeData};
+use crate::node::{FromAnyValue, NodeType};
 use crate::node_ref::{NodeMaskBuilder, NodeView};
 use crate::real_dom::RealDom;
 use crate::tree::{SlabEntry, Tree, TreeStateView};
@@ -129,26 +129,35 @@ pub trait Pass<V: FromAnyValue + Send + Sync = ()>: Any + Send + Sync {
     ) -> Self;
 
     fn validate() {
-        // no type can be a child and parent dependency
-        for type_id in Self::parent_type_ids().iter().copied() {
-            for type_id2 in Self::child_type_ids().iter().copied() {
-                if type_id == type_id2 {
-                    panic!("type cannot be both a parent and child dependency");
-                }
-            }
-        }
         // this type should not be a node dependency
         for type_id in Self::node_type_ids().iter().copied() {
             if type_id == TypeId::of::<Self>() {
                 panic!("The current type cannot be a node dependency");
             }
         }
+        // this type cannot be both a parent and child dependency
+        assert!(
+            Self::parent_type_ids()
+                .iter()
+                .any(|type_id| *type_id != TypeId::of::<Self>())
+                && Self::child_type_ids()
+                    .iter()
+                    .any(|type_id| *type_id != TypeId::of::<Self>()),
+            "The current type cannot be a parent and child dependency"
+        );
         // no states have the same type id
-        if Self::all_dependanices()
+        if Self::child_type_ids()
             .iter()
-            .collect::<FxDashSet<_>>()
+            .collect::<FxHashSet<_>>()
             .len()
-            != Self::all_dependanices().len()
+            != Self::child_type_ids().len()
+            || Self::parent_type_ids()
+                .iter()
+                .collect::<FxHashSet<_>>()
+                .len()
+                != Self::parent_type_ids().len()
+            || Self::node_type_ids().iter().collect::<FxHashSet<_>>().len()
+                != Self::node_type_ids().len()
         {
             panic!("all states must have unique type ids");
         }
@@ -178,28 +187,21 @@ pub trait Pass<V: FromAnyValue + Send + Sync = ()>: Any + Send + Sync {
                     let myself: SlabEntry<'static, Self> = unsafe {
                         std::mem::transmute(tree.get_slab_mut::<Self>().unwrap().entry(node_id))
                     };
-                    let node_data = tree.get_single::<NodeData<V>>(node_id).unwrap();
+                    let node_data = tree.get_single::<NodeType<V>>(node_id).unwrap();
                     let node = tree.get::<Self::NodeDependencies>(node_id).unwrap();
                     let children = tree.children::<Self::ChildDependencies>(node_id);
                     let parent = tree.parent::<Self::ParentDependencies>(node_id);
 
+                    let view = NodeView::new(node_id, node_data, &node_mask);
                     if myself.value.is_none() {
-                        *myself.value = Some(Self::create(
-                            NodeView::new(node_data, &node_mask),
-                            node,
-                            parent,
-                            children,
-                            context,
-                        ));
+                        *myself.value = Some(Self::create(view, node, parent, children, context));
                         true
                     } else {
-                        myself.value.as_mut().unwrap().pass(
-                            NodeView::new(node_data, &node_mask),
-                            node,
-                            parent,
-                            children,
-                            context,
-                        )
+                        myself
+                            .value
+                            .as_mut()
+                            .unwrap()
+                            .pass(view, node, parent, children, context)
                     }
                 },
             ) as PassCallback,
@@ -409,7 +411,7 @@ pub fn resolve_passes<V: FromAnyValue + Send + Sync>(
                             .iter()
                             .filter(|id| **id != pass.this_type_id)
                             .copied()
-                            .chain(std::iter::once(TypeId::of::<NodeData<V>>())),
+                            .chain(std::iter::once(TypeId::of::<NodeType<V>>())),
                         [pass.this_type_id],
                     );
                     let dirty_nodes = dirty_nodes.clone();
@@ -432,662 +434,3 @@ pub fn resolve_passes<V: FromAnyValue + Send + Sync>(
     }
     std::sync::Arc::try_unwrap(nodes_updated).unwrap()
 }
-
-// #[test]
-// fn node_pass() {
-//     use crate::real_dom::RealDom;
-//     use crate::tree::{Tree, TreeLike};
-
-//     #[derive(Debug, Default, Clone, PartialEq)]
-//     struct Number(i32);
-
-//     impl State for Number {
-//         fn create_passes() -> Box<[TypeErasedPass<Self>]> {
-//             Box::new([Number::to_type_erased()])
-//         }
-//     }
-
-//     impl AnyMapLike for Number {
-//         fn get<T: Any+Sync+Send>(&self) -> Option<&T> {
-//             if TypeId::of::<Self>() == TypeId::of::<T>() {
-//                 Some(unsafe { &*(self as *const Self as *const T) })
-//             } else {
-//                 None
-//             }
-//         }
-
-//         fn get_mut<T: Any+Sync+Send>(&mut self) -> Option<&mut T> {
-//             if TypeId::of::<Self>() == TypeId::of::<T>() {
-//                 Some(unsafe { &mut *(self as *mut Self as *mut T) })
-//             } else {
-//                 None
-//             }
-//         }
-//     }
-
-//     impl Pass for Number {
-//         type ChildDependencies = ();
-//         type NodeDependencies = ();
-//         type ParentDependencies = ();
-//         type Ctx = ();
-//         const MASK: NodeMask = NodeMask::new();
-
-//         fn pass<'a>(
-//             &mut self,
-//             node_view: NodeView,
-//             node: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
-//             parent: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
-//             children: Option<
-//                 impl Iterator<Item = <Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>,
-//             >,
-//             context: <Self::Ctx as Dependancy>::ElementBorrowed<'a>,
-//         ) -> bool {
-//             self.0 += 1;
-//             true
-//         }
-//     }
-
-//     let mut tree: RealDom<Number> = RealDom::new();
-//     tree.dirty_nodes.insert(TypeId::of::<Number>(), NodeId(0));
-//     tree.update_state(SendAnyMap::new());
-
-//     assert_eq!(tree.get(tree.root()).unwrap().state.0, 1);
-// }
-
-// #[test]
-// fn dependant_node_pass() {
-//     use crate::real_dom::RealDom;
-
-//     #[derive(Debug, Default, Clone, PartialEq)]
-//     struct AddNumber(i32);
-
-//     impl Pass for AddNumber {
-//         type ChildDependencies = ();
-//         type NodeDependencies = (SubtractNumber,);
-//         type ParentDependencies = ();
-//         type Ctx = ();
-//         const MASK: NodeMask = NodeMask::new();
-
-//         fn pass<'a>(
-//             &mut self,
-//             node_view: NodeView,
-//             node: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
-//             parent: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
-//             children: Option<
-//                 impl Iterator<Item = <Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>,
-//             >,
-//             context: <Self::Ctx as Dependancy>::ElementBorrowed<'a>,
-//         ) -> bool {
-//             self.0 += 1;
-//             true
-//         }
-//     }
-
-//     #[derive(Debug, Default, Clone, PartialEq)]
-//     struct SubtractNumber(i32);
-
-//     impl Pass for SubtractNumber {
-//         type ChildDependencies = ();
-//         type NodeDependencies = ();
-//         type ParentDependencies = ();
-//         type Ctx = ();
-//         const MASK: NodeMask = NodeMask::new();
-
-//         fn pass<'a>(
-//             &mut self,
-//             node_view: NodeView,
-//             node: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
-//             parent: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
-//             children: Option<
-//                 impl Iterator<Item = <Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>,
-//             >,
-//             context: <Self::Ctx as Dependancy>::ElementBorrowed<'a>,
-//         ) -> bool {
-//             self.0 -= 1;
-//             true
-//         }
-//     }
-
-//     #[derive(Debug, Default, Clone, PartialEq)]
-//     struct NumberState {
-//         add_number: AddNumber,
-//         subtract_number: SubtractNumber,
-//     }
-
-//     impl AnyMapLike for NumberState {
-//         fn get<T: Any+Sync+Send>(&self) -> Option<&T> {
-//             if TypeId::of::<AddNumber>() == TypeId::of::<T>() {
-//                 Some(unsafe { &*(&self.add_number as *const AddNumber as *const T) })
-//             } else if TypeId::of::<SubtractNumber>() == TypeId::of::<T>() {
-//                 Some(unsafe { &*(&self.subtract_number as *const SubtractNumber as *const T) })
-//             } else {
-//                 None
-//             }
-//         }
-
-//         fn get_mut<T: Any+Sync+Send>(&mut self) -> Option<&mut T> {
-//             if TypeId::of::<AddNumber>() == TypeId::of::<T>() {
-//                 Some(unsafe { &mut *(&mut self.add_number as *mut AddNumber as *mut T) })
-//             } else if TypeId::of::<SubtractNumber>() == TypeId::of::<T>() {
-//                 Some(unsafe { &mut *(&mut self.subtract_number as *mut SubtractNumber as *mut T) })
-//             } else {
-//                 None
-//             }
-//         }
-//     }
-
-//     impl State for NumberState {
-//         fn create_passes() -> Box<[TypeErasedPass<Self>]> {
-//             Box::new([
-//                 AddNumber::to_type_erased(),
-//                 SubtractNumber::to_type_erased(),
-//             ])
-//         }
-//     }
-
-//     let mut tree: RealDom<NumberState> = RealDom::new();
-//     tree.dirty_nodes
-//         .insert(TypeId::of::<SubtractNumber>(), NodeId(0));
-//     tree.update_state(dirty_nodes, SendAnyMap::new());
-
-//     assert_eq!(
-//         tree.get(tree.root()).unwrap().state,
-//         NumberState {
-//             add_number: AddNumber(1),
-//             subtract_number: SubtractNumber(-1)
-//         }
-//     );
-// }
-
-// #[test]
-// fn independant_node_pass() {
-//     use crate::real_dom::RealDom;
-//     use crate::tree::{Tree, TreeLike};
-
-//     #[derive(Debug, Default, Clone, PartialEq)]
-//     struct AddNumber(i32);
-
-//     impl Pass for AddNumber {
-//         type ChildDependencies = ();
-//         type NodeDependencies = ();
-//         type ParentDependencies = ();
-//         type Ctx = ();
-//         const MASK: NodeMask = NodeMask::new();
-
-//         fn pass<'a>(
-//             &mut self,
-//             node_view: NodeView,
-//             node: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
-//             parent: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
-//             children: Option<
-//                 impl Iterator<Item = <Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>,
-//             >,
-//             context: <Self::Ctx as Dependancy>::ElementBorrowed<'a>,
-//         ) -> bool {
-//             self.0 += 1;
-//             true
-//         }
-//     }
-
-//     #[derive(Debug, Default, Clone, PartialEq)]
-//     struct SubtractNumber(i32);
-
-//     impl Pass for SubtractNumber {
-//         type ChildDependencies = ();
-//         type NodeDependencies = ();
-//         type ParentDependencies = ();
-//         type Ctx = ();
-//         const MASK: NodeMask = NodeMask::new();
-
-//         fn pass<'a>(
-//             &mut self,
-//             node_view: NodeView,
-//             node: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
-//             parent: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
-//             children: Option<
-//                 impl Iterator<Item = <Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>,
-//             >,
-//             context: <Self::Ctx as Dependancy>::ElementBorrowed<'a>,
-//         ) -> bool {
-//             self.0 -= 1;
-//             true
-//         }
-//     }
-
-//     #[derive(Debug, Default, Clone, PartialEq)]
-//     struct NumberState {
-//         add_number: AddNumber,
-//         subtract_number: SubtractNumber,
-//     }
-
-//     impl AnyMapLike for NumberState {
-//         fn get<T: Any+Sync+Send>(&self) -> Option<&T> {
-//             if TypeId::of::<AddNumber>() == TypeId::of::<T>() {
-//                 Some(unsafe { &*(&self.add_number as *const AddNumber as *const T) })
-//             } else if TypeId::of::<SubtractNumber>() == TypeId::of::<T>() {
-//                 Some(unsafe { &*(&self.subtract_number as *const SubtractNumber as *const T) })
-//             } else {
-//                 None
-//             }
-//         }
-
-//         fn get_mut<T: Any+Sync+Send>(&mut self) -> Option<&mut T> {
-//             if TypeId::of::<AddNumber>() == TypeId::of::<T>() {
-//                 Some(unsafe { &mut *(&mut self.add_number as *mut AddNumber as *mut T) })
-//             } else if TypeId::of::<SubtractNumber>() == TypeId::of::<T>() {
-//                 Some(unsafe { &mut *(&mut self.subtract_number as *mut SubtractNumber as *mut T) })
-//             } else {
-//                 None
-//             }
-//         }
-//     }
-
-//     impl State for NumberState {
-//         fn create_passes() -> Box<[TypeErasedPass<Self>]> {
-//             Box::new([
-//                 AddNumber::to_type_erased(),
-//                 SubtractNumber::to_type_erased(),
-//             ])
-//         }
-//     }
-
-//     let mut tree: RealDom<NumberState> = RealDom::new();
-//     tree.dirty_nodes
-//         .insert(TypeId::of::<SubtractNumber>(), NodeId(0));
-//     tree.update_state(SendAnyMap::new());
-
-//     assert_eq!(
-//         tree.get(tree.root()).unwrap().state,
-//         NumberState {
-//             add_number: AddNumber(0),
-//             subtract_number: SubtractNumber(-1)
-//         }
-//     );
-// }
-
-// #[test]
-// fn down_pass() {
-//     use crate::real_dom::RealDom;
-//     use crate::tree::{Tree, TreeLike};
-
-//     #[derive(Debug, Default, Clone, PartialEq)]
-//     struct AddNumber(i32);
-
-//     impl Pass for AddNumber {
-//         type ChildDependencies = ();
-//         type NodeDependencies = ();
-//         type ParentDependencies = (AddNumber,);
-//         type Ctx = ();
-//         const MASK: NodeMask = NodeMask::new();
-
-//         fn pass<'a>(
-//             &mut self,
-//             node_view: NodeView,
-//             node: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
-//             parent: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
-//             children: Option<
-//                 impl Iterator<Item = <Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>,
-//             >,
-//             context: <Self::Ctx as Dependancy>::ElementBorrowed<'a>,
-//         ) -> bool {
-//             if let Some((parent,)) = parent {
-//                 *self.0 += *parent.0;
-//             }
-//             true
-//         }
-//     }
-
-//     #[derive(Debug, Default, Clone, PartialEq)]
-//     struct NumberState {
-//         add_number: AddNumber,
-//     }
-
-//     impl AnyMapLike for NumberState {
-//         fn get<T: Any+Sync+Send>(&self) -> Option<&T> {
-//             if TypeId::of::<AddNumber>() == TypeId::of::<T>() {
-//                 Some(unsafe { &*(&self.add_number as *const AddNumber as *const T) })
-//             } else {
-//                 None
-//             }
-//         }
-
-//         fn get_mut<T: Any+Sync+Send>(&mut self) -> Option<&mut T> {
-//             if TypeId::of::<AddNumber>() == TypeId::of::<T>() {
-//                 Some(unsafe { &mut *(&mut self.add_number as *mut AddNumber as *mut T) })
-//             } else {
-//                 None
-//             }
-//         }
-//     }
-
-//     impl State for NumberState {
-//         fn create_passes() -> Box<[TypeErasedPass<Self>]> {
-//             Box::new([AddNumber::to_type_erased()])
-//         }
-//     }
-
-//     let mut tree: RealDom<NumberState> = RealDom::new();
-//     let parent = tree.root();
-//     let child1 = tree.create_node(1);
-//     tree.add_child(parent, child1);
-//     let grandchild1 = tree.create_node(1);
-//     tree.add_child(child1, grandchild1);
-//     let child2 = tree.create_node(1);
-//     tree.add_child(parent, child2);
-//     let grandchild2 = tree.create_node(1);
-//     tree.add_child(child2, grandchild2);
-
-//     tree.dirty_nodes
-//         .insert(TypeId::of::<AddNumber>(), NodeId(0));
-//     tree.update_state(SendAnyMap::new());
-
-//     assert_eq!(tree.get(tree.root()).unwrap().state.add_number.0, 1);
-//     assert_eq!(tree.get(child1).unwrap().state.add_number.0, 2);
-//     assert_eq!(tree.get(grandchild1).unwrap().state.add_number.0, 3);
-//     assert_eq!(tree.get(child2).unwrap().state.add_number.0, 2);
-//     assert_eq!(tree.get(grandchild2).unwrap().state.add_number.0, 3);
-// }
-
-// #[test]
-// fn dependant_down_pass() {
-//     use crate::tree::{Tree, TreeLike};
-//     // 0
-//     let mut tree = Tree::new(1);
-//     let parent = tree.root();
-//     // 1
-//     let child1 = tree.create_node(1);
-//     tree.add_child(parent, child1);
-//     // 2
-//     let grandchild1 = tree.create_node(1);
-//     tree.add_child(child1, grandchild1);
-//     // 3
-//     let child2 = tree.create_node(1);
-//     tree.add_child(parent, child2);
-//     // 4
-//     let grandchild2 = tree.create_node(1);
-//     tree.add_child(child2, grandchild2);
-
-//     struct AddPass;
-//     impl Pass for AddPass {
-//         fn pass_id(&self) -> PassId {
-//             PassId(0)
-//         }
-
-//         fn dependancies(&self) -> &'static [PassId] {
-//             &[PassId(1)]
-//         }
-
-//         fn dependants(&self) -> &'static [PassId] {
-//             &[]
-//         }
-
-//         fn mask(&self) -> MemberMask {
-//             MemberMask(0)
-//         }
-//     }
-//     impl DownwardPass<i32> for AddPass {
-//         fn pass(&self, node: &mut i32, parent: Option<&mut i32>, _: &SendAnyMap) -> PassReturn {
-//             if let Some(parent) = parent {
-//                 *node += *parent;
-//             } else {
-//             }
-//             PassReturn {
-//                 progress: true,
-//                 mark_dirty: true,
-//             }
-//         }
-//     }
-
-//     struct SubtractPass;
-//     impl Pass for SubtractPass {
-//         fn pass_id(&self) -> PassId {
-//             PassId(1)
-//         }
-
-//         fn dependancies(&self) -> &'static [PassId] {
-//             &[]
-//         }
-
-//         fn dependants(&self) -> &'static [PassId] {
-//             &[PassId(0)]
-//         }
-
-//         fn mask(&self) -> MemberMask {
-//             MemberMask(0)
-//         }
-//     }
-//     impl DownwardPass<i32> for SubtractPass {
-//         fn pass(&self, node: &mut i32, parent: Option<&mut i32>, _: &SendAnyMap) -> PassReturn {
-//             if let Some(parent) = parent {
-//                 *node -= *parent;
-//             } else {
-//             }
-//             PassReturn {
-//                 progress: true,
-//                 mark_dirty: true,
-//             }
-//         }
-//     }
-
-//     let add_pass = AnyPass::Downward(&AddPass);
-//     let subtract_pass = AnyPass::Downward(&SubtractPass);
-//     let passes = vec![&add_pass, &subtract_pass];
-//     let dirty_nodes: DirtyNodeStates = DirtyNodeStates::default();
-//     dirty_nodes.insert(PassId(1), tree.root());
-//     resolve_passes(&mut tree, dirty_nodes, passes, SendAnyMap::new());
-
-//     // Tree before:
-//     // 1=\
-//     //   1=\
-//     //     1
-//     //   1=\
-//     //     1
-//     // Tree after subtract:
-//     // 1=\
-//     //   0=\
-//     //     1
-//     //   0=\
-//     //     1
-//     // Tree after add:
-//     // 1=\
-//     //   1=\
-//     //     2
-//     //   1=\
-//     //     2
-//     assert_eq!(tree.get(tree.root()).unwrap(), &1);
-//     assert_eq!(tree.get(child1).unwrap(), &1);
-//     assert_eq!(tree.get(grandchild1).unwrap(), &2);
-//     assert_eq!(tree.get(child2).unwrap(), &1);
-//     assert_eq!(tree.get(grandchild2).unwrap(), &2);
-// }
-
-// #[test]
-// fn up_pass() {
-//     use crate::tree::{Tree, TreeLike};
-//     // Tree before:
-//     // 0=\
-//     //   0=\
-//     //     1
-//     //   0=\
-//     //     1
-//     // Tree after:
-//     // 2=\
-//     //   1=\
-//     //     1
-//     //   1=\
-//     //     1
-//     let mut tree = Tree::new(0);
-//     let parent = tree.root();
-//     let child1 = tree.create_node(0);
-//     tree.add_child(parent, child1);
-//     let grandchild1 = tree.create_node(1);
-//     tree.add_child(child1, grandchild1);
-//     let child2 = tree.create_node(0);
-//     tree.add_child(parent, child2);
-//     let grandchild2 = tree.create_node(1);
-//     tree.add_child(child2, grandchild2);
-
-//     struct AddPass;
-//     impl Pass for AddPass {
-//         fn pass_id(&self) -> PassId {
-//             PassId(0)
-//         }
-
-//         fn dependancies(&self) -> &'static [PassId] {
-//             &[]
-//         }
-
-//         fn dependants(&self) -> &'static [PassId] {
-//             &[]
-//         }
-
-//         fn mask(&self) -> MemberMask {
-//             MemberMask(0)
-//         }
-//     }
-//     impl UpwardPass<i32> for AddPass {
-//         fn pass<'a>(
-//             &self,
-//             node: &mut i32,
-//             children: &mut dyn Iterator<Item = &'a mut i32>,
-//             _: &SendAnyMap,
-//         ) -> PassReturn {
-//             *node += children.map(|i| *i).sum::<i32>();
-//             PassReturn {
-//                 progress: true,
-//                 mark_dirty: true,
-//             }
-//         }
-//     }
-
-//     let add_pass = AnyPass::Upward(&AddPass);
-//     let passes = vec![&add_pass];
-//     let dirty_nodes: DirtyNodeStates = DirtyNodeStates::default();
-//     dirty_nodes.insert(PassId(0), grandchild1);
-//     dirty_nodes.insert(PassId(0), grandchild2);
-//     resolve_passes(&mut tree, dirty_nodes, passes, SendAnyMap::new());
-
-//     assert_eq!(tree.get(tree.root()).unwrap(), &2);
-//     assert_eq!(tree.get(child1).unwrap(), &1);
-//     assert_eq!(tree.get(grandchild1).unwrap(), &1);
-//     assert_eq!(tree.get(child2).unwrap(), &1);
-//     assert_eq!(tree.get(grandchild2).unwrap(), &1);
-// }
-
-// #[test]
-// fn dependant_up_pass() {
-//     use crate::tree::{Tree, TreeLike};
-//     // 0
-//     let mut tree = Tree::new(0);
-//     let parent = tree.root();
-//     // 1
-//     let child1 = tree.create_node(0);
-//     tree.add_child(parent, child1);
-//     // 2
-//     let grandchild1 = tree.create_node(1);
-//     tree.add_child(child1, grandchild1);
-//     // 3
-//     let child2 = tree.create_node(0);
-//     tree.add_child(parent, child2);
-//     // 4
-//     let grandchild2 = tree.create_node(1);
-//     tree.add_child(child2, grandchild2);
-
-//     struct AddPass;
-//     impl Pass for AddPass {
-//         fn pass_id(&self) -> PassId {
-//             PassId(0)
-//         }
-
-//         fn dependancies(&self) -> &'static [PassId] {
-//             &[PassId(1)]
-//         }
-
-//         fn dependants(&self) -> &'static [PassId] {
-//             &[]
-//         }
-
-//         fn mask(&self) -> MemberMask {
-//             MemberMask(0)
-//         }
-//     }
-//     impl UpwardPass<i32> for AddPass {
-//         fn pass<'a>(
-//             &self,
-//             node: &mut i32,
-//             children: &mut dyn Iterator<Item = &'a mut i32>,
-//             _: &SendAnyMap,
-//         ) -> PassReturn {
-//             *node += children.map(|i| *i).sum::<i32>();
-//             PassReturn {
-//                 progress: true,
-//                 mark_dirty: true,
-//             }
-//         }
-//     }
-
-//     struct SubtractPass;
-//     impl Pass for SubtractPass {
-//         fn pass_id(&self) -> PassId {
-//             PassId(1)
-//         }
-
-//         fn dependancies(&self) -> &'static [PassId] {
-//             &[]
-//         }
-
-//         fn dependants(&self) -> &'static [PassId] {
-//             &[PassId(0)]
-//         }
-
-//         fn mask(&self) -> MemberMask {
-//             MemberMask(0)
-//         }
-//     }
-//     impl UpwardPass<i32> for SubtractPass {
-//         fn pass<'a>(
-//             &self,
-//             node: &mut i32,
-//             children: &mut dyn Iterator<Item = &'a mut i32>,
-//             _: &SendAnyMap,
-//         ) -> PassReturn {
-//             *node -= children.map(|i| *i).sum::<i32>();
-//             PassReturn {
-//                 progress: true,
-//                 mark_dirty: true,
-//             }
-//         }
-//     }
-
-//     let add_pass = AnyPass::Upward(&AddPass);
-//     let subtract_pass = AnyPass::Upward(&SubtractPass);
-//     let passes = vec![&add_pass, &subtract_pass];
-//     let dirty_nodes: DirtyNodeStates = DirtyNodeStates::default();
-//     dirty_nodes.insert(PassId(1), grandchild1);
-//     dirty_nodes.insert(PassId(1), grandchild2);
-//     resolve_passes(&mut tree, dirty_nodes, passes, SendAnyMap::new());
-
-//     // Tree before:
-//     // 0=\
-//     //   0=\
-//     //     1
-//     //   0=\
-//     //     1
-//     // Tree after subtract:
-//     // 2=\
-//     //   -1=\
-//     //      1
-//     //   -1=\
-//     //      1
-//     // Tree after add:
-//     // 2=\
-//     //   0=\
-//     //     1
-//     //   0=\
-//     //     1
-//     assert_eq!(tree.get(tree.root()).unwrap(), &2);
-//     assert_eq!(tree.get(child1).unwrap(), &0);
-//     assert_eq!(tree.get(grandchild1).unwrap(), &1);
-//     assert_eq!(tree.get(child2).unwrap(), &0);
-//     assert_eq!(tree.get(grandchild2).unwrap(), &1);
-// }

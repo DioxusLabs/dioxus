@@ -13,6 +13,7 @@ pub enum ElementProduced {
     /// The iterator reached the end of the tree and looped back to the root
     Looped(NodeId),
 }
+
 impl ElementProduced {
     pub fn id(&self) -> NodeId {
         match self {
@@ -141,7 +142,7 @@ impl PersistantElementIter {
         } else {
             let (last, old_child_idx) = self.stack.last_mut().unwrap();
             let node = rdom.get(*last).unwrap();
-            match &node.node_data().node_type {
+            match node.node_type() {
                 NodeType::Element(ElementNode { .. }) => {
                     let children = node.child_ids().unwrap();
                     *old_child_idx = old_child_idx.map(|i| i + 1);
@@ -153,7 +154,7 @@ impl PersistantElementIter {
                     } else {
                         let id = children[child_idx];
                         if let NodeType::Element(ElementNode { .. }) =
-                            rdom.get(id).unwrap().node_data().node_type
+                            rdom.get(id).unwrap().node_type()
                         {
                             self.stack.push((id, NodePosition::AtNode));
                         }
@@ -178,7 +179,7 @@ impl PersistantElementIter {
             rdom: &RealDom<V>,
         ) -> NodeId {
             let node = rdom.get(new_node).unwrap();
-            match &node.node_data().node_type {
+            match node.node_type() {
                 NodeType::Element(ElementNode { .. }) => {
                     let children = node.child_ids().unwrap();
                     if children.is_empty() {
@@ -197,7 +198,7 @@ impl PersistantElementIter {
         } else {
             let (last, old_child_idx) = self.stack.last_mut().unwrap();
             let node = rdom.get(*last).unwrap();
-            match &node.node_data().node_type {
+            match node.node_type() {
                 NodeType::Element(ElementNode { .. }) => {
                     let children = node.child_ids().unwrap();
                     // if we have children, go to the next child
