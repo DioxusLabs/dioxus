@@ -9,6 +9,7 @@ use crate::Config;
 use crate::WebviewHandler;
 use dioxus_core::ScopeState;
 use dioxus_core::VirtualDom;
+#[cfg(feature = "hot-reload")]
 use dioxus_hot_reload::HotReloadMsg;
 use serde_json::Value;
 use slab::Slab;
@@ -285,6 +286,7 @@ pub enum EventData {
 
     Ipc(IpcMessage),
 
+    #[cfg(feature = "hot-reload")]
     HotReloadEvent(HotReloadMsg),
 
     NewWindow,
