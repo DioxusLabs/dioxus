@@ -1,15 +1,11 @@
 use dioxus::prelude::*;
-use dioxus_core::*;
 use dioxus_native_core::prelude::*;
 use dioxus_native_core::{
     dioxus::DioxusState,
-    node_ref::{AttributeMaskBuilder, NodeMaskBuilder, NodeView},
+    node_ref::{NodeMaskBuilder, NodeView},
     real_dom::RealDom,
     Dependancy, Pass, SendAnyMap,
 };
-use rustc_hash::{FxHashMap, FxHashSet};
-use std::any::TypeId;
-use std::sync::{Arc, Mutex};
 
 macro_rules! dep {
     ( child( $name:ty, $dep:ty ) ) => {
@@ -24,7 +20,7 @@ macro_rules! dep {
                 &mut self,
                 _: NodeView,
                 _: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
-                parent: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
+                _: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
                 _: Option<Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>>,
                 _: &SendAnyMap,
             ) -> bool {
@@ -58,7 +54,7 @@ macro_rules! dep {
                 &mut self,
                 _: NodeView,
                 _: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
-                parent: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
+                _: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
                 _: Option<Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>>,
                 _: &SendAnyMap,
             ) -> bool {
@@ -92,7 +88,7 @@ macro_rules! dep {
                 &mut self,
                 _: NodeView,
                 _: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
-                parent: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
+                _: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
                 _: Option<Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>>,
                 _: &SendAnyMap,
             ) -> bool {

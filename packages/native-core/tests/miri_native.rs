@@ -5,10 +5,6 @@ use dioxus_native_core::{
     real_dom::RealDom,
     Dependancy, Pass, SendAnyMap,
 };
-use std::{
-    borrow::BorrowMut,
-    sync::{Arc, Mutex},
-};
 use tokio::time::sleep;
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -99,6 +95,7 @@ mod dioxus_elements {
 
 #[test]
 fn native_core_is_okay() {
+    use std::sync::{Arc, Mutex};
     use std::time::Duration;
 
     fn app(cx: Scope) -> Element {

@@ -1,9 +1,6 @@
-use dioxus::prelude::*;
 use dioxus_native_core::node::NodeType;
 use dioxus_native_core::prelude::*;
 use rustc_hash::{FxHashMap, FxHashSet};
-use std::any::TypeId;
-use std::sync::{Arc, Mutex};
 
 fn create_blank_element() -> NodeType {
     NodeType::Element(ElementNode {
@@ -27,11 +24,11 @@ fn node_pass() {
 
         fn pass<'a>(
             &mut self,
-            node_view: NodeView,
-            node: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
-            parent: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
-            children: Option<Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>>,
-            context: &SendAnyMap,
+            _: NodeView,
+            _: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
+            _: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
+            _: Option<Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>>,
+            _: &SendAnyMap,
         ) -> bool {
             self.0 += 1;
             true
@@ -75,11 +72,11 @@ fn dependant_node_pass() {
 
         fn pass<'a>(
             &mut self,
-            node_view: NodeView,
-            node: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
-            parent: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
-            children: Option<Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>>,
-            context: &SendAnyMap,
+            _: NodeView,
+            _: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
+            _: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
+            _: Option<Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>>,
+            _: &SendAnyMap,
         ) -> bool {
             self.0 += 1;
             true
@@ -109,11 +106,11 @@ fn dependant_node_pass() {
 
         fn pass<'a>(
             &mut self,
-            node_view: NodeView,
-            node: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
-            parent: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
-            children: Option<Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>>,
-            context: &SendAnyMap,
+            _: NodeView,
+            _: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
+            _: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
+            _: Option<Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>>,
+            _: &SendAnyMap,
         ) -> bool {
             self.0 -= 1;
             true
@@ -175,11 +172,11 @@ fn independant_node_pass() {
 
         fn pass<'a>(
             &mut self,
-            node_view: NodeView,
-            node: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
-            parent: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
-            children: Option<Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>>,
-            context: &SendAnyMap,
+            _: NodeView,
+            _: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
+            _: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
+            _: Option<Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>>,
+            _: &SendAnyMap,
         ) -> bool {
             self.0 += 1;
             true
@@ -210,11 +207,11 @@ fn independant_node_pass() {
 
         fn pass<'a>(
             &mut self,
-            node_view: NodeView,
-            node: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
-            parent: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
-            children: Option<Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>>,
-            context: &SendAnyMap,
+            _: NodeView,
+            _: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
+            _: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
+            _: Option<Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>>,
+            _: &SendAnyMap,
         ) -> bool {
             self.0 -= 1;
             true
@@ -284,14 +281,12 @@ fn down_pass() {
 
         fn pass<'a>(
             &mut self,
-            node_view: NodeView,
-            node: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
+            _: NodeView,
+            _: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
             parent: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
-            children: Option<Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>>,
-            context: &SendAnyMap,
+            _: Option<Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>>,
+            _: &SendAnyMap,
         ) -> bool {
-            dbg!(parent);
-            dbg!(node_view);
             if let Some((parent,)) = parent {
                 self.0 += parent.0;
             }
@@ -312,12 +307,12 @@ fn down_pass() {
     }
 
     let mut tree: RealDom = RealDom::new(Box::new([AddNumber::to_type_erased()]));
-    let mut grandchild1 = tree.create_node(create_blank_element(), true);
+    let grandchild1 = tree.create_node(create_blank_element(), true);
     let grandchild1 = grandchild1.id();
     let mut child1 = tree.create_node(create_blank_element(), true);
     child1.add_child(grandchild1);
     let child1 = child1.id();
-    let mut grandchild2 = tree.create_node(create_blank_element(), true);
+    let grandchild2 = tree.create_node(create_blank_element(), true);
     let grandchild2 = grandchild2.id();
     let mut child2 = tree.create_node(create_blank_element(), true);
     child2.add_child(grandchild2);
@@ -374,11 +369,11 @@ fn up_pass() {
 
         fn pass<'a>(
             &mut self,
-            node_view: NodeView,
-            node: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
-            parent: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
+            _: NodeView,
+            _: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
+            _: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
             children: Option<Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>>,
-            context: &SendAnyMap,
+            _: &SendAnyMap,
         ) -> bool {
             if let Some(children) = children {
                 self.0 += children.iter().map(|(i,)| i.0).sum::<i32>();
@@ -400,12 +395,12 @@ fn up_pass() {
     }
 
     let mut tree: RealDom = RealDom::new(Box::new([AddNumber::to_type_erased()]));
-    let mut grandchild1 = tree.create_node(create_blank_element(), true);
+    let grandchild1 = tree.create_node(create_blank_element(), true);
     let grandchild1 = grandchild1.id();
     let mut child1 = tree.create_node(create_blank_element(), true);
     child1.add_child(grandchild1);
     let child1 = child1.id();
-    let mut grandchild2 = tree.create_node(create_blank_element(), true);
+    let grandchild2 = tree.create_node(create_blank_element(), true);
     let grandchild2 = grandchild2.id();
     let mut child2 = tree.create_node(create_blank_element(), true);
     child2.add_child(grandchild2);
