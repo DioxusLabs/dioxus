@@ -15,7 +15,7 @@ pub struct DioxusState {
 }
 
 impl DioxusState {
-    pub fn new(rdom: &mut RealDom) -> Self {
+    pub fn create(rdom: &mut RealDom) -> Self {
         rdom.insert_slab::<ElementId>();
         let root_id = rdom.root_id();
         let mut root = rdom.get_mut(root_id).unwrap();

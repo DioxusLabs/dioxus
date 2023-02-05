@@ -1,14 +1,56 @@
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::any::{Any, TypeId};
 use std::collections::VecDeque;
+use std::rc::Rc;
 
 use crate::node::{
     ElementNode, FromAnyValue, NodeType, OwnedAttributeDiscription, OwnedAttributeValue,
 };
-use crate::node_ref::{AttributeMask, NodeMask, NodeMaskBuilder};
+use crate::node_ref::{NodeMask, NodeMaskBuilder};
 use crate::passes::{resolve_passes, DirtyNodeStates, TypeErasedPass};
+use crate::prelude::AttributeMaskBuilder;
 use crate::tree::{NodeId, Tree};
 use crate::{FxDashSet, SendAnyMap};
+
+struct NodesDirty<V: FromAnyValue + Send + Sync> {
+    passes_updated: FxHashMap<NodeId, FxHashSet<TypeId>>,
+    nodes_updated: FxHashMap<NodeId, NodeMask>,
+    passes: Rc<Box<[TypeErasedPass<V>]>>,
+}
+
+impl<V: FromAnyValue + Send + Sync> NodesDirty<V> {
+    fn mark_dirty(&mut self, node_id: NodeId, mask: NodeMask) {
+        self.passes_updated.entry(node_id).or_default().extend(
+            self.passes
+                .iter()
+                .filter_map(|x| x.mask.overlaps(&mask).then_some(x.this_type_id)),
+        );
+        let nodes_updated = &mut self.nodes_updated;
+        if let Some(node) = nodes_updated.get_mut(&node_id) {
+            *node = node.union(&mask);
+        } else {
+            nodes_updated.insert(node_id, mask);
+        }
+    }
+
+    fn mark_parent_added_or_removed(&mut self, node_id: NodeId) {
+        let hm = self.passes_updated.entry(node_id).or_default();
+        for pass in &**self.passes {
+            if pass.parent_dependant {
+                hm.insert(pass.this_type_id);
+            }
+        }
+    }
+
+    fn mark_child_changed(&mut self, node_id: NodeId) {
+        let hm = self.passes_updated.entry(node_id).or_default();
+        for pass in &**self.passes {
+            if pass.child_dependant {
+                hm.insert(pass.this_type_id);
+            }
+        }
+    }
+}
 
 /// A Dom that can sync with the VirtualDom mutations intended for use in lazy renderers.
 /// The render state passes from parent to children and or accumulates state from children to parents.
@@ -19,9 +61,8 @@ use crate::{FxDashSet, SendAnyMap};
 pub struct RealDom<V: FromAnyValue + Send + Sync = ()> {
     pub(crate) tree: Tree,
     nodes_listening: FxHashMap<String, FxHashSet<NodeId>>,
-    pub(crate) passes: Box<[TypeErasedPass<V>]>,
-    passes_updated: FxHashMap<NodeId, FxHashSet<TypeId>>,
-    nodes_updated: FxHashMap<NodeId, NodeMask>,
+    pub(crate) passes: Rc<Box<[TypeErasedPass<V>]>>,
+    dirty_nodes: NodesDirty<V>,
     phantom: std::marker::PhantomData<V>,
 }
 
@@ -53,6 +94,7 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
                 }
             }
         }
+        let passes = Rc::new(passes);
 
         let mut passes_updated = FxHashMap::default();
         let mut nodes_updated = FxHashMap::default();
@@ -64,42 +106,13 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
         RealDom {
             tree,
             nodes_listening: FxHashMap::default(),
-            passes,
-            passes_updated,
-            nodes_updated,
+            passes: passes.clone(),
+            dirty_nodes: NodesDirty {
+                passes_updated,
+                nodes_updated,
+                passes,
+            },
             phantom: std::marker::PhantomData,
-        }
-    }
-
-    fn mark_dirty(&mut self, node_id: NodeId, mask: NodeMask) {
-        self.passes_updated.entry(node_id).or_default().extend(
-            self.passes
-                .iter()
-                .filter_map(|x| x.mask.overlaps(&mask).then_some(x.this_type_id)),
-        );
-        let nodes_updated = &mut self.nodes_updated;
-        if let Some(node) = nodes_updated.get_mut(&node_id) {
-            *node = node.union(&mask);
-        } else {
-            nodes_updated.insert(node_id, mask);
-        }
-    }
-
-    fn mark_parent_added_or_removed(&mut self, node_id: NodeId) {
-        let hm = self.passes_updated.entry(node_id).or_default();
-        for pass in &*self.passes {
-            if pass.parent_dependant {
-                hm.insert(pass.this_type_id);
-            }
-        }
-    }
-
-    fn mark_child_changed(&mut self, node_id: NodeId) {
-        let hm = self.passes_updated.entry(node_id).or_default();
-        for pass in &*self.passes {
-            if pass.child_dependant {
-                hm.insert(pass.this_type_id);
-            }
         }
     }
 
@@ -107,7 +120,8 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
         let mut node_entry = self.tree.create_node();
         let id = node_entry.id();
         if mark_dirty {
-            self.passes_updated
+            self.dirty_nodes
+                .passes_updated
                 .entry(id)
                 .or_default()
                 .extend(self.passes.iter().map(|x| x.this_type_id));
@@ -186,8 +200,8 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
         ctx: SendAnyMap,
         parallel: bool,
     ) -> (FxDashSet<NodeId>, FxHashMap<NodeId, NodeMask>) {
-        let passes = std::mem::take(&mut self.passes_updated);
-        let nodes_updated = std::mem::take(&mut self.nodes_updated);
+        let passes = std::mem::take(&mut self.dirty_nodes.passes_updated);
+        let nodes_updated = std::mem::take(&mut self.dirty_nodes.nodes_updated);
         let dirty_nodes = DirtyNodeStates::with_passes(self.passes.iter().map(|p| p.this_type_id));
         for (node_id, passes) in passes {
             // remove any nodes that were created and then removed in the same mutations from the dirty nodes list
@@ -206,15 +220,15 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
 
     pub fn remove(&mut self, id: NodeId) {
         if let Some(parent_id) = self.tree.parent_id(id) {
-            self.mark_child_changed(parent_id);
+            self.dirty_nodes.mark_child_changed(parent_id);
         }
         self.tree.remove(id)
     }
 
     pub fn replace(&mut self, old: NodeId, new: NodeId) {
         if let Some(parent_id) = self.tree.parent_id(old) {
-            self.mark_child_changed(parent_id);
-            self.mark_parent_added_or_removed(new);
+            self.dirty_nodes.mark_child_changed(parent_id);
+            self.dirty_nodes.mark_parent_added_or_removed(new);
         }
         self.tree.replace(old, new);
     }
@@ -376,16 +390,11 @@ impl<'a, V: FromAnyValue + Send + Sync> NodeImmutable<V> for NodeRef<'a, V> {
 pub struct NodeMut<'a, V: FromAnyValue + Send + Sync = ()> {
     id: NodeId,
     dom: &'a mut RealDom<V>,
-    dirty: NodeMask,
 }
 
 impl<'a, V: FromAnyValue + Send + Sync> NodeMut<'a, V> {
     pub fn new(id: NodeId, dom: &'a mut RealDom<V>) -> Self {
-        Self {
-            id,
-            dom,
-            dirty: NodeMask::default(),
-        }
+        Self { id, dom }
     }
 }
 
@@ -407,6 +416,7 @@ impl<'a, V: FromAnyValue + Send + Sync> NodeMutable<V> for NodeMut<'a, V> {
     fn get_mut<T: Any + Sync + Send>(&mut self) -> Option<&mut T> {
         // mark the node state as dirty
         self.dom
+            .dirty_nodes
             .passes_updated
             .entry(self.id)
             .or_default()
@@ -417,6 +427,7 @@ impl<'a, V: FromAnyValue + Send + Sync> NodeMutable<V> for NodeMut<'a, V> {
     fn insert<T: Any + Sync + Send>(&mut self, value: T) {
         // mark the node state as dirty
         self.dom
+            .dirty_nodes
             .passes_updated
             .entry(self.id)
             .or_default()
@@ -427,8 +438,8 @@ impl<'a, V: FromAnyValue + Send + Sync> NodeMutable<V> for NodeMut<'a, V> {
     fn insert_after(&mut self, old: NodeId) {
         let id = self.id();
         if let Some(parent_id) = self.dom.tree.parent_id(old) {
-            self.dom.mark_child_changed(parent_id);
-            self.dom.mark_parent_added_or_removed(id);
+            self.dom.dirty_nodes.mark_child_changed(parent_id);
+            self.dom.dirty_nodes.mark_parent_added_or_removed(id);
         }
         self.dom.tree.insert_after(old, id);
     }
@@ -436,16 +447,20 @@ impl<'a, V: FromAnyValue + Send + Sync> NodeMutable<V> for NodeMut<'a, V> {
     fn insert_before(&mut self, old: NodeId) {
         let id = self.id();
         if let Some(parent_id) = self.dom.tree.parent_id(old) {
-            self.dom.mark_child_changed(parent_id);
-            self.dom.mark_parent_added_or_removed(id);
+            self.dom.dirty_nodes.mark_child_changed(parent_id);
+            self.dom.dirty_nodes.mark_parent_added_or_removed(id);
         }
         self.dom.tree.insert_before(old, id);
     }
 
     fn add_event_listener(&mut self, event: &str) {
         let id = self.id();
-        if let NodeTypeMut::Element(mut element) = self.node_type_mut() {
-            element.listeners_mut().insert(event.to_string());
+        let node_type: &mut NodeType<V> = self.dom.tree.get_mut(self.id).unwrap();
+        if let NodeType::Element(ElementNode { listeners, .. }) = node_type {
+            self.dom
+                .dirty_nodes
+                .mark_dirty(self.id, NodeMaskBuilder::new().with_listeners().build());
+            listeners.insert(event.to_string());
             match self.dom.nodes_listening.get_mut(event) {
                 Some(hs) => {
                     hs.insert(id);
@@ -461,21 +476,33 @@ impl<'a, V: FromAnyValue + Send + Sync> NodeMutable<V> for NodeMut<'a, V> {
 
     fn remove_event_listener(&mut self, event: &str) {
         let id = self.id();
-        if let NodeTypeMut::Element(mut element) = self.node_type_mut() {
-            element.listeners_mut().remove(event);
+        let node_type: &mut NodeType<V> = self.dom.tree.get_mut(self.id).unwrap();
+        if let NodeType::Element(ElementNode { listeners, .. }) = node_type {
+            self.dom
+                .dirty_nodes
+                .mark_dirty(self.id, NodeMaskBuilder::new().with_listeners().build());
+            listeners.remove(event);
+
+            self.dom.nodes_listening.get_mut(event).unwrap().remove(&id);
         }
-        self.dom.nodes_listening.get_mut(event).unwrap().remove(&id);
     }
 }
 
 impl<'a, V: FromAnyValue + Send + Sync> NodeMut<'a, V> {
     pub fn node_type_mut(&mut self) -> NodeTypeMut<'_, V> {
-        let Self { id, dom, dirty } = self;
-        let node_type = dom.tree.get_mut::<NodeType<V>>(*id).unwrap();
+        let Self { id, dom } = self;
+        let RealDom {
+            dirty_nodes, tree, ..
+        } = dom;
+        let node_type = tree.get_mut(*id).unwrap();
         match node_type {
-            NodeType::Element(element) => NodeTypeMut::Element(ElementNodeMut { element, dirty }),
+            NodeType::Element(element) => NodeTypeMut::Element(ElementNodeMut {
+                id: *id,
+                element,
+                dirty_nodes,
+            }),
             NodeType::Text(text) => {
-                dirty.set_text();
+                dirty_nodes.mark_dirty(self.id, NodeMaskBuilder::new().with_text().build());
                 NodeTypeMut::Text(text)
             }
             NodeType::Placeholder => NodeTypeMut::Placeholder,
@@ -484,35 +511,32 @@ impl<'a, V: FromAnyValue + Send + Sync> NodeMut<'a, V> {
 
     pub fn set_type(&mut self, new: NodeType<V>) {
         *self.dom.tree.get_mut::<NodeType<V>>(self.id).unwrap() = new;
-        self.dirty = NodeMaskBuilder::ALL.build();
+        self.dom
+            .dirty_nodes
+            .mark_dirty(self.id, NodeMaskBuilder::ALL.build())
     }
 }
 
-impl<V: FromAnyValue + Send + Sync> Drop for NodeMut<'_, V> {
-    fn drop(&mut self) {
-        let mask = std::mem::take(&mut self.dirty);
-        self.dom.mark_dirty(self.id, mask);
-    }
-}
-
-pub enum NodeTypeMut<'a, V: FromAnyValue = ()> {
+pub enum NodeTypeMut<'a, V: FromAnyValue + Send + Sync = ()> {
     Element(ElementNodeMut<'a, V>),
     Text(&'a mut String),
     Placeholder,
 }
 
-pub struct ElementNodeMut<'a, V: FromAnyValue = ()> {
+pub struct ElementNodeMut<'a, V: FromAnyValue + Send + Sync = ()> {
+    id: NodeId,
     element: &'a mut ElementNode<V>,
-    dirty: &'a mut NodeMask,
+    dirty_nodes: &'a mut NodesDirty<V>,
 }
 
-impl<V: FromAnyValue> ElementNodeMut<'_, V> {
+impl<V: FromAnyValue + Send + Sync> ElementNodeMut<'_, V> {
     pub fn tag(&self) -> &str {
         &self.element.tag
     }
 
     pub fn tag_mut(&mut self) -> &mut String {
-        self.dirty.set_tag();
+        self.dirty_nodes
+            .mark_dirty(self.id, NodeMaskBuilder::new().with_tag().build());
         &mut self.element.tag
     }
 
@@ -521,7 +545,8 @@ impl<V: FromAnyValue> ElementNodeMut<'_, V> {
     }
 
     pub fn namespace_mut(&mut self) -> &mut Option<String> {
-        self.dirty.set_namespace();
+        self.dirty_nodes
+            .mark_dirty(self.id, NodeMaskBuilder::new().with_namespace().build());
         &mut self.element.namespace
     }
 
@@ -532,7 +557,12 @@ impl<V: FromAnyValue> ElementNodeMut<'_, V> {
     pub fn attributes_mut(
         &mut self,
     ) -> &mut FxHashMap<OwnedAttributeDiscription, OwnedAttributeValue<V>> {
-        self.dirty.add_attributes(AttributeMask::All);
+        self.dirty_nodes.mark_dirty(
+            self.id,
+            NodeMaskBuilder::new()
+                .with_attrs(AttributeMaskBuilder::All)
+                .build(),
+        );
         &mut self.element.attributes
     }
 
@@ -541,7 +571,12 @@ impl<V: FromAnyValue> ElementNodeMut<'_, V> {
         name: OwnedAttributeDiscription,
         value: OwnedAttributeValue<V>,
     ) -> Option<OwnedAttributeValue<V>> {
-        self.dirty.add_attributes(AttributeMask::single(&name.name));
+        self.dirty_nodes.mark_dirty(
+            self.id,
+            NodeMaskBuilder::new()
+                .with_attrs(AttributeMaskBuilder::Some(&[&name.name]))
+                .build(),
+        );
         self.element.attributes.insert(name, value)
     }
 
@@ -549,7 +584,12 @@ impl<V: FromAnyValue> ElementNodeMut<'_, V> {
         &mut self,
         name: &OwnedAttributeDiscription,
     ) -> Option<OwnedAttributeValue<V>> {
-        self.dirty.add_attributes(AttributeMask::single(&name.name));
+        self.dirty_nodes.mark_dirty(
+            self.id,
+            NodeMaskBuilder::new()
+                .with_attrs(AttributeMaskBuilder::Some(&[&name.name]))
+                .build(),
+        );
         self.element.attributes.remove(name)
     }
 
@@ -557,17 +597,17 @@ impl<V: FromAnyValue> ElementNodeMut<'_, V> {
         &mut self,
         name: &OwnedAttributeDiscription,
     ) -> Option<&mut OwnedAttributeValue<V>> {
-        self.dirty.add_attributes(AttributeMask::single(&name.name));
+        self.dirty_nodes.mark_dirty(
+            self.id,
+            NodeMaskBuilder::new()
+                .with_attrs(AttributeMaskBuilder::Some(&[&name.name]))
+                .build(),
+        );
         self.element.attributes.get_mut(name)
     }
 
     pub fn listeners(&self) -> &FxHashSet<String> {
         &self.element.listeners
-    }
-
-    pub fn listeners_mut(&mut self) -> &mut FxHashSet<String> {
-        self.dirty.set_listeners();
-        &mut self.element.listeners
     }
 }
 

@@ -1,6 +1,7 @@
 use dioxus::prelude::Props;
 use dioxus_core::*;
 use dioxus_native_core::{
+    dioxus::DioxusState,
     node_ref::{AttributeMaskBuilder, NodeMaskBuilder, NodeView},
     real_dom::RealDom,
     Dependancy, Pass, SendAnyMap,
@@ -302,7 +303,7 @@ impl Pass for BlablaState {
     type ChildDependencies = ();
     type NodeDependencies = ();
 
-    const NODE_MASK: NodeMaskBuilder = NodeMaskBuilder::new()
+    const NODE_MASK: NodeMaskBuilder<'static> = NodeMaskBuilder::new()
         .with_attrs(AttributeMaskBuilder::Some(&["blabla"]))
         .with_element();
 
@@ -348,7 +349,8 @@ fn create() {
         );
         let mutations = vdom.rebuild();
         let mut rdom: RealDom = RealDom::new(Box::new([BlablaState::to_type_erased()]));
-        rdom.apply_mutations(mutations);
+        let mut dioxus_state = DioxusState::create(&mut rdom);
+        dioxus_state.apply_mutations(&mut rdom, mutations);
 
         let ctx = SendAnyMap::new();
         rdom.update_state(ctx, false);
@@ -369,13 +371,14 @@ fn diff() {
         );
         let mutations = vdom.rebuild();
         let mut rdom: RealDom = RealDom::new(Box::new([BlablaState::to_type_erased()]));
-        rdom.apply_mutations(mutations);
+        let mut dioxus_state = DioxusState::create(&mut rdom);
+        dioxus_state.apply_mutations(&mut rdom, mutations);
 
         let ctx = SendAnyMap::new();
         rdom.update_state(ctx, false);
         for _ in 0..10 {
             let mutations = vdom.render_immediate();
-            rdom.apply_mutations(mutations);
+            dioxus_state.apply_mutations(&mut rdom, mutations);
 
             let ctx = SendAnyMap::new();
             rdom.update_state(ctx, false);

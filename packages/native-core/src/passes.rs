@@ -64,14 +64,15 @@ impl DirtyNodeStates {
     }
 
     pub fn insert(&self, pass_id: TypeId, node_id: NodeId, height: u16) {
-        let btree = self.dirty.get(&pass_id).unwrap();
-        let mut write = btree.write();
-        if let Some(entry) = write.get_mut(&height) {
-            entry.add_node(node_id);
-        } else {
-            let mut entry = DirtyNodes::default();
-            entry.add_node(node_id);
-            write.insert(height, entry);
+        if let Some(btree) = self.dirty.get(&pass_id) {
+            let mut write = btree.write();
+            if let Some(entry) = write.get_mut(&height) {
+                entry.add_node(node_id);
+            } else {
+                let mut entry = DirtyNodes::default();
+                entry.add_node(node_id);
+                write.insert(height, entry);
+            }
         }
     }
 
@@ -109,7 +110,7 @@ pub trait Pass<V: FromAnyValue + Send + Sync = ()>: Any + Send + Sync {
     type ChildDependencies: Dependancy;
     /// This is a tuple of (T: Any, ..)
     type NodeDependencies: Dependancy;
-    const NODE_MASK: NodeMaskBuilder;
+    const NODE_MASK: NodeMaskBuilder<'static>;
 
     fn pass<'a>(
         &mut self,
@@ -137,12 +138,12 @@ pub trait Pass<V: FromAnyValue + Send + Sync = ()>: Any + Send + Sync {
         }
         // this type cannot be both a parent and child dependency
         assert!(
-            Self::parent_type_ids()
+            !(Self::parent_type_ids()
                 .iter()
-                .any(|type_id| *type_id != TypeId::of::<Self>())
+                .any(|type_id| *type_id == TypeId::of::<Self>())
                 && Self::child_type_ids()
                     .iter()
-                    .any(|type_id| *type_id != TypeId::of::<Self>()),
+                    .any(|type_id| *type_id == TypeId::of::<Self>())),
             "The current type cannot be a parent and child dependency"
         );
         // no states have the same type id

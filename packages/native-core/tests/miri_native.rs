@@ -1,10 +1,14 @@
 use dioxus::prelude::*;
 use dioxus_native_core::{
+    dioxus::DioxusState,
     node_ref::{AttributeMaskBuilder, NodeMaskBuilder, NodeView},
     real_dom::RealDom,
     Dependancy, Pass, SendAnyMap,
 };
-use std::sync::{Arc, Mutex};
+use std::{
+    borrow::BorrowMut,
+    sync::{Arc, Mutex},
+};
 use tokio::time::sleep;
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -17,7 +21,7 @@ impl Pass for BlablaState {
     type ChildDependencies = ();
     type NodeDependencies = ();
 
-    const NODE_MASK: NodeMaskBuilder = NodeMaskBuilder::new()
+    const NODE_MASK: NodeMaskBuilder<'static> = NodeMaskBuilder::new()
         .with_attrs(AttributeMaskBuilder::Some(&["blabla"]))
         .with_element();
 
@@ -135,10 +139,11 @@ fn native_core_is_okay() {
         let rdom = Arc::new(Mutex::new(RealDom::new(Box::new([
             BlablaState::to_type_erased(),
         ]))));
+        let mut dioxus_state = DioxusState::create(&mut *rdom.lock().unwrap());
         let mut dom = VirtualDom::new(app);
 
-        let muts = dom.rebuild();
-        rdom.lock().unwrap().apply_mutations(muts);
+        let mutations = dom.rebuild();
+        dioxus_state.apply_mutations(&mut *rdom.lock().unwrap(), mutations);
 
         let ctx = SendAnyMap::new();
         rdom.lock().unwrap().update_state(ctx, false);
@@ -147,7 +152,7 @@ fn native_core_is_okay() {
             dom.wait_for_work().await;
 
             let mutations = dom.render_immediate();
-            rdom.lock().unwrap().apply_mutations(mutations);
+            dioxus_state.apply_mutations(&mut *rdom.lock().unwrap(), mutations);
 
             let ctx = SendAnyMap::new();
             rdom.lock().unwrap().update_state(ctx, false);

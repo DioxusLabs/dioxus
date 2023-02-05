@@ -249,7 +249,13 @@ pub struct TreeStateViewEntry<'a, 'b> {
 
 impl<'a, 'b> AnyMapLike<'a> for TreeStateViewEntry<'a, 'b> {
     fn get<T: Any + Sync + Send>(self) -> Option<&'a T> {
-        self.view.get_slab().and_then(|slab| slab.get(self.id))
+        let slab = self.view.get_slab();
+        dbg!(slab.is_some());
+        slab.and_then(|slab| {
+            let r = slab.get(self.id);
+            dbg!(r.is_some());
+            r
+        })
     }
 }
 
@@ -315,7 +321,7 @@ impl<'a, 'b> TreeStateView<'a, 'b> {
     }
 
     pub fn parent<T: Dependancy>(&self, id: NodeId) -> Option<T::ElementBorrowed<'_>> {
-        T::borrow_elements_from(self.entry(id))
+        T::borrow_elements_from(self.entry(self.parent_id(id)?))
     }
 }
 

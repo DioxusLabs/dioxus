@@ -36,5 +36,5 @@ tokio = { version = "*", features = ["full"] }
 dioxus-native-core = { path = ".", features = ["dioxus"] }
 
 [features]
-default = ["dioxus"]
+default = []
 dioxus = ["dioxus-core"]

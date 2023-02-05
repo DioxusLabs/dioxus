@@ -203,12 +203,12 @@ impl NodeMask {
 }
 
 #[derive(PartialEq, Eq, Clone, Debug)]
-pub enum AttributeMaskBuilder {
+pub enum AttributeMaskBuilder<'a> {
     All,
-    Some(&'static [&'static str]),
+    Some(&'a [&'a str]),
 }
 
-impl Default for AttributeMaskBuilder {
+impl Default for AttributeMaskBuilder<'_> {
     fn default() -> Self {
         AttributeMaskBuilder::Some(&[])
     }
@@ -216,15 +216,15 @@ impl Default for AttributeMaskBuilder {
 
 /// A mask that limits what parts of a node a dependency can see.
 #[derive(Default, PartialEq, Eq, Clone, Debug)]
-pub struct NodeMaskBuilder {
-    attritutes: AttributeMaskBuilder,
+pub struct NodeMaskBuilder<'a> {
+    attritutes: AttributeMaskBuilder<'a>,
     tag: bool,
     namespace: bool,
     text: bool,
     listeners: bool,
 }
 
-impl NodeMaskBuilder {
+impl<'a> NodeMaskBuilder<'a> {
     /// A node mask with no parts visible.
     pub const NONE: Self = Self::new();
     /// A node mask with every part visible.
@@ -246,7 +246,7 @@ impl NodeMaskBuilder {
     }
 
     /// Allow the mask to view the given attributes
-    pub const fn with_attrs(mut self, attritutes: AttributeMaskBuilder) -> Self {
+    pub const fn with_attrs(mut self, attritutes: AttributeMaskBuilder<'a>) -> Self {
         self.attritutes = attritutes;
         self
     }
