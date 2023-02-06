@@ -307,14 +307,14 @@ fn down_pass() {
     }
 
     let mut tree: RealDom = RealDom::new(Box::new([AddNumber::to_type_erased()]));
-    let grandchild1 = tree.create_node(create_blank_element(), true);
+    let grandchild1 = tree.create_node(create_blank_element());
     let grandchild1 = grandchild1.id();
-    let mut child1 = tree.create_node(create_blank_element(), true);
+    let mut child1 = tree.create_node(create_blank_element());
     child1.add_child(grandchild1);
     let child1 = child1.id();
-    let grandchild2 = tree.create_node(create_blank_element(), true);
+    let grandchild2 = tree.create_node(create_blank_element());
     let grandchild2 = grandchild2.id();
-    let mut child2 = tree.create_node(create_blank_element(), true);
+    let mut child2 = tree.create_node(create_blank_element());
     child2.add_child(grandchild2);
     let child2 = child2.id();
     let mut parent = tree.get_mut(tree.root_id()).unwrap();
@@ -395,14 +395,14 @@ fn up_pass() {
     }
 
     let mut tree: RealDom = RealDom::new(Box::new([AddNumber::to_type_erased()]));
-    let grandchild1 = tree.create_node(create_blank_element(), true);
+    let grandchild1 = tree.create_node(create_blank_element());
     let grandchild1 = grandchild1.id();
-    let mut child1 = tree.create_node(create_blank_element(), true);
+    let mut child1 = tree.create_node(create_blank_element());
     child1.add_child(grandchild1);
     let child1 = child1.id();
-    let grandchild2 = tree.create_node(create_blank_element(), true);
+    let grandchild2 = tree.create_node(create_blank_element());
     let grandchild2 = grandchild2.id();
-    let mut child2 = tree.create_node(create_blank_element(), true);
+    let mut child2 = tree.create_node(create_blank_element());
     child2.add_child(grandchild2);
     let child2 = child2.id();
     let mut parent = tree.get_mut(tree.root_id()).unwrap();

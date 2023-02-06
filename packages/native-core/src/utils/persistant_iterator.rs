@@ -1,10 +1,15 @@
+use smallvec::SmallVec;
+
 use crate::{
-    node::{ElementNode, FromAnyValue, NodeType},
+    node::FromAnyValue,
+    node_watcher::NodeWatcher,
     real_dom::{NodeImmutable, RealDom},
-    NodeId,
+    NodeId, NodeRef,
 };
-use dioxus_core::{Mutation, Mutations};
-use std::fmt::Debug;
+use std::{
+    fmt::Debug,
+    sync::{Arc, Mutex},
+};
 
 #[derive(Debug)]
 pub enum ElementProduced {
@@ -23,27 +28,36 @@ impl ElementProduced {
     }
 }
 
-#[derive(Debug)]
-enum NodePosition {
-    AtNode,
-    InChild(usize),
+struct PersistantElementIterUpdater<V> {
+    stack: Arc<Mutex<smallvec::SmallVec<[NodeId; 5]>>>,
+    phantom: std::marker::PhantomData<V>,
 }
 
-impl NodePosition {
-    fn map(&self, mut f: impl FnMut(usize) -> usize) -> Self {
-        match self {
-            Self::AtNode => Self::AtNode,
-            Self::InChild(i) => Self::InChild(f(*i)),
+impl<V: FromAnyValue + Sync + Send> NodeWatcher<V> for PersistantElementIterUpdater<V> {
+    fn on_node_moved(&self, node: crate::NodeMut<V>) {
+        // if any element is moved, update its parents in the stack
+        let mut stack = self.stack.lock().unwrap();
+        let moved = node.id();
+        let rdom = node.real_dom();
+        if let Some(r) = stack.iter().position(|el_id| *el_id == moved) {
+            let back = &stack[r..];
+            let mut new = SmallVec::new();
+            let mut parent = node.parent_id();
+            while let Some(p) = parent.and_then(|id| rdom.get(id)) {
+                new.push(p.id());
+                parent = p.parent_id();
+            }
+            new.extend(back.iter().copied());
+            *stack = new;
         }
     }
 
-    fn get_or_insert(&mut self, child_idx: usize) -> usize {
-        match self {
-            Self::AtNode => {
-                *self = Self::InChild(child_idx);
-                child_idx
-            }
-            Self::InChild(i) => *i,
+    fn on_node_removed(&self, node: crate::NodeMut<V>) {
+        // if any element is removed in the chain, remove it and its children from the stack
+        let mut stack = self.stack.lock().unwrap();
+        let removed = node.id();
+        if let Some(r) = stack.iter().position(|el_id| *el_id == removed) {
+            stack.truncate(r);
         }
     }
 }
@@ -53,118 +67,47 @@ impl NodePosition {
 /// Iterate through it with [PersistantElementIter::next] [PersistantElementIter::prev], and update it with [PersistantElementIter::prune] (with data from [`dioxus_core::prelude::VirtualDom::work_with_deadline`]).
 /// The iterator loops around when it reaches the end or the beginning.
 pub struct PersistantElementIter {
-    // stack of elements and fragments
-    stack: smallvec::SmallVec<[(NodeId, NodePosition); 5]>,
-}
-
-impl Default for PersistantElementIter {
-    fn default() -> Self {
-        PersistantElementIter {
-            stack: smallvec::smallvec![(NodeId(0), NodePosition::AtNode)],
-        }
-    }
+    // stack of elements and fragments, the last element is the last element that was yielded
+    stack: Arc<Mutex<smallvec::SmallVec<[NodeId; 5]>>>,
 }
 
 impl PersistantElementIter {
-    pub fn new() -> Self {
-        Self::default()
-    }
+    pub fn create<V: FromAnyValue + Send + Sync>(rdom: &mut RealDom<V>) -> Self {
+        let inner = Arc::new(Mutex::new(smallvec::smallvec![NodeId(0)]));
 
-    /// remove stale element refreneces
-    /// returns true if the focused element is removed
-    pub fn prune<V: FromAnyValue + Send + Sync>(
-        &mut self,
-        mutations: &Mutations,
-        rdom: &RealDom<V>,
-    ) -> bool {
-        let mut changed = false;
-        let ids_removed: Vec<_> = mutations
-            .edits
-            .iter()
-            .filter_map(|m| {
-                // nodes within templates will never be removed
-                match m {
-                    Mutation::Remove { id } => Some(rdom.element_to_node_id(*id)),
-                    Mutation::ReplaceWith { id, .. } => Some(rdom.element_to_node_id(*id)),
-                    _ => None,
-                }
-            })
-            .collect();
-        // if any element is removed in the chain, remove it and its children from the stack
-        if let Some(r) = self
-            .stack
-            .iter()
-            .position(|(el_id, _)| ids_removed.iter().any(|id| el_id == id))
-        {
-            self.stack.truncate(r);
-            changed = true;
-        }
-        // if a child is removed or inserted before or at the current element, update the child index
-        for (el_id, child_idx) in self.stack.iter_mut() {
-            if let NodePosition::InChild(child_idx) = child_idx {
-                if let Some(children) = &rdom.get(*el_id).unwrap().child_ids() {
-                    for m in &mutations.edits {
-                        match m {
-                            Mutation::Remove { id } => {
-                                let id = rdom.element_to_node_id(*id);
-                                if children.iter().take(*child_idx + 1).any(|c| *c == id) {
-                                    *child_idx -= 1;
-                                }
-                            }
-                            Mutation::InsertBefore { id, m } => {
-                                let id = rdom.element_to_node_id(*id);
-                                if children.iter().take(*child_idx + 1).any(|c| *c == id) {
-                                    *child_idx += *m;
-                                }
-                            }
-                            Mutation::InsertAfter { id, m } => {
-                                let id = rdom.element_to_node_id(*id);
-                                if children.iter().take(*child_idx).any(|c| *c == id) {
-                                    *child_idx += *m;
-                                }
-                            }
-                            _ => (),
-                        }
-                    }
-                }
-            }
-        }
-        changed
+        rdom.add_node_watcher(PersistantElementIterUpdater {
+            stack: inner.clone(),
+            phantom: std::marker::PhantomData,
+        });
+
+        PersistantElementIter { stack: inner }
     }
 
     /// get the next element
     pub fn next<V: FromAnyValue + Send + Sync>(&mut self, rdom: &RealDom<V>) -> ElementProduced {
-        if self.stack.is_empty() {
+        let mut stack = self.stack.lock().unwrap();
+        if stack.is_empty() {
             let id = NodeId(0);
-            let new = (id, NodePosition::AtNode);
-            self.stack.push(new);
+            let new = id;
+            stack.push(new);
             ElementProduced::Looped(id)
         } else {
-            let (last, old_child_idx) = self.stack.last_mut().unwrap();
-            let node = rdom.get(*last).unwrap();
-            match node.node_type() {
-                NodeType::Element(ElementNode { .. }) => {
-                    let children = node.child_ids().unwrap();
-                    *old_child_idx = old_child_idx.map(|i| i + 1);
-                    // if we have children, go to the next child
-                    let child_idx = old_child_idx.get_or_insert(0);
-                    if child_idx >= children.len() {
-                        self.pop();
-                        self.next(rdom)
-                    } else {
-                        let id = children[child_idx];
-                        if let NodeType::Element(ElementNode { .. }) =
-                            rdom.get(id).unwrap().node_type()
-                        {
-                            self.stack.push((id, NodePosition::AtNode));
-                        }
-                        ElementProduced::Progressed(id)
+            loop {
+                let last = stack.pop().unwrap();
+                if let Some(current) = rdom.get(last) {
+                    if let Some(new) = current.next() {
+                        // the next element exists, add it to the stack and return it
+                        let new = new.id();
+                        stack.push(new);
+                        return ElementProduced::Progressed(new);
                     }
-                }
-
-                NodeType::Text { .. } | NodeType::Placeholder { .. } => {
-                    // we are at a leaf, so we are done
-                    ElementProduced::Progressed(self.pop())
+                    // otherwise, continue the loop and go to the parent
+                } else {
+                    // if there is no parent, loop back to the root
+                    let new = NodeId(0);
+                    stack.clear();
+                    stack.push(new);
+                    return ElementProduced::Looped(new);
                 }
             }
         }
@@ -174,67 +117,43 @@ impl PersistantElementIter {
     pub fn prev<V: FromAnyValue + Send + Sync>(&mut self, rdom: &RealDom<V>) -> ElementProduced {
         // recursively add the last child element to the stack
         fn push_back<V: FromAnyValue + Send + Sync>(
-            stack: &mut smallvec::SmallVec<[(NodeId, NodePosition); 5]>,
-            new_node: NodeId,
-            rdom: &RealDom<V>,
+            stack: &mut smallvec::SmallVec<[NodeId; 5]>,
+            node: NodeRef<V>,
         ) -> NodeId {
-            let node = rdom.get(new_node).unwrap();
-            match node.node_type() {
-                NodeType::Element(ElementNode { .. }) => {
-                    let children = node.child_ids().unwrap();
-                    if children.is_empty() {
-                        new_node
-                    } else {
-                        stack.push((new_node, NodePosition::InChild(children.len() - 1)));
-                        push_back(stack, *children.last().unwrap(), rdom)
-                    }
+            stack.push(node.id());
+            if let Some(children) = node.children() {
+                if let Some(last) = children.last() {
+                    push_back(stack, *last)
+                } else {
+                    node.id()
                 }
-                _ => new_node,
+            } else {
+                node.id()
             }
         }
-        if self.stack.is_empty() {
-            let new_node = NodeId(0);
-            ElementProduced::Looped(push_back(&mut self.stack, new_node, rdom))
+        let mut stack = self.stack.lock().unwrap();
+        if stack.is_empty() {
+            let id = NodeId(0);
+            let last = push_back(&mut stack, rdom.get(id).unwrap());
+            ElementProduced::Looped(last)
         } else {
-            let (last, old_child_idx) = self.stack.last_mut().unwrap();
-            let node = rdom.get(*last).unwrap();
-            match node.node_type() {
-                NodeType::Element(ElementNode { .. }) => {
-                    let children = node.child_ids().unwrap();
-                    // if we have children, go to the next child
-                    if let NodePosition::InChild(0) = old_child_idx {
-                        ElementProduced::Progressed(self.pop())
-                    } else {
-                        *old_child_idx = old_child_idx.map(|i| i - 1);
-                        if let NodePosition::InChild(child_idx) = old_child_idx {
-                            if *child_idx >= children.len() || children.is_empty() {
-                                self.pop();
-                                self.prev(rdom)
-                            } else {
-                                let new_node = children[*child_idx];
-                                ElementProduced::Progressed(push_back(
-                                    &mut self.stack,
-                                    new_node,
-                                    rdom,
-                                ))
-                            }
-                        } else {
-                            self.pop();
-                            self.prev(rdom)
-                        }
+            loop {
+                let last = stack.pop().unwrap();
+                if let Some(current) = rdom.get(last) {
+                    if let Some(new) = current.prev() {
+                        // the next element exists, add it to the stack and return it
+                        let new = push_back(&mut stack, new);
+                        return ElementProduced::Progressed(new);
                     }
-                }
-
-                NodeType::Text { .. } | NodeType::Placeholder { .. } => {
-                    // we are at a leaf, so we are done
-                    ElementProduced::Progressed(self.pop())
+                    // otherwise, continue the loop and go to the parent
+                } else {
+                    // if there is no parent, loop back to the root
+                    let id = NodeId(0);
+                    let last = push_back(&mut stack, rdom.get(id).unwrap());
+                    return ElementProduced::Looped(last);
                 }
             }
         }
-    }
-
-    fn pop(&mut self) -> NodeId {
-        self.stack.pop().unwrap().0
     }
 }
 

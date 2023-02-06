@@ -77,14 +77,14 @@ impl DioxusState {
                 }
                 CreatePlaceholder { id } => {
                     let node = NodeType::Placeholder;
-                    let node = rdom.create_node(node, true);
+                    let node = rdom.create_node(node);
                     let node_id = node.id();
                     self.set_element_id(node, id);
                     self.stack.push(node_id);
                 }
                 CreateTextNode { value, id } => {
                     let node_data = NodeType::Text(value.to_string());
-                    let node = rdom.create_node(node_data, true);
+                    let node = rdom.create_node(node_data);
                     let node_id = node.id();
                     self.set_element_id(node, id);
                     self.stack.push(node_id);
@@ -228,20 +228,16 @@ fn create_template_node(rdom: &mut RealDom, node: &TemplateNode) -> NodeId {
                     .collect(),
                 listeners: FxHashSet::default(),
             });
-            let node_id = rdom.create_node(node, true).id();
+            let node_id = rdom.create_node(node).id();
             for child in *children {
                 let child_id = create_template_node(rdom, child);
                 rdom.add_child(node_id, child_id);
             }
             node_id
         }
-        TemplateNode::Text { text } => rdom
-            .create_node(NodeType::Text(text.to_string()), true)
-            .id(),
-        TemplateNode::Dynamic { .. } => rdom.create_node(NodeType::Placeholder, true).id(),
-        TemplateNode::DynamicText { .. } => {
-            rdom.create_node(NodeType::Text(String::new()), true).id()
-        }
+        TemplateNode::Text { text } => rdom.create_node(NodeType::Text(text.to_string())).id(),
+        TemplateNode::Dynamic { .. } => rdom.create_node(NodeType::Placeholder).id(),
+        TemplateNode::DynamicText { .. } => rdom.create_node(NodeType::Text(String::new())).id(),
     }
 }
 

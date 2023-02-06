@@ -380,12 +380,12 @@ impl_dependancy!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O);
 impl_dependancy!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P);
 
 pub fn resolve_passes<V: FromAnyValue + Send + Sync>(
-    tree: &mut RealDom<V>,
+    dom: &mut RealDom<V>,
     dirty_nodes: DirtyNodeStates,
     ctx: SendAnyMap,
     parallel: bool,
 ) -> FxDashSet<NodeId> {
-    let passes = &tree.passes;
+    let passes = &dom.dirty_nodes.passes;
     let mut resolved_passes: FxHashSet<TypeId> = FxHashSet::default();
     let mut resolving = Vec::new();
     let nodes_updated = Arc::new(FxDashSet::default());
@@ -393,7 +393,7 @@ pub fn resolve_passes<V: FromAnyValue + Send + Sync>(
     let mut pass_indexes_remaining: Vec<_> = (0..passes.len()).collect::<Vec<_>>();
     while !pass_indexes_remaining.is_empty() {
         let mut currently_in_use = FxHashSet::<TypeId>::default();
-        let dynamically_borrowed_tree = tree.tree.dynamically_borrowed();
+        let dynamically_borrowed_tree = dom.tree.dynamically_borrowed();
         rayon::in_place_scope(|s| {
             let mut i = 0;
             while i < pass_indexes_remaining.len() {

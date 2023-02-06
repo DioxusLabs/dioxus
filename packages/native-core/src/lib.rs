@@ -13,6 +13,7 @@ pub mod dioxus;
 pub mod layout_attributes;
 pub mod node;
 pub mod node_ref;
+pub mod node_watcher;
 mod passes;
 pub mod real_dom;
 pub mod tree;
@@ -22,7 +23,7 @@ pub mod prelude {
     pub use crate::node::{ElementNode, FromAnyValue, NodeType, OwnedAttributeView};
     pub use crate::node_ref::{AttributeMaskBuilder, NodeMaskBuilder, NodeView};
     pub use crate::passes::{Dependancy, Pass};
-    pub use crate::real_dom::{NodeImmutable, NodeMut, NodeMutRaw, NodeMutable, NodeRef, RealDom};
+    pub use crate::real_dom::{NodeImmutable, NodeMut, NodeRef, RealDom};
     pub use crate::tree::NodeId;
     pub use crate::SendAnyMap;
 }

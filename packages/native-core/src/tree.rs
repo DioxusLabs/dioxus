@@ -80,6 +80,18 @@ impl Tree {
         recurse(self, id);
     }
 
+    pub fn remove_single(&mut self, id: NodeId) {
+        {
+            let node_data_mut = self.node_slab_mut();
+            if let Some(parent) = node_data_mut.get(id).unwrap().parent {
+                let parent = node_data_mut.get_mut(parent).unwrap();
+                parent.children.retain(|&child| child != id);
+            }
+        }
+
+        self.nodes.remove(id);
+    }
+
     fn set_height(&mut self, node: NodeId, height: u16) {
         let children = {
             let mut node = self.get_node_data_mut(node);
