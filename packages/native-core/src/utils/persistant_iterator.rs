@@ -92,9 +92,20 @@ impl PersistantElementIter {
             stack.push(new);
             ElementProduced::Looped(id)
         } else {
+            let mut look_in_children = true;
             loop {
-                let last = stack.pop().unwrap();
-                if let Some(current) = rdom.get(last) {
+                if let Some(current) = stack.last().and_then(|last| rdom.get(*last)) {
+                    // if the current element has children, add the first child to the stack and return it
+                    if look_in_children {
+                        if let Some(children) = current.children() {
+                            if let Some(first) = children.first() {
+                                let new = first.id();
+                                stack.push(new);
+                                return ElementProduced::Progressed(new);
+                            }
+                        }
+                    }
+                    stack.pop();
                     if let Some(new) = current.next() {
                         // the next element exists, add it to the stack and return it
                         let new = new.id();
@@ -109,6 +120,7 @@ impl PersistantElementIter {
                     stack.push(new);
                     return ElementProduced::Looped(new);
                 }
+                look_in_children = false;
             }
         }
     }
@@ -136,23 +148,27 @@ impl PersistantElementIter {
             let id = NodeId(0);
             let last = push_back(&mut stack, rdom.get(id).unwrap());
             ElementProduced::Looped(last)
-        } else {
-            loop {
-                let last = stack.pop().unwrap();
-                if let Some(current) = rdom.get(last) {
-                    if let Some(new) = current.prev() {
-                        // the next element exists, add it to the stack and return it
-                        let new = push_back(&mut stack, new);
-                        return ElementProduced::Progressed(new);
-                    }
-                    // otherwise, continue the loop and go to the parent
-                } else {
-                    // if there is no parent, loop back to the root
-                    let id = NodeId(0);
-                    let last = push_back(&mut stack, rdom.get(id).unwrap());
-                    return ElementProduced::Looped(last);
-                }
+        } else if let Some(current) = stack.pop().and_then(|last| rdom.get(last)) {
+            if let Some(new) = current.prev() {
+                // the next element exists, add it to the stack and return it
+                let new = push_back(&mut stack, new);
+                ElementProduced::Progressed(new)
             }
+            // otherwise, yeild the parent
+            else if let Some(parent) = stack.last() {
+                // if there is a parent, return it
+                ElementProduced::Progressed(*parent)
+            } else {
+                // if there is no parent, loop back to the root
+                let id = NodeId(0);
+                let last = push_back(&mut stack, rdom.get(id).unwrap());
+                ElementProduced::Looped(last)
+            }
+        } else {
+            // if there is no parent, loop back to the root
+            let id = NodeId(0);
+            let last = push_back(&mut stack, rdom.get(id).unwrap());
+            ElementProduced::Looped(last)
         }
     }
 }
@@ -160,6 +176,8 @@ impl PersistantElementIter {
 #[test]
 #[allow(unused_variables)]
 fn traverse() {
+    use crate::dioxus::DioxusState;
+    use crate::prelude::*;
     use dioxus::prelude::*;
     #[allow(non_snake_case)]
     fn Base(cx: Scope) -> Element {
@@ -181,133 +199,74 @@ fn traverse() {
 
     let mut rdom: RealDom = RealDom::new(Box::new([]));
 
-    let _to_update = rdom.apply_mutations(mutations);
+    let mut iter = PersistantElementIter::create(&mut rdom);
+    let mut dioxus_state = DioxusState::create(&mut rdom);
+    dioxus_state.apply_mutations(&mut rdom, mutations);
 
-    let mut iter = PersistantElementIter::new();
     let div_tag = "div".to_string();
     assert!(matches!(
-        &rdom
-            .get(iter.next(&rdom).id())
-            .unwrap()
-            .node_data()
-            .node_type,
+        &rdom.get(iter.next(&rdom).id()).unwrap().node_type(),
         NodeType::Element(ElementNode { tag: div_tag, .. })
     ));
     assert!(matches!(
-        &rdom
-            .get(iter.next(&rdom).id())
-            .unwrap()
-            .node_data()
-            .node_type,
+        &rdom.get(iter.next(&rdom).id()).unwrap().node_type(),
         NodeType::Element(ElementNode { tag: div_tag, .. })
     ));
     let text1 = "hello".to_string();
     assert!(matches!(
-        &rdom
-            .get(iter.next(&rdom).id())
-            .unwrap()
-            .node_data()
-            .node_type,
+        &rdom.get(iter.next(&rdom).id()).unwrap().node_type(),
         NodeType::Text(text1)
     ));
     let p_tag = "p".to_string();
     assert!(matches!(
-        &rdom
-            .get(iter.next(&rdom).id())
-            .unwrap()
-            .node_data()
-            .node_type,
+        &rdom.get(iter.next(&rdom).id()).unwrap().node_type(),
         NodeType::Element(ElementNode { tag: p_tag, .. })
     ));
     let text2 = "world".to_string();
     assert!(matches!(
-        &rdom
-            .get(iter.next(&rdom).id())
-            .unwrap()
-            .node_data()
-            .node_type,
+        &rdom.get(iter.next(&rdom).id()).unwrap().node_type(),
         NodeType::Text(text2)
     ));
     let text3 = "hello world".to_string();
     assert!(matches!(
-        &rdom
-            .get(iter.next(&rdom).id())
-            .unwrap()
-            .node_data()
-            .node_type,
+        &rdom.get(iter.next(&rdom).id()).unwrap().node_type(),
         NodeType::Text(text3)
     ));
     assert!(matches!(
-        &rdom
-            .get(iter.next(&rdom).id())
-            .unwrap()
-            .node_data()
-            .node_type,
+        &rdom.get(iter.next(&rdom).id()).unwrap().node_type(),
         NodeType::Element(ElementNode { tag: div_tag, .. })
     ));
 
     assert!(matches!(
-        &rdom
-            .get(iter.prev(&rdom).id())
-            .unwrap()
-            .node_data()
-            .node_type,
+        &rdom.get(iter.prev(&rdom).id()).unwrap().node_type(),
         NodeType::Text(text3)
     ));
     assert!(matches!(
-        &rdom
-            .get(iter.prev(&rdom).id())
-            .unwrap()
-            .node_data()
-            .node_type,
+        &rdom.get(iter.prev(&rdom).id()).unwrap().node_type(),
         NodeType::Text(text2)
     ));
     assert!(matches!(
-        &rdom
-            .get(iter.prev(&rdom).id())
-            .unwrap()
-            .node_data()
-            .node_type,
+        &rdom.get(iter.prev(&rdom).id()).unwrap().node_type(),
         NodeType::Element(ElementNode { tag: p_tag, .. })
     ));
     assert!(matches!(
-        &rdom
-            .get(iter.prev(&rdom).id())
-            .unwrap()
-            .node_data()
-            .node_type,
+        &rdom.get(iter.prev(&rdom).id()).unwrap().node_type(),
         NodeType::Text(text1)
     ));
     assert!(matches!(
-        &rdom
-            .get(iter.prev(&rdom).id())
-            .unwrap()
-            .node_data()
-            .node_type,
+        &rdom.get(iter.prev(&rdom).id()).unwrap().node_type(),
         NodeType::Element(ElementNode { tag: div_tag, .. })
     ));
     assert!(matches!(
-        &rdom
-            .get(iter.prev(&rdom).id())
-            .unwrap()
-            .node_data()
-            .node_type,
+        &rdom.get(iter.prev(&rdom).id()).unwrap().node_type(),
         NodeType::Element(ElementNode { tag: div_tag, .. })
     ));
     assert!(matches!(
-        &rdom
-            .get(iter.prev(&rdom).id())
-            .unwrap()
-            .node_data()
-            .node_type,
+        &rdom.get(iter.prev(&rdom).id()).unwrap().node_type(),
         NodeType::Element(ElementNode { tag: div_tag, .. })
     ));
     assert!(matches!(
-        &rdom
-            .get(iter.prev(&rdom).id())
-            .unwrap()
-            .node_data()
-            .node_type,
+        &rdom.get(iter.prev(&rdom).id()).unwrap().node_type(),
         NodeType::Text(text3)
     ));
 }
@@ -315,6 +274,8 @@ fn traverse() {
 #[test]
 #[allow(unused_variables)]
 fn persist_removes() {
+    use crate::dioxus::DioxusState;
+    use crate::prelude::*;
     use dioxus::prelude::*;
     #[allow(non_snake_case)]
     fn Base(cx: Scope) -> Element {
@@ -342,12 +303,13 @@ fn persist_removes() {
 
     let build = vdom.rebuild();
     println!("{build:#?}");
-    let _to_update = rdom.apply_mutations(build);
-
     // this will end on the node that is removed
-    let mut iter1 = PersistantElementIter::new();
+    let mut iter1 = PersistantElementIter::create(&mut rdom);
     // this will end on the after node that is removed
-    let mut iter2 = PersistantElementIter::new();
+    let mut iter2 = PersistantElementIter::create(&mut rdom);
+    let mut dioxus_state = DioxusState::create(&mut rdom);
+    dioxus_state.apply_mutations(&mut rdom, build);
+
     // root
     iter1.next(&rdom).id();
     iter2.next(&rdom).id();
@@ -374,22 +336,18 @@ fn persist_removes() {
     vdom.mark_dirty(ScopeId(0));
     let update = vdom.render_immediate();
     println!("{update:#?}");
-    iter1.prune(&update, &rdom);
-    iter2.prune(&update, &rdom);
-    let _to_update = rdom.apply_mutations(update);
+    dioxus_state.apply_mutations(&mut rdom, update);
 
     let root_tag = "Root".to_string();
     let idx = iter1.next(&rdom).id();
-    dbg!(&rdom.get(idx).unwrap().node_data().node_type);
     assert!(matches!(
-        &rdom.get(idx).unwrap().node_data().node_type,
+        &rdom.get(idx).unwrap().node_type(),
         NodeType::Element(ElementNode { tag: root_tag, .. })
     ));
 
     let idx = iter2.next(&rdom).id();
-    dbg!(&rdom.get(idx).unwrap().node_data().node_type);
     assert!(matches!(
-        &rdom.get(idx).unwrap().node_data().node_type,
+        &rdom.get(idx).unwrap().node_type(),
         NodeType::Element(ElementNode { tag: root_tag, .. })
     ));
 }
@@ -397,6 +355,8 @@ fn persist_removes() {
 #[test]
 #[allow(unused_variables)]
 fn persist_instertions_before() {
+    use crate::dioxus::DioxusState;
+    use crate::prelude::*;
     use dioxus::prelude::*;
     #[allow(non_snake_case)]
     fn Base(cx: Scope) -> Element {
@@ -421,11 +381,12 @@ fn persist_instertions_before() {
     let mut vdom = VirtualDom::new(Base);
 
     let mut rdom: RealDom = RealDom::new(Box::new([]));
+    let mut dioxus_state = DioxusState::create(&mut rdom);
 
     let build = vdom.rebuild();
-    let _to_update = rdom.apply_mutations(build);
+    dioxus_state.apply_mutations(&mut rdom, build);
 
-    let mut iter = PersistantElementIter::new();
+    let mut iter = PersistantElementIter::create(&mut rdom);
     // div
     iter.next(&rdom).id();
     // p
@@ -439,13 +400,12 @@ fn persist_instertions_before() {
 
     vdom.mark_dirty(ScopeId(0));
     let update = vdom.render_immediate();
-    iter.prune(&update, &rdom);
-    let _to_update = rdom.apply_mutations(update);
+    dioxus_state.apply_mutations(&mut rdom, update);
 
     let p_tag = "div".to_string();
     let idx = iter.next(&rdom).id();
     assert!(matches!(
-        &rdom.get(idx).unwrap().node_data().node_type,
+        &rdom.get(idx).unwrap().node_type(),
         NodeType::Element(ElementNode { tag: p_tag, .. })
     ));
 }
@@ -453,6 +413,8 @@ fn persist_instertions_before() {
 #[test]
 #[allow(unused_variables)]
 fn persist_instertions_after() {
+    use crate::dioxus::DioxusState;
+    use crate::prelude::*;
     use dioxus::prelude::*;
     #[allow(non_snake_case)]
     fn Base(cx: Scope) -> Element {
@@ -477,11 +439,12 @@ fn persist_instertions_after() {
     let mut vdom = VirtualDom::new(Base);
 
     let mut rdom: RealDom = RealDom::new(Box::new([]));
+    let mut iter = PersistantElementIter::create(&mut rdom);
+    let mut dioxus_state = DioxusState::create(&mut rdom);
 
     let build = vdom.rebuild();
-    let _to_update = rdom.apply_mutations(build);
+    dioxus_state.apply_mutations(&mut rdom, build);
 
-    let mut iter = PersistantElementIter::new();
     // div
     iter.next(&rdom).id();
     // p
@@ -494,19 +457,18 @@ fn persist_instertions_after() {
     iter.next(&rdom).id();
 
     let update = vdom.rebuild();
-    iter.prune(&update, &rdom);
-    let _to_update = rdom.apply_mutations(update);
+    dioxus_state.apply_mutations(&mut rdom, update);
 
     let p_tag = "p".to_string();
     let idx = iter.next(&rdom).id();
     assert!(matches!(
-        &rdom.get(idx).unwrap().node_data().node_type,
+        &rdom.get(idx).unwrap().node_type(),
         NodeType::Element(ElementNode { tag: p_tag, .. })
     ));
     let text = "hello world".to_string();
     let idx = iter.next(&rdom).id();
     assert!(matches!(
-        &rdom.get(idx).unwrap().node_data().node_type,
+        &rdom.get(idx).unwrap().node_type(),
         NodeType::Text(text)
     ));
 }

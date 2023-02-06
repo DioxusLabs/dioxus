@@ -3,7 +3,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
     node::{ElementNode, FromAnyValue, NodeType, OwnedAttributeDiscription, OwnedAttributeValue},
-    prelude::{NodeImmutable, NodeMutable},
+    prelude::NodeImmutable,
     real_dom::NodeTypeMut,
     NodeId, NodeMut, RealDom,
 };
@@ -68,7 +68,7 @@ impl DioxusState {
                     let children = self.stack.split_off(self.stack.len() - m);
                     let parent = self.element_to_node_id(id);
                     for child in children {
-                        rdom.add_child(parent, child);
+                        rdom.get_mut(parent).unwrap().add_child(child);
                     }
                 }
                 AssignId { path, id } => {
@@ -114,7 +114,7 @@ impl DioxusState {
                         let mut node = rdom.get_mut(new).unwrap();
                         node.insert_before(old_node_id);
                     }
-                    rdom.remove(old_node_id);
+                    rdom.get_mut(old_node_id).unwrap().remove();
                 }
                 ReplacePlaceholder { path, m } => {
                     let new_nodes = self.stack.split_off(self.stack.len() - m);
@@ -123,7 +123,7 @@ impl DioxusState {
                         let mut node = rdom.get_mut(new).unwrap();
                         node.insert_before(old_node_id);
                     }
-                    rdom.remove(old_node_id);
+                    rdom.get_mut(old_node_id).unwrap().remove();
                 }
                 InsertAfter { id, m } => {
                     let new_nodes = self.stack.split_off(self.stack.len() - m);
@@ -186,7 +186,7 @@ impl DioxusState {
                 }
                 Remove { id } => {
                     let node_id = self.element_to_node_id(id);
-                    rdom.remove(node_id);
+                    rdom.get_mut(node_id).unwrap().remove();
                 }
                 PushRoot { id } => {
                     let node_id = self.element_to_node_id(id);
@@ -231,7 +231,7 @@ fn create_template_node(rdom: &mut RealDom, node: &TemplateNode) -> NodeId {
             let node_id = rdom.create_node(node).id();
             for child in *children {
                 let child_id = create_template_node(rdom, child);
-                rdom.add_child(node_id, child_id);
+                rdom.get_mut(node_id).unwrap().add_child(child_id);
             }
             node_id
         }
