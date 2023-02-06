@@ -217,7 +217,7 @@ mod js {
     }
     fn remove_attribute(id: u32, field: &str<u8, attr>, ns: &str<u8, ns_cache>) {
         r#"{name = $field$;
-        node = this.nodes[$id$];
+        node = nodes[$id$];
         if (ns == "style") {
             node.style.removeProperty(name);
         } else if (ns !== null && ns !== undefined && ns !== "") {
