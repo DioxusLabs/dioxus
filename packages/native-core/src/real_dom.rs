@@ -178,18 +178,15 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
     }
 
     pub fn get(&self, id: NodeId) -> Option<NodeRef<'_, V>> {
-        let id = id.into_node_id(self);
         self.tree.contains(id).then_some(NodeRef { id, dom: self })
     }
 
     pub fn get_mut(&mut self, id: NodeId) -> Option<NodeMut<'_, V>> {
-        let id = id.into_node_id(self);
         self.tree.contains(id).then(|| NodeMut::new(id, self))
     }
 
     /// WARNING: This escapes the reactive system that the real dom uses. Any changes made with this method will not trigger updates in states when [RealDom::update_state] is called.
     pub fn get_state_mut_raw<T: Any + Send + Sync>(&mut self, id: NodeId) -> Option<&mut T> {
-        let id = id.into_node_id(self);
         self.tree.get_mut(id)
     }
 
@@ -284,33 +281,27 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
     }
 }
 
-pub trait IntoNodeId<V: FromAnyValue + Send + Sync> {
-    fn into_node_id(self, rdom: &RealDom<V>) -> NodeId;
-}
-
-impl<V: FromAnyValue + Send + Sync> IntoNodeId<V> for NodeId {
-    fn into_node_id(self, _rdom: &RealDom<V>) -> NodeId {
-        self
-    }
-}
-
 pub trait NodeImmutable<V: FromAnyValue + Send + Sync>: Sized {
     fn real_dom(&self) -> &RealDom<V>;
 
     fn id(&self) -> NodeId;
 
+    #[inline]
     fn node_type(&self) -> &NodeType<V> {
         self.get().unwrap()
     }
 
+    #[inline]
     fn get<T: Any + Sync + Send>(&self) -> Option<&T> {
         self.real_dom().tree.get(self.id())
     }
 
+    #[inline]
     fn child_ids(&self) -> Option<&[NodeId]> {
         self.real_dom().tree.children_ids(self.id())
     }
 
+    #[inline]
     fn children(&self) -> Option<Vec<NodeRef<V>>> {
         self.child_ids().map(|ids| {
             ids.iter()
@@ -322,10 +313,12 @@ pub trait NodeImmutable<V: FromAnyValue + Send + Sync>: Sized {
         })
     }
 
+    #[inline]
     fn parent_id(&self) -> Option<NodeId> {
         self.real_dom().tree.parent_id(self.id())
     }
 
+    #[inline]
     fn parent(&self) -> Option<NodeRef<V>> {
         self.parent_id().map(|id| NodeRef {
             id,
@@ -333,6 +326,7 @@ pub trait NodeImmutable<V: FromAnyValue + Send + Sync>: Sized {
         })
     }
 
+    #[inline]
     fn next(&self) -> Option<NodeRef<V>> {
         let parent = self.parent_id()?;
         let children = self.real_dom().tree.children_ids(parent)?;
@@ -347,6 +341,7 @@ pub trait NodeImmutable<V: FromAnyValue + Send + Sync>: Sized {
         }
     }
 
+    #[inline]
     fn prev(&self) -> Option<NodeRef<V>> {
         let parent = self.parent_id()?;
         let children = self.real_dom().tree.children_ids(parent)?;
@@ -379,10 +374,12 @@ impl<'a, V: FromAnyValue + Send + Sync> Clone for NodeRef<'a, V> {
 impl<'a, V: FromAnyValue + Send + Sync> Copy for NodeRef<'a, V> {}
 
 impl<'a, V: FromAnyValue + Send + Sync> NodeImmutable<V> for NodeRef<'a, V> {
+    #[inline(always)]
     fn real_dom(&self) -> &RealDom<V> {
         self.dom
     }
 
+    #[inline(always)]
     fn id(&self) -> NodeId {
         self.id
     }
@@ -400,20 +397,24 @@ impl<'a, V: FromAnyValue + Send + Sync> NodeMut<'a, V> {
 }
 
 impl<'a, V: FromAnyValue + Send + Sync> NodeImmutable<V> for NodeMut<'a, V> {
+    #[inline(always)]
     fn real_dom(&self) -> &RealDom<V> {
         self.dom
     }
 
+    #[inline(always)]
     fn id(&self) -> NodeId {
         self.id
     }
 }
 
 impl<'a, V: FromAnyValue + Send + Sync> NodeMut<'a, V> {
+    #[inline(always)]
     pub fn real_dom_mut(&mut self) -> &mut RealDom<V> {
         self.dom
     }
 
+    #[inline]
     pub fn get_mut<T: Any + Sync + Send>(&mut self) -> Option<&mut T> {
         // mark the node state as dirty
         self.dom
@@ -425,6 +426,7 @@ impl<'a, V: FromAnyValue + Send + Sync> NodeMut<'a, V> {
         self.dom.tree.get_mut(self.id)
     }
 
+    #[inline]
     pub fn insert<T: Any + Sync + Send>(&mut self, value: T) {
         // mark the node state as dirty
         self.dom
@@ -436,6 +438,7 @@ impl<'a, V: FromAnyValue + Send + Sync> NodeMut<'a, V> {
         self.dom.tree.insert(self.id, value);
     }
 
+    #[inline]
     pub fn next_mut(self) -> Option<NodeMut<'a, V>> {
         let parent = self.parent_id()?;
         let children = self.dom.tree.children_ids(parent)?;
@@ -447,6 +450,7 @@ impl<'a, V: FromAnyValue + Send + Sync> NodeMut<'a, V> {
         }
     }
 
+    #[inline]
     pub fn prev_mut(self) -> Option<NodeMut<'a, V>> {
         let parent = self.parent_id()?;
         let children = self.dom.tree.children_ids(parent)?;
@@ -458,6 +462,7 @@ impl<'a, V: FromAnyValue + Send + Sync> NodeMut<'a, V> {
         }
     }
 
+    #[inline]
     pub fn add_child(&mut self, child: NodeId) {
         self.dom.dirty_nodes.mark_child_changed(self.id);
         self.dom.dirty_nodes.mark_parent_added_or_removed(child);
@@ -465,6 +470,7 @@ impl<'a, V: FromAnyValue + Send + Sync> NodeMut<'a, V> {
         NodeMut::new(child, self.dom).mark_moved();
     }
 
+    #[inline]
     pub fn insert_after(&mut self, old: NodeId) {
         let id = self.id();
         if let Some(parent_id) = self.dom.tree.parent_id(old) {
@@ -475,6 +481,7 @@ impl<'a, V: FromAnyValue + Send + Sync> NodeMut<'a, V> {
         self.mark_moved();
     }
 
+    #[inline]
     pub fn insert_before(&mut self, old: NodeId) {
         let id = self.id();
         if let Some(parent_id) = self.dom.tree.parent_id(old) {
@@ -485,6 +492,7 @@ impl<'a, V: FromAnyValue + Send + Sync> NodeMut<'a, V> {
         self.mark_moved();
     }
 
+    #[inline]
     pub fn remove(&mut self) {
         let id = self.id();
         if let NodeType::Element(ElementNode { listeners, .. })
@@ -515,6 +523,7 @@ impl<'a, V: FromAnyValue + Send + Sync> NodeMut<'a, V> {
         self.dom.tree.remove_single(id);
     }
 
+    #[inline]
     pub fn replace(&mut self, new: NodeId) {
         self.mark_removed();
         if let Some(parent_id) = self.parent_id() {
@@ -529,6 +538,7 @@ impl<'a, V: FromAnyValue + Send + Sync> NodeMut<'a, V> {
         self.dom.tree.replace(id, new);
     }
 
+    #[inline]
     pub fn add_event_listener(&mut self, event: &str) {
         let id = self.id();
         let node_type: &mut NodeType<V> = self.dom.tree.get_mut(self.id).unwrap();
@@ -552,6 +562,7 @@ impl<'a, V: FromAnyValue + Send + Sync> NodeMut<'a, V> {
         }
     }
 
+    #[inline]
     pub fn remove_event_listener(&mut self, event: &str) {
         let id = self.id();
         let node_type: &mut NodeType<V> = self.dom.tree.get_mut(self.id).unwrap();

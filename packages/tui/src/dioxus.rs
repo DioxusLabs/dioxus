@@ -6,7 +6,6 @@ use dioxus_native_core::{
     dioxus::{DioxusState, NodeImmutableDioxusExt},
     Renderer,
 };
-use tokio::select;
 
 use crate::{query::Query, render, Config, TuiContext};
 
@@ -80,7 +79,7 @@ impl Renderer<Rc<EventData>> for DioxusRenderer {
             let hot_reload_wait = self.hot_reload_rx.recv();
             let mut hot_reload_msg = None;
             let wait_for_work = self.vdom.wait_for_work();
-            select! {
+            tokio::select! {
                 Some(msg) = hot_reload_wait => {
                     #[cfg(all(feature = "hot-reload", debug_assertions))]
                     {
