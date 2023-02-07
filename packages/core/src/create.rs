@@ -11,6 +11,7 @@ use std::iter::Peekable;
 use std::rc::Rc;
 use TemplateNode::*;
 
+#[cfg(debug_assertions)]
 fn sort_bfs(paths: &[&'static [u8]]) -> Vec<(usize, &'static [u8])> {
     let mut with_indecies = paths.iter().copied().enumerate().collect::<Vec<_>>();
     with_indecies.sort_unstable_by(|(_, a), (_, b)| {
@@ -386,6 +387,8 @@ impl<'b> VirtualDom {
     }
 
     /// Insert a new template into the VirtualDom's template registry
+    // used in conditional compilation
+    #[allow(unused_mut)]
     pub(crate) fn register_template(&mut self, mut template: Template<'static>) {
         let (path, byte_index) = template.name.rsplit_once(':').unwrap();
         let byte_index = byte_index.parse::<usize>().unwrap();
