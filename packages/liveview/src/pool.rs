@@ -201,6 +201,7 @@ pub async fn run<
             },
 
             msg = hot_reload_wait => {
+                #[cfg(all(feature = "hot-reload", debug_assertions))]
                 if let Some(msg) = msg {
                     match msg{
                         dioxus_hot_reload::HotReloadMsg::UpdateTemplate(new_template) => {

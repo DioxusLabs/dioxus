@@ -58,7 +58,7 @@ uuid = { version = "1.2.2", features = ["v4", "serde"] }
 axum-extra = {version = "0.4.2", features = ["cookie-private"] }
 
 [features]
-default = ["hot-reload"]
+default = []
 # actix = ["actix-files", "actix-web", "actix-ws"]
 hot-reload = ["dioxus-hot-reload"]
 
