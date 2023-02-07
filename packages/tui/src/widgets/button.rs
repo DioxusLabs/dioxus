@@ -37,7 +37,7 @@ pub(crate) fn Button<'a>(cx: Scope<'a, ButtonProps>) -> Element<'a> {
         }
         state.set(new_state);
     };
-    cx.render(rsx! {
+    render! {
         div{
             width: "{width}",
             height: "{height}",
@@ -55,5 +55,5 @@ pub(crate) fn Button<'a>(cx: Scope<'a, ButtonProps>) -> Element<'a> {
             },
             "{text}"
         }
-    })
+    }
 }

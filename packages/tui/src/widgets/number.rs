@@ -99,7 +99,7 @@ pub(crate) fn NumbericInput<'a>(cx: Scope<'a, NumbericInputProps>) -> Element<'a
         update(text.clone());
     };
 
-    cx.render(rsx! {
+    render! {
         div{
             width: "{width}",
             height: "{height}",
@@ -205,5 +205,5 @@ pub(crate) fn NumbericInput<'a>(cx: Scope<'a, NumbericInputProps>) -> Element<'a
 
             "{text_after_second_cursor}"
         }
-    })
+    }
 }

@@ -1,7 +1,6 @@
 use crossterm::event::{
     Event as TermEvent, KeyCode as TermKeyCode, KeyModifiers, MouseButton, MouseEventKind,
 };
-use dioxus_core::*;
 use dioxus_native_core::real_dom::NodeImmutable;
 use dioxus_native_core::{NodeId, NodeRef, RealDom};
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -13,9 +12,8 @@ use dioxus_html::geometry::{
 use dioxus_html::input_data::keyboard_types::{Code, Key, Location, Modifiers};
 use dioxus_html::input_data::MouseButtonSet as DioxusMouseButtons;
 use dioxus_html::input_data::{MouseButton as DioxusMouseButton, MouseButtonSet};
-use dioxus_html::{event_bubbles, FocusData, KeyboardData, MouseData, WheelData};
+use dioxus_html::{event_bubbles, EventData, FocusData, KeyboardData, MouseData, WheelData};
 use std::{
-    any::Any,
     cell::{RefCell, RefMut},
     rc::Rc,
     time::{Duration, Instant},
@@ -28,9 +26,9 @@ use crate::layout::TaffyLayout;
 use crate::{layout_to_screen_space, FocusState};
 
 pub(crate) struct Event {
-    pub id: ElementId,
+    pub id: NodeId,
     pub name: &'static str,
-    pub data: Rc<dyn Any>,
+    pub data: Rc<EventData>,
     pub bubbles: bool,
 }
 
@@ -71,24 +69,6 @@ pub(crate) struct Event {
 
 type EventCore = (&'static str, EventData);
 
-#[derive(Debug)]
-enum EventData {
-    Mouse(MouseData),
-    Wheel(WheelData),
-    Screen((u16, u16)),
-    Keyboard(KeyboardData),
-}
-impl EventData {
-    fn into_any(self) -> Rc<dyn Any + Send + Sync> {
-        match self {
-            Self::Mouse(m) => Rc::new(m),
-            Self::Wheel(w) => Rc::new(w),
-            Self::Screen(s) => Rc::new(s),
-            Self::Keyboard(k) => Rc::new(k),
-        }
-    }
-}
-
 const MAX_REPEAT_TIME: Duration = Duration::from_millis(100);
 
 pub struct InnerInputState {
@@ -101,14 +81,14 @@ pub struct InnerInputState {
 }
 
 impl InnerInputState {
-    fn new() -> Self {
+    fn create(rdom: &mut RealDom) -> Self {
         Self {
             mouse: None,
             wheel: None,
             last_key_pressed: None,
             screen: None,
             // subscribers: Vec::new(),
-            focus_state: FocusState::default(),
+            focus_state: FocusState::create(rdom),
         }
     }
 
@@ -149,7 +129,6 @@ impl InnerInputState {
                 *m = new_mouse_data;
             }
             EventData::Wheel(ref w) => self.wheel = Some(w.clone()),
-            EventData::Screen(ref s) => self.screen = Some(*s),
             EventData::Keyboard(ref mut k) => {
                 let is_repeating = self
                     .last_key_pressed
@@ -166,6 +145,7 @@ impl InnerInputState {
 
                 self.last_key_pressed = Some((k.clone(), Instant::now()));
             }
+            _ => {}
         }
     }
 
@@ -202,31 +182,27 @@ impl InnerInputState {
             // elements with listeners will always have a element id
             if let Some(id) = self.focus_state.last_focused_id {
                 let element = dom.get(id).unwrap();
-                if let Some(id) = element.node_data().element_id {
-                    resolved_events.push(Event {
-                        name: "focus",
-                        id,
-                        data: Rc::new(FocusData {}),
-                        bubbles: event_bubbles("focus"),
-                    });
-                    resolved_events.push(Event {
-                        name: "focusin",
-                        id,
-                        data: Rc::new(FocusData {}),
-                        bubbles: event_bubbles("focusin"),
-                    });
-                }
+                resolved_events.push(Event {
+                    name: "focus",
+                    id,
+                    data: Rc::new(EventData::Focus(FocusData {})),
+                    bubbles: event_bubbles("focus"),
+                });
+                resolved_events.push(Event {
+                    name: "focusin",
+                    id,
+                    data: Rc::new(EventData::Focus(FocusData {})),
+                    bubbles: event_bubbles("focusin"),
+                });
             }
             if let Some(id) = old_focus {
                 let element = dom.get(id).unwrap();
-                if let Some(id) = element.node_data().element_id {
-                    resolved_events.push(Event {
-                        name: "focusout",
-                        id,
-                        data: Rc::new(FocusData {}),
-                        bubbles: event_bubbles("focusout"),
-                    });
-                }
+                resolved_events.push(Event {
+                    name: "focusout",
+                    id,
+                    data: Rc::new(EventData::Focus(FocusData {})),
+                    bubbles: event_bubbles("focusout"),
+                });
             }
         }
 
@@ -260,29 +236,27 @@ impl InnerInputState {
 
         fn try_create_event(
             name: &'static str,
-            data: Rc<dyn Any>,
+            data: Rc<EventData>,
             will_bubble: &mut FxHashSet<NodeId>,
             resolved_events: &mut Vec<Event>,
             node: NodeRef,
             dom: &RealDom,
         ) {
             // only trigger event if the event was not triggered already by a child
-            let id = node.node_data().node_id;
+            let id = node.id();
             if will_bubble.insert(id) {
                 let mut parent = Some(node);
                 while let Some(current_parent) = parent {
-                    let parent_id = current_parent.node_data().node_id;
+                    let parent_id = current_parent.id();
                     will_bubble.insert(parent_id);
                     parent = current_parent.parent_id().and_then(|id| dom.get(id));
                 }
-                if let Some(id) = node.mounted_id() {
-                    resolved_events.push(Event {
-                        name,
-                        id,
-                        data,
-                        bubbles: event_bubbles(name),
-                    })
-                }
+                resolved_events.push(Event {
+                    name,
+                    id,
+                    data,
+                    bubbles: event_bubbles(name),
+                })
             }
         }
 
@@ -346,7 +320,10 @@ impl InnerInputState {
                         if currently_contains && previously_contained {
                             try_create_event(
                                 "mousemove",
-                                Rc::new(prepare_mouse_data(mouse_data, &node_layout)),
+                                Rc::new(EventData::Mouse(prepare_mouse_data(
+                                    mouse_data,
+                                    &node_layout,
+                                ))),
                                 &mut will_bubble,
                                 resolved_events,
                                 node,
@@ -370,7 +347,7 @@ impl InnerInputState {
                     if currently_contains && !previously_contained {
                         try_create_event(
                             "mouseenter",
-                            Rc::new(mouse_data.clone()),
+                            Rc::new(dioxus_html::EventData::Mouse(mouse_data.clone())),
                             &mut will_bubble,
                             resolved_events,
                             node,
@@ -393,7 +370,10 @@ impl InnerInputState {
                     if currently_contains && !previously_contained {
                         try_create_event(
                             "mouseover",
-                            Rc::new(prepare_mouse_data(mouse_data, &node_layout)),
+                            Rc::new(EventData::Mouse(prepare_mouse_data(
+                                mouse_data,
+                                &node_layout,
+                            ))),
                             &mut will_bubble,
                             resolved_events,
                             node,
@@ -413,7 +393,10 @@ impl InnerInputState {
                     if currently_contains {
                         try_create_event(
                             "mousedown",
-                            Rc::new(prepare_mouse_data(mouse_data, &node_layout)),
+                            Rc::new(EventData::Mouse(prepare_mouse_data(
+                                mouse_data,
+                                &node_layout,
+                            ))),
                             &mut will_bubble,
                             resolved_events,
                             node,
@@ -434,7 +417,10 @@ impl InnerInputState {
                         if currently_contains {
                             try_create_event(
                                 "mouseup",
-                                Rc::new(prepare_mouse_data(mouse_data, &node_layout)),
+                                Rc::new(EventData::Mouse(prepare_mouse_data(
+                                    mouse_data,
+                                    &node_layout,
+                                ))),
                                 &mut will_bubble,
                                 resolved_events,
                                 node,
@@ -456,7 +442,10 @@ impl InnerInputState {
                         if currently_contains {
                             try_create_event(
                                 "click",
-                                Rc::new(prepare_mouse_data(mouse_data, &node_layout)),
+                                Rc::new(EventData::Mouse(prepare_mouse_data(
+                                    mouse_data,
+                                    &node_layout,
+                                ))),
                                 &mut will_bubble,
                                 resolved_events,
                                 node,
@@ -479,7 +468,10 @@ impl InnerInputState {
                         if currently_contains {
                             try_create_event(
                                 "contextmenu",
-                                Rc::new(prepare_mouse_data(mouse_data, &node_layout)),
+                                Rc::new(EventData::Mouse(prepare_mouse_data(
+                                    mouse_data,
+                                    &node_layout,
+                                ))),
                                 &mut will_bubble,
                                 resolved_events,
                                 node,
@@ -503,7 +495,7 @@ impl InnerInputState {
                             if currently_contains {
                                 try_create_event(
                                     "wheel",
-                                    Rc::new(w.clone()),
+                                    Rc::new(EventData::Wheel(w.clone())),
                                     &mut will_bubble,
                                     resolved_events,
                                     node,
@@ -528,7 +520,10 @@ impl InnerInputState {
                     if !currently_contains && previously_contained {
                         try_create_event(
                             "mouseleave",
-                            Rc::new(prepare_mouse_data(mouse_data, &node_layout)),
+                            Rc::new(EventData::Mouse(prepare_mouse_data(
+                                mouse_data,
+                                &node_layout,
+                            ))),
                             &mut will_bubble,
                             resolved_events,
                             node,
@@ -551,7 +546,10 @@ impl InnerInputState {
                     if !currently_contains && previously_contained {
                         try_create_event(
                             "mouseout",
-                            Rc::new(prepare_mouse_data(mouse_data, &node_layout)),
+                            Rc::new(EventData::Mouse(prepare_mouse_data(
+                                mouse_data,
+                                &node_layout,
+                            ))),
                             &mut will_bubble,
                             resolved_events,
                             node,
@@ -571,7 +569,7 @@ impl InnerInputState {
                     let currently_contains = layout_contains_point(node_layout, new_pos);
 
                     if currently_contains && node.get::<Focus>().unwrap().level.focusable() {
-                        focus_id = Some(node.node_data().node_id);
+                        focus_id = Some(node.id());
                     }
                 });
                 if let Some(id) = focus_id {
@@ -612,7 +610,9 @@ pub struct RinkInputHandler {
 impl RinkInputHandler {
     /// global context that handles events
     /// limitations: GUI key modifier is never detected, key up events are not detected, and only two mouse buttons may be pressed at once
-    pub fn new() -> (
+    pub fn craete(
+        rdom: &mut RealDom,
+    ) -> (
         Self,
         Rc<RefCell<InnerInputState>>,
         impl FnMut(crossterm::event::Event),
@@ -628,7 +628,7 @@ impl RinkInputHandler {
             }
         };
 
-        let state = Rc::new(RefCell::new(InnerInputState::new()));
+        let state = Rc::new(RefCell::new(InnerInputState::create(rdom)));
 
         (
             Self {
@@ -638,10 +638,6 @@ impl RinkInputHandler {
             state,
             regester_event,
         )
-    }
-
-    pub(crate) fn prune(&self, mutations: &dioxus_core::Mutations, rdom: &RealDom) {
-        self.state.borrow_mut().focus_state.prune(mutations, rdom);
     }
 
     pub(crate) fn get_events(&self, layout: &Taffy, dom: &mut RealDom) -> Vec<Event> {
@@ -675,14 +671,14 @@ impl RinkInputHandler {
                 ]
                 .contains(&e.0)
             })
-            .map(|evt| (evt.0, evt.1.into_any()));
+            .map(|evt| (evt.0, evt.1));
 
-        let mut hm: FxHashMap<&'static str, Vec<Rc<dyn Any + Send + Sync>>> = FxHashMap::default();
+        let mut hm: FxHashMap<&'static str, Vec<Rc<EventData>>> = FxHashMap::default();
         for (event, data) in events {
             if let Some(v) = hm.get_mut(event) {
-                v.push(data);
+                v.push(Rc::new(data));
             } else {
-                hm.insert(event, vec![data]);
+                hm.insert(event, vec![Rc::new(data)]);
             }
         }
         for (event, datas) in hm {
@@ -690,14 +686,12 @@ impl RinkInputHandler {
                 for data in &datas {
                     let focused = node.get::<Focused>();
                     if focused.is_some() && focused.unwrap().0 {
-                        if let Some(id) = node.mounted_id() {
-                            resolved_events.push(Event {
-                                name: event,
-                                id,
-                                data: data.clone(),
-                                bubbles: event_bubbles(event),
-                            });
-                        }
+                        resolved_events.push(Event {
+                            name: event,
+                            id: node.id(),
+                            data: data.clone(),
+                            bubbles: event_bubbles(event),
+                        });
                     }
                 }
             }
@@ -779,7 +773,7 @@ fn get_event(evt: TermEvent) -> Option<(&'static str, EventData)> {
                 MouseEventKind::ScrollUp => ("wheel", get_wheel_data(true)),
             }
         }
-        TermEvent::Resize(x, y) => ("resize", EventData::Screen((x, y))),
+        _ => return None,
     };
 
     Some((name, data))

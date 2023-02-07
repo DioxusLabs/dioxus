@@ -114,7 +114,7 @@ pub(crate) fn Password<'a>(cx: Scope<'a, PasswordProps>) -> Element<'a> {
         }
     };
 
-    cx.render(rsx! {
+    render! {
         div {
             width: "{width}",
             height: "{height}",
@@ -187,5 +187,5 @@ pub(crate) fn Password<'a>(cx: Scope<'a, PasswordProps>) -> Element<'a> {
 
             "{text_after_second_cursor}"
         }
-    })
+    }
 }

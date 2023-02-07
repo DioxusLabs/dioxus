@@ -79,7 +79,7 @@ pub(crate) fn TextBox<'a>(cx: Scope<'a, TextBoxProps>) -> Element<'a> {
         "solid"
     };
 
-    cx.render(rsx! {
+    render! {
         div{
             width: "{width}",
             height: "{height}",
@@ -178,5 +178,5 @@ pub(crate) fn TextBox<'a>(cx: Scope<'a, TextBoxProps>) -> Element<'a> {
 
             "{text_after_second_cursor}"
         }
-    })
+    }
 }

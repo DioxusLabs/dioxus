@@ -13,8 +13,8 @@ license = "MIT/Apache-2.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-dioxus = { path = "../dioxus", version = "^0.3.0" }
-dioxus-core = { path = "../core", version = "^0.3.0", features = ["serialize"] }
+dioxus = { path = "../dioxus", version = "^0.3.0", optional = true }
+dioxus-core = { path = "../core", version = "^0.3.0", features = ["serialize"], optional = true }
 dioxus-html = { path = "../html", version = "^0.3.0" }
 dioxus-native-core = { path = "../native-core", version = "^0.2.0" }
 dioxus-hot-reload = { path = "../hot-reload", optional = true }
@@ -40,5 +40,6 @@ name = "update"
 harness = false
 
 [features]
-default = ["hot-reload"]
+default = ["hot-reload", "dioxus-bindings"]
 hot-reload = ["dioxus-hot-reload"]
+dioxus-bindings = ["dioxus", "dioxus-core", "dioxus-native-core/dioxus"]

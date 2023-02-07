@@ -4,8 +4,7 @@ use std::{
     sync::{Arc, Mutex, MutexGuard},
 };
 
-use dioxus_core::ElementId;
-use dioxus_native_core::{real_dom::NodeImmutable, RealDom};
+use dioxus_native_core::{real_dom::NodeImmutable, NodeId, RealDom};
 use taffy::{
     geometry::Point,
     prelude::{Layout, Size},
@@ -52,7 +51,7 @@ pub struct Query {
 }
 
 impl Query {
-    pub fn get(&self, id: ElementId) -> ElementRef {
+    pub fn get(&self, id: NodeId) -> ElementRef {
         ElementRef::new(
             self.rdom.borrow(),
             self.stretch.lock().expect("taffy lock poisoned"),
@@ -64,11 +63,11 @@ impl Query {
 pub struct ElementRef<'a> {
     inner: Ref<'a, RealDom>,
     stretch: MutexGuard<'a, Taffy>,
-    id: ElementId,
+    id: NodeId,
 }
 
 impl<'a> ElementRef<'a> {
-    fn new(inner: Ref<'a, RealDom>, stretch: MutexGuard<'a, Taffy>, id: ElementId) -> Self {
+    fn new(inner: Ref<'a, RealDom>, stretch: MutexGuard<'a, Taffy>, id: NodeId) -> Self {
         Self { inner, stretch, id }
     }
 

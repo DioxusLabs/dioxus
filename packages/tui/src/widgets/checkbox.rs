@@ -61,7 +61,7 @@ pub(crate) fn CheckBox<'a>(cx: Scope<'a, CheckBoxProps>) -> Element<'a> {
         }
         state.set(new_state);
     };
-    cx.render(rsx! {
+    render! {
         div {
             width: "{width}",
             height: "{height}",
@@ -78,5 +78,5 @@ pub(crate) fn CheckBox<'a>(cx: Scope<'a, CheckBoxProps>) -> Element<'a> {
             },
             "{text}"
         }
-    })
+    }
 }

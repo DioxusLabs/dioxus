@@ -62,7 +62,7 @@ pub(crate) fn Slider<'a>(cx: Scope<'a, SliderProps>) -> Element<'a> {
         }
     };
 
-    cx.render(rsx! {
+    render! {
         div{
             width: "{width}",
             height: "{height}",
@@ -103,5 +103,5 @@ pub(crate) fn Slider<'a>(cx: Scope<'a, SliderProps>) -> Element<'a> {
                 background_color: "rgba(10,10,10,0.5)",
             }
         }
-    })
+    }
 }

@@ -2,7 +2,7 @@ use crate::prevent_default::PreventDefault;
 
 use dioxus_native_core::{
     node_ref::{AttributeMaskBuilder, NodeMaskBuilder},
-    real_dom::{NodeImmutable, NodeMutable},
+    real_dom::NodeImmutable,
     utils::{ElementProduced, PersistantElementIter},
     Dependancy, NodeId, Pass, RealDom, SendAnyMap,
 };
@@ -64,7 +64,7 @@ pub(crate) struct Focus {
 }
 
 impl Pass for Focus {
-    const NODE_MASK: NodeMaskBuilder = NodeMaskBuilder::new()
+    const NODE_MASK: NodeMaskBuilder<'static> = NodeMaskBuilder::new()
         .with_attrs(AttributeMaskBuilder::Some(FOCUS_ATTRIBUTES))
         .with_listeners();
 
@@ -138,7 +138,6 @@ impl Pass for Focus {
 const FOCUS_EVENTS: &[&str] = &["keydown", "keypress", "keyup"];
 const FOCUS_ATTRIBUTES: &[&str] = &["tabindex"];
 
-#[derive(Default)]
 pub(crate) struct FocusState {
     pub(crate) focus_iter: PersistantElementIter,
     pub(crate) last_focused_id: Option<NodeId>,
@@ -147,6 +146,16 @@ pub(crate) struct FocusState {
 }
 
 impl FocusState {
+    pub fn create(rdom: &mut RealDom) -> Self {
+        let mut focus_iter = PersistantElementIter::create(rdom);
+        Self {
+            focus_iter,
+            last_focused_id: Default::default(),
+            focus_level: Default::default(),
+            dirty: Default::default(),
+        }
+    }
+
     /// Returns true if the focus has changed.
     pub fn progress(&mut self, rdom: &mut RealDom, forward: bool) -> bool {
         if let Some(last) = self.last_focused_id {
@@ -242,14 +251,13 @@ impl FocusState {
         }
 
         if let Some(id) = next_focus {
-            let mut node = rdom.get_mut_raw(id).unwrap();
+            let mut node = rdom.get_mut(id).unwrap();
             if !node.get::<Focus>().unwrap().level.focusable() {
                 panic!()
             }
             node.insert(Focused(true));
             if let Some(old) = self.last_focused_id.replace(id) {
-                let mut old = rdom.get_mut_raw(old).unwrap();
-                let focused = old.get_mut::<Focused>().unwrap();
+                let focused = rdom.get_state_mut_raw::<Focused>(old).unwrap();
                 focused.0 = false;
             }
             // reset the position to the currently focused element
@@ -261,49 +269,14 @@ impl FocusState {
         false
     }
 
-    pub(crate) fn prune(&mut self, mutations: &dioxus_core::Mutations, rdom: &RealDom) {
-        fn remove_children(to_prune: &mut [&mut Option<NodeId>], rdom: &RealDom, removed: NodeId) {
-            for opt in to_prune.iter_mut() {
-                if let Some(id) = opt {
-                    if *id == removed {
-                        **opt = None;
-                    }
-                }
-            }
-            let node = rdom.get(removed).unwrap();
-            if let Some(children) = node.child_ids() {
-                for child in children {
-                    remove_children(to_prune, rdom, *child);
-                }
-            }
-        }
-        if self.focus_iter.prune(mutations, rdom) {
-            self.dirty = true;
-        }
-        for m in &mutations.edits {
-            match m {
-                dioxus_core::Mutation::ReplaceWith { id, .. } => remove_children(
-                    &mut [&mut self.last_focused_id],
-                    rdom,
-                    rdom.element_to_node_id(*id),
-                ),
-                dioxus_core::Mutation::Remove { id } => remove_children(
-                    &mut [&mut self.last_focused_id],
-                    rdom,
-                    rdom.element_to_node_id(*id),
-                ),
-                _ => (),
-            }
-        }
-    }
-
     pub(crate) fn set_focus(&mut self, rdom: &mut RealDom, id: NodeId) {
         if let Some(old) = self.last_focused_id.replace(id) {
-            let mut node = rdom.get_mut_raw(old).unwrap();
-            node.get_mut::<Focused>().unwrap().0 = false;
+            let mut focused = rdom.get_state_mut_raw::<Focused>(old).unwrap();
+            *focused = Focused(false);
         }
-        let mut node = rdom.get_mut_raw(id).unwrap();
-        node.insert(Focused(true));
+        let mut focused = rdom.get_state_mut_raw::<Focused>(id).unwrap();
+        *focused = Focused(true);
+        let mut node = rdom.get(id).unwrap();
         self.focus_level = node.get::<Focus>().unwrap().level;
         // reset the position to the currently focused element
         while self.focus_iter.next(rdom).id() != id {}

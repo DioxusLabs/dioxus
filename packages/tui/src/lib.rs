@@ -6,24 +6,17 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use dioxus_core::*;
-use dioxus_native_core::{node_ref::NodeMaskBuilder, real_dom::NodeImmutable, Pass};
+use dioxus_html::EventData;
+use dioxus_native_core::{node_ref::NodeMaskBuilder, real_dom::NodeImmutable, Pass, Renderer};
 use dioxus_native_core::{real_dom::RealDom, FxDashSet, NodeId, SendAnyMap};
 use focus::FocusState;
-use futures::{
-    channel::mpsc::{UnboundedReceiver, UnboundedSender},
-    pin_mut, StreamExt,
-};
+use futures::{channel::mpsc::UnboundedSender, pin_mut, StreamExt};
 use futures_channel::mpsc::unbounded;
 use layout::TaffyLayout;
 use prevent_default::PreventDefault;
-use query::Query;
-use std::rc::Rc;
-use std::{
-    cell::RefCell,
-    sync::{Arc, Mutex},
-};
+use std::sync::{Arc, Mutex};
 use std::{io, time::Duration};
+use std::{rc::Rc, sync::RwLock};
 use style_attributes::StyleModifier;
 use taffy::Taffy;
 pub use taffy::{geometry::Point, prelude::*};
@@ -41,7 +34,7 @@ mod render;
 mod style;
 mod style_attributes;
 mod widget;
-mod widgets;
+// mod widgets;
 
 pub use config::*;
 pub use hooks::*;
@@ -75,21 +68,21 @@ impl TuiContext {
     }
 }
 
-pub fn launch(app: Component<()>) {
-    launch_cfg(app, Config::default())
-}
+pub fn render<R: Renderer<(), Rc<EventData>>>(
+    cfg: Config,
+    f: impl FnOnce(&Arc<RwLock<RealDom>>, &Arc<Mutex<Taffy>>, UnboundedSender<InputEvent>) -> R,
+) -> Result<()> {
+    let mut rdom = RealDom::new(Box::new([
+        TaffyLayout::to_type_erased(),
+        Focus::to_type_erased(),
+        StyleModifier::to_type_erased(),
+        PreventDefault::to_type_erased(),
+    ]));
 
-pub fn launch_cfg(app: Component<()>, cfg: Config) {
-    launch_cfg_with_props(app, (), cfg);
-}
-
-pub fn launch_cfg_with_props<Props: 'static>(app: Component<Props>, props: Props, cfg: Config) {
-    let mut dom = VirtualDom::new_with_props(app, props);
-
-    let (handler, state, register_event) = RinkInputHandler::new();
+    let (handler, state, mut register_event) = RinkInputHandler::craete(&mut rdom);
 
     // Setup input handling
-    let (event_tx, event_rx) = unbounded();
+    let (event_tx, mut event_reciever) = unbounded();
     let event_tx_clone = event_tx.clone();
     if !cfg.headless {
         std::thread::spawn(move || {
@@ -105,51 +98,19 @@ pub fn launch_cfg_with_props<Props: 'static>(app: Component<Props>, props: Props
         });
     }
 
-    let cx = dom.base_scope();
-    let rdom = Rc::new(RefCell::new(RealDom::new(Box::new([
-        TaffyLayout::to_type_erased(),
-        Focus::to_type_erased(),
-        StyleModifier::to_type_erased(),
-        PreventDefault::to_type_erased(),
-    ]))));
+    let rdom = Arc::new(RwLock::new(rdom));
     let taffy = Arc::new(Mutex::new(Taffy::new()));
-    cx.provide_context(state);
-    cx.provide_context(TuiContext { tx: event_tx_clone });
-    cx.provide_context(Query {
-        rdom: rdom.clone(),
-        stretch: taffy.clone(),
-    });
+    let mut renderer = f(&rdom, &taffy, event_tx_clone);
 
     {
-        let mut rdom = rdom.borrow_mut();
-        let mutations = dom.rebuild();
-        rdom.apply_mutations(mutations);
+        let mut rdom = rdom.write().unwrap();
+        let root_id = rdom.root_id();
+        renderer.render(rdom.get_mut(root_id).unwrap());
         let mut any_map = SendAnyMap::new();
         any_map.insert(taffy.clone());
         let _ = rdom.update_state(any_map, false);
     }
 
-    render_vdom(
-        &mut dom,
-        event_rx,
-        handler,
-        cfg,
-        rdom,
-        taffy,
-        register_event,
-    )
-    .unwrap();
-}
-
-fn render_vdom(
-    vdom: &mut VirtualDom,
-    mut event_reciever: UnboundedReceiver<InputEvent>,
-    handler: RinkInputHandler,
-    cfg: Config,
-    rdom: Rc<RefCell<RealDom>>,
-    taffy: Arc<Mutex<Taffy>>,
-    mut register_event: impl FnMut(crossterm::event::Event),
-) -> Result<()> {
     tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()?
@@ -225,16 +186,16 @@ fn render_vdom(
                     if let Some(terminal) = &mut terminal {
                         execute!(terminal.backend_mut(), SavePosition).unwrap();
                         terminal.draw(|frame| {
-                            let rdom = rdom.borrow();
+                            let rdom = rdom.write().unwrap();
                             let mut taffy = taffy.lock().expect("taffy lock poisoned");
                             // size is guaranteed to not change when rendering
                             resize(frame.size(), &mut taffy, &rdom);
-                            let root = rdom.get(NodeId(0)).unwrap();
+                            let root = rdom.get(rdom.root_id()).unwrap();
                             render::render_vnode(frame, &taffy, root, cfg, Point::ZERO);
                         })?;
                         execute!(terminal.backend_mut(), RestorePosition, Show).unwrap();
                     } else {
-                        let rdom = rdom.borrow();
+                        let rdom = rdom.write().unwrap();
                         resize(
                             Rect {
                                 x: 0,
@@ -248,13 +209,13 @@ fn render_vdom(
                     }
                 }
 
-                let mut hot_reload_msg = None;
+                // let mut hot_reload_msg = None;
                 {
-                    let wait = vdom.wait_for_work();
-                    #[cfg(all(feature = "hot-reload", debug_assertions))]
-                    let hot_reload_wait = hot_reload_rx.recv();
-                    #[cfg(not(all(feature = "hot-reload", debug_assertions)))]
-                    let hot_reload_wait = std::future::pending();
+                    let wait = renderer.poll_async();
+                    // #[cfg(all(feature = "hot-reload", debug_assertions))]
+                    // let hot_reload_wait = hot_reload_rx.recv();
+                    // #[cfg(not(all(feature = "hot-reload", debug_assertions)))]
+                    // let hot_reload_wait = std::future::pending();
 
                     pin_mut!(wait);
 
@@ -283,40 +244,40 @@ fn render_vdom(
                                 register_event(evt);
                             }
                         },
-                        Some(msg) = hot_reload_wait => {
-                            hot_reload_msg = Some(msg);
-                        }
+                        // Some(msg) = hot_reload_wait => {
+                        //     hot_reload_msg = Some(msg);
+                        // }
                     }
                 }
 
-                // if we have a new template, replace the old one
-                if let Some(msg) = hot_reload_msg {
-                    match msg {
-                        dioxus_hot_reload::HotReloadMsg::UpdateTemplate(template) => {
-                            vdom.replace_template(template);
-                        }
-                        dioxus_hot_reload::HotReloadMsg::Shutdown => {
-                            break;
-                        }
-                    }
-                }
+                // // if we have a new template, replace the old one
+                // if let Some(msg) = hot_reload_msg {
+                //     match msg {
+                //         dioxus_hot_reload::HotReloadMsg::UpdateTemplate(template) => {
+                //             vdom.replace_template(template);
+                //         }
+                //         dioxus_hot_reload::HotReloadMsg::Shutdown => {
+                //             break;
+                //         }
+                //     }
+                // }
 
                 {
-                    let evts = {
-                        let mut rdom = rdom.borrow_mut();
-                        handler.get_events(&taffy.lock().expect("taffy lock poisoned"), &mut rdom)
-                    };
                     {
+                        let mut rdom = rdom.write().unwrap();
+                        let evts = handler
+                            .get_events(&taffy.lock().expect("taffy lock poisoned"), &mut rdom);
                         updated |= handler.state().focus_state.clean();
+
+                        for e in evts {
+                            let node = rdom.get_mut(e.id).unwrap();
+                            renderer.handle_event(node, e.name, e.data);
+                        }
                     }
-                    for e in evts {
-                        vdom.handle_event(e.name, e.data, e.id, e.bubbles)
-                    }
-                    let mut rdom = rdom.borrow_mut();
-                    let mutations = vdom.render_immediate();
-                    handler.prune(&mutations, &rdom);
+                    let mut rdom = rdom.write().unwrap();
                     // updates the dom's nodes
-                    rdom.apply_mutations(mutations);
+                    let root_id = rdom.root_id();
+                    renderer.render(rdom.get_mut(root_id).unwrap());
                     // update the style and layout
                     let mut any_map = SendAnyMap::new();
                     any_map.insert(taffy.clone());
@@ -346,7 +307,7 @@ fn render_vdom(
 }
 
 #[derive(Debug)]
-enum InputEvent {
+pub enum InputEvent {
     UserInput(TermEvent),
     Close,
 }

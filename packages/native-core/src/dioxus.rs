@@ -241,7 +241,7 @@ fn create_template_node(rdom: &mut RealDom, node: &TemplateNode) -> NodeId {
     }
 }
 
-trait NodeImmutableDioxusExt<V: FromAnyValue + Send + Sync>: NodeImmutable<V> {
+pub trait NodeImmutableDioxusExt<V: FromAnyValue + Send + Sync>: NodeImmutable<V> {
     fn mounted_id(&self) -> Option<ElementId> {
         self.get().copied()
     }

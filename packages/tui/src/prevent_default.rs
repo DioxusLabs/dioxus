@@ -30,7 +30,7 @@ impl Pass for PreventDefault {
     type ChildDependencies = ();
     type NodeDependencies = ();
 
-    const NODE_MASK: dioxus_native_core::node_ref::NodeMaskBuilder =
+    const NODE_MASK: dioxus_native_core::node_ref::NodeMaskBuilder<'static> =
         dioxus_native_core::node_ref::NodeMaskBuilder::new()
             .with_attrs(dioxus_native_core::node_ref::AttributeMaskBuilder::Some(&[
                 "dioxus-prevent-default",

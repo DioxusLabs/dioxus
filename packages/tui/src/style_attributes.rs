@@ -51,7 +51,7 @@ impl Pass for StyleModifier {
     type NodeDependencies = ();
 
     // todo: seperate each attribute into it's own class
-    const NODE_MASK: NodeMaskBuilder = NodeMaskBuilder::new()
+    const NODE_MASK: NodeMaskBuilder<'static> = NodeMaskBuilder::new()
         .with_attrs(AttributeMaskBuilder::Some(SORTED_STYLE_ATTRS))
         .with_element();
 

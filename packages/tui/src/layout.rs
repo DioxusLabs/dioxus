@@ -47,7 +47,7 @@ impl Pass for TaffyLayout {
     type ParentDependencies = ();
     type NodeDependencies = ();
 
-    const NODE_MASK: NodeMaskBuilder = NodeMaskBuilder::new()
+    const NODE_MASK: NodeMaskBuilder<'static> = NodeMaskBuilder::new()
         .with_attrs(AttributeMaskBuilder::Some(SORTED_LAYOUT_ATTRS))
         .with_text();
 
