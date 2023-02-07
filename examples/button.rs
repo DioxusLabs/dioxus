@@ -7,7 +7,7 @@ fn main() {
 fn app(cx: Scope) -> Element {
     cx.render(rsx! {
         button {
-            onclick: |e| async move {
+            onclick: |_| async move {
                 println!("hello, desktop!");
                 tokio::time::sleep(std::time::Duration::from_secs(1)).await;
                 println!("goodbye, desktop!");
