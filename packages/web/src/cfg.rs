@@ -8,6 +8,7 @@
 /// dioxus_web::launch(App, Config::new().hydrate(true).root_name("myroot"))
 /// ```
 pub struct Config {
+    #[cfg(feature = "hydrate")]
     pub(crate) hydrate: bool,
     pub(crate) rootname: String,
     pub(crate) cached_strings: Vec<String>,
@@ -17,6 +18,7 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
+            #[cfg(feature = "hydrate")]
             hydrate: false,
             rootname: "main".to_string(),
             cached_strings: Vec::new(),
@@ -33,6 +35,7 @@ impl Config {
         Self::default()
     }
 
+    #[cfg(feature = "hydrate")]
     /// Enable SSR hydration
     ///
     /// This enables Dioxus to pick up work from a pre-renderd HTML file. Hydration will completely skip over any async

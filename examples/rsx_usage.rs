@@ -83,7 +83,7 @@ fn app(cx: Scope) -> Element {
                 div {
                     class: {
                         const WORD: &str = "expressions";
-                        format_args!("Arguments can be passed in through curly braces for complex {}", WORD)
+                        format_args!("Arguments can be passed in through curly braces for complex {WORD}")
                     }
                 }
             }
@@ -214,7 +214,7 @@ fn app(cx: Scope) -> Element {
 }
 
 fn format_dollars(dollars: u32, cents: u32) -> String {
-    format!("${}.{:02}", dollars, cents)
+    format!("${dollars}.{cents:02}")
 }
 
 fn helper<'a>(cx: &'a ScopeState, text: &str) -> Element<'a> {

@@ -151,10 +151,10 @@ pub trait Pass {
 }
 
 pub trait UpwardPass<T>: Pass {
-    fn pass<'a>(
+    fn pass(
         &self,
         node: &mut T,
-        children: &mut dyn Iterator<Item = &'a mut T>,
+        children: &mut dyn Iterator<Item = &mut T>,
         ctx: &SendAnyMap,
     ) -> PassReturn;
 }
@@ -764,10 +764,10 @@ fn up_pass() {
         }
     }
     impl UpwardPass<i32> for AddPass {
-        fn pass<'a>(
+        fn pass(
             &self,
             node: &mut i32,
-            children: &mut dyn Iterator<Item = &'a mut i32>,
+            children: &mut dyn Iterator<Item = &mut i32>,
             _: &SendAnyMap,
         ) -> PassReturn {
             *node += children.map(|i| *i).sum::<i32>();
@@ -830,10 +830,10 @@ fn dependant_up_pass() {
         }
     }
     impl UpwardPass<i32> for AddPass {
-        fn pass<'a>(
+        fn pass(
             &self,
             node: &mut i32,
-            children: &mut dyn Iterator<Item = &'a mut i32>,
+            children: &mut dyn Iterator<Item = &mut i32>,
             _: &SendAnyMap,
         ) -> PassReturn {
             *node += children.map(|i| *i).sum::<i32>();
@@ -863,10 +863,10 @@ fn dependant_up_pass() {
         }
     }
     impl UpwardPass<i32> for SubtractPass {
-        fn pass<'a>(
+        fn pass(
             &self,
             node: &mut i32,
-            children: &mut dyn Iterator<Item = &'a mut i32>,
+            children: &mut dyn Iterator<Item = &mut i32>,
             _: &SendAnyMap,
         ) -> PassReturn {
             *node -= children.map(|i| *i).sum::<i32>();

@@ -170,6 +170,15 @@ pub async fn run<
     ws: impl LiveViewSocket<SendErr, RecvErr>,
     client_status: ClientStatus,
 ) -> DisconnectReason<SendErr, RecvErr> {
+    #[cfg(all(feature = "hot-reload", debug_assertions))]
+    let mut hot_reload_rx = {
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        dioxus_hot_reload::connect(move |template| {
+            let _ = tx.send(template);
+        });
+        rx
+    };
+
     pin_mut!(ws);
 
     let (mut vdom, handlers) = match initiate_client(&mut ws, app, props, client_status).await {
@@ -178,12 +187,30 @@ pub async fn run<
     };
 
     loop {
+        #[cfg(all(feature = "hot-reload", debug_assertions))]
+        let hot_reload_wait = hot_reload_rx.recv();
+        #[cfg(not(all(feature = "hot-reload", debug_assertions)))]
+        let hot_reload_wait = std::future::pending();
+
         tokio::select! {
             _ = vdom.wait_for_work() => (), // poll any futures or suspense
 
             msg = ws.next() => match handle_message(msg, &mut vdom, &mut ws, &handlers).await {
                 ControlFlow::Break(result) => return result,
                 ControlFlow::Continue(()) => (),
+            },
+
+            msg = hot_reload_wait => {
+                if let Some(msg) = msg {
+                    match msg{
+                        dioxus_hot_reload::HotReloadMsg::UpdateTemplate(new_template) => {
+                            vdom.replace_template(new_template);
+                        }
+                        dioxus_hot_reload::HotReloadMsg::Shutdown => {
+                            std::process::exit(0);
+                        },
+                    }
+                }
             }
         };
 

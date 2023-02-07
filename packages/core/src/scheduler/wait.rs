@@ -31,7 +31,7 @@ impl VirtualDom {
         // If the task completes...
         if task.task.borrow_mut().as_mut().poll(&mut cx).is_ready() {
             // Remove it from the scope so we dont try to double drop it when the scope dropes
-            let scope = &self.scopes[task.scope.0];
+            let scope = &self.scopes[task.scope];
             scope.spawned_tasks.borrow_mut().remove(&id);
 
             // Remove it from the scheduler
@@ -40,7 +40,7 @@ impl VirtualDom {
     }
 
     pub(crate) fn acquire_suspense_boundary(&self, id: ScopeId) -> Rc<SuspenseContext> {
-        self.scopes[id.0]
+        self.scopes[id]
             .consume_context::<Rc<SuspenseContext>>()
             .unwrap()
     }
@@ -64,7 +64,7 @@ impl VirtualDom {
         if let Poll::Ready(new_nodes) = as_pinned_mut.poll_unpin(&mut cx) {
             let fiber = self.acquire_suspense_boundary(leaf.scope_id);
 
-            let scope = &self.scopes[scope_id.0];
+            let scope = &self.scopes[scope_id];
             let arena = scope.current_frame();
 
             let ret = arena.bump().alloc(match new_nodes {

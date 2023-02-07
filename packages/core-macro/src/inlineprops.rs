@@ -95,7 +95,7 @@ impl ToTokens for InlinePropsBody {
             quote! { #vis #f }
         });
 
-        let struct_name = Ident::new(&format!("{}Props", ident), Span::call_site());
+        let struct_name = Ident::new(&format!("{ident}Props"), Span::call_site());
 
         let field_names = inputs.iter().filter_map(|f| match f {
             FnArg::Receiver(_) => todo!(),

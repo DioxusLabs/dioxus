@@ -20,7 +20,7 @@ impl Writer<'_> {
             let start = byte_offset(self.raw_src, start);
             let end = byte_offset(self.raw_src, end);
             let row = self.raw_src[start..end].trim();
-            write!(self.out, "{}", row)?;
+            write!(self.out, "{row}")?;
             return Ok(());
         }
 
@@ -56,11 +56,11 @@ impl Writer<'_> {
                     write!(self.out, " ")?;
                 }
 
-                write!(self.out, "{}", line)?;
+                write!(self.out, "{line}")?;
             } else {
                 let offset = offset as usize;
                 let right = &line[offset..];
-                write!(self.out, "{}", right)?;
+                write!(self.out, "{right}")?;
             }
         }
 

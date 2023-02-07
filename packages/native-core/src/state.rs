@@ -251,7 +251,7 @@ impl ChildDepState for () {
 impl ParentDepState for () {
     type Ctx = ();
     type DepState = ();
-    fn reduce<'a>(&mut self, _: NodeView<'a>, _: Option<()>, _: &Self::Ctx) -> bool {
+    fn reduce(&mut self, _: NodeView, _: Option<()>, _: &Self::Ctx) -> bool {
         false
     }
 }
@@ -259,7 +259,7 @@ impl ParentDepState for () {
 impl NodeDepState for () {
     type DepState = ();
     type Ctx = ();
-    fn reduce<'a>(&mut self, _: NodeView<'a>, _sibling: (), _: &Self::Ctx) -> bool {
+    fn reduce(&mut self, _: NodeView, _sibling: (), _: &Self::Ctx) -> bool {
         false
     }
 }

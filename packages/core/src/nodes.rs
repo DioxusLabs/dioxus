@@ -757,15 +757,21 @@ impl<'a, 'b> IntoDynNode<'a> for LazyNodes<'a, 'b> {
     }
 }
 
-impl<'a> IntoDynNode<'_> for &'a str {
-    fn into_vnode(self, cx: &ScopeState) -> DynamicNode {
-        cx.text_node(format_args!("{}", self))
+impl<'a, 'b> IntoDynNode<'b> for &'a str {
+    fn into_vnode(self, cx: &'b ScopeState) -> DynamicNode<'b> {
+        DynamicNode::Text(VText {
+            value: bumpalo::collections::String::from_str_in(self, cx.bump()).into_bump_str(),
+            id: Default::default(),
+        })
     }
 }
 
 impl IntoDynNode<'_> for String {
     fn into_vnode(self, cx: &ScopeState) -> DynamicNode {
-        cx.text_node(format_args!("{}", self))
+        DynamicNode::Text(VText {
+            value: cx.bump().alloc(self),
+            id: Default::default(),
+        })
     }
 }
 
