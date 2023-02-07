@@ -67,7 +67,7 @@ pub(crate) fn render_vnode(
             }
 
             let label = Label {
-                text,
+                text: &text.text,
                 style: node.get::<StyleModifier>().unwrap().core,
             };
             let area = Rect::new(x, y, width, height);

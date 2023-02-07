@@ -75,7 +75,6 @@ pub struct InnerInputState {
     mouse: Option<MouseData>,
     wheel: Option<WheelData>,
     last_key_pressed: Option<(KeyboardData, Instant)>,
-    screen: Option<(u16, u16)>,
     pub(crate) focus_state: FocusState,
     // subscribers: Vec<Rc<dyn Fn() + 'static>>,
 }
@@ -86,7 +85,6 @@ impl InnerInputState {
             mouse: None,
             wheel: None,
             last_key_pressed: None,
-            screen: None,
             // subscribers: Vec::new(),
             focus_state: FocusState::create(rdom),
         }
@@ -181,7 +179,6 @@ impl InnerInputState {
         if old_focus != self.focus_state.last_focused_id {
             // elements with listeners will always have a element id
             if let Some(id) = self.focus_state.last_focused_id {
-                let element = dom.get(id).unwrap();
                 resolved_events.push(Event {
                     name: "focus",
                     id,
@@ -196,7 +193,6 @@ impl InnerInputState {
                 });
             }
             if let Some(id) = old_focus {
-                let element = dom.get(id).unwrap();
                 resolved_events.push(Event {
                     name: "focusout",
                     id,

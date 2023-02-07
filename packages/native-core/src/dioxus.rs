@@ -2,7 +2,10 @@ use dioxus_core::{BorrowedAttributeValue, ElementId, Mutations, TemplateNode};
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
-    node::{ElementNode, FromAnyValue, NodeType, OwnedAttributeDiscription, OwnedAttributeValue},
+    node::{
+        ElementNode, FromAnyValue, NodeType, OwnedAttributeDiscription, OwnedAttributeValue,
+        TextNode,
+    },
     prelude::NodeImmutable,
     real_dom::NodeTypeMut,
     NodeId, NodeMut, RealDom,
@@ -83,7 +86,10 @@ impl DioxusState {
                     self.stack.push(node_id);
                 }
                 CreateTextNode { value, id } => {
-                    let node_data = NodeType::Text(value.to_string());
+                    let node_data = NodeType::Text(TextNode {
+                        listeners: FxHashSet::default(),
+                        text: value.to_string(),
+                    });
                     let node = rdom.create_node(node_data);
                     let node_id = node.id();
                     self.set_element_id(node, id);
@@ -97,7 +103,10 @@ impl DioxusState {
                     if let NodeTypeMut::Text(text) = node.node_type_mut() {
                         *text = value.to_string();
                     } else {
-                        node.set_type(NodeType::Text(value.to_string()));
+                        node.set_type(NodeType::Text(TextNode {
+                            text: value.to_string(),
+                            listeners: FxHashSet::default(),
+                        }));
                     }
                 }
                 LoadTemplate { name, index, id } => {
@@ -153,14 +162,12 @@ impl DioxusState {
                             element.remove_attributes(&OwnedAttributeDiscription {
                                 name: name.to_string(),
                                 namespace: ns.map(|s| s.to_string()),
-                                volatile: false,
                             });
                         } else {
                             element.set_attribute(
                                 OwnedAttributeDiscription {
                                     name: name.to_string(),
                                     namespace: ns.map(|s| s.to_string()),
-                                    volatile: false,
                                 },
                                 OwnedAttributeValue::from(value),
                             );
@@ -219,7 +226,6 @@ fn create_template_node(rdom: &mut RealDom, node: &TemplateNode) -> NodeId {
                             OwnedAttributeDiscription {
                                 namespace: namespace.map(|s| s.to_string()),
                                 name: name.to_string(),
-                                volatile: false,
                             },
                             OwnedAttributeValue::Text(value.to_string()),
                         )),
@@ -235,9 +241,16 @@ fn create_template_node(rdom: &mut RealDom, node: &TemplateNode) -> NodeId {
             }
             node_id
         }
-        TemplateNode::Text { text } => rdom.create_node(NodeType::Text(text.to_string())).id(),
+        TemplateNode::Text { text } => rdom
+            .create_node(NodeType::Text(TextNode {
+                text: text.to_string(),
+                ..Default::default()
+            }))
+            .id(),
         TemplateNode::Dynamic { .. } => rdom.create_node(NodeType::Placeholder).id(),
-        TemplateNode::DynamicText { .. } => rdom.create_node(NodeType::Text(String::new())).id(),
+        TemplateNode::DynamicText { .. } => {
+            rdom.create_node(NodeType::Text(TextNode::default())).id()
+        }
     }
 }
 

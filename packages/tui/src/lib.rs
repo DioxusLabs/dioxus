@@ -68,7 +68,7 @@ impl TuiContext {
     }
 }
 
-pub fn render<R: Renderer<(), Rc<EventData>>>(
+pub fn render<R: Renderer<Rc<EventData>>>(
     cfg: Config,
     f: impl FnOnce(&Arc<RwLock<RealDom>>, &Arc<Mutex<Taffy>>, UnboundedSender<InputEvent>) -> R,
 ) -> Result<()> {
@@ -271,7 +271,7 @@ pub fn render<R: Renderer<(), Rc<EventData>>>(
 
                         for e in evts {
                             let node = rdom.get_mut(e.id).unwrap();
-                            renderer.handle_event(node, e.name, e.data);
+                            renderer.handle_event(node, e.name, e.data, e.bubbles);
                         }
                     }
                     let mut rdom = rdom.write().unwrap();

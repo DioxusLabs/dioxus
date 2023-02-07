@@ -5,7 +5,7 @@ use std::rc::Rc;
 use std::sync::RwLock;
 
 use crate::node::{
-    ElementNode, FromAnyValue, NodeType, OwnedAttributeDiscription, OwnedAttributeValue,
+    ElementNode, FromAnyValue, NodeType, OwnedAttributeDiscription, OwnedAttributeValue, TextNode,
 };
 use crate::node_ref::{NodeMask, NodeMaskBuilder};
 use crate::node_watcher::NodeWatcher;
@@ -487,6 +487,19 @@ impl<'a, V: FromAnyValue + Send + Sync> NodeMut<'a, V> {
 
     pub fn remove(&mut self) {
         let id = self.id();
+        if let NodeType::Element(ElementNode { listeners, .. })
+        | NodeType::Text(TextNode { listeners, .. }) =
+            self.dom.get_state_mut_raw::<NodeType<V>>(id).unwrap()
+        {
+            let listeners = std::mem::take(listeners);
+            for event in listeners {
+                self.dom
+                    .nodes_listening
+                    .get_mut(&event)
+                    .unwrap()
+                    .remove(&id);
+            }
+        }
         self.mark_removed();
         if let Some(parent_id) = self.real_dom_mut().tree.parent_id(id) {
             self.real_dom_mut()
@@ -519,7 +532,9 @@ impl<'a, V: FromAnyValue + Send + Sync> NodeMut<'a, V> {
     pub fn add_event_listener(&mut self, event: &str) {
         let id = self.id();
         let node_type: &mut NodeType<V> = self.dom.tree.get_mut(self.id).unwrap();
-        if let NodeType::Element(ElementNode { listeners, .. }) = node_type {
+        if let NodeType::Element(ElementNode { listeners, .. })
+        | NodeType::Text(TextNode { listeners, .. }) = node_type
+        {
             self.dom
                 .dirty_nodes
                 .mark_dirty(self.id, NodeMaskBuilder::new().with_listeners().build());
@@ -540,7 +555,9 @@ impl<'a, V: FromAnyValue + Send + Sync> NodeMut<'a, V> {
     pub fn remove_event_listener(&mut self, event: &str) {
         let id = self.id();
         let node_type: &mut NodeType<V> = self.dom.tree.get_mut(self.id).unwrap();
-        if let NodeType::Element(ElementNode { listeners, .. }) = node_type {
+        if let NodeType::Element(ElementNode { listeners, .. })
+        | NodeType::Text(TextNode { listeners, .. }) = node_type
+        {
             self.dom
                 .dirty_nodes
                 .mark_dirty(self.id, NodeMaskBuilder::new().with_listeners().build());
@@ -579,7 +596,7 @@ impl<'a, V: FromAnyValue + Send + Sync> NodeMut<'a, V> {
             NodeType::Text(text) => {
                 dirty_nodes.mark_dirty(self.id, NodeMaskBuilder::new().with_text().build());
 
-                NodeTypeMut::Text(text)
+                NodeTypeMut::Text(&mut text.text)
             }
             NodeType::Placeholder => NodeTypeMut::Placeholder,
         }

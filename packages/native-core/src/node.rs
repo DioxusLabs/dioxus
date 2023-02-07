@@ -1,7 +1,7 @@
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::{any::Any, fmt::Debug};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct ElementNode<V: FromAnyValue = ()> {
     pub tag: String,
     pub namespace: Option<String>,
@@ -9,10 +9,25 @@ pub struct ElementNode<V: FromAnyValue = ()> {
     pub listeners: FxHashSet<String>,
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct TextNode {
+    pub text: String,
+    pub listeners: FxHashSet<String>,
+}
+
+impl TextNode {
+    pub fn new(text: String) -> Self {
+        Self {
+            text,
+            listeners: Default::default(),
+        }
+    }
+}
+
 /// A type of node with data specific to the node type. The types are a subset of the [VNode] types.
 #[derive(Debug, Clone)]
 pub enum NodeType<V: FromAnyValue = ()> {
-    Text(String),
+    Text(TextNode),
     Element(ElementNode<V>),
     Placeholder,
 }
@@ -21,7 +36,6 @@ pub enum NodeType<V: FromAnyValue = ()> {
 pub struct OwnedAttributeDiscription {
     pub name: String,
     pub namespace: Option<String>,
-    pub volatile: bool,
 }
 
 /// An attribute on a DOM node, such as `id="my-thing"` or

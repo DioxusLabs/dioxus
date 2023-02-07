@@ -73,10 +73,11 @@ impl<'a, V: FromAnyValue> NodeView<'a, V> {
         self.mask
             .text
             .then_some(match &self.inner {
-                NodeType::Text(text) => Some(&**text),
+                NodeType::Text(text) => Some(&text.text),
                 _ => None,
             })
             .flatten()
+            .map(|x| &**x)
     }
 
     /// Get the listeners if it is enabled in the mask

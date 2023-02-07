@@ -262,12 +262,7 @@ pub struct TreeStateViewEntry<'a, 'b> {
 impl<'a, 'b> AnyMapLike<'a> for TreeStateViewEntry<'a, 'b> {
     fn get<T: Any + Sync + Send>(self) -> Option<&'a T> {
         let slab = self.view.get_slab();
-        dbg!(slab.is_some());
-        slab.and_then(|slab| {
-            let r = slab.get(self.id);
-            dbg!(r.is_some());
-            r
-        })
+        slab.and_then(|slab| slab.get(self.id))
     }
 }
 
