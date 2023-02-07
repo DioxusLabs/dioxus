@@ -38,5 +38,5 @@ pub type SendAnyMap = anymap::Map<dyn Any + Send + Sync + 'static>;
 pub trait Renderer<E, V: FromAnyValue + Send + Sync = ()> {
     fn render(&mut self, root: NodeMut<V>);
     fn handle_event(&mut self, node: NodeMut<V>, event: &str, value: E, bubbles: bool);
-    fn poll_async(&mut self) -> Pin<Box<dyn Future<Output = ()> + Send>>;
+    fn poll_async(&mut self) -> Pin<Box<dyn Future<Output = ()> + '_>>;
 }

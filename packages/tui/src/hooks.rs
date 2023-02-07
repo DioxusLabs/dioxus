@@ -32,41 +32,6 @@ pub(crate) struct Event {
     pub bubbles: bool,
 }
 
-// a wrapper around the input state for easier access
-// todo: fix loop
-// pub struct InputState(Rc<Rc<RefCell<InnerInputState>>>);
-// impl InputState {
-//     pub fn get(cx: &ScopeState) -> InputState {
-//         let inner = cx
-//             .consume_context::<Rc<RefCell<InnerInputState>>>()
-//             .expect("Rink InputState can only be used in Rink apps!");
-//         (**inner).borrow_mut().subscribe(cx.schedule_update());
-//         InputState(inner)
-//     }
-
-//     pub fn mouse(&self) -> Option<MouseData> {
-//         let data = (**self.0).borrow();
-//         mouse.as_ref().map(|m| m.clone())
-//     }
-
-//     pub fn wheel(&self) -> Option<WheelData> {
-//         let data = (**self.0).borrow();
-//         wheel.as_ref().map(|w| w.clone())
-//     }
-
-//     pub fn screen(&self) -> Option<(u16, u16)> {
-//         let data = (**self.0).borrow();
-//         screen.as_ref().map(|m| m.clone())
-//     }
-
-//     pub fn last_key_pressed(&self) -> Option<KeyboardData> {
-//         let data = (**self.0).borrow();
-//         last_key_pressed
-//             .as_ref()
-//             .map(|k| &k.0.clone())
-//     }
-// }
-
 type EventCore = (&'static str, EventData);
 
 const MAX_REPEAT_TIME: Duration = Duration::from_millis(100);
@@ -606,13 +571,7 @@ pub struct RinkInputHandler {
 impl RinkInputHandler {
     /// global context that handles events
     /// limitations: GUI key modifier is never detected, key up events are not detected, and only two mouse buttons may be pressed at once
-    pub fn craete(
-        rdom: &mut RealDom,
-    ) -> (
-        Self,
-        Rc<RefCell<InnerInputState>>,
-        impl FnMut(crossterm::event::Event),
-    ) {
+    pub fn create(rdom: &mut RealDom) -> (Self, impl FnMut(crossterm::event::Event)) {
         let queued_events = Rc::new(RefCell::new(Vec::new()));
         let queued_events2 = Rc::downgrade(&queued_events);
 
@@ -628,10 +587,9 @@ impl RinkInputHandler {
 
         (
             Self {
-                state: state.clone(),
+                state,
                 queued_events,
             },
-            state,
             regester_event,
         )
     }

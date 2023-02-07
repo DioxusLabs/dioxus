@@ -147,7 +147,7 @@ pub(crate) struct FocusState {
 
 impl FocusState {
     pub fn create(rdom: &mut RealDom) -> Self {
-        let mut focus_iter = PersistantElementIter::create(rdom);
+        let focus_iter = PersistantElementIter::create(rdom);
         Self {
             focus_iter,
             last_focused_id: Default::default(),
@@ -271,12 +271,12 @@ impl FocusState {
 
     pub(crate) fn set_focus(&mut self, rdom: &mut RealDom, id: NodeId) {
         if let Some(old) = self.last_focused_id.replace(id) {
-            let mut focused = rdom.get_state_mut_raw::<Focused>(old).unwrap();
+            let focused = rdom.get_state_mut_raw::<Focused>(old).unwrap();
             *focused = Focused(false);
         }
-        let mut focused = rdom.get_state_mut_raw::<Focused>(id).unwrap();
+        let focused = rdom.get_state_mut_raw::<Focused>(id).unwrap();
         *focused = Focused(true);
-        let mut node = rdom.get(id).unwrap();
+        let node = rdom.get(id).unwrap();
         self.focus_level = node.get::<Focus>().unwrap().level;
         // reset the position to the currently focused element
         while self.focus_iter.next(rdom).id() != id {}

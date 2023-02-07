@@ -24,6 +24,8 @@ use tokio::select;
 use tui::{backend::CrosstermBackend, layout::Rect, Terminal};
 
 mod config;
+#[cfg(feature = "dioxus")]
+pub mod dioxus;
 mod focus;
 mod hooks;
 mod layout;
@@ -36,6 +38,8 @@ mod style_attributes;
 mod widget;
 // mod widgets;
 
+#[cfg(feature = "dioxus")]
+pub use crate::dioxus::*;
 pub use config::*;
 pub use hooks::*;
 
@@ -56,6 +60,7 @@ pub(crate) fn layout_to_screen_space(layout: f32) -> f32 {
 pub struct TuiContext {
     tx: UnboundedSender<InputEvent>,
 }
+
 impl TuiContext {
     pub fn quit(&self) {
         self.tx.unbounded_send(InputEvent::Close).unwrap();
@@ -79,7 +84,7 @@ pub fn render<R: Renderer<Rc<EventData>>>(
         PreventDefault::to_type_erased(),
     ]));
 
-    let (handler, state, mut register_event) = RinkInputHandler::craete(&mut rdom);
+    let (handler, mut register_event) = RinkInputHandler::create(&mut rdom);
 
     // Setup input handling
     let (event_tx, mut event_reciever) = unbounded();
@@ -115,15 +120,6 @@ pub fn render<R: Renderer<Rc<EventData>>>(
         .enable_all()
         .build()?
         .block_on(async {
-            #[cfg(all(feature = "hot-reload", debug_assertions))]
-            let mut hot_reload_rx = {
-                let (hot_reload_tx, hot_reload_rx) =
-                    tokio::sync::mpsc::unbounded_channel::<dioxus_hot_reload::HotReloadMsg>();
-                dioxus_hot_reload::connect(move |msg| {
-                    let _ = hot_reload_tx.send(msg);
-                });
-                hot_reload_rx
-            };
             let mut terminal = (!cfg.headless).then(|| {
                 enable_raw_mode().unwrap();
                 let mut stdout = std::io::stdout();
@@ -209,13 +205,8 @@ pub fn render<R: Renderer<Rc<EventData>>>(
                     }
                 }
 
-                // let mut hot_reload_msg = None;
                 {
                     let wait = renderer.poll_async();
-                    // #[cfg(all(feature = "hot-reload", debug_assertions))]
-                    // let hot_reload_wait = hot_reload_rx.recv();
-                    // #[cfg(not(all(feature = "hot-reload", debug_assertions)))]
-                    // let hot_reload_wait: std::future::Pending<Option<()>> = std::future::pending();
 
                     pin_mut!(wait);
 
@@ -228,8 +219,8 @@ pub fn render<R: Renderer<Rc<EventData>>>(
                                 InputEvent::UserInput(event) => match event {
                                     TermEvent::Key(key) => {
                                         if matches!(key.code, KeyCode::Char('C' | 'c'))
-                                            && key.modifiers.contains(KeyModifiers::CONTROL)
-                                            && cfg.ctrl_c_quit
+                                        && key.modifiers.contains(KeyModifiers::CONTROL)
+                                        && cfg.ctrl_c_quit
                                         {
                                             break;
                                         }
@@ -244,29 +235,8 @@ pub fn render<R: Renderer<Rc<EventData>>>(
                                 register_event(evt);
                             }
                         },
-                        // Some(msg) = hot_reload_wait => {
-                        //     #[cfg(all(feature = "hot-reload", debug_assertions))]
-                        //     {
-                        //         hot_reload_msg = Some(msg);
-                        //     }
-                        //     #[cfg(not(all(feature = "hot-reload", debug_assertions)))]
-                        //     let () = msg;
-                        // }
                     }
                 }
-
-                // // if we have a new template, replace the old one
-                // #[cfg(all(feature = "hot-reload", debug_assertions))]
-                // if let Some(msg) = hot_reload_msg {
-                //     match msg {
-                //         dioxus_hot_reload::HotReloadMsg::UpdateTemplate(template) => {
-                //             vdom.replace_template(template);
-                //         }
-                //         dioxus_hot_reload::HotReloadMsg::Shutdown => {
-                //             break;
-                //         }
-                //     }
-                // }
 
                 {
                     {

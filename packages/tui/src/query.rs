@@ -1,8 +1,4 @@
-use std::{
-    cell::{Ref, RefCell},
-    rc::Rc,
-    sync::{Arc, Mutex, MutexGuard},
-};
+use std::sync::{Arc, Mutex, MutexGuard, RwLock, RwLockReadGuard};
 
 use dioxus_native_core::{real_dom::NodeImmutable, NodeId, RealDom};
 use taffy::{
@@ -46,14 +42,14 @@ use crate::{layout::TaffyLayout, layout_to_screen_space};
 /// ```
 #[derive(Clone)]
 pub struct Query {
-    pub(crate) rdom: Rc<RefCell<RealDom>>,
+    pub(crate) rdom: Arc<RwLock<RealDom>>,
     pub(crate) stretch: Arc<Mutex<Taffy>>,
 }
 
 impl Query {
     pub fn get(&self, id: NodeId) -> ElementRef {
         ElementRef::new(
-            self.rdom.borrow(),
+            self.rdom.read().expect("rdom lock poisoned"),
             self.stretch.lock().expect("taffy lock poisoned"),
             id,
         )
@@ -61,13 +57,17 @@ impl Query {
 }
 
 pub struct ElementRef<'a> {
-    inner: Ref<'a, RealDom>,
+    inner: RwLockReadGuard<'a, RealDom>,
     stretch: MutexGuard<'a, Taffy>,
     id: NodeId,
 }
 
 impl<'a> ElementRef<'a> {
-    fn new(inner: Ref<'a, RealDom>, stretch: MutexGuard<'a, Taffy>, id: NodeId) -> Self {
+    fn new(
+        inner: RwLockReadGuard<'a, RealDom>,
+        stretch: MutexGuard<'a, Taffy>,
+        id: NodeId,
+    ) -> Self {
         Self { inner, stretch, id }
     }
 
