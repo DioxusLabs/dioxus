@@ -4,6 +4,7 @@ version = "0.0.1"
 edition = "2021"
 description = "Dioxus guide, including testable examples"
 license = "MIT/Apache-2.0"
+publish = false
 
 [dev-dependencies]
 dioxus = { path = "../../packages/dioxus" }

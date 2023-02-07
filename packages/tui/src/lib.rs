@@ -20,7 +20,7 @@ use std::{rc::Rc, sync::RwLock};
 use style_attributes::StyleModifier;
 use taffy::Taffy;
 pub use taffy::{geometry::Point, prelude::*};
-use tokio::{select, sync::mpsc::unbounded_channel};
+use tokio::select;
 use tui::{backend::CrosstermBackend, layout::Rect, Terminal};
 
 mod config;
@@ -118,7 +118,7 @@ pub fn render<R: Renderer<Rc<EventData>>>(
             #[cfg(all(feature = "hot-reload", debug_assertions))]
             let mut hot_reload_rx = {
                 let (hot_reload_tx, hot_reload_rx) =
-                    unbounded_channel::<dioxus_hot_reload::HotReloadMsg>();
+                    tokio::sync::mpsc::unbounded_channel::<dioxus_hot_reload::HotReloadMsg>();
                 dioxus_hot_reload::connect(move |msg| {
                     let _ = hot_reload_tx.send(msg);
                 });
@@ -215,7 +215,7 @@ pub fn render<R: Renderer<Rc<EventData>>>(
                     // #[cfg(all(feature = "hot-reload", debug_assertions))]
                     // let hot_reload_wait = hot_reload_rx.recv();
                     // #[cfg(not(all(feature = "hot-reload", debug_assertions)))]
-                    // let hot_reload_wait = std::future::pending();
+                    // let hot_reload_wait: std::future::Pending<Option<()>> = std::future::pending();
 
                     pin_mut!(wait);
 
@@ -245,12 +245,18 @@ pub fn render<R: Renderer<Rc<EventData>>>(
                             }
                         },
                         // Some(msg) = hot_reload_wait => {
-                        //     hot_reload_msg = Some(msg);
+                        //     #[cfg(all(feature = "hot-reload", debug_assertions))]
+                        //     {
+                        //         hot_reload_msg = Some(msg);
+                        //     }
+                        //     #[cfg(not(all(feature = "hot-reload", debug_assertions)))]
+                        //     let () = msg;
                         // }
                     }
                 }
 
                 // // if we have a new template, replace the old one
+                // #[cfg(all(feature = "hot-reload", debug_assertions))]
                 // if let Some(msg) = hot_reload_msg {
                 //     match msg {
                 //         dioxus_hot_reload::HotReloadMsg::UpdateTemplate(template) => {

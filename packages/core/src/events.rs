@@ -3,6 +3,10 @@ use std::{
     rc::Rc,
 };
 
+use futures_util::Future;
+
+use crate::ScopeState;
+
 /// A wrapper around some generic data that handles the event's state
 ///
 ///
@@ -103,6 +107,23 @@ impl<T: std::fmt::Debug> std::fmt::Debug for Event<T> {
             .field("bubble_state", &self.propagates)
             .field("data", &self.data)
             .finish()
+    }
+}
+
+#[doc(hidden)]
+pub trait EventReturn<P>: Sized {
+    fn spawn(self, _cx: &ScopeState) {}
+}
+
+impl EventReturn<()> for () {}
+
+pub struct AsyncMarker;
+impl<T> EventReturn<AsyncMarker> for T
+where
+    T: Future<Output = ()> + 'static,
+{
+    fn spawn(self, cx: &ScopeState) {
+        cx.spawn(self);
     }
 }
 
