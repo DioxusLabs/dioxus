@@ -190,7 +190,7 @@ pub async fn run<
         #[cfg(all(feature = "hot-reload", debug_assertions))]
         let hot_reload_wait = hot_reload_rx.recv();
         #[cfg(not(all(feature = "hot-reload", debug_assertions)))]
-        let hot_reload_wait = std::future::pending();
+        let hot_reload_wait: std::future::Pending<Option<()>> = std::future::pending();
 
         tokio::select! {
             _ = vdom.wait_for_work() => (), // poll any futures or suspense
@@ -200,17 +200,15 @@ pub async fn run<
                 ControlFlow::Continue(()) => (),
             },
 
-            msg = hot_reload_wait => {
+            Some(msg) = hot_reload_wait => {
                 #[cfg(all(feature = "hot-reload", debug_assertions))]
-                if let Some(msg) = msg {
-                    match msg {
-                        dioxus_hot_reload::HotReloadMsg::UpdateTemplate(new_template) => {
-                            vdom.replace_template(new_template);
-                        }
-                        dioxus_hot_reload::HotReloadMsg::Shutdown => {
-                            std::process::exit(0);
-                        },
+                match msg{
+                    dioxus_hot_reload::HotReloadMsg::UpdateTemplate(new_template) => {
+                        vdom.replace_template(new_template);
                     }
+                    dioxus_hot_reload::HotReloadMsg::Shutdown => {
+                        std::process::exit(0);
+                    },
                 }
                 #[cfg(not(all(feature = "hot-reload", debug_assertions)))]
                 let () = msg;

@@ -185,6 +185,7 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
             }
 
             Event::UserEvent(event) => match event.0 {
+                #[cfg(all(feature = "hot-reload", debug_assertions))]
                 EventData::HotReloadEvent(msg) => match msg {
                     dioxus_hot_reload::HotReloadMsg::UpdateTemplate(template) => {
                         for webview in webviews.values_mut() {
