@@ -222,9 +222,11 @@ impl<'a> InterpreterGlueBuilder<'a> {
         let reconnection_delays = serde_json::to_string(&reconnection_delays)
             .expect("Serializing `Vec<(u64, u64)>` should never fail");
 
-        let (script_open, script_close) = with_script_tag
-            .then_some(("<script>", "</script>"))
-            .unwrap_or(("", ""));
+        let (script_open, script_close) = if with_script_tag {
+            ("<script>", "</script>")
+        } else {
+            ("", "")
+        };
 
         // We only "minify" ´main.js` at the moment (`INTERPRETER_JS` doesn't
         // have many lines to remove anyway):
@@ -234,7 +236,9 @@ impl<'a> InterpreterGlueBuilder<'a> {
             } else {
                 let lines = MAIN_JS.lines().filter(|line| {
                     let line = line.trim_start();
-                    !(line == "" || line.starts_with("//") || (!log && line.starts_with("log(")))
+                    !(line.is_empty()
+                        || line.starts_with("//")
+                        || (!log && line.starts_with("log(")))
                 });
                 let mut main_js = String::with_capacity(MAIN_JS.len());
                 for line in lines {

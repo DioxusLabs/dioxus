@@ -14,7 +14,7 @@ pub type AxumDisconnectReason = crate::DisconnectReason<axum::Error, axum::Error
 pub fn axum_socket(ws: WebSocket) -> impl crate::LiveViewSocket<axum::Error, axum::Error> {
     ws.filter_map(transform_rx)
         .with(transform_tx)
-        .sink_map_err(|e| AxumLiveViewError::SendingMsgFailed(e))
+        .sink_map_err(AxumLiveViewError::SendingMsgFailed)
 }
 
 async fn transform_rx(msg: Result<AxumMsg, axum::Error>) -> Option<Result<Msg, AxumLiveViewError>> {

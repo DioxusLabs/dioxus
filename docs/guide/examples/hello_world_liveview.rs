@@ -24,7 +24,7 @@ async fn main() {
                 </html>
                 "#,
                     // Create the glue code to connect to the WebSocket on the "/ws" route
-                    glue = dioxus_liveview::interpreter_glue(&format!("ws://{addr}/ws"))
+                    glue = dioxus_liveview::interpreter_glue(format!("ws://{addr}/ws"))
                 ))
             }),
         )

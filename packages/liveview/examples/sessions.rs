@@ -44,7 +44,7 @@ async fn main() {
     pretty_env_logger::init();
 
     // Getting the path where the database will be stored:
-    let Some(db_path) = std::env::args().skip(1).next() else {
+    let Some(db_path) = std::env::args().nth(1) else {
         eprintln!("Error: This example requires a path to a file to store data in");
         eprintln!("Usage: cargo run --example sessions -F axum -- $PATH_TO_DATA_FILE");
         std::process::exit(1);

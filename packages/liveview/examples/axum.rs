@@ -33,7 +33,7 @@ async fn main() {
                 {glue}
             </html>
             "#,
-                    glue = dioxus_liveview::interpreter_glue(&format!("ws://{addr}/ws"))
+                    glue = dioxus_liveview::interpreter_glue(format!("ws://{addr}/ws"))
                 ))
             }),
         )

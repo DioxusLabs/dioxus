@@ -203,7 +203,7 @@ pub async fn run<
             msg = hot_reload_wait => {
                 #[cfg(all(feature = "hot-reload", debug_assertions))]
                 if let Some(msg) = msg {
-                    match msg{
+                    match msg {
                         dioxus_hot_reload::HotReloadMsg::UpdateTemplate(new_template) => {
                             vdom.replace_template(new_template);
                         }
@@ -212,6 +212,8 @@ pub async fn run<
                         },
                     }
                 }
+                #[cfg(not(all(feature = "hot-reload", debug_assertions)))]
+                let () = msg;
             }
         };
 
