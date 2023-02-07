@@ -54,7 +54,7 @@ tower = "0.4.13"
 
 # `sessions` example:
 rusqlite = "0.28.0"
-uuid = { version = "1.2.2", features = ["v4", "serde"] }
+uuid = { version = "1.2.2", features = ["v4"] }
 axum-extra = {version = "0.4.2", features = ["cookie-private"] }
 
 [features]
