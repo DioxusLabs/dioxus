@@ -134,7 +134,7 @@ where
         #[cfg(all(feature = "hot-reload", debug_assertions))]
         let hot_reload_wait = hot_reload_rx.recv();
         #[cfg(not(all(feature = "hot-reload", debug_assertions)))]
-        let hot_reload_wait = std::future::pending();
+        let hot_reload_wait: std::future::Pending<Option<()>> = std::future::pending();
 
         tokio::select! {
             // poll any futures or suspense
@@ -157,17 +157,18 @@ where
                 }
             }
 
-            msg = hot_reload_wait => {
-                if let Some(msg) = msg {
-                    match msg{
-                        dioxus_hot_reload::HotReloadMsg::UpdateTemplate(new_template) => {
-                            vdom.replace_template(new_template);
-                        }
-                        dioxus_hot_reload::HotReloadMsg::Shutdown => {
-                            std::process::exit(0);
-                        },
+            Some(msg) = hot_reload_wait => {
+                #[cfg(all(feature = "hot-reload", debug_assertions))]
+                match msg{
+                    dioxus_hot_reload::HotReloadMsg::UpdateTemplate(new_template) => {
+                        vdom.replace_template(new_template);
                     }
+                    dioxus_hot_reload::HotReloadMsg::Shutdown => {
+                        std::process::exit(0);
+                    },
                 }
+                #[cfg(not(all(feature = "hot-reload", debug_assertions)))]
+                let () = msg;
             }
         }
 
