@@ -12,7 +12,7 @@ TUI support is currently quite experimental. But, if you're willing to venture i
 
 - It uses flexbox for the layout
 - It only supports a subset of the attributes and elements
-- Regular widgets will not work in the tui render, but the tui renderer has its own widget components that start with a capital letter. See the [widgets example](https://github.com/DioxusLabs/dioxus/blob/master/packages/tui/examples/tui_widgets.rs)
+- Regular widgets will not work in the tui render, but the tui renderer has its own widget components that start with a capital letter. See the [widgets example](https://github.com/DioxusLabs/dioxus/blob/master/packages/tui/examples/widgets.rs)
 - 1px is one character line height. Your regular CSS px does not translate
 - If your app panics, your terminal is wrecked. This will be fixed eventually
 
