@@ -165,13 +165,15 @@ pub fn render<R: Renderer<Rc<EventData>>>(
                             .unwrap();
 
                         // the root node fills the entire area
-
                         let mut style = *taffy.style(root_node).unwrap();
-                        style.size = Size {
+                        let new_size = Size {
                             width: Dimension::Points(width),
                             height: Dimension::Points(height),
                         };
-                        taffy.set_style(root_node, style).unwrap();
+                        if style.size != new_size {
+                            style.size = new_size;
+                            taffy.set_style(root_node, style).unwrap();
+                        }
 
                         let size = Size {
                             width: AvailableSpace::Definite(width),
