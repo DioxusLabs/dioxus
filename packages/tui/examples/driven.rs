@@ -198,7 +198,7 @@ impl Renderer<Rc<EventData>> for Test {
         }
     }
 
-    fn poll_async(&mut self) -> std::pin::Pin<Box<dyn futures::Future<Output = ()> + Send>> {
+    fn poll_async(&mut self) -> std::pin::Pin<Box<dyn futures::Future<Output = ()> + '_>> {
         Box::pin(async move { tokio::time::sleep(std::time::Duration::from_millis(1000)).await })
     }
 }
