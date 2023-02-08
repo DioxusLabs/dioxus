@@ -54,12 +54,12 @@ pub struct DirtyNodeStates {
 
 impl DirtyNodeStates {
     pub fn with_passes(passes: impl Iterator<Item = TypeId>) -> Self {
-        let mut dirty = FxHashMap::default();
-        for pass in passes {
-            dirty.insert(pass, RwLock::new(BTreeMap::new()));
-        }
         Self {
-            dirty: Arc::new(dirty),
+            dirty: Arc::new(
+                passes
+                    .map(|pass| (pass, RwLock::new(BTreeMap::new())))
+                    .collect(),
+            ),
         }
     }
 
