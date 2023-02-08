@@ -7,7 +7,7 @@ use crate::{
     innerlude::{ErrorBoundary, Scheduler, SchedulerMsg},
     lazynodes::LazyNodes,
     nodes::{ComponentReturn, IntoAttributeValue, IntoDynNode, RenderReturn},
-    AnyValue, Attribute, AttributeValue, Element, Event, EventReturn, Properties, TaskId,
+    AnyValue, Attribute, AttributeValue, Element, Event, Properties, TaskId,
 };
 use bumpalo::{boxed::Box as BumpBox, Bump};
 use bumpslab::{BumpSlab, Slot};
@@ -581,9 +581,9 @@ impl<'src> ScopeState {
     /// Create a new [`AttributeValue`] with the listener variant from a callback
     ///
     /// The callback must be confined to the lifetime of the ScopeState
-    pub fn listener<T: 'static, P, E: EventReturn<P>>(
+    pub fn listener<T: 'static>(
         &'src self,
-        mut callback: impl FnMut(Event<T>) -> E + 'src,
+        mut callback: impl FnMut(Event<T>) + 'src,
     ) -> AttributeValue<'src> {
         // safety: there's no other way to create a dynamicly-dispatched bump box other than alloc + from-raw
         // This is the suggested way to build a bumpbox
@@ -595,8 +595,7 @@ impl<'src> ScopeState {
                     callback(Event {
                         propagates: event.propagates,
                         data,
-                    })
-                    .spawn(self);
+                    });
                 }
             }))
         };

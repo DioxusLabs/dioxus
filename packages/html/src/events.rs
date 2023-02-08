@@ -8,10 +8,13 @@ macro_rules! impl_event {
     ) => {
         $(
             $( #[$attr] )*
-            pub fn $name<'a, E: ::dioxus_core::EventReturn<T>, T>(_cx: &'a ::dioxus_core::ScopeState, _f: impl FnMut(::dioxus_core::Event<$data>) -> E + 'a) -> ::dioxus_core::Attribute<'a> {
+            #[inline]
+            pub fn $name<'a, E: crate::EventReturn<T>, T>(_cx: &'a ::dioxus_core::ScopeState, mut _f: impl FnMut(::dioxus_core::Event<$data>) -> E + 'a) -> ::dioxus_core::Attribute<'a> {
                 ::dioxus_core::Attribute {
                     name: stringify!($name),
-                    value: _cx.listener(_f),
+                    value: _cx.listener(move |e: ::dioxus_core::Event<$data>| {
+                        _f(e).spawn(_cx);
+                    }),
                     namespace: None,
                     mounted_element: Default::default(),
                     volatile: false,
@@ -142,5 +145,26 @@ pub fn event_bubbles(evt: &str) -> bool {
         "transitionend" => true,
         "toggle" => true,
         _ => true,
+    }
+}
+
+use std::future::Future;
+
+#[doc(hidden)]
+pub trait EventReturn<P>: Sized {
+    fn spawn(self, _cx: &dioxus_core::ScopeState) {}
+}
+
+impl EventReturn<()> for () {}
+#[doc(hidden)]
+pub struct AsyncMarker;
+
+impl<T> EventReturn<AsyncMarker> for T
+where
+    T: Future<Output = ()> + 'static,
+{
+    #[inline]
+    fn spawn(self, cx: &dioxus_core::ScopeState) {
+        cx.spawn(self);
     }
 }
