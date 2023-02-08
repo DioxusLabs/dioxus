@@ -10,8 +10,8 @@ fn tui_update(c: &mut Criterion) {
     let mut group = c.benchmark_group("Update boxes");
 
     // We can also use loops to define multiple benchmarks, even over multiple dimensions.
-    for size in 1..=8usize {
-        let parameter_string = format!("{}", (3 * size).pow(2));
+    for size in 1..=20usize {
+        let parameter_string = format!("{}", (size).pow(2));
         group.bench_with_input(
             BenchmarkId::new("size", parameter_string),
             &size,

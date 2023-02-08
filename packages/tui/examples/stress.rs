@@ -3,7 +3,7 @@ use dioxus_tui::{Config, TuiContext};
 
 /// This benchmarks the cache performance of the TUI for small edits by changing one box at a time.
 fn main() {
-    for size in 1..=8usize {
+    for size in 1..=20usize {
         for _ in 0..10 {
             dioxus_tui::launch_cfg_with_props(app, size, Config::default().with_headless())
         }
