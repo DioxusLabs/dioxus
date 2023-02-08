@@ -85,7 +85,7 @@ pub(crate) fn render_vnode(
                 frame.render_widget(WidgetWithContext::new(node, cfg), area);
             }
 
-            for c in node.children().unwrap() {
+            for c in node.children() {
                 render_vnode(frame, layout, c, cfg, location);
             }
         }

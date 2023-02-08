@@ -23,7 +23,7 @@ pub mod tree;
 pub mod utils;
 
 pub mod prelude {
-    pub use crate::node::{ElementNode, FromAnyValue, NodeType, OwnedAttributeView};
+    pub use crate::node::{ElementNode, FromAnyValue, NodeType, OwnedAttributeView, TextNode};
     pub use crate::node_ref::{AttributeMaskBuilder, NodeMaskBuilder, NodeView};
     pub use crate::passes::{Dependancy, Pass};
     pub use crate::real_dom::{NodeImmutable, NodeMut, NodeRef, RealDom};

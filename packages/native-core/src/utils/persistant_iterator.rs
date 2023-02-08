@@ -97,12 +97,10 @@ impl PersistantElementIter {
                 if let Some(current) = stack.last().and_then(|last| rdom.get(*last)) {
                     // if the current element has children, add the first child to the stack and return it
                     if look_in_children {
-                        if let Some(children) = current.children() {
-                            if let Some(first) = children.first() {
-                                let new = first.id();
-                                stack.push(new);
-                                return ElementProduced::Progressed(new);
-                            }
+                        if let Some(first) = current.children().first() {
+                            let new = first.id();
+                            stack.push(new);
+                            return ElementProduced::Progressed(new);
                         }
                     }
                     stack.pop();
@@ -133,12 +131,8 @@ impl PersistantElementIter {
             node: NodeRef<V>,
         ) -> NodeId {
             stack.push(node.id());
-            if let Some(children) = node.children() {
-                if let Some(last) = children.last() {
-                    push_back(stack, *last)
-                } else {
-                    node.id()
-                }
+            if let Some(last) = node.children().last() {
+                push_back(stack, *last)
             } else {
                 node.id()
             }

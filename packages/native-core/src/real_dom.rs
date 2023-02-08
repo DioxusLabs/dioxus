@@ -1,8 +1,7 @@
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::any::{Any, TypeId};
 use std::collections::VecDeque;
-use std::rc::Rc;
-use std::sync::RwLock;
+use std::sync::{Arc, RwLock};
 
 use crate::node::{
     ElementNode, FromAnyValue, NodeType, OwnedAttributeDiscription, OwnedAttributeValue, TextNode,
@@ -54,7 +53,7 @@ impl<V: FromAnyValue + Send + Sync> NodesDirty<V> {
     }
 }
 
-type NodeWatchers<V> = Rc<RwLock<Vec<Box<dyn NodeWatcher<V>>>>>;
+type NodeWatchers<V> = Arc<RwLock<Vec<Box<dyn NodeWatcher<V> + Send + Sync>>>>;
 
 /// A Dom that can sync with the VirtualDom mutations intended for use in lazy renderers.
 /// The render state passes from parent to children and or accumulates state from children to parents.
@@ -276,7 +275,7 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
         self.tree.insert_slab::<T>();
     }
 
-    pub fn add_node_watcher(&mut self, watcher: impl NodeWatcher<V> + 'static) {
+    pub fn add_node_watcher(&mut self, watcher: impl NodeWatcher<V> + 'static + Send + Sync) {
         self.node_watchers.write().unwrap().push(Box::new(watcher));
     }
 }
@@ -302,15 +301,17 @@ pub trait NodeImmutable<V: FromAnyValue + Send + Sync>: Sized {
     }
 
     #[inline]
-    fn children(&self) -> Option<Vec<NodeRef<V>>> {
-        self.child_ids().map(|ids| {
-            ids.iter()
-                .map(|id| NodeRef {
-                    id: *id,
-                    dom: self.real_dom(),
-                })
-                .collect()
-        })
+    fn children(&self) -> Vec<NodeRef<V>> {
+        self.child_ids()
+            .map(|ids| {
+                ids.iter()
+                    .map(|id| NodeRef {
+                        id: *id,
+                        dom: self.real_dom(),
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
     }
 
     #[inline]
@@ -354,6 +355,11 @@ pub trait NodeImmutable<V: FromAnyValue + Send + Sync>: Sized {
         } else {
             None
         }
+    }
+
+    #[inline]
+    fn height(&self) -> u16 {
+        self.real_dom().tree.height(self.id()).unwrap()
     }
 }
 
