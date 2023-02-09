@@ -111,7 +111,7 @@ impl DioxusState {
                 }
                 LoadTemplate { name, index, id } => {
                     let template_id = self.templates[name][index];
-                    let clone_id = rdom.clone_node(template_id);
+                    let clone_id = rdom.get_mut(template_id).unwrap().clone_node();
                     let clone = rdom.get_mut(clone_id).unwrap();
                     self.set_element_id(clone, id);
                     self.stack.push(clone_id);

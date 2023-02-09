@@ -163,19 +163,6 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
         self.tree.root()
     }
 
-    pub fn clone_node(&mut self, node_id: NodeId) -> NodeId {
-        let node = self.get(node_id).unwrap();
-        let new_node = node.node_type().clone();
-        let new_id = self.create_node(new_node).id();
-
-        let children = self.tree.children_ids(node_id).unwrap().to_vec();
-        for child in children {
-            let child_id = self.clone_node(child);
-            self.get_mut(new_id).unwrap().add_child(child_id);
-        }
-        new_id
-    }
-
     pub fn get(&self, id: NodeId) -> Option<NodeRef<'_, V>> {
         self.tree.contains(id).then_some(NodeRef { id, dom: self })
     }
@@ -629,6 +616,23 @@ impl<'a, V: FromAnyValue + Send + Sync> NodeMut<'a, V> {
         self.dom
             .dirty_nodes
             .mark_dirty(self.id, NodeMaskBuilder::ALL.build())
+    }
+
+    #[inline]
+    pub fn clone_node(&mut self) -> NodeId {
+        let new_node = self.node_type().clone();
+        let rdom = self.real_dom_mut();
+        let new_id = rdom.create_node(new_node).id();
+
+        if let Some(children) = self.child_ids() {
+            let children = children.to_vec();
+            let rdom = self.real_dom_mut();
+            for child in children {
+                let child_id = rdom.get_mut(child).unwrap().clone_node();
+                rdom.get_mut(new_id).unwrap().add_child(child_id);
+            }
+        }
+        new_id
     }
 }
 
