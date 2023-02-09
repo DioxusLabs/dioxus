@@ -2,18 +2,35 @@ use dioxus_html::EventData;
 use dioxus_native_core::{
     node::{OwnedAttributeDiscription, OwnedAttributeValue, TextNode},
     prelude::*,
-    real_dom::{NodeImmutable, NodeTypeMut},
+    real_dom::{ElementNodeMut, NodeImmutable, NodeTypeMut},
     NodeId, Renderer,
 };
 use dioxus_tui::{self, render, Config};
+use rustc_hash::FxHashSet;
 use std::sync::{Arc, RwLock};
 use std::{rc::Rc, sync::Mutex};
 use taffy::Taffy;
 
-struct Test([[usize; 10]; 10]);
+const SIZE: usize = 10;
 
-impl Renderer<Rc<EventData>> for Test {
-    fn render(&mut self, mut root: dioxus_native_core::NodeMut) {
+struct Test {
+    node_states: [[usize; SIZE]; SIZE],
+    dirty: FxHashSet<(usize, usize)>,
+}
+
+impl Default for Test {
+    fn default() -> Self {
+        Self {
+            node_states: [[0; SIZE]; SIZE],
+            dirty: FxHashSet::default(),
+        }
+    }
+}
+
+impl Test {
+    fn create(mut root: NodeMut) -> Self {
+        let myself = Self::default();
+
         // Set the root node to be a flexbox with a column direction.
         if let NodeTypeMut::Element(mut el) = root.node_type_mut() {
             el.set_attribute(
@@ -47,17 +64,10 @@ impl Renderer<Rc<EventData>> for Test {
         }
 
         let root_id = root.id();
-        // Remove old grid. Frameworks should retain the grid and only update the values.
-        let children_ids = root.child_ids().map(|ids| ids.to_vec());
         let rdom = root.real_dom_mut();
-        if let Some(children) = children_ids {
-            for child in children {
-                rdom.get_mut(child).unwrap().remove();
-            }
-        }
 
         // create the grid
-        for (x, row) in self.0.iter().copied().enumerate() {
+        for (x, row) in myself.node_states.iter().copied().enumerate() {
             let row_node = rdom
                 .create_node(NodeType::Element(ElementNode {
                     tag: "div".to_string(),
@@ -170,6 +180,38 @@ impl Renderer<Rc<EventData>> for Test {
             }
             rdom.get_mut(root_id).unwrap().add_child(row_node);
         }
+        myself
+    }
+}
+
+impl Renderer<Rc<EventData>> for Test {
+    fn render(&mut self, mut root: dioxus_native_core::NodeMut) {
+        for (x, y) in self.dirty.drain() {
+            let row_id = root.child_ids().unwrap()[x];
+            let mut rdom = root.real_dom_mut();
+            let row = rdom.get(row_id).unwrap();
+            let node_id = row.child_ids().unwrap()[y];
+            let mut node = rdom.get_mut(node_id).unwrap();
+            if let NodeTypeMut::Element(mut el) = node.node_type_mut() {
+                el.set_attribute(
+                    OwnedAttributeDiscription {
+                        name: "background-color".into(),
+                        namespace: None,
+                    },
+                    OwnedAttributeValue::Text(format!(
+                        "rgb({}, {}, {})",
+                        self.node_states[x][y] * 10,
+                        0,
+                        (x + y) * 10,
+                    )),
+                );
+            }
+            let text_id = *node.child_ids().unwrap().first().unwrap();
+            let mut text = rdom.get_mut(text_id).unwrap();
+            if let NodeTypeMut::Text(text) = text.node_type_mut() {
+                *text = self.node_states[x][y].to_string();
+            }
+        }
     }
 
     fn handle_event(
@@ -193,7 +235,8 @@ impl Renderer<Rc<EventData>> for Test {
                     .iter()
                     .position(|id| *id == parent.id())
                     .unwrap();
-                self.0[parents_child_number][child_number] += 1;
+                self.node_states[parents_child_number][child_number] += 1;
+                self.dirty.insert((parents_child_number, child_number));
             }
         }
     }
@@ -204,5 +247,10 @@ impl Renderer<Rc<EventData>> for Test {
 }
 
 fn main() {
-    render(Config::new(), |_, _, _| Test(Default::default())).unwrap();
+    render(Config::new(), |rdom, _, _| {
+        let mut rdom = rdom.write().unwrap();
+        let root = rdom.root_id();
+        Test::create(rdom.get_mut(root).unwrap())
+    })
+    .unwrap();
 }
