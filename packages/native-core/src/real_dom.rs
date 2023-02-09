@@ -421,6 +421,11 @@ impl<'a, V: FromAnyValue + Send + Sync> NodeMut<'a, V> {
     }
 
     #[inline]
+    pub fn parent_mut(&mut self) -> Option<NodeMut<V>> {
+        self.parent_id().map(|id| NodeMut { id, dom: self.dom })
+    }
+
+    #[inline]
     pub fn get_mut<T: Any + Sync + Send>(&mut self) -> Option<&mut T> {
         // mark the node state as dirty
         self.dom

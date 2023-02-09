@@ -75,7 +75,11 @@ impl TuiContext {
 
 pub fn render<R: Renderer<Rc<EventData>>>(
     cfg: Config,
-    f: impl FnOnce(&Arc<RwLock<RealDom>>, &Arc<Mutex<Taffy>>, UnboundedSender<InputEvent>) -> R,
+    create_renderer: impl FnOnce(
+        &Arc<RwLock<RealDom>>,
+        &Arc<Mutex<Taffy>>,
+        UnboundedSender<InputEvent>,
+    ) -> R,
 ) -> Result<()> {
     let mut rdom = RealDom::new(Box::new([
         TaffyLayout::to_type_erased(),
@@ -105,7 +109,7 @@ pub fn render<R: Renderer<Rc<EventData>>>(
 
     let rdom = Arc::new(RwLock::new(rdom));
     let taffy = Arc::new(Mutex::new(Taffy::new()));
-    let mut renderer = f(&rdom, &taffy, event_tx_clone);
+    let mut renderer = create_renderer(&rdom, &taffy, event_tx_clone);
 
     {
         let mut rdom = rdom.write().unwrap();
