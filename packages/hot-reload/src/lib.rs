@@ -129,9 +129,30 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(cfg: Config<Ctx>) {
     } = cfg;
 
     if let Ok(crate_dir) = PathBuf::from_str(root_path) {
+        // try to find the gitingore file
+        let gitignore_file_path = crate_dir.join(".gitignore");
+        let (gitignore, _) = ignore::gitignore::Gitignore::new(gitignore_file_path);
+
+        // convert the excluded paths to absolute paths
+        let excluded_paths = excluded_paths
+            .iter()
+            .map(|path| crate_dir.join(PathBuf::from(path)))
+            .collect::<Vec<_>>();
+
         let temp_file = std::env::temp_dir().join("@dioxusin");
         let channels = Arc::new(Mutex::new(Vec::new()));
-        let file_map = Arc::new(Mutex::new(FileMap::<Ctx>::new(crate_dir.clone())));
+        let file_map = Arc::new(Mutex::new(FileMap::<Ctx>::new_with_filter(
+            crate_dir.clone(),
+            |path| {
+                // skip excluded paths
+                excluded_paths.iter().any(|p| path.starts_with(p)) ||
+                // respect .gitignore
+                gitignore
+                    .matched_path_or_any_parents(path, path.is_dir())
+                    .is_ignore()
+            },
+        )));
+
         if let Ok(local_socket_stream) = LocalSocketListener::bind(temp_file.as_path()) {
             let aborted = Arc::new(Mutex::new(false));
 
@@ -177,10 +198,6 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(cfg: Config<Ctx>) {
 
             // watch for changes
             std::thread::spawn(move || {
-                // try to find the gitingore file
-                let gitignore_file_path = crate_dir.join(".gitignore");
-                let (gitignore, _) = ignore::gitignore::Gitignore::new(gitignore_file_path);
-
                 let mut last_update_time = chrono::Local::now().timestamp();
 
                 let (tx, rx) = std::sync::mpsc::channel();
@@ -197,11 +214,6 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(cfg: Config<Ctx>) {
                         }
                     }
                 }
-
-                let excluded_paths = excluded_paths
-                    .iter()
-                    .map(|path| crate_dir.join(PathBuf::from(path)))
-                    .collect::<Vec<_>>();
 
                 let mut rebuild = {
                     let aborted = aborted.clone();
@@ -242,7 +254,7 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(cfg: Config<Ctx>) {
                                     matches!(
                                         path.extension().and_then(|p| p.to_str()),
                                         Some("rs" | "toml" | "css" | "html" | "js")
-                                    )&&
+                                    ) &&
                                     // skip excluded paths
                                     !excluded_paths.iter().any(|p| path.starts_with(p)) &&
                                     // respect .gitignore
