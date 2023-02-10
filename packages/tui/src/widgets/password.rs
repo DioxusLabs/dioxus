@@ -88,7 +88,9 @@ pub(crate) fn Password<'a>(cx: Scope<'a, PasswordProps>) -> Element<'a> {
             return;
         }
         let mut text = text_ref.write();
-        cursor.write().handle_input(&k, &mut *text, max_len);
+        cursor
+            .write()
+            .handle_input(&k.code(), &k.key(), &k.modifiers(), &mut *text, max_len);
         if let Some(input_handler) = &cx.props.raw_oninput {
             input_handler.call(FormData {
                 value: text.clone(),

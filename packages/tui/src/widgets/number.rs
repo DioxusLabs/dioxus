@@ -113,7 +113,7 @@ pub(crate) fn NumbericInput<'a>(cx: Scope<'a, NumbericInputProps>) -> Element<'a
                 };
                 if is_text{
                     let mut text = text_ref.write();
-                    cursor.write().handle_input(&k, &mut *text, max_len);
+                    cursor.write().handle_input(&k.code(), &k.key(), &k.modifiers(), &mut *text, max_len);
                     update(text.clone());
 
                     let node = tui_query.get(get_root_id(cx).unwrap());

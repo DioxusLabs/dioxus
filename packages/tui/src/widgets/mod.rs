@@ -6,12 +6,16 @@ mod password;
 mod slider;
 mod textbox;
 
-use dioxus_core::{ElementId, RenderReturn, Scope};
+use dioxus_core::{RenderReturn, Scope};
+use dioxus_native_core::NodeId;
 pub use input::*;
 
-pub(crate) fn get_root_id<T>(cx: Scope<T>) -> Option<ElementId> {
+use crate::DioxusElementToNodeId;
+
+pub(crate) fn get_root_id<T>(cx: Scope<T>) -> Option<NodeId> {
     if let RenderReturn::Ready(sync) = cx.root_node() {
-        sync.root_ids.get(0)
+        let mapping: DioxusElementToNodeId = cx.consume_context()?;
+        mapping.get_node_id(sync.root_ids.get(0)?)
     } else {
         None
     }

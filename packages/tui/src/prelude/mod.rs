@@ -1,1 +1,2 @@
-// pub use crate::widgets::*;
+#[cfg(feature = "dioxus-bindings")]
+pub use crate::widgets::*;

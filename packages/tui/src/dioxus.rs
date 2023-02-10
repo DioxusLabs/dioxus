@@ -1,10 +1,10 @@
-use std::{ops::Deref, rc::Rc};
+use std::{ops::Deref, rc::Rc, sync::RwLock};
 
-use dioxus_core::{Component, VirtualDom};
+use dioxus_core::{Component, ElementId, VirtualDom};
 use dioxus_html::EventData;
 use dioxus_native_core::{
     dioxus::{DioxusState, NodeImmutableDioxusExt},
-    Renderer,
+    NodeId, Renderer,
 };
 
 use crate::{query::Query, render, Config, TuiContext};
@@ -29,6 +29,10 @@ pub fn launch_cfg_with_props<Props: 'static>(app: Component<Props>, props: Props
         let mut rdom = rdom.write().unwrap();
         let mut dioxus_state = DioxusState::create(&mut rdom);
         dioxus_state.apply_mutations(&mut rdom, muts);
+        let dioxus_state = Rc::new(RwLock::new(dioxus_state));
+        vdom = vdom.with_root_context(DioxusElementToNodeId {
+            mapping: dioxus_state.clone(),
+        });
         DioxusRenderer {
             vdom,
             dioxus_state,
@@ -48,7 +52,7 @@ pub fn launch_cfg_with_props<Props: 'static>(app: Component<Props>, props: Props
 
 struct DioxusRenderer {
     vdom: VirtualDom,
-    dioxus_state: DioxusState,
+    dioxus_state: Rc<RwLock<DioxusState>>,
     #[cfg(all(feature = "hot-reload", debug_assertions))]
     hot_reload_rx: tokio::sync::mpsc::UnboundedReceiver<dioxus_hot_reload::HotReloadMsg>,
 }
@@ -57,7 +61,10 @@ impl Renderer<Rc<EventData>> for DioxusRenderer {
     fn render(&mut self, mut root: dioxus_native_core::NodeMut<()>) {
         let rdom = root.real_dom_mut();
         let muts = self.vdom.render_immediate();
-        self.dioxus_state.apply_mutations(rdom, muts);
+        self.dioxus_state
+            .write()
+            .unwrap()
+            .apply_mutations(rdom, muts);
     }
 
     fn handle_event(
@@ -105,5 +112,19 @@ impl Renderer<Rc<EventData>> for DioxusRenderer {
 
         #[cfg(not(all(feature = "hot-reload", debug_assertions)))]
         Box::pin(self.vdom.wait_for_work())
+    }
+}
+
+#[derive(Clone)]
+pub struct DioxusElementToNodeId {
+    mapping: Rc<RwLock<DioxusState>>,
+}
+
+impl DioxusElementToNodeId {
+    pub fn get_node_id(&self, element_id: ElementId) -> Option<NodeId> {
+        self.mapping
+            .read()
+            .unwrap()
+            .try_element_to_node_id(element_id)
     }
 }

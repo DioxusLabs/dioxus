@@ -31,7 +31,11 @@ impl DioxusState {
     }
 
     pub fn element_to_node_id(&self, element_id: ElementId) -> NodeId {
-        self.node_id_mapping.get(element_id.0).unwrap().unwrap()
+        self.try_element_to_node_id(element_id).unwrap()
+    }
+
+    pub fn try_element_to_node_id(&self, element_id: ElementId) -> Option<NodeId> {
+        self.node_id_mapping.get(element_id.0).copied().flatten()
     }
 
     fn set_element_id(&mut self, mut node: NodeMut, element_id: ElementId) {
