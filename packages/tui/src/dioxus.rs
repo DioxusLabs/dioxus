@@ -23,20 +23,26 @@ pub fn launch_cfg(app: Component<()>, cfg: Config) {
 
 pub fn launch_cfg_with_props<Props: 'static>(app: Component<Props>, props: Props, cfg: Config) {
     render(cfg, |rdom, taffy, event_tx| {
+        let dioxus_state = {
+            let mut rdom = rdom.write().unwrap();
+            DioxusState::create(&mut rdom)
+        };
+        let dioxus_state = Rc::new(RwLock::new(dioxus_state));
         let mut vdom = VirtualDom::new_with_props(app, props)
             .with_root_context(TuiContext { tx: event_tx })
             .with_root_context(Query {
                 rdom: rdom.clone(),
                 stretch: taffy.clone(),
+            })
+            .with_root_context(DioxusElementToNodeId {
+                mapping: dioxus_state.clone(),
             });
         let muts = vdom.rebuild();
         let mut rdom = rdom.write().unwrap();
-        let mut dioxus_state = DioxusState::create(&mut rdom);
-        dioxus_state.apply_mutations(&mut rdom, muts);
-        let dioxus_state = Rc::new(RwLock::new(dioxus_state));
-        vdom = vdom.with_root_context(DioxusElementToNodeId {
-            mapping: dioxus_state.clone(),
-        });
+        dioxus_state
+            .write()
+            .unwrap()
+            .apply_mutations(&mut rdom, muts);
         DioxusRenderer {
             vdom,
             dioxus_state,
