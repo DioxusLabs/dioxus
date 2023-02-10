@@ -7,15 +7,18 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use dioxus_html::EventData;
-use dioxus_native_core::{node_ref::NodeMaskBuilder, real_dom::NodeImmutable, Pass, Renderer};
+use dioxus_native_core::{node_ref::NodeMaskBuilder, real_dom::NodeImmutable, Pass};
 use dioxus_native_core::{real_dom::RealDom, FxDashSet, NodeId, SendAnyMap};
 use focus::FocusState;
-use futures::{channel::mpsc::UnboundedSender, pin_mut, StreamExt};
+use futures::{channel::mpsc::UnboundedSender, pin_mut, Future, StreamExt};
 use futures_channel::mpsc::unbounded;
 use layout::TaffyLayout;
 use prevent_default::PreventDefault;
-use std::sync::{Arc, Mutex};
 use std::{io, time::Duration};
+use std::{
+    pin::Pin,
+    sync::{Arc, Mutex},
+};
 use std::{rc::Rc, sync::RwLock};
 use style_attributes::StyleModifier;
 use taffy::Taffy;
@@ -77,7 +80,7 @@ impl TuiContext {
     }
 }
 
-pub fn render<R: Renderer<Rc<EventData>>>(
+pub fn render<R: Renderer>(
     cfg: Config,
     create_renderer: impl FnOnce(
         &Arc<RwLock<RealDom>>,
@@ -116,11 +119,10 @@ pub fn render<R: Renderer<Rc<EventData>>>(
     let mut renderer = create_renderer(&rdom, &taffy, event_tx_clone);
 
     {
-        let mut rdom = rdom.write().unwrap();
-        let root_id = rdom.root_id();
-        renderer.render(rdom.get_mut(root_id).unwrap());
+        renderer.render(&rdom);
         let mut any_map = SendAnyMap::new();
         any_map.insert(taffy.clone());
+        let mut rdom = rdom.write().unwrap();
         let _ = rdom.update_state(any_map, false);
     }
 
@@ -201,7 +203,7 @@ pub fn render<R: Renderer<Rc<EventData>>>(
                         })?;
                         execute!(terminal.backend_mut(), RestorePosition, Show).unwrap();
                     } else {
-                        let rdom = rdom.write().unwrap();
+                        let rdom = rdom.read().unwrap();
                         resize(
                             Rect {
                                 x: 0,
@@ -250,21 +252,22 @@ pub fn render<R: Renderer<Rc<EventData>>>(
 
                 {
                     {
-                        let mut rdom = rdom.write().unwrap();
-                        let evts = handler
-                            .get_events(&taffy.lock().expect("taffy lock poisoned"), &mut rdom);
+                        let evts = {
+                            handler.get_events(
+                                &taffy.lock().expect("taffy lock poisoned"),
+                                &mut rdom.write().unwrap(),
+                            )
+                        };
                         updated |= handler.state().focus_state.clean();
 
                         for e in evts {
-                            let node = rdom.get_mut(e.id).unwrap();
-                            renderer.handle_event(node, e.name, e.data, e.bubbles);
+                            renderer.handle_event(&rdom, e.id, e.name, e.data, e.bubbles);
                         }
                     }
-                    let mut rdom = rdom.write().unwrap();
                     // updates the dom's nodes
-                    let root_id = rdom.root_id();
-                    renderer.render(rdom.get_mut(root_id).unwrap());
+                    renderer.render(&rdom);
                     // update the style and layout
+                    let mut rdom = rdom.write().unwrap();
                     let mut any_map = SendAnyMap::new();
                     any_map.insert(taffy.clone());
                     let (new_to_rerender, dirty) = rdom.update_state(any_map, false);
@@ -296,4 +299,17 @@ pub fn render<R: Renderer<Rc<EventData>>>(
 pub enum InputEvent {
     UserInput(TermEvent),
     Close,
+}
+
+pub trait Renderer {
+    fn render(&mut self, rdom: &Arc<RwLock<RealDom>>);
+    fn handle_event(
+        &mut self,
+        rdom: &Arc<RwLock<RealDom>>,
+        id: NodeId,
+        event: &str,
+        value: Rc<EventData>,
+        bubbles: bool,
+    );
+    fn poll_async(&mut self) -> Pin<Box<dyn Future<Output = ()> + '_>>;
 }

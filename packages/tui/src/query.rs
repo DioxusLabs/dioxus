@@ -48,9 +48,11 @@ pub struct Query {
 
 impl Query {
     pub fn get(&self, id: NodeId) -> ElementRef {
+        let rdom = self.rdom.read();
+        let stretch = self.stretch.lock();
         ElementRef::new(
-            self.rdom.read().expect("rdom lock poisoned"),
-            self.stretch.lock().expect("taffy lock poisoned"),
+            rdom.expect("rdom lock poisoned"),
+            stretch.expect("taffy lock poisoned"),
             id,
         )
     }

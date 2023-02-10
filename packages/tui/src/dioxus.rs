@@ -1,13 +1,17 @@
-use std::{ops::Deref, rc::Rc, sync::RwLock};
+use std::{
+    ops::Deref,
+    rc::Rc,
+    sync::{Arc, RwLock},
+};
 
 use dioxus_core::{Component, ElementId, VirtualDom};
 use dioxus_html::EventData;
 use dioxus_native_core::{
     dioxus::{DioxusState, NodeImmutableDioxusExt},
-    NodeId, Renderer,
+    NodeId, RealDom,
 };
 
-use crate::{query::Query, render, Config, TuiContext};
+use crate::{query::Query, render, Config, Renderer, TuiContext};
 
 pub fn launch(app: Component<()>) {
     launch_cfg(app, Config::default())
@@ -57,24 +61,28 @@ struct DioxusRenderer {
     hot_reload_rx: tokio::sync::mpsc::UnboundedReceiver<dioxus_hot_reload::HotReloadMsg>,
 }
 
-impl Renderer<Rc<EventData>> for DioxusRenderer {
-    fn render(&mut self, mut root: dioxus_native_core::NodeMut<()>) {
-        let rdom = root.real_dom_mut();
+impl Renderer for DioxusRenderer {
+    fn render(&mut self, rdom: &Arc<RwLock<RealDom>>) {
         let muts = self.vdom.render_immediate();
-        self.dioxus_state
-            .write()
-            .unwrap()
-            .apply_mutations(rdom, muts);
+        {
+            let mut rdom = rdom.write().unwrap();
+            self.dioxus_state
+                .write()
+                .unwrap()
+                .apply_mutations(&mut rdom, muts);
+        }
     }
 
     fn handle_event(
         &mut self,
-        node: dioxus_native_core::NodeMut<()>,
+        rdom: &Arc<RwLock<RealDom>>,
+        id: NodeId,
         event: &str,
         value: Rc<EventData>,
         bubbles: bool,
     ) {
-        if let Some(id) = node.mounted_id() {
+        let id = { rdom.read().unwrap().get(id).unwrap().mounted_id() };
+        if let Some(id) = id {
             self.vdom
                 .handle_event(event, value.deref().clone().into_any(), id, bubbles);
         }

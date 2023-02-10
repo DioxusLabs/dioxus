@@ -2,14 +2,13 @@ use dioxus_html::EventData;
 use dioxus_native_core::{
     node::{OwnedAttributeDiscription, OwnedAttributeValue, TextNode},
     prelude::*,
-    real_dom::{ElementNodeMut, NodeImmutable, NodeTypeMut},
-    NodeId, Renderer,
+    real_dom::{NodeImmutable, NodeTypeMut},
+    NodeId,
 };
-use dioxus_tui::{self, render, Config};
+use dioxus_tui::{self, render, Config, Renderer};
 use rustc_hash::FxHashSet;
+use std::rc::Rc;
 use std::sync::{Arc, RwLock};
-use std::{rc::Rc, sync::Mutex};
-use taffy::Taffy;
 
 const SIZE: usize = 10;
 
@@ -184,11 +183,14 @@ impl Test {
     }
 }
 
-impl Renderer<Rc<EventData>> for Test {
-    fn render(&mut self, mut root: dioxus_native_core::NodeMut) {
+impl Renderer for Test {
+    fn render(&mut self, rdom: &Arc<RwLock<RealDom>>) {
+        let mut rdom = rdom.write().unwrap();
+        let root_id = rdom.root_id();
+        let mut root = rdom.get_mut(root_id).unwrap();
         for (x, y) in self.dirty.drain() {
             let row_id = root.child_ids().unwrap()[x];
-            let mut rdom = root.real_dom_mut();
+            let rdom = root.real_dom_mut();
             let row = rdom.get(row_id).unwrap();
             let node_id = row.child_ids().unwrap()[y];
             let mut node = rdom.get_mut(node_id).unwrap();
@@ -216,11 +218,14 @@ impl Renderer<Rc<EventData>> for Test {
 
     fn handle_event(
         &mut self,
-        node: dioxus_native_core::NodeMut<()>,
-        event: &str,
-        value: Rc<EventData>,
-        bubbles: bool,
+        rdom: &Arc<RwLock<RealDom>>,
+        id: NodeId,
+        _: &str,
+        _: Rc<EventData>,
+        _: bool,
     ) {
+        let rdom = rdom.read().unwrap();
+        let node = rdom.get(id).unwrap();
         if let Some(parent) = node.parent() {
             let child_number = parent
                 .child_ids()
