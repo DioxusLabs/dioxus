@@ -3,7 +3,7 @@ use std::hash::BuildHasherDefault;
 
 pub use node_ref::NodeMask;
 pub use passes::AnyMapLike;
-pub use passes::{Dependancy, Pass, TypeErasedPass};
+pub use passes::{Dependancy, State, TypeErasedPass};
 pub use real_dom::{NodeMut, NodeRef, RealDom};
 use rustc_hash::FxHasher;
 pub use tree::NodeId;
@@ -22,7 +22,7 @@ pub mod utils;
 pub mod prelude {
     pub use crate::node::{ElementNode, FromAnyValue, NodeType, OwnedAttributeView, TextNode};
     pub use crate::node_ref::{AttributeMaskBuilder, NodeMaskBuilder, NodeView};
-    pub use crate::passes::{Dependancy, Pass};
+    pub use crate::passes::{Dependancy, State};
     pub use crate::real_dom::{NodeImmutable, NodeMut, NodeRef, RealDom};
     pub use crate::tree::NodeId;
     pub use crate::SendAnyMap;

@@ -33,7 +33,7 @@ use dioxus_native_core::{
     layout_attributes::parse_value,
     node::OwnedAttributeView,
     node_ref::{AttributeMaskBuilder, NodeMaskBuilder, NodeView},
-    Dependancy, Pass, SendAnyMap,
+    Dependancy, SendAnyMap, State,
 };
 use taffy::prelude::*;
 
@@ -45,7 +45,7 @@ pub struct StyleModifier {
     pub modifier: TuiModifier,
 }
 
-impl Pass for StyleModifier {
+impl State for StyleModifier {
     type ParentDependencies = (Self,);
     type ChildDependencies = ();
     type NodeDependencies = ();
@@ -55,7 +55,7 @@ impl Pass for StyleModifier {
         .with_attrs(AttributeMaskBuilder::Some(SORTED_STYLE_ATTRS))
         .with_element();
 
-    fn pass<'a>(
+    fn update<'a>(
         &mut self,
         node_view: NodeView,
         _: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
@@ -121,7 +121,7 @@ impl Pass for StyleModifier {
         context: &SendAnyMap,
     ) -> Self {
         let mut myself = Self::default();
-        myself.pass(node_view, node, parent, children, context);
+        myself.update(node_view, node, parent, children, context);
         myself
     }
 }

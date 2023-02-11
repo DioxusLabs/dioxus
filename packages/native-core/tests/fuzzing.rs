@@ -4,7 +4,7 @@ use dioxus_native_core::{
     dioxus::DioxusState,
     node_ref::{AttributeMaskBuilder, NodeMaskBuilder, NodeView},
     real_dom::RealDom,
-    Dependancy, Pass, SendAnyMap,
+    Dependancy, SendAnyMap, State,
 };
 use std::cell::Cell;
 
@@ -298,7 +298,7 @@ pub struct BlablaState {
     count: usize,
 }
 
-impl Pass for BlablaState {
+impl State for BlablaState {
     type ParentDependencies = (Self,);
     type ChildDependencies = ();
     type NodeDependencies = ();
@@ -307,7 +307,7 @@ impl Pass for BlablaState {
         .with_attrs(AttributeMaskBuilder::Some(&["blabla"]))
         .with_element();
 
-    fn pass<'a>(
+    fn update<'a>(
         &mut self,
         _: NodeView,
         _: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
@@ -331,7 +331,7 @@ impl Pass for BlablaState {
         context: &SendAnyMap,
     ) -> Self {
         let mut myself = Self::default();
-        myself.pass(node_view, node, parent, children, context);
+        myself.update(node_view, node, parent, children, context);
         myself
     }
 }

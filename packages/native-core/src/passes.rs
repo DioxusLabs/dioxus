@@ -103,16 +103,18 @@ impl DirtyNodeStates {
     }
 }
 
-pub trait Pass<V: FromAnyValue + Send + Sync = ()>: Any + Send + Sync {
-    /// This is a tuple of (T: Any, ..)
+pub trait State<V: FromAnyValue + Send + Sync = ()>: Any + Send + Sync {
+    /// This is a tuple of (T: Pass, ..) of states read from the parent required to run this pass
     type ParentDependencies: Dependancy;
-    /// This is a tuple of (T: Any, ..)
+    /// This is a tuple of (T: Pass, ..) of states read from the children required to run this pass
     type ChildDependencies: Dependancy;
-    /// This is a tuple of (T: Any, ..)
+    /// This is a tuple of (T: Pass, ..) of states read from the node required to run this pass
     type NodeDependencies: Dependancy;
+    /// This is a mask of what aspects of the node are required to run this pass
     const NODE_MASK: NodeMaskBuilder<'static>;
 
-    fn pass<'a>(
+    /// Update this state in a node, returns if the state was updated
+    fn update<'a>(
         &mut self,
         node_view: NodeView<V>,
         node: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
@@ -121,6 +123,7 @@ pub trait Pass<V: FromAnyValue + Send + Sync = ()>: Any + Send + Sync {
         context: &SendAnyMap,
     ) -> bool;
 
+    /// Create a new instance of this state
     fn create<'a>(
         node_view: NodeView<V>,
         node: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
@@ -202,7 +205,7 @@ pub trait Pass<V: FromAnyValue + Send + Sync = ()>: Any + Send + Sync {
                             .value
                             .as_mut()
                             .unwrap()
-                            .pass(view, node, parent, children, context)
+                            .update(view, node, parent, children, context)
                     }
                 },
             ) as PassCallback,

@@ -5,7 +5,7 @@ use dioxus_native_core::layout_attributes::{
 };
 use dioxus_native_core::node::OwnedAttributeView;
 use dioxus_native_core::node_ref::{AttributeMaskBuilder, NodeMaskBuilder, NodeView};
-use dioxus_native_core::{Dependancy, Pass, SendAnyMap};
+use dioxus_native_core::{Dependancy, SendAnyMap, State};
 use taffy::prelude::*;
 
 use crate::{screen_to_layout_space, unit_to_layout_space};
@@ -42,7 +42,7 @@ pub(crate) struct TaffyLayout {
     pub node: PossiblyUninitalized<Node>,
 }
 
-impl Pass for TaffyLayout {
+impl State for TaffyLayout {
     type ChildDependencies = (Self,);
     type ParentDependencies = ();
     type NodeDependencies = ();
@@ -51,7 +51,7 @@ impl Pass for TaffyLayout {
         .with_attrs(AttributeMaskBuilder::Some(SORTED_LAYOUT_ATTRS))
         .with_text();
 
-    fn pass<'a>(
+    fn update<'a>(
         &mut self,
         node_view: NodeView,
         _: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
@@ -198,7 +198,7 @@ impl Pass for TaffyLayout {
         context: &SendAnyMap,
     ) -> Self {
         let mut myself = Self::default();
-        myself.pass(node_view, node, parent, children, context);
+        myself.update(node_view, node, parent, children, context);
         myself
     }
 }

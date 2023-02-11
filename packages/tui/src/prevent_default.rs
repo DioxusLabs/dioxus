@@ -1,4 +1,4 @@
-use dioxus_native_core::{node_ref::NodeView, Dependancy, Pass, SendAnyMap};
+use dioxus_native_core::{node_ref::NodeView, Dependancy, SendAnyMap, State};
 
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub(crate) enum PreventDefault {
@@ -25,7 +25,7 @@ impl Default for PreventDefault {
     }
 }
 
-impl Pass for PreventDefault {
+impl State for PreventDefault {
     type ParentDependencies = ();
     type ChildDependencies = ();
     type NodeDependencies = ();
@@ -37,7 +37,7 @@ impl Pass for PreventDefault {
             ]))
             .with_listeners();
 
-    fn pass<'a>(
+    fn update<'a>(
         &mut self,
         node_view: NodeView,
         _: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
@@ -82,7 +82,7 @@ impl Pass for PreventDefault {
         context: &SendAnyMap,
     ) -> Self {
         let mut myself = Self::default();
-        myself.pass(node_view, node, parent, children, context);
+        myself.update(node_view, node, parent, children, context);
         myself
     }
 }

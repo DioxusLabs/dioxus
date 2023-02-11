@@ -4,7 +4,7 @@ use dioxus_native_core::{
     node_ref::{AttributeMaskBuilder, NodeMaskBuilder},
     real_dom::NodeImmutable,
     utils::{ElementProduced, PersistantElementIter},
-    Dependancy, NodeId, Pass, RealDom, SendAnyMap,
+    Dependancy, NodeId, RealDom, SendAnyMap, State,
 };
 
 use std::{cmp::Ordering, num::NonZeroU16};
@@ -63,7 +63,7 @@ pub(crate) struct Focus {
     pub level: FocusLevel,
 }
 
-impl Pass for Focus {
+impl State for Focus {
     const NODE_MASK: NodeMaskBuilder<'static> = NodeMaskBuilder::new()
         .with_attrs(AttributeMaskBuilder::Some(FOCUS_ATTRIBUTES))
         .with_listeners();
@@ -72,7 +72,7 @@ impl Pass for Focus {
     type ChildDependencies = ();
     type NodeDependencies = ();
 
-    fn pass<'a>(
+    fn update<'a>(
         &mut self,
         node_view: NodeView,
         _: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
@@ -130,7 +130,7 @@ impl Pass for Focus {
         context: &SendAnyMap,
     ) -> Self {
         let mut myself = Self::default();
-        myself.pass(node_view, node, parent, children, context);
+        myself.update(node_view, node, parent, children, context);
         myself
     }
 }

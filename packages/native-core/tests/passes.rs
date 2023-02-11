@@ -16,13 +16,13 @@ fn node_pass() {
     #[derive(Debug, Default, Clone, PartialEq)]
     struct Number(i32);
 
-    impl Pass for Number {
+    impl State for Number {
         type ChildDependencies = ();
         type NodeDependencies = ();
         type ParentDependencies = ();
         const NODE_MASK: NodeMaskBuilder<'static> = NodeMaskBuilder::new();
 
-        fn pass<'a>(
+        fn update<'a>(
             &mut self,
             _: NodeView,
             _: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
@@ -42,7 +42,7 @@ fn node_pass() {
             context: &SendAnyMap,
         ) -> Self {
             let mut myself = Self::default();
-            myself.pass(node_view, node, parent, children, context);
+            myself.update(node_view, node, parent, children, context);
             myself
         }
     }
@@ -64,13 +64,13 @@ fn dependant_node_pass() {
     #[derive(Debug, Default, Clone, PartialEq)]
     struct AddNumber(i32);
 
-    impl Pass for AddNumber {
+    impl State for AddNumber {
         type ChildDependencies = ();
         type NodeDependencies = (SubtractNumber,);
         type ParentDependencies = ();
         const NODE_MASK: NodeMaskBuilder<'static> = NodeMaskBuilder::new();
 
-        fn pass<'a>(
+        fn update<'a>(
             &mut self,
             _: NodeView,
             _: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
@@ -90,7 +90,7 @@ fn dependant_node_pass() {
             context: &SendAnyMap,
         ) -> Self {
             let mut myself = Self::default();
-            myself.pass(node_view, node, parent, children, context);
+            myself.update(node_view, node, parent, children, context);
             myself
         }
     }
@@ -98,13 +98,13 @@ fn dependant_node_pass() {
     #[derive(Debug, Default, Clone, PartialEq)]
     struct SubtractNumber(i32);
 
-    impl Pass for SubtractNumber {
+    impl State for SubtractNumber {
         type ChildDependencies = ();
         type NodeDependencies = ();
         type ParentDependencies = ();
         const NODE_MASK: NodeMaskBuilder<'static> = NodeMaskBuilder::new();
 
-        fn pass<'a>(
+        fn update<'a>(
             &mut self,
             _: NodeView,
             _: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
@@ -124,7 +124,7 @@ fn dependant_node_pass() {
             context: &SendAnyMap,
         ) -> Self {
             let mut myself = Self::default();
-            myself.pass(node_view, node, parent, children, context);
+            myself.update(node_view, node, parent, children, context);
             myself
         }
     }
@@ -163,14 +163,14 @@ fn independant_node_pass() {
     #[derive(Debug, Default, Clone, PartialEq)]
     struct AddNumber(i32);
 
-    impl Pass for AddNumber {
+    impl State for AddNumber {
         type ChildDependencies = ();
         type NodeDependencies = ();
         type ParentDependencies = ();
 
         const NODE_MASK: NodeMaskBuilder<'static> = NodeMaskBuilder::new();
 
-        fn pass<'a>(
+        fn update<'a>(
             &mut self,
             _: NodeView,
             _: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
@@ -190,7 +190,7 @@ fn independant_node_pass() {
             context: &SendAnyMap,
         ) -> Self {
             let mut myself = Self::default();
-            myself.pass(node_view, node, parent, children, context);
+            myself.update(node_view, node, parent, children, context);
             myself
         }
     }
@@ -198,14 +198,14 @@ fn independant_node_pass() {
     #[derive(Debug, Default, Clone, PartialEq)]
     struct SubtractNumber(i32);
 
-    impl Pass for SubtractNumber {
+    impl State for SubtractNumber {
         type ChildDependencies = ();
         type NodeDependencies = ();
         type ParentDependencies = ();
 
         const NODE_MASK: NodeMaskBuilder<'static> = NodeMaskBuilder::new();
 
-        fn pass<'a>(
+        fn update<'a>(
             &mut self,
             _: NodeView,
             _: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
@@ -225,7 +225,7 @@ fn independant_node_pass() {
             context: &SendAnyMap,
         ) -> Self {
             let mut myself = Self::default();
-            myself.pass(node_view, node, parent, children, context);
+            myself.update(node_view, node, parent, children, context);
             myself
         }
     }
@@ -272,14 +272,14 @@ fn down_pass() {
         }
     }
 
-    impl Pass for AddNumber {
+    impl State for AddNumber {
         type ChildDependencies = ();
         type NodeDependencies = ();
         type ParentDependencies = (AddNumber,);
 
         const NODE_MASK: NodeMaskBuilder<'static> = NodeMaskBuilder::new();
 
-        fn pass<'a>(
+        fn update<'a>(
             &mut self,
             _: NodeView,
             _: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
@@ -301,7 +301,7 @@ fn down_pass() {
             context: &SendAnyMap,
         ) -> Self {
             let mut myself = Self::default();
-            myself.pass(node_view, node, parent, children, context);
+            myself.update(node_view, node, parent, children, context);
             myself
         }
     }
@@ -360,14 +360,14 @@ fn up_pass() {
     #[derive(Debug, Clone, PartialEq)]
     struct AddNumber(i32);
 
-    impl Pass for AddNumber {
+    impl State for AddNumber {
         type ChildDependencies = (AddNumber,);
         type NodeDependencies = ();
         type ParentDependencies = ();
 
         const NODE_MASK: NodeMaskBuilder<'static> = NodeMaskBuilder::new();
 
-        fn pass<'a>(
+        fn update<'a>(
             &mut self,
             _: NodeView,
             _: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
@@ -389,7 +389,7 @@ fn up_pass() {
             context: &SendAnyMap,
         ) -> Self {
             let mut myself = Self(1);
-            myself.pass(node_view, node, parent, children, context);
+            myself.update(node_view, node, parent, children, context);
             myself
         }
     }

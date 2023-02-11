@@ -4,7 +4,7 @@ use dioxus_native_core::{
     dioxus::DioxusState,
     node_ref::{NodeMaskBuilder, NodeView},
     real_dom::RealDom,
-    Dependancy, Pass, SendAnyMap,
+    Dependancy, SendAnyMap, State,
 };
 
 macro_rules! dep {
