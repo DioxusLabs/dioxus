@@ -37,6 +37,7 @@ chrono = "0.4.19"
 anyhow = "1.0.53"
 hyper = "0.14.17"
 indicatif = "0.17.0-rc.11"
+subprocess = "0.2.9"
 
 axum = { version = "0.5.1", features = ["ws", "headers"] }
 tower-http = { version = "0.2.2", features = ["fs", "trace"] }

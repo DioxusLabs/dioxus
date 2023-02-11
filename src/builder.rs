@@ -48,39 +48,48 @@ pub fn build(config: &CrateConfig, quiet: bool) -> Result<BuildResult> {
 
     // [1] Build the .wasm module
     log::info!("🚅 Running build command...");
-    let mut cmd = Command::new("cargo");
-    cmd.current_dir(&crate_dir)
+    let cmd = subprocess::Exec::cmd("cargo");
+    let cmd = cmd.cwd(&crate_dir)
         .arg("build")
         .arg("--target")
         .arg("wasm32-unknown-unknown")
-        .arg("--message-format=json")
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped());
+        .arg("--message-format=json");
 
-    if config.release {
-        cmd.arg("--release");
-    }
-    if config.verbose {
-        cmd.arg("--verbose");
-    }
+    let cmd = if config.release {
+        cmd.arg("--release")
+    } else {
+        cmd
+    };
+    let cmd = if config.verbose {
+        cmd.arg("--verbose")
+    } else {
+        cmd
+    };
 
-    if quiet {
-        cmd.arg("--quiet");
-    }
+    let cmd = if quiet {
+        cmd.arg("--quiet")
+    } else {
+        cmd
+    };
 
-    if config.custom_profile.is_some() {
+    let cmd = if config.custom_profile.is_some() {
         let custom_profile = config.custom_profile.as_ref().unwrap();
-        cmd.arg("--profile");
-        cmd.arg(custom_profile);
-    }
+        cmd
+            .arg("--profile")
+            .arg(custom_profile)
+    } else {
+        cmd
+    };
 
-    if config.features.is_some() {
+    let cmd = if config.features.is_some() {
         let features_str = config.features.as_ref().unwrap().join(" ");
-        cmd.arg("--features");
-        cmd.arg(features_str);
-    }
+        cmd.arg("--features")
+            .arg(features_str)
+    } else {
+        cmd
+    };
 
-    match executable {
+    let cmd = match executable {
         ExecutableType::Binary(name) => cmd.arg("--bin").arg(name),
         ExecutableType::Lib(name) => cmd.arg("--lib").arg(name),
         ExecutableType::Example(name) => cmd.arg("--example").arg(name),
@@ -365,7 +374,7 @@ pub fn build_desktop(config: &CrateConfig, _is_serve: bool) -> Result<()> {
     Ok(())
 }
 
-fn prettier_build(mut cmd: Command) -> anyhow::Result<Vec<Diagnostic>> {
+fn prettier_build(cmd: subprocess::Exec) -> anyhow::Result<Vec<Diagnostic>> {
     let mut warning_messages: Vec<Diagnostic> = vec![];
 
     let pb = ProgressBar::new_spinner();
@@ -377,8 +386,8 @@ fn prettier_build(mut cmd: Command) -> anyhow::Result<Vec<Diagnostic>> {
     );
     pb.set_message("💼 Waiting to start build the project...");
 
-    let mut command = cmd.spawn()?;
-    let reader = std::io::BufReader::new(command.stdout.take().unwrap());
+    let stdout = cmd.stream_stdout()?;
+    let reader = std::io::BufReader::new(stdout);
     for message in cargo_metadata::Message::parse_stream(reader) {
         match message.unwrap() {
             Message::CompilerMessage(msg) => {
