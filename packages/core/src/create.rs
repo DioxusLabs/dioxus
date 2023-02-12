@@ -25,8 +25,8 @@ fn sort_bfs(paths: &[&'static [u8]]) -> Vec<(usize, &'static [u8])> {
                     }
                 }
                 // The shorter path goes first
-                (Some(_), None) => return std::cmp::Ordering::Less,
-                (None, Some(_)) => return std::cmp::Ordering::Greater,
+                (None, Some(_)) => return std::cmp::Ordering::Less,
+                (Some(_), None) => return std::cmp::Ordering::Greater,
                 (None, None) => return std::cmp::Ordering::Equal,
             }
         }
