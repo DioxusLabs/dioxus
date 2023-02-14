@@ -122,7 +122,7 @@ impl Renderer {
 
                     DynamicNode::Placeholder(_el) => {
                         if self.pre_render {
-                            write!(buf, "<pre><pre/>")?;
+                            write!(buf, "<pre></pre>")?;
                         }
                     }
                 },
