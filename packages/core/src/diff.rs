@@ -717,7 +717,7 @@ impl<'b> VirtualDom {
                     Fragment(nodes) => nodes
                         .iter()
                         .map(|node| self.push_all_real_nodes(node))
-                        .count(),
+                        .sum(),
 
                     Component(comp) => {
                         let scope = comp.scope.get().unwrap();
@@ -729,7 +729,7 @@ impl<'b> VirtualDom {
                     }
                 }
             })
-            .count()
+            .sum()
     }
 
     fn create_children(&mut self, nodes: impl IntoIterator<Item = &'b VNode<'b>>) -> usize {

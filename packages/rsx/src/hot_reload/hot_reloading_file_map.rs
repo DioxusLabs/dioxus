@@ -25,14 +25,22 @@ pub struct FileMap<Ctx: HotReloadingContext> {
 impl<Ctx: HotReloadingContext> FileMap<Ctx> {
     /// Create a new FileMap from a crate directory
     pub fn new(path: PathBuf) -> Self {
+        Self::new_with_filter(path, |_| false)
+    }
+
+    /// Create a new FileMap from a crate directory
+    pub fn new_with_filter(path: PathBuf, mut filter: impl FnMut(&Path) -> bool) -> Self {
         fn find_rs_files(
             root: PathBuf,
+            filter: &mut impl FnMut(&Path) -> bool,
         ) -> io::Result<HashMap<PathBuf, (String, Option<Template<'static>>)>> {
             let mut files = HashMap::new();
             if root.is_dir() {
                 for entry in (fs::read_dir(root)?).flatten() {
                     let path = entry.path();
-                    files.extend(find_rs_files(path)?);
+                    if !filter(&path) {
+                        files.extend(find_rs_files(path, filter)?);
+                    }
                 }
             } else if root.extension().and_then(|s| s.to_str()) == Some("rs") {
                 if let Ok(mut file) = File::open(root.clone()) {
@@ -45,7 +53,7 @@ impl<Ctx: HotReloadingContext> FileMap<Ctx> {
         }
 
         let result = Self {
-            map: find_rs_files(path).unwrap(),
+            map: find_rs_files(path, &mut filter).unwrap(),
             phantom: std::marker::PhantomData,
         };
         result

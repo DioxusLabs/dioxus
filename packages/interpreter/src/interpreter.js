@@ -116,9 +116,6 @@ class Interpreter {
       node.remove();
     }
   }
-  CreateRawText(text) {
-    this.stack.push(document.createTextNode(text));
-  }
   CreateTextNode(text, root) {
     const node = document.createTextNode(text);
     this.nodes[root] = node;
@@ -306,7 +303,7 @@ class Interpreter {
         this.CreatePlaceholder(edit.id);
         break;
       case "CreateTextNode":
-        this.CreateTextNode(edit.value);
+        this.CreateTextNode(edit.value, edit.id);
         break;
       case "HydrateText":
         this.HydrateText(edit.path, edit.value, edit.id);

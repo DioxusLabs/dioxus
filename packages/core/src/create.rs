@@ -25,8 +25,8 @@ fn sort_bfs(paths: &[&'static [u8]]) -> Vec<(usize, &'static [u8])> {
                     }
                 }
                 // The shorter path goes first
-                (Some(_), None) => return std::cmp::Ordering::Less,
-                (None, Some(_)) => return std::cmp::Ordering::Greater,
+                (None, Some(_)) => return std::cmp::Ordering::Less,
+                (Some(_), None) => return std::cmp::Ordering::Greater,
                 (None, None) => return std::cmp::Ordering::Equal,
             }
         }
@@ -40,14 +40,25 @@ fn sorting() {
         (0, &[0, 1]),
         (1, &[0, 2]),
         (2, &[1, 0]),
-        (4, &[1, 1]),
-        (3, &[1, 2]),
+        (3, &[1, 0, 1]),
+        (4, &[1, 2]),
     ];
     assert_eq!(
-        sort_bfs(&[&[0, 1,], &[0, 2,], &[1, 0,], &[1, 2,], &[1, 1,],]),
+        sort_bfs(&[&[0, 1,], &[0, 2,], &[1, 0,], &[1, 0, 1,], &[1, 2,],]),
         r
     );
-    assert!(matches!(&[0], &[_, ..]))
+    let r: [(usize, &[u8]); 6] = [
+        (0, &[0]),
+        (1, &[0, 1]),
+        (2, &[0, 1, 2]),
+        (3, &[1]),
+        (4, &[1, 2]),
+        (5, &[2]),
+    ];
+    assert_eq!(
+        sort_bfs(&[&[0], &[0, 1], &[0, 1, 2], &[1], &[1, 2], &[2],]),
+        r
+    );
 }
 
 impl<'b> VirtualDom {
