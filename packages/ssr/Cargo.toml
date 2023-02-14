@@ -14,6 +14,7 @@ keywords = ["dom", "ui", "gui", "react", "ssr"]
 
 [dependencies]
 dioxus-core = { path = "../core", version = "^0.3.0", features = ["serialize"] }
+askama_escape = "0.10.3"
 
 [dev-dependencies]
 dioxus = { path = "../dioxus", version = "0.3.0" }

@@ -104,8 +104,11 @@ impl Renderer {
                             write!(buf, "<!--#-->")?;
                         }
 
-                        // todo: escape the text
-                        write!(buf, "{}", text.value)?;
+                        write!(
+                            buf,
+                            "{}",
+                            askama_escape::escape(text.value, askama_escape::Html)
+                        )?;
 
                         if self.pre_render {
                             write!(buf, "<!--#-->")?;
