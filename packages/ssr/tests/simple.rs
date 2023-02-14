@@ -38,7 +38,7 @@ fn dynamic() {
         dioxus_ssr::render_lazy(rsx! {
             div { "Hello world 1 -->" "{dynamic}" "<-- Hello world 2" }
         }),
-        "<div>Hello world 1 -->123<-- Hello world 2</div>"
+        "<div>Hello world 1 --&gt;123&lt;-- Hello world 2</div>"
     );
 }
 
