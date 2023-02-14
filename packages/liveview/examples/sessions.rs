@@ -411,13 +411,6 @@ fn CrashResistantCounter(cx: Scope, id: uuid::Uuid) -> Element {
         }
     }
 
-    // XXX: For some reason, the counter below isn't incremented if the parent
-    // increment button was clicked. After reconnecting, the button works
-    // again. The click event is sent to the server (and logged to the terminal
-    // at the `trace` level), but they are not applied (i.e. the saved and
-    // displayed state doesn't change). Is there anything wrong with this code?
-    // This might just be my lacking knowledge regarding Dioxus.
-
     cx.render(rsx! {
         // Important state that needs to survive crashes and server restarts
         // (e.g. form data) needs to be saved after every update (or in the
