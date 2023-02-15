@@ -10,9 +10,9 @@ async fn main() -> anyhow::Result<()> {
     set_up_logging();
 
     let dioxus_config = DioxusConfig::load()
-        .map_err(|e| anyhow!("Failed to load `dioxus.toml` because: {e}"))?
+        .map_err(|e| anyhow!("Failed to load `Dioxus.toml` because: {e}"))?
         .unwrap_or_else(|| {
-            log::warn!("Your `dioxus.toml` could not be found. Using the default config. To set up this crate with dioxus, use `dioxus init`.");
+            log::warn!("You appear to be creating a Dioxus project from scratch; we will use the default config");
             DioxusConfig::default()
         });
 

@@ -17,7 +17,7 @@ pub struct Create {
 impl Create {
     pub fn create(self) -> Result<()> {
         if Self::name_valid_check(self.name.clone()) {
-            return custom_error!("❗Unsupported project name.");
+            return custom_error!("❗Unsupported project name: '{}'.", &self.name);
         }
 
         let project_path = PathBuf::from(&self.name);
@@ -26,7 +26,7 @@ impl Create {
             return custom_error!("🧨 Folder '{}' is initialized.", &self.name);
         }
 
-        log::info!("🔧 Start to create a new project '{}'.", self.name);
+        log::info!("🔧 Start: Creating new project '{}'.", self.name);
 
         let output = Command::new("cargo")
             .arg("generate")
