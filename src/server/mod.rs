@@ -61,10 +61,11 @@ pub async fn startup(port: u16, config: CrateConfig) -> Result<()> {
         std::process::exit(0);
     });
 
+    let ip = get_ip().unwrap_or(String::from("0.0.0.0"));
     if config.hot_reload {
-        startup_hot_reload(port, config).await?
+        startup_hot_reload(ip, port, config).await?
     } else {
-        startup_default(port, config).await?
+        startup_default(ip, port, config).await?
     }
     Ok(())
 }
@@ -126,7 +127,7 @@ pub async fn hot_reload_handler(
 }
 
 #[allow(unused_assignments)]
-pub async fn startup_hot_reload(port: u16, config: CrateConfig) -> Result<()> {
+pub async fn startup_hot_reload(ip: String, port: u16, config: CrateConfig) -> Result<()> {
     let first_build_result = crate::builder::build(&config, false)?;
 
     log::info!("🚀 Starting development server...");
@@ -165,6 +166,7 @@ pub async fn startup_hot_reload(port: u16, config: CrateConfig) -> Result<()> {
         .unwrap_or_else(|| vec![PathBuf::from("src")]);
 
     let watcher_config = config.clone();
+    let watcher_ip = ip.clone();
     let mut last_update_time = chrono::Local::now().timestamp();
 
     let mut watcher = RecommendedWatcher::new(
@@ -190,6 +192,7 @@ pub async fn startup_hot_reload(port: u16, config: CrateConfig) -> Result<()> {
                                 match build_manager.rebuild() {
                                     Ok(res) => {
                                         print_console_info(
+                                            &watcher_ip,
                                             port,
                                             &config,
                                             PrettierOptions {
@@ -229,6 +232,7 @@ pub async fn startup_hot_reload(port: u16, config: CrateConfig) -> Result<()> {
 
     // start serve dev-server at 0.0.0.0:8080
     print_console_info(
+        &ip,
         port,
         &config,
         PrettierOptions {
@@ -298,7 +302,7 @@ pub async fn startup_hot_reload(port: u16, config: CrateConfig) -> Result<()> {
     Ok(())
 }
 
-pub async fn startup_default(port: u16, config: CrateConfig) -> Result<()> {
+pub async fn startup_default(ip: String, port: u16, config: CrateConfig) -> Result<()> {
     let first_build_result = crate::builder::build(&config, false)?;
 
     log::info!("🚀 Starting development server...");
@@ -328,6 +332,7 @@ pub async fn startup_default(port: u16, config: CrateConfig) -> Result<()> {
         .unwrap_or_else(|| vec![PathBuf::from("src")]);
 
     let watcher_config = config.clone();
+    let watcher_ip = ip.clone();
     let mut watcher = notify::recommended_watcher(move |info: notify::Result<notify::Event>| {
         let config = watcher_config.clone();
         if let Ok(e) = info {
@@ -336,6 +341,7 @@ pub async fn startup_default(port: u16, config: CrateConfig) -> Result<()> {
                     Ok(res) => {
                         last_update_time = chrono::Local::now().timestamp();
                         print_console_info(
+                            &watcher_ip,
                             port,
                             &config,
                             PrettierOptions {
@@ -367,6 +373,7 @@ pub async fn startup_default(port: u16, config: CrateConfig) -> Result<()> {
 
     // start serve dev-server at 0.0.0.0
     print_console_info(
+        &ip,
         port,
         &config,
         PrettierOptions {
@@ -441,7 +448,7 @@ pub struct PrettierOptions {
     elapsed_time: u128,
 }
 
-fn print_console_info(port: u16, config: &CrateConfig, options: PrettierOptions) {
+fn print_console_info(ip: &String, port: u16, config: &CrateConfig, options: PrettierOptions) {
     if let Ok(native_clearseq) = Command::new(if cfg!(target_os = "windows") {
         "cls"
     } else {
@@ -511,12 +518,7 @@ fn print_console_info(port: u16, config: &CrateConfig, options: PrettierOptions)
     );
     println!(
         "\t> NetWork : {}",
-        format!(
-            "http://{}:{}/",
-            get_ip().unwrap_or(String::from("0.0.0.0")),
-            port
-        )
-        .blue()
+        format!("http://{}:{}/", ip, port).blue()
     );
     println!("");
     println!("\t> Profile : {}", profile.green());
