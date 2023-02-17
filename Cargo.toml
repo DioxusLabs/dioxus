@@ -13,7 +13,7 @@ license = "MIT/Apache-2.0"
 # cli core
 clap = { version = "3.0.14", features = ["derive"] }
 thiserror = "1.0.30"
-wasm-bindgen-cli-support = "0.2.79"
+wasm-bindgen-cli-support = "0.2.83"
 colored = "2.0.0"
 
 # features
@@ -73,16 +73,25 @@ mlua = { version = "0.8.1", features = [
 ] }
 ctrlc = "3.2.3"
 # dioxus-rsx = "0.0.1"
-dioxus-rsx = { git = "https://github.com/DioxusLabs/dioxus" }
-dioxus-html = { git = "https://github.com/DioxusLabs/dioxus", features = [
+gitignore = "1.0.7"
+
+dioxus-rsx = { path = "../../dioxus/packages/rsx" }
+dioxus-html = { path = "../../dioxus/packages/html", features = [
     "hot-reload-context",
 ] }
-dioxus-core = { git = "https://github.com/DioxusLabs/dioxus", features = [
-    "serialize",
-] }
-dioxus-autofmt = { git = "https://github.com/dioxuslabs/dioxus" }
-gitignore = "1.0.7"
-rsx-rosetta = { git = "https://github.com/dioxuslabs/dioxus" }
+dioxus-core = { path = "../../dioxus/packages/core", features = ["serialize"] }
+dioxus-autofmt = { path = "../../dioxus/packages/autofmt" }
+rsx-rosetta = { path = "../../dioxus/packages/rsx-rosetta" }
+
+# dioxus-rsx = { git = "https://github.com/DioxusLabs/dioxus" }
+# dioxus-html = { git = "https://github.com/DioxusLabs/dioxus", features = [
+#     "hot-reload-context",
+# ] }
+# dioxus-core = { git = "https://github.com/DioxusLabs/dioxus", features = [
+#     "serialize",
+# ] }
+# dioxus-autofmt = { git = "https://github.com/dioxuslabs/dioxus" }
+# rsx-rosetta = { git = "https://github.com/dioxuslabs/dioxus" }
 
 [[bin]]
 path = "src/main.rs"
