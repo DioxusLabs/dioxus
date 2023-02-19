@@ -8,10 +8,9 @@
 ## Resources
 This crate is a part of the broader Dioxus ecosystem. For more resources about Dioxus, check out:
 
-- [Getting Started](https://dioxuslabs.com/getting-started)
-- [Book](https://dioxuslabs.com/book)
-- [Reference](https://dioxuslabs.com/reference)
-- [Community Examples](https://github.com/DioxusLabs/community-examples)
+- [Getting Started](https://dioxuslabs.com/docs/0.3/guide/en/getting_started/index.html)
+- [Book](https://dioxuslabs.com/docs/0.3/guide/en/)
+- [Examples](https://github.com/DioxusLabs/example-projects)
 
 ## Overview
 
