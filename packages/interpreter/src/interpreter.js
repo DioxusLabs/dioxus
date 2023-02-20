@@ -358,7 +358,8 @@ class Interpreter {
             if (event.type === "click") {
               // todo call prevent default if it's the right type of event
               if (shouldPreventDefault !== `onclick`) {
-                if (target.tagName === "A") {
+                target = target.closest("a");
+                if (target != null) {
                   event.preventDefault();
                   const href = target.getAttribute("href");
                   if (href !== "" && href !== null && href !== undefined) {
