@@ -1,6 +1,6 @@
 [package]
 name = "dioxus-native-core"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 license = "MIT/Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
@@ -30,5 +30,5 @@ lightningcss = "1.0.0-alpha.39"
 [dev-dependencies]
 rand = "0.8.5"
 dioxus = { path = "../dioxus", version = "^0.3.0" }
-dioxus-native-core-macro = { path = "../native-core-macro" , version = "^0.3.0" }
-tokio = { version = "*", features = ["full"] }
+dioxus-native-core-macro = { path = "../native-core-macro" }
+tokio = { version = "1.0", features = ["full"] }
