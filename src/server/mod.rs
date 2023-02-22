@@ -136,9 +136,11 @@ pub async fn startup_hot_reload(ip: String, port: u16, config: CrateConfig) -> R
 
     let dist_path = config.out_dir.clone();
     let (reload_tx, _) = broadcast::channel(100);
-    let file_map = Arc::new(Mutex::new(FileMap::<HtmlCtx>::new(
-        config.crate_dir.clone(),
-    )));
+    let FileMapBuildResult { map, errors } = FileMap::<HtmlCtx>::create(config.crate_dir.clone())?;
+    for err in errors {
+        log::error!("{}", err);
+    }
+    let file_map = Arc::new(Mutex::new(map));
     let build_manager = Arc::new(BuildManager {
         config: config.clone(),
         reload_tx: reload_tx.clone(),
@@ -185,10 +187,10 @@ pub async fn startup_hot_reload(ip: String, port: u16, config: CrateConfig) -> R
                         let mut map = file_map.lock().unwrap();
 
                         match map.update_rsx(&path, &crate_dir) {
-                            UpdateResult::UpdatedRsx(msgs) => {
+                            Ok(UpdateResult::UpdatedRsx(msgs)) => {
                                 messages.extend(msgs);
                             }
-                            UpdateResult::NeedsRebuild => {
+                            Ok(UpdateResult::NeedsRebuild) => {
                                 match build_manager.rebuild() {
                                     Ok(res) => {
                                         print_console_info(
@@ -208,6 +210,9 @@ pub async fn startup_hot_reload(ip: String, port: u16, config: CrateConfig) -> R
                                 }
                                 return;
                             }
+                            Err(err) => {
+                                log::error!("{}", err);
+                            }
                         }
                     }
                     for msg in messages {
@@ -222,12 +227,12 @@ pub async fn startup_hot_reload(ip: String, port: u16, config: CrateConfig) -> R
     .unwrap();
 
     for sub_path in allow_watch_path {
-        watcher
-            .watch(
-                &config.crate_dir.join(sub_path),
-                notify::RecursiveMode::Recursive,
-            )
-            .unwrap();
+        if let Err(err) = watcher.watch(
+            &config.crate_dir.join(&sub_path),
+            notify::RecursiveMode::Recursive,
+        ) {
+            log::error!("error watching {sub_path:?}: \n{}", err);
+        }
     }
 
     // start serve dev-server at 0.0.0.0:8080
