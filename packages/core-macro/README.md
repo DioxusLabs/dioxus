@@ -19,7 +19,7 @@
 [discord-url]: https://discord.gg/XgGxMSkvUM
 
 [Website](https://dioxuslabs.com) |
-[Guides](https://dioxuslabs.com/guide/) |
+[Guides](https://dioxuslabs.com/docs/0.3/guide/en/) |
 [API Docs](https://docs.rs/dioxus-core-macro/latest/dioxus_core_macro) |
 [Chat](https://discord.gg/XgGxMSkvUM)
 

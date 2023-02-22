@@ -18,7 +18,7 @@
 [discord-url]: https://discord.gg/XgGxMSkvUM
 
 [Website](https://dioxuslabs.com) |
-[Guides](https://dioxuslabs.com/guide/) |
+[Guides](https://dioxuslabs.com/docs/0.3/guide/en/) |
 [API Docs](https://docs.rs/dioxus-mobile/latest/dioxus_mobile) |
 [Chat](https://discord.gg/XgGxMSkvUM)
 
@@ -98,7 +98,7 @@ To configure the web view, menubar, and other important desktop-specific feature
 
 ## Future Steps
 
-Make sure to read the [Dioxus Guide](https://dioxuslabs.com/guide) if you already haven't!
+Make sure to read the [Dioxus Guide](https://dioxuslabs.com/docs/0.3/guide/en) if you already haven't!
 
 
 

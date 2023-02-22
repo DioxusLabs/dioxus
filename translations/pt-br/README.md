@@ -40,7 +40,7 @@
     <span> | </span>
     <a href="https://github.com/DioxusLabs/example-projects"> Exemplos </a>
     <span> | </span>
-    <a href="https://dioxuslabs.com/guide"> Guia </a>
+    <a href="https://dioxuslabs.com/guide/pt-br"> Guia </a>
     <span> | </span>
     <a href="https://github.com/DioxusLabs/dioxus/blob/master/notes/README/ZH_CN.md"> 中文 </a>
   </h3>
@@ -83,7 +83,7 @@ Se você conhece React, então você já conhece o Dioxus.
 
 <table style="width:100%" align="center">
     <tr>
-        <th><a href="https://dioxuslabs.com/guide/">Tutorial</a></th>
+        <th><a href="https://dioxuslabs.com/guide/pt-br/">Tutorial</a></th>
         <th><a href="https://dioxuslabs.com/reference/web">Web</a></th>
         <th><a href="https://dioxuslabs.com/reference/desktop/">Desktop</a></th>
         <th><a href="https://dioxuslabs.com/reference/ssr/">SSR</a></th>
@@ -159,7 +159,7 @@ Dioxus é único no ecossistema do Rust por suportar:
 - SSR com `hydration` feito pelo Cliente
 - Suporte à aplicação Desktop
 
-Para mais informações sobre quais funções estão atualmente disponíveis e para o progresso futuro, veja [O Guia](https://dioxuslabs.com/guide/).
+Para mais informações sobre quais funções estão atualmente disponíveis e para o progresso futuro, veja [O Guia](https://dioxuslabs.com/guide/pt-br/).
 
 ## Projeto dentro do ecossistema Dioxus
 

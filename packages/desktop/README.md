@@ -19,7 +19,7 @@
 [discord-url]: https://discord.gg/XgGxMSkvUM
 
 [Website](https://dioxuslabs.com) |
-[Guides](https://dioxuslabs.com/guide/) |
+[Guides](https://dioxuslabs.com/docs/0.3/guide/en/) |
 [API Docs](https://docs.rs/dioxus-desktop/latest/dioxus_desktop) |
 [Chat](https://discord.gg/XgGxMSkvUM)
 
@@ -30,7 +30,7 @@
 
 This requires that webview is installed on the target system. WebView is installed by default on macOS and iOS devices, but might not come preinstalled on Windows or Linux devices. To fix these issues, follow the [instructions in the guide](guide-url).
 
-[guide-url]: https://dioxuslabs.com/guide/setup.html#platform-specific-dependencies
+[guide-url]: https://dioxuslabs.com/docs/0.3/guide/en/getting_started/desktop.html
 
 
 

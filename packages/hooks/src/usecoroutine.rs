@@ -108,6 +108,12 @@ impl<T> Coroutine<T> {
     }
 }
 
+impl<T> PartialEq for Coroutine<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.task == other.task
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(unused)]
