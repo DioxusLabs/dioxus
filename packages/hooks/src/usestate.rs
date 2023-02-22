@@ -329,7 +329,7 @@ impl PartialEq<bool> for &UseState<bool> {
     }
 }
 
-impl<T: PartialEq> PartialEq<UseState<T>> for UseState<T> {
+impl<T> PartialEq<UseState<T>> for UseState<T> {
     fn eq(&self, other: &UseState<T>) -> bool {
         Rc::ptr_eq(&self.current_val, &other.current_val)
     }
