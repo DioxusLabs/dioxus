@@ -17,6 +17,14 @@ pub enum UpdateResult {
     NeedsRebuild,
 }
 
+/// The result of building a FileMap
+pub struct FileMapBuildResult<Ctx: HotReloadingContext> {
+    /// The FileMap that was built
+    pub map: FileMap<Ctx>,
+    /// Any errors that occurred while building the FileMap that were not fatal
+    pub errors: Vec<io::Error>,
+}
+
 pub struct FileMap<Ctx: HotReloadingContext> {
     pub map: HashMap<PathBuf, (String, Option<Template<'static>>)>,
     phantom: std::marker::PhantomData<Ctx>,
@@ -24,46 +32,63 @@ pub struct FileMap<Ctx: HotReloadingContext> {
 
 impl<Ctx: HotReloadingContext> FileMap<Ctx> {
     /// Create a new FileMap from a crate directory
-    pub fn new(path: PathBuf) -> Self {
-        Self::new_with_filter(path, |_| false)
+    pub fn create(path: PathBuf) -> io::Result<FileMapBuildResult<Ctx>> {
+        Self::create_with_filter(path, |_| false)
     }
 
     /// Create a new FileMap from a crate directory
-    pub fn new_with_filter(path: PathBuf, mut filter: impl FnMut(&Path) -> bool) -> Self {
+    pub fn create_with_filter(
+        path: PathBuf,
+        mut filter: impl FnMut(&Path) -> bool,
+    ) -> io::Result<FileMapBuildResult<Ctx>> {
+        struct FileMapSearchResult {
+            map: HashMap<PathBuf, (String, Option<Template<'static>>)>,
+            errors: Vec<io::Error>,
+        }
         fn find_rs_files(
             root: PathBuf,
             filter: &mut impl FnMut(&Path) -> bool,
-        ) -> io::Result<HashMap<PathBuf, (String, Option<Template<'static>>)>> {
+        ) -> io::Result<FileMapSearchResult> {
             let mut files = HashMap::new();
+            let mut errors = Vec::new();
             if root.is_dir() {
                 for entry in (fs::read_dir(root)?).flatten() {
                     let path = entry.path();
                     if !filter(&path) {
-                        files.extend(find_rs_files(path, filter)?);
+                        let FileMapSearchResult {
+                            map,
+                            errors: child_errors,
+                        } = find_rs_files(path, filter)?;
+                        errors.extend(child_errors);
+                        files.extend(map);
                     }
                 }
             } else if root.extension().and_then(|s| s.to_str()) == Some("rs") {
                 if let Ok(mut file) = File::open(root.clone()) {
                     let mut src = String::new();
-                    file.read_to_string(&mut src).expect("Unable to read file");
+                    file.read_to_string(&mut src)?;
                     files.insert(root, (src, None));
                 }
             }
-            Ok(files)
+            Ok(FileMapSearchResult { map: files, errors })
         }
 
+        let FileMapSearchResult { map, errors } = find_rs_files(path, &mut filter)?;
         let result = Self {
-            map: find_rs_files(path, &mut filter).unwrap(),
+            map,
             phantom: std::marker::PhantomData,
         };
-        result
+        Ok(FileMapBuildResult {
+            map: result,
+            errors,
+        })
     }
 
     /// Try to update the rsx in a file
-    pub fn update_rsx(&mut self, file_path: &Path, crate_dir: &Path) -> UpdateResult {
-        let mut file = File::open(file_path).unwrap();
+    pub fn update_rsx(&mut self, file_path: &Path, crate_dir: &Path) -> io::Result<UpdateResult> {
+        let mut file = File::open(file_path)?;
         let mut src = String::new();
-        file.read_to_string(&mut src).expect("Unable to read file");
+        file.read_to_string(&mut src)?;
         if let Ok(syntax) = syn::parse_file(&src) {
             if let Some((old_src, template_slot)) = self.map.get_mut(file_path) {
                 if let Ok(old) = syn::parse_file(old_src) {
@@ -99,7 +124,7 @@ impl<Ctx: HotReloadingContext> FileMap<Ctx> {
                                         {
                                             // dioxus cannot handle empty templates
                                             if template.roots.is_empty() {
-                                                return UpdateResult::NeedsRebuild;
+                                                return Ok(UpdateResult::NeedsRebuild);
                                             } else {
                                                 // if the template is the same, don't send it
                                                 if let Some(old_template) = template_slot {
@@ -111,20 +136,25 @@ impl<Ctx: HotReloadingContext> FileMap<Ctx> {
                                                 messages.push(template);
                                             }
                                         } else {
-                                            return UpdateResult::NeedsRebuild;
+                                            return Ok(UpdateResult::NeedsRebuild);
                                         }
                                     }
                                 }
                             }
-                            return UpdateResult::UpdatedRsx(messages);
+                            return Ok(UpdateResult::UpdatedRsx(messages));
                         }
                     }
                 }
             } else {
                 // if this is a new file, rebuild the project
-                *self = FileMap::new(crate_dir.to_path_buf());
+                let FileMapBuildResult { map, mut errors } =
+                    FileMap::create(crate_dir.to_path_buf())?;
+                if let Some(err) = errors.pop() {
+                    return Err(err);
+                }
+                *self = map;
             }
         }
-        UpdateResult::NeedsRebuild
+        Ok(UpdateResult::NeedsRebuild)
     }
 }

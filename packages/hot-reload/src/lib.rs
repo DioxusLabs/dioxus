@@ -7,7 +7,7 @@ use std::{
 
 use dioxus_core::Template;
 use dioxus_rsx::{
-    hot_reload::{FileMap, UpdateResult},
+    hot_reload::{FileMap, FileMapBuildResult, UpdateResult},
     HotReloadingContext,
 };
 use interprocess::local_socket::{LocalSocketListener, LocalSocketStream};
@@ -141,17 +141,24 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(cfg: Config<Ctx>) {
 
         let temp_file = std::env::temp_dir().join("@dioxusin");
         let channels = Arc::new(Mutex::new(Vec::new()));
-        let file_map = Arc::new(Mutex::new(FileMap::<Ctx>::new_with_filter(
-            crate_dir.clone(),
-            |path| {
-                // skip excluded paths
-                excluded_paths.iter().any(|p| path.starts_with(p)) ||
+        let FileMapBuildResult {
+            map: file_map,
+            errors,
+        } = FileMap::<Ctx>::create_with_filter(crate_dir.clone(), |path| {
+            // skip excluded paths
+            excluded_paths.iter().any(|p| path.starts_with(p)) ||
                 // respect .gitignore
                 gitignore
                     .matched_path_or_any_parents(path, path.is_dir())
                     .is_ignore()
-            },
-        )));
+        })
+        .unwrap();
+        for err in errors {
+            if log {
+                println!("hot reloading failed to initialize:\n{err:?}");
+            }
+        }
+        let file_map = Arc::new(Mutex::new(file_map));
 
         if let Ok(local_socket_stream) = LocalSocketListener::bind(temp_file.as_path()) {
             let aborted = Arc::new(Mutex::new(false));
@@ -283,7 +290,7 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(cfg: Config<Ctx>) {
                                     .unwrap()
                                     .update_rsx(path, crate_dir.as_path())
                                 {
-                                    UpdateResult::UpdatedRsx(msgs) => {
+                                    Ok(UpdateResult::UpdatedRsx(msgs)) => {
                                         for msg in msgs {
                                             let mut i = 0;
                                             while i < channels.len() {
@@ -299,12 +306,19 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(cfg: Config<Ctx>) {
                                             }
                                         }
                                     }
-                                    UpdateResult::NeedsRebuild => {
+                                    Ok(UpdateResult::NeedsRebuild) => {
                                         drop(channels);
                                         if rebuild() {
                                             return;
                                         }
                                         break;
+                                    }
+                                    Err(err) => {
+                                        if log {
+                                            println!(
+                                                "hot reloading failed to update rsx:\n{err:?}"
+                                            );
+                                        }
                                     }
                                 }
                             }
