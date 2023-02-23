@@ -139,7 +139,6 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(cfg: Config<Ctx>) {
             .map(|path| crate_dir.join(PathBuf::from(path)))
             .collect::<Vec<_>>();
 
-        let temp_file = std::env::temp_dir().join("@dioxusin");
         let channels = Arc::new(Mutex::new(Vec::new()));
         let FileMapBuildResult {
             map: file_map,
@@ -160,7 +159,7 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(cfg: Config<Ctx>) {
         }
         let file_map = Arc::new(Mutex::new(file_map));
 
-        if let Ok(local_socket_stream) = LocalSocketListener::bind(temp_file.as_path()) {
+        if let Ok(local_socket_stream) = LocalSocketListener::bind("@dioxusin") {
             let aborted = Arc::new(Mutex::new(false));
 
             // listen for connections
@@ -348,8 +347,7 @@ fn send_msg(msg: HotReloadMsg, channel: &mut impl Write) -> bool {
 /// Connect to the hot reloading listener. The callback provided will be called every time a template change is detected
 pub fn connect(mut f: impl FnMut(HotReloadMsg) + Send + 'static) {
     std::thread::spawn(move || {
-        let temp_file = std::env::temp_dir().join("@dioxusin");
-        if let Ok(socket) = LocalSocketStream::connect(temp_file.as_path()) {
+        if let Ok(socket) = LocalSocketStream::connect("@dioxusin") {
             let mut buf_reader = BufReader::new(socket);
             loop {
                 let mut buf = String::new();
