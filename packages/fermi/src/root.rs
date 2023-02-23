@@ -13,8 +13,8 @@ use crate::Readable;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct AtomId {
-    pub(crate) ptr: *const (),
-    pub(crate) type_id: TypeId,
+    pub ptr: *const (),
+    pub type_id: TypeId,
 }
 
 pub struct AtomRoot {
