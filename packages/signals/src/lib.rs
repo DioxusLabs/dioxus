@@ -36,7 +36,7 @@ pub fn use_signal<T: 'static>(cx: &ScopeState, f: impl FnOnce() -> T) -> Signal<
         impl<T> Drop for SignalHook<T> {
             fn drop(&mut self) {
                 try_with_rt(self.signal.rt_id, |rt| {
-                    rt.remove(self.signal.id);
+                    rt.remove(&self.signal);
                 });
             }
         }

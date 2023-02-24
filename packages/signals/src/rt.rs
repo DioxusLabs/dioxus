@@ -3,6 +3,8 @@ use std::{any::Any, cell::RefCell, ops::Deref, rc::Rc, sync::Arc};
 use dioxus_core::ScopeId;
 use generational_arena::{Arena, Index};
 
+use crate::Signal;
+
 pub(crate) type RunTimeId = Index;
 
 thread_local! {
@@ -11,7 +13,7 @@ thread_local! {
 }
 
 #[inline(always)]
-pub(crate) fn with_rt<R>(idx: Index, f: impl FnOnce(&SignalRt) -> R) -> R {
+pub fn with_rt<R>(idx: Index, f: impl FnOnce(&SignalRt) -> R) -> R {
     try_with_rt(idx, f).expect("Attempted to get a runtime that does not exist. This is likely from using a signal after the scope it was created in has been dropped.")
 }
 
@@ -63,10 +65,7 @@ impl Drop for RuntimeOwner {
         // reclaim the runtime
         RUNTIMES.with(|runtimes| {
             let mut borrow = runtimes.borrow_mut();
-            println!("Dropping runtime {:?}", self.idx);
-            println!("Borrow: {:?}", borrow);
             borrow.remove(self.idx);
-            println!("Borrow: {:?}", borrow);
         });
     }
 }
@@ -87,6 +86,10 @@ impl std::fmt::Debug for SignalRt {
 }
 
 impl SignalRt {
+    pub fn size(&self) -> usize {
+        self.signals.borrow().len()
+    }
+
     pub fn init<T: 'static>(&self, val: T) -> Index {
         self.signals.borrow_mut().insert(Inner {
             value: Box::new(val),
@@ -117,8 +120,8 @@ impl SignalRt {
         }
     }
 
-    pub fn remove(&self, id: Index) {
-        self.signals.borrow_mut().remove(id);
+    pub fn remove<T>(&self, signal: &Signal<T>) {
+        self.signals.borrow_mut().remove(signal.id);
     }
 
     pub fn with<T: 'static, O>(&self, id: Index, f: impl FnOnce(&T) -> O) -> O {
@@ -167,11 +170,5 @@ impl std::fmt::Debug for Inner {
             .field("value", &self.value)
             .field("subscribers", &self.subscribers)
             .finish()
-    }
-}
-
-impl Drop for Inner {
-    fn drop(&mut self) {
-        println!("Dropping inner")
     }
 }

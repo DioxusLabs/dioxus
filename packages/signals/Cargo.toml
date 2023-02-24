@@ -9,3 +9,6 @@ edition = "2018"
 dioxus-core = { path = "../core" }
 generational-arena = "0.2.8"
 slab = "0.4.7"
+
+[dev-dependencies]
+rand = "0.8.4"
