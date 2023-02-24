@@ -1,43 +1,93 @@
-use std::{any::Any, cell::RefCell, sync::Arc};
+use std::{any::Any, cell::RefCell, ops::Deref, rc::Rc, sync::Arc};
 
 use dioxus_core::ScopeId;
-use slab::Slab;
+use generational_arena::{Arena, Index};
+
+pub(crate) type RunTimeId = Index;
 
 thread_local! {
     // we cannot drop these since any future might be using them
-    static RUNTIMES: RefCell<Vec<&'static SignalRt>> = RefCell::new(Vec::new());
+    static RUNTIMES: RefCell<Arena<&'static SignalRt>> = RefCell::new(Arena::new());
+}
+
+#[inline(always)]
+pub(crate) fn with_rt<R>(idx: Index, f: impl FnOnce(&SignalRt) -> R) -> R {
+    try_with_rt(idx, f).expect("Attempted to get a runtime that does not exist. This is likely from using a signal after the scope it was created in has been dropped.")
+}
+
+#[inline(always)]
+pub(crate) fn try_with_rt<R>(idx: Index, f: impl FnOnce(&SignalRt) -> R) -> Option<R> {
+    RUNTIMES.with(|runtimes| {
+        let runtimes = runtimes.borrow();
+        runtimes.get(idx).map(|rt| f(rt))
+    })
 }
 
 /// Provide the runtime for signals
 ///
 /// This will reuse dead runtimes
-pub fn claim_rt(update_any: Arc<dyn Fn(ScopeId)>) -> &'static SignalRt {
+fn claim_rt(update_any: Arc<dyn Fn(ScopeId)>) -> RunTimeId {
     RUNTIMES.with(|runtimes| {
-        if let Some(rt) = runtimes.borrow_mut().pop() {
-            return rt;
-        }
-
-        Box::leak(Box::new(SignalRt {
-            signals: RefCell::new(Slab::new()),
-            update_any,
-        }))
+        runtimes.borrow_mut().insert_with(|idx| {
+            Box::leak(Box::new(SignalRt {
+                idx,
+                signals: RefCell::new(Arena::new()),
+                update_any,
+            }))
+        })
     })
 }
 
-/// Push this runtime into the global runtime list
-pub fn reclam_rt(_rt: &'static SignalRt) {
-    RUNTIMES.with(|runtimes| {
-        runtimes.borrow_mut().push(_rt);
-    });
+pub struct RuntimeOwner {
+    idx: RunTimeId,
+}
+
+impl Deref for RuntimeOwner {
+    type Target = RunTimeId;
+
+    fn deref(&self) -> &Self::Target {
+        &self.idx
+    }
+}
+
+impl RuntimeOwner {
+    pub fn new(update_any: Arc<dyn Fn(ScopeId)>) -> Self {
+        Self {
+            idx: claim_rt(update_any),
+        }
+    }
+}
+
+impl Drop for RuntimeOwner {
+    fn drop(&mut self) {
+        // reclaim the runtime
+        RUNTIMES.with(|runtimes| {
+            let mut borrow = runtimes.borrow_mut();
+            println!("Dropping runtime {:?}", self.idx);
+            println!("Borrow: {:?}", borrow);
+            borrow.remove(self.idx);
+            println!("Borrow: {:?}", borrow);
+        });
+    }
 }
 
 pub struct SignalRt {
-    pub(crate) signals: RefCell<Slab<Inner>>,
+    pub(crate) idx: RunTimeId,
+    pub(crate) signals: RefCell<Arena<Inner>>,
     pub(crate) update_any: Arc<dyn Fn(ScopeId)>,
 }
 
+impl std::fmt::Debug for SignalRt {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SignalRt")
+            .field("idx", &self.idx)
+            .field("signals", &self.signals)
+            .finish()
+    }
+}
+
 impl SignalRt {
-    pub fn init<T: 'static>(&'static self, val: T) -> usize {
+    pub fn init<T: 'static>(&self, val: T) -> Index {
         self.signals.borrow_mut().insert(Inner {
             value: Box::new(val),
             subscribers: Vec::new(),
@@ -45,11 +95,11 @@ impl SignalRt {
         })
     }
 
-    pub fn subscribe(&self, id: usize, subscriber: ScopeId) {
+    pub fn subscribe(&self, id: Index, subscriber: ScopeId) {
         self.signals.borrow_mut()[id].subscribers.push(subscriber);
     }
 
-    pub fn get<T: Clone + 'static>(&self, id: usize) -> T {
+    pub fn get<T: Clone + 'static>(&self, id: Index) -> T {
         self.signals.borrow()[id]
             .value
             .downcast_ref::<T>()
@@ -57,7 +107,7 @@ impl SignalRt {
             .unwrap()
     }
 
-    pub fn set<T: 'static>(&self, id: usize, value: T) {
+    pub fn set<T: 'static>(&self, id: Index, value: T) {
         let mut signals = self.signals.borrow_mut();
         let inner = &mut signals[id];
         inner.value = Box::new(value);
@@ -67,48 +117,40 @@ impl SignalRt {
         }
     }
 
-    pub fn remove(&self, id: usize) {
+    pub fn remove(&self, id: Index) {
         self.signals.borrow_mut().remove(id);
     }
 
-    pub fn with<T: 'static, O>(&self, id: usize, f: impl FnOnce(&T) -> O) -> O {
+    pub fn with<T: 'static, O>(&self, id: Index, f: impl FnOnce(&T) -> O) -> O {
         let signals = self.signals.borrow();
         let inner = &signals[id];
         let inner = inner.value.downcast_ref::<T>().unwrap();
         f(inner)
     }
 
-    pub(crate) fn read<T: 'static>(&self, id: usize) -> std::cell::Ref<T> {
-        let signals = self.signals.borrow();
-        std::cell::Ref::map(signals, |signals| {
-            signals[id].value.downcast_ref::<T>().unwrap()
-        })
+    pub(crate) fn update<T: 'static, O>(&self, id: Index, f: impl FnOnce(&mut T) -> O) -> O {
+        let mut signals = self.signals.borrow_mut();
+        f(signals[id].value.downcast_mut::<T>().unwrap())
     }
 
-    pub(crate) fn write<T: 'static>(&self, id: usize) -> std::cell::RefMut<T> {
-        let signals = self.signals.borrow_mut();
-        std::cell::RefMut::map(signals, |signals| {
-            signals[id].value.downcast_mut::<T>().unwrap()
-        })
-    }
-
-    pub(crate) fn getter<T: 'static + Clone>(&self, id: usize) -> &dyn Fn() -> T {
+    pub(crate) fn getter<T: 'static + Clone>(&self, id: Index) -> Rc<dyn Fn() -> T> {
         let mut signals = self.signals.borrow_mut();
         let inner = &mut signals[id];
-        let r = inner.getter.as_mut();
-
-        if r.is_none() {
-            let rt = self;
-            let r = move || rt.get::<T>(id);
-            let getter: Box<dyn Fn() -> T> = Box::new(r);
-            let getter: Box<dyn Fn()> = unsafe { std::mem::transmute(getter) };
-
-            inner.getter = Some(getter);
-        }
-
-        let r = inner.getter.as_ref().unwrap();
-
-        unsafe { std::mem::transmute::<&dyn Fn(), &dyn Fn() -> T>(r) }
+        let idx = self.idx;
+        let getter: Rc<dyn Fn()> = match &mut inner.getter {
+            Some(getter) => {
+                let getter: Rc<dyn Fn() -> T> = unsafe { std::mem::transmute(getter.clone()) };
+                return getter;
+            }
+            None => {
+                let r = move || with_rt(idx, |rt| rt.get::<T>(id));
+                let getter: Rc<dyn Fn() -> T> = Rc::new(r);
+                let getter: Rc<dyn Fn()> = unsafe { std::mem::transmute(getter) };
+                inner.getter = Some(getter.clone());
+                getter
+            }
+        };
+        unsafe { std::mem::transmute(getter) }
     }
 }
 
@@ -116,6 +158,20 @@ pub(crate) struct Inner {
     pub value: Box<dyn Any>,
     pub subscribers: Vec<ScopeId>,
 
-    // todo: this has a soundness hole in it that you might not run into
-    pub getter: Option<Box<dyn Fn()>>,
+    pub getter: Option<Rc<dyn Fn()>>,
+}
+
+impl std::fmt::Debug for Inner {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Inner")
+            .field("value", &self.value)
+            .field("subscribers", &self.subscribers)
+            .finish()
+    }
+}
+
+impl Drop for Inner {
+    fn drop(&mut self) {
+        println!("Dropping inner")
+    }
 }

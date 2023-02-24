@@ -7,4 +7,5 @@ edition = "2018"
 
 [dependencies]
 dioxus-core = { path = "../core" }
+generational-arena = "0.2.8"
 slab = "0.4.7"
