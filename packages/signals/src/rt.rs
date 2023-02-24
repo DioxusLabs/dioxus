@@ -133,7 +133,15 @@ impl SignalRt {
 
     pub(crate) fn update<T: 'static, O>(&self, id: Index, f: impl FnOnce(&mut T) -> O) -> O {
         let mut signals = self.signals.borrow_mut();
-        f(signals[id].value.downcast_mut::<T>().unwrap())
+
+        let inner = &mut signals[id];
+        let r = f(inner.value.downcast_mut::<T>().unwrap());
+
+        for subscriber in inner.subscribers.iter() {
+            (self.update_any)(*subscriber);
+        }
+
+        r
     }
 
     pub(crate) fn getter<T: 'static + Clone>(&self, id: Index) -> Rc<dyn Fn() -> T> {
