@@ -9,7 +9,7 @@ pub(crate) type RunTimeId = Index;
 
 thread_local! {
     // we cannot drop these since any future might be using them
-    static RUNTIMES: RefCell<Arena<&'static SignalRt>> = RefCell::new(Arena::new());
+    static RUNTIMES: RefCell<Arena<SignalRt>> = RefCell::new(Arena::new());
 }
 
 #[inline(always)]
@@ -21,7 +21,7 @@ pub fn with_rt<R>(idx: Index, f: impl FnOnce(&SignalRt) -> R) -> R {
 pub(crate) fn try_with_rt<R>(idx: Index, f: impl FnOnce(&SignalRt) -> R) -> Option<R> {
     RUNTIMES.with(|runtimes| {
         let runtimes = runtimes.borrow();
-        runtimes.get(idx).map(|rt| f(rt))
+        runtimes.get(idx).map(f)
     })
 }
 
@@ -30,12 +30,10 @@ pub(crate) fn try_with_rt<R>(idx: Index, f: impl FnOnce(&SignalRt) -> R) -> Opti
 /// This will reuse dead runtimes
 fn claim_rt(update_any: Arc<dyn Fn(ScopeId)>) -> RunTimeId {
     RUNTIMES.with(|runtimes| {
-        runtimes.borrow_mut().insert_with(|idx| {
-            Box::leak(Box::new(SignalRt {
-                idx,
-                signals: RefCell::new(Arena::new()),
-                update_any,
-            }))
+        runtimes.borrow_mut().insert_with(|idx| SignalRt {
+            idx,
+            signals: RefCell::new(Arena::new()),
+            update_any,
         })
     })
 }
