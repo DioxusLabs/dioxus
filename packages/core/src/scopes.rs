@@ -373,16 +373,11 @@ impl<'src> ScopeState {
         None
     }
 
-    /// Expose state to children further down the [`crate::VirtualDom`] Tree. Does not require `clone` on the context,
-    /// though we do recommend it.
+    /// Expose state to children further down the [`crate::VirtualDom`] Tree. Requires `Clone` on the context to allow getting values down the tree.
     ///
     /// This is a "fundamental" operation and should only be called during initialization of a hook.
     ///
     /// For a hook that provides the same functionality, use `use_provide_context` and `use_context` instead.
-    ///
-    /// If a state is provided that already exists, the new value will not be inserted. Instead, this method will
-    /// return the existing value. This behavior is chosen so shared values do not need to be `Clone`. This particular
-    /// behavior might change in the future.
     ///
     /// # Example
     ///
