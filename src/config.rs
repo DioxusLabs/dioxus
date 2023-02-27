@@ -63,6 +63,7 @@ impl Default for DioxusConfig {
                     title: Some("dioxus | ⛺".into()),
                     base_path: None,
                 },
+                proxy: Some(vec![]),
                 watcher: WebWatcherConfig {
                     watch_path: Some(vec![PathBuf::from("src")]),
                     reload_html: Some(false),
@@ -97,6 +98,7 @@ pub struct ApplicationConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WebConfig {
     pub app: WebAppConfig,
+    pub proxy: Option<Vec<WebProxyConfig>>,
     pub watcher: WebWatcherConfig,
     pub resource: WebResourceConfig,
 }
@@ -105,6 +107,11 @@ pub struct WebConfig {
 pub struct WebAppConfig {
     pub title: Option<String>,
     pub base_path: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WebProxyConfig {
+    pub backend: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

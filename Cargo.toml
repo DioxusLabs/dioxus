@@ -36,6 +36,7 @@ regex = "1.5.4"
 chrono = "0.4.19"
 anyhow = "1.0.53"
 hyper = "0.14.17"
+hyper-rustls = "0.23.2"
 indicatif = "0.17.0-rc.11"
 subprocess = "0.2.9"
 
