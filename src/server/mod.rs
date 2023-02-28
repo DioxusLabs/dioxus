@@ -23,6 +23,8 @@ use tokio::sync::broadcast;
 use tower::ServiceBuilder;
 use tower_http::services::fs::{ServeDir, ServeFileSystemResponseBody};
 
+mod proxy;
+
 pub struct BuildManager {
     config: CrateConfig,
     reload_tx: broadcast::Sender<()>,
@@ -284,16 +286,18 @@ pub async fn startup_hot_reload(ip: String, port: u16, config: CrateConfig) -> R
         )
         .service(ServeDir::new(config.crate_dir.join(&dist_path)));
 
-    let router = Router::new()
-        .route("/_dioxus/ws", get(ws_handler))
-        .fallback(
-            get_service(file_service).handle_error(|error: std::io::Error| async move {
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    format!("Unhandled internal error: {}", error),
-                )
-            }),
-        );
+    let mut router = Router::new().route("/_dioxus/ws", get(ws_handler));
+    for proxy_config in config.dioxus_config.web.proxy.unwrap_or_default() {
+        router = proxy::add_proxy(router, &proxy_config )?;
+    }
+    router = router.fallback(get_service(file_service).handle_error(
+        |error: std::io::Error| async move {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Unhandled internal error: {}", error),
+            )
+        },
+    ));
 
     let router = router
         .route("/_dioxus/hot_reload", get(hot_reload_handler))
@@ -427,8 +431,9 @@ pub async fn startup_default(ip: String, port: u16, config: CrateConfig) -> Resu
         )
         .service(ServeDir::new(config.crate_dir.join(&dist_path)));
 
-    let router = Router::new()
-        .route("/_dioxus/ws", get(ws_handler))
+    let mut router = Router::new().route("/_dioxus/ws", get(ws_handler));
+
+    router = router
         .fallback(
             get_service(file_service).handle_error(|error: std::io::Error| async move {
                 (
@@ -498,6 +503,8 @@ fn print_console_info(ip: &String, port: u16, config: &CrateConfig, options: Pre
         "False"
     };
 
+    let proxies = config.dioxus_config.web.proxy.as_ref();
+
     if options.changed.is_empty() {
         println!(
             "{} @ v{} [{}] \n",
@@ -528,6 +535,14 @@ fn print_console_info(ip: &String, port: u16, config: &CrateConfig, options: Pre
     println!("");
     println!("\t> Profile : {}", profile.green());
     println!("\t> Hot Reload : {}", hot_reload.cyan());
+    if let Some(proxies) = proxies {
+        if !proxies.is_empty() {
+            println!("\t> Proxies :");
+            for proxy in proxies {
+                println!("\t\t- {}", proxy.backend.blue());
+            }
+        }
+    }
     println!("\t> Index Template : {}", custom_html_file.green());
     println!("\t> URL Rewrite [index_on_404] : {}", url_rewrite.purple());
     println!("");
