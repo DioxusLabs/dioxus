@@ -1,6 +1,13 @@
 use rustc_hash::{FxHashMap, FxHashSet};
-use std::any::{Any, TypeId};
+use shipyard::error::GetStorage;
+use shipyard::track::Untracked;
+use shipyard::{
+    Component, Get, IntoBorrow, ScheduledWorkload, System, Unique, View, ViewMut, Workload,
+    WorkloadSystem,
+};
+use std::any::TypeId;
 use std::collections::VecDeque;
+use std::ops::{Deref, DerefMut};
 use std::sync::{Arc, RwLock};
 
 use crate::node::{
@@ -8,10 +15,17 @@ use crate::node::{
 };
 use crate::node_ref::{NodeMask, NodeMaskBuilder};
 use crate::node_watcher::NodeWatcher;
-use crate::passes::{resolve_passes, DirtyNodeStates, TypeErasedPass};
+use crate::passes::{DirtyNodeStates, TypeErasedPass};
 use crate::prelude::AttributeMaskBuilder;
-use crate::tree::{NodeId, Tree};
+use crate::tree::Tree;
+use crate::NodeId;
 use crate::{FxDashSet, SendAnyMap};
+
+#[derive(Unique)]
+struct SendAnyMapWrapper(SendAnyMap);
+
+#[derive(Unique, Default)]
+struct DirtyNodes(FxDashSet<NodeId>);
 
 pub(crate) struct NodesDirty<V: FromAnyValue + Send + Sync> {
     passes_updated: FxHashMap<NodeId, FxHashSet<TypeId>>,
@@ -66,16 +80,19 @@ pub struct RealDom<V: FromAnyValue + Send + Sync = ()> {
     nodes_listening: FxHashMap<String, FxHashSet<NodeId>>,
     pub(crate) dirty_nodes: NodesDirty<V>,
     node_watchers: NodeWatchers<V>,
+    workload: ScheduledWorkload,
     phantom: std::marker::PhantomData<V>,
 }
 
 impl<V: FromAnyValue + Send + Sync> RealDom<V> {
     pub fn new(mut passes: Box<[TypeErasedPass<V>]>) -> RealDom<V> {
         let mut tree = Tree::new();
-        tree.insert_slab::<NodeType<V>>();
-        for pass in passes.iter() {
-            (pass.create)(&mut tree);
+        let mut workload = Workload::new("Main Workload");
+        for pass in &mut *passes {
+            let system = pass.workload.take().unwrap();
+            workload = workload.with_system(system);
         }
+        let (workload, _) = workload.build().unwrap();
         let root_id = tree.root();
         let root_node: NodeType<V> = NodeType::Element(ElementNode {
             tag: "Root".to_string(),
@@ -101,7 +118,6 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
         let mut passes_updated = FxHashMap::default();
         let mut nodes_updated = FxHashMap::default();
 
-        let root_id = NodeId(0);
         passes_updated.insert(root_id, passes.iter().map(|x| x.this_type_id).collect());
         nodes_updated.insert(root_id, NodeMaskBuilder::ALL.build());
 
@@ -114,6 +130,7 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
                 passes,
             },
             node_watchers: Default::default(),
+            workload,
             phantom: std::marker::PhantomData,
         }
     }
@@ -152,12 +169,6 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
         }
     }
 
-    /// Return the number of nodes in the dom.
-    pub fn size(&self) -> usize {
-        // The dom has a root node, ignore it.
-        self.tree.size() - 1
-    }
-
     /// Returns the id of the root node.
     pub fn root_id(&self) -> NodeId {
         self.tree.root()
@@ -171,16 +182,21 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
         self.tree.contains(id).then(|| NodeMut::new(id, self))
     }
 
-    /// WARNING: This escapes the reactive system that the real dom uses. Any changes made with this method will not trigger updates in states when [RealDom::update_state] is called.
-    pub fn get_state_mut_raw<T: Any + Send + Sync>(&mut self, id: NodeId) -> Option<&mut T> {
-        self.tree.get_mut(id)
+    fn borrow_raw<'a, B: IntoBorrow>(&'a self) -> Result<B, GetStorage>
+    where
+        B::Borrow: shipyard::Borrow<'a, View = B>,
+    {
+        self.tree.nodes.borrow()
+    }
+
+    fn borrow_node_type_mut(&self) -> Result<ViewMut<NodeType<V>>, GetStorage> {
+        self.tree.nodes.borrow()
     }
 
     /// Update the state of the dom, after appling some mutations. This will keep the nodes in the dom up to date with their VNode counterparts.
     pub fn update_state(
         &mut self,
         ctx: SendAnyMap,
-        parallel: bool,
     ) -> (FxDashSet<NodeId>, FxHashMap<NodeId, NodeMask>) {
         let passes = std::mem::take(&mut self.dirty_nodes.passes_updated);
         let nodes_updated = std::mem::take(&mut self.dirty_nodes.nodes_updated);
@@ -195,10 +211,17 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
             }
         }
 
-        (
-            resolve_passes(self, dirty_nodes, ctx, parallel),
-            nodes_updated,
-        )
+        let _ = self.tree.remove_unique::<DirtyNodeStates>();
+        let _ = self.tree.remove_unique::<SendAnyMapWrapper>();
+        self.tree.add_unique(dirty_nodes);
+        self.tree.add_unique(SendAnyMapWrapper(ctx));
+        self.tree.add_unique(DirtyNodes::default());
+
+        self.workload.run_with_world(&self.tree.nodes).unwrap();
+
+        let dirty = self.tree.remove_unique::<DirtyNodes>().unwrap();
+
+        (dirty.0, nodes_updated)
     }
 
     pub fn traverse_depth_first(&self, mut f: impl FnMut(NodeRef<V>)) {
@@ -221,7 +244,7 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
                 f(node);
                 if let Some(children) = self.tree.children_ids(id) {
                     for id in children {
-                        queue.push_back(*id);
+                        queue.push_back(id);
                     }
                 }
             }
@@ -258,12 +281,52 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
         }
     }
 
-    pub fn insert_slab<T: Any + Send + Sync>(&mut self) {
-        self.tree.insert_slab::<T>();
-    }
-
     pub fn add_node_watcher(&mut self, watcher: impl NodeWatcher<V> + 'static + Send + Sync) {
         self.node_watchers.write().unwrap().push(Box::new(watcher));
+    }
+}
+
+pub struct ViewEntry<'a, V: Component + Send + Sync> {
+    view: View<'a, V>,
+    id: NodeId,
+}
+
+impl<'a, V: Component + Send + Sync> ViewEntry<'a, V> {
+    fn new(view: View<'a, V>, id: NodeId) -> Self {
+        Self { view, id }
+    }
+}
+
+impl<'a, V: Component + Send + Sync> Deref for ViewEntry<'a, V> {
+    type Target = V;
+
+    fn deref(&self) -> &Self::Target {
+        &self.view[self.id]
+    }
+}
+
+pub struct ViewEntryMut<'a, V: Component<Tracking = Untracked> + Send + Sync> {
+    view: ViewMut<'a, V, Untracked>,
+    id: NodeId,
+}
+
+impl<'a, V: Component<Tracking = Untracked> + Send + Sync> ViewEntryMut<'a, V> {
+    fn new(view: ViewMut<'a, V, Untracked>, id: NodeId) -> Self {
+        Self { view, id }
+    }
+}
+
+impl<'a, V: Component<Tracking = Untracked> + Send + Sync> Deref for ViewEntryMut<'a, V> {
+    type Target = V;
+
+    fn deref(&self) -> &Self::Target {
+        self.view.get(self.id).unwrap()
+    }
+}
+
+impl<'a, V: Component<Tracking = Untracked> + Send + Sync> DerefMut for ViewEntryMut<'a, V> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        (&mut self.view).get(self.id).unwrap()
     }
 }
 
@@ -273,17 +336,19 @@ pub trait NodeImmutable<V: FromAnyValue + Send + Sync>: Sized {
     fn id(&self) -> NodeId;
 
     #[inline]
-    fn node_type(&self) -> &NodeType<V> {
+    fn node_type(&self) -> ViewEntry<NodeType<V>> {
         self.get().unwrap()
     }
 
     #[inline]
-    fn get<T: Any + Sync + Send>(&self) -> Option<&T> {
-        self.real_dom().tree.get(self.id())
+    fn get<'a, T: Component + Sync + Send>(&'a self) -> Option<ViewEntry<'a, T>> {
+        // self.real_dom().tree.get(self.id())
+        let view: View<'a, T> = self.real_dom().borrow_raw().ok()?;
+        Some(ViewEntry::new(view, self.id()))
     }
 
     #[inline]
-    fn child_ids(&self) -> Option<&[NodeId]> {
+    fn child_ids(&self) -> Option<Vec<NodeId>> {
         self.real_dom().tree.children_ids(self.id())
     }
 
@@ -413,7 +478,9 @@ impl<'a, V: FromAnyValue + Send + Sync> NodeMut<'a, V> {
     }
 
     #[inline]
-    pub fn get_mut<T: Any + Sync + Send>(&mut self) -> Option<&mut T> {
+    pub fn get_mut<T: Component<Tracking = Untracked> + Sync + Send>(
+        &mut self,
+    ) -> Option<ViewEntryMut<T>> {
         // mark the node state as dirty
         self.dom
             .dirty_nodes
@@ -421,11 +488,12 @@ impl<'a, V: FromAnyValue + Send + Sync> NodeMut<'a, V> {
             .entry(self.id)
             .or_default()
             .insert(TypeId::of::<T>());
-        self.dom.tree.get_mut(self.id)
+        let view_mut: ViewMut<T> = self.dom.borrow_raw().ok()?;
+        Some(ViewEntryMut::new(view_mut, self.id))
     }
 
     #[inline]
-    pub fn insert<T: Any + Sync + Send>(&mut self, value: T) {
+    pub fn insert<T: Component + Sync + Send>(&mut self, value: T) {
         // mark the node state as dirty
         self.dom
             .dirty_nodes
@@ -493,17 +561,20 @@ impl<'a, V: FromAnyValue + Send + Sync> NodeMut<'a, V> {
     #[inline]
     pub fn remove(&mut self) {
         let id = self.id();
-        if let NodeType::Element(ElementNode { listeners, .. })
-        | NodeType::Text(TextNode { listeners, .. }) =
-            self.dom.get_state_mut_raw::<NodeType<V>>(id).unwrap()
         {
-            let listeners = std::mem::take(listeners);
-            for event in listeners {
-                self.dom
-                    .nodes_listening
-                    .get_mut(&event)
-                    .unwrap()
-                    .remove(&id);
+            let RealDom {
+                tree,
+                nodes_listening,
+                ..
+            } = &mut self.dom;
+            let mut view: ViewMut<NodeType<V>> = tree.nodes.borrow().unwrap();
+            if let NodeType::Element(ElementNode { listeners, .. })
+            | NodeType::Text(TextNode { listeners, .. }) = (&mut view).get(id).unwrap()
+            {
+                let listeners = std::mem::take(listeners);
+                for event in listeners {
+                    nodes_listening.get_mut(&event).unwrap().remove(&id);
+                }
             }
         }
         self.mark_removed();
@@ -539,22 +610,27 @@ impl<'a, V: FromAnyValue + Send + Sync> NodeMut<'a, V> {
     #[inline]
     pub fn add_event_listener(&mut self, event: &str) {
         let id = self.id();
-        let node_type: &mut NodeType<V> = self.dom.tree.get_mut(self.id).unwrap();
+        let RealDom {
+            tree,
+            dirty_nodes,
+            nodes_listening,
+            ..
+        } = &mut self.dom;
+        let mut view: ViewMut<NodeType<V>> = tree.nodes.borrow().unwrap();
+        let node_type: &mut NodeType<V> = (&mut view).get(self.id).unwrap();
         if let NodeType::Element(ElementNode { listeners, .. })
         | NodeType::Text(TextNode { listeners, .. }) = node_type
         {
-            self.dom
-                .dirty_nodes
-                .mark_dirty(self.id, NodeMaskBuilder::new().with_listeners().build());
+            dirty_nodes.mark_dirty(self.id, NodeMaskBuilder::new().with_listeners().build());
             listeners.insert(event.to_string());
-            match self.dom.nodes_listening.get_mut(event) {
+            match nodes_listening.get_mut(event) {
                 Some(hs) => {
                     hs.insert(id);
                 }
                 None => {
                     let mut hs = FxHashSet::default();
                     hs.insert(id);
-                    self.dom.nodes_listening.insert(event.to_string(), hs);
+                    nodes_listening.insert(event.to_string(), hs);
                 }
             }
         }
@@ -563,16 +639,21 @@ impl<'a, V: FromAnyValue + Send + Sync> NodeMut<'a, V> {
     #[inline]
     pub fn remove_event_listener(&mut self, event: &str) {
         let id = self.id();
-        let node_type: &mut NodeType<V> = self.dom.tree.get_mut(self.id).unwrap();
+        let RealDom {
+            tree,
+            dirty_nodes,
+            nodes_listening,
+            ..
+        } = &mut self.dom;
+        let mut view: ViewMut<NodeType<V>> = tree.nodes.borrow().unwrap();
+        let node_type: &mut NodeType<V> = (&mut view).get(self.id).unwrap();
         if let NodeType::Element(ElementNode { listeners, .. })
         | NodeType::Text(TextNode { listeners, .. }) = node_type
         {
-            self.dom
-                .dirty_nodes
-                .mark_dirty(self.id, NodeMaskBuilder::new().with_listeners().build());
+            dirty_nodes.mark_dirty(self.id, NodeMaskBuilder::new().with_listeners().build());
             listeners.remove(event);
 
-            self.dom.nodes_listening.get_mut(event).unwrap().remove(&id);
+            nodes_listening.get_mut(event).unwrap().remove(&id);
         }
     }
 
@@ -591,28 +672,32 @@ impl<'a, V: FromAnyValue + Send + Sync> NodeMut<'a, V> {
     }
 
     pub fn node_type_mut(&mut self) -> NodeTypeMut<'_, V> {
-        let Self { id, dom } = self;
+        let id = self.id();
         let RealDom {
-            dirty_nodes, tree, ..
-        } = dom;
-        let node_type = tree.get_mut(*id).unwrap();
-        match node_type {
-            NodeType::Element(element) => NodeTypeMut::Element(ElementNodeMut {
-                id: *id,
-                element,
+            tree, dirty_nodes, ..
+        } = &mut self.dom;
+        let view: ViewMut<NodeType<V>> = tree.nodes.borrow().unwrap();
+        let node_type = ViewEntryMut::new(view, id);
+        match &*node_type {
+            NodeType::Element(_) => NodeTypeMut::Element(ElementNodeMut {
+                id,
+                element: node_type,
                 dirty_nodes,
             }),
-            NodeType::Text(text) => {
-                dirty_nodes.mark_dirty(self.id, NodeMaskBuilder::new().with_text().build());
-
-                NodeTypeMut::Text(&mut text.text)
-            }
+            NodeType::Text(_) => NodeTypeMut::Text(TextNodeMut {
+                id,
+                text: node_type,
+                dirty_nodes,
+            }),
             NodeType::Placeholder => NodeTypeMut::Placeholder,
         }
     }
 
     pub fn set_type(&mut self, new: NodeType<V>) {
-        *self.dom.tree.get_mut::<NodeType<V>>(self.id).unwrap() = new;
+        {
+            let mut view: ViewMut<NodeType<V>> = self.dom.borrow_node_type_mut().unwrap();
+            *(&mut view).get(self.id).unwrap() = new;
+        }
         self.dom
             .dirty_nodes
             .mark_dirty(self.id, NodeMaskBuilder::ALL.build())
@@ -638,39 +723,94 @@ impl<'a, V: FromAnyValue + Send + Sync> NodeMut<'a, V> {
 
 pub enum NodeTypeMut<'a, V: FromAnyValue + Send + Sync = ()> {
     Element(ElementNodeMut<'a, V>),
-    Text(&'a mut String),
+    Text(TextNodeMut<'a, V>),
     Placeholder,
+}
+
+pub struct TextNodeMut<'a, V: FromAnyValue + Send + Sync = ()> {
+    id: NodeId,
+    text: ViewEntryMut<'a, NodeType<V>>,
+    dirty_nodes: &'a mut NodesDirty<V>,
+}
+
+impl<V: FromAnyValue + Send + Sync> TextNodeMut<'_, V> {
+    pub fn text(&self) -> &str {
+        match &*self.text {
+            NodeType::Text(text) => &text.text,
+            _ => unreachable!(),
+        }
+    }
+
+    pub fn text_mut(&mut self) -> &mut String {
+        self.dirty_nodes
+            .mark_dirty(self.id, NodeMaskBuilder::new().with_text().build());
+        match &mut *self.text {
+            NodeType::Text(text) => &mut text.text,
+            _ => unreachable!(),
+        }
+    }
+}
+
+impl<V: FromAnyValue + Send + Sync> Deref for TextNodeMut<'_, V> {
+    type Target = String;
+
+    fn deref(&self) -> &Self::Target {
+        match &*self.text {
+            NodeType::Text(text) => &text.text,
+            _ => unreachable!(),
+        }
+    }
+}
+
+impl<V: FromAnyValue + Send + Sync> DerefMut for TextNodeMut<'_, V> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.text_mut()
+    }
 }
 
 pub struct ElementNodeMut<'a, V: FromAnyValue + Send + Sync = ()> {
     id: NodeId,
-    element: &'a mut ElementNode<V>,
+    element: ViewEntryMut<'a, NodeType<V>>,
     dirty_nodes: &'a mut NodesDirty<V>,
 }
 
 impl<V: FromAnyValue + Send + Sync> ElementNodeMut<'_, V> {
+    fn element(&self) -> &ElementNode<V> {
+        match &*self.element {
+            NodeType::Element(element) => element,
+            _ => unreachable!(),
+        }
+    }
+
+    fn element_mut(&mut self) -> &mut ElementNode<V> {
+        match &mut *self.element {
+            NodeType::Element(element) => element,
+            _ => unreachable!(),
+        }
+    }
+
     pub fn tag(&self) -> &str {
-        &self.element.tag
+        &self.element().tag
     }
 
     pub fn tag_mut(&mut self) -> &mut String {
         self.dirty_nodes
             .mark_dirty(self.id, NodeMaskBuilder::new().with_tag().build());
-        &mut self.element.tag
+        &mut self.element_mut().tag
     }
 
     pub fn namespace(&self) -> Option<&str> {
-        self.element.namespace.as_deref()
+        self.element().namespace.as_deref()
     }
 
     pub fn namespace_mut(&mut self) -> &mut Option<String> {
         self.dirty_nodes
             .mark_dirty(self.id, NodeMaskBuilder::new().with_namespace().build());
-        &mut self.element.namespace
+        &mut self.element_mut().namespace
     }
 
     pub fn attributes(&self) -> &FxHashMap<OwnedAttributeDiscription, OwnedAttributeValue<V>> {
-        &self.element.attributes
+        &self.element().attributes
     }
 
     pub fn set_attribute(
@@ -684,7 +824,7 @@ impl<V: FromAnyValue + Send + Sync> ElementNodeMut<'_, V> {
                 .with_attrs(AttributeMaskBuilder::Some(&[&name.name]))
                 .build(),
         );
-        self.element.attributes.insert(name, value)
+        self.element_mut().attributes.insert(name, value)
     }
 
     pub fn remove_attributes(
@@ -697,7 +837,7 @@ impl<V: FromAnyValue + Send + Sync> ElementNodeMut<'_, V> {
                 .with_attrs(AttributeMaskBuilder::Some(&[&name.name]))
                 .build(),
         );
-        self.element.attributes.remove(name)
+        self.element_mut().attributes.remove(name)
     }
 
     pub fn get_attribute_mut(
@@ -710,10 +850,10 @@ impl<V: FromAnyValue + Send + Sync> ElementNodeMut<'_, V> {
                 .with_attrs(AttributeMaskBuilder::Some(&[&name.name]))
                 .build(),
         );
-        self.element.attributes.get_mut(name)
+        self.element_mut().attributes.get_mut(name)
     }
 
     pub fn listeners(&self) -> &FxHashSet<String> {
-        &self.element.listeners
+        &self.element().listeners
     }
 }

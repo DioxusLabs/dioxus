@@ -1,4 +1,5 @@
 use rustc_hash::{FxHashMap, FxHashSet};
+use shipyard::Component;
 use std::{any::Any, fmt::Debug};
 
 #[derive(Debug, Clone, Default)]
@@ -25,7 +26,7 @@ impl TextNode {
 }
 
 /// A type of node with data specific to the node type. The types are a subset of the [VNode] types.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Component)]
 pub enum NodeType<V: FromAnyValue = ()> {
     Text(TextNode),
     Element(ElementNode<V>),

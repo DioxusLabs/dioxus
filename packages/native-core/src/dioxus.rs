@@ -1,5 +1,6 @@
 use dioxus_core::{BorrowedAttributeValue, ElementId, Mutations, TemplateNode};
 use rustc_hash::{FxHashMap, FxHashSet};
+use shipyard::Component;
 
 use crate::{
     node::{
@@ -11,6 +12,9 @@ use crate::{
     NodeId, NodeMut, RealDom,
 };
 
+#[derive(Component)]
+struct ElementIdComponent(ElementId);
+
 pub struct DioxusState {
     templates: FxHashMap<String, Vec<NodeId>>,
     stack: Vec<NodeId>,
@@ -19,10 +23,9 @@ pub struct DioxusState {
 
 impl DioxusState {
     pub fn create(rdom: &mut RealDom) -> Self {
-        rdom.insert_slab::<ElementId>();
         let root_id = rdom.root_id();
         let mut root = rdom.get_mut(root_id).unwrap();
-        root.insert(ElementId(0));
+        root.insert(ElementIdComponent(ElementId(0)));
         Self {
             templates: FxHashMap::default(),
             stack: vec![root_id],
@@ -40,7 +43,7 @@ impl DioxusState {
 
     fn set_element_id(&mut self, mut node: NodeMut, element_id: ElementId) {
         let node_id = node.id();
-        node.insert(element_id);
+        node.insert(ElementIdComponent(element_id));
         if self.node_id_mapping.len() <= element_id.0 {
             self.node_id_mapping.resize(element_id.0 + 1, None);
         }
@@ -104,9 +107,11 @@ impl DioxusState {
                     let node = rdom.get_mut(node_id).unwrap();
                     self.set_element_id(node, id);
                     let mut node = rdom.get_mut(node_id).unwrap();
-                    if let NodeTypeMut::Text(text) = node.node_type_mut() {
-                        *text = value.to_string();
+                    let node_type_mut = node.node_type_mut();
+                    if let NodeTypeMut::Text(mut text) = node_type_mut {
+                        *text.text_mut() = value.to_string();
                     } else {
+                        drop(node_type_mut);
                         node.set_type(NodeType::Text(TextNode {
                             text: value.to_string(),
                             listeners: FxHashSet::default(),
@@ -161,7 +166,8 @@ impl DioxusState {
                 } => {
                     let node_id = self.element_to_node_id(id);
                     let mut node = rdom.get_mut(node_id).unwrap();
-                    if let NodeTypeMut::Element(element) = &mut node.node_type_mut() {
+                    let mut node_type_mut = node.node_type_mut();
+                    if let NodeTypeMut::Element(element) = &mut node_type_mut {
                         if let BorrowedAttributeValue::None = &value {
                             element.remove_attributes(&OwnedAttributeDiscription {
                                 name: name.to_string(),
@@ -181,8 +187,9 @@ impl DioxusState {
                 SetText { value, id } => {
                     let node_id = self.element_to_node_id(id);
                     let mut node = rdom.get_mut(node_id).unwrap();
-                    if let NodeTypeMut::Text(text) = node.node_type_mut() {
-                        *text = value.to_string();
+                    let node_type_mut = node.node_type_mut();
+                    if let NodeTypeMut::Text(mut text) = node_type_mut {
+                        *text.text_mut() = value.to_string();
                     }
                 }
                 NewEventListener { name, id } => {
@@ -260,7 +267,8 @@ fn create_template_node(rdom: &mut RealDom, node: &TemplateNode) -> NodeId {
 
 pub trait NodeImmutableDioxusExt<V: FromAnyValue + Send + Sync>: NodeImmutable<V> {
     fn mounted_id(&self) -> Option<ElementId> {
-        self.get().copied()
+        let id = self.get::<ElementIdComponent>();
+        id.map(|id| id.0)
     }
 }
 

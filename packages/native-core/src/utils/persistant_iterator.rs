@@ -73,7 +73,7 @@ pub struct PersistantElementIter {
 
 impl PersistantElementIter {
     pub fn create<V: FromAnyValue + Send + Sync>(rdom: &mut RealDom<V>) -> Self {
-        let inner = Arc::new(Mutex::new(smallvec::smallvec![NodeId(0)]));
+        let inner = Arc::new(Mutex::new(smallvec::smallvec![rdom.root_id()]));
 
         rdom.add_node_watcher(PersistantElementIterUpdater {
             stack: inner.clone(),
@@ -87,7 +87,7 @@ impl PersistantElementIter {
     pub fn next<V: FromAnyValue + Send + Sync>(&mut self, rdom: &RealDom<V>) -> ElementProduced {
         let mut stack = self.stack.lock().unwrap();
         if stack.is_empty() {
-            let id = NodeId(0);
+            let id = rdom.root_id();
             let new = id;
             stack.push(new);
             ElementProduced::Looped(id)
@@ -113,7 +113,7 @@ impl PersistantElementIter {
                     // otherwise, continue the loop and go to the parent
                 } else {
                     // if there is no parent, loop back to the root
-                    let new = NodeId(0);
+                    let new = rdom.root_id();
                     stack.clear();
                     stack.push(new);
                     return ElementProduced::Looped(new);
@@ -139,7 +139,7 @@ impl PersistantElementIter {
         }
         let mut stack = self.stack.lock().unwrap();
         if stack.is_empty() {
-            let id = NodeId(0);
+            let id = rdom.root_id();
             let last = push_back(&mut stack, rdom.get(id).unwrap());
             ElementProduced::Looped(last)
         } else if let Some(current) = stack.pop().and_then(|last| rdom.get(last)) {
@@ -154,13 +154,13 @@ impl PersistantElementIter {
                 ElementProduced::Progressed(*parent)
             } else {
                 // if there is no parent, loop back to the root
-                let id = NodeId(0);
+                let id = rdom.root_id();
                 let last = push_back(&mut stack, rdom.get(id).unwrap());
                 ElementProduced::Looped(last)
             }
         } else {
             // if there is no parent, loop back to the root
-            let id = NodeId(0);
+            let id = rdom.root_id();
             let last = push_back(&mut stack, rdom.get(id).unwrap());
             ElementProduced::Looped(last)
         }
