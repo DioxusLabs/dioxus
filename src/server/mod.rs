@@ -182,8 +182,26 @@ pub async fn startup_hot_reload(ip: String, port: u16, config: CrateConfig) -> R
                 if let Ok(evt) = evt {
                     let mut messages: Vec<Template<'static>> = Vec::new();
                     for path in evt.paths.clone() {
+                        // if this is not a rust file, rebuild the whole project
                         if path.extension().and_then(|p| p.to_str()) != Some("rs") {
-                            continue;
+                            match build_manager.rebuild() {
+                                Ok(res) => {
+                                    print_console_info(
+                                        &watcher_ip,
+                                        port,
+                                        &config,
+                                        PrettierOptions {
+                                            changed: evt.paths,
+                                            warnings: res.warnings,
+                                            elapsed_time: res.elapsed_time,
+                                        },
+                                    );
+                                }
+                                Err(err) => {
+                                    log::error!("{}", err);
+                                }
+                            }
+                            return;
                         }
                         // find changes to the rsx in the file
                         let mut map = file_map.lock().unwrap();
