@@ -102,7 +102,7 @@ pub fn use_shared_state<T: 'static>(cx: &ScopeState) -> Option<&UseSharedState<T
     state.as_ref().map(|s| &s.state)
 }
 
-struct UseSharedStateOwner<T: 'static> {
+struct UseSharedStateOwner<T> {
     state: UseSharedState<T>,
     scope_id: ScopeId,
 }
