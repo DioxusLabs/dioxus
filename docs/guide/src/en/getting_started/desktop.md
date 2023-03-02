@@ -14,7 +14,7 @@ Examples:
 
 The desktop is a powerful target for Dioxus but is currently limited in capability when compared to the Web platform. Currently, desktop apps are rendered with the platform's WebView library, but your Rust code is running natively on a native thread. This means that browser APIs are *not* available, so rendering WebGL, Canvas, etc is not as easy as the Web. However, native system APIs *are* accessible, so streaming, WebSockets, filesystem, etc are all viable APIs. In the future, we plan to move to a custom web renderer-based DOM renderer with WGPU integrations.
 
-Dioxus Desktop is built off [Tauri](https://tauri.app/). Right now there aren't any Dioxus abstractions over keyboard shortcuts, menubar, handling, etc, so you'll want to leverage Tauri – mostly [Wry](http://github.com/tauri-apps/wry/) and [Tao](http://github.com/tauri-apps/tao)) directly.
+Dioxus Desktop is built off [Tauri](https://tauri.app/). Right now there aren't any Dioxus abstractions over the menubar, handling, etc, so you'll want to leverage Tauri – mostly [Wry](http://github.com/tauri-apps/wry/) and [Tao](http://github.com/tauri-apps/tao)) directly.
 
 # Getting started
 
