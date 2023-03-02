@@ -1,5 +1,7 @@
 use crate::{CallBody, HotReloadingContext};
 use dioxus_core::Template;
+use krates::cm::MetadataCommand;
+use krates::Cmd;
 pub use proc_macro2::TokenStream;
 pub use std::collections::HashMap;
 use std::path::PathBuf;
@@ -27,6 +29,7 @@ pub struct FileMapBuildResult<Ctx: HotReloadingContext> {
 
 pub struct FileMap<Ctx: HotReloadingContext> {
     pub map: HashMap<PathBuf, (String, Option<Template<'static>>)>,
+    in_workspace: HashMap<PathBuf, bool>,
     phantom: std::marker::PhantomData<Ctx>,
 }
 
@@ -76,6 +79,7 @@ impl<Ctx: HotReloadingContext> FileMap<Ctx> {
         let FileMapSearchResult { map, errors } = find_rs_files(path, &mut filter)?;
         let result = Self {
             map,
+            in_workspace: HashMap::new(),
             phantom: std::marker::PhantomData,
         };
         Ok(FileMapBuildResult {
@@ -90,6 +94,7 @@ impl<Ctx: HotReloadingContext> FileMap<Ctx> {
         let mut src = String::new();
         file.read_to_string(&mut src)?;
         if let Ok(syntax) = syn::parse_file(&src) {
+            let in_workspace = self.child_in_workspace(crate_dir)?;
             if let Some((old_src, template_slot)) = self.map.get_mut(file_path) {
                 if let Ok(old) = syn::parse_file(old_src) {
                     match find_rsx(&syntax, &old) {
@@ -105,7 +110,17 @@ impl<Ctx: HotReloadingContext> FileMap<Ctx> {
                                     syn::parse2::<CallBody>(old.tokens),
                                     syn::parse2::<CallBody>(new),
                                 ) {
-                                    if let Ok(file) = file_path.strip_prefix(crate_dir) {
+                                    // if the file!() macro is invoked in a workspace, the path is relative to the workspace root, otherwise it's relative to the crate root
+                                    // we need to check if the file is in a workspace or not and strip the prefix accordingly
+                                    let prefix = if in_workspace {
+                                        crate_dir.parent().ok_or(io::Error::new(
+                                            io::ErrorKind::Other,
+                                            "Could not load workspace",
+                                        ))?
+                                    } else {
+                                        crate_dir
+                                    };
+                                    if let Ok(file) = file_path.strip_prefix(prefix) {
                                         let line = old_start.line;
                                         let column = old_start.column + 1;
                                         let location = file.display().to_string()
@@ -156,5 +171,24 @@ impl<Ctx: HotReloadingContext> FileMap<Ctx> {
             }
         }
         Ok(UpdateResult::NeedsRebuild)
+    }
+
+    fn child_in_workspace(&mut self, crate_dir: &Path) -> io::Result<bool> {
+        if let Some(in_workspace) = self.in_workspace.get(crate_dir) {
+            Ok(*in_workspace)
+        } else {
+            let mut cmd = Cmd::new();
+            let manafest_path = crate_dir.join("Cargo.toml");
+            cmd.manifest_path(&manafest_path);
+            let cmd: MetadataCommand = cmd.into();
+            let metadata = cmd
+                .exec()
+                .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
+
+            let in_workspace = metadata.workspace_root != crate_dir;
+            self.in_workspace
+                .insert(crate_dir.to_path_buf(), in_workspace);
+            Ok(in_workspace)
+        }
     }
 }
