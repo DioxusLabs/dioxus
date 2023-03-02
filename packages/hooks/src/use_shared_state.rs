@@ -102,6 +102,7 @@ pub fn use_shared_state<T: 'static>(cx: &ScopeState) -> Option<&UseSharedState<T
     state.as_ref().map(|s| &s.state)
 }
 
+/// This wrapper detects when the hook is dropped and will unsubscribe when the component is unmounted
 struct UseSharedStateOwner<T> {
     state: UseSharedState<T>,
     scope_id: ScopeId,
@@ -115,15 +116,18 @@ impl<T> Drop for UseSharedStateOwner<T> {
     }
 }
 
+/// State that is shared between components through the context system
 pub struct UseSharedState<T> {
     pub(crate) inner: Rc<RefCell<ProvidedStateInner<T>>>,
 }
 
 impl<T> UseSharedState<T> {
+    /// Notify all consumers of the state that it has changed. (This is called automatically when you call "write")
     pub fn notify_consumers(&self) {
         self.inner.borrow_mut().notify_consumers();
     }
 
+    /// Read the shared value
     pub fn read(&self) -> Ref<'_, T> {
         Ref::map(self.inner.borrow(), |inner| &inner.value)
     }
@@ -131,7 +135,7 @@ impl<T> UseSharedState<T> {
     /// Calling "write" will force the component to re-render
     ///
     ///
-    /// TODO: We prevent unncessary notifications only in the hook, but we should figure out some more global lock
+    // TODO: We prevent unncessary notifications only in the hook, but we should figure out some more global lock
     pub fn write(&self) -> RefMut<'_, T> {
         let mut value = self.inner.borrow_mut();
         value.notify_consumers();
