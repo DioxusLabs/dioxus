@@ -1,6 +1,6 @@
 use dioxus_core::{ScopeId, ScopeState};
 use std::{
-    cell::{Cell, Ref, RefCell, RefMut},
+    cell::{Ref, RefCell, RefMut},
     collections::HashSet,
     rc::Rc,
     sync::Arc,
@@ -9,8 +9,8 @@ use std::{
 type ProvidedState<T> = Rc<RefCell<ProvidedStateInner<T>>>;
 
 // Tracks all the subscribers to a shared State
-pub struct ProvidedStateInner<T> {
-    value: Rc<RefCell<T>>,
+pub(crate) struct ProvidedStateInner<T> {
+    value: T,
     notify_any: Arc<dyn Fn(ScopeId)>,
     consumers: HashSet<ScopeId>,
 }
@@ -21,14 +21,6 @@ impl<T> ProvidedStateInner<T> {
             (self.notify_any)(*consumer);
         }
     }
-
-    pub fn write(&self) -> RefMut<T> {
-        self.value.borrow_mut()
-    }
-
-    pub fn read(&self) -> Ref<T> {
-        self.value.borrow()
-    }
 }
 
 /// This hook provides some relatively light ergonomics around shared state.
@@ -38,18 +30,57 @@ impl<T> ProvidedStateInner<T> {
 ///
 /// # Example
 ///
-/// ## Provider
+/// ```rust
+/// # use dioxus::prelude::*;
+/// #
+/// # fn app(cx: Scope) -> Element {
+/// #     render! {
+/// #         Parent{}
+/// #     }
+/// # }
 ///
-/// ```rust, ignore
+/// #[derive(Clone, Copy)]
+/// enum Theme {
+///     Light,
+///     Dark,
+/// }
 ///
+/// // Provider
+/// fn Parent<'a>(cx: Scope<'a>) -> Element<'a> {
+///     use_shared_state_provider(cx, || Theme::Dark);
+///     let theme = use_shared_state::<Theme>(cx).unwrap();
 ///
-/// ```
+///     render! {
+///         button{
+///             onclick: move |_| {
+///                 let current_theme = *theme.read();
+///                 *theme.write() = match current_theme {
+///                     Theme::Dark => Theme::Light,
+///                     Theme::Light => Theme::Dark,
+///                 };
+///             },
+///             "Change theme"
+///         }
+///         Child{}
+///     }
+/// }
 ///
-/// ## Consumer
+/// // Consumer
+/// fn Child<'a>(cx: Scope<'a>) -> Element<'a> {
+///     let theme = use_shared_state::<Theme>(cx).unwrap();
+///     let current_theme = *theme.read();
 ///
-/// ```rust, ignore
-///
-///
+///     render! {
+///         match &*theme.read() {
+///             Theme::Dark => {
+///                 "Dark mode"
+///             }
+///             Theme::Light => {
+///                 "Light mode"
+///             }
+///         }
+///     }
+/// }
 /// ```
 ///
 /// # How it works
@@ -57,118 +88,126 @@ impl<T> ProvidedStateInner<T> {
 /// Any time a component calls `write`, every consumer of the state will be notified - excluding the provider.
 ///
 /// Right now, there is not a distinction between read-only and write-only, so every consumer will be notified.
-///
-///
-///
-pub fn use_shared_state<T: 'static>(cx: &ScopeState) -> Option<UseSharedState<T>> {
-    let state = cx.use_hook(|| {
+pub fn use_shared_state<T: 'static>(cx: &ScopeState) -> Option<&UseSharedState<T>> {
+    let state: &Option<UseSharedStateOwner<T>> = &*cx.use_hook(move || {
         let scope_id = cx.scope_id();
-        let root = cx.consume_context::<ProvidedState<T>>();
+        let root = cx.consume_context::<ProvidedState<T>>()?;
 
-        if let Some(root) = root.as_ref() {
-            root.borrow_mut().consumers.insert(scope_id);
-        }
+        root.borrow_mut().consumers.insert(scope_id);
 
-        let value = root.as_ref().map(|f| f.borrow().value.clone());
-        SharedStateInner {
-            root,
-            value,
-            scope_id,
-            needs_notification: Cell::new(false),
-        }
+        let state = UseSharedState { inner: root };
+        let owner = UseSharedStateOwner { state, scope_id };
+        Some(owner)
     });
-
-    state.needs_notification.set(false);
-    match (&state.value, &state.root) {
-        (Some(value), Some(root)) => Some(UseSharedState {
-            cx,
-            value,
-            root,
-            needs_notification: &state.needs_notification,
-        }),
-        _ => None,
-    }
+    state.as_ref().map(|s| &s.state)
 }
 
-struct SharedStateInner<T: 'static> {
-    root: Option<ProvidedState<T>>,
-    value: Option<Rc<RefCell<T>>>,
+/// This wrapper detects when the hook is dropped and will unsubscribe when the component is unmounted
+struct UseSharedStateOwner<T> {
+    state: UseSharedState<T>,
     scope_id: ScopeId,
-    needs_notification: Cell<bool>,
 }
-impl<T> Drop for SharedStateInner<T> {
+
+impl<T> Drop for UseSharedStateOwner<T> {
     fn drop(&mut self) {
-        // we need to unsubscribe when our component is unounted
-        if let Some(root) = &self.root {
-            let mut root = root.borrow_mut();
-            root.consumers.remove(&self.scope_id);
-        }
+        // we need to unsubscribe when our component is unmounted
+        let mut root = self.state.inner.borrow_mut();
+        root.consumers.remove(&self.scope_id);
     }
 }
 
-pub struct UseSharedState<'a, T: 'static> {
-    pub(crate) cx: &'a ScopeState,
-    pub(crate) value: &'a Rc<RefCell<T>>,
-    pub(crate) root: &'a Rc<RefCell<ProvidedStateInner<T>>>,
-    pub(crate) needs_notification: &'a Cell<bool>,
+/// State that is shared between components through the context system
+pub struct UseSharedState<T> {
+    pub(crate) inner: Rc<RefCell<ProvidedStateInner<T>>>,
 }
 
-impl<'a, T: 'static> UseSharedState<'a, T> {
+impl<T> UseSharedState<T> {
+    /// Notify all consumers of the state that it has changed. (This is called automatically when you call "write")
+    pub fn notify_consumers(&self) {
+        self.inner.borrow_mut().notify_consumers();
+    }
+
+    /// Read the shared value
     pub fn read(&self) -> Ref<'_, T> {
-        self.value.borrow()
-    }
-
-    pub fn notify_consumers(self) {
-        if !self.needs_notification.get() {
-            self.root.borrow_mut().notify_consumers();
-            self.needs_notification.set(true);
-        }
-    }
-
-    pub fn read_write(&self) -> (Ref<'_, T>, &Self) {
-        (self.read(), self)
+        Ref::map(self.inner.borrow(), |inner| &inner.value)
     }
 
     /// Calling "write" will force the component to re-render
     ///
     ///
-    /// TODO: We prevent unncessary notifications only in the hook, but we should figure out some more global lock
+    // TODO: We prevent unncessary notifications only in the hook, but we should figure out some more global lock
     pub fn write(&self) -> RefMut<'_, T> {
-        self.cx.needs_update();
-        self.notify_consumers();
-        self.value.borrow_mut()
+        let mut value = self.inner.borrow_mut();
+        value.notify_consumers();
+        RefMut::map(value, |inner| &mut inner.value)
     }
 
     /// Allows the ability to write the value without forcing a re-render
     pub fn write_silent(&self) -> RefMut<'_, T> {
-        self.value.borrow_mut()
-    }
-
-    pub fn inner(&self) -> Rc<RefCell<ProvidedStateInner<T>>> {
-        self.root.clone()
+        RefMut::map(self.inner.borrow_mut(), |inner| &mut inner.value)
     }
 }
 
-impl<T> Copy for UseSharedState<'_, T> {}
-impl<'a, T> Clone for UseSharedState<'a, T>
-where
-    T: 'static,
-{
+impl<T> Clone for UseSharedState<T> {
     fn clone(&self) -> Self {
-        UseSharedState {
-            cx: self.cx,
-            value: self.value,
-            root: self.root,
-            needs_notification: self.needs_notification,
+        Self {
+            inner: self.inner.clone(),
         }
     }
 }
 
-/// Provide some state for components down the hierarchy to consume without having to drill props.
+impl<T: PartialEq> PartialEq for UseSharedState<T> {
+    fn eq(&self, other: &Self) -> bool {
+        let first = self.inner.borrow();
+        let second = other.inner.borrow();
+        first.value == second.value
+    }
+}
+
+/// Provide some state for components down the hierarchy to consume without having to drill props. See [`use_shared_state`] to consume the state
+///
+///
+/// # Example
+///
+/// ```rust
+/// # use dioxus::prelude::*;
+/// #
+/// # fn app(cx: Scope) -> Element {
+/// #     render! {
+/// #         Parent{}
+/// #     }
+/// # }
+///
+/// #[derive(Clone, Copy)]
+/// enum Theme {
+///     Light,
+///     Dark,
+/// }
+///
+/// // Provider
+/// fn Parent<'a>(cx: Scope<'a>) -> Element<'a> {
+///     use_shared_state_provider(cx, || Theme::Dark);
+///     let theme = use_shared_state::<Theme>(cx).unwrap();
+///
+///     render! {
+///         button{
+///             onclick: move |_| {
+///                 let current_theme = *theme.read();
+///                 *theme.write() = match current_theme {
+///                     Theme::Dark => Theme::Light,
+///                     Theme::Light => Theme::Dark,
+///                 };
+///             },
+///             "Change theme"
+///         }
+///         // Children components that consume the state...
+///     }
+/// }
+/// ```
 pub fn use_shared_state_provider<T: 'static>(cx: &ScopeState, f: impl FnOnce() -> T) {
     cx.use_hook(|| {
         let state: ProvidedState<T> = Rc::new(RefCell::new(ProvidedStateInner {
-            value: Rc::new(RefCell::new(f())),
+            value: f(),
             notify_any: cx.schedule_update_any(),
             consumers: HashSet::new(),
         }));
