@@ -9,8 +9,8 @@ use std::{
 type ProvidedState<T> = Rc<RefCell<ProvidedStateInner<T>>>;
 
 // Tracks all the subscribers to a shared State
-pub struct ProvidedStateInner<T> {
-    value: Rc<RefCell<T>>,
+pub(crate) struct ProvidedStateInner<T> {
+    value: T,
     notify_any: Arc<dyn Fn(ScopeId)>,
     consumers: HashSet<ScopeId>,
 }
@@ -20,14 +20,6 @@ impl<T> ProvidedStateInner<T> {
         for consumer in self.consumers.iter() {
             (self.notify_any)(*consumer);
         }
-    }
-
-    pub fn write(&self) -> RefMut<T> {
-        self.value.borrow_mut()
-    }
-
-    pub fn read(&self) -> Ref<T> {
-        self.value.borrow()
     }
 }
 
@@ -103,8 +95,7 @@ pub fn use_shared_state<T: 'static>(cx: &ScopeState) -> Option<&UseSharedState<T
 
         root.borrow_mut().consumers.insert(scope_id);
 
-        let value = root.borrow().value.clone();
-        let state = UseSharedState { value, root };
+        let state = UseSharedState { inner: root };
         let owner = UseSharedStateOwner { state, scope_id };
         Some(owner)
     });
@@ -119,27 +110,22 @@ struct UseSharedStateOwner<T: 'static> {
 impl<T> Drop for UseSharedStateOwner<T> {
     fn drop(&mut self) {
         // we need to unsubscribe when our component is unmounted
-        let mut root = self.state.root.borrow_mut();
+        let mut root = self.state.inner.borrow_mut();
         root.consumers.remove(&self.scope_id);
     }
 }
 
 pub struct UseSharedState<T> {
-    pub(crate) value: Rc<RefCell<T>>,
-    pub(crate) root: Rc<RefCell<ProvidedStateInner<T>>>,
+    pub(crate) inner: Rc<RefCell<ProvidedStateInner<T>>>,
 }
 
 impl<T> UseSharedState<T> {
-    pub fn read(&self) -> Ref<'_, T> {
-        self.value.borrow()
-    }
-
     pub fn notify_consumers(&self) {
-        self.root.borrow_mut().notify_consumers();
+        self.inner.borrow_mut().notify_consumers();
     }
 
-    pub fn read_write(&self) -> (Ref<'_, T>, &Self) {
-        (self.read(), self)
+    pub fn read(&self) -> Ref<'_, T> {
+        Ref::map(self.inner.borrow(), |inner| &inner.value)
     }
 
     /// Calling "write" will force the component to re-render
@@ -147,32 +133,30 @@ impl<T> UseSharedState<T> {
     ///
     /// TODO: We prevent unncessary notifications only in the hook, but we should figure out some more global lock
     pub fn write(&self) -> RefMut<'_, T> {
-        self.notify_consumers();
-        self.value.borrow_mut()
+        let mut value = self.inner.borrow_mut();
+        value.notify_consumers();
+        RefMut::map(value, |inner| &mut inner.value)
     }
 
     /// Allows the ability to write the value without forcing a re-render
     pub fn write_silent(&self) -> RefMut<'_, T> {
-        self.value.borrow_mut()
-    }
-
-    pub fn inner(&self) -> Rc<RefCell<ProvidedStateInner<T>>> {
-        self.root.clone()
+        RefMut::map(self.inner.borrow_mut(), |inner| &mut inner.value)
     }
 }
 
 impl<T> Clone for UseSharedState<T> {
     fn clone(&self) -> Self {
         Self {
-            value: self.value.clone(),
-            root: self.root.clone(),
+            inner: self.inner.clone(),
         }
     }
 }
 
 impl<T: PartialEq> PartialEq for UseSharedState<T> {
     fn eq(&self, other: &Self) -> bool {
-        self.value == other.value
+        let first = self.inner.borrow();
+        let second = other.inner.borrow();
+        first.value == second.value
     }
 }
 
@@ -219,7 +203,7 @@ impl<T: PartialEq> PartialEq for UseSharedState<T> {
 pub fn use_shared_state_provider<T: 'static>(cx: &ScopeState, f: impl FnOnce() -> T) {
     cx.use_hook(|| {
         let state: ProvidedState<T> = Rc::new(RefCell::new(ProvidedStateInner {
-            value: Rc::new(RefCell::new(f())),
+            value: f(),
             notify_any: cx.schedule_update_any(),
             consumers: HashSet::new(),
         }));
