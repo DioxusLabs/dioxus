@@ -1,10 +1,8 @@
 use rustc_hash::{FxHashMap, FxHashSet};
 use shipyard::error::GetStorage;
 use shipyard::track::Untracked;
-use shipyard::{
-    Component, Get, IntoBorrow, ScheduledWorkload, System, Unique, View, ViewMut, Workload,
-    WorkloadSystem,
-};
+use shipyard::{Component, Get, IntoBorrow, ScheduledWorkload, Unique, View, ViewMut, Workload};
+use shipyard::{SystemModificator, World};
 use std::any::TypeId;
 use std::collections::VecDeque;
 use std::ops::{Deref, DerefMut};
@@ -17,17 +15,33 @@ use crate::node_ref::{NodeMask, NodeMaskBuilder};
 use crate::node_watcher::NodeWatcher;
 use crate::passes::{DirtyNodeStates, TypeErasedPass};
 use crate::prelude::AttributeMaskBuilder;
-use crate::tree::Tree;
+use crate::tree::{TreeMut, TreeMutView, TreeRef, TreeRefView};
 use crate::NodeId;
 use crate::{FxDashSet, SendAnyMap};
 
 #[derive(Unique)]
-struct SendAnyMapWrapper(SendAnyMap);
+pub struct SendAnyMapWrapper(SendAnyMap);
+
+impl Deref for SendAnyMapWrapper {
+    type Target = SendAnyMap;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 
 #[derive(Unique, Default)]
-struct DirtyNodes(FxDashSet<NodeId>);
+pub struct DirtyNodesResult(FxDashSet<NodeId>);
 
-pub(crate) struct NodesDirty<V: FromAnyValue + Send + Sync> {
+impl Deref for DirtyNodesResult {
+    type Target = FxDashSet<NodeId>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+pub struct NodesDirty<V: FromAnyValue + Send + Sync> {
     passes_updated: FxHashMap<NodeId, FxHashSet<TypeId>>,
     nodes_updated: FxHashMap<NodeId, NodeMask>,
     pub(crate) passes: Box<[TypeErasedPass<V>]>,
@@ -76,31 +90,27 @@ type NodeWatchers<V> = Arc<RwLock<Vec<Box<dyn NodeWatcher<V> + Send + Sync>>>>;
 /// # Custom values
 /// To allow custom values to be passed into attributes implement FromAnyValue on a type that can represent your custom value and specify the V generic to be that type. If you have many different custom values, it can be useful to use a enum type to represent the varients.
 pub struct RealDom<V: FromAnyValue + Send + Sync = ()> {
-    pub(crate) tree: Tree,
+    pub(crate) world: World,
     nodes_listening: FxHashMap<String, FxHashSet<NodeId>>,
     pub(crate) dirty_nodes: NodesDirty<V>,
     node_watchers: NodeWatchers<V>,
     workload: ScheduledWorkload,
+    root_id: NodeId,
     phantom: std::marker::PhantomData<V>,
 }
 
 impl<V: FromAnyValue + Send + Sync> RealDom<V> {
     pub fn new(mut passes: Box<[TypeErasedPass<V>]>) -> RealDom<V> {
-        let mut tree = Tree::new();
-        let mut workload = Workload::new("Main Workload");
-        for pass in &mut *passes {
-            let system = pass.workload.take().unwrap();
-            workload = workload.with_system(system);
-        }
+        let workload = construct_workload(&mut passes);
         let (workload, _) = workload.build().unwrap();
-        let root_id = tree.root();
+        let mut world = World::new();
         let root_node: NodeType<V> = NodeType::Element(ElementNode {
             tag: "Root".to_string(),
             namespace: Some("Root".to_string()),
             attributes: FxHashMap::default(),
             listeners: FxHashSet::default(),
         });
-        tree.insert(root_id, root_node);
+        let root_id = world.add_entity(root_node);
 
         // resolve dependants for each pass
         for i in 1..passes.len() {
@@ -122,7 +132,7 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
         nodes_updated.insert(root_id, NodeMaskBuilder::ALL.build());
 
         RealDom {
-            tree,
+            world,
             nodes_listening: FxHashMap::default(),
             dirty_nodes: NodesDirty {
                 passes_updated,
@@ -131,19 +141,27 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
             },
             node_watchers: Default::default(),
             workload,
+            root_id,
             phantom: std::marker::PhantomData,
         }
     }
 
+    pub fn tree_mut(&self) -> TreeMutView {
+        self.world.borrow().unwrap()
+    }
+
+    pub fn tree_ref(&self) -> TreeRefView {
+        self.world.borrow().unwrap()
+    }
+
     pub fn create_node(&mut self, node: NodeType<V>) -> NodeMut<'_, V> {
-        let mut node_entry = self.tree.create_node();
-        let id = node_entry.id();
+        let id = self.world.add_entity(node);
+        self.tree_mut().create_node(id);
         self.dirty_nodes
             .passes_updated
             .entry(id)
             .or_default()
             .extend(self.dirty_nodes.passes.iter().map(|x| x.this_type_id));
-        node_entry.insert(node);
         let watchers = self.node_watchers.clone();
         for watcher in &*watchers.read().unwrap() {
             watcher.on_node_added(NodeMut::new(id, self));
@@ -157,7 +175,7 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
         if let Some(nodes) = self.nodes_listening.get(event) {
             let mut listening: Vec<_> = nodes
                 .iter()
-                .map(|id| (*id, self.tree.height(*id).unwrap()))
+                .map(|id| (*id, self.tree_ref().height(*id).unwrap()))
                 .collect();
             listening.sort_by(|(_, h1), (_, h2)| h1.cmp(h2).reverse());
             listening
@@ -171,26 +189,29 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
 
     /// Returns the id of the root node.
     pub fn root_id(&self) -> NodeId {
-        self.tree.root()
+        self.root_id
     }
 
     pub fn get(&self, id: NodeId) -> Option<NodeRef<'_, V>> {
-        self.tree.contains(id).then_some(NodeRef { id, dom: self })
+        self.tree_ref()
+            .contains(id)
+            .then_some(NodeRef { id, dom: self })
     }
 
     pub fn get_mut(&mut self, id: NodeId) -> Option<NodeMut<'_, V>> {
-        self.tree.contains(id).then(|| NodeMut::new(id, self))
+        let contains = { self.tree_ref().contains(id) };
+        contains.then(|| NodeMut::new(id, self))
     }
 
     fn borrow_raw<'a, B: IntoBorrow>(&'a self) -> Result<B, GetStorage>
     where
         B::Borrow: shipyard::Borrow<'a, View = B>,
     {
-        self.tree.nodes.borrow()
+        self.world.borrow()
     }
 
     fn borrow_node_type_mut(&self) -> Result<ViewMut<NodeType<V>>, GetStorage> {
-        self.tree.nodes.borrow()
+        self.world.borrow()
     }
 
     /// Update the state of the dom, after appling some mutations. This will keep the nodes in the dom up to date with their VNode counterparts.
@@ -202,34 +223,36 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
         let nodes_updated = std::mem::take(&mut self.dirty_nodes.nodes_updated);
         let dirty_nodes =
             DirtyNodeStates::with_passes(self.dirty_nodes.passes.iter().map(|p| p.this_type_id));
+        let tree = self.tree_ref();
         for (node_id, passes) in passes {
             // remove any nodes that were created and then removed in the same mutations from the dirty nodes list
-            if let Some(height) = self.tree.height(node_id) {
+            if let Some(height) = tree.height(node_id) {
                 for pass in passes {
                     dirty_nodes.insert(pass, node_id, height);
                 }
             }
         }
 
-        let _ = self.tree.remove_unique::<DirtyNodeStates>();
-        let _ = self.tree.remove_unique::<SendAnyMapWrapper>();
-        self.tree.add_unique(dirty_nodes);
-        self.tree.add_unique(SendAnyMapWrapper(ctx));
-        self.tree.add_unique(DirtyNodes::default());
+        let _ = self.world.remove_unique::<DirtyNodeStates>();
+        let _ = self.world.remove_unique::<SendAnyMapWrapper>();
+        self.world.add_unique(dirty_nodes);
+        self.world.add_unique(SendAnyMapWrapper(ctx));
+        self.world.add_unique(DirtyNodesResult::default());
 
-        self.workload.run_with_world(&self.tree.nodes).unwrap();
+        self.workload.run_with_world(&self.world).unwrap();
 
-        let dirty = self.tree.remove_unique::<DirtyNodes>().unwrap();
+        let dirty = self.world.remove_unique::<DirtyNodesResult>().unwrap();
 
         (dirty.0, nodes_updated)
     }
 
     pub fn traverse_depth_first(&self, mut f: impl FnMut(NodeRef<V>)) {
         let mut stack = vec![self.root_id()];
+        let tree = self.tree_ref();
         while let Some(id) = stack.pop() {
             if let Some(node) = self.get(id) {
                 f(node);
-                if let Some(children) = self.tree.children_ids(id) {
+                if let Some(children) = tree.children_ids(id) {
                     stack.extend(children.iter().copied().rev());
                 }
             }
@@ -239,10 +262,11 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
     pub fn traverse_breadth_first(&self, mut f: impl FnMut(NodeRef<V>)) {
         let mut queue = VecDeque::new();
         queue.push_back(self.root_id());
+        let tree = self.tree_ref();
         while let Some(id) = queue.pop_front() {
             if let Some(node) = self.get(id) {
                 f(node);
-                if let Some(children) = self.tree.children_ids(id) {
+                if let Some(children) = tree.children_ids(id) {
                     for id in children {
                         queue.push_back(id);
                     }
@@ -254,8 +278,10 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
     pub fn traverse_depth_first_mut(&mut self, mut f: impl FnMut(NodeMut<V>)) {
         let mut stack = vec![self.root_id()];
         while let Some(id) = stack.pop() {
-            if let Some(children) = self.tree.children_ids(id) {
-                let children = children.iter().copied().rev().collect::<Vec<_>>();
+            let tree = self.tree_ref();
+            if let Some(mut children) = tree.children_ids(id) {
+                drop(tree);
+                children.reverse();
                 if let Some(node) = self.get_mut(id) {
                     let node = node;
                     f(node);
@@ -269,8 +295,9 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
         let mut queue = VecDeque::new();
         queue.push_back(self.root_id());
         while let Some(id) = queue.pop_front() {
-            if let Some(children) = self.tree.children_ids(id) {
-                let children = children.to_vec();
+            let tree = self.tree_ref();
+            if let Some(children) = tree.children_ids(id) {
+                drop(tree);
                 if let Some(node) = self.get_mut(id) {
                     f(node);
                     for id in children {
@@ -349,7 +376,7 @@ pub trait NodeImmutable<V: FromAnyValue + Send + Sync>: Sized {
 
     #[inline]
     fn child_ids(&self) -> Option<Vec<NodeId>> {
-        self.real_dom().tree.children_ids(self.id())
+        self.real_dom().tree_ref().children_ids(self.id())
     }
 
     #[inline]
@@ -368,7 +395,7 @@ pub trait NodeImmutable<V: FromAnyValue + Send + Sync>: Sized {
 
     #[inline]
     fn parent_id(&self) -> Option<NodeId> {
-        self.real_dom().tree.parent_id(self.id())
+        self.real_dom().tree_ref().parent_id(self.id())
     }
 
     #[inline]
@@ -382,7 +409,7 @@ pub trait NodeImmutable<V: FromAnyValue + Send + Sync>: Sized {
     #[inline]
     fn next(&self) -> Option<NodeRef<V>> {
         let parent = self.parent_id()?;
-        let children = self.real_dom().tree.children_ids(parent)?;
+        let children = self.real_dom().tree_ref().children_ids(parent)?;
         let index = children.iter().position(|id| *id == self.id())?;
         if index + 1 < children.len() {
             Some(NodeRef {
@@ -397,7 +424,7 @@ pub trait NodeImmutable<V: FromAnyValue + Send + Sync>: Sized {
     #[inline]
     fn prev(&self) -> Option<NodeRef<V>> {
         let parent = self.parent_id()?;
-        let children = self.real_dom().tree.children_ids(parent)?;
+        let children = self.real_dom().tree_ref().children_ids(parent)?;
         let index = children.iter().position(|id| *id == self.id())?;
         if index > 0 {
             Some(NodeRef {
@@ -411,7 +438,7 @@ pub trait NodeImmutable<V: FromAnyValue + Send + Sync>: Sized {
 
     #[inline]
     fn height(&self) -> u16 {
-        self.real_dom().tree.height(self.id()).unwrap()
+        self.real_dom().tree_ref().height(self.id()).unwrap()
     }
 }
 
@@ -501,13 +528,13 @@ impl<'a, V: FromAnyValue + Send + Sync> NodeMut<'a, V> {
             .entry(self.id)
             .or_default()
             .insert(TypeId::of::<T>());
-        self.dom.tree.insert(self.id, value);
+        self.dom.world.add_component(self.id, value);
     }
 
     #[inline]
     pub fn next_mut(self) -> Option<NodeMut<'a, V>> {
         let parent = self.parent_id()?;
-        let children = self.dom.tree.children_ids(parent)?;
+        let children = self.dom.tree_mut().children_ids(parent)?;
         let index = children.iter().position(|id| *id == self.id)?;
         if index + 1 < children.len() {
             Some(NodeMut::new(children[index + 1], self.dom))
@@ -519,7 +546,7 @@ impl<'a, V: FromAnyValue + Send + Sync> NodeMut<'a, V> {
     #[inline]
     pub fn prev_mut(self) -> Option<NodeMut<'a, V>> {
         let parent = self.parent_id()?;
-        let children = self.dom.tree.children_ids(parent)?;
+        let children = self.dom.tree_ref().children_ids(parent)?;
         let index = children.iter().position(|id| *id == self.id)?;
         if index > 0 {
             Some(NodeMut::new(children[index - 1], self.dom))
@@ -532,29 +559,31 @@ impl<'a, V: FromAnyValue + Send + Sync> NodeMut<'a, V> {
     pub fn add_child(&mut self, child: NodeId) {
         self.dom.dirty_nodes.mark_child_changed(self.id);
         self.dom.dirty_nodes.mark_parent_added_or_removed(child);
-        self.dom.tree.add_child(self.id, child);
+        self.dom.tree_mut().add_child(self.id, child);
         NodeMut::new(child, self.dom).mark_moved();
     }
 
     #[inline]
     pub fn insert_after(&mut self, old: NodeId) {
         let id = self.id();
-        if let Some(parent_id) = self.dom.tree.parent_id(old) {
+        let parent_id = { self.dom.tree_ref().parent_id(old) };
+        if let Some(parent_id) = parent_id {
             self.dom.dirty_nodes.mark_child_changed(parent_id);
             self.dom.dirty_nodes.mark_parent_added_or_removed(id);
         }
-        self.dom.tree.insert_after(old, id);
+        self.dom.tree_mut().insert_after(old, id);
         self.mark_moved();
     }
 
     #[inline]
     pub fn insert_before(&mut self, old: NodeId) {
         let id = self.id();
-        if let Some(parent_id) = self.dom.tree.parent_id(old) {
+        let parent_id = { self.dom.tree_ref().parent_id(old) };
+        if let Some(parent_id) = parent_id {
             self.dom.dirty_nodes.mark_child_changed(parent_id);
             self.dom.dirty_nodes.mark_parent_added_or_removed(id);
         }
-        self.dom.tree.insert_before(old, id);
+        self.dom.tree_mut().insert_before(old, id);
         self.mark_moved();
     }
 
@@ -563,11 +592,11 @@ impl<'a, V: FromAnyValue + Send + Sync> NodeMut<'a, V> {
         let id = self.id();
         {
             let RealDom {
-                tree,
+                world,
                 nodes_listening,
                 ..
             } = &mut self.dom;
-            let mut view: ViewMut<NodeType<V>> = tree.nodes.borrow().unwrap();
+            let mut view: ViewMut<NodeType<V>> = world.borrow().unwrap();
             if let NodeType::Element(ElementNode { listeners, .. })
             | NodeType::Text(TextNode { listeners, .. }) = (&mut view).get(id).unwrap()
             {
@@ -578,7 +607,8 @@ impl<'a, V: FromAnyValue + Send + Sync> NodeMut<'a, V> {
             }
         }
         self.mark_removed();
-        if let Some(parent_id) = self.real_dom_mut().tree.parent_id(id) {
+        let parent_id = { self.dom.tree_ref().parent_id(id) };
+        if let Some(parent_id) = parent_id {
             self.real_dom_mut()
                 .dirty_nodes
                 .mark_child_changed(parent_id);
@@ -589,7 +619,7 @@ impl<'a, V: FromAnyValue + Send + Sync> NodeMut<'a, V> {
                 self.dom.get_mut(child).unwrap().remove();
             }
         }
-        self.dom.tree.remove_single(id);
+        self.dom.tree_mut().remove_single(id);
     }
 
     #[inline]
@@ -604,19 +634,19 @@ impl<'a, V: FromAnyValue + Send + Sync> NodeMut<'a, V> {
                 .mark_parent_added_or_removed(new);
         }
         let id = self.id();
-        self.dom.tree.replace(id, new);
+        self.dom.tree_mut().replace(id, new);
     }
 
     #[inline]
     pub fn add_event_listener(&mut self, event: &str) {
         let id = self.id();
         let RealDom {
-            tree,
+            world,
             dirty_nodes,
             nodes_listening,
             ..
         } = &mut self.dom;
-        let mut view: ViewMut<NodeType<V>> = tree.nodes.borrow().unwrap();
+        let mut view: ViewMut<NodeType<V>> = world.borrow().unwrap();
         let node_type: &mut NodeType<V> = (&mut view).get(self.id).unwrap();
         if let NodeType::Element(ElementNode { listeners, .. })
         | NodeType::Text(TextNode { listeners, .. }) = node_type
@@ -640,12 +670,12 @@ impl<'a, V: FromAnyValue + Send + Sync> NodeMut<'a, V> {
     pub fn remove_event_listener(&mut self, event: &str) {
         let id = self.id();
         let RealDom {
-            tree,
+            world,
             dirty_nodes,
             nodes_listening,
             ..
         } = &mut self.dom;
-        let mut view: ViewMut<NodeType<V>> = tree.nodes.borrow().unwrap();
+        let mut view: ViewMut<NodeType<V>> = world.borrow().unwrap();
         let node_type: &mut NodeType<V> = (&mut view).get(self.id).unwrap();
         if let NodeType::Element(ElementNode { listeners, .. })
         | NodeType::Text(TextNode { listeners, .. }) = node_type
@@ -674,9 +704,9 @@ impl<'a, V: FromAnyValue + Send + Sync> NodeMut<'a, V> {
     pub fn node_type_mut(&mut self) -> NodeTypeMut<'_, V> {
         let id = self.id();
         let RealDom {
-            tree, dirty_nodes, ..
+            world, dirty_nodes, ..
         } = &mut self.dom;
-        let view: ViewMut<NodeType<V>> = tree.nodes.borrow().unwrap();
+        let view: ViewMut<NodeType<V>> = world.borrow().unwrap();
         let node_type = ViewEntryMut::new(view, id);
         match &*node_type {
             NodeType::Element(_) => NodeTypeMut::Element(ElementNodeMut {
@@ -856,4 +886,38 @@ impl<V: FromAnyValue + Send + Sync> ElementNodeMut<'_, V> {
     pub fn listeners(&self) -> &FxHashSet<String> {
         &self.element().listeners
     }
+}
+
+fn construct_workload<V: FromAnyValue + Send + Sync>(passes: &mut [TypeErasedPass<V>]) -> Workload {
+    let mut workload = Workload::new("Main Workload");
+    let mut unresloved_workloads = passes
+        .iter_mut()
+        .enumerate()
+        .map(|(i, pass)| {
+            let workload = Some((pass.workload)(pass.dependants.clone()));
+            (i, pass, workload)
+        })
+        .collect::<Vec<_>>();
+    // set all the labels
+    for (id, _, workload) in &mut unresloved_workloads {
+        *workload = Some(workload.take().unwrap().tag(id.to_string()));
+    }
+    // mark any dependancies
+    for i in 0..unresloved_workloads.len() {
+        let (_, pass, _) = &unresloved_workloads[i];
+        for ty_id in pass.combined_dependancy_type_ids.clone() {
+            let &(dependancy_id, _, _) = unresloved_workloads
+                .iter()
+                .find(|(_, pass, _)| pass.this_type_id == ty_id)
+                .unwrap();
+            let (_, _, workload) = &mut unresloved_workloads[i];
+            *workload = workload
+                .take()
+                .map(|workload| workload.tag(dependancy_id.to_string()));
+        }
+    }
+    for (_, _, mut workload_system) in unresloved_workloads {
+        workload = workload.with_system(workload_system.take().unwrap());
+    }
+    workload
 }

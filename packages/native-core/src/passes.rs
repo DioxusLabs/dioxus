@@ -1,7 +1,10 @@
 use anymap::AnyMap;
 use parking_lot::RwLock;
 use rustc_hash::{FxHashMap, FxHashSet};
-use shipyard::{Component, IntoBorrow, Unique, View, WorkloadSystem};
+use shipyard::{
+    BorrowInfo, Component, IntoBorrow, IntoWorkloadSystem, Unique, UniqueView, View,
+    WorkloadSystem, World,
+};
 use std::any::{Any, TypeId};
 use std::collections::BTreeMap;
 use std::marker::PhantomData;
@@ -9,7 +12,9 @@ use std::sync::Arc;
 
 use crate::node::FromAnyValue;
 use crate::node_ref::{NodeMaskBuilder, NodeView};
-use crate::SendAnyMap;
+use crate::real_dom::{DirtyNodesResult, SendAnyMapWrapper};
+use crate::tree::{TreeMut, TreeRef, TreeRefView};
+use crate::{FxDashSet, SendAnyMap};
 use crate::{NodeId, NodeMask};
 
 #[derive(Default)]
@@ -108,6 +113,7 @@ pub trait State<V: FromAnyValue + Send + Sync = ()>: Any + Send + Sync {
     type ChildDependencies: Dependancy;
     /// This is a tuple of (T: Pass, ..) of states read from the node required to run this pass
     type NodeDependencies: Dependancy;
+    /// A tuple of all the dependencies combined
     type CombinedDependencies: Dependancy;
     /// This is a mask of what aspects of the node are required to run this pass
     const NODE_MASK: NodeMaskBuilder<'static>;
@@ -130,39 +136,93 @@ pub trait State<V: FromAnyValue + Send + Sync = ()>: Any + Send + Sync {
         children: Option<Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>>,
         context: &SendAnyMap,
     ) -> Self;
+
+    /// Create a workload system for this state
+    fn workload_system(dependants: FxHashSet<TypeId>) -> WorkloadSystem;
+}
+
+pub struct RunPassView<'a> {
+    type_id: TypeId,
+    dependants: FxHashSet<TypeId>,
+    pass_direction: PassDirection,
+    tree: TreeRefView<'a>,
+    nodes_updated: UniqueView<'a, DirtyNodesResult>,
+    dirty: UniqueView<'a, DirtyNodeStates>,
+    ctx: UniqueView<'a, SendAnyMapWrapper>,
+}
+
+impl<'a> RunPassView<'a> {
+    pub fn borrow(
+        type_id: TypeId,
+        dependants: FxHashSet<TypeId>,
+        pass_direction: PassDirection,
+        world: &'a World,
+    ) -> Self {
+        Self {
+            type_id,
+            dependants,
+            pass_direction,
+            tree: world.borrow().unwrap(),
+            nodes_updated: world.borrow().unwrap(),
+            dirty: world.borrow().unwrap(),
+            ctx: world.borrow().unwrap(),
+        }
+    }
+}
+
+pub fn run_pass(view: RunPassView, mut update_node: impl FnMut(NodeId, &SendAnyMap) -> bool) {
+    let RunPassView {
+        type_id,
+        dependants,
+        pass_direction,
+        tree,
+        nodes_updated,
+        dirty,
+        ctx,
+    } = view;
+    let ctx = ctx.as_ref();
+    match pass_direction {
+        PassDirection::ParentToChild => {
+            while let Some((height, id)) = dirty.pop_front(type_id) {
+                let id = tree.id_at(id).unwrap();
+                if (update_node)(id, ctx) {
+                    nodes_updated.insert(id);
+                    for id in tree.children_ids(id).unwrap() {
+                        for dependant in &dependants {
+                            dirty.insert(*dependant, id, height + 1);
+                        }
+                    }
+                }
+            }
+        }
+        PassDirection::ChildToParent => {
+            while let Some((height, id)) = dirty.pop_back(type_id) {
+                let id = tree.id_at(id).unwrap();
+                if (update_node)(id, ctx) {
+                    nodes_updated.insert(id);
+                    if let Some(id) = tree.parent_id(id) {
+                        for dependant in &dependants {
+                            dirty.insert(*dependant, id, height - 1);
+                        }
+                    }
+                }
+            }
+        }
+        PassDirection::AnyOrder => {
+            while let Some((height, id)) = dirty.pop_back(type_id) {
+                let id = tree.id_at(id).unwrap();
+                if (update_node)(id, ctx) {
+                    nodes_updated.insert(id);
+                    for dependant in &dependants {
+                        dirty.insert(*dependant, id, height);
+                    }
+                }
+            }
+        }
+    }
 }
 
 pub trait AnyState<V: FromAnyValue + Send + Sync = ()>: State<V> {
-    fn workload_system() -> WorkloadSystem;
-    //  Box::new(
-    //     move |node_id: NodeId, tree: &mut TreeStateView, context: &SendAnyMap| {
-    //         debug_assert!(!Self::NodeDependencies::type_ids()
-    //             .iter()
-    //             .any(|id| *id == TypeId::of::<Self>()));
-    //         // get all of the states from the tree view
-    //         // Safety: No node has itself as a parent or child.
-    //         let myself: SlabEntry<'static, Self> = unsafe {
-    //             std::mem::transmute(tree.get_slab_mut::<Self>().unwrap().entry(node_id))
-    //         };
-    //         let node_data = tree.get_single::<NodeType<V>>(node_id).unwrap();
-    //         let node = tree.get::<Self::NodeDependencies>(node_id).unwrap();
-    //         let children = tree.children::<Self::ChildDependencies>(node_id);
-    //         let parent = tree.parent::<Self::ParentDependencies>(node_id);
-
-    //         let view = NodeView::new(node_id, node_data, &node_mask);
-    //         if myself.value.is_none() {
-    //             *myself.value = Some(Self::create(view, node, parent, children, context));
-    //             true
-    //         } else {
-    //             myself
-    //                 .value
-    //                 .as_mut()
-    //                 .unwrap()
-    //                 .update(view, node, parent, children, context)
-    //         }
-    //     },
-    // ) as PassCallback
-
     fn to_type_erased() -> TypeErasedPass<V>
     where
         Self: Sized,
@@ -174,9 +234,9 @@ pub trait AnyState<V: FromAnyValue + Send + Sync = ()>: State<V> {
             parent_dependant: !Self::parent_type_ids().is_empty(),
             child_dependant: !Self::child_type_ids().is_empty(),
             dependants: FxHashSet::default(),
-            mask: node_mask.clone(),
+            mask: node_mask,
             pass_direction: Self::pass_direction(),
-            workload: Some(Self::workload_system()),
+            workload: Self::workload_system,
             phantom: PhantomData,
         }
     }
@@ -224,57 +284,10 @@ pub struct TypeErasedPass<V: FromAnyValue + Send = ()> {
     pub(crate) combined_dependancy_type_ids: FxHashSet<TypeId>,
     pub(crate) dependants: FxHashSet<TypeId>,
     pub(crate) mask: NodeMask,
-    pub(crate) workload: Option<WorkloadSystem>,
+    pub(crate) workload: fn(FxHashSet<TypeId>) -> WorkloadSystem,
     pub(crate) pass_direction: PassDirection,
     phantom: PhantomData<V>,
 }
-
-// impl<V: FromAnyValue + Send> TypeErasedPass<V> {
-//     fn resolve(
-//         &self,
-//         mut tree: TreeStateView,
-//         dirty: &DirtyNodeStates,
-//         nodes_updated: &FxDashSet<NodeId>,
-//         ctx: &SendAnyMap,
-//     ) {
-//         match self.pass_direction {
-//             PassDirection::ParentToChild => {
-//                 while let Some((height, id)) = dirty.pop_front(self.this_type_id) {
-//                     if (self.pass)(id, &mut tree, ctx) {
-//                         nodes_updated.insert(id);
-//                         for id in tree.children_ids(id).unwrap() {
-//                             for dependant in &self.dependants {
-//                                 dirty.insert(*dependant, *id, height + 1);
-//                             }
-//                         }
-//                     }
-//                 }
-//             }
-//             PassDirection::ChildToParent => {
-//                 while let Some((height, id)) = dirty.pop_back(self.this_type_id) {
-//                     if (self.pass)(id, &mut tree, ctx) {
-//                         nodes_updated.insert(id);
-//                         if let Some(id) = tree.parent_id(id) {
-//                             for dependant in &self.dependants {
-//                                 dirty.insert(*dependant, id, height - 1);
-//                             }
-//                         }
-//                     }
-//                 }
-//             }
-//             PassDirection::AnyOrder => {
-//                 while let Some((height, id)) = dirty.pop_back(self.this_type_id) {
-//                     if (self.pass)(id, &mut tree, ctx) {
-//                         nodes_updated.insert(id);
-//                         for dependant in &self.dependants {
-//                             dirty.insert(*dependant, id, height);
-//                         }
-//                     }
-//                 }
-//             }
-//         }
-//     }
-// }
 
 #[derive(Debug)]
 pub enum PassDirection {
@@ -300,7 +313,7 @@ impl<'a> AnyMapLike<'a> for &'a SendAnyMap {
 }
 
 pub trait Dependancy {
-    type ElementBorrowed<'a>: IntoBorrow;
+    type ElementBorrowed<'a>: IntoBorrow + BorrowInfo;
 
     fn type_ids() -> Box<[TypeId]> {
         Box::new([])
@@ -330,60 +343,3 @@ impl_dependancy!(A, B, C, D, E, F, G);
 impl_dependancy!(A, B, C, D, E, F, G, H);
 impl_dependancy!(A, B, C, D, E, F, G, H, I);
 impl_dependancy!(A, B, C, D, E, F, G, H, I, J);
-
-// pub fn resolve_passes<V: FromAnyValue + Send + Sync>(
-//     dom: &mut RealDom<V>,
-//     dirty_nodes: DirtyNodeStates,
-//     ctx: SendAnyMap,
-//     parallel: bool,
-// ) -> FxDashSet<NodeId> {
-//     let passes = &dom.dirty_nodes.passes;
-//     let mut resolved_passes: FxHashSet<TypeId> = FxHashSet::default();
-//     let mut resolving = Vec::new();
-//     let nodes_updated = Arc::new(FxDashSet::default());
-//     let ctx = Arc::new(ctx);
-//     let mut pass_indexes_remaining: Vec<_> = (0..passes.len()).collect::<Vec<_>>();
-//     while !pass_indexes_remaining.is_empty() {
-//         let mut currently_in_use = FxHashSet::<TypeId>::default();
-//         let dynamically_borrowed_tree = dom.tree.dynamically_borrowed();
-//         rayon::in_place_scope(|s| {
-//             let mut i = 0;
-//             while i < pass_indexes_remaining.len() {
-//                 let passes_idx = pass_indexes_remaining[i];
-//                 let pass = &passes[passes_idx];
-//                 let pass_id = pass.this_type_id;
-//                 // check if the pass is ready to be run
-//                 if pass.combined_dependancy_type_ids.iter().all(|d| {
-//                     (resolved_passes.contains(d) || *d == pass_id) && !currently_in_use.contains(d)
-//                 }) {
-//                     pass_indexes_remaining.remove(i);
-//                     resolving.push(pass_id);
-//                     currently_in_use.insert(pass.this_type_id);
-//                     let tree_view = dynamically_borrowed_tree.view(
-//                         pass.combined_dependancy_type_ids
-//                             .iter()
-//                             .filter(|id| **id != pass.this_type_id)
-//                             .copied()
-//                             .chain(std::iter::once(TypeId::of::<NodeType<V>>())),
-//                         [pass.this_type_id],
-//                     );
-//                     let dirty_nodes = dirty_nodes.clone();
-//                     let nodes_updated = nodes_updated.clone();
-//                     let ctx = ctx.clone();
-//                     if parallel {
-//                         s.spawn(move |_| {
-//                             pass.resolve(tree_view, &dirty_nodes, &nodes_updated, &ctx);
-//                         });
-//                     } else {
-//                         pass.resolve(tree_view, &dirty_nodes, &nodes_updated, &ctx);
-//                     }
-//                 } else {
-//                     i += 1;
-//                 }
-//             }
-//         });
-//         resolved_passes.extend(resolving.iter().copied());
-//         resolving.clear()
-//     }
-//     std::sync::Arc::try_unwrap(nodes_updated).unwrap()
-// }

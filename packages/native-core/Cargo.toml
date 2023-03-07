@@ -29,6 +29,7 @@ lightningcss = "1.0.0-alpha.39"
 
 rayon = "1.6.1"
 shipyard = "0.6.2"
+shipyard_hierarchy = "0.6.0"
 
 
 [dev-dependencies]

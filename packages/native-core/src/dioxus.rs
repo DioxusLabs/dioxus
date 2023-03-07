@@ -1,3 +1,4 @@
+use crate::tree::TreeMut;
 use dioxus_core::{BorrowedAttributeValue, ElementId, Mutations, TemplateNode};
 use rustc_hash::{FxHashMap, FxHashSet};
 use shipyard::Component;
@@ -155,7 +156,7 @@ impl DioxusState {
                     let new_nodes = self.stack.split_off(self.stack.len() - m);
                     let old_node_id = self.element_to_node_id(id);
                     for new in new_nodes {
-                        rdom.tree.insert_before(old_node_id, new);
+                        rdom.tree_mut().insert_before(old_node_id, new);
                     }
                 }
                 SetAttribute {

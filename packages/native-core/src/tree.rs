@@ -1,63 +1,65 @@
 use crate::NodeId;
-use shipyard::{Component, EntitiesView, EntityId, Get, Unique, View, ViewMut, World};
+use shipyard::{Component, EntitiesViewMut, Get, View, ViewMut};
 use std::fmt::Debug;
 
 #[derive(PartialEq, Eq, Clone, Debug, Component)]
-pub(crate) struct Node {
+pub struct Node {
     parent: Option<NodeId>,
     children: Vec<NodeId>,
     height: u16,
 }
 
-#[derive(Debug)]
-pub(crate) struct Tree {
-    pub(crate) nodes: World,
-    root: NodeId,
+pub type TreeRefView<'a> = View<'a, Node>;
+pub type TreeMutView<'a> = (EntitiesViewMut<'a>, ViewMut<'a, Node>);
+
+pub trait TreeRef {
+    fn parent_id(&self, id: NodeId) -> Option<NodeId>;
+    fn children_ids(&self, id: NodeId) -> Option<Vec<NodeId>>;
+    fn height(&self, id: NodeId) -> Option<u16>;
+    fn contains(&self, id: NodeId) -> bool;
 }
 
-impl Tree {
-    pub fn new() -> Self {
-        let mut nodes = World::default();
-        let node = Node {
-            parent: None,
-            children: Vec::new(),
-            height: 0,
-        };
-        let root = nodes.add_entity((node,));
-        Self { nodes, root }
+pub trait TreeMut: TreeRef {
+    fn remove(&mut self, id: NodeId);
+    fn remove_single(&mut self, id: NodeId);
+    fn set_height(&mut self, node: NodeId, height: u16);
+    fn create_node(&mut self, id: NodeId);
+    fn add_child(&mut self, parent: NodeId, new: NodeId);
+    fn replace(&mut self, old_id: NodeId, new_id: NodeId);
+    fn insert_before(&mut self, old_id: NodeId, new_id: NodeId);
+    fn insert_after(&mut self, old_id: NodeId, new_id: NodeId);
+}
+
+impl<'a> TreeRef for TreeRefView<'a> {
+    fn parent_id(&self, id: NodeId) -> Option<NodeId> {
+        self.get(id).unwrap().parent
     }
 
-    pub fn add_unique<T: Unique + Send + Sync>(&mut self, data: T) {
-        self.nodes.add_unique(data);
+    fn children_ids(&self, id: NodeId) -> Option<Vec<NodeId>> {
+        Some(self.get(id).unwrap().children.clone())
     }
 
-    pub fn remove_unique<T: Unique + Send + Sync>(
-        &mut self,
-    ) -> Result<T, shipyard::error::UniqueRemove> {
-        self.nodes.remove_unique::<T>()
+    fn height(&self, id: NodeId) -> Option<u16> {
+        Some(self.get(id).unwrap().height)
     }
 
-    fn node_data(&self) -> View<Node> {
-        self.nodes.borrow().unwrap()
+    fn contains(&self, id: NodeId) -> bool {
+        self.get(id).is_ok()
     }
+}
 
-    fn node_data_mut(&self) -> ViewMut<Node> {
-        self.nodes.borrow().unwrap()
-    }
-
-    pub fn remove(&mut self, id: NodeId) {
-        fn recurse(tree: &mut Tree, id: NodeId) {
+impl<'a> TreeMut for TreeMutView<'a> {
+    fn remove(&mut self, id: NodeId) {
+        fn recurse<'a>(tree: &mut TreeMutView<'a>, id: NodeId) {
             let children = tree.children_ids(id);
             if let Some(children) = children {
                 for child in children {
                     recurse(tree, child);
                 }
             }
-
-            tree.nodes.delete_entity(id);
         }
         {
-            let mut node_data_mut = self.node_data_mut();
+            let mut node_data_mut = &mut self.1;
             if let Some(parent) = node_data_mut.get(id).unwrap().parent {
                 let parent = (&mut node_data_mut).get(parent).unwrap();
                 parent.children.retain(|&child| child != id);
@@ -67,21 +69,19 @@ impl Tree {
         recurse(self, id);
     }
 
-    pub fn remove_single(&mut self, id: NodeId) {
+    fn remove_single(&mut self, id: NodeId) {
         {
-            let mut node_data_mut = self.node_data_mut();
+            let mut node_data_mut = &mut self.1;
             if let Some(parent) = node_data_mut.get(id).unwrap().parent {
                 let parent = (&mut node_data_mut).get(parent).unwrap();
                 parent.children.retain(|&child| child != id);
             }
         }
-
-        self.nodes.delete_entity(id);
     }
 
     fn set_height(&mut self, node: NodeId, height: u16) {
         let children = {
-            let mut node_data_mut = self.node_data_mut();
+            let mut node_data_mut = &mut self.1;
             let mut node = (&mut node_data_mut).get(node).unwrap();
             node.height = height;
             node.children.clone()
@@ -91,19 +91,23 @@ impl Tree {
         }
     }
 
-    pub fn create_node(&mut self) -> NodeBuilder<'_> {
-        let node = self.nodes.add_entity((Node {
-            parent: None,
-            children: Vec::new(),
-            height: 0,
-        },));
-        NodeBuilder { tree: self, node }
+    fn create_node(&mut self, id: NodeId) {
+        let (entities, node_data_mut) = self;
+        entities.add_component(
+            id,
+            node_data_mut,
+            Node {
+                parent: None,
+                children: Vec::new(),
+                height: 0,
+            },
+        );
     }
 
-    pub fn add_child(&mut self, parent: NodeId, new: NodeId) {
+    fn add_child(&mut self, parent: NodeId, new: NodeId) {
         let height;
         {
-            let mut node_state = self.node_data_mut();
+            let mut node_state = &mut self.1;
             (&mut node_state).get(new).unwrap().parent = Some(parent);
             let parent = (&mut node_state).get(parent).unwrap();
             parent.children.push(new);
@@ -112,9 +116,9 @@ impl Tree {
         self.set_height(new, height);
     }
 
-    pub fn replace(&mut self, old_id: NodeId, new_id: NodeId) {
+    fn replace(&mut self, old_id: NodeId, new_id: NodeId) {
         {
-            let mut node_state = self.node_data_mut();
+            let mut node_state = &mut self.1;
             // update the parent's link to the child
             if let Some(parent_id) = node_state.get(old_id).unwrap().parent {
                 let parent = (&mut node_state).get(parent_id).unwrap();
@@ -125,7 +129,6 @@ impl Tree {
                     }
                 }
                 let height = parent.height + 1;
-                drop(node_state);
                 self.set_height(new_id, height);
             }
         }
@@ -133,8 +136,8 @@ impl Tree {
         self.remove(old_id);
     }
 
-    pub fn insert_before(&mut self, old_id: NodeId, new_id: NodeId) {
-        let mut node_state = self.node_data_mut();
+    fn insert_before(&mut self, old_id: NodeId, new_id: NodeId) {
+        let mut node_state = &mut self.1;
         let old_node = node_state.get(old_id).unwrap();
         let parent_id = old_node.parent.expect("tried to insert before root");
         (&mut node_state).get(new_id).unwrap().parent = Some(parent_id);
@@ -146,12 +149,11 @@ impl Tree {
             .unwrap();
         parent.children.insert(index, new_id);
         let height = parent.height + 1;
-        drop(node_state);
         self.set_height(new_id, height);
     }
 
-    pub fn insert_after(&mut self, old_id: NodeId, new_id: NodeId) {
-        let mut node_state = self.node_data_mut();
+    fn insert_after(&mut self, old_id: NodeId, new_id: NodeId) {
+        let mut node_state = &mut self.1;
         let old_node = node_state.get(old_id).unwrap();
         let parent_id = old_node.parent.expect("tried to insert before root");
         (&mut node_state).get(new_id).unwrap().parent = Some(parent_id);
@@ -163,35 +165,28 @@ impl Tree {
             .unwrap();
         parent.children.insert(index + 1, new_id);
         let height = parent.height + 1;
-        drop(node_state);
         self.set_height(new_id, height);
     }
+}
 
-    pub fn insert<T: Component + Sync + Send>(&mut self, id: NodeId, value: T) {
-        self.nodes.add_component(id, value);
-    }
-
-    pub fn contains(&self, id: NodeId) -> bool {
-        self.nodes.borrow::<EntitiesView>().unwrap().is_alive(id)
-    }
-
-    pub fn root(&self) -> NodeId {
-        self.root
-    }
-
-    pub fn parent_id(&self, id: NodeId) -> Option<NodeId> {
-        let node_data = self.node_data();
+impl<'a> TreeRef for TreeMutView<'a> {
+    fn parent_id(&self, id: NodeId) -> Option<NodeId> {
+        let node_data = &self.1;
         node_data.get(id).unwrap().parent
     }
 
-    pub fn children_ids(&self, id: NodeId) -> Option<Vec<NodeId>> {
-        let node_data = self.node_data();
+    fn children_ids(&self, id: NodeId) -> Option<Vec<NodeId>> {
+        let node_data = &self.1;
         node_data.get(id).map(|node| node.children.clone()).ok()
     }
 
-    pub fn height(&self, id: NodeId) -> Option<u16> {
-        let node_data = self.node_data();
+    fn height(&self, id: NodeId) -> Option<u16> {
+        let node_data = &self.1;
         node_data.get(id).map(|node| node.height).ok()
+    }
+
+    fn contains(&self, id: NodeId) -> bool {
+        self.1.get(id).is_ok()
     }
 }
 
@@ -325,19 +320,4 @@ fn deletion() {
 
     assert_eq!(*tree.get::<i32>(parent).unwrap(), 0);
     assert_eq!(tree.get::<i32>(after), None);
-}
-
-pub struct NodeBuilder<'a> {
-    tree: &'a mut Tree,
-    node: EntityId,
-}
-
-impl<'a> NodeBuilder<'a> {
-    pub fn insert<T: Component + Send + Sync>(&mut self, component: T) {
-        self.tree.insert(self.node, component);
-    }
-
-    pub fn id(&self) -> EntityId {
-        self.node
-    }
 }
