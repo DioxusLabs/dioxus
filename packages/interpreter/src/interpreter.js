@@ -357,10 +357,11 @@ class Interpreter {
 
             if (event.type === "click") {
               // todo call prevent default if it's the right type of event
-              if (shouldPreventDefault !== `onclick`) {
-                if (target.tagName === "A") {
-                  event.preventDefault();
-                  const href = target.getAttribute("href");
+              let a_element = target.closest("a");
+              if (a_element != null) {
+                event.preventDefault();
+                if (shouldPreventDefault !== `onclick` && a_element.getAttribute(`dioxus-prevent-default`) !== `onclick`) {
+                  const href = a_element.getAttribute("href");
                   if (href !== "" && href !== null && href !== undefined) {
                     window.ipc.postMessage(
                       serializeIpcMessage("browser_open", { href })
