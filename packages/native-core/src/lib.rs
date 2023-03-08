@@ -17,6 +17,7 @@ mod passes;
 pub mod real_dom;
 pub mod tree;
 pub mod utils;
+pub use passes::run_pass;
 pub use shipyard::EntityId as NodeId;
 
 pub mod prelude {

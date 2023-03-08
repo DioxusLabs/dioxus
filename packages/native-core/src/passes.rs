@@ -1,10 +1,7 @@
 use anymap::AnyMap;
 use parking_lot::RwLock;
 use rustc_hash::{FxHashMap, FxHashSet};
-use shipyard::{
-    BorrowInfo, Component, IntoBorrow, IntoWorkloadSystem, Unique, UniqueView, View,
-    WorkloadSystem, World,
-};
+use shipyard::{BorrowInfo, Component, IntoBorrow, Unique, UniqueView, View, WorkloadSystem};
 use std::any::{Any, TypeId};
 use std::collections::BTreeMap;
 use std::marker::PhantomData;
@@ -13,8 +10,8 @@ use std::sync::Arc;
 use crate::node::FromAnyValue;
 use crate::node_ref::{NodeMaskBuilder, NodeView};
 use crate::real_dom::{DirtyNodesResult, SendAnyMapWrapper};
-use crate::tree::{TreeMut, TreeRef, TreeRefView};
-use crate::{FxDashSet, SendAnyMap};
+use crate::tree::{TreeRef, TreeRefView};
+use crate::SendAnyMap;
 use crate::{NodeId, NodeMask};
 
 #[derive(Default)]
@@ -113,8 +110,6 @@ pub trait State<V: FromAnyValue + Send + Sync = ()>: Any + Send + Sync {
     type ChildDependencies: Dependancy;
     /// This is a tuple of (T: Pass, ..) of states read from the node required to run this pass
     type NodeDependencies: Dependancy;
-    /// A tuple of all the dependencies combined
-    type CombinedDependencies: Dependancy;
     /// This is a mask of what aspects of the node are required to run this pass
     const NODE_MASK: NodeMaskBuilder<'static>;
 
@@ -138,43 +133,54 @@ pub trait State<V: FromAnyValue + Send + Sync = ()>: Any + Send + Sync {
     ) -> Self;
 
     /// Create a workload system for this state
-    fn workload_system(dependants: FxHashSet<TypeId>) -> WorkloadSystem;
+    fn workload_system(
+        type_id: TypeId,
+        dependants: FxHashSet<TypeId>,
+        pass_direction: PassDirection,
+    ) -> WorkloadSystem;
 }
 
 pub struct RunPassView<'a> {
-    type_id: TypeId,
-    dependants: FxHashSet<TypeId>,
-    pass_direction: PassDirection,
     tree: TreeRefView<'a>,
     nodes_updated: UniqueView<'a, DirtyNodesResult>,
     dirty: UniqueView<'a, DirtyNodeStates>,
     ctx: UniqueView<'a, SendAnyMapWrapper>,
 }
 
-impl<'a> RunPassView<'a> {
-    pub fn borrow(
-        type_id: TypeId,
-        dependants: FxHashSet<TypeId>,
-        pass_direction: PassDirection,
-        world: &'a World,
-    ) -> Self {
-        Self {
-            type_id,
-            dependants,
-            pass_direction,
-            tree: world.borrow().unwrap(),
-            nodes_updated: world.borrow().unwrap(),
-            dirty: world.borrow().unwrap(),
-            ctx: world.borrow().unwrap(),
-        }
+impl<'v> shipyard::Borrow<'v> for RunPassView<'v> {
+    type View = RunPassView<'v>;
+
+    fn borrow(
+        world: &'v shipyard::World,
+        last_run: Option<u32>,
+        current: u32,
+    ) -> Result<Self::View, shipyard::error::GetStorage> {
+        Ok(RunPassView {
+            tree: <TreeRefView<'v> as shipyard::IntoBorrow>::Borrow::borrow(
+                world, last_run, current,
+            )?,
+            nodes_updated:
+                <UniqueView<'v, DirtyNodesResult> as shipyard::IntoBorrow>::Borrow::borrow(
+                    world, last_run, current,
+                )?,
+            dirty: <UniqueView<'v, DirtyNodeStates> as shipyard::IntoBorrow>::Borrow::borrow(
+                world, last_run, current,
+            )?,
+            ctx: <UniqueView<'v, SendAnyMapWrapper> as shipyard::IntoBorrow>::Borrow::borrow(
+                world, last_run, current,
+            )?,
+        })
     }
 }
 
-pub fn run_pass(view: RunPassView, mut update_node: impl FnMut(NodeId, &SendAnyMap) -> bool) {
+pub fn run_pass(
+    type_id: TypeId,
+    dependants: FxHashSet<TypeId>,
+    pass_direction: PassDirection,
+    view: RunPassView,
+    mut update_node: impl FnMut(NodeId, &SendAnyMap) -> bool,
+) {
     let RunPassView {
-        type_id,
-        dependants,
-        pass_direction,
         tree,
         nodes_updated,
         dirty,
@@ -284,7 +290,7 @@ pub struct TypeErasedPass<V: FromAnyValue + Send = ()> {
     pub(crate) combined_dependancy_type_ids: FxHashSet<TypeId>,
     pub(crate) dependants: FxHashSet<TypeId>,
     pub(crate) mask: NodeMask,
-    pub(crate) workload: fn(FxHashSet<TypeId>) -> WorkloadSystem,
+    pub(crate) workload: fn(TypeId, FxHashSet<TypeId>, PassDirection) -> WorkloadSystem,
     pub(crate) pass_direction: PassDirection,
     phantom: PhantomData<V>,
 }
