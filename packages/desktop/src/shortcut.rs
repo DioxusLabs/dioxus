@@ -113,6 +113,18 @@ impl ShortcutRegistry {
             }
         }
     }
+
+    pub(crate) fn remove_all(&self) {
+        let mut shortcuts = self.shortcuts.borrow_mut();
+        shortcuts.clear();
+        let _ = self.manager.borrow_mut().unregister_all();
+        // prevent CTRL+R from reloading the page which breaks apps
+        let _ = self.add_shortcut(
+            Some(ModifiersState::CONTROL),
+            KeyCode::KeyR,
+            Box::new(|| {}),
+        );
+    }
 }
 
 #[non_exhaustive]
