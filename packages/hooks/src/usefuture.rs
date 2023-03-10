@@ -34,13 +34,11 @@ where
     let state = cx.use_hook(move || UseFuture {
         update: cx.schedule_update(),
         needs_regen: Cell::new(true),
-        values: Default::default(),
         task: Cell::new(None),
         dependencies: Vec::new(),
-        waker: Default::default(),
+        value: None,
+        pending_value: Rc::new(RefCell::new(None)),
     });
-
-    *state.waker.borrow_mut() = None;
 
     if dependencies.clone().apply(&mut state.dependencies) || state.needs_regen.get() {
         // We don't need regen anymore
@@ -50,29 +48,32 @@ where
         let fut = future(dependencies.out());
 
         // Clone in our cells
-        let values = state.values.clone();
         let schedule_update = state.update.clone();
-        let waker = state.waker.clone();
 
         // Cancel the current future
         if let Some(current) = state.task.take() {
             cx.remove_future(current);
         }
 
-        state.task.set(Some(cx.push_future(async move {
-            let res = fut.await;
-            values.borrow_mut().push(Box::leak(Box::new(res)));
+        let pending = state.pending_value.clone();
 
-            // if there's a waker, we dont re-render the component. Instead we just progress that future
-            match waker.borrow().as_ref() {
-                Some(waker) => waker.wake_by_ref(),
-                None => schedule_update(),
-            }
-        })));
+        cx.spawn(async move {
+            let res = fut.await;
+            *pending.borrow_mut() = Some(res);
+
+            // Schedule an update
+            schedule_update();
+        });
+    }
+
+    if let Some(now) = state.pending_value.borrow_mut().take() {
+        state.value = Some(now);
     }
 
     state
 }
+
+pub struct UseFutureHandle {}
 
 pub enum FutureState<'a, T> {
     Pending,
@@ -85,8 +86,10 @@ pub struct UseFuture<T> {
     needs_regen: Cell<bool>,
     task: Cell<Option<TaskId>>,
     dependencies: Vec<Box<dyn Any>>,
-    waker: Rc<RefCell<Option<std::task::Waker>>>,
-    values: Rc<RefCell<Vec<*mut T>>>,
+    pending_value: Rc<RefCell<Option<T>>>,
+    value: Option<T>,
+    // waker: Rc<RefCell<Option<std::task::Waker>>>,
+    // values: Rc<RefCell<Vec<*mut T>>>,
 }
 
 pub enum UseFutureState<'a, T> {
@@ -131,11 +134,7 @@ impl<T> UseFuture<T> {
     ///
     /// If the future has never completed, the returned value will be `None`.
     pub fn value(&self) -> Option<&T> {
-        self.values
-            .borrow_mut()
-            .last()
-            .cloned()
-            .map(|x| unsafe { &*x })
+        self.value.as_ref()
     }
 
     /// Get the ID of the future in Dioxus' internal scheduler
@@ -161,34 +160,34 @@ impl<T> UseFuture<T> {
     }
 }
 
-impl<'a, T> IntoFuture for &'a UseFuture<T> {
-    type Output = &'a T;
-    type IntoFuture = UseFutureAwait<'a, T>;
-    fn into_future(self) -> Self::IntoFuture {
-        UseFutureAwait { hook: self }
-    }
-}
+// impl<'a, T> IntoFuture for &'a UseFuture<T> {
+//     type Output = &'a T;
+//     type IntoFuture = UseFutureAwait<'a, T>;
+//     fn into_future(self) -> Self::IntoFuture {
+//         UseFutureAwait { hook: self }
+//     }
+// }
 
-pub struct UseFutureAwait<'a, T> {
-    hook: &'a UseFuture<T>,
-}
+// pub struct UseFutureAwait<'a, T> {
+//     hook: &'a UseFuture<T>,
+// }
 
-impl<'a, T> Future for UseFutureAwait<'a, T> {
-    type Output = &'a T;
+// impl<'a, T> Future for UseFutureAwait<'a, T> {
+//     type Output = &'a T;
 
-    fn poll(
-        self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Self::Output> {
-        match self.hook.values.borrow_mut().last().cloned() {
-            Some(value) => std::task::Poll::Ready(unsafe { &*value }),
-            None => {
-                self.hook.waker.replace(Some(cx.waker().clone()));
-                std::task::Poll::Pending
-            }
-        }
-    }
-}
+//     fn poll(
+//         self: std::pin::Pin<&mut Self>,
+//         cx: &mut std::task::Context<'_>,
+//     ) -> std::task::Poll<Self::Output> {
+//         match self.hook.values.borrow_mut().last().cloned() {
+//             Some(value) => std::task::Poll::Ready(unsafe { &*value }),
+//             None => {
+//                 self.hook.waker.replace(Some(cx.waker().clone()));
+//                 std::task::Poll::Pending
+//             }
+//         }
+//     }
+// }
 
 pub trait UseFutureDep: Sized + Clone {
     type Out;
