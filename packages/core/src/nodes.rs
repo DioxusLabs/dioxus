@@ -48,6 +48,9 @@ pub struct VNode<'a> {
     /// The key given to the root of this template.
     ///
     /// In fragments, this is the key of the first child. In other cases, it is the key of the root.
+    ////////////////////////////////////////////////////////////////////////////
+    //////////////////// Change the key type in the node ///////////////////////
+    ////////////////////////////////////////////////////////////////////////////
     pub key: Option<&'a str>,
 
     /// When rendered, this template will be linked to its parent manually
@@ -554,7 +557,9 @@ pub enum BorrowedAttributeValue<'a> {
     /// A "none" value, resulting in the removal of an attribute from the dom
     None,
 }
-
+////////////////////////////////////////////////////////////////////////////
+//////////////////// Make arbitrary attribute Hash here/////////////////////
+////////////////////////////////////////////////////////////////////////////
 impl<'a> From<&'a AttributeValue<'a>> for BorrowedAttributeValue<'a> {
     fn from(value: &'a AttributeValue<'a>) -> Self {
         match value {
