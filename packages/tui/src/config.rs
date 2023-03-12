@@ -46,18 +46,13 @@ impl Default for Config {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default)]
 pub enum RenderingMode {
     /// only 16 colors by accessed by name, no alpha support
     BaseColors,
     /// 8 bit colors, will be downsampled from rgb colors
     Ansi,
     /// 24 bit colors, most terminals support this
+    #[default]
     Rgb,
-}
-
-impl Default for RenderingMode {
-    fn default() -> Self {
-        RenderingMode::Rgb
-    }
 }
