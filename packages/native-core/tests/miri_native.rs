@@ -2,16 +2,20 @@ use dioxus::prelude::*;
 use dioxus_native_core::{
     dioxus::DioxusState,
     node_ref::{AttributeMaskBuilder, NodeMaskBuilder, NodeView},
+    prelude::*,
     real_dom::RealDom,
     Dependancy, SendAnyMap, State,
 };
+use dioxus_native_core_macro::partial_derive_state;
+use shipyard::Component;
 use tokio::time::sleep;
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Component)]
 pub struct BlablaState {
     count: usize,
 }
 
+#[partial_derive_state]
 impl State for BlablaState {
     type ParentDependencies = (Self,);
     type ChildDependencies = ();
@@ -26,7 +30,7 @@ impl State for BlablaState {
         _: NodeView,
         _: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
         parent: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
-        _: Option<Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>>,
+        _: Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>,
         _: &SendAnyMap,
     ) -> bool {
         if let Some((parent,)) = parent {
@@ -41,7 +45,7 @@ impl State for BlablaState {
         node_view: NodeView<()>,
         node: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
         parent: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
-        children: Option<Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>>,
+        children: Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>,
         context: &SendAnyMap,
     ) -> Self {
         let mut myself = Self::default();
@@ -143,7 +147,7 @@ fn native_core_is_okay() {
         dioxus_state.apply_mutations(&mut *rdom.lock().unwrap(), mutations);
 
         let ctx = SendAnyMap::new();
-        rdom.lock().unwrap().update_state(ctx, false);
+        rdom.lock().unwrap().update_state(ctx);
 
         for _ in 0..10 {
             dom.wait_for_work().await;
@@ -152,7 +156,7 @@ fn native_core_is_okay() {
             dioxus_state.apply_mutations(&mut *rdom.lock().unwrap(), mutations);
 
             let ctx = SendAnyMap::new();
-            rdom.lock().unwrap().update_state(ctx, false);
+            rdom.lock().unwrap().update_state(ctx);
         }
     });
 }

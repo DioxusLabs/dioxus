@@ -54,7 +54,7 @@ impl DioxusState {
     pub fn load_child(&self, rdom: &RealDom, path: &[u8]) -> NodeId {
         let mut current = rdom.get(*self.stack.last().unwrap()).unwrap();
         for i in path {
-            let new_id = current.child_ids().unwrap()[*i as usize];
+            let new_id = current.child_ids()[*i as usize];
             current = rdom.get(new_id).unwrap();
         }
         current.id()

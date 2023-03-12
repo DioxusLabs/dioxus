@@ -37,6 +37,7 @@ rand = "0.8.5"
 dioxus = { path = "../dioxus", version = "^0.3.0" }
 tokio = { version = "*", features = ["full"] }
 dioxus-native-core = { path = ".", features = ["dioxus"] }
+dioxus-native-core-macro = { path = "../native-core-macro" }
 
 [features]
 default = []

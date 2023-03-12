@@ -50,11 +50,16 @@ pub fn partial_derive_state(_: TokenStream, input: TokenStream) -> TokenStream {
 
     let mut combined_dependencies = HashSet::new();
 
+    let self_path: TypePath = syn::parse_quote!(Self);
+
     let parent_dependencies = match extract_tuple(parent_dependencies) {
         Some(tuple) => {
             let mut parent_dependencies = Vec::new();
             for type_ in &tuple.elems {
-                let type_ = extract_type_path(type_).unwrap_or_else(|| panic!("ParentDependencies must be a tuple of type paths, found {}", quote!(#type_)));
+                let mut type_ = extract_type_path(type_).unwrap_or_else(|| panic!("ParentDependencies must be a tuple of type paths, found {}", quote!(#type_)));
+                if type_ == self_path {
+                    type_ = this_type.clone();
+                }
                 combined_dependencies.insert(type_.clone());
                 parent_dependencies.push(type_);
             }
@@ -66,7 +71,10 @@ pub fn partial_derive_state(_: TokenStream, input: TokenStream) -> TokenStream {
         Some(tuple) => {
             let mut child_dependencies = Vec::new();
             for type_ in &tuple.elems {
-                let type_ = extract_type_path(type_).unwrap_or_else(|| panic!("ChildDependencies must be a tuple of type paths, found {}", quote!(#type_)));
+                let mut type_ = extract_type_path(type_).unwrap_or_else(|| panic!("ChildDependencies must be a tuple of type paths, found {}", quote!(#type_)));
+                if type_ == self_path {
+                    type_ = this_type.clone();
+                }
                 combined_dependencies.insert(type_.clone());
                 child_dependencies.push(type_);
             }
@@ -78,7 +86,10 @@ pub fn partial_derive_state(_: TokenStream, input: TokenStream) -> TokenStream {
         Some(tuple) => {
             let mut node_dependencies = Vec::new();
             for type_ in &tuple.elems {
-                let type_ = extract_type_path(type_).unwrap_or_else(|| panic!("NodeDependencies must be a tuple of type paths, found {}", quote!(#type_)));
+                let mut type_ = extract_type_path(type_).unwrap_or_else(|| panic!("NodeDependencies must be a tuple of type paths, found {}", quote!(#type_)));
+                if type_ == self_path {
+                    type_ = this_type.clone();
+                }
                 combined_dependencies.insert(type_.clone());
                 node_dependencies.push(type_);
             }
@@ -152,8 +163,14 @@ pub fn partial_derive_state(_: TokenStream, input: TokenStream) -> TokenStream {
                 let raw_node = ();
             }
         } else {
+            let temps = (0..node_dependencies.len())
+                .map(|i| format_ident!("__temp{}", i))
+                .collect::<Vec<_>>();
             quote! {
-                let raw_node: (#(*const #node_dependencies,)*) = (#(&#node_view,)*).get(id).unwrap();
+                let raw_node: (#(*const #node_dependencies,)*) = {
+                    let (#(#temps,)*) = (#(&#node_view,)*).get(id).unwrap_or_else(|err| panic!("Failed to get node view {:?}", err));
+                    (#(#temps as *const _,)*)
+                };
             }
         }
     };
@@ -225,13 +242,14 @@ let get_child_view = {
                 use dioxus_native_core::tree::TreeRef;
 
                 (move |data: #combined_dependencies_quote, run_view: dioxus_native_core::RunPassView #trait_generics| {
+                    println!("Running system for {:?}", type_id);
                     let (#(#split_views,)*) = data;
                     let (tree, types, _, _, _) = &run_view;
                     let tree = tree.clone();
                     let node_mask = Self::NODE_MASK.build();
                     let node_types = types.clone();
                     dioxus_native_core::run_pass(type_id, dependants.clone(), pass_direction, run_view, |id, context| {
-                        let node_data: &NodeType<_> = node_types.get(id).unwrap();
+                        let node_data: &NodeType<_> = node_types.get(id).unwrap_or_else(|err| panic!("Failed to get node type {:?}", err));
                         // get all of the states from the tree view
                         // Safety: No node has itself as a parent or child.
                         let raw_myself: Option<*mut Self> = (&mut #this_view).get(id).ok().map(|c| c as *mut _);

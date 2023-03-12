@@ -101,6 +101,19 @@ pub struct RealDom<V: FromAnyValue + Send + Sync = ()> {
 
 impl<V: FromAnyValue + Send + Sync> RealDom<V> {
     pub fn new(mut passes: Box<[TypeErasedPass<V>]>) -> RealDom<V> {
+        // resolve dependants for each pass
+        for i in 1..passes.len() {
+            let (before, after) = passes.split_at_mut(i);
+            let (current, before) = before.split_last_mut().unwrap();
+            for pass in before.iter_mut().chain(after.iter_mut()) {
+                if current
+                    .combined_dependancy_type_ids
+                    .contains(&pass.this_type_id)
+                {
+                    pass.dependants.insert(current.this_type_id);
+                }
+            }
+        }
         let workload = construct_workload(&mut passes);
         let (workload, _) = workload.build().unwrap();
         let mut world = World::new();
@@ -111,18 +124,9 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
             listeners: FxHashSet::default(),
         });
         let root_id = world.add_entity(root_node);
-
-        // resolve dependants for each pass
-        for i in 1..passes.len() {
-            let (before, after) = passes.split_at_mut(i);
-            let (current, before) = before.split_last_mut().unwrap();
-            for pass in before.iter_mut().chain(after.iter_mut()) {
-                for dependancy in &current.combined_dependancy_type_ids {
-                    if pass.this_type_id == *dependancy {
-                        pass.dependants.insert(current.this_type_id);
-                    }
-                }
-            }
+        {
+            let mut tree: TreeMutView = world.borrow().unwrap();
+            tree.create_node(root_id);
         }
 
         let mut passes_updated = FxHashMap::default();
@@ -199,7 +203,7 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
     }
 
     pub fn get_mut(&mut self, id: NodeId) -> Option<NodeMut<'_, V>> {
-        let contains = { self.tree_ref().contains(id) };
+        let contains = self.tree_ref().contains(id);
         contains.then(|| NodeMut::new(id, self))
     }
 
@@ -252,9 +256,8 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
         while let Some(id) = stack.pop() {
             if let Some(node) = self.get(id) {
                 f(node);
-                if let Some(children) = tree.children_ids(id) {
-                    stack.extend(children.iter().copied().rev());
-                }
+                let children = tree.children_ids(id);
+                stack.extend(children.iter().copied().rev());
             }
         }
     }
@@ -266,10 +269,9 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
         while let Some(id) = queue.pop_front() {
             if let Some(node) = self.get(id) {
                 f(node);
-                if let Some(children) = tree.children_ids(id) {
-                    for id in children {
-                        queue.push_back(id);
-                    }
+                let children = tree.children_ids(id);
+                for id in children {
+                    queue.push_back(id);
                 }
             }
         }
@@ -279,14 +281,13 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
         let mut stack = vec![self.root_id()];
         while let Some(id) = stack.pop() {
             let tree = self.tree_ref();
-            if let Some(mut children) = tree.children_ids(id) {
-                drop(tree);
-                children.reverse();
-                if let Some(node) = self.get_mut(id) {
-                    let node = node;
-                    f(node);
-                    stack.extend(children.iter());
-                }
+            let mut children = tree.children_ids(id);
+            drop(tree);
+            children.reverse();
+            if let Some(node) = self.get_mut(id) {
+                let node = node;
+                f(node);
+                stack.extend(children.iter());
             }
         }
     }
@@ -296,13 +297,12 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
         queue.push_back(self.root_id());
         while let Some(id) = queue.pop_front() {
             let tree = self.tree_ref();
-            if let Some(children) = tree.children_ids(id) {
-                drop(tree);
-                if let Some(node) = self.get_mut(id) {
-                    f(node);
-                    for id in children {
-                        queue.push_back(id);
-                    }
+            let children = tree.children_ids(id);
+            drop(tree);
+            if let Some(node) = self.get_mut(id) {
+                f(node);
+                for id in children {
+                    queue.push_back(id);
                 }
             }
         }
@@ -375,22 +375,19 @@ pub trait NodeImmutable<V: FromAnyValue + Send + Sync>: Sized {
     }
 
     #[inline]
-    fn child_ids(&self) -> Option<Vec<NodeId>> {
+    fn child_ids(&self) -> Vec<NodeId> {
         self.real_dom().tree_ref().children_ids(self.id())
     }
 
     #[inline]
     fn children(&self) -> Vec<NodeRef<V>> {
         self.child_ids()
-            .map(|ids| {
-                ids.iter()
-                    .map(|id| NodeRef {
-                        id: *id,
-                        dom: self.real_dom(),
-                    })
-                    .collect()
+            .iter()
+            .map(|id| NodeRef {
+                id: *id,
+                dom: self.real_dom(),
             })
-            .unwrap_or_default()
+            .collect()
     }
 
     #[inline]
@@ -409,7 +406,7 @@ pub trait NodeImmutable<V: FromAnyValue + Send + Sync>: Sized {
     #[inline]
     fn next(&self) -> Option<NodeRef<V>> {
         let parent = self.parent_id()?;
-        let children = self.real_dom().tree_ref().children_ids(parent)?;
+        let children = self.real_dom().tree_ref().children_ids(parent);
         let index = children.iter().position(|id| *id == self.id())?;
         if index + 1 < children.len() {
             Some(NodeRef {
@@ -424,7 +421,7 @@ pub trait NodeImmutable<V: FromAnyValue + Send + Sync>: Sized {
     #[inline]
     fn prev(&self) -> Option<NodeRef<V>> {
         let parent = self.parent_id()?;
-        let children = self.real_dom().tree_ref().children_ids(parent)?;
+        let children = self.real_dom().tree_ref().children_ids(parent);
         let index = children.iter().position(|id| *id == self.id())?;
         if index > 0 {
             Some(NodeRef {
@@ -534,7 +531,7 @@ impl<'a, V: FromAnyValue + Send + Sync> NodeMut<'a, V> {
     #[inline]
     pub fn next_mut(self) -> Option<NodeMut<'a, V>> {
         let parent = self.parent_id()?;
-        let children = self.dom.tree_mut().children_ids(parent)?;
+        let children = self.dom.tree_mut().children_ids(parent);
         let index = children.iter().position(|id| *id == self.id)?;
         if index + 1 < children.len() {
             Some(NodeMut::new(children[index + 1], self.dom))
@@ -546,7 +543,7 @@ impl<'a, V: FromAnyValue + Send + Sync> NodeMut<'a, V> {
     #[inline]
     pub fn prev_mut(self) -> Option<NodeMut<'a, V>> {
         let parent = self.parent_id()?;
-        let children = self.dom.tree_ref().children_ids(parent)?;
+        let children = self.dom.tree_ref().children_ids(parent);
         let index = children.iter().position(|id| *id == self.id)?;
         if index > 0 {
             Some(NodeMut::new(children[index - 1], self.dom))
@@ -613,11 +610,10 @@ impl<'a, V: FromAnyValue + Send + Sync> NodeMut<'a, V> {
                 .dirty_nodes
                 .mark_child_changed(parent_id);
         }
-        if let Some(children_ids) = self.child_ids() {
-            let children_ids_vec = children_ids.to_vec();
-            for child in children_ids_vec {
-                self.dom.get_mut(child).unwrap().remove();
-            }
+        let children_ids = self.child_ids();
+        let children_ids_vec = children_ids.to_vec();
+        for child in children_ids_vec {
+            self.dom.get_mut(child).unwrap().remove();
         }
         self.dom.tree_mut().remove_single(id);
     }
@@ -739,13 +735,12 @@ impl<'a, V: FromAnyValue + Send + Sync> NodeMut<'a, V> {
         let rdom = self.real_dom_mut();
         let new_id = rdom.create_node(new_node).id();
 
-        if let Some(children) = self.child_ids() {
-            let children = children.to_vec();
-            let rdom = self.real_dom_mut();
-            for child in children {
-                let child_id = rdom.get_mut(child).unwrap().clone_node();
-                rdom.get_mut(new_id).unwrap().add_child(child_id);
-            }
+        let children = self.child_ids();
+        let children = children.to_vec();
+        let rdom = self.real_dom_mut();
+        for child in children {
+            let child_id = rdom.get_mut(child).unwrap().clone_node();
+            rdom.get_mut(new_id).unwrap().add_child(child_id);
         }
         new_id
     }
@@ -894,7 +889,7 @@ fn construct_workload<V: FromAnyValue + Send + Sync>(passes: &mut [TypeErasedPas
         .iter_mut()
         .enumerate()
         .map(|(i, pass)| {
-            let workload = Some((pass.workload)(pass.dependants.clone()));
+            let workload = Some(pass.create_workload());
             (i, pass, workload)
         })
         .collect::<Vec<_>>();
@@ -913,7 +908,7 @@ fn construct_workload<V: FromAnyValue + Send + Sync>(passes: &mut [TypeErasedPas
             let (_, _, workload) = &mut unresloved_workloads[i];
             *workload = workload
                 .take()
-                .map(|workload| workload.tag(dependancy_id.to_string()));
+                .map(|workload| workload.after_all(dependancy_id.to_string()));
         }
     }
     for (_, _, mut workload_system) in unresloved_workloads {

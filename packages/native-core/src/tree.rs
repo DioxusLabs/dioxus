@@ -14,7 +14,7 @@ pub type TreeMutView<'a> = (EntitiesViewMut<'a>, ViewMut<'a, Node>);
 
 pub trait TreeRef {
     fn parent_id(&self, id: NodeId) -> Option<NodeId>;
-    fn children_ids(&self, id: NodeId) -> Option<Vec<NodeId>>;
+    fn children_ids(&self, id: NodeId) -> Vec<NodeId>;
     fn height(&self, id: NodeId) -> Option<u16>;
     fn contains(&self, id: NodeId) -> bool;
 }
@@ -35,8 +35,10 @@ impl<'a> TreeRef for TreeRefView<'a> {
         self.get(id).unwrap().parent
     }
 
-    fn children_ids(&self, id: NodeId) -> Option<Vec<NodeId>> {
-        Some(self.get(id).unwrap().children.clone())
+    fn children_ids(&self, id: NodeId) -> Vec<NodeId> {
+        self.get(id)
+            .map(|node| node.children.clone())
+            .unwrap_or_default()
     }
 
     fn height(&self, id: NodeId) -> Option<u16> {
@@ -50,12 +52,10 @@ impl<'a> TreeRef for TreeRefView<'a> {
 
 impl<'a> TreeMut for TreeMutView<'a> {
     fn remove(&mut self, id: NodeId) {
-        fn recurse<'a>(tree: &mut TreeMutView<'a>, id: NodeId) {
+        fn recurse(tree: &mut TreeMutView<'_>, id: NodeId) {
             let children = tree.children_ids(id);
-            if let Some(children) = children {
-                for child in children {
-                    recurse(tree, child);
-                }
+            for child in children {
+                recurse(tree, child);
             }
         }
         {
@@ -175,9 +175,12 @@ impl<'a> TreeRef for TreeMutView<'a> {
         node_data.get(id).unwrap().parent
     }
 
-    fn children_ids(&self, id: NodeId) -> Option<Vec<NodeId>> {
+    fn children_ids(&self, id: NodeId) -> Vec<NodeId> {
         let node_data = &self.1;
-        node_data.get(id).map(|node| node.children.clone()).ok()
+        node_data
+            .get(id)
+            .map(|node| node.children.clone())
+            .unwrap_or_default()
     }
 
     fn height(&self, id: NodeId) -> Option<u16> {
@@ -192,47 +195,51 @@ impl<'a> TreeRef for TreeMutView<'a> {
 
 #[test]
 fn creation() {
-    let mut tree = Tree::new();
-    let parent_id = tree.root;
-    tree.insert(parent_id, 1i32);
-    let mut child = tree.create_node();
-    child.insert(0i32);
-    let child_id = child.id();
+    use shipyard::World;
+    #[derive(Component)]
+    struct Num(i32);
+
+    let mut world = World::new();
+    let parent_id = world.add_entity(Num(1i32));
+    let child_id = world.add_entity(Num(0i32));
+
+    let mut tree = world.borrow::<TreeMutView>().unwrap();
+
+    tree.create_node(parent_id);
+    tree.create_node(child_id);
 
     tree.add_child(parent_id, child_id);
 
-    println!("Tree: {tree:#?}");
-    assert_eq!(tree.size(), 2);
     assert_eq!(tree.height(parent_id), Some(0));
     assert_eq!(tree.height(child_id), Some(1));
     assert_eq!(tree.parent_id(parent_id), None);
     assert_eq!(tree.parent_id(child_id).unwrap(), parent_id);
-    assert_eq!(tree.children_ids(parent_id).unwrap(), &[child_id]);
-
-    assert_eq!(*tree.get::<i32>(parent_id).unwrap(), 1);
-    assert_eq!(*tree.get::<i32>(child_id).unwrap(), 0);
+    assert_eq!(tree.children_ids(parent_id), &[child_id]);
 }
 
 #[test]
 fn insertion() {
-    let mut tree = Tree::new();
-    let parent = tree.root();
-    tree.insert(parent, 0);
-    let mut child = tree.create_node();
-    child.insert(2);
-    let child = child.id();
+    use shipyard::World;
+    #[derive(Component)]
+    struct Num(i32);
+
+    let mut world = World::new();
+    let parent = world.add_entity(Num(0));
+    let child = world.add_entity(Num(2));
+    let before = world.add_entity(Num(1));
+    let after = world.add_entity(Num(3));
+
+    let mut tree = world.borrow::<TreeMutView>().unwrap();
+
+    tree.create_node(parent);
+    tree.create_node(child);
+    tree.create_node(before);
+    tree.create_node(after);
+
     tree.add_child(parent, child);
-    let mut before = tree.create_node();
-    before.insert(1);
-    let before = before.id();
     tree.insert_before(child, before);
-    let mut after = tree.create_node();
-    after.insert(3);
-    let after = after.id();
     tree.insert_after(child, after);
 
-    println!("Tree: {tree:#?}");
-    assert_eq!(tree.size(), 4);
     assert_eq!(tree.height(parent), Some(0));
     assert_eq!(tree.height(child), Some(1));
     assert_eq!(tree.height(before), Some(1));
@@ -240,34 +247,32 @@ fn insertion() {
     assert_eq!(tree.parent_id(before).unwrap(), parent);
     assert_eq!(tree.parent_id(child).unwrap(), parent);
     assert_eq!(tree.parent_id(after).unwrap(), parent);
-    assert_eq!(tree.children_ids(parent).unwrap(), &[before, child, after]);
-
-    assert_eq!(*tree.get::<i32>(parent).unwrap(), 0);
-    assert_eq!(*tree.get::<i32>(before).unwrap(), 1);
-    assert_eq!(*tree.get::<i32>(child).unwrap(), 2);
-    assert_eq!(*tree.get::<i32>(after).unwrap(), 3);
+    assert_eq!(tree.children_ids(parent), &[before, child, after]);
 }
 
 #[test]
 fn deletion() {
-    let mut tree = Tree::new();
-    let parent = tree.root();
-    tree.insert(parent, 0);
-    let mut child = tree.create_node();
-    child.insert(2);
-    let child = child.id();
+    use shipyard::World;
+    #[derive(Component)]
+    struct Num(i32);
+
+    let mut world = World::new();
+    let parent = world.add_entity(Num(0));
+    let child = world.add_entity(Num(2));
+    let before = world.add_entity(Num(1));
+    let after = world.add_entity(Num(3));
+
+    let mut tree = world.borrow::<TreeMutView>().unwrap();
+
+    tree.create_node(parent);
+    tree.create_node(child);
+    tree.create_node(before);
+    tree.create_node(after);
+
     tree.add_child(parent, child);
-    let mut before = tree.create_node();
-    before.insert(1);
-    let before = before.id();
     tree.insert_before(child, before);
-    let mut after = tree.create_node();
-    after.insert(3);
-    let after = after.id();
     tree.insert_after(child, after);
 
-    println!("Tree: {tree:#?}");
-    assert_eq!(tree.size(), 4);
     assert_eq!(tree.height(parent), Some(0));
     assert_eq!(tree.height(child), Some(1));
     assert_eq!(tree.height(before), Some(1));
@@ -275,49 +280,26 @@ fn deletion() {
     assert_eq!(tree.parent_id(before).unwrap(), parent);
     assert_eq!(tree.parent_id(child).unwrap(), parent);
     assert_eq!(tree.parent_id(after).unwrap(), parent);
-    assert_eq!(tree.children_ids(parent).unwrap(), &[before, child, after]);
-
-    assert_eq!(*tree.get::<i32>(parent).unwrap(), 0);
-    assert_eq!(*tree.get::<i32>(before).unwrap(), 1);
-    assert_eq!(*tree.get::<i32>(child).unwrap(), 2);
-    assert_eq!(*tree.get::<i32>(after).unwrap(), 3);
+    assert_eq!(tree.children_ids(parent), &[before, child, after]);
 
     tree.remove(child);
 
-    println!("Tree: {tree:#?}");
-    assert_eq!(tree.size(), 3);
     assert_eq!(tree.height(parent), Some(0));
     assert_eq!(tree.height(before), Some(1));
     assert_eq!(tree.height(after), Some(1));
     assert_eq!(tree.parent_id(before).unwrap(), parent);
     assert_eq!(tree.parent_id(after).unwrap(), parent);
-    assert_eq!(tree.children_ids(parent).unwrap(), &[before, after]);
-
-    assert_eq!(*tree.get::<i32>(parent).unwrap(), 0);
-    assert_eq!(*tree.get::<i32>(before).unwrap(), 1);
-    assert_eq!(tree.get::<i32>(child), None);
-    assert_eq!(*tree.get::<i32>(after).unwrap(), 3);
+    assert_eq!(tree.children_ids(parent), &[before, after]);
 
     tree.remove(before);
 
-    println!("Tree: {tree:#?}");
-    assert_eq!(tree.size(), 2);
     assert_eq!(tree.height(parent), Some(0));
     assert_eq!(tree.height(after), Some(1));
     assert_eq!(tree.parent_id(after).unwrap(), parent);
-    assert_eq!(tree.children_ids(parent).unwrap(), &[after]);
-
-    assert_eq!(*tree.get::<i32>(parent).unwrap(), 0);
-    assert_eq!(tree.get::<i32>(before), None);
-    assert_eq!(*tree.get::<i32>(after).unwrap(), 3);
+    assert_eq!(tree.children_ids(parent), &[after]);
 
     tree.remove(after);
 
-    println!("Tree: {tree:#?}");
-    assert_eq!(tree.size(), 1);
     assert_eq!(tree.height(parent), Some(0));
-    assert_eq!(tree.children_ids(parent).unwrap(), &[]);
-
-    assert_eq!(*tree.get::<i32>(parent).unwrap(), 0);
-    assert_eq!(tree.get::<i32>(after), None);
+    assert_eq!(tree.children_ids(parent), &[]);
 }

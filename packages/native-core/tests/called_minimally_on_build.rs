@@ -6,22 +6,25 @@ use dioxus_native_core::{
     real_dom::RealDom,
     Dependancy, SendAnyMap, State,
 };
+use dioxus_native_core_macro::partial_derive_state;
+use shipyard::Component;
 
 macro_rules! dep {
     ( child( $name:ty, $dep:ty ) ) => {
-        impl Pass for $name {
+        #[partial_derive_state]
+        impl State for $name {
             type ParentDependencies = ();
             type ChildDependencies = $dep;
             type NodeDependencies = ();
 
             const NODE_MASK: NodeMaskBuilder<'static> = NodeMaskBuilder::ALL;
 
-            fn pass<'a>(
+            fn update<'a>(
                 &mut self,
                 _: NodeView,
                 _: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
                 _: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
-                _: Option<Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>>,
+                _: Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>,
                 _: &SendAnyMap,
             ) -> bool {
                 self.0 += 1;
@@ -32,30 +35,31 @@ macro_rules! dep {
                 node_view: NodeView<()>,
                 node: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
                 parent: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
-                children: Option<Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>>,
+                children: Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>,
                 context: &SendAnyMap,
             ) -> Self {
                 let mut myself = Self::default();
-                myself.pass(node_view, node, parent, children, context);
+                myself.update(node_view, node, parent, children, context);
                 myself
             }
         }
     };
 
     ( parent( $name:ty, $dep:ty ) ) => {
-        impl Pass for $name {
+        #[partial_derive_state]
+        impl State for $name {
             type ParentDependencies = $dep;
             type ChildDependencies = ();
             type NodeDependencies = ();
 
             const NODE_MASK: NodeMaskBuilder<'static> = NodeMaskBuilder::ALL;
 
-            fn pass<'a>(
+            fn update<'a>(
                 &mut self,
                 _: NodeView,
                 _: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
                 _: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
-                _: Option<Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>>,
+                _: Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>,
                 _: &SendAnyMap,
             ) -> bool {
                 self.0 += 1;
@@ -66,30 +70,31 @@ macro_rules! dep {
                 node_view: NodeView<()>,
                 node: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
                 parent: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
-                children: Option<Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>>,
+                children: Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>,
                 context: &SendAnyMap,
             ) -> Self {
                 let mut myself = Self::default();
-                myself.pass(node_view, node, parent, children, context);
+                myself.update(node_view, node, parent, children, context);
                 myself
             }
         }
     };
 
     ( node( $name:ty, $dep:ty ) ) => {
-        impl Pass for $name {
+        #[partial_derive_state]
+        impl State for $name {
             type ParentDependencies = $dep;
             type ChildDependencies = ();
             type NodeDependencies = ();
 
             const NODE_MASK: NodeMaskBuilder<'static> = NodeMaskBuilder::ALL;
 
-            fn pass<'a>(
+            fn update<'a>(
                 &mut self,
                 _: NodeView,
                 _: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
                 _: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
-                _: Option<Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>>,
+                _: Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>,
                 _: &SendAnyMap,
             ) -> bool {
                 self.0 += 1;
@@ -100,11 +105,11 @@ macro_rules! dep {
                 node_view: NodeView<()>,
                 node: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
                 parent: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
-                children: Option<Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>>,
+                children: Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>,
                 context: &SendAnyMap,
             ) -> Self {
                 let mut myself = Self::default();
-                myself.pass(node_view, node, parent, children, context);
+                myself.update(node_view, node, parent, children, context);
                 myself
             }
         }
@@ -145,7 +150,7 @@ macro_rules! test_state{
             let mut dioxus_state = DioxusState::create(&mut dom);
 
             dioxus_state.apply_mutations(&mut dom, mutations);
-            dom.update_state(SendAnyMap::new(), false);
+            dom.update_state(SendAnyMap::new());
 
             dom.traverse_depth_first(|n| {
                 $(
@@ -158,15 +163,15 @@ macro_rules! test_state{
 
 mod node_depends_on_child_and_parent {
     use super::*;
-    #[derive(Debug, Clone, Default, PartialEq)]
+    #[derive(Debug, Clone, Default, PartialEq, Component)]
     struct Node(i32);
     dep!(node(Node, (Child, Parent)));
 
-    #[derive(Debug, Clone, Default, PartialEq)]
+    #[derive(Debug, Clone, Default, PartialEq, Component)]
     struct Child(i32);
     dep!(child(Child, (Child,)));
 
-    #[derive(Debug, Clone, Default, PartialEq)]
+    #[derive(Debug, Clone, Default, PartialEq, Component)]
     struct Parent(i32);
     dep!(parent(Parent, (Parent,)));
 
@@ -175,15 +180,15 @@ mod node_depends_on_child_and_parent {
 
 mod child_depends_on_node_that_depends_on_parent {
     use super::*;
-    #[derive(Debug, Clone, Default, PartialEq)]
+    #[derive(Debug, Clone, Default, PartialEq, Component)]
     struct Node(i32);
     dep!(node(Node, (Parent,)));
 
-    #[derive(Debug, Clone, Default, PartialEq)]
+    #[derive(Debug, Clone, Default, PartialEq, Component)]
     struct Child(i32);
     dep!(child(Child, (Node,)));
 
-    #[derive(Debug, Clone, Default, PartialEq)]
+    #[derive(Debug, Clone, Default, PartialEq, Component)]
     struct Parent(i32);
     dep!(parent(Parent, (Parent,)));
 
@@ -192,15 +197,15 @@ mod child_depends_on_node_that_depends_on_parent {
 
 mod parent_depends_on_node_that_depends_on_child {
     use super::*;
-    #[derive(Debug, Clone, Default, PartialEq)]
+    #[derive(Debug, Clone, Default, PartialEq, Component)]
     struct Node(i32);
     dep!(node(Node, (Child,)));
 
-    #[derive(Debug, Clone, Default, PartialEq)]
+    #[derive(Debug, Clone, Default, PartialEq, Component)]
     struct Child(i32);
     dep!(child(Child, (Child,)));
 
-    #[derive(Debug, Clone, Default, PartialEq)]
+    #[derive(Debug, Clone, Default, PartialEq, Component)]
     struct Parent(i32);
     dep!(parent(Parent, (Node,)));
 
@@ -209,11 +214,11 @@ mod parent_depends_on_node_that_depends_on_child {
 
 mod node_depends_on_other_node_state {
     use super::*;
-    #[derive(Debug, Clone, Default, PartialEq)]
+    #[derive(Debug, Clone, Default, PartialEq, Component)]
     struct Node1(i32);
     dep!(node(Node1, (Node2,)));
 
-    #[derive(Debug, Clone, Default, PartialEq)]
+    #[derive(Debug, Clone, Default, PartialEq, Component)]
     struct Node2(i32);
     dep!(node(Node2, ()));
 
@@ -222,15 +227,15 @@ mod node_depends_on_other_node_state {
 
 mod node_child_and_parent_state_depends_on_self {
     use super::*;
-    #[derive(Debug, Clone, Default, PartialEq)]
+    #[derive(Debug, Clone, Default, PartialEq, Component)]
     struct Node(i32);
     dep!(node(Node, ()));
 
-    #[derive(Debug, Clone, Default, PartialEq)]
+    #[derive(Debug, Clone, Default, PartialEq, Component)]
     struct Child(i32);
     dep!(child(Child, (Child,)));
 
-    #[derive(Debug, Clone, Default, PartialEq)]
+    #[derive(Debug, Clone, Default, PartialEq, Component)]
     struct Parent(i32);
     dep!(parent(Parent, (Parent,)));
 

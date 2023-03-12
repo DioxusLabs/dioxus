@@ -1,13 +1,14 @@
 use anymap::AnyMap;
 use parking_lot::RwLock;
 use rustc_hash::{FxHashMap, FxHashSet};
-use shipyard::{BorrowInfo, Component, IntoBorrow, Unique, UniqueView, View, WorkloadSystem};
+use shipyard::{Component, Unique, UniqueView, View, WorkloadSystem};
 use std::any::{Any, TypeId};
 use std::collections::BTreeMap;
 use std::marker::PhantomData;
+use std::ops::Deref;
 use std::sync::Arc;
 
-use crate::node::FromAnyValue;
+use crate::node::{FromAnyValue, NodeType};
 use crate::node_ref::{NodeMaskBuilder, NodeView};
 use crate::real_dom::{DirtyNodesResult, SendAnyMapWrapper};
 use crate::tree::{TreeRef, TreeRefView};
@@ -104,11 +105,11 @@ impl DirtyNodeStates {
 }
 
 pub trait State<V: FromAnyValue + Send + Sync = ()>: Any + Send + Sync {
-    /// This is a tuple of (T: Pass, ..) of states read from the parent required to run this pass
+    /// This is a tuple of (T: State, ..) of states read from the parent required to run this pass
     type ParentDependencies: Dependancy;
-    /// This is a tuple of (T: Pass, ..) of states read from the children required to run this pass
+    /// This is a tuple of (T: State, ..) of states read from the children required to run this pass
     type ChildDependencies: Dependancy;
-    /// This is a tuple of (T: Pass, ..) of states read from the node required to run this pass
+    /// This is a tuple of (T: State, ..) of states read from the node required to run this pass
     type NodeDependencies: Dependancy;
     /// This is a mask of what aspects of the node are required to run this pass
     const NODE_MASK: NodeMaskBuilder<'static>;
@@ -119,7 +120,7 @@ pub trait State<V: FromAnyValue + Send + Sync = ()>: Any + Send + Sync {
         node_view: NodeView<V>,
         node: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
         parent: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
-        children: Option<Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>>,
+        children: Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>,
         context: &SendAnyMap,
     ) -> bool;
 
@@ -128,7 +129,7 @@ pub trait State<V: FromAnyValue + Send + Sync = ()>: Any + Send + Sync {
         node_view: NodeView<V>,
         node: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
         parent: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
-        children: Option<Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>>,
+        children: Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>,
         context: &SendAnyMap,
     ) -> Self;
 
@@ -140,52 +141,22 @@ pub trait State<V: FromAnyValue + Send + Sync = ()>: Any + Send + Sync {
     ) -> WorkloadSystem;
 }
 
-pub struct RunPassView<'a> {
-    tree: TreeRefView<'a>,
-    nodes_updated: UniqueView<'a, DirtyNodesResult>,
-    dirty: UniqueView<'a, DirtyNodeStates>,
-    ctx: UniqueView<'a, SendAnyMapWrapper>,
-}
+pub type RunPassView<'a, V = ()> = (
+    TreeRefView<'a>,
+    View<'a, NodeType<V>>,
+    UniqueView<'a, DirtyNodesResult>,
+    UniqueView<'a, DirtyNodeStates>,
+    UniqueView<'a, SendAnyMapWrapper>,
+);
 
-impl<'v> shipyard::Borrow<'v> for RunPassView<'v> {
-    type View = RunPassView<'v>;
-
-    fn borrow(
-        world: &'v shipyard::World,
-        last_run: Option<u32>,
-        current: u32,
-    ) -> Result<Self::View, shipyard::error::GetStorage> {
-        Ok(RunPassView {
-            tree: <TreeRefView<'v> as shipyard::IntoBorrow>::Borrow::borrow(
-                world, last_run, current,
-            )?,
-            nodes_updated:
-                <UniqueView<'v, DirtyNodesResult> as shipyard::IntoBorrow>::Borrow::borrow(
-                    world, last_run, current,
-                )?,
-            dirty: <UniqueView<'v, DirtyNodeStates> as shipyard::IntoBorrow>::Borrow::borrow(
-                world, last_run, current,
-            )?,
-            ctx: <UniqueView<'v, SendAnyMapWrapper> as shipyard::IntoBorrow>::Borrow::borrow(
-                world, last_run, current,
-            )?,
-        })
-    }
-}
-
-pub fn run_pass(
+pub fn run_pass<V: FromAnyValue>(
     type_id: TypeId,
     dependants: FxHashSet<TypeId>,
     pass_direction: PassDirection,
-    view: RunPassView,
+    view: RunPassView<V>,
     mut update_node: impl FnMut(NodeId, &SendAnyMap) -> bool,
 ) {
-    let RunPassView {
-        tree,
-        nodes_updated,
-        dirty,
-        ctx,
-    } = view;
+    let (tree, _, nodes_updated, dirty, ctx, ..) = view;
     let ctx = ctx.as_ref();
     match pass_direction {
         PassDirection::ParentToChild => {
@@ -193,7 +164,7 @@ pub fn run_pass(
                 let id = tree.id_at(id).unwrap();
                 if (update_node)(id, ctx) {
                     nodes_updated.insert(id);
-                    for id in tree.children_ids(id).unwrap() {
+                    for id in tree.children_ids(id) {
                         for dependant in &dependants {
                             dirty.insert(*dependant, id, height + 1);
                         }
@@ -283,6 +254,8 @@ pub trait AnyState<V: FromAnyValue + Send + Sync = ()>: State<V> {
     }
 }
 
+impl<V: FromAnyValue + Send + Sync, S: State<V>> AnyState<V> for S {}
+
 pub struct TypeErasedPass<V: FromAnyValue + Send = ()> {
     pub(crate) this_type_id: TypeId,
     pub(crate) parent_dependant: bool,
@@ -295,7 +268,17 @@ pub struct TypeErasedPass<V: FromAnyValue + Send = ()> {
     phantom: PhantomData<V>,
 }
 
-#[derive(Debug)]
+impl<V: FromAnyValue + Send> TypeErasedPass<V> {
+    pub(crate) fn create_workload(&self) -> WorkloadSystem {
+        (self.workload)(
+            self.this_type_id,
+            self.dependants.clone(),
+            self.pass_direction,
+        )
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
 pub enum PassDirection {
     ParentToChild,
     ChildToParent,
@@ -319,7 +302,7 @@ impl<'a> AnyMapLike<'a> for &'a SendAnyMap {
 }
 
 pub trait Dependancy {
-    type ElementBorrowed<'a>: IntoBorrow + BorrowInfo;
+    type ElementBorrowed<'a>;
 
     fn type_ids() -> Box<[TypeId]> {
         Box::new([])
@@ -328,14 +311,36 @@ pub trait Dependancy {
 
 macro_rules! impl_dependancy {
     ($($t:ident),*) => {
-        impl< $($t: Send + Sync + Component),* > Dependancy for ($($t,)*) {
-            type ElementBorrowed<'a> = ($(View<'a, $t>,)*);
+        impl< $($t: Send + Sync + Component + State),* > Dependancy for ($($t,)*) {
+            type ElementBorrowed<'a> = ($(DependancyView<'a, $t>,)*);
 
             fn type_ids() -> Box<[TypeId]> {
                 Box::new([$(TypeId::of::<$t>()),*])
             }
         }
     };
+}
+
+// TODO: track what components are actually read to update subscriptions
+// making this a wrapper makes it possible to implement that optimization without a breaking change
+pub struct DependancyView<'a, T> {
+    inner: &'a T,
+}
+
+impl<'a, T> DependancyView<'a, T> {
+    // This should only be used in the macro. This is not a public API or stable
+    #[doc(hidden)]
+    pub fn new(inner: &'a T) -> Self {
+        Self { inner }
+    }
+}
+
+impl<'a, T> Deref for DependancyView<'a, T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        self.inner
+    }
 }
 
 impl_dependancy!();
