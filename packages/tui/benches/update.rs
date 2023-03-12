@@ -7,20 +7,53 @@ criterion_main!(mbenches);
 
 /// This benchmarks the cache performance of the TUI for small edits by changing one box at a time.
 fn tui_update(c: &mut Criterion) {
-    let mut group = c.benchmark_group("Update boxes");
+    {
+        let mut group = c.benchmark_group("Update boxes");
 
-    // We can also use loops to define multiple benchmarks, even over multiple dimensions.
-    for size in 1..=20usize {
-        let parameter_string = format!("{}", (size).pow(2));
-        group.bench_with_input(
-            BenchmarkId::new("size", parameter_string),
-            &size,
-            |b, size| {
-                b.iter(|| {
-                    dioxus_tui::launch_cfg_with_props(app, *size, Config::default().with_headless())
-                })
-            },
-        );
+        for size in 1..=20usize {
+            let parameter_string = format!("{}", (size).pow(2));
+            group.bench_with_input(
+                BenchmarkId::new("size", parameter_string),
+                &size,
+                |b, size| {
+                    b.iter(|| {
+                        dioxus_tui::launch_cfg_with_props(
+                            app,
+                            GridProps {
+                                size: *size,
+                                update_count: 1,
+                            },
+                            Config::default().with_headless(),
+                        )
+                    })
+                },
+            );
+        }
+    }
+
+    {
+        let mut group = c.benchmark_group("Update many boxes");
+
+        for update_count in 1..=20usize {
+            let update_count = update_count * 20;
+            let parameter_string = update_count.to_string();
+            group.bench_with_input(
+                BenchmarkId::new("update count", parameter_string),
+                &update_count,
+                |b, update_count| {
+                    b.iter(|| {
+                        dioxus_tui::launch_cfg_with_props(
+                            app,
+                            GridProps {
+                                size: 20,
+                                update_count: *update_count,
+                            },
+                            Config::default().with_headless(),
+                        )
+                    })
+                },
+            );
+        }
     }
 }
 
@@ -58,6 +91,7 @@ fn Box(cx: Scope<BoxProps>) -> Element {
 #[derive(Props, PartialEq)]
 struct GridProps {
     size: usize,
+    update_count: usize,
 }
 #[allow(non_snake_case)]
 fn Grid(cx: Scope<GridProps>) -> Element {
@@ -66,18 +100,20 @@ fn Grid(cx: Scope<GridProps>) -> Element {
     let counts = use_ref(cx, || vec![0; size * size]);
 
     let ctx: TuiContext = cx.consume_context().unwrap();
-    if *count.get() + 1 >= (size * size) {
+    if *count.get() + cx.props.update_count >= (size * size) {
         ctx.quit();
     } else {
-        counts.with_mut(|c| {
-            let i = *count.current();
-            c[i] += 1;
-            c[i] %= 360;
-        });
-        count.with_mut(|i| {
-            *i += 1;
-            *i %= size * size;
-        });
+        for _ in 0..cx.props.update_count {
+            counts.with_mut(|c| {
+                let i = *count.current();
+                c[i] += 1;
+                c[i] %= 360;
+            });
+            count.with_mut(|i| {
+                *i += 1;
+                *i %= size * size;
+            });
+        }
     }
 
     render! {
@@ -115,13 +151,14 @@ fn Grid(cx: Scope<GridProps>) -> Element {
     }
 }
 
-fn app(cx: Scope<usize>) -> Element {
+fn app(cx: Scope<GridProps>) -> Element {
     cx.render(rsx! {
         div{
             width: "100%",
             height: "100%",
             Grid{
-                size: *cx.props,
+                size: cx.props.size,
+                update_count: cx.props.update_count,
             }
         }
     })
