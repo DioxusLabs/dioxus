@@ -241,12 +241,13 @@ let get_child_view = {
                 use dioxus_native_core::exports::shipyard::{IntoWorkloadSystem, Get, AddComponent};
                 use dioxus_native_core::tree::TreeRef;
                 use dioxus_native_core::prelude::{NodeType, NodeView};
+                
+                let node_mask = Self::NODE_MASK.build();
 
                 (move |data: #combined_dependencies_quote, run_view: dioxus_native_core::RunPassView #trait_generics| {
                     let (#(#split_views,)*) = data;
                     let (tree, types, _, _, _) = &run_view;
                     let tree = tree.clone();
-                    let node_mask = Self::NODE_MASK.build();
                     let node_types = types.clone();
                     dioxus_native_core::run_pass(type_id, dependants.clone(), pass_direction, run_view, |id, context| {
                         let node_data: &NodeType<_> = node_types.get(id).unwrap_or_else(|err| panic!("Failed to get node type {:?}", err));
