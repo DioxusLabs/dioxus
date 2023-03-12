@@ -7,7 +7,7 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use dioxus_html::EventData;
-use dioxus_native_core::{node_ref::NodeMaskBuilder, real_dom::NodeImmutable, State};
+use dioxus_native_core::{node_ref::NodeMaskBuilder, prelude::AnyState, real_dom::NodeImmutable};
 use dioxus_native_core::{real_dom::RealDom, FxDashSet, NodeId, SendAnyMap};
 use focus::FocusState;
 use futures::{channel::mpsc::UnboundedSender, pin_mut, Future, StreamExt};
@@ -123,7 +123,7 @@ pub fn render<R: Renderer>(
         let mut any_map = SendAnyMap::new();
         any_map.insert(taffy.clone());
         let mut rdom = rdom.write().unwrap();
-        let _ = rdom.update_state(any_map, false);
+        let _ = rdom.update_state(any_map);
     }
 
     tokio::runtime::Builder::new_current_thread()
@@ -148,7 +148,7 @@ pub fn render<R: Renderer>(
             }
 
             let mut to_rerender = FxDashSet::default();
-            to_rerender.insert(NodeId(0));
+            to_rerender.insert(rdom.read().unwrap().root_id());
             let mut updated = true;
 
             loop {
@@ -167,7 +167,7 @@ pub fn render<R: Renderer>(
                         let width = screen_to_layout_space(dims.width);
                         let height = screen_to_layout_space(dims.height);
                         let root_node = rdom
-                            .get(NodeId(0))
+                            .get(rdom.root_id())
                             .unwrap()
                             .get::<TaffyLayout>()
                             .unwrap()
@@ -270,7 +270,7 @@ pub fn render<R: Renderer>(
                     let mut rdom = rdom.write().unwrap();
                     let mut any_map = SendAnyMap::new();
                     any_map.insert(taffy.clone());
-                    let (new_to_rerender, dirty) = rdom.update_state(any_map, false);
+                    let (new_to_rerender, dirty) = rdom.update_state(any_map);
                     to_rerender = new_to_rerender;
                     let text_mask = NodeMaskBuilder::new().with_text().build();
                     for (id, mask) in dirty {

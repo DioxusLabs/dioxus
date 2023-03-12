@@ -1,11 +1,13 @@
 use std::sync::{Arc, Mutex};
 
+use dioxus_native_core::exports::shipyard::Component;
 use dioxus_native_core::layout_attributes::{
     apply_layout_attributes_cfg, BorderWidths, LayoutConfigeration,
 };
 use dioxus_native_core::node::OwnedAttributeView;
 use dioxus_native_core::node_ref::{AttributeMaskBuilder, NodeMaskBuilder, NodeView};
 use dioxus_native_core::{Dependancy, SendAnyMap, State};
+use dioxus_native_core_macro::partial_derive_state;
 use taffy::prelude::*;
 
 use crate::{screen_to_layout_space, unit_to_layout_space};
@@ -36,12 +38,13 @@ impl<T> Default for PossiblyUninitalized<T> {
     }
 }
 
-#[derive(Clone, PartialEq, Default, Debug)]
+#[derive(Clone, PartialEq, Default, Debug, Component)]
 pub(crate) struct TaffyLayout {
     pub style: Style,
     pub node: PossiblyUninitalized<Node>,
 }
 
+#[partial_derive_state]
 impl State for TaffyLayout {
     type ChildDependencies = (Self,);
     type ParentDependencies = ();
@@ -56,7 +59,7 @@ impl State for TaffyLayout {
         node_view: NodeView,
         _: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
         _: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
-        children: Option<Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>>,
+        children: Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>,
         ctx: &SendAnyMap,
     ) -> bool {
         let mut changed = false;
@@ -110,10 +113,8 @@ impl State for TaffyLayout {
 
             // Set all direct nodes as our children
             let mut child_layout = vec![];
-            if let Some(children) = children {
-                for (l,) in children {
-                    child_layout.push(l.node.unwrap());
-                }
+            for (l,) in children {
+                child_layout.push(l.node.unwrap());
             }
 
             fn scale_dimention(d: Dimension) -> Dimension {
@@ -194,7 +195,7 @@ impl State for TaffyLayout {
         node_view: NodeView<()>,
         node: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
         parent: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
-        children: Option<Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>>,
+        children: Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>,
         context: &SendAnyMap,
     ) -> Self {
         let mut myself = Self::default();

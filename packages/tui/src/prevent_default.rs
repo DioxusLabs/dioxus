@@ -1,6 +1,8 @@
 use dioxus_native_core::{node_ref::NodeView, Dependancy, SendAnyMap, State};
+use dioxus_native_core_macro::partial_derive_state;
+use shipyard::Component;
 
-#[derive(PartialEq, Debug, Clone, Copy)]
+#[derive(PartialEq, Debug, Clone, Copy, Component)]
 pub(crate) enum PreventDefault {
     Focus,
     KeyPress,
@@ -25,6 +27,7 @@ impl Default for PreventDefault {
     }
 }
 
+#[partial_derive_state]
 impl State for PreventDefault {
     type ParentDependencies = ();
     type ChildDependencies = ();
@@ -42,7 +45,7 @@ impl State for PreventDefault {
         node_view: NodeView,
         _: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
         _: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
-        _: Option<Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>>,
+        _: Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>,
         _: &SendAnyMap,
     ) -> bool {
         let new = match node_view.attributes().and_then(|mut attrs| {
@@ -78,7 +81,7 @@ impl State for PreventDefault {
         node_view: NodeView<()>,
         node: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
         parent: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
-        children: Option<Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>>,
+        children: Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>,
         context: &SendAnyMap,
     ) -> Self {
         let mut myself = Self::default();

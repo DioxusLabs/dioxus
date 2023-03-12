@@ -311,6 +311,16 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
     pub fn add_node_watcher(&mut self, watcher: impl NodeWatcher<V> + 'static + Send + Sync) {
         self.node_watchers.write().unwrap().push(Box::new(watcher));
     }
+
+    /// Returns a reference to the underlying world. Any changes made to the world will not update the reactive system.
+    pub fn raw_world(&self) -> &World {
+        &self.world
+    }
+
+    /// Returns a mutable reference to the underlying world. Any changes made to the world will not update the reactive system.
+    pub fn raw_world_mut(&mut self) -> &mut World {
+        &mut self.world
+    }
 }
 
 pub struct ViewEntry<'a, V: Component + Send + Sync> {
@@ -371,7 +381,8 @@ pub trait NodeImmutable<V: FromAnyValue + Send + Sync>: Sized {
     fn get<'a, T: Component + Sync + Send>(&'a self) -> Option<ViewEntry<'a, T>> {
         // self.real_dom().tree.get(self.id())
         let view: View<'a, T> = self.real_dom().borrow_raw().ok()?;
-        Some(ViewEntry::new(view, self.id()))
+        view.contains(self.id())
+            .then(|| ViewEntry::new(view, self.id()))
     }
 
     #[inline]

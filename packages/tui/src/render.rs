@@ -28,7 +28,7 @@ pub(crate) fn render_vnode(
 ) {
     use dioxus_native_core::node::NodeType;
 
-    if let NodeType::Placeholder = &node.node_type() {
+    if let NodeType::Placeholder = &*node.node_type() {
         return;
     }
 
@@ -47,7 +47,7 @@ pub(crate) fn render_vnode(
     let width = layout_to_screen_space(fx + width).round() as u16 - x;
     let height = layout_to_screen_space(fy + height).round() as u16 - y;
 
-    match node.node_type() {
+    match &*node.node_type() {
         NodeType::Text(text) => {
             #[derive(Default)]
             struct Label<'a> {
@@ -272,10 +272,11 @@ impl RinkWidget for NodeRef<'_> {
                 if let Some(c) = self.get::<StyleModifier>().unwrap().core.bg {
                     new_cell.bg = c;
                 }
-                let focused = self.get::<Focused>();
-                if focused.is_some() && focused.unwrap().0 {
-                    new_cell.bg.alpha = 100;
-                    new_cell.bg.color = new_cell.bg.blend(Color::White);
+                if let Some(focused) = self.get::<Focused>() {
+                    if focused.0 {
+                        new_cell.bg.alpha = 100;
+                        new_cell.bg.color = new_cell.bg.blend(Color::White);
+                    }
                 }
                 buf.set(x, y, new_cell);
             }

@@ -6,11 +6,15 @@ use dioxus_native_core::{
     utils::{ElementProduced, PersistantElementIter},
     Dependancy, NodeId, RealDom, SendAnyMap, State,
 };
+use dioxus_native_core_macro::partial_derive_state;
+use shipyard::Component;
+use shipyard::{Get, ViewMut};
 
 use std::{cmp::Ordering, num::NonZeroU16};
 
 use dioxus_native_core::node_ref::NodeView;
 
+#[derive(Component)]
 pub struct Focused(pub bool);
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -58,11 +62,12 @@ impl Default for FocusLevel {
     }
 }
 
-#[derive(Clone, PartialEq, Debug, Default)]
+#[derive(Clone, PartialEq, Debug, Default, Component)]
 pub(crate) struct Focus {
     pub level: FocusLevel,
 }
 
+#[partial_derive_state]
 impl State for Focus {
     const NODE_MASK: NodeMaskBuilder<'static> = NodeMaskBuilder::new()
         .with_attrs(AttributeMaskBuilder::Some(FOCUS_ATTRIBUTES))
@@ -77,7 +82,7 @@ impl State for Focus {
         node_view: NodeView,
         _: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
         _: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
-        _: Option<Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>>,
+        _: Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>,
         _: &SendAnyMap,
     ) -> bool {
         let new = Focus {
@@ -126,7 +131,7 @@ impl State for Focus {
         node_view: NodeView<()>,
         node: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
         parent: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
-        children: Option<Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>>,
+        children: Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>,
         context: &SendAnyMap,
     ) -> Self {
         let mut myself = Self::default();
@@ -159,7 +164,7 @@ impl FocusState {
     /// Returns true if the focus has changed.
     pub fn progress(&mut self, rdom: &mut RealDom, forward: bool) -> bool {
         if let Some(last) = self.last_focused_id {
-            if rdom.get(last).unwrap().get::<PreventDefault>().copied()
+            if rdom.get(last).unwrap().get::<PreventDefault>().map(|p| *p)
                 == Some(PreventDefault::KeyDown)
             {
                 return false;
@@ -257,7 +262,8 @@ impl FocusState {
             }
             node.insert(Focused(true));
             if let Some(old) = self.last_focused_id.replace(id) {
-                let focused = rdom.get_state_mut_raw::<Focused>(old).unwrap();
+                let mut focused_borrow: ViewMut<Focused> = rdom.raw_world().borrow().unwrap();
+                let focused = (&mut focused_borrow).get(old).unwrap();
                 focused.0 = false;
             }
             // reset the position to the currently focused element

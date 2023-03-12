@@ -240,9 +240,9 @@ let get_child_view = {
             fn workload_system(type_id: std::any::TypeId, dependants: dioxus_native_core::exports::FxHashSet<std::any::TypeId>, pass_direction: dioxus_native_core::PassDirection) -> dioxus_native_core::exports::shipyard::WorkloadSystem {
                 use dioxus_native_core::exports::shipyard::{IntoWorkloadSystem, Get, AddComponent};
                 use dioxus_native_core::tree::TreeRef;
+                use dioxus_native_core::prelude::{NodeType, NodeView};
 
                 (move |data: #combined_dependencies_quote, run_view: dioxus_native_core::RunPassView #trait_generics| {
-                    println!("Running system for {:?}", type_id);
                     let (#(#split_views,)*) = data;
                     let (tree, types, _, _, _) = &run_view;
                     let tree = tree.clone();

@@ -35,16 +35,19 @@ use dioxus_native_core::{
     node_ref::{AttributeMaskBuilder, NodeMaskBuilder, NodeView},
     Dependancy, SendAnyMap, State,
 };
+use dioxus_native_core_macro::partial_derive_state;
+use shipyard::Component;
 use taffy::prelude::*;
 
 use crate::style::{RinkColor, RinkStyle};
 
-#[derive(Default, Clone, PartialEq, Debug)]
+#[derive(Default, Clone, PartialEq, Debug, Component)]
 pub struct StyleModifier {
     pub core: RinkStyle,
     pub modifier: TuiModifier,
 }
 
+#[partial_derive_state]
 impl State for StyleModifier {
     type ParentDependencies = (Self,);
     type ChildDependencies = ();
@@ -60,7 +63,7 @@ impl State for StyleModifier {
         node_view: NodeView,
         _: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
         parent: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
-        _: Option<Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>>,
+        _: Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>,
         _: &SendAnyMap,
     ) -> bool {
         let mut new = StyleModifier::default();
@@ -117,7 +120,7 @@ impl State for StyleModifier {
         node_view: NodeView<()>,
         node: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
         parent: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
-        children: Option<Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>>,
+        children: Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>,
         context: &SendAnyMap,
     ) -> Self {
         let mut myself = Self::default();
