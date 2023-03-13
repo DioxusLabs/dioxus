@@ -10,7 +10,7 @@ use rustc_hash::FxHashSet;
 use std::rc::Rc;
 use std::sync::{Arc, RwLock};
 
-const SIZE: usize = 200;
+const SIZE: usize = 10;
 
 struct Test {
     node_states: [[usize; SIZE]; SIZE],
