@@ -9,10 +9,8 @@ use std::{
 
 use dioxus_core::{Component, ElementId, VirtualDom};
 use dioxus_html::EventData;
-use dioxus_native_core::{
-    dioxus::{DioxusState, NodeImmutableDioxusExt},
-    NodeId, RealDom,
-};
+use dioxus_native_core::dioxus::{DioxusState, NodeImmutableDioxusExt};
+use dioxus_native_core::prelude::*;
 
 pub use rink::Config;
 use rink::{query::Query, render, Renderer, TuiContext};

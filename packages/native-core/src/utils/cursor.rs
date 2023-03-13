@@ -1,3 +1,5 @@
+//! A cursor implementation that can be used to navigate and edit text.
+
 use std::{cmp::Ordering, ops::Range};
 
 use keyboard_types::{Code, Key, Modifiers};

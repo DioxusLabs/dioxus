@@ -1,3 +1,5 @@
+//! Utilities that provide limited access to nodes
+
 use rustc_hash::FxHashSet;
 
 use crate::{
@@ -5,7 +7,7 @@ use crate::{
     NodeId,
 };
 
-/// A view into a [VNode] with limited access.
+/// A view into a [NodeType] with a mask that determines what is visible.
 #[derive(Debug)]
 pub struct NodeView<'a, V: FromAnyValue = ()> {
     id: NodeId,
@@ -98,11 +100,14 @@ impl<'a, V: FromAnyValue> NodeView<'a, V> {
 /// A mask that contains a list of attributes that are visible.
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum AttributeMask {
+    /// All attributes are visible
     All,
+    /// Only the given attributes are visible
     Some(FxHashSet<Box<str>>),
 }
 
 impl AttributeMask {
+    /// Check if the given attribute is visible
     fn contains_attribute(&self, attr: &str) -> bool {
         match self {
             AttributeMask::All => true,
@@ -203,9 +208,12 @@ impl NodeMask {
     }
 }
 
+/// A builder for a mask that controls what attributes are visible.
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum AttributeMaskBuilder<'a> {
+    /// All attributes are visible
     All,
+    /// Only the given attributes are visible
     Some(&'a [&'a str]),
 }
 

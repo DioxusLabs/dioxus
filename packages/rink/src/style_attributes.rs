@@ -33,7 +33,7 @@ use dioxus_native_core::{
     layout_attributes::parse_value,
     node::OwnedAttributeView,
     node_ref::{AttributeMaskBuilder, NodeMaskBuilder, NodeView},
-    Dependancy, SendAnyMap, State,
+    prelude::*,
 };
 use dioxus_native_core_macro::partial_derive_state;
 use shipyard::Component;

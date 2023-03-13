@@ -1,3 +1,5 @@
+//! Integration between Dioxus and the RealDom
+
 use crate::tree::TreeMut;
 use dioxus_core::{BorrowedAttributeValue, ElementId, Mutations, TemplateNode};
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -8,14 +10,15 @@ use crate::{
         ElementNode, FromAnyValue, NodeType, OwnedAttributeDiscription, OwnedAttributeValue,
         TextNode,
     },
-    prelude::NodeImmutable,
+    prelude::*,
     real_dom::NodeTypeMut,
-    NodeId, NodeMut, RealDom,
+    NodeId,
 };
 
 #[derive(Component)]
 struct ElementIdComponent(ElementId);
 
+/// The state of the Dioxus integration with the RealDom
 pub struct DioxusState {
     templates: FxHashMap<String, Vec<NodeId>>,
     stack: Vec<NodeId>,
@@ -23,6 +26,7 @@ pub struct DioxusState {
 }
 
 impl DioxusState {
+    /// Initialize the DioxusState in the RealDom
     pub fn create(rdom: &mut RealDom) -> Self {
         let root_id = rdom.root_id();
         let mut root = rdom.get_mut(root_id).unwrap();
@@ -34,10 +38,12 @@ impl DioxusState {
         }
     }
 
+    /// Convert an ElementId to a NodeId
     pub fn element_to_node_id(&self, element_id: ElementId) -> NodeId {
         self.try_element_to_node_id(element_id).unwrap()
     }
 
+    /// Attempt to convert an ElementId to a NodeId. This will return None if the ElementId is not in the RealDom.
     pub fn try_element_to_node_id(&self, element_id: ElementId) -> Option<NodeId> {
         self.node_id_mapping.get(element_id.0).copied().flatten()
     }
@@ -51,7 +57,7 @@ impl DioxusState {
         self.node_id_mapping[element_id.0] = Some(node_id);
     }
 
-    pub fn load_child(&self, rdom: &RealDom, path: &[u8]) -> NodeId {
+    fn load_child(&self, rdom: &RealDom, path: &[u8]) -> NodeId {
         let mut current = rdom.get(*self.stack.last().unwrap()).unwrap();
         for i in path {
             let new_id = current.child_ids()[*i as usize];
@@ -170,7 +176,7 @@ impl DioxusState {
                     let mut node_type_mut = node.node_type_mut();
                     if let NodeTypeMut::Element(element) = &mut node_type_mut {
                         if let BorrowedAttributeValue::None = &value {
-                            element.remove_attributes(&OwnedAttributeDiscription {
+                            element.remove_attribute(&OwnedAttributeDiscription {
                                 name: name.to_string(),
                                 namespace: ns.map(|s| s.to_string()),
                             });
@@ -266,7 +272,10 @@ fn create_template_node(rdom: &mut RealDom, node: &TemplateNode) -> NodeId {
     }
 }
 
+/// A trait that extends the `NodeImmutable` trait with methods that are useful for dioxus.
 pub trait NodeImmutableDioxusExt<V: FromAnyValue + Send + Sync>: NodeImmutable<V> {
+    /// Returns the id of the element that this node is mounted to.
+    /// Not all nodes are mounted to an element, only nodes with dynamic content that have been renderered will have an id.
     fn mounted_id(&self) -> Option<ElementId> {
         let id = self.get::<ElementIdComponent>();
         id.map(|id| id.0)

@@ -1,4 +1,6 @@
-use crate::{node::FromAnyValue, NodeMut};
+//! Helpers for watching for changes in the DOM tree.
+
+use crate::{node::FromAnyValue, prelude::*};
 
 /// A trait for watching for changes in the DOM tree.
 pub trait NodeWatcher<V: FromAnyValue + Send + Sync> {

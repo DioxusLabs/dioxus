@@ -3,27 +3,53 @@ use smallvec::SmallVec;
 use crate::{
     node::FromAnyValue,
     node_watcher::NodeWatcher,
+    prelude::{NodeMut, NodeRef},
     real_dom::{NodeImmutable, RealDom},
-    NodeId, NodeRef,
+    NodeId,
 };
 use std::{
     fmt::Debug,
     sync::{Arc, Mutex},
 };
 
-#[derive(Debug)]
-pub enum ElementProduced {
-    /// The iterator produced an element by progressing to the next node in a depth first order.
-    Progressed(NodeId),
+/// The element produced by the iterator
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct ElementProduced {
+    id: NodeId,
+    movement: IteratorMovement,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+/// The method by which the iterator produced an element
+pub enum IteratorMovement {
+    /// The iterator produced an element by progressing to the next node
+    Progressed,
     /// The iterator reached the end of the tree and looped back to the root
-    Looped(NodeId),
+    Looped,
 }
 
 impl ElementProduced {
+    /// Get the id of the element produced
     pub fn id(&self) -> NodeId {
-        match self {
-            ElementProduced::Progressed(id) => *id,
-            ElementProduced::Looped(id) => *id,
+        self.id
+    }
+
+    /// The movement the iterator made to produce the element
+    pub fn movement(&self) -> &IteratorMovement {
+        &self.movement
+    }
+
+    fn looped(id: NodeId) -> Self {
+        Self {
+            id,
+            movement: IteratorMovement::Looped,
+        }
+    }
+
+    fn progressed(id: NodeId) -> Self {
+        Self {
+            id,
+            movement: IteratorMovement::Progressed,
         }
     }
 }
@@ -34,7 +60,7 @@ struct PersistantElementIterUpdater<V> {
 }
 
 impl<V: FromAnyValue + Sync + Send> NodeWatcher<V> for PersistantElementIterUpdater<V> {
-    fn on_node_moved(&self, node: crate::NodeMut<V>) {
+    fn on_node_moved(&self, node: NodeMut<V>) {
         // if any element is moved, update its parents in the stack
         let mut stack = self.stack.lock().unwrap();
         let moved = node.id();
@@ -52,7 +78,7 @@ impl<V: FromAnyValue + Sync + Send> NodeWatcher<V> for PersistantElementIterUpda
         }
     }
 
-    fn on_node_removed(&self, node: crate::NodeMut<V>) {
+    fn on_node_removed(&self, node: NodeMut<V>) {
         // if any element is removed in the chain, remove it and its children from the stack
         let mut stack = self.stack.lock().unwrap();
         let removed = node.id();
@@ -62,9 +88,9 @@ impl<V: FromAnyValue + Sync + Send> NodeWatcher<V> for PersistantElementIterUpda
     }
 }
 
-/// Focus systems need a iterator that can persist through changes in the [dioxus_core::VirtualDom].
+/// Focus systems need a iterator that can persist through changes in the [crate::prelude::RealDom]
 /// This iterator traverses the tree depth first.
-/// Iterate through it with [PersistantElementIter::next] [PersistantElementIter::prev], and update it with [PersistantElementIter::prune] (with data from [`dioxus_core::prelude::VirtualDom::work_with_deadline`]).
+/// You can iterate through it with [PersistantElementIter::next] and [PersistantElementIter::prev].
 /// The iterator loops around when it reaches the end or the beginning.
 pub struct PersistantElementIter {
     // stack of elements and fragments, the last element is the last element that was yielded
@@ -72,6 +98,7 @@ pub struct PersistantElementIter {
 }
 
 impl PersistantElementIter {
+    /// Create a new iterator in the RealDom
     pub fn create<V: FromAnyValue + Send + Sync>(rdom: &mut RealDom<V>) -> Self {
         let inner = Arc::new(Mutex::new(smallvec::smallvec![rdom.root_id()]));
 
@@ -90,7 +117,7 @@ impl PersistantElementIter {
             let id = rdom.root_id();
             let new = id;
             stack.push(new);
-            ElementProduced::Looped(id)
+            ElementProduced::looped(id)
         } else {
             let mut look_in_children = true;
             loop {
@@ -100,7 +127,7 @@ impl PersistantElementIter {
                         if let Some(first) = current.children().first() {
                             let new = first.id();
                             stack.push(new);
-                            return ElementProduced::Progressed(new);
+                            return ElementProduced::progressed(new);
                         }
                     }
                     stack.pop();
@@ -108,7 +135,7 @@ impl PersistantElementIter {
                         // the next element exists, add it to the stack and return it
                         let new = new.id();
                         stack.push(new);
-                        return ElementProduced::Progressed(new);
+                        return ElementProduced::progressed(new);
                     }
                     // otherwise, continue the loop and go to the parent
                 } else {
@@ -116,7 +143,7 @@ impl PersistantElementIter {
                     let new = rdom.root_id();
                     stack.clear();
                     stack.push(new);
-                    return ElementProduced::Looped(new);
+                    return ElementProduced::looped(new);
                 }
                 look_in_children = false;
             }
@@ -141,28 +168,28 @@ impl PersistantElementIter {
         if stack.is_empty() {
             let id = rdom.root_id();
             let last = push_back(&mut stack, rdom.get(id).unwrap());
-            ElementProduced::Looped(last)
+            ElementProduced::looped(last)
         } else if let Some(current) = stack.pop().and_then(|last| rdom.get(last)) {
             if let Some(new) = current.prev() {
                 // the next element exists, add it to the stack and return it
                 let new = push_back(&mut stack, new);
-                ElementProduced::Progressed(new)
+                ElementProduced::progressed(new)
             }
             // otherwise, yeild the parent
             else if let Some(parent) = stack.last() {
                 // if there is a parent, return it
-                ElementProduced::Progressed(*parent)
+                ElementProduced::progressed(*parent)
             } else {
                 // if there is no parent, loop back to the root
                 let id = rdom.root_id();
                 let last = push_back(&mut stack, rdom.get(id).unwrap());
-                ElementProduced::Looped(last)
+                ElementProduced::looped(last)
             }
         } else {
             // if there is no parent, loop back to the root
             let id = rdom.root_id();
             let last = push_back(&mut stack, rdom.get(id).unwrap());
-            ElementProduced::Looped(last)
+            ElementProduced::looped(last)
         }
     }
 }

@@ -1,7 +1,10 @@
+//! A tree of nodes intigated with shipyard
+
 use crate::NodeId;
 use shipyard::{Component, EntitiesViewMut, Get, View, ViewMut};
 use std::fmt::Debug;
 
+/// A node in a tree.
 #[derive(PartialEq, Eq, Clone, Debug, Component)]
 pub struct Node {
     parent: Option<NodeId>,
@@ -9,24 +12,38 @@ pub struct Node {
     height: u16,
 }
 
+/// A view of a tree.
 pub type TreeRefView<'a> = View<'a, Node>;
+/// A mutable view of a tree.
 pub type TreeMutView<'a> = (EntitiesViewMut<'a>, ViewMut<'a, Node>);
 
+/// A immutable view of a tree.
 pub trait TreeRef {
+    /// The parent id of the node.
     fn parent_id(&self, id: NodeId) -> Option<NodeId>;
+    /// The children ids of the node.
     fn children_ids(&self, id: NodeId) -> Vec<NodeId>;
+    /// The height of the node.
     fn height(&self, id: NodeId) -> Option<u16>;
+    /// Returns true if the node exists.
     fn contains(&self, id: NodeId) -> bool;
 }
 
+/// A mutable view of a tree.
 pub trait TreeMut: TreeRef {
+    /// Removes the node and all of its children.
     fn remove(&mut self, id: NodeId);
+    /// Removes the node and all of its children.
     fn remove_single(&mut self, id: NodeId);
-    fn set_height(&mut self, node: NodeId, height: u16);
+    /// Adds a new node to the tree.
     fn create_node(&mut self, id: NodeId);
+    /// Adds a child to the node.
     fn add_child(&mut self, parent: NodeId, new: NodeId);
+    /// Replaces the node with a new node.
     fn replace(&mut self, old_id: NodeId, new_id: NodeId);
+    /// Inserts a node before another node.
     fn insert_before(&mut self, old_id: NodeId, new_id: NodeId);
+    /// Inserts a node after another node.
     fn insert_after(&mut self, old_id: NodeId, new_id: NodeId);
 }
 
@@ -79,18 +96,6 @@ impl<'a> TreeMut for TreeMutView<'a> {
         }
     }
 
-    fn set_height(&mut self, node: NodeId, height: u16) {
-        let children = {
-            let mut node_data_mut = &mut self.1;
-            let mut node = (&mut node_data_mut).get(node).unwrap();
-            node.height = height;
-            node.children.clone()
-        };
-        for child in children {
-            self.set_height(child, height + 1);
-        }
-    }
-
     fn create_node(&mut self, id: NodeId) {
         let (entities, node_data_mut) = self;
         entities.add_component(
@@ -113,7 +118,7 @@ impl<'a> TreeMut for TreeMutView<'a> {
             parent.children.push(new);
             height = parent.height + 1;
         }
-        self.set_height(new, height);
+        set_height(self, new, height);
     }
 
     fn replace(&mut self, old_id: NodeId, new_id: NodeId) {
@@ -129,7 +134,7 @@ impl<'a> TreeMut for TreeMutView<'a> {
                     }
                 }
                 let height = parent.height + 1;
-                self.set_height(new_id, height);
+                set_height(self, new_id, height);
             }
         }
         // remove the old node
@@ -149,7 +154,7 @@ impl<'a> TreeMut for TreeMutView<'a> {
             .unwrap();
         parent.children.insert(index, new_id);
         let height = parent.height + 1;
-        self.set_height(new_id, height);
+        set_height(self, new_id, height);
     }
 
     fn insert_after(&mut self, old_id: NodeId, new_id: NodeId) {
@@ -165,7 +170,20 @@ impl<'a> TreeMut for TreeMutView<'a> {
             .unwrap();
         parent.children.insert(index + 1, new_id);
         let height = parent.height + 1;
-        self.set_height(new_id, height);
+        set_height(self, new_id, height);
+    }
+}
+
+/// Sets the height of a node and updates the height of all its children
+fn set_height(tree: &mut TreeMutView<'_>, node: NodeId, height: u16) {
+    let children = {
+        let mut node_data_mut = &mut tree.1;
+        let mut node = (&mut node_data_mut).get(node).unwrap();
+        node.height = height;
+        node.children.clone()
+    };
+    for child in children {
+        set_height(tree, child, height + 1);
     }
 }
 

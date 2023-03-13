@@ -1,4 +1,4 @@
-use dioxus_native_core::{real_dom::NodeImmutable, NodeRef};
+use dioxus_native_core::prelude::*;
 use std::io::Stdout;
 use taffy::{
     geometry::Point,
@@ -26,8 +26,6 @@ pub(crate) fn render_vnode(
     cfg: Config,
     parent_location: Point<f32>,
 ) {
-    use dioxus_native_core::node::NodeType;
-
     if let NodeType::Placeholder = &*node.node_type() {
         return;
     }

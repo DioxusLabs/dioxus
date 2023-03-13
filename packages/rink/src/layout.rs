@@ -6,7 +6,7 @@ use dioxus_native_core::layout_attributes::{
 };
 use dioxus_native_core::node::OwnedAttributeView;
 use dioxus_native_core::node_ref::{AttributeMaskBuilder, NodeMaskBuilder, NodeView};
-use dioxus_native_core::{Dependancy, SendAnyMap, State};
+use dioxus_native_core::prelude::*;
 use dioxus_native_core_macro::partial_derive_state;
 use taffy::prelude::*;
 

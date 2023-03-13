@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex, MutexGuard, RwLock, RwLockReadGuard};
 
-use dioxus_native_core::{real_dom::NodeImmutable, NodeId, RealDom};
+use dioxus_native_core::prelude::*;
 use taffy::{
     geometry::Point,
     prelude::{Layout, Size},

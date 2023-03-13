@@ -1,7 +1,6 @@
-use anymap::AnyMap;
 use parking_lot::RwLock;
 use rustc_hash::{FxHashMap, FxHashSet};
-use shipyard::{Component, Unique, UniqueView, View, WorkloadSystem};
+use shipyard::{Borrow, BorrowInfo, Component, Unique, UniqueView, View, WorkloadSystem};
 use std::any::{Any, TypeId};
 use std::collections::BTreeMap;
 use std::marker::PhantomData;
@@ -104,6 +103,7 @@ impl DirtyNodeStates {
     }
 }
 
+/// A state that is automatically inserted in a node with dependencies.
 pub trait State<V: FromAnyValue + Send + Sync = ()>: Any + Send + Sync {
     /// This is a tuple of (T: State, ..) of states read from the parent required to run this pass
     type ParentDependencies: Dependancy;
@@ -139,24 +139,77 @@ pub trait State<V: FromAnyValue + Send + Sync = ()>: Any + Send + Sync {
         dependants: FxHashSet<TypeId>,
         pass_direction: PassDirection,
     ) -> WorkloadSystem;
+
+    /// Converts to a type erased version of the trait
+    fn to_type_erased() -> TypeErasedState<V>
+    where
+        Self: Sized,
+    {
+        let node_mask = Self::NODE_MASK.build();
+        TypeErasedState {
+            this_type_id: TypeId::of::<Self>(),
+            combined_dependancy_type_ids: all_dependanices::<V, Self>().iter().copied().collect(),
+            parent_dependant: !Self::ParentDependencies::type_ids().is_empty(),
+            child_dependant: !Self::ChildDependencies::type_ids().is_empty(),
+            dependants: FxHashSet::default(),
+            mask: node_mask,
+            pass_direction: pass_direction::<V, Self>(),
+            workload: Self::workload_system,
+            phantom: PhantomData,
+        }
+    }
 }
 
-pub type RunPassView<'a, V = ()> = (
-    TreeRefView<'a>,
-    View<'a, NodeType<V>>,
-    UniqueView<'a, DirtyNodesResult>,
-    UniqueView<'a, DirtyNodeStates>,
-    UniqueView<'a, SendAnyMapWrapper>,
-);
+fn pass_direction<V: FromAnyValue + Send + Sync, S: State<V>>() -> PassDirection {
+    if S::ChildDependencies::type_ids()
+        .iter()
+        .any(|type_id| *type_id == TypeId::of::<S>())
+    {
+        PassDirection::ChildToParent
+    } else if S::ParentDependencies::type_ids()
+        .iter()
+        .any(|type_id| *type_id == TypeId::of::<S>())
+    {
+        PassDirection::ParentToChild
+    } else {
+        PassDirection::AnyOrder
+    }
+}
 
-pub fn run_pass<V: FromAnyValue>(
+fn all_dependanices<V: FromAnyValue + Send + Sync, S: State<V>>() -> Box<[TypeId]> {
+    let mut dependencies = S::ParentDependencies::type_ids().to_vec();
+    dependencies.extend(S::ChildDependencies::type_ids().iter());
+    dependencies.extend(S::NodeDependencies::type_ids().iter());
+    dependencies.into_boxed_slice()
+}
+
+#[doc(hidden)]
+#[derive(Borrow, BorrowInfo)]
+pub struct RunPassView<'a, V: FromAnyValue + Send + Sync = ()> {
+    pub tree: TreeRefView<'a>,
+    pub node_type: View<'a, NodeType<V>>,
+    dirty_nodes_result: UniqueView<'a, DirtyNodesResult>,
+    node_states: UniqueView<'a, DirtyNodeStates>,
+    any_map: UniqueView<'a, SendAnyMapWrapper>,
+}
+
+// This is used by the macro
+/// Updates the given pass, marking any nodes that were changed
+#[doc(hidden)]
+pub fn run_pass<V: FromAnyValue + Send + Sync>(
     type_id: TypeId,
     dependants: FxHashSet<TypeId>,
     pass_direction: PassDirection,
     view: RunPassView<V>,
     mut update_node: impl FnMut(NodeId, &SendAnyMap) -> bool,
 ) {
-    let (tree, _, nodes_updated, dirty, ctx, ..) = view;
+    let RunPassView {
+        tree,
+        dirty_nodes_result: nodes_updated,
+        node_states: dirty,
+        any_map: ctx,
+        ..
+    } = view;
     let ctx = ctx.as_ref();
     match pass_direction {
         PassDirection::ParentToChild => {
@@ -199,64 +252,8 @@ pub fn run_pass<V: FromAnyValue>(
     }
 }
 
-pub trait AnyState<V: FromAnyValue + Send + Sync = ()>: State<V> {
-    fn to_type_erased() -> TypeErasedPass<V>
-    where
-        Self: Sized,
-    {
-        let node_mask = Self::NODE_MASK.build();
-        TypeErasedPass {
-            this_type_id: TypeId::of::<Self>(),
-            combined_dependancy_type_ids: Self::all_dependanices().iter().copied().collect(),
-            parent_dependant: !Self::parent_type_ids().is_empty(),
-            child_dependant: !Self::child_type_ids().is_empty(),
-            dependants: FxHashSet::default(),
-            mask: node_mask,
-            pass_direction: Self::pass_direction(),
-            workload: Self::workload_system,
-            phantom: PhantomData,
-        }
-    }
-
-    fn parent_type_ids() -> Box<[TypeId]> {
-        Self::ParentDependencies::type_ids()
-    }
-
-    fn child_type_ids() -> Box<[TypeId]> {
-        Self::ChildDependencies::type_ids()
-    }
-
-    fn node_type_ids() -> Box<[TypeId]> {
-        Self::NodeDependencies::type_ids()
-    }
-
-    fn all_dependanices() -> Box<[TypeId]> {
-        let mut dependencies = Self::parent_type_ids().to_vec();
-        dependencies.extend(Self::child_type_ids().iter());
-        dependencies.extend(Self::node_type_ids().iter());
-        dependencies.into_boxed_slice()
-    }
-
-    fn pass_direction() -> PassDirection {
-        if Self::child_type_ids()
-            .iter()
-            .any(|type_id| *type_id == TypeId::of::<Self>())
-        {
-            PassDirection::ChildToParent
-        } else if Self::parent_type_ids()
-            .iter()
-            .any(|type_id| *type_id == TypeId::of::<Self>())
-        {
-            PassDirection::ParentToChild
-        } else {
-            PassDirection::AnyOrder
-        }
-    }
-}
-
-impl<V: FromAnyValue + Send + Sync, S: State<V>> AnyState<V> for S {}
-
-pub struct TypeErasedPass<V: FromAnyValue + Send = ()> {
+/// A type erased version of [`State`] that can be added to the [`crate::prelude::RealDom`] with [`crate::prelude::RealDom::new`]
+pub struct TypeErasedState<V: FromAnyValue + Send = ()> {
     pub(crate) this_type_id: TypeId,
     pub(crate) parent_dependant: bool,
     pub(crate) child_dependant: bool,
@@ -268,7 +265,7 @@ pub struct TypeErasedPass<V: FromAnyValue + Send = ()> {
     phantom: PhantomData<V>,
 }
 
-impl<V: FromAnyValue + Send> TypeErasedPass<V> {
+impl<V: FromAnyValue + Send> TypeErasedState<V> {
     pub(crate) fn create_workload(&self) -> WorkloadSystem {
         (self.workload)(
             self.this_type_id,
@@ -278,32 +275,23 @@ impl<V: FromAnyValue + Send> TypeErasedPass<V> {
     }
 }
 
+/// The direction that a pass should be run in
 #[derive(Debug, Clone, Copy)]
 pub enum PassDirection {
+    /// The pass should be run from the root to the leaves
     ParentToChild,
+    /// The pass should be run from the leaves to the root
     ChildToParent,
+    /// The pass can be run in any order
     AnyOrder,
 }
 
-pub trait AnyMapLike<'a> {
-    fn get<T: Any + Sync + Send>(self) -> Option<&'a T>;
-}
-
-impl<'a> AnyMapLike<'a> for &'a AnyMap {
-    fn get<T: Any + Sync + Send>(self) -> Option<&'a T> {
-        self.get()
-    }
-}
-
-impl<'a> AnyMapLike<'a> for &'a SendAnyMap {
-    fn get<T: Any + Sync + Send>(self) -> Option<&'a T> {
-        todo!()
-    }
-}
-
+/// A trait that is implemented for all the dependancies of a [`State`]
 pub trait Dependancy {
+    /// A tuple with all the elements of the dependancy as [`DependancyView`]
     type ElementBorrowed<'a>;
 
+    /// Returns a list of all the [`TypeId`]s of the elements in the dependancy
     fn type_ids() -> Box<[TypeId]> {
         Box::new([])
     }
@@ -323,6 +311,7 @@ macro_rules! impl_dependancy {
 
 // TODO: track what components are actually read to update subscriptions
 // making this a wrapper makes it possible to implement that optimization without a breaking change
+/// A immutable view of a [`State`]
 pub struct DependancyView<'a, T> {
     inner: &'a T,
 }

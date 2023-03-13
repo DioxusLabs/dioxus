@@ -300,19 +300,18 @@ pub fn partial_derive_state(_: TokenStream, input: TokenStream) -> TokenStream {
         #defaultness #unsafety #impl_token #generics #trait_ #for_ #self_ty {
             #(#items)*
 
-            fn workload_system(type_id: std::any::TypeId, dependants: dioxus_native_core::exports::FxHashSet<std::any::TypeId>, pass_direction: dioxus_native_core::PassDirection) -> dioxus_native_core::exports::shipyard::WorkloadSystem {
+            fn workload_system(type_id: std::any::TypeId, dependants: dioxus_native_core::exports::FxHashSet<std::any::TypeId>, pass_direction: dioxus_native_core::prelude::PassDirection) -> dioxus_native_core::exports::shipyard::WorkloadSystem {
                 use dioxus_native_core::exports::shipyard::{IntoWorkloadSystem, Get, AddComponent};
                 use dioxus_native_core::tree::TreeRef;
                 use dioxus_native_core::prelude::{NodeType, NodeView};
                 
                 let node_mask = Self::NODE_MASK.build();
 
-                (move |data: #combined_dependencies_quote, run_view: dioxus_native_core::RunPassView #trait_generics| {
+                (move |data: #combined_dependencies_quote, run_view: dioxus_native_core::prelude::RunPassView #trait_generics| {
                     let (#(#split_views,)*) = data;
-                    let (tree, types, _, _, _) = &run_view;
-                    let tree = tree.clone();
-                    let node_types = types.clone();
-                    dioxus_native_core::run_pass(type_id, dependants.clone(), pass_direction, run_view, |id, context| {
+                    let tree = run_view.tree.clone();
+                    let node_types = run_view.node_type.clone();
+                    dioxus_native_core::prelude::run_pass(type_id, dependants.clone(), pass_direction, run_view, |id, context| {
                         let node_data: &NodeType<_> = node_types.get(id).unwrap_or_else(|err| panic!("Failed to get node type {:?}", err));
                         // get all of the states from the tree view
                         // Safety: No node has itself as a parent or child.

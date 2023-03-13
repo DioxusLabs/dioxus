@@ -2,9 +2,9 @@ use crate::prevent_default::PreventDefault;
 
 use dioxus_native_core::{
     node_ref::{AttributeMaskBuilder, NodeMaskBuilder},
+    prelude::*,
     real_dom::NodeImmutable,
-    utils::{ElementProduced, PersistantElementIter},
-    Dependancy, NodeId, RealDom, SendAnyMap, State,
+    utils::{IteratorMovement, PersistantElementIter},
 };
 use dioxus_native_core_macro::partial_derive_state;
 use once_cell::sync::Lazy;
@@ -178,7 +178,7 @@ impl FocusState {
                 self.focus_iter.prev(rdom)
             };
             let new_id = new.id();
-            if let ElementProduced::Looped(_) = new {
+            if let IteratorMovement::Looped = new.movement() {
                 let mut closest_level = None;
 
                 if forward {
