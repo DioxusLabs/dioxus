@@ -7,6 +7,8 @@ use dioxus_native_core::{
     Dependancy, NodeId, RealDom, SendAnyMap, State,
 };
 use dioxus_native_core_macro::partial_derive_state;
+use once_cell::sync::Lazy;
+use rustc_hash::FxHashSet;
 use shipyard::Component;
 use shipyard::{Get, ViewMut};
 
@@ -108,9 +110,7 @@ impl State for Focus {
             } else if node_view
                 .listeners()
                 .and_then(|mut listeners| {
-                    listeners
-                        .any(|l| FOCUS_EVENTS.binary_search(&l).is_ok())
-                        .then_some(())
+                    listeners.any(|l| FOCUS_EVENTS.contains(&l)).then_some(())
                 })
                 .is_some()
             {
@@ -140,7 +140,8 @@ impl State for Focus {
     }
 }
 
-const FOCUS_EVENTS: &[&str] = &["keydown", "keypress", "keyup"];
+static FOCUS_EVENTS: Lazy<FxHashSet<&str>> =
+    Lazy::new(|| ["keydown", "keypress", "keyup"].into_iter().collect());
 const FOCUS_ATTRIBUTES: &[&str] = &["tabindex"];
 
 pub(crate) struct FocusState {
