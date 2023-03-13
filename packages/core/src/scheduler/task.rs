@@ -72,9 +72,9 @@ pub struct LocalTaskHandle {
 
 impl ArcWake for LocalTaskHandle {
     fn wake_by_ref(arc_self: &Arc<Self>) {
-        arc_self
+        // This can fail if the scheduler has been dropped while the application is shutting down
+        let _ = arc_self
             .tx
-            .unbounded_send(SchedulerMsg::TaskNotified(arc_self.id))
-            .unwrap();
+            .unbounded_send(SchedulerMsg::TaskNotified(arc_self.id));
     }
 }
