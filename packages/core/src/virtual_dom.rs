@@ -396,7 +396,7 @@ impl VirtualDom {
 
                 // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
                 if attr.name.trim_start_matches("on") == name
-                    && target_path.is_ascendant(&this_path)
+                    && target_path.is_decendant(&this_path)
                 {
                     listeners.push(&attr.value);
 
