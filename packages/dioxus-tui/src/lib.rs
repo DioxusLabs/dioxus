@@ -12,8 +12,8 @@ use dioxus_html::EventData;
 use dioxus_native_core::dioxus::{DioxusState, NodeImmutableDioxusExt};
 use dioxus_native_core::prelude::*;
 
-pub use rink::Config;
-use rink::{query::Query, render, Renderer, TuiContext};
+pub use rink::{query::Query, Config, Size, TuiContext, RenderingMode};
+use rink::{render, Renderer};
 
 pub fn launch(app: Component<()>) {
     launch_cfg(app, Config::default())

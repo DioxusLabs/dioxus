@@ -30,6 +30,8 @@ pub mod exports {
 
 /// A prelude of commonly used items
 pub mod prelude {
+    #[cfg(feature = "dioxus")]
+    pub use crate::dioxus::*;
     pub use crate::node::{ElementNode, FromAnyValue, NodeType, OwnedAttributeView, TextNode};
     pub use crate::node_ref::{AttributeMaskBuilder, NodeMaskBuilder, NodeView};
     pub use crate::passes::{run_pass, PassDirection, RunPassView, TypeErasedState};

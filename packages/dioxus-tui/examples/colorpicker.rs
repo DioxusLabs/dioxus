@@ -1,7 +1,7 @@
 use dioxus::core::RenderReturn;
 use dioxus::prelude::*;
-use dioxus_tui::query::Query;
 use dioxus_tui::DioxusElementToNodeId;
+use dioxus_tui::Query;
 use dioxus_tui::Size;
 
 fn main() {
