@@ -1,11 +1,11 @@
 use crate::widgets::get_root_id;
-use crate::Query;
 use crossterm::{cursor::*, execute};
 use dioxus::prelude::*;
 use dioxus_elements::input_data::keyboard_types::Key;
 use dioxus_html as dioxus_elements;
 use dioxus_html::FormData;
 use dioxus_native_core::utils::cursor::{Cursor, Pos};
+use rink::Query;
 use std::{collections::HashMap, io::stdout};
 use taffy::geometry::Point;
 

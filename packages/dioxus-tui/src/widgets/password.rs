@@ -1,16 +1,16 @@
 use crate::widgets::get_root_id;
-use crate::Query;
-use crossterm::{cursor::MoveTo, execute};
+use crossterm::{cursor::*, execute};
 use dioxus::prelude::*;
 use dioxus_elements::input_data::keyboard_types::Key;
 use dioxus_html as dioxus_elements;
 use dioxus_html::FormData;
 use dioxus_native_core::utils::cursor::{Cursor, Pos};
+use rink::Query;
 use std::{collections::HashMap, io::stdout};
 use taffy::geometry::Point;
 
 #[derive(Props)]
-pub(crate) struct NumbericInputProps<'a> {
+pub(crate) struct PasswordProps<'a> {
     #[props(!optional)]
     raw_oninput: Option<&'a EventHandler<'a, FormData>>,
     #[props(!optional)]
@@ -25,7 +25,7 @@ pub(crate) struct NumbericInputProps<'a> {
     height: Option<&'a str>,
 }
 #[allow(non_snake_case)]
-pub(crate) fn NumbericInput<'a>(cx: Scope<'a, NumbericInputProps>) -> Element<'a> {
+pub(crate) fn Password<'a>(cx: Scope<'a, PasswordProps>) -> Element<'a> {
     let tui_query: Query = cx.consume_context().unwrap();
     let tui_query_clone = tui_query.clone();
 
@@ -45,6 +45,10 @@ pub(crate) fn NumbericInput<'a>(cx: Scope<'a, NumbericInputProps>) -> Element<'a
     let (text_before_first_cursor, text_after_first_cursor) = text.split_at(start_highlight);
     let (text_highlighted, text_after_second_cursor) =
         text_after_first_cursor.split_at(end_highlight - start_highlight);
+
+    let text_before_first_cursor = ".".repeat(text_before_first_cursor.len());
+    let text_highlighted = ".".repeat(text_highlighted.len());
+    let text_after_second_cursor = ".".repeat(text_after_second_cursor.len());
 
     let max_len = cx
         .props
@@ -79,69 +83,47 @@ pub(crate) fn NumbericInput<'a>(cx: Scope<'a, NumbericInputProps>) -> Element<'a
         "solid"
     };
 
-    let update = |text: String| {
+    let onkeydown = move |k: KeyboardEvent| {
+        if k.key() == Key::Enter {
+            return;
+        }
+        let mut text = text_ref.write();
+        cursor
+            .write()
+            .handle_input(&k.code(), &k.key(), &k.modifiers(), &mut *text, max_len);
         if let Some(input_handler) = &cx.props.raw_oninput {
             input_handler.call(FormData {
-                value: text,
+                value: text.clone(),
                 values: HashMap::new(),
                 files: None,
             });
         }
-    };
-    let increase = move || {
-        let mut text = text_ref.write();
-        *text = (text.parse::<f64>().unwrap_or(0.0) + 1.0).to_string();
-        update(text.clone());
-    };
-    let decrease = move || {
-        let mut text = text_ref.write();
-        *text = (text.parse::<f64>().unwrap_or(0.0) - 1.0).to_string();
-        update(text.clone());
+
+        let node = tui_query.get(get_root_id(cx).unwrap());
+        let Point { x, y } = node.pos().unwrap();
+
+        let Pos { col, row } = cursor.read().start;
+        let (x, y) = (
+            col as u16 + x as u16 + u16::from(border != "none"),
+            row as u16 + y as u16 + u16::from(border != "none"),
+        );
+        if let Ok(pos) = crossterm::cursor::position() {
+            if pos != (x, y) {
+                execute!(stdout(), MoveTo(x, y)).unwrap();
+            }
+        } else {
+            execute!(stdout(), MoveTo(x, y)).unwrap();
+        }
     };
 
     render! {
-        div{
+        div {
             width: "{width}",
             height: "{height}",
             border_style: "{border}",
 
-            onkeydown: move |k| {
-                let is_text = match k.key(){
-                    Key::ArrowLeft | Key::ArrowRight | Key::Backspace => true,
-                    Key::Character(c) if c=="." || c== "-" || c.chars().all(|c|c.is_numeric())=> true,
-                    _  => false,
-                };
-                if is_text{
-                    let mut text = text_ref.write();
-                    cursor.write().handle_input(&k.code(), &k.key(), &k.modifiers(), &mut *text, max_len);
-                    update(text.clone());
+            onkeydown: onkeydown,
 
-                    let node = tui_query.get(get_root_id(cx).unwrap());
-                    let Point{ x, y } = node.pos().unwrap();
-
-                    let Pos { col, row } = cursor.read().start;
-                    let (x, y) = (col as u16 + x as u16 + u16::from(border != "none"), row as u16 + y as u16 + u16::from(border != "none"));
-                    if let Ok(pos) = crossterm::cursor::position() {
-                        if pos != (x, y){
-                            execute!(stdout(), MoveTo(x, y)).unwrap();
-                        }
-                    }
-                    else{
-                        execute!(stdout(), MoveTo(x, y)).unwrap();
-                    }
-                }
-                else{
-                    match k.key() {
-                        Key::ArrowUp =>{
-                            increase();
-                        }
-                        Key::ArrowDown =>{
-                            decrease();
-                        }
-                        _ => ()
-                    }
-                }
-            },
             onmousemove: move |evt| {
                 if *dragging.get() {
                     let offset = evt.data.element_coordinates();
@@ -157,12 +139,14 @@ pub(crate) fn NumbericInput<'a>(cx: Scope<'a, NumbericInputProps>) -> Element<'a
                     }
                 }
             },
+
             onmousedown: move |evt| {
                 let offset = evt.data.element_coordinates();
-                let mut new = Pos::new(offset.x as usize,  offset.y as usize);
+                let mut new = Pos::new(offset.x as usize, offset.y as usize);
                 if border != "none" {
                     new.col = new.col.saturating_sub(1);
                 }
+                // textboxs are only one line tall
                 new.row = 0;
 
                 new.realize_col(text_ref.read().as_str());

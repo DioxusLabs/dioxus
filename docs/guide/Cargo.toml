@@ -13,7 +13,7 @@ dioxus-web = { path = "../../packages/web" }
 dioxus-ssr = { path = "../../packages/ssr" }
 dioxus-router = { path = "../../packages/router" }
 dioxus-liveview = { path = "../../packages/liveview", features = ["axum"] }
-dioxus-tui = { path = "../../packages/tui" }
+dioxus-tui = { path = "../../packages/dioxus-tui" }
 fermi = { path = "../../packages/fermi" }
 
 

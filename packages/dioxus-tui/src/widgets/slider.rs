@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 
 use crate::widgets::get_root_id;
-use crate::Query;
 use dioxus::prelude::*;
 use dioxus_elements::input_data::keyboard_types::Key;
 use dioxus_html as dioxus_elements;
 use dioxus_html::FormData;
+use rink::Query;
 
 #[derive(Props)]
 pub(crate) struct SliderProps<'a> {

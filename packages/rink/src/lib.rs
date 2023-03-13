@@ -27,8 +27,6 @@ use tokio::select;
 use tui::{backend::CrosstermBackend, layout::Rect, Terminal};
 
 mod config;
-#[cfg(feature = "dioxus-bindings")]
-pub mod dioxus;
 mod focus;
 mod hooks;
 mod layout;
@@ -39,16 +37,10 @@ mod render;
 mod style;
 mod style_attributes;
 mod widget;
-#[cfg(feature = "dioxus-bindings")]
-mod widgets;
 
-#[cfg(feature = "dioxus-bindings")]
-pub use crate::dioxus::*;
 pub use config::*;
 pub use hooks::*;
 pub use query::Query;
-#[cfg(feature = "dioxus-bindings")]
-pub use widgets::*;
 
 // the layout space has a multiplier of 10 to minimize rounding errors
 pub(crate) fn screen_to_layout_space(screen: u16) -> f32 {
@@ -69,6 +61,10 @@ pub struct TuiContext {
 }
 
 impl TuiContext {
+    pub fn new(tx: UnboundedSender<InputEvent>) -> Self {
+        Self { tx }
+    }
+
     pub fn quit(&self) {
         self.tx.unbounded_send(InputEvent::Close).unwrap();
     }

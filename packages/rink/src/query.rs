@@ -47,6 +47,10 @@ pub struct Query {
 }
 
 impl Query {
+    pub fn new(rdom: Arc<RwLock<RealDom>>, stretch: Arc<Mutex<Taffy>>) -> Self {
+        Self { rdom, stretch }
+    }
+
     pub fn get(&self, id: NodeId) -> ElementRef {
         let rdom = self.rdom.read();
         let stretch = self.stretch.lock();

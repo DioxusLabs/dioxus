@@ -1,3 +1,6 @@
+pub mod prelude;
+pub mod widgets;
+
 use std::{
     ops::Deref,
     rc::Rc,
@@ -11,7 +14,8 @@ use dioxus_native_core::{
     NodeId, RealDom,
 };
 
-use crate::{query::Query, render, Config, Renderer, TuiContext};
+pub use rink::Config;
+use rink::{query::Query, render, Renderer, TuiContext};
 
 pub fn launch(app: Component<()>) {
     launch_cfg(app, Config::default())
@@ -29,11 +33,8 @@ pub fn launch_cfg_with_props<Props: 'static>(app: Component<Props>, props: Props
         };
         let dioxus_state = Rc::new(RwLock::new(dioxus_state));
         let mut vdom = VirtualDom::new_with_props(app, props)
-            .with_root_context(TuiContext { tx: event_tx })
-            .with_root_context(Query {
-                rdom: rdom.clone(),
-                stretch: taffy.clone(),
-            })
+            .with_root_context(TuiContext::new(event_tx))
+            .with_root_context(Query::new(rdom.clone(), taffy.clone()))
             .with_root_context(DioxusElementToNodeId {
                 mapping: dioxus_state.clone(),
             });

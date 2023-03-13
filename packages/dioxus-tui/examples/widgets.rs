@@ -1,7 +1,6 @@
 use dioxus::prelude::*;
 use dioxus_html::FormData;
 use dioxus_tui::prelude::*;
-use dioxus_tui::Config;
 
 fn main() {
     dioxus_tui::launch_cfg(app, Config::new());

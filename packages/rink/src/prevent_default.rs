@@ -2,7 +2,7 @@ use dioxus_native_core::{node_ref::NodeView, Dependancy, SendAnyMap, State};
 use dioxus_native_core_macro::partial_derive_state;
 use shipyard::Component;
 
-#[derive(PartialEq, Debug, Clone, Copy, Component)]
+#[derive(PartialEq, Debug, Clone, Copy, Component, Default)]
 pub(crate) enum PreventDefault {
     Focus,
     KeyPress,
@@ -14,17 +14,12 @@ pub(crate) enum PreventDefault {
     MouseEnter,
     MouseLeave,
     MouseOut,
+    #[default]
     Unknown,
     MouseOver,
     ContextMenu,
     Wheel,
     MouseUp,
-}
-
-impl Default for PreventDefault {
-    fn default() -> Self {
-        PreventDefault::Unknown
-    }
 }
 
 #[partial_derive_state]
