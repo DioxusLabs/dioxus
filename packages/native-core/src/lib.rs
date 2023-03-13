@@ -29,7 +29,7 @@ pub mod exports {
 pub mod prelude {
     pub use crate::node::{ElementNode, FromAnyValue, NodeType, OwnedAttributeView, TextNode};
     pub use crate::node_ref::{AttributeMaskBuilder, NodeMaskBuilder, NodeView};
-    pub use crate::passes::{AnyState, Dependancy, State};
+    pub use crate::passes::{AnyState, Dependancy, DependancyView, State};
     pub use crate::real_dom::{NodeImmutable, NodeMut, NodeRef, RealDom};
     pub use crate::NodeId;
     pub use crate::SendAnyMap;

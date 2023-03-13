@@ -4,7 +4,7 @@ use std::collections::HashSet;
 
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
-use syn::{parse_macro_input, ItemImpl, Type,  TypeTuple, TypePath};
+use syn::{parse_macro_input, ItemImpl, Type, TypePath, TypeTuple};
 
 /// A helper attribute for deriving `State` for a struct.
 #[proc_macro_attribute]
@@ -46,7 +46,8 @@ pub fn partial_derive_state(_: TokenStream, input: TokenStream) -> TokenStream {
         .expect("NodeDependencies must be defined");
 
     let this_type = &impl_block.self_ty;
-    let this_type = extract_type_path(this_type).unwrap_or_else(|| panic!("Self must be a type path, found {}", quote!(#this_type)));
+    let this_type = extract_type_path(this_type)
+        .unwrap_or_else(|| panic!("Self must be a type path, found {}", quote!(#this_type)));
 
     let mut combined_dependencies = HashSet::new();
 
@@ -56,7 +57,12 @@ pub fn partial_derive_state(_: TokenStream, input: TokenStream) -> TokenStream {
         Some(tuple) => {
             let mut parent_dependencies = Vec::new();
             for type_ in &tuple.elems {
-                let mut type_ = extract_type_path(type_).unwrap_or_else(|| panic!("ParentDependencies must be a tuple of type paths, found {}", quote!(#type_)));
+                let mut type_ = extract_type_path(type_).unwrap_or_else(|| {
+                    panic!(
+                        "ParentDependencies must be a tuple of type paths, found {}",
+                        quote!(#type_)
+                    )
+                });
                 if type_ == self_path {
                     type_ = this_type.clone();
                 }
@@ -65,13 +71,21 @@ pub fn partial_derive_state(_: TokenStream, input: TokenStream) -> TokenStream {
             }
             parent_dependencies
         }
-        _ => panic!("ParentDependencies must be a tuple, found {}", quote!(#parent_dependencies)),
+        _ => panic!(
+            "ParentDependencies must be a tuple, found {}",
+            quote!(#parent_dependencies)
+        ),
     };
     let child_dependencies = match extract_tuple(child_dependencies) {
         Some(tuple) => {
             let mut child_dependencies = Vec::new();
             for type_ in &tuple.elems {
-                let mut type_ = extract_type_path(type_).unwrap_or_else(|| panic!("ChildDependencies must be a tuple of type paths, found {}", quote!(#type_)));
+                let mut type_ = extract_type_path(type_).unwrap_or_else(|| {
+                    panic!(
+                        "ChildDependencies must be a tuple of type paths, found {}",
+                        quote!(#type_)
+                    )
+                });
                 if type_ == self_path {
                     type_ = this_type.clone();
                 }
@@ -80,13 +94,21 @@ pub fn partial_derive_state(_: TokenStream, input: TokenStream) -> TokenStream {
             }
             child_dependencies
         }
-        _ => panic!("ChildDependencies must be a tuple, found {}", quote!(#child_dependencies)),
+        _ => panic!(
+            "ChildDependencies must be a tuple, found {}",
+            quote!(#child_dependencies)
+        ),
     };
     let node_dependencies = match extract_tuple(node_dependencies) {
         Some(tuple) => {
             let mut node_dependencies = Vec::new();
             for type_ in &tuple.elems {
-                let mut type_ = extract_type_path(type_).unwrap_or_else(|| panic!("NodeDependencies must be a tuple of type paths, found {}", quote!(#type_)));
+                let mut type_ = extract_type_path(type_).unwrap_or_else(|| {
+                    panic!(
+                        "NodeDependencies must be a tuple of type paths, found {}",
+                        quote!(#type_)
+                    )
+                });
                 if type_ == self_path {
                     type_ = this_type.clone();
                 }
@@ -95,7 +117,10 @@ pub fn partial_derive_state(_: TokenStream, input: TokenStream) -> TokenStream {
             }
             node_dependencies
         }
-        _ => panic!("NodeDependencies must be a tuple, found {}", quote!(#node_dependencies)),
+        _ => panic!(
+            "NodeDependencies must be a tuple, found {}",
+            quote!(#node_dependencies)
+        ),
     };
     combined_dependencies.insert(this_type.clone());
 
@@ -146,11 +171,11 @@ pub fn partial_derive_state(_: TokenStream, input: TokenStream) -> TokenStream {
         .map(|i| {
             let ident = format_ident!("__data{}", i);
             if i == this_type_idx {
-                quote!{mut #ident}
+                quote! {mut #ident}
             } else {
-                quote!{#ident}
+                quote! {#ident}
             }
-    })
+        })
         .collect();
 
     let node_view = node_dependencies_idxes
@@ -174,6 +199,19 @@ pub fn partial_derive_state(_: TokenStream, input: TokenStream) -> TokenStream {
             }
         }
     };
+    let deref_node_view = {
+        if node_dependencies.is_empty() {
+            quote! {
+                let node = raw_node;
+            }
+        } else {
+            let indexes = (0..node_dependencies.len()).map(syn::Index::from);
+            quote! {
+                let node = unsafe { (#(dioxus_native_core::prelude::DependancyView::new(&*raw_node.#indexes),)*) };
+            }
+        }
+    };
+
     let parent_view = parent_dependancies_idxes
         .iter()
         .map(|i| format_ident!("__data{}", i))
@@ -198,16 +236,29 @@ pub fn partial_derive_state(_: TokenStream, input: TokenStream) -> TokenStream {
             }
         }
     };
-    let child_view = child_dependencies_idxes
-    .iter()
-    .map(|i| format_ident!("__data{}", i))
-    .collect::<Vec<_>>();
-let get_child_view = {
-    if child_dependencies.is_empty() {
-        quote! {
-            let raw_children: Vec<_> = tree.children_ids(id).into_iter().map(|_| ()).collect();
+    let deref_parent_view = {
+        if parent_dependencies.is_empty() {
+            quote! {
+                let parent = raw_parent;
+            }
+        } else {
+            let indexes = (0..parent_dependencies.len()).map(syn::Index::from);
+            quote! {
+                let parent = unsafe { raw_parent.map(|raw_parent| (#(dioxus_native_core::prelude::DependancyView::new(&*raw_parent.#indexes),)*)) };
+            }
         }
-    } else {
+    };
+
+    let child_view = child_dependencies_idxes
+        .iter()
+        .map(|i| format_ident!("__data{}", i))
+        .collect::<Vec<_>>();
+    let get_child_view = {
+        if child_dependencies.is_empty() {
+            quote! {
+                let raw_children: Vec<_> = tree.children_ids(id).into_iter().map(|_| ()).collect();
+            }
+        } else {
             let temps = (0..child_dependencies.len())
                 .map(|i| format_ident!("__temp{}", i))
                 .collect::<Vec<_>>();
@@ -219,6 +270,18 @@ let get_child_view = {
                     });
                     raw_children
                 }).collect();
+            }
+        }
+    };
+    let deref_child_view = {
+        if child_dependencies.is_empty() {
+            quote! {
+                let children = raw_children;
+            }
+        } else {
+            let indexes = (0..child_dependencies.len()).map(syn::Index::from);
+            quote! {
+                let children = unsafe { raw_children.iter().map(|raw_children| (#(dioxus_native_core::prelude::DependancyView::new(&*raw_children.#indexes),)*)).collect::<Vec<_>>() };
             }
         }
     };
@@ -258,10 +321,10 @@ let get_child_view = {
                         #get_parent_view
                         #get_child_view
 
-                        let myself: Option<&mut Self> = unsafe { raw_myself.map(|val| std::mem::transmute(val)) };
-                        let node = unsafe { std::mem::transmute(raw_node) };
-                        let parent = unsafe { raw_parent.map(|val| std::mem::transmute(val)) };
-                        let children = unsafe { std::mem::transmute(raw_children) };
+                        let myself: Option<&mut Self> = unsafe { raw_myself.map(|val| &mut *val) };
+                        #deref_node_view
+                        #deref_parent_view
+                        #deref_child_view
 
                         let view = NodeView::new(id, node_data, &node_mask);
                         if let Some(myself) = myself { 
