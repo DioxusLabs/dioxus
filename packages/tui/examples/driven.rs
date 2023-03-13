@@ -10,7 +10,7 @@ use rustc_hash::FxHashSet;
 use std::rc::Rc;
 use std::sync::{Arc, RwLock};
 
-const SIZE: usize = 10;
+const SIZE: usize = 200;
 
 struct Test {
     node_states: [[usize; SIZE]; SIZE],
@@ -189,10 +189,10 @@ impl Renderer for Test {
         let root_id = rdom.root_id();
         let mut root = rdom.get_mut(root_id).unwrap();
         for (x, y) in self.dirty.drain() {
-            let row_id = root.child_ids().unwrap()[x];
+            let row_id = root.child_ids()[x];
             let rdom = root.real_dom_mut();
             let row = rdom.get(row_id).unwrap();
-            let node_id = row.child_ids().unwrap()[y];
+            let node_id = row.child_ids()[y];
             let mut node = rdom.get_mut(node_id).unwrap();
             if let NodeTypeMut::Element(mut el) = node.node_type_mut() {
                 el.set_attribute(
@@ -208,9 +208,10 @@ impl Renderer for Test {
                     )),
                 );
             }
-            let text_id = *node.child_ids().unwrap().first().unwrap();
+            let text_id = *node.child_ids().first().unwrap();
             let mut text = rdom.get_mut(text_id).unwrap();
-            if let NodeTypeMut::Text(text) = text.node_type_mut() {
+            let type_mut = text.node_type_mut();
+            if let NodeTypeMut::Text(mut text) = type_mut {
                 *text = self.node_states[x][y].to_string();
             }
         }
@@ -229,14 +230,12 @@ impl Renderer for Test {
         if let Some(parent) = node.parent() {
             let child_number = parent
                 .child_ids()
-                .unwrap()
                 .iter()
                 .position(|id| *id == node.id())
                 .unwrap();
             if let Some(parents_parent) = parent.parent() {
                 let parents_child_number = parents_parent
                     .child_ids()
-                    .unwrap()
                     .iter()
                     .position(|id| *id == parent.id())
                     .unwrap();
