@@ -1,4 +1,4 @@
-# Dioxus Native Core
+# Dioxus Router
 
 [![Crates.io][crates-badge]][crates-url]
 [![MIT licensed][mit-badge]][mit-url]
