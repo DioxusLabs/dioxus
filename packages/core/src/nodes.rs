@@ -51,7 +51,7 @@ pub struct VNode<'a> {
     ////////////////////////////////////////////////////////////////////////////
     //////////////////// Change the key type in the node ///////////////////////
     ////////////////////////////////////////////////////////////////////////////
-    pub key: Option<&'a KeyValue<'a>>,
+    pub key: Option<KeyValue<'a>>,
 
     /// When rendered, this template will be linked to its parent manually
     pub parent: Option<ElementId>,
@@ -898,7 +898,7 @@ impl<'a, T: IntoAttributeValue<'a>> IntoAttributeValue<'a> for Option<T> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum KeyValue<'a> {
     /// Text attribute key value
     Text(&'a str),
@@ -907,9 +907,6 @@ pub enum KeyValue<'a> {
     Int(i64),
 }
 
-// need to understand if these traits are necessary
-#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serialize", serde(untagged))]
 pub enum BorrowedKeyValue<'a> {
     /// Text attribute
     Text(&'a str),
@@ -918,9 +915,6 @@ pub enum BorrowedKeyValue<'a> {
     Int(i64),
 }
 
-////////////////////////////////////////////////////////////////////////////
-//////////////////// Make arbitrary attribute Hash here/////////////////////
-////////////////////////////////////////////////////////////////////////////
 impl<'a> From<&'a KeyValue<'a>> for BorrowedKeyValue<'a> {
     fn from(value: &'a KeyValue<'a>) -> Self {
         match value {
@@ -949,7 +943,7 @@ impl PartialEq for BorrowedKeyValue<'_> {
 }
 /// A value that can be converted into an attribute key value
 pub trait IntoKeyValue<'a> {
-    /// Convert into an attribute value
+    /// Convert into an attribute key value
     fn into_value(self, bump: &'a Bump) -> KeyValue<'a>;
 }
 
