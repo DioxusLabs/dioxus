@@ -557,9 +557,7 @@ pub enum BorrowedAttributeValue<'a> {
     /// A "none" value, resulting in the removal of an attribute from the dom
     None,
 }
-////////////////////////////////////////////////////////////////////////////
-//////////////////// Make arbitrary attribute Hash here/////////////////////
-////////////////////////////////////////////////////////////////////////////
+
 impl<'a> From<&'a AttributeValue<'a>> for BorrowedAttributeValue<'a> {
     fn from(value: &'a AttributeValue<'a>) -> Self {
         match value {
@@ -920,6 +918,9 @@ pub enum BorrowedKeyValue<'a> {
     Int(i64),
 }
 
+////////////////////////////////////////////////////////////////////////////
+//////////////////// Make arbitrary attribute Hash here/////////////////////
+////////////////////////////////////////////////////////////////////////////
 impl<'a> From<&'a KeyValue<'a>> for BorrowedKeyValue<'a> {
     fn from(value: &'a KeyValue<'a>) -> Self {
         match value {
