@@ -271,6 +271,11 @@ impl DesktopContext {
         self.shortcut_manager.remove_shortcut(id)
     }
 
+    /// Remove all global shortcuts
+    pub fn remove_all_shortcuts(&self) {
+        self.shortcut_manager.remove_all()
+    }
+
     /// Push an objc view to the window
     #[cfg(target_os = "ios")]
     pub fn push_view(&self, view: objc_id::ShareId<objc::runtime::Object>) {
