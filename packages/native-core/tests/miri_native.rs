@@ -132,11 +132,11 @@ fn native_core_is_okay() {
 
     rt.block_on(async {
         let rdom = Arc::new(Mutex::new(RealDom::new([BlablaState::to_type_erased()])));
-        let mut dioxus_state = DioxusState::create(&mut *rdom.lock().unwrap());
+        let mut dioxus_state = DioxusState::create(&mut rdom.lock().unwrap());
         let mut dom = VirtualDom::new(app);
 
         let mutations = dom.rebuild();
-        dioxus_state.apply_mutations(&mut *rdom.lock().unwrap(), mutations);
+        dioxus_state.apply_mutations(&mut rdom.lock().unwrap(), mutations);
 
         let ctx = SendAnyMap::new();
         rdom.lock().unwrap().update_state(ctx);
@@ -145,7 +145,7 @@ fn native_core_is_okay() {
             dom.wait_for_work().await;
 
             let mutations = dom.render_immediate();
-            dioxus_state.apply_mutations(&mut *rdom.lock().unwrap(), mutations);
+            dioxus_state.apply_mutations(&mut rdom.lock().unwrap(), mutations);
 
             let ctx = SendAnyMap::new();
             rdom.lock().unwrap().update_state(ctx);
