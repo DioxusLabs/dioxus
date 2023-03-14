@@ -48,9 +48,6 @@ pub struct VNode<'a> {
     /// The key given to the root of this template.
     ///
     /// In fragments, this is the key of the first child. In other cases, it is the key of the root.
-    ////////////////////////////////////////////////////////////////////////////
-    //////////////////// Change the key type in the node ///////////////////////
-    ////////////////////////////////////////////////////////////////////////////
     pub key: Option<KeyValue<'a>>,
 
     /// When rendered, this template will be linked to its parent manually
