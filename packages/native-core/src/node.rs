@@ -62,6 +62,24 @@ pub struct OwnedAttributeDiscription {
     pub namespace: Option<String>,
 }
 
+impl From<String> for OwnedAttributeDiscription {
+    fn from(name: String) -> Self {
+        Self {
+            name,
+            namespace: None,
+        }
+    }
+}
+
+impl<S: Into<String>, N: Into<String>> From<(S, N)> for OwnedAttributeDiscription {
+    fn from(name: (S, N)) -> Self {
+        Self {
+            name: name.0.into(),
+            namespace: Some(name.1.into()),
+        }
+    }
+}
+
 /// An attribute on a DOM node, such as `id="my-thing"` or
 /// `href="https://example.com"`.
 #[derive(Clone, Copy, Debug)]
@@ -86,6 +104,36 @@ pub enum OwnedAttributeValue<V: FromAnyValue = ()> {
     Bool(bool),
     /// A custom value specific to the renderer
     Custom(V),
+}
+
+impl From<String> for OwnedAttributeValue {
+    fn from(value: String) -> Self {
+        Self::Text(value)
+    }
+}
+
+impl From<f64> for OwnedAttributeValue {
+    fn from(value: f64) -> Self {
+        Self::Float(value)
+    }
+}
+
+impl From<i64> for OwnedAttributeValue {
+    fn from(value: i64) -> Self {
+        Self::Int(value)
+    }
+}
+
+impl From<bool> for OwnedAttributeValue {
+    fn from(value: bool) -> Self {
+        Self::Bool(value)
+    }
+}
+
+impl<V: FromAnyValue> From<V> for OwnedAttributeValue<V> {
+    fn from(value: V) -> Self {
+        Self::Custom(value)
+    }
 }
 
 /// Something that can be converted from a borrowed [Any] value.

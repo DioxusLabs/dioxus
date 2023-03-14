@@ -12,8 +12,8 @@ use dioxus_html::EventData;
 use dioxus_native_core::dioxus::{DioxusState, NodeImmutableDioxusExt};
 use dioxus_native_core::prelude::*;
 
-pub use rink::{query::Query, Config, Size, TuiContext, RenderingMode};
-use rink::{render, Renderer};
+pub use rink::{query::Query, Config, RenderingMode, Size, TuiContext};
+use rink::{render, Driver};
 
 pub fn launch(app: Component<()>) {
     launch_cfg(app, Config::default())
@@ -66,8 +66,8 @@ struct DioxusRenderer {
     hot_reload_rx: tokio::sync::mpsc::UnboundedReceiver<dioxus_hot_reload::HotReloadMsg>,
 }
 
-impl Renderer for DioxusRenderer {
-    fn render(&mut self, rdom: &Arc<RwLock<RealDom>>) {
+impl Driver for DioxusRenderer {
+    fn update(&mut self, rdom: &Arc<RwLock<RealDom>>) {
         let muts = self.vdom.render_immediate();
         {
             let mut rdom = rdom.write().unwrap();

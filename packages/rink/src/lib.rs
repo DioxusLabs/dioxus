@@ -76,7 +76,7 @@ impl TuiContext {
     }
 }
 
-pub fn render<R: Renderer>(
+pub fn render<R: Driver>(
     cfg: Config,
     create_renderer: impl FnOnce(
         &Arc<RwLock<RealDom>>,
@@ -115,7 +115,7 @@ pub fn render<R: Renderer>(
     let mut renderer = create_renderer(&rdom, &taffy, event_tx_clone);
 
     {
-        renderer.render(&rdom);
+        renderer.update(&rdom);
         let mut any_map = SendAnyMap::new();
         any_map.insert(taffy.clone());
         let mut rdom = rdom.write().unwrap();
@@ -261,7 +261,7 @@ pub fn render<R: Renderer>(
                         }
                     }
                     // updates the dom's nodes
-                    renderer.render(&rdom);
+                    renderer.update(&rdom);
                     // update the style and layout
                     let mut rdom = rdom.write().unwrap();
                     let mut any_map = SendAnyMap::new();
@@ -297,8 +297,8 @@ pub enum InputEvent {
     Close,
 }
 
-pub trait Renderer {
-    fn render(&mut self, rdom: &Arc<RwLock<RealDom>>);
+pub trait Driver {
+    fn update(&mut self, rdom: &Arc<RwLock<RealDom>>);
     fn handle_event(
         &mut self,
         rdom: &Arc<RwLock<RealDom>>,

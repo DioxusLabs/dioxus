@@ -933,9 +933,11 @@ impl<V: FromAnyValue + Send + Sync> ElementNodeMut<'_, V> {
     /// Set an attribute in the element
     pub fn set_attribute(
         &mut self,
-        name: OwnedAttributeDiscription,
-        value: OwnedAttributeValue<V>,
+        name: impl Into<OwnedAttributeDiscription>,
+        value: impl Into<OwnedAttributeValue<V>>,
     ) -> Option<OwnedAttributeValue<V>> {
+        let name = name.into();
+        let value = value.into();
         self.dirty_nodes.mark_dirty(
             self.id,
             NodeMaskBuilder::new()
