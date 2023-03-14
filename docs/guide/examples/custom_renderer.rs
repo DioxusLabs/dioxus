@@ -1,7 +1,9 @@
+use dioxus::html::input_data::keyboard_types::{Code, Key, Modifiers};
 use dioxus::prelude::*;
 use dioxus_native_core::exports::shipyard::Component;
 use dioxus_native_core::node_ref::*;
 use dioxus_native_core::prelude::*;
+use dioxus_native_core::utils::cursor::{Cursor, Pos};
 use dioxus_native_core_macro::partial_derive_state;
 
 // ANCHOR: state_impl
@@ -284,20 +286,20 @@ impl State for MyState {
 }
 // ANCHOR_END: derive_state
 
+#[allow(unused)]
 // ANCHOR: cursor
 fn text_editing() {
     let mut cursor = Cursor::default();
     let mut text = String::new();
 
-    let keyboard_data = dioxus_html::KeyboardData::new(
-        dioxus_html::input_data::keyboard_types::Key::ArrowRight,
-        dioxus_html::input_data::keyboard_types::Code::ArrowRight,
-        dioxus_html::input_data::keyboard_types::Location::Standard,
-        false,
-        Modifiers::empty(),
-    );
     // handle keyboard input with a max text length of 10
-    cursor.handle_input(&keyboard_data, &mut text, 10);
+    cursor.handle_input(
+        &Code::ArrowRight,
+        &Key::ArrowRight,
+        &Modifiers::empty(),
+        &mut text,
+        10,
+    );
 
     // mannually select text between characters 0-5 on the first line (this could be from dragging with a mouse)
     cursor.start = Pos::new(0, 0);
