@@ -302,8 +302,8 @@ pub fn partial_derive_state(_: TokenStream, input: TokenStream) -> TokenStream {
 
     // if a create function is defined, we don't generate one
     // otherwise we generate a default one that uses the update function and the default constructor
-    let create_fn = (!has_create_fn).then(||{
-        quote!{
+    let create_fn = (!has_create_fn).then(|| {
+        quote! {
             fn create<'a>(
                 node_view: dioxus_native_core::prelude::NodeView<()>,
                 node: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
@@ -329,7 +329,7 @@ pub fn partial_derive_state(_: TokenStream, input: TokenStream) -> TokenStream {
                 use dioxus_native_core::exports::shipyard::{IntoWorkloadSystem, Get, AddComponent};
                 use dioxus_native_core::tree::TreeRef;
                 use dioxus_native_core::prelude::{NodeType, NodeView};
-                
+
                 let node_mask = Self::NODE_MASK.build();
 
                 (move |data: #combined_dependencies_quote, run_view: dioxus_native_core::prelude::RunPassView #trait_generics| {
@@ -351,7 +351,7 @@ pub fn partial_derive_state(_: TokenStream, input: TokenStream) -> TokenStream {
                         #deref_child_view
 
                         let view = NodeView::new(id, node_data, &node_mask);
-                        if let Some(myself) = myself { 
+                        if let Some(myself) = myself {
                             myself
                                 .update(view, node, parent, children, context)
                         }
@@ -360,7 +360,7 @@ pub fn partial_derive_state(_: TokenStream, input: TokenStream) -> TokenStream {
                                 id,
                                 Self::create(view, node, parent, children, context));
                             true
-                        } 
+                        }
                     })
                 }).into_workload_system().unwrap()
             }

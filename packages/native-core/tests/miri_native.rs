@@ -131,9 +131,7 @@ fn native_core_is_okay() {
         .unwrap();
 
     rt.block_on(async {
-        let rdom = Arc::new(Mutex::new(RealDom::new([
-            BlablaState::to_type_erased(),
-        ])));
+        let rdom = Arc::new(Mutex::new(RealDom::new([BlablaState::to_type_erased()])));
         let mut dioxus_state = DioxusState::create(&mut *rdom.lock().unwrap());
         let mut dom = VirtualDom::new(app);
 
