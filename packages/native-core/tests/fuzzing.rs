@@ -346,7 +346,7 @@ fn create() {
             },
         );
         let mutations = vdom.rebuild();
-        let mut rdom: RealDom = RealDom::new(Box::new([BlablaState::to_type_erased()]));
+        let mut rdom: RealDom = RealDom::new([BlablaState::to_type_erased()]);
         let mut dioxus_state = DioxusState::create(&mut rdom);
         dioxus_state.apply_mutations(&mut rdom, mutations);
 
@@ -368,7 +368,7 @@ fn diff() {
             },
         );
         let mutations = vdom.rebuild();
-        let mut rdom: RealDom = RealDom::new(Box::new([BlablaState::to_type_erased()]));
+        let mut rdom: RealDom = RealDom::new([BlablaState::to_type_erased()]);
         let mut dioxus_state = DioxusState::create(&mut rdom);
         dioxus_state.apply_mutations(&mut rdom, mutations);
 

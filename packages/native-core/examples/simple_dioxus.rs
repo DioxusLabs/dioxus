@@ -1,3 +1,4 @@
+#![allow(non_snake_case)]
 use dioxus::prelude::*;
 use dioxus_native_core::exports::shipyard::Component;
 use dioxus_native_core::node_ref::*;

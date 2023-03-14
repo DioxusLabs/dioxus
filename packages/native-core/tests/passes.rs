@@ -50,7 +50,7 @@ fn node_pass() {
         }
     }
 
-    let mut tree: RealDom = RealDom::new(Box::new([Number::to_type_erased()]));
+    let mut tree: RealDom = RealDom::new([Number::to_type_erased()]);
     tree.update_state(SendAnyMap::new());
 
     assert_eq!(
@@ -140,10 +140,10 @@ fn dependant_node_pass() {
         }
     }
 
-    let mut tree: RealDom = RealDom::new(Box::new([
+    let mut tree: RealDom = RealDom::new([
         AddNumber::to_type_erased(),
         SubtractNumber::to_type_erased(),
-    ]));
+    ]);
     tree.update_state(SendAnyMap::new());
 
     let root = tree.get(tree.root_id()).unwrap();
@@ -243,10 +243,10 @@ fn independant_node_pass() {
         }
     }
 
-    let mut tree: RealDom = RealDom::new(Box::new([
+    let mut tree: RealDom = RealDom::new([
         AddNumber::to_type_erased(),
         SubtractNumber::to_type_erased(),
-    ]));
+    ]);
     tree.update_state(SendAnyMap::new());
 
     let root = tree.get(tree.root_id()).unwrap();
@@ -320,7 +320,7 @@ fn down_pass() {
         }
     }
 
-    let mut tree: RealDom = RealDom::new(Box::new([AddNumber::to_type_erased()]));
+    let mut tree: RealDom = RealDom::new([AddNumber::to_type_erased()]);
     let grandchild1 = tree.create_node(create_blank_element());
     let grandchild1 = grandchild1.id();
     let mut child1 = tree.create_node(create_blank_element());
@@ -406,7 +406,7 @@ fn up_pass() {
         }
     }
 
-    let mut tree: RealDom = RealDom::new(Box::new([AddNumber::to_type_erased()]));
+    let mut tree: RealDom = RealDom::new([AddNumber::to_type_erased()]);
     let grandchild1 = tree.create_node(create_blank_element());
     let grandchild1 = grandchild1.id();
     let mut child1 = tree.create_node(create_blank_element());

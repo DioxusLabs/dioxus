@@ -218,7 +218,7 @@ fn traverse() {
     let mut vdom = VirtualDom::new(Base);
     let mutations = vdom.rebuild();
 
-    let mut rdom: RealDom = RealDom::new(Box::new([]));
+    let mut rdom: RealDom = RealDom::new([]);
 
     let mut iter = PersistantElementIter::create(&mut rdom);
     let mut dioxus_state = DioxusState::create(&mut rdom);
@@ -320,7 +320,7 @@ fn persist_removes() {
     }
     let mut vdom = VirtualDom::new(Base);
 
-    let mut rdom: RealDom = RealDom::new(Box::new([]));
+    let mut rdom: RealDom = RealDom::new([]);
 
     let build = vdom.rebuild();
     println!("{build:#?}");
@@ -401,7 +401,7 @@ fn persist_instertions_before() {
     }
     let mut vdom = VirtualDom::new(Base);
 
-    let mut rdom: RealDom = RealDom::new(Box::new([]));
+    let mut rdom: RealDom = RealDom::new([]);
     let mut dioxus_state = DioxusState::create(&mut rdom);
 
     let build = vdom.rebuild();
@@ -459,7 +459,7 @@ fn persist_instertions_after() {
     }
     let mut vdom = VirtualDom::new(Base);
 
-    let mut rdom: RealDom = RealDom::new(Box::new([]));
+    let mut rdom: RealDom = RealDom::new([]);
     let mut iter = PersistantElementIter::create(&mut rdom);
     let mut dioxus_state = DioxusState::create(&mut rdom);
 

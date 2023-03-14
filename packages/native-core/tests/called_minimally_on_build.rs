@@ -140,7 +140,7 @@ macro_rules! test_state{
 
             let mutations = vdom.rebuild();
 
-            let mut dom: RealDom = RealDom::new(Box::new([$( <$state>::to_type_erased() ),*]));
+            let mut dom: RealDom = RealDom::new([$( <$state>::to_type_erased() ),*]);
             let mut dioxus_state = DioxusState::create(&mut dom);
 
             dioxus_state.apply_mutations(&mut dom, mutations);

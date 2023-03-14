@@ -84,12 +84,12 @@ pub fn render<R: Driver>(
         UnboundedSender<InputEvent>,
     ) -> R,
 ) -> Result<()> {
-    let mut rdom = RealDom::new(Box::new([
+    let mut rdom = RealDom::new([
         TaffyLayout::to_type_erased(),
         Focus::to_type_erased(),
         StyleModifier::to_type_erased(),
         PreventDefault::to_type_erased(),
-    ]));
+    ]);
 
     let (handler, mut register_event) = RinkInputHandler::create(&mut rdom);
 
