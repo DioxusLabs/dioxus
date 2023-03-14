@@ -11,6 +11,11 @@ use syn::{parse_macro_input, ItemImpl, Type, TypePath, TypeTuple};
 pub fn partial_derive_state(_: TokenStream, input: TokenStream) -> TokenStream {
     let impl_block: syn::ItemImpl = parse_macro_input!(input as syn::ItemImpl);
 
+    let has_create_fn = impl_block
+        .items
+        .iter()
+        .any(|item| matches!(item, syn::ImplItem::Method(method) if method.sig.ident == "create"));
+
     let parent_dependencies = impl_block
         .items
         .iter()
@@ -295,9 +300,29 @@ pub fn partial_derive_state(_: TokenStream, input: TokenStream) -> TokenStream {
         .arguments
         .clone();
 
+    // if a create function is defined, we don't generate one
+    // otherwise we generate a default one that uses the update function and the default constructor
+    let create_fn = (!has_create_fn).then(||{
+        quote!{
+            fn create<'a>(
+                node_view: dioxus_native_core::prelude::NodeView<()>,
+                node: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
+                parent: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
+                children: Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>,
+                context: &dioxus_native_core::prelude::SendAnyMap,
+            ) -> Self {
+                let mut myself = Self::default();
+                myself.update(node_view, node, parent, children, context);
+                myself
+            }
+        }
+    });
+
     quote!(
         #(#attrs)*
         #defaultness #unsafety #impl_token #generics #trait_ #for_ #self_ty {
+            #create_fn
+
             #(#items)*
 
             fn workload_system(type_id: std::any::TypeId, dependants: dioxus_native_core::exports::FxHashSet<std::any::TypeId>, pass_direction: dioxus_native_core::prelude::PassDirection) -> dioxus_native_core::exports::shipyard::WorkloadSystem {

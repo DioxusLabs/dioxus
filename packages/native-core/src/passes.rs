@@ -105,13 +105,13 @@ impl DirtyNodeStates {
 
 /// A state that is automatically inserted in a node with dependencies.
 pub trait State<V: FromAnyValue + Send + Sync = ()>: Any + Send + Sync {
-    /// This is a tuple of (T: State, ..) of states read from the parent required to run this pass
+    /// This is a tuple of (T: State, ..) of states read from the parent required to update this state
     type ParentDependencies: Dependancy;
-    /// This is a tuple of (T: State, ..) of states read from the children required to run this pass
+    /// This is a tuple of (T: State, ..) of states read from the children required to update this state
     type ChildDependencies: Dependancy;
-    /// This is a tuple of (T: State, ..) of states read from the node required to run this pass
+    /// This is a tuple of (T: State, ..) of states read from the node required to update this state
     type NodeDependencies: Dependancy;
-    /// This is a mask of what aspects of the node are required to run this pass
+    /// This is a mask of what aspects of the node are required to update this state
     const NODE_MASK: NodeMaskBuilder<'static>;
 
     /// Update this state in a node, returns if the state was updated

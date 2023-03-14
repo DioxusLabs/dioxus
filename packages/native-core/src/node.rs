@@ -20,6 +20,18 @@ pub struct ElementNode<V: FromAnyValue = ()> {
     pub listeners: FxHashSet<String>,
 }
 
+impl ElementNode {
+    /// Create a new element node
+    pub fn new(tag: impl Into<String>, namespace: impl Into<Option<String>>) -> Self {
+        Self {
+            tag: tag.into(),
+            namespace: namespace.into(),
+            attributes: Default::default(),
+            listeners: Default::default(),
+        }
+    }
+}
+
 /// A text node in the RealDom
 #[derive(Debug, Clone, Default)]
 pub struct TextNode {
@@ -48,6 +60,24 @@ pub enum NodeType<V: FromAnyValue = ()> {
     Element(ElementNode<V>),
     /// A placeholder node. This can be used as a cheaper placeholder for a node that will be created later
     Placeholder,
+}
+
+impl<S: Into<String>> From<S> for NodeType {
+    fn from(text: S) -> Self {
+        Self::Text(TextNode::new(text.into()))
+    }
+}
+
+impl From<TextNode> for NodeType {
+    fn from(text: TextNode) -> Self {
+        Self::Text(text)
+    }
+}
+
+impl<V: FromAnyValue> From<ElementNode<V>> for NodeType<V> {
+    fn from(element: ElementNode<V>) -> Self {
+        Self::Element(element)
+    }
 }
 
 /// A discription of an attribute on a DOM node, such as `id` or `href`.
@@ -158,14 +188,14 @@ impl<V: FromAnyValue> Debug for OwnedAttributeValue<V> {
     }
 }
 
-impl<V: FromAnyValue + Display> Display for OwnedAttributeValue<V> {
+impl<V: FromAnyValue> Display for OwnedAttributeValue<V> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Text(arg0) => f.write_str(arg0),
             Self::Float(arg0) => f.write_str(&arg0.to_string()),
             Self::Int(arg0) => f.write_str(&arg0.to_string()),
             Self::Bool(arg0) => f.write_str(&arg0.to_string()),
-            Self::Custom(arg0) => f.write_str(&arg0.to_string()),
+            Self::Custom(_) => f.write_str("custom"),
         }
     }
 }

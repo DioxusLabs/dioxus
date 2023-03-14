@@ -113,7 +113,8 @@ pub struct RealDom<V: FromAnyValue + Send + Sync = ()> {
 
 impl<V: FromAnyValue + Send + Sync> RealDom<V> {
     /// Create a new RealDom with the given states that will be inserted and updated when needed
-    pub fn new(mut tracked_states: Box<[TypeErasedState<V>]>) -> RealDom<V> {
+    pub fn new(tracked_states: impl Into<Box<[TypeErasedState<V>]>>) -> RealDom<V> {
+        let mut tracked_states = tracked_states.into();
         // resolve dependants for each pass
         for i in 1..tracked_states.len() {
             let (before, after) = tracked_states.split_at_mut(i);
@@ -177,8 +178,8 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
     }
 
     /// Create a new node of the given type in the dom and return a mutable reference to it.
-    pub fn create_node(&mut self, node: NodeType<V>) -> NodeMut<'_, V> {
-        let id = self.world.add_entity(node);
+    pub fn create_node(&mut self, node: impl Into<NodeType<V>>) -> NodeMut<'_, V> {
+        let id = self.world.add_entity(node.into());
         self.tree_mut().create_node(id);
         self.dirty_nodes
             .passes_updated
