@@ -51,7 +51,7 @@ pub struct VNode<'a> {
     ////////////////////////////////////////////////////////////////////////////
     //////////////////// Change the key type in the node ///////////////////////
     ////////////////////////////////////////////////////////////////////////////
-    pub key: Option<&'a str>,
+    pub key: Option<&'a KeyValue<'a>>,
 
     /// When rendered, this template will be linked to its parent manually
     pub parent: Option<ElementId>,
@@ -897,5 +897,69 @@ impl<'a, T: IntoAttributeValue<'a>> IntoAttributeValue<'a> for Option<T> {
             Some(val) => val.into_value(bump),
             None => AttributeValue::None,
         }
+    }
+}
+
+#[derive(Debug)]
+pub enum KeyValue<'a> {
+    /// Text attribute key value
+    Text(&'a str),
+
+    /// Signed integer key value
+    Int(i64),
+}
+
+// need to understand if these traits are necessary
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serialize", serde(untagged))]
+pub enum BorrowedKeyValue<'a> {
+    /// Text attribute
+    Text(&'a str),
+
+    /// Signed integer
+    Int(i64),
+}
+
+impl<'a> From<&'a KeyValue<'a>> for BorrowedKeyValue<'a> {
+    fn from(value: &'a KeyValue<'a>) -> Self {
+        match value {
+            KeyValue::Text(value) => BorrowedKeyValue::Text(value),
+            KeyValue::Int(value) => BorrowedKeyValue::Int(*value),
+        }
+    }
+}
+
+impl Debug for BorrowedKeyValue<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Text(arg0) => f.debug_tuple("Text").field(arg0).finish(),
+            Self::Int(arg0) => f.debug_tuple("Int").field(arg0).finish(),
+        }
+    }
+}
+
+impl PartialEq for BorrowedKeyValue<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Text(l0), Self::Text(r0)) => l0 == r0,
+            (Self::Int(l0), Self::Int(r0)) => l0 == r0,
+        }
+    }
+}
+/// A value that can be converted into an attribute key value
+pub trait IntoKeyValue<'a> {
+    /// Convert into an attribute value
+    fn into_value(self, bump: &'a Bump) -> KeyValue<'a>;
+}
+
+impl<'a> IntoKeyValue<'a> for &'a str {
+    fn into_value(self, _: &'a Bump) -> KeyValue<'a> {
+        KeyValue::Text(self)
+    }
+}
+
+impl<'a> IntoKeyValue<'a> for i64 {
+    fn into_value(self, _: &'a Bump) -> KeyValue<'a> {
+        KeyValue::Int(self)
     }
 }
