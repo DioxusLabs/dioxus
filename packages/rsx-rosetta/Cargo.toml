@@ -7,7 +7,7 @@ edition = "2018"
 
 [dependencies]
 dioxus-autofmt = { path = "../autofmt" }
-dioxus-rsx = { path = "../rsx" }
+dioxus-rsx = { path = "../rsx" , version = "^0.0.3" }
 html_parser = "0.6.3"
 proc-macro2 = "1.0.49"
 quote = "1.0.23"

@@ -40,7 +40,7 @@
     <span> | </span>
     <a href="https://github.com/DioxusLabs/example-projects"> 代码示例 </a>
     <span> | </span>
-    <a href="https://dioxuslabs.com/guide"> 开发指南 </a>
+    <a href="https://dioxuslabs.com/guide/en"> 开发指南 </a>
     <span> | </span>
     <a href="https://github.com/DioxusLabs/dioxus/blob/master/README.md"> English </a>
     <span> | </span>

@@ -18,7 +18,7 @@ proc-macro = true
 proc-macro2 = { version = "1.0" }
 quote = "1.0"
 syn = { version = "1.0", features = ["full", "extra-traits"] }
-dioxus-rsx = {  path = "../rsx", version = "0.0.2" }
+dioxus-rsx = {  path = "../rsx", version = "^0.0.3" }
 
 # testing
 [dev-dependencies]

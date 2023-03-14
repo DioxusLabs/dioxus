@@ -1,6 +1,6 @@
 [package]
 name = "dioxus-html"
-version = "0.3.0"
+version = "0.3.1"
 authors = ["Jonathan Kelley"]
 edition = "2018"
 description = "HTML Element pack for Dioxus - a concurrent renderer-agnostic Virtual DOM for interactive user experiences"
@@ -12,7 +12,7 @@ keywords = ["dom", "ui", "gui", "react"]
 
 [dependencies]
 dioxus-core = { path = "../core", version = "^0.3.0" }
-dioxus-rsx = { path = "../rsx", version = "0.0.2", optional = true }
+dioxus-rsx = { path = "../rsx", version = "^0.0.3", optional = true }
 serde = { version = "1", features = ["derive"], optional = true }
 serde_repr = { version = "0.1", optional = true }
 wasm-bindgen = { version = "0.2.79", optional = true }

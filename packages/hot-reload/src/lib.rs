@@ -7,7 +7,7 @@ use std::{
 
 use dioxus_core::Template;
 use dioxus_rsx::{
-    hot_reload::{FileMap, UpdateResult},
+    hot_reload::{FileMap, FileMapBuildResult, UpdateResult},
     HotReloadingContext,
 };
 use interprocess::local_socket::{LocalSocketListener, LocalSocketStream};
@@ -129,10 +129,37 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(cfg: Config<Ctx>) {
     } = cfg;
 
     if let Ok(crate_dir) = PathBuf::from_str(root_path) {
-        let temp_file = std::env::temp_dir().join("@dioxusin");
+        // try to find the gitingore file
+        let gitignore_file_path = crate_dir.join(".gitignore");
+        let (gitignore, _) = ignore::gitignore::Gitignore::new(gitignore_file_path);
+
+        // convert the excluded paths to absolute paths
+        let excluded_paths = excluded_paths
+            .iter()
+            .map(|path| crate_dir.join(PathBuf::from(path)))
+            .collect::<Vec<_>>();
+
         let channels = Arc::new(Mutex::new(Vec::new()));
-        let file_map = Arc::new(Mutex::new(FileMap::<Ctx>::new(crate_dir.clone())));
-        if let Ok(local_socket_stream) = LocalSocketListener::bind(temp_file.as_path()) {
+        let FileMapBuildResult {
+            map: file_map,
+            errors,
+        } = FileMap::<Ctx>::create_with_filter(crate_dir.clone(), |path| {
+            // skip excluded paths
+            excluded_paths.iter().any(|p| path.starts_with(p)) ||
+                // respect .gitignore
+                gitignore
+                    .matched_path_or_any_parents(path, path.is_dir())
+                    .is_ignore()
+        })
+        .unwrap();
+        for err in errors {
+            if log {
+                println!("hot reloading failed to initialize:\n{err:?}");
+            }
+        }
+        let file_map = Arc::new(Mutex::new(file_map));
+
+        if let Ok(local_socket_stream) = LocalSocketListener::bind("@dioxusin") {
             let aborted = Arc::new(Mutex::new(false));
 
             // listen for connections
@@ -177,10 +204,6 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(cfg: Config<Ctx>) {
 
             // watch for changes
             std::thread::spawn(move || {
-                // try to find the gitingore file
-                let gitignore_file_path = crate_dir.join(".gitignore");
-                let (gitignore, _) = ignore::gitignore::Gitignore::new(gitignore_file_path);
-
                 let mut last_update_time = chrono::Local::now().timestamp();
 
                 let (tx, rx) = std::sync::mpsc::channel();
@@ -197,11 +220,6 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(cfg: Config<Ctx>) {
                         }
                     }
                 }
-
-                let excluded_paths = excluded_paths
-                    .iter()
-                    .map(|path| crate_dir.join(PathBuf::from(path)))
-                    .collect::<Vec<_>>();
 
                 let mut rebuild = {
                     let aborted = aborted.clone();
@@ -242,7 +260,7 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(cfg: Config<Ctx>) {
                                     matches!(
                                         path.extension().and_then(|p| p.to_str()),
                                         Some("rs" | "toml" | "css" | "html" | "js")
-                                    )&&
+                                    ) &&
                                     // skip excluded paths
                                     !excluded_paths.iter().any(|p| path.starts_with(p)) &&
                                     // respect .gitignore
@@ -271,7 +289,7 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(cfg: Config<Ctx>) {
                                     .unwrap()
                                     .update_rsx(path, crate_dir.as_path())
                                 {
-                                    UpdateResult::UpdatedRsx(msgs) => {
+                                    Ok(UpdateResult::UpdatedRsx(msgs)) => {
                                         for msg in msgs {
                                             let mut i = 0;
                                             while i < channels.len() {
@@ -287,12 +305,19 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(cfg: Config<Ctx>) {
                                             }
                                         }
                                     }
-                                    UpdateResult::NeedsRebuild => {
+                                    Ok(UpdateResult::NeedsRebuild) => {
                                         drop(channels);
                                         if rebuild() {
                                             return;
                                         }
                                         break;
+                                    }
+                                    Err(err) => {
+                                        if log {
+                                            println!(
+                                                "hot reloading failed to update rsx:\n{err:?}"
+                                            );
+                                        }
                                     }
                                 }
                             }
@@ -322,8 +347,7 @@ fn send_msg(msg: HotReloadMsg, channel: &mut impl Write) -> bool {
 /// Connect to the hot reloading listener. The callback provided will be called every time a template change is detected
 pub fn connect(mut f: impl FnMut(HotReloadMsg) + Send + 'static) {
     std::thread::spawn(move || {
-        let temp_file = std::env::temp_dir().join("@dioxusin");
-        if let Ok(socket) = LocalSocketStream::connect(temp_file.as_path()) {
+        if let Ok(socket) = LocalSocketStream::connect("@dioxusin") {
             let mut buf_reader = BufReader::new(socket);
             loop {
                 let mut buf = String::new();

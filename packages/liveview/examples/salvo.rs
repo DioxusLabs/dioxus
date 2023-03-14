@@ -41,7 +41,7 @@ fn index(_depot: &mut Depot, res: &mut Response) {
         r#"
             <!DOCTYPE html>
             <html>
-                <head> <title>Dioxus LiveView with Warp</title>  </head>
+                <head> <title>Dioxus LiveView with Salvo</title>  </head>
                 <body> <div id="main"></div> </body>
                 {glue}
             </html>

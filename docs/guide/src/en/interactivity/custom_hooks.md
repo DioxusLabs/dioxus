@@ -14,7 +14,7 @@ For example, if many components need to access an `AppSettings` struct, you can 
 
 ## Custom Hook Logic
 
-You can use [`cx.use_hook`](https://docs.rs/dioxus/latest/dioxus/prelude/struct.Scope.html#method.use_hook) to build your own hooks. In fact, this is what all the standard hooks are built on!
+You can use [`cx.use_hook`](https://docs.rs/dioxus/latest/dioxus/prelude/struct.ScopeState.html#method.use_hook) to build your own hooks. In fact, this is what all the standard hooks are built on!
 
 `use_hook` accepts a single closure for initializing the hook. It will be only run the first time the component is rendered. The return value of that closure will be used as the value of the hook – Dioxus will take it, and store it for as long as the component is alive. On every render (not just the first one!), you will get a reference to this value.
 

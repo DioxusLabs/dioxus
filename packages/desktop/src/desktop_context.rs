@@ -5,6 +5,11 @@ use std::rc::Weak;
 use crate::create_new_window;
 use crate::eval::EvalResult;
 use crate::events::IpcMessage;
+use crate::shortcut::IntoKeyCode;
+use crate::shortcut::IntoModifersState;
+use crate::shortcut::ShortcutId;
+use crate::shortcut::ShortcutRegistry;
+use crate::shortcut::ShortcutRegistryError;
 use crate::Config;
 use crate::WebviewHandler;
 use dioxus_core::ScopeState;
@@ -63,6 +68,8 @@ pub struct DesktopContext {
 
     pub(crate) event_handlers: WindowEventHandlers,
 
+    pub(crate) shortcut_manager: ShortcutRegistry,
+
     #[cfg(target_os = "ios")]
     pub(crate) views: Rc<RefCell<Vec<*mut objc::runtime::Object>>>,
 }
@@ -83,6 +90,7 @@ impl DesktopContext {
         event_loop: EventLoopWindowTarget<UserWindowEvent>,
         webviews: WebviewQueue,
         event_handlers: WindowEventHandlers,
+        shortcut_manager: ShortcutRegistry,
     ) -> Self {
         Self {
             webview,
@@ -91,6 +99,7 @@ impl DesktopContext {
             eval: tokio::sync::broadcast::channel(8).0,
             pending_windows: webviews,
             event_handlers,
+            shortcut_manager,
             #[cfg(target_os = "ios")]
             views: Default::default(),
         }
@@ -111,6 +120,7 @@ impl DesktopContext {
             dom,
             &self.pending_windows,
             &self.event_handlers,
+            self.shortcut_manager.clone(),
         );
 
         let id = window.webview.window().id();
@@ -238,6 +248,32 @@ impl DesktopContext {
     /// Remove a wry event handler created with [`DesktopContext::create_wry_event_handler`]
     pub fn remove_wry_event_handler(&self, id: WryEventHandlerId) {
         self.event_handlers.remove(id)
+    }
+
+    /// Create a global shortcut
+    ///
+    /// Linux: Only works on x11. See [this issue](https://github.com/tauri-apps/tao/issues/331) for more information.
+    pub fn create_shortcut(
+        &self,
+        key: impl IntoKeyCode,
+        modifiers: impl IntoModifersState,
+        callback: impl FnMut() + 'static,
+    ) -> Result<ShortcutId, ShortcutRegistryError> {
+        self.shortcut_manager.add_shortcut(
+            modifiers.into_modifiers_state(),
+            key.into_key_code(),
+            Box::new(callback),
+        )
+    }
+
+    /// Remove a global shortcut
+    pub fn remove_shortcut(&self, id: ShortcutId) {
+        self.shortcut_manager.remove_shortcut(id)
+    }
+
+    /// Remove all global shortcuts
+    pub fn remove_all_shortcuts(&self) {
+        self.shortcut_manager.remove_all()
     }
 
     /// Push an objc view to the window

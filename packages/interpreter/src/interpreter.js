@@ -116,9 +116,6 @@ class Interpreter {
       node.remove();
     }
   }
-  CreateRawText(text) {
-    this.stack.push(document.createTextNode(text));
-  }
   CreateTextNode(text, root) {
     const node = document.createTextNode(text);
     this.nodes[root] = node;
@@ -306,7 +303,7 @@ class Interpreter {
         this.CreatePlaceholder(edit.id);
         break;
       case "CreateTextNode":
-        this.CreateTextNode(edit.value);
+        this.CreateTextNode(edit.value, edit.id);
         break;
       case "HydrateText":
         this.HydrateText(edit.path, edit.value, edit.id);
@@ -360,10 +357,11 @@ class Interpreter {
 
             if (event.type === "click") {
               // todo call prevent default if it's the right type of event
-              if (shouldPreventDefault !== `onclick`) {
-                if (target.tagName === "A") {
-                  event.preventDefault();
-                  const href = target.getAttribute("href");
+              let a_element = target.closest("a");
+              if (a_element != null) {
+                event.preventDefault();
+                if (shouldPreventDefault !== `onclick` && a_element.getAttribute(`dioxus-prevent-default`) !== `onclick`) {
+                  const href = a_element.getAttribute("href");
                   if (href !== "" && href !== null && href !== undefined) {
                     window.ipc.postMessage(
                       serializeIpcMessage("browser_open", { href })

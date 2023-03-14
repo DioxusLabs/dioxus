@@ -104,8 +104,11 @@ impl Renderer {
                             write!(buf, "<!--#-->")?;
                         }
 
-                        // todo: escape the text
-                        write!(buf, "{}", text.value)?;
+                        write!(
+                            buf,
+                            "{}",
+                            askama_escape::escape(text.value, askama_escape::Html)
+                        )?;
 
                         if self.pre_render {
                             write!(buf, "<!--#-->")?;
@@ -119,7 +122,7 @@ impl Renderer {
 
                     DynamicNode::Placeholder(_el) => {
                         if self.pre_render {
-                            write!(buf, "<pre><pre/>")?;
+                            write!(buf, "<pre></pre>")?;
                         }
                     }
                 },
@@ -138,7 +141,7 @@ fn to_string_works() {
 
     fn app(cx: Scope) -> Element {
         let dynamic = 123;
-        let dyn2 = "</diiiiiiiiv>"; // todo: escape this
+        let dyn2 = "</diiiiiiiiv>"; // this should be escaped
 
         render! {
             div { class: "asdasdasd", class: "asdasdasd", id: "id-{dynamic}",
@@ -165,10 +168,10 @@ fn to_string_works() {
                 vec![
                     PreRendered("<div class=\"asdasdasd\" class=\"asdasdasd\"".into(),),
                     Attr(0,),
-                    PreRendered(">Hello world 1 -->".into(),),
+                    PreRendered(">Hello world 1 --&gt;".into(),),
                     Node(0,),
                     PreRendered(
-                        "<-- Hello world 2<div>nest 1</div><div></div><div>nest 2</div>".into(),
+                        "&lt;-- Hello world 2<div>nest 1</div><div></div><div>nest 2</div>".into(),
                     ),
                     Node(1,),
                     Node(2,),
@@ -180,5 +183,5 @@ fn to_string_works() {
 
     use Segment::*;
 
-    assert_eq!(out, "<div class=\"asdasdasd\" class=\"asdasdasd\" id=\"id-123\">Hello world 1 -->123<-- Hello world 2<div>nest 1</div><div></div><div>nest 2</div></diiiiiiiiv><div>finalize 0</div><div>finalize 1</div><div>finalize 2</div><div>finalize 3</div><div>finalize 4</div></div>");
+    assert_eq!(out, "<div class=\"asdasdasd\" class=\"asdasdasd\" id=\"id-123\">Hello world 1 --&gt;123&lt;-- Hello world 2<div>nest 1</div><div></div><div>nest 2</div>&lt;/diiiiiiiiv&gt;<div>finalize 0</div><div>finalize 1</div><div>finalize 2</div><div>finalize 3</div><div>finalize 4</div></div>");
 }

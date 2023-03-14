@@ -1,5 +1,7 @@
 use crate::{CallBody, HotReloadingContext};
 use dioxus_core::Template;
+use krates::cm::MetadataCommand;
+use krates::Cmd;
 pub use proc_macro2::TokenStream;
 pub use std::collections::HashMap;
 use std::path::PathBuf;
@@ -17,46 +19,82 @@ pub enum UpdateResult {
     NeedsRebuild,
 }
 
+/// The result of building a FileMap
+pub struct FileMapBuildResult<Ctx: HotReloadingContext> {
+    /// The FileMap that was built
+    pub map: FileMap<Ctx>,
+    /// Any errors that occurred while building the FileMap that were not fatal
+    pub errors: Vec<io::Error>,
+}
+
 pub struct FileMap<Ctx: HotReloadingContext> {
     pub map: HashMap<PathBuf, (String, Option<Template<'static>>)>,
+    in_workspace: HashMap<PathBuf, bool>,
     phantom: std::marker::PhantomData<Ctx>,
 }
 
 impl<Ctx: HotReloadingContext> FileMap<Ctx> {
     /// Create a new FileMap from a crate directory
-    pub fn new(path: PathBuf) -> Self {
+    pub fn create(path: PathBuf) -> io::Result<FileMapBuildResult<Ctx>> {
+        Self::create_with_filter(path, |_| false)
+    }
+
+    /// Create a new FileMap from a crate directory
+    pub fn create_with_filter(
+        path: PathBuf,
+        mut filter: impl FnMut(&Path) -> bool,
+    ) -> io::Result<FileMapBuildResult<Ctx>> {
+        struct FileMapSearchResult {
+            map: HashMap<PathBuf, (String, Option<Template<'static>>)>,
+            errors: Vec<io::Error>,
+        }
         fn find_rs_files(
             root: PathBuf,
-        ) -> io::Result<HashMap<PathBuf, (String, Option<Template<'static>>)>> {
+            filter: &mut impl FnMut(&Path) -> bool,
+        ) -> io::Result<FileMapSearchResult> {
             let mut files = HashMap::new();
+            let mut errors = Vec::new();
             if root.is_dir() {
                 for entry in (fs::read_dir(root)?).flatten() {
                     let path = entry.path();
-                    files.extend(find_rs_files(path)?);
+                    if !filter(&path) {
+                        let FileMapSearchResult {
+                            map,
+                            errors: child_errors,
+                        } = find_rs_files(path, filter)?;
+                        errors.extend(child_errors);
+                        files.extend(map);
+                    }
                 }
             } else if root.extension().and_then(|s| s.to_str()) == Some("rs") {
                 if let Ok(mut file) = File::open(root.clone()) {
                     let mut src = String::new();
-                    file.read_to_string(&mut src).expect("Unable to read file");
+                    file.read_to_string(&mut src)?;
                     files.insert(root, (src, None));
                 }
             }
-            Ok(files)
+            Ok(FileMapSearchResult { map: files, errors })
         }
 
+        let FileMapSearchResult { map, errors } = find_rs_files(path, &mut filter)?;
         let result = Self {
-            map: find_rs_files(path).unwrap(),
+            map,
+            in_workspace: HashMap::new(),
             phantom: std::marker::PhantomData,
         };
-        result
+        Ok(FileMapBuildResult {
+            map: result,
+            errors,
+        })
     }
 
     /// Try to update the rsx in a file
-    pub fn update_rsx(&mut self, file_path: &Path, crate_dir: &Path) -> UpdateResult {
-        let mut file = File::open(file_path).unwrap();
+    pub fn update_rsx(&mut self, file_path: &Path, crate_dir: &Path) -> io::Result<UpdateResult> {
+        let mut file = File::open(file_path)?;
         let mut src = String::new();
-        file.read_to_string(&mut src).expect("Unable to read file");
+        file.read_to_string(&mut src)?;
         if let Ok(syntax) = syn::parse_file(&src) {
+            let in_workspace = self.child_in_workspace(crate_dir)?;
             if let Some((old_src, template_slot)) = self.map.get_mut(file_path) {
                 if let Ok(old) = syn::parse_file(old_src) {
                     match find_rsx(&syntax, &old) {
@@ -72,7 +110,17 @@ impl<Ctx: HotReloadingContext> FileMap<Ctx> {
                                     syn::parse2::<CallBody>(old.tokens),
                                     syn::parse2::<CallBody>(new),
                                 ) {
-                                    if let Ok(file) = file_path.strip_prefix(crate_dir) {
+                                    // if the file!() macro is invoked in a workspace, the path is relative to the workspace root, otherwise it's relative to the crate root
+                                    // we need to check if the file is in a workspace or not and strip the prefix accordingly
+                                    let prefix = if in_workspace {
+                                        crate_dir.parent().ok_or(io::Error::new(
+                                            io::ErrorKind::Other,
+                                            "Could not load workspace",
+                                        ))?
+                                    } else {
+                                        crate_dir
+                                    };
+                                    if let Ok(file) = file_path.strip_prefix(prefix) {
                                         let line = old_start.line;
                                         let column = old_start.column + 1;
                                         let location = file.display().to_string()
@@ -91,7 +139,7 @@ impl<Ctx: HotReloadingContext> FileMap<Ctx> {
                                         {
                                             // dioxus cannot handle empty templates
                                             if template.roots.is_empty() {
-                                                return UpdateResult::NeedsRebuild;
+                                                return Ok(UpdateResult::NeedsRebuild);
                                             } else {
                                                 // if the template is the same, don't send it
                                                 if let Some(old_template) = template_slot {
@@ -103,20 +151,44 @@ impl<Ctx: HotReloadingContext> FileMap<Ctx> {
                                                 messages.push(template);
                                             }
                                         } else {
-                                            return UpdateResult::NeedsRebuild;
+                                            return Ok(UpdateResult::NeedsRebuild);
                                         }
                                     }
                                 }
                             }
-                            return UpdateResult::UpdatedRsx(messages);
+                            return Ok(UpdateResult::UpdatedRsx(messages));
                         }
                     }
                 }
             } else {
                 // if this is a new file, rebuild the project
-                *self = FileMap::new(crate_dir.to_path_buf());
+                let FileMapBuildResult { map, mut errors } =
+                    FileMap::create(crate_dir.to_path_buf())?;
+                if let Some(err) = errors.pop() {
+                    return Err(err);
+                }
+                *self = map;
             }
         }
-        UpdateResult::NeedsRebuild
+        Ok(UpdateResult::NeedsRebuild)
+    }
+
+    fn child_in_workspace(&mut self, crate_dir: &Path) -> io::Result<bool> {
+        if let Some(in_workspace) = self.in_workspace.get(crate_dir) {
+            Ok(*in_workspace)
+        } else {
+            let mut cmd = Cmd::new();
+            let manafest_path = crate_dir.join("Cargo.toml");
+            cmd.manifest_path(&manafest_path);
+            let cmd: MetadataCommand = cmd.into();
+            let metadata = cmd
+                .exec()
+                .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
+
+            let in_workspace = metadata.workspace_root != crate_dir;
+            self.in_workspace
+                .insert(crate_dir.to_path_buf(), in_workspace);
+            Ok(in_workspace)
+        }
     }
 }

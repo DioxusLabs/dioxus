@@ -1,6 +1,6 @@
 [package]
 name = "dioxus"
-version = "0.3.1"
+version = "0.3.2"
 authors = ["Jonathan Kelley", "Dioxus Labs", "ealmloff"]
 edition = "2021"
 description = "Core functionality for Dioxus - a concurrent renderer-agnostic Virtual DOM for interactive user experiences"
@@ -16,7 +16,7 @@ dioxus-core = { path = "../core", version = "^0.3.0" }
 dioxus-html = { path = "../html", version = "^0.3.0", optional = true }
 dioxus-core-macro = { path = "../core-macro", version = "^0.3.0", optional = true }
 dioxus-hooks = { path = "../hooks", version = "^0.3.0", optional = true }
-dioxus-rsx = { path = "../rsx", version = "0.0.2", optional = true }
+dioxus-rsx = { path = "../rsx", version = "^0.0.3", optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 dioxus-hot-reload = { path = "../hot-reload", version = "0.1.0", optional = true }

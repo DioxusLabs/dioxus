@@ -1,20 +1,20 @@
 [package]
 name = "dioxus-hot-reload"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 license = "MIT/Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com"
 description = "Hot reloading utilites for Dioxus"
 documentation = "https://dioxuslabs.com"
-keywords = ["dom", "ui", "gui", "react", "hot-reloading", "watch"]
+keywords = ["dom", "ui", "gui", "react", "hot-reloading"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-dioxus-rsx = { path = "../rsx" }
-dioxus-core = { path = "../core", features = ["serialize"] }
-dioxus-html = { path = "../html", features = ["hot-reload-context"] }
+dioxus-rsx = { path = "../rsx" , version = "^0.0.3" }
+dioxus-core = { path = "../core", features = ["serialize"], version = "^0.3.2"}
+dioxus-html = { path = "../html", features = ["hot-reload-context"], version = "^0.3.0" }
 
 interprocess = { version = "1.2.1" }
 notify = "5.0.0"

@@ -19,7 +19,7 @@
 [discord-url]: https://discord.gg/XgGxMSkvUM
 
 [Website](https://dioxuslabs.com) |
-[Guides](https://dioxuslabs.com/guide/) |
+[Guides](https://dioxuslabs.com/docs/0.3/guide/en) |
 [API Docs](https://docs.rs/dioxus-hot-reload/latest/dioxus_hot_reload) |
 [Chat](https://discord.gg/XgGxMSkvUM)
 
