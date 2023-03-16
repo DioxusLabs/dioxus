@@ -895,7 +895,7 @@ impl<'a, T: IntoAttributeValue<'a>> IntoAttributeValue<'a> for Option<T> {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub enum KeyValue<'a> {
     /// Text attribute key value
     Text(&'a str),
