@@ -22,5 +22,5 @@ You can use [`cx.use_hook`](https://docs.rs/dioxus/latest/dioxus/prelude/struct.
 
 Inside the initialization closure, you will typically make calls to other `cx` methods. For example:
 
-- The `use_state` hook tracks state in the hook value, and uses [`cx.schedule_update`](https://docs.rs/dioxus/latest/dioxus/prelude/struct.Scope.html#method.schedule_update) to make Dioxus re-render the component whenever it changes.
-- The `use_context` hook calls [`cx.consume_context`](https://docs.rs/dioxus/latest/dioxus/prelude/struct.Scope.html#method.consume_context) (which would be expensive to call on every render) to get some context from the scope
+- The `use_state` hook tracks state in the hook value, and uses [`cx.schedule_update`](https://docs.rs/dioxus/latest/dioxus/prelude/struct.ScopeState.html#method.schedule_update) to make Dioxus re-render the component whenever it changes.
+- The `use_context` hook calls [`cx.consume_context`](https://docs.rs/dioxus/latest/dioxus/prelude/struct.ScopeState.html#method.consume_context) (which would be expensive to call on every render) to get some context from the scope
