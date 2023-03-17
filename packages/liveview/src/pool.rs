@@ -37,7 +37,16 @@ impl LiveViewPool {
         app: fn(Scope<T>) -> Element,
         props: T,
     ) -> Result<(), LiveViewError> {
-        match self.pool.spawn_pinned(move || run(app, props, ws)).await {
+        self.launch_virtualdom(ws, move || VirtualDom::new_with_props(app, props))
+            .await
+    }
+
+    pub async fn launch_virtualdom<F: FnOnce() -> VirtualDom + Send + 'static>(
+        &self,
+        ws: impl LiveViewSocket,
+        make_app: F,
+    ) -> Result<(), LiveViewError> {
+        match self.pool.spawn_pinned(move || run(make_app(), ws)).await {
             Ok(Ok(_)) => Ok(()),
             Ok(Err(e)) => Err(e),
             Err(_) => Err(LiveViewError::SendingFailed),
@@ -95,14 +104,7 @@ impl<S> LiveViewSocket for S where
 /// As long as your framework can provide a Sink and Stream of Strings, you can use this function.
 ///
 /// You might need to transform the error types of the web backend into the LiveView error type.
-pub async fn run<T>(
-    app: Component<T>,
-    props: T,
-    ws: impl LiveViewSocket,
-) -> Result<(), LiveViewError>
-where
-    T: Send + 'static,
-{
+pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), LiveViewError> {
     #[cfg(all(feature = "hot-reload", debug_assertions))]
     let mut hot_reload_rx = {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
@@ -111,8 +113,6 @@ where
         });
         rx
     };
-
-    let mut vdom = VirtualDom::new_with_props(app, props);
 
     // todo: use an efficient binary packed format for this
     let edits = serde_json::to_string(&vdom.rebuild()).unwrap();

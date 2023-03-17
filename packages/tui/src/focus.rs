@@ -14,8 +14,9 @@ use dioxus_native_core::{
     state::NodeDepState,
 };
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub(crate) enum FocusLevel {
+    #[default]
     Unfocusable,
     Focusable,
     Ordered(std::num::NonZeroU16),
@@ -50,12 +51,6 @@ impl PartialOrd for FocusLevel {
 impl Ord for FocusLevel {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.partial_cmp(other).unwrap()
-    }
-}
-
-impl Default for FocusLevel {
-    fn default() -> Self {
-        FocusLevel::Unfocusable
     }
 }
 

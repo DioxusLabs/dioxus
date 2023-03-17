@@ -20,7 +20,7 @@ pub(crate) struct NodeState {
     pub focused: bool,
 }
 
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Debug, Clone, Default)]
 pub(crate) enum PreventDefault {
     Focus,
     KeyPress,
@@ -32,17 +32,12 @@ pub(crate) enum PreventDefault {
     MouseEnter,
     MouseLeave,
     MouseOut,
+    #[default]
     Unknown,
     MouseOver,
     ContextMenu,
     Wheel,
     MouseUp,
-}
-
-impl Default for PreventDefault {
-    fn default() -> Self {
-        PreventDefault::Unknown
-    }
 }
 
 impl NodeDepState for PreventDefault {
