@@ -62,13 +62,13 @@ pub enum NodeType<V: FromAnyValue = ()> {
     Placeholder,
 }
 
-impl<S: Into<String>> From<S> for NodeType {
+impl<V: FromAnyValue, S: Into<String>> From<S> for NodeType<V> {
     fn from(text: S) -> Self {
         Self::Text(TextNode::new(text.into()))
     }
 }
 
-impl From<TextNode> for NodeType {
+impl<V: FromAnyValue> From<TextNode> for NodeType<V> {
     fn from(text: TextNode) -> Self {
         Self::Text(text)
     }
@@ -136,25 +136,25 @@ pub enum OwnedAttributeValue<V: FromAnyValue = ()> {
     Custom(V),
 }
 
-impl From<String> for OwnedAttributeValue {
+impl<V: FromAnyValue> From<String> for OwnedAttributeValue<V> {
     fn from(value: String) -> Self {
         Self::Text(value)
     }
 }
 
-impl From<f64> for OwnedAttributeValue {
+impl<V: FromAnyValue> From<f64> for OwnedAttributeValue<V> {
     fn from(value: f64) -> Self {
         Self::Float(value)
     }
 }
 
-impl From<i64> for OwnedAttributeValue {
+impl<V: FromAnyValue> From<i64> for OwnedAttributeValue<V> {
     fn from(value: i64) -> Self {
         Self::Int(value)
     }
 }
 
-impl From<bool> for OwnedAttributeValue {
+impl<V: FromAnyValue> From<bool> for OwnedAttributeValue<V> {
     fn from(value: bool) -> Self {
         Self::Bool(value)
     }

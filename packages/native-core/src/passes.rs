@@ -299,7 +299,7 @@ pub trait Dependancy {
 
 macro_rules! impl_dependancy {
     ($($t:ident),*) => {
-        impl< $($t: Send + Sync + Component + State),* > Dependancy for ($($t,)*) {
+        impl< $($t: Send + Sync + Component),* > Dependancy for ($($t,)*) {
             type ElementBorrowed<'a> = ($(DependancyView<'a, $t>,)*);
 
             fn type_ids() -> Box<[TypeId]> {

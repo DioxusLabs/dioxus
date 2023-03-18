@@ -305,7 +305,7 @@ pub fn partial_derive_state(_: TokenStream, input: TokenStream) -> TokenStream {
     let create_fn = (!has_create_fn).then(|| {
         quote! {
             fn create<'a>(
-                node_view: dioxus_native_core::prelude::NodeView<()>,
+                node_view: dioxus_native_core::prelude::NodeView # trait_generics,
                 node: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
                 parent: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
                 children: Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>,
