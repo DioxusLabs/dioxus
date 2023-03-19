@@ -4,14 +4,14 @@ use crate::events::{
 };
 use crate::geometry::{ClientPoint, Coordinates, ElementPoint, PagePoint, ScreenPoint};
 use crate::input_data::{decode_key_location, decode_mouse_button_set, MouseButton};
-use crate::DragData;
+use crate::{DragData, MountedData, RenderedElementBacking, ScrollBehavior};
 use keyboard_types::{Code, Key, Modifiers};
 use std::convert::TryInto;
 use std::str::FromStr;
 use wasm_bindgen::JsCast;
 use web_sys::{
-    AnimationEvent, CompositionEvent, Event, KeyboardEvent, MouseEvent, PointerEvent, TouchEvent,
-    TransitionEvent, WheelEvent,
+    AnimationEvent, CompositionEvent, Event, KeyboardEvent, MouseEvent, PointerEvent,
+    ScrollIntoViewOptions, TouchEvent, TransitionEvent, WheelEvent,
 };
 
 macro_rules! uncheck_convert {
@@ -191,5 +191,48 @@ impl From<&TransitionEvent> for TransitionData {
             property_name: e.property_name(),
             pseudo_element: e.pseudo_element(),
         }
+    }
+}
+
+impl From<&web_sys::Element> for MountedData {
+    fn from(e: &web_sys::Element) -> Self {
+        MountedData::new(e.clone())
+    }
+}
+
+impl RenderedElementBacking for web_sys::Element {
+    fn get_client_rect(&self) -> Option<euclid::Rect<f64, f64>> {
+        let rect = self.get_bounding_client_rect();
+        Some(euclid::Rect::new(
+            euclid::Point2D::new(rect.left(), rect.top()),
+            euclid::Size2D::new(rect.width(), rect.height()),
+        ))
+    }
+
+    fn get_raw_element(&self) -> Option<&dyn std::any::Any> {
+        Some(self)
+    }
+
+    fn scroll_to(&self, behavior: ScrollBehavior) -> Option<()> {
+        match behavior {
+            ScrollBehavior::Instant => self.scroll_into_view_with_scroll_into_view_options(
+                ScrollIntoViewOptions::new().behavior(web_sys::ScrollBehavior::Instant),
+            ),
+            ScrollBehavior::Smooth => self.scroll_into_view_with_scroll_into_view_options(
+                ScrollIntoViewOptions::new().behavior(web_sys::ScrollBehavior::Smooth),
+            ),
+        }
+
+        Some(())
+    }
+
+    fn set_focus(&self, focus: bool) -> Option<()> {
+        self.dyn_ref::<web_sys::HtmlElement>().and_then(|e| {
+            if focus {
+                e.focus().ok()
+            } else {
+                e.blur().ok()
+            }
+        })
     }
 }
