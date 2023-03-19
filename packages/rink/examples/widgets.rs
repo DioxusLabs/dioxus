@@ -1,5 +1,4 @@
 use dioxus_native_core::{
-    node::TextNode,
     prelude::*,
     real_dom::{NodeImmutable, NodeTypeMut},
     NodeId,
@@ -10,8 +9,7 @@ use std::sync::{Arc, RwLock};
 
 #[derive(Default)]
 struct Counter {
-    count: usize,
-    counter_id: NodeId,
+    count: f64,
     button_id: NodeId,
 }
 
@@ -24,33 +22,32 @@ impl Counter {
 
         // create the counter
         let count = myself.count;
-        myself.counter_id = rdom
-            .create_node(NodeType::Text(TextNode::new(count.to_string())))
-            .id();
         let mut button = rdom.create_node(NodeType::Element(ElementNode {
-            tag: "div".to_string(),
+            tag: "input".to_string(),
             attributes: [
+                // supported types: button, checkbox, textbox, password, number, range
+                ("type".to_string().into(), "range".to_string().into()),
                 ("display".to_string().into(), "flex".to_string().into()),
-                (
-                    ("background-color", "style").into(),
-                    format!("rgb({}, {}, {})", count * 10, 0, 0,).into(),
-                ),
-                (("width", "style").into(), "100%".to_string().into()),
-                (("height", "style").into(), "100%".to_string().into()),
                 (("flex-direction", "style").into(), "row".to_string().into()),
                 (
                     ("justify-content", "style").into(),
                     "center".to_string().into(),
                 ),
                 (("align-items", "style").into(), "center".to_string().into()),
+                (
+                    "value".to_string().into(),
+                    format!("click me {count}").into(),
+                ),
+                (("width", "style").into(), "50%".to_string().into()),
+                (("height", "style").into(), "10%".to_string().into()),
+                ("min".to_string().into(), "20".to_string().into()),
+                ("max".to_string().into(), "80".to_string().into()),
             ]
             .into_iter()
             .collect(),
             ..Default::default()
         }));
-        button.add_event_listener("click");
-        button.add_event_listener("wheel");
-        button.add_child(myself.counter_id);
+        button.add_event_listener("input");
         myself.button_id = button.id();
         rdom.get_mut(root_id).unwrap().add_child(myself.button_id);
 
@@ -66,26 +63,30 @@ impl Driver for Counter {
         if let NodeTypeMut::Element(mut el) = node.node_type_mut() {
             el.set_attribute(
                 ("background-color", "style"),
-                format!("rgb({}, {}, {})", self.count * 10, 0, 0,),
+                format!("rgb({}, {}, {})", 255.0 - self.count * 2.0, 0, 0,),
             );
-        }
-        let mut text = rdom.get_mut(self.counter_id).unwrap();
-        let type_mut = text.node_type_mut();
-        if let NodeTypeMut::Text(mut text) = type_mut {
-            *text = self.count.to_string();
-        }
+        };
     }
 
     fn handle_event(
         &mut self,
         _: &Arc<RwLock<RealDom>>,
         _: NodeId,
-        _: &str,
-        _: Rc<EventData>,
+        event_type: &str,
+        event: Rc<EventData>,
         _: bool,
     ) {
-        // when a click or wheel event is fired, increment the counter
-        self.count += 1;
+        match event_type {
+            "oninput" => {
+                // when the button is clicked, increment the counter
+                if let EventData::Form(input_event) = &*event {
+                    if let Ok(value) = input_event.value.parse::<f64>() {
+                        self.count = value;
+                    }
+                }
+            }
+            _ => {}
+        }
     }
 
     fn poll_async(&mut self) -> std::pin::Pin<Box<dyn futures::Future<Output = ()> + '_>> {

@@ -60,7 +60,7 @@ struct PersistantElementIterUpdater<V> {
 }
 
 impl<V: FromAnyValue + Sync + Send> NodeWatcher<V> for PersistantElementIterUpdater<V> {
-    fn on_node_moved(&self, node: NodeMut<V>) {
+    fn on_node_moved(&mut self, node: NodeMut<V>) {
         // if any element is moved, update its parents in the stack
         let mut stack = self.stack.lock().unwrap();
         let moved = node.id();
@@ -78,7 +78,7 @@ impl<V: FromAnyValue + Sync + Send> NodeWatcher<V> for PersistantElementIterUpda
         }
     }
 
-    fn on_node_removed(&self, node: NodeMut<V>) {
+    fn on_node_removed(&mut self, node: NodeMut<V>) {
         // if any element is removed in the chain, remove it and its children from the stack
         let mut stack = self.stack.lock().unwrap();
         let removed = node.id();

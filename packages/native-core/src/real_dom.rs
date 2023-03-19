@@ -14,7 +14,7 @@ use crate::node::{
     ElementNode, FromAnyValue, NodeType, OwnedAttributeDiscription, OwnedAttributeValue, TextNode,
 };
 use crate::node_ref::{NodeMask, NodeMaskBuilder};
-use crate::node_watcher::NodeWatcher;
+use crate::node_watcher::{AttributeWatcher, NodeWatcher};
 use crate::passes::{DirtyNodeStates, TypeErasedState};
 use crate::prelude::AttributeMaskBuilder;
 use crate::tree::{TreeMut, TreeMutView, TreeRef, TreeRefView};
@@ -49,6 +49,7 @@ impl Deref for DirtyNodesResult {
 pub(crate) struct NodesDirty<V: FromAnyValue + Send + Sync> {
     passes_updated: FxHashMap<NodeId, FxHashSet<TypeId>>,
     nodes_updated: FxHashMap<NodeId, NodeMask>,
+    nodes_created: FxHashSet<NodeId>,
     pub(crate) passes: Box<[TypeErasedState<V>]>,
 }
 
@@ -90,6 +91,7 @@ impl<V: FromAnyValue + Send + Sync> NodesDirty<V> {
 }
 
 type NodeWatchers<V> = Arc<RwLock<Vec<Box<dyn NodeWatcher<V> + Send + Sync>>>>;
+type AttributeWatchers<V> = Arc<RwLock<Vec<Box<dyn AttributeWatcher<V> + Send + Sync>>>>;
 
 /// A Dom that can sync with the VirtualDom mutations intended for use in lazy renderers.
 /// The render state passes from parent to children and or accumulates state from children to parents.
@@ -106,6 +108,7 @@ pub struct RealDom<V: FromAnyValue + Send + Sync = ()> {
     nodes_listening: FxHashMap<String, FxHashSet<NodeId>>,
     pub(crate) dirty_nodes: NodesDirty<V>,
     node_watchers: NodeWatchers<V>,
+    attribute_watchers: AttributeWatchers<V>,
     workload: ScheduledWorkload,
     root_id: NodeId,
     phantom: std::marker::PhantomData<V>,
@@ -159,8 +162,10 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
                 passes_updated,
                 nodes_updated,
                 passes: tracked_states,
+                nodes_created: [root_id].into_iter().collect(),
             },
             node_watchers: Default::default(),
+            attribute_watchers: Default::default(),
             workload,
             root_id,
             phantom: std::marker::PhantomData,
@@ -181,15 +186,16 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
     pub fn create_node(&mut self, node: impl Into<NodeType<V>>) -> NodeMut<'_, V> {
         let id = self.world.add_entity(node.into());
         self.tree_mut().create_node(id);
+
         self.dirty_nodes
             .passes_updated
             .entry(id)
             .or_default()
             .extend(self.dirty_nodes.passes.iter().map(|x| x.this_type_id));
-        let watchers = self.node_watchers.clone();
-        for watcher in &*watchers.read().unwrap() {
-            watcher.on_node_added(NodeMut::new(id, self));
-        }
+        self.dirty_nodes
+            .mark_dirty(id, NodeMaskBuilder::ALL.build());
+        self.dirty_nodes.nodes_created.insert(id);
+
         NodeMut::new(id, self)
     }
 
@@ -216,16 +222,19 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
         self.root_id
     }
 
+    /// Check if a node exists in the dom.
+    pub fn contains(&self, id: NodeId) -> bool {
+        self.tree_ref().contains(id)
+    }
+
     /// Get a reference to a node.
     pub fn get(&self, id: NodeId) -> Option<NodeRef<'_, V>> {
-        self.tree_ref()
-            .contains(id)
-            .then_some(NodeRef { id, dom: self })
+        self.contains(id).then_some(NodeRef { id, dom: self })
     }
 
     /// Get a mutable reference to a node.
     pub fn get_mut(&mut self, id: NodeId) -> Option<NodeMut<'_, V>> {
-        let contains = self.tree_ref().contains(id);
+        let contains = self.contains(id);
         contains.then(|| NodeMut::new(id, self))
     }
 
@@ -247,8 +256,41 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
         &mut self,
         ctx: SendAnyMap,
     ) -> (FxDashSet<NodeId>, FxHashMap<NodeId, NodeMask>) {
+        let nodes_created = std::mem::take(&mut self.dirty_nodes.nodes_created);
+
+        // call node watchers
+        {
+            let watchers = self.node_watchers.clone();
+
+            // ignore watchers if they are already being modified
+            if let Ok(mut watchers) = watchers.try_write() {
+                for id in &nodes_created {
+                    for watcher in &mut *watchers {
+                        watcher.on_node_added(NodeMut::new(*id, self));
+                    }
+                }
+            };
+        }
+
         let passes = std::mem::take(&mut self.dirty_nodes.passes_updated);
         let nodes_updated = std::mem::take(&mut self.dirty_nodes.nodes_updated);
+
+        // call attribute watchers
+        for (node_id, mask) in &nodes_updated {
+            if self.contains(*node_id) {
+                // ignore watchers if they are already being modified
+                let watchers = self.attribute_watchers.clone();
+                if let Ok(mut watchers) = watchers.try_write() {
+                    for watcher in &mut *watchers {
+                        watcher.on_attributes_changed(
+                            self.get_mut(*node_id).unwrap(),
+                            mask.attributes(),
+                        );
+                    }
+                };
+            }
+        }
+
         let dirty_nodes =
             DirtyNodeStates::with_passes(self.dirty_nodes.passes.iter().map(|p| p.this_type_id));
         let tree = self.tree_ref();
@@ -341,6 +383,17 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
         self.node_watchers.write().unwrap().push(Box::new(watcher));
     }
 
+    /// Adds an [`AttributeWatcher`] to the dom. Attribute watchers are called whenever an attribute is changed.
+    pub fn add_attribute_watcher(
+        &mut self,
+        watcher: impl AttributeWatcher<V> + 'static + Send + Sync,
+    ) {
+        self.attribute_watchers
+            .write()
+            .unwrap()
+            .push(Box::new(watcher));
+    }
+
     /// Returns a reference to the underlying world. Any changes made to the world will not update the reactive system.
     pub fn raw_world(&self) -> &World {
         &self.world
@@ -399,7 +452,7 @@ impl<'a, V: Component<Tracking = Untracked> + Send + Sync> DerefMut for ViewEntr
 }
 
 /// A immutable view of a node
-pub trait NodeImmutable<V: FromAnyValue + Send + Sync>: Sized {
+pub trait NodeImmutable<V: FromAnyValue + Send + Sync = ()>: Sized {
     /// Get the real dom this node was created in
     fn real_dom(&self) -> &RealDom<V>;
 
@@ -573,7 +626,9 @@ impl<'a, V: FromAnyValue + Send + Sync> NodeMut<'a, V> {
             .or_default()
             .insert(TypeId::of::<T>());
         let view_mut: ViewMut<T> = self.dom.borrow_raw().ok()?;
-        Some(ViewEntryMut::new(view_mut, self.id))
+        view_mut
+            .contains(self.id)
+            .then_some(ViewEntryMut::new(view_mut, self.id))
     }
 
     /// Insert a custom component into this node
@@ -684,7 +739,8 @@ impl<'a, V: FromAnyValue + Send + Sync> NodeMut<'a, V> {
         for child in children_ids_vec {
             self.dom.get_mut(child).unwrap().remove();
         }
-        self.dom.tree_mut().remove_single(id);
+        self.dom.tree_mut().remove(id);
+        self.real_dom_mut().raw_world_mut().delete_entity(id);
     }
 
     /// Replace this node with a different node
@@ -758,7 +814,7 @@ impl<'a, V: FromAnyValue + Send + Sync> NodeMut<'a, V> {
     /// mark that this node was removed for the incremental system
     fn mark_removed(&mut self) {
         let watchers = self.dom.node_watchers.clone();
-        for watcher in &*watchers.read().unwrap() {
+        for watcher in &mut *watchers.write().unwrap() {
             watcher.on_node_removed(NodeMut::new(self.id(), self.dom));
         }
     }
@@ -766,9 +822,12 @@ impl<'a, V: FromAnyValue + Send + Sync> NodeMut<'a, V> {
     /// mark that this node was moved for the incremental system
     fn mark_moved(&mut self) {
         let watchers = self.dom.node_watchers.clone();
-        for watcher in &*watchers.read().unwrap() {
-            watcher.on_node_moved(NodeMut::new(self.id(), self.dom));
-        }
+        // ignore watchers if the we are inside of a watcher
+        if let Ok(mut watchers) = watchers.try_write() {
+            for watcher in &mut *watchers {
+                watcher.on_node_moved(NodeMut::new(self.id(), self.dom));
+            }
+        };
     }
 
     /// Get a mutable reference to the type of the current node
@@ -885,6 +944,15 @@ pub struct ElementNodeMut<'a, V: FromAnyValue + Send + Sync = ()> {
     dirty_nodes: &'a mut NodesDirty<V>,
 }
 
+impl std::fmt::Debug for ElementNodeMut<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ElementNodeMut")
+            .field("id", &self.id)
+            .field("element", &*self.element)
+            .finish()
+    }
+}
+
 impl<V: FromAnyValue + Send + Sync> ElementNodeMut<'_, V> {
     /// Get the current element
     fn element(&self) -> &ElementNode<V> {
@@ -974,6 +1042,14 @@ impl<V: FromAnyValue + Send + Sync> ElementNodeMut<'_, V> {
                 .build(),
         );
         self.element_mut().attributes.get_mut(name)
+    }
+
+    /// Get an attribute of the element
+    pub fn get_attribute(
+        &self,
+        name: &OwnedAttributeDiscription,
+    ) -> Option<&OwnedAttributeValue<V>> {
+        self.element().attributes.get(name)
     }
 
     /// Get the set of all events the element is listening to

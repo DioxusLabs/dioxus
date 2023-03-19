@@ -1,6 +1,7 @@
 use std::sync::{Arc, Mutex, MutexGuard, RwLock, RwLockReadGuard};
 
 use dioxus_native_core::prelude::*;
+use shipyard::Unique;
 use taffy::{
     geometry::Point,
     prelude::{Layout, Size},
@@ -40,7 +41,7 @@ use crate::{layout::TaffyLayout, layout_to_screen_space};
 ///     })
 /// }
 /// ```
-#[derive(Clone)]
+#[derive(Clone, Unique)]
 pub struct Query {
     pub(crate) rdom: Arc<RwLock<RealDom>>,
     pub(crate) stretch: Arc<Mutex<Taffy>>,
@@ -69,7 +70,7 @@ pub struct ElementRef<'a> {
 }
 
 impl<'a> ElementRef<'a> {
-    fn new(
+    pub(crate) fn new(
         inner: RwLockReadGuard<'a, RealDom>,
         stretch: MutexGuard<'a, Taffy>,
         id: NodeId,
@@ -89,25 +90,33 @@ impl<'a> ElementRef<'a> {
     }
 
     pub fn layout(&self) -> Option<Layout> {
-        let layout = self
-            .stretch
-            .layout(
-                self.inner
-                    .get(self.id)
-                    .unwrap()
-                    .get::<TaffyLayout>()
-                    .unwrap()
-                    .node
-                    .ok()?,
-            )
-            .ok();
-        layout.map(|layout| Layout {
-            order: layout.order,
-            size: layout.size.map(layout_to_screen_space),
-            location: Point {
-                x: layout_to_screen_space(layout.location.x),
-                y: layout_to_screen_space(layout.location.y),
-            },
-        })
+        get_layout(self.inner.get(self.id).unwrap(), &self.stretch)
     }
+}
+
+pub(crate) fn get_layout(node: NodeRef, stretch: &Taffy) -> Option<Layout> {
+    let layout = stretch
+        .layout(node.get::<TaffyLayout>().unwrap().node.ok()?)
+        .ok()?;
+
+    let mut current_node_id = node.parent_id();
+    let mut pos = layout.location;
+    let rdom = node.real_dom();
+    while let Some(node) = current_node_id.and_then(|id| rdom.get(id)) {
+        let current_layout = stretch
+            .layout(node.get::<TaffyLayout>().unwrap().node.ok()?)
+            .ok()?;
+        pos.x += current_layout.location.x;
+        pos.y += current_layout.location.y;
+        current_node_id = node.parent_id();
+    }
+
+    Some(Layout {
+        order: layout.order,
+        size: layout.size.map(layout_to_screen_space),
+        location: Point {
+            x: layout_to_screen_space(pos.x).round(),
+            y: layout_to_screen_space(pos.y).round(),
+        },
+    })
 }
