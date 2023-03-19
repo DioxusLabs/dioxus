@@ -27,7 +27,7 @@ pub struct DioxusState {
 
 impl DioxusState {
     /// Initialize the DioxusState in the RealDom
-    pub fn create(rdom: &mut RealDom) -> Self {
+    pub fn create<V: FromAnyValue + Send + Sync>(rdom: &mut RealDom<V>) -> Self {
         let root_id = rdom.root_id();
         let mut root = rdom.get_mut(root_id).unwrap();
         root.insert(ElementIdComponent(ElementId(0)));
@@ -48,7 +48,11 @@ impl DioxusState {
         self.node_id_mapping.get(element_id.0).copied().flatten()
     }
 
-    fn set_element_id(&mut self, mut node: NodeMut, element_id: ElementId) {
+    fn set_element_id<V: FromAnyValue + Send + Sync>(
+        &mut self,
+        mut node: NodeMut<V>,
+        element_id: ElementId,
+    ) {
         let node_id = node.id();
         node.insert(ElementIdComponent(element_id));
         if self.node_id_mapping.len() <= element_id.0 {
@@ -57,7 +61,7 @@ impl DioxusState {
         self.node_id_mapping[element_id.0] = Some(node_id);
     }
 
-    fn load_child(&self, rdom: &RealDom, path: &[u8]) -> NodeId {
+    fn load_child<V: FromAnyValue + Send + Sync>(&self, rdom: &RealDom<V>, path: &[u8]) -> NodeId {
         let mut current = rdom.get(*self.stack.last().unwrap()).unwrap();
         for i in path {
             let new_id = current.child_ids()[*i as usize];
@@ -67,7 +71,11 @@ impl DioxusState {
     }
 
     /// Updates the dom with some mutations and return a set of nodes that were updated. Pass the dirty nodes to update_state.
-    pub fn apply_mutations(&mut self, rdom: &mut RealDom, mutations: Mutations) {
+    pub fn apply_mutations<V: FromAnyValue + Send + Sync>(
+        &mut self,
+        rdom: &mut RealDom<V>,
+        mutations: Mutations,
+    ) {
         for template in mutations.templates {
             let mut template_root_ids = Vec::new();
             for root in template.roots {
@@ -222,7 +230,10 @@ impl DioxusState {
     }
 }
 
-fn create_template_node(rdom: &mut RealDom, node: &TemplateNode) -> NodeId {
+fn create_template_node<V: FromAnyValue + Send + Sync>(
+    rdom: &mut RealDom<V>,
+    node: &TemplateNode,
+) -> NodeId {
     match node {
         TemplateNode::Element {
             tag,
