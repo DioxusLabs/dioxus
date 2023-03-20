@@ -957,4 +957,3 @@ impl<'a> IntoKeyValue<'a> for i64 {
         KeyValue::Int(self)
     }
 }
-_ => core::mem::discriminant(self) == core::mem::discriminant(other),
