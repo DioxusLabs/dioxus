@@ -233,7 +233,11 @@ impl Parse for ElementName {
         if raw.len() == 1 {
             Ok(ElementName::Ident(raw.into_iter().next().unwrap()))
         } else {
-            let tag = raw.into_iter().map(|ident| ident.to_string()).collect::<Vec<_>>().join("-");
+            let tag = raw
+                .into_iter()
+                .map(|ident| ident.to_string())
+                .collect::<Vec<_>>()
+                .join("-");
             Ok(ElementName::Custom(tag))
         }
     }
@@ -307,21 +311,19 @@ impl ToTokens for ElementAttrNamed {
             ElementName::Ident(_) => quote! { #el_name::#name.2 },
             ElementName::Custom(_) => quote! { false },
         };
-        let attribute=|name: &Ident| match el_name{
+        let attribute = |name: &Ident| match el_name {
             ElementName::Ident(_) => quote! { #el_name::#name.0 },
             ElementName::Custom(_) => {
-                let as_string=name.to_string();
+                let as_string = name.to_string();
                 quote!(#as_string)
             }
         };
 
-        let attribute=
-
-        match attr {
+        let attribute = match attr {
             ElementAttr::AttrText { name, value } => {
                 let ns = ns(name);
                 let volitile = volitile(name);
-                let attribute=attribute(name);
+                let attribute = attribute(name);
                 quote! {
                     __cx.attr(
                         #attribute,
@@ -334,7 +336,7 @@ impl ToTokens for ElementAttrNamed {
             ElementAttr::AttrExpression { name, value } => {
                 let ns = ns(name);
                 let volitile = volitile(name);
-                let attribute=attribute(name);
+                let attribute = attribute(name);
                 quote! {
                     __cx.attr(
                         #attribute,

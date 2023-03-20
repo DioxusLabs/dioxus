@@ -434,12 +434,12 @@ impl<'a> DynamicContext<'a> {
                     ElementAttr::AttrText { name, value } if value.is_static() => {
                         let value = value.to_static().unwrap();
                         let ns = ns(quote!(#name.1));
-                        let name=match el_name {
+                        let name = match el_name {
                             ElementName::Ident(_) => quote! { #el_name::#name.0 },
                             ElementName::Custom(_) => {
-                                let as_string=name.to_string();
+                                let as_string = name.to_string();
                                 quote! { #as_string }
-                            },
+                            }
                         };
                         quote! {
                             ::dioxus::core::TemplateAttribute::Static {
