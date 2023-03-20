@@ -426,13 +426,25 @@ impl<'a> DynamicContext<'a> {
         match root {
             BodyNode::Element(el) => {
                 let el_name = &el.name;
+                let ns = |name| match el_name {
+                    ElementName::Ident(i) => quote! { dioxus_elements::#i::#name },
+                    ElementName::Custom(_) => quote! { None },
+                };
                 let static_attrs = el.attributes.iter().map(|attr| match &attr.attr {
                     ElementAttr::AttrText { name, value } if value.is_static() => {
                         let value = value.to_static().unwrap();
+                        let ns = ns(quote!(#name.1));
+                        let name=match el_name {
+                            ElementName::Ident(_) => quote! { #el_name::#name.0 },
+                            ElementName::Custom(_) => {
+                                let as_string=name.to_string();
+                                quote! { #as_string }
+                            },
+                        };
                         quote! {
                             ::dioxus::core::TemplateAttribute::Static {
-                                name: dioxus_elements::#el_name::#name.0,
-                                namespace: dioxus_elements::#el_name::#name.1,
+                                name: #name,
+                                namespace: #ns,
                                 value: #value,
 
                                 // todo: we don't diff these so we never apply the volatile flag
@@ -479,10 +491,13 @@ impl<'a> DynamicContext<'a> {
                 let _opt = el.children.len() == 1;
                 let children = quote! { #(#children),* };
 
+                let ns = ns(quote!(NAME_SPACE));
+                let el_name = el_name.tag_name();
+
                 quote! {
                     ::dioxus::core::TemplateNode::Element {
-                        tag: dioxus_elements::#el_name::TAG_NAME,
-                        namespace: dioxus_elements::#el_name::NAME_SPACE,
+                        tag: #el_name,
+                        namespace: #ns,
                         attrs: &[ #attrs ],
                         children: &[ #children ],
                     }
