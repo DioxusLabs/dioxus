@@ -204,6 +204,76 @@ class Interpreter {
       node.removeAttribute(name);
     }
   }
+
+  GetClientRect(id) {
+    const node= this.nodes[id];
+    if (!node) {
+      return;
+    }
+    const rect = node.getBoundingClientRect();
+    return {
+      type: "GetClientRect",
+      origin: [
+         rect.x,
+         rect.y,
+      ],
+      size: [
+         rect.width,
+         rect.height,
+      ]
+    };
+  }
+  
+  ScrollTo(id, behavior) {
+    const node = this.nodes[id];
+    if (!node) {
+      return;
+    }
+    node.scrollIntoView({
+      behavior: behavior
+    });
+    return {
+      type: "ScrollTo",
+    };
+  }
+
+  /// Set the focus on the element
+  SetFocus(id, focus) {
+    const node = this.nodes[id];
+    if (!node) {
+      return;
+    }
+    if (focus) {
+      node.focus();
+    } else {
+      node.blur();
+    }
+    return {
+      type: "SetFocus",
+    };
+  }
+
+  handleNodeUpdate(edit) {
+    let data;
+    switch (edit.data.type) {
+      case "SetFocus":
+        data = this.SetFocus(edit.id, edit.data.focus);
+        break;
+      case "ScrollTo":
+        data = this.ScrollTo(edit.id, edit.data.behavior);
+        break;
+      case "GetClientRect":
+        data = this.GetClientRect(edit.id);
+        break;
+    }
+    window.ipc.postMessage(
+      serializeIpcMessage("node_update", {
+        id: edit.request_id,
+        data: data
+      })
+    );
+  }
+  
   handleEdits(edits) {
     for (let template of edits.templates) {
       this.SaveTemplate(template);
@@ -344,6 +414,19 @@ class Interpreter {
       case "NewEventListener":
 
         let bubbles = event_bubbles(edit.name);
+
+        // if this is a mounted listener, we send the event immediately
+        if (edit.name === "mounted") {
+            window.ipc.postMessage(
+              serializeIpcMessage("user_event", {
+                name: edit.name,
+                element: edit.id,
+                data: null,
+                bubbles,
+              })
+            );
+        }
+
 
         // this handler is only provided on desktop implementations since this
         // method is not used by the web implementation
@@ -921,6 +1004,8 @@ function event_bubbles(event) {
       return true;
     case "toggle":
       return true;
+    case "mounted":
+      return false;
   }
 
   return true;

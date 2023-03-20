@@ -9,6 +9,8 @@ use crate::{
 };
 use keyboard_types::{Code, Key, Modifiers};
 use std::convert::TryInto;
+use std::future::Future;
+use std::pin::Pin;
 use std::str::FromStr;
 use wasm_bindgen::{JsCast, JsValue};
 use web_sys::{
@@ -203,19 +205,25 @@ impl From<&web_sys::Element> for MountedData {
 }
 
 impl RenderedElementBacking for web_sys::Element {
-    fn get_client_rect(&self) -> MountedResult<euclid::Rect<f64, f64>> {
+    fn get_client_rect(
+        &self,
+    ) -> Pin<Box<dyn Future<Output = MountedResult<euclid::Rect<f64, f64>>>>> {
         let rect = self.get_bounding_client_rect();
-        Ok(euclid::Rect::new(
+        let result = Ok(euclid::Rect::new(
             euclid::Point2D::new(rect.left(), rect.top()),
             euclid::Size2D::new(rect.width(), rect.height()),
-        ))
+        ));
+        Box::pin(async { result })
     }
 
     fn get_raw_element(&self) -> MountedResult<&dyn std::any::Any> {
         Ok(self)
     }
 
-    fn scroll_to(&self, behavior: ScrollBehavior) -> MountedResult<()> {
+    fn scroll_to(
+        &self,
+        behavior: ScrollBehavior,
+    ) -> Pin<Box<dyn Future<Output = MountedResult<()>>>> {
         match behavior {
             ScrollBehavior::Instant => self.scroll_into_view_with_scroll_into_view_options(
                 ScrollIntoViewOptions::new().behavior(web_sys::ScrollBehavior::Instant),
@@ -225,16 +233,18 @@ impl RenderedElementBacking for web_sys::Element {
             ),
         }
 
-        Ok(())
+        Box::pin(async { Ok(()) })
     }
 
-    fn set_focus(&self, focus: bool) -> MountedResult<()> {
-        self.dyn_ref::<web_sys::HtmlElement>()
+    fn set_focus(&self, focus: bool) -> Pin<Box<dyn Future<Output = MountedResult<()>>>> {
+        let result = self
+            .dyn_ref::<web_sys::HtmlElement>()
             .ok_or_else(|| MountedError::OperationFailed(Box::new(FocusError(self.into()))))
             .and_then(|e| {
                 (if focus { e.focus() } else { e.blur() })
                     .map_err(|err| MountedError::OperationFailed(Box::new(FocusError(err))))
-            })
+            });
+        Box::pin(async { result })
     }
 }
 

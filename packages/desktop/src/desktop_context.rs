@@ -3,6 +3,7 @@ use std::rc::Rc;
 use std::rc::Weak;
 
 use crate::create_new_window;
+use crate::element::QueryEngine;
 use crate::eval::EvalResult;
 use crate::events::IpcMessage;
 use crate::shortcut::IntoKeyCode;
@@ -62,6 +63,9 @@ pub struct DesktopContext {
     /// The receiver for eval results since eval is async
     pub(super) eval: tokio::sync::broadcast::Sender<Value>,
 
+    /// The receiver for queries about elements
+    pub(super) query: QueryEngine,
+
     pub(super) pending_windows: WebviewQueue,
 
     pub(crate) event_loop: EventLoopWindowTarget<UserWindowEvent>,
@@ -97,6 +101,7 @@ impl DesktopContext {
             proxy,
             event_loop,
             eval: tokio::sync::broadcast::channel(8).0,
+            query: Default::default(),
             pending_windows: webviews,
             event_handlers,
             shortcut_manager,
