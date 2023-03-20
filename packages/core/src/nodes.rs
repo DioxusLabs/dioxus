@@ -926,6 +926,7 @@ impl Debug for BorrowedKeyValue<'_> {
         match self {
             Self::Text(arg0) => f.debug_tuple("Text").field(arg0).finish(),
             Self::Int(arg0) => f.debug_tuple("Int").field(arg0).finish(),
+            Self::None => write!(f, "None"),
         }
     }
 }
@@ -935,6 +936,7 @@ impl PartialEq for BorrowedKeyValue<'_> {
         match (self, other) {
             (Self::Text(l0), Self::Text(r0)) => l0 == r0,
             (Self::Int(l0), Self::Int(r0)) => l0 == r0,
+            _ => core::mem::discriminant(self) == core::mem::discriminant(other),
         }
     }
 }
@@ -955,3 +957,4 @@ impl<'a> IntoKeyValue<'a> for i64 {
         KeyValue::Int(self)
     }
 }
+_ => core::mem::discriminant(self) == core::mem::discriminant(other),
