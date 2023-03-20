@@ -7,6 +7,7 @@ use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{
     parse::{Parse, ParseBuffer, ParseStream},
     punctuated::Punctuated,
+    spanned::Spanned,
     Error, Expr, Ident, LitStr, Result, Token,
 };
 
@@ -197,7 +198,7 @@ impl ToTokens for Element {
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub enum ElementName {
     Ident(Ident),
-    Custom(String),
+    Custom(LitStr),
 }
 
 impl ElementName {
@@ -209,11 +210,20 @@ impl ElementName {
     }
 }
 
+impl ElementName {
+    pub fn span(&self) -> Span {
+        match self {
+            ElementName::Ident(i) => i.span(),
+            ElementName::Custom(s) => s.span(),
+        }
+    }
+}
+
 impl PartialEq<&str> for ElementName {
     fn eq(&self, other: &&str) -> bool {
         match self {
             ElementName::Ident(i) => i == *other,
-            ElementName::Custom(s) => s == *other,
+            ElementName::Custom(s) => s.value() == *other,
         }
     }
 }
@@ -222,7 +232,7 @@ impl Display for ElementName {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             ElementName::Ident(i) => write!(f, "{}", i),
-            ElementName::Custom(s) => write!(f, "{}", s),
+            ElementName::Custom(s) => write!(f, "{}", s.value()),
         }
     }
 }
@@ -233,11 +243,13 @@ impl Parse for ElementName {
         if raw.len() == 1 {
             Ok(ElementName::Ident(raw.into_iter().next().unwrap()))
         } else {
+            let span = raw.span();
             let tag = raw
                 .into_iter()
                 .map(|ident| ident.to_string())
                 .collect::<Vec<_>>()
                 .join("-");
+            let tag = LitStr::new(&tag, span);
             Ok(ElementName::Custom(tag))
         }
     }
