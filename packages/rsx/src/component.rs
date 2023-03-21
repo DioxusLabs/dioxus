@@ -250,7 +250,7 @@ impl Parse for ComponentField {
             }
         };
         if input.peek(LitStr) || input.peek(Ident) {
-            missing_trailing_comma!(input.span());
+            missing_trailing_comma!(content.span());
         }
         Ok(Self { name, content })
     }
