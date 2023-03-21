@@ -902,6 +902,7 @@ pub enum KeyValue<'a> {
 
     /// Signed integer key value
     Int(i64),
+    None,
 }
 
 pub enum BorrowedKeyValue<'a> {
@@ -910,6 +911,7 @@ pub enum BorrowedKeyValue<'a> {
 
     /// Signed integer
     Int(i64),
+    None,
 }
 
 impl<'a> From<&'a KeyValue<'a>> for BorrowedKeyValue<'a> {
@@ -917,6 +919,7 @@ impl<'a> From<&'a KeyValue<'a>> for BorrowedKeyValue<'a> {
         match value {
             KeyValue::Text(value) => BorrowedKeyValue::Text(value),
             KeyValue::Int(value) => BorrowedKeyValue::Int(*value),
+            KeyValue::None => BorrowedKeyValue::None,
         }
     }
 }
