@@ -70,15 +70,24 @@ impl Renderer {
             .or_insert_with(|| Rc::new(StringCache::from_template(template).unwrap()))
             .clone();
 
+        // We need to keep track of the dynamic styles so we can insert them into the right place
+        let mut accumulated_dynamic_styles = Vec::new();
+
         for segment in entry.segments.iter() {
             match segment {
                 Segment::Attr(idx) => {
                     let attr = &template.dynamic_attrs[*idx];
-                    match attr.value {
-                        AttributeValue::Text(value) => write!(buf, " {}=\"{}\"", attr.name, value)?,
-                        AttributeValue::Bool(value) => write!(buf, " {}={}", attr.name, value)?,
-                        _ => {}
-                    };
+                    if attr.namespace == Some("style") {
+                        accumulated_dynamic_styles.push(attr);
+                    } else {
+                        match attr.value {
+                            AttributeValue::Text(value) => {
+                                write!(buf, " {}=\"{}\"", attr.name, value)?
+                            }
+                            AttributeValue::Bool(value) => write!(buf, " {}={}", attr.name, value)?,
+                            _ => {}
+                        };
+                    }
                 }
                 Segment::Node(idx) => match &template.dynamic_nodes[*idx] {
                     DynamicNode::Component(node) => {
@@ -128,6 +137,34 @@ impl Renderer {
                 },
 
                 Segment::PreRendered(contents) => write!(buf, "{contents}")?,
+
+                Segment::StyleMarker { inside_style_tag } => {
+                    if !accumulated_dynamic_styles.is_empty() {
+                        // if we are inside a style tag, we don't need to write the style attribute
+                        if !*inside_style_tag {
+                            write!(buf, " style=\"")?;
+                        }
+                        for attr in &accumulated_dynamic_styles {
+                            match attr.value {
+                                AttributeValue::Text(value) => {
+                                    write!(buf, "{}:{};", attr.name, value)?
+                                }
+                                AttributeValue::Bool(value) => {
+                                    write!(buf, "{}:{};", attr.name, value)?
+                                }
+                                AttributeValue::Float(f) => write!(buf, "{}:{};", attr.name, f)?,
+                                AttributeValue::Int(i) => write!(buf, "{}:{};", attr.name, i)?,
+                                _ => {}
+                            };
+                        }
+                        if !*inside_style_tag {
+                            write!(buf, "\"")?;
+                        }
+
+                        // clear the accumulated styles
+                        accumulated_dynamic_styles.clear();
+                    }
+                }
             }
         }
 
@@ -168,6 +205,9 @@ fn to_string_works() {
                 vec![
                     PreRendered("<div class=\"asdasdasd\" class=\"asdasdasd\"".into(),),
                     Attr(0,),
+                    StyleMarker {
+                        inside_style_tag: false,
+                    },
                     PreRendered(">Hello world 1 --&gt;".into(),),
                     Node(0,),
                     PreRendered(
