@@ -77,6 +77,8 @@ impl Renderer {
                     match attr.value {
                         AttributeValue::Text(value) => write!(buf, " {}=\"{}\"", attr.name, value)?,
                         AttributeValue::Bool(value) => write!(buf, " {}={}", attr.name, value)?,
+                        AttributeValue::Int(value) => write!(buf, " {}={}", attr.name, value)?,
+                        AttributeValue::Float(value) => write!(buf, " {}={}", attr.name, value)?,
                         _ => {}
                     };
                 }
