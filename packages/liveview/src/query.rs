@@ -4,8 +4,7 @@ use serde::{de::DeserializeOwned, Deserialize};
 use serde_json::Value;
 use slab::Slab;
 use thiserror::Error;
-use tokio::sync::broadcast::error::RecvError;
-use wry::webview::WebView;
+use tokio::sync::{broadcast::error::RecvError, mpsc::UnboundedSender};
 
 /// Tracks what query ids are currently active
 #[derive(Default, Clone)]
@@ -32,12 +31,16 @@ impl Default for QueryEngine {
 
 impl QueryEngine {
     /// Creates a new query and returns a handle to it. The query will be resolved when the webview returns a result with the same id.
-    pub fn new_query<V: DeserializeOwned>(&self, script: &str, webview: &WebView) -> Query<V> {
+    pub fn new_query<V: DeserializeOwned>(
+        &self,
+        script: &str,
+        tx: &UnboundedSender<String>,
+    ) -> Query<V> {
         let request_id = self.active_requests.slab.borrow_mut().insert(());
 
         // start the query
         // We embed the return of the eval in a function so we can send it back to the main thread
-        if let Err(err) = webview.evaluate_script(&format!(
+        if let Err(err) = tx.send(format!(
             r#"window.ipc.postMessage(
                 JSON.stringify({{
                     "method":"query",
