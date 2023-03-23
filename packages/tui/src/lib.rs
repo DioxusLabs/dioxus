@@ -7,6 +7,7 @@ use crossterm::{
 };
 use dioxus_core::*;
 use dioxus_native_core::{real_dom::RealDom, FxDashSet, NodeId, NodeMask, SendAnyMap};
+use element::{find_mount_events, send_mounted_events};
 use focus::FocusState;
 use futures::{
     channel::mpsc::{UnboundedReceiver, UnboundedSender},
@@ -26,6 +27,7 @@ use tokio::select;
 use tui::{backend::CrosstermBackend, layout::Rect, Terminal};
 
 mod config;
+mod element;
 mod focus;
 mod hooks;
 mod layout;
@@ -114,7 +116,11 @@ pub fn launch_cfg_with_props<Props: 'static>(app: Component<Props>, props: Props
     {
         let mut rdom = rdom.borrow_mut();
         let mutations = dom.rebuild();
+        // Search for mount events that happened during the rebuild
+        let mounted = find_mount_events(&mutations);
         let (to_update, _) = rdom.apply_mutations(mutations);
+        // Send the mount events
+        send_mounted_events(&mut dom, mounted);
         let mut any_map = SendAnyMap::new();
         any_map.insert(taffy.clone());
         let _to_rerender = rdom.update_state(to_update, any_map);
@@ -307,8 +313,12 @@ fn render_vdom(
                     let mut rdom = rdom.borrow_mut();
                     let mutations = vdom.render_immediate();
                     handler.prune(&mutations, &rdom);
+                    // Search for mount events that happened during the rebuild
+                    let mounted = find_mount_events(&mutations);
                     // updates the dom's nodes
                     let (to_update, dirty) = rdom.apply_mutations(mutations);
+                    // Send the mount events
+                    send_mounted_events(vdom, mounted);
                     // update the style and layout
                     let mut any_map = SendAnyMap::new();
                     any_map.insert(taffy.clone());
