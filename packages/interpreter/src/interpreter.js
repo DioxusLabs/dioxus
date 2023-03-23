@@ -227,51 +227,26 @@ class Interpreter {
   ScrollTo(id, behavior) {
     const node = this.nodes[id];
     if (!node) {
-      return;
+      return false;
     }
     node.scrollIntoView({
       behavior: behavior
     });
-    return {
-      type: "ScrollTo",
-    };
+    return true;
   }
 
   /// Set the focus on the element
   SetFocus(id, focus) {
     const node = this.nodes[id];
     if (!node) {
-      return;
+      return false;
     }
     if (focus) {
       node.focus();
     } else {
       node.blur();
     }
-    return {
-      type: "SetFocus",
-    };
-  }
-
-  handleNodeUpdate(edit) {
-    let data;
-    switch (edit.data.type) {
-      case "SetFocus":
-        data = this.SetFocus(edit.id, edit.data.focus);
-        break;
-      case "ScrollTo":
-        data = this.ScrollTo(edit.id, edit.data.behavior);
-        break;
-      case "GetClientRect":
-        data = this.GetClientRect(edit.id);
-        break;
-    }
-    window.ipc.postMessage(
-      serializeIpcMessage("node_update", {
-        id: edit.request_id,
-        data: data
-      })
-    );
+    return true;
   }
   
   handleEdits(edits) {

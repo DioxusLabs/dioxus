@@ -3,9 +3,9 @@ use std::rc::Rc;
 use std::rc::Weak;
 
 use crate::create_new_window;
-use crate::element::QueryEngine;
 use crate::eval::EvalResult;
 use crate::events::IpcMessage;
+use crate::query::QueryEngine;
 use crate::shortcut::IntoKeyCode;
 use crate::shortcut::IntoModifersState;
 use crate::shortcut::ShortcutId;
@@ -17,7 +17,6 @@ use dioxus_core::ScopeState;
 use dioxus_core::VirtualDom;
 #[cfg(all(feature = "hot-reload", debug_assertions))]
 use dioxus_hot_reload::HotReloadMsg;
-use serde_json::Value;
 use slab::Slab;
 use wry::application::event::Event;
 use wry::application::event_loop::EventLoopProxy;
@@ -60,10 +59,7 @@ pub struct DesktopContext {
     /// The proxy to the event loop
     pub proxy: ProxyType,
 
-    /// The receiver for eval results since eval is async
-    pub(super) eval: tokio::sync::broadcast::Sender<Value>,
-
-    /// The receiver for queries about elements
+    /// The receiver for queries about the current window
     pub(super) query: QueryEngine,
 
     pub(super) pending_windows: WebviewQueue,
@@ -100,7 +96,6 @@ impl DesktopContext {
             webview,
             proxy,
             event_loop,
-            eval: tokio::sync::broadcast::channel(8).0,
             query: Default::default(),
             pending_windows: webviews,
             event_handlers,
@@ -215,28 +210,10 @@ impl DesktopContext {
 
     /// Evaluate a javascript expression
     pub fn eval(&self, code: &str) -> EvalResult {
-        // Embed the return of the eval in a function so we can send it back to the main thread
-        let script = format!(
-            r#"
-            window.ipc.postMessage(
-                JSON.stringify({{
-                    "method":"eval_result",
-                    "params": (
-                        function(){{
-                            {code}
-                        }}
-                    )()
-                }})
-            );
-            "#
-        );
+        // the query id lets us keep track of the eval result and send it back to the main thread
+        let query = self.query.new_query(code, &self.webview);
 
-        if let Err(e) = self.webview.evaluate_script(&script) {
-            // send an error to the eval receiver
-            log::warn!("Eval script error: {e}");
-        }
-
-        EvalResult::new(self.eval.clone())
+        EvalResult::new(query)
     }
 
     /// Create a wry event handler that listens for wry events.

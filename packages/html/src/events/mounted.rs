@@ -79,13 +79,16 @@ impl MountedData {
     }
 
     /// Scroll to make the element visible
-    pub async fn scroll_to(&self, behavior: ScrollBehavior) -> MountedResult<()> {
-        self.inner.scroll_to(behavior).await
+    pub fn scroll_to(
+        &self,
+        behavior: ScrollBehavior,
+    ) -> Pin<Box<dyn Future<Output = MountedResult<()>>>> {
+        self.inner.scroll_to(behavior)
     }
 
     /// Set the focus on the element
-    pub async fn set_focus(&self, focus: bool) -> MountedResult<()> {
-        self.inner.set_focus(focus).await
+    pub fn set_focus(&self, focus: bool) -> Pin<Box<dyn Future<Output = MountedResult<()>>>> {
+        self.inner.set_focus(focus)
     }
 }
 

@@ -10,17 +10,19 @@ mod escape;
 mod eval;
 mod events;
 mod protocol;
+mod query;
 mod shortcut;
 mod waker;
 mod webview;
 
+use crate::query::QueryResult;
 pub use cfg::Config;
 pub use desktop_context::{
     use_window, use_wry_event_handler, DesktopContext, WryEventHandler, WryEventHandlerId,
 };
 use desktop_context::{EventData, UserWindowEvent, WebviewQueue, WindowEventHandlers};
 use dioxus_core::*;
-use dioxus_html::{HtmlEvent, MountedData, MountedReturn};
+use dioxus_html::{HtmlEvent, MountedData};
 use element::DesktopElement;
 pub use eval::{use_eval, EvalResult};
 use futures_util::{pin_mut, FutureExt};
@@ -259,50 +261,26 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
                     send_edits(view.dom.render_immediate(), &view.webview);
                 }
 
-                EventData::Ipc(msg) if msg.method() == "node_update" => {
+                // When the webview sends a query, we need to send it to the query manager which handles dispatching the data to the correct pending query
+                EventData::Ipc(msg) if msg.method() == "query" => {
                     let params = msg.params();
-                    println!("node_update: {:?}", params);
 
-                    // check for a mounted event
-                    let evt = match serde_json::from_value::<MountedReturn>(params) {
-                        Ok(value) => value,
-                        Err(err) => {
-                            println!("node_update: {:?}", err);
-                            return;
-                        }
-                    };
+                    if let Ok(result) = dbg!(serde_json::from_value::<QueryResult>(params)) {
+                        let view = webviews.get(&event.1).unwrap();
+                        let query = view
+                            .dom
+                            .base_scope()
+                            .consume_context::<DesktopContext>()
+                            .unwrap()
+                            .query;
 
-                    let view = webviews.get(&event.1).unwrap();
-                    let query = view
-                        .dom
-                        .base_scope()
-                        .consume_context::<DesktopContext>()
-                        .unwrap()
-                        .query;
-
-                    println!("node_update: {:?}", evt);
-
-                    query.send(evt);
+                        query.send(result);
+                    }
                 }
 
                 EventData::Ipc(msg) if msg.method() == "initialize" => {
                     let view = webviews.get_mut(&event.1).unwrap();
                     send_edits(view.dom.rebuild(), &view.webview);
-                }
-
-                // When the webview chirps back with the result of the eval, we send it to the active receiver
-                //
-                // This currently doesn't perform any targeting to the callsite, so if you eval multiple times at once,
-                // you might the wrong result. This should be fixed
-                EventData::Ipc(msg) if msg.method() == "eval_result" => {
-                    webviews[&event.1]
-                        .dom
-                        .base_scope()
-                        .consume_context::<DesktopContext>()
-                        .unwrap()
-                        .eval
-                        .send(msg.params())
-                        .unwrap();
                 }
 
                 EventData::Ipc(msg) if msg.method() == "browser_open" => {

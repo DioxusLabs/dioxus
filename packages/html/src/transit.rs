@@ -2,7 +2,6 @@ use std::{any::Any, rc::Rc};
 
 use crate::events::*;
 use dioxus_core::ElementId;
-use euclid::Rect;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Debug, Clone, PartialEq)]
@@ -220,50 +219,4 @@ fn test_back_and_forth() {
     let p: HtmlEvent = serde_json::from_str(o).unwrap();
 
     assert_eq!(data, p);
-}
-
-/// Message to update a node to support MountedData
-#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-pub struct NodeUpdate {
-    /// The id of the node to update
-    pub id: u32,
-    /// The id of the request
-    pub request_id: usize,
-    /// The data to update the node with
-    pub data: NodeUpdateData,
-}
-
-/// Message to update a node to support MountedData
-#[cfg_attr(
-    feature = "serialize",
-    derive(serde::Serialize, serde::Deserialize),
-    serde(tag = "type")
-)]
-pub enum NodeUpdateData {
-    SetFocus { focus: bool },
-    GetClientRect {},
-    ScrollTo { behavior: ScrollBehavior },
-}
-
-/// The result of a element query
-#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Debug, Clone, PartialEq)]
-pub struct MountedReturn {
-    /// A unique id for the query
-    pub id: usize,
-    /// The result of the query
-    pub data: Option<MountedReturnData>,
-}
-
-/// The data of a element query
-#[derive(Debug, Clone, PartialEq)]
-#[cfg_attr(
-    feature = "serialize",
-    derive(serde::Serialize, serde::Deserialize),
-    serde(tag = "type")
-)]
-pub enum MountedReturnData {
-    SetFocus(()),
-    GetClientRect(Rect<f64, f64>),
-    ScrollTo(()),
 }
