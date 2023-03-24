@@ -677,10 +677,11 @@ dependencies = [
 [[package]]
 name = "dioxus-autofmt"
 version = "0.3.0"
-source = "git+https://github.com/dioxuslabs/dioxus#915406666dba6df7ae977cfc735823c9a95b7bd4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "935ac336dd077436505f2eda7b7b81515093e8a3fb352ac514cd6901dbd302e7"
 dependencies = [
  "dioxus-rsx",
- "prettyplease",
+ "prettier-please",
  "proc-macro2",
  "quote",
  "serde",
@@ -689,7 +690,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-cli"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "anyhow",
  "atty",
@@ -743,7 +744,8 @@ dependencies = [
 [[package]]
 name = "dioxus-core"
 version = "0.3.2"
-source = "git+https://github.com/dioxuslabs/dioxus#915406666dba6df7ae977cfc735823c9a95b7bd4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bc602f0ca7030f80fe4abc47cc43ffa75c6e7f48208c2b3f6ae24ec7bc6f6618"
 dependencies = [
  "bumpalo",
  "bumpslab",
@@ -761,7 +763,8 @@ dependencies = [
 [[package]]
 name = "dioxus-html"
 version = "0.3.1"
-source = "git+https://github.com/dioxuslabs/dioxus#915406666dba6df7ae977cfc735823c9a95b7bd4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7682a6615e4e5a460cd3293ce420451abffb719c84c4b54e297b17365f601fb4"
 dependencies = [
  "async-trait",
  "dioxus-core",
@@ -777,7 +780,8 @@ dependencies = [
 [[package]]
 name = "dioxus-rsx"
 version = "0.0.3"
-source = "git+https://github.com/dioxuslabs/dioxus#915406666dba6df7ae977cfc735823c9a95b7bd4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e8544632e20f462a64f26502c91e7cf6ae3b30d82956e70543644d2c16b6659d"
 dependencies = [
  "dioxus-core",
  "internment",
@@ -2101,9 +2105,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5b40af805b3121feab8a3c29f04d8ad262fa8e0561883e7653e024ae4479e6de"
 
 [[package]]
-name = "prettyplease"
-version = "0.1.15"
-source = "git+https://github.com/DioxusLabs/prettyplease-macro-fmt.git#de734495e2ca267afb7b20f7cd4fff88c7cb885c"
+name = "prettier-please"
+version = "0.1.16"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "be31b7957122175fcf33c6d8f54489a5262176020bf096026a86b308b7fa5b23"
 dependencies = [
  "proc-macro2",
  "syn",
@@ -2313,8 +2318,9 @@ dependencies = [
 
 [[package]]
 name = "rsx-rosetta"
-version = "0.0.0"
-source = "git+https://github.com/dioxuslabs/dioxus#915406666dba6df7ae977cfc735823c9a95b7bd4"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "593810f58a97e3a45e23b84437d5323c2420b46f73cf38fe49133eb59a7524bb"
 dependencies = [
  "convert_case",
  "dioxus-autofmt",

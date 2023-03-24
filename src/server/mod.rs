@@ -138,10 +138,10 @@ pub async fn startup_hot_reload(ip: String, port: u16, config: CrateConfig) -> R
 
     let dist_path = config.out_dir.clone();
     let (reload_tx, _) = broadcast::channel(100);
-    let FileMapBuildResult { map, errors } = FileMap::<HtmlCtx>::create(config.crate_dir.clone())?;
-    for err in errors {
-        log::error!("{}", err);
-    }
+    let map = FileMap::<HtmlCtx>::new(config.crate_dir.clone());
+    // for err in errors {
+    //     log::error!("{}", err);
+    // }
     let file_map = Arc::new(Mutex::new(map));
     let build_manager = Arc::new(BuildManager {
         config: config.clone(),
@@ -207,10 +207,10 @@ pub async fn startup_hot_reload(ip: String, port: u16, config: CrateConfig) -> R
                         let mut map = file_map.lock().unwrap();
 
                         match map.update_rsx(&path, &crate_dir) {
-                            Ok(UpdateResult::UpdatedRsx(msgs)) => {
+                            UpdateResult::UpdatedRsx(msgs) => {
                                 messages.extend(msgs);
                             }
-                            Ok(UpdateResult::NeedsRebuild) => {
+                            UpdateResult::NeedsRebuild => {
                                 match build_manager.rebuild() {
                                     Ok(res) => {
                                         print_console_info(
@@ -229,9 +229,6 @@ pub async fn startup_hot_reload(ip: String, port: u16, config: CrateConfig) -> R
                                     }
                                 }
                                 return;
-                            }
-                            Err(err) => {
-                                log::error!("{}", err);
                             }
                         }
                     }
@@ -306,7 +303,7 @@ pub async fn startup_hot_reload(ip: String, port: u16, config: CrateConfig) -> R
 
     let mut router = Router::new().route("/_dioxus/ws", get(ws_handler));
     for proxy_config in config.dioxus_config.web.proxy.unwrap_or_default() {
-        router = proxy::add_proxy(router, &proxy_config )?;
+        router = proxy::add_proxy(router, &proxy_config)?;
     }
     router = router.fallback(get_service(file_service).handle_error(
         |error: std::io::Error| async move {
