@@ -16,34 +16,20 @@ use crate::{NodeId, NodeMask};
 
 #[derive(Default)]
 struct DirtyNodes {
-    passes_dirty: Vec<u64>,
+    nodes_dirty: Vec<NodeId>,
 }
 
 impl DirtyNodes {
     pub fn add_node(&mut self, node_id: NodeId) {
-        let node_id = node_id.uindex();
-        let index = node_id / 64;
-        let bit = node_id % 64;
-        let encoded = 1 << bit;
-        if let Some(passes) = self.passes_dirty.get_mut(index) {
-            *passes |= encoded;
-        } else {
-            self.passes_dirty.resize(index + 1, 0);
-            self.passes_dirty[index] |= encoded;
-        }
+        self.nodes_dirty.push(node_id);
     }
 
     pub fn is_empty(&self) -> bool {
-        self.passes_dirty.iter().all(|dirty| *dirty == 0)
+        self.nodes_dirty.is_empty()
     }
 
-    pub fn pop(&mut self) -> Option<usize> {
-        let index = self.passes_dirty.iter().position(|dirty| *dirty != 0)?;
-        let passes = self.passes_dirty[index];
-        let node_id = passes.trailing_zeros();
-        let encoded = 1 << node_id;
-        self.passes_dirty[index] &= !encoded;
-        Some((index * 64) + node_id as usize)
+    pub fn pop(&mut self) -> Option<NodeId> {
+        self.nodes_dirty.pop()
     }
 }
 
@@ -76,7 +62,7 @@ impl DirtyNodeStates {
         }
     }
 
-    fn pop_front(&self, pass_id: TypeId) -> Option<(u16, usize)> {
+    fn pop_front(&self, pass_id: TypeId) -> Option<(u16, NodeId)> {
         let mut values = self.dirty.get(&pass_id)?.write();
         let mut value = values.first_entry()?;
         let height = *value.key();
@@ -89,7 +75,7 @@ impl DirtyNodeStates {
         Some((height, id))
     }
 
-    fn pop_back(&self, pass_id: TypeId) -> Option<(u16, usize)> {
+    fn pop_back(&self, pass_id: TypeId) -> Option<(u16, NodeId)> {
         let mut values = self.dirty.get(&pass_id)?.write();
         let mut value = values.last_entry()?;
         let height = *value.key();
@@ -214,7 +200,6 @@ pub fn run_pass<V: FromAnyValue + Send + Sync>(
     match pass_direction {
         PassDirection::ParentToChild => {
             while let Some((height, id)) = dirty.pop_front(type_id) {
-                let id = tree.id_at(id).unwrap();
                 if (update_node)(id, ctx) {
                     nodes_updated.insert(id);
                     for id in tree.children_ids(id) {
@@ -227,7 +212,6 @@ pub fn run_pass<V: FromAnyValue + Send + Sync>(
         }
         PassDirection::ChildToParent => {
             while let Some((height, id)) = dirty.pop_back(type_id) {
-                let id = tree.id_at(id).unwrap();
                 if (update_node)(id, ctx) {
                     nodes_updated.insert(id);
                     if let Some(id) = tree.parent_id(id) {
@@ -240,7 +224,6 @@ pub fn run_pass<V: FromAnyValue + Send + Sync>(
         }
         PassDirection::AnyOrder => {
             while let Some((height, id)) = dirty.pop_back(type_id) {
-                let id = tree.id_at(id).unwrap();
                 if (update_node)(id, ctx) {
                     nodes_updated.insert(id);
                     for dependant in &dependants {
