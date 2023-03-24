@@ -32,6 +32,12 @@ pub enum Error {
     #[error("{0}")]
     CustomError(String),
 
+    #[error("Invalid proxy URL: {0}")]
+    InvalidProxy(#[from] hyper::http::uri::InvalidUri),
+
+    #[error("Error proxying request: {0}")]
+    ProxyRequestError(hyper::Error),
+
     #[error(transparent)]
     Other(#[from] anyhow::Error),
 }

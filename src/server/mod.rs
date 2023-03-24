@@ -23,6 +23,8 @@ use tokio::sync::broadcast;
 use tower::ServiceBuilder;
 use tower_http::services::fs::{ServeDir, ServeFileSystemResponseBody};
 
+mod proxy;
+
 pub struct BuildManager {
     config: CrateConfig,
     reload_tx: broadcast::Sender<()>,
@@ -136,9 +138,11 @@ pub async fn startup_hot_reload(ip: String, port: u16, config: CrateConfig) -> R
 
     let dist_path = config.out_dir.clone();
     let (reload_tx, _) = broadcast::channel(100);
-    let file_map = Arc::new(Mutex::new(FileMap::<HtmlCtx>::new(
-        config.crate_dir.clone(),
-    )));
+    let FileMapBuildResult { map, errors } = FileMap::<HtmlCtx>::create(config.crate_dir.clone())?;
+    for err in errors {
+        log::error!("{}", err);
+    }
+    let file_map = Arc::new(Mutex::new(map));
     let build_manager = Arc::new(BuildManager {
         config: config.clone(),
         reload_tx: reload_tx.clone(),
@@ -178,17 +182,35 @@ pub async fn startup_hot_reload(ip: String, port: u16, config: CrateConfig) -> R
                 if let Ok(evt) = evt {
                     let mut messages: Vec<Template<'static>> = Vec::new();
                     for path in evt.paths.clone() {
+                        // if this is not a rust file, rebuild the whole project
                         if path.extension().and_then(|p| p.to_str()) != Some("rs") {
-                            continue;
+                            match build_manager.rebuild() {
+                                Ok(res) => {
+                                    print_console_info(
+                                        &watcher_ip,
+                                        port,
+                                        &config,
+                                        PrettierOptions {
+                                            changed: evt.paths,
+                                            warnings: res.warnings,
+                                            elapsed_time: res.elapsed_time,
+                                        },
+                                    );
+                                }
+                                Err(err) => {
+                                    log::error!("{}", err);
+                                }
+                            }
+                            return;
                         }
                         // find changes to the rsx in the file
                         let mut map = file_map.lock().unwrap();
 
                         match map.update_rsx(&path, &crate_dir) {
-                            UpdateResult::UpdatedRsx(msgs) => {
+                            Ok(UpdateResult::UpdatedRsx(msgs)) => {
                                 messages.extend(msgs);
                             }
-                            UpdateResult::NeedsRebuild => {
+                            Ok(UpdateResult::NeedsRebuild) => {
                                 match build_manager.rebuild() {
                                     Ok(res) => {
                                         print_console_info(
@@ -208,6 +230,9 @@ pub async fn startup_hot_reload(ip: String, port: u16, config: CrateConfig) -> R
                                 }
                                 return;
                             }
+                            Err(err) => {
+                                log::error!("{}", err);
+                            }
                         }
                     }
                     for msg in messages {
@@ -222,12 +247,12 @@ pub async fn startup_hot_reload(ip: String, port: u16, config: CrateConfig) -> R
     .unwrap();
 
     for sub_path in allow_watch_path {
-        watcher
-            .watch(
-                &config.crate_dir.join(sub_path),
-                notify::RecursiveMode::Recursive,
-            )
-            .unwrap();
+        if let Err(err) = watcher.watch(
+            &config.crate_dir.join(&sub_path),
+            notify::RecursiveMode::Recursive,
+        ) {
+            log::error!("error watching {sub_path:?}: \n{}", err);
+        }
     }
 
     // start serve dev-server at 0.0.0.0:8080
@@ -279,16 +304,18 @@ pub async fn startup_hot_reload(ip: String, port: u16, config: CrateConfig) -> R
         )
         .service(ServeDir::new(config.crate_dir.join(&dist_path)));
 
-    let router = Router::new()
-        .route("/_dioxus/ws", get(ws_handler))
-        .fallback(
-            get_service(file_service).handle_error(|error: std::io::Error| async move {
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    format!("Unhandled internal error: {}", error),
-                )
-            }),
-        );
+    let mut router = Router::new().route("/_dioxus/ws", get(ws_handler));
+    for proxy_config in config.dioxus_config.web.proxy.unwrap_or_default() {
+        router = proxy::add_proxy(router, &proxy_config )?;
+    }
+    router = router.fallback(get_service(file_service).handle_error(
+        |error: std::io::Error| async move {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Unhandled internal error: {}", error),
+            )
+        },
+    ));
 
     let router = router
         .route("/_dioxus/hot_reload", get(hot_reload_handler))
@@ -422,8 +449,9 @@ pub async fn startup_default(ip: String, port: u16, config: CrateConfig) -> Resu
         )
         .service(ServeDir::new(config.crate_dir.join(&dist_path)));
 
-    let router = Router::new()
-        .route("/_dioxus/ws", get(ws_handler))
+    let mut router = Router::new().route("/_dioxus/ws", get(ws_handler));
+
+    router = router
         .fallback(
             get_service(file_service).handle_error(|error: std::io::Error| async move {
                 (
@@ -493,6 +521,8 @@ fn print_console_info(ip: &String, port: u16, config: &CrateConfig, options: Pre
         "False"
     };
 
+    let proxies = config.dioxus_config.web.proxy.as_ref();
+
     if options.changed.is_empty() {
         println!(
             "{} @ v{} [{}] \n",
@@ -523,6 +553,14 @@ fn print_console_info(ip: &String, port: u16, config: &CrateConfig, options: Pre
     println!("");
     println!("\t> Profile : {}", profile.green());
     println!("\t> Hot Reload : {}", hot_reload.cyan());
+    if let Some(proxies) = proxies {
+        if !proxies.is_empty() {
+            println!("\t> Proxies :");
+            for proxy in proxies {
+                println!("\t\t- {}", proxy.backend.blue());
+            }
+        }
+    }
     println!("\t> Index Template : {}", custom_html_file.green());
     println!("\t> URL Rewrite [index_on_404] : {}", url_rewrite.purple());
     println!("");

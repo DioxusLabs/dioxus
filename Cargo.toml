@@ -36,6 +36,7 @@ regex = "1.5.4"
 chrono = "0.4.19"
 anyhow = "1.0.53"
 hyper = "0.14.17"
+hyper-rustls = "0.23.2"
 indicatif = "0.17.0-rc.11"
 subprocess = "0.2.9"
 
@@ -76,23 +77,15 @@ ctrlc = "3.2.3"
 # dioxus-rsx = "0.0.1"
 gitignore = "1.0.7"
 
-dioxus-rsx = { path = "../../dioxus/packages/rsx" }
-dioxus-html = { path = "../../dioxus/packages/html", features = [
+dioxus-rsx = { git = "https://github.com/DioxusLabs/dioxus" }
+dioxus-html = { git = "https://github.com/DioxusLabs/dioxus", features = [
     "hot-reload-context",
 ] }
-dioxus-core = { path = "../../dioxus/packages/core", features = ["serialize"] }
-dioxus-autofmt = { path = "../../dioxus/packages/autofmt" }
-rsx-rosetta = { path = "../../dioxus/packages/rsx-rosetta" }
-
-# dioxus-rsx = { git = "https://github.com/DioxusLabs/dioxus" }
-# dioxus-html = { git = "https://github.com/DioxusLabs/dioxus", features = [
-#     "hot-reload-context",
-# ] }
-# dioxus-core = { git = "https://github.com/DioxusLabs/dioxus", features = [
-#     "serialize",
-# ] }
-# dioxus-autofmt = { git = "https://github.com/dioxuslabs/dioxus" }
-# rsx-rosetta = { git = "https://github.com/dioxuslabs/dioxus" }
+dioxus-core = { git = "https://github.com/DioxusLabs/dioxus", features = [
+    "serialize",
+] }
+dioxus-autofmt = { git = "https://github.com/dioxuslabs/dioxus" }
+rsx-rosetta = { git = "https://github.com/dioxuslabs/dioxus" }
 
 [[bin]]
 path = "src/main.rs"

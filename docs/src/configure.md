@@ -119,6 +119,16 @@ Only include resources at `Dev` mode.
     ]
    ```
 
+### Web.Proxy
+
+Proxy requests matching a path to a backend server.
+
+1. ***backend*** - the URL to the backend server.
+   ```
+   backend = "http://localhost:8000/api/"
+   ```
+   This will cause any requests made to the dev server with prefix /api/ to be redirected to the backend server at http://localhost:8000. The path and query parameters will be passed on as-is (path rewriting is not currently supported).
+
 ## Config example
 
 ```toml
@@ -168,4 +178,7 @@ style = []
 
 # Javascript code file
 script = []
+
+[[web.proxy]]
+backend = "http://localhost:8000/api/"
 ```
