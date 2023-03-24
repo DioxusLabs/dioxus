@@ -88,12 +88,10 @@ impl RenderedElementBacking for DesktopElement {
             self.id.0, focus
         );
 
-        println!("script: {}", script);
         let fut = self
             .query
             .new_query::<bool>(&script, &self.webview)
             .resolve();
-        println!("fut");
 
         Box::pin(async move {
             match fut.await {

@@ -265,7 +265,7 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
                 EventData::Ipc(msg) if msg.method() == "query" => {
                     let params = msg.params();
 
-                    if let Ok(result) = dbg!(serde_json::from_value::<QueryResult>(params)) {
+                    if let Ok(result) = serde_json::from_value::<QueryResult>(params) {
                         let view = webviews.get(&event.1).unwrap();
                         let query = view
                             .dom
