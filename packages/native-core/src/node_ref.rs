@@ -126,7 +126,7 @@ impl AttributeMask {
     pub fn union(&self, other: &Self) -> Self {
         match (self, other) {
             (AttributeMask::Some(s), AttributeMask::Some(o)) => {
-                AttributeMask::Some(s.intersection(o).cloned().collect())
+                AttributeMask::Some(s.union(o).cloned().collect())
             }
             _ => AttributeMask::All,
         }
@@ -187,9 +187,19 @@ impl NodeMask {
         self.attritutes = self.attritutes.union(&attributes);
     }
 
+    /// Get the mask for the attributes
+    pub fn attributes(&self) -> &AttributeMask {
+        &self.attritutes
+    }
+
     /// Set the mask to view the tag
     pub fn set_tag(&mut self) {
         self.tag = true;
+    }
+
+    /// Get the mask for the tag
+    pub fn tag(&self) -> bool {
+        self.tag
     }
 
     /// Set the mask to view the namespace
@@ -197,14 +207,29 @@ impl NodeMask {
         self.namespace = true;
     }
 
+    /// Get the mask for the namespace
+    pub fn namespace(&self) -> bool {
+        self.namespace
+    }
+
     /// Set the mask to view the text
     pub fn set_text(&mut self) {
         self.text = true;
     }
 
+    /// Get the mask for the text
+    pub fn text(&self) -> bool {
+        self.text
+    }
+
     /// Set the mask to view the listeners
     pub fn set_listeners(&mut self) {
         self.listeners = true;
+    }
+
+    /// Get the mask for the listeners
+    pub fn listeners(&self) -> bool {
+        self.listeners
     }
 }
 

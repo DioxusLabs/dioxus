@@ -1,6 +1,3 @@
-pub mod prelude;
-pub mod widgets;
-
 use std::{
     ops::Deref,
     rc::Rc,
@@ -8,7 +5,6 @@ use std::{
 };
 
 use dioxus_core::{Component, ElementId, VirtualDom};
-use dioxus_html::EventData;
 use dioxus_native_core::dioxus::{DioxusState, NodeImmutableDioxusExt};
 use dioxus_native_core::prelude::*;
 
@@ -83,13 +79,14 @@ impl Driver for DioxusRenderer {
         rdom: &Arc<RwLock<RealDom>>,
         id: NodeId,
         event: &str,
-        value: Rc<EventData>,
+        value: Rc<rink::EventData>,
         bubbles: bool,
     ) {
         let id = { rdom.read().unwrap().get(id).unwrap().mounted_id() };
         if let Some(id) = id {
+            let inner_value = value.deref().clone();
             self.vdom
-                .handle_event(event, value.deref().clone().into_any(), id, bubbles);
+                .handle_event(event, inner_value.into_any(), id, bubbles);
         }
     }
 
