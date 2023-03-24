@@ -186,6 +186,8 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
             .entry(id)
             .or_default()
             .extend(self.dirty_nodes.passes.iter().map(|x| x.this_type_id));
+        self.dirty_nodes
+            .mark_dirty(id, NodeMaskBuilder::ALL.build());
         let watchers = self.node_watchers.clone();
         for watcher in &*watchers.read().unwrap() {
             watcher.on_node_added(NodeMut::new(id, self));
@@ -216,16 +218,19 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
         self.root_id
     }
 
+    /// Check if a node exists in the dom.
+    pub fn contains(&self, id: NodeId) -> bool {
+        self.tree_ref().contains(id)
+    }
+
     /// Get a reference to a node.
     pub fn get(&self, id: NodeId) -> Option<NodeRef<'_, V>> {
-        self.tree_ref()
-            .contains(id)
-            .then_some(NodeRef { id, dom: self })
+        self.contains(id).then_some(NodeRef { id, dom: self })
     }
 
     /// Get a mutable reference to a node.
     pub fn get_mut(&mut self, id: NodeId) -> Option<NodeMut<'_, V>> {
-        let contains = self.tree_ref().contains(id);
+        let contains = self.contains(id);
         contains.then(|| NodeMut::new(id, self))
     }
 
@@ -399,7 +404,7 @@ impl<'a, V: Component<Tracking = Untracked> + Send + Sync> DerefMut for ViewEntr
 }
 
 /// A immutable view of a node
-pub trait NodeImmutable<V: FromAnyValue + Send + Sync>: Sized {
+pub trait NodeImmutable<V: FromAnyValue + Send + Sync = ()>: Sized {
     /// Get the real dom this node was created in
     fn real_dom(&self) -> &RealDom<V>;
 
@@ -573,7 +578,9 @@ impl<'a, V: FromAnyValue + Send + Sync> NodeMut<'a, V> {
             .or_default()
             .insert(TypeId::of::<T>());
         let view_mut: ViewMut<T> = self.dom.borrow_raw().ok()?;
-        Some(ViewEntryMut::new(view_mut, self.id))
+        view_mut
+            .contains(self.id)
+            .then_some(ViewEntryMut::new(view_mut, self.id))
     }
 
     /// Insert a custom component into this node
@@ -684,7 +691,8 @@ impl<'a, V: FromAnyValue + Send + Sync> NodeMut<'a, V> {
         for child in children_ids_vec {
             self.dom.get_mut(child).unwrap().remove();
         }
-        self.dom.tree_mut().remove_single(id);
+        self.dom.tree_mut().remove(id);
+        self.real_dom_mut().raw_world_mut().delete_entity(id);
     }
 
     /// Replace this node with a different node

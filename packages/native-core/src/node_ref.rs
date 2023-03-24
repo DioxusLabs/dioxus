@@ -126,7 +126,7 @@ impl AttributeMask {
     pub fn union(&self, other: &Self) -> Self {
         match (self, other) {
             (AttributeMask::Some(s), AttributeMask::Some(o)) => {
-                AttributeMask::Some(s.intersection(o).cloned().collect())
+                AttributeMask::Some(s.union(o).cloned().collect())
             }
             _ => AttributeMask::All,
         }
