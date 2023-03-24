@@ -3,9 +3,17 @@ use std::process::exit;
 
 use super::*;
 
+// For reference, the rustfmt main.rs file
+// https://github.com/rust-lang/rustfmt/blob/master/src/bin/main.rs
+
 /// Build the Rust WASM app and all of its assets.
 #[derive(Clone, Debug, Parser)]
 pub struct Autoformat {
+    /// Run in 'check' mode. Exits with 0 if input is formatted correctly. Exits
+    /// with 1 and prints a diff if formatting is required.
+    #[clap(short, long)]
+    pub check: bool,
+
     /// Input rsx (selection)
     #[clap(short, long)]
     pub raw: Option<String>,
@@ -20,7 +28,7 @@ impl Autoformat {
     pub async fn autoformat(self) -> Result<()> {
         // Default to formatting the project
         if self.raw.is_none() && self.file.is_none() {
-            if let Err(e) = autoformat_project().await {
+            if let Err(e) = autoformat_project(self.check).await {
                 eprintln!("error formatting project: {}", e);
                 exit(1);
             }
@@ -51,7 +59,7 @@ impl Autoformat {
 /// Runs using Tokio for multithreading, so it should be really really fast
 ///
 /// Doesn't do mod-descending, so it will still try to format unreachable files. TODO.
-async fn autoformat_project() -> Result<()> {
+async fn autoformat_project(check: bool) -> Result<()> {
     let crate_config = crate::CrateConfig::new()?;
 
     let mut files_to_format = vec![];
@@ -59,8 +67,16 @@ async fn autoformat_project() -> Result<()> {
 
     let counts = files_to_format
         .into_iter()
-        .map(|path| {
-            tokio::spawn(async move {
+        .filter(|file| {
+            if file.components().any(|f| f.as_os_str() == "target") {
+                return false;
+            }
+
+            true
+        })
+        .map(|path| async {
+            let _path = path.clone();
+            let res = tokio::spawn(async move {
                 let contents = tokio::fs::read_to_string(&path).await?;
 
                 let edits = dioxus_autofmt::fmt_file(&contents);
@@ -73,6 +89,13 @@ async fn autoformat_project() -> Result<()> {
 
                 Ok(len) as Result<usize, tokio::io::Error>
             })
+            .await;
+
+            if res.is_err() {
+                eprintln!("error formatting file: {}", _path.display());
+            }
+
+            res
         })
         .collect::<FuturesUnordered<_>>()
         .collect::<Vec<_>>()
@@ -86,7 +109,10 @@ async fn autoformat_project() -> Result<()> {
         })
         .sum();
 
-    println!("formatted {} blocks of rsx", files_formatted);
+    if files_formatted > 0 && check {
+        eprintln!("{} files needed formatting", files_formatted);
+        exit(1);
+    }
 
     Ok(())
 }
