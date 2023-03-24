@@ -2,7 +2,13 @@
 name = "dioxus-autofmt"
 version = "0.3.0"
 edition = "2021"
-
+authors = ["Jonathan Kelley"]
+description = "Autofomatter for Dioxus RSX"
+license = "MIT/Apache-2.0"
+repository = "https://github.com/DioxusLabs/dioxus/"
+homepage = "https://dioxuslabs.com"
+documentation = "https://dioxuslabs.com"
+keywords = ["dom", "ui", "gui", "react"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
@@ -11,7 +17,7 @@ proc-macro2 = { version = "1.0.6", features = ["span-locations"] }
 quote = "1.0"
 syn = { version = "1.0.11", features = ["full", "extra-traits"] }
 serde = { version = "1.0.136", features = ["derive"] }
-prettyplease = { git = "https://github.com/DioxusLabs/prettyplease-macro-fmt.git", features = [
+prettyplease = { package = "prettier-please", version = "0.1.16",  features = [
     "verbatim",
 ] }
 
