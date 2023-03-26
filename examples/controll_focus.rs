@@ -7,7 +7,7 @@ fn main() {
 }
 
 fn app(cx: Scope) -> Element {
-    let elements: &UseRef<Vec<Rc<MountedData>>> = use_ref(cx, || Vec::new());
+    let elements: &UseRef<Vec<Rc<MountedData>>> = use_ref(cx, Vec::new);
     let running = use_state(cx, || true);
 
     use_future!(cx, |(elements, running)| async move {

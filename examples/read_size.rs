@@ -1,3 +1,4 @@
+#![allow(clippy::await_holding_refcell_ref)]
 use std::rc::Rc;
 
 use dioxus::{html::geometry::euclid::Rect, prelude::*};
@@ -27,7 +28,7 @@ fn main() {
 fn app(cx: Scope) -> Element {
     let div_element: &UseRef<Option<Rc<MountedData>>> = use_ref(cx, || None);
 
-    let dimentions = use_ref(cx, || Rect::zero());
+    let dimentions = use_ref(cx, Rect::zero);
 
     cx.render(rsx!(
         div {
@@ -44,8 +45,10 @@ fn app(cx: Scope) -> Element {
             onclick: move |_| {
                 to_owned![div_element, dimentions];
                 async move {
-                    if let Some(div) = div_element.read().as_ref() {
-                        if let Ok(rect)=div.get_client_rect().await{
+                    let read = div_element.read();
+                    let client_rect = read.as_ref().map(|el| el.get_client_rect());
+                    if let Some(client_rect) = client_rect {
+                        if let Ok(rect) = client_rect.await {
                             dimentions.set(rect);
                         }
                     }
