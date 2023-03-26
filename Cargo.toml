@@ -22,6 +22,8 @@ members = [
     "packages/signals",
     "packages/hot-reload",
     "docs/guide",
+    # Full project examples
+    "examples/tailwind",
 ]
 
 # This is a "virtual package"
