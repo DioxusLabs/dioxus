@@ -59,6 +59,11 @@ impl FromStr for IfmtInput {
                 let mut current_captured = String::new();
                 while let Some(c) = chars.next() {
                     if c == ':' {
+                        // two :s in a row is a path, not a format arg
+                        if chars.next_if(|c| *c == ':').is_some() {
+                            current_captured.push_str("::");
+                            continue;
+                        }
                         let mut current_format_args = String::new();
                         for c in chars.by_ref() {
                             if c == '}' {

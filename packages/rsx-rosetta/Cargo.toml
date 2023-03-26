@@ -1,12 +1,19 @@
 [package]
 name = "rsx-rosetta"
-version = "0.0.0"
-edition = "2018"
+version = "0.3.0"
+edition = "2021"
+authors = ["Jonathan Kelley"]
+description = "Autofomatter for Dioxus RSX"
+license = "MIT/Apache-2.0"
+repository = "https://github.com/DioxusLabs/dioxus/"
+homepage = "https://dioxuslabs.com"
+documentation = "https://dioxuslabs.com"
+keywords = ["dom", "ui", "gui", "react"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-dioxus-autofmt = { path = "../autofmt" }
+dioxus-autofmt = { path = "../autofmt", version = "0.3.0" }
 dioxus-rsx = { path = "../rsx" , version = "^0.0.3" }
 html_parser = "0.6.3"
 proc-macro2 = "1.0.49"
