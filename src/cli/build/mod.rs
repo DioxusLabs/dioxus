@@ -26,6 +26,10 @@ impl Build {
             crate_config.set_profile(self.build.profile.unwrap());
         }
 
+        if self.build.features.is_some() {
+            crate_config.set_features(self.build.features.unwrap());
+        }
+
         let platform = self.build.platform.unwrap_or_else(|| {
             crate_config
                 .dioxus_config
