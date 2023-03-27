@@ -13,7 +13,7 @@ use syn::{
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub struct Element {
     pub name: Ident,
-    pub key: Option<KeyValue>,
+    pub key: Option<RsxKeyValue>,
     pub attributes: Vec<ElementAttrNamed>,
     pub children: Vec<BodyNode>,
     pub _is_static: bool,
@@ -30,7 +30,7 @@ impl Parse for Element {
 
         let mut attributes: Vec<ElementAttrNamed> = vec![];
         let mut children: Vec<BodyNode> = vec![];
-        let mut key = None;
+        let mut key: Option<RsxKeyValue> = None;
         let mut _el_ref = None;
 
         // parse fields with commas
@@ -88,7 +88,7 @@ impl Parse for Element {
                 } else {
                     match name_str.as_str() {
                         "key" => {
-                            key = Some(content.parse()?);
+                            key = Some(RsxKeyValue::Text(content.parse()?));
                         }
                         "classes" => todo!("custom class list not supported yet"),
                         // "namespace" => todo!("custom namespace not supported yet"),
@@ -299,3 +299,36 @@ impl ToTokens for ElementAttrNamed {
 //     mounted_node: Default::default(),
 //     value: ::dioxus::core::AttributeValue::Text(#value),
 // }
+
+#[derive(PartialEq, Eq, Clone, Debug, Hash)]
+pub enum RsxKeyValue {
+    /// Text attribute key value
+    Text(IfmtInput),
+
+    /// Signed integer key value
+    Int(i64),
+}
+
+impl ToTokens for RsxKeyValue {
+    fn to_tokens(&self, tokens: &mut TokenStream2) {
+        todo!();
+    }
+}
+
+/// A value that can be converted into an attribute key value
+pub trait IntoRsxKeyValue {
+    /// Convert into an attribute key value
+    fn into_value(self) -> RsxKeyValue;
+}
+
+impl IntoRsxKeyValue for IfmtInput {
+    fn into_value(self) -> RsxKeyValue {
+        RsxKeyValue::Text(self)
+    }
+}
+
+impl IntoRsxKeyValue for i64 {
+    fn into_value(self) -> RsxKeyValue {
+        RsxKeyValue::Int(self)
+    }
+}

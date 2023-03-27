@@ -56,7 +56,7 @@ impl Component {
         Ok(())
     }
 
-    pub fn key(&self) -> Option<&KeyValue> {
+    pub fn key(&self) -> Option<&RsxKeyValue> {
         match self
             .fields
             .iter()

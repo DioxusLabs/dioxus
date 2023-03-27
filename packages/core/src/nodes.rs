@@ -895,6 +895,7 @@ impl<'a, T: IntoAttributeValue<'a>> IntoAttributeValue<'a> for Option<T> {
     }
 }
 
+/// The value of the attribute key
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub enum KeyValue<'a> {
     /// Text attribute key value
@@ -902,47 +903,8 @@ pub enum KeyValue<'a> {
 
     /// Signed integer key value
     Int(i64),
-    None,
 }
 
-pub enum BorrowedKeyValue<'a> {
-    /// Text attribute
-    Text(&'a str),
-
-    /// Signed integer
-    Int(i64),
-    None,
-}
-
-impl<'a> From<&'a KeyValue<'a>> for BorrowedKeyValue<'a> {
-    fn from(value: &'a KeyValue<'a>) -> Self {
-        match value {
-            KeyValue::Text(value) => BorrowedKeyValue::Text(value),
-            KeyValue::Int(value) => BorrowedKeyValue::Int(*value),
-            KeyValue::None => BorrowedKeyValue::None,
-        }
-    }
-}
-
-impl Debug for BorrowedKeyValue<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Text(arg0) => f.debug_tuple("Text").field(arg0).finish(),
-            Self::Int(arg0) => f.debug_tuple("Int").field(arg0).finish(),
-            Self::None => write!(f, "None"),
-        }
-    }
-}
-
-impl PartialEq for BorrowedKeyValue<'_> {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Self::Text(l0), Self::Text(r0)) => l0 == r0,
-            (Self::Int(l0), Self::Int(r0)) => l0 == r0,
-            _ => core::mem::discriminant(self) == core::mem::discriminant(other),
-        }
-    }
-}
 /// A value that can be converted into an attribute key value
 pub trait IntoKeyValue<'a> {
     /// Convert into an attribute key value
