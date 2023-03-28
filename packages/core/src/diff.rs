@@ -628,10 +628,12 @@ impl<'b> VirtualDom {
             }
 
             let id = self.find_last_element(&new[last]);
-            self.mutations.push(Mutation::InsertAfter {
-                id,
-                m: nodes_created,
-            });
+            if nodes_created > 0 {
+                self.mutations.push(Mutation::InsertAfter {
+                    id,
+                    m: nodes_created,
+                })
+            }
             nodes_created = 0;
         }
 
@@ -652,10 +654,12 @@ impl<'b> VirtualDom {
                 }
 
                 let id = self.find_first_element(&new[last]);
-                self.mutations.push(Mutation::InsertBefore {
-                    id,
-                    m: nodes_created,
-                });
+                if nodes_created > 0 {
+                    self.mutations.push(Mutation::InsertBefore {
+                        id,
+                        m: nodes_created,
+                    });
+                }
 
                 nodes_created = 0;
             }
@@ -676,10 +680,12 @@ impl<'b> VirtualDom {
             }
 
             let id = self.find_first_element(&new[first_lis]);
-            self.mutations.push(Mutation::InsertBefore {
-                id,
-                m: nodes_created,
-            });
+            if nodes_created > 0 {
+                self.mutations.push(Mutation::InsertBefore {
+                    id,
+                    m: nodes_created,
+                });
+            }
         }
     }
 
