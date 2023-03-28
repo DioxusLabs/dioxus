@@ -16,12 +16,12 @@ use crate::{NodeId, NodeMask};
 
 #[derive(Default)]
 struct DirtyNodes {
-    nodes_dirty: Vec<NodeId>,
+    nodes_dirty: FxHashSet<NodeId>,
 }
 
 impl DirtyNodes {
     pub fn add_node(&mut self, node_id: NodeId) {
-        self.nodes_dirty.push(node_id);
+        self.nodes_dirty.insert(node_id);
     }
 
     pub fn is_empty(&self) -> bool {
@@ -29,10 +29,14 @@ impl DirtyNodes {
     }
 
     pub fn pop(&mut self) -> Option<NodeId> {
-        self.nodes_dirty.pop()
+        self.nodes_dirty.iter().next().copied().map(|id| {
+            self.nodes_dirty.remove(&id);
+            id
+        })
     }
 }
 
+/// Tracks the dirty nodes sorted by height for each pass. We resolve passes based on the height of the node in order to avoid resolving any node twice in a pass.
 #[derive(Clone, Unique)]
 pub struct DirtyNodeStates {
     dirty: Arc<FxHashMap<TypeId, RwLock<BTreeMap<u16, DirtyNodes>>>>,
