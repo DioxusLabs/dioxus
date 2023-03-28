@@ -1,563 +1,386 @@
 extern crate proc_macro;
 
-mod sorted_slice;
+use std::collections::HashSet;
 
 use proc_macro::TokenStream;
-use quote::{quote, ToTokens, __private::Span};
-use sorted_slice::StrSlice;
-use syn::parenthesized;
-use syn::parse::ParseBuffer;
-use syn::punctuated::Punctuated;
-use syn::{
-    self,
-    parse::{Parse, ParseStream, Result},
-    parse_macro_input, parse_quote, Error, Field, Ident, Token, Type,
-};
+use quote::{format_ident, quote};
+use syn::{parse_macro_input, ItemImpl, Type, TypePath, TypeTuple};
 
-/// Sorts a slice of string literals at compile time.
-#[proc_macro]
-pub fn sorted_str_slice(input: TokenStream) -> TokenStream {
-    let slice: StrSlice = parse_macro_input!(input as StrSlice);
-    let strings = slice.map.values();
-    quote!([#(#strings, )*]).into()
-}
+/// A helper attribute for deriving `State` for a struct.
+#[proc_macro_attribute]
+pub fn partial_derive_state(_: TokenStream, input: TokenStream) -> TokenStream {
+    let impl_block: syn::ItemImpl = parse_macro_input!(input as syn::ItemImpl);
 
-#[derive(PartialEq, Debug, Clone)]
-enum DependencyKind {
-    Node,
-    Child,
-    Parent,
-}
-
-/// Derive's the state from any elements that have a node_dep_state, child_dep_state, parent_dep_state, or state attribute.
-///
-/// # Declaring elements
-/// Each of the attributes require specifying the members of the struct it depends on to allow the macro to find the optimal resultion order.
-/// These dependencies should match the types declared in the trait the member implements.
-///
-/// # The node_dep_state attribute
-/// The node_dep_state attribute declares a member that implements the NodeDepState trait.
-/// ```rust, ignore
-/// #[derive(State)]
-/// struct MyStruct {
-///     // MyDependency implements ChildDepState<()>
-///     #[node_dep_state()]
-///     my_dependency_1: MyDependency,
-///     // MyDependency2 implements ChildDepState<(MyDependency,)>
-///     #[node_dep_state(my_dependency_1)]
-///     my_dependency_2: MyDependency2,
-/// }
-/// // or
-/// #[derive(State)]
-/// struct MyStruct {
-///     // MyDependnancy implements NodeDepState<()>
-///     #[node_dep_state()]
-///     my_dependency_1: MyDependency,
-///     // MyDependency2 implements NodeDepState<()>
-///     #[node_dep_state()]
-///     my_dependency_2: MyDependency2,
-///     // MyDependency3 implements NodeDepState<(MyDependency, MyDependency2)> with Ctx = f32
-///     #[node_dep_state((my_dependency_1, my_dependency_2), f32)]
-///     my_dependency_3: MyDependency2,
-/// }
-/// ```
-/// # The child_dep_state attribute
-/// The child_dep_state attribute declares a member that implements the ChildDepState trait.
-/// ```rust, ignore
-/// #[derive(State)]
-/// struct MyStruct {
-///     // MyDependnacy implements ChildDepState with DepState = Self
-///     #[child_dep_state(my_dependency_1)]
-///     my_dependency_1: MyDependency,
-/// }
-/// // or
-/// #[derive(State)]
-/// struct MyStruct {
-///     // MyDependnacy implements ChildDepState with DepState = Self
-///     #[child_dep_state(my_dependency_1)]
-///     my_dependency_1: MyDependency,
-///     // MyDependnacy2 implements ChildDepState with DepState = MyDependency and Ctx = f32
-///     #[child_dep_state(my_dependency_1, f32)]
-///     my_dependency_2: MyDependency2,
-/// }
-/// ```
-/// # The parent_dep_state attribute
-/// The parent_dep_state attribute declares a member that implements the ParentDepState trait.
-/// The parent_dep_state attribute can be called in the forms:
-/// ```rust, ignore
-/// #[derive(State)]
-/// struct MyStruct {
-///     // MyDependnacy implements ParentDepState with DepState = Self
-///     #[parent_dep_state(my_dependency_1)]
-///     my_dependency_1: MyDependency,
-/// }
-/// // or
-/// #[derive(State)]
-/// struct MyStruct {
-///     // MyDependnacy implements ParentDepState with DepState = Self
-///     #[parent_dep_state(my_dependency_1)]
-///     my_dependency_1: MyDependency,
-///     // MyDependnacy2 implements ParentDepState with DepState = MyDependency and Ctx = f32
-///     #[parent_dep_state(my_dependency_1, f32)]
-///     my_dependency_2: MyDependency2,
-/// }
-/// ```
-///
-/// # Combining dependancies
-/// The node_dep_state, parent_dep_state, and child_dep_state attributes can be combined to allow for more complex dependancies.
-/// For example if we wanted to combine the font that is passed from the parent to the child and the layout of the size children to find the size of the current node we could do:
-/// ```rust, ignore
-/// #[derive(State)]
-/// struct MyStruct {
-///     // ChildrenSize implements ChildDepState with DepState = Size
-///     #[child_dep_state(size)]
-///     children_size: ChildrenSize,
-///     // FontSize implements ParentDepState with DepState = Self
-///     #[parent_dep_state(font_size)]
-///     font_size: FontSize,
-///     // Size implements NodeDepState<(ChildrenSize, FontSize)>
-///     #[parent_dep_state((children_size, font_size))]
-///     size: Size,
-/// }
-/// ```
-///
-/// # The state attribute
-/// The state macro declares a member that implements the State trait. This allows you to organize your state into multiple isolated components.
-/// Unlike the other attributes, the state attribute does not accept any arguments, because a nested state cannot depend on any other part of the state.
-///
-/// # Custom values
-///
-/// If your state has a custom value type you can specify it with the state attribute.
-///
-/// ```rust, ignore
-/// #[derive(State)]
-/// #[state(custom_value = MyCustomType)]
-/// struct MyStruct {
-///     // ...
-/// }
-#[proc_macro_derive(
-    State,
-    attributes(node_dep_state, child_dep_state, parent_dep_state, state)
-)]
-pub fn state_macro_derive(input: TokenStream) -> TokenStream {
-    let ast = syn::parse(input).unwrap();
-    impl_derive_macro(&ast)
-}
-
-fn impl_derive_macro(ast: &syn::DeriveInput) -> TokenStream {
-    let custom_type = ast
-        .attrs
+    let has_create_fn = impl_block
+        .items
         .iter()
-        .find(|a| a.path.is_ident("state"))
-        .and_then(|attr| {
-            // parse custom_type = "MyType"
-            let assignment = attr.parse_args::<syn::Expr>().unwrap();
-            if let syn::Expr::Assign(assign) = assignment {
-                let (left, right) = (&*assign.left, &*assign.right);
-                if let syn::Expr::Path(e) = left {
-                    let path = &e.path;
-                    if let Some(ident) = path.get_ident() {
-                        if ident == "custom_value" {
-                            return match right {
-                                syn::Expr::Path(e) => {
-                                    let path = &e.path;
-                                    Some(quote! {#path})
-                                }
-                                _ => None,
-                            };
-                        }
-                    }
-                }
-            }
-            None
-        })
-        .unwrap_or(quote! {()});
-    let type_name = &ast.ident;
-    let fields: Vec<_> = match &ast.data {
-        syn::Data::Struct(data) => match &data.fields {
-            syn::Fields::Named(e) => &e.named,
-            syn::Fields::Unnamed(_) => todo!("unnamed fields"),
-            syn::Fields::Unit => todo!("unit structs"),
-        }
+        .any(|item| matches!(item, syn::ImplItem::Method(method) if method.sig.ident == "create"));
+
+    let parent_dependencies = impl_block
+        .items
         .iter()
-        .collect(),
-        _ => unimplemented!(),
-    };
-    let strct = Struct::new(type_name.clone(), &fields);
-    match StateStruct::parse(&fields, &strct) {
-        Ok(state_strct) => {
-            let passes = state_strct.state_members.iter().map(|m| {
-                let unit = &m.mem.unit_type;
-                match m.dep_kind {
-                    DependencyKind::Node => quote! {dioxus_native_core::AnyPass::Node(&#unit)},
-                    DependencyKind::Child => quote! {dioxus_native_core::AnyPass::Upward(&#unit)},
-                    DependencyKind::Parent => {
-                        quote! {dioxus_native_core::AnyPass::Downward(&#unit)}
-                    }
-                }
-            });
-            let member_types = state_strct.state_members.iter().map(|m| &m.mem.ty);
-            let impl_members = state_strct
-                .state_members
-                .iter()
-                .map(|m| m.impl_pass(state_strct.ty, &custom_type));
-
-            let gen = quote! {
-                #(#impl_members)*
-                impl State<#custom_type> for #type_name {
-                    const PASSES: &'static [dioxus_native_core::AnyPass<dioxus_native_core::node::Node<Self, #custom_type>>] = &[
-                        #(#passes),*
-                    ];
-                    const MASKS: &'static [dioxus_native_core::NodeMask] = &[#(#member_types::NODE_MASK),*];
-                }
-            };
-            gen.into()
-        }
-        Err(e) => e.into_compile_error().into(),
-    }
-}
-
-struct Struct {
-    name: Ident,
-    members: Vec<Member>,
-}
-
-impl Struct {
-    fn new(name: Ident, fields: &[&Field]) -> Self {
-        let members = fields
-            .iter()
-            .enumerate()
-            .filter_map(|(i, f)| Member::parse(&name, f, i as u64))
-            .collect();
-        Self { name, members }
-    }
-}
-
-struct StateStruct<'a> {
-    state_members: Vec<StateMember<'a>>,
-    #[allow(unused)]
-    child_states: Vec<&'a Member>,
-    ty: &'a Ident,
-}
-
-impl<'a> StateStruct<'a> {
-    /// Parse the state structure, and find a resolution order that will allow us to update the state for each node in after the state(s) it depends on have been resolved.
-    fn parse(fields: &[&'a Field], strct: &'a Struct) -> Result<Self> {
-        let mut parse_err = Ok(());
-        let mut state_members: Vec<_> = strct
-            .members
-            .iter()
-            .zip(fields.iter())
-            .filter_map(|(m, f)| match StateMember::parse(f, m, strct) {
-                Ok(m) => m,
-                Err(err) => {
-                    parse_err = Err(err);
-                    None
-                }
-            })
-            .collect();
-        parse_err?;
-        for i in 0..state_members.len() {
-            let deps: Vec<_> = state_members[i].dep_mems.iter().map(|m| m.id).collect();
-            for dep in deps {
-                state_members[dep as usize].dependant_mems.push(i as u64);
-            }
-        }
-
-        let child_states = strct
-            .members
-            .iter()
-            .zip(fields.iter())
-            .filter(|(_, f)| {
-                f.attrs.iter().any(|a| {
-                    a.path
-                        .get_ident()
-                        .filter(|i| i.to_string().as_str() == "state")
-                        .is_some()
-                })
-            })
-            .map(|(m, _)| m);
-
-        // members need to be sorted so that members are updated after the members they depend on
-        Ok(Self {
-            ty: &strct.name,
-            state_members,
-            child_states: child_states.collect(),
-        })
-    }
-}
-
-fn try_parenthesized(input: ParseStream) -> Result<ParseBuffer> {
-    let inside;
-    parenthesized!(inside in input);
-    Ok(inside)
-}
-
-struct Dependency {
-    ctx_ty: Option<Type>,
-    deps: Vec<Ident>,
-}
-
-impl Parse for Dependency {
-    fn parse(input: ParseStream) -> Result<Self> {
-        let deps: Option<Punctuated<Ident, Token![,]>> = {
-            try_parenthesized(input)
-                .ok()
-                .and_then(|inside| inside.parse_terminated(Ident::parse).ok())
-        };
-        let deps: Vec<_> = deps
-            .map(|deps| deps.into_iter().collect())
-            .or_else(|| {
-                input
-                    .parse::<Ident>()
-                    .ok()
-                    .filter(|i: &Ident| i != "NONE")
-                    .map(|i| vec![i])
-            })
-            .unwrap_or_default();
-        let comma: Option<Token![,]> = input.parse().ok();
-        let ctx_ty = input.parse().ok();
-        Ok(Self {
-            ctx_ty: comma.and(ctx_ty),
-            deps,
-        })
-    }
-}
-
-/// The type of the member and the ident of the member
-#[derive(PartialEq, Debug)]
-struct Member {
-    id: u64,
-    ty: Type,
-    unit_type: Ident,
-    ident: Ident,
-}
-
-impl Member {
-    fn parse(parent: &Ident, field: &Field, id: u64) -> Option<Self> {
-        Some(Self {
-            id,
-            ty: field.ty.clone(),
-            unit_type: Ident::new(
-                ("_Unit".to_string()
-                    + parent.to_token_stream().to_string().as_str()
-                    + field.ty.to_token_stream().to_string().as_str())
-                .as_str(),
-                Span::call_site(),
-            ),
-            ident: field.ident.as_ref()?.clone(),
-        })
-    }
-}
-
-#[derive(Debug, Clone)]
-struct StateMember<'a> {
-    mem: &'a Member,
-    // the kind of dependncies this state has
-    dep_kind: DependencyKind,
-    // the depenancy and if it is satified
-    dep_mems: Vec<&'a Member>,
-    // any members that depend on this member
-    dependant_mems: Vec<u64>,
-    // the context this state requires
-    ctx_ty: Option<Type>,
-}
-
-impl<'a> StateMember<'a> {
-    fn parse(
-        field: &Field,
-        mem: &'a Member,
-        parent: &'a Struct,
-    ) -> Result<Option<StateMember<'a>>> {
-        let mut err = Ok(());
-        let member = field.attrs.iter().find_map(|a| {
-            let dep_kind = a
-                .path
-                .get_ident()
-                .and_then(|i| match i.to_string().as_str() {
-                    "node_dep_state" => Some(DependencyKind::Node),
-                    "child_dep_state" => Some(DependencyKind::Child),
-                    "parent_dep_state" => Some(DependencyKind::Parent),
-                    _ => None,
-                })?;
-            match a.parse_args::<Dependency>() {
-                Ok(dependency) => {
-                    let dep_mems = dependency
-                        .deps
-                        .iter()
-                        .filter_map(|name| {
-                            if let Some(found) = parent.members.iter().find(|m| &m.ident == name) {
-                                Some(found)
-                            } else {
-                                err = Err(Error::new(
-                                    name.span(),
-                                    format!("{} not found in {}", name, parent.name),
-                                ));
-                                None
-                            }
-                        })
-                        .collect();
-                    Some(Self {
-                        mem,
-                        dep_kind,
-                        dep_mems,
-                        dependant_mems: Vec::new(),
-                        ctx_ty: dependency.ctx_ty,
-                    })
-                }
-                Err(e) => {
-                    err = Err(e);
-                    None
-                }
-            }
-        });
-        err?;
-        Ok(member)
-    }
-
-    /// generate code to call the resolve function for the state. This does not handle checking if resolving the state is necessary, or marking the states that depend on this state as dirty.
-    fn impl_pass(
-        &self,
-        parent_type: &Ident,
-        custom_type: impl ToTokens,
-    ) -> quote::__private::TokenStream {
-        let ident = &self.mem.ident;
-        let get_ctx = if let Some(ctx_ty) = &self.ctx_ty {
-            if ctx_ty == &parse_quote!(()) {
-                quote! {&()}
+        .find_map(|item| {
+            if let syn::ImplItem::Type(syn::ImplItemType { ident, ty, .. }) = item {
+                (ident == "ParentDependencies").then_some(ty)
             } else {
-                let msg = ctx_ty.to_token_stream().to_string() + " not found in context";
-                quote! {ctx.get().expect(#msg)}
+                None
+            }
+        })
+        .expect("ParentDependencies must be defined");
+    let child_dependencies = impl_block
+        .items
+        .iter()
+        .find_map(|item| {
+            if let syn::ImplItem::Type(syn::ImplItemType { ident, ty, .. }) = item {
+                (ident == "ChildDependencies").then_some(ty)
+            } else {
+                None
+            }
+        })
+        .expect("ChildDependencies must be defined");
+    let node_dependencies = impl_block
+        .items
+        .iter()
+        .find_map(|item| {
+            if let syn::ImplItem::Type(syn::ImplItemType { ident, ty, .. }) = item {
+                (ident == "NodeDependencies").then_some(ty)
+            } else {
+                None
+            }
+        })
+        .expect("NodeDependencies must be defined");
+
+    let this_type = &impl_block.self_ty;
+    let this_type = extract_type_path(this_type)
+        .unwrap_or_else(|| panic!("Self must be a type path, found {}", quote!(#this_type)));
+
+    let mut combined_dependencies = HashSet::new();
+
+    let self_path: TypePath = syn::parse_quote!(Self);
+
+    let parent_dependencies = match extract_tuple(parent_dependencies) {
+        Some(tuple) => {
+            let mut parent_dependencies = Vec::new();
+            for type_ in &tuple.elems {
+                let mut type_ = extract_type_path(type_).unwrap_or_else(|| {
+                    panic!(
+                        "ParentDependencies must be a tuple of type paths, found {}",
+                        quote!(#type_)
+                    )
+                });
+                if type_ == self_path {
+                    type_ = this_type.clone();
+                }
+                combined_dependencies.insert(type_.clone());
+                parent_dependencies.push(type_);
+            }
+            parent_dependencies
+        }
+        _ => panic!(
+            "ParentDependencies must be a tuple, found {}",
+            quote!(#parent_dependencies)
+        ),
+    };
+    let child_dependencies = match extract_tuple(child_dependencies) {
+        Some(tuple) => {
+            let mut child_dependencies = Vec::new();
+            for type_ in &tuple.elems {
+                let mut type_ = extract_type_path(type_).unwrap_or_else(|| {
+                    panic!(
+                        "ChildDependencies must be a tuple of type paths, found {}",
+                        quote!(#type_)
+                    )
+                });
+                if type_ == self_path {
+                    type_ = this_type.clone();
+                }
+                combined_dependencies.insert(type_.clone());
+                child_dependencies.push(type_);
+            }
+            child_dependencies
+        }
+        _ => panic!(
+            "ChildDependencies must be a tuple, found {}",
+            quote!(#child_dependencies)
+        ),
+    };
+    let node_dependencies = match extract_tuple(node_dependencies) {
+        Some(tuple) => {
+            let mut node_dependencies = Vec::new();
+            for type_ in &tuple.elems {
+                let mut type_ = extract_type_path(type_).unwrap_or_else(|| {
+                    panic!(
+                        "NodeDependencies must be a tuple of type paths, found {}",
+                        quote!(#type_)
+                    )
+                });
+                if type_ == self_path {
+                    type_ = this_type.clone();
+                }
+                combined_dependencies.insert(type_.clone());
+                node_dependencies.push(type_);
+            }
+            node_dependencies
+        }
+        _ => panic!(
+            "NodeDependencies must be a tuple, found {}",
+            quote!(#node_dependencies)
+        ),
+    };
+    combined_dependencies.insert(this_type.clone());
+
+    let combined_dependencies: Vec<_> = combined_dependencies.into_iter().collect();
+    let parent_dependancies_idxes: Vec<_> = parent_dependencies
+        .iter()
+        .filter_map(|ident| combined_dependencies.iter().position(|i| i == ident))
+        .collect();
+    let child_dependencies_idxes: Vec<_> = child_dependencies
+        .iter()
+        .filter_map(|ident| combined_dependencies.iter().position(|i| i == ident))
+        .collect();
+    let node_dependencies_idxes: Vec<_> = node_dependencies
+        .iter()
+        .filter_map(|ident| combined_dependencies.iter().position(|i| i == ident))
+        .collect();
+    let this_type_idx = combined_dependencies
+        .iter()
+        .enumerate()
+        .find_map(|(i, ident)| (this_type == *ident).then_some(i))
+        .unwrap();
+    let this_view = format_ident!("__data{}", this_type_idx);
+
+    let combined_dependencies_quote = combined_dependencies.iter().map(|ident| {
+        if ident == &this_type {
+            quote! {shipyard::ViewMut<#ident>}
+        } else {
+            quote! {shipyard::View<#ident>}
+        }
+    });
+    let combined_dependencies_quote = quote!((#(#combined_dependencies_quote,)*));
+
+    let ItemImpl {
+        attrs,
+        defaultness,
+        unsafety,
+        impl_token,
+        generics,
+        trait_,
+        self_ty,
+        items,
+        ..
+    } = impl_block;
+    let for_ = trait_.as_ref().map(|t| t.2);
+    let trait_ = trait_.map(|t| t.1);
+
+    let split_views: Vec<_> = (0..combined_dependencies.len())
+        .map(|i| {
+            let ident = format_ident!("__data{}", i);
+            if i == this_type_idx {
+                quote! {mut #ident}
+            } else {
+                quote! {#ident}
+            }
+        })
+        .collect();
+
+    let node_view = node_dependencies_idxes
+        .iter()
+        .map(|i| format_ident!("__data{}", i))
+        .collect::<Vec<_>>();
+    let get_node_view = {
+        if node_dependencies.is_empty() {
+            quote! {
+                let raw_node = ();
             }
         } else {
-            quote! {&()}
-        };
-
-        let ty = &self.mem.ty;
-        let unit_type = &self.mem.unit_type;
-        let node_view =
-            quote!(dioxus_native_core::node_ref::NodeView::new(&node.node_data, #ty::NODE_MASK));
-        let dep_idents = self.dep_mems.iter().map(|m| &m.ident);
-        let impl_specific = match self.dep_kind {
-            DependencyKind::Node => {
-                quote! {
-                    impl dioxus_native_core::NodePass<dioxus_native_core::node::Node<#parent_type, #custom_type>> for #unit_type {
-                        fn pass(&self, node: &mut dioxus_native_core::node::Node<#parent_type, #custom_type>, ctx: &dioxus_native_core::SendAnyMap) -> bool {
-                            node.state.#ident.reduce(#node_view, (#(&node.state.#dep_idents,)*), #get_ctx)
-                        }
-                    }
-                }
-            }
-            DependencyKind::Child => {
-                let update = if self.dep_mems.iter().any(|m| m.id == self.mem.id) {
-                    quote! {
-                        if update {
-                            dioxus_native_core::PassReturn{
-                                progress: true,
-                                mark_dirty: true,
-                            }
-                        } else {
-                            dioxus_native_core::PassReturn{
-                                progress: false,
-                                mark_dirty: false,
-                            }
-                        }
-                    }
-                } else {
-                    quote! {
-                        if update {
-                            dioxus_native_core::PassReturn{
-                                progress: false,
-                                mark_dirty: true,
-                            }
-                        } else {
-                            dioxus_native_core::PassReturn{
-                                progress: false,
-                                mark_dirty: false,
-                            }
-                        }
-                    }
+            let temps = (0..node_dependencies.len())
+                .map(|i| format_ident!("__temp{}", i))
+                .collect::<Vec<_>>();
+            quote! {
+                let raw_node: (#(*const #node_dependencies,)*) = {
+                    let (#(#temps,)*) = (#(&#node_view,)*).get(id).unwrap_or_else(|err| panic!("Failed to get node view {:?}", err));
+                    (#(#temps as *const _,)*)
                 };
-                quote!(
-                    impl dioxus_native_core::UpwardPass<dioxus_native_core::node::Node<#parent_type, #custom_type>> for #unit_type{
-                        fn pass<'a>(
-                            &self,
-                            node: &mut dioxus_native_core::node::Node<#parent_type, #custom_type>,
-                            children: &mut dyn Iterator<Item = &'a mut dioxus_native_core::node::Node<#parent_type, #custom_type>>,
-                            ctx: &dioxus_native_core::SendAnyMap,
-                        ) -> dioxus_native_core::PassReturn {
-                            let update = node.state.#ident.reduce(#node_view, children.map(|c| (#(&c.state.#dep_idents,)*)), #get_ctx);
-                            #update
-                        }
-                    }
-                )
-            }
-            DependencyKind::Parent => {
-                let update = if self.dep_mems.iter().any(|m| m.id == self.mem.id) {
-                    quote! {
-                        if update {
-                            dioxus_native_core::PassReturn{
-                                progress: true,
-                                mark_dirty: true,
-                            }
-                        } else {
-                            dioxus_native_core::PassReturn{
-                                progress: false,
-                                mark_dirty: false,
-                            }
-                        }
-                    }
-                } else {
-                    quote! {
-                        if update {
-                            dioxus_native_core::PassReturn{
-                                progress: false,
-                                mark_dirty: true,
-                            }
-                        } else {
-                            dioxus_native_core::PassReturn{
-                                progress: false,
-                                mark_dirty: false,
-                            }
-                        }
-                    }
-                };
-                quote!(
-                    impl dioxus_native_core::DownwardPass<dioxus_native_core::node::Node<#parent_type, #custom_type>> for #unit_type {
-                        fn pass(&self, node: &mut dioxus_native_core::node::Node<#parent_type, #custom_type>, parent: Option<&mut dioxus_native_core::node::Node<#parent_type, #custom_type>>, ctx: &dioxus_native_core::SendAnyMap) -> dioxus_native_core::PassReturn{
-                            let update = node.state.#ident.reduce(#node_view, parent.as_ref().map(|p| (#(&p.state.#dep_idents,)*)), #get_ctx);
-                            #update
-                        }
-                    }
-                )
-            }
-        };
-        let pass_id = self.mem.id;
-        let depenancies = self.dep_mems.iter().map(|m| m.id);
-        let dependants = &self.dependant_mems;
-        let mask = self
-            .dep_mems
-            .iter()
-            .map(|m| 1u64 << m.id)
-            .fold(1 << self.mem.id, |a, b| a | b);
-        quote! {
-            #[derive(Clone, Copy)]
-            struct #unit_type;
-            #impl_specific
-            impl dioxus_native_core::Pass for #unit_type {
-                fn pass_id(&self) -> dioxus_native_core::PassId {
-                    dioxus_native_core::PassId(#pass_id)
-                }
-                fn dependancies(&self) -> &'static [dioxus_native_core::PassId] {
-                    &[#(dioxus_native_core::PassId(#depenancies)),*]
-                }
-                fn dependants(&self) -> &'static [dioxus_native_core::PassId] {
-                    &[#(dioxus_native_core::PassId(#dependants)),*]
-                }
-                fn mask(&self) -> dioxus_native_core::MemberMask {
-                    dioxus_native_core::MemberMask(#mask)
-                }
             }
         }
+    };
+    let deref_node_view = {
+        if node_dependencies.is_empty() {
+            quote! {
+                let node = raw_node;
+            }
+        } else {
+            let indexes = (0..node_dependencies.len()).map(syn::Index::from);
+            quote! {
+                let node = unsafe { (#(dioxus_native_core::prelude::DependancyView::new(&*raw_node.#indexes),)*) };
+            }
+        }
+    };
+
+    let parent_view = parent_dependancies_idxes
+        .iter()
+        .map(|i| format_ident!("__data{}", i))
+        .collect::<Vec<_>>();
+    let get_parent_view = {
+        if parent_dependencies.is_empty() {
+            quote! {
+                let raw_parent = tree.parent_id(id).map(|_| ());
+            }
+        } else {
+            let temps = (0..parent_dependencies.len())
+                .map(|i| format_ident!("__temp{}", i))
+                .collect::<Vec<_>>();
+            quote! {
+                let raw_parent = tree.parent_id(id).and_then(|parent_id| {
+                    let raw_parent: Option<(#(*const #parent_dependencies,)*)> = (#(&#parent_view,)*).get(parent_id).ok().map(|c| {
+                        let (#(#temps,)*) = c;
+                        (#(#temps as *const _,)*)
+                    });
+                    raw_parent
+                });
+            }
+        }
+    };
+    let deref_parent_view = {
+        if parent_dependencies.is_empty() {
+            quote! {
+                let parent = raw_parent;
+            }
+        } else {
+            let indexes = (0..parent_dependencies.len()).map(syn::Index::from);
+            quote! {
+                let parent = unsafe { raw_parent.map(|raw_parent| (#(dioxus_native_core::prelude::DependancyView::new(&*raw_parent.#indexes),)*)) };
+            }
+        }
+    };
+
+    let child_view = child_dependencies_idxes
+        .iter()
+        .map(|i| format_ident!("__data{}", i))
+        .collect::<Vec<_>>();
+    let get_child_view = {
+        if child_dependencies.is_empty() {
+            quote! {
+                let raw_children: Vec<_> = tree.children_ids(id).into_iter().map(|_| ()).collect();
+            }
+        } else {
+            let temps = (0..child_dependencies.len())
+                .map(|i| format_ident!("__temp{}", i))
+                .collect::<Vec<_>>();
+            quote! {
+                let raw_children: Vec<_> = tree.children_ids(id).into_iter().filter_map(|id| {
+                    let raw_children: Option<(#(*const #child_dependencies,)*)> = (#(&#child_view,)*).get(id).ok().map(|c| {
+                        let (#(#temps,)*) = c;
+                        (#(#temps as *const _,)*)
+                    });
+                    raw_children
+                }).collect();
+            }
+        }
+    };
+    let deref_child_view = {
+        if child_dependencies.is_empty() {
+            quote! {
+                let children = raw_children;
+            }
+        } else {
+            let indexes = (0..child_dependencies.len()).map(syn::Index::from);
+            quote! {
+                let children = unsafe { raw_children.iter().map(|raw_children| (#(dioxus_native_core::prelude::DependancyView::new(&*raw_children.#indexes),)*)).collect::<Vec<_>>() };
+            }
+        }
+    };
+
+    let trait_generics = trait_
+        .as_ref()
+        .unwrap()
+        .segments
+        .last()
+        .unwrap()
+        .arguments
+        .clone();
+
+    // if a create function is defined, we don't generate one
+    // otherwise we generate a default one that uses the update function and the default constructor
+    let create_fn = (!has_create_fn).then(|| {
+        quote! {
+            fn create<'a>(
+                node_view: dioxus_native_core::prelude::NodeView # trait_generics,
+                node: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
+                parent: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
+                children: Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>,
+                context: &dioxus_native_core::prelude::SendAnyMap,
+            ) -> Self {
+                let mut myself = Self::default();
+                myself.update(node_view, node, parent, children, context);
+                myself
+            }
+        }
+    });
+
+    quote!(
+        #(#attrs)*
+        #defaultness #unsafety #impl_token #generics #trait_ #for_ #self_ty {
+            #create_fn
+
+            #(#items)*
+
+            fn workload_system(type_id: std::any::TypeId, dependants: dioxus_native_core::exports::FxHashSet<std::any::TypeId>, pass_direction: dioxus_native_core::prelude::PassDirection) -> dioxus_native_core::exports::shipyard::WorkloadSystem {
+                use dioxus_native_core::exports::shipyard::{IntoWorkloadSystem, Get, AddComponent};
+                use dioxus_native_core::tree::TreeRef;
+                use dioxus_native_core::prelude::{NodeType, NodeView};
+
+                let node_mask = Self::NODE_MASK.build();
+
+                (move |data: #combined_dependencies_quote, run_view: dioxus_native_core::prelude::RunPassView #trait_generics| {
+                    let (#(#split_views,)*) = data;
+                    let tree = run_view.tree.clone();
+                    let node_types = run_view.node_type.clone();
+                    dioxus_native_core::prelude::run_pass(type_id, dependants.clone(), pass_direction, run_view, |id, context| {
+                        let node_data: &NodeType<_> = node_types.get(id).unwrap_or_else(|err| panic!("Failed to get node type {:?}", err));
+                        // get all of the states from the tree view
+                        // Safety: No node has itself as a parent or child.
+                        let raw_myself: Option<*mut Self> = (&mut #this_view).get(id).ok().map(|c| c as *mut _);
+                        #get_node_view
+                        #get_parent_view
+                        #get_child_view
+
+                        let myself: Option<&mut Self> = unsafe { raw_myself.map(|val| &mut *val) };
+                        #deref_node_view
+                        #deref_parent_view
+                        #deref_child_view
+
+                        let view = NodeView::new(id, node_data, &node_mask);
+                        if let Some(myself) = myself {
+                            myself
+                                .update(view, node, parent, children, context)
+                        }
+                        else {
+                            (&mut #this_view).add_component_unchecked(
+                                id,
+                                Self::create(view, node, parent, children, context));
+                            true
+                        }
+                    })
+                }).into_workload_system().unwrap()
+            }
+        }
+    )
+    .into()
+}
+
+fn extract_tuple(ty: &Type) -> Option<TypeTuple> {
+    match ty {
+        Type::Tuple(tuple) => Some(tuple.clone()),
+        Type::Group(group) => extract_tuple(&group.elem),
+        _ => None,
+    }
+}
+
+fn extract_type_path(ty: &Type) -> Option<TypePath> {
+    match ty {
+        Type::Path(path) => Some(path.clone()),
+        Type::Group(group) => extract_type_path(&group.elem),
+        _ => None,
     }
 }

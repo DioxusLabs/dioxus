@@ -1,6 +1,8 @@
+//! A cursor implementation that can be used to navigate and edit text.
+
 use std::{cmp::Ordering, ops::Range};
 
-use dioxus_html::input_data::keyboard_types::{Code, Key, Modifiers};
+use keyboard_types::{Code, Key, Modifiers};
 
 /// This contains the information about the text that is used by the cursor to handle navigation.
 pub trait Text {
@@ -221,26 +223,28 @@ impl Cursor {
     /// Handle moving the cursor with the given key.
     pub fn handle_input<T: Text + ?Sized>(
         &mut self,
-        data: &dioxus_html::KeyboardData,
+        code: &Code,
+        key: &Key,
+        modifiers: &Modifiers,
         text: &mut impl TextEditable<T>,
         max_text_length: usize,
     ) {
         use Code::*;
-        match data.code() {
+        match code {
             ArrowUp => {
                 self.move_cursor(
                     |c| c.up(text.as_ref()),
-                    data.modifiers().contains(Modifiers::SHIFT),
+                    modifiers.contains(Modifiers::SHIFT),
                 );
             }
             ArrowDown => {
                 self.move_cursor(
                     |c| c.down(text.as_ref()),
-                    data.modifiers().contains(Modifiers::SHIFT),
+                    modifiers.contains(Modifiers::SHIFT),
                 );
             }
             ArrowRight => {
-                if data.modifiers().contains(Modifiers::CONTROL) {
+                if modifiers.contains(Modifiers::CONTROL) {
                     self.move_cursor(
                         |c| {
                             let mut change = 1;
@@ -255,17 +259,17 @@ impl Cursor {
                             }
                             c.move_col(change as i32, text.as_ref());
                         },
-                        data.modifiers().contains(Modifiers::SHIFT),
+                        modifiers.contains(Modifiers::SHIFT),
                     );
                 } else {
                     self.move_cursor(
                         |c| c.right(text.as_ref()),
-                        data.modifiers().contains(Modifiers::SHIFT),
+                        modifiers.contains(Modifiers::SHIFT),
                     );
                 }
             }
             ArrowLeft => {
-                if data.modifiers().contains(Modifiers::CONTROL) {
+                if modifiers.contains(Modifiers::CONTROL) {
                     self.move_cursor(
                         |c| {
                             let mut change = -1;
@@ -279,23 +283,23 @@ impl Cursor {
                             }
                             c.move_col(change, text.as_ref());
                         },
-                        data.modifiers().contains(Modifiers::SHIFT),
+                        modifiers.contains(Modifiers::SHIFT),
                     );
                 } else {
                     self.move_cursor(
                         |c| c.left(text.as_ref()),
-                        data.modifiers().contains(Modifiers::SHIFT),
+                        modifiers.contains(Modifiers::SHIFT),
                     );
                 }
             }
             End => {
                 self.move_cursor(
                     |c| c.col = c.len_line(text.as_ref()),
-                    data.modifiers().contains(Modifiers::SHIFT),
+                    modifiers.contains(Modifiers::SHIFT),
                 );
             }
             Home => {
-                self.move_cursor(|c| c.col = 0, data.modifiers().contains(Modifiers::SHIFT));
+                self.move_cursor(|c| c.col = 0, modifiers.contains(Modifiers::SHIFT));
             }
             Backspace => {
                 self.start.realize_col(text.as_ref());
@@ -305,7 +309,7 @@ impl Cursor {
                 } else if start_idx > 0 {
                     self.start.left(text.as_ref());
                     text.delete_range(start_idx - 1..start_idx);
-                    if data.modifiers().contains(Modifiers::CONTROL) {
+                    if modifiers.contains(Modifiers::CONTROL) {
                         start_idx = self.start.idx(text.as_ref());
                         while start_idx > 0
                             && text
@@ -340,7 +344,7 @@ impl Cursor {
             }
             _ => {
                 self.start.realize_col(text.as_ref());
-                if let Key::Character(character) = data.key() {
+                if let Key::Character(character) = key {
                     if text.as_ref().length() + 1 - self.selection_len(text.as_ref())
                         <= max_text_length
                     {
@@ -460,13 +464,9 @@ fn cursor_input() {
 
     for _ in 0..5 {
         cursor.handle_input(
-            &dioxus_html::KeyboardData::new(
-                dioxus_html::input_data::keyboard_types::Key::ArrowRight,
-                dioxus_html::input_data::keyboard_types::Code::ArrowRight,
-                dioxus_html::input_data::keyboard_types::Location::Standard,
-                false,
-                Modifiers::empty(),
-            ),
+            &keyboard_types::Code::ArrowRight,
+            &keyboard_types::Key::ArrowRight,
+            &Modifiers::empty(),
             &mut text,
             10,
         );
@@ -474,13 +474,9 @@ fn cursor_input() {
 
     for _ in 0..5 {
         cursor.handle_input(
-            &dioxus_html::KeyboardData::new(
-                dioxus_html::input_data::keyboard_types::Key::Backspace,
-                dioxus_html::input_data::keyboard_types::Code::Backspace,
-                dioxus_html::input_data::keyboard_types::Location::Standard,
-                false,
-                Modifiers::empty(),
-            ),
+            &keyboard_types::Code::Backspace,
+            &keyboard_types::Key::Backspace,
+            &Modifiers::empty(),
             &mut text,
             10,
         );
@@ -491,61 +487,41 @@ fn cursor_input() {
     let goal_text = "hello world\nhi";
     let max_width = goal_text.len();
     cursor.handle_input(
-        &dioxus_html::KeyboardData::new(
-            dioxus_html::input_data::keyboard_types::Key::Character("h".to_string()),
-            dioxus_html::input_data::keyboard_types::Code::KeyH,
-            dioxus_html::input_data::keyboard_types::Location::Standard,
-            false,
-            Modifiers::empty(),
-        ),
+        &keyboard_types::Code::KeyH,
+        &keyboard_types::Key::Character("h".to_string()),
+        &Modifiers::empty(),
         &mut text,
         max_width,
     );
 
     cursor.handle_input(
-        &dioxus_html::KeyboardData::new(
-            dioxus_html::input_data::keyboard_types::Key::Character("e".to_string()),
-            dioxus_html::input_data::keyboard_types::Code::KeyE,
-            dioxus_html::input_data::keyboard_types::Location::Standard,
-            false,
-            Modifiers::empty(),
-        ),
+        &keyboard_types::Code::KeyE,
+        &keyboard_types::Key::Character("e".to_string()),
+        &Modifiers::empty(),
         &mut text,
         max_width,
     );
 
     cursor.handle_input(
-        &dioxus_html::KeyboardData::new(
-            dioxus_html::input_data::keyboard_types::Key::Character("l".to_string()),
-            dioxus_html::input_data::keyboard_types::Code::KeyL,
-            dioxus_html::input_data::keyboard_types::Location::Standard,
-            false,
-            Modifiers::empty(),
-        ),
+        &keyboard_types::Code::KeyL,
+        &keyboard_types::Key::Character("l".to_string()),
+        &Modifiers::empty(),
         &mut text,
         max_width,
     );
 
     cursor.handle_input(
-        &dioxus_html::KeyboardData::new(
-            dioxus_html::input_data::keyboard_types::Key::Character("l".to_string()),
-            dioxus_html::input_data::keyboard_types::Code::KeyL,
-            dioxus_html::input_data::keyboard_types::Location::Standard,
-            false,
-            Modifiers::empty(),
-        ),
+        &keyboard_types::Code::KeyL,
+        &keyboard_types::Key::Character("l".to_string()),
+        &Modifiers::empty(),
         &mut text,
         max_width,
     );
 
     cursor.handle_input(
-        &dioxus_html::KeyboardData::new(
-            dioxus_html::input_data::keyboard_types::Key::Character("o".to_string()),
-            dioxus_html::input_data::keyboard_types::Code::KeyO,
-            dioxus_html::input_data::keyboard_types::Location::Standard,
-            false,
-            Modifiers::empty(),
-        ),
+        &keyboard_types::Code::KeyO,
+        &keyboard_types::Key::Character("o".to_string()),
+        &Modifiers::empty(),
         &mut text,
         max_width,
     );
@@ -553,13 +529,9 @@ fn cursor_input() {
     // these should be ignored
     for _ in 0..10 {
         cursor.handle_input(
-            &dioxus_html::KeyboardData::new(
-                dioxus_html::input_data::keyboard_types::Key::Character("o".to_string()),
-                dioxus_html::input_data::keyboard_types::Code::KeyO,
-                dioxus_html::input_data::keyboard_types::Location::Standard,
-                false,
-                Modifiers::empty(),
-            ),
+            &keyboard_types::Code::KeyO,
+            &keyboard_types::Key::Character("o".to_string()),
+            &Modifiers::empty(),
             &mut text,
             max_width,
         );
