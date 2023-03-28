@@ -18,6 +18,7 @@ pub struct Config {
     pub(crate) pre_rendered: Option<String>,
     pub(crate) disable_context_menu: bool,
     pub(crate) resource_dir: Option<PathBuf>,
+    pub(crate) data_dir: Option<PathBuf>,
     pub(crate) custom_head: Option<String>,
     pub(crate) custom_index: Option<String>,
     pub(crate) root_name: String,
@@ -44,6 +45,7 @@ impl Config {
             pre_rendered: None,
             disable_context_menu: !cfg!(debug_assertions),
             resource_dir: None,
+            data_dir: None,
             custom_head: None,
             custom_index: None,
             root_name: "main".to_string(),
@@ -53,6 +55,14 @@ impl Config {
     /// set the directory from which assets will be searched in release mode
     pub fn with_resource_directory(mut self, path: impl Into<PathBuf>) -> Self {
         self.resource_dir = Some(path.into());
+        self
+    }
+
+    /// set the directory where data will be stored in release mode.
+    ///
+    /// > Note: This **must** be set when bundling on Windows.
+    pub fn with_data_directory(mut self, path: impl Into<PathBuf>) -> Self {
+        self.data_dir = Some(path.into());
         self
     }
 
