@@ -1,0 +1,21 @@
+[package]
+name = "server"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+server_fn = { version = "0.2.4", features = ["stable"] }
+
+# warp
+warp = { version = "0.3.3", optional = true }
+
+# axum
+axum = { version = "0.6.1", optional = true, features = ["ws"] }
+
+# salvo
+salvo = { version = "0.37.7", optional = true, features = ["ws"] }
+serde = "1.0.159"
+
+dioxus = { path = "../dioxus", version = "^0.3.0" }
