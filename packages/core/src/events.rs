@@ -79,6 +79,36 @@ impl<T> Event<T> {
     pub fn inner(&self) -> &Rc<T> {
         &self.data
     }
+    
+    /// Create event with custom data instead of e.g. MouseData
+    /// 
+    /// ```rust, ignore
+    /// #[inline_props]
+    /// pub fn CustomComponent<'a>(cx: Scope<'a>, on_custom_event: EventHandler<'a, Event<String>>) -> Element<'a> {
+    ///     cx.render(rsx! {
+    ///         button {
+    ///             onclick: move |_| { 
+    ///                 let tmp: Event<String> = Event::new_non_propagated_custom_event(String::from("test"));
+    ///                 on_custom_event.call(tmp);
+    ///             },
+    ///         }
+    ///     })
+    /// }
+    /// 
+    /// pub fn Container(cx: Scope) -> Element {
+    ///     let current_string = use_state(cx, || "".to_string());
+    ///     cx.render(rsx! {
+    ///         CustomComponent {
+    ///             on_custom_event: move |e: Event<String>| {
+    ///                 current_string.set(e.data.as_ref().clone());
+    ///             },
+    ///         },
+    ///     })
+    /// }
+    /// ```
+    pub fn new_non_propagated_custom_event(data: T) -> Self {
+        Self { data: Rc::new(data), propagates: Rc::new(Cell::new(false))}
+    }
 }
 
 impl<T: ?Sized> Clone for Event<T> {
