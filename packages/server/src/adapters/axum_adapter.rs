@@ -1,23 +1,105 @@
-use crate::{LiveViewError, LiveViewSocket};
-use axum::extract::ws::{Message, WebSocket};
-use futures_util::{SinkExt, StreamExt};
+use std::{error::Error, sync::Arc};
 
-/// Convert a warp websocket into a LiveViewSocket
-///
-/// This is required to launch a LiveView app using the warp web framework
-pub fn axum_socket(ws: WebSocket) -> impl LiveViewSocket {
-    ws.map(transform_rx)
-        .with(transform_tx)
-        .sink_map_err(|_| LiveViewError::SendingFailed)
+use axum::{
+    body::{self, Body, BoxBody, Full},
+    http::{HeaderMap, Request, Response, StatusCode},
+    response::IntoResponse,
+    routing::post,
+    Router,
+};
+use server_fn::{Payload, ServerFunctionRegistry};
+use tokio::task::spawn_blocking;
+
+use crate::{DioxusServerContext, DioxusServerFnRegistry, ServerFnTraitObj};
+
+trait DioxusRouterExt {
+    fn register_server_fns(self) -> Self;
 }
 
-fn transform_rx(message: Result<Message, axum::Error>) -> Result<String, LiveViewError> {
-    message
-        .map_err(|_| LiveViewError::SendingFailed)?
-        .into_text()
-        .map_err(|_| LiveViewError::SendingFailed)
+impl DioxusRouterExt for Router {
+    fn register_server_fns(self) -> Self {
+        let mut router = self;
+        for server_fn_path in DioxusServerFnRegistry::paths_registered() {
+            let func = DioxusServerFnRegistry::get(server_fn_path).unwrap();
+            router = router.route(
+                server_fn_path,
+                post(move |headers: HeaderMap, body: Request<Body>| async move {
+                    server_fn_handler(DioxusServerContext {}, func.clone(), headers, body).await
+                    // todo!()
+                }),
+            );
+        }
+        router
+    }
 }
 
-async fn transform_tx(message: String) -> Result<Message, axum::Error> {
-    Ok(Message::Text(message))
+async fn server_fn_handler(
+    server_context: DioxusServerContext,
+    function: Arc<ServerFnTraitObj>,
+    headers: HeaderMap,
+    req: Request<Body>,
+) -> impl IntoResponse {
+    let (_, body) = req.into_parts();
+    let body = hyper::body::to_bytes(body).await;
+    let Ok(body)=body else {
+        return report_err(body.err().unwrap());
+    };
+
+    // Because the future returned by `server_fn_handler` is `Send`, and the future returned by this function must be send, we need to spawn a new runtime
+    let (resp_tx, resp_rx) = tokio::sync::oneshot::channel();
+    spawn_blocking({
+        move || {
+            tokio::runtime::Runtime::new()
+                .expect("couldn't spawn runtime")
+                .block_on(async {
+                    let resp = match function(server_context, &body).await {
+                        Ok(serialized) => {
+                            // if this is Accept: application/json then send a serialized JSON response
+                            let accept_header =
+                                headers.get("Accept").and_then(|value| value.to_str().ok());
+                            let mut res = Response::builder();
+                            if accept_header == Some("application/json")
+                                || accept_header
+                                    == Some(
+                                        "application/\
+                                                 x-www-form-urlencoded",
+                                    )
+                                || accept_header == Some("application/cbor")
+                            {
+                                res = res.status(StatusCode::OK);
+                            }
+
+                            let resp = match serialized {
+                                Payload::Binary(data) => res
+                                    .header("Content-Type", "application/cbor")
+                                    .body(body::boxed(Full::from(data))),
+                                Payload::Url(data) => res
+                                    .header(
+                                        "Content-Type",
+                                        "application/\
+                                        x-www-form-urlencoded",
+                                    )
+                                    .body(body::boxed(data)),
+                                Payload::Json(data) => res
+                                    .header("Content-Type", "application/json")
+                                    .body(body::boxed(data)),
+                            };
+
+                            resp.unwrap()
+                        }
+                        Err(e) => report_err(e),
+                    };
+
+                    resp_tx.send(resp).unwrap();
+                })
+        }
+    });
+    resp_rx.await.unwrap()
+}
+
+fn report_err<E: Error>(e: E) -> Response<BoxBody> {
+    Response::builder()
+        .status(StatusCode::INTERNAL_SERVER_ERROR)
+        .body(body::boxed(format!("Error: {}", e)))
+        .unwrap()
 }
