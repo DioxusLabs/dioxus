@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 server_fn = { version = "0.2.4", features = ["stable"] }
-server_macro = { path = "server_macro" }
+server_macro = { path = "server-macro" }
 
 # warp
 warp = { version = "0.3.3", optional = true }
@@ -35,9 +35,3 @@ warp = ["dep:warp"]
 axum = ["dep:axum", "tower-http", "hyper"]
 salvo = ["dep:salvo"]
 ssr = ["server_fn/ssr", "tokio", "dioxus-ssr"]
-
-[workspace]
-members = [
-    "server_macro",
-    "examples/hello-world",
-]

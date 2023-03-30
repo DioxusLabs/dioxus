@@ -22,6 +22,8 @@ members = [
     "packages/signals",
     "packages/hot-reload",
     "packages/server",
+    "packages/server/server-macro",
+    "packages/server/examples/hello-world",
     "docs/guide",
 ]
 
