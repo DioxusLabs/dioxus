@@ -44,11 +44,11 @@ impl DioxusRouterExt for Router {
         let serve_dir = ServeDir::new("dist");
 
         self.register_server_fns(cfg.server_fn_route.unwrap_or_default())
-            .nest_service("/", serve_dir)
-            .fallback_service(get(move || {
+            .route("/", get(move || {
                 let rendered = dioxus_ssr_html(cfg);
                 async move { Full::from(rendered) }
             }))
+            .fallback_service( serve_dir)
     }
 }
 

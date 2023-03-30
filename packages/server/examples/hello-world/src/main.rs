@@ -1,3 +1,10 @@
+//! Run with:
+//! 
+//! ```sh
+//! dioxus build --features web
+//! cargo run --features ssr
+//! ```
+
 #![allow(non_snake_case)]
 use dioxus::prelude::*;
 use dioxus_server::prelude::*;

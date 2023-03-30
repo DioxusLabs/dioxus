@@ -2,12 +2,14 @@
 use dioxus_core::prelude::*;
 
 mod adapters;
+#[cfg(feature = "ssr")]
 mod serve;
 mod server_fn;
 
 pub mod prelude {
     #[cfg(feature = "axum")]
     pub use crate::adapters::axum_adapter::*;
+    #[cfg(feature = "ssr")]
     pub use crate::serve::ServeConfig;
     pub use crate::server_fn::{DioxusServerContext, ServerFn};
     pub use server_fn::{self, ServerFn as _, ServerFnError};
