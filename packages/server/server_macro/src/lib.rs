@@ -1,3 +1,7 @@
+use proc_macro::TokenStream;
+use quote::ToTokens;
+use server_fn_macro::*;
+
 /// Declares that a function is a [server function](leptos_server). This means that
 /// its body will only run on the server, i.e., when the `ssr` feature is enabled.
 ///
@@ -52,14 +56,14 @@
 #[proc_macro_attribute]
 pub fn server(args: proc_macro::TokenStream, s: TokenStream) -> TokenStream {
     let context = ServerContext {
-        ty: syn::parse_quote!(Scope),
-        path: syn::parse_quote!(::leptos::Scope),
+        ty: syn::parse_quote!(DioxusServerContext),
+        path: syn::parse_quote!(::dioxus_server::prelude::DioxusServerContext),
     };
     match server_macro_impl(
         args.into(),
         s.into(),
         Some(context),
-        Some(syn::parse_quote!(::leptos::server_fn)),
+        Some(syn::parse_quote!(::dioxus_server::prelude::server_fn)),
     ) {
         Err(e) => e.to_compile_error().into(),
         Ok(s) => s.to_token_stream().into(),

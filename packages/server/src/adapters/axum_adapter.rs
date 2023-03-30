@@ -4,32 +4,67 @@ use axum::{
     body::{self, Body, BoxBody, Full},
     http::{HeaderMap, Request, Response, StatusCode},
     response::IntoResponse,
-    routing::post,
+    routing::{get, post},
     Router,
 };
+use dioxus_core::Component;
 use server_fn::{Payload, ServerFunctionRegistry};
 use tokio::task::spawn_blocking;
 
-use crate::{DioxusServerContext, DioxusServerFnRegistry, ServerFnTraitObj};
+use crate::{
+    dioxus_ssr_html,
+    server_fn::{DioxusServerContext, DioxusServerFnRegistry, ServerFnTraitObj},
+};
 
-trait DioxusRouterExt {
-    fn register_server_fns(self) -> Self;
+pub trait DioxusRouterExt {
+    fn register_server_fns(self, server_fn_route: &'static str) -> Self;
+    fn serve_dioxus_application(
+        self,
+        title: &'static str,
+        application_name: &'static str,
+        base_path: Option<&'static str>,
+        head: Option<&'static str>,
+        server_fn_route: &'static str,
+        app: Component,
+    ) -> Self;
 }
 
 impl DioxusRouterExt for Router {
-    fn register_server_fns(self) -> Self {
+    fn register_server_fns(self, server_fn_route: &'static str) -> Self {
         let mut router = self;
         for server_fn_path in DioxusServerFnRegistry::paths_registered() {
             let func = DioxusServerFnRegistry::get(server_fn_path).unwrap();
+            let full_route = format!("{server_fn_route}/{server_fn_path}");
             router = router.route(
-                server_fn_path,
+                &full_route,
                 post(move |headers: HeaderMap, body: Request<Body>| async move {
                     server_fn_handler(DioxusServerContext {}, func.clone(), headers, body).await
-                    // todo!()
                 }),
             );
         }
         router
+    }
+
+    fn serve_dioxus_application(
+        self,
+        title: &'static str,
+        application_name: &'static str,
+        base_path: Option<&'static str>,
+        head: Option<&'static str>,
+        server_fn_route: &'static str,
+        app: Component,
+    ) -> Self {
+        use tower_http::services::ServeDir;
+
+        // Serve the dist folder and the index.html file
+        let serve_dir = ServeDir::new("dist");
+
+        self.register_server_fns(server_fn_route)
+            .nest_service("/", serve_dir)
+            .fallback_service(get(move || {
+                let rendered = dioxus_ssr_html(title, application_name, base_path, head, app);
+                async move { Full::from(rendered) }
+            }))
     }
 }
 

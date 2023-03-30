@@ -1,2 +1,2 @@
 #[cfg(feature = "axum")]
-mod axum_adapter;
+pub mod axum_adapter;
