@@ -7,26 +7,18 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use dioxus_core::Component;
 use server_fn::{Payload, ServerFunctionRegistry};
 use tokio::task::spawn_blocking;
 
 use crate::{
     dioxus_ssr_html,
+    serve::ServeConfig,
     server_fn::{DioxusServerContext, DioxusServerFnRegistry, ServerFnTraitObj},
 };
 
 pub trait DioxusRouterExt {
     fn register_server_fns(self, server_fn_route: &'static str) -> Self;
-    fn serve_dioxus_application(
-        self,
-        title: &'static str,
-        application_name: &'static str,
-        base_path: Option<&'static str>,
-        head: Option<&'static str>,
-        server_fn_route: &'static str,
-        app: Component,
-    ) -> Self;
+    fn serve_dioxus_application(self, cfg: ServeConfig) -> Self;
 }
 
 impl DioxusRouterExt for Router {
@@ -45,24 +37,16 @@ impl DioxusRouterExt for Router {
         router
     }
 
-    fn serve_dioxus_application(
-        self,
-        title: &'static str,
-        application_name: &'static str,
-        base_path: Option<&'static str>,
-        head: Option<&'static str>,
-        server_fn_route: &'static str,
-        app: Component,
-    ) -> Self {
+    fn serve_dioxus_application(self, cfg: ServeConfig) -> Self {
         use tower_http::services::ServeDir;
 
         // Serve the dist folder and the index.html file
         let serve_dir = ServeDir::new("dist");
 
-        self.register_server_fns(server_fn_route)
+        self.register_server_fns(cfg.server_fn_route.unwrap_or_default())
             .nest_service("/", serve_dir)
             .fallback_service(get(move || {
-                let rendered = dioxus_ssr_html(title, application_name, base_path, head, app);
+                let rendered = dioxus_ssr_html(cfg);
                 async move { Full::from(rendered) }
             }))
     }

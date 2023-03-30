@@ -17,12 +17,7 @@ fn main() {
                     .serve(
                         axum::Router::new()
                             .serve_dioxus_application(
-                                "Hello, world!",
-                                "hello-world",
-                                None,
-                                None,
-                                "",
-                                app,
+                                ServeConfig::new(app).head(r#"<title>Hello World!</title>"#),
                             )
                             .into_make_service(),
                     )
