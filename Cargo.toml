@@ -23,7 +23,8 @@ members = [
     "packages/hot-reload",
     "packages/server",
     "packages/server/server-macro",
-    "packages/server/examples/hello-world",
+    "packages/server/examples/axum-hello-world",
+    "packages/server/examples/salvo-hello-world",
     "docs/guide",
 ]
 

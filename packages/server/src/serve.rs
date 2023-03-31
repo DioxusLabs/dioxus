@@ -1,19 +1,21 @@
 use dioxus_core::Component;
 
 #[derive(Clone)]
-pub struct ServeConfig {
-    pub(crate) app: Component,
+pub struct ServeConfig<P: Clone> {
+    pub(crate) app: Component<P>,
+    pub(crate) props: P,
     pub(crate) application_name: Option<&'static str>,
     pub(crate) server_fn_route: Option<&'static str>,
     pub(crate) base_path: Option<&'static str>,
     pub(crate) head: Option<&'static str>,
 }
 
-impl ServeConfig {
+impl<P: Clone> ServeConfig<P> {
     /// Create a new ServeConfig
-    pub fn new(app: Component) -> Self {
+    pub fn new(app: Component<P>, props: P) -> Self {
         Self {
             app,
+            props,
             application_name: None,
             server_fn_route: None,
             base_path: None,

@@ -1,3 +1,4 @@
+#[derive(Clone)]
 pub struct DioxusServerContext {}
 
 #[cfg(any(feature = "ssr", doc))]

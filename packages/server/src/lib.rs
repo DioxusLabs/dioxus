@@ -9,6 +9,8 @@ mod server_fn;
 pub mod prelude {
     #[cfg(feature = "axum")]
     pub use crate::adapters::axum_adapter::*;
+    #[cfg(feature = "salvo")]
+    pub use crate::adapters::salvo_adapter::*;
     #[cfg(feature = "ssr")]
     pub use crate::serve::ServeConfig;
     pub use crate::server_fn::{DioxusServerContext, ServerFn};
@@ -17,7 +19,7 @@ pub mod prelude {
 }
 
 #[cfg(feature = "ssr")]
-fn dioxus_ssr_html(cfg: serve::ServeConfig) -> String {
+fn dioxus_ssr_html<P: 'static + Clone>(cfg: &serve::ServeConfig<P>) -> String {
     use prelude::ServeConfig;
 
     let ServeConfig {
@@ -25,12 +27,13 @@ fn dioxus_ssr_html(cfg: serve::ServeConfig) -> String {
         application_name,
         base_path,
         head,
+        props,
         ..
     } = cfg;
 
     let application_name = application_name.unwrap_or("dioxus");
 
-    let mut vdom = VirtualDom::new(app);
+    let mut vdom = VirtualDom::new_with_props(*app, props.clone());
     let _ = vdom.rebuild();
     let renderered = dioxus_ssr::pre_render(&vdom);
     let base_path = base_path.unwrap_or(".");
