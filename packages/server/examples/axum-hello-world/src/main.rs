@@ -1,5 +1,5 @@
 //! Run with:
-//! 
+//!
 //! ```sh
 //! dioxus build --features web
 //! cargo run --features ssr
@@ -24,7 +24,7 @@ fn main() {
                     .serve(
                         axum::Router::new()
                             .serve_dioxus_application(
-                                ServeConfig::new(app).head(r#"<title>Hello World!</title>"#),
+                                ServeConfig::new(app, ()).head(r#"<title>Hello World!</title>"#),
                             )
                             .into_make_service(),
                     )

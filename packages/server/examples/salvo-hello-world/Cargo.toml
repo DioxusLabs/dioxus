@@ -1,5 +1,5 @@
 [package]
-name = "hello-world"
+name = "salvo-hello-world"
 version = "0.1.0"
 edition = "2021"
 
@@ -9,12 +9,12 @@ edition = "2021"
 dioxus-web = { path = "../../../web", features=["hydrate"], optional = true }
 dioxus = { path = "../../../dioxus" }
 dioxus-server = { path = "../../" }
-axum = { version = "0.6.12", optional = true }
 tokio = { version = "1.27.0", features = ["full"], optional = true }
 serde = "1.0.159"
 tracing-subscriber = "0.3.16"
 tracing = "0.1.37"
+salvo = { version = "0.37.9", optional = true }
 
 [features]
-ssr = ["axum", "tokio", "dioxus-server/ssr", "dioxus-server/axum"]
+ssr = ["salvo", "tokio", "dioxus-server/ssr", "dioxus-server/salvo"]
 web = ["dioxus-web"]
