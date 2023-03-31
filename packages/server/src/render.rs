@@ -20,25 +20,36 @@ fn dioxus_ssr_html<P: 'static + Clone>(cfg: &ServeConfig<P>, renderer: &mut Rend
     let mut vdom = VirtualDom::new_with_props(*app, props.clone());
     let _ = vdom.rebuild();
     let base_path = base_path.unwrap_or(".");
-    let head = head.unwrap_or(
-        r#"<title>Dioxus Application</title>
-        <meta content="text/html;charset=utf-8" http-equiv="Content-Type" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <meta charset="UTF-8" />"#,
-    );
 
     let mut html = String::new();
 
-    if let Err(err) = write!(
-        &mut html,
-        r#"
+    let result = match head {
+        Some(head) => {
+            write!(
+                &mut html,
+                r#"
         <!DOCTYPE html>
         <html>
         <head>{head}
         </head>
         <body>
         <div id="main">"#
-    ) {
+            )
+        }
+        None => {
+            write!(
+                &mut html,
+                r#"<title>Dioxus Application</title>
+        <link rel="preload" href="/{base_path}/assets/dioxus/{application_name}_bg.wasm" as="fetch" type="application/wasm" crossorigin="" />
+        <link rel="modulepreload" href="/{base_path}/assets/dioxus/{application_name}.js" />
+        <meta content="text/html;charset=utf-8" http-equiv="Content-Type" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta charset="UTF-8" />"#
+            )
+        }
+    };
+
+    if let Err(err) = result {
         eprintln!("Failed to write to html: {}", err);
     }
 

@@ -41,15 +41,12 @@ fn main() {
                             // If the path is unknown, render the application
                             .fallback(
                                 move |uri: http::uri::Uri, State(ssr_state): State<SSRState>| {
-                                    let rendered = ssr_state.render(
-                                        &ServeConfig::new(
-                                            App,
-                                            AppProps {
-                                                route: Some(format!("http://{addr}{uri}")),
-                                            },
-                                        )
-                                        .head(r#"<title>Hello World!</title>"#),
-                                    );
+                                    let rendered = ssr_state.render(&ServeConfig::new(
+                                        App,
+                                        AppProps {
+                                            route: Some(format!("http://{addr}{uri}")),
+                                        },
+                                    ));
                                     async move { axum::body::Full::from(rendered) }
                                 },
                             )
