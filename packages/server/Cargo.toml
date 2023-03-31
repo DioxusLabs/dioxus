@@ -11,6 +11,7 @@ server_macro = { path = "server-macro" }
 
 # warp
 warp = { version = "0.3.3", optional = true }
+http-body = { version = "0.4.5", optional = true }
 
 # axum
 axum = { version = "0.6.1", optional = true }
@@ -31,7 +32,7 @@ tokio = { version = "1.27.0", features = ["full"], optional = true }
 
 [features]
 default = []
-warp = ["dep:warp"]
+warp = ["dep:warp", "http-body"]
 axum = ["dep:axum", "tower-http", "hyper"]
 salvo = ["dep:salvo", "hyper"]
 ssr = ["server_fn/ssr", "tokio", "dioxus-ssr"]

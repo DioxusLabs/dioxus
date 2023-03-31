@@ -25,6 +25,7 @@ members = [
     "packages/server/server-macro",
     "packages/server/examples/axum-hello-world",
     "packages/server/examples/salvo-hello-world",
+    "packages/server/examples/warp-hello-world",
     "docs/guide",
 ]
 

@@ -132,12 +132,12 @@ impl ServerFnHandler {
                                     x-www-form-urlencoded",
                             ),
                         );
-                        res.render(data);
+                        res.write_body(data).unwrap();
                     }
                     Payload::Json(data) => {
                         res.headers_mut()
                             .insert("Content-Type", HeaderValue::from_static("application/json"));
-                        res.render(data);
+                        res.write_body(data).unwrap();
                     }
                 }
             }
