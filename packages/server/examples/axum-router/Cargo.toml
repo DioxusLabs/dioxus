@@ -1,5 +1,5 @@
 [package]
-name = "axum-hello-world"
+name = "axum-router"
 version = "0.1.0"
 edition = "2021"
 
@@ -13,7 +13,9 @@ dioxus-server = { path = "../../" }
 axum = { version = "0.6.12", optional = true }
 tokio = { version = "1.27.0", features = ["full"], optional = true }
 serde = "1.0.159"
+tower-http = { version = "0.4.0", features = ["fs"], optional = true }
+http = { version = "0.2.9", optional = true }
 
 [features]
-ssr = ["axum", "tokio", "dioxus-server/ssr", "dioxus-server/axum"]
+ssr = ["axum", "tokio", "dioxus-server/ssr", "dioxus-server/axum", "tower-http", "http"]
 web = ["dioxus-web", "dioxus-router/web"]

@@ -29,6 +29,7 @@ pub struct RouterProps<'a> {
     pub active_class: Option<&'a str>,
 
     /// Set the initial url.
+    #[props(!optional, into)]
     pub initial_url: Option<String>,
 }
 

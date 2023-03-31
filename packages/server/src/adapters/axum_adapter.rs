@@ -2,6 +2,7 @@ use std::{error::Error, sync::Arc};
 
 use axum::{
     body::{self, Body, BoxBody, Full},
+    extract::{FromRef, State},
     http::{HeaderMap, Request, Response, StatusCode},
     response::IntoResponse,
     routing::{get, post},
@@ -11,7 +12,7 @@ use server_fn::{Payload, ServerFunctionRegistry};
 use tokio::task::spawn_blocking;
 
 use crate::{
-    dioxus_ssr_html,
+    render::SSRState,
     serve::ServeConfig,
     server_fn::{DioxusServerContext, DioxusServerFnRegistry, ServerFnTraitObj},
 };
@@ -21,10 +22,15 @@ pub trait DioxusRouterExt {
     fn serve_dioxus_application<P: Clone + Send + Sync + 'static>(
         self,
         cfg: ServeConfig<P>,
+        server_fn_route: Option<&'static str>,
     ) -> Self;
 }
 
-impl DioxusRouterExt for Router {
+impl<S> DioxusRouterExt for Router<S>
+where
+    SSRState: FromRef<S>,
+    S: Send + Sync + Clone + 'static,
+{
     fn register_server_fns(self, server_fn_route: &'static str) -> Self {
         let mut router = self;
         for server_fn_path in DioxusServerFnRegistry::paths_registered() {
@@ -43,17 +49,18 @@ impl DioxusRouterExt for Router {
     fn serve_dioxus_application<P: Clone + Send + Sync + 'static>(
         self,
         cfg: ServeConfig<P>,
+        server_fn_route: Option<&'static str>,
     ) -> Self {
         use tower_http::services::ServeDir;
 
         // Serve the dist folder and the index.html file
         let serve_dir = ServeDir::new("dist");
 
-        self.register_server_fns(cfg.server_fn_route.unwrap_or_default())
+        self.register_server_fns(server_fn_route.unwrap_or_default())
             .route(
                 "/",
-                get(move || {
-                    let rendered = dioxus_ssr_html(&cfg);
+                get(move |State(ssr_state): State<SSRState>| {
+                    let rendered = ssr_state.render(&cfg);
                     async move { Full::from(rendered) }
                 }),
             )

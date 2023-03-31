@@ -25,7 +25,9 @@ fn main() {
                         axum::Router::new()
                             .serve_dioxus_application(
                                 ServeConfig::new(app, ()).head(r#"<title>Hello World!</title>"#),
+                                None,
                             )
+                            .with_state(SSRState::default())
                             .into_make_service(),
                     )
                     .await

@@ -11,8 +11,6 @@ dioxus = { path = "../../../dioxus" }
 dioxus-server = { path = "../../" }
 tokio = { version = "1.27.0", features = ["full"], optional = true }
 serde = "1.0.159"
-tracing-subscriber = "0.3.16"
-tracing = "0.1.37"
 salvo = { version = "0.37.9", optional = true }
 
 [features]
