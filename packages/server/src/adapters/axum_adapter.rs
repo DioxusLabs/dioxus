@@ -18,7 +18,10 @@ use crate::{
 
 pub trait DioxusRouterExt {
     fn register_server_fns(self, server_fn_route: &'static str) -> Self;
-    fn serve_dioxus_application(self, cfg: ServeConfig) -> Self;
+    fn serve_dioxus_application<P: Clone + Send + Sync + 'static>(
+        self,
+        cfg: ServeConfig<P>,
+    ) -> Self;
 }
 
 impl DioxusRouterExt for Router {
@@ -37,18 +40,24 @@ impl DioxusRouterExt for Router {
         router
     }
 
-    fn serve_dioxus_application(self, cfg: ServeConfig) -> Self {
+    fn serve_dioxus_application<P: Clone + Send + Sync + 'static>(
+        self,
+        cfg: ServeConfig<P>,
+    ) -> Self {
         use tower_http::services::ServeDir;
 
         // Serve the dist folder and the index.html file
         let serve_dir = ServeDir::new("dist");
 
         self.register_server_fns(cfg.server_fn_route.unwrap_or_default())
-            .route("/", get(move || {
-                let rendered = dioxus_ssr_html(cfg);
-                async move { Full::from(rendered) }
-            }))
-            .fallback_service( serve_dir)
+            .route(
+                "/",
+                get(move || {
+                    let rendered = dioxus_ssr_html(&cfg);
+                    async move { Full::from(rendered) }
+                }),
+            )
+            .fallback_service(serve_dir)
     }
 }
 
