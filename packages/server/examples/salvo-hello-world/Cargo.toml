@@ -14,5 +14,6 @@ serde = "1.0.159"
 salvo = { version = "0.37.9", optional = true }
 
 [features]
-ssr = ["salvo", "tokio", "dioxus-server/ssr", "dioxus-server/salvo"]
+default = ["web"]
+ssr = ["salvo", "tokio", "dioxus-server/salvo"]
 web = ["dioxus-web"]

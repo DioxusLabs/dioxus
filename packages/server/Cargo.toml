@@ -35,7 +35,7 @@ anymap = "0.12.1"
 
 [features]
 default = []
-warp = ["dep:warp", "http-body"]
-axum = ["dep:axum", "tower-http", "hyper"]
-salvo = ["dep:salvo", "hyper"]
+warp = ["dep:warp", "http-body", "ssr"]
+axum = ["dep:axum", "tower-http", "hyper", "ssr"]
+salvo = ["dep:salvo", "hyper", "ssr"]
 ssr = ["server_fn/ssr", "tokio", "dioxus-ssr"]

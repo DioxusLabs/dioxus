@@ -14,5 +14,6 @@ serde = "1.0.159"
 warp = { version = "0.3.3", optional = true }
 
 [features]
-ssr = ["warp", "tokio", "dioxus-server/ssr", "dioxus-server/warp"]
+default = ["web"]
+ssr = ["warp", "tokio", "dioxus-server/warp"]
 web = ["dioxus-web"]

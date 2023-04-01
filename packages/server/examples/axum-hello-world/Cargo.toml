@@ -15,5 +15,6 @@ tokio = { version = "1.27.0", features = ["full"], optional = true }
 serde = "1.0.159"
 
 [features]
-ssr = ["axum", "tokio", "dioxus-server/ssr", "dioxus-server/axum"]
+default = ["web"]
+ssr = ["axum", "tokio", "dioxus-server/axum"]
 web = ["dioxus-web", "dioxus-router/web"]

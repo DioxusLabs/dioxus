@@ -17,5 +17,6 @@ tower-http = { version = "0.4.0", features = ["fs"], optional = true }
 http = { version = "0.2.9", optional = true }
 
 [features]
-ssr = ["axum", "tokio", "dioxus-server/ssr", "dioxus-server/axum", "tower-http", "http"]
+default = ["web"]
+ssr = ["axum", "tokio", "dioxus-server/axum", "tower-http", "http"]
 web = ["dioxus-web", "dioxus-router/web"]

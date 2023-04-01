@@ -2,7 +2,7 @@
 //!
 //! ```sh
 //! dioxus build --features web
-//! cargo run --features ssr
+//! cargo run --features ssr --no-default-features
 //! ```
 
 #![allow(non_snake_case)]
