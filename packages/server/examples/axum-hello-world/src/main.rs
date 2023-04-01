@@ -23,11 +23,7 @@ fn main() {
                 axum::Server::bind(&addr)
                     .serve(
                         axum::Router::new()
-                            .serve_dioxus_application(
-                                ServeConfig::new(app, ()).head(r#"<title>Hello World!</title>"#),
-                                None,
-                            )
-                            .with_state(SSRState::default())
+                            .serve_dioxus_application("", ServeConfigBuilder::new(app, ()))
                             .into_make_service(),
                     )
                     .await

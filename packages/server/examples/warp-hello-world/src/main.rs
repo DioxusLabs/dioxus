@@ -19,9 +19,7 @@ fn main() {
         tokio::runtime::Runtime::new()
             .unwrap()
             .block_on(async move {
-                let routes = serve_dioxus_application(
-                    ServeConfig::new(app, ()).head(r#"<title>Hello World!</title>"#),
-                );
+                let routes = serve_dioxus_application("", ServeConfigBuilder::new(app, ()));
                 warp::serve(routes).run(([127, 0, 0, 1], 8080)).await;
             });
     }

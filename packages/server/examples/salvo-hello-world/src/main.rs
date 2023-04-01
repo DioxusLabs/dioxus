@@ -20,9 +20,8 @@ fn main() {
         tokio::runtime::Runtime::new()
             .unwrap()
             .block_on(async move {
-                let router = Router::new().serve_dioxus_application(
-                    ServeConfig::new(app, ()).head(r#"<title>Hello World!</title>"#),
-                );
+                let router =
+                    Router::new().serve_dioxus_application("", ServeConfigBuilder::new(app, ()));
                 Server::new(TcpListener::bind("127.0.0.1:8080"))
                     .serve(router)
                     .await;
