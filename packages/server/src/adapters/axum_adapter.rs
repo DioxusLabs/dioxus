@@ -2,7 +2,8 @@ use std::{error::Error, sync::Arc};
 
 use axum::{
     body::{self, Body, BoxBody, Full},
-    extract::{FromRef, State},
+    extract::State,
+    handler::Handler,
     http::{HeaderMap, Request, Response, StatusCode},
     response::IntoResponse,
     routing::{get, post},
@@ -14,61 +15,89 @@ use tokio::task::spawn_blocking;
 use crate::{
     render::SSRState,
     serve::ServeConfig,
-    server_fn::{DioxusServerContext, DioxusServerFnRegistry, ServerFnTraitObj},
+    server_context::DioxusServerContext,
+    server_fn::{DioxusServerFnRegistry, ServerFnTraitObj},
 };
 
-pub trait DioxusRouterExt {
+pub trait DioxusRouterExt<S> {
+    fn register_server_fns_with_handler<H, T>(
+        self,
+        server_fn_route: &'static str,
+        handler: impl Fn(Arc<ServerFnTraitObj>) -> H,
+    ) -> Self
+    where
+        H: Handler<T, S>,
+        T: 'static,
+        S: Clone + Send + Sync + 'static;
     fn register_server_fns(self, server_fn_route: &'static str) -> Self;
+
     fn serve_dioxus_application<P: Clone + Send + Sync + 'static>(
         self,
-        cfg: ServeConfig<P>,
-        server_fn_route: Option<&'static str>,
+        server_fn_route: &'static str,
+        cfg: impl Into<ServeConfig<P>>,
     ) -> Self;
 }
 
-impl<S> DioxusRouterExt for Router<S>
+impl<S> DioxusRouterExt<S> for Router<S>
 where
-    SSRState: FromRef<S>,
     S: Send + Sync + Clone + 'static,
 {
-    fn register_server_fns(self, server_fn_route: &'static str) -> Self {
+    fn register_server_fns_with_handler<H, T>(
+        self,
+        server_fn_route: &'static str,
+        mut handler: impl FnMut(Arc<ServerFnTraitObj>) -> H,
+    ) -> Self
+    where
+        H: Handler<T, S, Body>,
+        T: 'static,
+        S: Clone + Send + Sync + 'static,
+    {
         let mut router = self;
         for server_fn_path in DioxusServerFnRegistry::paths_registered() {
             let func = DioxusServerFnRegistry::get(server_fn_path).unwrap();
             let full_route = format!("{server_fn_route}/{server_fn_path}");
-            router = router.route(
-                &full_route,
-                post(move |headers: HeaderMap, body: Request<Body>| async move {
-                    server_fn_handler(DioxusServerContext {}, func.clone(), headers, body).await
-                }),
-            );
+            router = router.route(&full_route, post(handler(func)));
         }
         router
     }
 
+    fn register_server_fns(self, server_fn_route: &'static str) -> Self {
+        self.register_server_fns_with_handler(server_fn_route, |func| {
+            move |headers: HeaderMap, body: Request<Body>| async move {
+                server_fn_handler(DioxusServerContext::default(), func.clone(), headers, body).await
+            }
+        })
+    }
+
     fn serve_dioxus_application<P: Clone + Send + Sync + 'static>(
         self,
-        cfg: ServeConfig<P>,
-        server_fn_route: Option<&'static str>,
+        server_fn_route: &'static str,
+        cfg: impl Into<ServeConfig<P>>,
     ) -> Self {
         use tower_http::services::ServeDir;
 
-        // Serve the dist folder and the index.html file
-        let serve_dir = ServeDir::new("dist");
+        let cfg = cfg.into();
 
-        self.register_server_fns(server_fn_route.unwrap_or_default())
-            .route(
+        // Serve the dist folder and the index.html file
+        let serve_dir = ServeDir::new(cfg.assets_path);
+
+        self.register_server_fns(server_fn_route)
+            .nest_service("/assets", serve_dir)
+            .route_service(
                 "/",
-                get(move |State(ssr_state): State<SSRState>| {
-                    let rendered = ssr_state.render(&cfg);
-                    async move { Full::from(rendered) }
-                }),
+                get(render_handler).with_state((cfg, SSRState::default())),
             )
-            .fallback_service(serve_dir)
     }
 }
 
-async fn server_fn_handler(
+async fn render_handler<P: Clone + Send + Sync + 'static>(
+    State((cfg, ssr_state)): State<(ServeConfig<P>, SSRState)>,
+) -> impl IntoResponse {
+    let rendered = ssr_state.render(&cfg);
+    Full::from(rendered)
+}
+
+pub async fn server_fn_handler(
     server_context: DioxusServerContext,
     function: Arc<ServerFnTraitObj>,
     headers: HeaderMap,

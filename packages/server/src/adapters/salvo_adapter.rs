@@ -9,43 +9,65 @@ use server_fn::{Payload, ServerFunctionRegistry};
 use tokio::task::spawn_blocking;
 
 use crate::{
-    dioxus_ssr_html,
+    prelude::DioxusServerContext,
+    prelude::SSRState,
     serve::ServeConfig,
-    server_fn::{DioxusServerContext, DioxusServerFnRegistry, ServerFnTraitObj},
+    server_fn::{DioxusServerFnRegistry, ServerFnTraitObj},
 };
 
 pub trait DioxusRouterExt {
     fn register_server_fns(self, server_fn_route: &'static str) -> Self;
+    fn register_server_fns_with_handler<H>(
+        self,
+        server_fn_route: &'static str,
+        handler: impl Fn(Arc<ServerFnTraitObj>) -> H,
+    ) -> Self
+    where
+        H: Handler + 'static;
     fn serve_dioxus_application<P: Clone + Send + Sync + 'static>(
         self,
-        cfg: ServeConfig<P>,
+        server_fn_path: &'static str,
+        cfg: impl Into<ServeConfig<P>>,
     ) -> Self;
 }
 
 impl DioxusRouterExt for Router {
-    fn register_server_fns(self, server_fn_route: &'static str) -> Self {
+    fn register_server_fns_with_handler<H>(
+        self,
+        server_fn_route: &'static str,
+        mut handler: impl FnMut(Arc<ServerFnTraitObj>) -> H,
+    ) -> Self
+    where
+        H: Handler + 'static,
+    {
         let mut router = self;
         for server_fn_path in DioxusServerFnRegistry::paths_registered() {
             let func = DioxusServerFnRegistry::get(server_fn_path).unwrap();
             let full_route = format!("{server_fn_route}/{server_fn_path}");
-            router = router.push(Router::with_path(&full_route).post(ServerFnHandler {
-                server_context: DioxusServerContext {},
-                function: func,
-            }));
+            router = router.push(Router::with_path(&full_route).post(handler(func)));
         }
         router
     }
 
+    fn register_server_fns(self, server_fn_route: &'static str) -> Self {
+        self.register_server_fns_with_handler(|| ServerFnHandler {
+            server_context: DioxusServerContext::default(),
+            function: func,
+        })
+    }
+
     fn serve_dioxus_application<P: Clone + Send + Sync + 'static>(
         self,
-        cfg: ServeConfig<P>,
+        server_fn_route: &'static str,
+        cfg: impl Into<ServeConfig<P>>,
     ) -> Self {
+        let cfg = cfg.into();
         // Serve the dist folder and the index.html file
-        let serve_dir = StaticDir::new(["dist"]);
+        let serve_dir = StaticDir::new([cfg.assets_path]);
 
-        self.register_server_fns(cfg.server_fn_route.unwrap_or_default())
+        self.register_server_fns(server_fn_route)
             .push(Router::with_path("/").get(SSRHandler { cfg }))
-            .push(Router::with_path("<**path>").get(serve_dir))
+            .push(Router::with_path("assets/<**path>").get(serve_dir))
     }
 }
 
@@ -58,17 +80,34 @@ impl<P: Clone + Send + Sync + 'static> Handler for SSRHandler<P> {
     async fn handle(
         &self,
         _req: &mut Request,
-        _depot: &mut Depot,
+        depot: &mut Depot,
         res: &mut Response,
         _flow: &mut FlowCtrl,
     ) {
-        res.write_body(dioxus_ssr_html(&self.cfg)).unwrap();
+        // Get the SSR renderer from the depot or create a new one if it doesn't exist
+        let renderer_pool = if let Some(renderer) = depot.obtain::<SSRState>() {
+            renderer.clone()
+        } else {
+            let renderer = SSRState::default();
+            depot.inject(renderer.clone());
+            renderer
+        };
+        res.write_body(renderer_pool.render(&self.cfg)).unwrap();
     }
 }
 
-struct ServerFnHandler {
+pub struct ServerFnHandler {
     server_context: DioxusServerContext,
     function: Arc<ServerFnTraitObj>,
+}
+
+impl ServerFnHandler {
+    pub fn new(server_context: DioxusServerContext, function: Arc<ServerFnTraitObj>) -> Self {
+        Self {
+            server_context,
+            function,
+        }
+    }
 }
 
 #[handler]

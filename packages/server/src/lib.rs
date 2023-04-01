@@ -6,6 +6,7 @@ mod adapters;
 pub mod render;
 #[cfg(feature = "ssr")]
 mod serve;
+mod server_context;
 mod server_fn;
 
 pub mod prelude {
@@ -18,8 +19,11 @@ pub mod prelude {
     #[cfg(feature = "ssr")]
     pub use crate::render::*;
     #[cfg(feature = "ssr")]
-    pub use crate::serve::ServeConfig;
-    pub use crate::server_fn::{DioxusServerContext, ServerFn};
+    pub use crate::serve::{ServeConfig, ServeConfigBuilder};
+    pub use crate::server_context::DioxusServerContext;
+    pub use crate::server_fn::ServerFn;
+    #[cfg(feature = "ssr")]
+    pub use crate::server_fn::ServerFnTraitObj;
     pub use server_fn::{self, ServerFn as _, ServerFnError};
     pub use server_macro::*;
 }

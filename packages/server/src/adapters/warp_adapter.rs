@@ -10,48 +10,73 @@ use warp::{
 };
 
 use crate::{
-    dioxus_ssr_html,
+    prelude::{DioxusServerContext, SSRState},
     serve::ServeConfig,
-    server_fn::{DioxusServerContext, DioxusServerFnRegistry, ServerFnTraitObj},
+    server_fn::{DioxusServerFnRegistry, ServerFnTraitObj},
 };
 
-pub fn register_server_fns(server_fn_route: &'static str) -> BoxedFilter<(impl Reply,)> {
-    let mut filter: Option<BoxedFilter<(_,)>> = None;
+pub fn register_server_fns_with_handler<H, F, R>(
+    server_fn_route: &'static str,
+    mut handler: H,
+) -> BoxedFilter<(R,)>
+where
+    H: FnMut(String, Arc<ServerFnTraitObj>) -> F,
+    F: Filter<Extract = (R,), Error = warp::Rejection> + Send + Sync + 'static,
+    F::Extract: Send,
+    R: Reply + 'static,
+{
+    let mut filter: Option<BoxedFilter<F::Extract>> = None;
     for server_fn_path in DioxusServerFnRegistry::paths_registered() {
         let func = DioxusServerFnRegistry::get(server_fn_path).unwrap();
         let full_route = format!("{server_fn_route}/{server_fn_path}")
             .trim_start_matches('/')
             .to_string();
-        let route = path(full_route)
-            .and(warp::post())
-            .and(warp::header::headers_cloned())
-            .and(warp::body::bytes())
-            .and_then(move |headers: HeaderMap, body| {
-                let func = func.clone();
-                async move { server_fn_handler(DioxusServerContext {}, func, headers, body).await }
-            })
-            .boxed();
+        let route = handler(full_route, func.clone()).boxed();
         if let Some(boxed_filter) = filter.take() {
             filter = Some(boxed_filter.or(route).unify().boxed());
         } else {
-            filter = Some(route.boxed());
+            filter = Some(route);
         }
     }
     filter.expect("No server functions found")
 }
 
-pub fn serve_dioxus_application<P: Clone + Send + Sync + 'static>(
-    cfg: ServeConfig<P>,
-) -> BoxedFilter<(impl Reply,)> {
-    // Serve the dist folder and the index.html file
-    let serve_dir = warp::fs::dir("./dist");
+pub fn register_server_fns(server_fn_route: &'static str) -> BoxedFilter<(impl Reply,)> {
+    register_server_fns_with_handler(server_fn_route, |full_route, func| {
+        path(full_route)
+            .and(warp::post())
+            .and(warp::header::headers_cloned())
+            .and(warp::body::bytes())
+            .and_then(move |headers: HeaderMap, body| {
+                let func = func.clone();
+                async move {
+                    server_fn_handler(DioxusServerContext::default(), func, headers, body).await
+                }
+            })
+    })
+}
 
-    register_server_fns(cfg.server_fn_route.unwrap_or_default())
+pub fn serve_dioxus_application<P: Clone + Send + Sync + 'static>(
+    server_fn_route: &'static str,
+    cfg: impl Into<ServeConfig<P>>,
+) -> BoxedFilter<(impl Reply,)> {
+    let cfg = cfg.into();
+    // Serve the dist folder and the index.html file
+    let serve_dir = warp::fs::dir(cfg.assets_path);
+
+    register_server_fns(server_fn_route)
         .or(warp::path::end()
             .and(warp::get())
-            .map(move || warp::reply::html(dioxus_ssr_html(&cfg))))
-        .or(serve_dir)
+            .and(with_ssr_state())
+            .map(move |renderer: SSRState| warp::reply::html(renderer.render(&cfg))))
+        .or(warp::path("assets").and(serve_dir))
         .boxed()
+}
+
+fn with_ssr_state() -> impl Filter<Extract = (SSRState,), Error = std::convert::Infallible> + Clone
+{
+    let renderer = SSRState::default();
+    warp::any().map(move || renderer.clone())
 }
 
 #[derive(Debug)]

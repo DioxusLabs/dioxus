@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-server_fn = { version = "0.2.4", features = ["stable"] }
+server_fn = { path = "D:/Users/Desktop/github/leptos/server_fn", features = ["stable"] }
 server_macro = { path = "server-macro" }
 
 # warp
@@ -31,6 +31,7 @@ once_cell = "1.17.1"
 thiserror = "1.0.40"
 tokio = { version = "1.27.0", features = ["full"], optional = true }
 object-pool = "0.5.4"
+anymap = "0.12.1"
 
 [features]
 default = []

@@ -1,5 +1,4 @@
-#[derive(Clone)]
-pub struct DioxusServerContext {}
+use crate::server_context::DioxusServerContext;
 
 #[cfg(any(feature = "ssr", doc))]
 pub type ServerFnTraitObj = server_fn::ServerFnTraitObj<DioxusServerContext>;

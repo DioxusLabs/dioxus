@@ -2,7 +2,7 @@ use proc_macro::TokenStream;
 use quote::ToTokens;
 use server_fn_macro::*;
 
-/// Declares that a function is a [server function](leptos_server). This means that
+/// Declares that a function is a [server function](dioxus_server). This means that
 /// its body will only run on the server, i.e., when the `ssr` feature is enabled.
 ///
 /// If you call a server function from the client (i.e., when the `csr` or `hydrate` features
@@ -19,18 +19,18 @@ use server_fn_macro::*;
 ///   work without WebAssembly, the encoding must be `"Url"`.
 ///
 /// The server function itself can take any number of arguments, each of which should be serializable
-/// and deserializable with `serde`. Optionally, its first argument can be a Leptos [Scope](leptos_reactive::Scope),
+/// and deserializable with `serde`. Optionally, its first argument can be a [DioxusServerContext](dioxus_server::prelude::DioxusServerContext),
 /// which will be injected *on the server side.* This can be used to inject the raw HTTP request or other
 /// server-side context into the server function.
 ///
 /// ```ignore
-/// # use leptos::*; use serde::{Serialize, Deserialize};
+/// # use dioxus_server::prelude::*; use serde::{Serialize, Deserialize};
 /// # #[derive(Serialize, Deserialize)]
 /// # pub struct Post { }
 /// #[server(ReadPosts, "/api")]
 /// pub async fn read_posts(how_many: u8, query: String) -> Result<Vec<Post>, ServerFnError> {
 ///   // do some work on the server to access the database
-///   todo!()   
+///   todo!()
 /// }
 /// ```
 ///
@@ -42,7 +42,7 @@ use server_fn_macro::*;
 /// - **Server functions must return `Result<T, ServerFnError>`.** Even if the work being done
 ///   inside the function body can’t fail, the processes of serialization/deserialization and the
 ///   network call are fallible.
-/// - **Return types must be [Serializable](leptos_reactive::Serializable).**
+/// - **Return types must implement [`Serialize`](https://docs.rs/serde/latest/serde/trait.Serialize.html).**
 ///   This should be fairly obvious: we have to serialize arguments to send them to the server, and we
 ///   need to deserialize the result to return it to the client.
 /// - **Arguments must be implement [`Serialize`](https://docs.rs/serde/latest/serde/trait.Serialize.html)
@@ -50,8 +50,8 @@ use server_fn_macro::*;
 ///   They are serialized as an `application/x-www-form-urlencoded`
 ///   form data using [`serde_urlencoded`](https://docs.rs/serde_urlencoded/latest/serde_urlencoded/) or as `application/cbor`
 ///   using [`cbor`](https://docs.rs/cbor/latest/cbor/).
-/// - **The [Scope](leptos_reactive::Scope) comes from the server.** Optionally, the first argument of a server function
-///   can be a Leptos [Scope](leptos_reactive::Scope). This scope can be used to inject dependencies like the HTTP request
+/// - **The [DioxusServerContext](dioxus_server::prelude::DioxusServerContext) comes from the server.** Optionally, the first argument of a server function
+///   can be a [DioxusServerContext](dioxus_server::prelude::DioxusServerContext). This scope can be used to inject dependencies like the HTTP request
 ///   or response or other server-only dependencies, but it does *not* have access to reactive state that exists in the client.
 #[proc_macro_attribute]
 pub fn server(args: proc_macro::TokenStream, s: TokenStream) -> TokenStream {
