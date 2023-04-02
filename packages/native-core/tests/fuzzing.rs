@@ -1,12 +1,8 @@
 use dioxus::prelude::Props;
 use dioxus_core::*;
-use dioxus_native_core::{
-    node_ref::{AttributeMask, NodeView},
-    real_dom::RealDom,
-    state::{ParentDepState, State},
-    NodeMask, SendAnyMap,
-};
-use dioxus_native_core_macro::{sorted_str_slice, State};
+use dioxus_native_core::prelude::*;
+use dioxus_native_core_macro::partial_derive_state;
+use shipyard::Component;
 use std::cell::Cell;
 
 fn random_ns() -> Option<&'static str> {
@@ -232,7 +228,7 @@ fn create_random_dynamic_attr(cx: &ScopeState) -> Attribute {
 
 static mut TEMPLATE_COUNT: usize = 0;
 
-#[derive(PartialEq, Props)]
+#[derive(PartialEq, Props, Component)]
 struct DepthProps {
     depth: usize,
     root: bool,
@@ -294,26 +290,48 @@ fn create_random_element(cx: Scope<DepthProps>) -> Element {
     node
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct BlablaState {}
-
-/// Font style are inherited by default if not specified otherwise by some of the supported attributes.
-impl ParentDepState for BlablaState {
-    type Ctx = ();
-    type DepState = (Self,);
-
-    const NODE_MASK: NodeMask =
-        NodeMask::new_with_attrs(AttributeMask::Static(&sorted_str_slice!(["blabla",])));
-
-    fn reduce(&mut self, _node: NodeView, _parent: Option<(&Self,)>, _ctx: &Self::Ctx) -> bool {
-        false
-    }
+#[derive(Debug, Clone, PartialEq, Eq, Default, Component)]
+pub struct BlablaState {
+    count: usize,
 }
 
-#[derive(Clone, State, Default, Debug)]
-pub struct NodeState {
-    #[parent_dep_state(blabla)]
-    blabla: BlablaState,
+#[partial_derive_state]
+impl State for BlablaState {
+    type ParentDependencies = (Self,);
+    type ChildDependencies = ();
+    type NodeDependencies = ();
+
+    const NODE_MASK: NodeMaskBuilder<'static> = NodeMaskBuilder::new()
+        .with_attrs(AttributeMaskBuilder::Some(&["blabla"]))
+        .with_element();
+
+    fn update<'a>(
+        &mut self,
+        _: NodeView,
+        _: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
+        parent: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
+        _: Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>,
+        _: &SendAnyMap,
+    ) -> bool {
+        if let Some((parent,)) = parent {
+            if parent.count != 0 {
+                self.count += 1;
+            }
+        }
+        true
+    }
+
+    fn create<'a>(
+        node_view: NodeView<()>,
+        node: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
+        parent: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
+        children: Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>,
+        context: &SendAnyMap,
+    ) -> Self {
+        let mut myself = Self::default();
+        myself.update(node_view, node, parent, children, context);
+        myself
+    }
 }
 
 // test for panics when creating random nodes and templates
@@ -328,11 +346,12 @@ fn create() {
             },
         );
         let mutations = vdom.rebuild();
-        let mut rdom: RealDom<NodeState> = RealDom::new();
-        let (to_update, _diff) = rdom.apply_mutations(mutations);
+        let mut rdom: RealDom = RealDom::new([BlablaState::to_type_erased()]);
+        let mut dioxus_state = DioxusState::create(&mut rdom);
+        dioxus_state.apply_mutations(&mut rdom, mutations);
 
         let ctx = SendAnyMap::new();
-        rdom.update_state(to_update, ctx);
+        rdom.update_state(ctx);
     }
 }
 
@@ -349,17 +368,18 @@ fn diff() {
             },
         );
         let mutations = vdom.rebuild();
-        let mut rdom: RealDom<NodeState> = RealDom::new();
-        let (to_update, _diff) = rdom.apply_mutations(mutations);
+        let mut rdom: RealDom = RealDom::new([BlablaState::to_type_erased()]);
+        let mut dioxus_state = DioxusState::create(&mut rdom);
+        dioxus_state.apply_mutations(&mut rdom, mutations);
 
         let ctx = SendAnyMap::new();
-        rdom.update_state(to_update, ctx);
+        rdom.update_state(ctx);
         for _ in 0..10 {
             let mutations = vdom.render_immediate();
-            let (to_update, _diff) = rdom.apply_mutations(mutations);
+            dioxus_state.apply_mutations(&mut rdom, mutations);
 
             let ctx = SendAnyMap::new();
-            rdom.update_state(to_update, ctx);
+            rdom.update_state(ctx);
         }
     }
 }

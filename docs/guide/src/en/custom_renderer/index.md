@@ -99,13 +99,14 @@ Template {
     attr_paths: &'a [&'a [u8]],
 }
 ```
+
 > For more detailed docs about the struture of templates see the [Template api docs](https://docs.rs/dioxus-core/latest/dioxus_core/prelude/struct.Template.html)
 
 This template will be sent to the renderer in the [list of templates](https://docs.rs/dioxus-core/latest/dioxus_core/struct.Mutations.html#structfield.templates) supplied with the mutations the first time it is used. Any time the renderer encounters a [LoadTemplate](https://docs.rs/dioxus-core/latest/dioxus_core/enum.Mutation.html#variant.LoadTemplate) mutation after this, it should clone the template and store it in the given id.
 
-For dynamic nodes and dynamic text nodes, a placeholder node should be created and inserted into the UI so that the node can be navigated to later.
+For dynamic nodes and dynamic text nodes, a placeholder node should be created and inserted into the UI so that the node can be modified later.
 
-In HTML renderers, this template could look like:
+In HTML renderers, this template could look like this:
 
 ```html
 <h1>""</h1>
@@ -206,7 +207,9 @@ nodes: [
     "count: 0",
 ]
 ```
+
 Over time, our stack looked like this:
+
 ```rust
 [Root]
 [Root, <h1>""</h1>]
@@ -218,15 +221,15 @@ Conveniently, this approach completely separates the Virtual DOM and the Real DO
 
 Dioxus is also really fast. Because Dioxus splits the diff and patch phase, it's able to make all the edits to the RealDOM in a very short amount of time (less than a single frame) making rendering very snappy. It also allows Dioxus to cancel large diffing operations if higher priority work comes in while it's diffing.
 
-This little demo serves to show exactly how a Renderer would need to process an edit stream to build UIs.
+This little demo serves to show exactly how a Renderer would need to process a mutation stream to build UIs.
 
 ## Event loop
 
-Like most GUIs, Dioxus relies on an event loop to progress the VirtualDOM. The VirtualDOM itself can produce events as well, so it's important that your custom renderer can handle those too.
+Like most GUIs, Dioxus relies on an event loop to progress the VirtualDOM. The VirtualDOM itself can produce events as well, so it's important for your custom renderer can handle those too.
 
 The code for the WebSys implementation is straightforward, so we'll add it here to demonstrate how simple an event loop is:
 
-```rust
+```rust, ignore
 pub async fn run(&mut self) -> dioxus_core::error::Result<()> {
     // Push the body element onto the WebsysDom's stack machine
     let mut websys_dom = crate::new::WebsysDom::new(prepare_websys_dom());
@@ -254,9 +257,9 @@ pub async fn run(&mut self) -> dioxus_core::error::Result<()> {
 }
 ```
 
-It's important that you decode the real events from your event system into Dioxus' synthetic event system (synthetic meaning abstracted). This simply means matching your event type and creating a Dioxus `UserEvent` type. Right now, the VirtualEvent system is modeled almost entirely around the HTML spec, but we are interested in slimming it down.
+It's important to decode what the real events are for your event system into Dioxus' synthetic event system (synthetic meaning abstracted). This simply means matching your event type and creating a Dioxus `UserEvent` type. Right now, the virtual event system is modeled almost entirely around the HTML spec, but we are interested in slimming it down.
 
-```rust
+```rust, ignore
 fn virtual_event_from_websys_event(event: &web_sys::Event) -> VirtualEvent {
     match event.type_().as_str() {
         "keydown" => {
@@ -294,16 +297,17 @@ For more examples and information on how to create custom namespaces, see the [`
 
 # Native Core
 
-If you are creating a renderer in rust, the [native-core](https://github.com/DioxusLabs/dioxus/tree/master/packages/native-core) crate provides some utilities to implement a renderer. It provides an abstraction over Mutations and Templates and contains helpers that can handle the layout, and text editing for you.
+If you are creating a renderer in rust, the [native-core](https://github.com/DioxusLabs/dioxus/tree/master/packages/native-core) crate provides some utilities to implement a renderer. It provides an abstraction over Mutations and Templates and contains helpers that can handle the layout and text editing for you.
 
 ## The RealDom
 
-The `RealDom` is a higher-level abstraction over updating the Dom. It updates with `Mutations` and provides a way to incrementally update the state of nodes based on attributes or other states that change.
+The `RealDom` is a higher-level abstraction over updating the Dom. It uses an entity component system to manage the state of nodes. This system allows you to modify insert and modify arbitrary components on nodes. On top of this, the RealDom provides a way to manage a tree of nodes, and the State trait provides a way to automatically add and update these components when the tree is modified. It also provides a way to apply `Mutations` to the RealDom.
 
 ### Example
 
 Let's build a toy renderer with borders, size, and text color.
 Before we start let's take a look at an example element we can render:
+
 ```rust
 cx.render(rsx!{
     div{
@@ -372,188 +376,24 @@ In the following diagram arrows represent dataflow:
 [//]: # "        end"
 [//]: # "    end"
 
-To help in building a Dom, native-core provides four traits: State, ChildDepState, ParentDepState, NodeDepState, and a RealDom struct. The ChildDepState, ParentDepState, and NodeDepState provide a way to describe how some information in a node relates to that of its relatives. By providing how to build a single node from its relations, native-core will derive a way to update the state of all nodes for you with ```#[derive(State)]```. Once you have a state you can provide it as a generic to RealDom. RealDom provides all of the methods to interact and update your new dom.
+To help in building a Dom, native-core provides the State trait and a RealDom struct. The State trait provides a way to describe how states in a node depend on other states in its relatives. By describing how to update a single node from its relations, native-core will derive a way to update the states of all nodes for you. Once you have a state you can provide it as a generic to RealDom. RealDom provides all of the methods to interact and update your new dom.
 
-```rust
+Native Core cannot create all of the required methods for the State trait, but it can derive some of them. To implement the State trait, you must implement the following methods and let the `#[partial_derive_state]` macro handle the rest:
 
-use dioxus_native_core::node_ref::*;
-use dioxus_native_core::state::{ChildDepState, NodeDepState, ParentDepState, State};
-use dioxus_native_core_macro::{sorted_str_slice, State};
-
-#[derive(Default, Copy, Clone)]
-struct Size(f64, f64);
-// Size only depends on the current node and its children, so it implements ChildDepState
-impl ChildDepState for Size {
-    // Size accepts a font size context
-    type Ctx = f64;
-    // Size depends on the Size part of each child
-    type DepState = (Self,);
-    // Size only cares about the width, height, and text parts of the current node
-    const NODE_MASK: NodeMask =
-        NodeMask::new_with_attrs(AttributeMask::Static(&sorted_str_slice!([
-            "width", "height"
-        ])))
-        .with_text();
-    fn reduce<'a>(
-        &mut self,
-        node: NodeView,
-        children: impl Iterator<Item = (&'a Self,)>,
-        ctx: &Self::Ctx,
-    ) -> bool
-    where
-        Self::DepState: 'a,
-    {
-        let mut width;
-        let mut height;
-        if let Some(text) = node.text() {
-            // if the node has text, use the text to size our object
-            width = text.len() as f64 * ctx;
-            height = *ctx;
-        } else {
-            // otherwise, the size is the maximum size of the children
-            width = children
-                .by_ref()
-                .map(|(item,)| item.0)
-                .reduce(|accum, item| if accum >= item { accum } else { item })
-                .unwrap_or(0.0);
-
-            height = children
-                .map(|(item,)| item.1)
-                .reduce(|accum, item| if accum >= item { accum } else { item })
-                .unwrap_or(0.0);
-        }
-        // if the node contains a width or height attribute it overrides the other size
-        for a in node.attributes().into_iter().flatten() {
-            match &*a.attribute.name {
-                "width" => width = a.value.as_float().unwrap(),
-                "height" => height = a.value.as_float().unwrap(),
-                // because Size only depends on the width and height, no other attributes will be passed to the member
-                _ => panic!(),
-            }
-        }
-        // to determine what other parts of the dom need to be updated we return a boolean that marks if this member changed
-        let changed = (width != self.0) || (height != self.1);
-        *self = Self(width, height);
-        changed
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Default)]
-struct TextColor {
-    r: u8,
-    g: u8,
-    b: u8,
-}
-// TextColor only depends on the current node and its parent, so it implements ParentDepState
-impl ParentDepState for TextColor {
-    type Ctx = ();
-    // TextColor depends on the TextColor part of the parent
-    type DepState = (Self,);
-    // TextColor only cares about the color attribute of the current node
-    const NODE_MASK: NodeMask = NodeMask::new_with_attrs(AttributeMask::Static(&["color"]));
-    fn reduce(&mut self, node: NodeView, parent: Option<(&Self,)>, _ctx: &Self::Ctx) -> bool {
-        // TextColor only depends on the color tag, so getting the first tag is equivilent to looking through all tags
-        let new = match node
-            .attributes()
-            .and_then(|attrs| attrs.next())
-            .map(|attr| attr.attribute.name.as_str())
-        {
-            // if there is a color tag, translate it
-            Some("red") => TextColor { r: 255, g: 0, b: 0 },
-            Some("green") => TextColor { r: 0, g: 255, b: 0 },
-            Some("blue") => TextColor { r: 0, g: 0, b: 255 },
-            Some(_) => panic!("unknown color"),
-            // otherwise check if the node has a parent and inherit that color
-            None => match parent {
-                Some((parent,)) => *parent,
-                None => Self::default(),
-            },
-        };
-        // check if the member has changed
-        let changed = new != *self;
-        *self = new;
-        changed
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Default)]
-struct Border(bool);
-// TextColor only depends on the current node, so it implements NodeDepState
-impl NodeDepState for Border {
-    type Ctx = ();
-    type DepState = ();
-
-    // Border does not depended on any other member in the current node
-    const NODE_MASK: NodeMask = NodeMask::new_with_attrs(AttributeMask::Static(&["border"]));
-    fn reduce(&mut self, node: NodeView, _sibling: (), _ctx: &Self::Ctx) -> bool {
-        // check if the node contians a border attribute
-        let new = Self(
-            node.attributes()
-                .and_then(|attrs| attrs.next().map(|a| a.attribute.name == "border"))
-                .is_some(),
-        );
-        // check if the member has changed
-        let changed = new != *self;
-        *self = new;
-        changed
-    }
-}
-
-// State provides a derive macro, but anotations on the members are needed in the form #[dep_type(dep_member, CtxType)]
-#[derive(State, Default, Clone)]
-struct ToyState {
-    // the color member of it's parent and no context
-    #[parent_dep_state(color)]
-    color: TextColor,
-    // depends on the node, and no context
-    #[node_dep_state()]
-    border: Border,
-    // depends on the layout_width member of children and f32 context (for text size)
-    #[child_dep_state(size, f32)]
-    size: Size,
-}
+```rust, ignore
+{{#include ../../../examples/custom_renderer.rs:derive_state}}
 ```
 
-Now that we have our state, we can put it to use in our dom. We can update the dom with update_state to update the structure of the dom (adding, removing, and changing properties of nodes) and then apply_mutations to update the ToyState for each of the nodes that changed.
+Lets take a look at how to implement the State trait for a simple renderer.
+
 ```rust
-fn main(){
-    fn app(cx: Scope) -> Element {
-        cx.render(rsx!{
-            div{
-                color: "red",
-                "hello world"
-            }
-        })
-    }
-    let vdom = VirtualDom::new(app);
-    let rdom: RealDom<ToyState> = RealDom::new();
+{{#include ../../../examples/custom_renderer.rs:state_impl}}
+```
 
-    let mutations = dom.rebuild();
-    // update the structure of the real_dom tree
-    let to_update = rdom.apply_mutations(vec![mutations]);
-    let mut ctx = AnyMap::new();
-    // set the font size to 3.3
-    ctx.insert(3.3f64);
-    // update the ToyState for nodes in the real_dom tree
-    let _to_rerender = rdom.update_state(&dom, to_update, ctx).unwrap();
+Now that we have our state, we can put it to use in our RealDom. We can update the RealDom with apply_mutations to update the structure of the dom (adding, removing, and changing properties of nodes) and then update_state to update the States for each of the nodes that changed.
 
-    // we need to run the vdom in a async runtime
-    tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()?
-        .block_on(async {
-            loop{
-                let wait = vdom.wait_for_work();
-                let mutations = vdom.work_with_deadline(|| false);
-                let to_update = rdom.apply_mutations(mutations);
-                let mut ctx = AnyMap::new();
-                ctx.insert(3.3f64);
-                let _to_rerender = rdom.update_state(vdom, to_update, ctx).unwrap();
-
-                // render...
-            }
-        })
-}
+```rust
+{{#include ../../../examples/custom_renderer.rs:rendering}}
 ```
 
 ## Layout
@@ -565,26 +405,9 @@ For most platforms, the layout of the Elements will stay the same. The [layout_a
 To make it easier to implement text editing in rust renderers, `native-core` also contains a renderer-agnostic cursor system. The cursor can handle text editing, selection, and movement with common keyboard shortcuts integrated.
 
 ```rust
-let mut cursor = Cursor::default();
-let mut text = String::new();
-
-let keyboard_data = dioxus_html::KeyboardData::new(
-    dioxus_html::input_data::keyboard_types::Key::ArrowRight,
-    dioxus_html::input_data::keyboard_types::Code::ArrowRight,
-    dioxus_html::input_data::keyboard_types::Location::Standard,
-    false,
-    Modifiers::empty(),
-);
-// handle keyboard input with a max text length of 10
-cursor.handle_input(&keyboard_data, &mut text, 10);
-
-// mannually select text between characters 0-5 on the first line (this could be from dragging with a mouse)
-cursor.start = Pos::new(0, 0);
-cursor.end = Some(Pos::new(5, 0));
-
-// delete the selected text and move the cursor to the start of the selection
-cursor.delete_selection(&mut text);
+{{#include ../../../examples/custom_renderer.rs:cursor}}
 ```
 
 ## Conclusion
+
 That should be it! You should have nearly all the knowledge required on how to implement your renderer. We're super interested in seeing Dioxus apps brought to custom desktop renderers, mobile renderers, video game UI, and even augmented reality! If you're interested in contributing to any of these projects, don't be afraid to reach out or join the [community](https://discord.gg/XgGxMSkvUM).

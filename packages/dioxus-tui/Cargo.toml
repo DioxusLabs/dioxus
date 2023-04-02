@@ -1,0 +1,40 @@
+[package]
+name = "dioxus-tui"
+version = "0.2.2"
+authors = ["Jonathan Kelley, @dementhos"]
+edition = "2021"
+description = "TUI-based renderer for Dioxus"
+repository = "https://github.com/DioxusLabs/dioxus/"
+homepage = "https://dioxuslabs.com"
+documentation = "https://dioxuslabs.com"
+keywords = ["dom", "ui", "gui", "react", "terminal"]
+license = "MIT/Apache-2.0"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+dioxus = { path = "../dioxus", version = "^0.3.0" }
+dioxus-core = { path = "../core", version = "^0.3.0", features = ["serialize"] }
+dioxus-html = { path = "../html", version = "^0.3.0" }
+dioxus-native-core = { path = "../native-core", version = "^0.2.0", features = ["dioxus"] }
+dioxus-native-core-macro = { path = "../native-core-macro", version = "^0.3.0" }
+dioxus-hot-reload = { path = "../hot-reload", optional = true }
+rink = { path = "../rink" }
+
+crossterm = "0.23.0"
+tokio = { version = "1.15.0", features = ["full"] }
+futures = "0.3.19"
+taffy = "0.2.1"
+
+[dev-dependencies]
+dioxus = { path = "../dioxus" }
+tokio = { version = "1" }
+criterion = "0.3.5"
+
+[[bench]]
+name = "update"
+harness = false
+
+[features]
+default = ["hot-reload"]
+hot-reload = ["dioxus-hot-reload"]
