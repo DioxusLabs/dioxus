@@ -2,8 +2,9 @@ use std::{error::Error, sync::Arc};
 
 use hyper::{http::HeaderValue, StatusCode};
 use salvo::{
-    async_trait, handler, serve_static::StaticDir, Depot, FlowCtrl, Handler, Request, Response,
-    Router,
+    async_trait, handler,
+    serve_static::{StaticDir, StaticFile},
+    Depot, FlowCtrl, Handler, Request, Response, Router,
 };
 use server_fn::{Payload, ServerFunctionRegistry};
 use tokio::task::spawn_blocking;
@@ -80,7 +81,6 @@ impl DioxusRouterExt for Router {
             if path.ends_with("index.html") {
                 continue;
             }
-            let serve_dir = StaticDir::new([path.clone()]);
             let route = path
                 .strip_prefix(&cfg.assets_path)
                 .unwrap()
@@ -92,8 +92,15 @@ impl DioxusRouterExt for Router {
                 })
                 .collect::<Vec<_>>()
                 .join("/");
-            let route = format!("/{}/<**path>", route);
-            self = self.push(Router::with_path(route).get(serve_dir))
+            if path.is_file() {
+                let route = format!("/{}", route);
+                let serve_dir = StaticFile::new(path.clone());
+                self = self.push(Router::with_path(route).get(serve_dir))
+            } else {
+                let route = format!("/{}/<**path>", route);
+                let serve_dir = StaticDir::new([path.clone()]);
+                self = self.push(Router::with_path(route).get(serve_dir))
+            }
         }
 
         self.connect_hot_reload()
