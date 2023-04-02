@@ -2,6 +2,8 @@
 use dioxus_core::prelude::*;
 
 mod adapters;
+#[cfg(all(debug_assertions, feature = "hot-reload", feature = "ssr"))]
+mod hot_reload;
 #[cfg(feature = "ssr")]
 pub mod render;
 #[cfg(feature = "ssr")]

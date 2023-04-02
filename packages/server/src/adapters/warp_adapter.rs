@@ -64,7 +64,8 @@ pub fn serve_dioxus_application<P: Clone + Send + Sync + 'static>(
     // Serve the dist folder and the index.html file
     let serve_dir = warp::fs::dir(cfg.assets_path);
 
-    register_server_fns(server_fn_route)
+    connect_hot_reload()
+        .or(register_server_fns(server_fn_route))
         .or(warp::path::end()
             .and(warp::get())
             .and(with_ssr_state())
@@ -158,4 +159,70 @@ fn report_err<E: Error>(e: E) -> Box<dyn warp::Reply> {
             .body(format!("Error: {}", e))
             .unwrap(),
     ) as Box<dyn warp::Reply>
+}
+
+pub fn connect_hot_reload() -> impl Filter<Extract = (impl Reply,), Error = warp::Rejection> {
+    #[cfg(not(all(debug_assertions, feature = "hot-reload", feature = "ssr")))]
+    {
+        warp::path("_dioxus/hot_reload").and(warp::ws()).map(|| {
+            Response::builder()
+                .status(StatusCode::NOT_FOUND)
+                .body("Not Found".into())
+                .unwrap()
+        })
+    }
+    #[cfg(all(debug_assertions, feature = "hot-reload", feature = "ssr"))]
+    {
+        use crate::hot_reload::HotReloadState;
+        let state = HotReloadState::default();
+
+        warp::path("_dioxus")
+            .and(warp::path("hot_reload"))
+            .and(warp::ws())
+            .and(warp::any().map(move || state.clone()))
+            .map(move |ws: warp::ws::Ws, state: HotReloadState| {
+                #[cfg(all(debug_assertions, feature = "hot-reload", feature = "ssr"))]
+                ws.on_upgrade(move |mut websocket| {
+                    async move {
+                        use futures_util::sink::SinkExt;
+                        use futures_util::StreamExt;
+                        use warp::ws::Message;
+
+                        println!("🔥 Hot Reload WebSocket connected");
+                        {
+                            // update any rsx calls that changed before the websocket connected.
+                            {
+                                println!("🔮 Finding updates since last compile...");
+                                let templates_read = state.templates.read().await;
+
+                                for template in &*templates_read {
+                                    if websocket
+                                        .send(Message::text(
+                                            serde_json::to_string(&template).unwrap(),
+                                        ))
+                                        .await
+                                        .is_err()
+                                    {
+                                        return;
+                                    }
+                                }
+                            }
+                            println!("finished");
+                        }
+
+                        let mut rx = tokio_stream::wrappers::WatchStream::from_changes(
+                            state.message_receiver,
+                        );
+                        while let Some(change) = rx.next().await {
+                            if let Some(template) = change {
+                                let template = { serde_json::to_string(&template).unwrap() };
+                                if websocket.send(Message::text(template)).await.is_err() {
+                                    break;
+                                };
+                            }
+                        }
+                    }
+                })
+            })
+    }
 }

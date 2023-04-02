@@ -1,0 +1,46 @@
+use std::sync::Arc;
+
+use dioxus_core::Template;
+use tokio::sync::{
+    watch::{channel, Receiver},
+    RwLock,
+};
+
+#[derive(Clone)]
+pub struct HotReloadState {
+    // The cache of all templates that have been modified since the last time we checked
+    pub(crate) templates: Arc<RwLock<std::collections::HashSet<dioxus_core::Template<'static>>>>,
+    // The channel to send messages to the hot reload thread
+    pub(crate) message_receiver: Receiver<Option<Template<'static>>>,
+}
+
+impl Default for HotReloadState {
+    fn default() -> Self {
+        let templates = Arc::new(RwLock::new(std::collections::HashSet::new()));
+        let (tx, rx) = channel(None);
+
+        dioxus_hot_reload::connect({
+            let templates = templates.clone();
+            move |msg| match msg {
+                dioxus_hot_reload::HotReloadMsg::UpdateTemplate(template) => {
+                    {
+                        let mut templates = templates.blocking_write();
+                        templates.insert(template);
+                    }
+
+                    if let Err(err) = tx.send(Some(template)) {
+                        log::error!("Failed to send hot reload message: {}", err);
+                    }
+                }
+                dioxus_hot_reload::HotReloadMsg::Shutdown => {
+                    std::process::exit(0);
+                }
+            }
+        });
+
+        Self {
+            templates,
+            message_receiver: rx,
+        }
+    }
+}

@@ -17,6 +17,7 @@ use crate::{
 
 pub trait DioxusRouterExt {
     fn register_server_fns(self, server_fn_route: &'static str) -> Self;
+
     fn register_server_fns_with_handler<H>(
         self,
         server_fn_route: &'static str,
@@ -24,11 +25,14 @@ pub trait DioxusRouterExt {
     ) -> Self
     where
         H: Handler + 'static;
+
     fn serve_dioxus_application<P: Clone + Send + Sync + 'static>(
         self,
         server_fn_path: &'static str,
         cfg: impl Into<ServeConfig<P>>,
     ) -> Self;
+
+    fn connect_hot_reload(self) -> Self;
 }
 
 impl DioxusRouterExt for Router {
@@ -92,8 +96,13 @@ impl DioxusRouterExt for Router {
             self = self.push(Router::with_path(route).get(serve_dir))
         }
 
-        self.register_server_fns(server_fn_route)
+        self.connect_hot_reload()
+            .register_server_fns(server_fn_route)
             .push(Router::with_path("/").get(SSRHandler { cfg }))
+    }
+
+    fn connect_hot_reload(self) -> Self {
+        self.push(Router::with_path("/_dioxus/hot_reload").get(HotReloadHandler::default()))
     }
 }
 
@@ -216,4 +225,80 @@ fn handle_error(error: impl Error + Send + Sync, res: &mut Response) {
     resp_err.set_status_code(StatusCode::INTERNAL_SERVER_ERROR);
     resp_err.render(format!("Internal Server Error: {}", error));
     *res = resp_err;
+}
+
+#[cfg(not(all(debug_assertions, feature = "hot-reload", feature = "ssr")))]
+#[derive(Default)]
+pub struct HotReloadHandler;
+
+#[cfg(not(all(debug_assertions, feature = "hot-reload", feature = "ssr")))]
+#[handler]
+impl HotReloadHandler {
+    async fn handle(
+        &self,
+        _req: &mut Request,
+        _depot: &mut Depot,
+        _res: &mut Response,
+    ) -> Result<(), salvo::http::StatusError> {
+        Err(salvo::http::StatusError::not_found())
+    }
+}
+
+#[cfg(all(debug_assertions, feature = "hot-reload", feature = "ssr"))]
+#[derive(Default)]
+pub struct HotReloadHandler {
+    state: crate::hot_reload::HotReloadState,
+}
+
+#[cfg(all(debug_assertions, feature = "hot-reload", feature = "ssr"))]
+#[handler]
+impl HotReloadHandler {
+    async fn handle(
+        &self,
+        req: &mut Request,
+        _depot: &mut Depot,
+        res: &mut Response,
+    ) -> Result<(), salvo::http::StatusError> {
+        use salvo::ws::Message;
+        use salvo::ws::WebSocketUpgrade;
+
+        let state = self.state.clone();
+
+        WebSocketUpgrade::new()
+            .upgrade(req, res, |mut websocket| async move {
+                use futures_util::StreamExt;
+
+                println!("🔥 Hot Reload WebSocket connected");
+                {
+                    // update any rsx calls that changed before the websocket connected.
+                    {
+                        println!("🔮 Finding updates since last compile...");
+                        let templates_read = state.templates.read().await;
+
+                        for template in &*templates_read {
+                            if websocket
+                                .send(Message::text(serde_json::to_string(&template).unwrap()))
+                                .await
+                                .is_err()
+                            {
+                                return;
+                            }
+                        }
+                    }
+                    println!("finished");
+                }
+
+                let mut rx =
+                    tokio_stream::wrappers::WatchStream::from_changes(state.message_receiver);
+                while let Some(change) = rx.next().await {
+                    if let Some(template) = change {
+                        let template = { serde_json::to_string(&template).unwrap() };
+                        if websocket.send(Message::text(template)).await.is_err() {
+                            break;
+                        };
+                    }
+                }
+            })
+            .await
+    }
 }

@@ -2,7 +2,7 @@ use std::{error::Error, sync::Arc};
 
 use axum::{
     body::{self, Body, BoxBody, Full},
-    extract::State,
+    extract::{State, WebSocketUpgrade},
     handler::Handler,
     http::{HeaderMap, Request, Response, StatusCode},
     response::IntoResponse,
@@ -36,6 +36,8 @@ pub trait DioxusRouterExt<S> {
         server_fn_route: &'static str,
         cfg: impl Into<ServeConfig<P>>,
     ) -> Self;
+
+    fn connect_hot_reload(self) -> Self;
 }
 
 impl<S> DioxusRouterExt<S> for Router<S>
@@ -92,7 +94,7 @@ where
                 continue;
             }
             let route = path
-                .strip_prefix(&cfg.assets_path)
+                .strip_prefix(cfg.assets_path)
                 .unwrap()
                 .iter()
                 .map(|segment| {
@@ -111,10 +113,26 @@ where
         }
 
         // Add server functions and render index.html
-        self.register_server_fns(server_fn_route).route(
-            "/",
-            get(render_handler).with_state((cfg, SSRState::default())),
-        )
+        self.connect_hot_reload()
+            .register_server_fns(server_fn_route)
+            .route(
+                "/",
+                get(render_handler).with_state((cfg, SSRState::default())),
+            )
+    }
+
+    fn connect_hot_reload(self) -> Self {
+        #[cfg(all(debug_assertions, feature = "hot-reload", feature = "ssr"))]
+        {
+            self.route(
+                "/_dioxus/hot_reload",
+                get(hot_reload_handler).with_state(crate::hot_reload::HotReloadState::default()),
+            )
+        }
+        #[cfg(not(all(debug_assertions, feature = "hot-reload", feature = "ssr")))]
+        {
+            self
+        }
     }
 }
 
@@ -194,4 +212,45 @@ fn report_err<E: Error>(e: E) -> Response<BoxBody> {
         .status(StatusCode::INTERNAL_SERVER_ERROR)
         .body(body::boxed(format!("Error: {}", e)))
         .unwrap()
+}
+
+#[cfg(all(debug_assertions, feature = "hot-reload", feature = "ssr"))]
+pub async fn hot_reload_handler(
+    ws: WebSocketUpgrade,
+    State(state): State<crate::hot_reload::HotReloadState>,
+) -> impl IntoResponse {
+    use axum::extract::ws::Message;
+    use futures_util::StreamExt;
+
+    ws.on_upgrade(|mut socket| async move {
+        println!("🔥 Hot Reload WebSocket connected");
+        {
+            // update any rsx calls that changed before the websocket connected.
+            {
+                println!("🔮 Finding updates since last compile...");
+                let templates_read = state.templates.read().await;
+
+                for template in &*templates_read {
+                    if socket
+                        .send(Message::Text(serde_json::to_string(&template).unwrap()))
+                        .await
+                        .is_err()
+                    {
+                        return;
+                    }
+                }
+            }
+            println!("finished");
+        }
+
+        let mut rx = tokio_stream::wrappers::WatchStream::from_changes(state.message_receiver);
+        while let Some(change) = rx.next().await {
+            if let Some(template) = change {
+                let template = { serde_json::to_string(&template).unwrap() };
+                if socket.send(Message::Text(template)).await.is_err() {
+                    break;
+                };
+            }
+        }
+    })
 }
