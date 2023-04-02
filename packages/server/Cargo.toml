@@ -6,6 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+# server functions
 server_fn = { path = "D:/Users/Desktop/github/leptos/server_fn", features = ["stable"] }
 server_macro = { path = "server-macro" }
 
@@ -23,6 +24,7 @@ axum-macros = "0.3.7"
 salvo = { version = "0.37.7", optional = true, features = ["serve-static"] }
 serde = "1.0.159"
 
+# Dioxus + SSR
 dioxus-core = { path = "../core", version = "^0.3.0" }
 dioxus-ssr = { path = "../ssr", version = "^0.3.0", optional = true }
 
@@ -33,8 +35,12 @@ tokio = { version = "1.27.0", features = ["full"], optional = true }
 object-pool = "0.5.4"
 anymap = "0.12.1"
 
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+dioxus-hot-reload = { path = "../hot-reload" }
+
 [features]
-default = []
+default = ["hot-reload"]
+hot-reload = []
 warp = ["dep:warp", "http-body", "ssr"]
 axum = ["dep:axum", "tower-http", "hyper", "ssr"]
 salvo = ["dep:salvo", "hyper", "ssr"]
