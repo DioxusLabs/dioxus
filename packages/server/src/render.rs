@@ -1,4 +1,3 @@
-use std::fmt::Write;
 use std::sync::Arc;
 
 use dioxus_core::VirtualDom;
@@ -47,12 +46,7 @@ impl Default for SSRState {
 impl SSRState {
     pub fn render<P: 'static + Clone>(&self, cfg: &ServeConfig<P>) -> String {
         let ServeConfig {
-            app,
-            application_name,
-            base_path,
-            head,
-            props,
-            ..
+            app, props, index, ..
         } = cfg;
 
         let mut vdom = VirtualDom::new_with_props(*app, props.clone());
@@ -63,38 +57,11 @@ impl SSRState {
 
         let mut html = String::new();
 
-        let result = write!(
-            &mut html,
-            r#"
-        <!DOCTYPE html>
-        <html>
-        <head>{head}
-        </head><body>
-        <div id="main">"#
-        );
-
-        if let Err(err) = result {
-            eprintln!("Failed to write to html: {}", err);
-        }
+        html += &index.pre_main;
 
         let _ = renderer.render_to(&mut html, &vdom);
 
-        if let Err(err) = write!(
-            &mut html,
-            r#"</div>
-        <script type="module">
-        import init from "/{base_path}/assets/dioxus/{application_name}.js";
-    init("/{base_path}/assets/dioxus/{application_name}_bg.wasm").then(wasm => {{
-      if (wasm.__wbindgen_start == undefined) {{
-          wasm.main();
-        }}
-    }});
-    </script>
-    </body>
-    </html>"#
-        ) {
-            eprintln!("Failed to write to html: {}", err);
-        }
+        html += &index.post_main;
 
         html
     }

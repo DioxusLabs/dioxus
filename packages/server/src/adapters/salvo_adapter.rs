@@ -50,24 +50,50 @@ impl DioxusRouterExt for Router {
     }
 
     fn register_server_fns(self, server_fn_route: &'static str) -> Self {
-        self.register_server_fns_with_handler(|| ServerFnHandler {
+        self.register_server_fns_with_handler(server_fn_route, |func| ServerFnHandler {
             server_context: DioxusServerContext::default(),
             function: func,
         })
     }
 
     fn serve_dioxus_application<P: Clone + Send + Sync + 'static>(
-        self,
+        mut self,
         server_fn_route: &'static str,
         cfg: impl Into<ServeConfig<P>>,
     ) -> Self {
         let cfg = cfg.into();
-        // Serve the dist folder and the index.html file
-        let serve_dir = StaticDir::new([cfg.assets_path]);
+
+        // Serve all files in dist folder except index.html
+        let dir = std::fs::read_dir(cfg.assets_path).unwrap_or_else(|e| {
+            panic!(
+                "Couldn't read assets directory at {:?}: {}",
+                &cfg.assets_path, e
+            )
+        });
+
+        for entry in dir.flatten() {
+            let path = entry.path();
+            if path.ends_with("index.html") {
+                continue;
+            }
+            let serve_dir = StaticDir::new([path.clone()]);
+            let route = path
+                .strip_prefix(&cfg.assets_path)
+                .unwrap()
+                .iter()
+                .map(|segment| {
+                    segment.to_str().unwrap_or_else(|| {
+                        panic!("Failed to convert path segment {:?} to string", segment)
+                    })
+                })
+                .collect::<Vec<_>>()
+                .join("/");
+            let route = format!("/{}/<**path>", route);
+            self = self.push(Router::with_path(route).get(serve_dir))
+        }
 
         self.register_server_fns(server_fn_route)
             .push(Router::with_path("/").get(SSRHandler { cfg }))
-            .push(Router::with_path("assets/<**path>").get(serve_dir))
     }
 }
 

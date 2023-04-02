@@ -70,23 +70,51 @@ where
     }
 
     fn serve_dioxus_application<P: Clone + Send + Sync + 'static>(
-        self,
+        mut self,
         server_fn_route: &'static str,
         cfg: impl Into<ServeConfig<P>>,
     ) -> Self {
-        use tower_http::services::ServeDir;
+        use tower_http::services::{ServeDir, ServeFile};
 
         let cfg = cfg.into();
 
-        // Serve the dist folder and the index.html file
-        let serve_dir = ServeDir::new(cfg.assets_path);
-
-        self.register_server_fns(server_fn_route)
-            .nest_service("/assets", serve_dir)
-            .route_service(
-                "/",
-                get(render_handler).with_state((cfg, SSRState::default())),
+        // Serve all files in dist folder except index.html
+        let dir = std::fs::read_dir(cfg.assets_path).unwrap_or_else(|e| {
+            panic!(
+                "Couldn't read assets directory at {:?}: {}",
+                &cfg.assets_path, e
             )
+        });
+
+        for entry in dir.flatten() {
+            let path = entry.path();
+            if path.ends_with("index.html") {
+                continue;
+            }
+            let route = path
+                .strip_prefix(&cfg.assets_path)
+                .unwrap()
+                .iter()
+                .map(|segment| {
+                    segment.to_str().unwrap_or_else(|| {
+                        panic!("Failed to convert path segment {:?} to string", segment)
+                    })
+                })
+                .collect::<Vec<_>>()
+                .join("/");
+            let route = format!("/{}", route);
+            if path.is_dir() {
+                self = self.nest_service(&route, ServeDir::new(path));
+            } else {
+                self = self.nest_service(&route, ServeFile::new(path));
+            }
+        }
+
+        // Add server functions and render index.html
+        self.register_server_fns(server_fn_route).route(
+            "/",
+            get(render_handler).with_state((cfg, SSRState::default())),
+        )
     }
 }
 

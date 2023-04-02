@@ -69,7 +69,7 @@ pub fn serve_dioxus_application<P: Clone + Send + Sync + 'static>(
             .and(warp::get())
             .and(with_ssr_state())
             .map(move |renderer: SSRState| warp::reply::html(renderer.render(&cfg))))
-        .or(warp::path("assets").and(serve_dir))
+        .or(serve_dir)
         .boxed()
 }
 
