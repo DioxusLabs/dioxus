@@ -44,7 +44,7 @@ From anywhere in our app, we can read the value of our atom:
 
 ```rust, ignores
 fn NameCard(cx: Scope) -> Element {
-    let name = use_read(cx, NAME);
+    let name = use_atom_state(cx, NAME);
     cx.render(rsx!{ h1 { "Hello, {name}"} })
 }
 ```
@@ -58,6 +58,26 @@ fn NameCard(cx: Scope) -> Element {
         button {
             onclick: move |_| set_name("Fermi"),
             "Set name to fermi"
+        }
+    })
+}
+```
+
+If needed, we can update the atom's value, based on itself:
+
+```rust, ignore
+static COUNT: Atom<i32> = |_| 0;
+
+fn Counter(cx: Scope) -> Element {
+    let mut count = use_atom_state(cx, COUNT);
+
+    cx.render(rsx!{
+        p {
+          "{count}"
+        }
+        button {
+            onclick: move |_| count += 1,
+            "Increment counter"
         }
     })
 }
