@@ -44,7 +44,7 @@ From anywhere in our app, we can read the value of our atom:
 
 ```rust, ignores
 fn NameCard(cx: Scope) -> Element {
-    let name = use_atom_state(cx, NAME);
+    let name = use_read(cx, NAME);
     cx.render(rsx!{ h1 { "Hello, {name}"} })
 }
 ```
