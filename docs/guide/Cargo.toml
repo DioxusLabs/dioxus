@@ -16,6 +16,7 @@ dioxus-native-core-macro = { path = "../../packages/native-core-macro" }
 dioxus-router = { path = "../../packages/router" }
 dioxus-liveview = { path = "../../packages/liveview", features = ["axum"] }
 dioxus-tui = { path = "../../packages/dioxus-tui" }
+dioxus-server = { path = "../../packages/server" }
 fermi = { path = "../../packages/fermi" }
 shipyard = "0.6.2"
 
@@ -23,5 +24,5 @@ shipyard = "0.6.2"
 # dioxus = { path = "../../packages/dioxus", features = ["desktop", "web", "ssr", "router", "fermi", "tui"] }
 serde = { version = "1.0.138", features=["derive"] }
 reqwest = { version = "0.11.11", features = ["json"] }
-tokio = { version = "1.19.2" , features=[]}
+tokio = { version = "1.19.2", features = ["full"] }
 axum = { version = "0.6.1", features = ["ws"] }

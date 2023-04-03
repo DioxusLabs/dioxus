@@ -6,6 +6,7 @@
   - [Desktop](getting_started/desktop.md)
   - [Web](getting_started/web.md)
   - [Server-Side Rendering](getting_started/ssr.md)
+  - [Fullstack](getting_started/fullstack.md)
   - [Liveview](getting_started/liveview.md)
   - [Terminal UI](getting_started/tui.md)
   - [Mobile](getting_started/mobile.md)
