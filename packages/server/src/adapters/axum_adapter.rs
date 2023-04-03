@@ -39,7 +39,7 @@
 //!                 to_owned![text];
 //!                 async move {
 //!                     if let Ok(data) = get_server_data().await {
-//!                         text.set(data.clone());
+//!                         text.set(data);
 //!                     }
 //!                 }
 //!             },
@@ -85,25 +85,22 @@ pub trait DioxusRouterExt<S> {
     /// # use dioxus::prelude::*;
     /// # use dioxus_server::prelude::*;
     ///
-    /// fn main() {
-    ///     tokio::runtime::Runtime::new()
-    ///        .unwrap()
-    ///        .block_on(async move {
-    ///            let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 8080));
-    ///            axum::Server::bind(&addr)
-    ///                .serve(
-    ///                    axum::Router::new()
-    ///                        .register_server_fns_with_handler("", |func| {
-    ///                            move |headers: HeaderMap, body: Request<Body>| async move {
-    ///                                // Add the headers to the context
-    ///                                server_fn_handler((headers.clone(),).into(), func.clone(), headers, body).await
-    ///                            }
-    ///                        })
-    ///                        .into_make_service(),
-    ///                )
-    ///                .await
-    ///                .unwrap();
-    ///        });
+    /// #[tokio::main]
+    /// async fn main() {
+    ///    let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 8080));
+    ///    axum::Server::bind(&addr)
+    ///        .serve(
+    ///            axum::Router::new()
+    ///                .register_server_fns_with_handler("", |func| {
+    ///                    move |headers: HeaderMap, body: Request<Body>| async move {
+    ///                        // Add the headers to the context
+    ///                        server_fn_handler((headers.clone(),), func.clone(), headers, body).await
+    ///                    }
+    ///                })
+    ///                .into_make_service(),
+    ///        )
+    ///        .await
+    ///        .unwrap();
     /// }
     /// ```
     fn register_server_fns_with_handler<H, T>(
@@ -123,20 +120,17 @@ pub trait DioxusRouterExt<S> {
     /// # use dioxus::prelude::*;
     /// # use dioxus_server::prelude::*;
     ///
-    /// fn main() {
-    ///     tokio::runtime::Runtime::new()
-    ///        .unwrap()
-    ///        .block_on(async move {
-    ///            let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 8080));
-    ///            axum::Server::bind(&addr)
-    ///                .serve(
-    ///                    axum::Router::new()
-    ///                        .register_server_fns("")
-    ///                        .into_make_service(),
-    ///                )
-    ///                .await
-    ///                .unwrap();
-    ///        });
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 8080));
+    ///     axum::Server::bind(&addr)
+    ///         .serve(
+    ///             axum::Router::new()
+    ///                 .register_server_fns("")
+    ///                 .into_make_service(),
+    ///         )
+    ///         .await
+    ///         .unwrap();
     /// }
     /// ```
     fn register_server_fns(self, server_fn_route: &'static str) -> Self;
@@ -150,23 +144,19 @@ pub trait DioxusRouterExt<S> {
     /// # use dioxus::prelude::*;
     /// # use dioxus_server::prelude::*;
     ///
-    /// fn main() {
-    ///     GetServerData::register().unwrap();
-    ///     tokio::runtime::Runtime::new()
-    ///         .unwrap()
-    ///         .block_on(async move {
-    ///             hot_reload_init!();
-    ///             let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 8080));
-    ///             axum::Server::bind(&addr)
-    ///                 .serve(
-    ///                     axum::Router::new()
-    ///                         // Server side render the application, serve static assets, and register server functions
-    ///                         .connect_hot_reload()
-    ///                         .into_make_service(),
-    ///                 )
-    ///                 .await
-    ///                 .unwrap();
-    ///         });
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     hot_reload_init!();
+    ///     let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 8080));
+    ///     axum::Server::bind(&addr)
+    ///         .serve(
+    ///             axum::Router::new()
+    ///                 // Server side render the application, serve static assets, and register server functions
+    ///                 .connect_hot_reload()
+    ///                 .into_make_service(),
+    ///         )
+    ///         .await
+    ///         .unwrap();
     /// }
     ///
     /// # fn app(cx: Scope) -> Element {todo!()}
@@ -174,7 +164,7 @@ pub trait DioxusRouterExt<S> {
     fn connect_hot_reload(self) -> Self;
 
     /// Serves the Dioxus application. This will serve a complete server side rendered application.
-    /// It will serve static assets, server render the application, register server functions, and intigrate with hot reloading.
+    /// This will serve static assets, server render the application, register server functions, and intigrate with hot reloading.
     ///
     /// # Example
     /// ```rust
@@ -182,22 +172,18 @@ pub trait DioxusRouterExt<S> {
     /// # use dioxus::prelude::*;
     /// # use dioxus_server::prelude::*;
     ///
-    /// fn main() {
-    ///     GetServerData::register().unwrap();
-    ///     tokio::runtime::Runtime::new()
-    ///         .unwrap()
-    ///         .block_on(async move {
-    ///             let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 8080));
-    ///             axum::Server::bind(&addr)
-    ///                 .serve(
-    ///                     axum::Router::new()
-    ///                         // Server side render the application, serve static assets, and register server functions
-    ///                         .serve_dioxus_application("", ServeConfigBuilder::new(app, ()))
-    ///                         .into_make_service(),
-    ///                 )
-    ///                 .await
-    ///                 .unwrap();
-    ///         });
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 8080));
+    ///     axum::Server::bind(&addr)
+    ///         .serve(
+    ///             axum::Router::new()
+    ///                 // Server side render the application, serve static assets, and register server functions
+    ///                 .serve_dioxus_application("", ServeConfigBuilder::new(app, ()))
+    ///                 .into_make_service(),
+    ///         )
+    ///         .await
+    ///         .unwrap();
     /// }
     ///
     /// # fn app(cx: Scope) -> Element {todo!()}
@@ -235,7 +221,7 @@ where
     fn register_server_fns(self, server_fn_route: &'static str) -> Self {
         self.register_server_fns_with_handler(server_fn_route, |func| {
             move |headers: HeaderMap, body: Request<Body>| async move {
-                server_fn_handler(().into(), func.clone(), headers, body).await
+                server_fn_handler((), func.clone(), headers, body).await
             }
         })
     }
@@ -314,11 +300,12 @@ async fn render_handler<P: Clone + Send + Sync + 'static>(
 
 /// A default handler for server functions. It will deserialize the request body, call the server function, and serialize the response.
 pub async fn server_fn_handler(
-    server_context: DioxusServerContext,
+    server_context: impl Into<DioxusServerContext>,
     function: Arc<ServerFnTraitObj>,
     headers: HeaderMap,
     req: Request<Body>,
 ) -> impl IntoResponse {
+    let server_context = server_context.into();
     let (_, body) = req.into_parts();
     let body = hyper::body::to_bytes(body).await;
     let Ok(body)=body else {
