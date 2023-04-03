@@ -82,7 +82,7 @@ pub enum ServerRegistrationFnError {
 /// Server functions are created using the `server` macro.
 ///
 /// The function should be registered by calling `ServerFn::register()`. The set of server functions
-/// can be queried on the server for routing purposes by calling [ServerFunctionRegistry::get].
+/// can be queried on the server for routing purposes by calling [server_fn::ServerFunctionRegistry::get].
 ///
 /// Technically, the trait is implemented on a type that describes the server function's arguments, not the function itself.
 pub trait ServerFn: server_fn::ServerFn<DioxusServerContext> {

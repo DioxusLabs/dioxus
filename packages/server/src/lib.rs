@@ -1,8 +1,8 @@
 //! Fullstack utilities for the [`dioxus`](https://dioxuslabs.com) framework.
 //!
 //! # Features
-//! - Intigrations with the [axum](crate::adapters::axum_adapter), [salvo](crate::adapters::salvo_adapters), and [warp](crate::adapters::warp_adapters) server frameworks with utilities for serving and rendering Dioxus applications.
-//! - Server functions that allow you to call code on the server from the client as if it were a normal function.
+//! - Intigrations with the [axum](crate::adapters::axum_adapter), [salvo](crate::adapters::salvo_adapter), and [warp](crate::adapters::warp_adapter) server frameworks with utilities for serving and rendering Dioxus applications.
+//! - [Server functions](crate::prelude::server) that allow you to call code on the server from the client as if it were a normal function.
 //! - Instant RSX Hot reloading with [`dioxus-hot-reload`](https://crates.io/crates/dioxus-hot-reload).
 //!
 //! # Example
@@ -59,6 +59,8 @@
 #![warn(missing_docs)]
 #[allow(unused)]
 use dioxus_core::prelude::*;
+
+pub use adapters::*;
 
 mod adapters;
 #[cfg(all(debug_assertions, feature = "hot-reload", feature = "ssr"))]

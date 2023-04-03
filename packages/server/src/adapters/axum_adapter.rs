@@ -182,7 +182,9 @@ pub trait DioxusRouterExt<S> {
     ///         .unwrap();
     /// }
     ///
-    /// fn app(cx: Scope) -> Element {todo!()}
+    /// fn app(cx: Scope) -> Element {
+    ///     todo!()
+    /// }
     /// ```
     fn serve_dioxus_application<P: Clone + Send + Sync + 'static>(
         self,

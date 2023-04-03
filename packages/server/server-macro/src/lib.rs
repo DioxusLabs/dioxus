@@ -19,7 +19,7 @@ use server_fn_macro::*;
 ///   work without WebAssembly, the encoding must be `"Url"`.
 ///
 /// The server function itself can take any number of arguments, each of which should be serializable
-/// and deserializable with `serde`. Optionally, its first argument can be a [DioxusServerContext](dioxus_server::prelude::DioxusServerContext),
+/// and deserializable with `serde`. Optionally, its first argument can be a [DioxusServerContext](https::/docs.rs/dioxus_server/latest/dixous_server/prelude/struct.DioxusServerContext.html),
 /// which will be injected *on the server side.* This can be used to inject the raw HTTP request or other
 /// server-side context into the server function.
 ///
@@ -50,8 +50,8 @@ use server_fn_macro::*;
 ///   They are serialized as an `application/x-www-form-urlencoded`
 ///   form data using [`serde_urlencoded`](https://docs.rs/serde_urlencoded/latest/serde_urlencoded/) or as `application/cbor`
 ///   using [`cbor`](https://docs.rs/cbor/latest/cbor/).
-/// - **The [DioxusServerContext](dioxus_server::prelude::DioxusServerContext) comes from the server.** Optionally, the first argument of a server function
-///   can be a [DioxusServerContext](dioxus_server::prelude::DioxusServerContext). This scope can be used to inject dependencies like the HTTP request
+/// - **The [DioxusServerContext](https::/docs.rs/dioxus_server/latest/dixous_server/prelude/struct.DioxusServerContext.html) comes from the server.** Optionally, the first argument of a server function
+///   can be a [DioxusServerContext](https::/docs.rs/dioxus_server/latest/dixous_server/prelude/struct.DioxusServerContext.html). This scope can be used to inject dependencies like the HTTP request
 ///   or response or other server-only dependencies, but it does *not* have access to reactive state that exists in the client.
 #[proc_macro_attribute]
 pub fn server(args: proc_macro::TokenStream, s: TokenStream) -> TokenStream {
