@@ -14,7 +14,7 @@ keywords = ["dom", "ui", "gui", "react", "ssr", "fullstack"]
 [dependencies]
 # server functions
 server_fn = { git = "https://github.com/leptos-rs/leptos", rev = "a9e6590b5e7f1c0b01da7db7b86719cb18a4aaa1", features = ["stable"] }
-server_macro = { path = "server-macro" }
+dioxus_server_macro = { path = "server-macro" }
 
 # warp
 warp = { version = "0.3.3", optional = true }

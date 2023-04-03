@@ -44,7 +44,7 @@ tokio = { version = "*", features = ["full"] }
 Now, set up your Axum app to serve the Dioxus app.
 
 ```rust
-{{#include ../../../examples/server.rs:basic}}
+{{#include ../../../examples/server_basic.rs}}
 ```
 
 Now, run your app with `cargo run` and open `http://localhost:8080` in your browser. You should see a server-side rendered page with a counter.
@@ -77,7 +77,7 @@ web = ["dioxus-web"]
 Next, we need to modify our `main.rs` to use either hydrate on the client or render on the server depending on the active features.
 
 ```rust
-{{#include ../../../examples/server.rs:hydration}}
+{{#include ../../../examples/hydration.rs}}
 ```
 
 Now, build your client-side bundle with `dioxus build --features web` and run your server with `cargo run --features ssr`. You should see the same page as before, but now you can interact with the buttons!
@@ -105,7 +105,7 @@ cargo add serde
 Next, add the server function to your `main.rs`:
 
 ```rust
-{{#include ../../../examples/server.rs:server_function}}
+{{#include ../../../examples/server_function.rs}}
 ```
 
 Now, build your client-side bundle with `dioxus build --features web` and run your server with `cargo run --features ssr`. You should see a new button that multiplies the count by 2.

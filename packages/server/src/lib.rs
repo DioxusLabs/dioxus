@@ -24,11 +24,13 @@ pub mod prelude {
     #[cfg(feature = "warp")]
     pub use crate::adapters::warp_adapter::*;
     #[cfg(feature = "ssr")]
+    pub use crate::render::SSRState;
+    #[cfg(feature = "ssr")]
     pub use crate::serve_config::{ServeConfig, ServeConfigBuilder};
     pub use crate::server_context::DioxusServerContext;
     pub use crate::server_fn::ServerFn;
     #[cfg(feature = "ssr")]
     pub use crate::server_fn::ServerFnTraitObj;
+    pub use dioxus_server_macro::*;
     pub use server_fn::{self, ServerFn as _, ServerFnError};
-    pub use server_macro::*;
 }

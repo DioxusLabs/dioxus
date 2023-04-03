@@ -29,8 +29,9 @@ pub struct RouterProps<'a> {
     pub active_class: Option<&'a str>,
 
     /// Set the initial url.
-    #[props(!optional, into)]
-    pub initial_url: Option<String>,
+    // This is Option<Option<String>> because we want to be able to either omit the prop or pass in Option<String>
+    #[props(into)]
+    pub initial_url: Option<Option<String>>,
 }
 
 /// A component that conditionally renders children based on the current location of the app.
@@ -46,7 +47,7 @@ pub fn Router<'a>(cx: Scope<'a, RouterProps<'a>>) -> Element {
             RouterCfg {
                 base_url: cx.props.base_url.map(|s| s.to_string()),
                 active_class: cx.props.active_class.map(|s| s.to_string()),
-                initial_url: cx.props.initial_url.clone(),
+                initial_url: cx.props.initial_url.clone().flatten(),
             },
         ))
     });

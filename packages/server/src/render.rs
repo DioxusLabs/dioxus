@@ -9,7 +9,7 @@ use crate::prelude::ServeConfig;
 
 /// State used in server side rendering. This utilizes a pool of [`dioxus_ssr::Renderer`]s to cache static templates between renders.
 #[derive(Clone)]
-pub(crate) struct SSRState {
+pub struct SSRState {
     // We keep a pool of renderers to avoid re-creating them on every request. They are boxed to make them very cheap to move
     renderers: Arc<object_pool::Pool<Renderer>>,
 }
@@ -23,6 +23,7 @@ impl Default for SSRState {
 }
 
 impl SSRState {
+    /// Render the application to HTML.
     pub fn render<P: 'static + Clone>(&self, cfg: &ServeConfig<P>) -> String {
         let ServeConfig {
             app, props, index, ..
