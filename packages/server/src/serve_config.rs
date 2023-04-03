@@ -1,9 +1,12 @@
+//! Configeration for how to serve a Dioxus application
+
 use std::fs::File;
 use std::io::Read;
 use std::path::PathBuf;
 
 use dioxus_core::Component;
 
+/// A ServeConfig is used to configure how to serve a Dioxus application. It contains information about how to serve static assets, and what content to render with [`dioxus-ssr`].
 #[derive(Clone)]
 pub struct ServeConfigBuilder<P: Clone> {
     pub(crate) app: Component<P>,
@@ -14,7 +17,7 @@ pub struct ServeConfigBuilder<P: Clone> {
 }
 
 impl<P: Clone> ServeConfigBuilder<P> {
-    /// Create a new ServeConfig
+    /// Create a new ServeConfigBuilder with the root component and props to render on the server.
     pub fn new(app: Component<P>, props: P) -> Self {
         Self {
             app,
@@ -95,6 +98,8 @@ pub(crate) struct IndexHtml {
     pub(crate) post_main: String,
 }
 
+/// Used to configure how to serve a Dioxus application. It contains information about how to serve static assets, and what content to render with [`dioxus-ssr`].
+/// See [`ServeConfigBuilder`] to create a ServeConfig
 #[derive(Clone)]
 pub struct ServeConfig<P: Clone> {
     pub(crate) app: Component<P>,

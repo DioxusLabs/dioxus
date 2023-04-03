@@ -1,6 +1,7 @@
 use crate::server_context::DioxusServerContext;
 
 #[cfg(any(feature = "ssr", doc))]
+/// A trait object for a function that be called on serializable arguments and returns a serializable result.
 pub type ServerFnTraitObj = server_fn::ServerFnTraitObj<DioxusServerContext>;
 
 #[cfg(any(feature = "ssr", doc))]
@@ -78,17 +79,14 @@ pub enum ServerRegistrationFnError {
 /// Defines a "server function." A server function can be called from the server or the client,
 /// but the body of its code will only be run on the server, i.e., if a crate feature `ssr` is enabled.
 ///
-/// (This follows the same convention as the Dioxus framework's distinction between `ssr` for server-side rendering,
-/// and `csr` and `hydrate` for client-side rendering and hydration, respectively.)
-///
 /// Server functions are created using the `server` macro.
 ///
 /// The function should be registered by calling `ServerFn::register()`. The set of server functions
-/// can be queried on the server for routing purposes by calling [server_fn_by_path].
+/// can be queried on the server for routing purposes by calling [ServerFunctionRegistry::get].
 ///
-/// Technically, the trait is implemented on a type that describes the server function's arguments.
+/// Technically, the trait is implemented on a type that describes the server function's arguments, not the function itself.
 pub trait ServerFn: server_fn::ServerFn<DioxusServerContext> {
-    /// Registers the server function, allowing the server to query it by URL.
+    /// Registers the server function, allowing the client to query it by URL.
     #[cfg(any(feature = "ssr", doc))]
     fn register() -> Result<(), server_fn::ServerFnError> {
         Self::register_in::<DioxusServerFnRegistry>()

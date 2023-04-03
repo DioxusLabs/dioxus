@@ -1,3 +1,5 @@
+//! A shared pool of renderers for efficient server side rendering.
+
 use std::sync::Arc;
 
 use dioxus_core::VirtualDom;
@@ -5,9 +7,10 @@ use dioxus_ssr::Renderer;
 
 use crate::prelude::ServeConfig;
 
+/// State used in server side rendering. This utilizes a pool of [`dioxus_ssr::Renderer`]s to cache static templates between renders.
 #[derive(Clone)]
-pub struct SSRState {
-    // We keep a cache of renderers to avoid re-creating them on every request. They are boxed to make them very cheap to move
+pub(crate) struct SSRState {
+    // We keep a pool of renderers to avoid re-creating them on every request. They are boxed to make them very cheap to move
     renderers: Arc<object_pool::Pool<Renderer>>,
 }
 
