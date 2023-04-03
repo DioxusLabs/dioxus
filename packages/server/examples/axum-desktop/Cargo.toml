@@ -1,20 +1,31 @@
 [package]
-name = "axum-hello-world"
+name = "axum-desktop"
 version = "0.1.0"
 edition = "2021"
 publish = false
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
 
 [dependencies]
-dioxus-web = { path = "../../../web", features=["hydrate"], optional = true }
+dioxus-desktop = { path = "../../../desktop", optional = true }
 dioxus = { path = "../../../dioxus" }
+dioxus-router = { path = "../../../router" }
 dioxus-server = { path = "../../" }
 axum = { version = "0.6.12", optional = true }
 tokio = { version = "1.27.0", features = ["full"], optional = true }
 serde = "1.0.159"
 
 [features]
-default = ["web"]
+default = []
 ssr = ["axum", "tokio", "dioxus-server/axum"]
-web = ["dioxus-web"]
+desktop = ["dioxus-desktop"]
+
+[[bin]]
+name = "client"
+path = "src/client.rs"
+required-features = ["desktop"]
+
+[[bin]]
+name = "server"
+path = "src/server.rs"
+required-features = ["ssr"]
