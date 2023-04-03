@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 # server functions
-server_fn = { path = "D:/Users/Desktop/github/leptos/server_fn", features = ["stable"] }
+server_fn = { git = "https://github.com/leptos-rs/leptos", rev = "a9e6590b5e7f1c0b01da7db7b86719cb18a4aaa1", features = ["stable"] }
 server_macro = { path = "server-macro" }
 
 # warp
