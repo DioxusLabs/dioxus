@@ -1,3 +1,52 @@
+//! Dioxus utilities for the [Warp](https://docs.rs/warp/latest/warp/index.html) server framework.
+//!
+//! # Example
+//! ```rust
+//! #![allow(non_snake_case)]
+//! use dioxus::prelude::*;
+//! use dioxus_server::prelude::*;
+//!
+//! fn main() {
+//!     #[cfg(feature = "web")]
+//!     dioxus_web::launch_cfg(app, dioxus_web::Config::new().hydrate(true));
+//!     #[cfg(feature = "ssr")]
+//!     {
+//!         GetServerData::register().unwrap();
+//!         tokio::runtime::Runtime::new()
+//!             .unwrap()
+//!             .block_on(async move {
+//!                 let routes = serve_dioxus_application("", ServeConfigBuilder::new(app, ()));
+//!                 warp::serve(routes).run(([127, 0, 0, 1], 8080)).await;
+//!             });
+//!     }
+//! }
+//!
+//! fn app(cx: Scope) -> Element {
+//!     let text = use_state(cx, || "...".to_string());
+//!
+//!     cx.render(rsx! {
+//!         button {
+//!             onclick: move |_| {
+//!                 to_owned![text];
+//!                 async move {
+//!                     if let Ok(data) = get_server_data().await {
+//!                         text.set(data);
+//!                     }
+//!                 }
+//!             },
+//!             "Run a server function"
+//!         }
+//!         "Server said: {text}"
+//!     })
+//! }
+//!
+//! #[server(GetServerData)]
+//! async fn get_server_data() -> Result<String, ServerFnError> {
+//!     Ok("Hello from the server!".to_string())
+//! }
+//!
+//! ```
+
 use std::{error::Error, sync::Arc};
 
 use server_fn::{Payload, ServerFunctionRegistry};
@@ -10,11 +59,36 @@ use warp::{
 };
 
 use crate::{
-    prelude::{DioxusServerContext, SSRState},
-    serve::ServeConfig,
+    prelude::DioxusServerContext,
+    render::SSRState,
+    serve_config::ServeConfig,
     server_fn::{DioxusServerFnRegistry, ServerFnTraitObj},
 };
 
+/// Registers server functions with a custom handler function. This allows you to pass custom context to your server functions by generating a [`DioxusServerContext`] from the request.
+///
+/// # Example
+/// ```rust
+/// use warp::{body, header, hyper::HeaderMap, path, post, Filter};
+///
+/// #[tokio::main]
+/// async fn main() {
+///     let routes = register_server_fns_with_handler("", |full_route, func| {
+///         path(full_route)
+///             .and(post())
+///             .and(header::headers_cloned())
+///             .and(body::bytes())
+///             .and_then(move |headers: HeaderMap, body| {
+///                 let func = func.clone();
+///                 async move {
+///                     // Add the headers to the server function context
+///                     server_fn_handler((headers.clone(),), func, headers, body).await
+///                 }
+///             })
+///     });
+///     warp::serve(routes).run(([127, 0, 0, 1], 8080)).await;
+/// }
+/// ```
 pub fn register_server_fns_with_handler<H, F, R>(
     server_fn_route: &'static str,
     mut handler: H,
@@ -41,6 +115,18 @@ where
     filter.expect("No server functions found")
 }
 
+/// Registers server functions with the default handler. This handler function will pass an empty [`DioxusServerContext`] to your server functions.
+///
+/// # Example
+/// ```rust
+/// use dioxus_server::prelude::*;
+///
+/// #[tokio::main]
+/// async fn main() {
+///     let routes = register_server_fns("");
+///     warp::serve(routes).run(([127, 0, 0, 1], 8080)).await;
+/// }
+/// ```
 pub fn register_server_fns(server_fn_route: &'static str) -> BoxedFilter<(impl Reply,)> {
     register_server_fns_with_handler(server_fn_route, |full_route, func| {
         path(full_route)
@@ -56,6 +142,25 @@ pub fn register_server_fns(server_fn_route: &'static str) -> BoxedFilter<(impl R
     })
 }
 
+/// Serves the Dioxus application. This will serve a complete server side rendered application.
+/// This will serve static assets, server render the application, register server functions, and intigrate with hot reloading.
+///
+/// # Example
+/// ```rust
+/// #![allow(non_snake_case)]
+/// use dioxus::prelude::*;
+/// use dioxus_server::prelude::*;
+///
+/// #[tokio::main]
+/// async fn main() {
+///     let routes = serve_dioxus_application("", ServeConfigBuilder::new(app, ()));
+///     warp::serve(routes).run(([127, 0, 0, 1], 8080)).await;
+/// }
+///
+/// fn app(cx: Scope) -> Element {
+///     todo!()
+/// }
+/// ```
 pub fn serve_dioxus_application<P: Clone + Send + Sync + 'static>(
     server_fn_route: &'static str,
     cfg: impl Into<ServeConfig<P>>,
@@ -90,12 +195,14 @@ struct RecieveFailed(String);
 
 impl warp::reject::Reject for RecieveFailed {}
 
-async fn server_fn_handler(
-    server_context: DioxusServerContext,
+/// A default handler for server functions. It will deserialize the request body, call the server function, and serialize the response.
+pub async fn server_fn_handler(
+    server_context: impl Into<DioxusServerContext>,
     function: Arc<ServerFnTraitObj>,
     headers: HeaderMap,
     body: Bytes,
 ) -> Result<Box<dyn warp::Reply>, warp::Rejection> {
+    let server_context = server_context.into();
     // Because the future returned by `server_fn_handler` is `Send`, and the future returned by this function must be send, we need to spawn a new runtime
     let (resp_tx, resp_rx) = tokio::sync::oneshot::channel();
     spawn_blocking({
@@ -161,7 +268,21 @@ fn report_err<E: Error>(e: E) -> Box<dyn warp::Reply> {
     ) as Box<dyn warp::Reply>
 }
 
-pub fn connect_hot_reload() -> impl Filter<Extract = (impl Reply,), Error = warp::Rejection> {
+/// Register the web RSX hot reloading endpoint. This will enable hot reloading for your application in debug mode when you call [`dioxus_hot_reload::hot_reload_init`].
+///
+/// # Example
+/// ```rust
+/// #![allow(non_snake_case)]
+/// use dioxus_server::prelude::*;
+///
+/// #[tokio::main]
+/// async fn main() {
+///     let routes = connect_hot_reload();
+///     warp::serve(routes).run(([127, 0, 0, 1], 8080)).await;
+/// }
+/// ```
+pub fn connect_hot_reload() -> impl Filter<Extract = (impl Reply,), Error = warp::Rejection> + Clone
+{
     #[cfg(not(all(debug_assertions, feature = "hot-reload", feature = "ssr")))]
     {
         warp::path("_dioxus/hot_reload").and(warp::ws()).map(|| {

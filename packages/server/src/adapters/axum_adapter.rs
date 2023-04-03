@@ -2,9 +2,9 @@
 //!
 //! # Example
 //! ```rust
-//! # #![allow(non_snake_case)]
-//! # use dioxus::prelude::*;
-//! # use dioxus_server::prelude::*;
+//! #![allow(non_snake_case)]
+//! use dioxus::prelude::*;
+//! use dioxus_server::prelude::*;
 //!
 //! fn main() {
 //!     #[cfg(feature = "web")]
@@ -82,8 +82,8 @@ pub trait DioxusRouterExt<S> {
     ///
     /// # Example
     /// ```rust
-    /// # use dioxus::prelude::*;
-    /// # use dioxus_server::prelude::*;
+    /// use dioxus::prelude::*;
+    /// use dioxus_server::prelude::*;
     ///
     /// #[tokio::main]
     /// async fn main() {
@@ -117,8 +117,8 @@ pub trait DioxusRouterExt<S> {
     ///
     /// # Example
     /// ```rust
-    /// # use dioxus::prelude::*;
-    /// # use dioxus_server::prelude::*;
+    /// use dioxus::prelude::*;
+    /// use dioxus_server::prelude::*;
     ///
     /// #[tokio::main]
     /// async fn main() {
@@ -138,11 +138,9 @@ pub trait DioxusRouterExt<S> {
     /// Register the web RSX hot reloading endpoint. This will enable hot reloading for your application in debug mode when you call [`dioxus_hot_reload::hot_reload_init`].
     ///
     /// # Example
-    /// /// # Example
     /// ```rust
-    /// # #![allow(non_snake_case)]
-    /// # use dioxus::prelude::*;
-    /// # use dioxus_server::prelude::*;
+    /// #![allow(non_snake_case)]
+    /// use dioxus_server::prelude::*;
     ///
     /// #[tokio::main]
     /// async fn main() {
@@ -158,8 +156,6 @@ pub trait DioxusRouterExt<S> {
     ///         .await
     ///         .unwrap();
     /// }
-    ///
-    /// # fn app(cx: Scope) -> Element {todo!()}
     /// ```
     fn connect_hot_reload(self) -> Self;
 
@@ -168,9 +164,9 @@ pub trait DioxusRouterExt<S> {
     ///
     /// # Example
     /// ```rust
-    /// # #![allow(non_snake_case)]
-    /// # use dioxus::prelude::*;
-    /// # use dioxus_server::prelude::*;
+    /// #![allow(non_snake_case)]
+    /// use dioxus::prelude::*;
+    /// use dioxus_server::prelude::*;
     ///
     /// #[tokio::main]
     /// async fn main() {
@@ -186,7 +182,7 @@ pub trait DioxusRouterExt<S> {
     ///         .unwrap();
     /// }
     ///
-    /// # fn app(cx: Scope) -> Element {todo!()}
+    /// fn app(cx: Scope) -> Element {todo!()}
     /// ```
     fn serve_dioxus_application<P: Clone + Send + Sync + 'static>(
         self,

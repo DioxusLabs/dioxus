@@ -2,9 +2,9 @@
 //!
 //! # Example
 //! ```rust
-//! # #![allow(non_snake_case)]
-//! # use dioxus::prelude::*;
-//! # use dioxus_server::prelude::*;
+//! #![allow(non_snake_case)]
+//! use dioxus::prelude::*;
+//! use dioxus_server::prelude::*;
 //!
 //! fn main() {
 //!     #[cfg(feature = "web")]
@@ -48,6 +48,7 @@
 //! async fn get_server_data() -> Result<String, ServerFnError> {
 //!     Ok("Hello from the server!".to_string())
 //! }
+//! ```
 
 use std::{error::Error, sync::Arc};
 
@@ -71,6 +72,7 @@ use crate::{
 pub trait DioxusRouterExt {
     /// Registers server functions with a custom handler function. This allows you to pass custom context to your server functions by generating a [`DioxusServerContext`] from the request.
     ///
+    /// # Example
     /// ```rust
     /// use salvo::prelude::*;
     /// use std::{net::TcpListener, sync::Arc};
@@ -172,7 +174,7 @@ pub trait DioxusRouterExt {
     ///         .await;
     /// }
     ///
-    /// # fn app(cx: Scope) -> Element {todo!()}
+    /// fn app(cx: Scope) -> Element {todo!()}
     /// ```    
     fn serve_dioxus_application<P: Clone + Send + Sync + 'static>(
         self,
