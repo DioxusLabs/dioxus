@@ -6,6 +6,7 @@
 //! - Instant RSX Hot reloading with [`dioxus-hot-reload`](https://crates.io/crates/dioxus-hot-reload).
 //!
 //! # Example
+//! Full stack Dioxus in under 50 lines of code
 //! ```rust
 //! #![allow(non_snake_case)]
 //! use dioxus::prelude::*;
@@ -13,50 +14,45 @@
 //!
 //! fn main() {
 //!     #[cfg(feature = "web")]
-//!     // Hydrate the application on the client
 //!     dioxus_web::launch_cfg(app, dioxus_web::Config::new().hydrate(true));
 //!     #[cfg(feature = "ssr")]
 //!     {
-//!         GetServerData::register().unwrap();
+//!         GetMeaning::register().unwrap();
 //!         tokio::runtime::Runtime::new()
 //!             .unwrap()
 //!             .block_on(async move {
-//!                 let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 8080));
-//!                 axum::Server::bind(&addr)
-//!                     .serve(
-//!                         axum::Router::new()
-//!                             // Server side render the application, serve static assets, and register server functions
-//!                             .serve_dioxus_application("", ServeConfigBuilder::new(app, ()))
-//!                             .into_make_service(),
-//!                     )
-//!                     .await
-//!                     .unwrap();
+//!                 warp::serve(serve_dioxus_application(
+//!                     "",
+//!                     ServeConfigBuilder::new(app, ()),
+//!                 ))
+//!                 .run(([127, 0, 0, 1], 8080))
+//!                 .await;
 //!             });
-//!      }
+//!     }
 //! }
 //!
 //! fn app(cx: Scope) -> Element {
-//!     let text = use_state(cx, || "...".to_string());
-//!
+//!     let meaning = use_state(cx, || None);
 //!     cx.render(rsx! {
 //!         button {
 //!             onclick: move |_| {
-//!                 to_owned![text];
+//!                 to_owned![meaning];
 //!                 async move {
-//!                     if let Ok(data) = get_server_data().await {
-//!                         text.set(data.clone());
+//!                     if let Ok(data) = get_meaning("life the universe and everything".into()).await {
+//!                         meaning.set(data);
 //!                     }
 //!                 }
 //!             },
 //!             "Run a server function"
 //!         }
-//!         "Server said: {text}"
+//!         "Server said: {meaning:?}"
 //!     })
 //! }
 //!
-//! #[server(GetServerData)]
-//! async fn get_server_data() -> Result<String, ServerFnError> {
-//!     Ok("Hello from the server!".to_string())
+//! // This code will only run on the server
+//! #[server(GetMeaning)]
+//! async fn get_meaning(of: String) -> Result<Option<u32>, ServerFnError> {
+//!     Ok(of.contains("life").then(|| 42))
 //! }
 //! ```
 
