@@ -1,3 +1,60 @@
+//! Dioxus utilities for the [Axum](https://docs.rs/axum/latest/axum/index.html) server framework.
+//!
+//! # Example
+//! ```rust
+//! # #![allow(non_snake_case)]
+//! # use dioxus::prelude::*;
+//! # use dioxus_server::prelude::*;
+//!
+//! fn main() {
+//!     #[cfg(feature = "web")]
+//!     // Hydrate the application on the client
+//!     dioxus_web::launch_cfg(app, dioxus_web::Config::new().hydrate(true));
+//!     #[cfg(feature = "ssr")]
+//!     {
+//!         GetServerData::register().unwrap();
+//!         tokio::runtime::Runtime::new()
+//!             .unwrap()
+//!             .block_on(async move {
+//!                 let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 8080));
+//!                 axum::Server::bind(&addr)
+//!                     .serve(
+//!                         axum::Router::new()
+//!                             // Server side render the application, serve static assets, and register server functions
+//!                             .serve_dioxus_application("", ServeConfigBuilder::new(app, ()))
+//!                             .into_make_service(),
+//!                     )
+//!                     .await
+//!                     .unwrap();
+//!             });
+//!      }
+//! }
+//!
+//! fn app(cx: Scope) -> Element {
+//!     let text = use_state(cx, || "...".to_string());
+//!
+//!     cx.render(rsx! {
+//!         button {
+//!             onclick: move |_| {
+//!                 to_owned![text];
+//!                 async move {
+//!                     if let Ok(data) = get_server_data().await {
+//!                         text.set(data.clone());
+//!                     }
+//!                 }
+//!             },
+//!             "Run a server function"
+//!         }
+//!         "Server said: {text}"
+//!     })
+//! }
+//!
+//! #[server(GetServerData)]
+//! async fn get_server_data() -> Result<String, ServerFnError> {
+//!     Ok("Hello from the server!".to_string())
+//! }
+//! ```
+
 use std::{error::Error, sync::Arc};
 
 use axum::{
@@ -14,12 +71,41 @@ use tokio::task::spawn_blocking;
 
 use crate::{
     render::SSRState,
-    serve::ServeConfig,
+    serve_config::ServeConfig,
     server_context::DioxusServerContext,
     server_fn::{DioxusServerFnRegistry, ServerFnTraitObj},
 };
 
+/// A extension trait with utilities for integrating Dioxus with your Axum router.
 pub trait DioxusRouterExt<S> {
+    /// Registers server functions with a custom handler function. This allows you to pass custom context to your server functions by generating a [`DioxusServerContext`] from the request.
+    ///
+    /// # Example
+    /// ```rust
+    /// # use dioxus::prelude::*;
+    /// # use dioxus_server::prelude::*;
+    ///
+    /// fn main() {
+    ///     tokio::runtime::Runtime::new()
+    ///        .unwrap()
+    ///        .block_on(async move {
+    ///            let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 8080));
+    ///            axum::Server::bind(&addr)
+    ///                .serve(
+    ///                    axum::Router::new()
+    ///                        .register_server_fns_with_handler("", |func| {
+    ///                            move |headers: HeaderMap, body: Request<Body>| async move {
+    ///                                // Add the headers to the context
+    ///                                server_fn_handler((headers.clone(),).into(), func.clone(), headers, body).await
+    ///                            }
+    ///                        })
+    ///                        .into_make_service(),
+    ///                )
+    ///                .await
+    ///                .unwrap();
+    ///        });
+    /// }
+    /// ```
     fn register_server_fns_with_handler<H, T>(
         self,
         server_fn_route: &'static str,
@@ -29,15 +115,98 @@ pub trait DioxusRouterExt<S> {
         H: Handler<T, S>,
         T: 'static,
         S: Clone + Send + Sync + 'static;
+
+    /// Registers server functions with the default handler. This handler function will pass an empty [`DioxusServerContext`] to your server functions.
+    ///
+    /// # Example
+    /// ```rust
+    /// # use dioxus::prelude::*;
+    /// # use dioxus_server::prelude::*;
+    ///
+    /// fn main() {
+    ///     tokio::runtime::Runtime::new()
+    ///        .unwrap()
+    ///        .block_on(async move {
+    ///            let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 8080));
+    ///            axum::Server::bind(&addr)
+    ///                .serve(
+    ///                    axum::Router::new()
+    ///                        .register_server_fns("")
+    ///                        .into_make_service(),
+    ///                )
+    ///                .await
+    ///                .unwrap();
+    ///        });
+    /// }
+    /// ```
     fn register_server_fns(self, server_fn_route: &'static str) -> Self;
 
+    /// Register the web RSX hot reloading endpoint. This will enable hot reloading for your application in debug mode when you call [`dioxus_hot_reload::hot_reload_init`].
+    ///
+    /// # Example
+    /// /// # Example
+    /// ```rust
+    /// # #![allow(non_snake_case)]
+    /// # use dioxus::prelude::*;
+    /// # use dioxus_server::prelude::*;
+    ///
+    /// fn main() {
+    ///     GetServerData::register().unwrap();
+    ///     tokio::runtime::Runtime::new()
+    ///         .unwrap()
+    ///         .block_on(async move {
+    ///             hot_reload_init!();
+    ///             let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 8080));
+    ///             axum::Server::bind(&addr)
+    ///                 .serve(
+    ///                     axum::Router::new()
+    ///                         // Server side render the application, serve static assets, and register server functions
+    ///                         .connect_hot_reload()
+    ///                         .into_make_service(),
+    ///                 )
+    ///                 .await
+    ///                 .unwrap();
+    ///         });
+    /// }
+    ///
+    /// # fn app(cx: Scope) -> Element {todo!()}
+    /// ```
+    fn connect_hot_reload(self) -> Self;
+
+    /// Serves the Dioxus application. This will serve a complete server side rendered application.
+    /// It will serve static assets, server render the application, register server functions, and intigrate with hot reloading.
+    ///
+    /// # Example
+    /// ```rust
+    /// # #![allow(non_snake_case)]
+    /// # use dioxus::prelude::*;
+    /// # use dioxus_server::prelude::*;
+    ///
+    /// fn main() {
+    ///     GetServerData::register().unwrap();
+    ///     tokio::runtime::Runtime::new()
+    ///         .unwrap()
+    ///         .block_on(async move {
+    ///             let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 8080));
+    ///             axum::Server::bind(&addr)
+    ///                 .serve(
+    ///                     axum::Router::new()
+    ///                         // Server side render the application, serve static assets, and register server functions
+    ///                         .serve_dioxus_application("", ServeConfigBuilder::new(app, ()))
+    ///                         .into_make_service(),
+    ///                 )
+    ///                 .await
+    ///                 .unwrap();
+    ///         });
+    /// }
+    ///
+    /// # fn app(cx: Scope) -> Element {todo!()}
+    /// ```
     fn serve_dioxus_application<P: Clone + Send + Sync + 'static>(
         self,
         server_fn_route: &'static str,
         cfg: impl Into<ServeConfig<P>>,
     ) -> Self;
-
-    fn connect_hot_reload(self) -> Self;
 }
 
 impl<S> DioxusRouterExt<S> for Router<S>
@@ -66,7 +235,7 @@ where
     fn register_server_fns(self, server_fn_route: &'static str) -> Self {
         self.register_server_fns_with_handler(server_fn_route, |func| {
             move |headers: HeaderMap, body: Request<Body>| async move {
-                server_fn_handler(DioxusServerContext::default(), func.clone(), headers, body).await
+                server_fn_handler(().into(), func.clone(), headers, body).await
             }
         })
     }
@@ -143,6 +312,7 @@ async fn render_handler<P: Clone + Send + Sync + 'static>(
     Full::from(rendered)
 }
 
+/// A default handler for server functions. It will deserialize the request body, call the server function, and serialize the response.
 pub async fn server_fn_handler(
     server_context: DioxusServerContext,
     function: Arc<ServerFnTraitObj>,
@@ -214,6 +384,7 @@ fn report_err<E: Error>(e: E) -> Response<BoxBody> {
         .unwrap()
 }
 
+/// A handler for Dioxus web hot reload websocket. This will send the updated static parts of the RSX to the client when they change.
 #[cfg(all(debug_assertions, feature = "hot-reload", feature = "ssr"))]
 pub async fn hot_reload_handler(
     ws: WebSocketUpgrade,
