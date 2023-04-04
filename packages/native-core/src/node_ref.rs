@@ -1,43 +1,41 @@
-use dioxus_core::ElementId;
+//! Utilities that provide limited access to nodes
+
+use rustc_hash::FxHashSet;
 
 use crate::{
-    node::{FromAnyValue, NodeData, NodeType, OwnedAttributeView},
-    state::union_ordered_iter,
-    RealNodeId,
+    node::{ElementNode, FromAnyValue, NodeType, OwnedAttributeView},
+    NodeId,
 };
 
-/// A view into a [VNode] with limited access.
+/// A view into a [NodeType] with a mask that determines what is visible.
 #[derive(Debug)]
 pub struct NodeView<'a, V: FromAnyValue = ()> {
-    inner: &'a NodeData<V>,
-    mask: NodeMask,
+    id: NodeId,
+    inner: &'a NodeType<V>,
+    mask: &'a NodeMask,
 }
 
 impl<'a, V: FromAnyValue> NodeView<'a, V> {
     /// Create a new NodeView from a VNode, and mask.
-    pub fn new(node: &'a NodeData<V>, view: NodeMask) -> Self {
+    pub fn new(id: NodeId, node: &'a NodeType<V>, view: &'a NodeMask) -> Self {
         Self {
             inner: node,
             mask: view,
+            id,
         }
     }
 
-    /// Get the id of the node
-    pub fn id(&self) -> Option<ElementId> {
-        self.inner.element_id
-    }
-
     /// Get the node id of the node
-    pub fn node_id(&self) -> RealNodeId {
-        self.inner.node_id
+    pub fn node_id(&self) -> NodeId {
+        self.id
     }
 
     /// Get the tag of the node if the tag is enabled in the mask
     pub fn tag(&self) -> Option<&'a str> {
         self.mask
             .tag
-            .then_some(match &self.inner.node_type {
-                NodeType::Element { tag, .. } => Some(&**tag),
+            .then_some(match &self.inner {
+                NodeType::Element(ElementNode { tag, .. }) => Some(&**tag),
                 _ => None,
             })
             .flatten()
@@ -47,8 +45,8 @@ impl<'a, V: FromAnyValue> NodeView<'a, V> {
     pub fn namespace(&self) -> Option<&'a str> {
         self.mask
             .namespace
-            .then_some(match &self.inner.node_type {
-                NodeType::Element { namespace, .. } => namespace.as_deref(),
+            .then_some(match &self.inner {
+                NodeType::Element(ElementNode { namespace, .. }) => namespace.as_deref(),
                 _ => None,
             })
             .flatten()
@@ -58,8 +56,8 @@ impl<'a, V: FromAnyValue> NodeView<'a, V> {
     pub fn attributes<'b>(
         &'b self,
     ) -> Option<impl Iterator<Item = OwnedAttributeView<'a, V>> + 'b> {
-        match &self.inner.node_type {
-            NodeType::Element { attributes, .. } => Some(
+        match &self.inner {
+            NodeType::Element(ElementNode { attributes, .. }) => Some(
                 attributes
                     .iter()
                     .filter(move |(attr, _)| self.mask.attritutes.contains_attribute(&attr.name))
@@ -76,18 +74,21 @@ impl<'a, V: FromAnyValue> NodeView<'a, V> {
     pub fn text(&self) -> Option<&str> {
         self.mask
             .text
-            .then_some(match &self.inner.node_type {
-                NodeType::Text { text } => Some(&**text),
+            .then_some(match &self.inner {
+                NodeType::Text(text) => Some(&text.text),
                 _ => None,
             })
             .flatten()
+            .map(|x| &**x)
     }
 
     /// Get the listeners if it is enabled in the mask
     pub fn listeners(&self) -> Option<impl Iterator<Item = &'a str> + '_> {
         if self.mask.listeners {
-            match &self.inner.node_type {
-                NodeType::Element { listeners, .. } => Some(listeners.iter().map(|l| &**l)),
+            match &self.inner {
+                NodeType::Element(ElementNode { listeners, .. }) => {
+                    Some(listeners.iter().map(|l| &**l))
+                }
                 _ => None,
             }
         } else {
@@ -99,125 +100,54 @@ impl<'a, V: FromAnyValue> NodeView<'a, V> {
 /// A mask that contains a list of attributes that are visible.
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum AttributeMask {
+    /// All attributes are visible
     All,
-    /// A list of attribute names that are visible, this list must be sorted
-    Dynamic(Vec<String>),
-    /// A list of attribute names that are visible, this list must be sorted
-    Static(&'static [&'static str]),
+    /// Only the given attributes are visible
+    Some(FxHashSet<Box<str>>),
 }
 
 impl AttributeMask {
-    /// A empty attribute mask
-    pub const NONE: Self = Self::Static(&[]);
-
+    /// Check if the given attribute is visible
     fn contains_attribute(&self, attr: &str) -> bool {
         match self {
             AttributeMask::All => true,
-            AttributeMask::Dynamic(l) => l.binary_search_by_key(&attr, |s| s.as_str()).is_ok(),
-            AttributeMask::Static(l) => l.binary_search(&attr).is_ok(),
+            AttributeMask::Some(attrs) => attrs.contains(attr),
         }
     }
 
     /// Create a new dynamic attribute mask with a single attribute
     pub fn single(new: &str) -> Self {
-        Self::Dynamic(vec![new.to_string()])
-    }
-
-    /// Ensure the attribute list is sorted.
-    pub fn verify(&self) {
-        match &self {
-            AttributeMask::Static(attrs) => debug_assert!(
-                attrs.windows(2).all(|w| w[0] < w[1]),
-                "attritutes must be increasing"
-            ),
-            AttributeMask::Dynamic(attrs) => debug_assert!(
-                attrs.windows(2).all(|w| w[0] < w[1]),
-                "attritutes must be increasing"
-            ),
-            _ => (),
-        }
+        let mut set = FxHashSet::default();
+        set.insert(new.into());
+        Self::Some(set)
     }
 
     /// Combine two attribute masks
     pub fn union(&self, other: &Self) -> Self {
-        let new = match (self, other) {
-            (AttributeMask::Dynamic(s), AttributeMask::Dynamic(o)) => {
-                AttributeMask::Dynamic(union_ordered_iter(
-                    s.iter().map(|s| s.as_str()),
-                    o.iter().map(|s| s.as_str()),
-                    s.len() + o.len(),
-                ))
+        match (self, other) {
+            (AttributeMask::Some(s), AttributeMask::Some(o)) => {
+                AttributeMask::Some(s.union(o).cloned().collect())
             }
-            (AttributeMask::Static(s), AttributeMask::Dynamic(o)) => {
-                AttributeMask::Dynamic(union_ordered_iter(
-                    s.iter().copied(),
-                    o.iter().map(|s| s.as_str()),
-                    s.len() + o.len(),
-                ))
-            }
-            (AttributeMask::Dynamic(s), AttributeMask::Static(o)) => {
-                AttributeMask::Dynamic(union_ordered_iter(
-                    s.iter().map(|s| s.as_str()),
-                    o.iter().copied(),
-                    s.len() + o.len(),
-                ))
-            }
-            (AttributeMask::Static(s), AttributeMask::Static(o)) => AttributeMask::Dynamic(
-                union_ordered_iter(s.iter().copied(), o.iter().copied(), s.len() + o.len()),
-            ),
             _ => AttributeMask::All,
-        };
-        new.verify();
-        new
+        }
     }
 
     /// Check if two attribute masks overlap
     fn overlaps(&self, other: &Self) -> bool {
-        fn overlaps_iter<'a>(
-            self_iter: impl Iterator<Item = &'a str>,
-            mut other_iter: impl Iterator<Item = &'a str>,
-        ) -> bool {
-            if let Some(mut other_attr) = other_iter.next() {
-                for self_attr in self_iter {
-                    while other_attr < self_attr {
-                        if let Some(attr) = other_iter.next() {
-                            other_attr = attr;
-                        } else {
-                            return false;
-                        }
-                    }
-                    if other_attr == self_attr {
-                        return true;
-                    }
-                }
-            }
-            false
-        }
         match (self, other) {
-            (AttributeMask::All, AttributeMask::All) => true,
-            (AttributeMask::All, AttributeMask::Dynamic(v)) => !v.is_empty(),
-            (AttributeMask::All, AttributeMask::Static(s)) => !s.is_empty(),
-            (AttributeMask::Dynamic(v), AttributeMask::All) => !v.is_empty(),
-            (AttributeMask::Static(s), AttributeMask::All) => !s.is_empty(),
-            (AttributeMask::Dynamic(v1), AttributeMask::Dynamic(v2)) => {
-                overlaps_iter(v1.iter().map(|s| s.as_str()), v2.iter().map(|s| s.as_str()))
+            (AttributeMask::All, AttributeMask::Some(attrs)) => !attrs.is_empty(),
+            (AttributeMask::Some(attrs), AttributeMask::All) => !attrs.is_empty(),
+            (AttributeMask::Some(attrs1), AttributeMask::Some(attrs2)) => {
+                !attrs1.is_disjoint(attrs2)
             }
-            (AttributeMask::Dynamic(v), AttributeMask::Static(s)) => {
-                overlaps_iter(v.iter().map(|s| s.as_str()), s.iter().copied())
-            }
-            (AttributeMask::Static(s), AttributeMask::Dynamic(v)) => {
-                overlaps_iter(v.iter().map(|s| s.as_str()), s.iter().copied())
-            }
-            (AttributeMask::Static(s1), AttributeMask::Static(s2)) => {
-                overlaps_iter(s1.iter().copied(), s2.iter().copied())
-            }
+            _ => true,
         }
     }
 }
 
 impl Default for AttributeMask {
     fn default() -> Self {
-        AttributeMask::Static(&[])
+        AttributeMask::Some(FxHashSet::default())
     }
 }
 
@@ -232,14 +162,6 @@ pub struct NodeMask {
 }
 
 impl NodeMask {
-    /// A node mask with no parts visible.
-    pub const NONE: Self = Self::new();
-    /// A node mask with every part visible.
-    pub const ALL: Self = Self::new_with_attrs(AttributeMask::All)
-        .with_text()
-        .with_element()
-        .with_listeners();
-
     /// Check if two masks overlap
     pub fn overlaps(&self, other: &Self) -> bool {
         (self.tag && other.tag)
@@ -260,10 +182,71 @@ impl NodeMask {
         }
     }
 
-    /// Create a new node mask with the given attributes
-    pub const fn new_with_attrs(attritutes: AttributeMask) -> Self {
+    /// Allow the mask to view the given attributes
+    pub fn add_attributes(&mut self, attributes: AttributeMask) {
+        self.attritutes = self.attritutes.union(&attributes);
+    }
+
+    /// Set the mask to view the tag
+    pub fn set_tag(&mut self) {
+        self.tag = true;
+    }
+
+    /// Set the mask to view the namespace
+    pub fn set_namespace(&mut self) {
+        self.namespace = true;
+    }
+
+    /// Set the mask to view the text
+    pub fn set_text(&mut self) {
+        self.text = true;
+    }
+
+    /// Set the mask to view the listeners
+    pub fn set_listeners(&mut self) {
+        self.listeners = true;
+    }
+}
+
+/// A builder for a mask that controls what attributes are visible.
+#[derive(PartialEq, Eq, Clone, Debug)]
+pub enum AttributeMaskBuilder<'a> {
+    /// All attributes are visible
+    All,
+    /// Only the given attributes are visible
+    Some(&'a [&'a str]),
+}
+
+impl Default for AttributeMaskBuilder<'_> {
+    fn default() -> Self {
+        AttributeMaskBuilder::Some(&[])
+    }
+}
+
+/// A mask that limits what parts of a node a dependency can see.
+#[derive(Default, PartialEq, Eq, Clone, Debug)]
+pub struct NodeMaskBuilder<'a> {
+    attritutes: AttributeMaskBuilder<'a>,
+    tag: bool,
+    namespace: bool,
+    text: bool,
+    listeners: bool,
+}
+
+impl<'a> NodeMaskBuilder<'a> {
+    /// A node mask with no parts visible.
+    pub const NONE: Self = Self::new();
+    /// A node mask with every part visible.
+    pub const ALL: Self = Self::new()
+        .with_attrs(AttributeMaskBuilder::All)
+        .with_text()
+        .with_element()
+        .with_listeners();
+
+    /// Create a empty node mask
+    pub const fn new() -> Self {
         Self {
-            attritutes,
+            attritutes: AttributeMaskBuilder::Some(&[]),
             tag: false,
             namespace: false,
             text: false,
@@ -271,9 +254,10 @@ impl NodeMask {
         }
     }
 
-    /// Create a empty node mask
-    pub const fn new() -> Self {
-        Self::new_with_attrs(AttributeMask::NONE)
+    /// Allow the mask to view the given attributes
+    pub const fn with_attrs(mut self, attritutes: AttributeMaskBuilder<'a>) -> Self {
+        self.attritutes = attritutes;
+        self
     }
 
     /// Allow the mask to view the tag
@@ -303,5 +287,21 @@ impl NodeMask {
     pub const fn with_listeners(mut self) -> Self {
         self.listeners = true;
         self
+    }
+
+    /// Build the mask
+    pub fn build(self) -> NodeMask {
+        NodeMask {
+            attritutes: match self.attritutes {
+                AttributeMaskBuilder::All => AttributeMask::All,
+                AttributeMaskBuilder::Some(attrs) => {
+                    AttributeMask::Some(attrs.iter().map(|s| (*s).into()).collect())
+                }
+            },
+            tag: self.tag,
+            namespace: self.namespace,
+            text: self.text,
+            listeners: self.listeners,
+        }
     }
 }

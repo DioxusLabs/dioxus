@@ -7,7 +7,7 @@ use tao::event_loop::{EventLoopProxy, EventLoopWindowTarget};
 pub use wry;
 pub use wry::application as tao;
 use wry::application::window::Window;
-use wry::webview::{WebView, WebViewBuilder};
+use wry::webview::{WebContext, WebView, WebViewBuilder};
 
 pub fn build(
     cfg: &mut Config,
@@ -33,6 +33,8 @@ pub fn build(
         ));
     }
 
+    let mut web_context = WebContext::new(cfg.data_dir.clone());
+
     let mut webview = WebViewBuilder::new(window)
         .unwrap()
         .with_transparent(cfg.window.window.transparent)
@@ -52,7 +54,8 @@ pub fn build(
                 .as_ref()
                 .map(|handler| handler(window, evet))
                 .unwrap_or_default()
-        });
+        })
+        .with_web_context(&mut web_context);
 
     for (name, handler) in cfg.protocols.drain(..) {
         webview = webview.with_custom_protocol(name, handler)
