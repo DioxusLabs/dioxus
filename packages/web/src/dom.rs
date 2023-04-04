@@ -54,16 +54,17 @@ impl WebsysDom {
                 let element = walk_event_for_id(event);
                 let bubbles = dioxus_html::event_bubbles(name.as_str());
                 if let Some((element, target)) = element {
+                    let prevent_default_attribute = target.get_attribute("dioxus-prevent-default");
+                    let prevented_event = prevent_default_attribute
+                        .as_deref()
+                        .map(|f| f.trim_start_matches("on"));
                     // Prevent forms from submitting and redirecting
                     if name == "submit" {
-                        event.prevent_default();
-                    }
-                    if target
-                        .get_attribute("dioxus-prevent-default")
-                        .as_deref()
-                        .map(|f| f.trim_start_matches("on"))
-                        == Some(&name)
-                    {
+                        // On forms the default behavior is not to submit, if prevent default is set then we submit the form
+                        if prevented_event != Some("submit") {
+                            event.prevent_default();
+                        }
+                    } else if prevented_event == Some(&name) {
                         event.prevent_default();
                     }
 
