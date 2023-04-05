@@ -33,8 +33,6 @@ pub fn build(
         ));
     }
 
-    let mut web_context = WebContext::new(cfg.data_dir.clone());
-
     let mut webview = WebViewBuilder::new(window)
         .unwrap()
         .with_transparent(cfg.window.window.transparent)
@@ -54,8 +52,11 @@ pub fn build(
                 .as_ref()
                 .map(|handler| handler(window, evet))
                 .unwrap_or_default()
-        })
-        .with_web_context(&mut web_context);
+        });
+
+    // These are commented out because wry is currently broken in wry
+    // let mut web_context = WebContext::new(cfg.data_dir.clone());
+    // .with_web_context(&mut web_context);
 
     for (name, handler) in cfg.protocols.drain(..) {
         webview = webview.with_custom_protocol(name, handler)
