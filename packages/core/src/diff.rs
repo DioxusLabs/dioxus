@@ -148,6 +148,13 @@ impl<'b> VirtualDom {
 
         // Make sure the roots get transferred over while we're here
         right_template.root_ids.transfer(&left_template.root_ids);
+
+        // Update the node refs
+        for i in 0..right_template.root_ids.len() {
+            if let Some(root_id) = right_template.root_ids.get(i) {
+                self.update_template(root_id, right_template);
+            }
+        }
     }
 
     fn diff_dynamic_node(
