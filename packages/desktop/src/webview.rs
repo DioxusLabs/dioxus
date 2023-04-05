@@ -7,7 +7,7 @@ use tao::event_loop::{EventLoopProxy, EventLoopWindowTarget};
 pub use wry;
 pub use wry::application as tao;
 use wry::application::window::Window;
-use wry::webview::{WebContext, WebView, WebViewBuilder};
+use wry::webview::{WebView, WebViewBuilder};
 
 pub fn build(
     cfg: &mut Config,
