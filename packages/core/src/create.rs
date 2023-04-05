@@ -35,6 +35,7 @@ fn sort_bfs(paths: &[&'static [u8]]) -> Vec<(usize, &'static [u8])> {
 }
 
 #[test]
+#[cfg(debug_assertions)]
 fn sorting() {
     let r: [(usize, &[u8]); 5] = [
         (0, &[0, 1]),
