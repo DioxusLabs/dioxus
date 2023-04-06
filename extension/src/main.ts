@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { spawn } from "child_process";
+import { TextEncoder } from 'util';
 
 let serverPath: string = "dioxus";
 
@@ -19,7 +20,7 @@ export async function activate(context: vscode.ExtensionContext) {
 		vscode.commands.registerCommand('extension.htmlToDioxusComponent', translateComponent),
 		vscode.commands.registerCommand('extension.formatRsx', fmtSelection),
 		vscode.commands.registerCommand('extension.formatRsxDocument', formatRsxDocument),
-		vscode.workspace.onWillSaveTextDocument(fmtDocument)
+		vscode.workspace.onWillSaveTextDocument(fmtDocumentOnSave)
 	);
 }
 
@@ -81,9 +82,8 @@ function convertHtmlToRsxOnPaste() {
 
 function formatRsxDocument() {
 	const editor = vscode.window.activeTextEditor;
-	if (editor) {
-		fmtDocument();
-	}
+	if (!editor) return;
+	fmtDocument(editor.document);
 }
 
 function fmtSelection() {
@@ -97,7 +97,11 @@ function fmtSelection() {
 		return;
 	}
 
-	const child_proc = spawn(serverPath, ["fmt", "--raw", unformatted.toString()]);
+	const fileDir = editor.document.fileName.slice(0, editor.document.fileName.lastIndexOf('\\'));
+
+	const child_proc = spawn(serverPath, ["fmt", "--raw", unformatted.toString()], {
+		cwd: fileDir ? fileDir : undefined,
+	});
 	let result = '';
 
 	child_proc.stdout?.on('data', data => result += data);
@@ -111,52 +115,140 @@ function fmtSelection() {
 	});
 }
 
-function fmtDocument() {
-	const editor = vscode.window.activeTextEditor;
-	const document = editor?.document;
-	if (!document) return;
-
+function fmtDocumentOnSave(e: vscode.TextDocumentWillSaveEvent) {
 	// check the settings to make sure format on save is configured
-	if (document.languageId === "rust" && document.uri.scheme === "file") {
-		const active_editor = vscode.window.activeTextEditor;
-
-		if (active_editor?.document.fileName === document.fileName) {
-			const text = document.getText();
-			const child_proc = spawn("dioxus", ["fmt", "-f", text]);
-
-			let result = '';
-			child_proc.stdout?.on('data', data => result += data);
-
-			type RsxEdit = {
-				formatted: string,
-				start: number,
-				end: number
-			}
-
-			child_proc.on('close', () => {
-				if (result.length > 0) {
-					let decoded: RsxEdit[] = JSON.parse(result);
-
-					if (decoded.length > 0) {
-						active_editor.edit(editBuilder => {
-							decoded.map((edit) => {
-								editBuilder.replace(new vscode.Range(
-									document.positionAt(edit.start),
-									document.positionAt(edit.end)
-								), edit.formatted);
-							});
-						}, {
-							undoStopAfter: false,
-							undoStopBefore: false
-						})
-					}
-				}
-			});
-
-			child_proc.on('error', (err) => {
-				vscode.window.showWarningMessage(`Errors occurred while translating. Make sure you have the most recent Dioxus-CLI installed! \n${err}`);
-			});
+	if (!vscode.workspace.getConfiguration('editor', e.document).get('formatOnSave')) {
+		return;
+	}
+	fmtDocument(e.document);
+}
+function fmtDocument(document: vscode.TextDocument) {
+	try {
+		if (document.languageId !== "rust" || document.uri.scheme !== "file") {
+			return;
 		}
+
+		const [editor,] = vscode.window.visibleTextEditors.filter(editor => editor.document.fileName === document.fileName);
+		if (!editor) return; // Need an editor to apply text edits.
+
+		const text = document.getText();
+		const fileDir = document.fileName.slice(0, document.fileName.lastIndexOf('\\'));
+
+		const child_proc = spawn(serverPath, ["fmt", "--file", text], {
+			cwd: fileDir ? fileDir : undefined,
+		});
+
+		let result = '';
+		child_proc.stdout?.on('data', data => result += data);
+
+		type RsxEdit = {
+			formatted: string,
+			start: number,
+			end: number
+		}
+
+		child_proc.on('close', () => {
+			if (child_proc.exitCode !== 0) {
+				vscode.window.showWarningMessage(`Errors occurred while formatting. Make sure you have the most recent Dioxus-CLI installed!\nDioxus-CLI exited with exit code ${child_proc.exitCode}\n\nData from Dioxus-CLI:\n${result}`);
+				return;
+			}
+			if (result.length === 0) return;
+
+			// Used for error message:
+			const originalResult = result;
+			try {
+				// Only parse the last non empty line, to skip log warning messages:
+				const lines = result.replaceAll('\r\n', '\n').split('\n');
+				const nonEmptyLines = lines.filter(line => line.trim().length !== 0);
+				result = nonEmptyLines[nonEmptyLines.length - 1] ?? '';
+
+				if (result.length === 0) return;
+
+				let decoded: RsxEdit[] = JSON.parse(result);
+				if (decoded.length === 0) return;
+
+				// Preform edits at the end of the file
+				// first (to not change previous text file
+				// offsets):
+				decoded.sort((a, b) => b.start - a.start);
+
+
+				// Convert from utf8 offsets to utf16 offsets used by VS Code:
+
+				const utf8Text = new TextEncoder().encode(text);
+				const utf8ToUtf16Pos = (posUtf8: number) => {
+					const beforeTarget = utf8Text.slice(0, posUtf8 - 1);
+
+					// Find the line of the position as well as the utf8 and
+					// utf16 indexes for the start of that line:
+					let startOfLineUtf8 = 0;
+					let lineIndex = 0;
+					const newLineUtf8 = '\n'.charCodeAt(0);
+					while (true) {
+						const nextLineAt = beforeTarget.indexOf(newLineUtf8, startOfLineUtf8);
+						if (nextLineAt < 0) break;
+						startOfLineUtf8 = nextLineAt + 1;
+						lineIndex++;
+					}
+					const lineUtf16 = document.lineAt(lineIndex);
+
+					// Move forward from a synced position in the text until the
+					// target pos is found:
+					let currentUtf8 = startOfLineUtf8;
+					let currentUtf16 = document.offsetAt(lineUtf16.range.start);
+
+					const decodeBuffer = new Uint8Array(10);
+					const utf8Encoder = new TextEncoder();
+					while (currentUtf8 < posUtf8) {
+						const { written } = utf8Encoder.encodeInto(text.charAt(currentUtf16), decodeBuffer);
+						currentUtf8 += written;
+						currentUtf16++;
+					}
+					return currentUtf16;
+				};
+
+				type FixedEdit = {
+					range: vscode.Range,
+					formatted: string,
+				};
+
+				const edits: FixedEdit[] = [];
+				for (const edit of decoded) {
+					// Convert from utf8 to utf16:
+					const range = new vscode.Range(
+						document.positionAt(utf8ToUtf16Pos(edit.start)),
+						document.positionAt(utf8ToUtf16Pos(edit.end))
+					);
+
+					if (editor.document.getText(range) !== document.getText(range)) {
+						// The text that was formatted has changed while we were working.
+						vscode.window.showWarningMessage(`Dioxus formatting was ignored since the source file changed before the change could be applied.`);
+						continue;
+					}
+
+					edits.push({
+						range,
+						formatted: edit.formatted,
+					});
+				}
+
+				// Apply edits:
+				editor.edit(editBuilder => {
+					edits.forEach((edit) => editBuilder.replace(edit.range, edit.formatted));
+				}, {
+					undoStopAfter: false,
+					undoStopBefore: false
+				})
+			} catch (err) {
+				vscode.window.showWarningMessage(`Errors occurred while formatting. Make sure you have the most recent Dioxus-CLI installed!\n${err}\n\nData from Dioxus-CLI:\n${originalResult}`);
+			}
+		});
+
+		child_proc.on('error', (err) => {
+			vscode.window.showWarningMessage(`Errors occurred while formatting. Make sure you have the most recent Dioxus-CLI installed! \n${err}`);
+		});
+	} catch (error) {
+		vscode.window.showWarningMessage(`Errors occurred while formatting. Make sure you have the most recent Dioxus-CLI installed! \n${error}`);
 	}
 }
 
