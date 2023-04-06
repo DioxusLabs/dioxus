@@ -68,7 +68,7 @@ pub enum Mutation<'a> {
         /// The ID of the element being mounted to
         id: ElementId,
 
-        /// The number of nodes on the stack
+        /// The number of nodes on the stack to append to the target element
         m: usize,
     },
 
@@ -155,7 +155,7 @@ pub enum Mutation<'a> {
         /// The ID of the node we're going to replace with
         id: ElementId,
 
-        /// The number of nodes on the stack to use to replace
+        /// The number of nodes on the stack to replace the target element with
         m: usize,
     },
 
@@ -167,7 +167,7 @@ pub enum Mutation<'a> {
         /// `[0,1,2]` represents 1st child's 2nd child's 3rd child.
         path: &'static [u8],
 
-        /// The number of nodes on the stack to use to replace
+        /// The number of nodes on the stack to replace the target element with
         m: usize,
     },
 
@@ -176,7 +176,7 @@ pub enum Mutation<'a> {
         /// The ID of the node to insert after.
         id: ElementId,
 
-        /// The ids of the nodes to insert after the target node.
+        /// The number of nodes on the stack to insert after the target node.
         m: usize,
     },
 
@@ -185,7 +185,7 @@ pub enum Mutation<'a> {
         /// The ID of the node to insert before.
         id: ElementId,
 
-        /// The ids of the nodes to insert before the target node.
+        /// The number of nodes on the stack to insert before the target node.
         m: usize,
     },
 

@@ -128,10 +128,11 @@ impl WebsysDom {
                         mounted_id = Some(id);
                         let name = attribute.name;
                         if let AttributeValue::Listener(_) = value {
+                            let event_name = &name[2..];
                             self.interpreter.new_event_listener(
-                                &name[2..],
+                                event_name,
                                 id.0 as u32,
-                                event_bubbles(name) as u8,
+                                event_bubbles(event_name) as u8,
                             );
                         }
                     }

@@ -36,7 +36,6 @@ thiserror = "1.0.30"
 futures-util = "0.3.21"
 serde = { version = "1", optional = true }
 serde_urlencoded = { version = "0.7.1", optional = true }
-simple_logger = "4.0.0"
 
 [features]
 default = ["query"]
@@ -46,7 +45,6 @@ wasm_test = []
 
 [dev-dependencies]
 console_error_panic_hook = "0.1.7"
-log = "0.4.14"
 wasm-logger = "0.2.0"
 wasm-bindgen-test = "0.3"
 gloo-utils = "0.1.2"

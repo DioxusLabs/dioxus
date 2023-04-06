@@ -49,7 +49,7 @@ pub trait TreeMut: TreeRef {
 
 impl<'a> TreeRef for TreeRefView<'a> {
     fn parent_id(&self, id: NodeId) -> Option<NodeId> {
-        self.get(id).unwrap().parent
+        self.get(id).ok()?.parent
     }
 
     fn children_ids(&self, id: NodeId) -> Vec<NodeId> {
@@ -59,7 +59,7 @@ impl<'a> TreeRef for TreeRefView<'a> {
     }
 
     fn height(&self, id: NodeId) -> Option<u16> {
-        Some(self.get(id).unwrap().height)
+        Some(self.get(id).ok()?.height)
     }
 
     fn contains(&self, id: NodeId) -> bool {

@@ -54,6 +54,10 @@ pub fn build(
                 .unwrap_or_default()
         });
 
+    // These are commented out because wry is currently broken in wry
+    // let mut web_context = WebContext::new(cfg.data_dir.clone());
+    // .with_web_context(&mut web_context);
+
     for (name, handler) in cfg.protocols.drain(..) {
         webview = webview.with_custom_protocol(name, handler)
     }

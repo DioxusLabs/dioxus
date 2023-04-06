@@ -17,6 +17,12 @@ pub enum Segment {
     Attr(usize),
     Node(usize),
     PreRendered(String),
+    /// A marker for where to insert a dynamic styles
+    StyleMarker {
+        // If the marker is inside a style tag or not
+        // This will be true if there are static styles
+        inside_style_tag: bool,
+    },
 }
 
 impl std::fmt::Write for StringChain {
@@ -61,16 +67,45 @@ impl StringCache {
             } => {
                 cur_path.push(root_idx);
                 write!(chain, "<{tag}")?;
+                // we need to collect the styles and write them at the end
+                let mut styles = Vec::new();
+                let mut has_dynamic_attrs = false;
                 for attr in *attrs {
                     match attr {
-                        TemplateAttribute::Static { name, value, .. } => {
-                            write!(chain, " {name}=\"{value}\"")?;
+                        TemplateAttribute::Static {
+                            name,
+                            value,
+                            namespace,
+                        } => {
+                            if let Some("style") = namespace {
+                                styles.push((name, value));
+                            } else {
+                                write!(chain, " {name}=\"{value}\"")?;
+                            }
                         }
                         TemplateAttribute::Dynamic { id: index } => {
-                            chain.segments.push(Segment::Attr(*index))
+                            chain.segments.push(Segment::Attr(*index));
+                            has_dynamic_attrs = true;
                         }
                     }
                 }
+
+                // write the styles
+                if !styles.is_empty() {
+                    write!(chain, " style=\"")?;
+                    for (name, value) in styles {
+                        write!(chain, "{name}:{value};")?;
+                    }
+                    chain.segments.push(Segment::StyleMarker {
+                        inside_style_tag: true,
+                    });
+                    write!(chain, "\"")?;
+                } else if has_dynamic_attrs {
+                    chain.segments.push(Segment::StyleMarker {
+                        inside_style_tag: false,
+                    });
+                }
+
                 if children.is_empty() && tag_is_self_closing(tag) {
                     write!(chain, "/>")?;
                 } else {
