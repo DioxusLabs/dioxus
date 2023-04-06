@@ -21,7 +21,7 @@ serde = "1.0.136"
 serde_json = "1.0.79"
 thiserror = "1.0.30"
 log = "0.4.14"
-wry = { version = "0.23.4" }
+wry = { version = "0.27.2" }
 futures-channel = "0.3.21"
 tokio = { version = "1.16.1", features = [
     "sync",
