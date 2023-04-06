@@ -169,7 +169,7 @@ function fmtDocument(document: vscode.TextDocument) {
 
 				if (result.length === 0) return;
 
-				let decoded: RsxEdit[] = JSON.parse(result);
+				const decoded: RsxEdit[] = JSON.parse(result);
 				if (decoded.length === 0) return;
 
 				// Preform edits at the end of the file
@@ -182,16 +182,15 @@ function fmtDocument(document: vscode.TextDocument) {
 
 				const utf8Text = new TextEncoder().encode(text);
 				const utf8ToUtf16Pos = (posUtf8: number) => {
-					const beforeTarget = utf8Text.slice(0, posUtf8 - 1);
-
 					// Find the line of the position as well as the utf8 and
 					// utf16 indexes for the start of that line:
 					let startOfLineUtf8 = 0;
 					let lineIndex = 0;
 					const newLineUtf8 = '\n'.charCodeAt(0);
+					// eslint-disable-next-line no-constant-condition
 					while (true) {
-						const nextLineAt = beforeTarget.indexOf(newLineUtf8, startOfLineUtf8);
-						if (nextLineAt < 0) break;
+						const nextLineAt = utf8Text.indexOf(newLineUtf8, startOfLineUtf8);
+						if (nextLineAt < 0 || posUtf8 <= nextLineAt) break;
 						startOfLineUtf8 = nextLineAt + 1;
 						lineIndex++;
 					}
@@ -211,6 +210,7 @@ function fmtDocument(document: vscode.TextDocument) {
 					}
 					return currentUtf16;
 				};
+
 
 				type FixedEdit = {
 					range: vscode.Range,
@@ -237,13 +237,14 @@ function fmtDocument(document: vscode.TextDocument) {
 					});
 				}
 
+
 				// Apply edits:
 				editor.edit(editBuilder => {
 					edits.forEach((edit) => editBuilder.replace(edit.range, edit.formatted));
 				}, {
 					undoStopAfter: false,
 					undoStopBefore: false
-				})
+				});
 			} catch (err) {
 				vscode.window.showWarningMessage(`Errors occurred while formatting. Make sure you have the most recent Dioxus-CLI installed!\n${err}\n\nData from Dioxus-CLI:\n${originalResult}`);
 			}
