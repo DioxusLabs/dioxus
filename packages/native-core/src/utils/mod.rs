@@ -5,4 +5,3 @@
 mod persistant_iterator;
 pub use persistant_iterator::*;
 pub mod cursor;
-pub mod widget_watcher;

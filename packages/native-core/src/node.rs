@@ -7,6 +7,8 @@ use std::{
     fmt::{Debug, Display},
 };
 
+use crate::shadow_dom::ShadowDom;
+
 /// A element node in the RealDom
 #[derive(Debug, Clone, Default)]
 pub struct ElementNode<V: FromAnyValue = ()> {
@@ -18,6 +20,9 @@ pub struct ElementNode<V: FromAnyValue = ()> {
     pub attributes: FxHashMap<OwnedAttributeDiscription, OwnedAttributeValue<V>>,
     /// The events the element is listening for
     pub listeners: FxHashSet<String>,
+    /// The shadow dom of the element
+    // This is a rare property, so it is stored in an `Box` to save space
+    pub shadow: Option<Box<ShadowDom<V>>>,
 }
 
 impl ElementNode {
@@ -28,6 +33,7 @@ impl ElementNode {
             namespace: namespace.into(),
             attributes: Default::default(),
             listeners: Default::default(),
+            shadow: Default::default(),
         }
     }
 }

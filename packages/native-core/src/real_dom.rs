@@ -17,6 +17,7 @@ use crate::node_ref::{NodeMask, NodeMaskBuilder};
 use crate::node_watcher::{AttributeWatcher, NodeWatcher};
 use crate::passes::{DirtyNodeStates, TypeErasedState};
 use crate::prelude::AttributeMaskBuilder;
+use crate::shadow_dom::ShadowDom;
 use crate::tree::{TreeMut, TreeMutView, TreeRef, TreeRefView};
 use crate::NodeId;
 use crate::{FxDashSet, SendAnyMap};
@@ -139,6 +140,7 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
             namespace: Some("Root".to_string()),
             attributes: FxHashMap::default(),
             listeners: FxHashSet::default(),
+            shadow: None,
         });
         let root_id = world.add_entity(root_node);
         {
@@ -1055,6 +1057,16 @@ impl<V: FromAnyValue + Send + Sync> ElementNodeMut<'_, V> {
     /// Get the set of all events the element is listening to
     pub fn listeners(&self) -> &FxHashSet<String> {
         &self.element().listeners
+    }
+
+    /// Get the shadow root of the element
+    pub fn shadow_root(&self) -> Option<&ShadowDom<V>> {
+        self.element().shadow.as_deref()
+    }
+
+    /// Get the shadow root of the element
+    pub fn shadow_root_mut(&mut self) -> &mut Option<Box<ShadowDom<V>>> {
+        &mut self.element_mut().shadow
     }
 }
 
