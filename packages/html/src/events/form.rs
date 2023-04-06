@@ -10,7 +10,7 @@ pub type FormEvent = Event<FormData>;
 pub struct FormData {
     pub value: String,
 
-    pub values: HashMap<String, String>,
+    pub values: HashMap<String, Vec<String>>,
 
     #[cfg_attr(feature = "serialize", serde(skip))]
     pub files: Option<std::sync::Arc<dyn FileEngine>>,
