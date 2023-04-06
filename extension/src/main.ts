@@ -117,11 +117,16 @@ function fmtSelection() {
 
 function fmtDocumentOnSave(e: vscode.TextDocumentWillSaveEvent) {
 	// check the settings to make sure format on save is configured
-	if (!vscode.workspace.getConfiguration('editor', e.document).get('formatOnSave')) {
-		return;
+	const dioxusConfig = vscode.workspace.getConfiguration('dioxus', e.document).get('formatOnSave');
+	const globalConfig = vscode.workspace.getConfiguration('editor', e.document).get('formatOnSave');
+	if (
+		(dioxusConfig === 'enabled') ||
+		(dioxusConfig !== 'disabled' && globalConfig)
+	) {
+		fmtDocument(e.document);
 	}
-	fmtDocument(e.document);
 }
+
 function fmtDocument(document: vscode.TextDocument) {
 	try {
 		if (document.languageId !== "rust" || document.uri.scheme !== "file") {
