@@ -54,6 +54,13 @@ pub fn build(
                 .unwrap_or_default()
         });
 
+    #[cfg(windows)]
+    {
+        // Windows has a platform specific settings to disable the browser shortcut keys
+        use wry::webview::WebViewBuilderExtWindows;
+        webview = webview.with_browser_accelerator_keys(false);
+    }
+
     // These are commented out because wry is currently broken in wry
     // let mut web_context = WebContext::new(cfg.data_dir.clone());
     // .with_web_context(&mut web_context);
