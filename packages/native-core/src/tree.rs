@@ -61,6 +61,8 @@ pub trait TreeMut: TreeRef {
     fn insert_after(&mut self, old_id: NodeId, new_id: NodeId);
     /// Creates a new subtree.
     fn create_subtree(&mut self, id: NodeId, shadow_roots: Vec<NodeId>, slot: Option<NodeId>);
+    /// Remove any subtree.
+    fn remove_subtree(&mut self, id: NodeId);
 }
 
 impl<'a> TreeRef for TreeRefView<'a> {
@@ -236,6 +238,36 @@ impl<'a> TreeMut for TreeMutView<'a> {
             set_height(self, root, light_root_height + 1);
         }
     }
+
+    fn remove_subtree(&mut self, id: NodeId) {
+        let (_, node_data_mut) = self;
+
+        if let Ok(node) = node_data_mut.get(id) {
+            if let Some(subtree) = node.child_subtree.take() {
+                // Remove the slot's link to the subtree
+                if let Some(slot) = subtree.slot {
+                    let slot = node_data_mut
+                        .get(slot)
+                        .expect("tried to remove subtree with non-existent slot");
+                    slot.slot_for_supertree = None;
+                }
+
+                let node = node_data_mut.get(id).unwrap();
+
+                // Reset the height of the light root's children
+                let height = node.height;
+                for child in node.children.clone() {
+                    println!("child: {:?}", child);
+                    set_height(self, child, height + 1);
+                }
+
+                // Reset the height of the shadow roots
+                for root in &subtree.shadow_roots {
+                    set_height(self, *root, 0);
+                }
+            }
+        }
+    }
 }
 
 fn child_height(parent: &Node, tree: &impl TreeRef) -> u16 {
@@ -343,7 +375,7 @@ fn creation() {
 }
 
 #[test]
-fn subtree_creation() {
+fn subtree() {
     use shipyard::World;
     #[derive(Component)]
     struct Num(i32);
@@ -369,6 +401,7 @@ fn subtree_creation() {
 
     tree.add_child(shadow_parent_id, shadow_child_id);
 
+    // Check that both trees are correct individually
     assert_eq!(tree.height(parent_id), Some(0));
     assert_eq!(tree.height(child_id), Some(1));
     assert_eq!(tree.parent_id(parent_id), None);
@@ -388,6 +421,36 @@ fn subtree_creation() {
     assert_eq!(tree.height(shadow_parent_id), Some(1));
     assert_eq!(tree.height(shadow_child_id), Some(2));
     assert_eq!(tree.height(child_id), Some(3));
+    assert_eq!(
+        tree.1
+            .get(parent_id)
+            .unwrap()
+            .child_subtree
+            .as_ref()
+            .unwrap()
+            .shadow_roots,
+        &[shadow_parent_id]
+    );
+    assert_eq!(
+        tree.1.get(shadow_child_id).unwrap().slot_for_supertree,
+        Some(parent_id)
+    );
+
+    // Remove shadow tree from main tree
+    tree.remove_subtree(parent_id);
+
+    // Check that both trees are correct individually
+    assert_eq!(tree.height(parent_id), Some(0));
+    assert_eq!(tree.height(child_id), Some(1));
+    assert_eq!(tree.parent_id(parent_id), None);
+    assert_eq!(tree.parent_id(child_id).unwrap(), parent_id);
+    assert_eq!(tree.children_ids(parent_id), &[child_id]);
+
+    assert_eq!(tree.height(shadow_parent_id), Some(0));
+    assert_eq!(tree.height(shadow_child_id), Some(1));
+    assert_eq!(tree.parent_id(shadow_parent_id), None);
+    assert_eq!(tree.parent_id(shadow_child_id).unwrap(), shadow_parent_id);
+    assert_eq!(tree.children_ids(shadow_parent_id), &[shadow_child_id]);
 }
 
 #[test]
