@@ -1,10 +1,6 @@
-use std::{
-    cell::RefCell,
-    sync::{Arc, RwLock},
-};
+use std::sync::{Arc, RwLock};
 
 use rustc_hash::FxHashMap;
-use shipyard::Component;
 
 use crate::{
     node::{FromAnyValue, NodeType},
@@ -15,9 +11,16 @@ use crate::{
     NodeId,
 };
 
-#[derive(Default)]
 pub(crate) struct CustomElementRegistry<V: FromAnyValue + Send + Sync> {
     builders: FxHashMap<&'static str, CustomElementBuilder<V>>,
+}
+
+impl<V: FromAnyValue + Send + Sync> Default for CustomElementRegistry<V> {
+    fn default() -> Self {
+        Self {
+            builders: FxHashMap::default(),
+        }
+    }
 }
 
 impl<V: FromAnyValue + Send + Sync> CustomElementRegistry<V> {
@@ -99,7 +102,7 @@ impl<W: CustomElement<V>, V: FromAnyValue + Send + Sync> ElementFactory<W, V> fo
 /// A trait for updating widgets
 trait CustomElementUpdater<V: FromAnyValue + Send + Sync = ()>: Send + Sync + 'static {
     /// Called when the attributes of the widget are changed.
-    fn attributes_changed(&mut self, _dom: &mut RealDom<V>, _attributes: &AttributeMask);
+    fn attributes_changed(&mut self, dom: &mut RealDom<V>, attributes: &AttributeMask);
 
     /// The root node of the widget.
     fn root(&self) -> NodeId;

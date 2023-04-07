@@ -104,7 +104,7 @@ pub trait State<V: FromAnyValue + Send + Sync = ()>: Any + Send + Sync {
     /// This is a mask of what aspects of the node are required to update this state
     const NODE_MASK: NodeMaskBuilder<'static>;
 
-    /// Does the state traverse into the shadow dom?
+    /// Does the state traverse into the shadow dom or pass over it. This should be true for layout and false for styles
     const TRAVERSE_SHADOW_DOM: bool = false;
 
     /// Update this state in a node, returns if the state was updated

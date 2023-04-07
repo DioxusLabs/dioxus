@@ -10,6 +10,7 @@ use std::collections::VecDeque;
 use std::ops::{Deref, DerefMut};
 use std::sync::{Arc, RwLock};
 
+use crate::custom_element::CustomElementRegistry;
 use crate::node::{
     ElementNode, FromAnyValue, NodeType, OwnedAttributeDiscription, OwnedAttributeValue, TextNode,
 };
@@ -112,6 +113,7 @@ pub struct RealDom<V: FromAnyValue + Send + Sync = ()> {
     attribute_watchers: AttributeWatchers<V>,
     workload: ScheduledWorkload,
     root_id: NodeId,
+    custom_elements: CustomElementRegistry<V>,
     phantom: std::marker::PhantomData<V>,
 }
 
@@ -170,6 +172,7 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
             attribute_watchers: Default::default(),
             workload,
             root_id,
+            custom_elements: Default::default(),
             phantom: std::marker::PhantomData,
         }
     }
@@ -759,6 +762,7 @@ impl<'a, V: FromAnyValue + Send + Sync> NodeMut<'a, V> {
         }
         let id = self.id();
         self.dom.tree_mut().replace(id, new);
+        self.remove();
     }
 
     /// Add an event listener
