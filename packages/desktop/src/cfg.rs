@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::path::PathBuf;
 
 use wry::application::window::Icon;
@@ -28,7 +29,7 @@ type DropHandler = Box<dyn Fn(&Window, FileDropEvent) -> bool>;
 
 pub(crate) type WryProtocol = (
     String,
-    Box<dyn Fn(&HttpRequest<Vec<u8>>) -> WryResult<HttpResponse<Vec<u8>>> + 'static>,
+    Box<dyn Fn(&HttpRequest<Vec<u8>>) -> WryResult<HttpResponse<Cow<'static, [u8]>>> + 'static>,
 );
 
 impl Config {
@@ -98,7 +99,7 @@ impl Config {
     /// Set a custom protocol
     pub fn with_custom_protocol<F>(mut self, name: String, handler: F) -> Self
     where
-        F: Fn(&HttpRequest<Vec<u8>>) -> WryResult<HttpResponse<Vec<u8>>> + 'static,
+        F: Fn(&HttpRequest<Vec<u8>>) -> WryResult<HttpResponse<Cow<'static, [u8]>>> + 'static,
     {
         self.protocols.push((name, Box::new(handler)));
         self
