@@ -66,15 +66,20 @@ impl<'b> VirtualDom {
     /// Create a new template [`VNode`] and write it to the [`Mutations`] buffer.
     ///
     /// This method pushes the ScopeID to the internal scopestack and returns the number of nodes created.
-    pub(crate) fn create_scope(&mut self, scope: ScopeId, template: &'b VNode<'b>) -> usize {
+    pub(crate) fn create_scope(
+        &mut self,
+        scope: ScopeId,
+        template: &'b VNode<'b>,
+        parent_id: Option<ElementId>,
+    ) -> usize {
         self.scope_stack.push(scope);
-        let out = self.create(template);
+        let out = self.create(template, parent_id);
         self.scope_stack.pop();
         out
     }
 
     /// Create this template and write its mutations
-    pub(crate) fn create(&mut self, node: &'b VNode<'b>) -> usize {
+    pub(crate) fn create(&mut self, node: &'b VNode<'b>, parent_id: Option<ElementId>) -> usize {
         // check for a overriden template
         #[cfg(debug_assertions)]
         {
@@ -87,6 +92,9 @@ impl<'b> VirtualDom {
                 node.template.set(*template);
             }
         }
+
+        // Set the parent id
+        node.parent.set(parent_id);
 
         // Intialize the root nodes slice
         node.root_ids
@@ -446,7 +454,14 @@ impl<'b> VirtualDom {
             Text(text) => self.create_dynamic_text(template, text, idx),
             Placeholder(place) => self.create_placeholder(place, template, idx),
             Component(component) => self.create_component_node(template, component, idx),
-            Fragment(frag) => frag.iter().map(|child| self.create(child)).sum(),
+            Fragment(frag) => {
+                let id = self.next_element(template, template.template.get().node_paths[idx]);
+                frag.id.set(Some(id));
+                frag.children
+                    .iter()
+                    .map(|child| self.create(child, Some(id)))
+                    .sum()
+            }
         }
     }
 
@@ -506,13 +521,18 @@ impl<'b> VirtualDom {
     ) -> usize {
         use RenderReturn::*;
 
+        let id = self.next_element(template, template.template.get().node_paths[idx]);
+
+        // Assign the ID to component for bubbling events
+        component.id.set(Some(id));
+
         // Load up a ScopeId for this vcomponent
         let scope = self.load_scope_from_vcomponent(component);
 
         component.scope.set(Some(scope));
 
         match unsafe { self.run_scope(scope).extend_lifetime_ref() } {
-            Ready(t) => self.mount_component(scope, template, t, idx),
+            Ready(t) => self.mount_component(scope, template, Some(id), t, idx),
             Aborted(t) => self.mount_aborted(template, t),
             Pending(_) => self.mount_async(template, idx, scope),
         }
@@ -534,6 +554,7 @@ impl<'b> VirtualDom {
         &mut self,
         scope: ScopeId,
         parent: &'b VNode<'b>,
+        parent_id: Option<ElementId>,
         new: &'b VNode<'b>,
         idx: usize,
     ) -> usize {
@@ -542,7 +563,7 @@ impl<'b> VirtualDom {
         let mutations_to_this_point = self.mutations.edits.len();
 
         // Create the component's root element
-        let created = self.create_scope(scope, new);
+        let created = self.create_scope(scope, new, parent_id);
 
         // If there are no suspense leaves below us, then just don't bother checking anything suspense related
         if self.collected_leaves.is_empty() {

@@ -130,9 +130,10 @@ impl VirtualDom {
                 }
                 c.props.take();
             }
-            DynamicNode::Fragment(nodes) => {
-                nodes.iter().for_each(|node| self.drop_scope_inner(node))
-            }
+            DynamicNode::Fragment(nodes) => nodes
+                .children
+                .iter()
+                .for_each(|node| self.drop_scope_inner(node)),
             DynamicNode::Placeholder(_) => {}
             DynamicNode::Text(_) => {}
         });

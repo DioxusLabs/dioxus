@@ -381,7 +381,7 @@ pub enum DynamicNode<'a> {
     ///
     /// Note that this is not a list of dynamic nodes. These must be VNodes and created through conditional rendering
     /// or iterators.
-    Fragment(&'a [VNode<'a>]),
+    Fragment(VFragment<'a>),
 }
 
 impl Default for DynamicNode<'_> {
@@ -390,8 +390,20 @@ impl Default for DynamicNode<'_> {
     }
 }
 
+/// A fragment node containing a list of VNodes
+#[derive(Debug)]
+pub struct VFragment<'a> {
+    /// The mounted id of this fragment
+    pub id: Cell<Option<ElementId>>,
+    /// The list of VNodes that this fragment contains
+    pub children: &'a [VNode<'a>],
+}
+
 /// An instance of a child component
 pub struct VComponent<'a> {
+    /// The mounted id of this component
+    pub id: Cell<Option<ElementId>>,
+
     /// The name of this component
     pub name: &'static str,
 
@@ -723,7 +735,10 @@ impl<'a> IntoDynNode<'a> for () {
 }
 impl<'a> IntoDynNode<'a> for VNode<'a> {
     fn into_vnode(self, _cx: &'a ScopeState) -> DynamicNode<'a> {
-        DynamicNode::Fragment(_cx.bump().alloc([self]))
+        DynamicNode::Fragment(VFragment {
+            id: Cell::new(None),
+            children: &*_cx.bump().alloc([self]),
+        })
     }
 }
 
@@ -753,7 +768,10 @@ impl<'a> IntoDynNode<'a> for &Element<'a> {
 
 impl<'a, 'b> IntoDynNode<'a> for LazyNodes<'a, 'b> {
     fn into_vnode(self, cx: &'a ScopeState) -> DynamicNode<'a> {
-        DynamicNode::Fragment(cx.bump().alloc([self.call(cx)]))
+        DynamicNode::Fragment(VFragment {
+            id: Cell::new(None),
+            children: cx.bump().alloc([self.call(cx)]),
+        })
     }
 }
 
@@ -783,14 +801,17 @@ impl<'b> IntoDynNode<'b> for Arguments<'_> {
 
 impl<'a> IntoDynNode<'a> for &'a VNode<'a> {
     fn into_vnode(self, _cx: &'a ScopeState) -> DynamicNode<'a> {
-        DynamicNode::Fragment(_cx.bump().alloc([VNode {
-            parent: self.parent.clone(),
-            template: self.template.clone(),
-            root_ids: self.root_ids.clone(),
-            key: self.key,
-            dynamic_nodes: self.dynamic_nodes,
-            dynamic_attrs: self.dynamic_attrs,
-        }]))
+        DynamicNode::Fragment(VFragment {
+            id: Cell::new(None),
+            children: &*_cx.bump().alloc([VNode {
+                parent: self.parent.clone(),
+                template: self.template.clone(),
+                root_ids: self.root_ids.clone(),
+                key: self.key,
+                dynamic_nodes: self.dynamic_nodes,
+                dynamic_attrs: self.dynamic_attrs,
+            }]),
+        })
     }
 }
 
@@ -830,7 +851,10 @@ where
 
         match nodes.into_bump_slice() {
             children if children.is_empty() => DynamicNode::default(),
-            children => DynamicNode::Fragment(children),
+            children => DynamicNode::Fragment(VFragment {
+                id: Cell::new(None),
+                children,
+            }),
         }
     }
 }

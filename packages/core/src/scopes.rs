@@ -557,6 +557,7 @@ impl<'src> ScopeState {
         let extended: Box<dyn AnyProps<'src> + 'src> = unsafe { std::mem::transmute(as_dyn) };
 
         DynamicNode::Component(VComponent {
+            id: Default::default(),
             name: fn_name,
             render_fn: component as *const (),
             static_props: P::IS_STATIC,

@@ -89,7 +89,7 @@ impl VirtualDom {
 
                 drop(leaves);
 
-                let created = self.create(template);
+                let created = self.create(template, Some(place_holder_id));
                 self.scope_stack.pop();
                 mutations.push(Mutation::ReplaceWith {
                     id: place_holder_id,

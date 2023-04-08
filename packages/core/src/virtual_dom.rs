@@ -538,7 +538,7 @@ impl VirtualDom {
         match unsafe { self.run_scope(ScopeId(0)).extend_lifetime_ref() } {
             // Rebuilding implies we append the created elements to the root
             RenderReturn::Ready(node) => {
-                let m = self.create_scope(ScopeId(0), node);
+                let m = self.create_scope(ScopeId(0), node, None);
                 self.mutations.edits.push(Mutation::AppendChildren {
                     id: ElementId(0),
                     m,
