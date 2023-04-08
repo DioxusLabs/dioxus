@@ -1,6 +1,5 @@
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::rc::Weak;
 
 use crate::create_new_window;
 use crate::eval::EvalResult;
@@ -112,8 +111,8 @@ impl DesktopContext {
     /// You can use this to control other windows from the current window.
     ///
     /// Be careful to not create a cycle of windows, or you might leak memory.
-    pub fn new_window(&self, dom: VirtualDom, cfg: Config) -> Weak<WebView> {
-        let window = create_new_window(
+    pub fn new_window(&self, dom: VirtualDom, cfg: Config) -> DesktopContext {
+        let (window, desktop_context) = create_new_window(
             cfg,
             &self.event_loop,
             &self.proxy,
@@ -133,11 +132,9 @@ impl DesktopContext {
             .send_event(UserWindowEvent(EventData::Poll, id))
             .unwrap();
 
-        let webview = window.webview.clone();
-
         self.pending_windows.borrow_mut().push(window);
 
-        Rc::downgrade(&webview)
+        desktop_context
     }
 
     /// trigger the drag-window event

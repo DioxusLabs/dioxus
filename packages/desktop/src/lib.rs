@@ -144,8 +144,7 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
 
     let shortcut_manager = ShortcutRegistry::new(&event_loop);
 
-    // By default, we'll create a new window when the app starts
-    queue.borrow_mut().push(create_new_window(
+    let (web_view, _) = create_new_window(
         cfg,
         &event_loop,
         &proxy,
@@ -153,7 +152,10 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
         &queue,
         &event_handlers,
         shortcut_manager.clone(),
-    ));
+    );
+
+    // By default, we'll create a new window when the app starts
+    queue.borrow_mut().push(web_view);
 
     event_loop.run(move |window_event, event_loop, control_flow| {
         *control_flow = ControlFlow::Wait;
@@ -280,26 +282,30 @@ fn create_new_window(
     queue: &WebviewQueue,
     event_handlers: &WindowEventHandlers,
     shortcut_manager: ShortcutRegistry,
-) -> WebviewHandler {
+) -> (WebviewHandler, DesktopContext) {
     let webview = webview::build(&mut cfg, event_loop, proxy.clone());
-
-    dom.base_scope().provide_context(DesktopContext::new(
+    let desktop_context = DesktopContext::new(
         webview.clone(),
         proxy.clone(),
         event_loop.clone(),
         queue.clone(),
         event_handlers.clone(),
         shortcut_manager,
-    ));
+    );
+
+    dom.base_scope().provide_context(desktop_context.clone());
 
     let id = webview.window().id();
 
     // We want to poll the virtualdom and the event loop at the same time, so the waker will be connected to both
-    WebviewHandler {
-        webview,
-        dom,
-        waker: waker::tao_waker(proxy, id),
-    }
+    (
+        WebviewHandler {
+            webview,
+            dom,
+            waker: waker::tao_waker(proxy, id),
+        },
+        desktop_context,
+    )
 }
 
 struct WebviewHandler {
