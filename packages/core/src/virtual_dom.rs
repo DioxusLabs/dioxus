@@ -428,7 +428,7 @@ impl VirtualDom {
                 }
             }
 
-            parent_path = template.parent.and_then(|id| self.elements.get(id.0));
+            parent_path = template.parent.get().and_then(|id| self.elements.get(id.0));
         }
     }
 
