@@ -1,13 +1,12 @@
 use std::sync::{Arc, RwLock};
 
 use rustc_hash::FxHashMap;
+use shipyard::Component;
 
 use crate::{
     node::{FromAnyValue, NodeType},
     node_ref::AttributeMask,
     prelude::{NodeImmutable, NodeMut, RealDom},
-    real_dom::NodeTypeMut,
-    shadow_dom::ShadowDom,
     NodeId,
 };
 
@@ -28,7 +27,7 @@ impl<V: FromAnyValue + Send + Sync> CustomElementRegistry<V> {
         self.builders.insert(
             W::NAME,
             CustomElementBuilder {
-                create: |dom, light_root_id| Box::new(W::create(dom, light_root_id)),
+                create: |dom| Box::new(W::create(dom)),
             },
         );
     }
@@ -42,27 +41,22 @@ impl<V: FromAnyValue + Send + Sync> CustomElementRegistry<V> {
         if let Some(element_tag) = element_tag {
             if let Some(builder) = self.builders.get(element_tag.as_str()) {
                 let boxed_widget = {
-                    let light_root_id = node.id();
                     let dom = node.real_dom_mut();
-                    (builder.create)(dom, light_root_id)
+                    (builder.create)(dom)
                 };
 
                 let boxed_widget = CustomElementManager {
                     inner: Arc::new(RwLock::new(boxed_widget)),
                 };
 
-                let NodeTypeMut::Element(mut el) = node.node_type_mut()else{
-                    panic!("The type of the light element should not change when creating a shadow DOM")
-                };
-
-                *el.shadow_root_mut() = Some(ShadowDom::new(boxed_widget).into());
+                node.insert(boxed_widget);
             }
         }
     }
 }
 
 struct CustomElementBuilder<V: FromAnyValue + Send + Sync> {
-    create: fn(&mut RealDom<V>, NodeId) -> Box<dyn CustomElementUpdater<V>>,
+    create: fn(&mut RealDom<V>) -> Box<dyn CustomElementUpdater<V>>,
 }
 
 /// A controlled element that renders to a shadow DOM
@@ -71,10 +65,15 @@ pub trait CustomElement<V: FromAnyValue + Send + Sync = ()>: Send + Sync + 'stat
     const NAME: &'static str;
 
     /// Create a new widget without mounting it.
-    fn create(dom: &mut RealDom<V>, light_root_id: NodeId) -> Self;
+    fn create(dom: &mut RealDom<V>) -> Self;
 
-    /// The root node of the widget.
+    /// The root node of the widget. This must be static once the element is created.
     fn root(&self) -> NodeId;
+
+    /// The slot to render children of the element into. This must be static once the element is created.
+    fn slot(&self) -> Option<NodeId> {
+        None
+    }
 
     /// Called when the attributes of the widget are changed.
     fn attributes_changed(&mut self, _dom: &mut RealDom<V>, _attributes: &AttributeMask);
@@ -88,14 +87,14 @@ trait ElementFactory<W: CustomElementUpdater<V>, V: FromAnyValue + Send + Sync =
     const NAME: &'static str;
 
     /// Create a new widget.
-    fn create(dom: &mut RealDom<V>, light_root_id: NodeId) -> W;
+    fn create(dom: &mut RealDom<V>) -> W;
 }
 
 impl<W: CustomElement<V>, V: FromAnyValue + Send + Sync> ElementFactory<W, V> for W {
     const NAME: &'static str = W::NAME;
 
-    fn create(dom: &mut RealDom<V>, light_root_id: NodeId) -> Self {
-        Self::create(dom, light_root_id)
+    fn create(dom: &mut RealDom<V>) -> Self {
+        Self::create(dom)
     }
 }
 
@@ -118,6 +117,7 @@ impl<W: CustomElement<V>, V: FromAnyValue + Send + Sync> CustomElementUpdater<V>
     }
 }
 
+#[derive(Component, Clone)]
 pub struct CustomElementManager<V: FromAnyValue = ()> {
     inner: Arc<RwLock<Box<dyn CustomElementUpdater<V>>>>,
 }
@@ -126,12 +126,11 @@ impl<V: FromAnyValue + Send + Sync> CustomElementManager<V> {
     pub fn root(&self) -> NodeId {
         self.inner.read().unwrap().root()
     }
-}
 
-impl<V: FromAnyValue> Clone for CustomElementManager<V> {
-    fn clone(&self) -> Self {
-        Self {
-            inner: self.inner.clone(),
-        }
+    pub fn on_attributes_changed(&self, dom: &mut RealDom<V>, attributes: &AttributeMask) {
+        self.inner
+            .write()
+            .unwrap()
+            .attributes_changed(dom, attributes);
     }
 }

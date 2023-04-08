@@ -262,7 +262,6 @@ fn create_template_node<V: FromAnyValue + Send + Sync>(
                     })
                     .collect(),
                 listeners: FxHashSet::default(),
-                shadow: None,
             });
             let node_id = rdom.create_node(node).id();
             for child in *children {

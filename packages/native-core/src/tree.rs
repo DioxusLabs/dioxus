@@ -4,15 +4,15 @@ use crate::NodeId;
 use shipyard::{Component, EntitiesViewMut, Get, View, ViewMut};
 use std::fmt::Debug;
 
-/// A subtree of a tree.
+/// A shadow_tree of a tree.
 #[derive(PartialEq, Eq, Clone, Debug, Component)]
-pub struct Subtree {
-    /// The root of the subtree
-    shadow_roots: Vec<NodeId>,
+pub struct ShadowTree {
+    /// The root of the shadow_tree
+    pub shadow_roots: Vec<NodeId>,
     /// The node that children of the super tree should be inserted under.
-    slot: Option<NodeId>,
-    /// The node in the super tree that the subtree is attached to.
-    super_tree_root: NodeId,
+    pub slot: Option<NodeId>,
+    /// The node in the super tree that the shadow_tree is attached to.
+    pub super_tree_root: NodeId,
 }
 
 /// A node in a tree.
@@ -20,9 +20,11 @@ pub struct Subtree {
 pub struct Node {
     parent: Option<NodeId>,
     children: Vec<NodeId>,
-    child_subtree: Option<Subtree>,
-    /// If this node is a slot in a subtree, this is node whose child_subtree is that subtree.
-    slot_for_supertree: Option<NodeId>,
+    child_subtree: Option<ShadowTree>,
+    /// If this node is a slot in a shadow_tree, this is node whose child_subtree is that shadow_tree.
+    slot_for_light_tree: Option<NodeId>,
+    /// If this node is a root of a shadow_tree, this is the node whose child_subtree is that shadow_tree.
+    light_tree_root: Option<NodeId>,
     height: u16,
 }
 
@@ -37,8 +39,13 @@ pub trait TreeRef {
     fn parent_id(&self, id: NodeId) -> Option<NodeId>;
     /// The children ids of the node.
     fn children_ids(&self, id: NodeId) -> Vec<NodeId>;
-    /// The subtree tree under the node.
-    fn subtree(&self, id: NodeId) -> Option<&Subtree>;
+    /// The shadow tree tree under the node.
+    fn shadow_tree(&self, id: NodeId) -> Option<&ShadowTree>;
+    // TODO: rethink naming
+    /// The node that contains the shadow tree this node is a slot for
+    fn slot_for_light_tree(&self, id: NodeId) -> Option<NodeId>;
+    /// The node that contains the shadow tree this node is a root of
+    fn light_tree_root(&self, id: NodeId) -> Option<NodeId>;
     /// The height of the node.
     fn height(&self, id: NodeId) -> Option<u16>;
     /// Returns true if the node exists.
@@ -59,9 +66,9 @@ pub trait TreeMut: TreeRef {
     fn insert_before(&mut self, old_id: NodeId, new_id: NodeId);
     /// Inserts a node after another node.
     fn insert_after(&mut self, old_id: NodeId, new_id: NodeId);
-    /// Creates a new subtree.
+    /// Creates a new shadow tree.
     fn create_subtree(&mut self, id: NodeId, shadow_roots: Vec<NodeId>, slot: Option<NodeId>);
-    /// Remove any subtree.
+    /// Remove any shadow tree.
     fn remove_subtree(&mut self, id: NodeId);
 }
 
@@ -84,34 +91,42 @@ impl<'a> TreeRef for TreeRefView<'a> {
         self.get(id).is_ok()
     }
 
-    fn subtree(&self, id: NodeId) -> Option<&Subtree> {
+    fn shadow_tree(&self, id: NodeId) -> Option<&ShadowTree> {
         self.get(id).ok()?.child_subtree.as_ref()
+    }
+
+    fn slot_for_light_tree(&self, id: NodeId) -> Option<NodeId> {
+        self.get(id).ok()?.slot_for_light_tree
+    }
+
+    fn light_tree_root(&self, id: NodeId) -> Option<NodeId> {
+        self.get(id).ok()?.light_tree_root
     }
 }
 
 impl<'a> TreeMut for TreeMutView<'a> {
     fn remove(&mut self, id: NodeId) {
         fn recurse(tree: &mut TreeMutView<'_>, id: NodeId) {
-            let (supertree, children) = {
+            let (light_tree, children) = {
                 let node = (&mut tree.1).get(id).unwrap();
-                (node.slot_for_supertree, std::mem::take(&mut node.children))
+                (node.slot_for_light_tree, std::mem::take(&mut node.children))
             };
 
             for child in children {
                 recurse(tree, child);
             }
 
-            // If this node is a slot in a subtree, remove it from the subtree.
-            if let Some(supertree) = supertree {
-                let supertree_root = (&mut tree.1).get(supertree).unwrap();
+            // If this node is a slot in a shadow_tree, remove it from the shadow_tree.
+            if let Some(light_tree) = light_tree {
+                let light_tree_root = (&mut tree.1).get(light_tree).unwrap();
 
-                if let Some(subtree) = &mut supertree_root.child_subtree {
-                    subtree.slot = None;
+                if let Some(shadow_tree) = &mut light_tree_root.child_subtree {
+                    shadow_tree.slot = None;
                 }
 
                 debug_assert!(
-                    supertree_root.children.is_empty(),
-                    "Subtree root should have no children when slot is removed."
+                    light_tree_root.children.is_empty(),
+                    "ShadowTree root should have no children when slot is removed."
                 );
             }
         }
@@ -137,7 +152,8 @@ impl<'a> TreeMut for TreeMutView<'a> {
                 children: Vec::new(),
                 height: 0,
                 child_subtree: None,
-                slot_for_supertree: None,
+                slot_for_light_tree: None,
+                light_tree_root: None,
             },
         );
     }
@@ -212,7 +228,7 @@ impl<'a> TreeMut for TreeMutView<'a> {
 
         let light_root_height;
         {
-            let subtree = Subtree {
+            let shadow_tree = ShadowTree {
                 super_tree_root: id,
                 shadow_roots: shadow_roots.clone(),
                 slot,
@@ -220,20 +236,20 @@ impl<'a> TreeMut for TreeMutView<'a> {
 
             let light_root = node_data_mut
                 .get(id)
-                .expect("tried to create subtree with non-existent id");
+                .expect("tried to create shadow_tree with non-existent id");
 
-            light_root.child_subtree = Some(subtree);
+            light_root.child_subtree = Some(shadow_tree);
             light_root_height = light_root.height;
 
             if let Some(slot) = slot {
                 let slot = node_data_mut
                     .get(slot)
-                    .expect("tried to create subtree with non-existent slot");
-                slot.slot_for_supertree = Some(id);
+                    .expect("tried to create shadow_tree with non-existent slot");
+                slot.slot_for_light_tree = Some(id);
             }
         }
 
-        // Now that we have created the subtree, we need to update the height of the subtree roots
+        // Now that we have created the shadow_tree, we need to update the height of the shadow_tree roots
         for root in shadow_roots {
             set_height(self, root, light_root_height + 1);
         }
@@ -243,13 +259,13 @@ impl<'a> TreeMut for TreeMutView<'a> {
         let (_, node_data_mut) = self;
 
         if let Ok(node) = node_data_mut.get(id) {
-            if let Some(subtree) = node.child_subtree.take() {
-                // Remove the slot's link to the subtree
-                if let Some(slot) = subtree.slot {
+            if let Some(shadow_tree) = node.child_subtree.take() {
+                // Remove the slot's link to the shadow_tree
+                if let Some(slot) = shadow_tree.slot {
                     let slot = node_data_mut
                         .get(slot)
-                        .expect("tried to remove subtree with non-existent slot");
-                    slot.slot_for_supertree = None;
+                        .expect("tried to remove shadow_tree with non-existent slot");
+                    slot.slot_for_light_tree = None;
                 }
 
                 let node = node_data_mut.get(id).unwrap();
@@ -262,7 +278,7 @@ impl<'a> TreeMut for TreeMutView<'a> {
                 }
 
                 // Reset the height of the shadow roots
-                for root in &subtree.shadow_roots {
+                for root in &shadow_tree.shadow_roots {
                     set_height(self, *root, 0);
                 }
             }
@@ -272,13 +288,13 @@ impl<'a> TreeMut for TreeMutView<'a> {
 
 fn child_height(parent: &Node, tree: &impl TreeRef) -> u16 {
     match &parent.child_subtree {
-        Some(subtree) => {
-            if let Some(slot) = subtree.slot {
+        Some(shadow_tree) => {
+            if let Some(slot) = shadow_tree.slot {
                 tree.height(slot)
                     .expect("Attempted to read a slot that does not exist")
                     + 1
             } else {
-                panic!("Attempted to read the height of a subtree without a slot");
+                panic!("Attempted to read the height of a shadow_tree without a slot");
             }
         }
         None => parent.height + 1,
@@ -287,22 +303,22 @@ fn child_height(parent: &Node, tree: &impl TreeRef) -> u16 {
 
 /// Sets the height of a node and updates the height of all its children
 fn set_height(tree: &mut TreeMutView<'_>, node: NodeId, height: u16) {
-    let (subtree, supertree, children) = {
+    let (shadow_tree, light_tree, children) = {
         let mut node_data_mut = &mut tree.1;
         let mut node = (&mut node_data_mut).get(node).unwrap();
         node.height = height;
 
         (
             node.child_subtree.clone(),
-            node.slot_for_supertree,
+            node.slot_for_light_tree,
             node.children.clone(),
         )
     };
 
-    // If the children are actually part of a subtree, there height is determined by the height of the subtree
-    if let Some(subtree) = subtree {
-        // Set the height of the subtree roots
-        for &shadow_root in &subtree.shadow_roots {
+    // If the children are actually part of a shadow_tree, there height is determined by the height of the shadow_tree
+    if let Some(shadow_tree) = shadow_tree {
+        // Set the height of the shadow_tree roots
+        for &shadow_root in &shadow_tree.shadow_roots {
             set_height(tree, shadow_root, height);
         }
     } else {
@@ -312,9 +328,9 @@ fn set_height(tree: &mut TreeMutView<'_>, node: NodeId, height: u16) {
         }
     }
 
-    // If this nodes is a slot for a subtree, we need to go to the super tree and update the height of its children
-    if let Some(supertree) = supertree {
-        let children = (&tree.1).get(supertree).unwrap().children.clone();
+    // If this nodes is a slot for a shadow_tree, we need to go to the super tree and update the height of its children
+    if let Some(light_tree) = light_tree {
+        let children = (&tree.1).get(light_tree).unwrap().children.clone();
         for child in children {
             set_height(tree, child, height + 1);
         }
@@ -344,9 +360,19 @@ impl<'a> TreeRef for TreeMutView<'a> {
         self.1.get(id).is_ok()
     }
 
-    fn subtree(&self, id: NodeId) -> Option<&Subtree> {
+    fn shadow_tree(&self, id: NodeId) -> Option<&ShadowTree> {
         let node_data = &self.1;
         node_data.get(id).unwrap().child_subtree.as_ref()
+    }
+
+    fn slot_for_light_tree(&self, id: NodeId) -> Option<NodeId> {
+        let node_data = &self.1;
+        node_data.get(id).unwrap().slot_for_light_tree
+    }
+
+    fn light_tree_root(&self, id: NodeId) -> Option<NodeId> {
+        let node_data = &self.1;
+        node_data.get(id).unwrap().light_tree_root
     }
 }
 
@@ -375,7 +401,7 @@ fn creation() {
 }
 
 #[test]
-fn subtree() {
+fn shadow_tree() {
     use shipyard::World;
     #[derive(Component)]
     struct Num(i32);
@@ -432,7 +458,7 @@ fn subtree() {
         &[shadow_parent_id]
     );
     assert_eq!(
-        tree.1.get(shadow_child_id).unwrap().slot_for_supertree,
+        tree.1.get(shadow_child_id).unwrap().slot_for_light_tree,
         Some(parent_id)
     );
 

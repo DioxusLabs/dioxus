@@ -10,7 +10,7 @@ use std::collections::VecDeque;
 use std::ops::{Deref, DerefMut};
 use std::sync::{Arc, RwLock};
 
-use crate::custom_element::CustomElementRegistry;
+use crate::custom_element::{CustomElementManager, CustomElementRegistry};
 use crate::node::{
     ElementNode, FromAnyValue, NodeType, OwnedAttributeDiscription, OwnedAttributeValue, TextNode,
 };
@@ -18,7 +18,6 @@ use crate::node_ref::{NodeMask, NodeMaskBuilder};
 use crate::node_watcher::{AttributeWatcher, NodeWatcher};
 use crate::passes::{DirtyNodeStates, TypeErasedState};
 use crate::prelude::AttributeMaskBuilder;
-use crate::shadow_dom::ShadowDom;
 use crate::tree::{TreeMut, TreeMutView, TreeRef, TreeRefView};
 use crate::NodeId;
 use crate::{FxDashSet, SendAnyMap};
@@ -113,7 +112,7 @@ pub struct RealDom<V: FromAnyValue + Send + Sync = ()> {
     attribute_watchers: AttributeWatchers<V>,
     workload: ScheduledWorkload,
     root_id: NodeId,
-    custom_elements: CustomElementRegistry<V>,
+    custom_elements: Arc<RwLock<CustomElementRegistry<V>>>,
     phantom: std::marker::PhantomData<V>,
 }
 
@@ -142,7 +141,6 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
             namespace: Some("Root".to_string()),
             attributes: FxHashMap::default(),
             listeners: FxHashSet::default(),
-            shadow: None,
         });
         let root_id = world.add_entity(root_node);
         {
@@ -189,7 +187,10 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
 
     /// Create a new node of the given type in the dom and return a mutable reference to it.
     pub fn create_node(&mut self, node: impl Into<NodeType<V>>) -> NodeMut<'_, V> {
-        let id = self.world.add_entity(node.into());
+        let node = node.into();
+        let is_element = matches!(node, NodeType::Element(_));
+
+        let id = self.world.add_entity(node);
         self.tree_mut().create_node(id);
 
         self.dirty_nodes
@@ -200,6 +201,15 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
         self.dirty_nodes
             .mark_dirty(id, NodeMaskBuilder::ALL.build());
         self.dirty_nodes.nodes_created.insert(id);
+
+        // Create a custom element if needed
+        if is_element {
+            let custom_elements = self.custom_elements.clone();
+            custom_elements
+                .write()
+                .unwrap()
+                .add_shadow_dom(NodeMut::new(id, self));
+        }
 
         NodeMut::new(id, self)
     }
@@ -280,10 +290,9 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
         let passes = std::mem::take(&mut self.dirty_nodes.passes_updated);
         let nodes_updated = std::mem::take(&mut self.dirty_nodes.nodes_updated);
 
-        // call attribute watchers
         for (node_id, mask) in &nodes_updated {
             if self.contains(*node_id) {
-                // ignore watchers if they are already being modified
+                // call attribute watchers but ignore watchers if they are already being modified
                 let watchers = self.attribute_watchers.clone();
                 if let Ok(mut watchers) = watchers.try_write() {
                     for watcher in &mut *watchers {
@@ -293,6 +302,15 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
                         );
                     }
                 };
+
+                // call custom element watchers
+                let custom_element_manager = {
+                    let node = self.get_mut(*node_id).unwrap();
+                    node.get::<CustomElementManager<V>>().map(|x| x.clone())
+                };
+                if let Some(custom_element_manager) = custom_element_manager {
+                    custom_element_manager.on_attributes_changed(self, mask.attributes());
+                }
             }
         }
 
@@ -1061,16 +1079,6 @@ impl<V: FromAnyValue + Send + Sync> ElementNodeMut<'_, V> {
     /// Get the set of all events the element is listening to
     pub fn listeners(&self) -> &FxHashSet<String> {
         &self.element().listeners
-    }
-
-    /// Get the shadow root of the element
-    pub fn shadow_root(&self) -> Option<&ShadowDom<V>> {
-        self.element().shadow.as_deref()
-    }
-
-    /// Get the shadow root of the element
-    pub fn shadow_root_mut(&mut self) -> &mut Option<Box<ShadowDom<V>>> {
-        &mut self.element_mut().shadow
     }
 }
 

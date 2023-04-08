@@ -16,7 +16,6 @@ pub mod node_ref;
 pub mod node_watcher;
 mod passes;
 pub mod real_dom;
-mod shadow_dom;
 pub mod tree;
 pub mod utils;
 

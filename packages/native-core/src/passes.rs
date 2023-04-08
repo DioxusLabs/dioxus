@@ -194,6 +194,7 @@ pub fn run_pass<V: FromAnyValue + Send + Sync>(
     dependants: FxHashSet<TypeId>,
     pass_direction: PassDirection,
     view: RunPassView<V>,
+    enter_shadow_dom: bool,
     mut update_node: impl FnMut(NodeId, &SendAnyMap) -> bool,
 ) {
     let RunPassView {
@@ -209,9 +210,32 @@ pub fn run_pass<V: FromAnyValue + Send + Sync>(
             while let Some((height, id)) = dirty.pop_front(type_id) {
                 if (update_node)(id, ctx) {
                     nodes_updated.insert(id);
-                    for id in tree.children_ids(id) {
-                        for dependant in &dependants {
-                            dirty.insert(*dependant, id, height + 1);
+                    let shadow_tree = tree.shadow_tree(id);
+                    match (enter_shadow_dom, shadow_tree) {
+                        (true, Some(shadow_tree)) => {
+                            // If this pass uses the shadow dom, update the shadow dom children instead of the normal children
+                            for id in &shadow_tree.shadow_roots {
+                                for dependant in &dependants {
+                                    dirty.insert(*dependant, *id, height + 1);
+                                }
+                            }
+                        }
+                        _ => {
+                            for id in tree.children_ids(id) {
+                                for dependant in &dependants {
+                                    dirty.insert(*dependant, id, height + 1);
+                                }
+                            }
+                        }
+                    }
+                    // If this pass uses the shadow dom, update the light dom's children if this node is a slot
+                    if enter_shadow_dom {
+                        if let Some(slot_for_light_tree) = tree.slot_for_light_tree(id) {
+                            for id in tree.children_ids(slot_for_light_tree) {
+                                for dependant in &dependants {
+                                    dirty.insert(*dependant, id, height + 1);
+                                }
+                            }
                         }
                     }
                 }
@@ -221,9 +245,21 @@ pub fn run_pass<V: FromAnyValue + Send + Sync>(
             while let Some((height, id)) = dirty.pop_back(type_id) {
                 if (update_node)(id, ctx) {
                     nodes_updated.insert(id);
-                    if let Some(id) = tree.parent_id(id) {
-                        for dependant in &dependants {
-                            dirty.insert(*dependant, id, height - 1);
+
+                    // If this pass uses the shadow dom, update the light dom root if this node is a root
+                    let light_tree_root = tree.light_tree_root(id);
+                    match (enter_shadow_dom, light_tree_root) {
+                        (true, Some(light_tree_root)) => {
+                            for dependant in &dependants {
+                                dirty.insert(*dependant, light_tree_root, height + 1);
+                            }
+                        }
+                        _ => {
+                            if let Some(id) = tree.parent_id(id) {
+                                for dependant in &dependants {
+                                    dirty.insert(*dependant, id, height - 1);
+                                }
+                            }
                         }
                     }
                 }

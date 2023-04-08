@@ -10,7 +10,6 @@ fn create_blank_element() -> NodeType {
         namespace: None,
         attributes: FxHashMap::default(),
         listeners: FxHashSet::default(),
-        shadow: None,
     })
 }
 
