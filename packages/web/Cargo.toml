@@ -89,3 +89,5 @@ wasm-bindgen-test = "0.3.29"
 dioxus-ssr = { path = "../ssr", version = "0.3.0"}
 wasm-logger = "0.2.0"
 dioxus-web = { path = ".", features = ["hydrate"] }
+gloo-timers = "0.2.3"
+gloo-dialogs = "0.1.1"
