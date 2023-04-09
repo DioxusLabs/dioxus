@@ -10,7 +10,7 @@ use std::collections::VecDeque;
 use std::ops::{Deref, DerefMut};
 use std::sync::{Arc, RwLock};
 
-use crate::custom_element::{CustomElementManager, CustomElementRegistry};
+use crate::custom_element::{CustomElement, CustomElementManager, CustomElementRegistry};
 use crate::node::{
     ElementNode, FromAnyValue, NodeType, OwnedAttributeDiscription, OwnedAttributeValue, TextNode,
 };
@@ -206,7 +206,7 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
         if is_element {
             let custom_elements = self.custom_elements.clone();
             custom_elements
-                .write()
+                .read()
                 .unwrap()
                 .add_shadow_dom(NodeMut::new(id, self));
         }
@@ -425,6 +425,11 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
     /// Returns a mutable reference to the underlying world. Any changes made to the world will not update the reactive system.
     pub fn raw_world_mut(&mut self) -> &mut World {
         &mut self.world
+    }
+
+    /// Registers a new custom element.
+    pub fn register_custom_element<E: CustomElement<V>>(&mut self) {
+        self.custom_elements.write().unwrap().register::<E>()
     }
 }
 
