@@ -56,7 +56,7 @@ impl Component {
         Ok(())
     }
 
-    pub fn key(&self) -> Option<&IfmtInput> {
+    pub fn key(&self) -> Option<&KeyValue> {
         match self
             .fields
             .iter()
