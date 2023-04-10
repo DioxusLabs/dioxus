@@ -48,7 +48,7 @@ pub struct VNode<'a> {
     /// The key given to the root of this template.
     ///
     /// In fragments, this is the key of the first child. In other cases, it is the key of the root.
-    pub key: Option<&'a str>,
+    pub key: Option<KeyValue<'a>>,
 
     /// When rendered, this template will be linked to its parent manually
     pub parent: Option<ElementId>,
@@ -892,5 +892,33 @@ impl<'a, T: IntoAttributeValue<'a>> IntoAttributeValue<'a> for Option<T> {
             Some(val) => val.into_value(bump),
             None => AttributeValue::None,
         }
+    }
+}
+
+/// The value of the attribute key
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+pub enum KeyValue<'a> {
+    /// Text attribute key value
+    Text(&'a str),
+
+    /// Signed integer key value
+    Int(i64),
+}
+
+/// A value that can be converted into an attribute key value
+pub trait IntoKeyValue<'a> {
+    /// Convert into an attribute key value
+    fn into_value(self, bump: &'a Bump) -> KeyValue<'a>;
+}
+
+impl<'a> IntoKeyValue<'a> for &'a str {
+    fn into_value(self, _: &'a Bump) -> KeyValue<'a> {
+        KeyValue::Text(self)
+    }
+}
+
+impl<'a> IntoKeyValue<'a> for i64 {
+    fn into_value(self, _: &'a Bump) -> KeyValue<'a> {
+        KeyValue::Int(self)
     }
 }
