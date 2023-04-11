@@ -10,7 +10,7 @@ use wry::application::{
     keyboard::{KeyCode, ModifiersState},
 };
 
-use crate::{use_window, DesktopContext};
+use crate::{desktop_context::DesktopContext, use_window};
 
 #[derive(Clone)]
 pub(crate) struct ShortcutRegistry {
@@ -146,7 +146,7 @@ pub struct ShortcutId {
 
 /// A global shortcut. This will be automatically removed when it is dropped.
 pub struct ShortcutHandle {
-    desktop: Rc<DesktopContext>,
+    desktop: DesktopContext,
     /// The id of the shortcut
     pub shortcut_id: ShortcutId,
 }

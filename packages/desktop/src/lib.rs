@@ -15,9 +15,11 @@ mod webview;
 
 pub use cfg::Config;
 pub use desktop_context::{
-    use_window, use_wry_event_handler, DesktopContext, WryEventHandler, WryEventHandlerId,
+    use_window, use_wry_event_handler, DesktopService, WryEventHandler, WryEventHandlerId,
 };
-use desktop_context::{EventData, UserWindowEvent, WebviewQueue, WindowEventHandlers};
+use desktop_context::{
+    DesktopContext, EventData, UserWindowEvent, WebviewQueue, WindowEventHandlers,
+};
 use dioxus_core::*;
 use dioxus_html::HtmlEvent;
 pub use eval::{use_eval, EvalResult};
@@ -186,7 +188,7 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
             Event::NewEvents(StartCause::Init)
             | Event::UserEvent(UserWindowEvent(EventData::NewWindow, _)) => {
                 for handler in queue.borrow_mut().drain(..) {
-                    let id = handler.webview.window().id();
+                    let id = handler.desktop_context.webview.window().id();
                     webviews.insert(id, handler);
                     _ = proxy.send_event(UserWindowEvent(EventData::Poll, id));
                 }
@@ -232,12 +234,12 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
                     view.dom
                         .handle_event(&evt.name, evt.data.into_any(), evt.element, evt.bubbles);
 
-                    send_edits(view.dom.render_immediate(), &view.webview);
+                    send_edits(view.dom.render_immediate(), &view.desktop_context.webview);
                 }
 
                 EventData::Ipc(msg) if msg.method() == "initialize" => {
                     let view = webviews.get_mut(&event.1).unwrap();
-                    send_edits(view.dom.rebuild(), &view.webview);
+                    send_edits(view.dom.rebuild(), &view.desktop_context.webview);
                 }
 
                 // When the webview chirps back with the result of the eval, we send it to the active receiver
@@ -248,7 +250,7 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
                     webviews[&event.1]
                         .dom
                         .base_scope()
-                        .consume_context::<Rc<DesktopContext>>()
+                        .consume_context::<DesktopContext>()
                         .unwrap()
                         .eval
                         .send(msg.params())
@@ -284,8 +286,8 @@ fn create_new_window(
     shortcut_manager: ShortcutRegistry,
 ) -> WebviewHandler {
     let webview = webview::build(&mut cfg, event_loop, proxy.clone());
-    let desktop_context = Rc::from(DesktopContext::new(
-        webview.clone(),
+    let desktop_context = Rc::from(DesktopService::new(
+        webview,
         proxy.clone(),
         event_loop.clone(),
         queue.clone(),
@@ -295,12 +297,12 @@ fn create_new_window(
 
     dom.base_scope().provide_context(desktop_context.clone());
 
-    let id = webview.window().id();
+    let id = desktop_context.webview.window().id();
 
     // We want to poll the virtualdom and the event loop at the same time, so the waker will be connected to both
 
     WebviewHandler {
-        webview,
+        desktop_context,
         dom,
         waker: waker::tao_waker(proxy, id),
     }
@@ -308,7 +310,7 @@ fn create_new_window(
 
 struct WebviewHandler {
     dom: VirtualDom,
-    webview: Rc<wry::webview::WebView>,
+    desktop_context: DesktopContext,
     waker: Waker,
 }
 
@@ -331,7 +333,7 @@ fn poll_vdom(view: &mut WebviewHandler) {
             }
         }
 
-        send_edits(view.dom.render_immediate(), &view.webview);
+        send_edits(view.dom.render_immediate(), &view.desktop_context.webview);
     }
 }
 

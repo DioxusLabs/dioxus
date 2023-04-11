@@ -31,8 +31,8 @@ use wry::webview::WebView;
 pub type ProxyType = EventLoopProxy<UserWindowEvent>;
 
 /// Get an imperative handle to the current window
-pub fn use_window(cx: &ScopeState) -> &Rc<DesktopContext> {
-    cx.use_hook(|| cx.consume_context::<Rc<DesktopContext>>())
+pub fn use_window(cx: &ScopeState) -> &DesktopContext {
+    cx.use_hook(|| cx.consume_context::<DesktopContext>())
         .as_ref()
         .unwrap()
 }
@@ -51,10 +51,9 @@ pub(crate) type WebviewQueue = Rc<RefCell<Vec<WebviewHandler>>>;
 /// ```rust, ignore
 ///     let desktop = cx.consume_context::<DesktopContext>().unwrap();
 /// ```
-#[derive(Clone)]
-pub struct DesktopContext {
+pub struct DesktopService {
     /// The wry/tao proxy to the current window
-    pub webview: Rc<WebView>,
+    pub webview: WebView,
 
     /// The proxy to the event loop
     pub proxy: ProxyType,
@@ -74,8 +73,10 @@ pub struct DesktopContext {
     pub(crate) views: Rc<RefCell<Vec<*mut objc::runtime::Object>>>,
 }
 
+pub type DesktopContext = Rc<DesktopService>;
+
 /// A smart pointer to the current window.
-impl std::ops::Deref for DesktopContext {
+impl std::ops::Deref for DesktopService {
     type Target = Window;
 
     fn deref(&self) -> &Self::Target {
@@ -83,9 +84,9 @@ impl std::ops::Deref for DesktopContext {
     }
 }
 
-impl DesktopContext {
+impl DesktopService {
     pub(crate) fn new(
-        webview: Rc<WebView>,
+        webview: WebView,
         proxy: ProxyType,
         event_loop: EventLoopWindowTarget<UserWindowEvent>,
         webviews: WebviewQueue,
@@ -112,7 +113,7 @@ impl DesktopContext {
     /// You can use this to control other windows from the current window.
     ///
     /// Be careful to not create a cycle of windows, or you might leak memory.
-    pub fn new_window(&self, dom: VirtualDom, cfg: Config) -> Weak<DesktopContext> {
+    pub fn new_window(&self, dom: VirtualDom, cfg: Config) -> Weak<DesktopService> {
         let window = create_new_window(
             cfg,
             &self.event_loop,
@@ -126,10 +127,10 @@ impl DesktopContext {
         let desktop_context = window
             .dom
             .base_scope()
-            .consume_context::<Rc<DesktopContext>>()
+            .consume_context::<Rc<DesktopService>>()
             .unwrap();
 
-        let id = window.webview.window().id();
+        let id = window.desktop_context.webview.window().id();
 
         self.proxy
             .send_event(UserWindowEvent(EventData::NewWindow, id))
