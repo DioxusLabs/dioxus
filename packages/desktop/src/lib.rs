@@ -248,7 +248,7 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
                     webviews[&event.1]
                         .dom
                         .base_scope()
-                        .consume_context::<DesktopContext>()
+                        .consume_context::<Rc<DesktopContext>>()
                         .unwrap()
                         .eval
                         .send(msg.params())
