@@ -7,7 +7,8 @@ use crate::{
     innerlude::{ErrorBoundary, Scheduler, SchedulerMsg},
     lazynodes::LazyNodes,
     nodes::{ComponentReturn, IntoAttributeValue, IntoDynNode, RenderReturn},
-    AnyValue, Attribute, AttributeValue, Element, Event, Properties, TaskId,
+    AnyValue, Attribute, AttributeValue, Element, Event, IntoKeyValue, KeyValue, Properties,
+    TaskId,
 };
 use bumpalo::{boxed::Box as BumpBox, Bump};
 use bumpslab::{BumpSlab, Slot};
@@ -525,6 +526,13 @@ impl<'src> ScopeState {
             mounted_element: Default::default(),
             value: value.into_value(self.bump()),
         }
+    }
+
+    /// Make it possible to input Key value as text or a number
+    ///
+    /// Uses the currently active [`Bump`] allocator
+    pub fn key(&'src self, value: impl IntoKeyValue<'src>) -> KeyValue<'src> {
+        value.into_value(self.bump())
     }
 
     /// Create a new [`DynamicNode::Component`] variant

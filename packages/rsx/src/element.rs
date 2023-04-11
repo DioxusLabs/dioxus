@@ -89,7 +89,7 @@ impl Parse for Element {
                     match name_str.as_str() {
                         "key" => {
                             // content.parse()?
-                            key = Some(Key::parse(&content)?);
+                            key = Some(KeyValue::parse(&content)?);
                         }
                         "classes" => todo!("custom class list not supported yet"),
                         // "namespace" => todo!("custom namespace not supported yet"),
@@ -302,6 +302,22 @@ impl ToTokens for ElementAttrNamed {
 // }
 
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
+pub struct Key {
+    pub value: KeyValue,
+}
+
+impl ToTokens for Key {
+    fn to_tokens(&self, tokens: &mut TokenStream2) {
+        todo!();
+    }
+}
+impl Parse for Key {
+    fn parse(input: ParseStream) -> Result<Self> {
+        Ok(Key(input.parse()?))
+    }
+}
+
+#[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub enum KeyValue {
     Formatted(IfmtInput),
     Expression(Expr),
@@ -310,14 +326,10 @@ pub enum KeyValue {
 impl ToTokens for KeyValue {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         match self {
-            KeyValue::Formatted(s) => todo!(),
-            KeyValue::Expression(e) => todo!(),
+            KeyValue::Formatted(s) => tokens.append_all(quote! {
+                __cx.key_value(#s)
+            }),
+            KeyValue::Expression(e) => e.to_tokens(tokens),
         }
-    }
-}
-
-impl Parse for KeyValue {
-    fn parse(input: ParseStream) -> Result<Self> {
-        todo!()
     }
 }
