@@ -4,7 +4,7 @@ use std::{
     sync::{Arc, Weak},
 };
 
-use async_rwlock::{RwLock, RwLockReadGuard, RwLockWriteGuard};
+use async_lock::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use either::Either;
 use futures_channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
 use futures_util::StreamExt;

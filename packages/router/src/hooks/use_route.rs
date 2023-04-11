@@ -1,4 +1,4 @@
-use async_rwlock::RwLockReadGuard;
+use async_lock::RwLockReadGuard;
 use dioxus::{core::Component, prelude::ScopeState};
 use dioxus_router_core::RouterState;
 

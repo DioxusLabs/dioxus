@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use async_rwlock::RwLock;
+use async_lock::RwLock;
 use dioxus::{core::Component, prelude::ScopeId};
 use dioxus_router_core::{RouterMessage, RouterState};
 use futures_channel::mpsc::UnboundedSender;

@@ -1,4 +1,4 @@
-use async_rwlock::RwLockReadGuard;
+use async_lock::RwLockReadGuard;
 use dioxus::{core::Component, prelude::*};
 use dioxus_router_core::{
     history::{HistoryProvider, MemoryHistory},
