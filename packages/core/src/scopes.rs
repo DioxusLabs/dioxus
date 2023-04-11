@@ -4,18 +4,21 @@ use crate::{
     arena::ElementId,
     bump_frame::BumpFrame,
     innerlude::{DynamicNode, EventHandler, VComponent, VText},
-    innerlude::{Scheduler, SchedulerMsg},
+    innerlude::{ErrorBoundary, Scheduler, SchedulerMsg},
     lazynodes::LazyNodes,
     nodes::{ComponentReturn, IntoAttributeValue, IntoDynNode, RenderReturn},
-    Attribute, AttributeValue, Element, Event, Properties, TaskId,
+    AnyValue, Attribute, AttributeValue, Element, Event, Properties, TaskId,
 };
 use bumpalo::{boxed::Box as BumpBox, Bump};
+use bumpslab::{BumpSlab, Slot};
 use rustc_hash::{FxHashMap, FxHashSet};
+use slab::{Slab, VacantEntry};
 use std::{
     any::{Any, TypeId},
     cell::{Cell, RefCell},
-    fmt::Arguments,
+    fmt::{Arguments, Debug},
     future::Future,
+    ops::{Index, IndexMut},
     rc::Rc,
     sync::Arc,
 };
@@ -63,6 +66,95 @@ impl<'a, T> std::ops::Deref for Scoped<'a, T> {
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
 pub struct ScopeId(pub usize);
 
+/// A thin wrapper around a BumpSlab that uses ids to index into the slab.
+pub(crate) struct ScopeSlab {
+    slab: BumpSlab<ScopeState>,
+    // a slab of slots of stable pointers to the ScopeState in the bump slab
+    entries: Slab<Slot<'static, ScopeState>>,
+}
+
+impl Drop for ScopeSlab {
+    fn drop(&mut self) {
+        // Bump slab doesn't drop its contents, so we need to do it manually
+        for slot in self.entries.drain() {
+            self.slab.remove(slot);
+        }
+    }
+}
+
+impl Default for ScopeSlab {
+    fn default() -> Self {
+        Self {
+            slab: BumpSlab::new(),
+            entries: Slab::new(),
+        }
+    }
+}
+
+impl ScopeSlab {
+    pub(crate) fn get(&self, id: ScopeId) -> Option<&ScopeState> {
+        self.entries.get(id.0).map(|slot| unsafe { &*slot.ptr() })
+    }
+
+    pub(crate) fn get_mut(&mut self, id: ScopeId) -> Option<&mut ScopeState> {
+        self.entries
+            .get(id.0)
+            .map(|slot| unsafe { &mut *slot.ptr_mut() })
+    }
+
+    pub(crate) fn vacant_entry(&mut self) -> ScopeSlabEntry {
+        let entry = self.entries.vacant_entry();
+        ScopeSlabEntry {
+            slab: &mut self.slab,
+            entry,
+        }
+    }
+
+    pub(crate) fn remove(&mut self, id: ScopeId) {
+        self.slab.remove(self.entries.remove(id.0));
+    }
+
+    pub(crate) fn contains(&self, id: ScopeId) -> bool {
+        self.entries.contains(id.0)
+    }
+
+    pub(crate) fn iter(&self) -> impl Iterator<Item = &ScopeState> {
+        self.entries.iter().map(|(_, slot)| unsafe { &*slot.ptr() })
+    }
+}
+
+pub(crate) struct ScopeSlabEntry<'a> {
+    slab: &'a mut BumpSlab<ScopeState>,
+    entry: VacantEntry<'a, Slot<'static, ScopeState>>,
+}
+
+impl<'a> ScopeSlabEntry<'a> {
+    pub(crate) fn key(&self) -> ScopeId {
+        ScopeId(self.entry.key())
+    }
+
+    pub(crate) fn insert(self, scope: ScopeState) -> &'a ScopeState {
+        let slot = self.slab.push(scope);
+        // this is safe because the slot is only ever accessed with the lifetime of the borrow of the slab
+        let slot = unsafe { std::mem::transmute(slot) };
+        let entry = self.entry.insert(slot);
+        unsafe { &*entry.ptr() }
+    }
+}
+
+impl Index<ScopeId> for ScopeSlab {
+    type Output = ScopeState;
+    fn index(&self, id: ScopeId) -> &Self::Output {
+        self.get(id).unwrap()
+    }
+}
+
+impl IndexMut<ScopeId> for ScopeSlab {
+    fn index_mut(&mut self, id: ScopeId) -> &mut Self::Output {
+        self.get_mut(id).unwrap()
+    }
+}
+
 /// A component's state separate from its props.
 ///
 /// This struct exists to provide a common interface for all scopes without relying on generics.
@@ -73,7 +165,7 @@ pub struct ScopeState {
     pub(crate) node_arena_1: BumpFrame,
     pub(crate) node_arena_2: BumpFrame,
 
-    pub(crate) parent: Option<*mut ScopeState>,
+    pub(crate) parent: Option<*const ScopeState>,
     pub(crate) id: ScopeId,
 
     pub(crate) height: u32,
@@ -85,10 +177,10 @@ pub struct ScopeState {
     pub(crate) shared_contexts: RefCell<FxHashMap<TypeId, Box<dyn Any>>>,
 
     pub(crate) tasks: Rc<Scheduler>,
-    pub(crate) spawned_tasks: FxHashSet<TaskId>,
+    pub(crate) spawned_tasks: RefCell<FxHashSet<TaskId>>,
 
     pub(crate) borrowed_props: RefCell<Vec<*const VComponent<'static>>>,
-    pub(crate) listeners: RefCell<Vec<*const Attribute<'static>>>,
+    pub(crate) attributes_to_drop: RefCell<Vec<*const Attribute<'static>>>,
 
     pub(crate) props: Option<Box<dyn AnyProps<'static>>>,
     pub(crate) placeholder: Cell<Option<ElementId>>,
@@ -107,14 +199,6 @@ impl<'src> ScopeState {
         match self.render_cnt.get() % 2 {
             1 => &self.node_arena_1,
             0 => &self.node_arena_2,
-            _ => unreachable!(),
-        }
-    }
-
-    pub(crate) fn previous_frame_mut(&mut self) -> &mut BumpFrame {
-        match self.render_cnt.get() % 2 {
-            1 => &mut self.node_arena_1,
-            0 => &mut self.node_arena_2,
             _ => unreachable!(),
         }
     }
@@ -139,7 +223,7 @@ impl<'src> ScopeState {
     /// If you need to allocate items that need to be dropped, use bumpalo's box.
     pub fn bump(&self) -> &Bump {
         // note that this is actually the previous frame since we use that as scratch space while the component is rendering
-        &self.previous_frame().bump
+        self.previous_frame().bump()
     }
 
     /// Get a handle to the currently active head node arena for this Scope
@@ -289,16 +373,11 @@ impl<'src> ScopeState {
         None
     }
 
-    /// Expose state to children further down the [`crate::VirtualDom`] Tree. Does not require `clone` on the context,
-    /// though we do recommend it.
+    /// Expose state to children further down the [`crate::VirtualDom`] Tree. Requires `Clone` on the context to allow getting values down the tree.
     ///
     /// This is a "fundamental" operation and should only be called during initialization of a hook.
     ///
     /// For a hook that provides the same functionality, use `use_provide_context` and `use_context` instead.
-    ///
-    /// If a state is provided that already exists, the new value will not be inserted. Instead, this method will
-    /// return the existing value. This behavior is chosen so shared values do not need to be `Clone`. This particular
-    /// behavior might change in the future.
     ///
     /// # Example
     ///
@@ -327,7 +406,9 @@ impl<'src> ScopeState {
 
     /// Pushes the future onto the poll queue to be polled after the component renders.
     pub fn push_future(&self, fut: impl Future<Output = ()> + 'static) -> TaskId {
-        self.tasks.spawn(self.id, fut)
+        let id = self.tasks.spawn(self.id, fut);
+        self.spawned_tasks.borrow_mut().insert(id);
+        id
     }
 
     /// Spawns the future but does not return the [`TaskId`]
@@ -347,6 +428,8 @@ impl<'src> ScopeState {
             .sender
             .unbounded_send(SchedulerMsg::TaskNotified(id))
             .expect("Scheduler should exist");
+
+        self.spawned_tasks.borrow_mut().insert(id);
 
         id
     }
@@ -374,19 +457,25 @@ impl<'src> ScopeState {
     pub fn render(&'src self, rsx: LazyNodes<'src, '_>) -> Element<'src> {
         let element = rsx.call(self);
 
-        let mut listeners = self.listeners.borrow_mut();
+        let mut listeners = self.attributes_to_drop.borrow_mut();
         for attr in element.dynamic_attrs {
-            if let AttributeValue::Listener(_) = attr.value {
-                let unbounded = unsafe { std::mem::transmute(attr as *const Attribute) };
-                listeners.push(unbounded);
+            match attr.value {
+                AttributeValue::Any(_) | AttributeValue::Listener(_) => {
+                    let unbounded = unsafe { std::mem::transmute(attr as *const Attribute) };
+                    listeners.push(unbounded);
+                }
+
+                _ => (),
             }
         }
 
         let mut props = self.borrowed_props.borrow_mut();
         for node in element.dynamic_nodes {
             if let DynamicNode::Component(comp) = node {
-                let unbounded = unsafe { std::mem::transmute(comp as *const VComponent) };
-                props.push(unbounded);
+                if !comp.static_props {
+                    let unbounded = unsafe { std::mem::transmute(comp as *const VComponent) };
+                    props.push(unbounded);
+                }
             }
         }
 
@@ -499,14 +588,38 @@ impl<'src> ScopeState {
             BumpBox::from_raw(self.bump().alloc(move |event: Event<dyn Any>| {
                 if let Ok(data) = event.data.downcast::<T>() {
                     callback(Event {
-                        propogates: event.propogates,
+                        propagates: event.propagates,
                         data,
-                    })
+                    });
                 }
             }))
         };
 
         AttributeValue::Listener(RefCell::new(Some(boxed)))
+    }
+
+    /// Create a new [`AttributeValue`] with a value that implements [`AnyValue`]
+    pub fn any_value<T: AnyValue>(&'src self, value: T) -> AttributeValue<'src> {
+        // safety: there's no other way to create a dynamicly-dispatched bump box other than alloc + from-raw
+        // This is the suggested way to build a bumpbox
+        //
+        // In theory, we could just use regular boxes
+        let boxed: BumpBox<'src, dyn AnyValue> =
+            unsafe { BumpBox::from_raw(self.bump().alloc(value)) };
+        AttributeValue::Any(RefCell::new(Some(boxed)))
+    }
+
+    /// Inject an error into the nearest error boundary and quit rendering
+    ///
+    /// The error doesn't need to implement Error or any specific traits since the boundary
+    /// itself will downcast the error into a trait object.
+    pub fn throw(&self, error: impl Debug + 'static) -> Option<()> {
+        if let Some(cx) = self.consume_context::<Rc<ErrorBoundary>>() {
+            cx.insert_error(self.scope_id(), Box::new(error));
+        }
+
+        // Always return none during a throw
+        None
     }
 
     /// Store a value between renders. The foundational hook for all other hooks.
@@ -528,7 +641,7 @@ impl<'src> ScopeState {
     #[allow(clippy::mut_from_ref)]
     pub fn use_hook<State: 'static>(&self, initializer: impl FnOnce() -> State) -> &mut State {
         let cur_hook = self.hook_idx.get();
-        let mut hook_list = self.hook_list.borrow_mut();
+        let mut hook_list = self.hook_list.try_borrow_mut().expect("The hook list is already borrowed: This error is likely caused by trying to use a hook inside a hook which violates the rules of hooks.");
 
         if cur_hook >= hook_list.len() {
             hook_list.push(self.hook_arena.alloc(initializer()));

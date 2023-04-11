@@ -4,36 +4,40 @@
 #![deny(missing_docs)]
 
 mod cfg;
-mod controller;
 mod desktop_context;
 mod escape;
+mod eval;
 mod events;
 mod protocol;
-
-#[cfg(all(feature = "hot-reload", debug_assertions))]
-mod hot_reload;
-
-use std::sync::atomic::AtomicBool;
-use std::sync::Arc;
-
-use desktop_context::UserWindowEvent;
-pub use desktop_context::{use_eval, use_window, DesktopContext, EvalResult};
-use futures_channel::mpsc::UnboundedSender;
-pub use wry;
-pub use wry::application as tao;
+mod shortcut;
+mod waker;
+mod webview;
 
 pub use cfg::Config;
-use controller::DesktopController;
+pub use desktop_context::{
+    use_window, use_wry_event_handler, DesktopContext, WryEventHandler, WryEventHandlerId,
+};
+use desktop_context::{EventData, UserWindowEvent, WebviewQueue, WindowEventHandlers};
 use dioxus_core::*;
-use events::parse_ipc_message;
+use dioxus_html::HtmlEvent;
+pub use eval::{use_eval, EvalResult};
+use futures_util::{pin_mut, FutureExt};
+use shortcut::ShortcutRegistry;
+pub use shortcut::{use_global_shortcut, ShortcutHandle, ShortcutId, ShortcutRegistryError};
+use std::collections::HashMap;
+use std::rc::Rc;
+use std::task::Waker;
 pub use tao::dpi::{LogicalSize, PhysicalSize};
+use tao::event_loop::{EventLoopProxy, EventLoopWindowTarget};
 pub use tao::window::WindowBuilder;
 use tao::{
     event::{Event, StartCause, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
-    window::Window,
 };
-use wry::webview::WebViewBuilder;
+pub use wry;
+pub use wry::application as tao;
+use wry::webview::WebView;
+use wry::{application::window::WindowId, webview::WebContext};
 
 /// Launch the WebView and run the event loop.
 ///
@@ -81,7 +85,7 @@ pub fn launch_cfg(root: Component, config_builder: Config) {
 
 /// Launch the WebView and run the event loop, with configuration and root props.
 ///
-/// This function will start a multithreaded Tokio runtime as well the WebView event loop.
+/// This function will start a multithreaded Tokio runtime as well the WebView event loop. This will block the current thread.
 ///
 /// You can configure the WebView window with a configuration closure
 ///
@@ -89,7 +93,7 @@ pub fn launch_cfg(root: Component, config_builder: Config) {
 /// use dioxus::prelude::*;
 ///
 /// fn main() {
-///     dioxus_desktop::launch_cfg(app, AppProps { name: "asd" }, |c| c);
+///     dioxus_desktop::launch_with_props(app, AppProps { name: "asd" }, Config::default());
 /// }
 ///
 /// struct AppProps {
@@ -102,162 +106,237 @@ pub fn launch_cfg(root: Component, config_builder: Config) {
 ///     })
 /// }
 /// ```
-pub fn launch_with_props<P: 'static + Send>(root: Component<P>, props: P, mut cfg: Config) {
-    let event_loop = EventLoop::with_user_event();
-    let mut desktop = DesktopController::new_on_tokio(root, props, event_loop.create_proxy());
+pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) {
+    let event_loop = EventLoop::<UserWindowEvent>::with_user_event();
+
+    let proxy = event_loop.create_proxy();
+
+    // Intialize hot reloading if it is enabled
+    #[cfg(all(feature = "hot-reload", debug_assertions))]
+    {
+        let proxy = proxy.clone();
+        dioxus_hot_reload::connect(move |template| {
+            let _ = proxy.send_event(UserWindowEvent(
+                EventData::HotReloadEvent(template),
+                unsafe { WindowId::dummy() },
+            ));
+        });
+    }
+
+    // We start the tokio runtime *on this thread*
+    // Any future we poll later will use this runtime to spawn tasks and for IO
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+
+    // We enter the runtime but we poll futures manually, circumventing the per-task runtime budget
+    let _guard = rt.enter();
+
+    // We only have one webview right now, but we'll have more later
+    // Store them in a hashmap so we can remove them when they're closed
+    let mut webviews = HashMap::<WindowId, WebviewHandler>::new();
+
+    // We use this to allow dynamically adding and removing window event handlers
+    let event_handlers = WindowEventHandlers::default();
+
+    let queue = WebviewQueue::default();
+
+    let shortcut_manager = ShortcutRegistry::new(&event_loop);
+
+    // By default, we'll create a new window when the app starts
+    queue.borrow_mut().push(create_new_window(
+        cfg,
+        &event_loop,
+        &proxy,
+        VirtualDom::new_with_props(root, props),
+        &queue,
+        &event_handlers,
+        shortcut_manager.clone(),
+    ));
 
     event_loop.run(move |window_event, event_loop, control_flow| {
         *control_flow = ControlFlow::Wait;
 
-        match window_event {
-            Event::NewEvents(StartCause::Init) => desktop.start(&mut cfg, event_loop),
+        event_handlers.apply_event(&window_event, event_loop);
 
+        match window_event {
             Event::WindowEvent {
                 event, window_id, ..
             } => match event {
-                WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
-                WindowEvent::Destroyed { .. } => desktop.close_window(window_id, control_flow),
+                WindowEvent::CloseRequested => {
+                    webviews.remove(&window_id);
+
+                    if webviews.is_empty() {
+                        *control_flow = ControlFlow::Exit
+                    }
+                }
+                WindowEvent::Destroyed { .. } => {
+                    webviews.remove(&window_id);
+
+                    if webviews.is_empty() {
+                        *control_flow = ControlFlow::Exit;
+                    }
+                }
                 _ => {}
             },
 
-            Event::UserEvent(user_event) => desktop.handle_event(user_event, control_flow),
-            Event::MainEventsCleared => {}
-            Event::Resumed => {}
-            Event::Suspended => {}
-            Event::LoopDestroyed => {}
-            Event::RedrawRequested(_id) => {}
-            _ => {}
-        }
-    })
-}
-
-impl DesktopController {
-    fn start(
-        &mut self,
-        cfg: &mut Config,
-        event_loop: &tao::event_loop::EventLoopWindowTarget<UserWindowEvent>,
-    ) {
-        let webview = build_webview(
-            cfg,
-            event_loop,
-            self.is_ready.clone(),
-            self.proxy.clone(),
-            self.eval_sender.clone(),
-            self.event_tx.clone(),
-        );
-
-        self.webviews.insert(webview.window().id(), webview);
-    }
-}
-
-fn build_webview(
-    cfg: &mut Config,
-    event_loop: &tao::event_loop::EventLoopWindowTarget<UserWindowEvent>,
-    is_ready: Arc<AtomicBool>,
-    proxy: tao::event_loop::EventLoopProxy<UserWindowEvent>,
-    eval_sender: tokio::sync::mpsc::UnboundedSender<serde_json::Value>,
-    event_tx: UnboundedSender<serde_json::Value>,
-) -> wry::webview::WebView {
-    let builder = cfg.window.clone();
-    let window = builder.build(event_loop).unwrap();
-    let file_handler = cfg.file_drop_handler.take();
-    let custom_head = cfg.custom_head.clone();
-    let resource_dir = cfg.resource_dir.clone();
-    let index_file = cfg.custom_index.clone();
-    let root_name = cfg.root_name.clone();
-
-    // We assume that if the icon is None in cfg, then the user just didnt set it
-    if cfg.window.window.window_icon.is_none() {
-        window.set_window_icon(Some(
-            tao::window::Icon::from_rgba(
-                include_bytes!("./assets/default_icon.bin").to_vec(),
-                460,
-                460,
-            )
-            .expect("image parse failed"),
-        ));
-    }
-
-    let mut webview = WebViewBuilder::new(window)
-        .unwrap()
-        .with_transparent(cfg.window.window.transparent)
-        .with_url("dioxus://index.html/")
-        .unwrap()
-        .with_ipc_handler(move |_window: &Window, payload: String| {
-            let message = match parse_ipc_message(&payload) {
-                Some(message) => message,
-                None => {
-                    log::error!("Failed to parse IPC message: {}", payload);
-                    return;
+            Event::NewEvents(StartCause::Init)
+            | Event::UserEvent(UserWindowEvent(EventData::NewWindow, _)) => {
+                for handler in queue.borrow_mut().drain(..) {
+                    let id = handler.webview.window().id();
+                    webviews.insert(id, handler);
+                    _ = proxy.send_event(UserWindowEvent(EventData::Poll, id));
                 }
-            };
+            }
 
-            match message.method() {
-                "eval_result" => {
-                    let result = message.params();
-                    eval_sender.send(result).unwrap();
+            Event::UserEvent(event) => match event.0 {
+                #[cfg(all(feature = "hot-reload", debug_assertions))]
+                EventData::HotReloadEvent(msg) => match msg {
+                    dioxus_hot_reload::HotReloadMsg::UpdateTemplate(template) => {
+                        for webview in webviews.values_mut() {
+                            webview.dom.replace_template(template);
+
+                            poll_vdom(webview);
+                        }
+                    }
+                    dioxus_hot_reload::HotReloadMsg::Shutdown => {
+                        *control_flow = ControlFlow::Exit;
+                    }
+                },
+
+                EventData::CloseWindow => {
+                    webviews.remove(&event.1);
+
+                    if webviews.is_empty() {
+                        *control_flow = ControlFlow::Exit
+                    }
                 }
-                "user_event" => {
-                    _ = event_tx.unbounded_send(message.params());
+
+                EventData::Poll => {
+                    if let Some(view) = webviews.get_mut(&event.1) {
+                        poll_vdom(view);
+                    }
                 }
-                "initialize" => {
-                    is_ready.store(true, std::sync::atomic::Ordering::Relaxed);
-                    let _ = proxy.send_event(UserWindowEvent::EditsReady);
+
+                EventData::Ipc(msg) if msg.method() == "user_event" => {
+                    let evt = match serde_json::from_value::<HtmlEvent>(msg.params()) {
+                        Ok(value) => value,
+                        Err(_) => return,
+                    };
+
+                    let view = webviews.get_mut(&event.1).unwrap();
+
+                    view.dom
+                        .handle_event(&evt.name, evt.data.into_any(), evt.element, evt.bubbles);
+
+                    send_edits(view.dom.render_immediate(), &view.webview);
                 }
-                "browser_open" => {
-                    let data = message.params();
-                    log::trace!("Open browser: {:?}", data);
-                    if let Some(temp) = data.as_object() {
+
+                EventData::Ipc(msg) if msg.method() == "initialize" => {
+                    let view = webviews.get_mut(&event.1).unwrap();
+                    send_edits(view.dom.rebuild(), &view.webview);
+                }
+
+                // When the webview chirps back with the result of the eval, we send it to the active receiver
+                //
+                // This currently doesn't perform any targeting to the callsite, so if you eval multiple times at once,
+                // you might the wrong result. This should be fixed
+                EventData::Ipc(msg) if msg.method() == "eval_result" => {
+                    webviews[&event.1]
+                        .dom
+                        .base_scope()
+                        .consume_context::<DesktopContext>()
+                        .unwrap()
+                        .eval
+                        .send(msg.params())
+                        .unwrap();
+                }
+
+                EventData::Ipc(msg) if msg.method() == "browser_open" => {
+                    if let Some(temp) = msg.params().as_object() {
                         if temp.contains_key("href") {
-                            let url = temp.get("href").unwrap().as_str().unwrap();
-                            if let Err(e) = webbrowser::open(url) {
+                            let open = webbrowser::open(temp["href"].as_str().unwrap());
+                            if let Err(e) = open {
                                 log::error!("Open Browser error: {:?}", e);
                             }
                         }
                     }
                 }
-                _ => (),
+
+                _ => {}
+            },
+            Event::GlobalShortcutEvent(id) => shortcut_manager.call_handlers(id),
+            _ => {}
+        }
+    })
+}
+
+fn create_new_window(
+    mut cfg: Config,
+    event_loop: &EventLoopWindowTarget<UserWindowEvent>,
+    proxy: &EventLoopProxy<UserWindowEvent>,
+    dom: VirtualDom,
+    queue: &WebviewQueue,
+    event_handlers: &WindowEventHandlers,
+    shortcut_manager: ShortcutRegistry,
+) -> WebviewHandler {
+    let (webview, web_context) = webview::build(&mut cfg, event_loop, proxy.clone());
+
+    dom.base_scope().provide_context(DesktopContext::new(
+        webview.clone(),
+        proxy.clone(),
+        event_loop.clone(),
+        queue.clone(),
+        event_handlers.clone(),
+        shortcut_manager,
+    ));
+
+    let id = webview.window().id();
+
+    // We want to poll the virtualdom and the event loop at the same time, so the waker will be connected to both
+    WebviewHandler {
+        webview,
+        dom,
+        waker: waker::tao_waker(proxy, id),
+        web_context,
+    }
+}
+
+struct WebviewHandler {
+    dom: VirtualDom,
+    webview: Rc<wry::webview::WebView>,
+    waker: Waker,
+    web_context: WebContext,
+}
+
+/// Poll the virtualdom until it's pending
+///
+/// The waker we give it is connected to the event loop, so it will wake up the event loop when it's ready to be polled again
+///
+/// All IO is done on the tokio runtime we started earlier
+fn poll_vdom(view: &mut WebviewHandler) {
+    let mut cx = std::task::Context::from_waker(&view.waker);
+
+    loop {
+        {
+            let fut = view.dom.wait_for_work();
+            pin_mut!(fut);
+
+            match fut.poll_unpin(&mut cx) {
+                std::task::Poll::Ready(_) => {}
+                std::task::Poll::Pending => break,
             }
-        })
-        .with_custom_protocol(String::from("dioxus"), move |r| {
-            protocol::desktop_handler(
-                r,
-                resource_dir.clone(),
-                custom_head.clone(),
-                index_file.clone(),
-                &root_name,
-            )
-        })
-        .with_file_drop_handler(move |window, evet| {
-            file_handler
-                .as_ref()
-                .map(|handler| handler(window, evet))
-                .unwrap_or_default()
-        });
+        }
 
-    for (name, handler) in cfg.protocols.drain(..) {
-        webview = webview.with_custom_protocol(name, handler)
+        send_edits(view.dom.render_immediate(), &view.webview);
     }
+}
 
-    if cfg.disable_context_menu {
-        // in release mode, we don't want to show the dev tool or reload menus
-        webview = webview.with_initialization_script(
-            r#"
-                        if (document.addEventListener) {
-                        document.addEventListener('contextmenu', function(e) {
-                            e.preventDefault();
-                        }, false);
-                        } else {
-                        document.attachEvent('oncontextmenu', function() {
-                            window.event.returnValue = false;
-                        });
-                        }
-                    "#,
-        )
-    } else {
-        // in debug, we are okay with the reload menu showing and dev tool
-        webview = webview.with_devtools(true);
-    }
+/// Send a list of mutations to the webview
+fn send_edits(edits: Mutations, webview: &WebView) {
+    let serialized = serde_json::to_string(&edits).unwrap();
 
-    webview.build().unwrap()
+    // todo: use SSE and binary data to send the edits with lower overhead
+    _ = webview.evaluate_script(&format!("window.interpreter.handleEdits({serialized})"));
 }

@@ -5,40 +5,48 @@ use std::future::IntoFuture;
 use std::rc::Rc;
 use std::time::Duration;
 
-#[tokio::test]
-async fn it_works() {
-    let mut dom = VirtualDom::new(app);
-
-    let mutations = dom.rebuild().santize();
-
-    // We should at least get the top-level template in before pausing for the children
-    // note: we dont test template edits anymore
-    // assert_eq!(
-    //     mutations.templates,
-    //     [
-    //         CreateElement { name: "div" },
-    //         CreateStaticText { value: "Waiting for child..." },
-    //         CreateStaticPlaceholder,
-    //         AppendChildren { m: 2 },
-    //         SaveTemplate { name: "template", m: 1 }
-    //     ]
-    // );
-
-    // And we should load it in and assign the placeholder properly
-    assert_eq!(
-        mutations.edits,
-        [
-            LoadTemplate { name: "template", index: 0, id: ElementId(1) },
-            // hmmmmmmmmm.... with suspense how do we guarantee that IDs increase linearly?
-            // can we even?
-            AssignId { path: &[1], id: ElementId(3) },
-            AppendChildren { m: 1, id: ElementId(0) },
-        ]
-    );
-
+#[test]
+fn it_works() {
     // wait just a moment, not enough time for the boundary to resolve
 
-    dom.wait_for_work().await;
+    tokio::runtime::Builder::new_current_thread()
+        .enable_time()
+        .build()
+        .unwrap()
+        .block_on(async {
+            let mut dom = VirtualDom::new(app);
+
+            {
+                let mutations = dom.rebuild().santize();
+
+                // We should at least get the top-level template in before pausing for the children
+                // note: we dont test template edits anymore
+                // assert_eq!(
+                //     mutations.templates,
+                //     [
+                //         CreateElement { name: "div" },
+                //         CreateStaticText { value: "Waiting for child..." },
+                //         CreateStaticPlaceholder,
+                //         AppendChildren { m: 2 },
+                //         SaveTemplate { name: "template", m: 1 }
+                //     ]
+                // );
+
+                // And we should load it in and assign the placeholder properly
+                assert_eq!(
+                    mutations.edits,
+                    [
+                        LoadTemplate { name: "template", index: 0, id: ElementId(1) },
+                        // hmmmmmmmmm.... with suspense how do we guarantee that IDs increase linearly?
+                        // can we even?
+                        AssignId { path: &[1], id: ElementId(3) },
+                        AppendChildren { m: 1, id: ElementId(0) },
+                    ]
+                );
+            }
+
+            dom.wait_for_work().await;
+        });
 }
 
 fn app(cx: Scope) -> Element {

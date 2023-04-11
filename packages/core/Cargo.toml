@@ -1,6 +1,6 @@
 [package]
 name = "dioxus-core"
-version = "0.2.1"
+version = "0.3.2"
 authors = ["Jonathan Kelley"]
 edition = "2018"
 description = "Core functionality for Dioxus - a concurrent renderer-agnostic Virtual DOM for interactive user experiences"
@@ -8,7 +8,7 @@ license = "MIT/Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com"
 documentation = "https://dioxuslabs.com"
-keywords = ["dom", "ui", "gui", "react", "wasm"]
+keywords = ["dom", "ui", "gui", "react"]
 
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -23,7 +23,9 @@ rustc-hash = "1.1.0"
 # Used in diffing
 longest-increasing-subsequence = "0.1.0"
 
-futures-util = { version = "0.3", default-features = false }
+futures-util = { version = "0.3", default-features = false, features = [
+    "alloc",
+] }
 
 slab = "0.4"
 
@@ -37,10 +39,13 @@ log = "0.4.17"
 # Serialize the Edits for use in Webview/Liveview instances
 serde = { version = "1", features = ["derive"], optional = true }
 
+bumpslab = { version = "0.2.0" }
+
 [dev-dependencies]
-tokio = { version = "*", features = ["full"] }
+tokio = { version = "1", features = ["full"] }
 dioxus = { path = "../dioxus" }
 pretty_assertions = "1.3.0"
+rand = "0.8.5"
 
 [features]
 default = []

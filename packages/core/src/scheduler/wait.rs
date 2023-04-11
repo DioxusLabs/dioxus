@@ -10,7 +10,7 @@ use crate::{
     ScopeId, TaskId, VNode, VirtualDom,
 };
 
-use super::{waker::RcWake, SuspenseId};
+use super::SuspenseId;
 
 impl VirtualDom {
     /// Handle notifications by tasks inside the scheduler
@@ -22,42 +22,37 @@ impl VirtualDom {
 
         let task = match tasks.get(id.0) {
             Some(task) => task,
+            // The task was removed from the scheduler, so we can just ignore it
             None => return,
         };
 
-        let waker = task.waker();
-        let mut cx = Context::from_waker(&waker);
+        let mut cx = Context::from_waker(&task.waker);
 
         // If the task completes...
         if task.task.borrow_mut().as_mut().poll(&mut cx).is_ready() {
             // Remove it from the scope so we dont try to double drop it when the scope dropes
-            self.scopes[task.scope.0].spawned_tasks.remove(&id);
+            let scope = &self.scopes[task.scope];
+            scope.spawned_tasks.borrow_mut().remove(&id);
 
             // Remove it from the scheduler
-            tasks.remove(id.0);
+            tasks.try_remove(id.0);
         }
     }
 
     pub(crate) fn acquire_suspense_boundary(&self, id: ScopeId) -> Rc<SuspenseContext> {
-        self.scopes[id.0]
+        self.scopes[id]
             .consume_context::<Rc<SuspenseContext>>()
             .unwrap()
     }
 
     pub(crate) fn handle_suspense_wakeup(&mut self, id: SuspenseId) {
-        let leaf = self
-            .scheduler
-            .leaves
-            .borrow_mut()
-            .get(id.0)
-            .unwrap()
-            .clone();
+        let leaves = self.scheduler.leaves.borrow_mut();
+        let leaf = leaves.get(id.0).unwrap();
 
         let scope_id = leaf.scope_id;
 
         // todo: cache the waker
-        let waker = leaf.waker();
-        let mut cx = Context::from_waker(&waker);
+        let mut cx = Context::from_waker(&leaf.waker);
 
         // Safety: the future is always pinned to the bump arena
         let mut pinned = unsafe { std::pin::Pin::new_unchecked(&mut *leaf.task) };
@@ -67,18 +62,21 @@ impl VirtualDom {
         // we should attach them to that component and then render its children
         // continue rendering the tree until we hit yet another suspended component
         if let Poll::Ready(new_nodes) = as_pinned_mut.poll_unpin(&mut cx) {
-            // safety: we're not going to modify the suspense context but we don't want to make a clone of it
             let fiber = self.acquire_suspense_boundary(leaf.scope_id);
 
-            let scope = &mut self.scopes[scope_id.0];
+            let scope = &self.scopes[scope_id];
             let arena = scope.current_frame();
 
-            let ret = arena.bump.alloc(RenderReturn::Sync(new_nodes));
+            let ret = arena.bump().alloc(match new_nodes {
+                Some(new) => RenderReturn::Ready(new),
+                None => RenderReturn::default(),
+            });
+
             arena.node.set(ret);
 
             fiber.waiting_on.borrow_mut().remove(&id);
 
-            if let RenderReturn::Sync(Some(template)) = ret {
+            if let RenderReturn::Ready(template) = ret {
                 let mutations_ref = &mut fiber.mutations.borrow_mut();
                 let mutations = &mut **mutations_ref;
                 let template: &VNode = unsafe { std::mem::transmute(template) };
@@ -88,6 +86,9 @@ impl VirtualDom {
 
                 let place_holder_id = scope.placeholder.get().unwrap();
                 self.scope_stack.push(scope_id);
+
+                drop(leaves);
+
                 let created = self.create(template);
                 self.scope_stack.pop();
                 mutations.push(Mutation::ReplaceWith {

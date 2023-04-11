@@ -2,7 +2,7 @@
 
 [`use_future`](https://docs.rs/dioxus-hooks/latest/dioxus_hooks/fn.use_future.html) lets you run an async closure, and provides you with its result.
 
-For example, we can make an API request inside `use_future`:
+For example, we can make an API request (using [reqwest](https://docs.rs/reqwest/latest/reqwest/index.html)) inside `use_future`:
 
 ```rust
 {{#include ../../../examples/use_future.rs:use_future}}
@@ -25,7 +25,7 @@ The `UseFuture` handle provides a `restart` method. It can be used to execute th
 
 ## Dependencies
 
-Often, you will need to run the future again every time some value (e.g. a prop) changes. Rather than `.restart`ing it manually, you can provide a tuple of "dependencies" to the hook. It will automatically re-run the future when any of those dependencies change. Example:
+Often, you will need to run the future again every time some value (e.g. a prop) changes. Rather than calling `restart` manually, you can provide a tuple of "dependencies" to the hook. It will automatically re-run the future when any of those dependencies change. Example:
 
 
 ```rust

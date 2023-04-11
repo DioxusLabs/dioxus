@@ -1,6 +1,6 @@
 [package]
 name = "dioxus-router"
-version = "0.2.3"
+version = "0.3.0"
 edition = "2018"
 description = "Cross-platform router for Dioxus apps"
 license = "MIT/Apache-2.0"

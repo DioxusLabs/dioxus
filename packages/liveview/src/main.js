@@ -12,7 +12,13 @@ class IPC {
 
     let ws = new WebSocket(WS_ADDR);
 
+    function ping() {
+      ws.send("__ping__");
+    }
+
     ws.onopen = () => {
+      // we ping every 30 seconds to keep the websocket alive
+      setInterval(ping, 30000);
       ws.send(serializeIpcMessage("initialize"));
     };
 
@@ -21,8 +27,11 @@ class IPC {
     };
 
     ws.onmessage = (event) => {
-      let edits = JSON.parse(event.data);
-      window.interpreter.handleEdits(edits);
+      // Ignore pongs
+      if (event.data != "__pong__") {
+        let edits = JSON.parse(event.data);
+        window.interpreter.handleEdits(edits);
+      }
     };
 
     this.ws = ws;

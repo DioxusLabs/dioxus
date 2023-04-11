@@ -4,7 +4,7 @@
 
 **Dioxus** é um framework e ecossistema para desenvolver interfaces rápidas, escaláveis e robustas com a linguagem de Programação Rust. Este guia irá ajudar você a começar com o Dioxus para Web, Desktop, Móvel e mais.
 
-> Este livro é a Referência e Guias Avançados para o framework Dioxus. Para um tutorial em como de fato _usar_ o Dioxus, procure o [guia oficial](https://dioxuslabs.com/guide/).
+> Este livro é a Referência e Guias Avançados para o framework Dioxus. Para um tutorial em como de fato _usar_ o Dioxus, procure o [guia oficial](https://dioxuslabs.com/guide/en/).
 
 ## Guias e Referência
 

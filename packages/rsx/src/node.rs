@@ -1,5 +1,3 @@
-// use crate::{raw_expr::RawExprNode, text::TextNode};
-
 use super::*;
 
 use proc_macro2::{Span, TokenStream as TokenStream2};
@@ -97,25 +95,7 @@ impl Parse for BodyNode {
 
         // Transform for loops into into_iter calls
         if stream.peek(Token![for]) {
-            let _f = stream.parse::<Token![for]>()?;
-            let pat = stream.parse::<Pat>()?;
-            let _i = stream.parse::<Token![in]>()?;
-            let expr = stream.parse::<Box<Expr>>()?;
-
-            let body;
-            braced!(body in stream);
-            let mut children = vec![];
-            while !body.is_empty() {
-                children.push(body.parse()?);
-            }
-
-            return Ok(BodyNode::ForLoop(ForLoop {
-                for_token: _f,
-                pat,
-                in_token: _i,
-                expr,
-                body: children,
-            }));
+            return Ok(BodyNode::ForLoop(stream.parse()?));
         }
 
         // Transform unterminated if statements into terminated optional if statements
@@ -143,7 +123,7 @@ impl ToTokens for BodyNode {
                     pat, expr, body, ..
                 } = exp;
 
-                let renderer = TemplateRenderer { roots: body };
+                let renderer: TemplateRenderer = TemplateRenderer { roots: body };
 
                 tokens.append_all(quote! {
                      __cx.make_node(
@@ -223,6 +203,36 @@ pub struct ForLoop {
     pub in_token: Token![in],
     pub expr: Box<Expr>,
     pub body: Vec<BodyNode>,
+    pub brace_token: token::Brace,
+}
+
+impl Parse for ForLoop {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let for_token: Token![for] = input.parse()?;
+
+        let pat = input.parse()?;
+
+        let in_token: Token![in] = input.parse()?;
+        let expr: Expr = input.call(Expr::parse_without_eager_brace)?;
+
+        let content;
+        let brace_token = braced!(content in input);
+
+        let mut children = vec![];
+
+        while !content.is_empty() {
+            children.push(content.parse()?);
+        }
+
+        Ok(Self {
+            for_token,
+            pat,
+            in_token,
+            body: children,
+            expr: Box::new(expr),
+            brace_token,
+        })
+    }
 }
 
 fn is_if_chain_terminated(chain: &ExprIf) -> bool {

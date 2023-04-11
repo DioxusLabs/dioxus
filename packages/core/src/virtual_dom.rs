@@ -5,7 +5,7 @@
 use crate::{
     any_props::VProps,
     arena::{ElementId, ElementRef},
-    innerlude::{DirtyScope, ErrorBoundary, Mutations, Scheduler, SchedulerMsg},
+    innerlude::{DirtyScope, ErrorBoundary, Mutations, Scheduler, SchedulerMsg, ScopeSlab},
     mutations::Mutation,
     nodes::RenderReturn,
     nodes::{Template, TemplateId},
@@ -24,7 +24,9 @@ use std::{any::Any, borrow::BorrowMut, cell::Cell, collections::BTreeSet, future
 ///
 /// Components are defined as simple functions that take [`Scope`] and return an [`Element`].
 ///
-/// ```rust, ignore
+/// ```rust
+/// # use dioxus::prelude::*;
+///
 /// #[derive(Props, PartialEq)]
 /// struct AppProps {
 ///     title: String
@@ -39,7 +41,17 @@ use std::{any::Any, borrow::BorrowMut, cell::Cell, collections::BTreeSet, future
 ///
 /// Components may be composed to make complex apps.
 ///
-/// ```rust, ignore
+/// ```rust
+/// # #![allow(unused)]
+/// # use dioxus::prelude::*;
+///
+/// # #[derive(Props, PartialEq)]
+/// # struct AppProps {
+/// #     title: String
+/// # }
+///
+/// static ROUTES: &str = "";
+///
 /// fn App(cx: Scope<AppProps>) -> Element {
 ///     cx.render(rsx!(
 ///         NavBar { routes: ROUTES }
@@ -47,12 +59,33 @@ use std::{any::Any, borrow::BorrowMut, cell::Cell, collections::BTreeSet, future
 ///         Footer {}
 ///     ))
 /// }
+///
+/// #[inline_props]
+/// fn NavBar(cx: Scope, routes: &'static str) -> Element {
+///     cx.render(rsx! {
+///         div { "Routes: {routes}" }
+///     })
+/// }
+///
+/// fn Footer(cx: Scope) -> Element {
+///     cx.render(rsx! { div { "Footer" } })
+/// }
+///
+/// #[inline_props]
+/// fn Title<'a>(cx: Scope<'a>, children: Element<'a>) -> Element {
+///     cx.render(rsx! {
+///         div { id: "title", children }
+///     })
+/// }
 /// ```
 ///
 /// To start an app, create a [`VirtualDom`] and call [`VirtualDom::rebuild`] to get the list of edits required to
 /// draw the UI.
 ///
-/// ```rust, ignore
+/// ```rust
+/// # use dioxus::prelude::*;
+/// # fn App(cx: Scope) -> Element { cx.render(rsx! { div {} }) }
+///
 /// let mut vdom = VirtualDom::new(App);
 /// let edits = vdom.rebuild();
 /// ```
@@ -142,8 +175,9 @@ use std::{any::Any, borrow::BorrowMut, cell::Cell, collections::BTreeSet, future
 /// }
 /// ```
 pub struct VirtualDom {
-    pub(crate) templates: FxHashMap<TemplateId, Template<'static>>,
-    pub(crate) scopes: Slab<Box<ScopeState>>,
+    // Maps a template path to a map of byteindexes to templates
+    pub(crate) templates: FxHashMap<TemplateId, FxHashMap<usize, Template<'static>>>,
+    pub(crate) scopes: ScopeSlab,
     pub(crate) dirty_scopes: BTreeSet<DirtyScope>,
     pub(crate) scheduler: Rc<Scheduler>,
 
@@ -224,7 +258,7 @@ impl VirtualDom {
             rx,
             scheduler: Scheduler::new(tx),
             templates: Default::default(),
-            scopes: Slab::default(),
+            scopes: Default::default(),
             elements: Default::default(),
             scope_stack: Vec::new(),
             dirty_scopes: BTreeSet::new(),
@@ -248,7 +282,7 @@ impl VirtualDom {
         root.provide_context(Rc::new(ErrorBoundary::new(ScopeId(0))));
 
         // the root element is always given element ID 0 since it's the container for the entire tree
-        dom.elements.insert(ElementRef::null());
+        dom.elements.insert(ElementRef::none());
 
         dom
     }
@@ -257,14 +291,14 @@ impl VirtualDom {
     ///
     /// This is useful for inserting or removing contexts from a scope, or rendering out its root node
     pub fn get_scope(&self, id: ScopeId) -> Option<&ScopeState> {
-        self.scopes.get(id.0).map(|f| f.as_ref())
+        self.scopes.get(id)
     }
 
     /// Get the single scope at the top of the VirtualDom tree that will always be around
     ///
     /// This scope has a ScopeId of 0 and is the root of the tree
     pub fn base_scope(&self) -> &ScopeState {
-        self.scopes.get(0).unwrap()
+        self.scopes.get(ScopeId(0)).unwrap()
     }
 
     /// Build the virtualdom with a global context inserted into the base scope
@@ -279,7 +313,7 @@ impl VirtualDom {
     ///
     /// Whenever the VirtualDom "works", it will re-render this scope
     pub fn mark_dirty(&mut self, id: ScopeId) {
-        if let Some(scope) = self.scopes.get(id.0) {
+        if let Some(scope) = self.scopes.get(id) {
             let height = scope.height;
             self.dirty_scopes.insert(DirtyScope { height, id });
         }
@@ -290,7 +324,7 @@ impl VirtualDom {
     /// This does not mean the scope is waiting on its own futures, just that the tree that the scope exists in is
     /// currently suspended.
     pub fn is_scope_suspended(&self, id: ScopeId) -> bool {
-        !self.scopes[id.0]
+        !self.scopes[id]
             .consume_context::<Rc<SuspenseContext>>()
             .unwrap()
             .waiting_on
@@ -346,22 +380,24 @@ impl VirtualDom {
 
         // We will clone this later. The data itself is wrapped in RC to be used in callbacks if required
         let uievent = Event {
-            propogates: Rc::new(Cell::new(bubbles)),
+            propagates: Rc::new(Cell::new(bubbles)),
             data,
         };
 
         // Loop through each dynamic attribute in this template before moving up to the template's parent.
         while let Some(el_ref) = parent_path {
             // safety: we maintain references of all vnodes in the element slab
-            let template = unsafe { &*el_ref.template };
+            let template = unsafe { el_ref.template.unwrap().as_ref() };
+            let node_template = template.template.get();
             let target_path = el_ref.path;
 
             for (idx, attr) in template.dynamic_attrs.iter().enumerate() {
-                let this_path = template.template.attr_paths[idx];
+                let this_path = node_template.attr_paths[idx];
 
-                // listeners are required to be prefixed with "on", but they come back to the virtualdom with that missing
-                // we should fix this so that we look for "onclick" instead of "click"
-                if &attr.name[2..] == name && target_path.is_ascendant(&this_path) {
+                // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
+                if attr.name.trim_start_matches("on") == name
+                    && target_path.is_decendant(&this_path)
+                {
                     listeners.push(&attr.value);
 
                     // Break if the event doesn't bubble anyways
@@ -386,7 +422,7 @@ impl VirtualDom {
                         cb(uievent.clone());
                     }
 
-                    if !uievent.propogates.get() {
+                    if !uievent.propagates.get() {
                         return;
                     }
                 }
@@ -454,6 +490,30 @@ impl VirtualDom {
         }
     }
 
+    /// Replace a template at runtime. This will re-render all components that use this template.
+    /// This is the primitive that enables hot-reloading.
+    ///
+    /// The caller must ensure that the template refrences the same dynamic attributes and nodes as the original template.
+    ///
+    /// This will only replace the the parent template, not any nested templates.
+    pub fn replace_template(&mut self, template: Template<'static>) {
+        self.register_template_first_byte_index(template);
+        // iterating a slab is very inefficient, but this is a rare operation that will only happen during development so it's fine
+        for scope in self.scopes.iter() {
+            if let Some(RenderReturn::Ready(sync)) = scope.try_root_node() {
+                if sync.template.get().name.rsplit_once(':').unwrap().0
+                    == template.name.rsplit_once(':').unwrap().0
+                {
+                    let height = scope.height;
+                    self.dirty_scopes.insert(DirtyScope {
+                        height,
+                        id: scope.id,
+                    });
+                }
+            }
+        }
+    }
+
     /// Performs a *full* rebuild of the virtual dom, returning every edit required to generate the actual dom from scratch.
     ///
     /// The mutations item expects the RealDom's stack to be the root of the application.
@@ -477,7 +537,7 @@ impl VirtualDom {
     pub fn rebuild(&mut self) -> Mutations {
         match unsafe { self.run_scope(ScopeId(0)).extend_lifetime_ref() } {
             // Rebuilding implies we append the created elements to the root
-            RenderReturn::Sync(Some(node)) => {
+            RenderReturn::Ready(node) => {
                 let m = self.create_scope(ScopeId(0), node);
                 self.mutations.edits.push(Mutation::AppendChildren {
                     id: ElementId(0),
@@ -485,8 +545,8 @@ impl VirtualDom {
                 });
             }
             // If an error occurs, we should try to render the default error component and context where the error occured
-            RenderReturn::Sync(None) => panic!("Cannot catch errors during rebuild"),
-            RenderReturn::Async(_) => unreachable!("Root scope cannot be an async component"),
+            RenderReturn::Aborted(_placeholder) => panic!("Cannot catch errors during rebuild"),
+            RenderReturn::Pending(_) => unreachable!("Root scope cannot be an async component"),
         }
 
         self.finalize()
@@ -523,7 +583,7 @@ impl VirtualDom {
         loop {
             // first, unload any complete suspense trees
             for finished_fiber in self.finished_fibers.drain(..) {
-                let scope = &mut self.scopes[finished_fiber.0];
+                let scope = &self.scopes[finished_fiber];
                 let context = scope.has_context::<Rc<SuspenseContext>>().unwrap();
 
                 self.mutations
@@ -547,7 +607,7 @@ impl VirtualDom {
                 self.dirty_scopes.remove(&dirty);
 
                 // If the scope doesn't exist for whatever reason, then we should skip it
-                if !self.scopes.contains(dirty.id.0) {
+                if !self.scopes.contains(dirty.id) {
                     continue;
                 }
 
@@ -566,7 +626,7 @@ impl VirtualDom {
                 // If suspended leaves are present, then we should find the boundary for this scope and attach things
                 // No placeholder necessary since this is a diff
                 if !self.collected_leaves.is_empty() {
-                    let mut boundary = self.scopes[dirty.id.0]
+                    let mut boundary = self.scopes[dirty.id]
                         .consume_context::<Rc<SuspenseContext>>()
                         .unwrap();
 
@@ -615,16 +675,13 @@ impl VirtualDom {
 
     /// Swap the current mutations with a new
     fn finalize(&mut self) -> Mutations {
-        // todo: make this a routine
-        let mut out = Mutations::default();
-        std::mem::swap(&mut self.mutations, &mut out);
-        out
+        std::mem::take(&mut self.mutations)
     }
 }
 
 impl Drop for VirtualDom {
     fn drop(&mut self) {
         // Simply drop this scope which drops all of its children
-        self.drop_scope(ScopeId(0));
+        self.drop_scope(ScopeId(0), true);
     }
 }

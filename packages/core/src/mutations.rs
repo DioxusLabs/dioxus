@@ -1,6 +1,6 @@
 use rustc_hash::FxHashSet;
 
-use crate::{arena::ElementId, ScopeId, Template};
+use crate::{arena::ElementId, innerlude::BorrowedAttributeValue, ScopeId, Template};
 
 /// A container for all the relevant steps to modify the Real DOM
 ///
@@ -61,14 +61,14 @@ impl<'a> Mutations<'a> {
     derive(serde::Serialize, serde::Deserialize),
     serde(tag = "type")
 )]
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq)]
 pub enum Mutation<'a> {
     /// Add these m children to the target element
     AppendChildren {
         /// The ID of the element being mounted to
         id: ElementId,
 
-        /// The number of nodes on the stack
+        /// The number of nodes on the stack to append to the target element
         m: usize,
     },
 
@@ -155,7 +155,7 @@ pub enum Mutation<'a> {
         /// The ID of the node we're going to replace with
         id: ElementId,
 
-        /// The number of nodes on the stack to use to replace
+        /// The number of nodes on the stack to replace the target element with
         m: usize,
     },
 
@@ -167,7 +167,7 @@ pub enum Mutation<'a> {
         /// `[0,1,2]` represents 1st child's 2nd child's 3rd child.
         path: &'static [u8],
 
-        /// The number of nodes on the stack to use to replace
+        /// The number of nodes on the stack to replace the target element with
         m: usize,
     },
 
@@ -176,7 +176,7 @@ pub enum Mutation<'a> {
         /// The ID of the node to insert after.
         id: ElementId,
 
-        /// The ids of the nodes to insert after the target node.
+        /// The number of nodes on the stack to insert after the target node.
         m: usize,
     },
 
@@ -185,7 +185,7 @@ pub enum Mutation<'a> {
         /// The ID of the node to insert before.
         id: ElementId,
 
-        /// The ids of the nodes to insert before the target node.
+        /// The number of nodes on the stack to insert before the target node.
         m: usize,
     },
 
@@ -193,8 +193,9 @@ pub enum Mutation<'a> {
     SetAttribute {
         /// The name of the attribute to set.
         name: &'a str,
+
         /// The value of the attribute.
-        value: &'a str,
+        value: BorrowedAttributeValue<'a>,
 
         /// The ID of the node to set the attribute of.
         id: ElementId,
@@ -202,18 +203,6 @@ pub enum Mutation<'a> {
         /// The (optional) namespace of the attribute.
         /// For instance, "style" is in the "style" namespace.
         ns: Option<&'a str>,
-    },
-
-    /// Set the value of a node's attribute.
-    SetBoolAttribute {
-        /// The name of the attribute to set.
-        name: &'a str,
-
-        /// The value of the attribute.
-        value: bool,
-
-        /// The ID of the node to set the attribute of.
-        id: ElementId,
     },
 
     /// Set the textcontent of a node.

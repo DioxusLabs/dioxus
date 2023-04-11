@@ -13,7 +13,7 @@ dioxus-core is a fast and featureful VirtualDom implementation written in and fo
 - Error boundaries through the `anyhow` crate
 - Customizable memoization
 
-If just starting out, check out the Guides first.
+If you are just starting, check out the Guides first.
 
 # General Theory
 
@@ -21,7 +21,7 @@ The dioxus-core `VirtualDom` object is built around the concept of a `Template`.
 
 Each component in the VirtualDom works as a dedicated render loop where re-renders are triggered by events external to the VirtualDom, or from the components themselves.
 
-When each component re-renders, it must return an `Element`. In Dioxus, the `Element` type is an alias for `Result<VNode>`. Between two renders, Dioxus compares the inner `VNode` object, and calculates the differences of the dynamic portions of each internal `Template`. If any attributes or elements are different between the old layout and new layout, Dioxus will write modifications to the `Mutations` object.
+When each component re-renders, it must return an `Element`. In Dioxus, the `Element` type is an alias for `Result<VNode>`. Between two renders, Dioxus compares the inner `VNode` object and calculates the differences between the dynamic portions of each internal `Template`. If any attributes or elements are different between the old layout and the new layout, Dioxus will write modifications to the `Mutations` object.
 
 Dioxus expects the target renderer to save its nodes in a list. Each element is given a numerical ID which can be used to directly index into that list for O(1) lookups.
 
@@ -33,37 +33,48 @@ The `dioxus` crate exports the `rsx` macro which transforms a helpful, simpler s
 
 First, start with your app:
 
-```rust, ignore
+```rust
+# use dioxus::core::Mutations;
+use dioxus::prelude::*;
+
+// First, declare a root component
 fn app(cx: Scope) -> Element {
-    cx.render(rsx!( div { "hello world" } ))
+    cx.render(rsx!{
+        div { "hello world" }
+    })
 }
+
+fn main() {
+    // Next, create a new VirtualDom using this app as the root component.
+    let mut dom = VirtualDom::new(app);
+
+    // The initial render of the dom will generate a stream of edits for the real dom to apply
+    let mutations = dom.rebuild();
+
+    // Somehow, you can apply these edits to the real dom
+    apply_edits_to_real_dom(mutations);
+}
+
+# fn apply_edits_to_real_dom(mutations: Mutations) {}
 ```
 
-Then, we'll want to create a new VirtualDom using this app as the root component.
-
-```rust, ignore
-let mut dom = VirtualDom::new(app);
-```
-
-To build the app into a stream of mutations, we'll use [`VirtualDom::rebuild`]:
-
-```rust, ignore
-let mutations = dom.rebuild();
-
-apply_edits_to_real_dom(mutations);
-```
 
 We can then wait for any asynchronous components or pending futures using the `wait_for_work()` method. If we have a deadline, then we can use render_with_deadline instead:
+```rust
+# #![allow(unused)]
+# use dioxus::prelude::*;
 
-```rust, ignore
+# use std::time::Duration;
+# async fn wait(mut dom: VirtualDom) {
 // Wait for the dom to be marked dirty internally
 dom.wait_for_work().await;
 
 // Or wait for a deadline and then collect edits
-dom.render_with_deadline(tokio::time::sleep(Duration::from_millis(16)));
+let mutations = dom.render_with_deadline(tokio::time::sleep(Duration::from_millis(16)));
+# }
 ```
 
-If an event occurs from outside the virtualdom while waiting for work, then we can cancel the wait using a `select!` block and inject the event.
+If an event occurs from outside the VirtualDom while waiting for work, then we can cancel the wait using a `select!` block and inject the event.
 
 ```rust, ignore
 loop {
@@ -88,18 +99,18 @@ Dioxus-core builds off the many frameworks that came before it. Notably, Dioxus 
 - React: hooks, concurrency, suspense
 - Dodrio: bump allocation, double buffering, and some diffing architecture
 
-Dioxus-core leverages some really cool techniques and hits a very high level of parity with mature frameworks. However, Dioxus also brings some new unique features:
+Dioxus-core hits a very high level of parity with mature frameworks. However, Dioxus also brings some new unique features:
 
 - managed lifetimes for borrowed data
 - placeholder approach for suspended vnodes
 - fiber/interruptible diffing algorithm
-- custom memory allocator for vnodes and all text content
+- custom memory allocator for VNodes and all text content
 - support for fragments w/ lazy normalization
 - slab allocator for scopes
-- mirrored-slab approach for remote vdoms
+- mirrored-slab approach for remote VirtualDoms
 - dedicated subtrees for rendering into separate contexts from the same app
 
-There's certainly more to the story, but these optimizations make Dioxus memory use and allocation count extremely minimal. For an average application, it is possible that zero allocations will need to be performed once the app has been loaded. Only when new components are added to the dom will allocations occur. For a given component, the space of old VNodes is dynamically recycled as new nodes are added. Additionally, Dioxus tracks the average memory footprint of previous components to estimate how much memory allocate for future components.
+There's certainly more to the story, but these optimizations make Dioxus memory use and allocation count extremely minimal. For an average application, no allocations may be needed once the app has been loaded. Only when new components are added to the dom will allocations occur. For a given component, the space of old VNodes is dynamically recycled as new nodes are added. Additionally, Dioxus tracks the average memory footprint of previous components to estimate how much memory allocate for future components.
 
 All in all, Dioxus treats memory as a valuable resource. Combined with the memory-efficient footprint of Wasm compilation, Dioxus apps can scale to thousands of components and still stay snappy.
 
@@ -112,5 +123,5 @@ The final implementation of Dioxus must:
 - Be concurrent. Components should be able to pause rendering to let the screen paint the next frame.
 - Be disconnected from a specific renderer (no WebSys dependency in the core crate).
 - Support server-side-rendering (SSR). VNodes should render to a string that can be served via a web server.
-- Be "live". Components should be able to be both server rendered and client rendered without needing frontend APIs.
-- Be modular. Components and hooks should be work anywhere without worrying about target platform.
+- Be "live". Components should be able to be both server-rendered and client rendered without needing frontend APIs.
+- Be modular. Components and hooks should work anywhere without worrying about the target platform.

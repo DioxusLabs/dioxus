@@ -1,88 +1,49 @@
-# This crate autofmts blocks of rsx!
-
-This crate formats rsx! by parsing call bodies and pretty-printing them back out.
+# dioxus-autofmt
 
 
+[![Crates.io][crates-badge]][crates-url]
+[![MIT licensed][mit-badge]][mit-url]
+[![Build Status][actions-badge]][actions-url]
+[![Discord chat][discord-badge]][discord-url]
 
-# Todo:
-Sorted roughly in order of what's possible
+[crates-badge]: https://img.shields.io/crates/v/dioxus-autofmt.svg
+[crates-url]: https://crates.io/crates/dioxus-autofmt
 
-- [x] Oneline rsx! calls - blocker because this wrecks formatting
-- [ ] Nested RSX calls (important) - unnecessary but desirable
-- [ ] RSX edits overstepping each other
-- [ ] Collapse components and elements under syntax -
-- [ ] Don't eat comments in exprs
-- [ ] Format regular exprs
-- [ ] Fix prettyplease around chaining
-- [ ] Don't eat comments in prettyplease
+[mit-badge]: https://img.shields.io/badge/license-MIT-blue.svg
+[mit-url]: https://github.com/dioxuslabs/dioxus/blob/master/LICENSE
 
+[actions-badge]: https://github.com/dioxuslabs/dioxus/actions/workflows/main.yml/badge.svg
+[actions-url]: https://github.com/dioxuslabs/dioxus/actions?query=workflow%3ACI+branch%3Amaster
 
-# Technique
+[discord-badge]: https://img.shields.io/discord/899851952891002890.svg?logo=discord&style=flat-square
+[discord-url]: https://discord.gg/XgGxMSkvUM
 
-
-div {
-    div {}
-    div {}
-}
-
-
-div
-
-possible line break
-div
-div
+[Website](https://dioxuslabs.com) |
+[Guides](https://dioxuslabs.com/docs/0.3/guide/en/) |
+[API Docs](https://docs.rs/dioxus-autofmt/latest/dioxus_autofmt) |
+[Chat](https://discord.gg/XgGxMSkvUM)
 
 
+## Overview
 
-string of possible items within a nesting
-div {
-    attr_pair
-    expr
-    text
-    comment
-}
-a nesting is either a component or an element
-
-idea:
-collect all items into a queue
-q
-```rust
-section {
-    div {
-        h1 { p { "asdasd" } }
-        h1 { p { "asdasd" } }
-    }
-}
-
-section {}
-```
+`dioxus-autofmt` provides a pretty printer for the `rsx` syntax tree.
 
 
-// space
-// space
-// space
+This is done manually with a via set of formatting rules. The output is not guaranteed to be stable between minor versions of the crate as we might tweak the output.
+
+`dioxus-autofmt` provides an API to perform precision edits as well as just spit out a block of formatted RSX from any RSX syntax tree. This is used by the `rsx-rosetta` crate which can accept various input languages and output valid RSX.
 
 
-3 - section
-3 - section div
-3 - section div h1
-3 - section div h1 p
-3 - section div h1 p text
-3 - section
-3 - section div
-3 - section div h1
-3 - section div h1 p
-3 - section div h1 p text
+## Contributing
 
-block
+- Report issues on our [issue tracker](https://github.com/dioxuslabs/dioxus/issues).
+- Join the discord and ask questions!
 
-- when we hit the end of a trail, we can make a decision what needs to be hard breaked
-- most nestings cannot be merged into a single one, so at some point we need to write the line break
-- this is the scan section. we scan forward until it's obvious where to place a hard break
-- when a line is finished, we can print it out by unloading our queued items
-- never double nested
+## License
+This project is licensed under the [MIT license].
 
+[mit license]: https://github.com/DioxusLabs/dioxus/blob/master/LICENSE-MIT
 
-Terms
-- break is a whitespace than can flex, dependent on the situation
-- ‹⁠›
+Unless you explicitly state otherwise, any contribution intentionally submitted
+for inclusion in Dioxus by you shall be licensed as MIT without any additional
+terms or conditions.

@@ -1,4 +1,30 @@
-# Html (and SVG) Namespace for Dioxus
+# `dioxus-html`: Html (and SVG) Namespace for Dioxus
+
+
+[![Crates.io][crates-badge]][crates-url]
+[![MIT licensed][mit-badge]][mit-url]
+[![Build Status][actions-badge]][actions-url]
+[![Discord chat][discord-badge]][discord-url]
+
+[crates-badge]: https://img.shields.io/crates/v/dioxus-html.svg
+[crates-url]: https://crates.io/crates/dioxus-html
+
+[mit-badge]: https://img.shields.io/badge/license-MIT-blue.svg
+[mit-url]: https://github.com/dioxuslabs/dioxus/blob/master/LICENSE
+
+[actions-badge]: https://github.com/dioxuslabs/dioxus/actions/workflows/main.yml/badge.svg
+[actions-url]: https://github.com/dioxuslabs/dioxus/actions?query=workflow%3ACI+branch%3Amaster
+
+[discord-badge]: https://img.shields.io/discord/899851952891002890.svg?logo=discord&style=flat-square
+[discord-url]: https://discord.gg/XgGxMSkvUM
+
+[Website](https://dioxuslabs.com) |
+[Guides](https://dioxuslabs.com/docs/0.3/guide/en/) |
+[API Docs](https://docs.rs/dioxus-html/latest/dioxus_html) |
+[Chat](https://discord.gg/XgGxMSkvUM)
+
+
+## Overview
 
 The Dioxus `rsx!` and `html!` macros can accept any compile-time correct namespace on top of NodeFactory. This crate provides the HTML (and SVG) namespaces which get imported in the Dioxus prelude.
 
@@ -35,7 +61,7 @@ impl DioxusElement for div {
 
 All elements should be defined as a zero-sized-struct (also known as unit struct). These structs are zero-cost and just provide the type-level trickery to Rust for compile-time correct templates.
 
-Attributes would then be implemented as methods on these unit structs.
+Attributes would then be implemented as constants on these unit structs.
 
 The HTML namespace is defined mostly with macros. However, the expanded form would look something like this:
 ```rust
@@ -45,14 +71,8 @@ impl DioxusElement for base {
     const NAME_SPACE: Option<&'static str> = None;
 }
 impl base {
-    #[inline]
-    fn href<'a>(&self, f: NodeFactory<'a>, v: Arguments) -> Attribute<'a> {
-        f.attr("href", v, None, false)
-    }
-    #[inline]
-    fn target<'a>(&self, f: NodeFactory<'a>, v: Arguments) -> Attribute<'a> {
-        f.attr("target", v, None, false)
-    }
+    const href: (&'static str, Option<'static str>, bool) = ("href", None, false);
+    const target: (&'static str, Option<'static str>, bool) = ("target", None, false);
 }
 ```
 Because attributes are defined as methods on the unit struct, they guard the attribute creation behind a compile-time correct interface.
@@ -73,35 +93,20 @@ mod dioxus_elements {
 }
 ```
 
-## Limitations:
--
 
-## How to work around it:
-If an attribute in Dioxus is invalid (defined incorrectly) - first, make an issue - but then, you can work around it. The raw builder API is actually somewhat ergonomic to work with, and the NodeFactory type exposes a bunch of methods to make any type of tree - even invalid ones! So obviously, be careful, but there's basically anything you can do.
 
-```rust
-cx.render(rsx!{
-    div {
-        h1 {}
-        // Oh no! I need a super custom element
-        {LazyNodes::new(move |f| {
-            f.raw_element(
-                // tag name
-                "custom_element",
 
-                // attributes
-                &[f.attr("billy", format_args!("goat"))],
 
-                // listeners
-                &[f.listener(onclick(move |_| {}))],
+## Contributing
 
-                // children
-                &[cx.render(rsx!(div {} ))],
+- Report issues on our [issue tracker](https://github.com/dioxuslabs/dioxus/issues).
+- Join the discord and ask questions!
 
-                // key
-                None
-            )
-        })}
-    }
-})
-```
+## License
+This project is licensed under the [MIT license].
+
+[mit license]: https://github.com/DioxusLabs/dioxus/blob/master/LICENSE-MIT
+
+Unless you explicitly state otherwise, any contribution intentionally submitted
+for inclusion in Dioxus by you shall be licensed as MIT without any additional
+terms or conditions.

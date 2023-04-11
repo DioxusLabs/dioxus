@@ -28,7 +28,7 @@ async fn main() {
                     r#"
             <!DOCTYPE html>
             <html>
-                <head> <title>Dioxus LiveView with Warp</title>  </head>
+                <head> <title>Dioxus LiveView with axum</title>  </head>
                 <body> <div id="main"></div> </body>
                 {glue}
             </html>
@@ -46,7 +46,7 @@ async fn main() {
             }),
         );
 
-    println!("Listening on http://{}", addr);
+    println!("Listening on http://{addr}");
 
     axum::Server::bind(&addr.to_string().parse().unwrap())
         .serve(app.into_make_service())

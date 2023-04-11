@@ -143,22 +143,21 @@ impl<T> UseFuture<T> {
         self.task.get()
     }
 
-    /// Get the current stateof the future.
+    /// Get the current state of the future.
     pub fn state(&self) -> UseFutureState<T> {
-        todo!()
-        // match (&self.task.get(), &self.value) {
-        //     // If we have a task and an existing value, we're reloading
-        //     (Some(_), Some(val)) => UseFutureState::Reloading(val),
+        match (&self.task.get(), &self.value()) {
+            // If we have a task and an existing value, we're reloading
+            (Some(_), Some(val)) => UseFutureState::Reloading(val),
 
-        //     // no task, but value - we're done
-        //     (None, Some(val)) => UseFutureState::Complete(val),
+            // no task, but value - we're done
+            (None, Some(val)) => UseFutureState::Complete(val),
 
-        //     // no task, no value - something's wrong? return pending
-        //     (None, None) => UseFutureState::Pending,
+            // no task, no value - something's wrong? return pending
+            (None, None) => UseFutureState::Pending,
 
-        //     // Task, no value - we're still pending
-        //     (Some(_), None) => UseFutureState::Pending,
-        // }
+            // Task, no value - we're still pending
+            (Some(_), None) => UseFutureState::Pending,
+        }
     }
 }
 

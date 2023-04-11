@@ -1,19 +1,32 @@
+use std::cell::RefCell;
 use std::rc::Rc;
+use std::rc::Weak;
 
-use crate::controller::DesktopController;
+use crate::create_new_window;
+use crate::eval::EvalResult;
+use crate::events::IpcMessage;
+use crate::shortcut::IntoKeyCode;
+use crate::shortcut::IntoModifersState;
+use crate::shortcut::ShortcutId;
+use crate::shortcut::ShortcutRegistry;
+use crate::shortcut::ShortcutRegistryError;
+use crate::Config;
+use crate::WebviewHandler;
 use dioxus_core::ScopeState;
-use serde::de::Error;
+use dioxus_core::VirtualDom;
+#[cfg(all(feature = "hot-reload", debug_assertions))]
+use dioxus_hot_reload::HotReloadMsg;
 use serde_json::Value;
-use std::future::Future;
-use std::future::IntoFuture;
-use std::pin::Pin;
-use wry::application::event_loop::ControlFlow;
+use slab::Slab;
+use wry::application::event::Event;
 use wry::application::event_loop::EventLoopProxy;
+use wry::application::event_loop::EventLoopWindowTarget;
 #[cfg(target_os = "ios")]
 use wry::application::platform::ios::WindowExtIOS;
 use wry::application::window::Fullscreen as WryFullscreen;
-
-use UserWindowEvent::*;
+use wry::application::window::Window;
+use wry::application::window::WindowId;
+use wry::webview::WebView;
 
 pub type ProxyType = EventLoopProxy<UserWindowEvent>;
 
@@ -23,6 +36,8 @@ pub fn use_window(cx: &ScopeState) -> &DesktopContext {
         .as_ref()
         .unwrap()
 }
+
+pub(crate) type WebviewQueue = Rc<RefCell<Vec<WebviewHandler>>>;
 
 /// An imperative interface to the current window.
 ///
@@ -39,19 +54,90 @@ pub fn use_window(cx: &ScopeState) -> &DesktopContext {
 #[derive(Clone)]
 pub struct DesktopContext {
     /// The wry/tao proxy to the current window
+    pub webview: Rc<WebView>,
+
+    /// The proxy to the event loop
     pub proxy: ProxyType,
-    pub(super) eval_reciever: Rc<tokio::sync::Mutex<tokio::sync::mpsc::UnboundedReceiver<Value>>>,
+
+    /// The receiver for eval results since eval is async
+    pub(super) eval: tokio::sync::broadcast::Sender<Value>,
+
+    pub(super) pending_windows: WebviewQueue,
+
+    pub(crate) event_loop: EventLoopWindowTarget<UserWindowEvent>,
+
+    pub(crate) event_handlers: WindowEventHandlers,
+
+    pub(crate) shortcut_manager: ShortcutRegistry,
+
+    #[cfg(target_os = "ios")]
+    pub(crate) views: Rc<RefCell<Vec<*mut objc::runtime::Object>>>,
+}
+
+/// A smart pointer to the current window.
+impl std::ops::Deref for DesktopContext {
+    type Target = Window;
+
+    fn deref(&self) -> &Self::Target {
+        self.webview.window()
+    }
 }
 
 impl DesktopContext {
     pub(crate) fn new(
+        webview: Rc<WebView>,
         proxy: ProxyType,
-        eval_reciever: tokio::sync::mpsc::UnboundedReceiver<Value>,
+        event_loop: EventLoopWindowTarget<UserWindowEvent>,
+        webviews: WebviewQueue,
+        event_handlers: WindowEventHandlers,
+        shortcut_manager: ShortcutRegistry,
     ) -> Self {
         Self {
+            webview,
             proxy,
-            eval_reciever: Rc::new(tokio::sync::Mutex::new(eval_reciever)),
+            event_loop,
+            eval: tokio::sync::broadcast::channel(8).0,
+            pending_windows: webviews,
+            event_handlers,
+            shortcut_manager,
+            #[cfg(target_os = "ios")]
+            views: Default::default(),
         }
+    }
+
+    /// Create a new window using the props and window builder
+    ///
+    /// Returns the webview handle for the new window.
+    ///
+    /// You can use this to control other windows from the current window.
+    ///
+    /// Be careful to not create a cycle of windows, or you might leak memory.
+    pub fn new_window(&self, dom: VirtualDom, cfg: Config) -> Weak<WebView> {
+        let window = create_new_window(
+            cfg,
+            &self.event_loop,
+            &self.proxy,
+            dom,
+            &self.pending_windows,
+            &self.event_handlers,
+            self.shortcut_manager.clone(),
+        );
+
+        let id = window.webview.window().id();
+
+        self.proxy
+            .send_event(UserWindowEvent(EventData::NewWindow, id))
+            .unwrap();
+
+        self.proxy
+            .send_event(UserWindowEvent(EventData::Poll, id))
+            .unwrap();
+
+        let webview = window.webview.clone();
+
+        self.pending_windows.borrow_mut().push(window);
+
+        Rc::downgrade(&webview)
     }
 
     /// trigger the drag-window event
@@ -63,282 +149,185 @@ impl DesktopContext {
     /// onmousedown: move |_| { desktop.drag_window(); }
     /// ```
     pub fn drag(&self) {
-        let _ = self.proxy.send_event(DragWindow);
+        let window = self.webview.window();
+
+        // if the drag_window has any errors, we don't do anything
+        if window.fullscreen().is_none() {
+            window.drag_window().unwrap();
+        }
     }
 
-    /// set window minimize state
-    pub fn set_minimized(&self, minimized: bool) {
-        let _ = self.proxy.send_event(Minimize(minimized));
-    }
-
-    /// set window maximize state
-    pub fn set_maximized(&self, maximized: bool) {
-        let _ = self.proxy.send_event(Maximize(maximized));
-    }
-
-    /// toggle window maximize state
+    /// Toggle whether the window is maximized or not
     pub fn toggle_maximized(&self) {
-        let _ = self.proxy.send_event(MaximizeToggle);
-    }
+        let window = self.webview.window();
 
-    /// set window visible or not
-    pub fn set_visible(&self, visible: bool) {
-        let _ = self.proxy.send_event(Visible(visible));
+        window.set_maximized(!window.is_maximized())
     }
 
     /// close window
     pub fn close(&self) {
-        let _ = self.proxy.send_event(CloseWindow);
+        let _ = self
+            .proxy
+            .send_event(UserWindowEvent(EventData::CloseWindow, self.id()));
     }
 
-    /// set window to focus
-    pub fn focus(&self) {
-        let _ = self.proxy.send_event(FocusWindow);
+    /// close window
+    pub fn close_window(&self, id: WindowId) {
+        let _ = self
+            .proxy
+            .send_event(UserWindowEvent(EventData::CloseWindow, id));
     }
 
     /// change window to fullscreen
     pub fn set_fullscreen(&self, fullscreen: bool) {
-        let _ = self.proxy.send_event(Fullscreen(fullscreen));
-    }
-
-    /// set resizable state
-    pub fn set_resizable(&self, resizable: bool) {
-        let _ = self.proxy.send_event(Resizable(resizable));
-    }
-
-    /// set the window always on top
-    pub fn set_always_on_top(&self, top: bool) {
-        let _ = self.proxy.send_event(AlwaysOnTop(top));
-    }
-
-    /// set cursor visible or not
-    pub fn set_cursor_visible(&self, visible: bool) {
-        let _ = self.proxy.send_event(CursorVisible(visible));
-    }
-
-    /// set cursor grab
-    pub fn set_cursor_grab(&self, grab: bool) {
-        let _ = self.proxy.send_event(CursorGrab(grab));
-    }
-
-    /// set window title
-    pub fn set_title(&self, title: &str) {
-        let _ = self.proxy.send_event(SetTitle(String::from(title)));
-    }
-
-    /// change window to borderless
-    pub fn set_decorations(&self, decoration: bool) {
-        let _ = self.proxy.send_event(SetDecorations(decoration));
-    }
-
-    /// set window zoom level
-    pub fn set_zoom_level(&self, scale_factor: f64) {
-        let _ = self.proxy.send_event(SetZoomLevel(scale_factor));
+        if let Some(handle) = self.webview.window().current_monitor() {
+            self.webview
+                .window()
+                .set_fullscreen(fullscreen.then_some(WryFullscreen::Borderless(Some(handle))));
+        }
     }
 
     /// launch print modal
     pub fn print(&self) {
-        let _ = self.proxy.send_event(Print);
+        if let Err(e) = self.webview.print() {
+            log::warn!("Open print modal failed: {e}");
+        }
+    }
+
+    /// Set the zoom level of the webview
+    pub fn set_zoom_level(&self, level: f64) {
+        self.webview.zoom(level);
     }
 
     /// opens DevTool window
     pub fn devtool(&self) {
-        let _ = self.proxy.send_event(DevTool);
+        #[cfg(debug_assertions)]
+        self.webview.open_devtools();
+
+        #[cfg(not(debug_assertions))]
+        log::warn!("Devtools are disabled in release builds");
     }
 
-    /// run (evaluate) a script in the WebView context
-    pub fn eval(&self, script: impl std::string::ToString) {
-        let _ = self.proxy.send_event(Eval(script.to_string()));
+    /// Evaluate a javascript expression
+    pub fn eval(&self, code: &str) -> EvalResult {
+        // Embed the return of the eval in a function so we can send it back to the main thread
+        let script = format!(
+            r#"
+            window.ipc.postMessage(
+                JSON.stringify({{
+                    "method":"eval_result",
+                    "params": (
+                        function(){{
+                            {code}
+                        }}
+                    )()
+                }})
+            );
+            "#
+        );
+
+        if let Err(e) = self.webview.evaluate_script(&script) {
+            // send an error to the eval receiver
+            log::warn!("Eval script error: {e}");
+        }
+
+        EvalResult::new(self.eval.clone())
     }
 
-    /// Push view
+    /// Create a wry event handler that listens for wry events.
+    /// This event handler is scoped to the currently active window and will only recieve events that are either global or related to the current window.
+    ///
+    /// The id this function returns can be used to remove the event handler with [`DesktopContext::remove_wry_event_handler`]
+    pub fn create_wry_event_handler(
+        &self,
+        handler: impl FnMut(&Event<UserWindowEvent>, &EventLoopWindowTarget<UserWindowEvent>) + 'static,
+    ) -> WryEventHandlerId {
+        self.event_handlers.add(self.id(), handler)
+    }
+
+    /// Remove a wry event handler created with [`DesktopContext::create_wry_event_handler`]
+    pub fn remove_wry_event_handler(&self, id: WryEventHandlerId) {
+        self.event_handlers.remove(id)
+    }
+
+    /// Create a global shortcut
+    ///
+    /// Linux: Only works on x11. See [this issue](https://github.com/tauri-apps/tao/issues/331) for more information.
+    pub fn create_shortcut(
+        &self,
+        key: impl IntoKeyCode,
+        modifiers: impl IntoModifersState,
+        callback: impl FnMut() + 'static,
+    ) -> Result<ShortcutId, ShortcutRegistryError> {
+        self.shortcut_manager.add_shortcut(
+            modifiers.into_modifiers_state(),
+            key.into_key_code(),
+            Box::new(callback),
+        )
+    }
+
+    /// Remove a global shortcut
+    pub fn remove_shortcut(&self, id: ShortcutId) {
+        self.shortcut_manager.remove_shortcut(id)
+    }
+
+    /// Remove all global shortcuts
+    pub fn remove_all_shortcuts(&self) {
+        self.shortcut_manager.remove_all()
+    }
+
+    /// Push an objc view to the window
     #[cfg(target_os = "ios")]
     pub fn push_view(&self, view: objc_id::ShareId<objc::runtime::Object>) {
-        let _ = self.proxy.send_event(PushView(view));
+        let window = self.webview.window();
+
+        unsafe {
+            use objc::runtime::Object;
+            use objc::*;
+            assert!(is_main_thread());
+            let ui_view = window.ui_view() as *mut Object;
+            let ui_view_frame: *mut Object = msg_send![ui_view, frame];
+            let _: () = msg_send![view, setFrame: ui_view_frame];
+            let _: () = msg_send![view, setAutoresizingMask: 31];
+
+            let ui_view_controller = window.ui_view_controller() as *mut Object;
+            let _: () = msg_send![ui_view_controller, setView: view];
+            self.views.borrow_mut().push(ui_view);
+        }
     }
 
-    /// Push view
+    /// Pop an objc view from the window
     #[cfg(target_os = "ios")]
     pub fn pop_view(&self) {
-        let _ = self.proxy.send_event(PopView);
-    }
-}
+        let window = self.webview.window();
 
-#[derive(Debug)]
-pub enum UserWindowEvent {
-    EditsReady,
-    Initialize,
-
-    CloseWindow,
-    DragWindow,
-    FocusWindow,
-
-    /// Set a new Dioxus template for hot-reloading
-    ///
-    /// Is a no-op in release builds. Must fit the right format for templates
-    SetTemplate(String),
-
-    Visible(bool),
-    Minimize(bool),
-    Maximize(bool),
-    MaximizeToggle,
-    Resizable(bool),
-    AlwaysOnTop(bool),
-    Fullscreen(bool),
-
-    CursorVisible(bool),
-    CursorGrab(bool),
-
-    SetTitle(String),
-    SetDecorations(bool),
-
-    SetZoomLevel(f64),
-
-    Print,
-    DevTool,
-
-    Eval(String),
-
-    #[cfg(target_os = "ios")]
-    PushView(objc_id::ShareId<objc::runtime::Object>),
-    #[cfg(target_os = "ios")]
-    PopView,
-}
-
-impl DesktopController {
-    pub(super) fn handle_event(
-        &mut self,
-        user_event: UserWindowEvent,
-        control_flow: &mut ControlFlow,
-    ) {
-        // currently dioxus-desktop supports a single window only,
-        // so we can grab the only webview from the map;
-        // on wayland it is possible that a user event is emitted
-        // before the webview is initialized. ignore the event.
-        let webview = if let Some(webview) = self.webviews.values().next() {
-            webview
-        } else {
-            return;
-        };
-
-        let window = webview.window();
-
-        match user_event {
-            Initialize | EditsReady => self.try_load_ready_webviews(),
-            SetTemplate(template) => self.set_template(template),
-            CloseWindow => *control_flow = ControlFlow::Exit,
-            DragWindow => {
-                // if the drag_window has any errors, we don't do anything
-                window.fullscreen().is_none().then(|| window.drag_window());
-            }
-            Visible(state) => window.set_visible(state),
-            Minimize(state) => window.set_minimized(state),
-            Maximize(state) => window.set_maximized(state),
-            MaximizeToggle => window.set_maximized(!window.is_maximized()),
-            Fullscreen(state) => {
-                if let Some(handle) = window.current_monitor() {
-                    window.set_fullscreen(state.then_some(WryFullscreen::Borderless(Some(handle))));
-                }
-            }
-            FocusWindow => window.set_focus(),
-            Resizable(state) => window.set_resizable(state),
-            AlwaysOnTop(state) => window.set_always_on_top(state),
-
-            Eval(code) => {
-                let script = format!(
-                    r#"window.ipc.postMessage(JSON.stringify({{"method":"eval_result", params: (function(){{
-                        {}
-                    }})()}}));"#,
-                    code
-                );
-                if let Err(e) = webview.evaluate_script(&script) {
-                    // we can't panic this error.
-                    log::warn!("Eval script error: {e}");
-                }
-            }
-            CursorVisible(state) => window.set_cursor_visible(state),
-            CursorGrab(state) => {
-                let _ = window.set_cursor_grab(state);
-            }
-
-            SetTitle(content) => window.set_title(&content),
-            SetDecorations(state) => window.set_decorations(state),
-
-            SetZoomLevel(scale_factor) => webview.zoom(scale_factor),
-
-            Print => {
-                if let Err(e) = webview.print() {
-                    // we can't panic this error.
-                    log::warn!("Open print modal failed: {e}");
-                }
-            }
-            DevTool => {
-                #[cfg(debug_assertions)]
-                webview.open_devtools();
-                #[cfg(not(debug_assertions))]
-                log::warn!("Devtools are disabled in release builds");
-            }
-
-            #[cfg(target_os = "ios")]
-            PushView(view) => unsafe {
-                use objc::runtime::Object;
-                use objc::*;
-                assert!(is_main_thread());
-                let ui_view = window.ui_view() as *mut Object;
-                let ui_view_frame: *mut Object = msg_send![ui_view, frame];
-                let _: () = msg_send![view, setFrame: ui_view_frame];
-                let _: () = msg_send![view, setAutoresizingMask: 31];
-
+        unsafe {
+            use objc::runtime::Object;
+            use objc::*;
+            assert!(is_main_thread());
+            if let Some(view) = self.views.borrow_mut().pop() {
                 let ui_view_controller = window.ui_view_controller() as *mut Object;
                 let _: () = msg_send![ui_view_controller, setView: view];
-                self.views.push(ui_view);
-            },
-
-            #[cfg(target_os = "ios")]
-            PopView => unsafe {
-                use objc::runtime::Object;
-                use objc::*;
-                assert!(is_main_thread());
-                if let Some(view) = self.views.pop() {
-                    let ui_view_controller = window.ui_view_controller() as *mut Object;
-                    let _: () = msg_send![ui_view_controller, setView: view];
-                }
-            },
-        }
-    }
-}
-
-/// Get a closure that executes any JavaScript in the WebView context.
-pub fn use_eval<S: std::string::ToString>(cx: &ScopeState) -> &dyn Fn(S) -> EvalResult {
-    let desktop = use_window(cx).clone();
-    cx.use_hook(|| {
-        move |script| {
-            desktop.eval(script);
-            let recv = desktop.eval_reciever.clone();
-            EvalResult { reciever: recv }
-        }
-    })
-}
-
-/// A future that resolves to the result of a JavaScript evaluation.
-pub struct EvalResult {
-    reciever: Rc<tokio::sync::Mutex<tokio::sync::mpsc::UnboundedReceiver<serde_json::Value>>>,
-}
-
-impl IntoFuture for EvalResult {
-    type Output = Result<serde_json::Value, serde_json::Error>;
-
-    type IntoFuture = Pin<Box<dyn Future<Output = Result<serde_json::Value, serde_json::Error>>>>;
-
-    fn into_future(self) -> Self::IntoFuture {
-        Box::pin(async move {
-            let mut reciever = self.reciever.lock().await;
-            match reciever.recv().await {
-                Some(result) => Ok(result),
-                None => Err(serde_json::Error::custom("No result returned")),
             }
-        }) as Pin<Box<dyn Future<Output = Result<serde_json::Value, serde_json::Error>>>>
+        }
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct UserWindowEvent(pub EventData, pub WindowId);
+
+#[derive(Debug, Clone)]
+pub enum EventData {
+    Poll,
+
+    Ipc(IpcMessage),
+
+    #[cfg(all(feature = "hot-reload", debug_assertions))]
+    HotReloadEvent(HotReloadMsg),
+
+    NewWindow,
+
+    CloseWindow,
 }
 
 #[cfg(target_os = "ios")]
@@ -349,4 +338,115 @@ fn is_main_thread() -> bool {
     let cls = Class::get("NSThread").unwrap();
     let result: BOOL = unsafe { msg_send![cls, isMainThread] };
     result != NO
+}
+
+/// The unique identifier of a window event handler. This can be used to later remove the handler.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct WryEventHandlerId(usize);
+
+#[derive(Clone, Default)]
+pub(crate) struct WindowEventHandlers {
+    handlers: Rc<RefCell<Slab<WryWindowEventHandlerInner>>>,
+}
+
+impl WindowEventHandlers {
+    pub(crate) fn add(
+        &self,
+        window_id: WindowId,
+        handler: impl FnMut(&Event<UserWindowEvent>, &EventLoopWindowTarget<UserWindowEvent>) + 'static,
+    ) -> WryEventHandlerId {
+        WryEventHandlerId(
+            self.handlers
+                .borrow_mut()
+                .insert(WryWindowEventHandlerInner {
+                    window_id,
+                    handler: Box::new(handler),
+                }),
+        )
+    }
+
+    pub(crate) fn remove(&self, id: WryEventHandlerId) {
+        self.handlers.borrow_mut().try_remove(id.0);
+    }
+
+    pub(crate) fn apply_event(
+        &self,
+        event: &Event<UserWindowEvent>,
+        target: &EventLoopWindowTarget<UserWindowEvent>,
+    ) {
+        for (_, handler) in self.handlers.borrow_mut().iter_mut() {
+            handler.apply_event(event, target);
+        }
+    }
+}
+
+struct WryWindowEventHandlerInner {
+    window_id: WindowId,
+    handler: WryEventHandlerCallback,
+}
+
+type WryEventHandlerCallback =
+    Box<dyn FnMut(&Event<UserWindowEvent>, &EventLoopWindowTarget<UserWindowEvent>) + 'static>;
+
+impl WryWindowEventHandlerInner {
+    fn apply_event(
+        &mut self,
+        event: &Event<UserWindowEvent>,
+        target: &EventLoopWindowTarget<UserWindowEvent>,
+    ) {
+        // if this event does not apply to the window this listener cares about, return
+        match event {
+            Event::WindowEvent { window_id, .. }
+            | Event::MenuEvent {
+                window_id: Some(window_id),
+                ..
+            } => {
+                if *window_id != self.window_id {
+                    return;
+                }
+            }
+            _ => (),
+        }
+        (self.handler)(event, target)
+    }
+}
+
+/// Get a closure that executes any JavaScript in the WebView context.
+pub fn use_wry_event_handler(
+    cx: &ScopeState,
+    handler: impl FnMut(&Event<UserWindowEvent>, &EventLoopWindowTarget<UserWindowEvent>) + 'static,
+) -> &WryEventHandler {
+    let desktop = use_window(cx);
+    cx.use_hook(move || {
+        let desktop = desktop.clone();
+
+        let id = desktop.create_wry_event_handler(handler);
+
+        WryEventHandler {
+            handlers: desktop.event_handlers,
+            id,
+        }
+    })
+}
+
+/// A wry event handler that is scoped to the current component and window. The event handler will only receive events for the window it was created for and global events.
+///
+/// This will automatically be removed when the component is unmounted.
+pub struct WryEventHandler {
+    handlers: WindowEventHandlers,
+    /// The unique identifier of the event handler.
+    pub id: WryEventHandlerId,
+}
+
+impl WryEventHandler {
+    /// Remove the event handler.
+    pub fn remove(&self) {
+        self.handlers.remove(self.id);
+    }
+}
+
+impl Drop for WryEventHandler {
+    fn drop(&mut self) {
+        self.handlers.remove(self.id);
+    }
 }

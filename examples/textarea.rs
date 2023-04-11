@@ -9,7 +9,7 @@ fn main() {
 fn app(cx: Scope) -> Element {
     let model = use_state(cx, || String::from("asd"));
 
-    println!("{}", model);
+    println!("{model}");
 
     cx.render(rsx! {
         textarea {

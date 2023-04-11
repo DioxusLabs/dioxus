@@ -116,9 +116,6 @@ class Interpreter {
       node.remove();
     }
   }
-  CreateRawText(text) {
-    this.stack.push(document.createTextNode(text));
-  }
   CreateTextNode(text, root) {
     const node = document.createTextNode(text);
     this.nodes[root] = node;
@@ -144,8 +141,13 @@ class Interpreter {
     this.nodes[root].textContent = text;
   }
   SetAttribute(id, field, value, ns) {
-    const node = this.nodes[id];
-    this.SetAttributeInner(node, field, value, ns);
+    if (value === null) {
+      this.RemoveAttribute(id, field, ns);
+    }
+    else {
+      const node = this.nodes[id];
+      this.SetAttributeInner(node, field, value, ns);
+    }
   }
   SetAttributeInner(node, field, value, ns) {
     const name = field;
@@ -221,7 +223,6 @@ class Interpreter {
   }
 
   MakeTemplateNode(node) {
-    console.log("making template node", node);
     switch (node.type) {
       case "Text":
         return document.createTextNode(node.text);
@@ -302,7 +303,7 @@ class Interpreter {
         this.CreatePlaceholder(edit.id);
         break;
       case "CreateTextNode":
-        this.CreateTextNode(edit.value);
+        this.CreateTextNode(edit.value, edit.id);
         break;
       case "HydrateText":
         this.HydrateText(edit.path, edit.value, edit.id);
@@ -334,9 +335,6 @@ class Interpreter {
       case "SetAttribute":
         this.SetAttribute(edit.id, edit.name, edit.value, edit.ns);
         break;
-      case "SetBoolAttribute":
-        this.SetAttribute(edit.id, edit.name, edit.value, edit.ns);
-        break;
       case "RemoveAttribute":
         this.RemoveAttribute(edit.id, edit.name, edit.ns);
         break;
@@ -359,10 +357,11 @@ class Interpreter {
 
             if (event.type === "click") {
               // todo call prevent default if it's the right type of event
-              if (shouldPreventDefault !== `onclick`) {
-                if (target.tagName === "A") {
-                  event.preventDefault();
-                  const href = target.getAttribute("href");
+              let a_element = target.closest("a");
+              if (a_element != null) {
+                event.preventDefault();
+                if (shouldPreventDefault !== `onclick` && a_element.getAttribute(`dioxus-prevent-default`) !== `onclick`) {
+                  const href = a_element.getAttribute("href");
                   if (href !== "" && href !== null && href !== undefined) {
                     window.ipc.postMessage(
                       serializeIpcMessage("browser_open", { href })
@@ -444,6 +443,41 @@ class Interpreter {
   }
 }
 
+function get_mouse_data(event) {
+  const {
+    altKey,
+    button,
+    buttons,
+    clientX,
+    clientY,
+    ctrlKey,
+    metaKey,
+    offsetX,
+    offsetY,
+    pageX,
+    pageY,
+    screenX,
+    screenY,
+    shiftKey,
+  } = event;
+  return {
+    alt_key: altKey,
+    button: button,
+    buttons: buttons,
+    client_x: clientX,
+    client_y: clientY,
+    ctrl_key: ctrlKey,
+    meta_key: metaKey,
+    offset_x: offsetX,
+    offset_y: offsetY,
+    page_x: pageX,
+    page_y: pageY,
+    screen_x: screenX,
+    screen_y: screenY,
+    shift_key: shiftKey,
+  };
+}
+
 function serialize_event(event) {
   switch (event.type) {
     case "copy":
@@ -522,10 +556,6 @@ function serialize_event(event) {
         values: {},
       };
     }
-    case "click":
-    case "contextmenu":
-    case "doubleclick":
-    case "dblclick":
     case "drag":
     case "dragend":
     case "dragenter":
@@ -533,7 +563,13 @@ function serialize_event(event) {
     case "dragleave":
     case "dragover":
     case "dragstart":
-    case "drop":
+    case "drop": {
+      return { mouse: get_mouse_data(event) };
+    }
+    case "click":
+    case "contextmenu":
+    case "doubleclick":
+    case "dblclick":
     case "mousedown":
     case "mouseenter":
     case "mouseleave":
@@ -541,38 +577,7 @@ function serialize_event(event) {
     case "mouseout":
     case "mouseover":
     case "mouseup": {
-      const {
-        altKey,
-        button,
-        buttons,
-        clientX,
-        clientY,
-        ctrlKey,
-        metaKey,
-        offsetX,
-        offsetY,
-        pageX,
-        pageY,
-        screenX,
-        screenY,
-        shiftKey,
-      } = event;
-      return {
-        alt_key: altKey,
-        button: button,
-        buttons: buttons,
-        client_x: clientX,
-        client_y: clientY,
-        ctrl_key: ctrlKey,
-        meta_key: metaKey,
-        offset_x: offsetX,
-        offset_y: offsetY,
-        page_x: pageX,
-        page_y: pageY,
-        screen_x: screenX,
-        screen_y: screenY,
-        shift_key: shiftKey,
-      };
+      return get_mouse_data(event);
     }
     case "pointerdown":
     case "pointermove":

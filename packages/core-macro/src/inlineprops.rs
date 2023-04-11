@@ -95,7 +95,7 @@ impl ToTokens for InlinePropsBody {
             quote! { #vis #f }
         });
 
-        let struct_name = Ident::new(&format!("{}Props", ident), Span::call_site());
+        let struct_name = Ident::new(&format!("{ident}Props"), Span::call_site());
 
         let field_names = inputs.iter().filter_map(|f| match f {
             FnArg::Receiver(_) => todo!(),
@@ -145,6 +145,25 @@ impl ToTokens for InlinePropsBody {
             (quote! { #lifetime, }, fn_generics, quote! { #generics })
         };
 
+        let generics_no_bounds = {
+            let mut generics = generics.clone();
+            generics.params = generics
+                .params
+                .iter()
+                .map(|it| match it {
+                    GenericParam::Type(tp) => {
+                        let mut tp = tp.clone();
+                        tp.bounds.clear();
+
+                        GenericParam::Type(tp)
+                    }
+                    _ => it.clone(),
+                })
+                .collect();
+
+            generics
+        };
+
         out_tokens.append_all(quote! {
             #modifiers
             #[allow(non_camel_case_types)]
@@ -155,10 +174,10 @@ impl ToTokens for InlinePropsBody {
             }
 
             #(#attrs)*
-            #maybe_async #vis fn #ident #fn_generics (#cx_token: Scope<#scope_lifetime #struct_name #generics>) #output
+            #maybe_async #vis fn #ident #fn_generics (#cx_token: Scope<#scope_lifetime #struct_name #generics_no_bounds>) #output
             #where_clause
             {
-                let #struct_name { #(#field_names),* } = &cx.props;
+                let #struct_name { #(#field_names),* } = &#cx_token.props;
                 #block
             }
         });

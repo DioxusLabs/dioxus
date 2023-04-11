@@ -1,11 +1,15 @@
-use crate::buffer::*;
-use crate::util::*;
+use crate::writer::*;
+use collect_macros::byte_offset;
+use dioxus_rsx::{BodyNode, CallBody};
+use proc_macro2::LineColumn;
+use syn::{ExprMacro, MacroDelimiter};
 
 mod buffer;
+mod collect_macros;
 mod component;
 mod element;
 mod expr;
-mod util;
+mod writer;
 
 /// A modification to the original file to be applied by an IDE
 ///
@@ -31,87 +35,141 @@ pub struct FormattedBlock {
 /// Format a file into a list of `FormattedBlock`s to be applied by an IDE for autoformatting.
 ///
 /// This function expects a complete file, not just a block of code. To format individual rsx! blocks, use fmt_block instead.
+///
+/// The point here is to provide precise modifications of a source file so an accompanying IDE tool can map these changes
+/// back to the file precisely.
+///
+/// Nested blocks of RSX will be handled automatically
 pub fn fmt_file(contents: &str) -> Vec<FormattedBlock> {
     let mut formatted_blocks = Vec::new();
-    let mut last_bracket_end = 0;
 
-    use triple_accel::{levenshtein_search, Match};
+    let parsed = syn::parse_file(contents).unwrap();
 
-    for Match { end, start, k } in levenshtein_search(b"rsx! {", contents.as_bytes()) {
-        if k > 1 {
+    let mut macros = vec![];
+    collect_macros::collect_from_file(&parsed, &mut macros);
+
+    // No macros, no work to do
+    if macros.is_empty() {
+        return formatted_blocks;
+    }
+
+    let mut writer = Writer::new(contents);
+
+    // Dont parse nested macros
+    let mut end_span = LineColumn { column: 0, line: 0 };
+    for item in macros {
+        let macro_path = &item.path.segments[0].ident;
+
+        // this macro is inside the last macro we parsed, skip it
+        if macro_path.span().start() < end_span {
             continue;
         }
 
-        // ensure the marker is not nested
-        if start < last_bracket_end {
-            continue;
+        // item.parse_body::<CallBody>();
+        let body = item.parse_body::<CallBody>().unwrap();
+
+        let rsx_start = macro_path.span().start();
+
+        writer.out.indent = &writer.src[rsx_start.line - 1]
+            .chars()
+            .take_while(|c| *c == ' ')
+            .count()
+            / 4;
+
+        write_body(&mut writer, &body);
+
+        // writing idents leaves the final line ended at the end of the last ident
+        if writer.out.buf.contains('\n') {
+            writer.out.new_line().unwrap();
+            writer.out.tab().unwrap();
         }
 
-        let mut indent_level = {
-            // walk backwards from start until we find a new line
-            let mut lines = contents[..start].lines().rev();
-            match lines.next() {
-                Some(line) => {
-                    if line.starts_with("//") || line.starts_with("///") {
-                        continue;
-                    }
-
-                    line.chars().take_while(|c| *c == ' ').count() / 4
-                }
-                None => 0,
-            }
+        let span = match item.delimiter {
+            MacroDelimiter::Paren(b) => b.span,
+            MacroDelimiter::Brace(b) => b.span,
+            MacroDelimiter::Bracket(b) => b.span,
         };
 
-        let remaining = &contents[end - 1..];
-        let bracket_end = find_bracket_end(remaining).unwrap();
-        let sub_string = &contents[end..bracket_end + end - 1];
-        last_bracket_end = bracket_end + end - 1;
+        let mut formatted = String::new();
 
-        let mut new = fmt_block(sub_string, indent_level).unwrap();
+        std::mem::swap(&mut formatted, &mut writer.out.buf);
 
-        if new.len() <= 80 && !new.contains('\n') {
-            new = format!(" {new} ");
+        let start = byte_offset(contents, span.start()) + 1;
+        let end = byte_offset(contents, span.end()) - 1;
 
-            // if the new string is not multiline, don't try to adjust the marker ending
-            // We want to trim off any indentation that there might be
-            indent_level = 0;
+        // Rustfmt will remove the space between the macro and the opening paren if the macro is a single expression
+        let body_is_solo_expr = body.roots.len() == 1
+            && matches!(body.roots[0], BodyNode::RawExpr(_) | BodyNode::Text(_));
+
+        if formatted.len() <= 80 && !formatted.contains('\n') && !body_is_solo_expr {
+            formatted = format!(" {formatted} ");
         }
 
-        let end_marker = end + bracket_end - indent_level * 4 - 1;
+        end_span = span.end();
 
-        if new == contents[end..end_marker] {
+        if contents[start..end] == formatted {
             continue;
         }
 
         formatted_blocks.push(FormattedBlock {
-            formatted: new,
-            start: end,
-            end: end_marker,
+            formatted,
+            start,
+            end,
         });
     }
 
     formatted_blocks
 }
 
-pub fn fmt_block(block: &str, indent_level: usize) -> Option<String> {
-    let mut buf = Buffer {
-        src: block.lines().map(|f| f.to_string()).collect(),
-        indent: indent_level,
-        ..Buffer::default()
-    };
+pub fn write_block_out(body: CallBody) -> Option<String> {
+    let mut buf = Writer::new("");
 
-    let body = syn::parse_str::<dioxus_rsx::CallBody>(block).unwrap();
+    write_body(&mut buf, &body);
 
-    // Oneliner optimization
+    buf.consume()
+}
+
+fn write_body(buf: &mut Writer, body: &CallBody) {
+    use std::fmt::Write;
+
     if buf.is_short_children(&body.roots).is_some() {
-        buf.write_ident(&body.roots[0]).unwrap();
+        // write all the indents with spaces and commas between
+        for idx in 0..body.roots.len() - 1 {
+            let ident = &body.roots[idx];
+            buf.write_ident(ident).unwrap();
+            write!(&mut buf.out.buf, ", ").unwrap();
+        }
+
+        // write the last ident without a comma
+        let ident = &body.roots[body.roots.len() - 1];
+        buf.write_ident(ident).unwrap();
     } else {
         buf.write_body_indented(&body.roots).unwrap();
     }
+}
+
+pub fn fmt_block_from_expr(raw: &str, expr: ExprMacro) -> Option<String> {
+    let body = syn::parse2::<CallBody>(expr.mac.tokens).unwrap();
+
+    let mut buf = Writer::new(raw);
+
+    write_body(&mut buf, &body);
+
+    buf.consume()
+}
+
+pub fn fmt_block(block: &str, indent_level: usize) -> Option<String> {
+    let body = syn::parse_str::<dioxus_rsx::CallBody>(block).unwrap();
+
+    let mut buf = Writer::new(block);
+
+    buf.out.indent = indent_level;
+
+    write_body(&mut buf, &body);
 
     // writing idents leaves the final line ended at the end of the last ident
-    if buf.buf.contains('\n') {
-        buf.new_line().unwrap();
+    if buf.out.buf.contains('\n') {
+        buf.out.new_line().unwrap();
     }
 
     buf.consume()
@@ -123,8 +181,6 @@ pub fn apply_format(input: &str, block: FormattedBlock) -> String {
 
     let (left, _) = input.split_at(start);
     let (_, right) = input.split_at(end);
-
-    // dbg!(&block.formatted);
 
     format!("{}{}{}", left, block.formatted, right)
 }

@@ -1,8 +1,12 @@
-use super::{waker::RcWake, Scheduler, SchedulerMsg};
+use futures_util::task::ArcWake;
+
+use super::{Scheduler, SchedulerMsg};
 use crate::ScopeId;
 use std::cell::RefCell;
 use std::future::Future;
-use std::{pin::Pin, rc::Rc};
+use std::pin::Pin;
+use std::sync::Arc;
+use std::task::Waker;
 
 /// A task's unique identifier.
 ///
@@ -16,8 +20,7 @@ pub struct TaskId(pub usize);
 pub(crate) struct LocalTask {
     pub scope: ScopeId,
     pub(super) task: RefCell<Pin<Box<dyn Future<Output = ()> + 'static>>>,
-    id: TaskId,
-    tx: futures_channel::mpsc::UnboundedSender<SchedulerMsg>,
+    pub waker: Waker,
 }
 
 impl Scheduler {
@@ -32,15 +35,20 @@ impl Scheduler {
     /// will only occur when the VirtuaalDom itself has been dropped.
     pub fn spawn(&self, scope: ScopeId, task: impl Future<Output = ()> + 'static) -> TaskId {
         let mut tasks = self.tasks.borrow_mut();
+
         let entry = tasks.vacant_entry();
         let task_id = TaskId(entry.key());
 
-        entry.insert(Rc::new(LocalTask {
-            id: task_id,
-            tx: self.sender.clone(),
+        let task = LocalTask {
             task: RefCell::new(Box::pin(task)),
             scope,
-        }));
+            waker: futures_util::task::waker(Arc::new(LocalTaskHandle {
+                id: task_id,
+                tx: self.sender.clone(),
+            })),
+        };
+
+        entry.insert(task);
 
         self.sender
             .unbounded_send(SchedulerMsg::TaskNotified(task_id))
@@ -51,15 +59,21 @@ impl Scheduler {
 
     /// Drop the future with the given TaskId
     ///
-    /// This does nto abort the task, so you'll want to wrap it in an aborthandle if that's important to you
+    /// This does not abort the task, so you'll want to wrap it in an aborthandle if that's important to you
     pub fn remove(&self, id: TaskId) {
-        self.tasks.borrow_mut().remove(id.0);
+        self.tasks.borrow_mut().try_remove(id.0);
     }
 }
 
-impl RcWake for LocalTask {
-    fn wake_by_ref(arc_self: &Rc<Self>) {
-        _ = arc_self
+pub struct LocalTaskHandle {
+    id: TaskId,
+    tx: futures_channel::mpsc::UnboundedSender<SchedulerMsg>,
+}
+
+impl ArcWake for LocalTaskHandle {
+    fn wake_by_ref(arc_self: &Arc<Self>) {
+        // This can fail if the scheduler has been dropped while the application is shutting down
+        let _ = arc_self
             .tx
             .unbounded_send(SchedulerMsg::TaskNotified(arc_self.id));
     }

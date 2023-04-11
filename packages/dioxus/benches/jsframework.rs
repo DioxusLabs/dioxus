@@ -42,7 +42,7 @@ fn create_rows(c: &mut Criterion) {
 
     c.bench_function("create rows", |b| {
         let mut dom = VirtualDom::new(app);
-        dom.rebuild();
+        let _ = dom.rebuild();
 
         b.iter(|| {
             let g = dom.rebuild();

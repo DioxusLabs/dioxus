@@ -25,7 +25,7 @@ fn render_template_node(node: &TemplateNode, out: &mut String) -> std::fmt::Resu
             write!(out, "<{tag}")?;
             for attr in *attrs {
                 if let TemplateAttribute::Static { name, value, .. } = attr {
-                    write!(out, "{}=\"{}\"", name, value)?;
+                    write!(out, "{name}=\"{value}\"")?;
                 }
             }
             for child in *children {

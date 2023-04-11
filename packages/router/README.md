@@ -1,52 +1,32 @@
-<div align="center">
-  <h1>Dioxus Router</h1>
-</div>
+# Dioxus Router
 
-<div align="center">
-  <!-- Crates version -->
-  <a href="https://crates.io/crates/dioxus">
-    <img src="https://img.shields.io/crates/v/dioxus.svg?style=flat-square"
-    alt="Crates.io version" />
-  </a>
-  <!-- Downloads -->
-  <a href="https://crates.io/crates/dioxus">
-    <img src="https://img.shields.io/crates/d/dioxus.svg?style=flat-square"
-      alt="Download" />
-  </a>
-  <!-- docs -->
-  <a href="https://docs.rs/dioxus">
-    <img src="https://img.shields.io/badge/docs-latest-blue.svg?style=flat-square"
-      alt="docs.rs docs" />
-  </a>
-  <!-- CI -->
-  <a href="https://github.com/jkelleyrtp/dioxus/actions">
-    <img src="https://github.com/dioxuslabs/dioxus/actions/workflows/main.yml/badge.svg"
-      alt="CI status" />
-  </a>
+[![Crates.io][crates-badge]][crates-url]
+[![MIT licensed][mit-badge]][mit-url]
+[![Build Status][actions-badge]][actions-url]
+[![Discord chat][discord-badge]][discord-url]
 
-  <!--Awesome -->
-  <a href="https://github.com/dioxuslabs/awesome-dioxus">
-    <img src="https://cdn.rawgit.com/sindresorhus/awesome/d7305f38d29fed78fa85652e3a63e154dd8e8829/media/badge.svg" alt="Awesome Page" />
-  </a>
-  <!-- Discord -->
-  <a href="https://discord.gg/XgGxMSkvUM">
-    <img src="https://img.shields.io/discord/899851952891002890.svg?logo=discord&style=flat-square" alt="Discord Link" />
-  </a>
-</div>
+[crates-badge]: https://img.shields.io/crates/v/dioxus-router.svg
+[crates-url]: https://crates.io/crates/dioxus-router
 
-<div align="center">
-  <h3>
-    <a href="https://dioxuslabs.com"> Website </a>
-    <span> | </span>
-    <a href="https://github.com/DioxusLabs/example-projects"> Examples </a>
-    <span> | </span>
-    <a href="https://dioxuslabs.com/router"> Guide (Latest) </a>
-    <span> | </span>
-    <a href="https://dioxuslabs.com/nightly/router"> Guide (Master) </a>
-  </h3>
-</div>
+[mit-badge]: https://img.shields.io/badge/license-MIT-blue.svg
+[mit-url]: https://github.com/dioxuslabs/dioxus/blob/master/LICENSE
 
-Dioxus Router is a first-party Router for all your Dioxus Apps. It provides a React-Router style interface that works anywhere: across the browser, SSR, and natively.
+[actions-badge]: https://github.com/dioxuslabs/dioxus/actions/workflows/main.yml/badge.svg
+[actions-url]: https://github.com/dioxuslabs/dioxus/actions?query=workflow%3ACI+branch%3Amaster
+
+[discord-badge]: https://img.shields.io/discord/899851952891002890.svg?logo=discord&style=flat-square
+[discord-url]: https://discord.gg/XgGxMSkvUM
+
+[Website](https://dioxuslabs.com) |
+[Guides](https://dioxuslabs.com/docs/0.3/guide/en/) |
+[API Docs](https://docs.rs/dioxus-router/latest/dioxus_router) |
+[Chat](https://discord.gg/XgGxMSkvUM)
+
+## Overview
+
+Dioxus Router is a first-party Router for all your Dioxus Apps. It provides an
+interface similar to React Router, but takes advantage of types for more
+expressiveness.
 
 ```rust ,no_run
 use dioxus::prelude::*;
@@ -107,3 +87,19 @@ fn BlogPost(cx: Scope) -> Element {
     }
 }
 ```
+
+You need to enable the right features for the platform you're targeting since these are not determined automatically!
+
+## Contributing
+
+- Report issues on our [issue tracker](https://github.com/dioxuslabs/dioxus/issues).
+- Join the discord and ask questions!
+
+## License
+This project is licensed under the [MIT license].
+
+[mit license]: https://github.com/DioxusLabs/dioxus/blob/master/LICENSE-MIT
+
+Unless you explicitly state otherwise, any contribution intentionally submitted
+for inclusion in Dioxus by you shall be licensed as MIT without any additional
+terms or conditions.

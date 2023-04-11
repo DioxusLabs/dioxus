@@ -2,18 +2,16 @@ use crate::{
     any_props::AnyProps,
     bump_frame::BumpFrame,
     innerlude::DirtyScope,
-    innerlude::{SuspenseId, SuspenseLeaf},
+    innerlude::{SuspenseHandle, SuspenseId, SuspenseLeaf},
     nodes::RenderReturn,
-    scheduler::RcWake,
     scopes::{ScopeId, ScopeState},
     virtual_dom::VirtualDom,
 };
-use bumpalo::Bump;
 use futures_util::FutureExt;
 use std::{
     mem,
     pin::Pin,
-    rc::Rc,
+    sync::Arc,
     task::{Context, Poll},
 };
 
@@ -26,9 +24,9 @@ impl VirtualDom {
         let parent = self.acquire_current_scope_raw();
         let entry = self.scopes.vacant_entry();
         let height = unsafe { parent.map(|f| (*f).height + 1).unwrap_or(0) };
-        let id = ScopeId(entry.key());
+        let id = entry.key();
 
-        entry.insert(Box::new(ScopeState {
+        entry.insert(ScopeState {
             parent,
             id,
             height,
@@ -45,15 +43,14 @@ impl VirtualDom {
             hook_idx: Default::default(),
             shared_contexts: Default::default(),
             borrowed_props: Default::default(),
-            listeners: Default::default(),
-        }))
+            attributes_to_drop: Default::default(),
+        })
     }
 
-    fn acquire_current_scope_raw(&mut self) -> Option<*mut ScopeState> {
-        self.scope_stack
-            .last()
-            .copied()
-            .and_then(|id| self.scopes.get_mut(id.0).map(|f| f.as_mut() as *mut _))
+    fn acquire_current_scope_raw(&self) -> Option<*const ScopeState> {
+        let id = self.scope_stack.last().copied()?;
+        let scope = self.scopes.get(id)?;
+        Some(scope)
     }
 
     pub(crate) fn run_scope(&mut self, scope_id: ScopeId) -> &RenderReturn {
@@ -63,42 +60,37 @@ impl VirtualDom {
         self.ensure_drop_safety(scope_id);
 
         let mut new_nodes = unsafe {
-            let scope = self.scopes[scope_id.0].as_mut();
+            self.scopes[scope_id].previous_frame().bump_mut().reset();
 
-            // if this frame hasn't been intialized yet, we can guess the size of the next frame to be more efficient
-            if scope.previous_frame().bump.allocated_bytes() == 0 {
-                scope.previous_frame_mut().bump =
-                    Bump::with_capacity(scope.current_frame().bump.allocated_bytes());
-            } else {
-                scope.previous_frame_mut().bump.reset();
-            }
+            let scope = &self.scopes[scope_id];
 
-            // Make sure to reset the hook counter so we give out hooks in the right order
             scope.hook_idx.set(0);
 
             // safety: due to how we traverse the tree, we know that the scope is not currently aliased
             let props: &dyn AnyProps = scope.props.as_ref().unwrap().as_ref();
             let props: &dyn AnyProps = mem::transmute(props);
+
             props.render(scope).extend_lifetime()
         };
 
         // immediately resolve futures that can be resolved
-        if let RenderReturn::Async(task) = &mut new_nodes {
+        if let RenderReturn::Pending(task) = &mut new_nodes {
             let mut leaves = self.scheduler.leaves.borrow_mut();
 
             let entry = leaves.vacant_entry();
             let suspense_id = SuspenseId(entry.key());
 
-            let leaf = Rc::new(SuspenseLeaf {
+            let leaf = SuspenseLeaf {
                 scope_id,
                 task: task.as_mut(),
-                id: suspense_id,
-                tx: self.scheduler.sender.clone(),
                 notified: Default::default(),
-            });
+                waker: futures_util::task::waker(Arc::new(SuspenseHandle {
+                    id: suspense_id,
+                    tx: self.scheduler.sender.clone(),
+                })),
+            };
 
-            let waker = leaf.waker();
-            let mut cx = Context::from_waker(&waker);
+            let mut cx = Context::from_waker(&leaf.waker);
 
             // safety: the task is already pinned in the bump arena
             let mut pinned = unsafe { Pin::new_unchecked(task.as_mut()) };
@@ -108,7 +100,11 @@ impl VirtualDom {
                 match pinned.poll_unpin(&mut cx) {
                     // If nodes are produced, then set it and we can break
                     Poll::Ready(nodes) => {
-                        new_nodes = RenderReturn::Sync(nodes);
+                        new_nodes = match nodes {
+                            Some(nodes) => RenderReturn::Ready(nodes),
+                            None => RenderReturn::default(),
+                        };
+
                         break;
                     }
 
@@ -131,13 +127,13 @@ impl VirtualDom {
             }
         };
 
-        let scope = &self.scopes[scope_id.0];
+        let scope = &self.scopes[scope_id];
 
         // We write on top of the previous frame and then make it the current by pushing the generation forward
         let frame = scope.previous_frame();
 
         // set the new head of the bump frame
-        let allocated = &*frame.bump.alloc(new_nodes);
+        let allocated = &*frame.bump().alloc(new_nodes);
         frame.node.set(allocated);
 
         // And move the render generation forward by one
@@ -150,6 +146,6 @@ impl VirtualDom {
         });
 
         // rebind the lifetime now that its stored internally
-        unsafe { mem::transmute(allocated) }
+        unsafe { allocated.extend_lifetime_ref() }
     }
 }

@@ -1,13 +1,13 @@
 [package]
 name = "dioxus-native-core-macro"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 description = "Build natively rendered apps with Dioxus"
 license = "MIT/Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com"
 documentation = "https://dioxuslabs.com"
-keywords = ["dom", "ui", "gui", "react", "wasm"]
+keywords = ["dom", "ui", "gui", "react"]
 
 
 [lib]
@@ -15,13 +15,12 @@ proc-macro = true
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dependencies]
-syn = { version = "1.0.11", features = ["extra-traits"] }
+syn = { version = "1.0.11", features = ["extra-traits", "full"] }
 quote = "1.0"
-dioxus-native-core = { path = "../native-core", version = "^0.2.0" }
 
 [dev-dependencies]
-dioxus = { path = "../dioxus" }
-
 smallvec = "1.6"
 rustc-hash = "1.1.0"
 anymap = "0.12.1"
+dioxus = { path = "../dioxus" }
+dioxus-native-core = { path = "../native-core" }

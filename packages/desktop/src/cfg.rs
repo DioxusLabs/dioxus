@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::path::PathBuf;
 
 use wry::application::window::Icon;
@@ -16,9 +17,9 @@ pub struct Config {
     pub(crate) file_drop_handler: Option<DropHandler>,
     pub(crate) protocols: Vec<WryProtocol>,
     pub(crate) pre_rendered: Option<String>,
-    // pub(crate) event_handler: Option<Box<DynEventHandlerFn>>,
     pub(crate) disable_context_menu: bool,
     pub(crate) resource_dir: Option<PathBuf>,
+    pub(crate) data_dir: Option<PathBuf>,
     pub(crate) custom_head: Option<String>,
     pub(crate) custom_index: Option<String>,
     pub(crate) root_name: String,
@@ -28,7 +29,7 @@ type DropHandler = Box<dyn Fn(&Window, FileDropEvent) -> bool>;
 
 pub(crate) type WryProtocol = (
     String,
-    Box<dyn Fn(&HttpRequest<Vec<u8>>) -> WryResult<HttpResponse<Vec<u8>>> + 'static>,
+    Box<dyn Fn(&HttpRequest<Vec<u8>>) -> WryResult<HttpResponse<Cow<'static, [u8]>>> + 'static>,
 );
 
 impl Config {
@@ -45,6 +46,7 @@ impl Config {
             pre_rendered: None,
             disable_context_menu: !cfg!(debug_assertions),
             resource_dir: None,
+            data_dir: None,
             custom_head: None,
             custom_index: None,
             root_name: "main".to_string(),
@@ -54,6 +56,14 @@ impl Config {
     /// set the directory from which assets will be searched in release mode
     pub fn with_resource_directory(mut self, path: impl Into<PathBuf>) -> Self {
         self.resource_dir = Some(path.into());
+        self
+    }
+
+    /// set the directory where data will be stored in release mode.
+    ///
+    /// > Note: This **must** be set when bundling on Windows.
+    pub fn with_data_directory(mut self, path: impl Into<PathBuf>) -> Self {
+        self.data_dir = Some(path.into());
         self
     }
 
@@ -77,15 +87,6 @@ impl Config {
         self
     }
 
-    // /// Set a custom event handler
-    // pub fn with_event_handler(
-    //     mut self,
-    //     handler: impl Fn(&mut EventLoop<()>, &mut WebView) + 'static,
-    // ) -> Self {
-    //     self.event_handler = Some(Box::new(handler));
-    //     self
-    // }
-
     /// Set a file drop handler
     pub fn with_file_drop_handler(
         mut self,
@@ -98,7 +99,7 @@ impl Config {
     /// Set a custom protocol
     pub fn with_custom_protocol<F>(mut self, name: String, handler: F) -> Self
     where
-        F: Fn(&HttpRequest<Vec<u8>>) -> WryResult<HttpResponse<Vec<u8>>> + 'static,
+        F: Fn(&HttpRequest<Vec<u8>>) -> WryResult<HttpResponse<Cow<'static, [u8]>>> + 'static,
     {
         self.protocols.push((name, Box::new(handler)));
         self

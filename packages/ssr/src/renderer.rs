@@ -51,7 +51,7 @@ impl Renderer {
     ) -> std::fmt::Result {
         // We should never ever run into async or errored nodes in SSR
         // Error boundaries and suspense boundaries will convert these to sync
-        if let RenderReturn::Sync(Some(node)) = dom.get_scope(scope).unwrap().root_node() {
+        if let RenderReturn::Ready(node) = dom.get_scope(scope).unwrap().root_node() {
             self.render_template(buf, dom, node)?
         };
 
@@ -66,19 +66,32 @@ impl Renderer {
     ) -> std::fmt::Result {
         let entry = self
             .template_cache
-            .entry(template.template.name)
+            .entry(template.template.get().name)
             .or_insert_with(|| Rc::new(StringCache::from_template(template).unwrap()))
             .clone();
+
+        let mut inner_html = None;
+
+        // We need to keep track of the dynamic styles so we can insert them into the right place
+        let mut accumulated_dynamic_styles = Vec::new();
 
         for segment in entry.segments.iter() {
             match segment {
                 Segment::Attr(idx) => {
                     let attr = &template.dynamic_attrs[*idx];
-                    match attr.value {
-                        AttributeValue::Text(value) => write!(buf, " {}=\"{}\"", attr.name, value)?,
-                        AttributeValue::Bool(value) => write!(buf, " {}={}", attr.name, value)?,
-                        _ => {}
-                    };
+                    if attr.name == "dangerous_inner_html" {
+                        inner_html = Some(attr);
+                    } else if attr.namespace == Some("style") {
+                        accumulated_dynamic_styles.push(attr);
+                    } else {
+                        match attr.value {
+                            AttributeValue::Text(value) => {
+                                write!(buf, " {}=\"{}\"", attr.name, value)?
+                            }
+                            AttributeValue::Bool(value) => write!(buf, " {}={}", attr.name, value)?,
+                            _ => {}
+                        };
+                    }
                 }
                 Segment::Node(idx) => match &template.dynamic_nodes[*idx] {
                     DynamicNode::Component(node) => {
@@ -89,7 +102,7 @@ impl Renderer {
                             let scope = dom.get_scope(id).unwrap();
                             let node = scope.root_node();
                             match node {
-                                RenderReturn::Sync(Some(node)) => {
+                                RenderReturn::Ready(node) => {
                                     self.render_template(buf, dom, node)?
                                 }
                                 _ => todo!(
@@ -104,8 +117,11 @@ impl Renderer {
                             write!(buf, "<!--#-->")?;
                         }
 
-                        // todo: escape the text
-                        write!(buf, "{}", text.value)?;
+                        write!(
+                            buf,
+                            "{}",
+                            askama_escape::escape(text.value, askama_escape::Html)
+                        )?;
 
                         if self.pre_render {
                             write!(buf, "<!--#-->")?;
@@ -119,12 +135,53 @@ impl Renderer {
 
                     DynamicNode::Placeholder(_el) => {
                         if self.pre_render {
-                            write!(buf, "<pre><pre/>")?;
+                            write!(buf, "<pre></pre>")?;
                         }
                     }
                 },
 
-                Segment::PreRendered(contents) => write!(buf, "{}", contents)?,
+                Segment::PreRendered(contents) => write!(buf, "{contents}")?,
+
+                Segment::StyleMarker { inside_style_tag } => {
+                    if !accumulated_dynamic_styles.is_empty() {
+                        // if we are inside a style tag, we don't need to write the style attribute
+                        if !*inside_style_tag {
+                            write!(buf, " style=\"")?;
+                        }
+                        for attr in &accumulated_dynamic_styles {
+                            match attr.value {
+                                AttributeValue::Text(value) => {
+                                    write!(buf, "{}:{};", attr.name, value)?
+                                }
+                                AttributeValue::Bool(value) => {
+                                    write!(buf, "{}:{};", attr.name, value)?
+                                }
+                                AttributeValue::Float(f) => write!(buf, "{}:{};", attr.name, f)?,
+                                AttributeValue::Int(i) => write!(buf, "{}:{};", attr.name, i)?,
+                                _ => {}
+                            };
+                        }
+                        if !*inside_style_tag {
+                            write!(buf, "\"")?;
+                        }
+
+                        // clear the accumulated styles
+                        accumulated_dynamic_styles.clear();
+                    }
+                }
+
+                Segment::InnerHtmlMarker => {
+                    if let Some(inner_html) = inner_html.take() {
+                        let inner_html = &inner_html.value;
+                        match inner_html {
+                            AttributeValue::Text(value) => write!(buf, "{}", value)?,
+                            AttributeValue::Bool(value) => write!(buf, "{}", value)?,
+                            AttributeValue::Float(f) => write!(buf, "{}", f)?,
+                            AttributeValue::Int(i) => write!(buf, "{}", i)?,
+                            _ => {}
+                        }
+                    }
+                }
             }
         }
 
@@ -138,7 +195,7 @@ fn to_string_works() {
 
     fn app(cx: Scope) -> Element {
         let dynamic = 123;
-        let dyn2 = "</diiiiiiiiv>"; // todo: escape this
+        let dyn2 = "</diiiiiiiiv>"; // this should be escaped
 
         render! {
             div { class: "asdasdasd", class: "asdasdasd", id: "id-{dynamic}",
@@ -165,10 +222,15 @@ fn to_string_works() {
                 vec![
                     PreRendered("<div class=\"asdasdasd\" class=\"asdasdasd\"".into(),),
                     Attr(0,),
-                    PreRendered(">Hello world 1 -->".into(),),
+                    StyleMarker {
+                        inside_style_tag: false,
+                    },
+                    PreRendered(">".into()),
+                    InnerHtmlMarker,
+                    PreRendered("Hello world 1 --&gt;".into(),),
                     Node(0,),
                     PreRendered(
-                        "<-- Hello world 2<div>nest 1</div><div></div><div>nest 2</div>".into(),
+                        "&lt;-- Hello world 2<div>nest 1</div><div></div><div>nest 2</div>".into(),
                     ),
                     Node(1,),
                     Node(2,),
@@ -180,5 +242,5 @@ fn to_string_works() {
 
     use Segment::*;
 
-    assert_eq!(out, "<div class=\"asdasdasd\" class=\"asdasdasd\" id=\"id-123\">Hello world 1 -->123<-- Hello world 2<div>nest 1</div><div></div><div>nest 2</div></diiiiiiiiv><div>finalize 0</div><div>finalize 1</div><div>finalize 2</div><div>finalize 3</div><div>finalize 4</div></div>");
+    assert_eq!(out, "<div class=\"asdasdasd\" class=\"asdasdasd\" id=\"id-123\">Hello world 1 --&gt;123&lt;-- Hello world 2<div>nest 1</div><div></div><div>nest 2</div>&lt;/diiiiiiiiv&gt;<div>finalize 0</div><div>finalize 1</div><div>finalize 2</div><div>finalize 3</div><div>finalize 4</div></div>");
 }

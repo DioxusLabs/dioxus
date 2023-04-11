@@ -129,6 +129,34 @@ mod js {
             root.appendChild(els[k]);
         }
     }
+    const bool_attrs = {
+        allowfullscreen: true,
+        allowpaymentrequest: true,
+        async: true,
+        autofocus: true,
+        autoplay: true,
+        checked: true,
+        controls: true,
+        default: true,
+        defer: true,
+        disabled: true,
+        formnovalidate: true,
+        hidden: true,
+        ismap: true,
+        itemscope: true,
+        loop: true,
+        multiple: true,
+        muted: true,
+        nomodule: true,
+        novalidate: true,
+        open: true,
+        playsinline: true,
+        readonly: true,
+        required: true,
+        reversed: true,
+        selected: true,
+        truespeed: true,
+      };
     "#;
 
     extern "C" {
@@ -189,7 +217,7 @@ mod js {
     }
     fn remove_attribute(id: u32, field: &str<u8, attr>, ns: &str<u8, ns_cache>) {
         r#"{name = $field$;
-        node = this.nodes[$id$];
+        node = nodes[$id$];
         if (ns == "style") {
             node.style.removeProperty(name);
         } else if (ns !== null && ns !== undefined && ns !== "") {

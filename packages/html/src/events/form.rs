@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::Debug, sync::Arc};
+use std::{collections::HashMap, fmt::Debug};
 
 use dioxus_core::Event;
 
@@ -13,7 +13,7 @@ pub struct FormData {
     pub values: HashMap<String, String>,
 
     #[cfg_attr(feature = "serialize", serde(skip))]
-    pub files: Option<Arc<dyn FileEngine>>,
+    pub files: Option<std::sync::Arc<dyn FileEngine>>,
 }
 
 impl PartialEq for FormData {

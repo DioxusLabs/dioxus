@@ -21,7 +21,7 @@ pub struct IfmtInput {
 
 impl IfmtInput {
     pub fn is_static(&self) -> bool {
-        matches!(self.segments.as_slice(), &[Segment::Literal(_)])
+        matches!(self.segments.as_slice(), &[Segment::Literal(_)] | &[])
     }
 }
 
@@ -59,6 +59,11 @@ impl FromStr for IfmtInput {
                 let mut current_captured = String::new();
                 while let Some(c) = chars.next() {
                     if c == ':' {
+                        // two :s in a row is a path, not a format arg
+                        if chars.next_if(|c| *c == ':').is_some() {
+                            current_captured.push_str("::");
+                            continue;
+                        }
                         let mut current_format_args = String::new();
                         for c in chars.by_ref() {
                             if c == '}' {
@@ -193,7 +198,7 @@ pub struct FormattedSegment {
 impl ToTokens for FormattedSegment {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let (fmt, seg) = (&self.format_args, &self.segment);
-        let fmt = format!("{{0:{}}}", fmt);
+        let fmt = format!("{{0:{fmt}}}");
         tokens.append_all(quote! {
             format_args!(#fmt, #seg)
         });

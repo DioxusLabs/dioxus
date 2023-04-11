@@ -1,6 +1,6 @@
 [package]
 name = "fermi"
-version = "0.2.1"
+version = "0.3.0"
 authors = ["Jonathan Kelley"]
 edition = "2018"
 description = "Global state management for Dioxus"
@@ -8,12 +8,12 @@ license = "MIT/Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com"
 documentation = "https://dioxuslabs.com"
-keywords = ["dom", "ui", "gui", "react", "wasm"]
+keywords = ["dom", "ui", "gui", "react", "state-management"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-dioxus-core = { path = "../core", version = "^0.2.1" }
+dioxus-core = { path = "../core", version = "^0.3.0" }
 im-rc = { version = "15.0.0", features = ["serde"] }
 log = "0.4.14"
 

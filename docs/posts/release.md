@@ -63,7 +63,7 @@ This very site is built with Dioxus, and the source code is available [here](htt
 
 To get started with Dioxus, check out any of the "Getting Started" guides for your platform of choice, or check out the GitHub Repository for more details.
 
-- [Getting Started with Dioxus](https://dioxuslabs.com/guide)
+- [Getting Started with Dioxus](https://dioxuslabs.com/guide/en)
 - [Getting Started with Web](https://dioxuslabs.com/reference/web)
 - [Getting Started with Desktop](https://dioxuslabs.com/reference/desktop)
 - [Getting Started with Mobile](https://dioxuslabs.com/reference/mobile)
@@ -163,7 +163,7 @@ Today, to publish a Dioxus app, you don't need NPM/WebPack/Parcel/etc. Dioxus si
 
 ## Show me more
 
-Here, we'll dive into some features of Dioxus and why it's so fun to use. The [guide](https://dioxuslabs.com/guide/) serves as a deeper and more comprehensive look at what Dioxus can do.
+Here, we'll dive into some features of Dioxus and why it's so fun to use. The [guide](https://dioxuslabs.com/guide/en/) serves as a deeper and more comprehensive look at what Dioxus can do.
 
 ## Building a new project is simple
 

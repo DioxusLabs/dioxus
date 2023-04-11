@@ -12,14 +12,16 @@ fn cycling_elements() {
         })
     });
 
-    let edits = dom.rebuild().santize();
-    assert_eq!(
-        edits.edits,
-        [
-            LoadTemplate { name: "template", index: 0, id: ElementId(1,) },
-            AppendChildren { m: 1, id: ElementId(0) },
-        ]
-    );
+    {
+        let edits = dom.rebuild().santize();
+        assert_eq!(
+            edits.edits,
+            [
+                LoadTemplate { name: "template", index: 0, id: ElementId(1,) },
+                AppendChildren { m: 1, id: ElementId(0) },
+            ]
+        );
+    }
 
     dom.mark_dirty(ScopeId(0));
     assert_eq!(
