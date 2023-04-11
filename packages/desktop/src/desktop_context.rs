@@ -1,5 +1,6 @@
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::rc::Weak;
 
 use crate::create_new_window;
 use crate::eval::EvalResult;
@@ -30,8 +31,8 @@ use wry::webview::WebView;
 pub type ProxyType = EventLoopProxy<UserWindowEvent>;
 
 /// Get an imperative handle to the current window
-pub fn use_window(cx: &ScopeState) -> &DesktopContext {
-    cx.use_hook(|| cx.consume_context::<DesktopContext>())
+pub fn use_window(cx: &ScopeState) -> &Rc<DesktopContext> {
+    cx.use_hook(|| cx.consume_context::<Rc<DesktopContext>>())
         .as_ref()
         .unwrap()
 }
@@ -111,8 +112,8 @@ impl DesktopContext {
     /// You can use this to control other windows from the current window.
     ///
     /// Be careful to not create a cycle of windows, or you might leak memory.
-    pub fn new_window(&self, dom: VirtualDom, cfg: Config) -> DesktopContext {
-        let (window, desktop_context) = create_new_window(
+    pub fn new_window(&self, dom: VirtualDom, cfg: Config) -> Weak<DesktopContext> {
+        let window = create_new_window(
             cfg,
             &self.event_loop,
             &self.proxy,
@@ -121,6 +122,12 @@ impl DesktopContext {
             &self.event_handlers,
             self.shortcut_manager.clone(),
         );
+
+        let desktop_context = window
+            .dom
+            .base_scope()
+            .consume_context::<Rc<DesktopContext>>()
+            .unwrap();
 
         let id = window.webview.window().id();
 
@@ -134,7 +141,7 @@ impl DesktopContext {
 
         self.pending_windows.borrow_mut().push(window);
 
-        desktop_context
+        Rc::downgrade(&desktop_context)
     }
 
     /// trigger the drag-window event
@@ -420,7 +427,7 @@ pub fn use_wry_event_handler(
         let id = desktop.create_wry_event_handler(handler);
 
         WryEventHandler {
-            handlers: desktop.event_handlers,
+            handlers: desktop.event_handlers.clone(),
             id,
         }
     })

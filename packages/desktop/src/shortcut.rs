@@ -146,7 +146,7 @@ pub struct ShortcutId {
 
 /// A global shortcut. This will be automatically removed when it is dropped.
 pub struct ShortcutHandle {
-    desktop: DesktopContext,
+    desktop: Rc<DesktopContext>,
     /// The id of the shortcut
     pub shortcut_id: ShortcutId,
 }
