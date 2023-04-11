@@ -135,6 +135,7 @@ impl<T: Clone> Segment<T> {
     /// Add a matching [`ParameterRoute`] to the [`Segment`].
     ///
     /// ```rust,ignore
+    /// # // Test is ignored because there are scenarios where no matcher is available.
     /// # use dioxus_router_core::routes::Segment;
     /// Segment::empty().matching("some matcher", (true, ContentAtom("matching route content")));
     /// ```
