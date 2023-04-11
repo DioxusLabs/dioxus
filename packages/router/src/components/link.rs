@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 use dioxus::prelude::*;
 use dioxus_router_core::{navigation::NavigationTarget, RouterMessage};
 use log::error;
@@ -5,7 +7,7 @@ use log::error;
 use crate::utils::use_router_internal::use_router_internal;
 
 /// The properties for a [`Link`].
-#[derive(Debug, Props)]
+#[derive(Props)]
 pub struct LinkProps<'a> {
     /// A class to apply to the generate HTML anchor tag if the `target` route is active.
     pub active_class: Option<&'a str>,
@@ -28,6 +30,16 @@ pub struct LinkProps<'a> {
     /// This does not change whether the [`Link`] is active or not.
     #[props(default)]
     pub new_tab: bool,
+    /// The onclick event handler.
+    pub onclick: Option<EventHandler<'a, MouseEvent>>,
+    #[props(default)]
+    /// Whether the default behavior should be executed if an `onclick` handler is provided.
+    ///
+    /// 1. When `onclick` is [`None`] (default if not specified), `onclick_only` has no effect.
+    /// 2. If `onclick_only` is [`false`] (default if not specified), the provided `onclick` handler
+    ///    will be executed after the links regular functionality.
+    /// 3. If `onclick_only` is [`true`], only the provided `onclick` handler will be executed.
+    pub onclick_only: bool,
     /// The rel attribute for the generated HTML anchor tag.
     ///
     /// For external `target`s, this defaults to `noopener noreferrer`.
@@ -35,6 +47,23 @@ pub struct LinkProps<'a> {
     /// The navigation target. Roughly equivalent to the href attribute of an HTML anchor tag.
     #[props(into)]
     pub target: NavigationTarget,
+}
+
+impl Debug for LinkProps<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LinkProps")
+            .field("active_class", &self.active_class)
+            .field("children", &self.children)
+            .field("class", &self.class)
+            .field("exact", &self.exact)
+            .field("id", &self.id)
+            .field("new_tab", &self.new_tab)
+            .field("onclick", &self.onclick.as_ref().map(|_| "onclick is set"))
+            .field("onclick_only", &self.onclick_only)
+            .field("rel", &self.rel)
+            .field("target", &self.target)
+            .finish()
+    }
 }
 
 /// A link to navigate to another route.
@@ -109,6 +138,8 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
         exact,
         id,
         new_tab,
+        onclick,
+        onclick_only,
         rel,
         target,
     } = cx.props;
@@ -152,13 +183,22 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
         .or_else(|| is_external.then_some("noopener noreferrer"))
         .unwrap_or_default();
 
+    let do_default = onclick.is_none() || !onclick_only;
+    let action = move |event| {
+        if do_default {
+            if is_router_nav {
+                let _ = sender.unbounded_send(RouterMessage::Push(target.clone()));
+            }
+        }
+
+        if let Some(handler) = onclick {
+            handler.call(event);
+        }
+    };
+
     render! {
         a {
-            onclick: move |_| {
-                if is_router_nav {
-                    let _ = sender.unbounded_send(RouterMessage::Push(target.clone()));
-                }
-            },
+            onclick: action,
             href: "{href}",
             prevent_default: "{prevent_default}",
             class: "{class}",
