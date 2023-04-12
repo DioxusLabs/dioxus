@@ -591,8 +591,6 @@ impl<'src> ScopeState {
                         propagates: event.propagates,
                         data,
                     });
-                } else {
-                    println!("Failed to downcast event data")
                 }
             }))
         };
