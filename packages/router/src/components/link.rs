@@ -185,10 +185,8 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
 
     let do_default = onclick.is_none() || !onclick_only;
     let action = move |event| {
-        if do_default {
-            if is_router_nav {
-                let _ = sender.unbounded_send(RouterMessage::Push(target.clone()));
-            }
+        if do_default && is_router_nav {
+            let _ = sender.unbounded_send(RouterMessage::Push(target.clone()));
         }
 
         if let Some(handler) = onclick {
