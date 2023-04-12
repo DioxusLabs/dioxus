@@ -148,6 +148,13 @@ impl<'b> VirtualDom {
 
         // Make sure the roots get transferred over while we're here
         right_template.root_ids.transfer(&left_template.root_ids);
+
+        // Update the node refs
+        for i in 0..right_template.root_ids.len() {
+            if let Some(root_id) = right_template.root_ids.get(i) {
+                self.update_template(root_id, right_template);
+            }
+        }
     }
 
     fn diff_dynamic_node(
@@ -628,10 +635,12 @@ impl<'b> VirtualDom {
             }
 
             let id = self.find_last_element(&new[last]);
-            self.mutations.push(Mutation::InsertAfter {
-                id,
-                m: nodes_created,
-            });
+            if nodes_created > 0 {
+                self.mutations.push(Mutation::InsertAfter {
+                    id,
+                    m: nodes_created,
+                })
+            }
             nodes_created = 0;
         }
 
@@ -652,10 +661,12 @@ impl<'b> VirtualDom {
                 }
 
                 let id = self.find_first_element(&new[last]);
-                self.mutations.push(Mutation::InsertBefore {
-                    id,
-                    m: nodes_created,
-                });
+                if nodes_created > 0 {
+                    self.mutations.push(Mutation::InsertBefore {
+                        id,
+                        m: nodes_created,
+                    });
+                }
 
                 nodes_created = 0;
             }
@@ -676,10 +687,12 @@ impl<'b> VirtualDom {
             }
 
             let id = self.find_first_element(&new[first_lis]);
-            self.mutations.push(Mutation::InsertBefore {
-                id,
-                m: nodes_created,
-            });
+            if nodes_created > 0 {
+                self.mutations.push(Mutation::InsertBefore {
+                    id,
+                    m: nodes_created,
+                });
+            }
         }
     }
 

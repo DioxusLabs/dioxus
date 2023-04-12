@@ -18,7 +18,7 @@
 [discord-url]: https://discord.gg/XgGxMSkvUM
 
 [Website](https://dioxuslabs.com) |
-[Guides](https://dioxuslabs.com/docs/0.3/guide/en/) |
+[Guides](https://dioxuslabs.com/guide/) |
 [API Docs](https://docs.rs/dioxus-native-core/latest/dioxus_native_core) |
 [Chat](https://discord.gg/XgGxMSkvUM)
 

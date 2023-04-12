@@ -1,3 +1,5 @@
+//! Utility functions for applying layout attributes to taffy layout
+
 /*
 - [ ] pub display: Display, ----> taffy doesnt support all display types
 - [x] pub position_type: PositionType,  --> taffy doesnt support everything
@@ -46,12 +48,14 @@ use taffy::{
     style::{FlexDirection, PositionType},
 };
 
+/// Default values for layout attributes
 #[derive(Default)]
 pub struct LayoutConfigeration {
     /// the default border widths to use
     pub border_widths: BorderWidths,
 }
 
+/// Default border widths
 pub struct BorderWidths {
     /// the default border width to use for thin borders
     pub thin: f32,

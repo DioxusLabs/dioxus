@@ -11,10 +11,13 @@ dioxus = { path = "../../packages/dioxus" }
 dioxus-desktop = { path = "../../packages/desktop" }
 dioxus-web = { path = "../../packages/web" }
 dioxus-ssr = { path = "../../packages/ssr" }
+dioxus-native-core = { path = "../../packages/native-core" }
+dioxus-native-core-macro = { path = "../../packages/native-core-macro" }
 dioxus-router = { path = "../../packages/router" }
 dioxus-liveview = { path = "../../packages/liveview", features = ["axum"] }
-dioxus-tui = { path = "../../packages/tui" }
+dioxus-tui = { path = "../../packages/dioxus-tui" }
 fermi = { path = "../../packages/fermi" }
+shipyard = "0.6.2"
 
 
 # dioxus = { path = "../../packages/dioxus", features = ["desktop", "web", "ssr", "router", "fermi", "tui"] }
