@@ -325,7 +325,7 @@ pub fn partial_derive_state(_: TokenStream, input: TokenStream) -> TokenStream {
 
             #(#items)*
 
-            fn workload_system(type_id: std::any::TypeId, dependants: dioxus_native_core::exports::FxHashSet<std::any::TypeId>, pass_direction: dioxus_native_core::prelude::PassDirection) -> dioxus_native_core::exports::shipyard::WorkloadSystem {
+            fn workload_system(type_id: std::any::TypeId, dependants: std::sync::Arc<dioxus_native_core::prelude::Dependants>, pass_direction: dioxus_native_core::prelude::PassDirection) -> dioxus_native_core::exports::shipyard::WorkloadSystem {
                 use dioxus_native_core::exports::shipyard::{IntoWorkloadSystem, Get, AddComponent};
                 use dioxus_native_core::tree::TreeRef;
                 use dioxus_native_core::prelude::{NodeType, NodeView};

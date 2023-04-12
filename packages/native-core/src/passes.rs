@@ -129,7 +129,7 @@ pub trait State<V: FromAnyValue + Send + Sync = ()>: Any + Send + Sync {
     /// Create a workload system for this state
     fn workload_system(
         type_id: TypeId,
-        dependants: FxHashSet<TypeId>,
+        dependants: Arc<Dependants>,
         pass_direction: PassDirection,
     ) -> WorkloadSystem;
 
@@ -141,10 +141,16 @@ pub trait State<V: FromAnyValue + Send + Sync = ()>: Any + Send + Sync {
         let node_mask = Self::NODE_MASK.build();
         TypeErasedState {
             this_type_id: TypeId::of::<Self>(),
-            combined_dependancy_type_ids: all_dependanices::<V, Self>().iter().copied().collect(),
-            parent_dependant: !Self::ParentDependencies::type_ids().is_empty(),
-            child_dependant: !Self::ChildDependencies::type_ids().is_empty(),
-            dependants: FxHashSet::default(),
+            parent_dependancies_ids: Self::ParentDependencies::type_ids()
+                .iter()
+                .copied()
+                .collect(),
+            child_dependancies_ids: Self::ChildDependencies::type_ids()
+                .iter()
+                .copied()
+                .collect(),
+            node_dependancies_ids: Self::NodeDependencies::type_ids().iter().copied().collect(),
+            dependants: Default::default(),
             mask: node_mask,
             pass_direction: pass_direction::<V, Self>(),
             workload: Self::workload_system,
@@ -169,13 +175,6 @@ fn pass_direction<V: FromAnyValue + Send + Sync, S: State<V>>() -> PassDirection
     }
 }
 
-fn all_dependanices<V: FromAnyValue + Send + Sync, S: State<V>>() -> Box<[TypeId]> {
-    let mut dependencies = S::ParentDependencies::type_ids().to_vec();
-    dependencies.extend(S::ChildDependencies::type_ids().iter());
-    dependencies.extend(S::NodeDependencies::type_ids().iter());
-    dependencies.into_boxed_slice()
-}
-
 #[doc(hidden)]
 #[derive(Borrow, BorrowInfo)]
 pub struct RunPassView<'a, V: FromAnyValue + Send + Sync = ()> {
@@ -191,7 +190,7 @@ pub struct RunPassView<'a, V: FromAnyValue + Send + Sync = ()> {
 #[doc(hidden)]
 pub fn run_pass<V: FromAnyValue + Send + Sync>(
     type_id: TypeId,
-    dependants: FxHashSet<TypeId>,
+    dependants: Arc<Dependants>,
     pass_direction: PassDirection,
     view: RunPassView<V>,
     enter_shadow_dom: bool,
@@ -210,34 +209,7 @@ pub fn run_pass<V: FromAnyValue + Send + Sync>(
             while let Some((height, id)) = dirty.pop_front(type_id) {
                 if (update_node)(id, ctx) {
                     nodes_updated.insert(id);
-                    let shadow_tree = tree.shadow_tree(id);
-                    match (enter_shadow_dom, shadow_tree) {
-                        (true, Some(shadow_tree)) => {
-                            // If this pass uses the shadow dom, update the shadow dom children instead of the normal children
-                            for id in &shadow_tree.shadow_roots {
-                                for dependant in &dependants {
-                                    dirty.insert(*dependant, *id, height + 1);
-                                }
-                            }
-                        }
-                        _ => {
-                            for id in tree.children_ids(id) {
-                                for dependant in &dependants {
-                                    dirty.insert(*dependant, id, height + 1);
-                                }
-                            }
-                        }
-                    }
-                    // If this pass uses the shadow dom, update the light dom's children if this node is a slot
-                    if enter_shadow_dom {
-                        if let Some(slot_for_light_tree) = tree.slot_for_light_tree(id) {
-                            for id in tree.children_ids(slot_for_light_tree) {
-                                for dependant in &dependants {
-                                    dirty.insert(*dependant, id, height + 1);
-                                }
-                            }
-                        }
-                    }
+                    dependants.mark_dirty(&dirty, id, &tree, height);
                 }
             }
         }
@@ -245,23 +217,7 @@ pub fn run_pass<V: FromAnyValue + Send + Sync>(
             while let Some((height, id)) = dirty.pop_back(type_id) {
                 if (update_node)(id, ctx) {
                     nodes_updated.insert(id);
-
-                    // If this pass uses the shadow dom, update the light dom root if this node is a root
-                    let light_tree_root = tree.light_tree_root(id);
-                    match (enter_shadow_dom, light_tree_root) {
-                        (true, Some(light_tree_root)) => {
-                            for dependant in &dependants {
-                                dirty.insert(*dependant, light_tree_root, height + 1);
-                            }
-                        }
-                        _ => {
-                            if let Some(id) = tree.parent_id(id) {
-                                for dependant in &dependants {
-                                    dirty.insert(*dependant, id, height - 1);
-                                }
-                            }
-                        }
-                    }
+                    dependants.mark_dirty(&dirty, id, &tree, height);
                 }
             }
         }
@@ -269,11 +225,40 @@ pub fn run_pass<V: FromAnyValue + Send + Sync>(
             while let Some((height, id)) = dirty.pop_back(type_id) {
                 if (update_node)(id, ctx) {
                     nodes_updated.insert(id);
-                    for dependant in &dependants {
-                        dirty.insert(*dependant, id, height);
-                    }
+                    dependants.mark_dirty(&dirty, id, &tree, height);
                 }
             }
+        }
+    }
+}
+
+/// The states that depend on this state
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
+pub struct Dependants {
+    /// The states in the parent direction that should be invalidated when this state is invalidated
+    pub parent: Vec<TypeId>,
+    /// The states in the child direction that should be invalidated when this state is invalidated
+    pub child: Vec<TypeId>,
+    /// The states in the node direction that should be invalidated when this state is invalidated
+    pub node: Vec<TypeId>,
+}
+
+impl Dependants {
+    fn mark_dirty(&self, dirty: &DirtyNodeStates, id: NodeId, tree: &impl TreeRef, height: u16) {
+        for dependant in &self.child {
+            for id in tree.children_ids(id) {
+                dirty.insert(*dependant, id, height + 1);
+            }
+        }
+
+        for dependant in &self.parent {
+            if let Some(id) = tree.parent_id(id) {
+                dirty.insert(*dependant, id, height - 1);
+            }
+        }
+
+        for dependant in &self.node {
+            dirty.insert(*dependant, id, height);
         }
     }
 }
@@ -281,12 +266,12 @@ pub fn run_pass<V: FromAnyValue + Send + Sync>(
 /// A type erased version of [`State`] that can be added to the [`crate::prelude::RealDom`] with [`crate::prelude::RealDom::new`]
 pub struct TypeErasedState<V: FromAnyValue + Send = ()> {
     pub(crate) this_type_id: TypeId,
-    pub(crate) parent_dependant: bool,
-    pub(crate) child_dependant: bool,
-    pub(crate) combined_dependancy_type_ids: FxHashSet<TypeId>,
-    pub(crate) dependants: FxHashSet<TypeId>,
+    pub(crate) parent_dependancies_ids: FxHashSet<TypeId>,
+    pub(crate) child_dependancies_ids: FxHashSet<TypeId>,
+    pub(crate) node_dependancies_ids: FxHashSet<TypeId>,
+    pub(crate) dependants: Arc<Dependants>,
     pub(crate) mask: NodeMask,
-    pub(crate) workload: fn(TypeId, FxHashSet<TypeId>, PassDirection) -> WorkloadSystem,
+    pub(crate) workload: fn(TypeId, Arc<Dependants>, PassDirection) -> WorkloadSystem,
     pub(crate) pass_direction: PassDirection,
     phantom: PhantomData<V>,
 }
@@ -299,10 +284,18 @@ impl<V: FromAnyValue + Send> TypeErasedState<V> {
             self.pass_direction,
         )
     }
+
+    pub(crate) fn combined_dependancy_type_ids(&self) -> impl Iterator<Item = TypeId> + '_ {
+        self.parent_dependancies_ids
+            .iter()
+            .chain(self.child_dependancies_ids.iter())
+            .chain(self.node_dependancies_ids.iter())
+            .copied()
+    }
 }
 
 /// The direction that a pass should be run in
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub enum PassDirection {
     /// The pass should be run from the root to the leaves
     ParentToChild,
