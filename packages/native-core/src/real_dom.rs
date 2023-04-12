@@ -304,12 +304,11 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
                 };
 
                 // call custom element watchers
-                let custom_element_manager = {
-                    let node = self.get_mut(*node_id).unwrap();
-                    node.get::<CustomElementManager<V>>().map(|x| x.clone())
-                };
+                let node = self.get_mut(*node_id).unwrap();
+                let custom_element_manager =
+                    node.get::<CustomElementManager<V>>().map(|x| x.clone());
                 if let Some(custom_element_manager) = custom_element_manager {
-                    custom_element_manager.on_attributes_changed(self, mask.attributes());
+                    custom_element_manager.on_attributes_changed(node, mask.attributes());
                 }
             }
         }

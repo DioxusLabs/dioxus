@@ -294,7 +294,7 @@ fn child_height(parent: &Node, tree: &impl TreeRef) -> u16 {
                     .expect("Attempted to read a slot that does not exist")
                     + 1
             } else {
-                panic!("Attempted to read the height of a shadow_tree without a slot");
+                panic!("Attempted to read the height of a child of a node with a shadow tree, but the shadow tree does not have a slot. Every shadow tree attached to a node with children must have a slot.")
             }
         }
         None => parent.height + 1,

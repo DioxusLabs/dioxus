@@ -1,3 +1,6 @@
+//! A custom element is a controlled element that renders to a shadow DOM.
+//! Each custom element is registered with a element name
+
 use std::sync::{Arc, RwLock};
 
 use rustc_hash::FxHashMap;
@@ -7,11 +10,12 @@ use crate::{
     node::{FromAnyValue, NodeType},
     node_ref::AttributeMask,
     prelude::{NodeImmutable, NodeMut, RealDom},
+    tree::TreeMut,
     NodeId,
 };
 
 pub(crate) struct CustomElementRegistry<V: FromAnyValue + Send + Sync> {
-    builders: FxHashMap<&'static str, CustomElementBuilder<V>>,
+    builders: FxHashMap<(&'static str, Option<&'static str>), CustomElementBuilder<V>>,
 }
 
 impl<V: FromAnyValue + Send + Sync> Default for CustomElementRegistry<V> {
@@ -25,7 +29,7 @@ impl<V: FromAnyValue + Send + Sync> Default for CustomElementRegistry<V> {
 impl<V: FromAnyValue + Send + Sync> CustomElementRegistry<V> {
     pub fn register<W: CustomElement<V>>(&mut self) {
         self.builders.insert(
-            W::NAME,
+            (W::NAME, W::NAMESPACE),
             CustomElementBuilder {
                 create: |dom| Box::new(W::create(dom)),
             },
@@ -34,16 +38,25 @@ impl<V: FromAnyValue + Send + Sync> CustomElementRegistry<V> {
 
     pub fn add_shadow_dom(&self, mut node: NodeMut<V>) {
         let element_tag = if let NodeType::Element(el) = &*node.node_type() {
-            Some(el.tag.clone())
+            Some((el.tag.clone(), el.namespace.clone()))
         } else {
             None
         };
-        if let Some(element_tag) = element_tag {
-            if let Some(builder) = self.builders.get(element_tag.as_str()) {
+        if let Some((tag, ns)) = element_tag {
+            if let Some(builder) = self.builders.get(&(tag.as_str(), ns.as_deref())) {
                 let boxed_widget = {
                     let dom = node.real_dom_mut();
                     (builder.create)(dom)
                 };
+
+                let shadow_roots = boxed_widget.roots();
+
+                let light_id = node.id();
+                node.real_dom_mut().tree_mut().create_subtree(
+                    light_id,
+                    shadow_roots,
+                    boxed_widget.slot(),
+                );
 
                 let boxed_widget = CustomElementManager {
                     inner: Arc::new(RwLock::new(boxed_widget)),
@@ -64,11 +77,14 @@ pub trait CustomElement<V: FromAnyValue + Send + Sync = ()>: Send + Sync + 'stat
     /// The tag the widget is registered under.
     const NAME: &'static str;
 
-    /// Create a new widget without mounting it.
+    /// The namespace the widget is registered under.
+    const NAMESPACE: Option<&'static str> = None;
+
+    /// Create a new widget *without mounting* it.
     fn create(dom: &mut RealDom<V>) -> Self;
 
     /// The root node of the widget. This must be static once the element is created.
-    fn root(&self) -> NodeId;
+    fn roots(&self) -> Vec<NodeId>;
 
     /// The slot to render children of the element into. This must be static once the element is created.
     fn slot(&self) -> Option<NodeId> {
@@ -76,7 +92,7 @@ pub trait CustomElement<V: FromAnyValue + Send + Sync = ()>: Send + Sync + 'stat
     }
 
     /// Called when the attributes of the widget are changed.
-    fn attributes_changed(&mut self, _dom: &mut RealDom<V>, _attributes: &AttributeMask);
+    fn attributes_changed(&mut self, light_node: NodeMut<V>, attributes: &AttributeMask);
 }
 
 /// A factory for creating widgets
@@ -86,12 +102,17 @@ trait ElementFactory<W: CustomElementUpdater<V>, V: FromAnyValue + Send + Sync =
     /// The tag the widget is registered under.
     const NAME: &'static str;
 
+    /// The namespace the widget is registered under.
+    const NAMESPACE: Option<&'static str> = None;
+
     /// Create a new widget.
     fn create(dom: &mut RealDom<V>) -> W;
 }
 
 impl<W: CustomElement<V>, V: FromAnyValue + Send + Sync> ElementFactory<W, V> for W {
     const NAME: &'static str = W::NAME;
+
+    const NAMESPACE: Option<&'static str> = W::NAMESPACE;
 
     fn create(dom: &mut RealDom<V>) -> Self {
         Self::create(dom)
@@ -101,36 +122,51 @@ impl<W: CustomElement<V>, V: FromAnyValue + Send + Sync> ElementFactory<W, V> fo
 /// A trait for updating widgets
 trait CustomElementUpdater<V: FromAnyValue + Send + Sync = ()>: Send + Sync + 'static {
     /// Called when the attributes of the widget are changed.
-    fn attributes_changed(&mut self, dom: &mut RealDom<V>, attributes: &AttributeMask);
+    fn attributes_changed(&mut self, light_root: NodeMut<V>, attributes: &AttributeMask);
 
     /// The root node of the widget.
-    fn root(&self) -> NodeId;
+    fn roots(&self) -> Vec<NodeId>;
+
+    /// The slot to render children of the element into.
+    fn slot(&self) -> Option<NodeId>;
 }
 
 impl<W: CustomElement<V>, V: FromAnyValue + Send + Sync> CustomElementUpdater<V> for W {
-    fn attributes_changed(&mut self, root: &mut RealDom<V>, attributes: &AttributeMask) {
-        self.attributes_changed(root, attributes);
+    fn attributes_changed(&mut self, light_root: NodeMut<V>, attributes: &AttributeMask) {
+        self.attributes_changed(light_root, attributes);
     }
 
-    fn root(&self) -> NodeId {
-        self.root()
+    fn roots(&self) -> Vec<NodeId> {
+        self.roots()
+    }
+
+    fn slot(&self) -> Option<NodeId> {
+        self.slot()
     }
 }
 
+/// A concrete structure for managing a any widget.
 #[derive(Component, Clone)]
 pub struct CustomElementManager<V: FromAnyValue = ()> {
     inner: Arc<RwLock<Box<dyn CustomElementUpdater<V>>>>,
 }
 
 impl<V: FromAnyValue + Send + Sync> CustomElementManager<V> {
-    pub fn root(&self) -> NodeId {
-        self.inner.read().unwrap().root()
+    /// The root node of the widget's shadow DOM.
+    pub fn roots(&self) -> Vec<NodeId> {
+        self.inner.read().unwrap().roots()
     }
 
-    pub fn on_attributes_changed(&self, dom: &mut RealDom<V>, attributes: &AttributeMask) {
+    /// The slot to render children of the element into.
+    pub fn slot(&self) -> Option<NodeId> {
+        self.inner.read().unwrap().slot()
+    }
+
+    /// Update the custom element based on attributes changed.
+    pub fn on_attributes_changed(&self, light_root: NodeMut<V>, attributes: &AttributeMask) {
         self.inner
             .write()
             .unwrap()
-            .attributes_changed(dom, attributes);
+            .attributes_changed(light_root, attributes);
     }
 }

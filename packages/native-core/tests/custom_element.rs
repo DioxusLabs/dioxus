@@ -2,21 +2,23 @@ use dioxus::prelude::*;
 use dioxus_native_core::{custom_element::CustomElement, prelude::*};
 use dioxus_native_core_macro::partial_derive_state;
 use shipyard::Component;
-use tokio::time::sleep;
 
-#[derive(Debug, Clone, PartialEq, Eq, Default, Component)]
-pub struct BlablaState {
-    count: usize,
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Component)]
+pub struct ColorState {
+    color: usize,
 }
 
 #[partial_derive_state]
-impl State for BlablaState {
+impl State for ColorState {
     type ParentDependencies = (Self,);
     type ChildDependencies = ();
     type NodeDependencies = ();
 
+    // The color state should not be effected by the shadow dom
+    const TRAVERSE_SHADOW_DOM: bool = false;
+
     const NODE_MASK: NodeMaskBuilder<'static> = NodeMaskBuilder::new()
-        .with_attrs(AttributeMaskBuilder::Some(&["blabla"]))
+        .with_attrs(AttributeMaskBuilder::Some(&["color"]))
         .with_element();
 
     fn update<'a>(
@@ -28,8 +30,70 @@ impl State for BlablaState {
         _: &SendAnyMap,
     ) -> bool {
         if let Some((parent,)) = parent {
-            if parent.count != 0 {
-                self.count += 1;
+            self.color = parent.color;
+        }
+        true
+    }
+
+    fn create<'a>(
+        node_view: NodeView<()>,
+        node: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
+        parent: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
+        children: Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>,
+        context: &SendAnyMap,
+    ) -> Self {
+        let mut myself = Self::default();
+        myself.update(node_view, node, parent, children, context);
+        myself
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Component)]
+pub struct LayoutState {
+    size: usize,
+}
+
+#[partial_derive_state]
+impl State for LayoutState {
+    type ParentDependencies = (Self,);
+    type ChildDependencies = ();
+    type NodeDependencies = ();
+
+    // The layout state should be effected by the shadow dom
+    const TRAVERSE_SHADOW_DOM: bool = true;
+
+    const NODE_MASK: NodeMaskBuilder<'static> = NodeMaskBuilder::new()
+        .with_attrs(AttributeMaskBuilder::Some(&["size"]))
+        .with_element();
+
+    fn update<'a>(
+        &mut self,
+        view: NodeView,
+        _: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
+        parent: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
+        _: Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>,
+        _: &SendAnyMap,
+    ) -> bool {
+        println!(
+            "Updating layout state @{:?} {:?}",
+            parent.as_ref().map(|(p,)| p.size),
+            view.node_id()
+        );
+        if let Some(size) = view
+            .attributes()
+            .into_iter()
+            .flatten()
+            .find(|attr| attr.attribute.name == "size")
+        {
+            self.size = size
+                .value
+                .as_float()
+                .or_else(|| size.value.as_int().map(|i| i as f64))
+                .or_else(|| size.value.as_text().and_then(|i| i.parse().ok()))
+                .unwrap_or(0.0) as usize;
+        } else if let Some((parent,)) = parent {
+            if parent.size > 0 {
+                self.size -= 1;
             }
         }
         true
@@ -66,6 +130,7 @@ mod dioxus_elements {
                 $(#[$attr])*
                 pub struct $name;
 
+                #[allow(non_upper_case_globals)]
                 impl $name {
                     pub const TAG_NAME: &'static str = stringify!($name);
                     pub const NAME_SPACE: Option<&'static str> = None;
@@ -85,47 +150,110 @@ mod dioxus_elements {
     pub trait SvgAttributes {}
 
     builder_constructors! {
-        blabla {
-
+        customelementslot {
+            size: attr,
+        };
+        customelementnoslot {
         };
         testing132 {
-
         };
     }
 }
 
+struct CustomElementWithSlot {
+    root: NodeId,
+    slot: NodeId,
+}
+
+impl CustomElement for CustomElementWithSlot {
+    const NAME: &'static str = "customelementslot";
+
+    fn create(dom: &mut RealDom<()>) -> Self {
+        let child = dom.create_node(ElementNode {
+            tag: "div".into(),
+            namespace: None,
+            attributes: Default::default(),
+            listeners: Default::default(),
+        });
+        let slot_id = child.id();
+        let mut root = dom.create_node(ElementNode {
+            tag: "div".into(),
+            namespace: None,
+            attributes: Default::default(),
+            listeners: Default::default(),
+        });
+        root.add_child(slot_id);
+
+        Self {
+            root: root.id(),
+            slot: slot_id,
+        }
+    }
+
+    fn slot(&self) -> Option<NodeId> {
+        Some(self.slot)
+    }
+
+    fn roots(&self) -> Vec<NodeId> {
+        vec![self.root]
+    }
+
+    fn attributes_changed(
+        &mut self,
+        node: NodeMut<()>,
+        attributes: &dioxus_native_core::node_ref::AttributeMask,
+    ) {
+        println!("attributes_changed");
+        println!("{:?}", attributes);
+        println!("{:?}: {:#?}", node.id(), &*node.node_type());
+    }
+}
+
+struct CustomElementWithNoSlot {
+    root: NodeId,
+}
+
+impl CustomElement for CustomElementWithNoSlot {
+    const NAME: &'static str = "customelementnoslot";
+
+    fn create(dom: &mut RealDom<()>) -> Self {
+        let root = dom.create_node(ElementNode {
+            tag: "div".into(),
+            namespace: None,
+            attributes: Default::default(),
+            listeners: Default::default(),
+        });
+        Self { root: root.id() }
+    }
+
+    fn roots(&self) -> Vec<NodeId> {
+        vec![self.root]
+    }
+
+    fn attributes_changed(
+        &mut self,
+        node: NodeMut<()>,
+        attributes: &dioxus_native_core::node_ref::AttributeMask,
+    ) {
+        println!("attributes_changed");
+        println!("{:?}", attributes);
+        println!("{:?}: {:#?}", node.id(), &*node.node_type());
+    }
+}
+
 #[test]
-fn native_core_is_okay() {
-    use std::sync::{Arc, Mutex};
-    use std::time::Duration;
-
+fn custom_elements_work() {
     fn app(cx: Scope) -> Element {
-        let colors = use_state(cx, || vec!["green", "blue", "red"]);
-        let padding = use_state(cx, || 10);
+        let count = use_state(cx, || 0);
 
-        use_effect(cx, colors, |colors| async move {
-            sleep(Duration::from_millis(1000)).await;
-            colors.with_mut(|colors| colors.reverse());
+        use_future!(cx, |count| async move {
+            count.with_mut(|count| *count += 1);
         });
-
-        use_effect(cx, padding, |padding| async move {
-            sleep(Duration::from_millis(10)).await;
-            padding.with_mut(|padding| {
-                if *padding < 65 {
-                    *padding += 1;
-                } else {
-                    *padding = 5;
-                }
-            });
-        });
-
-        let _big = colors[0];
-        let _mid = colors[1];
-        let _small = colors[2];
 
         cx.render(rsx! {
-            blabla {
-                blabla {
+            customelementslot {
+                size: "{count}",
+                customelementslot {
                     testing132 {}
                 }
             }
@@ -138,58 +266,93 @@ fn native_core_is_okay() {
         .unwrap();
 
     rt.block_on(async {
-        let rdom = Arc::new(Mutex::new(RealDom::new([BlablaState::to_type_erased()])));
-        rdom.lock()
-            .unwrap()
-            .register_custom_element::<TestElement>();
-        let mut dioxus_state = DioxusState::create(&mut rdom.lock().unwrap());
+        let mut rdom = RealDom::new([LayoutState::to_type_erased(), ColorState::to_type_erased()]);
+        rdom.register_custom_element::<CustomElementWithSlot>();
+        let mut dioxus_state = DioxusState::create(&mut rdom);
         let mut dom = VirtualDom::new(app);
 
         let mutations = dom.rebuild();
-        dioxus_state.apply_mutations(&mut rdom.lock().unwrap(), mutations);
+        dioxus_state.apply_mutations(&mut rdom, mutations);
 
         let ctx = SendAnyMap::new();
-        rdom.lock().unwrap().update_state(ctx);
+        rdom.update_state(ctx);
 
         for _ in 0..10 {
             dom.wait_for_work().await;
 
             let mutations = dom.render_immediate();
-            dioxus_state.apply_mutations(&mut rdom.lock().unwrap(), mutations);
+            dioxus_state.apply_mutations(&mut rdom, mutations);
 
             let ctx = SendAnyMap::new();
-            rdom.lock().unwrap().update_state(ctx);
+            rdom.update_state(ctx);
+
+            // render...
+            rdom.traverse_depth_first(|node| {
+                let node_type = &*node.node_type();
+                let indent = " ".repeat(node.height() as usize);
+                let color = *node.get::<ColorState>().unwrap();
+                let size = *node.get::<LayoutState>().unwrap();
+                let id = node.id();
+                println!("{indent}{id:?} {color:?} {size:?} {node_type:?}");
+            });
         }
     });
 }
 
-struct TestElement {
-    root: NodeId,
+#[test]
+#[should_panic]
+fn slotless_custom_element_cant_have_children() {
+    fn app(cx: Scope) -> Element {
+        cx.render(rsx! {
+            customelementnoslot {
+                testing132 {}
+            }
+        })
+    }
+
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_time()
+        .build()
+        .unwrap();
+
+    rt.block_on(async {
+        let mut rdom = RealDom::new([LayoutState::to_type_erased(), ColorState::to_type_erased()]);
+        rdom.register_custom_element::<CustomElementWithNoSlot>();
+        let mut dioxus_state = DioxusState::create(&mut rdom);
+        let mut dom = VirtualDom::new(app);
+
+        let mutations = dom.rebuild();
+        dioxus_state.apply_mutations(&mut rdom, mutations);
+
+        let ctx = SendAnyMap::new();
+        rdom.update_state(ctx);
+    });
 }
 
-impl CustomElement for TestElement {
-    const NAME: &'static str = "blabla";
-
-    fn create(dom: &mut RealDom<()>) -> Self {
-        let root = dom.create_node(ElementNode {
-            tag: "shadow_root".into(),
-            namespace: None,
-            attributes: Default::default(),
-            listeners: Default::default(),
-        });
-        Self { root: root.id() }
+#[test]
+fn slotless_custom_element() {
+    fn app(cx: Scope) -> Element {
+        cx.render(rsx! {
+            customelementnoslot {
+            }
+        })
     }
 
-    fn root(&self) -> NodeId {
-        self.root
-    }
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_time()
+        .build()
+        .unwrap();
 
-    fn attributes_changed(
-        &mut self,
-        _dom: &mut RealDom<()>,
-        attributes: &dioxus_native_core::node_ref::AttributeMask,
-    ) {
-        println!("attributes_changed");
-        println!("{:?}", attributes);
-    }
+    rt.block_on(async {
+        let mut rdom = RealDom::new([LayoutState::to_type_erased(), ColorState::to_type_erased()]);
+        rdom.register_custom_element::<CustomElementWithNoSlot>();
+        let mut dioxus_state = DioxusState::create(&mut rdom);
+        let mut dom = VirtualDom::new(app);
+
+        let mutations = dom.rebuild();
+        dioxus_state.apply_mutations(&mut rdom, mutations);
+
+        let ctx = SendAnyMap::new();
+        rdom.update_state(ctx);
+    });
 }
