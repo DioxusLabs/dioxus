@@ -146,7 +146,7 @@ macro_rules! test_state{
             dioxus_state.apply_mutations(&mut dom, mutations);
             dom.update_state(SendAnyMap::new());
 
-            dom.traverse_depth_first(|n| {
+            dom.traverse_depth_first(false, |n| {
                 $(
                     assert_eq!(n.get::<$state>().unwrap().0, 1);
                 )*

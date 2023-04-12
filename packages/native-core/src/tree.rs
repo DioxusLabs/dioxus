@@ -11,8 +11,6 @@ pub struct ShadowTree {
     pub shadow_roots: Vec<NodeId>,
     /// The node that children of the super tree should be inserted under.
     pub slot: Option<NodeId>,
-    /// The node in the super tree that the shadow_tree is attached to.
-    pub super_tree_root: NodeId,
 }
 
 /// A node in a tree.
@@ -35,8 +33,43 @@ pub type TreeMutView<'a> = (EntitiesViewMut<'a>, ViewMut<'a, Node>);
 
 /// A immutable view of a tree.
 pub trait TreeRef {
+    /// Get the id of the parent of the current node, if enter_shadow_dom is true and the current node is a shadow root, the node the shadow root is attached to will be returned
+    #[inline]
+    fn parent_id_advanced(&self, id: NodeId, enter_shadow_dom: bool) -> Option<NodeId> {
+        // If this node is the root of a shadow_tree, return the node the shadow_tree is attached
+        let light_tree_root = self.light_tree_root(id);
+        match (light_tree_root, enter_shadow_dom) {
+            (Some(id), true) => Some(id),
+            _ => {
+                let parent_id = self.parent_id(id);
+                if enter_shadow_dom {
+                    // If this node is attached via a slot, return the slot as the parent instead of the light tree parent
+                    parent_id.map(|id| {
+                        self.shadow_tree(id)
+                            .and_then(|tree| tree.slot)
+                            .unwrap_or(id)
+                    })
+                } else {
+                    parent_id
+                }
+            }
+        }
+    }
     /// The parent id of the node.
     fn parent_id(&self, id: NodeId) -> Option<NodeId>;
+    /// Get the ids of the children of the current node, if enter_shadow_dom is true and the current node is a shadow slot, the ids of the nodes under the node the shadow slot is attached to will be returned
+    #[inline]
+    fn children_ids_advanced(&self, id: NodeId, enter_shadow_dom: bool) -> Vec<NodeId> {
+        let shadow_tree = self.shadow_tree(id);
+        let slot_of_light_tree = self.slot_for_light_tree(id);
+        match (shadow_tree, slot_of_light_tree, enter_shadow_dom) {
+            // If this node is a shadow root, return the shadow roots
+            (Some(tree), _, true) => tree.shadow_roots.clone(),
+            // If this node is a slot, return the children of the node the slot is attached to
+            (None, Some(id), true) => self.children_ids(id),
+            _ => self.children_ids(id),
+        }
+    }
     /// The children ids of the node.
     fn children_ids(&self, id: NodeId) -> Vec<NodeId>;
     /// The shadow tree tree under the node.
@@ -229,7 +262,6 @@ impl<'a> TreeMut for TreeMutView<'a> {
         let light_root_height;
         {
             let shadow_tree = ShadowTree {
-                super_tree_root: id,
                 shadow_roots: shadow_roots.clone(),
                 slot,
             };
@@ -251,6 +283,7 @@ impl<'a> TreeMut for TreeMutView<'a> {
 
         // Now that we have created the shadow_tree, we need to update the height of the shadow_tree roots
         for root in shadow_roots {
+            (&mut self.1).get(root).unwrap().light_tree_root = Some(id);
             set_height(self, root, light_root_height + 1);
         }
     }
@@ -319,7 +352,7 @@ fn set_height(tree: &mut TreeMutView<'_>, node: NodeId, height: u16) {
     if let Some(shadow_tree) = shadow_tree {
         // Set the height of the shadow_tree roots
         for &shadow_root in &shadow_tree.shadow_roots {
-            set_height(tree, shadow_root, height);
+            set_height(tree, shadow_root, height + 1);
         }
     } else {
         // Otherwise, we just set the height of the children to be one more than the height of the parent
@@ -362,17 +395,17 @@ impl<'a> TreeRef for TreeMutView<'a> {
 
     fn shadow_tree(&self, id: NodeId) -> Option<&ShadowTree> {
         let node_data = &self.1;
-        node_data.get(id).unwrap().child_subtree.as_ref()
+        node_data.get(id).ok()?.child_subtree.as_ref()
     }
 
     fn slot_for_light_tree(&self, id: NodeId) -> Option<NodeId> {
         let node_data = &self.1;
-        node_data.get(id).unwrap().slot_for_light_tree
+        node_data.get(id).ok()?.slot_for_light_tree
     }
 
     fn light_tree_root(&self, id: NodeId) -> Option<NodeId> {
         let node_data = &self.1;
-        node_data.get(id).unwrap().light_tree_root
+        node_data.get(id).ok()?.light_tree_root
     }
 }
 

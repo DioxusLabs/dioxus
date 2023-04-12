@@ -23,14 +23,26 @@ impl State for ColorState {
 
     fn update<'a>(
         &mut self,
-        _: NodeView,
+        view: NodeView,
         _: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
         parent: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
         _: Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>,
         _: &SendAnyMap,
     ) -> bool {
-        if let Some((parent,)) = parent {
-            self.color = parent.color;
+        if let Some(size) = view
+            .attributes()
+            .into_iter()
+            .flatten()
+            .find(|attr| attr.attribute.name == "color")
+        {
+            self.color = size
+                .value
+                .as_float()
+                .or_else(|| size.value.as_int().map(|i| i as f64))
+                .or_else(|| size.value.as_text().and_then(|i| i.parse().ok()))
+                .unwrap_or(0.0) as usize;
+        } else if let Some((parent,)) = parent {
+            *self = *parent;
         }
         true
     }
@@ -74,11 +86,6 @@ impl State for LayoutState {
         _: Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>,
         _: &SendAnyMap,
     ) -> bool {
-        println!(
-            "Updating layout state @{:?} {:?}",
-            parent.as_ref().map(|(p,)| p.size),
-            view.node_id()
-        );
         if let Some(size) = view
             .attributes()
             .into_iter()
@@ -93,7 +100,7 @@ impl State for LayoutState {
                 .unwrap_or(0.0) as usize;
         } else if let Some((parent,)) = parent {
             if parent.size > 0 {
-                self.size -= 1;
+                self.size = parent.size - 1;
             }
         }
         true
@@ -130,7 +137,7 @@ mod dioxus_elements {
                 $(#[$attr])*
                 pub struct $name;
 
-                #[allow(non_upper_case_globals)]
+                #[allow(non_upper_case_globals, unused)]
                 impl $name {
                     pub const TAG_NAME: &'static str = stringify!($name);
                     pub const NAME_SPACE: Option<&'static str> = None;
@@ -152,10 +159,14 @@ mod dioxus_elements {
     builder_constructors! {
         customelementslot {
             size: attr,
+            color: attr,
         };
         customelementnoslot {
+            size: attr,
+            color: attr,
         };
         testing132 {
+            color: attr,
         };
     }
 }
@@ -253,6 +264,7 @@ fn custom_elements_work() {
         cx.render(rsx! {
             customelementslot {
                 size: "{count}",
+                color: "1",
                 customelementslot {
                     testing132 {}
                 }
@@ -277,7 +289,7 @@ fn custom_elements_work() {
         let ctx = SendAnyMap::new();
         rdom.update_state(ctx);
 
-        for _ in 0..10 {
+        for i in 0..10usize {
             dom.wait_for_work().await;
 
             let mutations = dom.render_immediate();
@@ -287,13 +299,33 @@ fn custom_elements_work() {
             rdom.update_state(ctx);
 
             // render...
-            rdom.traverse_depth_first(|node| {
+            rdom.traverse_depth_first(true, |node| {
                 let node_type = &*node.node_type();
-                let indent = " ".repeat(node.height() as usize);
+                let height = node.height() as usize;
+                let indent = " ".repeat(height);
                 let color = *node.get::<ColorState>().unwrap();
                 let size = *node.get::<LayoutState>().unwrap();
                 let id = node.id();
                 println!("{indent}{id:?} {color:?} {size:?} {node_type:?}");
+                match node_type {
+                    NodeType::Element(el) => {
+                        match el.tag.as_str() {
+                            // the color should bubble up from customelementslot
+                            "testing132" | "customelementslot" => {
+                                assert_eq!(color.color, 1);
+                            }
+                            // the color of the light dom should not effect the color of the shadow dom, so the color of divs in the shadow dom should be 0
+                            "div" => {
+                                assert_eq!(color.color, 0);
+                            }
+                            _ => {}
+                        }
+                        if el.tag != "Root" {
+                            assert_eq!(size.size, (i + 2).saturating_sub(height));
+                        }
+                    }
+                    _ => {}
+                }
             });
         }
     });

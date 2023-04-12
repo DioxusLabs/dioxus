@@ -16,7 +16,7 @@ use crate::node::{
 };
 use crate::node_ref::{NodeMask, NodeMaskBuilder};
 use crate::node_watcher::{AttributeWatcher, NodeWatcher};
-use crate::passes::{DirtyNodeStates, PassDirection, TypeErasedState};
+use crate::passes::{Dependant, DirtyNodeStates, PassDirection, TypeErasedState};
 use crate::prelude::AttributeMaskBuilder;
 use crate::tree::{TreeMut, TreeMutView, TreeRef, TreeRefView};
 use crate::NodeId;
@@ -128,19 +128,25 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
             let (current, before) = before.split_last_mut().unwrap();
             for state in before.iter_mut().chain(after.iter_mut()) {
                 let dependants = Arc::get_mut(&mut state.dependants).unwrap();
+
+                let current_dependant = Dependant {
+                    type_id: current.this_type_id,
+                    enter_shadow_dom: current.enter_shadow_dom,
+                };
+
                 // If this node depends on the other state as a parent, then the other state should update its children of the current type when it is invalidated
                 if current
                     .parent_dependancies_ids
                     .contains(&state.this_type_id)
-                    && !dependants.child.contains(&current.this_type_id)
+                    && !dependants.child.contains(&current_dependant)
                 {
-                    dependants.child.push(current.this_type_id);
+                    dependants.child.push(current_dependant);
                 }
                 // If this node depends on the other state as a child, then the other state should update its parent of the current type when it is invalidated
                 if current.child_dependancies_ids.contains(&state.this_type_id)
-                    && !dependants.parent.contains(&current.this_type_id)
+                    && !dependants.parent.contains(&current_dependant)
                 {
-                    dependants.parent.push(current.this_type_id);
+                    dependants.parent.push(current_dependant);
                 }
                 // If this node depends on the other state as a sibling, then the other state should update its siblings of the current type when it is invalidated
                 if current.node_dependancies_ids.contains(&state.this_type_id)
@@ -151,15 +157,19 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
             }
             // If the current state depends on itself, then it should update itself when it is invalidated
             let dependants = Arc::get_mut(&mut current.dependants).unwrap();
+            let current_dependant = Dependant {
+                type_id: current.this_type_id,
+                enter_shadow_dom: current.enter_shadow_dom,
+            };
             match current.pass_direction {
                 PassDirection::ChildToParent => {
-                    if !dependants.parent.contains(&current.this_type_id) {
-                        dependants.parent.push(current.this_type_id);
+                    if !dependants.parent.contains(&current_dependant) {
+                        dependants.parent.push(current_dependant);
                     }
                 }
                 PassDirection::ParentToChild => {
-                    if !dependants.child.contains(&current.this_type_id) {
-                        dependants.child.push(current.this_type_id);
+                    if !dependants.child.contains(&current_dependant) {
+                        dependants.child.push(current_dependant);
                     }
                 }
                 _ => {}
@@ -371,27 +381,27 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
     }
 
     /// Traverses the dom in a depth first manner, calling the provided function on each node.
-    pub fn traverse_depth_first(&self, mut f: impl FnMut(NodeRef<V>)) {
+    pub fn traverse_depth_first(&self, enter_shadow_doms: bool, mut f: impl FnMut(NodeRef<V>)) {
         let mut stack = vec![self.root_id()];
         let tree = self.tree_ref();
         while let Some(id) = stack.pop() {
             if let Some(node) = self.get(id) {
                 f(node);
-                let children = tree.children_ids(id);
+                let children = tree.children_ids_advanced(id, enter_shadow_doms);
                 stack.extend(children.iter().copied().rev());
             }
         }
     }
 
     /// Traverses the dom in a breadth first manner, calling the provided function on each node.
-    pub fn traverse_breadth_first(&self, mut f: impl FnMut(NodeRef<V>)) {
+    pub fn traverse_breadth_first(&self, enter_shadow_doms: bool, mut f: impl FnMut(NodeRef<V>)) {
         let mut queue = VecDeque::new();
         queue.push_back(self.root_id());
         let tree = self.tree_ref();
         while let Some(id) = queue.pop_front() {
             if let Some(node) = self.get(id) {
                 f(node);
-                let children = tree.children_ids(id);
+                let children = tree.children_ids_advanced(id, enter_shadow_doms);
                 for id in children {
                     queue.push_back(id);
                 }
@@ -400,11 +410,15 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
     }
 
     /// Traverses the dom in a depth first manner mutably, calling the provided function on each node.
-    pub fn traverse_depth_first_mut(&mut self, mut f: impl FnMut(NodeMut<V>)) {
+    pub fn traverse_depth_first_mut(
+        &mut self,
+        enter_shadow_doms: bool,
+        mut f: impl FnMut(NodeMut<V>),
+    ) {
         let mut stack = vec![self.root_id()];
         while let Some(id) = stack.pop() {
             let tree = self.tree_ref();
-            let mut children = tree.children_ids(id);
+            let mut children = tree.children_ids_advanced(id, enter_shadow_doms);
             drop(tree);
             children.reverse();
             if let Some(node) = self.get_mut(id) {
@@ -416,12 +430,16 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
     }
 
     /// Traverses the dom in a breadth first manner mutably, calling the provided function on each node.
-    pub fn traverse_breadth_first_mut(&mut self, mut f: impl FnMut(NodeMut<V>)) {
+    pub fn traverse_breadth_first_mut(
+        &mut self,
+        enter_shadow_doms: bool,
+        mut f: impl FnMut(NodeMut<V>),
+    ) {
         let mut queue = VecDeque::new();
         queue.push_back(self.root_id());
         while let Some(id) = queue.pop_front() {
             let tree = self.tree_ref();
-            let children = tree.children_ids(id);
+            let children = tree.children_ids_advanced(id, enter_shadow_doms);
             drop(tree);
             if let Some(node) = self.get_mut(id) {
                 f(node);
