@@ -8,7 +8,7 @@ fn main() {
 }
 
 fn app(cx: Scope) -> Element {
-    use_router(cx, &|| RouterConfiguration::default(), &|| {
+    use_router(cx, &RouterConfiguration::default, &|| {
         Segment::content(comp(Home)).fixed("settings", comp(Settings))
     });
 

@@ -12,7 +12,7 @@ fn main() {
 
 fn App(cx: Scope) -> Element {
     use_router(
-        &cx,
+        cx,
         &|| {
             #[cfg(not(feature = "web"))]
             let history = MemoryHistory::default();

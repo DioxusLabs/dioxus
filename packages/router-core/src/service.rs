@@ -590,8 +590,8 @@ mod tests {
         assert!(state.parameters.is_empty());
         assert_eq!(state.path, String::from("/fixed"));
         assert_eq!(state.query, Some(String::from("test=value")));
-        assert_eq!(state.can_go_back, false);
-        assert_eq!(state.can_go_forward, false);
+        assert!(!state.can_go_back);
+        assert!(!state.can_go_forward);
         assert_eq!(s.names, state.name_map);
     }
 
@@ -599,7 +599,7 @@ mod tests {
     fn update_routing_root_index() {
         let (mut s, _, _) = RouterService::<_, u8>::new(
             test_segment(),
-            Box::new(MemoryHistory::default()),
+            Box::<MemoryHistory>::default(),
             Arc::new(|_| {}),
             None,
             ContentAtom("external target"),
@@ -619,8 +619,8 @@ mod tests {
         assert_eq!(state.path, String::from("/"));
         assert!(state.query.is_none());
         assert!(state.prefix.is_none());
-        assert_eq!(state.can_go_back, false);
-        assert_eq!(state.can_go_forward, false);
+        assert!(!state.can_go_back);
+        assert!(!state.can_go_forward);
     }
 
     #[test]
@@ -645,8 +645,8 @@ mod tests {
         });
         assert!(state.parameters.is_empty());
         assert_eq!(state.path, String::from("/fixed"));
-        assert_eq!(state.can_go_back, false);
-        assert_eq!(state.can_go_forward, false);
+        assert!(!state.can_go_back);
+        assert!(!state.can_go_forward);
     }
 
     #[test]
@@ -699,7 +699,7 @@ mod tests {
 
         let (mut s, _, _) = RouterService::<_, u8>::new(
             Segment::empty(),
-            Box::new(MemoryHistory::default()),
+            Box::<MemoryHistory>::default(),
             Arc::new(move |id| {
                 ids2.lock().unwrap().push(id);
             }),
@@ -727,7 +727,7 @@ mod tests {
     fn push_internal() {
         let (mut s, _, _) = RouterService::<_, u8>::new(
             test_segment(),
-            Box::new(MemoryHistory::default()),
+            Box::<MemoryHistory>::default(),
             Arc::new(|_| {}),
             None,
             ContentAtom("external target"),
@@ -746,15 +746,15 @@ mod tests {
         });
         assert!(state.parameters.is_empty());
         assert_eq!(state.path, String::from("/fixed"));
-        assert_eq!(state.can_go_back, true);
-        assert_eq!(state.can_go_forward, false);
+        assert!(state.can_go_back);
+        assert!(!state.can_go_forward);
     }
 
     #[test]
     fn push_named() {
         let (mut s, _, _) = RouterService::<_, u8>::new(
             test_segment(),
-            Box::new(MemoryHistory::default()),
+            Box::<MemoryHistory>::default(),
             Arc::new(|_| {}),
             None,
             ContentAtom("external target"),
@@ -773,8 +773,8 @@ mod tests {
         });
         assert!(state.parameters.is_empty());
         assert_eq!(state.path, String::from("/fixed"));
-        assert_eq!(state.can_go_back, true);
-        assert_eq!(state.can_go_forward, false);
+        assert!(state.can_go_back);
+        assert!(!state.can_go_forward);
     }
 
     #[test]
@@ -811,15 +811,15 @@ mod tests {
             r
         });
         assert_eq!(state.path, String::from("/fixed"));
-        assert_eq!(state.can_go_back, false);
-        assert_eq!(state.can_go_forward, false);
+        assert!(!state.can_go_back);
+        assert!(!state.can_go_forward);
     }
 
     #[test]
     fn replace_named() {
         let (mut s, _, _) = RouterService::<_, u8>::new(
             test_segment(),
-            Box::new(MemoryHistory::default()),
+            Box::<MemoryHistory>::default(),
             Arc::new(|_| {}),
             None,
             ContentAtom("external target"),
@@ -838,15 +838,15 @@ mod tests {
         });
         assert!(state.parameters.is_empty());
         assert_eq!(state.path, String::from("/fixed"));
-        assert_eq!(state.can_go_back, false);
-        assert_eq!(state.can_go_forward, false);
+        assert!(!state.can_go_back);
+        assert!(!state.can_go_forward);
     }
 
     #[test]
     fn replace_internal() {
         let (mut s, _, _) = RouterService::<_, u8>::new(
             test_segment(),
-            Box::new(MemoryHistory::default()),
+            Box::<MemoryHistory>::default(),
             Arc::new(|_| {}),
             None,
             ContentAtom("external target"),
@@ -865,8 +865,8 @@ mod tests {
         });
         assert!(state.parameters.is_empty());
         assert_eq!(state.path, String::from("/fixed"));
-        assert_eq!(state.can_go_back, false);
-        assert_eq!(state.can_go_forward, false);
+        assert!(!state.can_go_back);
+        assert!(!state.can_go_forward);
     }
 
     #[test]
@@ -903,15 +903,15 @@ mod tests {
             r
         });
         assert_eq!(state.path, String::from("/fixed"));
-        assert_eq!(state.can_go_back, false);
-        assert_eq!(state.can_go_forward, false);
+        assert!(!state.can_go_back);
+        assert!(!state.can_go_forward);
     }
 
     #[test]
     fn subscribe() {
         let (mut s, _, _) = RouterService::<_, u8>::new(
             Segment::empty(),
-            Box::new(MemoryHistory::default()),
+            Box::<MemoryHistory>::default(),
             Arc::new(|_| {}),
             None,
             ContentAtom("external target"),
@@ -982,8 +982,8 @@ mod tests {
             r
         });
         assert_eq!(state.path, String::from("/%F0%9F%A5%B3"));
-        assert_eq!(state.can_go_back, false);
-        assert_eq!(state.can_go_forward, false);
+        assert!(!state.can_go_back);
+        assert!(!state.can_go_forward);
     }
 
     #[test]
@@ -1006,8 +1006,8 @@ mod tests {
         assert!(state.names.is_empty());
         assert!(state.parameters.is_empty());
         assert_eq!(state.path, String::from("/%F0%9F%8E%BA"));
-        assert_eq!(state.can_go_back, false);
-        assert_eq!(state.can_go_forward, false);
+        assert!(!state.can_go_back);
+        assert!(!state.can_go_forward);
     }
 
     #[test]
@@ -1078,7 +1078,7 @@ mod tests {
         assert_eq!(state.path, String::from("/"));
         assert!(state.query.is_none());
         assert_eq!(state.prefix, Some(String::from("/prefix")));
-        assert_eq!(state.can_go_back, false);
-        assert_eq!(state.can_go_forward, false);
+        assert!(!state.can_go_back);
+        assert!(!state.can_go_forward);
     }
 }

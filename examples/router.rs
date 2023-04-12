@@ -8,7 +8,7 @@ fn main() {
 }
 
 fn app(cx: Scope) -> Element {
-    use_router(cx, &|| RouterConfiguration::default(), &|| {
+    use_router(cx, &RouterConfiguration::default, &|| {
         Segment::content(comp(Home))
             .fixed(
                 "users",
@@ -79,7 +79,7 @@ fn User(cx: Scope) -> Element {
 
     let user = state.parameter::<UserId>().unwrap();
 
-    let query = state.query.as_ref().map(|q| q.clone()).unwrap_or_default();
+    let query = state.query.as_ref().cloned().unwrap_or_default();
     let bold = query.contains("bold") && !query.contains("bold=false");
 
     cx.render(rsx! {

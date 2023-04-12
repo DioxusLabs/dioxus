@@ -20,7 +20,7 @@ pub struct Client {
 type ClientContext = Arc<Mutex<Vec<Client>>>;
 
 fn App(cx: Scope) -> Element {
-    use_router(cx, &|| RouterConfiguration::default(), &|| {
+    use_router(cx, &RouterConfiguration::default, &|| {
         Segment::content(comp(ClientList))
             .fixed(
                 "new",
@@ -32,7 +32,7 @@ fn App(cx: Scope) -> Element {
             )
     });
 
-    use_context_provider::<ClientContext>(&cx, Default::default);
+    use_context_provider::<ClientContext>(cx, Default::default);
 
     render! {
         link {
@@ -86,11 +86,11 @@ fn ClientList(cx: Scope) -> Element {
 struct ClientAddName;
 fn ClientAdd(cx: Scope) -> Element {
     let clients = use_context::<ClientContext>(cx).unwrap();
-    let first_name = use_state(&cx, String::new);
-    let last_name = use_state(&cx, String::new);
-    let description = use_state(&cx, String::new);
+    let first_name = use_state(cx, String::new);
+    let last_name = use_state(cx, String::new);
+    let description = use_state(cx, String::new);
 
-    let navigator = use_navigate(&cx).unwrap();
+    let navigator = use_navigate(cx).unwrap();
 
     cx.render(rsx! {
         h2 { "Add new Client" }
@@ -178,7 +178,7 @@ fn ClientAdd(cx: Scope) -> Element {
 
 struct SettingsName;
 fn Settings(cx: Scope) -> Element {
-    let clients = use_context::<ClientContext>(&cx).unwrap();
+    let clients = use_context::<ClientContext>(cx).unwrap();
 
     cx.render(rsx! {
         h2 { "Settings" }

@@ -252,8 +252,8 @@ mod tests {
         assert!(state.names.is_empty());
         assert!(state.parameters.is_empty());
         assert_eq!(state.path, String::from("/"));
-        assert_eq!(state.can_go_back, false);
-        assert_eq!(state.can_go_forward, true);
+        assert!(!state.can_go_back);
+        assert!(state.can_go_forward);
     }
 
     #[test]

@@ -14,7 +14,7 @@ fn prepare(link: Component) -> String {
     }
 
     impl PartialEq for AppProps {
-        fn eq(&self, other: &Self) -> bool {
+        fn eq(&self, _other: &Self) -> bool {
             false
         }
     }
