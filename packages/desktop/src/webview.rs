@@ -13,7 +13,7 @@ pub fn build(
     cfg: &mut Config,
     event_loop: &EventLoopWindowTarget<UserWindowEvent>,
     proxy: EventLoopProxy<UserWindowEvent>,
-) -> Rc<WebView> {
+) -> (Rc<WebView>, WebContext) {
     let builder = cfg.window.clone();
     let window = builder.build(event_loop).unwrap();
     let file_handler = cfg.file_drop_handler.take();
@@ -81,5 +81,5 @@ pub fn build(
         webview = webview.with_devtools(true);
     }
 
-    Rc::new(webview.build().unwrap())
+    (Rc::new(webview.build().unwrap()), web_context)
 }

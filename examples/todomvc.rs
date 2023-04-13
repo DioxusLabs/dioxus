@@ -7,7 +7,7 @@ fn main() {
     dioxus_desktop::launch(app);
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Clone, Copy)]
 pub enum FilterState {
     All,
     Active,
@@ -39,56 +39,99 @@ pub fn app(cx: Scope<()>) -> Element {
         .collect::<Vec<_>>();
     filtered_todos.sort_unstable();
 
-    let show_clear_completed = todos.values().any(|todo| todo.checked);
-    let items_left = filtered_todos.len();
-    let item_text = match items_left {
+    let active_todo_count = todos.values().filter(|item| !item.checked).count();
+    let active_todo_text = match active_todo_count {
         1 => "item",
         _ => "items",
     };
 
-    cx.render(rsx!{
+    let show_clear_completed = todos.values().any(|todo| todo.checked);
+
+    let selected = |state| {
+        if *filter == state {
+            "selected"
+        } else {
+            "false"
+        }
+    };
+
+    cx.render(rsx! {
         section { class: "todoapp",
             style { include_str!("./assets/todomvc.css") }
-            div {
-                header { class: "header",
-                    h1 {"todos"}
-                    input {
-                        class: "new-todo",
-                        placeholder: "What needs to be done?",
-                        value: "{draft}",
-                        autofocus: "true",
-                        oninput: move |evt| {
-                            draft.set(evt.value.clone());
-                        },
-                        onkeydown: move |evt| {
-                            if evt.key() == Key::Enter && !draft.is_empty() {
-                                todos.make_mut().insert(
-                                    **todo_id,
-                                    TodoItem {
-                                        id: **todo_id,
-                                        checked: false,
-                                        contents: draft.to_string(),
-                                    },
-                                );
-                                *todo_id.make_mut() += 1;
-                                draft.set("".to_string());
-                            }
+            header { class: "header",
+                h1 {"todos"}
+                input {
+                    class: "new-todo",
+                    placeholder: "What needs to be done?",
+                    value: "{draft}",
+                    autofocus: "true",
+                    oninput: move |evt| {
+                        draft.set(evt.value.clone());
+                    },
+                    onkeydown: move |evt| {
+                        if evt.key() == Key::Enter && !draft.is_empty() {
+                            todos.make_mut().insert(
+                                **todo_id,
+                                TodoItem {
+                                    id: **todo_id,
+                                    checked: false,
+                                    contents: draft.to_string(),
+                                },
+                            );
+                            *todo_id.make_mut() += 1;
+                            draft.set("".to_string());
                         }
                     }
                 }
+            }
+            section {
+                class: "main",
+                if !todos.is_empty() {
+                    rsx! {
+                        input {
+                            id: "toggle-all",
+                            class: "toggle-all",
+                            r#type: "checkbox",
+                            onchange: move |_| {
+                                let check = active_todo_count != 0;
+                                for (_, item) in todos.make_mut().iter_mut() {
+                                    item.checked = check;
+                                }
+                            },
+                            checked: if active_todo_count == 0 { "true" } else { "false" },
+                        }
+                        label { r#for: "toggle-all" }
+                    }
+                }
                 ul { class: "todo-list",
-                    filtered_todos.iter().map(|id| rsx!(TodoEntry { key: "{id}", id: *id, todos: todos }))
+                    filtered_todos.iter().map(|id| rsx!(TodoEntry {
+                        key: "{id}",
+                        id: *id,
+                        todos: todos,
+                    }))
                 }
                 (!todos.is_empty()).then(|| rsx!(
                     footer { class: "footer",
                         span { class: "todo-count",
-                            strong {"{items_left} "}
-                            span {"{item_text} left"}
+                            strong {"{active_todo_count} "}
+                            span {"{active_todo_text} left"}
                         }
                         ul { class: "filters",
-                            li { class: "All", a { onclick: move |_| filter.set(FilterState::All), "All" }}
-                            li { class: "Active", a { onclick: move |_| filter.set(FilterState::Active), "Active" }}
-                            li { class: "Completed", a { onclick: move |_| filter.set(FilterState::Completed), "Completed" }}
+                            for (state, state_text, url) in [
+                                (FilterState::All, "All", "#/"),
+                                (FilterState::Active, "Active", "#/active"),
+                                (FilterState::Completed, "Completed", "#/completed"),
+                            ] {
+                                li {
+                                    a {
+                                        href: url,
+                                        class: selected(state),
+                                        onclick: move |_| filter.set(state),
+                                        prevent_default: "onclick",
+                                        state_text
+                                    }
+                                }
+                            }
                         }
                         show_clear_completed.then(|| rsx!(
                             button {
@@ -102,8 +145,8 @@ pub fn app(cx: Scope<()>) -> Element {
             }
         }
         footer { class: "info",
-            p {"Double-click to edit a todo"}
-            p { "Created by ", a {  href: "http://github.com/jkelleyrtp/", "jkelleyrtp" }}
+            p { "Double-click to edit a todo" }
+            p { "Created by ", a { href: "http://github.com/jkelleyrtp/", "jkelleyrtp" }}
             p { "Part of ", a { href: "http://todomvc.com", "TodoMVC" }}
         }
     })
@@ -136,12 +179,16 @@ pub fn TodoEntry<'a>(cx: Scope<'a, TodoEntryProps<'a>>) -> Element {
                         cx.props.todos.make_mut()[&cx.props.id].checked = evt.value.parse().unwrap();
                     }
                 }
-
                 label {
                     r#for: "cbg-{todo.id}",
-                    onclick: move |_| is_editing.set(true),
+                    ondblclick: move |_| is_editing.set(true),
                     prevent_default: "onclick",
                     "{todo.contents}"
+                }
+                button {
+                    class: "destroy",
+                    onclick: move |_| { cx.props.todos.make_mut().remove(&todo.id); },
+                    prevent_default: "onclick",
                 }
             }
             is_editing.then(|| rsx!{
