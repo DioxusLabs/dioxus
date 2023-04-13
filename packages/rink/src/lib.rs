@@ -6,7 +6,7 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use dioxus_native_core::prelude::*;
+use dioxus_native_core::{prelude::*, tree::TreeRef};
 use dioxus_native_core::{real_dom::RealDom, FxDashSet, NodeId, SendAnyMap};
 use focus::FocusState;
 use futures::{channel::mpsc::UnboundedSender, pin_mut, Future, StreamExt};
@@ -262,7 +262,7 @@ pub fn render<R: Driver>(
                             }
                         },
                         Some(evt) = event_reciever.next() => {
-                            event_recieved=Some(evt);
+                            event_recieved = Some(evt);
                         }
                     }
                 }
@@ -342,19 +342,50 @@ pub trait Driver {
 /// Before sending the event to drivers, we need to bubble it up the tree to any widgets that are listening
 fn bubble_event_to_widgets(rdom: &mut RealDom, event: &Event) {
     let id = event.id;
-    let mut node = Some(rdom.get_mut(id).unwrap());
+    let mut node = Some(id);
 
-    while let Some(mut node_mut) = node {
-        let parent_id = node_mut.parent_id();
-        if let Some(mut widget) = node_mut
-            .get_mut::<RinkWidgetTraitObject>()
-            .map(|w| w.clone())
+    while let Some(node_id) = node {
+        let parent_id = {
+            let tree = rdom.tree_ref();
+            tree.parent_id_advanced(node_id, true)
+        };
+
         {
-            widget.handle_event(event, &mut node_mut)
+            // println!("@ bubbling event to node {:?}", node_id);
+            let mut node_mut = rdom.get_mut(node_id).unwrap();
+            if let Some(mut widget) = node_mut
+                .get_mut::<RinkWidgetTraitObject>()
+                .map(|w| w.clone())
+            {
+                widget.handle_event(event, node_mut)
+            }
         }
+
         if !event.bubbles {
+            // println!("event does not bubble");
             break;
         }
-        node = parent_id.map(|id| rdom.get_mut(id).unwrap());
+        node = parent_id;
     }
+}
+
+pub(crate) fn get_abs_layout(node: NodeRef, taffy: &Taffy) -> Layout {
+    let mut node_layout = *taffy
+        .layout(node.get::<TaffyLayout>().unwrap().node.unwrap())
+        .unwrap();
+    let mut current = node;
+
+    let dom = node.real_dom();
+    let tree = dom.tree_ref();
+
+    while let Some(parent) = tree.parent_id_advanced(current.id(), true) {
+        let parent = dom.get(parent).unwrap();
+        current = parent;
+        let parent_layout = taffy
+            .layout(parent.get::<TaffyLayout>().unwrap().node.unwrap())
+            .unwrap();
+        node_layout.location.x += parent_layout.location.x;
+        node_layout.location.y += parent_layout.location.y;
+    }
+    node_layout
 }

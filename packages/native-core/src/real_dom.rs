@@ -10,7 +10,10 @@ use std::collections::VecDeque;
 use std::ops::{Deref, DerefMut};
 use std::sync::{Arc, RwLock};
 
-use crate::custom_element::{CustomElement, CustomElementManager, CustomElementRegistry};
+use crate::custom_element::{
+    CustomElement, CustomElementFactory, CustomElementManager, CustomElementRegistry,
+    CustomElementUpdater,
+};
 use crate::node::{
     ElementNode, FromAnyValue, NodeType, OwnedAttributeDiscription, OwnedAttributeValue, TextNode,
 };
@@ -478,7 +481,16 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
 
     /// Registers a new custom element.
     pub fn register_custom_element<E: CustomElement<V>>(&mut self) {
-        self.custom_elements.write().unwrap().register::<E>()
+        self.register_custom_element_factory::<E, E>()
+    }
+
+    /// Registers a new custom element with a custom factory.
+    pub fn register_custom_element_factory<F, U>(&mut self)
+    where
+        F: CustomElementFactory<U, V>,
+        U: CustomElementUpdater<V>,
+    {
+        self.custom_elements.write().unwrap().register::<F, U>()
     }
 }
 
@@ -678,6 +690,14 @@ impl<'a, V: FromAnyValue + Send + Sync> NodeImmutable<V> for NodeMut<'a, V> {
 }
 
 impl<'a, V: FromAnyValue + Send + Sync> NodeMut<'a, V> {
+    /// Reborrow the node mutably
+    pub fn reborrow(&mut self) -> NodeMut<'_, V> {
+        NodeMut {
+            id: self.id,
+            dom: self.dom,
+        }
+    }
+
     /// Get the real dom this node was created in mutably
     #[inline(always)]
     pub fn real_dom_mut(&mut self) -> &mut RealDom<V> {

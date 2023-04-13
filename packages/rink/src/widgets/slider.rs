@@ -2,11 +2,11 @@ use std::collections::HashMap;
 
 use dioxus_html::{input_data::keyboard_types::Key, KeyboardData, MouseData};
 use dioxus_native_core::{
+    custom_element::CustomElement,
     node::{OwnedAttributeDiscription, OwnedAttributeValue},
     node_ref::AttributeMask,
     prelude::{ElementNode, NodeType},
     real_dom::{ElementNodeMut, NodeImmutable, NodeMut, NodeTypeMut, RealDom},
-    utils::widget_watcher::Widget,
     NodeId,
 };
 use shipyard::UniqueView;
@@ -205,7 +205,7 @@ impl Slider {
         }
     }
 
-    fn handle_keydown(&mut self, root: &mut NodeMut, data: &KeyboardData) {
+    fn handle_keydown(&mut self, mut root: NodeMut, data: &KeyboardData) {
         let key = data.key();
 
         let step = self.step();
@@ -227,7 +227,7 @@ impl Slider {
         self.write_value(rdom, id);
     }
 
-    fn handle_mousemove(&mut self, root: &mut NodeMut, data: &MouseData) {
+    fn handle_mousemove(&mut self, mut root: NodeMut, data: &MouseData) {
         if !data.held_buttons().is_empty() {
             let id = root.id();
             let rdom = root.real_dom_mut();
@@ -250,10 +250,14 @@ impl Slider {
     }
 }
 
-impl Widget for Slider {
+impl CustomElement for Slider {
     const NAME: &'static str = "input";
 
-    fn create(root: &mut dioxus_native_core::real_dom::NodeMut<()>) -> Self {
+    fn roots(&self) -> Vec<NodeId> {
+        vec![self.div_wrapper]
+    }
+
+    fn create(mut root: dioxus_native_core::real_dom::NodeMut) -> Self {
         let node_type = root.node_type();
         let NodeType::Element(el) = &*node_type else { panic!("input must be an element") };
 
@@ -364,11 +368,9 @@ impl Widget for Slider {
         div_wrapper.add_child(cursor_span_id);
         div_wrapper.add_child(post_cursor_div_id);
 
-        div_wrapper.add_event_listener("mousemove");
-        div_wrapper.add_event_listener("mousedown");
+        root.add_event_listener("mousemove");
+        root.add_event_listener("mousedown");
         root.add_event_listener("keydown");
-
-        root.add_child(div_wrapper_id);
 
         Self {
             pre_cursor_div: pre_cursor_div_id,
@@ -381,7 +383,7 @@ impl Widget for Slider {
 
     fn attributes_changed(
         &mut self,
-        mut root: dioxus_native_core::real_dom::NodeMut<()>,
+        mut root: dioxus_native_core::real_dom::NodeMut,
         attributes: &dioxus_native_core::node_ref::AttributeMask,
     ) {
         match attributes {
@@ -428,11 +430,7 @@ impl Widget for Slider {
 }
 
 impl RinkWidget for Slider {
-    fn handle_event(
-        &mut self,
-        event: &crate::Event,
-        node: &mut dioxus_native_core::real_dom::NodeMut,
-    ) {
+    fn handle_event(&mut self, event: &crate::Event, node: dioxus_native_core::real_dom::NodeMut) {
         match event.name {
             "keydown" => {
                 if let EventData::Keyboard(data) = &event.data {

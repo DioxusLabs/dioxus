@@ -179,7 +179,8 @@ struct CustomElementWithSlot {
 impl CustomElement for CustomElementWithSlot {
     const NAME: &'static str = "customelementslot";
 
-    fn create(dom: &mut RealDom<()>) -> Self {
+    fn create(mut node: NodeMut<()>) -> Self {
+        let dom = node.real_dom_mut();
         let child = dom.create_node(ElementNode {
             tag: "div".into(),
             namespace: None,
@@ -227,7 +228,8 @@ struct CustomElementWithNoSlot {
 impl CustomElement for CustomElementWithNoSlot {
     const NAME: &'static str = "customelementnoslot";
 
-    fn create(dom: &mut RealDom<()>) -> Self {
+    fn create(mut node: NodeMut<()>) -> Self {
+        let dom = node.real_dom_mut();
         let root = dom.create_node(ElementNode {
             tag: "div".into(),
             namespace: None,

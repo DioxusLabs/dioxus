@@ -77,7 +77,7 @@ impl Driver for Counter {
         _: bool,
     ) {
         match event_type {
-            "oninput" => {
+            "input" => {
                 // when the button is clicked, increment the counter
                 if let EventData::Form(input_event) = &*event {
                     if let Ok(value) = input_event.value.parse::<f64>() {

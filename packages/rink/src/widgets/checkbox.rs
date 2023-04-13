@@ -2,11 +2,11 @@ use std::collections::HashMap;
 
 use dioxus_html::input_data::keyboard_types::Key;
 use dioxus_native_core::{
+    custom_element::CustomElement,
     node::OwnedAttributeDiscription,
     node_ref::AttributeMask,
     prelude::NodeType,
     real_dom::{ElementNodeMut, NodeImmutable, NodeMut, NodeTypeMut},
-    utils::widget_watcher::Widget,
     NodeId,
 };
 use shipyard::UniqueView;
@@ -91,7 +91,7 @@ impl CheckBox {
             == "true";
     }
 
-    fn write_value(&self, root: &mut NodeMut) {
+    fn write_value(&self, mut root: NodeMut) {
         let single_char = {
             let node_type = root.node_type_mut();
             let NodeTypeMut::Element( el) = node_type else { panic!("input must be an element") };
@@ -117,7 +117,7 @@ impl CheckBox {
         }
     }
 
-    fn switch(&mut self, node: &mut NodeMut) {
+    fn switch(&mut self, mut node: NodeMut) {
         let new_state = !self.checked;
 
         let data = FormData {
@@ -147,10 +147,14 @@ impl CheckBox {
     }
 }
 
-impl Widget for CheckBox {
+impl CustomElement for CheckBox {
     const NAME: &'static str = "input";
 
-    fn create(root: &mut dioxus_native_core::real_dom::NodeMut<()>) -> Self {
+    fn roots(&self) -> Vec<NodeId> {
+        vec![self.text_id]
+    }
+
+    fn create(mut root: dioxus_native_core::real_dom::NodeMut) -> Self {
         let node_type = root.node_type();
         let NodeType::Element(el) = &*node_type else { panic!("input must be an element") };
 
@@ -172,7 +176,6 @@ impl Widget for CheckBox {
         root.add_event_listener("click");
         root.add_event_listener("keydown");
         let div_id = root.id();
-        root.add_child(text_id);
 
         let myself = Self {
             div_id,
@@ -187,7 +190,7 @@ impl Widget for CheckBox {
 
     fn attributes_changed(
         &mut self,
-        mut root: dioxus_native_core::real_dom::NodeMut<()>,
+        mut root: dioxus_native_core::real_dom::NodeMut,
         attributes: &dioxus_native_core::node_ref::AttributeMask,
     ) {
         match attributes {
@@ -199,7 +202,7 @@ impl Widget for CheckBox {
                     self.update_size_attr(&mut el);
                     self.update_checked_attr(&el);
                 }
-                self.write_value(&mut root);
+                self.write_value(root);
             }
             AttributeMask::Some(attrs) => {
                 {
@@ -216,7 +219,7 @@ impl Widget for CheckBox {
                     }
                 }
                 if attrs.contains("checked") {
-                    self.write_value(&mut root);
+                    self.write_value(root);
                 }
             }
         }
@@ -224,11 +227,7 @@ impl Widget for CheckBox {
 }
 
 impl RinkWidget for CheckBox {
-    fn handle_event(
-        &mut self,
-        event: &crate::Event,
-        node: &mut dioxus_native_core::real_dom::NodeMut,
-    ) {
+    fn handle_event(&mut self, event: &crate::Event, node: dioxus_native_core::real_dom::NodeMut) {
         match event.name {
             "click" => self.switch(node),
             "keydown" => {

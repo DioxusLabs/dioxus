@@ -1,4 +1,4 @@
-use dioxus_native_core::prelude::*;
+use dioxus_native_core::{prelude::*, tree::TreeRef};
 use std::io::Stdout;
 use taffy::{
     geometry::Point,
@@ -83,7 +83,10 @@ pub(crate) fn render_vnode(
                 frame.render_widget(WidgetWithContext::new(node, cfg), area);
             }
 
-            for c in node.children() {
+            let node_id = node.id();
+            let rdom = node.real_dom();
+            for child_id in rdom.tree_ref().children_ids_advanced(node_id, true) {
+                let c = rdom.get(child_id).unwrap();
                 render_vnode(frame, layout, c, cfg, location);
             }
         }

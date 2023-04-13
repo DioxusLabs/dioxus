@@ -25,7 +25,7 @@ use taffy::{prelude::Layout, Taffy};
 
 use crate::focus::{Focus, Focused};
 use crate::layout::TaffyLayout;
-use crate::{layout_to_screen_space, FocusState};
+use crate::{get_abs_layout, layout_to_screen_space, FocusState};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Event {
@@ -323,7 +323,7 @@ impl InnerInputState {
                 if old_pos != Some(new_pos) {
                     let mut will_bubble = FxHashSet::default();
                     for node in dom.get_listening_sorted("mousemove") {
-                        let node_layout = get_abs_layout(node, dom, layout);
+                        let node_layout = get_abs_layout(node, layout);
                         let previously_contained = old_pos
                             .filter(|pos| layout_contains_point(&node_layout, *pos))
                             .is_some();
@@ -347,7 +347,7 @@ impl InnerInputState {
                 // mouseenter
                 let mut will_bubble = FxHashSet::default();
                 for node in dom.get_listening_sorted("mouseenter") {
-                    let node_layout = get_abs_layout(node, dom, layout);
+                    let node_layout = get_abs_layout(node, layout);
                     let previously_contained = old_pos
                         .filter(|pos| layout_contains_point(&node_layout, *pos))
                         .is_some();
@@ -370,7 +370,7 @@ impl InnerInputState {
                 // mouseover
                 let mut will_bubble = FxHashSet::default();
                 for node in dom.get_listening_sorted("mouseover") {
-                    let node_layout = get_abs_layout(node, dom, layout);
+                    let node_layout = get_abs_layout(node, layout);
                     let previously_contained = old_pos
                         .filter(|pos| layout_contains_point(&node_layout, *pos))
                         .is_some();
@@ -393,7 +393,7 @@ impl InnerInputState {
             if was_pressed {
                 let mut will_bubble = FxHashSet::default();
                 for node in dom.get_listening_sorted("mousedown") {
-                    let node_layout = get_abs_layout(node, dom, layout);
+                    let node_layout = get_abs_layout(node, layout);
                     let currently_contains = layout_contains_point(&node_layout, new_pos);
 
                     if currently_contains {
@@ -414,7 +414,7 @@ impl InnerInputState {
                 if was_released {
                     let mut will_bubble = FxHashSet::default();
                     for node in dom.get_listening_sorted("mouseup") {
-                        let node_layout = get_abs_layout(node, dom, layout);
+                        let node_layout = get_abs_layout(node, layout);
                         let currently_contains = layout_contains_point(&node_layout, new_pos);
 
                         if currently_contains {
@@ -436,7 +436,7 @@ impl InnerInputState {
                 if mouse_data.trigger_button() == Some(DioxusMouseButton::Primary) && was_released {
                     let mut will_bubble = FxHashSet::default();
                     for node in dom.get_listening_sorted("click") {
-                        let node_layout = get_abs_layout(node, dom, layout);
+                        let node_layout = get_abs_layout(node, layout);
                         let currently_contains = layout_contains_point(&node_layout, new_pos);
 
                         if currently_contains {
@@ -459,7 +459,7 @@ impl InnerInputState {
                 {
                     let mut will_bubble = FxHashSet::default();
                     for node in dom.get_listening_sorted("contextmenu") {
-                        let node_layout = get_abs_layout(node, dom, layout);
+                        let node_layout = get_abs_layout(node, layout);
                         let currently_contains = layout_contains_point(&node_layout, new_pos);
 
                         if currently_contains {
@@ -482,7 +482,7 @@ impl InnerInputState {
                     if was_scrolled {
                         let mut will_bubble = FxHashSet::default();
                         for node in dom.get_listening_sorted("wheel") {
-                            let node_layout = get_abs_layout(node, dom, layout);
+                            let node_layout = get_abs_layout(node, layout);
 
                             let currently_contains = layout_contains_point(&node_layout, new_pos);
 
@@ -505,7 +505,7 @@ impl InnerInputState {
                 // mouseleave
                 let mut will_bubble = FxHashSet::default();
                 for node in dom.get_listening_sorted("mouseleave") {
-                    let node_layout = get_abs_layout(node, dom, layout);
+                    let node_layout = get_abs_layout(node, layout);
                     let previously_contained = old_pos
                         .filter(|pos| layout_contains_point(&node_layout, *pos))
                         .is_some();
@@ -528,7 +528,7 @@ impl InnerInputState {
                 // mouseout
                 let mut will_bubble = FxHashSet::default();
                 for node in dom.get_listening_sorted("mouseout") {
-                    let node_layout = get_abs_layout(node, dom, layout);
+                    let node_layout = get_abs_layout(node, layout);
                     let previously_contained = old_pos
                         .filter(|pos| layout_contains_point(&node_layout, *pos))
                         .is_some();
@@ -550,7 +550,7 @@ impl InnerInputState {
             // update focus
             if was_released {
                 let mut focus_id = None;
-                dom.traverse_depth_first(|node| {
+                dom.traverse_depth_first(true, |node| {
                     let node_layout = layout
                         .layout(node.get::<TaffyLayout>().unwrap().node.unwrap())
                         .unwrap();
@@ -570,24 +570,6 @@ impl InnerInputState {
     // fn subscribe(&mut self, f: Rc<dyn Fn() + 'static>) {
     //     self.subscribers.push(f)
     // }
-}
-
-fn get_abs_layout(node: NodeRef, dom: &RealDom, taffy: &Taffy) -> Layout {
-    let mut node_layout = *taffy
-        .layout(node.get::<TaffyLayout>().unwrap().node.unwrap())
-        .unwrap();
-    let mut current = node;
-
-    while let Some(parent) = current.parent_id() {
-        let parent = dom.get(parent).unwrap();
-        current = parent;
-        let parent_layout = taffy
-            .layout(parent.get::<TaffyLayout>().unwrap().node.unwrap())
-            .unwrap();
-        node_layout.location.x += parent_layout.location.x;
-        node_layout.location.y += parent_layout.location.y;
-    }
-    node_layout
 }
 
 pub struct RinkInputHandler {

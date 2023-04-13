@@ -8,7 +8,7 @@ use taffy::{
     Taffy,
 };
 
-use crate::{layout::TaffyLayout, layout_to_screen_space};
+use crate::{get_abs_layout, layout_to_screen_space};
 
 /// Allows querying the layout of nodes after rendering. It will only provide a correct value after a node is rendered.
 /// Provided as a root context for all tui applictions.
@@ -95,21 +95,8 @@ impl<'a> ElementRef<'a> {
 }
 
 pub(crate) fn get_layout(node: NodeRef, stretch: &Taffy) -> Option<Layout> {
-    let layout = stretch
-        .layout(node.get::<TaffyLayout>().unwrap().node.ok()?)
-        .ok()?;
-
-    let mut current_node_id = node.parent_id();
-    let mut pos = layout.location;
-    let rdom = node.real_dom();
-    while let Some(node) = current_node_id.and_then(|id| rdom.get(id)) {
-        let current_layout = stretch
-            .layout(node.get::<TaffyLayout>().unwrap().node.ok()?)
-            .ok()?;
-        pos.x += current_layout.location.x;
-        pos.y += current_layout.location.y;
-        current_node_id = node.parent_id();
-    }
+    let layout = get_abs_layout(node, stretch);
+    let pos = layout.location;
 
     Some(Layout {
         order: layout.order,

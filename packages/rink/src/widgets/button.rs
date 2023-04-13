@@ -2,14 +2,14 @@ use std::collections::HashMap;
 
 use dioxus_html::input_data::keyboard_types::Key;
 use dioxus_native_core::{
+    custom_element::CustomElement,
     node::OwnedAttributeDiscription,
     node_ref::AttributeMask,
     prelude::NodeType,
-    real_dom::{ElementNodeMut, NodeImmutable, NodeTypeMut, RealDom},
-    utils::widget_watcher::Widget,
+    real_dom::{ElementNodeMut, NodeImmutable, NodeMut, NodeTypeMut, RealDom},
     NodeId,
 };
-use shipyard::UniqueViewMut;
+use shipyard::UniqueView;
 
 use crate::FormData;
 
@@ -17,7 +17,6 @@ use super::{RinkWidget, WidgetContext};
 
 #[derive(Debug, Default)]
 pub(crate) struct Button {
-    div_id: NodeId,
     text_id: NodeId,
     value: String,
 }
@@ -88,14 +87,14 @@ impl Button {
         }
     }
 
-    fn switch(&mut self, ctx: &mut WidgetContext) {
+    fn switch(&mut self, ctx: &mut WidgetContext, node: NodeMut) {
         let data = FormData {
             value: self.value.to_string(),
             values: HashMap::new(),
             files: None,
         };
         ctx.send(crate::Event {
-            id: self.div_id,
+            id: node.id(),
             name: "input",
             data: crate::EventData::Form(data),
             bubbles: true,
@@ -103,10 +102,14 @@ impl Button {
     }
 }
 
-impl Widget for Button {
+impl CustomElement for Button {
     const NAME: &'static str = "input";
 
-    fn create(root: &mut dioxus_native_core::real_dom::NodeMut<()>) -> Self {
+    fn roots(&self) -> Vec<NodeId> {
+        vec![self.text_id]
+    }
+
+    fn create(mut root: dioxus_native_core::real_dom::NodeMut) -> Self {
         let node_type = root.node_type();
         let NodeType::Element(el) = &*node_type else { panic!("input must be an element") };
 
@@ -127,11 +130,8 @@ impl Widget for Button {
 
         root.add_event_listener("keydown");
         root.add_event_listener("click");
-        let div_id = root.id();
-        root.add_child(text_id);
 
         Self {
-            div_id,
             text_id,
             value: value.unwrap_or_default(),
         }
@@ -139,7 +139,7 @@ impl Widget for Button {
 
     fn attributes_changed(
         &mut self,
-        mut root: dioxus_native_core::real_dom::NodeMut<()>,
+        mut root: dioxus_native_core::real_dom::NodeMut,
         attributes: &dioxus_native_core::node_ref::AttributeMask,
     ) {
         match attributes {
@@ -175,16 +175,18 @@ impl RinkWidget for Button {
     fn handle_event(
         &mut self,
         event: &crate::Event,
-        node: &mut dioxus_native_core::real_dom::NodeMut,
+        mut node: dioxus_native_core::real_dom::NodeMut,
     ) {
-        let mut ctx: UniqueViewMut<WidgetContext> = node
-            .real_dom_mut()
-            .raw_world_mut()
-            .borrow()
-            .expect("expected widget context");
+        let mut ctx: WidgetContext = {
+            node.real_dom_mut()
+                .raw_world_mut()
+                .borrow::<UniqueView<WidgetContext>>()
+                .expect("expected widget context")
+                .clone()
+        };
 
         match event.name {
-            "click" => self.switch(&mut ctx),
+            "click" => self.switch(&mut ctx, node),
             "keydown" => {
                 if let crate::EventData::Keyboard(data) = &event.data {
                     if !data.is_auto_repeating()
@@ -194,7 +196,7 @@ impl RinkWidget for Button {
                             _ => false,
                         }
                     {
-                        self.switch(&mut ctx);
+                        self.switch(&mut ctx, node);
                     }
                 }
             }

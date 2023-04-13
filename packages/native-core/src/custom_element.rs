@@ -9,7 +9,7 @@ use shipyard::Component;
 use crate::{
     node::{FromAnyValue, NodeType},
     node_ref::AttributeMask,
-    prelude::{NodeImmutable, NodeMut, RealDom},
+    prelude::{NodeImmutable, NodeMut},
     tree::TreeMut,
     NodeId,
 };
@@ -27,11 +27,15 @@ impl<V: FromAnyValue + Send + Sync> Default for CustomElementRegistry<V> {
 }
 
 impl<V: FromAnyValue + Send + Sync> CustomElementRegistry<V> {
-    pub fn register<W: CustomElement<V>>(&mut self) {
+    pub fn register<F, U>(&mut self)
+    where
+        F: CustomElementFactory<U, V>,
+        U: CustomElementUpdater<V>,
+    {
         self.builders.insert(
-            (W::NAME, W::NAMESPACE),
+            (F::NAME, F::NAMESPACE),
             CustomElementBuilder {
-                create: |dom| Box::new(W::create(dom)),
+                create: |node| Box::new(F::create(node)),
             },
         );
     }
@@ -44,10 +48,7 @@ impl<V: FromAnyValue + Send + Sync> CustomElementRegistry<V> {
         };
         if let Some((tag, ns)) = element_tag {
             if let Some(builder) = self.builders.get(&(tag.as_str(), ns.as_deref())) {
-                let boxed_widget = {
-                    let dom = node.real_dom_mut();
-                    (builder.create)(dom)
-                };
+                let boxed_widget = { (builder.create)(node.reborrow()) };
 
                 let shadow_roots = boxed_widget.roots();
 
@@ -69,7 +70,7 @@ impl<V: FromAnyValue + Send + Sync> CustomElementRegistry<V> {
 }
 
 struct CustomElementBuilder<V: FromAnyValue + Send + Sync> {
-    create: fn(&mut RealDom<V>) -> Box<dyn CustomElementUpdater<V>>,
+    create: fn(NodeMut<V>) -> Box<dyn CustomElementUpdater<V>>,
 }
 
 /// A controlled element that renders to a shadow DOM
@@ -81,7 +82,7 @@ pub trait CustomElement<V: FromAnyValue + Send + Sync = ()>: Send + Sync + 'stat
     const NAMESPACE: Option<&'static str> = None;
 
     /// Create a new widget *without mounting* it.
-    fn create(dom: &mut RealDom<V>) -> Self;
+    fn create(node: NodeMut<V>) -> Self;
 
     /// The root node of the widget. This must be static once the element is created.
     fn roots(&self) -> Vec<NodeId>;
@@ -96,7 +97,7 @@ pub trait CustomElement<V: FromAnyValue + Send + Sync = ()>: Send + Sync + 'stat
 }
 
 /// A factory for creating widgets
-trait ElementFactory<W: CustomElementUpdater<V>, V: FromAnyValue + Send + Sync = ()>:
+pub trait CustomElementFactory<W: CustomElementUpdater<V>, V: FromAnyValue + Send + Sync = ()>:
     Send + Sync + 'static
 {
     /// The tag the widget is registered under.
@@ -106,21 +107,21 @@ trait ElementFactory<W: CustomElementUpdater<V>, V: FromAnyValue + Send + Sync =
     const NAMESPACE: Option<&'static str> = None;
 
     /// Create a new widget.
-    fn create(dom: &mut RealDom<V>) -> W;
+    fn create(dom: NodeMut<V>) -> W;
 }
 
-impl<W: CustomElement<V>, V: FromAnyValue + Send + Sync> ElementFactory<W, V> for W {
+impl<W: CustomElement<V>, V: FromAnyValue + Send + Sync> CustomElementFactory<W, V> for W {
     const NAME: &'static str = W::NAME;
 
     const NAMESPACE: Option<&'static str> = W::NAMESPACE;
 
-    fn create(dom: &mut RealDom<V>) -> Self {
-        Self::create(dom)
+    fn create(node: NodeMut<V>) -> Self {
+        Self::create(node)
     }
 }
 
 /// A trait for updating widgets
-trait CustomElementUpdater<V: FromAnyValue + Send + Sync = ()>: Send + Sync + 'static {
+pub trait CustomElementUpdater<V: FromAnyValue + Send + Sync = ()>: Send + Sync + 'static {
     /// Called when the attributes of the widget are changed.
     fn attributes_changed(&mut self, light_root: NodeMut<V>, attributes: &AttributeMask);
 

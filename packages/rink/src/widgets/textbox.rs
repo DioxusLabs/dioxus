@@ -3,14 +3,12 @@ use std::{collections::HashMap, io::stdout};
 use crossterm::{cursor::MoveTo, execute};
 use dioxus_html::{input_data::keyboard_types::Key, KeyboardData, MouseData};
 use dioxus_native_core::{
+    custom_element::CustomElement,
     node::OwnedAttributeDiscription,
     node_ref::AttributeMask,
     prelude::{ElementNode, NodeType},
     real_dom::{ElementNodeMut, NodeImmutable, NodeMut, NodeTypeMut, RealDom},
-    utils::{
-        cursor::{Cursor, Pos},
-        widget_watcher::Widget,
-    },
+    utils::cursor::{Cursor, Pos},
     NodeId,
 };
 use shipyard::UniqueView;
@@ -159,7 +157,7 @@ impl TextBox {
         }
     }
 
-    fn handle_keydown(&mut self, root: &mut NodeMut, data: &KeyboardData) {
+    fn handle_keydown(&mut self, mut root: NodeMut, data: &KeyboardData) {
         let key = data.key();
         let modifiers = data.modifiers();
         let code = data.code();
@@ -203,14 +201,12 @@ impl TextBox {
         }
     }
 
-    fn handle_mousemove(&mut self, root: &mut NodeMut, data: &MouseData) {
+    fn handle_mousemove(&mut self, mut root: NodeMut, data: &MouseData) {
         if self.dragging {
             let id = root.id();
             let offset = data.element_coordinates();
             let mut new = Pos::new(offset.x as usize, offset.y as usize);
-            if self.border {
-                new.col = new.col.saturating_sub(1);
-            }
+
             // textboxs are only one line tall
             new.row = 0;
 
@@ -222,12 +218,9 @@ impl TextBox {
         }
     }
 
-    fn handle_mousedown(&mut self, root: &mut NodeMut, data: &MouseData) {
+    fn handle_mousedown(&mut self, mut root: NodeMut, data: &MouseData) {
         let offset = data.element_coordinates();
         let mut new = Pos::new(offset.x as usize, offset.y as usize);
-        if self.border {
-            new.col = new.col.saturating_sub(1);
-        }
 
         // textboxs are only one line tall
         new.row = 0;
@@ -265,10 +258,14 @@ impl TextBox {
     }
 }
 
-impl Widget for TextBox {
+impl CustomElement for TextBox {
     const NAME: &'static str = "input";
 
-    fn create(root: &mut dioxus_native_core::real_dom::NodeMut<()>) -> Self {
+    fn roots(&self) -> Vec<NodeId> {
+        vec![self.div_wrapper]
+    }
+
+    fn create(mut root: dioxus_native_core::real_dom::NodeMut) -> Self {
         let node_type = root.node_type();
         let NodeType::Element(el) = &*node_type else { panic!("input must be an element") };
 
@@ -332,8 +329,6 @@ impl Widget for TextBox {
         root.add_event_listener("keydown");
         root.add_event_listener("focusout");
 
-        root.add_child(div_wrapper_id);
-
         Self {
             pre_cursor_text: pre_text_id,
             highlighted_text: highlighted_text_id,
@@ -347,7 +342,7 @@ impl Widget for TextBox {
 
     fn attributes_changed(
         &mut self,
-        mut root: dioxus_native_core::real_dom::NodeMut<()>,
+        mut root: dioxus_native_core::real_dom::NodeMut,
         attributes: &dioxus_native_core::node_ref::AttributeMask,
     ) {
         match attributes {
@@ -386,11 +381,7 @@ impl Widget for TextBox {
 }
 
 impl RinkWidget for TextBox {
-    fn handle_event(
-        &mut self,
-        event: &crate::Event,
-        node: &mut dioxus_native_core::real_dom::NodeMut,
-    ) {
+    fn handle_event(&mut self, event: &crate::Event, node: NodeMut) {
         match event.name {
             "keydown" => {
                 if let EventData::Keyboard(data) = &event.data {
