@@ -42,7 +42,33 @@
                 "command": "extension.formatRsxDocument",
                 "title": "Dioxus: Format RSX Document"
             }
-        ]
+        ],
+        "configuration": {
+            "properties": {
+                "dioxus.formatOnSave": {
+                    "type": [
+                        "string"
+                    ],
+                    "default": "followFormatOnSave",
+                    "enum": [
+                        "followFormatOnSave",
+                        "enabled",
+                        "disabled"
+                    ],
+                    "enumItemLabels": [
+                        "Follow the normal formatOnSave config",
+                        "Enabled",
+                        "Disabled"
+                    ],
+                    "enumDescriptions": [
+                        "Only format Rsx when saving files if the editor.formatOnSave config is enabled",
+                        "Always format Rsx when a Rust file is saved",
+                        "Never format Rsx when a file is saved"
+                    ],
+                    "description": "Format RSX when a file is saved."
+                }
+            }
+        }
     },
     "scripts": {
         "vscode:prepublish": "npm run build-base -- --minify",
