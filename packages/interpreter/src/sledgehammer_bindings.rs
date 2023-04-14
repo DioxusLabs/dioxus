@@ -108,6 +108,7 @@ mod js {
     const listeners = new ListenerMap();
     let nodes = [];
     let stack = [];
+    let root;
     const templates = {};
     let node, els, end, ptr_end, k;
     export function save_template(nodes, tmpl_id) {
