@@ -4,6 +4,7 @@ mod input;
 mod number;
 mod password;
 mod slider;
+mod text_like;
 mod textbox;
 
 use std::sync::{Arc, RwLock};
