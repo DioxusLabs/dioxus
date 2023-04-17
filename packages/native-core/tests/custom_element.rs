@@ -309,24 +309,21 @@ fn custom_elements_work() {
                 let size = *node.get::<LayoutState>().unwrap();
                 let id = node.id();
                 println!("{indent}{id:?} {color:?} {size:?} {node_type:?}");
-                match node_type {
-                    NodeType::Element(el) => {
-                        match el.tag.as_str() {
-                            // the color should bubble up from customelementslot
-                            "testing132" | "customelementslot" => {
-                                assert_eq!(color.color, 1);
-                            }
-                            // the color of the light dom should not effect the color of the shadow dom, so the color of divs in the shadow dom should be 0
-                            "div" => {
-                                assert_eq!(color.color, 0);
-                            }
-                            _ => {}
+                if let NodeType::Element(el) = node_type {
+                    match el.tag.as_str() {
+                        // the color should bubble up from customelementslot
+                        "testing132" | "customelementslot" => {
+                            assert_eq!(color.color, 1);
                         }
-                        if el.tag != "Root" {
-                            assert_eq!(size.size, (i + 2).saturating_sub(height));
+                        // the color of the light dom should not effect the color of the shadow dom, so the color of divs in the shadow dom should be 0
+                        "div" => {
+                            assert_eq!(color.color, 0);
                         }
+                        _ => {}
                     }
-                    _ => {}
+                    if el.tag != "Root" {
+                        assert_eq!(size.size, (i + 2).saturating_sub(height));
+                    }
                 }
             });
         }
