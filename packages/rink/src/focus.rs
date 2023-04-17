@@ -183,7 +183,7 @@ impl FocusState {
 
                 if forward {
                     // find the closest focusable element after the current level
-                    rdom.traverse_depth_first(true, |n| {
+                    rdom.traverse_depth_first(|n| {
                         let node_level = n.get::<Focus>().unwrap().level;
                         if node_level != *focus_level
                             && node_level.focusable()
@@ -200,7 +200,7 @@ impl FocusState {
                     });
                 } else {
                     // find the closest focusable element before the current level
-                    rdom.traverse_depth_first(true, |n| {
+                    rdom.traverse_depth_first(|n| {
                         let node_level = n.get::<Focus>().unwrap().level;
                         if node_level != *focus_level
                             && node_level.focusable()

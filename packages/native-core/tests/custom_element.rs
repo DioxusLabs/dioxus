@@ -301,7 +301,7 @@ fn custom_elements_work() {
             rdom.update_state(ctx);
 
             // render...
-            rdom.traverse_depth_first(true, |node| {
+            rdom.traverse_depth_first_advanced(true, |node| {
                 let node_type = &*node.node_type();
                 let height = node.height() as usize;
                 let indent = " ".repeat(height);

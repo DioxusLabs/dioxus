@@ -1,5 +1,10 @@
-//! A custom element is a controlled element that renders to a shadow DOM.
-//! Each custom element is registered with a element name
+//! A custom element is a controlled element that renders to a shadow DOM. This allows you to create elements that act like widgets without relying on a specific framework.
+//!
+//! Each custom element is registered with a element name and namespace with [`RealDom::register_custom_element`] or [`RealDom::register_custom_element_with_factory`]. Once registered, they will be created automatically when the element is added to the DOM.
+
+// Used in doc links
+#[allow(unused)]
+use crate::real_dom::RealDom;
 
 use std::sync::{Arc, RwLock};
 
@@ -48,22 +53,22 @@ impl<V: FromAnyValue + Send + Sync> CustomElementRegistry<V> {
         };
         if let Some((tag, ns)) = element_tag {
             if let Some(builder) = self.builders.get(&(tag.as_str(), ns.as_deref())) {
-                let boxed_widget = { (builder.create)(node.reborrow()) };
+                let boxed_custom_element = { (builder.create)(node.reborrow()) };
 
-                let shadow_roots = boxed_widget.roots();
+                let shadow_roots = boxed_custom_element.roots();
 
                 let light_id = node.id();
                 node.real_dom_mut().tree_mut().create_subtree(
                     light_id,
                     shadow_roots,
-                    boxed_widget.slot(),
+                    boxed_custom_element.slot(),
                 );
 
-                let boxed_widget = CustomElementManager {
-                    inner: Arc::new(RwLock::new(boxed_widget)),
+                let boxed_custom_element = CustomElementManager {
+                    inner: Arc::new(RwLock::new(boxed_custom_element)),
                 };
 
-                node.insert(boxed_widget);
+                node.insert(boxed_custom_element);
             }
         }
     }
@@ -73,40 +78,49 @@ struct CustomElementBuilder<V: FromAnyValue + Send + Sync> {
     create: fn(NodeMut<V>) -> Box<dyn CustomElementUpdater<V>>,
 }
 
-/// A controlled element that renders to a shadow DOM
+/// A controlled element that renders to a shadow DOM.
+///
+/// Register with [`RealDom::register_custom_element`]
+///
+/// This is a simplified custom element trait for elements that can create themselves. For more granular control, implement [`CustomElementFactory`] and [`CustomElementUpdater`] instead.
 pub trait CustomElement<V: FromAnyValue + Send + Sync = ()>: Send + Sync + 'static {
-    /// The tag the widget is registered under.
+    /// The tag of the element
     const NAME: &'static str;
 
-    /// The namespace the widget is registered under.
+    /// The namespace of the element
     const NAMESPACE: Option<&'static str> = None;
 
-    /// Create a new widget *without mounting* it.
-    fn create(node: NodeMut<V>) -> Self;
+    /// Create a new element *without mounting* it.
+    /// The node passed in is the light DOM node. The element should not modify the light DOM node, but it can get the [`NodeMut::real_dom_mut`] from the node to create new nodes.
+    fn create(light_root: NodeMut<V>) -> Self;
 
-    /// The root node of the widget. This must be static once the element is created.
+    /// The root node of the custom element. These roots must be not change once the element is created.
     fn roots(&self) -> Vec<NodeId>;
 
-    /// The slot to render children of the element into. This must be static once the element is created.
+    /// The slot to render children of the element into. The slot must be not change once the element is created.
     fn slot(&self) -> Option<NodeId> {
         None
     }
 
-    /// Called when the attributes of the widget are changed.
+    /// Update the custom element's shadow tree with the new attributes.
+    /// Called when the attributes of the custom element are changed.
     fn attributes_changed(&mut self, light_node: NodeMut<V>, attributes: &AttributeMask);
 }
 
-/// A factory for creating widgets
+/// A factory for creating custom elements
+///
+/// Register with [`RealDom::register_custom_element_with_factory`]
 pub trait CustomElementFactory<W: CustomElementUpdater<V>, V: FromAnyValue + Send + Sync = ()>:
     Send + Sync + 'static
 {
-    /// The tag the widget is registered under.
+    /// The tag of the element
     const NAME: &'static str;
 
-    /// The namespace the widget is registered under.
+    /// The namespace of the element
     const NAMESPACE: Option<&'static str> = None;
 
-    /// Create a new widget.
+    /// Create a new element *without mounting* it.
+    /// The node passed in is the light DOM node. The element should not modify the light DOM node, but it can get the [`NodeMut::real_dom_mut`] from the node to create new nodes.
     fn create(dom: NodeMut<V>) -> W;
 }
 
@@ -120,16 +134,19 @@ impl<W: CustomElement<V>, V: FromAnyValue + Send + Sync> CustomElementFactory<W,
     }
 }
 
-/// A trait for updating widgets
+/// A trait for updating custom elements
 pub trait CustomElementUpdater<V: FromAnyValue + Send + Sync = ()>: Send + Sync + 'static {
-    /// Called when the attributes of the widget are changed.
+    /// Update the custom element's shadow tree with the new attributes.
+    /// Called when the attributes of the custom element are changed.
     fn attributes_changed(&mut self, light_root: NodeMut<V>, attributes: &AttributeMask);
 
-    /// The root node of the widget.
+    /// The root node of the custom element. These roots must be not change once the element is created.
     fn roots(&self) -> Vec<NodeId>;
 
-    /// The slot to render children of the element into.
-    fn slot(&self) -> Option<NodeId>;
+    /// The slot to render children of the element into. The slot must be not change once the element is created.
+    fn slot(&self) -> Option<NodeId> {
+        None
+    }
 }
 
 impl<W: CustomElement<V>, V: FromAnyValue + Send + Sync> CustomElementUpdater<V> for W {
@@ -146,23 +163,13 @@ impl<W: CustomElement<V>, V: FromAnyValue + Send + Sync> CustomElementUpdater<V>
     }
 }
 
-/// A concrete structure for managing a any widget.
+/// A dynamic trait object wrapper for [`CustomElementUpdater`]
 #[derive(Component, Clone)]
-pub struct CustomElementManager<V: FromAnyValue = ()> {
+pub(crate) struct CustomElementManager<V: FromAnyValue = ()> {
     inner: Arc<RwLock<Box<dyn CustomElementUpdater<V>>>>,
 }
 
 impl<V: FromAnyValue + Send + Sync> CustomElementManager<V> {
-    /// The root node of the widget's shadow DOM.
-    pub fn roots(&self) -> Vec<NodeId> {
-        self.inner.read().unwrap().roots()
-    }
-
-    /// The slot to render children of the element into.
-    pub fn slot(&self) -> Option<NodeId> {
-        self.inner.read().unwrap().slot()
-    }
-
     /// Update the custom element based on attributes changed.
     pub fn on_attributes_changed(&self, light_root: NodeMut<V>, attributes: &AttributeMask) {
         self.inner

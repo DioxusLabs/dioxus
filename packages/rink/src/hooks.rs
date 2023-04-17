@@ -550,7 +550,7 @@ impl InnerInputState {
             // update focus
             if was_released {
                 let mut focus_id = None;
-                dom.traverse_depth_first(true, |node| {
+                dom.traverse_depth_first(|node| {
                     let node_layout = layout
                         .layout(node.get::<TaffyLayout>().unwrap().node.unwrap())
                         .unwrap();

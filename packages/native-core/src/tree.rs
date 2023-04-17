@@ -4,10 +4,10 @@ use crate::NodeId;
 use shipyard::{Component, EntitiesViewMut, Get, View, ViewMut};
 use std::fmt::Debug;
 
-/// A shadow_tree of a tree.
+/// A shadow tree reference inside of a tree. This tree is isolated from the main tree.
 #[derive(PartialEq, Eq, Clone, Debug, Component)]
 pub struct ShadowTree {
-    /// The root of the shadow_tree
+    /// The root of the shadow tree
     pub shadow_roots: Vec<NodeId>,
     /// The node that children of the super tree should be inserted under.
     pub slot: Option<NodeId>,
@@ -22,7 +22,7 @@ pub struct Node {
     /// If this node is a slot in a shadow_tree, this is node whose child_subtree is that shadow_tree.
     slot_for_light_tree: Option<NodeId>,
     /// If this node is a root of a shadow_tree, this is the node whose child_subtree is that shadow_tree.
-    light_tree_root: Option<NodeId>,
+    root_for_light_tree: Option<NodeId>,
     height: u16,
 }
 
@@ -37,8 +37,8 @@ pub trait TreeRef {
     #[inline]
     fn parent_id_advanced(&self, id: NodeId, enter_shadow_dom: bool) -> Option<NodeId> {
         // If this node is the root of a shadow_tree, return the node the shadow_tree is attached
-        let light_tree_root = self.light_tree_root(id);
-        match (light_tree_root, enter_shadow_dom) {
+        let root_for_light_tree = self.root_for_light_tree(id);
+        match (root_for_light_tree, enter_shadow_dom) {
             (Some(id), true) => Some(id),
             _ => {
                 let parent_id = self.parent_id(id);
@@ -74,11 +74,10 @@ pub trait TreeRef {
     fn children_ids(&self, id: NodeId) -> Vec<NodeId>;
     /// The shadow tree tree under the node.
     fn shadow_tree(&self, id: NodeId) -> Option<&ShadowTree>;
-    // TODO: rethink naming
     /// The node that contains the shadow tree this node is a slot for
     fn slot_for_light_tree(&self, id: NodeId) -> Option<NodeId>;
     /// The node that contains the shadow tree this node is a root of
-    fn light_tree_root(&self, id: NodeId) -> Option<NodeId>;
+    fn root_for_light_tree(&self, id: NodeId) -> Option<NodeId>;
     /// The height of the node.
     fn height(&self, id: NodeId) -> Option<u16>;
     /// Returns true if the node exists.
@@ -132,8 +131,8 @@ impl<'a> TreeRef for TreeRefView<'a> {
         self.get(id).ok()?.slot_for_light_tree
     }
 
-    fn light_tree_root(&self, id: NodeId) -> Option<NodeId> {
-        self.get(id).ok()?.light_tree_root
+    fn root_for_light_tree(&self, id: NodeId) -> Option<NodeId> {
+        self.get(id).ok()?.root_for_light_tree
     }
 }
 
@@ -151,14 +150,14 @@ impl<'a> TreeMut for TreeMutView<'a> {
 
             // If this node is a slot in a shadow_tree, remove it from the shadow_tree.
             if let Some(light_tree) = light_tree {
-                let light_tree_root = (&mut tree.1).get(light_tree).unwrap();
+                let root_for_light_tree = (&mut tree.1).get(light_tree).unwrap();
 
-                if let Some(shadow_tree) = &mut light_tree_root.child_subtree {
+                if let Some(shadow_tree) = &mut root_for_light_tree.child_subtree {
                     shadow_tree.slot = None;
                 }
 
                 debug_assert!(
-                    light_tree_root.children.is_empty(),
+                    root_for_light_tree.children.is_empty(),
                     "ShadowTree root should have no children when slot is removed."
                 );
             }
@@ -186,7 +185,7 @@ impl<'a> TreeMut for TreeMutView<'a> {
                 height: 0,
                 child_subtree: None,
                 slot_for_light_tree: None,
-                light_tree_root: None,
+                root_for_light_tree: None,
             },
         );
     }
@@ -283,7 +282,7 @@ impl<'a> TreeMut for TreeMutView<'a> {
 
         // Now that we have created the shadow_tree, we need to update the height of the shadow_tree roots
         for root in shadow_roots {
-            (&mut self.1).get(root).unwrap().light_tree_root = Some(id);
+            (&mut self.1).get(root).unwrap().root_for_light_tree = Some(id);
             set_height(self, root, light_root_height + 1);
         }
     }
@@ -403,9 +402,9 @@ impl<'a> TreeRef for TreeMutView<'a> {
         node_data.get(id).ok()?.slot_for_light_tree
     }
 
-    fn light_tree_root(&self, id: NodeId) -> Option<NodeId> {
+    fn root_for_light_tree(&self, id: NodeId) -> Option<NodeId> {
         let node_data = &self.1;
-        node_data.get(id).ok()?.light_tree_root
+        node_data.get(id).ok()?.root_for_light_tree
     }
 }
 
