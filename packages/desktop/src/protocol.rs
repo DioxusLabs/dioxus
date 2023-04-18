@@ -1,5 +1,8 @@
 use dioxus_interpreter_js::INTERPRETER_JS;
-use std::path::{Path, PathBuf};
+use std::{
+    borrow::Cow,
+    path::{Path, PathBuf},
+};
 use wry::{
     http::{status::StatusCode, Request, Response},
     Result,
@@ -27,7 +30,7 @@ pub(super) fn desktop_handler(
     custom_head: Option<String>,
     custom_index: Option<String>,
     root_name: &str,
-) -> Result<Response<Vec<u8>>> {
+) -> Result<Response<Cow<'static, [u8]>>> {
     // If the request is for the root, we'll serve the index.html file.
     if request.uri().path() == "/" {
         // If a custom index is provided, just defer to that, expecting the user to know what they're doing.
@@ -53,7 +56,7 @@ pub(super) fn desktop_handler(
 
         return Response::builder()
             .header("Content-Type", "text/html")
-            .body(body)
+            .body(Cow::from(body))
             .map_err(From::from);
     }
 
@@ -72,13 +75,13 @@ pub(super) fn desktop_handler(
     if asset.exists() {
         return Response::builder()
             .header("Content-Type", get_mime_from_path(&asset)?)
-            .body(std::fs::read(asset)?)
+            .body(Cow::from(std::fs::read(asset)?))
             .map_err(From::from);
     }
 
     Response::builder()
         .status(StatusCode::NOT_FOUND)
-        .body(String::from("Not Found").into_bytes())
+        .body(Cow::from(String::from("Not Found").into_bytes()))
         .map_err(From::from)
 }
 
