@@ -10,15 +10,15 @@
 use dioxus_core::{
     BorrowedAttributeValue, ElementId, Mutation, Template, TemplateAttribute, TemplateNode,
 };
-use dioxus_html::{event_bubbles, CompositionData, FormData};
+use dioxus_html::{event_bubbles, CompositionData, FileEngine, FormData};
 use dioxus_interpreter_js::{save_template, Channel};
 use futures_channel::mpsc;
 use rustc_hash::FxHashMap;
-use std::{any::Any, rc::Rc};
+use std::{any::Any, rc::Rc, sync::Arc};
 use wasm_bindgen::{closure::Closure, JsCast};
-use web_sys::{Document, Element, Event, HtmlElement};
+use web_sys::{console, Document, Element, Event, HtmlElement};
 
-use crate::Config;
+use crate::{file_engine::WebFileEngine, Config};
 
 pub struct WebsysDom {
     document: Document,
@@ -206,6 +206,7 @@ impl WebsysDom {
                 },
                 SetText { value, id } => i.set_text(id.0 as u32, value),
                 NewEventListener { name, id, .. } => {
+                    console::log_1(&format!("new event listener: {}", name).into());
                     i.new_event_listener(name, id.0 as u32, event_bubbles(name) as u8);
                 }
                 RemoveEventListener { name, id } => {
@@ -224,6 +225,7 @@ impl WebsysDom {
 // We need tests that simulate clicks/etc and make sure every event type works.
 pub fn virtual_event_from_websys_event(event: web_sys::Event, target: Element) -> Rc<dyn Any> {
     use dioxus_html::events::*;
+    console::log_1(&event.clone().into());
 
     match event.type_().as_str() {
         "copy" | "cut" | "paste" => Rc::new(ClipboardData {}),
@@ -359,10 +361,18 @@ fn read_input_to_data(target: Element) -> Rc<FormData> {
         }
     }
 
+    let files = target
+        .dyn_ref()
+        .and_then(|input: &web_sys::HtmlInputElement| {
+            input.files().and_then(|files| {
+                WebFileEngine::new(files).map(|f| Arc::new(f) as Arc<dyn FileEngine>)
+            })
+        });
+
     Rc::new(FormData {
         value,
         values,
-        files: None,
+        files,
     })
 }
 

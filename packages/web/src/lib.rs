@@ -61,6 +61,7 @@ use futures_util::{pin_mut, FutureExt, StreamExt};
 mod cache;
 mod cfg;
 mod dom;
+mod file_engine;
 mod hot_reload;
 #[cfg(feature = "hydrate")]
 mod rehydrate;

@@ -32,6 +32,7 @@ futures-channel = "0.3.21"
 serde_json = { version = "1.0" }
 serde = { version = "1.0" }
 serde-wasm-bindgen = "0.4.5"
+async-trait = "0.1.58"
 
 [dependencies.web-sys]
 version = "0.3.56"
@@ -76,6 +77,9 @@ features = [
     "Location",
     "MessageEvent",
     "console",
+    "FileList",
+    "File",
+    "FileReader"
 ]
 
 [features]
