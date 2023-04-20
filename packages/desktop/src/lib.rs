@@ -307,6 +307,8 @@ struct WebviewHandler {
     dom: VirtualDom,
     webview: Rc<wry::webview::WebView>,
     waker: Waker,
+    // This is nessisary because of a bug in wry. Wry assumes the webcontext is alive for the lifetime of the webview. We need to keep the webcontext alive, otherwise the webview will crash
+    #[allow(dead_code)]
     web_context: WebContext,
 }
 
