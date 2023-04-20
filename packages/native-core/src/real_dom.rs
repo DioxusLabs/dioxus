@@ -15,7 +15,7 @@ use crate::node::{
 };
 use crate::node_ref::{NodeMask, NodeMaskBuilder};
 use crate::node_watcher::NodeWatcher;
-use crate::passes::{DirtyNodeStates, TypeErasedState};
+use crate::passes::{DirtyNodeStates, PassDirection, TypeErasedState};
 use crate::prelude::AttributeMaskBuilder;
 use crate::tree::{TreeMut, TreeMutView, TreeRef, TreeRefView};
 use crate::NodeId;
@@ -68,12 +68,13 @@ impl<V: FromAnyValue + Send + Sync> NodesDirty<V> {
         }
     }
 
-    /// Mark a node as added or removed from the tree
+    /// Mark a node that has had a parent changed
     fn mark_parent_added_or_removed(&mut self, node_id: NodeId) {
         let hm = self.passes_updated.entry(node_id).or_default();
         for pass in &*self.passes {
-            if pass.parent_dependant {
-                hm.insert(pass.this_type_id);
+            // If any of the states in this node depend on the parent then mark them as dirty
+            for &pass in &pass.parent_dependancies_ids {
+                hm.insert(pass);
             }
         }
     }
@@ -82,8 +83,9 @@ impl<V: FromAnyValue + Send + Sync> NodesDirty<V> {
     fn mark_child_changed(&mut self, node_id: NodeId) {
         let hm = self.passes_updated.entry(node_id).or_default();
         for pass in &*self.passes {
-            if pass.child_dependant {
-                hm.insert(pass.this_type_id);
+            // If any of the states in this node depend on the children then mark them as dirty
+            for &pass in &pass.child_dependancies_ids {
+                hm.insert(pass);
             }
         }
     }
@@ -116,16 +118,46 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
     pub fn new(tracked_states: impl Into<Box<[TypeErasedState<V>]>>) -> RealDom<V> {
         let mut tracked_states = tracked_states.into();
         // resolve dependants for each pass
-        for i in 1..tracked_states.len() {
+        for i in 1..=tracked_states.len() {
             let (before, after) = tracked_states.split_at_mut(i);
             let (current, before) = before.split_last_mut().unwrap();
-            for pass in before.iter_mut().chain(after.iter_mut()) {
+            for state in before.iter_mut().chain(after.iter_mut()) {
+                let dependants = Arc::get_mut(&mut state.dependants).unwrap();
+                // If this node depends on the other state as a parent, then the other state should update its children of the current type when it is invalidated
                 if current
-                    .combined_dependancy_type_ids
-                    .contains(&pass.this_type_id)
+                    .parent_dependancies_ids
+                    .contains(&state.this_type_id)
+                    && !dependants.child.contains(&current.this_type_id)
                 {
-                    pass.dependants.insert(current.this_type_id);
+                    dependants.child.push(current.this_type_id);
                 }
+                // If this node depends on the other state as a child, then the other state should update its parent of the current type when it is invalidated
+                if current.child_dependancies_ids.contains(&state.this_type_id)
+                    && !dependants.parent.contains(&current.this_type_id)
+                {
+                    dependants.parent.push(current.this_type_id);
+                }
+                // If this node depends on the other state as a sibling, then the other state should update its siblings of the current type when it is invalidated
+                if current.node_dependancies_ids.contains(&state.this_type_id)
+                    && !dependants.node.contains(&current.this_type_id)
+                {
+                    dependants.node.push(current.this_type_id);
+                }
+            }
+            // If the current state depends on itself, then it should update itself when it is invalidated
+            let dependants = Arc::get_mut(&mut current.dependants).unwrap();
+            match current.pass_direction {
+                PassDirection::ChildToParent => {
+                    if !dependants.parent.contains(&current.this_type_id) {
+                        dependants.parent.push(current.this_type_id);
+                    }
+                }
+                PassDirection::ParentToChild => {
+                    if !dependants.child.contains(&current.this_type_id) {
+                        dependants.child.push(current.this_type_id);
+                    }
+                }
+                _ => {}
             }
         }
         let workload = construct_workload(&mut tracked_states);
@@ -1011,7 +1043,8 @@ fn construct_workload<V: FromAnyValue + Send + Sync>(
     // mark any dependancies
     for i in 0..unresloved_workloads.len() {
         let (_, pass, _) = &unresloved_workloads[i];
-        for ty_id in pass.combined_dependancy_type_ids.clone() {
+        let all_dependancies: Vec<_> = pass.combined_dependancy_type_ids().collect();
+        for ty_id in all_dependancies {
             let &(dependancy_id, _, _) = unresloved_workloads
                 .iter()
                 .find(|(_, pass, _)| pass.this_type_id == ty_id)
