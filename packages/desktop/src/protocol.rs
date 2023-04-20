@@ -9,10 +9,26 @@ use wry::{
 };
 
 fn module_loader(root_name: &str) -> String {
+    let js = INTERPRETER_JS.replace(
+        "/*POST_HANDLE_EDITS*/",
+        r#"// Prevent file inputs from opening the file dialog on click
+    let inputs = document.querySelectorAll("input");
+    for (let input of inputs) {
+      input.addEventListener("click", (event) => {
+        let target = event.target;
+        // prevent file inputs from opening the file dialog on click
+        const type = target.getAttribute("type");
+        if (type === "file") {
+          window.ipc.postMessage(serializeIpcMessage("file_diolog", { accept: target.getAttribute("accept"), multiple: target.hasAttribute("multiple") }));
+          event.preventDefault();
+        }
+      });
+    }"#,
+    );
     format!(
         r#"
 <script>
-    {INTERPRETER_JS}
+    {js}
 
     let rootname = "{root_name}";
     let root = window.document.getElementById(rootname);
