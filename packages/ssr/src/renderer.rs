@@ -132,7 +132,7 @@ impl Renderer {
                         }
                     }
                     DynamicNode::Fragment(nodes) => {
-                        for child in *nodes {
+                        for child in nodes.children {
                             self.render_template(buf, dom, child)?;
                         }
                     }

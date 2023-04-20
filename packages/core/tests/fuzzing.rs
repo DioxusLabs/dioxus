@@ -246,7 +246,7 @@ fn create_random_element(cx: Scope<DepthProps>) -> Element {
             println!("{template:#?}");
             let node = VNode {
                 key: None,
-                parent: None,
+                parent: None.into(),
                 template: Cell::new(template),
                 root_ids: Default::default(),
                 dynamic_nodes: {

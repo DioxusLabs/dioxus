@@ -263,7 +263,7 @@ impl WebsysDom {
                 )?;
             }
             dioxus_core::DynamicNode::Fragment(fragment) => {
-                for vnode in *fragment {
+                for vnode in fragment.children {
                     self.rehydrate_vnode(
                         current_child,
                         hydrated,
