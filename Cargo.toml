@@ -23,6 +23,7 @@ members = [
     "packages/signals",
     "packages/hot-reload",
     "docs/guide",
+    "examples/PWA-example",
 ]
 
 # This is a "virtual package"

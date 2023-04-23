@@ -7,8 +7,8 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-dioxus = "0.3"
-dioxus-web = "0.3"
+dioxus = { path = "../../packages/dioxus", version = "^0.3.0"}
+dioxus-web = { path = "../../packages/web", version = "^0.3.0"}
 
 log = "0.4.6"
 
