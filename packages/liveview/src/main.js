@@ -8,7 +8,7 @@ function main() {
 class IPC {
   constructor(root) {
     // connect to the websocket
-    window.interpreter = new Interpreter(root);
+    window.interpreter = new Interpreter(root, new InterpreterConfig(false));
 
     let ws = new WebSocket(WS_ADDR);
 
