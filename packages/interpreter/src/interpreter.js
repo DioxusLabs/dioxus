@@ -17,8 +17,7 @@ class ListenerMap {
       } else {
         this.global[event_name].active++;
       }
-    }
-    else {
+    } else {
       const id = element.getAttribute("data-dioxus-id");
       if (!this.local[id]) {
         this.local[id] = {};
@@ -32,11 +31,13 @@ class ListenerMap {
     if (bubbles) {
       this.global[event_name].active--;
       if (this.global[event_name].active === 0) {
-        this.root.removeEventListener(event_name, this.global[event_name].callback);
+        this.root.removeEventListener(
+          event_name,
+          this.global[event_name].callback
+        );
         delete this.global[event_name];
       }
-    }
-    else {
+    } else {
       const id = element.getAttribute("data-dioxus-id");
       delete this.local[id][event_name];
       if (this.local[id].length === 0) {
@@ -143,8 +144,7 @@ class Interpreter {
   SetAttribute(id, field, value, ns) {
     if (value === null) {
       this.RemoveAttribute(id, field, ns);
-    }
-    else {
+    } else {
       const node = this.nodes[id];
       this.SetAttributeInner(node, field, value, ns);
     }
@@ -167,10 +167,10 @@ class Interpreter {
           }
           break;
         case "checked":
-          node.checked = value === "true";
+          node.checked = value === "true" || value === true;
           break;
         case "selected":
-          node.selected = value === "true";
+          node.selected = value === "true" || value === true;
           break;
         case "dangerous_inner_html":
           node.innerHTML = value;
@@ -342,7 +342,6 @@ class Interpreter {
         this.RemoveEventListener(edit.id, edit.name);
         break;
       case "NewEventListener":
-
         let bubbles = event_bubbles(edit.name);
 
         // this handler is only provided on desktop implementations since this
@@ -360,7 +359,10 @@ class Interpreter {
               let a_element = target.closest("a");
               if (a_element != null) {
                 event.preventDefault();
-                if (shouldPreventDefault !== `onclick` && a_element.getAttribute(`dioxus-prevent-default`) !== `onclick`) {
+                if (
+                  shouldPreventDefault !== `onclick` &&
+                  a_element.getAttribute(`dioxus-prevent-default`) !== `onclick`
+                ) {
                   const href = a_element.getAttribute("href");
                   if (href !== "" && href !== null && href !== undefined) {
                     window.ipc.postMessage(
