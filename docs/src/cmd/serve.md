@@ -45,5 +45,5 @@ You can use `--example {name}` to start a example code.
 
 ```
 # build `example/test` code
-dioxus serve --exmaple test
+dioxus serve --example test
 ```
