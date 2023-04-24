@@ -1,34 +1,51 @@
 use dioxus::prelude::*;
-use dioxus_native_core::{
-    node_ref::{AttributeMask, NodeView},
-    real_dom::RealDom,
-    state::{ParentDepState, State},
-    NodeMask, SendAnyMap,
-};
-use dioxus_native_core_macro::{sorted_str_slice, State};
-use std::sync::{Arc, Mutex};
+use dioxus_native_core::prelude::*;
+use dioxus_native_core_macro::partial_derive_state;
+use shipyard::Component;
 use tokio::time::sleep;
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct BlablaState {}
-
-/// Font style are inherited by default if not specified otherwise by some of the supported attributes.
-impl ParentDepState for BlablaState {
-    type Ctx = ();
-    type DepState = (Self,);
-
-    const NODE_MASK: NodeMask =
-        NodeMask::new_with_attrs(AttributeMask::Static(&sorted_str_slice!(["blabla",])));
-
-    fn reduce(&mut self, _node: NodeView, _parent: Option<(&Self,)>, _ctx: &Self::Ctx) -> bool {
-        false
-    }
+#[derive(Debug, Clone, PartialEq, Eq, Default, Component)]
+pub struct BlablaState {
+    count: usize,
 }
 
-#[derive(Clone, State, Default, Debug)]
-pub struct NodeState {
-    #[parent_dep_state(blabla)]
-    blabla: BlablaState,
+#[partial_derive_state]
+impl State for BlablaState {
+    type ParentDependencies = (Self,);
+    type ChildDependencies = ();
+    type NodeDependencies = ();
+
+    const NODE_MASK: NodeMaskBuilder<'static> = NodeMaskBuilder::new()
+        .with_attrs(AttributeMaskBuilder::Some(&["blabla"]))
+        .with_element();
+
+    fn update<'a>(
+        &mut self,
+        _: NodeView,
+        _: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
+        parent: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
+        _: Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>,
+        _: &SendAnyMap,
+    ) -> bool {
+        if let Some((parent,)) = parent {
+            if parent.count != 0 {
+                self.count += 1;
+            }
+        }
+        true
+    }
+
+    fn create<'a>(
+        node_view: NodeView<()>,
+        node: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
+        parent: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
+        children: Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>,
+        context: &SendAnyMap,
+    ) -> Self {
+        let mut myself = Self::default();
+        myself.update(node_view, node, parent, children, context);
+        myself
+    }
 }
 
 mod dioxus_elements {
@@ -76,6 +93,7 @@ mod dioxus_elements {
 
 #[test]
 fn native_core_is_okay() {
+    use std::sync::{Arc, Mutex};
     use std::time::Duration;
 
     fn app(cx: Scope) -> Element {
@@ -113,23 +131,24 @@ fn native_core_is_okay() {
         .unwrap();
 
     rt.block_on(async {
-        let rdom = Arc::new(Mutex::new(RealDom::<NodeState>::new()));
+        let rdom = Arc::new(Mutex::new(RealDom::new([BlablaState::to_type_erased()])));
+        let mut dioxus_state = DioxusState::create(&mut rdom.lock().unwrap());
         let mut dom = VirtualDom::new(app);
 
-        let muts = dom.rebuild();
-        let (to_update, _diff) = rdom.lock().unwrap().apply_mutations(muts);
+        let mutations = dom.rebuild();
+        dioxus_state.apply_mutations(&mut rdom.lock().unwrap(), mutations);
 
         let ctx = SendAnyMap::new();
-        rdom.lock().unwrap().update_state(to_update, ctx);
+        rdom.lock().unwrap().update_state(ctx);
 
         for _ in 0..10 {
             dom.wait_for_work().await;
 
             let mutations = dom.render_immediate();
-            let (to_update, _diff) = rdom.lock().unwrap().apply_mutations(mutations);
+            dioxus_state.apply_mutations(&mut rdom.lock().unwrap(), mutations);
 
             let ctx = SendAnyMap::new();
-            rdom.lock().unwrap().update_state(to_update, ctx);
+            rdom.lock().unwrap().update_state(ctx);
         }
     });
 }

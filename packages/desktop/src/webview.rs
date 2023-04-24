@@ -7,13 +7,13 @@ use tao::event_loop::{EventLoopProxy, EventLoopWindowTarget};
 pub use wry;
 pub use wry::application as tao;
 use wry::application::window::Window;
-use wry::webview::{WebView, WebViewBuilder};
+use wry::webview::{WebContext, WebView, WebViewBuilder};
 
 pub fn build(
     cfg: &mut Config,
     event_loop: &EventLoopWindowTarget<UserWindowEvent>,
     proxy: EventLoopProxy<UserWindowEvent>,
-) -> Rc<WebView> {
+) -> (Rc<WebView>, WebContext) {
     let builder = cfg.window.clone();
     let window = builder.build(event_loop).unwrap();
     let file_handler = cfg.file_drop_handler.take();
@@ -32,6 +32,8 @@ pub fn build(
             .expect("image parse failed"),
         ));
     }
+
+    let mut web_context = WebContext::new(cfg.data_dir.clone());
 
     let mut webview = WebViewBuilder::new(window)
         .unwrap()
@@ -52,7 +54,19 @@ pub fn build(
                 .as_ref()
                 .map(|handler| handler(window, evet))
                 .unwrap_or_default()
-        });
+        })
+        .with_web_context(&mut web_context);
+
+    #[cfg(windows)]
+    {
+        // Windows has a platform specific settings to disable the browser shortcut keys
+        use wry::webview::WebViewBuilderExtWindows;
+        webview = webview.with_browser_accelerator_keys(false);
+    }
+
+    // These are commented out because wry is currently broken in wry
+    // let mut web_context = WebContext::new(cfg.data_dir.clone());
+    // .with_web_context(&mut web_context);
 
     for (name, handler) in cfg.protocols.drain(..) {
         webview = webview.with_custom_protocol(name, handler)
@@ -78,5 +92,5 @@ pub fn build(
         webview = webview.with_devtools(true);
     }
 
-    Rc::new(webview.build().unwrap())
+    (Rc::new(webview.build().unwrap()), web_context)
 }
