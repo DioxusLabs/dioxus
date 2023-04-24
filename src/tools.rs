@@ -49,7 +49,7 @@ pub fn clone_repo(dir: &Path, url: &str) -> anyhow::Result<()> {
     let res = cmd.arg("clone").arg(url).arg(dir_name).output();
     if let Err(err) = res {
         if ErrorKind::NotFound == err.kind() {
-            log::error!("Git program not found. Hint: Install git or check $PATH.");
+            log::warn!("Git program not found. Hint: Install git or check $PATH.");
             return Err(err.into());
         }
     }

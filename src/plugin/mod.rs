@@ -42,7 +42,7 @@ impl PluginManager {
         let manager = lua.create_table().unwrap();
         let name_index = lua.create_table().unwrap();
 
-        let plugin_dir = Self::init_plugin_dir();
+        let plugin_dir = Self::init_plugin_dir().unwrap();
 
         let api = lua.create_table().unwrap();
 
@@ -288,15 +288,17 @@ impl PluginManager {
         Ok(())
     }
 
-    pub fn init_plugin_dir() -> PathBuf {
+    pub fn init_plugin_dir() -> anyhow::Result<PathBuf> {
         let app_path = app_path();
         let plugin_path = app_path.join("plugins");
         if !plugin_path.is_dir() {
             log::info!("📖 Start to init plugin library ...");
             let url = "https://github.com/DioxusLabs/cli-plugin-library";
-            clone_repo(&plugin_path, url).unwrap();
+            if let Err(err) = clone_repo(&plugin_path, url) {
+                log::error!("Failed to init plugin dir, error caused by {}. ", err);
+            }
         }
-        plugin_path
+        Ok(plugin_path)
     }
 
     pub fn plugin_list() -> Vec<String> {
