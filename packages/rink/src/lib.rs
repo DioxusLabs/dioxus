@@ -234,7 +234,7 @@ pub fn render<R: Driver>(
                                         }
                                     }
                                     TermEvent::Resize(_, _) => updated = true,
-                                    TermEvent::Mouse(_) => {}
+                                    _ => {}
                                 },
                                 InputEvent::Close => break,
                             };
