@@ -1,6 +1,6 @@
 use std::{
     fs::{create_dir_all, File},
-    io::{Read, Write},
+    io::{Read, Write, ErrorKind},
     path::{Path, PathBuf},
     process::Command,
 };
@@ -46,7 +46,13 @@ pub fn clone_repo(dir: &Path, url: &str) -> anyhow::Result<()> {
 
     let mut cmd = Command::new("git");
     let cmd = cmd.current_dir(target_dir);
-    let _res = cmd.arg("clone").arg(url).arg(dir_name).output()?;
+    let res = cmd.arg("clone").arg(url).arg(dir_name).output();
+    if let Err(err) = res {
+        if ErrorKind::NotFound == err.kind() {
+            log::error!("Git program not found. Hint: Install git or check $PATH.");
+            return Err(err.into());
+        }
+    }
     Ok(())
 }
 
