@@ -276,13 +276,12 @@ impl Writer<'_> {
         let start = location.start();
         let line_start = start.line - 1;
 
-        let this_line = self.src[line_start];
-
-        let beginning = if this_line.len() > start.column {
-            this_line[..start.column].trim()
-        } else {
-            ""
-        };
+        let beginning = self
+            .src
+            .get(line_start)
+            .filter(|this_line| this_line.len() > start.column)
+            .map(|this_line| this_line[..start.column].trim())
+            .unwrap_or_default();
 
         beginning.is_empty()
     }
