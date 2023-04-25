@@ -61,8 +61,7 @@ impl WebsysDom {
                     {
                         if prevent_requests
                             .map(|f| f.trim_start_matches("on"))
-                            .find(|f| f == &name)
-                            .is_some()
+                            .any(|f| f == name)
                         {
                             event.prevent_default();
                         }
