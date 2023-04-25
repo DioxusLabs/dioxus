@@ -29,7 +29,6 @@ lightningcss = "1.0.0-alpha.39"
 
 rayon = "1.6.1"
 shipyard = { version = "0.6.2", features = ["proc", "std"], default-features = false }
-shipyard_hierarchy = "0.6.0"
 
 [dev-dependencies]
 rand = "0.8.5"
