@@ -23,11 +23,12 @@ fn module_loader(root_name: &str) -> String {
           if (type === "file") {
             let target_id = find_real_id(target);
             if (target_id !== null) {
-              const event_name = "change";
-              const message = serializeIpcMessage("file_diolog", { accept: target.getAttribute("accept"), multiple: target.hasAttribute("multiple"), target: parseInt(target_id), bubbles: event_bubbles(event_name), event: event_name });
-              console.log(message);
-              console.log(event);
-              window.ipc.postMessage(message);
+              const send = (event_name) => {
+                const message = serializeIpcMessage("file_diolog", { accept: target.getAttribute("accept"), multiple: target.hasAttribute("multiple"), target: parseInt(target_id), bubbles: event_bubbles(event_name), event: event_name });
+                window.ipc.postMessage(message);
+              };
+              send("change");
+              send("input");
             }
             event.preventDefault();
           }

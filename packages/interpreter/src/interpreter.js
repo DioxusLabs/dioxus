@@ -344,17 +344,19 @@ class Interpreter {
         this.RemoveEventListener(edit.id, edit.name);
         break;
       case "NewEventListener":
-        let bubbles = event_bubbles(edit.name);
+        const bubbles = event_bubbles(edit.name);
 
-        this.NewEventListener(edit.name, edit.id, bubbles, handler);
+        this.NewEventListener(edit.name, edit.id, bubbles, (event) =>
+          handler(event, edit.name, bubbles)
+        );
         break;
     }
   }
 }
 
-// this handler is only provided on desktop implementations since this
+// this handler is only provided on the desktop and liveview implementations since this
 // method is not used by the web implementation
-function handler(event) {
+function handler(event, name, bubbles) {
   let target = event.target;
   if (target != null) {
     let shouldPreventDefault = target.getAttribute(`dioxus-prevent-default`);
@@ -387,8 +389,6 @@ function handler(event) {
 
     shouldPreventDefault = target.getAttribute(`dioxus-prevent-default`);
 
-    let contents = serialize_event(event);
-
     if (shouldPreventDefault === `on${event.type}`) {
       event.preventDefault();
     }
@@ -396,6 +396,10 @@ function handler(event) {
     if (event.type === "submit") {
       event.preventDefault();
     }
+
+    let contents = serialize_event(event);
+
+    /*POST_EVENT_SERIALIZATION*/
 
     if (
       target.tagName === "FORM" &&
@@ -408,7 +412,8 @@ function handler(event) {
         const formData = new FormData(target);
 
         for (let name of formData.keys()) {
-          contents.values[name] = formData.getAll(name);
+          let value = formData.getAll(name);
+          contents.values[name] = value;
         }
       }
     }
@@ -418,7 +423,7 @@ function handler(event) {
     }
     window.ipc.postMessage(
       serializeIpcMessage("user_event", {
-        name: edit.name,
+        name: name,
         element: parseInt(realId),
         data: contents,
         bubbles,
