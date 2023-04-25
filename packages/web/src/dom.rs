@@ -54,13 +54,18 @@ impl WebsysDom {
                 let element = walk_event_for_id(event);
                 let bubbles = dioxus_html::event_bubbles(name.as_str());
                 if let Some((element, target)) = element {
-                    if target
+                    if let Some(prevent_requests) = target
                         .get_attribute("dioxus-prevent-default")
                         .as_deref()
-                        .map(|f| f.trim_start_matches("on"))
-                        == Some(&name)
+                        .map(|f| f.split(" "))
                     {
-                        event.prevent_default();
+                        if prevent_requests
+                            .map(|f| f.trim_start_matches("on"))
+                            .find(|f| f == &name)
+                            .is_some()
+                        {
+                            event.prevent_default();
+                        }
                     }
 
                     let data = virtual_event_from_websys_event(event.clone(), target);
