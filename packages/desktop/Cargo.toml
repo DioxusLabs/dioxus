@@ -13,7 +13,7 @@ keywords = ["dom", "ui", "gui", "react"]
 
 [dependencies]
 dioxus-core = { path = "../core", version = "^0.3.0", features = ["serialize"] }
-dioxus-html = { path = "../html", features = ["serialize"], version = "^0.3.0" }
+dioxus-html = { path = "../html", features = ["serialize", "native-bind"], version = "^0.3.0" }
 dioxus-interpreter-js = { path = "../interpreter", version = "^0.3.0" }
 dioxus-hot-reload = { path = "../hot-reload", optional = true }
 
@@ -37,6 +37,7 @@ dunce = "1.0.2"
 slab = "0.4"
 
 futures-util = "0.3.25"
+rfd = "0.11.3"
 
 [target.'cfg(target_os = "ios")'.dependencies]
 objc = "0.2.7"

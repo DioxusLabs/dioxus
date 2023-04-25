@@ -11,11 +11,11 @@ fn App(cx: Scope) -> Element {
     cx.render(rsx! {
         input {
             r#type: "file",
-            accept: "text/*",
+            accept: ".txt",
+            multiple: true,
             onchange: |evt| {
                 to_owned![files_uploaded];
                 async move {
-                    println!("files uploaded: {:?}", evt);
                     if let Some(file_engine) = &evt.files {
                         let files = file_engine.files();
                         for file_name in &files {

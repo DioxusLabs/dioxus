@@ -14,15 +14,25 @@ fn module_loader(root_name: &str) -> String {
         r#"// Prevent file inputs from opening the file dialog on click
     let inputs = document.querySelectorAll("input");
     for (let input of inputs) {
-      input.addEventListener("click", (event) => {
-        let target = event.target;
-        // prevent file inputs from opening the file dialog on click
-        const type = target.getAttribute("type");
-        if (type === "file") {
-          window.ipc.postMessage(serializeIpcMessage("file_diolog", { accept: target.getAttribute("accept"), multiple: target.hasAttribute("multiple") }));
-          event.preventDefault();
-        }
-      });
+      if (!input.getAttribute("data-dioxus-file-listener")) {
+        input.setAttribute("data-dioxus-file-listener", true);
+        input.addEventListener("click", (event) => {
+          let target = event.target;
+          // prevent file inputs from opening the file dialog on click
+          const type = target.getAttribute("type");
+          if (type === "file") {
+            let target_id = find_real_id(target);
+            if (target_id !== null) {
+              const event_name = "change";
+              const message = serializeIpcMessage("file_diolog", { accept: target.getAttribute("accept"), multiple: target.hasAttribute("multiple"), target: parseInt(target_id), bubbles: event_bubbles(event_name), event: event_name });
+              console.log(message);
+              console.log(event);
+              window.ipc.postMessage(message);
+            }
+            event.preventDefault();
+          }
+        });
+      }
     }"#,
     );
     format!(
