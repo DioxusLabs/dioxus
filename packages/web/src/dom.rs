@@ -57,7 +57,7 @@ impl WebsysDom {
                     if let Some(prevent_requests) = target
                         .get_attribute("dioxus-prevent-default")
                         .as_deref()
-                        .map(|f| f.split(" "))
+                        .map(|f| f.split_whitespace())
                     {
                         if prevent_requests
                             .map(|f| f.trim_start_matches("on"))
