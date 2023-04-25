@@ -21,7 +21,7 @@ dioxus-native-core-macro = { path = "../native-core-macro", version = "^0.3.0" }
 dioxus-hot-reload = { path = "../hot-reload", optional = true }
 rink = { path = "../rink" }
 
-crossterm = "0.23.0"
+crossterm = "0.26.0"
 tokio = { version = "1.15.0", features = ["full"] }
 futures = "0.3.19"
 taffy = "0.2.1"
