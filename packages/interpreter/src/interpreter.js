@@ -345,6 +345,7 @@ class Interpreter {
         break;
       case "NewEventListener":
         let bubbles = event_bubbles(edit.name);
+
         this.NewEventListener(edit.name, edit.id, bubbles, handler);
         break;
     }
@@ -354,7 +355,6 @@ class Interpreter {
 // this handler is only provided on desktop implementations since this
 // method is not used by the web implementation
 function handler(event) {
-  console.log(event);
   let target = event.target;
   if (target != null) {
     let shouldPreventDefault = target.getAttribute(`dioxus-prevent-default`);
@@ -401,21 +401,14 @@ function handler(event) {
       target.tagName === "FORM" &&
       (event.type === "submit" || event.type === "input")
     ) {
-      for (let x = 0; x < target.elements.length; x++) {
-        let element = target.elements[x];
-        let name = element.getAttribute("name");
-        if (name != null) {
-          if (element.getAttribute("type") === "checkbox") {
-            // @ts-ignore
-            contents.values[name] = element.checked ? "true" : "false";
-          } else if (element.getAttribute("type") === "radio") {
-            if (element.checked) {
-              contents.values[name] = element.value;
-            }
-          } else {
-            // @ts-ignore
-            contents.values[name] = element.value ?? element.textContent;
-          }
+      if (
+        target.tagName === "FORM" &&
+        (event.type === "submit" || event.type === "input")
+      ) {
+        const formData = new FormData(target);
+
+        for (let name of formData.keys()) {
+          contents.values[name] = formData.getAll(name);
         }
       }
     }

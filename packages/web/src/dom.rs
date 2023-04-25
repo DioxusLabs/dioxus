@@ -13,9 +13,10 @@ use dioxus_core::{
 use dioxus_html::{event_bubbles, CompositionData, FileEngine, FormData};
 use dioxus_interpreter_js::{save_template, Channel};
 use futures_channel::mpsc;
+use js_sys::Array;
 use rustc_hash::FxHashMap;
 use std::{any::Any, rc::Rc, sync::Arc};
-use wasm_bindgen::{closure::Closure, JsCast};
+use wasm_bindgen::{closure::Closure, prelude::wasm_bindgen, JsCast};
 use web_sys::{console, Document, Element, Event, HtmlElement};
 
 use crate::{file_engine::WebFileEngine, Config};
@@ -327,35 +328,16 @@ fn read_input_to_data(target: Element) -> Rc<FormData> {
 
     // try to fill in form values
     if let Some(form) = target.dyn_ref::<web_sys::HtmlFormElement>() {
-        let elements = form.elements();
-        for x in 0..elements.length() {
-            let element = elements.item(x).unwrap();
-            if let Some(name) = element.get_attribute("name") {
-                let value: Option<String> = element
-                    .dyn_ref()
-                    .map(|input: &web_sys::HtmlInputElement| {
-                        match input.type_().as_str() {
-                            "checkbox" => {
-                                match input.checked() {
-                                    true => Some("true".to_string()),
-                                    false => Some("false".to_string()),
-                                }
-                            },
-                            "radio" => {
-                                match input.checked() {
-                                    true => Some(input.value()),
-                                    false => None,
-                                }
-                            }
-                            _ => Some(input.value())
-                        }
-                    })
-                    .or_else(|| element.dyn_ref().map(|input: &web_sys::HtmlTextAreaElement| Some(input.value())))
-                    .or_else(|| element.dyn_ref().map(|input: &web_sys::HtmlSelectElement| Some(input.value())))
-                    .or_else(|| Some(element.dyn_ref::<web_sys::HtmlElement>().unwrap().text_content()))
-                    .expect("only an InputElement or TextAreaElement or an element with contenteditable=true can have an oninput event listener");
-                if let Some(value) = value {
-                    values.insert(name, value);
+        let form_data = get_form_data(form);
+        for value in form_data.entries().into_iter().flatten() {
+            if let Ok(array) = value.dyn_into::<Array>() {
+                if let Some(name) = array.get(0).as_string() {
+                    if let Ok(item_values) = array.get(1).dyn_into::<Array>() {
+                        let item_values =
+                            item_values.iter().filter_map(|v| v.as_string()).collect();
+
+                        values.insert(name, item_values);
+                    }
                 }
             }
         }
@@ -374,6 +356,23 @@ fn read_input_to_data(target: Element) -> Rc<FormData> {
         values,
         files,
     })
+}
+
+// web-sys does not expose the keys api for form data, so we need to manually bind to it
+#[wasm_bindgen(inline_js = r#"
+    export function get_form_data(form) {
+        let values = new Map();
+        const formData = new FormData(form);
+
+        for (let name of formData.keys()) {
+            values.set(name, formData.getAll(name));
+        }
+
+        return values;
+    }
+"#)]
+extern "C" {
+    fn get_form_data(form: &web_sys::HtmlFormElement) -> js_sys::Map;
 }
 
 fn walk_event_for_id(event: &web_sys::Event) -> Option<(ElementId, web_sys::Element)> {
