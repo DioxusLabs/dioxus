@@ -273,16 +273,21 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
                         let event_name = &file_diolog.event;
                         let event_bubbles = file_diolog.bubbles;
                         let files = file_upload::get_file_event(&file_diolog);
-                        let data = FormData {
+                        let data = Rc::new(FormData {
                             value: Default::default(),
                             values: Default::default(),
                             files: Some(Arc::new(NativeFileEngine::new(files))),
-                        };
+                        });
 
                         let view = webviews.get_mut(&event.1).unwrap();
 
-                        view.dom
-                            .handle_event(event_name, Rc::new(data), id, event_bubbles);
+                        if event_name == "change&input" {
+                            view.dom
+                                .handle_event("input", data.clone(), id, event_bubbles);
+                            view.dom.handle_event("change", data, id, event_bubbles);
+                        } else {
+                            view.dom.handle_event(event_name, data, id, event_bubbles);
+                        }
 
                         send_edits(view.dom.render_immediate(), &view.webview);
                     }

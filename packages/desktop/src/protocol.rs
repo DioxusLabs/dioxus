@@ -27,8 +27,7 @@ fn module_loader(root_name: &str) -> String {
                 const message = serializeIpcMessage("file_diolog", { accept: target.getAttribute("accept"), multiple: target.hasAttribute("multiple"), target: parseInt(target_id), bubbles: event_bubbles(event_name), event: event_name });
                 window.ipc.postMessage(message);
               };
-              send("change");
-              send("input");
+              send("change&input");
             }
             event.preventDefault();
           }
