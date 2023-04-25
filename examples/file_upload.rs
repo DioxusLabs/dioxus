@@ -19,7 +19,7 @@ fn App(cx: Scope) -> Element {
                     if let Some(file_engine) = &evt.files {
                         let files = file_engine.files();
                         for file_name in &files {
-                            if let Some(file) = file_engine.read_file_to_string(&file_name).await{
+                            if let Some(file) = file_engine.read_file_to_string(file_name).await{
                                 files_uploaded.write().push(file);
                             }
                         }
