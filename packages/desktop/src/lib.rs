@@ -9,6 +9,7 @@ mod element;
 mod escape;
 mod eval;
 mod events;
+mod file_upload;
 mod protocol;
 mod query;
 mod shortcut;
@@ -22,15 +23,16 @@ pub use desktop_context::{
 };
 use desktop_context::{EventData, UserWindowEvent, WebviewQueue, WindowEventHandlers};
 use dioxus_core::*;
-use dioxus_html::{HtmlEvent, MountedData};
+use dioxus_html::MountedData;
+use dioxus_html::{native_bind::NativeFileEngine, FormData, HtmlEvent};
 use element::DesktopElement;
 pub use eval::{use_eval, EvalResult};
 use futures_util::{pin_mut, FutureExt};
 use shortcut::ShortcutRegistry;
 pub use shortcut::{use_global_shortcut, ShortcutHandle, ShortcutId, ShortcutRegistryError};
-use std::collections::HashMap;
 use std::rc::Rc;
 use std::task::Waker;
+use std::{collections::HashMap, sync::Arc};
 pub use tao::dpi::{LogicalSize, PhysicalSize};
 use tao::event_loop::{EventLoopProxy, EventLoopWindowTarget};
 pub use tao::window::WindowBuilder;
@@ -291,6 +293,34 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
                                 log::error!("Open Browser error: {:?}", e);
                             }
                         }
+                    }
+                }
+
+                EventData::Ipc(msg) if msg.method() == "file_diolog" => {
+                    if let Ok(file_diolog) =
+                        serde_json::from_value::<file_upload::FileDiologRequest>(msg.params())
+                    {
+                        let id = ElementId(file_diolog.target);
+                        let event_name = &file_diolog.event;
+                        let event_bubbles = file_diolog.bubbles;
+                        let files = file_upload::get_file_event(&file_diolog);
+                        let data = Rc::new(FormData {
+                            value: Default::default(),
+                            values: Default::default(),
+                            files: Some(Arc::new(NativeFileEngine::new(files))),
+                        });
+
+                        let view = webviews.get_mut(&event.1).unwrap();
+
+                        if event_name == "change&input" {
+                            view.dom
+                                .handle_event("input", data.clone(), id, event_bubbles);
+                            view.dom.handle_event("change", data, id, event_bubbles);
+                        } else {
+                            view.dom.handle_event(event_name, data, id, event_bubbles);
+                        }
+
+                        send_edits(view.dom.render_immediate(), &view.webview);
                     }
                 }
 
