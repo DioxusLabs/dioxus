@@ -36,6 +36,7 @@ axum = { version = "0.6.1", optional = true, features = ["ws"] }
 
 # salvo
 salvo = { version = "0.37.7", optional = true, features = ["ws"] }
+once_cell = "1.17.1"
 
 # actix is ... complicated?
 # actix-files = { version = "0.6.2", optional = true }
