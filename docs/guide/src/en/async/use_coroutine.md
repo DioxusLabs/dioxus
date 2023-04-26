@@ -92,6 +92,8 @@ With Coroutines, we can centralize our async logic. The `rx` parameter is an Cha
 
 
 ```rust
+use futures_util::stream::StreamExt;
+
 enum ProfileUpdate {
     SetUsername(String),
     SetAge(i32)
@@ -116,6 +118,10 @@ cx.render(rsx!{
     }
 })
 ```
+
+
+> Note: In order to use/run the `rx.next().await` statement you will need to extend the [`Stream`] trait (used by [`UnboundedReceiver`]) by adding 'futures_util' as a dependency to your project and adding the `use futures_util::stream::StreamExt;`.
+
 
 For sufficiently complex apps, we could build a bunch of different useful "services" that loop on channels to update the app.
 
@@ -164,6 +170,8 @@ fn Banner(cx: Scope) -> Element {
 Now, in our sync service, we can structure our state however we want. We only need to update the view values when ready.
 
 ```rust
+use futures_util::stream::StreamExt;
+
 enum SyncAction {
     SetUsername(String),
 }

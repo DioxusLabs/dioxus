@@ -63,6 +63,26 @@ fn NameCard(cx: Scope) -> Element {
 }
 ```
 
+If needed, we can update the atom's value, based on itself:
+
+```rust, ignore
+static COUNT: Atom<i32> = |_| 0;
+
+fn Counter(cx: Scope) -> Element {
+    let mut count = use_atom_state(cx, COUNT);
+
+    cx.render(rsx!{
+        p {
+          "{count}"
+        }
+        button {
+            onclick: move |_| count += 1,
+            "Increment counter"
+        }
+    })
+}
+```
+
 It's that simple!
 
 ## Installation

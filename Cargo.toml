@@ -15,13 +15,15 @@ members = [
     "packages/liveview",
     "packages/autofmt",
     "packages/rsx",
-    "packages/tui",
+    "packages/dioxus-tui",
+    "packages/rink",
     "packages/native-core",
     "packages/native-core-macro",
     "packages/rsx-rosetta",
     "packages/signals",
     "packages/hot-reload",
     "docs/guide",
+    "examples/PWA-example",
 ]
 
 # This is a "virtual package"

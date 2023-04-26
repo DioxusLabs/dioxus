@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Test</title>
+    <style>
+        html,
+        body {
+            height: 100%;
+        }
+        
+        .container {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            background-color: black;
+            /* justify-content: center;
+            align-items: center; */
+            /* margin: auto; */
+        }
+        
+        .smaller {
+            height: 70%;
+            width: 70%;
+            background-color: green;
+            /* justify-content: center; */
+            /* align-items: center; */
+        }
+        
+        .superinner {
+            height: 100%;
+            width: 100%;
+            /* display: flex; */
+            /*  */
+            margin-top: 20px;
+            margin-bottom: 20px;
+            margin-left: 20px;
+            margin-right: 20px;
+            /*  */
+            background-color: red;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            /* margin: 20px; */
+            /* margin: 20px; */
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="smaller">
+            <div class="superinner">
+                <h1>Hello World</h1>
+                <p>This is a test</p>
+            </div>
+        </div>
+    </div>
+    <!-- <div class="container">
+        <div class="smaller">
+            hello world
+            <div style="color: green; margin: 40px;">
+                goodbye
+                <div style="color:red;">
+                    asdasdasd
+                </div>
+            </div>
+        </div>
+    </div> -->
+</body>
+
+</html>

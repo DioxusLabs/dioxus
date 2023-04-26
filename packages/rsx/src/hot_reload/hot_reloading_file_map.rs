@@ -29,7 +29,7 @@ pub struct FileMapBuildResult<Ctx: HotReloadingContext> {
 
 pub struct FileMap<Ctx: HotReloadingContext> {
     pub map: HashMap<PathBuf, (String, Option<Template<'static>>)>,
-    in_workspace: HashMap<PathBuf, bool>,
+    in_workspace: HashMap<PathBuf, Option<PathBuf>>,
     phantom: std::marker::PhantomData<Ctx>,
 }
 
@@ -112,11 +112,8 @@ impl<Ctx: HotReloadingContext> FileMap<Ctx> {
                                 ) {
                                     // if the file!() macro is invoked in a workspace, the path is relative to the workspace root, otherwise it's relative to the crate root
                                     // we need to check if the file is in a workspace or not and strip the prefix accordingly
-                                    let prefix = if in_workspace {
-                                        crate_dir.parent().ok_or(io::Error::new(
-                                            io::ErrorKind::Other,
-                                            "Could not load workspace",
-                                        ))?
+                                    let prefix = if let Some(workspace) = &in_workspace {
+                                        workspace
                                     } else {
                                         crate_dir
                                     };
@@ -173,9 +170,9 @@ impl<Ctx: HotReloadingContext> FileMap<Ctx> {
         Ok(UpdateResult::NeedsRebuild)
     }
 
-    fn child_in_workspace(&mut self, crate_dir: &Path) -> io::Result<bool> {
+    fn child_in_workspace(&mut self, crate_dir: &Path) -> io::Result<Option<PathBuf>> {
         if let Some(in_workspace) = self.in_workspace.get(crate_dir) {
-            Ok(*in_workspace)
+            Ok(in_workspace.clone())
         } else {
             let mut cmd = Cmd::new();
             let manafest_path = crate_dir.join("Cargo.toml");
@@ -186,9 +183,10 @@ impl<Ctx: HotReloadingContext> FileMap<Ctx> {
                 .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
 
             let in_workspace = metadata.workspace_root != crate_dir;
+            let workspace_path = in_workspace.then(|| metadata.workspace_root.into());
             self.in_workspace
-                .insert(crate_dir.to_path_buf(), in_workspace);
-            Ok(in_workspace)
+                .insert(crate_dir.to_path_buf(), workspace_path.clone());
+            Ok(workspace_path)
         }
     }
 }

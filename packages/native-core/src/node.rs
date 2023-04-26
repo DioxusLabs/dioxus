@@ -1,65 +1,113 @@
-use crate::{state::State, tree::NodeId};
-use dioxus_core::{AnyValue, BorrowedAttributeValue, ElementId};
+//! Items related to Nodes in the RealDom
+
 use rustc_hash::{FxHashMap, FxHashSet};
-use std::fmt::Debug;
+use shipyard::Component;
+use std::{
+    any::Any,
+    fmt::{Debug, Display},
+};
 
-/// The node is stored client side and stores only basic data about the node.
-#[derive(Debug, Clone)]
-pub struct Node<S: State<V>, V: FromAnyValue + 'static = ()> {
-    /// The transformed state of the node.
-    pub state: S,
-    /// The raw data for the node
-    pub node_data: NodeData<V>,
+/// A element node in the RealDom
+#[derive(Debug, Clone, Default)]
+pub struct ElementNode<V: FromAnyValue = ()> {
+    /// The [tag](https://developer.mozilla.org/en-US/docs/Web/API/Element/tagName) of the element
+    pub tag: String,
+    /// The [namespace](https://developer.mozilla.org/en-US/docs/Web/API/Element/namespaceURI) of the element
+    pub namespace: Option<String>,
+    /// The attributes of the element
+    pub attributes: FxHashMap<OwnedAttributeDiscription, OwnedAttributeValue<V>>,
+    /// The events the element is listening for
+    pub listeners: FxHashSet<String>,
 }
 
-#[derive(Debug, Clone)]
-pub struct NodeData<V: FromAnyValue = ()> {
-    /// The id of the node
-    pub node_id: NodeId,
-    /// The id of the node in the vdom.
-    pub element_id: Option<ElementId>,
-    /// Additional inforation specific to the node type
-    pub node_type: NodeType<V>,
+impl ElementNode {
+    /// Create a new element node
+    pub fn new(tag: impl Into<String>, namespace: impl Into<Option<String>>) -> Self {
+        Self {
+            tag: tag.into(),
+            namespace: namespace.into(),
+            attributes: Default::default(),
+            listeners: Default::default(),
+        }
+    }
 }
 
-/// A type of node with data specific to the node type. The types are a subset of the [VNode] types.
-#[derive(Debug, Clone)]
+/// A text node in the RealDom
+#[derive(Debug, Clone, Default)]
+pub struct TextNode {
+    /// The text of the node
+    pub text: String,
+    /// The events the node is listening for
+    pub listeners: FxHashSet<String>,
+}
+
+impl TextNode {
+    /// Create a new text node
+    pub fn new(text: String) -> Self {
+        Self {
+            text,
+            listeners: Default::default(),
+        }
+    }
+}
+
+/// A type of node with data specific to the node type.
+#[derive(Debug, Clone, Component)]
 pub enum NodeType<V: FromAnyValue = ()> {
-    Text {
-        text: String,
-    },
-    Element {
-        tag: String,
-        namespace: Option<String>,
-        attributes: FxHashMap<OwnedAttributeDiscription, OwnedAttributeValue<V>>,
-        listeners: FxHashSet<String>,
-    },
+    /// A text node
+    Text(TextNode),
+    /// An element node
+    Element(ElementNode<V>),
+    /// A placeholder node. This can be used as a cheaper placeholder for a node that will be created later
     Placeholder,
 }
 
-impl<S: State<V>, V: FromAnyValue> Node<S, V> {
-    pub(crate) fn new(node_type: NodeType<V>) -> Self {
-        Node {
-            state: S::default(),
-            node_data: NodeData {
-                element_id: None,
-                node_type,
-                node_id: NodeId(0),
-            },
-        }
-    }
-
-    /// get the mounted id of the node
-    pub fn mounted_id(&self) -> Option<ElementId> {
-        self.node_data.element_id
+impl<V: FromAnyValue, S: Into<String>> From<S> for NodeType<V> {
+    fn from(text: S) -> Self {
+        Self::Text(TextNode::new(text.into()))
     }
 }
 
+impl<V: FromAnyValue> From<TextNode> for NodeType<V> {
+    fn from(text: TextNode) -> Self {
+        Self::Text(text)
+    }
+}
+
+impl<V: FromAnyValue> From<ElementNode<V>> for NodeType<V> {
+    fn from(element: ElementNode<V>) -> Self {
+        Self::Element(element)
+    }
+}
+
+/// A discription of an attribute on a DOM node, such as `id` or `href`.
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct OwnedAttributeDiscription {
+    /// The name of the attribute.
     pub name: String,
+    /// The namespace of the attribute used to identify what kind of attribute it is.
+    ///
+    /// For renderers that use HTML, this can be used to identify if the attribute is a style attribute.
+    /// Instead of parsing the style attribute every time a style is changed, you can set an attribute with the `style` namespace.
     pub namespace: Option<String>,
-    pub volatile: bool,
+}
+
+impl From<String> for OwnedAttributeDiscription {
+    fn from(name: String) -> Self {
+        Self {
+            name,
+            namespace: None,
+        }
+    }
+}
+
+impl<S: Into<String>, N: Into<String>> From<(S, N)> for OwnedAttributeDiscription {
+    fn from(name: (S, N)) -> Self {
+        Self {
+            name: name.0.into(),
+            namespace: Some(name.1.into()),
+        }
+    }
 }
 
 /// An attribute on a DOM node, such as `id="my-thing"` or
@@ -73,21 +121,59 @@ pub struct OwnedAttributeView<'a, V: FromAnyValue = ()> {
     pub value: &'a OwnedAttributeValue<V>,
 }
 
+/// The value of an attribute on a DOM node. This contains non-text values to allow users to skip parsing attribute values in some cases.
 #[derive(Clone)]
 pub enum OwnedAttributeValue<V: FromAnyValue = ()> {
+    /// A string value. This is the most common type of attribute.
     Text(String),
+    /// A floating point value.
     Float(f64),
+    /// An integer value.
     Int(i64),
+    /// A boolean value.
     Bool(bool),
+    /// A custom value specific to the renderer
     Custom(V),
 }
 
-pub trait FromAnyValue: Clone {
-    fn from_any_value(value: &dyn AnyValue) -> Self;
+impl<V: FromAnyValue> From<String> for OwnedAttributeValue<V> {
+    fn from(value: String) -> Self {
+        Self::Text(value)
+    }
+}
+
+impl<V: FromAnyValue> From<f64> for OwnedAttributeValue<V> {
+    fn from(value: f64) -> Self {
+        Self::Float(value)
+    }
+}
+
+impl<V: FromAnyValue> From<i64> for OwnedAttributeValue<V> {
+    fn from(value: i64) -> Self {
+        Self::Int(value)
+    }
+}
+
+impl<V: FromAnyValue> From<bool> for OwnedAttributeValue<V> {
+    fn from(value: bool) -> Self {
+        Self::Bool(value)
+    }
+}
+
+impl<V: FromAnyValue> From<V> for OwnedAttributeValue<V> {
+    fn from(value: V) -> Self {
+        Self::Custom(value)
+    }
+}
+
+/// Something that can be converted from a borrowed [Any] value.
+pub trait FromAnyValue: Clone + 'static {
+    /// Convert from an [Any] value.
+    fn from_any_value(value: &dyn Any) -> Self;
 }
 
 impl FromAnyValue for () {
-    fn from_any_value(_: &dyn AnyValue) -> Self {}
+    fn from_any_value(_: &dyn Any) -> Self {}
 }
 
 impl<V: FromAnyValue> Debug for OwnedAttributeValue<V> {
@@ -102,20 +188,34 @@ impl<V: FromAnyValue> Debug for OwnedAttributeValue<V> {
     }
 }
 
-impl<V: FromAnyValue> From<BorrowedAttributeValue<'_>> for OwnedAttributeValue<V> {
-    fn from(value: BorrowedAttributeValue<'_>) -> Self {
+impl<V: FromAnyValue> Display for OwnedAttributeValue<V> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Text(arg0) => f.write_str(arg0),
+            Self::Float(arg0) => f.write_str(&arg0.to_string()),
+            Self::Int(arg0) => f.write_str(&arg0.to_string()),
+            Self::Bool(arg0) => f.write_str(&arg0.to_string()),
+            Self::Custom(_) => f.write_str("custom"),
+        }
+    }
+}
+
+#[cfg(feature = "dioxus")]
+impl<V: FromAnyValue> From<dioxus_core::BorrowedAttributeValue<'_>> for OwnedAttributeValue<V> {
+    fn from(value: dioxus_core::BorrowedAttributeValue<'_>) -> Self {
         match value {
-            BorrowedAttributeValue::Text(text) => Self::Text(text.to_string()),
-            BorrowedAttributeValue::Float(float) => Self::Float(float),
-            BorrowedAttributeValue::Int(int) => Self::Int(int),
-            BorrowedAttributeValue::Bool(bool) => Self::Bool(bool),
-            BorrowedAttributeValue::Any(any) => Self::Custom(V::from_any_value(&*any)),
-            BorrowedAttributeValue::None => panic!("None attribute values result in removing the attribute, not converting it to a None value.")
+            dioxus_core::BorrowedAttributeValue::Text(text) => Self::Text(text.to_string()),
+            dioxus_core::BorrowedAttributeValue::Float(float) => Self::Float(float),
+            dioxus_core::BorrowedAttributeValue::Int(int) => Self::Int(int),
+            dioxus_core::BorrowedAttributeValue::Bool(bool) => Self::Bool(bool),
+            dioxus_core::BorrowedAttributeValue::Any(any) => Self::Custom(V::from_any_value(any.as_any())),
+            dioxus_core::BorrowedAttributeValue::None => panic!("None attribute values result in removing the attribute, not converting it to a None value.")
         }
     }
 }
 
 impl<V: FromAnyValue> OwnedAttributeValue<V> {
+    /// Attempt to convert the attribute value to a string.
     pub fn as_text(&self) -> Option<&str> {
         match self {
             OwnedAttributeValue::Text(text) => Some(text),
@@ -123,20 +223,25 @@ impl<V: FromAnyValue> OwnedAttributeValue<V> {
         }
     }
 
+    /// Attempt to convert the attribute value to a float.
     pub fn as_float(&self) -> Option<f64> {
         match self {
             OwnedAttributeValue::Float(float) => Some(*float),
+            OwnedAttributeValue::Int(int) => Some(*int as f64),
             _ => None,
         }
     }
 
+    /// Attempt to convert the attribute value to an integer.
     pub fn as_int(&self) -> Option<i64> {
         match self {
+            OwnedAttributeValue::Float(float) => Some(*float as i64),
             OwnedAttributeValue::Int(int) => Some(*int),
             _ => None,
         }
     }
 
+    /// Attempt to convert the attribute value to a boolean.
     pub fn as_bool(&self) -> Option<bool> {
         match self {
             OwnedAttributeValue::Bool(bool) => Some(*bool),
@@ -144,6 +249,7 @@ impl<V: FromAnyValue> OwnedAttributeValue<V> {
         }
     }
 
+    /// Attempt to convert the attribute value to a custom value.
     pub fn as_custom(&self) -> Option<&V> {
         match self {
             OwnedAttributeValue::Custom(custom) => Some(custom),

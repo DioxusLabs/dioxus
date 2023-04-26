@@ -175,10 +175,10 @@ impl VirtualDom {
 }
 
 impl ElementPath {
-    pub(crate) fn is_ascendant(&self, big: &&[u8]) -> bool {
+    pub(crate) fn is_decendant(&self, small: &&[u8]) -> bool {
         match *self {
-            ElementPath::Deep(small) => small.len() <= big.len() && small == &big[..small.len()],
-            ElementPath::Root(r) => big.len() == 1 && big[0] == r as u8,
+            ElementPath::Deep(big) => small.len() <= big.len() && *small == &big[..small.len()],
+            ElementPath::Root(r) => small.len() == 1 && small[0] == r as u8,
         }
     }
 }
