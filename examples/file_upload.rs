@@ -11,7 +11,7 @@ fn App(cx: Scope) -> Element {
     cx.render(rsx! {
         input {
             r#type: "file",
-            accept: ".txt",
+            accept: ".txt, .rs",
             multiple: true,
             onchange: |evt| {
                 to_owned![files_uploaded];
