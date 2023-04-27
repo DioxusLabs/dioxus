@@ -13,7 +13,7 @@ use syn::{
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub struct Element {
     pub name: Ident,
-    pub key: Option<KeyValue>,
+    pub key: Option<Key>,
     pub attributes: Vec<ElementAttrNamed>,
     pub children: Vec<BodyNode>,
     pub _is_static: bool,
@@ -88,23 +88,7 @@ impl Parse for Element {
                 } else {
                     match name_str.as_str() {
                         "key" => {
-                            if content.peek(LitStr) {
-                                attributes.push(ElementAttrNamed {
-                                    el_name: el_name.clone(),
-                                    attr: ElementAttr::AttrText {
-                                        name,
-                                        value: content.parse()?,
-                                    },
-                                });
-                            } else {
-                                attributes.push(ElementAttrNamed {
-                                    el_name: el_name.clone(),
-                                    attr: ElementAttr::AttrExpression {
-                                        name,
-                                        value: content.parse()?,
-                                    },
-                                });
-                            }
+                            key = Some(content.parse()?);
                         }
                         // {
                         //     // content.parse()?
@@ -328,9 +312,10 @@ pub enum Key {
 
 impl Parse for Key {
     fn parse(input: ParseStream) -> Result<Self> {
-        match Key(input.parse())? {
-            Key::Formatted(IfmtInput) => Self,
-            Key::Raw(Expr) => Self,
+        if input.peek(LitStr) {
+            Ok(Key::Formatted(input.parse()?))
+        } else {
+            Ok(Key::Raw(input.parse()?))
         }
     }
 }
