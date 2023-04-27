@@ -321,32 +321,27 @@ impl ToTokens for ElementAttrNamed {
 // }
 
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
-pub struct Key {
-    pub value: KeyValue,
+pub enum Key {
+    Formatted(IfmtInput),
+    Raw(Expr),
 }
 
 impl Parse for Key {
     fn parse(input: ParseStream) -> Result<Self> {
         match Key(input.parse())? {
-            KeyValue::Formatted(IfmtInput) => Self,
-            KeyValue::Expression(Expr) => Self,
+            Key::Formatted(IfmtInput) => Self,
+            Key::Raw(Expr) => Self,
         }
     }
 }
 
-#[derive(PartialEq, Eq, Clone, Debug, Hash)]
-pub enum KeyValue {
-    Formatted(IfmtInput),
-    Expression(Expr),
-}
-
-impl ToTokens for KeyValue {
+impl ToTokens for Key {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         match self {
-            KeyValue::Formatted(s) => tokens.append_all(quote! {
+            Key::Formatted(s) => tokens.append_all(quote! {
                 __cx.key_value(#s)
             }),
-            KeyValue::Expression(e) => e.to_tokens(tokens),
+            Key::Raw(e) => e.to_tokens(tokens),
         }
     }
 }

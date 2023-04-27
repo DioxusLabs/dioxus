@@ -64,7 +64,7 @@ impl Component {
             .map(|f| &f.content)
         {
             // should I dereference format or reference &IfmtInput in elelemt.rs KeyValue enum?
-            Some(ContentField::Formatted(fmt)) => Some(KeyValue::Formatted(*fmt)),
+            Some(ContentField::Formatted(fmt)) => Some(Key::Formatted(*fmt)),
             _ => None,
         }
     }
