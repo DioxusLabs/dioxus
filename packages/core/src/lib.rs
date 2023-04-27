@@ -71,9 +71,9 @@ pub(crate) mod innerlude {
 
 pub use crate::innerlude::{
     fc_to_builder, AnyValue, Attribute, AttributeValue, BorrowedAttributeValue, CapturedError,
-    Component, DynamicNode, Element, ElementId, Event, Fragment, IntoDynNode, KeyValue, LazyNodes,
-    Mutation, Mutations, Properties, RenderReturn, Scope, ScopeId, ScopeState, Scoped,
-    SuspenseContext, TaskId, Template, TemplateAttribute, TemplateNode, VComponent, VNode,
+    Component, DynamicNode, Element, ElementId, Event, Fragment, IntoDynNode, IntoKeyValue,
+    KeyValue, LazyNodes, Mutation, Mutations, Properties, RenderReturn, Scope, ScopeId, ScopeState,
+    Scoped, SuspenseContext, TaskId, Template, TemplateAttribute, TemplateNode, VComponent, VNode,
     VPlaceholder, VText, VirtualDom,
 };
 
@@ -83,8 +83,8 @@ pub use crate::innerlude::{
 pub mod prelude {
     pub use crate::innerlude::{
         fc_to_builder, AnyValue, Component, Element, Event, EventHandler, Fragment,
-        IntoAttributeValue, IntoKeyValue, LazyNodes, Properties, Scope, ScopeId, ScopeState,
-        Scoped, TaskId, Template, TemplateAttribute, TemplateNode, Throw, VNode, VirtualDom,
+        IntoAttributeValue, LazyNodes, Properties, Scope, ScopeId, ScopeState, Scoped, TaskId,
+        Template, TemplateAttribute, TemplateNode, Throw, VNode, VirtualDom,
     };
 }
 

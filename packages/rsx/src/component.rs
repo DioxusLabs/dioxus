@@ -56,14 +56,15 @@ impl Component {
         Ok(())
     }
 
-    pub fn key(&self) -> Option<&KeyValue> {
+    pub fn key(&self) -> Option<KeyValue> {
         match self
             .fields
             .iter()
             .find(|f| f.name == "key")
             .map(|f| &f.content)
         {
-            Some(ContentField::Formatted(fmt)) => Some(fmt),
+            // should I dereference format or reference &IfmtInput in elelemt.rs KeyValue enum?
+            Some(ContentField::Formatted(fmt)) => Some(KeyValue::Formatted(*fmt)),
             _ => None,
         }
     }

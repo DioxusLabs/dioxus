@@ -88,9 +88,28 @@ impl Parse for Element {
                 } else {
                     match name_str.as_str() {
                         "key" => {
-                            // content.parse()?
-                            key = Some(KeyValue::parse(&content)?);
+                            if content.peek(LitStr) {
+                                attributes.push(ElementAttrNamed {
+                                    el_name: el_name.clone(),
+                                    attr: ElementAttr::AttrText {
+                                        name,
+                                        value: content.parse()?,
+                                    },
+                                });
+                            } else {
+                                attributes.push(ElementAttrNamed {
+                                    el_name: el_name.clone(),
+                                    attr: ElementAttr::AttrExpression {
+                                        name,
+                                        value: content.parse()?,
+                                    },
+                                });
+                            }
                         }
+                        // {
+                        //     // content.parse()?
+                        //     key = Some(Key::parse(&content)?);
+                        // }
                         "classes" => todo!("custom class list not supported yet"),
                         // "namespace" => todo!("custom namespace not supported yet"),
                         "node_ref" => {
@@ -306,14 +325,12 @@ pub struct Key {
     pub value: KeyValue,
 }
 
-impl ToTokens for Key {
-    fn to_tokens(&self, tokens: &mut TokenStream2) {
-        todo!();
-    }
-}
 impl Parse for Key {
     fn parse(input: ParseStream) -> Result<Self> {
-        Ok(Key(input.parse()?))
+        match Key(input.parse())? {
+            KeyValue::Formatted(IfmtInput) => Self,
+            KeyValue::Expression(Expr) => Self,
+        }
     }
 }
 
