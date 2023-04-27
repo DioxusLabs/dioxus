@@ -17,8 +17,7 @@ class ListenerMap {
       } else {
         this.global[event_name].active++;
       }
-    }
-    else {
+    } else {
       const id = element.getAttribute("data-dioxus-id");
       if (!this.local[id]) {
         this.local[id] = {};
@@ -32,11 +31,13 @@ class ListenerMap {
     if (bubbles) {
       this.global[event_name].active--;
       if (this.global[event_name].active === 0) {
-        this.root.removeEventListener(event_name, this.global[event_name].callback);
+        this.root.removeEventListener(
+          event_name,
+          this.global[event_name].callback
+        );
         delete this.global[event_name];
       }
-    }
-    else {
+    } else {
       const id = element.getAttribute("data-dioxus-id");
       delete this.local[id][event_name];
       if (this.local[id].length === 0) {
@@ -143,8 +144,7 @@ class Interpreter {
   SetAttribute(id, field, value, ns) {
     if (value === null) {
       this.RemoveAttribute(id, field, ns);
-    }
-    else {
+    } else {
       const node = this.nodes[id];
       this.SetAttributeInner(node, field, value, ns);
     }
@@ -167,10 +167,10 @@ class Interpreter {
           }
           break;
         case "checked":
-          node.checked = value === "true";
+          node.checked = value === "true" || value === true;
           break;
         case "selected":
-          node.selected = value === "true";
+          node.selected = value === "true" || value === true;
           break;
         case "dangerous_inner_html":
           node.innerHTML = value;
@@ -212,6 +212,8 @@ class Interpreter {
     for (let edit of edits.edits) {
       this.handleEdit(edit);
     }
+
+    /*POST_HANDLE_EDITS*/
   }
 
   SaveTemplate(template) {
@@ -342,7 +344,6 @@ class Interpreter {
         this.RemoveEventListener(edit.id, edit.name);
         break;
       case "NewEventListener":
-
         let bubbles = event_bubbles(edit.name);
 
         // this handler is only provided on desktop implementations since this
@@ -351,7 +352,7 @@ class Interpreter {
           let target = event.target;
           if (target != null) {
             let realId = target.getAttribute(`data-dioxus-id`);
-            let shouldPreventDefault = target.getAttribute(
+            let preventDefaultRequests = target.getAttribute(
               `dioxus-prevent-default`
             );
 
@@ -360,7 +361,14 @@ class Interpreter {
               let a_element = target.closest("a");
               if (a_element != null) {
                 event.preventDefault();
-                if (shouldPreventDefault !== `onclick` && a_element.getAttribute(`dioxus-prevent-default`) !== `onclick`) {
+
+                let elementShouldPreventDefault =
+                  preventDefaultRequests.includes(`onclick`);
+                let linkShouldPreventDefault = a_element
+                  .getAttribute(`dioxus-prevent-default`)
+                  .includes(`onclick`);
+
+                if (!elementShouldPreventDefault && !linkShouldPreventDefault) {
                   const href = a_element.getAttribute("href");
                   if (href !== "" && href !== null && href !== undefined) {
                     window.ipc.postMessage(
@@ -386,13 +394,13 @@ class Interpreter {
               realId = target.getAttribute(`data-dioxus-id`);
             }
 
-            shouldPreventDefault = target.getAttribute(
+            preventDefaultRequests = target.getAttribute(
               `dioxus-prevent-default`
             );
 
             let contents = serialize_event(event);
 
-            if (shouldPreventDefault === `on${event.type}`) {
+            if (preventDefaultRequests.includes(`on${event.type}`)) {
               event.preventDefault();
             }
 
@@ -441,6 +449,99 @@ class Interpreter {
         break;
     }
   }
+}
+
+// this handler is only provided on the desktop and liveview implementations since this
+// method is not used by the web implementation
+function handler(event, name, bubbles) {
+  let target = event.target;
+  if (target != null) {
+    let shouldPreventDefault = target.getAttribute(`dioxus-prevent-default`);
+
+    if (event.type === "click") {
+      // Prevent redirects from links
+      let a_element = target.closest("a");
+      if (a_element != null) {
+        event.preventDefault();
+        if (
+          shouldPreventDefault !== `onclick` &&
+          a_element.getAttribute(`dioxus-prevent-default`) !== `onclick`
+        ) {
+          const href = a_element.getAttribute("href");
+          if (href !== "" && href !== null && href !== undefined) {
+            window.ipc.postMessage(
+              serializeIpcMessage("browser_open", { href })
+            );
+          }
+        }
+      }
+
+      // also prevent buttons from submitting
+      if (target.tagName === "BUTTON" && event.type == "submit") {
+        event.preventDefault();
+      }
+    }
+
+    const realId = find_real_id(target);
+
+    shouldPreventDefault = target.getAttribute(`dioxus-prevent-default`);
+
+    if (shouldPreventDefault === `on${event.type}`) {
+      event.preventDefault();
+    }
+
+    if (event.type === "submit") {
+      event.preventDefault();
+    }
+
+    let contents = serialize_event(event);
+
+    /*POST_EVENT_SERIALIZATION*/
+
+    if (
+      target.tagName === "FORM" &&
+      (event.type === "submit" || event.type === "input")
+    ) {
+      if (
+        target.tagName === "FORM" &&
+        (event.type === "submit" || event.type === "input")
+      ) {
+        const formData = new FormData(target);
+
+        for (let name of formData.keys()) {
+          let value = formData.getAll(name);
+          contents.values[name] = value;
+        }
+      }
+    }
+
+    if (realId === null) {
+      return;
+    }
+    window.ipc.postMessage(
+      serializeIpcMessage("user_event", {
+        name: name,
+        element: parseInt(realId),
+        data: contents,
+        bubbles,
+      })
+    );
+  }
+}
+
+function find_real_id(target) {
+  let realId = target.getAttribute(`data-dioxus-id`);
+  // walk the tree to find the real element
+  while (realId == null) {
+    // we've reached the root we don't want to send an event
+    if (target.parentElement === null) {
+      return;
+    }
+
+    target = target.parentElement;
+    realId = target.getAttribute(`data-dioxus-id`);
+  }
+  return realId;
 }
 
 function get_mouse_data(event) {

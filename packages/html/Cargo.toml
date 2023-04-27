@@ -21,6 +21,8 @@ enumset = "1.0.11"
 keyboard-types = "0.6.2"
 async-trait = "0.1.58"
 serde-value = "0.7.0"
+tokio = { version = "1.27", features = ["fs", "io-util"], optional = true }
+rfd = { version = "0.11.3", optional = true }
 
 [dependencies.web-sys]
 optional = true
@@ -48,4 +50,5 @@ serde_json = "1"
 default = ["serialize"]
 serialize = ["serde", "serde_repr", "euclid/serde", "keyboard-types/serde", "dioxus-core/serialize"]
 wasm-bind = ["web-sys", "wasm-bindgen"]
+native-bind = ["tokio", "rfd"]
 hot-reload-context = ["dioxus-rsx"]
