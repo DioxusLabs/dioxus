@@ -11,10 +11,12 @@ fn mock_event(cx: &ScopeState, id: &'static str, value: &'static str) {
     use_effect(cx, (), |_| {
         let desktop_context: DesktopContext = cx.consume_context().unwrap();
         async move {
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
             desktop_context.eval(&format!(
                 r#"let element = document.getElementById('{}');
                 // Dispatch a synthetic event
                 const event = {};
+                console.log(element, event);
                 element.dispatchEvent(event);
                 "#,
                 id, value
@@ -103,9 +105,12 @@ fn app(cx: Scope) -> Element {
         &cx,
         "wheel_div",
         r#"new WheelEvent("wheel", {
+    view: window,
     deltaX: 1.0,
     deltaY: 2.0,
     deltaZ: 3.0,
+    deltaMode: 0x00,
+    bubbles: true,
     })"#,
     );
     // key_down_div
@@ -117,6 +122,17 @@ fn app(cx: Scope) -> Element {
     code: "KeyA",
     location: 0,
     repeat: true,
+    keyCode: 65,
+    charCode: 97,
+    char: "a",
+    charCode: 0,
+    altKey: false,
+    ctrlKey: false,
+    metaKey: false,
+    shiftKey: false,
+    isComposing: false,
+    which: 65,
+    bubbles: true,
     })"#,
     );
     // key_up_div
@@ -128,6 +144,17 @@ fn app(cx: Scope) -> Element {
     code: "KeyA",
     location: 0,
     repeat: false,
+    keyCode: 65,
+    charCode: 97,
+    char: "a",
+    charCode: 0,
+    altKey: false,
+    ctrlKey: false,
+    metaKey: false,
+    shiftKey: false,
+    isComposing: false,
+    which: 65,
+    bubbles: true,
     })"#,
     );
     // key_press_div
@@ -139,19 +166,30 @@ fn app(cx: Scope) -> Element {
     code: "KeyA",
     location: 0,
     repeat: false,
+    keyCode: 65,
+    charCode: 97,
+    char: "a",
+    charCode: 0,
+    altKey: false,
+    ctrlKey: false,
+    metaKey: false,
+    shiftKey: false,
+    isComposing: false,
+    which: 65,
+    bubbles: true,
     })"#,
     );
     // focus_in_div
     mock_event(
         &cx,
         "focus_in_div",
-        r#"new FocusEvent("focusin")"#,
+        r#"new FocusEvent("focusin", {bubbles: true})"#,
     );
     // focus_out_div
     mock_event(
         &cx,
         "focus_out_div",
-        r#"new FocusEvent("focusout")"#,
+        r#"new FocusEvent("focusout",{bubbles: true})"#,
     );
     
 
@@ -223,6 +261,9 @@ fn app(cx: Scope) -> Element {
             }
             div{
                 id: "wheel_div",
+                width: "100px",
+                height: "100px",
+                background_color: "red",
                 onwheel: move |event| {
                     println!("{:?}", event.data);
                     let dioxus_html::geometry::WheelDelta::Pixels(delta)= event.data.delta()else{
@@ -232,7 +273,7 @@ fn app(cx: Scope) -> Element {
                     recieved_events.modify(|x| *x + 1)
                 }
             }
-            div{
+            input{
                 id: "key_down_div",
                 onkeydown: move |event| {
                     println!("{:?}", event.data);
@@ -245,7 +286,7 @@ fn app(cx: Scope) -> Element {
                     recieved_events.modify(|x| *x + 1)
                 }
             }
-            div{
+            input{
                 id: "key_up_div",
                 onkeyup: move |event| {
                     println!("{:?}", event.data);
@@ -258,7 +299,7 @@ fn app(cx: Scope) -> Element {
                     recieved_events.modify(|x| *x + 1)
                 }
             }
-            div{
+            input{
                 id: "key_press_div",
                 onkeypress: move |event| {
                     println!("{:?}", event.data);
@@ -271,14 +312,14 @@ fn app(cx: Scope) -> Element {
                     recieved_events.modify(|x| *x + 1)
                 }
             }
-            div{
+            input{
                 id: "focus_in_div",
                 onfocusin: move |event| {
                     println!("{:?}", event.data);
                     recieved_events.modify(|x| *x + 1)
                 }
             }
-            div{
+            input{
                 id: "focus_out_div",
                 onfocusout: move |event| {
                     println!("{:?}", event.data);
