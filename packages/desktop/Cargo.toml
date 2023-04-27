@@ -57,4 +57,10 @@ hot-reload = ["dioxus-hot-reload"]
 [dev-dependencies]
 dioxus-core-macro = { path = "../core-macro" }
 dioxus-hooks = { path = "../hooks" }
+dioxus = { path = "../dioxus" }
 # image = "0.24.0" # enable this when generating a new desktop image
+
+[[test]]
+name = "headless_tests"
+path = "headless_tests/main.rs"
+harness = false
