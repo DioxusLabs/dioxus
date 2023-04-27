@@ -31,7 +31,7 @@ Some events will trigger first on the element the event originated at upward. Fo
 
 > For more information about event propigation see [the mdn docs on event bubling](https://developer.mozilla.org/en-US/docs/Learn/JavaScript/Building_blocks/Events#event_bubbling)
 
-If you want to prevent this behavior, you can call `stop_propogation()` on the event:
+If you want to prevent this behavior, you can call `stop_propagation()` on the event:
 
 ```rust
 {{#include ../../../examples/event_nested.rs:rsx}}

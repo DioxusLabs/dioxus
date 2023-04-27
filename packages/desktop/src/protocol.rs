@@ -9,10 +9,36 @@ use wry::{
 };
 
 fn module_loader(root_name: &str) -> String {
+    let js = INTERPRETER_JS.replace(
+        "/*POST_HANDLE_EDITS*/",
+        r#"// Prevent file inputs from opening the file dialog on click
+    let inputs = document.querySelectorAll("input");
+    for (let input of inputs) {
+      if (!input.getAttribute("data-dioxus-file-listener")) {
+        input.setAttribute("data-dioxus-file-listener", true);
+        input.addEventListener("click", (event) => {
+          let target = event.target;
+          // prevent file inputs from opening the file dialog on click
+          const type = target.getAttribute("type");
+          if (type === "file") {
+            let target_id = find_real_id(target);
+            if (target_id !== null) {
+              const send = (event_name) => {
+                const message = serializeIpcMessage("file_diolog", { accept: target.getAttribute("accept"), multiple: target.hasAttribute("multiple"), target: parseInt(target_id), bubbles: event_bubbles(event_name), event: event_name });
+                window.ipc.postMessage(message);
+              };
+              send("change&input");
+            }
+            event.preventDefault();
+          }
+        });
+      }
+    }"#,
+    );
     format!(
         r#"
 <script>
-    {INTERPRETER_JS}
+    {js}
 
     let rootname = "{root_name}";
     let root = window.document.getElementById(rootname);
