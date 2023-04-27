@@ -4,7 +4,8 @@ use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct FileDiologRequest {
-    accept: String,
+    #[serde(default)]
+    accept: Option<String>,
     multiple: bool,
     pub event: String,
     pub target: usize,
@@ -16,6 +17,8 @@ pub(crate) fn get_file_event(request: &FileDiologRequest) -> Vec<PathBuf> {
 
     let filters: Vec<_> = request
         .accept
+        .as_deref()
+        .unwrap_or_default()
         .split(',')
         .filter_map(|s| Filters::from_str(s).ok())
         .collect();
