@@ -14,7 +14,11 @@ pub struct FormData {
 
     #[cfg_attr(
         feature = "serialize",
-        serde(skip_serializing, deserialize_with = "deserialize_file_engine")
+        serde(
+            default,
+            skip_serializing,
+            deserialize_with = "deserialize_file_engine"
+        )
     )]
     pub files: Option<std::sync::Arc<dyn FileEngine>>,
 }
