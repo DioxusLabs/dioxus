@@ -49,13 +49,11 @@ pub fn build(
         .with_custom_protocol(String::from("dioxus"), move |r| {
             protocol::desktop_handler(r, custom_head.clone(), index_file.clone(), &root_name)
         })
-        .with_file_drop_handler(move |window, evet| {
-            file_handler
-                .as_ref()
-                .map(|handler| handler(window, evet))
-                .unwrap_or_default()
-        })
         .with_web_context(&mut web_context);
+
+    if let Some(handler) = file_handler {
+        webview = webview.with_file_drop_handler(handler)
+    }
 
     #[cfg(windows)]
     {

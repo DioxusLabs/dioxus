@@ -351,7 +351,11 @@ class Interpreter {
         let handler = (event) => {
           let target = event.target;
           if (target != null) {
-            let realId = target.getAttribute(`data-dioxus-id`);
+            const realId = find_real_id(target);
+            if (realId === null) {
+              return;
+            }
+
             let shouldPreventDefault = target.getAttribute(
               `dioxus-prevent-default`
             );
@@ -379,22 +383,6 @@ class Interpreter {
                 event.preventDefault();
               }
             }
-            // walk the tree to find the real element
-            while (realId == null) {
-              // we've reached the root we don't want to send an event
-              if (target.parentElement === null) {
-                return;
-              }
-
-              target = target.parentElement;
-              realId = target.getAttribute(`data-dioxus-id`);
-            }
-
-            shouldPreventDefault = target.getAttribute(
-              `dioxus-prevent-default`
-            );
-
-            let contents = serialize_event(event);
 
             if (shouldPreventDefault === `on${event.type}`) {
               event.preventDefault();
@@ -404,41 +392,42 @@ class Interpreter {
               event.preventDefault();
             }
 
-            if (
-              target.tagName === "FORM" &&
-              (event.type === "submit" || event.type === "input")
-            ) {
-              for (let x = 0; x < target.elements.length; x++) {
-                let element = target.elements[x];
-                let name = element.getAttribute("name");
-                if (name != null) {
-                  if (element.getAttribute("type") === "checkbox") {
-                    // @ts-ignore
-                    contents.values[name] = element.checked ? "true" : "false";
-                  } else if (element.getAttribute("type") === "radio") {
-                    if (element.checked) {
-                      contents.values[name] = element.value;
+            serialize_event(event).then((contents) => {
+              if (
+                target.tagName === "FORM" &&
+                (event.type === "submit" || event.type === "input")
+              ) {
+                for (let x = 0; x < target.elements.length; x++) {
+                  let element = target.elements[x];
+                  let name = element.getAttribute("name");
+                  if (name != null) {
+                    if (element.getAttribute("type") === "checkbox") {
+                      // @ts-ignore
+                      contents.values[name] = element.checked
+                        ? "true"
+                        : "false";
+                    } else if (element.getAttribute("type") === "radio") {
+                      if (element.checked) {
+                        contents.values[name] = element.value;
+                      }
+                    } else {
+                      // @ts-ignore
+                      contents.values[name] =
+                        element.value ?? element.textContent;
                     }
-                  } else {
-                    // @ts-ignore
-                    contents.values[name] =
-                      element.value ?? element.textContent;
                   }
                 }
               }
-            }
 
-            if (realId === null) {
-              return;
-            }
-            window.ipc.postMessage(
-              serializeIpcMessage("user_event", {
-                name: edit.name,
-                element: parseInt(realId),
-                data: contents,
-                bubbles,
-              })
-            );
+              window.ipc.postMessage(
+                serializeIpcMessage("user_event", {
+                  name: edit.name,
+                  element: parseInt(realId),
+                  data: contents,
+                  bubbles,
+                })
+              );
+            });
           }
         };
         this.NewEventListener(edit.name, edit.id, bubbles, handler);
@@ -575,7 +564,7 @@ function get_mouse_data(event) {
   };
 }
 
-function serialize_event(event) {
+async function serialize_event(event) {
   switch (event.type) {
     case "copy":
     case "cut":
@@ -661,7 +650,11 @@ function serialize_event(event) {
     case "dragover":
     case "dragstart":
     case "drop": {
-      return { mouse: get_mouse_data(event) };
+      let files = null;
+      if (event.dataTransfer && event.dataTransfer.files) {
+        files = await serializeFileList(event.dataTransfer.files);
+      }
+      return { mouse: get_mouse_data(event), files };
     }
     case "click":
     case "contextmenu":
@@ -815,6 +808,20 @@ function serialize_event(event) {
       return {};
     }
   }
+}
+async function serializeFileList(fileList) {
+  const file_contents = {};
+
+  for (let i = 0; i < fileList.length; i++) {
+    const file = fileList[i];
+
+    file_contents[file.name] = Array.from(
+      new Uint8Array(await file.arrayBuffer())
+    );
+  }
+  return {
+    files: file_contents,
+  };
 }
 function serializeIpcMessage(method, params = {}) {
   return JSON.stringify({ method, params });

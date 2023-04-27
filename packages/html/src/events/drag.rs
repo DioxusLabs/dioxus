@@ -1,6 +1,8 @@
-use dioxus_core::Event;
-
+use crate::FileEngine;
 use crate::MouseData;
+
+use dioxus_core::Event;
+use std::fmt::Debug;
 
 pub type DragEvent = Event<DragData>;
 
@@ -9,11 +11,37 @@ pub type DragEvent = Event<DragData>;
 /// (such as another DOM element). Applications are free to interpret a drag and drop interaction in an
 /// application-specific way.
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone)]
 pub struct DragData {
     /// Inherit mouse data
     pub mouse: MouseData,
+
+    #[cfg_attr(
+        feature = "serialize",
+        serde(
+            default,
+            skip_serializing,
+            deserialize_with = "crate::events::deserialize_file_engine"
+        )
+    )]
+    pub files: Option<std::sync::Arc<dyn FileEngine>>,
 }
+
+impl Debug for DragData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DragData")
+            .field("mouse", &self.mouse)
+            .finish()
+    }
+}
+
+impl PartialEq for DragData {
+    fn eq(&self, other: &Self) -> bool {
+        self.mouse == other.mouse
+    }
+}
+
+impl Eq for DragData {}
 
 impl_event! {
     DragData;

@@ -48,7 +48,7 @@ impl FileEngine for SerializedFileEngine {
 }
 
 #[cfg(feature = "serialize")]
-fn deserialize_file_engine<'de, D>(
+pub(crate) fn deserialize_file_engine<'de, D>(
     deserializer: D,
 ) -> Result<Option<std::sync::Arc<dyn FileEngine>>, D::Error>
 where

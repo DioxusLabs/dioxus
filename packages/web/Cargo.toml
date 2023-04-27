@@ -79,7 +79,8 @@ features = [
     "console",
     "FileList",
     "File",
-    "FileReader"
+    "FileReader",
+    "DataTransfer"
 ]
 
 [features]

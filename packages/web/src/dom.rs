@@ -244,8 +244,17 @@ pub fn virtual_event_from_websys_event(event: web_sys::Event, target: Element) -
         }
         "drag" | "dragend" | "dragenter" | "dragexit" | "dragleave" | "dragover" | "dragstart"
         | "drop" => {
+            let mut files = None;
+            if let Some(event) = event.dyn_ref::<web_sys::DragEvent>() {
+                if let Some(data) = event.data_transfer() {
+                    if let Some(file_list) = data.files() {
+                        files = WebFileEngine::new(file_list)
+                            .map(|f| Arc::new(f) as Arc<dyn FileEngine>);
+                    }
+                }
+            }
             let mouse = MouseData::from(event);
-            Rc::new(DragData { mouse })
+            Rc::new(DragData { mouse, files })
         }
 
         "pointerdown" | "pointermove" | "pointerup" | "pointercancel" | "gotpointercapture"

@@ -41,6 +41,7 @@ features = [
     "FocusEvent",
     "CompositionEvent",
     "ClipboardEvent",
+    "DragEvent"
 ]
 
 [dev-dependencies]

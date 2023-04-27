@@ -123,6 +123,7 @@ impl From<&MouseEvent> for DragData {
     fn from(value: &MouseEvent) -> Self {
         Self {
             mouse: MouseData::from(value),
+            files: None,
         }
     }
 }

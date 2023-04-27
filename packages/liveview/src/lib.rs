@@ -45,19 +45,7 @@ static INTERPRETER_JS: Lazy<String> = Lazy::new(|| {
       const type = target.getAttribute("type");
       if (type === "file") {
         async function read_files() {
-          const files = target.files;
-          const file_contents = {};
-
-          for (let i = 0; i < files.length; i++) {
-            const file = files[i];
-
-            file_contents[file.name] = Array.from(
-              new Uint8Array(await file.arrayBuffer())
-            );
-          }
-          let file_engine = {
-            files: file_contents,
-          };
+          const file_engine=await serializeFileList( target.files);
           contents.files = file_engine;
 
           if (realId === null) {
