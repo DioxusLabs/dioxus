@@ -352,7 +352,7 @@ class Interpreter {
           let target = event.target;
           if (target != null) {
             let realId = target.getAttribute(`data-dioxus-id`);
-            let shouldPreventDefault = target.getAttribute(
+            let preventDefaultRequests = target.getAttribute(
               `dioxus-prevent-default`
             );
 
@@ -361,10 +361,14 @@ class Interpreter {
               let a_element = target.closest("a");
               if (a_element != null) {
                 event.preventDefault();
-                if (
-                  shouldPreventDefault !== `onclick` &&
-                  a_element.getAttribute(`dioxus-prevent-default`) !== `onclick`
-                ) {
+
+                let elementShouldPreventDefault =
+                  preventDefaultRequests.includes(`onclick`);
+                let linkShouldPreventDefault = a_element
+                  .getAttribute(`dioxus-prevent-default`)
+                  .includes(`onclick`);
+
+                if (!elementShouldPreventDefault && !linkShouldPreventDefault) {
                   const href = a_element.getAttribute("href");
                   if (href !== "" && href !== null && href !== undefined) {
                     window.ipc.postMessage(
@@ -390,13 +394,13 @@ class Interpreter {
               realId = target.getAttribute(`data-dioxus-id`);
             }
 
-            shouldPreventDefault = target.getAttribute(
+            preventDefaultRequests = target.getAttribute(
               `dioxus-prevent-default`
             );
 
             let contents = serialize_event(event);
 
-            if (shouldPreventDefault === `on${event.type}`) {
+            if (preventDefaultRequests.includes(`on${event.type}`)) {
               event.preventDefault();
             }
 

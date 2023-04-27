@@ -10,8 +10,7 @@ fn App(cx: Scope) -> Element {
     // ANCHOR: prevent_default
 cx.render(rsx! {
     input {
-        prevent_default: "oninput",
-        prevent_default: "onclick",
+        prevent_default: "oninput onclick",
     }
 })
     // ANCHOR_END: prevent_default
