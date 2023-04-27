@@ -16,9 +16,9 @@ pub(crate) fn check_app_exits(app: Component) {
     let should_panic = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
     let should_panic_clone = should_panic.clone();
     std::thread::spawn(move || {
-        std::thread::sleep(std::time::Duration::from_secs(100));
+        std::thread::sleep(std::time::Duration::from_secs(10));
         if should_panic_clone.load(std::sync::atomic::Ordering::SeqCst) {
-            panic!("App did not exit successfully")
+            std::process::exit(exitcode::SOFTWARE);
         }
     });
 

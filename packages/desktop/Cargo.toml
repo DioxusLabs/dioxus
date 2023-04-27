@@ -58,7 +58,7 @@ hot-reload = ["dioxus-hot-reload"]
 dioxus-core-macro = { path = "../core-macro" }
 dioxus-hooks = { path = "../hooks" }
 dioxus = { path = "../dioxus" }
-# image = "0.24.0" # enable this when generating a new desktop image
+exitcode = "1.1.2"
 
 [[test]]
 name = "headless_tests"
