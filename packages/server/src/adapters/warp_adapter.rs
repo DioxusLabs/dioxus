@@ -189,7 +189,7 @@ pub fn register_server_fns(server_fn_route: &'static str) -> BoxedFilter<(impl R
 ///     todo!()
 /// }
 /// ```
-pub fn serve_dioxus_application<P: Clone + Send + Sync + 'static>(
+pub fn serve_dioxus_application<P: Clone + serde::Serialize + Send + Sync + 'static>(
     server_fn_route: &'static str,
     cfg: impl Into<ServeConfig<P>>,
 ) -> BoxedFilter<(impl Reply,)> {

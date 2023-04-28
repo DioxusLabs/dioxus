@@ -44,9 +44,14 @@ anymap = "0.12.1"
 serde_json = { version = "1.0.95", optional = true }
 tokio-stream = { version = "0.1.12", features = ["sync"], optional = true }
 futures-util = { version = "0.3.28", optional = true }
+postcard = { version = "1.0.4", features = ["use-std"] }
+yazi = "0.1.5"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 dioxus-hot-reload = { path = "../hot-reload" }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+web-sys = { version = "0.3.61", features = ["Window", "Document", "Element", "HtmlDocument", "Storage", "console"] }
 
 [features]
 default = ["hot-reload"]

@@ -173,7 +173,7 @@ pub trait DioxusRouterExt {
     ///
     /// fn app(cx: Scope) -> Element {todo!()}
     /// ```    
-    fn serve_dioxus_application<P: Clone + Send + Sync + 'static>(
+    fn serve_dioxus_application<P: Clone + serde::Serialize + Send + Sync + 'static>(
         self,
         server_fn_path: &'static str,
         cfg: impl Into<ServeConfig<P>>,
@@ -212,7 +212,7 @@ impl DioxusRouterExt for Router {
         })
     }
 
-    fn serve_dioxus_application<P: Clone + Send + Sync + 'static>(
+    fn serve_dioxus_application<P: Clone + serde::Serialize + Send + Sync + 'static>(
         mut self,
         server_fn_route: &'static str,
         cfg: impl Into<ServeConfig<P>>,
@@ -269,7 +269,7 @@ struct SSRHandler<P: Clone> {
 }
 
 #[async_trait]
-impl<P: Clone + Send + Sync + 'static> Handler for SSRHandler<P> {
+impl<P: Clone + serde::Serialize + Send + Sync + 'static> Handler for SSRHandler<P> {
     async fn handle(
         &self,
         _req: &mut Request,

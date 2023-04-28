@@ -24,7 +24,7 @@ impl Default for SSRState {
 
 impl SSRState {
     /// Render the application to HTML.
-    pub fn render<P: 'static + Clone>(&self, cfg: &ServeConfig<P>) -> String {
+    pub fn render<P: 'static + Clone + serde::Serialize>(&self, cfg: &ServeConfig<P>) -> String {
         let ServeConfig {
             app, props, index, ..
         } = cfg;
@@ -40,6 +40,9 @@ impl SSRState {
         html += &index.pre_main;
 
         let _ = renderer.render_to(&mut html, &vdom);
+
+        // serialize the props
+        let _ = crate::props_html::serialize_props::encode_in_element(&cfg.props, &mut html);
 
         html += &index.post_main;
 

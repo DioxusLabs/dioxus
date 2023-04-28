@@ -8,10 +8,15 @@
 #![allow(non_snake_case)]
 use dioxus::prelude::*;
 use dioxus_server::prelude::*;
+use serde::{Deserialize, Serialize};
 
 fn main() {
     #[cfg(feature = "web")]
-    dioxus_web::launch_cfg(app, dioxus_web::Config::new().hydrate(true));
+    dioxus_web::launch_with_props(
+        app,
+        get_props_from_document().unwrap_or_default(),
+        dioxus_web::Config::new().hydrate(true),
+    );
     #[cfg(feature = "ssr")]
     {
         PostServerData::register().unwrap();
@@ -19,14 +24,22 @@ fn main() {
         tokio::runtime::Runtime::new()
             .unwrap()
             .block_on(async move {
-                let routes = serve_dioxus_application("", ServeConfigBuilder::new(app, ()));
+                let routes = serve_dioxus_application(
+                    "",
+                    ServeConfigBuilder::new(app, AppProps { count: 12345 }),
+                );
                 warp::serve(routes).run(([127, 0, 0, 1], 8080)).await;
             });
     }
 }
 
-fn app(cx: Scope) -> Element {
-    let mut count = use_state(cx, || 0);
+#[derive(Props, PartialEq, Debug, Default, Serialize, Deserialize, Clone)]
+struct AppProps {
+    count: i32,
+}
+
+fn app(cx: Scope<AppProps>) -> Element {
+    let mut count = use_state(cx, || cx.props.count);
     let text = use_state(cx, || "...".to_string());
 
     cx.render(rsx! {

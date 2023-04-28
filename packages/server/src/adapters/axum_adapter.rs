@@ -184,7 +184,7 @@ pub trait DioxusRouterExt<S> {
     ///     todo!()
     /// }
     /// ```
-    fn serve_dioxus_application<P: Clone + Send + Sync + 'static>(
+    fn serve_dioxus_application<P: Clone + serde::Serialize + Send + Sync + 'static>(
         self,
         server_fn_route: &'static str,
         cfg: impl Into<ServeConfig<P>>,
@@ -229,7 +229,7 @@ where
         })
     }
 
-    fn serve_dioxus_application<P: Clone + Send + Sync + 'static>(
+    fn serve_dioxus_application<P: Clone + serde::Serialize + Send + Sync + 'static>(
         mut self,
         server_fn_route: &'static str,
         cfg: impl Into<ServeConfig<P>>,
@@ -294,7 +294,7 @@ where
     }
 }
 
-async fn render_handler<P: Clone + Send + Sync + 'static>(
+async fn render_handler<P: Clone + serde::Serialize + Send + Sync + 'static>(
     State((cfg, ssr_state)): State<(ServeConfig<P>, SSRState)>,
 ) -> impl IntoResponse {
     let rendered = ssr_state.render(&cfg);
