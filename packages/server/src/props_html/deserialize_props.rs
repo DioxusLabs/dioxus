@@ -20,7 +20,9 @@ pub(crate) fn serde_from_string<T: DeserializeOwned>(string: &str) -> Option<T> 
 
 #[cfg(not(feature = "ssr"))]
 /// Get the props from the document. This is only available in the browser.
-pub fn get_props_from_document<T: DeserializeOwned>() -> Option<T> {
+///
+/// When dioxus-server renders the page, it will serialize the root props and put them in the document. This function gets them from the document.
+pub fn get_root_props_from_document<T: DeserializeOwned>() -> Option<T> {
     #[cfg(not(target_arch = "wasm32"))]
     {
         None

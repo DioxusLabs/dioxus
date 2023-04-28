@@ -14,7 +14,7 @@ fn main() {
     #[cfg(feature = "web")]
     dioxus_web::launch_with_props(
         app,
-        get_props_from_document().unwrap_or_default(),
+        get_root_props_from_document().unwrap_or_default(),
         dioxus_web::Config::new().hydrate(true),
     );
     #[cfg(feature = "ssr")]

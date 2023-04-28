@@ -26,7 +26,7 @@ pub mod prelude {
     #[cfg(feature = "warp")]
     pub use crate::adapters::warp_adapter::*;
     #[cfg(not(feature = "ssr"))]
-    pub use crate::props_html::deserialize_props::get_props_from_document;
+    pub use crate::props_html::deserialize_props::get_root_props_from_document;
     #[cfg(feature = "ssr")]
     pub use crate::render::SSRState;
     #[cfg(feature = "ssr")]
