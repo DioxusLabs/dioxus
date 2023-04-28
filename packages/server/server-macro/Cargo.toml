@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 quote = "1.0.26"
-server_fn_macro = { git = "https://github.com/leptos-rs/leptos", rev = "a9e6590b5e7f1c0b01da7db7b86719cb18a4aaa1", features = ["stable"] }
+server_fn_macro = { git = "https://github.com/leptos-rs/leptos", rev = "671b1e4a8fff7a2e05bb621ef08e87be2b18ccae", features = ["stable"] }
 syn = { version = "1", features = ["full"] }
 
 [lib]

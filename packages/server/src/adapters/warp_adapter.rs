@@ -47,22 +47,18 @@
 //!
 //! ```
 
-use std::{error::Error, sync::Arc};
+use crate::{
+    prelude::*, render::SSRState, serve_config::ServeConfig, server_fn::DioxusServerFnRegistry,
+};
 
-use server_fn::{Payload, ServerFunctionRegistry};
+use server_fn::{Encoding, Payload, ServerFunctionRegistry};
+use std::error::Error;
 use tokio::task::spawn_blocking;
 use warp::{
     filters::BoxedFilter,
     http::{Response, StatusCode},
     hyper::{body::Bytes, HeaderMap},
     path, Filter, Reply,
-};
-
-use crate::{
-    prelude::DioxusServerContext,
-    render::SSRState,
-    serve_config::ServeConfig,
-    server_fn::{DioxusServerFnRegistry, ServerFnTraitObj},
 };
 
 /// Registers server functions with a custom handler function. This allows you to pass custom context to your server functions by generating a [`DioxusServerContext`] from the request.
@@ -94,7 +90,7 @@ pub fn register_server_fns_with_handler<H, F, R>(
     mut handler: H,
 ) -> BoxedFilter<(R,)>
 where
-    H: FnMut(String, Arc<ServerFnTraitObj>) -> F,
+    H: FnMut(String, ServerFunction) -> F,
     F: Filter<Extract = (R,), Error = warp::Rejection> + Send + Sync + 'static,
     F::Extract: Send,
     R: Reply + 'static,
@@ -129,16 +125,48 @@ where
 /// ```
 pub fn register_server_fns(server_fn_route: &'static str) -> BoxedFilter<(impl Reply,)> {
     register_server_fns_with_handler(server_fn_route, |full_route, func| {
-        path(full_route)
-            .and(warp::post())
+        let func2 = func.clone();
+        let func3 = func.clone();
+        path(full_route.clone())
+            .and(warp::filters::method::get())
             .and(warp::header::headers_cloned())
+            .and(warp::filters::query::raw())
             .and(warp::body::bytes())
-            .and_then(move |headers: HeaderMap, body| {
+            .and_then(move |headers, query, body| {
                 let func = func.clone();
                 async move {
-                    server_fn_handler(DioxusServerContext::default(), func, headers, body).await
+                    server_fn_handler(
+                        DioxusServerContext::default(),
+                        func,
+                        headers,
+                        Some(query),
+                        body,
+                    )
+                    .await
                 }
             })
+            .or(path(full_route.clone())
+                .and(warp::filters::method::get())
+                .and(warp::header::headers_cloned())
+                .and(warp::body::bytes())
+                .and_then(move |headers, body| {
+                    let func = func2.clone();
+                    async move {
+                        server_fn_handler(DioxusServerContext::default(), func, headers, None, body)
+                            .await
+                    }
+                }))
+            .or(path(full_route)
+                .and(warp::filters::method::post())
+                .and(warp::header::headers_cloned())
+                .and(warp::body::bytes())
+                .and_then(move |headers, body| {
+                    let func = func3.clone();
+                    async move {
+                        server_fn_handler(DioxusServerContext::default(), func, headers, None, body)
+                            .await
+                    }
+                }))
     })
 }
 
@@ -198,8 +226,9 @@ impl warp::reject::Reject for RecieveFailed {}
 /// A default handler for server functions. It will deserialize the request body, call the server function, and serialize the response.
 pub async fn server_fn_handler(
     server_context: impl Into<DioxusServerContext>,
-    function: Arc<ServerFnTraitObj>,
+    function: ServerFunction,
     headers: HeaderMap,
+    query: Option<String>,
     body: Bytes,
 ) -> Result<Box<dyn warp::Reply>, warp::Rejection> {
     let server_context = server_context.into();
@@ -210,7 +239,12 @@ pub async fn server_fn_handler(
             tokio::runtime::Runtime::new()
                 .expect("couldn't spawn runtime")
                 .block_on(async {
-                    let resp = match function(server_context, &body).await {
+                    let query = &query.unwrap_or_default().into();
+                    let data = match &function.encoding {
+                        Encoding::Url | Encoding::Cbor => &body,
+                        Encoding::GetJSON | Encoding::GetCBOR => query,
+                    };
+                    let resp = match (function.trait_obj)(server_context, &data).await {
                         Ok(serialized) => {
                             // if this is Accept: application/json then send a serialized JSON response
                             let accept_header =

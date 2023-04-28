@@ -5,13 +5,13 @@ use crate::server_context::DioxusServerContext;
 pub type ServerFnTraitObj = server_fn::ServerFnTraitObj<DioxusServerContext>;
 
 #[cfg(any(feature = "ssr", doc))]
+/// A server function that can be called on serializable arguments and returns a serializable result.
+pub type ServerFunction = server_fn::ServerFunction<DioxusServerContext>;
+
+#[cfg(any(feature = "ssr", doc))]
 #[allow(clippy::type_complexity)]
 static REGISTERED_SERVER_FUNCTIONS: once_cell::sync::Lazy<
-    std::sync::Arc<
-        std::sync::RwLock<
-            std::collections::HashMap<&'static str, std::sync::Arc<ServerFnTraitObj>>,
-        >,
-    >,
+    std::sync::Arc<std::sync::RwLock<std::collections::HashMap<&'static str, ServerFunction>>>,
 > = once_cell::sync::Lazy::new(Default::default);
 
 #[cfg(any(feature = "ssr", doc))]
@@ -25,12 +25,19 @@ impl server_fn::ServerFunctionRegistry<DioxusServerContext> for DioxusServerFnRe
     fn register(
         url: &'static str,
         server_function: std::sync::Arc<ServerFnTraitObj>,
+        encoding: server_fn::Encoding,
     ) -> Result<(), Self::Error> {
         // store it in the hashmap
         let mut write = REGISTERED_SERVER_FUNCTIONS
             .write()
             .map_err(|e| ServerRegistrationFnError::Poisoned(e.to_string()))?;
-        let prev = write.insert(url, server_function);
+        let prev = write.insert(
+            url,
+            ServerFunction {
+                trait_obj: server_function,
+                encoding,
+            },
+        );
 
         // if there was already a server function with this key,
         // return Err
@@ -47,11 +54,26 @@ impl server_fn::ServerFunctionRegistry<DioxusServerContext> for DioxusServerFnRe
     }
 
     /// Returns the server function registered at the given URL, or `None` if no function is registered at that URL.
-    fn get(url: &str) -> Option<std::sync::Arc<ServerFnTraitObj>> {
+    fn get(url: &str) -> Option<ServerFunction> {
         REGISTERED_SERVER_FUNCTIONS
             .read()
             .ok()
             .and_then(|fns| fns.get(url).cloned())
+    }
+
+    /// Returns the server function registered at the given URL, or `None` if no function is registered at that URL.
+    fn get_trait_obj(url: &str) -> Option<std::sync::Arc<ServerFnTraitObj>> {
+        REGISTERED_SERVER_FUNCTIONS
+            .read()
+            .ok()
+            .and_then(|fns| fns.get(url).map(|f| f.trait_obj.clone()))
+    }
+
+    fn get_encoding(url: &str) -> Option<server_fn::Encoding> {
+        REGISTERED_SERVER_FUNCTIONS
+            .read()
+            .ok()
+            .and_then(|fns| fns.get(url).map(|f| f.encoding.clone()))
     }
 
     /// Returns a list of all registered server functions.

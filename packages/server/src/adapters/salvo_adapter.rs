@@ -50,7 +50,7 @@
 //! }
 //! ```
 
-use std::{error::Error, sync::Arc};
+use std::error::Error;
 
 use hyper::{http::HeaderValue, StatusCode};
 use salvo::{
@@ -58,14 +58,11 @@ use salvo::{
     serve_static::{StaticDir, StaticFile},
     Depot, FlowCtrl, Handler, Request, Response, Router,
 };
-use server_fn::{Payload, ServerFunctionRegistry};
+use server_fn::{Encoding, Payload, ServerFunctionRegistry};
 use tokio::task::spawn_blocking;
 
 use crate::{
-    prelude::DioxusServerContext,
-    render::SSRState,
-    serve_config::ServeConfig,
-    server_fn::{DioxusServerFnRegistry, ServerFnTraitObj},
+    prelude::*, render::SSRState, serve_config::ServeConfig, server_fn::DioxusServerFnRegistry,
 };
 
 /// A extension trait with utilities for integrating Dioxus with your Salvo router.
@@ -79,7 +76,7 @@ pub trait DioxusRouterExt {
     /// use dioxus_server::prelude::*;
     ///
     /// struct ServerFunctionHandler {
-    ///     server_fn: Arc<ServerFnTraitObj>,
+    ///     server_fn: ServerFunction,
     /// }
     ///
     /// #[handler]
@@ -112,7 +109,7 @@ pub trait DioxusRouterExt {
     fn register_server_fns_with_handler<H>(
         self,
         server_fn_route: &'static str,
-        handler: impl Fn(Arc<ServerFnTraitObj>) -> H,
+        handler: impl Fn(ServerFunction) -> H,
     ) -> Self
     where
         H: Handler + 'static;
@@ -187,7 +184,7 @@ impl DioxusRouterExt for Router {
     fn register_server_fns_with_handler<H>(
         self,
         server_fn_route: &'static str,
-        mut handler: impl FnMut(Arc<ServerFnTraitObj>) -> H,
+        mut handler: impl FnMut(ServerFunction) -> H,
     ) -> Self
     where
         H: Handler + 'static,
@@ -196,7 +193,14 @@ impl DioxusRouterExt for Router {
         for server_fn_path in DioxusServerFnRegistry::paths_registered() {
             let func = DioxusServerFnRegistry::get(server_fn_path).unwrap();
             let full_route = format!("{server_fn_route}/{server_fn_path}");
-            router = router.push(Router::with_path(&full_route).post(handler(func)));
+            match func.encoding {
+                Encoding::Url | Encoding::Cbor => {
+                    router = router.push(Router::with_path(&full_route).post(handler(func)));
+                }
+                Encoding::GetJSON | Encoding::GetCBOR => {
+                    router = router.push(Router::with_path(&full_route).get(handler(func)));
+                }
+            }
         }
         router
     }
@@ -288,15 +292,12 @@ impl<P: Clone + Send + Sync + 'static> Handler for SSRHandler<P> {
 /// A default handler for server functions. It will deserialize the request body, call the server function, and serialize the response.
 pub struct ServerFnHandler {
     server_context: DioxusServerContext,
-    function: Arc<ServerFnTraitObj>,
+    function: ServerFunction,
 }
 
 impl ServerFnHandler {
     /// Create a new server function handler with the given server context and server function.
-    pub fn new(
-        server_context: impl Into<DioxusServerContext>,
-        function: Arc<ServerFnTraitObj>,
-    ) -> Self {
+    pub fn new(server_context: impl Into<DioxusServerContext>, function: ServerFunction) -> Self {
         let server_context = server_context.into();
         Self {
             server_context,
@@ -324,12 +325,23 @@ impl ServerFnHandler {
         let (resp_tx, resp_rx) = tokio::sync::oneshot::channel();
         let function = function.clone();
         let server_context = server_context.clone();
+        let query = req
+            .uri()
+            .query()
+            .unwrap_or_default()
+            .as_bytes()
+            .to_vec()
+            .into();
         spawn_blocking({
             move || {
                 tokio::runtime::Runtime::new()
                     .expect("couldn't spawn runtime")
                     .block_on(async move {
-                        let resp = function(server_context, &body).await;
+                        let data = match &function.encoding {
+                            Encoding::Url | Encoding::Cbor => &body,
+                            Encoding::GetJSON | Encoding::GetCBOR => &query,
+                        };
+                        let resp = (function.trait_obj)(server_context, data).await;
 
                         resp_tx.send(resp).unwrap();
                     })

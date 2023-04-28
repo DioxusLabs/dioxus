@@ -55,10 +55,9 @@
 //! }
 //! ```
 
-use std::{error::Error, sync::Arc};
-
 use axum::{
     body::{self, Body, BoxBody, Full},
+    extract::RawQuery,
     extract::{State, WebSocketUpgrade},
     handler::Handler,
     http::{HeaderMap, Request, Response, StatusCode},
@@ -66,14 +65,13 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use server_fn::{Payload, ServerFunctionRegistry};
+use server_fn::{Encoding, Payload, ServerFunctionRegistry};
+use std::error::Error;
 use tokio::task::spawn_blocking;
 
 use crate::{
-    render::SSRState,
-    serve_config::ServeConfig,
-    server_context::DioxusServerContext,
-    server_fn::{DioxusServerFnRegistry, ServerFnTraitObj},
+    prelude::*, render::SSRState, serve_config::ServeConfig, server_context::DioxusServerContext,
+    server_fn::DioxusServerFnRegistry,
 };
 
 /// A extension trait with utilities for integrating Dioxus with your Axum router.
@@ -106,7 +104,7 @@ pub trait DioxusRouterExt<S> {
     fn register_server_fns_with_handler<H, T>(
         self,
         server_fn_route: &'static str,
-        handler: impl Fn(Arc<ServerFnTraitObj>) -> H,
+        handler: impl Fn(ServerFunction) -> H,
     ) -> Self
     where
         H: Handler<T, S>,
@@ -200,7 +198,7 @@ where
     fn register_server_fns_with_handler<H, T>(
         self,
         server_fn_route: &'static str,
-        mut handler: impl FnMut(Arc<ServerFnTraitObj>) -> H,
+        mut handler: impl FnMut(ServerFunction) -> H,
     ) -> Self
     where
         H: Handler<T, S, Body>,
@@ -211,15 +209,22 @@ where
         for server_fn_path in DioxusServerFnRegistry::paths_registered() {
             let func = DioxusServerFnRegistry::get(server_fn_path).unwrap();
             let full_route = format!("{server_fn_route}/{server_fn_path}");
-            router = router.route(&full_route, post(handler(func)));
+            match func.encoding {
+                Encoding::Url | Encoding::Cbor => {
+                    router = router.route(&full_route, post(handler(func)));
+                }
+                Encoding::GetJSON | Encoding::GetCBOR => {
+                    router = router.route(&full_route, get(handler(func)));
+                }
+            }
         }
         router
     }
 
     fn register_server_fns(self, server_fn_route: &'static str) -> Self {
         self.register_server_fns_with_handler(server_fn_route, |func| {
-            move |headers: HeaderMap, body: Request<Body>| async move {
-                server_fn_handler((), func.clone(), headers, body).await
+            move |headers: HeaderMap, RawQuery(query): RawQuery, body: Request<Body>| async move {
+                server_fn_handler((), func.clone(), headers, query, body).await
             }
         })
     }
@@ -299,8 +304,9 @@ async fn render_handler<P: Clone + Send + Sync + 'static>(
 /// A default handler for server functions. It will deserialize the request body, call the server function, and serialize the response.
 pub async fn server_fn_handler(
     server_context: impl Into<DioxusServerContext>,
-    function: Arc<ServerFnTraitObj>,
+    function: ServerFunction,
     headers: HeaderMap,
+    query: Option<String>,
     req: Request<Body>,
 ) -> impl IntoResponse {
     let server_context = server_context.into();
@@ -317,7 +323,12 @@ pub async fn server_fn_handler(
             tokio::runtime::Runtime::new()
                 .expect("couldn't spawn runtime")
                 .block_on(async {
-                    let resp = match function(server_context, &body).await {
+                    let query = &query.unwrap_or_default().into();
+                    let data = match &function.encoding {
+                        Encoding::Url | Encoding::Cbor => &body,
+                        Encoding::GetJSON | Encoding::GetCBOR => query,
+                    };
+                    let resp = match (function.trait_obj)(server_context, &data).await {
                         Ok(serialized) => {
                             // if this is Accept: application/json then send a serialized JSON response
                             let accept_header =
