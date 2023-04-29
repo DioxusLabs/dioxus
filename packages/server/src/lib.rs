@@ -30,8 +30,10 @@ pub mod prelude {
     #[cfg(feature = "ssr")]
     pub use crate::render::SSRState;
     #[cfg(feature = "ssr")]
-    pub use crate::serve_config::{ServeConfig, ServeConfigBuilder};
-    pub use crate::server_context::DioxusServerContext;
+    pub use crate::serve_config::{ ServeConfig, ServeConfigBuilder};
+    #[cfg(feature = "ssr")]
+    pub use crate::server_context::{RequestParts};
+    pub use crate::server_context::{ DioxusServerContext, HasServerContext};
     pub use crate::server_fn::ServerFn;
     #[cfg(feature = "ssr")]
     pub use crate::server_fn::{ServerFnTraitObj, ServerFunction};

@@ -57,16 +57,17 @@
 
 use axum::{
     body::{self, Body, BoxBody, Full},
-    extract::RawQuery,
     extract::{State, WebSocketUpgrade},
     handler::Handler,
-    http::{HeaderMap, Request, Response, StatusCode},
+    http::{Request, Response, StatusCode},
     response::IntoResponse,
     routing::{get, post},
     Router,
 };
+use dioxus_core::VirtualDom;
 use server_fn::{Encoding, Payload, ServerFunctionRegistry};
 use std::error::Error;
+use std::sync::Arc;
 use tokio::task::spawn_blocking;
 
 use crate::{
@@ -223,8 +224,11 @@ where
 
     fn register_server_fns(self, server_fn_route: &'static str) -> Self {
         self.register_server_fns_with_handler(server_fn_route, |func| {
-            move |headers: HeaderMap, RawQuery(query): RawQuery, body: Request<Body>| async move {
-                server_fn_handler((), func.clone(), headers, query, body).await
+            move |req: Request<Body>| async move {
+                let (parts, body) = req.into_parts();
+                let parts: Arc<RequestParts> = Arc::new(parts.into());
+                let server_context = DioxusServerContext::new(parts.clone());
+                server_fn_handler(server_context, func.clone(), parts, body).await
             }
         })
     }
@@ -296,44 +300,54 @@ where
 
 async fn render_handler<P: Clone + serde::Serialize + Send + Sync + 'static>(
     State((cfg, ssr_state)): State<(ServeConfig<P>, SSRState)>,
+    request: Request<Body>,
 ) -> impl IntoResponse {
-    let rendered = ssr_state.render(&cfg);
+    let (parts, _) = request.into_parts();
+    let parts: Arc<RequestParts> = Arc::new(parts.into());
+    let server_context = DioxusServerContext::new(parts);
+    let mut vdom =
+        VirtualDom::new_with_props(cfg.app, cfg.props.clone()).with_root_context(server_context);
+    let _ = vdom.rebuild();
+
+    let rendered = ssr_state.render_vdom(&vdom, &cfg);
     Full::from(rendered)
 }
 
 /// A default handler for server functions. It will deserialize the request body, call the server function, and serialize the response.
 pub async fn server_fn_handler(
-    server_context: impl Into<DioxusServerContext>,
+    server_context: DioxusServerContext,
     function: ServerFunction,
-    headers: HeaderMap,
-    query: Option<String>,
-    req: Request<Body>,
+    parts: Arc<RequestParts>,
+    body: Body,
 ) -> impl IntoResponse {
-    let server_context = server_context.into();
-    let (_, body) = req.into_parts();
     let body = hyper::body::to_bytes(body).await;
-    let Ok(body)=body else {
+    let Ok(body) = body else {
         return report_err(body.err().unwrap());
     };
 
     // Because the future returned by `server_fn_handler` is `Send`, and the future returned by this function must be send, we need to spawn a new runtime
     let (resp_tx, resp_rx) = tokio::sync::oneshot::channel();
+    let query_string = parts.uri.query().unwrap_or_default().to_string();
     spawn_blocking({
         move || {
             tokio::runtime::Runtime::new()
                 .expect("couldn't spawn runtime")
                 .block_on(async {
-                    let query = &query.unwrap_or_default().into();
+                    let query = &query_string.into();
                     let data = match &function.encoding {
                         Encoding::Url | Encoding::Cbor => &body,
                         Encoding::GetJSON | Encoding::GetCBOR => query,
                     };
-                    let resp = match (function.trait_obj)(server_context, &data).await {
+                    let resp = match (function.trait_obj)(server_context.clone(), &data).await {
                         Ok(serialized) => {
                             // if this is Accept: application/json then send a serialized JSON response
-                            let accept_header =
-                                headers.get("Accept").and_then(|value| value.to_str().ok());
+                            let accept_header = parts
+                                .headers
+                                .get("Accept")
+                                .and_then(|value| value.to_str().ok());
                             let mut res = Response::builder();
+                            *res.headers_mut().expect("empty responce should be valid") =
+                                server_context.take_responce_headers();
                             if accept_header == Some("application/json")
                                 || accept_header
                                     == Some(

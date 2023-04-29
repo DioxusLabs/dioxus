@@ -50,8 +50,7 @@
 //! }
 //! ```
 
-use std::error::Error;
-
+use dioxus_core::VirtualDom;
 use hyper::{http::HeaderValue, StatusCode};
 use salvo::{
     async_trait, handler,
@@ -59,6 +58,8 @@ use salvo::{
     Depot, FlowCtrl, Handler, Request, Response, Router,
 };
 use server_fn::{Encoding, Payload, ServerFunctionRegistry};
+use std::error::Error;
+use std::sync::Arc;
 use tokio::task::spawn_blocking;
 
 use crate::{
@@ -172,7 +173,7 @@ pub trait DioxusRouterExt {
     /// }
     ///
     /// fn app(cx: Scope) -> Element {todo!()}
-    /// ```    
+    /// ```
     fn serve_dioxus_application<P: Clone + serde::Serialize + Send + Sync + 'static>(
         self,
         server_fn_path: &'static str,
@@ -264,6 +265,17 @@ impl DioxusRouterExt for Router {
     }
 }
 
+/// Extracts the parts of a request that are needed for server functions. This will take parts of the request and replace them with empty values.
+pub fn extract_parts(req: &mut Request) -> RequestParts {
+    RequestParts {
+        method: std::mem::take(req.method_mut()),
+        uri: std::mem::take(req.uri_mut()),
+        version: req.version(),
+        headers: std::mem::take(req.headers_mut()),
+        extensions: std::mem::take(req.extensions_mut()),
+    }
+}
+
 struct SSRHandler<P: Clone> {
     cfg: ServeConfig<P>,
 }
@@ -272,7 +284,7 @@ struct SSRHandler<P: Clone> {
 impl<P: Clone + serde::Serialize + Send + Sync + 'static> Handler for SSRHandler<P> {
     async fn handle(
         &self,
-        _req: &mut Request,
+        req: &mut Request,
         depot: &mut Depot,
         res: &mut Response,
         _flow: &mut FlowCtrl,
@@ -285,7 +297,16 @@ impl<P: Clone + serde::Serialize + Send + Sync + 'static> Handler for SSRHandler
             depot.inject(renderer.clone());
             renderer
         };
-        res.write_body(renderer_pool.render(&self.cfg)).unwrap();
+        let parts: Arc<RequestParts> = Arc::new(extract_parts(req));
+        let server_context = DioxusServerContext::new(parts);
+        let mut vdom = VirtualDom::new_with_props(self.cfg.app, self.cfg.props.clone())
+            .with_root_context(server_context.clone());
+        let _ = vdom.rebuild();
+
+        res.write_body(renderer_pool.render_vdom(&vdom, &self.cfg))
+            .unwrap();
+
+        *res.headers_mut() = server_context.take_responce_headers();
     }
 }
 
@@ -314,17 +335,6 @@ impl ServerFnHandler {
             function,
         } = self;
 
-        let body = hyper::body::to_bytes(req.body_mut().unwrap()).await;
-        let Ok(body)=body else {
-            handle_error(body.err().unwrap(), res);
-            return;
-        };
-        let headers = req.headers();
-
-        // Because the future returned by `server_fn_handler` is `Send`, and the future returned by this function must be send, we need to spawn a new runtime
-        let (resp_tx, resp_rx) = tokio::sync::oneshot::channel();
-        let function = function.clone();
-        let server_context = server_context.clone();
         let query = req
             .uri()
             .query()
@@ -332,7 +342,22 @@ impl ServerFnHandler {
             .as_bytes()
             .to_vec()
             .into();
+        let body = hyper::body::to_bytes(req.body_mut().unwrap()).await;
+        let Ok(body)=body else {
+            handle_error(body.err().unwrap(), res);
+            return;
+        };
+        let headers = req.headers();
+        let accept_header = headers.get("Accept").cloned();
+
+        let parts = Arc::new(extract_parts(req));
+
+        // Because the future returned by `server_fn_handler` is `Send`, and the future returned by this function must be send, we need to spawn a new runtime
+        let (resp_tx, resp_rx) = tokio::sync::oneshot::channel();
         spawn_blocking({
+            let function = function.clone();
+            let mut server_context = server_context.clone();
+            server_context.parts = parts;
             move || {
                 tokio::runtime::Runtime::new()
                     .expect("couldn't spawn runtime")
@@ -349,10 +374,13 @@ impl ServerFnHandler {
         });
         let result = resp_rx.await.unwrap();
 
+        // Set the headers from the server context
+        *res.headers_mut() = server_context.take_responce_headers();
+
         match result {
             Ok(serialized) => {
                 // if this is Accept: application/json then send a serialized JSON response
-                let accept_header = headers.get("Accept").and_then(|value| value.to_str().ok());
+                let accept_header = accept_header.as_ref().and_then(|value| value.to_str().ok());
                 if accept_header == Some("application/json")
                     || accept_header
                         == Some(

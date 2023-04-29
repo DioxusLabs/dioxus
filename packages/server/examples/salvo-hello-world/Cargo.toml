@@ -18,3 +18,10 @@ salvo = { version = "0.37.9", optional = true }
 default = ["web"]
 ssr = ["salvo", "tokio", "dioxus-server/salvo"]
 web = ["dioxus-web"]
+
+[profile.release]
+lto = true
+panic = "abort"
+opt-level = 3
+strip = true
+codegen-units = 1

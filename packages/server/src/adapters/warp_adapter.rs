@@ -51,13 +51,16 @@ use crate::{
     prelude::*, render::SSRState, serve_config::ServeConfig, server_fn::DioxusServerFnRegistry,
 };
 
+use dioxus_core::VirtualDom;
 use server_fn::{Encoding, Payload, ServerFunctionRegistry};
 use std::error::Error;
+use std::sync::Arc;
 use tokio::task::spawn_blocking;
+use warp::path::FullPath;
 use warp::{
     filters::BoxedFilter,
     http::{Response, StatusCode},
-    hyper::{body::Bytes, HeaderMap},
+    hyper::body::Bytes,
     path, Filter, Reply,
 };
 
@@ -125,48 +128,16 @@ where
 /// ```
 pub fn register_server_fns(server_fn_route: &'static str) -> BoxedFilter<(impl Reply,)> {
     register_server_fns_with_handler(server_fn_route, |full_route, func| {
-        let func2 = func.clone();
-        let func3 = func.clone();
         path(full_route.clone())
-            .and(warp::filters::method::get())
-            .and(warp::header::headers_cloned())
-            .and(warp::filters::query::raw())
+            .and(warp::post().or(warp::get()).unify())
+            .and(request_parts())
             .and(warp::body::bytes())
-            .and_then(move |headers, query, body| {
+            .and_then(move |parts, bytes| {
                 let func = func.clone();
                 async move {
-                    server_fn_handler(
-                        DioxusServerContext::default(),
-                        func,
-                        headers,
-                        Some(query),
-                        body,
-                    )
-                    .await
+                    server_fn_handler(DioxusServerContext::default(), func, parts, bytes).await
                 }
             })
-            .or(path(full_route.clone())
-                .and(warp::filters::method::get())
-                .and(warp::header::headers_cloned())
-                .and(warp::body::bytes())
-                .and_then(move |headers, body| {
-                    let func = func2.clone();
-                    async move {
-                        server_fn_handler(DioxusServerContext::default(), func, headers, None, body)
-                            .await
-                    }
-                }))
-            .or(path(full_route)
-                .and(warp::filters::method::post())
-                .and(warp::header::headers_cloned())
-                .and(warp::body::bytes())
-                .and_then(move |headers, body| {
-                    let func = func3.clone();
-                    async move {
-                        server_fn_handler(DioxusServerContext::default(), func, headers, None, body)
-                            .await
-                    }
-                }))
     })
 }
 
@@ -199,18 +170,71 @@ pub fn serve_dioxus_application<P: Clone + serde::Serialize + Send + Sync + 'sta
 
     connect_hot_reload()
         .or(register_server_fns(server_fn_route))
-        .or(warp::path::end()
-            .and(warp::get())
-            .and(with_ssr_state())
-            .map(move |renderer: SSRState| warp::reply::html(renderer.render(&cfg))))
+        .or(warp::path::end().and(render_ssr(cfg)))
         .or(serve_dir)
         .boxed()
 }
 
+/// Server render the application.
+pub fn render_ssr<P: Clone + serde::Serialize + Send + Sync + 'static>(
+    cfg: ServeConfig<P>,
+) -> impl Filter<Extract = (impl Reply,), Error = warp::Rejection> + Clone {
+    warp::get()
+        .and(request_parts())
+        .and(with_ssr_state())
+        .map(move |parts, renderer: SSRState| {
+            let parts = Arc::new(parts);
+
+            let server_context = DioxusServerContext::new(parts);
+
+            let mut vdom = VirtualDom::new_with_props(cfg.app, cfg.props.clone())
+                .with_root_context(server_context.clone());
+            let _ = vdom.rebuild();
+
+            let html = renderer.render_vdom(&vdom, &cfg);
+
+            let mut res = Response::builder();
+
+            *res.headers_mut().expect("empty request should be valid") =
+                server_context.take_responce_headers();
+
+            res.header("Content-Type", "text/html")
+                .body(Bytes::from(html))
+                .unwrap()
+        })
+}
+
+/// An extractor for the request parts (used in [DioxusServerContext]). This will extract the method, uri, query, and headers from the request.
+pub fn request_parts(
+) -> impl Filter<Extract = (RequestParts,), Error = warp::reject::Rejection> + Clone {
+    warp::method()
+        .and(warp::filters::path::full())
+        .and(
+            warp::filters::query::raw()
+                .or(warp::any().map(String::new))
+                .unify(),
+        )
+        .and(warp::header::headers_cloned())
+        .and_then(move |method, path: FullPath, query, headers| async move {
+            http::uri::Builder::new()
+                .path_and_query(format!("{}?{}", path.as_str(), query))
+                .build()
+                .map_err(|err| {
+                    warp::reject::custom(FailedToReadBody(format!("Failed to build uri: {}", err)))
+                })
+                .map(|uri| RequestParts {
+                    method,
+                    uri,
+                    headers,
+                    ..Default::default()
+                })
+        })
+}
+
 fn with_ssr_state() -> impl Filter<Extract = (SSRState,), Error = std::convert::Infallible> + Clone
 {
-    let renderer = SSRState::default();
-    warp::any().map(move || renderer.clone())
+    let state = SSRState::default();
+    warp::any().map(move || state.clone())
 }
 
 #[derive(Debug)]
@@ -227,29 +251,46 @@ impl warp::reject::Reject for RecieveFailed {}
 pub async fn server_fn_handler(
     server_context: impl Into<DioxusServerContext>,
     function: ServerFunction,
-    headers: HeaderMap,
-    query: Option<String>,
+    parts: RequestParts,
     body: Bytes,
 ) -> Result<Box<dyn warp::Reply>, warp::Rejection> {
-    let server_context = server_context.into();
+    let mut server_context = server_context.into();
+
+    let parts = Arc::new(parts);
+
+    server_context.parts = parts.clone();
+
     // Because the future returned by `server_fn_handler` is `Send`, and the future returned by this function must be send, we need to spawn a new runtime
     let (resp_tx, resp_rx) = tokio::sync::oneshot::channel();
     spawn_blocking({
         move || {
             tokio::runtime::Runtime::new()
                 .expect("couldn't spawn runtime")
-                .block_on(async {
-                    let query = &query.unwrap_or_default().into();
+                .block_on(async move {
+                    let query = parts
+                        .uri
+                        .query()
+                        .unwrap_or_default()
+                        .as_bytes()
+                        .to_vec()
+                        .into();
                     let data = match &function.encoding {
                         Encoding::Url | Encoding::Cbor => &body,
-                        Encoding::GetJSON | Encoding::GetCBOR => query,
+                        Encoding::GetJSON | Encoding::GetCBOR => &query,
                     };
-                    let resp = match (function.trait_obj)(server_context, &data).await {
+                    let resp = match (function.trait_obj)(server_context.clone(), data).await {
                         Ok(serialized) => {
                             // if this is Accept: application/json then send a serialized JSON response
-                            let accept_header =
-                                headers.get("Accept").and_then(|value| value.to_str().ok());
+                            let accept_header = parts
+                                .headers
+                                .get("Accept")
+                                .as_ref()
+                                .and_then(|value| value.to_str().ok());
                             let mut res = Response::builder();
+
+                            *res.headers_mut().expect("empty request should be valid") =
+                                server_context.take_responce_headers();
+
                             if accept_header == Some("application/json")
                                 || accept_header
                                     == Some(

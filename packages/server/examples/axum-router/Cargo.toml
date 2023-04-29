@@ -21,3 +21,10 @@ http = { version = "0.2.9", optional = true }
 default = ["web"]
 ssr = ["axum", "tokio", "dioxus-server/axum", "tower-http", "http"]
 web = ["dioxus-web", "dioxus-router/web"]
+
+[profile.release]
+lto = true
+panic = "abort"
+opt-level = 3
+strip = true
+codegen-units = 1

@@ -18,3 +18,10 @@ serde = "1.0.159"
 default = ["web"]
 ssr = ["axum", "tokio", "dioxus-server/axum"]
 web = ["dioxus-web"]
+
+[profile.release]
+lto = true
+panic = "abort"
+opt-level = 3
+strip = true
+codegen-units = 1

@@ -26,12 +26,23 @@ impl SSRState {
     /// Render the application to HTML.
     pub fn render<P: 'static + Clone + serde::Serialize>(&self, cfg: &ServeConfig<P>) -> String {
         let ServeConfig {
-            app, props, index, ..
+            app, props, ..
         } = cfg;
 
         let mut vdom = VirtualDom::new_with_props(*app, props.clone());
 
         let _ = vdom.rebuild();
+
+        self.render_vdom(&vdom, cfg)
+    }
+
+    /// Render a VirtualDom to HTML.
+    pub fn render_vdom<P: 'static + Clone + serde::Serialize>(
+        &self,
+        vdom: &VirtualDom,
+        cfg: &ServeConfig<P>,
+    ) -> String {
+        let ServeConfig { index, .. } = cfg;
 
         let mut renderer = self.renderers.pull(pre_renderer);
 
@@ -39,7 +50,7 @@ impl SSRState {
 
         html += &index.pre_main;
 
-        let _ = renderer.render_to(&mut html, &vdom);
+        let _ = renderer.render_to(&mut html, vdom);
 
         // serialize the props
         let _ = crate::props_html::serialize_props::encode_in_element(&cfg.props, &mut html);

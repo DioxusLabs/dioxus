@@ -41,6 +41,7 @@ struct AppProps {
 fn app(cx: Scope<AppProps>) -> Element {
     let mut count = use_state(cx, || cx.props.count);
     let text = use_state(cx, || "...".to_string());
+    let server_context = cx.sc();
 
     cx.render(rsx! {
         h1 { "High-Five counter: {count}" }
@@ -48,12 +49,12 @@ fn app(cx: Scope<AppProps>) -> Element {
         button { onclick: move |_| count -= 1, "Down low!" }
         button {
             onclick: move |_| {
-                to_owned![text];
+                to_owned![text, server_context];
                 async move {
                     if let Ok(data) = get_server_data().await {
                         println!("Client received: {}", data);
                         text.set(data.clone());
-                        post_server_data(data).await.unwrap();
+                        post_server_data(server_context, data).await.unwrap();
                     }
                 }
             },
@@ -64,8 +65,12 @@ fn app(cx: Scope<AppProps>) -> Element {
 }
 
 #[server(PostServerData)]
-async fn post_server_data(data: String) -> Result<(), ServerFnError> {
+async fn post_server_data(cx: DioxusServerContext, data: String) -> Result<(), ServerFnError> {
+    // The server context contains information about the current request and allows you to modify the response.
+    cx.responce_headers_mut()
+        .insert("Set-Cookie", "foo=bar".parse().unwrap());
     println!("Server received: {}", data);
+    println!("Request parts are {:?}", cx.request_parts());
 
     Ok(())
 }
