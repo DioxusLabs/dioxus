@@ -1,0 +1,28 @@
+{
+    "name": "dioxus",
+    "image": "mcr.microsoft.com/devcontainers/rust:latest",
+    "features": {
+        "ghcr.io/devcontainers/features/common-utils:2": {},
+        "./local-features/linux": {}
+    },
+    "containerEnv": {
+        "RUST_LOG": "INFO"
+    },
+    "customizations": {
+        "vscode": {
+            "settings": {
+                "files.watcherExclude": {
+                    "**/target/**": true
+                },
+                "[rust]": {
+                    "editor.formatOnSave": true
+                }
+            },
+            "extensions": [
+                "rust-lang.rust-analyzer",
+                "tamasfe.even-better-toml",
+                "serayuzgur.crates"
+            ]
+        }
+    }
+}
