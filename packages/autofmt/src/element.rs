@@ -175,14 +175,17 @@ impl Writer<'_> {
             if !sameline {
                 self.out.indented_tabbed_line()?;
             }
-            // Find better word for this variable
             let key = match key {
                 Key::Formatted(litstr) => write!(
                     self.out,
                     "key: \"{}\"",
                     litstr.source.as_ref().unwrap().value()
                 )?,
-                Key::Raw(expr) => write!(self.out, "key: \"{}\"", expr.as_ref().unwrap().value())?,
+                Key::Raw(expr) => write!(
+                    self.out,
+                    "key: {}",
+                    <&syn::Expr as Into<String>>::into(expr)
+                )?,
             };
 
             if !attributes.is_empty() {
