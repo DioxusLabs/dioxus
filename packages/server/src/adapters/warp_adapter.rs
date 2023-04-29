@@ -360,12 +360,10 @@ pub fn connect_hot_reload() -> impl Filter<Extract = (impl Reply,), Error = warp
 {
     #[cfg(not(all(debug_assertions, feature = "hot-reload", feature = "ssr")))]
     {
-        warp::path("_dioxus/hot_reload").and(warp::ws()).map(|| {
-            Response::builder()
-                .status(StatusCode::NOT_FOUND)
-                .body("Not Found".into())
-                .unwrap()
-        })
+        warp::path("_dioxus/hot_reload")
+            .and(warp::ws())
+            .map(warp::reply)
+            .map(|reply| warp::reply::with_status(reply, warp::http::StatusCode::NOT_FOUND));
     }
     #[cfg(all(debug_assertions, feature = "hot-reload", feature = "ssr"))]
     {
