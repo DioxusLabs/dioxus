@@ -1,6 +1,7 @@
 use serde::Serialize;
 
-use super::u16_to_char;
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
 
 #[allow(unused)]
 pub(crate) fn serde_to_writable<T: Serialize>(
@@ -14,14 +15,7 @@ pub(crate) fn serde_to_writable<T: Serialize>(
         yazi::CompressionLevel::BestSize,
     )
     .unwrap();
-    for array in compressed.chunks(2) {
-        let w = if array.len() == 2 {
-            [array[0], array[1]]
-        } else {
-            [array[0], 0]
-        };
-        write_to.write_char(u16_to_char((w[0] as u16) << 8 | (w[1] as u16)))?;
-    }
+    write_to.write_str(&STANDARD.encode(compressed));
     Ok(())
 }
 

@@ -52,34 +52,3 @@ fn serialized_and_deserializes() {
         }
     }
 }
-
-#[test]
-fn encodes_and_decodes_bytes() {
-    for i in 0..(u16::MAX) {
-        let c = u16_to_char(i);
-        let i2 = u16_from_char(c);
-        assert_eq!(i, i2);
-    }
-}
-
-#[allow(unused)]
-pub(crate) fn u16_to_char(u: u16) -> char {
-    let u = u as u32;
-    let mapped = if u <= 0xD7FF {
-        u
-    } else {
-        0xE000 + (u - 0xD7FF)
-    };
-    char::from_u32(mapped).unwrap()
-}
-
-#[allow(unused)]
-pub(crate) fn u16_from_char(c: char) -> u16 {
-    let c = c as u32;
-    let mapped = if c <= 0xD7FF {
-        c
-    } else {
-        0xD7FF + (c - 0xE000)
-    };
-    mapped as u16
-}

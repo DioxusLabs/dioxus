@@ -1,18 +1,11 @@
 use serde::de::DeserializeOwned;
 
-use super::u16_from_char;
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
 
 #[allow(unused)]
 pub(crate) fn serde_from_string<T: DeserializeOwned>(string: &str) -> Option<T> {
-    let decompressed = string
-        .chars()
-        .flat_map(|c| {
-            let u = u16_from_char(c);
-            let u1 = (u >> 8) as u8;
-            let u2 = (u & 0xFF) as u8;
-            [u1, u2].into_iter()
-        })
-        .collect::<Vec<u8>>();
+    let decompressed = STANDARD.decode(string.as_bytes()).ok()?;
     let (decompressed, _) = yazi::decompress(&decompressed, yazi::Format::Zlib).unwrap();
 
     postcard::from_bytes(&decompressed).ok()
