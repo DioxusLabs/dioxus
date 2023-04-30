@@ -55,7 +55,7 @@ struct WsReloadState {
     update: broadcast::Sender<()>,
 }
 
-pub async fn startup(port: u16, config: CrateConfig) -> Result<()> {
+pub async fn startup(port: u16, config: CrateConfig, start_browser: bool) -> Result<()> {
     // ctrl-c shutdown checker
     let crate_config = config.clone();
     let _ = ctrlc::set_handler(move || {
@@ -64,10 +64,11 @@ pub async fn startup(port: u16, config: CrateConfig) -> Result<()> {
     });
 
     let ip = get_ip().unwrap_or(String::from("0.0.0.0"));
+
     if config.hot_reload {
-        startup_hot_reload(ip, port, config).await?
+        startup_hot_reload(ip, port, config, start_browser).await?
     } else {
-        startup_default(ip, port, config).await?
+        startup_default(ip, port, config, start_browser).await?
     }
     Ok(())
 }
@@ -129,7 +130,7 @@ pub async fn hot_reload_handler(
 }
 
 #[allow(unused_assignments)]
-pub async fn startup_hot_reload(ip: String, port: u16, config: CrateConfig) -> Result<()> {
+pub async fn startup_hot_reload(ip: String, port: u16, config: CrateConfig, start_browser: bool) -> Result<()> {
     let first_build_result = crate::builder::build(&config, false)?;
 
     log::info!("🚀 Starting development server...");
@@ -319,14 +320,25 @@ pub async fn startup_hot_reload(ip: String, port: u16, config: CrateConfig) -> R
         .layer(Extension(ws_reload_state))
         .layer(Extension(hot_reload_state));
 
-    axum::Server::bind(&format!("0.0.0.0:{}", port).parse().unwrap())
-        .serve(router.into_make_service())
-        .await?;
+    let addr = format!("0.0.0.0:{}", port).parse().unwrap();
+
+    let server = axum::Server::bind(&addr).serve(router.into_make_service());
+
+    if start_browser {
+        let _ = open::that(format!("http://{}", addr));
+    }
+
+    server.await?;
 
     Ok(())
 }
 
-pub async fn startup_default(ip: String, port: u16, config: CrateConfig) -> Result<()> {
+pub async fn startup_default(
+    ip: String,
+    port: u16,
+    config: CrateConfig,
+    start_browser: bool,
+) -> Result<()> {
     let first_build_result = crate::builder::build(&config, false)?;
 
     log::info!("🚀 Starting development server...");
@@ -461,9 +473,14 @@ pub async fn startup_default(ip: String, port: u16, config: CrateConfig) -> Resu
         )
         .layer(Extension(ws_reload_state));
 
-    axum::Server::bind(&format!("0.0.0.0:{}", port).parse().unwrap())
-        .serve(router.into_make_service())
-        .await?;
+    let addr = format!("0.0.0.0:{}", port).parse().unwrap();
+    let server = axum::Server::bind(&addr).serve(router.into_make_service());
+
+    if start_browser {
+        let _ = open::that(format!("http://{}", addr));
+    }
+
+    server.await?;
 
     Ok(())
 }
