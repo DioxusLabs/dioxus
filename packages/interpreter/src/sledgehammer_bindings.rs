@@ -118,7 +118,6 @@ mod js {
         nodes[id] = node;
     }
     export function get_node(id) {
-        console.log(nodes, id);
         return nodes[id];
     }
     export function initilize(root, handler) {
