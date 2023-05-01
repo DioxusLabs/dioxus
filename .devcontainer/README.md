@@ -17,7 +17,7 @@ To use this dev container locally, make sure Docker is installed and in VSCode i
 
 ### Codespaces
 
-TBD
+[Codespaces Setup](https://docs.github.com/en/codespaces/developing-in-codespaces/creating-a-codespace-for-a-repository#creating-a-codespace-for-a-repository)
 
 ## Troubleshooting
 
