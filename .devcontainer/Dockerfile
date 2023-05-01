@@ -1,6 +1,6 @@
 # [Choice] Debian OS version (use bullseye on local arm64/Apple Silicon): buster, bullseye
-ARG VARIANT="slim-bookworm"
-FROM rust:${VARIANT}
+ARG VARIANT="nightly-bookworm-slim"
+FROM rustlang/rust:${VARIANT}
 ENV DEBIAN_FRONTEND noninteractive
 RUN echo 'debconf debconf/frontend select Noninteractive' | debconf-set-selections
 
