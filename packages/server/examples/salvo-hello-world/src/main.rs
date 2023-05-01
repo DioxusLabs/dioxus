@@ -19,6 +19,19 @@ fn main() {
     );
     #[cfg(feature = "ssr")]
     {
+        // Start hot reloading
+        hot_reload_init!(dioxus_hot_reload::Config::new().with_rebuild_callback(|| {
+            execute::shell("dioxus build --features web")
+                .spawn()
+                .unwrap()
+                .wait()
+                .unwrap();
+            execute::shell("cargo run --features ssr --no-default-features")
+                .spawn()
+                .unwrap();
+            true
+        }));
+
         use salvo::prelude::*;
         PostServerData::register().unwrap();
         GetServerData::register().unwrap();

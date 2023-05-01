@@ -44,3 +44,18 @@ impl Default for HotReloadState {
         }
     }
 }
+
+// Hot reloading can be expensive to start so we spawn a new thread
+static HOT_RELOAD_STATE: tokio::sync::OnceCell<HotReloadState> = tokio::sync::OnceCell::const_new();
+pub(crate) async fn spawn_hot_reload() -> &'static HotReloadState {
+    HOT_RELOAD_STATE
+        .get_or_init(|| async {
+            println!("spinning up hot reloading");
+            let r = tokio::task::spawn_blocking(HotReloadState::default)
+                .await
+                .unwrap();
+            println!("hot reloading ready");
+            r
+        })
+        .await
+}

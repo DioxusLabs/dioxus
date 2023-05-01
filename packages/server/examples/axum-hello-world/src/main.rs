@@ -19,6 +19,19 @@ fn main() {
     );
     #[cfg(feature = "ssr")]
     {
+        // Start hot reloading
+        hot_reload_init!(dioxus_hot_reload::Config::new().with_rebuild_callback(|| {
+            execute::shell("dioxus build --features web")
+                .spawn()
+                .unwrap()
+                .wait()
+                .unwrap();
+            execute::shell("cargo run --features ssr --no-default-features")
+                .spawn()
+                .unwrap();
+            true
+        }));
+
         PostServerData::register().unwrap();
         GetServerData::register().unwrap();
         tokio::runtime::Runtime::new()
@@ -65,7 +78,7 @@ fn app(cx: Scope<AppProps>) -> Element {
                     }
                 }
             },
-            "Run a server function"
+            "Run a server function! testing1234"
         }
         "Server said: {text}"
     })

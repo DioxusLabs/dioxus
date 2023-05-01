@@ -290,11 +290,7 @@ where
             self.nest(
                 "/_dioxus",
                 Router::new()
-                    .route(
-                        "/hot_reload",
-                        get(hot_reload_handler)
-                            .with_state(crate::hot_reload::HotReloadState::default()),
-                    )
+                    .route("/hot_reload", get(hot_reload_handler))
                     .route(
                         "/disconnect",
                         get(|ws: WebSocketUpgrade| async {
@@ -420,14 +416,13 @@ fn report_err<E: Error>(e: E) -> Response<BoxBody> {
 
 /// A handler for Dioxus web hot reload websocket. This will send the updated static parts of the RSX to the client when they change.
 #[cfg(all(debug_assertions, feature = "hot-reload", feature = "ssr"))]
-pub async fn hot_reload_handler(
-    ws: WebSocketUpgrade,
-    State(state): State<crate::hot_reload::HotReloadState>,
-) -> impl IntoResponse {
+pub async fn hot_reload_handler(ws: WebSocketUpgrade) -> impl IntoResponse {
     use axum::extract::ws::Message;
     use futures_util::StreamExt;
 
-    ws.on_upgrade(|mut socket| async move {
+    let state = crate::hot_reload::spawn_hot_reload().await;
+
+    ws.on_upgrade(move |mut socket| async move {
         println!("🔥 Hot Reload WebSocket connected");
         {
             // update any rsx calls that changed before the websocket connected.
@@ -448,7 +443,8 @@ pub async fn hot_reload_handler(
             println!("finished");
         }
 
-        let mut rx = tokio_stream::wrappers::WatchStream::from_changes(state.message_receiver);
+        let mut rx =
+            tokio_stream::wrappers::WatchStream::from_changes(state.message_receiver.clone());
         while let Some(change) = rx.next().await {
             if let Some(template) = change {
                 let template = { serde_json::to_string(&template).unwrap() };

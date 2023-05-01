@@ -455,9 +455,7 @@ impl HotReloadHandler {
 /// A handler for Dioxus web hot reload websocket. This will send the updated static parts of the RSX to the client when they change.
 #[cfg(all(debug_assertions, feature = "hot-reload", feature = "ssr"))]
 #[derive(Default)]
-pub struct HotReloadHandler {
-    state: crate::hot_reload::HotReloadState,
-}
+pub struct HotReloadHandler;
 
 #[cfg(all(debug_assertions, feature = "hot-reload", feature = "ssr"))]
 #[handler]
@@ -471,10 +469,10 @@ impl HotReloadHandler {
         use salvo::ws::Message;
         use salvo::ws::WebSocketUpgrade;
 
-        let state = self.state.clone();
+        let state = crate::hot_reload::spawn_hot_reload().await;
 
         WebSocketUpgrade::new()
-            .upgrade(req, res, |mut websocket| async move {
+            .upgrade(req, res, move |mut websocket| async move {
                 use futures_util::StreamExt;
 
                 println!("🔥 Hot Reload WebSocket connected");
@@ -497,8 +495,9 @@ impl HotReloadHandler {
                     println!("finished");
                 }
 
-                let mut rx =
-                    tokio_stream::wrappers::WatchStream::from_changes(state.message_receiver);
+                let mut rx = tokio_stream::wrappers::WatchStream::from_changes(
+                    state.message_receiver.clone(),
+                );
                 while let Some(change) = rx.next().await {
                     if let Some(template) = change {
                         let template = { serde_json::to_string(&template).unwrap() };
@@ -518,7 +517,7 @@ async fn ignore_ws(req: &mut Request, res: &mut Response) -> Result<(), salvo::h
     use salvo::ws::WebSocketUpgrade;
     WebSocketUpgrade::new()
         .upgrade(req, res, |mut ws| async move {
-            let _ = dbg!(ws.send(salvo::ws::Message::text("connected")).await);
+            let _ = ws.send(salvo::ws::Message::text("connected")).await;
             while let Some(msg) = ws.recv().await {
                 if msg.is_err() {
                     return;

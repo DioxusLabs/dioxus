@@ -19,6 +19,19 @@ fn main() {
     );
     #[cfg(feature = "ssr")]
     {
+        // Start hot reloading
+        hot_reload_init!(dioxus_hot_reload::Config::new().with_rebuild_callback(|| {
+            execute::shell("dioxus build --features web")
+                .spawn()
+                .unwrap()
+                .wait()
+                .unwrap();
+            execute::shell("cargo run --features ssr --no-default-features")
+                .spawn()
+                .unwrap();
+            true
+        }));
+
         PostServerData::register().unwrap();
         GetServerData::register().unwrap();
         tokio::runtime::Runtime::new()
@@ -45,7 +58,7 @@ fn app(cx: Scope<AppProps>) -> Element {
 
     cx.render(rsx! {
         h1 { "High-Five counter: {count}" }
-        button { onclick: move |_| count += 1, "Up high!" }
+        button { onclick: move |_| count += 10, "Up high!" }
         button { onclick: move |_| count -= 1, "Down low!" }
         button {
             onclick: move |_| {

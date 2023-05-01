@@ -55,6 +55,7 @@ impl SSRState {
 
         #[cfg(all(debug_assertions, feature = "hot-reload"))]
         {
+            // In debug mode, we need to add a script to the page that will reload the page if the websocket disconnects to make full recompile hot reloads work
             let disconnect_js = r#"(function () {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const url = protocol + '//' + window.location.host + '/_dioxus/disconnect';
@@ -77,10 +78,9 @@ impl SSRState {
 
     // on initial page load connect to the disconnect ws
     const ws = new WebSocket(url);
-    ws.onopen = () => {
-        // if we disconnect, start polling
-        ws.onclose = reload_upon_connect;
-    };
+    // if we disconnect, start polling
+    ws.onmessage = (m) => {console.log(m)};
+    ws.onclose = reload_upon_connect;
 })()"#;
 
             html += r#"<script>"#;

@@ -372,12 +372,10 @@ pub fn connect_hot_reload() -> impl Filter<Extract = (impl Reply,), Error = warp
         use futures_util::StreamExt;
         use warp::ws::Message;
 
-        let state = HotReloadState::default();
-
-        warp::path!("_dioxus" / "hot_reload")
+        let hot_reload = warp::path!("_dioxus" / "hot_reload")
+            .and(warp::any().then(|| crate::hot_reload::spawn_hot_reload()))
             .and(warp::ws())
-            .and(warp::any().map(move || state.clone()))
-            .map(move |ws: warp::ws::Ws, state: HotReloadState| {
+            .map(move |state: &'static HotReloadState, ws: warp::ws::Ws| {
                 #[cfg(all(debug_assertions, feature = "hot-reload", feature = "ssr"))]
                 ws.on_upgrade(move |mut websocket| {
                     async move {
@@ -404,7 +402,7 @@ pub fn connect_hot_reload() -> impl Filter<Extract = (impl Reply,), Error = warp
                         }
 
                         let mut rx = tokio_stream::wrappers::WatchStream::from_changes(
-                            state.message_receiver,
+                            state.message_receiver.clone(),
                         );
                         while let Some(change) = rx.next().await {
                             if let Some(template) = change {
@@ -416,9 +414,12 @@ pub fn connect_hot_reload() -> impl Filter<Extract = (impl Reply,), Error = warp
                         }
                     }
                 })
-            })
-            .or(warp::path!("_dioxus" / "disconnect").and(warp::ws()).map(
-                move |ws: warp::ws::Ws| {
+            });
+        let disconnect =
+            warp::path!("_dioxus" / "disconnect")
+                .and(warp::ws())
+                .map(move |ws: warp::ws::Ws| {
+                    println!("disconnect");
                     #[cfg(all(debug_assertions, feature = "hot-reload", feature = "ssr"))]
                     ws.on_upgrade(move |mut websocket| async move {
                         struct DisconnectOnDrop(Option<warp::ws::WebSocket>);
@@ -432,10 +433,12 @@ pub fn connect_hot_reload() -> impl Filter<Extract = (impl Reply,), Error = warp
                         let mut ws = DisconnectOnDrop(Some(websocket));
 
                         loop {
-                            ws.0.as_mut().unwrap().next().await;
+                            if ws.0.as_mut().unwrap().next().await.is_none() {
+                                break;
+                            }
                         }
                     })
-                },
-            ))
+                });
+        disconnect.or(hot_reload)
     }
 }

@@ -13,15 +13,9 @@ dioxus-server = { path = "../../" }
 tokio = { version = "1.27.0", features = ["full"], optional = true }
 serde = "1.0.159"
 salvo = { version = "0.37.9", optional = true }
+execute = "0.2.12"
 
 [features]
 default = ["web"]
 ssr = ["salvo", "tokio", "dioxus-server/salvo"]
 web = ["dioxus-web"]
-
-[profile.release]
-lto = true
-panic = "abort"
-opt-level = 3
-strip = true
-codegen-units = 1
