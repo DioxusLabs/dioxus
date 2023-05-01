@@ -326,7 +326,6 @@ async fn render_handler<P: Clone + serde::Serialize + Send + Sync + 'static>(
     State((cfg, ssr_state)): State<(ServeConfig<P>, SSRState)>,
     request: Request<Body>,
 ) -> impl IntoResponse {
-    println!("Rendering");
     let (parts, _) = request.into_parts();
     let parts: Arc<RequestParts> = Arc::new(parts.into());
     let server_context = DioxusServerContext::new(parts);
