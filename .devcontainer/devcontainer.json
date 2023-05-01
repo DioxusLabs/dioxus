@@ -1,9 +1,18 @@
 {
     "name": "dioxus",
-    "image": "mcr.microsoft.com/devcontainers/rust:latest",
+    "remoteUser": "vscode",
+    "build": {
+        "dockerfile": "./Dockerfile",
+        "context": "."
+    },
     "features": {
-        "ghcr.io/devcontainers/features/common-utils:2": {},
-        "./local-features/linux": {}
+        "ghcr.io/devcontainers/features/common-utils:2": {
+            "installZsh": "true",
+            "username": "vscode",
+            "uid": "1000",
+            "gid": "1000",
+            "upgradePackages": "true"
+        }
     },
     "containerEnv": {
         "RUST_LOG": "INFO"
