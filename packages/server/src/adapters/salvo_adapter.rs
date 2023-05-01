@@ -261,7 +261,14 @@ impl DioxusRouterExt for Router {
     }
 
     fn connect_hot_reload(self) -> Self {
-        self.push(Router::with_path("/_dioxus/hot_reload").get(HotReloadHandler::default()))
+        let mut _dioxus_router = Router::with_path("_dioxus");
+        _dioxus_router = _dioxus_router
+            .push(Router::with_path("hot_reload").handle(HotReloadHandler::default()));
+        #[cfg(all(debug_assertions, feature = "hot-reload", feature = "ssr"))]
+        {
+            _dioxus_router = _dioxus_router.push(Router::with_path("disconnect").handle(ignore_ws));
+        }
+        self.push(_dioxus_router)
     }
 }
 
@@ -503,4 +510,20 @@ impl HotReloadHandler {
             })
             .await
     }
+}
+
+#[cfg(all(debug_assertions, feature = "hot-reload", feature = "ssr"))]
+#[handler]
+async fn ignore_ws(req: &mut Request, res: &mut Response) -> Result<(), salvo::http::StatusError> {
+    use salvo::ws::WebSocketUpgrade;
+    WebSocketUpgrade::new()
+        .upgrade(req, res, |mut ws| async move {
+            let _ = dbg!(ws.send(salvo::ws::Message::text("connected")).await);
+            while let Some(msg) = ws.recv().await {
+                if msg.is_err() {
+                    return;
+                };
+            }
+        })
+        .await
 }

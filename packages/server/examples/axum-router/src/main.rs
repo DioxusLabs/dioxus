@@ -9,6 +9,7 @@
 use dioxus::prelude::*;
 use dioxus_router::*;
 use dioxus_server::prelude::*;
+use serde::{Deserialize, Serialize};
 
 fn main() {
     #[cfg(feature = "web")]
@@ -62,7 +63,7 @@ fn main() {
     }
 }
 
-#[derive(Clone, Debug, Props, PartialEq)]
+#[derive(Clone, Debug, Props, PartialEq, Serialize, Deserialize)]
 struct AppProps {
     route: Option<String>,
 }

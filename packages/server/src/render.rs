@@ -25,9 +25,7 @@ impl Default for SSRState {
 impl SSRState {
     /// Render the application to HTML.
     pub fn render<P: 'static + Clone + serde::Serialize>(&self, cfg: &ServeConfig<P>) -> String {
-        let ServeConfig {
-            app, props, ..
-        } = cfg;
+        let ServeConfig { app, props, .. } = cfg;
 
         let mut vdom = VirtualDom::new_with_props(*app, props.clone());
 
@@ -54,6 +52,41 @@ impl SSRState {
 
         // serialize the props
         let _ = crate::props_html::serialize_props::encode_in_element(&cfg.props, &mut html);
+
+        #[cfg(all(debug_assertions, feature = "hot-reload"))]
+        {
+            let disconnect_js = r#"(function () {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const url = protocol + '//' + window.location.host + '/_dioxus/disconnect';
+    const poll_interval = 1000;
+    const reload_upon_connect = () => {
+        console.log('Disconnected from server. Attempting to reconnect...');
+        window.setTimeout(
+            () => {
+                // Try to reconnect to the websocket
+                const ws = new WebSocket(url);
+                ws.onopen = () => {
+                    // If we reconnect, reload the page
+                    window.location.reload();
+                }
+                // Otherwise, try again in a second
+                reload_upon_connect();
+            },
+            poll_interval);
+    };
+
+    // on initial page load connect to the disconnect ws
+    const ws = new WebSocket(url);
+    ws.onopen = () => {
+        // if we disconnect, start polling
+        ws.onclose = reload_upon_connect;
+    };
+})()"#;
+
+            html += r#"<script>"#;
+            html += disconnect_js;
+            html += r#"</script>"#;
+        }
 
         html += &index.post_main;
 

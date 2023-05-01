@@ -360,7 +360,7 @@ pub fn connect_hot_reload() -> impl Filter<Extract = (impl Reply,), Error = warp
 {
     #[cfg(not(all(debug_assertions, feature = "hot-reload", feature = "ssr")))]
     {
-        warp::path("_dioxus/hot_reload")
+        warp::path!("_dioxus" / "hot_reload")
             .and(warp::ws())
             .map(warp::reply)
             .map(|reply| warp::reply::with_status(reply, warp::http::StatusCode::NOT_FOUND));
@@ -368,20 +368,19 @@ pub fn connect_hot_reload() -> impl Filter<Extract = (impl Reply,), Error = warp
     #[cfg(all(debug_assertions, feature = "hot-reload", feature = "ssr"))]
     {
         use crate::hot_reload::HotReloadState;
+        use futures_util::sink::SinkExt;
+        use futures_util::StreamExt;
+        use warp::ws::Message;
+
         let state = HotReloadState::default();
 
-        warp::path("_dioxus")
-            .and(warp::path("hot_reload"))
+        warp::path!("_dioxus" / "hot_reload")
             .and(warp::ws())
             .and(warp::any().map(move || state.clone()))
             .map(move |ws: warp::ws::Ws, state: HotReloadState| {
                 #[cfg(all(debug_assertions, feature = "hot-reload", feature = "ssr"))]
                 ws.on_upgrade(move |mut websocket| {
                     async move {
-                        use futures_util::sink::SinkExt;
-                        use futures_util::StreamExt;
-                        use warp::ws::Message;
-
                         println!("🔥 Hot Reload WebSocket connected");
                         {
                             // update any rsx calls that changed before the websocket connected.
@@ -418,5 +417,25 @@ pub fn connect_hot_reload() -> impl Filter<Extract = (impl Reply,), Error = warp
                     }
                 })
             })
+            .or(warp::path!("_dioxus" / "disconnect").and(warp::ws()).map(
+                move |ws: warp::ws::Ws| {
+                    #[cfg(all(debug_assertions, feature = "hot-reload", feature = "ssr"))]
+                    ws.on_upgrade(move |mut websocket| async move {
+                        struct DisconnectOnDrop(Option<warp::ws::WebSocket>);
+                        impl Drop for DisconnectOnDrop {
+                            fn drop(&mut self) {
+                                let _ = self.0.take().unwrap().close();
+                            }
+                        }
+
+                        let _ = websocket.send(Message::text("connected")).await;
+                        let mut ws = DisconnectOnDrop(Some(websocket));
+
+                        loop {
+                            ws.0.as_mut().unwrap().next().await;
+                        }
+                    })
+                },
+            ))
     }
 }

@@ -267,6 +267,7 @@ where
                 .collect::<Vec<_>>()
                 .join("/");
             let route = format!("/{}", route);
+            println!("Serving static asset at {}", route);
             if path.is_dir() {
                 self = self.nest_service(&route, ServeDir::new(path));
             } else {
@@ -275,20 +276,43 @@ where
         }
 
         // Add server functions and render index.html
-        self.connect_hot_reload()
-            .register_server_fns(server_fn_route)
-            .route(
-                "/",
-                get(render_handler).with_state((cfg, SSRState::default())),
-            )
+        self.route(
+            "/",
+            get(render_handler).with_state((cfg, SSRState::default())),
+        )
+        .connect_hot_reload()
+        .register_server_fns(server_fn_route)
     }
 
     fn connect_hot_reload(self) -> Self {
         #[cfg(all(debug_assertions, feature = "hot-reload", feature = "ssr"))]
         {
-            self.route(
-                "/_dioxus/hot_reload",
-                get(hot_reload_handler).with_state(crate::hot_reload::HotReloadState::default()),
+            self.nest(
+                "/_dioxus",
+                Router::new()
+                    .route(
+                        "/hot_reload",
+                        get(hot_reload_handler)
+                            .with_state(crate::hot_reload::HotReloadState::default()),
+                    )
+                    .route(
+                        "/disconnect",
+                        get(|ws: WebSocketUpgrade| async {
+                            ws.on_failed_upgrade(|error| {
+                                println!("failed to upgrade: {}", error);
+                                todo!()
+                            })
+                            .on_upgrade(|mut ws| async move {
+                                use axum::extract::ws::Message;
+                                let _ = ws.send(Message::Text("connected".into())).await;
+                                loop {
+                                    if ws.recv().await.is_none() {
+                                        break;
+                                    }
+                                }
+                            })
+                        }),
+                    ),
             )
         }
         #[cfg(not(all(debug_assertions, feature = "hot-reload", feature = "ssr")))]
@@ -302,6 +326,7 @@ async fn render_handler<P: Clone + serde::Serialize + Send + Sync + 'static>(
     State((cfg, ssr_state)): State<(ServeConfig<P>, SSRState)>,
     request: Request<Body>,
 ) -> impl IntoResponse {
+    println!("Rendering");
     let (parts, _) = request.into_parts();
     let parts: Arc<RequestParts> = Arc::new(parts.into());
     let server_context = DioxusServerContext::new(parts);
