@@ -290,15 +290,10 @@ where
             self.nest(
                 "/_dioxus",
                 Router::new()
-                    .route("/hot_reload", get(hot_reload_handler))
                     .route(
                         "/disconnect",
                         get(|ws: WebSocketUpgrade| async {
-                            ws.on_failed_upgrade(|error| {
-                                println!("failed to upgrade: {}", error);
-                                todo!()
-                            })
-                            .on_upgrade(|mut ws| async move {
+                            ws.on_upgrade(|mut ws| async move {
                                 use axum::extract::ws::Message;
                                 let _ = ws.send(Message::Text("connected".into())).await;
                                 loop {
@@ -308,7 +303,8 @@ where
                                 }
                             })
                         }),
-                    ),
+                    )
+                    .route("/hot_reload", get(hot_reload_handler)),
             )
         }
         #[cfg(not(all(debug_assertions, feature = "hot-reload", feature = "ssr")))]

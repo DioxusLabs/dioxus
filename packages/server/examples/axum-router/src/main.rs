@@ -50,6 +50,8 @@ fn main() {
                         axum::Router::new()
                             // Register server functions
                             .register_server_fns("")
+                            // Connect to the hot reload server
+                            .connect_hot_reload()
                             // Serve the static assets folder
                             .nest_service("/assets", serve_dir)
                             // If the path is unknown, render the application
