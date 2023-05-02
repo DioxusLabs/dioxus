@@ -6,7 +6,7 @@ fn main() {
     dioxus_web::launch_cfg(app, dioxus_web::Config::new().hydrate(true));
     #[cfg(feature = "ssr")]
     {
-        use dioxus_server::prelude::*;
+        use dioxus_fullstack::prelude::*;
         tokio::runtime::Runtime::new()
             .unwrap()
             .block_on(async move {

@@ -16,7 +16,7 @@ dioxus-native-core-macro = { path = "../../packages/native-core-macro" }
 dioxus-router = { path = "../../packages/router" }
 dioxus-liveview = { path = "../../packages/liveview", features = ["axum"] }
 dioxus-tui = { path = "../../packages/dioxus-tui" }
-dioxus-server = { path = "../../packages/server" }
+dioxus-fullstack = { path = "../../packages/fullstack" }
 fermi = { path = "../../packages/fermi" }
 shipyard = "0.6.2"
 

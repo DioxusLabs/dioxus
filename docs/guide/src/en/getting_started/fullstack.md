@@ -4,11 +4,11 @@
 
 We can combine the `dioxus-web` renderer with the `dioxus-ssr` renderer to create a full-stack Dioxus application. By combining server-side rendering with client-side hydration we can create an application that is initially rendered on the server and then hydrates the application on the client. Server-side rendering results in a fast first paint and make our page SEO-friendly. Client-side hydration makes our page responsive once the application has fully loaded.
 
-To help make full-stack development easier, Dioxus provides a `dioxus-server` crate that integrates with popular web frameworks with utilities for full-stack development.
+To help make full-stack development easier, Dioxus provides a `dioxus-fullstack` crate that integrates with popular web frameworks with utilities for full-stack development.
 
 ## Setup
 
-For this guide, we're going to show how to use Dioxus with [Axum](https://docs.rs/axum/latest/axum/), but `dioxus-server` also integrates with the [Warp](https://docs.rs/warp/latest/warp/) and [Salvo](https://docs.rs/salvo/latest/salvo/) web frameworks.
+For this guide, we're going to show how to use Dioxus with [Axum](https://docs.rs/axum/latest/axum/), but `dioxus-fullstack` also integrates with the [Warp](https://docs.rs/warp/latest/warp/) and [Salvo](https://docs.rs/salvo/latest/salvo/) web frameworks.
 
 Make sure you have Rust and Cargo installed, and then create a new project:
 
@@ -17,11 +17,11 @@ cargo new --bin demo
 cd demo
 ```
 
-Add `dioxus` and `dioxus-server` as dependencies:
+Add `dioxus` and `dioxus-fullstack` as dependencies:
 
 ```shell
 cargo add dioxus
-cargo add dioxus-server --features axum, ssr
+cargo add dioxus-fullstack --features axum, ssr
 ```
 
 Next, add all the Axum dependencies. This will be different if you're using a different Web Framework
@@ -37,7 +37,7 @@ Your dependencies should look roughly like this:
 [dependencies]
 axum = "*"
 dioxus = { version = "*" }
-dioxus-server = { version = "*", features = ["axum", "ssr"] }
+dioxus-fullstack = { version = "*", features = ["axum", "ssr"] }
 tokio = { version = "*", features = ["full"] }
 ```
 
@@ -59,7 +59,7 @@ First, modify your `Cargo.toml` to include two features, one for the server call
 [dependencies]
 # Common dependancies
 dioxus = { version = "*" }
-dioxus-server = { version = "*" }
+dioxus-fullstack = { version = "*" }
 
 # Web dependancies
 dioxus-web = { version = "*", features=["hydrate"], optional = true }
@@ -70,7 +70,7 @@ tokio = { version = "1.27.0", features = ["full"], optional = true }
 
 [features]
 default = []
-ssr = ["axum", "tokio", "dioxus-server/axum"]
+ssr = ["axum", "tokio", "dioxus-fullstack/axum"]
 web = ["dioxus-web"]
 ```
 
@@ -112,4 +112,4 @@ Now, build your client-side bundle with `dioxus build --features web` and run yo
 
 ## Conclusion
 
-That's it! You've created a full-stack Dioxus app. You can find more examples of full-stack apps and information about how to integrate with other frameworks and desktop renderers in the [dioxus-server examples directory](https://github.com/DioxusLabs/dioxus/tree/master/packages/server/examples).
+That's it! You've created a full-stack Dioxus app. You can find more examples of full-stack apps and information about how to integrate with other frameworks and desktop renderers in the [dioxus-fullstack examples directory](https://github.com/DioxusLabs/dioxus/tree/master/packages/server/examples).

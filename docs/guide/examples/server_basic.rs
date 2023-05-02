@@ -5,7 +5,7 @@ use dioxus::prelude::*;
 async fn main() {
     #[cfg(feature = "ssr")]
     {
-        use dioxus_server::prelude::*;
+        use dioxus_fullstack::prelude::*;
 
         let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 8080));
         axum::Server::bind(&addr)
