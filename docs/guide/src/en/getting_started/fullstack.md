@@ -82,6 +82,10 @@ Next, we need to modify our `main.rs` to use either hydrate on the client or ren
 
 Now, build your client-side bundle with `dioxus build --features web` and run your server with `cargo run --features ssr`. You should see the same page as before, but now you can interact with the buttons!
 
+## Sycronizing props between the server and client
+
+Lets make the initial count of the counter dynamic based on the current page.
+
 ## Communicating with the server
 
 `dixous-server` provides server functions that allow you to call an automatically generated API on the server from the client as if it were a local function.

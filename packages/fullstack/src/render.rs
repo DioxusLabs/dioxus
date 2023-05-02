@@ -79,7 +79,6 @@ impl SSRState {
     // on initial page load connect to the disconnect ws
     const ws = new WebSocket(url);
     // if we disconnect, start polling
-    ws.onmessage = (m) => {console.log(m)};
     ws.onclose = reload_upon_connect;
 })()"#;
 
