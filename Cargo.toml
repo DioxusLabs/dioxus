@@ -30,6 +30,7 @@ members = [
     "packages/fullstack/examples/salvo-hello-world",
     "packages/fullstack/examples/warp-hello-world",
     "docs/guide",
+    "examples/PWA-example",
 ]
 
 # This is a "virtual package"

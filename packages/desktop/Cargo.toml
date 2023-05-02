@@ -13,7 +13,7 @@ keywords = ["dom", "ui", "gui", "react"]
 
 [dependencies]
 dioxus-core = { path = "../core", version = "^0.3.0", features = ["serialize"] }
-dioxus-html = { path = "../html", features = ["serialize"], version = "^0.3.0" }
+dioxus-html = { path = "../html", features = ["serialize", "native-bind"], version = "^0.3.0" }
 dioxus-interpreter-js = { path = "../interpreter", version = "^0.3.0" }
 dioxus-hot-reload = { path = "../hot-reload", optional = true }
 
@@ -23,12 +23,13 @@ thiserror = "1.0.30"
 log = "0.4.14"
 wry = { version = "0.27.2" }
 futures-channel = "0.3.21"
-tokio = { version = "1.16.1", features = [
+tokio = { version = "1.27", features = [
     "sync",
     "rt-multi-thread",
     "rt",
     "time",
     "macros",
+    "fs",
 ], optional = true, default-features = false }
 webbrowser = "0.8.0"
 infer = "0.11.0"
@@ -36,6 +37,7 @@ dunce = "1.0.2"
 slab = "0.4"
 
 futures-util = "0.3.25"
+rfd = "0.11.3"
 
 [target.'cfg(target_os = "ios")'.dependencies]
 objc = "0.2.7"

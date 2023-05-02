@@ -61,6 +61,7 @@ use futures_util::{pin_mut, FutureExt, StreamExt};
 mod cache;
 mod cfg;
 mod dom;
+mod file_engine;
 mod hot_reload;
 #[cfg(feature = "hydrate")]
 mod rehydrate;
@@ -225,7 +226,7 @@ pub async fn run_with_props<T: 'static>(root: fn(Scope<T>) -> Element, root_prop
     websys_dom.mount();
 
     loop {
-        log::debug!("waiting for work");
+        log::trace!("waiting for work");
 
         // if virtualdom has nothing, wait for it to have something before requesting idle time
         // if there is work then this future resolves immediately.
