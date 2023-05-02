@@ -125,6 +125,7 @@ pub trait DioxusRouterExt<S> {
     ///     axum::Server::bind(&addr)
     ///         .serve(
     ///             axum::Router::new()
+    ///                 // Register server functions routes with the default handler
     ///                 .register_server_fns("")
     ///                 .into_make_service(),
     ///         )
@@ -148,7 +149,7 @@ pub trait DioxusRouterExt<S> {
     ///     axum::Server::bind(&addr)
     ///         .serve(
     ///             axum::Router::new()
-    ///                 // Server side render the application, serve static assets, and register server functions
+    ///                 // Connect to hot reloading in debug mode
     ///                 .connect_hot_reload()
     ///                 .into_make_service(),
     ///         )
@@ -157,6 +158,36 @@ pub trait DioxusRouterExt<S> {
     /// }
     /// ```
     fn connect_hot_reload(self) -> Self;
+
+    /// Serves the static WASM for your Dioxus application (except the generated index.html).
+    ///
+    /// # Example
+    /// ```rust
+    /// #![allow(non_snake_case)]
+    /// use dioxus::prelude::*;
+    /// use dioxus_fullstack::prelude::*;
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 8080));
+    ///     axum::Server::bind(&addr)
+    ///         .serve(
+    ///             axum::Router::new()
+    ///                 // Server side render the application, serve static assets, and register server functions
+    ///                 .serve_static_assets(ServeConfigBuilder::new(app, ()))
+    ///                 // Server render the application
+    ///                 // ...
+    ///                 .into_make_service(),
+    ///         )
+    ///         .await
+    ///         .unwrap();
+    /// }
+    ///
+    /// fn app(cx: Scope) -> Element {
+    ///     todo!()
+    /// }
+    /// ```
+    fn serve_static_assets(self, assets_path: impl Into<std::path::PathBuf>) -> Self;
 
     /// Serves the Dioxus application. This will serve a complete server side rendered application.
     /// This will serve static assets, server render the application, register server functions, and intigrate with hot reloading.
@@ -233,20 +264,16 @@ where
         })
     }
 
-    fn serve_dioxus_application<P: Clone + serde::Serialize + Send + Sync + 'static>(
-        mut self,
-        server_fn_route: &'static str,
-        cfg: impl Into<ServeConfig<P>>,
-    ) -> Self {
+    fn serve_static_assets(mut self, assets_path: impl Into<std::path::PathBuf>) -> Self {
         use tower_http::services::{ServeDir, ServeFile};
 
-        let cfg = cfg.into();
+        let assets_path = assets_path.into();
 
         // Serve all files in dist folder except index.html
-        let dir = std::fs::read_dir(cfg.assets_path).unwrap_or_else(|e| {
+        let dir = std::fs::read_dir(&assets_path).unwrap_or_else(|e| {
             panic!(
                 "Couldn't read assets directory at {:?}: {}",
-                &cfg.assets_path, e
+                &assets_path, e
             )
         });
 
@@ -256,7 +283,7 @@ where
                 continue;
             }
             let route = path
-                .strip_prefix(cfg.assets_path)
+                .strip_prefix(&assets_path)
                 .unwrap()
                 .iter()
                 .map(|segment| {
@@ -267,7 +294,6 @@ where
                 .collect::<Vec<_>>()
                 .join("/");
             let route = format!("/{}", route);
-            println!("Serving static asset at {}", route);
             if path.is_dir() {
                 self = self.nest_service(&route, ServeDir::new(path));
             } else {
@@ -275,13 +301,24 @@ where
             }
         }
 
+        self
+    }
+
+    fn serve_dioxus_application<P: Clone + serde::Serialize + Send + Sync + 'static>(
+        mut self,
+        server_fn_route: &'static str,
+        cfg: impl Into<ServeConfig<P>>,
+    ) -> Self {
+        let cfg = cfg.into();
+
         // Add server functions and render index.html
-        self.route(
-            "/",
-            get(render_handler).with_state((cfg, SSRState::default())),
-        )
-        .connect_hot_reload()
-        .register_server_fns(server_fn_route)
+        self.serve_static_assets(&cfg.assets_path)
+            .route(
+                "/",
+                get(render_handler).with_state((cfg, SSRState::default())),
+            )
+            .connect_hot_reload()
+            .register_server_fns(server_fn_route)
     }
 
     fn connect_hot_reload(self) -> Self {

@@ -153,6 +153,25 @@ pub trait DioxusRouterExt {
     /// }
     fn connect_hot_reload(self) -> Self;
 
+    /// Serves the static WASM for your Dioxus application (except the generated index.html).
+    ///
+    /// # Example
+    /// ```rust
+    /// use salvo::prelude::*;
+    /// use std::{net::TcpListener, sync::Arc};
+    /// use dioxus_fullstack::prelude::*;
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let router = Router::new()
+    ///         .server_static_assets("/dist");
+    ///     Server::new(TcpListener::bind("127.0.0.1:8080"))
+    ///         .serve(router)
+    ///         .await;
+    /// }
+    /// ```
+    fn serve_static_assets(self, assets_path: impl Into<std::path::PathBuf>) -> Self;
+
     /// Serves the Dioxus application. This will serve a complete server side rendered application.
     /// This will serve static assets, server render the application, register server functions, and intigrate with hot reloading.
     ///
@@ -213,18 +232,14 @@ impl DioxusRouterExt for Router {
         })
     }
 
-    fn serve_dioxus_application<P: Clone + serde::Serialize + Send + Sync + 'static>(
-        mut self,
-        server_fn_route: &'static str,
-        cfg: impl Into<ServeConfig<P>>,
-    ) -> Self {
-        let cfg = cfg.into();
+    fn serve_static_assets(mut self, assets_path: impl Into<std::path::PathBuf>) -> Self {
+        let assets_path = assets_path.into();
 
         // Serve all files in dist folder except index.html
-        let dir = std::fs::read_dir(cfg.assets_path).unwrap_or_else(|e| {
+        let dir = std::fs::read_dir(&assets_path).unwrap_or_else(|e| {
             panic!(
                 "Couldn't read assets directory at {:?}: {}",
-                &cfg.assets_path, e
+                &assets_path, e
             )
         });
 
@@ -234,7 +249,7 @@ impl DioxusRouterExt for Router {
                 continue;
             }
             let route = path
-                .strip_prefix(&cfg.assets_path)
+                .strip_prefix(&assets_path)
                 .unwrap()
                 .iter()
                 .map(|segment| {
@@ -255,8 +270,19 @@ impl DioxusRouterExt for Router {
             }
         }
 
-        self.connect_hot_reload()
-            .register_server_fns(server_fn_route)
+        self
+    }
+
+    fn serve_dioxus_application<P: Clone + serde::Serialize + Send + Sync + 'static>(
+        self,
+        server_fn_path: &'static str,
+        cfg: impl Into<ServeConfig<P>>,
+    ) -> Self {
+        let cfg = cfg.into();
+
+        self.serve_static_assets(&cfg.assets_path)
+            .connect_hot_reload()
+            .register_server_fns(server_fn_path)
             .push(Router::with_path("/").get(SSRHandler { cfg }))
     }
 

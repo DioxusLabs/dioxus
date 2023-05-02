@@ -15,8 +15,7 @@ use server_fn_macro::*;
 ///   (e.g., `"/api"`). Defaults to `"/"`.
 /// 3. *Optional*: either `"Cbor"` (specifying that it should use the binary `cbor` format for
 ///   serialization), `"Url"` (specifying that it should be use a URL-encoded form-data string).
-///   Defaults to `"Url"`. If you want to use this server function to power a `<form>` that will
-///   work without WebAssembly, the encoding must be `"Url"`. If you want to use this server function
+///   Defaults to `"Url"`. If you want to use this server function
 ///   using Get instead of Post methods, the encoding must be `"GetCbor"` or `"GetJson"`.
 ///
 /// The server function itself can take any number of arguments, each of which should be serializable
