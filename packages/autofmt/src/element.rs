@@ -181,11 +181,7 @@ impl Writer<'_> {
                     "key: \"{}\"",
                     litstr.source.as_ref().unwrap().value()
                 )?,
-                Key::Raw(expr) => write!(
-                    self.out,
-                    "key: {}",
-                    <&syn::Expr as Into<String>>::into(expr)
-                )?,
+                Key::Raw(expr) => write!(self.out, "key: {}", prettyplease::unparse_expr(expr))?,
             };
 
             if !attributes.is_empty() {
