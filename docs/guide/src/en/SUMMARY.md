@@ -37,6 +37,12 @@
 
 ---
 
+- [Fullstack](fullstack/index.md)
+  - [Getting Started](fullstack/getting_started.md)
+  - [Communicating with the Server](fullstack/server_functions.md)
+
+---
+
 - [Custom Renderer](custom_renderer/index.md)
 
 ---

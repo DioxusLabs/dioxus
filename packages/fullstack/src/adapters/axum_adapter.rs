@@ -305,7 +305,7 @@ where
     }
 
     fn serve_dioxus_application<P: Clone + serde::Serialize + Send + Sync + 'static>(
-        mut self,
+        self,
         server_fn_route: &'static str,
         cfg: impl Into<ServeConfig<P>>,
     ) -> Self {
