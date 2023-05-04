@@ -1,9 +1,25 @@
-use crate::check_app_exits;
+
 use dioxus::prelude::*;
 use dioxus_desktop::DesktopContext;
 use dioxus::html::geometry::euclid::Vector3D;
 
-pub fn test_events() {
+pub(crate) fn check_app_exits(app: Component) {
+    // This is a deadman's switch to ensure that the app exits
+    let should_panic = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
+    let should_panic_clone = should_panic.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_secs(100));
+        if should_panic_clone.load(std::sync::atomic::Ordering::SeqCst) {
+            std::process::exit(exitcode::SOFTWARE);
+        }
+    });
+
+    dioxus_desktop::launch(app);
+
+    should_panic.store(false, std::sync::atomic::Ordering::SeqCst);
+}
+
+pub fn main() {
     check_app_exits(app);
 }
 
@@ -194,6 +210,7 @@ fn app(cx: Scope) -> Element {
     
 
     if **recieved_events == 12 {
+        println!("all events recieved");
         desktop_context.close();
     }
 
