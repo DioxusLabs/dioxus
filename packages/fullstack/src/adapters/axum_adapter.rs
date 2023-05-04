@@ -91,9 +91,11 @@ pub trait DioxusRouterExt<S> {
     ///        .serve(
     ///            axum::Router::new()
     ///                .register_server_fns_with_handler("", |func| {
-    ///                    move |headers: HeaderMap, body: Request<Body>| async move {
-    ///                        // Add the headers to the context
-    ///                        server_fn_handler((headers.clone(),), func.clone(), headers, body).await
+    ///                    move |req: Request<Body>| async move {
+    ///                        let (parts, body) = req.into_parts();
+    ///                        let parts: Arc<RequestParts> = Arc::new(parts.into());
+    ///                        let server_context = DioxusServerContext::new(parts.clone());
+    ///                        server_fn_handler(server_context, func.clone(), parts, body).await
     ///                    }
     ///                })
     ///                .into_make_service(),
@@ -366,7 +368,7 @@ async fn render_handler<P: Clone + serde::Serialize + Send + Sync + 'static>(
     Full::from(rendered)
 }
 
-/// A default handler for server functions. It will deserialize the request body, call the server function, and serialize the response.
+/// A default handler for server functions. It will deserialize the request, call the server function, and serialize the response.
 pub async fn server_fn_handler(
     server_context: DioxusServerContext,
     function: ServerFunction,
