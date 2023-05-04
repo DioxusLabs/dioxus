@@ -1,7 +1,6 @@
-
+use dioxus::html::geometry::euclid::Vector3D;
 use dioxus::prelude::*;
 use dioxus_desktop::DesktopContext;
-use dioxus::html::geometry::euclid::Vector3D;
 
 pub(crate) fn check_app_exits(app: Component) {
     // This is a deadman's switch to ensure that the app exits
@@ -67,7 +66,7 @@ fn app(cx: Scope) -> Element {
     cancelable: true,
     buttons: 2,
     })"#,
-        );
+    );
     // mouse_click_div
     mock_event(
         &cx,
@@ -78,7 +77,7 @@ fn app(cx: Scope) -> Element {
     cancelable: true,
     buttons: 2,
     button: 2,
-    })"#
+    })"#,
     );
     // mouse_dblclick_div
     mock_event(
@@ -207,7 +206,6 @@ fn app(cx: Scope) -> Element {
         "focus_out_div",
         r#"new FocusEvent("focusout",{bubbles: true})"#,
     );
-    
 
     if **recieved_events == 12 {
         println!("all events recieved");
@@ -299,7 +297,7 @@ fn app(cx: Scope) -> Element {
                     assert_eq!(event.data.code().to_string(), "KeyA");
                     assert_eq!(event.data.location, 0);
                     assert!(event.data.is_auto_repeating());
-                    
+
                     recieved_events.modify(|x| *x + 1)
                 }
             }
@@ -325,7 +323,7 @@ fn app(cx: Scope) -> Element {
                     assert_eq!(event.data.code().to_string(), "KeyA");
                     assert_eq!(event.data.location, 0);
                     assert!(!event.data.is_auto_repeating());
-                    
+
                     recieved_events.modify(|x| *x + 1)
                 }
             }
