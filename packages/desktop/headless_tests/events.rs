@@ -52,7 +52,7 @@ fn app(cx: Scope) -> Element {
 
     // button
     mock_event(
-        &cx,
+        cx,
         "button",
         r#"new MouseEvent("click", {
     view: window,
@@ -63,7 +63,7 @@ fn app(cx: Scope) -> Element {
     );
     // mouse_move_div
     mock_event(
-        &cx,
+        cx,
         "mouse_move_div",
         r#"new MouseEvent("mousemove", {
     view: window,
@@ -74,7 +74,7 @@ fn app(cx: Scope) -> Element {
     );
     // mouse_click_div
     mock_event(
-        &cx,
+        cx,
         "mouse_click_div",
         r#"new MouseEvent("click", {
     view: window,
@@ -86,7 +86,7 @@ fn app(cx: Scope) -> Element {
     );
     // mouse_dblclick_div
     mock_event(
-        &cx,
+        cx,
         "mouse_dblclick_div",
         r#"new MouseEvent("dblclick", {
     view: window,
@@ -98,7 +98,7 @@ fn app(cx: Scope) -> Element {
     );
     // mouse_down_div
     mock_event(
-        &cx,
+        cx,
         "mouse_down_div",
         r#"new MouseEvent("mousedown", {
     view: window,
@@ -110,7 +110,7 @@ fn app(cx: Scope) -> Element {
     );
     // mouse_up_div
     mock_event(
-        &cx,
+        cx,
         "mouse_up_div",
         r#"new MouseEvent("mouseup", {
     view: window,
@@ -122,7 +122,7 @@ fn app(cx: Scope) -> Element {
     );
     // wheel_div
     mock_event(
-        &cx,
+        cx,
         "wheel_div",
         r#"new WheelEvent("wheel", {
     view: window,
@@ -135,7 +135,7 @@ fn app(cx: Scope) -> Element {
     );
     // key_down_div
     mock_event(
-        &cx,
+        cx,
         "key_down_div",
         r#"new KeyboardEvent("keydown", {
     key: "a",
@@ -157,7 +157,7 @@ fn app(cx: Scope) -> Element {
     );
     // key_up_div
     mock_event(
-        &cx,
+        cx,
         "key_up_div",
         r#"new KeyboardEvent("keyup", {
     key: "a",
@@ -179,7 +179,7 @@ fn app(cx: Scope) -> Element {
     );
     // key_press_div
     mock_event(
-        &cx,
+        cx,
         "key_press_div",
         r#"new KeyboardEvent("keypress", {
     key: "a",
@@ -201,13 +201,13 @@ fn app(cx: Scope) -> Element {
     );
     // focus_in_div
     mock_event(
-        &cx,
+        cx,
         "focus_in_div",
         r#"new FocusEvent("focusin", {bubbles: true})"#,
     );
     // focus_out_div
     mock_event(
-        &cx,
+        cx,
         "focus_out_div",
         r#"new FocusEvent("focusout",{bubbles: true})"#,
     );
