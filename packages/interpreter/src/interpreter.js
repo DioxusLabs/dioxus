@@ -206,31 +206,25 @@ class Interpreter {
   }
 
   GetClientRect(id) {
-    const node= this.nodes[id];
+    const node = this.nodes[id];
     if (!node) {
       return;
     }
     const rect = node.getBoundingClientRect();
     return {
       type: "GetClientRect",
-      origin: [
-         rect.x,
-         rect.y,
-      ],
-      size: [
-         rect.width,
-         rect.height,
-      ]
+      origin: [rect.x, rect.y],
+      size: [rect.width, rect.height],
     };
   }
-  
+
   ScrollTo(id, behavior) {
     const node = this.nodes[id];
     if (!node) {
       return false;
     }
     node.scrollIntoView({
-      behavior: behavior
+      behavior: behavior,
     });
     return true;
   }
@@ -248,7 +242,7 @@ class Interpreter {
     }
     return true;
   }
-  
+
   handleEdits(edits) {
     for (let template of edits.templates) {
       this.SaveTemplate(template);
@@ -393,113 +387,19 @@ class Interpreter {
 
         // if this is a mounted listener, we send the event immediately
         if (edit.name === "mounted") {
-            window.ipc.postMessage(
-              serializeIpcMessage("user_event", {
-                name: edit.name,
-                element: edit.id,
-                data: null,
-                bubbles,
-              })
-            );
+          window.ipc.postMessage(
+            serializeIpcMessage("user_event", {
+              name: edit.name,
+              element: edit.id,
+              data: null,
+              bubbles,
+            })
+          );
+        } else {
+          this.NewEventListener(edit.name, edit.id, bubbles, (event) => {
+            handler(event, edit.name, bubbles);
+          });
         }
-
-
-        // this handler is only provided on desktop implementations since this
-        // method is not used by the web implementation
-        let handler = (event) => {
-          let target = event.target;
-          if (target != null) {
-            let realId = target.getAttribute(`data-dioxus-id`);
-            let shouldPreventDefault = target.getAttribute(
-              `dioxus-prevent-default`
-            );
-
-            if (event.type === "click") {
-              // todo call prevent default if it's the right type of event
-              let a_element = target.closest("a");
-              if (a_element != null) {
-                event.preventDefault();
-                if (
-                  shouldPreventDefault !== `onclick` &&
-                  a_element.getAttribute(`dioxus-prevent-default`) !== `onclick`
-                ) {
-                  const href = a_element.getAttribute("href");
-                  if (href !== "" && href !== null && href !== undefined) {
-                    window.ipc.postMessage(
-                      serializeIpcMessage("browser_open", { href })
-                    );
-                  }
-                }
-              }
-
-              // also prevent buttons from submitting
-              if (target.tagName === "BUTTON" && event.type == "submit") {
-                event.preventDefault();
-              }
-            }
-            // walk the tree to find the real element
-            while (realId == null) {
-              // we've reached the root we don't want to send an event
-              if (target.parentElement === null) {
-                return;
-              }
-
-              target = target.parentElement;
-              realId = target.getAttribute(`data-dioxus-id`);
-            }
-
-            shouldPreventDefault = target.getAttribute(
-              `dioxus-prevent-default`
-            );
-
-            let contents = serialize_event(event);
-
-            if (shouldPreventDefault === `on${event.type}`) {
-              event.preventDefault();
-            }
-
-            if (event.type === "submit") {
-              event.preventDefault();
-            }
-
-            if (
-              target.tagName === "FORM" &&
-              (event.type === "submit" || event.type === "input")
-            ) {
-              for (let x = 0; x < target.elements.length; x++) {
-                let element = target.elements[x];
-                let name = element.getAttribute("name");
-                if (name != null) {
-                  if (element.getAttribute("type") === "checkbox") {
-                    // @ts-ignore
-                    contents.values[name] = element.checked ? "true" : "false";
-                  } else if (element.getAttribute("type") === "radio") {
-                    if (element.checked) {
-                      contents.values[name] = element.value;
-                    }
-                  } else {
-                    // @ts-ignore
-                    contents.values[name] =
-                      element.value ?? element.textContent;
-                  }
-                }
-              }
-            }
-
-            if (realId === null) {
-              return;
-            }
-            window.ipc.postMessage(
-              serializeIpcMessage("user_event", {
-                name: edit.name,
-                element: parseInt(realId),
-                data: contents,
-                bubbles,
-              })
-            );
-          }
-        };
-        this.NewEventListener(edit.name, edit.id, bubbles, handler);
         break;
     }
   }
@@ -510,17 +410,24 @@ class Interpreter {
 function handler(event, name, bubbles) {
   let target = event.target;
   if (target != null) {
-    let shouldPreventDefault = target.getAttribute(`dioxus-prevent-default`);
+    let preventDefaultRequests = target.getAttribute(`dioxus-prevent-default`);
 
     if (event.type === "click") {
-      // Prevent redirects from links
+      // todo call prevent default if it's the right type of event
       let a_element = target.closest("a");
       if (a_element != null) {
         event.preventDefault();
-        if (
-          shouldPreventDefault !== `onclick` &&
-          a_element.getAttribute(`dioxus-prevent-default`) !== `onclick`
-        ) {
+
+        let elementShouldPreventDefault =
+          preventDefaultRequests && preventDefaultRequests.includes(`onclick`);
+        let aElementShouldPreventDefault = a_element.getAttribute(
+          `dioxus-prevent-default`
+        );
+        let linkShouldPreventDefault =
+          aElementShouldPreventDefault &&
+          aElementShouldPreventDefault.includes(`onclick`);
+
+        if (!elementShouldPreventDefault && !linkShouldPreventDefault) {
           const href = a_element.getAttribute("href");
           if (href !== "" && href !== null && href !== undefined) {
             window.ipc.postMessage(
@@ -538,9 +445,10 @@ function handler(event, name, bubbles) {
 
     const realId = find_real_id(target);
 
-    shouldPreventDefault = target.getAttribute(`dioxus-prevent-default`);
-
-    if (shouldPreventDefault === `on${event.type}`) {
+    if (
+      preventDefaultRequests &&
+      preventDefaultRequests.includes(`on${event.type}`)
+    ) {
       event.preventDefault();
     }
 
