@@ -2,7 +2,10 @@ use crate::{builder, plugin::PluginManager, serve::Serve, BuildResult, CrateConf
 use axum::{
     body::{Full, HttpBody},
     extract::{ws::Message, Extension, TypedHeader, WebSocketUpgrade},
-    http::{Response, StatusCode},
+    http::{
+        header::{HeaderName, HeaderValue},
+        Method, Response, StatusCode,
+    },
     response::IntoResponse,
     routing::{get, get_service},
     Router,
@@ -22,7 +25,10 @@ use std::{
 use tokio::sync::broadcast;
 use tower::ServiceBuilder;
 use tower_http::services::fs::{ServeDir, ServeFileSystemResponseBody};
-
+use tower_http::{
+    cors::{Any, CorsLayer},
+    ServiceBuilderExt,
+};
 mod proxy;
 
 pub struct BuildManager {
@@ -170,6 +176,13 @@ pub async fn startup_hot_reload(ip: String, port: u16, config: CrateConfig, star
         .clone()
         .unwrap_or_else(|| vec![PathBuf::from("src")]);
 
+    let cors = CorsLayer::new()
+        // allow `GET` and `POST` when accessing the resource
+        .allow_methods([Method::GET, Method::POST])
+        // allow requests from any origin
+        .allow_origin(Any)
+        .allow_headers(Any);
+
     let watcher_config = config.clone();
     let watcher_ip = ip.clone();
     let mut last_update_time = chrono::Local::now().timestamp();
@@ -267,6 +280,14 @@ pub async fn startup_hot_reload(ip: String, port: u16, config: CrateConfig, star
 
     let file_service_config = config.clone();
     let file_service = ServiceBuilder::new()
+        .override_response_header(
+            HeaderName::from_static("cross-origin-embedder-policy"),
+            HeaderValue::from_static("require-corp"),
+        )
+        .override_response_header(
+            HeaderName::from_static("cross-origin-opener-policy"),
+            HeaderValue::from_static("same-origin"),
+        )
         .and_then(
             move |response: Response<ServeFileSystemResponseBody>| async move {
                 let response = if file_service_config
@@ -317,6 +338,7 @@ pub async fn startup_hot_reload(ip: String, port: u16, config: CrateConfig, star
 
     let router = router
         .route("/_dioxus/hot_reload", get(hot_reload_handler))
+        .layer(cors)
         .layer(Extension(ws_reload_state))
         .layer(Extension(hot_reload_state));
 
@@ -357,6 +379,13 @@ pub async fn startup_default(
     });
 
     let mut last_update_time = chrono::Local::now().timestamp();
+
+    let cors = CorsLayer::new()
+        // allow `GET` and `POST` when accessing the resource
+        .allow_methods([Method::GET, Method::POST])
+        // allow requests from any origin
+        .allow_origin(Any)
+        .allow_headers(Any);
 
     // file watcher: check file change
     let allow_watch_path = config
@@ -423,6 +452,14 @@ pub async fn startup_default(
 
     let file_service_config = config.clone();
     let file_service = ServiceBuilder::new()
+        .override_response_header(
+            HeaderName::from_static("cross-origin-embedder-policy"),
+            HeaderValue::from_static("require-corp"),
+        )
+        .override_response_header(
+            HeaderName::from_static("cross-origin-opener-policy"),
+            HeaderValue::from_static("same-origin"),
+        )
         .and_then(
             move |response: Response<ServeFileSystemResponseBody>| async move {
                 let response = if file_service_config
@@ -471,6 +508,7 @@ pub async fn startup_default(
                 )
             }),
         )
+        .layer(cors)
         .layer(Extension(ws_reload_state));
 
     let addr = format!("0.0.0.0:{}", port).parse().unwrap();

@@ -41,7 +41,7 @@ indicatif = "0.17.0-rc.11"
 subprocess = "0.2.9"
 
 axum = { version = "0.5.1", features = ["ws", "headers"] }
-tower-http = { version = "0.2.2", features = ["fs", "trace"] }
+tower-http = { version = "0.2.2", features = ["full" ] }
 headers = "0.3.7"
 
 walkdir = "2"
