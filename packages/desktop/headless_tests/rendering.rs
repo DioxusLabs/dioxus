@@ -2,6 +2,8 @@ use dioxus::prelude::*;
 use dioxus_desktop::DesktopContext;
 
 pub(crate) fn check_app_exits(app: Component) {
+    use dioxus_desktop::tao::window::WindowBuilder;
+    use dioxus_desktop::Config;
     // This is a deadman's switch to ensure that the app exits
     let should_panic = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
     let should_panic_clone = should_panic.clone();
@@ -12,7 +14,10 @@ pub(crate) fn check_app_exits(app: Component) {
         }
     });
 
-    dioxus_desktop::launch(app);
+    dioxus_desktop::launch_cfg(
+        app,
+        Config::new().with_window(WindowBuilder::new().with_visible(false)),
+    );
 
     should_panic.store(false, std::sync::atomic::Ordering::SeqCst);
 }
