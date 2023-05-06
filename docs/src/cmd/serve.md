@@ -47,3 +47,11 @@ You can use `--example {name}` to start a example code.
 # build `example/test` code
 dioxus serve --exmaple test
 ```
+
+## Open Browser
+
+You can add `--open` flag to open system default browser when server startup.
+
+```
+dioxus serve --open
+```
