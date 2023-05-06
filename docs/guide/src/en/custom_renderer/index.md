@@ -15,7 +15,7 @@ Essentially, your renderer needs to process edits and generate events to update 
 
 Internally, Dioxus handles the tree relationship, diffing, memory management, and the event system, leaving as little as possible required for renderers to implement themselves.
 
-For reference, check out the [javascript interpreter](https://github.com/DioxusLabs/dioxus/tree/master/packages/interpreter) or [tui renderer](https://github.com/DioxusLabs/dioxus/tree/master/packages/tui) as a starting point for your custom renderer.
+For reference, check out the [javascript interpreter](https://github.com/DioxusLabs/dioxus/tree/master/packages/interpreter) or [tui renderer](https://github.com/DioxusLabs/dioxus/tree/master/packages/dioxus-tui) as a starting point for your custom renderer.
 
 ## Templates
 
