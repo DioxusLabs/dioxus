@@ -146,6 +146,7 @@ pub struct CrateConfig {
     pub dioxus_config: DioxusConfig,
     pub release: bool,
     pub hot_reload: bool,
+    pub shared_array_buffer: bool,
     pub verbose: bool,
     pub custom_profile: Option<String>,
     pub features: Option<Vec<String>>,
@@ -213,6 +214,7 @@ impl CrateConfig {
             release,
             dioxus_config,
             hot_reload,
+            shared_array_buffer: false,
             custom_profile,
             features,
             verbose,
@@ -231,6 +233,11 @@ impl CrateConfig {
 
     pub fn with_hot_reload(&mut self, hot_reload: bool) -> &mut Self {
         self.hot_reload = hot_reload;
+        self
+    }
+
+    pub fn with_shared_array_buffer(&mut self, shared_array_buffer: bool) -> &mut Self {
+        self.shared_array_buffer = shared_array_buffer;
         self
     }
 

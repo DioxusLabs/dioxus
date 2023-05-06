@@ -2,7 +2,10 @@ use crate::{builder, plugin::PluginManager, serve::Serve, BuildResult, CrateConf
 use axum::{
     body::{Full, HttpBody},
     extract::{ws::Message, Extension, TypedHeader, WebSocketUpgrade},
-    http::{Response, StatusCode},
+    http::{
+        header::{HeaderName, HeaderValue},
+        Method, Response, StatusCode,
+    },
     response::IntoResponse,
     routing::{get, get_service},
     Router,
@@ -22,7 +25,10 @@ use std::{
 use tokio::sync::broadcast;
 use tower::ServiceBuilder;
 use tower_http::services::fs::{ServeDir, ServeFileSystemResponseBody};
-
+use tower_http::{
+    cors::{Any, CorsLayer},
+    ServiceBuilderExt,
+};
 mod proxy;
 
 pub struct BuildManager {
@@ -264,8 +270,35 @@ pub async fn startup_hot_reload(ip: String, port: u16, config: CrateConfig) -> R
         },
     );
 
+    let cors = CorsLayer::new()
+    // allow `GET` and `POST` when accessing the resource
+    .allow_methods([Method::GET, Method::POST])
+    // allow requests from any origin
+    .allow_origin(Any)
+    .allow_headers(Any);
+
+    let (coep, coop) = if config.shared_array_buffer {
+        (
+            HeaderValue::from_static("require-corp"),
+            HeaderValue::from_static("same-origin"),
+        )
+    } else {
+        (
+            HeaderValue::from_static("unsafe-none"),
+            HeaderValue::from_static("unsafe-none"),
+        )
+    };
+
     let file_service_config = config.clone();
     let file_service = ServiceBuilder::new()
+        .override_response_header(
+            HeaderName::from_static("cross-origin-embedder-policy"),
+            coep,
+        )
+        .override_response_header(
+            HeaderName::from_static("cross-origin-opener-policy"),
+            coop,
+        )
         .and_then(
             move |response: Response<ServeFileSystemResponseBody>| async move {
                 let response = if file_service_config
@@ -316,6 +349,7 @@ pub async fn startup_hot_reload(ip: String, port: u16, config: CrateConfig) -> R
 
     let router = router
         .route("/_dioxus/hot_reload", get(hot_reload_handler))
+        .layer(cors)
         .layer(Extension(ws_reload_state))
         .layer(Extension(hot_reload_state));
 
@@ -409,8 +443,35 @@ pub async fn startup_default(ip: String, port: u16, config: CrateConfig) -> Resu
 
     PluginManager::on_serve_start(&config)?;
 
+    let cors = CorsLayer::new()
+    // allow `GET` and `POST` when accessing the resource
+    .allow_methods([Method::GET, Method::POST])
+    // allow requests from any origin
+    .allow_origin(Any)
+    .allow_headers(Any);
+
+    let (coep, coop) = if config.shared_array_buffer {
+        (
+            HeaderValue::from_static("require-corp"),
+            HeaderValue::from_static("same-origin"),
+        )
+    } else {
+        (
+            HeaderValue::from_static("unsafe-none"),
+            HeaderValue::from_static("unsafe-none"),
+        )
+    };
+
     let file_service_config = config.clone();
     let file_service = ServiceBuilder::new()
+        .override_response_header(
+            HeaderName::from_static("cross-origin-embedder-policy"),
+            coep,
+        )
+        .override_response_header(
+            HeaderName::from_static("cross-origin-opener-policy"),
+            coop,
+        )
         .and_then(
             move |response: Response<ServeFileSystemResponseBody>| async move {
                 let response = if file_service_config
@@ -459,6 +520,7 @@ pub async fn startup_default(ip: String, port: u16, config: CrateConfig) -> Resu
                 )
             }),
         )
+        .layer(cors)
         .layer(Extension(ws_reload_state));
 
     axum::Server::bind(&format!("0.0.0.0:{}", port).parse().unwrap())

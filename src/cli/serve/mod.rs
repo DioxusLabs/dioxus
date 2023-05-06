@@ -20,6 +20,7 @@ impl Serve {
 
         // change the relase state.
         crate_config.with_hot_reload(self.serve.hot_reload);
+        crate_config.with_shared_array_buffer(self.serve.shared_array_buffer);
         crate_config.with_release(self.serve.release);
         crate_config.with_verbose(self.serve.verbose);
 

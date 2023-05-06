@@ -72,6 +72,11 @@ pub struct ConfigOptsServe {
     #[serde(default)]
     pub hot_reload: bool,
 
+    /// Build with shared_array_buffer enabled in JS [default: false]
+    #[clap(long)]
+    #[serde(default)]
+    pub shared_array_buffer: bool,
+
     /// Space separated list of features to activate
     #[clap(long)]
     pub features: Option<Vec<String>>,
