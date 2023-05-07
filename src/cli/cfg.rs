@@ -77,6 +77,12 @@ pub struct ConfigOptsServe {
     #[serde(default)]
     pub hot_reload: bool,
 
+    /// Set cross-origin-policy to same-origin [default: false]
+    #[clap(name="cross-origin-policy")]
+    #[clap(long)]
+    #[serde(default)]
+    pub cross_origin_policy: bool,
+
     /// Space separated list of features to activate
     #[clap(long)]
     pub features: Option<Vec<String>>,

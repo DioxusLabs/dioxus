@@ -55,3 +55,17 @@ You can add `--open` flag to open system default browser when server startup.
 ```
 dioxus serve --open
 ```
+
+
+## Cross Origin Policy
+
+use `cross-origin-policy` can change corss-origin header in serverside.
+
+```
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Embedder-Policy: require-corp
+```
+
+```
+dioxus serve --corss-origin-policy
+```
