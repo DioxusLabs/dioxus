@@ -43,5 +43,6 @@
 
 - [Contributing](contributing/index.md)
   - [Project Structure](contributing/project_structure.md)
+  - [Walkthrough of the Hello World Example Internals](contributing/walkthrough_readme.md)
   - [Guiding Principles](contributing/guiding_principles.md)
   - [Roadmap](contributing/roadmap.md)
