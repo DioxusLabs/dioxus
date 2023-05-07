@@ -146,7 +146,7 @@ pub struct CrateConfig {
     pub dioxus_config: DioxusConfig,
     pub release: bool,
     pub hot_reload: bool,
-    pub shared_array_buffer: bool,
+    pub cross_origin_policy: bool,
     pub verbose: bool,
     pub custom_profile: Option<String>,
     pub features: Option<Vec<String>>,
@@ -214,7 +214,7 @@ impl CrateConfig {
             release,
             dioxus_config,
             hot_reload,
-            shared_array_buffer: false,
+            cross_origin_policy: false,
             custom_profile,
             features,
             verbose,
@@ -236,8 +236,8 @@ impl CrateConfig {
         self
     }
 
-    pub fn with_shared_array_buffer(&mut self, shared_array_buffer: bool) -> &mut Self {
-        self.shared_array_buffer = shared_array_buffer;
+    pub fn  with_cross_origin_policy(&mut self, cross_origin_policy: bool) -> &mut Self {
+        self.cross_origin_policy = cross_origin_policy;
         self
     }
 

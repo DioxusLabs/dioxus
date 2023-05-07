@@ -77,10 +77,11 @@ pub struct ConfigOptsServe {
     #[serde(default)]
     pub hot_reload: bool,
 
-    /// Build with shared_array_buffer enabled in JS [default: false]
+    /// Set cross-origin-policy to same-origin [default: false]
+    #[clap(name="cross-origin-policy")]
     #[clap(long)]
     #[serde(default)]
-    pub shared_array_buffer: bool,
+    pub cross_origin_policy: bool,
 
     /// Space separated list of features to activate
     #[clap(long)]
