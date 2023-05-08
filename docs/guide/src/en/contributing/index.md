@@ -41,7 +41,7 @@ cargo check --workspace --examples --tests
 cargo clippy --workspace --examples --tests -- -D warnings
 ```
 
-- Crates that use unsafe are checked for undefined behavior with [MIRI](https://github.com/rust-lang/miri). MIRI can be helpful to debug what unsafe code is causing issues. Only code that does not interact with system calls can be checked with MIRI. Currently this is used for the two MIRI tests in `dioxus-core` and `dioxus-native-core`.
+- Crates that use unsafe are checked for undefined behavior with [MIRI](https://github.com/rust-lang/miri). MIRI can be helpful to debug what unsafe code is causing issues. Only code that does not interact with system calls can be checked with MIRI. Currently, this is used for the two MIRI tests in `dioxus-core` and `dioxus-native-core`.
 
 ```sh
 cargo miri test --package dioxus-core --test miri_stress

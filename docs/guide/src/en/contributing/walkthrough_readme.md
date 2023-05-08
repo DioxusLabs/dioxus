@@ -123,4 +123,4 @@ Here is what the diffing algorithm looks like for the root scope (red lines indi
 
 ## Conclusion
 
-This is only a brief overview of how the Virtual Dom works. There are several aspects not yet covered in this guide including how the Virtual Dom handles async-components, keyed diffing, and how it uses bump allocation to efficiently allocate VNodes. If need more information about the Virtual Dom, you can read the code of the [core](https://github.com/DioxusLabs/dioxus/tree/master/packages/core) crate or reach out to us on [Discord](https://discord.gg/XgGxMSkvUM).
+This is only a brief overview of how the Virtual Dom works. There are several aspects not yet covered in this guide including how the Virtual Dom handles async-components, keyed diffing, and how it uses [bump allocation](https://github.com/fitzgen/bumpalo) to efficiently allocate VNodes. If need more information about the Virtual Dom, you can read the code of the [core](https://github.com/DioxusLabs/dioxus/tree/master/packages/core) crate or reach out to us on [Discord](https://discord.gg/XgGxMSkvUM).
