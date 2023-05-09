@@ -8,14 +8,12 @@ cargo install mdbook --git https://github.com/Demonthos/mdBook.git --branch mast
 
 Then, you can build the documentation by running:
 
-Linux and MacOS:
-
 ```sh
-cd docs && cd guide && mdbook build -d ../nightly/guide && cd .. && cd router && mdbook build -d ../nightly/router && cd .. && cd ..
-```
-
-Windows:
-
-```cmd
-cd docs; cd guide; mdbook build -d ../nightly/guide; cd ..; cd router; mdbook build -d ../nightly/router; cd ..; cd ..
+cd docs
+cd guide
+mdbook build -d ../nightly/guide
+cd ..
+cd router
+mdbook build -d ../nightly/router
+cd ../../
 ```
