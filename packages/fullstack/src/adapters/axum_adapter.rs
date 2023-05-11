@@ -401,8 +401,8 @@ pub async fn server_fn_handler(
                                 .get("Accept")
                                 .and_then(|value| value.to_str().ok());
                             let mut res = Response::builder();
-                            *res.headers_mut().expect("empty responce should be valid") =
-                                server_context.take_responce_headers();
+                            *res.headers_mut().expect("empty response should be valid") =
+                                server_context.take_response_headers();
                             if accept_header == Some("application/json")
                                 || accept_header
                                     == Some(

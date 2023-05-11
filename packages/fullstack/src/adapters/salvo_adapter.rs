@@ -339,7 +339,7 @@ impl<P: Clone + serde::Serialize + Send + Sync + 'static> Handler for SSRHandler
         res.write_body(renderer_pool.render_vdom(&vdom, &self.cfg))
             .unwrap();
 
-        *res.headers_mut() = server_context.take_responce_headers();
+        *res.headers_mut() = server_context.take_response_headers();
     }
 }
 
@@ -408,7 +408,7 @@ impl ServerFnHandler {
         let result = resp_rx.await.unwrap();
 
         // Set the headers from the server context
-        *res.headers_mut() = server_context.take_responce_headers();
+        *res.headers_mut() = server_context.take_response_headers();
 
         match result {
             Ok(serialized) => {

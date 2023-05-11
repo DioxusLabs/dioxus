@@ -121,7 +121,7 @@ async fn double_server(cx: DioxusServerContext, number: usize) -> Result<usize, 
     );
 
     // Set the cache control header to 1 hour on the post request
-    cx.responce_headers_mut()
+    cx.response_headers_mut()
         .insert("Cache-Control", "max-age=3600".parse().unwrap());
 
     // Get the server function state

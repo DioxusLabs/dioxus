@@ -196,7 +196,7 @@ pub fn render_ssr<P: Clone + serde::Serialize + Send + Sync + 'static>(
             let mut res = Response::builder();
 
             *res.headers_mut().expect("empty request should be valid") =
-                server_context.take_responce_headers();
+                server_context.take_response_headers();
 
             res.header("Content-Type", "text/html")
                 .body(Bytes::from(html))
@@ -289,7 +289,7 @@ pub async fn server_fn_handler(
                             let mut res = Response::builder();
 
                             *res.headers_mut().expect("empty request should be valid") =
-                                server_context.take_responce_headers();
+                                server_context.take_response_headers();
 
                             if accept_header == Some("application/json")
                                 || accept_header

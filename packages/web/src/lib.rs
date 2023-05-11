@@ -254,7 +254,7 @@ pub async fn run_with_props<T: 'static>(root: fn(Scope<T>) -> Element, root_prop
             res = rx.try_next().transpose().unwrap().ok();
         }
 
-        // Todo: This is currently disabled because it has a negative impact on responce times for events but it could be re-enabled for tasks
+        // Todo: This is currently disabled because it has a negative impact on response times for events but it could be re-enabled for tasks
         // Jank free rendering
         //
         // 1. wait for the browser to give us "idle" time

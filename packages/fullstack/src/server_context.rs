@@ -93,32 +93,32 @@ mod server_fn_impl {
         }
 
         /// Get the headers from the server context
-        pub fn responce_headers(&self) -> RwLockReadGuard<'_, hyper::header::HeaderMap> {
-            self.try_responce_headers()
+        pub fn response_headers(&self) -> RwLockReadGuard<'_, hyper::header::HeaderMap> {
+            self.try_response_headers()
                 .expect("Failed to get headers from server context")
         }
 
         /// Try to get the headers from the server context
-        pub fn try_responce_headers(
+        pub fn try_response_headers(
             &self,
         ) -> LockResult<RwLockReadGuard<'_, hyper::header::HeaderMap>> {
             self.headers.read()
         }
 
         /// Get the headers mutably from the server context
-        pub fn responce_headers_mut(&self) -> RwLockWriteGuard<'_, hyper::header::HeaderMap> {
-            self.try_responce_headers_mut()
+        pub fn response_headers_mut(&self) -> RwLockWriteGuard<'_, hyper::header::HeaderMap> {
+            self.try_response_headers_mut()
                 .expect("Failed to get headers mutably from server context")
         }
 
         /// Try to get the headers mut from the server context
-        pub fn try_responce_headers_mut(
+        pub fn try_response_headers_mut(
             &self,
         ) -> LockResult<RwLockWriteGuard<'_, hyper::header::HeaderMap>> {
             self.headers.write()
         }
 
-        pub(crate) fn take_responce_headers(&self) -> hyper::header::HeaderMap {
+        pub(crate) fn take_response_headers(&self) -> hyper::header::HeaderMap {
             let mut headers = self.headers.write().unwrap();
             std::mem::take(&mut *headers)
         }

@@ -80,7 +80,7 @@ fn app(cx: Scope<AppProps>) -> Element {
 #[server(PostServerData)]
 async fn post_server_data(cx: DioxusServerContext, data: String) -> Result<(), ServerFnError> {
     // The server context contains information about the current request and allows you to modify the response.
-    cx.responce_headers_mut()
+    cx.response_headers_mut()
         .insert("Set-Cookie", "foo=bar".parse().unwrap());
     println!("Server received: {}", data);
     println!("Request parts are {:?}", cx.request_parts());
