@@ -4,8 +4,6 @@ use std::{collections::HashMap, str::FromStr};
 
 use url::{ParseError, Url};
 
-use crate::Name;
-
 /// A target for the router to navigate to.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum NavigationTarget {

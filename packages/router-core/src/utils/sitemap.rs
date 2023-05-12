@@ -2,7 +2,6 @@ use std::collections::BTreeMap;
 
 use urlencoding::encode;
 
-use crate::{routes::Segment, Name};
 
 pub fn gen_sitemap<T: Clone>(seg: &Segment<T>, current: &str, map: &mut Vec<String>) {
     for (p, r) in &seg.fixed {
