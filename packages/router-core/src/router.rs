@@ -67,20 +67,36 @@ where
 }
 
 pub trait ToRouteSegments {
-    fn to_route_segments(&self) -> Vec<String>;
+    fn display_route_segements(self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result;
+}
+
+impl<I, T: std::fmt::Display> ToRouteSegments for I
+where
+    I: IntoIterator<Item = T>,
+{
+    fn display_route_segements(self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for segment in self {
+            write!(f, "/")?;
+            write!(f, "{}", segment)?;
+        }
+        Ok(())
+    }
 }
 
 pub trait FromRouteSegments: Sized {
     type Err;
 
-    fn from_route_segments(segments: &[&str], query: &str) -> Result<Self, Self::Err>;
+    fn from_route_segments(segments: &[&str]) -> Result<Self, Self::Err>;
 }
 
-impl<T: FromRouteSegment> FromRouteSegments for Vec<T> {
-    type Err = <T as FromRouteSegment>::Err;
+impl<I: std::iter::FromIterator<String>> FromRouteSegments for I {
+    type Err = <String as FromRouteSegment>::Err;
 
-    fn from_route_segments(segments: &[&str], query: &str) -> Result<Self, Self::Err> {
-        segments.iter().map(|s| T::from_route_segment(s)).collect()
+    fn from_route_segments(segments: &[&str]) -> Result<Self, Self::Err> {
+        segments
+            .iter()
+            .map(|s| String::from_route_segment(s))
+            .collect()
     }
 }
 

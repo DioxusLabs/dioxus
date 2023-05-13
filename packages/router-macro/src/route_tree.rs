@@ -18,8 +18,8 @@ pub enum RouteTreeSegment<'a> {
 }
 
 impl<'a> RouteTreeSegment<'a> {
-    pub fn build(routes: &'a Vec<Route>) -> Vec<RouteTreeSegment<'a>> {
-        let routes = routes.into_iter().map(PartialRoute::new).collect();
+    pub fn build(routes: &'a [Route]) -> Vec<RouteTreeSegment<'a>> {
+        let routes = routes.iter().map(PartialRoute::new).collect();
         Self::construct(routes)
     }
 
@@ -37,7 +37,7 @@ impl<'a> RouteTreeSegment<'a> {
                             segment: s,
                             children,
                             ..
-                        } => (s == &segment).then(|| children),
+                        } => (s == &segment).then_some(children),
                         _ => None,
                     });
 
@@ -89,28 +89,21 @@ impl<'a> RouteTreeSegment<'a> {
                 let enum_varient = &from_route.route_name;
                 let error_ident = static_segment_idx(*index);
 
-                let children_with_next_segment = children.iter().filter_map(|child| match child {
-                    RouteTreeSegment::StaticEnd { .. } => None,
-                    _ => Some(child.to_tokens(enum_name.clone(), error_enum_name.clone())),
-                });
-                let children_without_next_segment =
-                    children.iter().filter_map(|child| match child {
-                        RouteTreeSegment::StaticEnd { .. } => {
-                            Some(child.to_tokens(enum_name.clone(), error_enum_name.clone()))
-                        }
-                        _ => None,
-                    });
+                let children = children
+                    .iter()
+                    .map(|child| child.to_tokens(enum_name.clone(), error_enum_name.clone()));
 
                 quote! {
-                    if #segment == segment {
+                    {
                         let mut segments = segments.clone();
-                        #(#children_without_next_segment)*
                         if let Some(segment) = segments.next() {
-                            #(#children_with_next_segment)*
+                            if #segment == segment {
+                                #(#children)*
+                            }
+                            else {
+                                errors.push(#error_enum_name::#enum_varient(#varient_parse_error::#error_ident))
+                            }
                         }
-                    }
-                    else {
-                        errors.push(#error_enum_name::#enum_varient(#varient_parse_error::#error_ident))
                     }
                 }
             }
@@ -123,50 +116,31 @@ impl<'a> RouteTreeSegment<'a> {
                     .route_segments
                     .iter()
                     .enumerate()
-                    .skip_while(|(_, seg)| match seg {
-                        RouteSegment::Static(_) => true,
-                        _ => false,
-                    })
-                    .map(|(i, seg)| {
-                        (
-                            seg.name(),
-                            seg.try_parse(i, &error_enum_name, enum_varient, &varient_parse_error),
-                        )
-                    });
+                    .skip_while(|(_, seg)| matches!(seg, RouteSegment::Static(_)));
 
-                fn print_route_segment<I: Iterator<Item = (Option<Ident>, TokenStream)>>(
+                fn print_route_segment<'a, I: Iterator<Item = (usize, &'a RouteSegment)>>(
                     mut s: std::iter::Peekable<I>,
                     sucess_tokens: TokenStream,
+                    error_enum_name: &Ident,
+                    enum_varient: &Ident,
+                    varient_parse_error: &Ident,
                 ) -> TokenStream {
-                    if let Some((name, first)) = s.next() {
-                        let has_next = s.peek().is_some();
-                        let children = print_route_segment(s, sucess_tokens);
-                        let name = name
-                            .map(|name| quote! {#name})
-                            .unwrap_or_else(|| quote! {_});
+                    if let Some((i, route)) = s.next() {
+                        let children = print_route_segment(
+                            s,
+                            sucess_tokens,
+                            error_enum_name,
+                            enum_varient,
+                            varient_parse_error,
+                        );
 
-                        let sucess = if has_next {
-                            quote! {
-                                let mut segments = segments.clone();
-                                if let Some(segment) = segments.next() {
-                                    #children
-                                }
-                            }
-                        } else {
-                            children
-                        };
-
-                        quote! {
-                            #first
-                            match parsed {
-                                Ok(#name) => {
-                                    #sucess
-                                }
-                                Err(err) => {
-                                    errors.push(err);
-                                }
-                            }
-                        }
+                        route.try_parse(
+                            i,
+                            error_enum_name,
+                            enum_varient,
+                            varient_parse_error,
+                            children,
+                        )
                     } else {
                         quote! {
                             #sucess_tokens
@@ -177,15 +151,25 @@ impl<'a> RouteTreeSegment<'a> {
                 let construct_variant = route.construct(enum_name);
                 let parse_query = route.parse_query();
 
+                let insure_not_trailing = route
+                    .route_segments
+                    .last()
+                    .map(|seg| !matches!(seg, RouteSegment::CatchAll(_, _)))
+                    .unwrap_or(true);
+
                 print_route_segment(
                     route_segments.peekable(),
                     return_constructed(
+                        insure_not_trailing,
                         construct_variant,
                         &error_enum_name,
                         enum_varient,
                         &varient_parse_error,
                         parse_query,
                     ),
+                    &error_enum_name,
+                    enum_varient,
+                    &varient_parse_error,
                 )
             }
             Self::StaticEnd(route) => {
@@ -195,6 +179,7 @@ impl<'a> RouteTreeSegment<'a> {
                 let parse_query = route.parse_query();
 
                 return_constructed(
+                    true,
                     construct_variant,
                     &error_enum_name,
                     enum_varient,
@@ -207,32 +192,40 @@ impl<'a> RouteTreeSegment<'a> {
 }
 
 fn return_constructed(
+    insure_not_trailing: bool,
     construct_variant: TokenStream,
     error_enum_name: &Ident,
     enum_varient: &Ident,
     varient_parse_error: &Ident,
     parse_query: TokenStream,
 ) -> TokenStream {
-    quote! {
-        let remaining_segments = segments.clone();
-        let mut segments_clone = segments.clone();
-        let next_segment = segments_clone.next();
-        let segment_after_next = segments_clone.next();
-        match (next_segment, segment_after_next) {
-            // This is the last segment, return the parsed route
-            (None, _) | (Some(""), None) => {
-                #parse_query
-                return Ok(#construct_variant);
-            }
-            _ => {
-                let mut trailing = String::new();
-                for seg in remaining_segments {
-                    trailing += seg;
-                    trailing += "/";
+    if insure_not_trailing {
+        quote! {
+            let remaining_segments = segments.clone();
+            let mut segments_clone = segments.clone();
+            let next_segment = segments_clone.next();
+            let segment_after_next = segments_clone.next();
+            match (next_segment, segment_after_next) {
+                // This is the last segment, return the parsed route
+                (None, _) | (Some(""), None) => {
+                    #parse_query
+                    return Ok(#construct_variant);
                 }
-                trailing.pop();
-                errors.push(#error_enum_name::#enum_varient(#varient_parse_error::ExtraSegments(trailing)))
+                _ => {
+                    let mut trailing = String::new();
+                    for seg in remaining_segments {
+                        trailing += seg;
+                        trailing += "/";
+                    }
+                    trailing.pop();
+                    errors.push(#error_enum_name::#enum_varient(#varient_parse_error::ExtraSegments(trailing)))
+                }
             }
+        }
+    } else {
+        quote! {
+            #parse_query
+            return Ok(#construct_variant);
         }
     }
 }

@@ -1,6 +1,6 @@
 use dioxus::prelude::*;
-use dioxus_router_macro::*;
 use dioxus_router_core::*;
+use dioxus_router_macro::*;
 use std::str::FromStr;
 
 #[inline_props]
@@ -43,7 +43,16 @@ fn Route4(cx: Scope, number1: u32, number2: u32) -> Element {
 fn Route5(cx: Scope, query: String) -> Element {
     render! {
         div{
-            "Route5"
+            "Route5: {query}"
+        }
+    }
+}
+
+#[inline_props]
+fn Route6(cx: Scope, extra: Vec<String>) -> Element {
+    render! {
+        div{
+            "Route5: {extra:?}"
         }
     }
 }
@@ -60,9 +69,9 @@ enum Route {
     #[route("/(number1)/(number2)" Route4)]
     Route4 { number1: u32, number2: u32 },
     #[route("/?(query)" Route5)]
-    Route5 {
-        query: String,
-    },
+    Route5 { query: String },
+    #[route("/(...extra)" Route6)]
+    Route6 { extra: Vec<String> },
 }
 
 #[test]
@@ -82,6 +91,25 @@ fn display_works() {
     };
 
     assert_eq!(route.to_string(), "/hello_world2");
+
+    let route = Route::Route4 {
+        number1: 1234,
+        number2: 5678,
+    };
+
+    assert_eq!(route.to_string(), "/1234/5678");
+
+    let route = Route::Route5 {
+        query: "hello".to_string(),
+    };
+
+    assert_eq!(route.to_string(), "/?hello");
+
+    let route = Route::Route6 {
+        extra: vec!["hello".to_string(), "world".to_string()],
+    };
+
+    assert_eq!(route.to_string(), "/hello/world");
 }
 
 #[test]
@@ -114,17 +142,23 @@ fn from_string_works() {
         })
     );
 
-    let w = "/hello_world/-1";
-    match Route::from_str(w) {
-        Ok(r) => panic!("should not parse {r:?}"),
-        Err(err) => println!("{err}"),
-    }
-
     let w = "/?x=1234&y=hello";
     assert_eq!(
         Route::from_str(w),
         Ok(Route::Route5 {
             query: "x=1234&y=hello".to_string()
+        })
+    );
+
+    let w = "/hello_world/hello_world/hello_world";
+    assert_eq!(
+        Route::from_str(w),
+        Ok(Route::Route6 {
+            extra: vec![
+                "hello_world".to_string(),
+                "hello_world".to_string(),
+                "hello_world".to_string()
+            ]
         })
     );
 }
@@ -161,4 +195,16 @@ fn round_trip() {
         query: string.to_string(),
     };
     assert_eq!(Route::from_str(&route.to_string()), Ok(route));
+
+    // Route5
+    let route = Route::Route6 {
+        extra: vec![
+            "hello_world".to_string(),
+            "hello_world".to_string(),
+            "hello_world".to_string(),
+        ],
+    };
+    assert_eq!(Route::from_str(&route.to_string()), Ok(route));
 }
+
+fn main() {}

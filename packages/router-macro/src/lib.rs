@@ -17,7 +17,7 @@ pub fn derive_routable(input: TokenStream) -> TokenStream {
 
     let route_enum = match RouteEnum::parse(routes_enum) {
         Ok(route_enum) => route_enum,
-        Err(err) => return TokenStream2::from(err.to_compile_error()).into(),
+        Err(err) => return err.to_compile_error().into(),
     };
 
     let error_type = route_enum.error_type();
@@ -118,9 +118,7 @@ impl RouteEnum {
                     let mut segments = route.split('/');
                     let mut errors = Vec::new();
 
-                    if let Some(segment) = segments.next() {
-                        #(#tokens)*
-                    }
+                    #(#tokens)*
 
                     Err(RouteParseError {
                         attempted_routes: errors,
