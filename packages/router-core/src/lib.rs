@@ -1,30 +1,30 @@
 #![doc = include_str!("../README.md")]
-#![forbid(missing_docs)]
+// #![forbid(missing_docs)]
 
 pub mod history;
 
-mod router;
+pub mod router;
 pub use router::*;
 
-pub mod navigation;
+// pub mod navigation;
 
-mod navigator;
-pub use navigator::*;
+// mod navigator;
+// pub use navigator::*;
 
-mod service;
-pub use service::*;
+// mod service;
+// pub use service::*;
 
-mod state;
-pub use state::*;
+// mod state;
+// pub use state::*;
 
-mod utils {
-    mod sitemap;
-    pub use sitemap::*;
-}
+// mod utils {
+//     mod sitemap;
+//     pub use sitemap::*;
+// }
 
 /// A collection of useful types most applications might need.
 pub mod prelude {
-    pub use crate::navigation::*;
+    // pub use crate::navigation::*;
 
     /// An external navigation failure.
     ///

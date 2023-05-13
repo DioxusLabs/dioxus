@@ -1,24 +1,30 @@
 use quote::{__private::Span, format_ident, quote, ToTokens};
-use syn::{Ident, LitStr, Type, Variant};
-use syn::parse::ParseStream;
 use syn::parse::Parse;
+use syn::parse::ParseStream;
+use syn::{Ident, LitStr, Type, Variant};
 
 use proc_macro2::TokenStream as TokenStream2;
 
-struct RouteArgs{
+struct RouteArgs {
     route: LitStr,
     comp_name: Option<Ident>,
     props_name: Option<Ident>,
 }
 
-impl Parse for RouteArgs{
-    fn parse(input: ParseStream<'_>) -> syn::Result<Self>{
+impl Parse for RouteArgs {
+    fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
         let route = input.parse::<LitStr>()?;
 
         Ok(RouteArgs {
             route,
-            comp_name:input.parse().ok(),
-            props_name: input.parse().ok(),
+            comp_name: {
+                let _ = input.parse::<syn::Token![,]>();
+                input.parse().ok()
+            },
+            props_name: {
+                let _ = input.parse::<syn::Token![,]>();
+                input.parse().ok()
+            },
         })
     }
 }
@@ -31,6 +37,7 @@ pub struct Route {
     pub props_name: Ident,
     pub route: LitStr,
     pub route_segments: Vec<RouteSegment>,
+    pub query: Option<QuerySegment>,
 }
 
 impl Route {
@@ -49,11 +56,15 @@ impl Route {
         let route_name = input.ident.clone();
         let args = route_attr.parse_args::<RouteArgs>()?;
         let route = args.route;
-        let file_based= args.comp_name.is_none();
-        let comp_name = args.comp_name.unwrap_or_else(|| format_ident!("{}", route_name));
-        let props_name = args.props_name.unwrap_or_else(|| format_ident!("{}Props", comp_name));
+        let file_based = args.comp_name.is_none();
+        let comp_name = args
+            .comp_name
+            .unwrap_or_else(|| format_ident!("{}", route_name));
+        let props_name = args
+            .props_name
+            .unwrap_or_else(|| format_ident!("{}Props", comp_name));
 
-        let route_segments = parse_route_segments(&input, &route)?;
+        let (route_segments, query) = parse_route_segments(&input, &route)?;
 
         Ok(Self {
             comp_name,
@@ -62,17 +73,20 @@ impl Route {
             route_segments,
             route,
             file_based,
+            query,
         })
     }
 
     pub fn display_match(&self) -> TokenStream2 {
         let name = &self.route_name;
-        let dynamic_segments = self.route_segments.iter().filter_map(|s| s.name());
+        let dynamic_segments = self.dynamic_segments();
         let write_segments = self.route_segments.iter().map(|s| s.write_segment());
+        let write_query = self.query.as_ref().map(|q| q.write());
 
         quote! {
             Self::#name { #(#dynamic_segments,)* } => {
                 #(#write_segments)*
+                #write_query
             }
         }
     }
@@ -80,10 +94,7 @@ impl Route {
     pub fn routable_match(&self) -> TokenStream2 {
         let name = &self.route_name;
         let dynamic_segments: Vec<_> = self
-            .route_segments
-            .iter()
-            .filter_map(|s| s.name())
-            .collect();
+            .dynamic_segments().collect();
         let props_name = &self.props_name;
         let comp_name = &self.comp_name;
 
@@ -99,7 +110,7 @@ impl Route {
         }
     }
 
-    pub fn construct(&self, enum_name: Ident) -> TokenStream2 {
+    fn dynamic_segments(&self)-> impl Iterator<Item = TokenStream2> +'_{
         let segments = self.route_segments.iter().filter_map(|seg| {
             seg.name().map(|name| {
                 quote! {
@@ -107,6 +118,18 @@ impl Route {
                 }
             })
         });
+        let query = self.query.as_ref().map(|q| {
+            let name = q.name();
+            quote! {
+                #name
+            }
+    }).into_iter();
+
+        segments.chain(query)
+    }
+
+    pub fn construct(&self, enum_name: Ident) -> TokenStream2 {
+       let segments = self.dynamic_segments();
         let name = &self.route_name;
 
         quote! {
@@ -165,13 +188,20 @@ impl Route {
             }
         }
     }
+
+    pub fn parse_query(&self) -> TokenStream2 {
+        match &self.query {
+            Some(query) => query.parse(),
+            None => quote! {},
+        }
+    }
 }
 
 impl ToTokens for Route {
     fn to_tokens(&self, tokens: &mut quote::__private::TokenStream) {
         if !self.file_based {
             return;
-       }
+        }
 
         let without_leading_slash = &self.route.value()[1..];
         let route_path = std::path::Path::new(without_leading_slash);
@@ -199,10 +229,17 @@ impl ToTokens for Route {
     }
 }
 
-fn parse_route_segments(varient: &Variant, route: &LitStr) -> syn::Result<Vec<RouteSegment>> {
+fn parse_route_segments(
+    varient: &Variant,
+    route: &LitStr,
+) -> syn::Result<(Vec<RouteSegment>, Option<QuerySegment>)> {
     let mut route_segments = Vec::new();
 
     let route_string = route.value();
+    let (route_string, query) = match route_string.rsplit_once('?') {
+        Some((route, query)) => (route, Some(query)),
+        None => (route_string.as_str(), None),
+    };
     let mut iterator = route_string.split('/');
 
     // skip the first empty segment
@@ -268,7 +305,40 @@ fn parse_route_segments(varient: &Variant, route: &LitStr) -> syn::Result<Vec<Ro
         }
     }
 
-    Ok(route_segments)
+    // check if the route has a query string
+    let parsed_query = match query {
+        Some(query) => {
+            if query.starts_with('(') && query.ends_with(')') {
+                let query_ident = Ident::new(&query[1..query.len() - 1], Span::call_site());
+                let field = varient.fields.iter().find(|field| match field.ident {
+                    Some(ref field_ident) => field_ident == &query_ident,
+                    None => false,
+                });
+
+                let ty = if let Some(field) = field {
+                    field.ty.clone()
+                } else {
+                    return Err(syn::Error::new_spanned(
+                        varient,
+                        format!(
+                            "Could not find a field with the name '{}' in the variant '{}'",
+                            query_ident, varient.ident
+                        ),
+                    ));
+                };
+
+                Some(QuerySegment {
+                    ident: query_ident,
+                    ty,
+                })
+            } else {
+                None
+            }
+        }
+        None => None,
+    };
+
+    Ok((route_segments, parsed_query))
 }
 
 #[derive(Debug)]
@@ -323,11 +393,13 @@ impl RouteSegment {
             }
             Self::Dynamic(_, ty) => {
                 quote! {
-                    let parsed = <#ty as std::str::FromStr>::from_str(segment).map_err(|err| #error_enum_name::#error_enum_varient(#inner_parse_enum::#error_name(err)));
+                    let parsed = <#ty as dioxus_router_core::router::FromRouteSegment>::from_route_segment(segment).map_err(|err| #error_enum_name::#error_enum_varient(#inner_parse_enum::#error_name(err)));
                 }
             }
-            Self::CatchAll(_, _) => {
-                todo!()
+            Self::CatchAll(_, ty) => {
+                quote! {
+                    let parsed = <#ty as dioxus_router_core::router::FromRouteSegments>::from_route_segments(segment).map_err(|err| #error_enum_name::#error_enum_varient(#inner_parse_enum::#error_name(err)));
+                }
             }
         }
     }
@@ -335,4 +407,31 @@ impl RouteSegment {
 
 pub fn static_segment_idx(idx: usize) -> Ident {
     format_ident!("StaticSegment{}ParseError", idx)
+}
+
+#[derive(Debug)]
+pub struct QuerySegment {
+    ident: Ident,
+    ty: Type,
+}
+
+impl QuerySegment {
+    pub fn parse(&self) -> TokenStream2 {
+        let ident = &self.ident;
+        let ty = &self.ty;
+        quote! {
+            let #ident = <#ty as dioxus_router_core::router::FromQuery>::from_query(query);
+        }
+    }
+
+    pub fn write(&self) -> TokenStream2 {
+        let ident = &self.ident;
+        quote! {
+            write!(f, "?{}", #ident)?;
+        }
+    }
+
+    pub fn name(&self) -> Ident {
+        self.ident.clone()
+    }
 }

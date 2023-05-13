@@ -15,18 +15,15 @@ use crate::{
     prelude::{
         FailureExternalNavigation, FailureNamedNavigation, FailureRedirectionLimit, RootIndex,
     },
-    routes::{ContentAtom, Segment},
-    segments::{NameMap, NamedSegment},
-    utils::{resolve_target, route_segment},
-    Name, RouterState,
+    RouterState,
 };
 
 /// Messages that the [`RouterService`] can handle.
-pub enum RouterMessage<I> {
+pub enum RouterMessage<I, R> {
     /// Subscribe to router update.
     Subscribe(Arc<I>),
     /// Navigate to the specified target.
-    Push(NavigationTarget),
+    Push(NavigationTarget<R>),
     /// Replace the current location with the specified target.
     Replace(NavigationTarget),
     /// Trigger a routing update.
@@ -63,9 +60,9 @@ impl<I: PartialEq> PartialEq for RouterMessage<I> {
 
 impl<I: Eq> Eq for RouterMessage<I> {}
 
-enum NavigationFailure {
+enum NavigationFailure<R: Routable> {
     External(String),
-    Named(Name),
+    Internal(<R as std::str::FromStr>::Err),
 }
 
 /// A function the router will call after every routing update.

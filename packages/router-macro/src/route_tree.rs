@@ -175,6 +175,7 @@ impl<'a> RouteTreeSegment<'a> {
                 }
 
                 let construct_variant = route.construct(enum_name);
+                let parse_query = route.parse_query();
 
                 print_route_segment(
                     route_segments.peekable(),
@@ -183,6 +184,7 @@ impl<'a> RouteTreeSegment<'a> {
                         &error_enum_name,
                         enum_varient,
                         &varient_parse_error,
+                        parse_query,
                     ),
                 )
             }
@@ -190,12 +192,14 @@ impl<'a> RouteTreeSegment<'a> {
                 let varient_parse_error = route.error_ident();
                 let enum_varient = &route.route_name;
                 let construct_variant = route.construct(enum_name);
+                let parse_query = route.parse_query();
 
                 return_constructed(
                     construct_variant,
                     &error_enum_name,
                     enum_varient,
                     &varient_parse_error,
+                    parse_query,
                 )
             }
         }
@@ -207,6 +211,7 @@ fn return_constructed(
     error_enum_name: &Ident,
     enum_varient: &Ident,
     varient_parse_error: &Ident,
+    parse_query: TokenStream,
 ) -> TokenStream {
     quote! {
         let remaining_segments = segments.clone();
@@ -216,6 +221,7 @@ fn return_constructed(
         match (next_segment, segment_after_next) {
             // This is the last segment, return the parsed route
             (None, _) | (Some(""), None) => {
+                #parse_query
                 return Ok(#construct_variant);
             }
             _ => {

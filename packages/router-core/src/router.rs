@@ -1,9 +1,11 @@
 use crate::history::HistoryProvider;
+use dioxus::prelude::*;
+
 use std::str::FromStr;
 
 #[derive(Debug, PartialEq)]
-struct RouteParseError<E: std::fmt::Display> {
-    attempted_routes: Vec<E>,
+pub struct RouteParseError<E: std::fmt::Display> {
+    pub attempted_routes: Vec<E>,
 }
 
 impl<E: std::fmt::Display> std::fmt::Display for RouteParseError<E> {
@@ -37,127 +39,76 @@ where
     }
 }
 
-// #[derive(Props, PartialEq)]
-// struct RouterProps {
-//     current_route: String,
-// }
+pub trait FromQuery {
+    fn from_query(query: &str) -> Self;
+}
 
-trait Routable: FromStr + std::fmt::Display + Clone
+impl<T: for<'a> From<&'a str>> FromQuery for T {
+    fn from_query(query: &str) -> Self {
+        T::from(query)
+    }
+}
+
+pub trait FromRouteSegment: Sized {
+    type Err;
+
+    fn from_route_segment(route: &str) -> Result<Self, Self::Err>;
+}
+
+impl<T: FromStr> FromRouteSegment for T
+where
+    <T as FromStr>::Err: std::fmt::Display,
+{
+    type Err = <T as FromStr>::Err;
+
+    fn from_route_segment(route: &str) -> Result<Self, Self::Err> {
+        T::from_str(route)
+    }
+}
+
+pub trait ToRouteSegments {
+    fn to_route_segments(&self) -> Vec<String>;
+}
+
+pub trait FromRouteSegments: Sized {
+    type Err;
+
+    fn from_route_segments(segments: &[&str], query: &str) -> Result<Self, Self::Err>;
+}
+
+impl<T: FromRouteSegment> FromRouteSegments for Vec<T> {
+    type Err = <T as FromRouteSegment>::Err;
+
+    fn from_route_segments(segments: &[&str], query: &str) -> Result<Self, Self::Err> {
+        segments.iter().map(|s| T::from_route_segment(s)).collect()
+    }
+}
+
+#[derive(Props, PartialEq)]
+pub struct RouterProps {
+    pub current_route: String,
+}
+
+pub trait Routable: FromStr + std::fmt::Display + Clone
 where
     <Self as FromStr>::Err: std::fmt::Display,
 {
-//     fn render(self, cx: &ScopeState) -> Element;
+    fn render(self, cx: &ScopeState) -> Element;
 
-//     fn comp(cx: Scope<RouterProps>) -> Element
-//     where
-//         Self: 'static,
-//     {
-//         let router = Self::from_str(&cx.props.current_route);
-//         match router {
-//             Ok(router) => router.render(cx),
-//             Err(err) => {
-//                 render! {pre {
-//                     "{err}"
-//                 }}
-//             }
-//         }
-//     }
-}
-
-#[derive(Routable, Clone, Debug, PartialEq)]
-enum Route {
-    #[route("/(dynamic)")]
-    Route1 { dynamic: String },
-    #[route("/hello_world")]
-    Route2 {},
-    #[redirect("/(dynamic)/hello_world")]
-    #[route("/hello_world/(dynamic)")]
-    Route3 { dynamic: u32 },
-    #[route("/(number1)/(number2)")]
-    Route4 { number1: u32, number2: u32 },
-    #[route("/")]
-    Route5 {},
-}
-
-#[test]
-fn display_works() {
-    let route = Route::Route1 {
-        dynamic: "hello".to_string(),
-    };
-
-    assert_eq!(route.to_string(), "/hello");
-
-    let route = Route::Route3 { dynamic: 1234 };
-
-    assert_eq!(route.to_string(), "/hello_world/1234");
-
-    let route = Route::Route1 {
-        dynamic: "hello_world2".to_string(),
-    };
-
-    assert_eq!(route.to_string(), "/hello_world2");
-}
-
-#[test]
-fn from_string_works() {
-    let w = "/hello";
-    assert_eq!(
-        Route::from_str(w),
-        Ok(Route::Route1 {
-            dynamic: "hello".to_string()
-        })
-    );
-    let w = "/hello/";
-    assert_eq!(
-        Route::from_str(w),
-        Ok(Route::Route1 {
-            dynamic: "hello".to_string()
-        })
-    );
-
-    let w = "/hello_world/1234";
-    assert_eq!(Route::from_str(w), Ok(Route::Route3 { dynamic: 1234 }));
-    let w = "/hello_world/1234/";
-    assert_eq!(Route::from_str(w), Ok(Route::Route3 { dynamic: 1234 }));
-
-    let w = "/hello_world2";
-    assert_eq!(
-        Route::from_str(w),
-        Ok(Route::Route1 {
-            dynamic: "hello_world2".to_string()
-        })
-    );
-
-    let w = "/hello_world/-1";
-    match Route::from_str(w) {
-        Ok(r) => panic!("should not parse {r:?}"),
-        Err(err) => println!("{err}"),
-    }
-}
-
-#[test]
-fn round_trip() {
-    // Route1
-    let string = "hello_world2";
-    let route = Route::Route1 {
-        dynamic: string.to_string(),
-    };
-    assert_eq!(Route::from_str(&route.to_string()), Ok(route));
-
-    // Route2
-    for num in 0..100 {
-        let route = Route::Route3 { dynamic: num };
-        assert_eq!(Route::from_str(&route.to_string()), Ok(route));
-    }
-
-    // Route3
-    for num1 in 0..100 {
-        for num2 in 0..100 {
-            let route = Route::Route4 {
-                number1: num1,
-                number2: num2,
-            };
-            assert_eq!(Route::from_str(&route.to_string()), Ok(route));
+    fn comp(cx: Scope<RouterProps>) -> Element
+    where
+        Self: 'static,
+    {
+        let router = Self::from_str(&cx.props.current_route);
+        match router {
+            Ok(router) => router.render(cx),
+            Err(err) => {
+                render! {
+                    pre {
+                        "{err}"
+                    }
+                }
+            }
         }
     }
 }

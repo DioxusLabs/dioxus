@@ -113,7 +113,9 @@ impl RouteEnum {
                 type Err = RouteParseError<#error_name>;
 
                 fn from_str(s: &str) -> Result<Self, Self::Err> {
-                    let mut segments = s.strip_prefix('/').unwrap_or(s).split('/');
+                    let route = s.strip_prefix('/').unwrap_or(s);
+                    let (route, query) = route.split_once('?').unwrap_or((route, ""));
+                    let mut segments = route.split('/');
                     let mut errors = Vec::new();
 
                     if let Some(segment) = segments.next() {

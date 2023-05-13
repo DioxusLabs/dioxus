@@ -6,7 +6,7 @@ use url::{ParseError, Url};
 
 /// A target for the router to navigate to.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum NavigationTarget {
+pub enum NavigationTarget<R: Routable> {
     /// An internal path that the router can navigate to by itself.
     ///
     /// ```rust
@@ -15,45 +15,7 @@ pub enum NavigationTarget {
     /// let implicit: NavigationTarget = "/internal".into();
     /// assert_eq!(explicit, implicit);
     /// ```
-    Internal(String),
-    /// An internal target that the router can navigate to by itself.
-    ///
-    /// ```rust
-    /// # use std::collections::HashMap;
-    /// # use dioxus_router_core::{Name, navigation::{named, NavigationTarget}};
-    /// let mut parameters = HashMap::new();
-    /// parameters.insert(Name::of::<bool>(), String::from("some parameter"));
-    ///
-    /// let explicit = NavigationTarget::Named {
-    ///     name: Name::of::<bool>(),
-    ///     parameters,
-    ///     query: Some("some=query".into())
-    /// };
-    ///
-    /// let implicit = named::<bool>().parameter::<bool>("some parameter").query("some=query");
-    ///
-    /// assert_eq!(explicit, implicit);
-    /// ```
-    ///
-    /// It will automatically find the route with the matching name, insert all required parameters
-    /// and add the query.
-    ///
-    /// **Note:** The dioxus-router-core documentation and tests mostly use standard Rust types. This is only
-    /// for brevity. It is recommend to use types with descriptive names, and create unit structs if
-    /// needed.
-    Named {
-        /// The name of the [`Route`](crate::routes::Route) or
-        /// [`ParameterRoute`](crate::routes::ParameterRoute) to navigate to.
-        ///
-        /// **Note:** The dioxus-router-core documentation and tests mostly use standard Rust types. This is
-        /// only for brevity. It is recommend to use types with descriptive names, and create unit
-        /// structs if needed.
-        name: Name,
-        /// The parameters required to get to the specified route.
-        parameters: HashMap<Name, String>,
-        /// A query to add to the route.
-        query: Option<Query>,
-    },
+    Internal(R),
     /// An external target that the router doesn't control.
     ///
     /// ```rust

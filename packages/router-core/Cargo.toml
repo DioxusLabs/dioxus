@@ -20,6 +20,8 @@ url = "2.3.1"
 urlencoding = "2.1.2"
 wasm-bindgen = { version = "0.2.83", optional = true }
 web-sys = { version = "0.3.60", optional = true, features = ["ScrollRestoration"]}
+dioxus = { path = "../dioxus" }
+dioxus-router-macro = { path = "../router-macro" }
 
 [features]
 regex = ["dep:regex"]

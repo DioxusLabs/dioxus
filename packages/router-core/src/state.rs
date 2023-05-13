@@ -153,7 +153,7 @@ impl<T: Clone> Default for RouterState<T> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{navigation::named, prelude::RootIndex, routes::Segment, segments::NamedSegment};
+    use crate::{navigation::named, prelude::RootIndex};
 
     use super::*;
 
