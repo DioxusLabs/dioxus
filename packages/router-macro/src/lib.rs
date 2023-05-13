@@ -8,8 +8,11 @@ use syn::{parse_macro_input, Ident};
 
 use proc_macro2::TokenStream as TokenStream2;
 
+mod nest;
+mod query;
 mod route;
 mod route_tree;
+mod segment;
 
 #[proc_macro_derive(Routable, attributes(route))]
 pub fn derive_routable(input: TokenStream) -> TokenStream {
@@ -51,8 +54,15 @@ impl RouteEnum {
         if let syn::Data::Enum(data) = input.data {
             let mut routes = Vec::new();
 
+            let mut current_base_route = String::new();
+
             for variant in data.variants {
-                let route = Route::parse(variant)?;
+                // Apply the any nesting attributes in order
+                for attr in &variant.attrs {
+                    if attr.path.is_ident("nest") {}
+                }
+
+                let route = Route::parse(current_base_route.clone(), variant)?;
                 routes.push(route);
             }
 

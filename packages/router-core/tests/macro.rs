@@ -1,3 +1,5 @@
+#![allow(non_snake_case)]
+
 use dioxus::prelude::*;
 use dioxus_router_core::*;
 use dioxus_router_macro::*;
@@ -57,6 +59,7 @@ fn Route6(cx: Scope, extra: Vec<String>) -> Element {
     }
 }
 
+#[rustfmt::skip]
 #[derive(Routable, Clone, Debug, PartialEq)]
 enum Route {
     #[route("/(dynamic)" Route1)]

@@ -2,7 +2,10 @@ use proc_macro2::TokenStream;
 use quote::quote;
 use syn::Ident;
 
-use crate::route::{static_segment_idx, Route, RouteSegment};
+use crate::{
+    route::Route,
+    segment::{static_segment_idx, RouteSegment},
+};
 
 // First deduplicate the routes by the static part of the route
 #[derive(Debug)]

@@ -1,9 +1,12 @@
 use quote::{__private::Span, format_ident, quote, ToTokens};
 use syn::parse::Parse;
 use syn::parse::ParseStream;
-use syn::{Ident, LitStr, Type, Variant};
+use syn::{Ident, LitStr, Variant};
 
 use proc_macro2::TokenStream as TokenStream2;
+
+use crate::query::QuerySegment;
+use crate::segment::RouteSegment;
 
 struct RouteArgs {
     route: LitStr,
@@ -35,13 +38,13 @@ pub struct Route {
     pub route_name: Ident,
     pub comp_name: Ident,
     pub props_name: Ident,
-    pub route: LitStr,
+    pub route: String,
     pub route_segments: Vec<RouteSegment>,
     pub query: Option<QuerySegment>,
 }
 
 impl Route {
-    pub fn parse(input: syn::Variant) -> syn::Result<Self> {
+    pub fn parse(root_route: String, input: syn::Variant) -> syn::Result<Self> {
         let route_attr = input
             .attrs
             .iter()
@@ -55,7 +58,7 @@ impl Route {
 
         let route_name = input.ident.clone();
         let args = route_attr.parse_args::<RouteArgs>()?;
-        let route = args.route;
+        let route = root_route + &args.route.value();
         let file_based = args.comp_name.is_none();
         let comp_name = args
             .comp_name
@@ -209,7 +212,7 @@ impl ToTokens for Route {
             return;
         }
 
-        let without_leading_slash = &self.route.value()[1..];
+        let without_leading_slash = &self.route[1..];
         let route_path = std::path::Path::new(without_leading_slash);
         let with_extension = route_path.with_extension("rs");
         let dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
@@ -237,14 +240,13 @@ impl ToTokens for Route {
 
 fn parse_route_segments(
     varient: &Variant,
-    route: &LitStr,
+    route: &str,
 ) -> syn::Result<(Vec<RouteSegment>, Option<QuerySegment>)> {
     let mut route_segments = Vec::new();
 
-    let route_string = route.value();
-    let (route_string, query) = match route_string.rsplit_once('?') {
+    let (route_string, query) = match route.rsplit_once('?') {
         Some((route, query)) => (route, Some(query)),
-        None => (route_string.as_str(), None),
+        None => (route, None),
     };
     let mut iterator = route_string.split('/');
 
@@ -255,7 +257,7 @@ fn parse_route_segments(
             varient,
             format!(
                 "Routes should start with /. Error found in the route '{}'",
-                route.value()
+                route
             ),
         ));
     }
@@ -345,148 +347,4 @@ fn parse_route_segments(
     };
 
     Ok((route_segments, parsed_query))
-}
-
-#[derive(Debug)]
-pub enum RouteSegment {
-    Static(String),
-    Dynamic(Ident, Type),
-    CatchAll(Ident, Type),
-}
-
-impl RouteSegment {
-    pub fn name(&self) -> Option<Ident> {
-        match self {
-            Self::Static(_) => None,
-            Self::Dynamic(ident, _) => Some(ident.clone()),
-            Self::CatchAll(ident, _) => Some(ident.clone()),
-        }
-    }
-
-    pub fn write_segment(&self) -> TokenStream2 {
-        match self {
-            Self::Static(segment) => quote! { write!(f, "/{}", #segment)?; },
-            Self::Dynamic(ident, _) => quote! { write!(f, "/{}", #ident)?; },
-            Self::CatchAll(ident, _) => quote! { #ident.display_route_segements(f)?; },
-        }
-    }
-
-    fn error_name(&self, idx: usize) -> Ident {
-        match self {
-            Self::Static(_) => static_segment_idx(idx),
-            Self::Dynamic(ident, _) => format_ident!("{}ParseError", ident),
-            Self::CatchAll(ident, _) => format_ident!("{}ParseError", ident),
-        }
-    }
-
-    fn missing_error_name(&self) -> Option<Ident> {
-        match self {
-            Self::Dynamic(ident, _) => Some(format_ident!("{}MissingError", ident)),
-            _ => None,
-        }
-    }
-
-    pub fn try_parse(
-        &self,
-        idx: usize,
-        error_enum_name: &Ident,
-        error_enum_varient: &Ident,
-        inner_parse_enum: &Ident,
-        parse_children: TokenStream2,
-    ) -> TokenStream2 {
-        let error_name = self.error_name(idx);
-        match self {
-            Self::Static(segment) => {
-                quote! {
-                    {
-                        let mut segments = segments.clone();
-                        let parsed = if let Some(#segment) = segments.next() {
-                            Ok(())
-                        } else {
-                            Err(#error_enum_name::#error_enum_varient(#inner_parse_enum::#error_name))
-                        };
-                        match parsed {
-                            Ok(_) => {
-                                #parse_children
-                            }
-                            Err(err) => {
-                                errors.push(err);
-                            }
-                        }
-                    }
-                }
-            }
-            Self::Dynamic(name, ty) => {
-                let missing_error_name = self.missing_error_name().unwrap();
-                quote! {
-                    {
-                        let mut segments = segments.clone();
-                        let parsed = if let Some(segment) = segments.next() {
-                            <#ty as dioxus_router_core::router::FromRouteSegment>::from_route_segment(segment).map_err(|err| #error_enum_name::#error_enum_varient(#inner_parse_enum::#error_name(err)))
-                        } else {
-                            Err(#error_enum_name::#error_enum_varient(#inner_parse_enum::#missing_error_name))
-                        };
-                        match parsed {
-                            Ok(#name) => {
-                                #parse_children
-                            }
-                            Err(err) => {
-                                errors.push(err);
-                            }
-                        }
-                    }
-                }
-            }
-            Self::CatchAll(name, ty) => {
-                quote! {
-                    {
-                        let parsed = {
-                            let mut segments = segments.clone();
-                            let segments: Vec<_> = segments.collect();
-                            <#ty as dioxus_router_core::router::FromRouteSegments>::from_route_segments(&segments).map_err(|err| #error_enum_name::#error_enum_varient(#inner_parse_enum::#error_name(err)))
-                        };
-                        match parsed {
-                            Ok(#name) => {
-                                #parse_children
-                            }
-                            Err(err) => {
-                                errors.push(err);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-pub fn static_segment_idx(idx: usize) -> Ident {
-    format_ident!("StaticSegment{}ParseError", idx)
-}
-
-#[derive(Debug)]
-pub struct QuerySegment {
-    ident: Ident,
-    ty: Type,
-}
-
-impl QuerySegment {
-    pub fn parse(&self) -> TokenStream2 {
-        let ident = &self.ident;
-        let ty = &self.ty;
-        quote! {
-            let #ident = <#ty as dioxus_router_core::router::FromQuery>::from_query(query);
-        }
-    }
-
-    pub fn write(&self) -> TokenStream2 {
-        let ident = &self.ident;
-        quote! {
-            write!(f, "?{}", #ident)?;
-        }
-    }
-
-    pub fn name(&self) -> Ident {
-        self.ident.clone()
-    }
 }
