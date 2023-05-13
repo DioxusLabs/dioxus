@@ -201,13 +201,6 @@ impl Route {
             None => quote! {},
         }
     }
-
-    pub fn ends_with_catch_all(&self) -> bool {
-        self.route_segments
-            .last()
-            .map(|seg| matches!(seg, RouteSegment::CatchAll(..)))
-            .unwrap_or(false)
-    }
 }
 
 impl ToTokens for Route {
