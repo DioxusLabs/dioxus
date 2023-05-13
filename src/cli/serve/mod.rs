@@ -20,6 +20,7 @@ impl Serve {
 
         // change the relase state.
         crate_config.with_hot_reload(self.serve.hot_reload);
+        crate_config.with_cross_origin_policy(self.serve.cross_origin_policy);
         crate_config.with_release(self.serve.release);
         crate_config.with_verbose(self.serve.verbose);
 
@@ -68,7 +69,7 @@ impl Serve {
         Serve::regen_dev_page(&crate_config)?;
 
         // start the develop server
-        server::startup(self.serve.port, crate_config.clone()).await?;
+        server::startup(self.serve.port, crate_config.clone(), self.serve.open).await?;
 
         Ok(())
     }

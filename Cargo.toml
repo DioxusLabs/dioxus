@@ -41,7 +41,7 @@ indicatif = "0.17.0-rc.11"
 subprocess = "0.2.9"
 
 axum = { version = "0.5.1", features = ["ws", "headers"] }
-tower-http = { version = "0.2.2", features = ["fs", "trace"] }
+tower-http = { version = "0.2.2", features = ["full"] }
 headers = "0.3.7"
 
 walkdir = "2"
@@ -82,6 +82,7 @@ dioxus-html = { version = "0.3", features = ["hot-reload-context"] }
 dioxus-core = { version = "0.3", features = ["serialize"] }
 dioxus-autofmt = "0.3.0"
 rsx-rosetta = { version = "0.3" }
+open = "4.1.0"
 
 [[bin]]
 path = "src/main.rs"

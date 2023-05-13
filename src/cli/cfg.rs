@@ -45,6 +45,11 @@ pub struct ConfigOptsServe {
     #[clap(default_value_t = 8080)]
     pub port: u16,
 
+    /// Open the app in the default browser [default: false]
+    #[clap(long)]
+    #[serde(default)]
+    pub open: bool,
+
     /// Build a example [default: ""]
     #[clap(long)]
     pub example: Option<String>,
@@ -71,6 +76,12 @@ pub struct ConfigOptsServe {
     #[clap(long)]
     #[serde(default)]
     pub hot_reload: bool,
+
+    /// Set cross-origin-policy to same-origin [default: false]
+    #[clap(name="cross-origin-policy")]
+    #[clap(long)]
+    #[serde(default)]
+    pub cross_origin_policy: bool,
 
     /// Space separated list of features to activate
     #[clap(long)]
