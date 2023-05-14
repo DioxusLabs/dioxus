@@ -60,7 +60,7 @@ struct Layout {
 //         // If the component is not specified, the component is assumed to be at the path of the route (in this case /pages/hello_world.rs or /pages/hello_world/index.rs)
 //         #[route("/")]
 //         // You can opt out of a parent Layout
-//         #[layout(!Component)]
+//         #[layout(!root_dynamic_segment)]
 //         Route2 {
 //             // implicitly adds
 //             // root_dynamic_segment: ComponentProps,

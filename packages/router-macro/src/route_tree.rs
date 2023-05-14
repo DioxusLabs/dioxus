@@ -17,7 +17,6 @@ pub enum RouteTreeSegment<'a> {
         from_route: &'a Route,
     },
     Dynamic(&'a Route),
-    StaticEnd(&'a Route),
 }
 
 impl<'a> RouteTreeSegment<'a> {
@@ -62,12 +61,7 @@ impl<'a> RouteTreeSegment<'a> {
                 }
                 // If there is no static segment, add the route to the dynamic routes
                 None => {
-                    // This route is entirely static
-                    if route.route.route_segments.len() == route.static_segment_index {
-                        static_segments.push(RouteTreeSegment::StaticEnd(route.route));
-                    } else {
-                        dyn_segments.push(RouteTreeSegment::Dynamic(route.route));
-                    }
+                    dyn_segments.push(RouteTreeSegment::Dynamic(route.route));
                 }
             }
         }
@@ -173,21 +167,6 @@ impl<'a> RouteTreeSegment<'a> {
                     &error_enum_name,
                     enum_varient,
                     &varient_parse_error,
-                )
-            }
-            Self::StaticEnd(route) => {
-                let varient_parse_error = route.error_ident();
-                let enum_varient = &route.route_name;
-                let construct_variant = route.construct(enum_name);
-                let parse_query = route.parse_query();
-
-                return_constructed(
-                    true,
-                    construct_variant,
-                    &error_enum_name,
-                    enum_varient,
-                    &varient_parse_error,
-                    parse_query,
                 )
             }
         }
