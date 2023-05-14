@@ -1,11 +1,12 @@
-use quote::{__private::Span, format_ident, quote, ToTokens};
+use quote::{format_ident, quote, ToTokens};
 use syn::parse::Parse;
 use syn::parse::ParseStream;
-use syn::{Ident, LitStr, Variant};
+use syn::{Ident, LitStr};
 
 use proc_macro2::TokenStream as TokenStream2;
 
 use crate::query::QuerySegment;
+use crate::segment::parse_route_segments;
 use crate::segment::RouteSegment;
 
 struct RouteArgs {
@@ -236,115 +237,4 @@ impl ToTokens for Route {
             pub use #route_name::{#prop_name, #route_name};
         ));
     }
-}
-
-fn parse_route_segments(
-    varient: &Variant,
-    route: &str,
-) -> syn::Result<(Vec<RouteSegment>, Option<QuerySegment>)> {
-    let mut route_segments = Vec::new();
-
-    let (route_string, query) = match route.rsplit_once('?') {
-        Some((route, query)) => (route, Some(query)),
-        None => (route, None),
-    };
-    let mut iterator = route_string.split('/');
-
-    // skip the first empty segment
-    let first = iterator.next();
-    if first != Some("") {
-        return Err(syn::Error::new_spanned(
-            varient,
-            format!(
-                "Routes should start with /. Error found in the route '{}'",
-                route
-            ),
-        ));
-    }
-
-    while let Some(segment) = iterator.next() {
-        if segment.starts_with('(') && segment.ends_with(')') {
-            let spread = segment.starts_with("(...");
-
-            let ident = if spread {
-                segment[4..segment.len() - 1].to_string()
-            } else {
-                segment[1..segment.len() - 1].to_string()
-            };
-
-            let field = varient.fields.iter().find(|field| match field.ident {
-                Some(ref field_ident) => *field_ident == ident,
-                None => false,
-            });
-
-            let ty = if let Some(field) = field {
-                field.ty.clone()
-            } else {
-                return Err(syn::Error::new_spanned(
-                    varient,
-                    format!(
-                        "Could not find a field with the name '{}' in the variant '{}'",
-                        ident, varient.ident
-                    ),
-                ));
-            };
-            if spread {
-                route_segments.push(RouteSegment::CatchAll(
-                    Ident::new(&ident, Span::call_site()),
-                    ty,
-                ));
-
-                if iterator.next().is_some() {
-                    return Err(syn::Error::new_spanned(
-                        route,
-                        "Catch-all route segments must be the last segment in a route. The route segments after the catch-all segment will never be matched.",
-                    ));
-                } else {
-                    break;
-                }
-            } else {
-                route_segments.push(RouteSegment::Dynamic(
-                    Ident::new(&ident, Span::call_site()),
-                    ty,
-                ));
-            }
-        } else {
-            route_segments.push(RouteSegment::Static(segment.to_string()));
-        }
-    }
-
-    // check if the route has a query string
-    let parsed_query = match query {
-        Some(query) => {
-            if query.starts_with('(') && query.ends_with(')') {
-                let query_ident = Ident::new(&query[1..query.len() - 1], Span::call_site());
-                let field = varient.fields.iter().find(|field| match field.ident {
-                    Some(ref field_ident) => field_ident == &query_ident,
-                    None => false,
-                });
-
-                let ty = if let Some(field) = field {
-                    field.ty.clone()
-                } else {
-                    return Err(syn::Error::new_spanned(
-                        varient,
-                        format!(
-                            "Could not find a field with the name '{}' in the variant '{}'",
-                            query_ident, varient.ident
-                        ),
-                    ));
-                };
-
-                Some(QuerySegment {
-                    ident: query_ident,
-                    ty,
-                })
-            } else {
-                None
-            }
-        }
-        None => None,
-    };
-
-    Ok((route_segments, parsed_query))
 }

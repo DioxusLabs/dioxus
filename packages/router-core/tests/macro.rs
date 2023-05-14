@@ -64,11 +64,13 @@ fn Route6(cx: Scope, extra: Vec<String>) -> Element {
 enum Route {
     #[route("/(dynamic)" Route1)]
     Route1 { dynamic: String },
-    #[route("/hello_world" Route2)]
-    Route2 {},
-    // #[redirect("/(dynamic)/hello_world")]
-    #[route("/hello_world/(dynamic)" Route3)]
-    Route3 { dynamic: u32 },
+    #[nest("/hello_world")]
+        #[route("/" Route2)]
+        Route2 {},
+        // #[redirect("/(dynamic)/hello_world")]
+        #[route("/(dynamic)" Route3)]
+        Route3 { dynamic: u32 },
+    #[end_nest]
     #[route("/(number1)/(number2)" Route4)]
     Route4 { number1: u32, number2: u32 },
     #[route("/?(query)" Route5)]

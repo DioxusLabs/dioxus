@@ -1,5 +1,6 @@
 extern crate proc_macro;
 
+use nest::Nest;
 use proc_macro::TokenStream;
 use quote::{__private::Span, format_ident, quote, ToTokens};
 use route::Route;
@@ -14,7 +15,7 @@ mod route;
 mod route_tree;
 mod segment;
 
-#[proc_macro_derive(Routable, attributes(route))]
+#[proc_macro_derive(Routable, attributes(route, nest, end_nest))]
 pub fn derive_routable(input: TokenStream) -> TokenStream {
     let routes_enum = parse_macro_input!(input as syn::DeriveInput);
 
@@ -54,15 +55,23 @@ impl RouteEnum {
         if let syn::Data::Enum(data) = input.data {
             let mut routes = Vec::new();
 
-            let mut current_base_route = String::new();
+            let mut current_base_route = Vec::new();
 
             for variant in data.variants {
                 // Apply the any nesting attributes in order
                 for attr in &variant.attrs {
-                    if attr.path.is_ident("nest") {}
+                    if attr.path.is_ident("nest") {
+                        let nest: Nest = attr.parse_args()?;
+                        match nest {
+                            Nest::Static(s) => current_base_route.push(s),
+                            _ => todo!(),
+                        }
+                    } else if attr.path.is_ident("end_nest") {
+                        current_base_route.pop();
+                    }
                 }
 
-                let route = Route::parse(current_base_route.clone(), variant)?;
+                let route = Route::parse(current_base_route.join("/"), variant)?;
                 routes.push(route);
             }
 
