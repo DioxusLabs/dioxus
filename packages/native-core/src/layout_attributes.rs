@@ -105,12 +105,16 @@ pub fn apply_layout_attributes_cfg(
                 display::Display::Keyword(display::DisplayKeyword::None) => {
                     style.display = Display::None
                 }
-                display::Display::Pair(pair) => {
-                    if let display::DisplayInside::Flex(_) = pair.inside {
-                        style.display = Display::Flex
+                display::Display::Pair(pair) => match pair.inside {
+                    display::DisplayInside::Flex(_) => {
+                        style.display = Display::Flex;
                     }
-                }
-                _ => (),
+                    display::DisplayInside::Grid => {
+                        style.display = Display::Grid;
+                    }
+                    _ => {}
+                },
+                _ => {}
             },
             Property::Position(position) => {
                 style.position = match position {
