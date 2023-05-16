@@ -11,6 +11,14 @@
 - [x] pub flex_shrink: f32,
 - [x] pub flex_basis: Dimension,
 
+- [ ]pub grid_template_rows: GridTrackVec<TrackSizingFunction>,
+- [ ]pub grid_template_columns: GridTrackVec<TrackSizingFunction>,
+- [ ]pub grid_auto_rows: GridTrackVec<NonRepeatedTrackSizingFunction>,
+- [ ]pub grid_auto_columns: GridTrackVec<NonRepeatedTrackSizingFunction>,
+- [ ]pub grid_auto_flow: GridAutoFlow,
+- [ ]pub grid_row: Line<GridPlacement>,
+- [ ]pub grid_column: Line<GridPlacement>,
+
 - [x] pub overflow: Overflow, ---> taffy doesnt have support for directional overflow
 
 - [x] pub align_items: AlignItems,
@@ -28,11 +36,13 @@
 - [ ] pub min_size: Size<Dimension>,
 - [ ] pub max_size: Size<Dimension>,
 
-- [ ] pub aspect_ratio: Number, ----> parsing is done, but taffy doesnt support it
+- [x] pub aspect_ratio: Number,
 */
 
 use lightningcss::properties::border::LineStyle;
-use lightningcss::properties::{align, border, display, flex, position, size};
+use lightningcss::properties::grid::{TrackBreadth, TrackList, TrackSizing};
+use lightningcss::properties::{align, border, display, flex, grid, position, size};
+use lightningcss::values::percentage::Percentage;
 use lightningcss::{
     properties::{Property, PropertyId},
     stylesheet::ParserOptions,
@@ -218,6 +228,8 @@ pub fn apply_layout_attributes_cfg(
                     );
                 }
             }
+
+            // Flexbox properties
             Property::FlexDirection(flex_direction, _) => {
                 use FlexDirection::*;
                 style.flex_direction = match flex_direction {
@@ -248,6 +260,56 @@ pub fn apply_layout_attributes_cfg(
                 style.flex_grow = flex.grow;
                 style.flex_shrink = flex.shrink;
                 style.flex_basis = convert_length_percentage_or_auto(flex.basis).into();
+            }
+
+            // Grid properties
+            Property::GridAutoFlow(grid_auto_flow) => {
+                let is_row = grid_auto_flow.contains(grid::GridAutoFlow::Row);
+                let is_dense = grid_auto_flow.contains(grid::GridAutoFlow::Dense);
+                style.grid_auto_flow = match (is_row, is_dense) {
+                    (true, false) => GridAutoFlow::Row,
+                    (false, false) => GridAutoFlow::Column,
+                    (true, true) => GridAutoFlow::RowDense,
+                    (false, true) => GridAutoFlow::ColumnDense,
+                };
+            }
+            Property::GridTemplateColumns(TrackSizing::TrackList(track_list)) => {
+                style.grid_template_columns = track_list
+                    .items
+                    .into_iter()
+                    .map(|item| convert_grid_track_item(item))
+                    .collect();
+            }
+            Property::GridTemplateRows(TrackSizing::TrackList(track_list)) => {
+                style.grid_template_rows = track_list
+                    .items
+                    .into_iter()
+                    .map(|item| convert_grid_track_item(item))
+                    .collect();
+            }
+            Property::GridAutoColumns(grid::TrackSizeList(track_size_list)) => {
+                style.grid_auto_columns = track_size_list
+                    .into_iter()
+                    .map(|item| convert_grid_track_size(item))
+                    .collect();
+            }
+            Property::GridAutoRows(grid::TrackSizeList(track_size_list)) => {
+                style.grid_auto_rows = track_size_list
+                    .into_iter()
+                    .map(|item| convert_grid_track_size(item))
+                    .collect();
+            }
+            Property::GridRow(grid_row) => {
+                style.grid_row = Line {
+                    start: convert_grid_placement(grid_row.start),
+                    end: convert_grid_placement(grid_row.end),
+                };
+            }
+            Property::GridColumn(grid_column) => {
+                style.grid_column = Line {
+                    start: convert_grid_placement(grid_column.start),
+                    end: convert_grid_placement(grid_column.end),
+                };
             }
 
             // Alignment properties
@@ -488,6 +550,70 @@ fn convert_size(size: size::Size) -> Dimension {
         size::Size::FitContentFunction(_) => Dimension::Auto, // Unimplemented, so default auto
         size::Size::Stretch(_) => Dimension::Auto,    // Unimplemented, so default auto
         size::Size::Contain => Dimension::Auto,       // Unimplemented, so default auto
+    }
+}
+
+fn convert_grid_placement(input: grid::GridLine) -> GridPlacement {
+    match input {
+        grid::GridLine::Auto => GridPlacement::Auto,
+        grid::GridLine::Line { index, .. } => line(index as i16),
+        grid::GridLine::Span { index, .. } => span(index as u16),
+        grid::GridLine::Area { .. } => unimplemented!(),
+    }
+}
+
+fn convert_grid_track_item(input: grid::TrackListItem) -> TrackSizingFunction {
+    match input {
+        grid::TrackListItem::TrackSize(size) => {
+            TrackSizingFunction::Single(convert_grid_track_size(size))
+        }
+        grid::TrackListItem::TrackRepeat(_) => todo!(), // TODO: requires TrackRepeat fields to be public!
+    }
+}
+
+fn convert_grid_track_size(input: grid::TrackSize) -> NonRepeatedTrackSizingFunction {
+    match input {
+        grid::TrackSize::TrackBreadth(breadth) => minmax(
+            convert_track_breadth_min(&breadth),
+            convert_track_breadth_max(&breadth),
+        ),
+        grid::TrackSize::MinMax { min, max } => minmax(
+            convert_track_breadth_min(&min),
+            convert_track_breadth_max(&max),
+        ),
+        grid::TrackSize::FitContent(limit) => match limit {
+            DimensionPercentage::Dimension(LengthValue::Px(len)) => minmax(auto(), points(len)),
+            DimensionPercentage::Percentage(Percentage(pct)) => minmax(auto(), percent(pct)),
+            _ => unimplemented!(),
+        },
+    }
+}
+
+fn convert_track_breadth_max(breadth: &TrackBreadth) -> MaxTrackSizingFunction {
+    match breadth {
+        grid::TrackBreadth::Length(length_percentage) => match length_percentage {
+            DimensionPercentage::Dimension(LengthValue::Px(len)) => points(*len),
+            DimensionPercentage::Percentage(Percentage(pct)) => percent(*pct),
+            _ => unimplemented!(),
+        },
+        grid::TrackBreadth::Flex(fraction) => fr(*fraction),
+        grid::TrackBreadth::MinContent => MaxTrackSizingFunction::MinContent,
+        grid::TrackBreadth::MaxContent => MaxTrackSizingFunction::MaxContent,
+        grid::TrackBreadth::Auto => MaxTrackSizingFunction::Auto,
+    }
+}
+
+fn convert_track_breadth_min(breadth: &TrackBreadth) -> MinTrackSizingFunction {
+    match breadth {
+        grid::TrackBreadth::Length(length_percentage) => match length_percentage {
+            DimensionPercentage::Dimension(LengthValue::Px(len)) => points(*len),
+            DimensionPercentage::Percentage(Percentage(pct)) => percent(*pct),
+            _ => unimplemented!(),
+        },
+        grid::TrackBreadth::MinContent => MinTrackSizingFunction::MinContent,
+        grid::TrackBreadth::MaxContent => MinTrackSizingFunction::MaxContent,
+        grid::TrackBreadth::Auto => MinTrackSizingFunction::Auto,
+        grid::TrackBreadth::Flex(_) => MinTrackSizingFunction::Auto,
     }
 }
 
