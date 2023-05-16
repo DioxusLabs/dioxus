@@ -11,13 +11,13 @@
 - [x] pub flex_shrink: f32,
 - [x] pub flex_basis: Dimension,
 
-- [ ]pub grid_template_rows: GridTrackVec<TrackSizingFunction>,
-- [ ]pub grid_template_columns: GridTrackVec<TrackSizingFunction>,
-- [ ]pub grid_auto_rows: GridTrackVec<NonRepeatedTrackSizingFunction>,
-- [ ]pub grid_auto_columns: GridTrackVec<NonRepeatedTrackSizingFunction>,
-- [ ]pub grid_auto_flow: GridAutoFlow,
-- [ ]pub grid_row: Line<GridPlacement>,
-- [ ]pub grid_column: Line<GridPlacement>,
+- [x]pub grid_auto_flow: GridAutoFlow,
+- [x]pub grid_template_rows: GridTrackVec<TrackSizingFunction>,
+- [x]pub grid_template_columns: GridTrackVec<TrackSizingFunction>,
+- [x]pub grid_auto_rows: GridTrackVec<NonRepeatedTrackSizingFunction>,
+- [x]pub grid_auto_columns: GridTrackVec<NonRepeatedTrackSizingFunction>,
+- [x]pub grid_row: Line<GridPlacement>,
+- [x]pub grid_column: Line<GridPlacement>,
 
 - [x] pub overflow: Overflow, ---> taffy doesnt have support for directional overflow
 
@@ -40,7 +40,7 @@
 */
 
 use lightningcss::properties::border::LineStyle;
-use lightningcss::properties::grid::{TrackBreadth, TrackList, TrackSizing};
+use lightningcss::properties::grid::{TrackBreadth, TrackSizing};
 use lightningcss::properties::{align, border, display, flex, grid, position, size};
 use lightningcss::values::percentage::Percentage;
 use lightningcss::{
