@@ -281,26 +281,26 @@ pub fn apply_layout_attributes_cfg(
                 style.grid_template_columns = track_list
                     .items
                     .into_iter()
-                    .map(|item| convert_grid_track_item(item))
+                    .map(convert_grid_track_item)
                     .collect();
             }
             Property::GridTemplateRows(TrackSizing::TrackList(track_list)) => {
                 style.grid_template_rows = track_list
                     .items
                     .into_iter()
-                    .map(|item| convert_grid_track_item(item))
+                    .map(convert_grid_track_item)
                     .collect();
             }
             Property::GridAutoColumns(grid::TrackSizeList(track_size_list)) => {
                 style.grid_auto_columns = track_size_list
                     .into_iter()
-                    .map(|item| convert_grid_track_size(item))
+                    .map(convert_grid_track_size)
                     .collect();
             }
             Property::GridAutoRows(grid::TrackSizeList(track_size_list)) => {
                 style.grid_auto_rows = track_size_list
                     .into_iter()
-                    .map(|item| convert_grid_track_size(item))
+                    .map(convert_grid_track_size)
                     .collect();
             }
             Property::GridRow(grid_row) => {
