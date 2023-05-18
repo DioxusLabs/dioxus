@@ -204,6 +204,45 @@ class Interpreter {
       node.removeAttribute(name);
     }
   }
+
+  GetClientRect(id) {
+    const node = this.nodes[id];
+    if (!node) {
+      return;
+    }
+    const rect = node.getBoundingClientRect();
+    return {
+      type: "GetClientRect",
+      origin: [rect.x, rect.y],
+      size: [rect.width, rect.height],
+    };
+  }
+
+  ScrollTo(id, behavior) {
+    const node = this.nodes[id];
+    if (!node) {
+      return false;
+    }
+    node.scrollIntoView({
+      behavior: behavior,
+    });
+    return true;
+  }
+
+  /// Set the focus on the element
+  SetFocus(id, focus) {
+    const node = this.nodes[id];
+    if (!node) {
+      return false;
+    }
+    if (focus) {
+      node.focus();
+    } else {
+      node.blur();
+    }
+    return true;
+  }
+
   handleEdits(edits) {
     for (let template of edits.templates) {
       this.SaveTemplate(template);
@@ -346,9 +385,21 @@ class Interpreter {
       case "NewEventListener":
         let bubbles = event_bubbles(edit.name);
 
-        this.NewEventListener(edit.name, edit.id, bubbles, (event) => {
-          handler(event, edit.name, bubbles);
-        });
+        // if this is a mounted listener, we send the event immediately
+        if (edit.name === "mounted") {
+          window.ipc.postMessage(
+            serializeIpcMessage("user_event", {
+              name: edit.name,
+              element: edit.id,
+              data: null,
+              bubbles,
+            })
+          );
+        } else {
+          this.NewEventListener(edit.name, edit.id, bubbles, (event) => {
+            handler(event, edit.name, bubbles);
+          });
+        }
         break;
     }
   }
@@ -933,6 +984,8 @@ function event_bubbles(event) {
       return true;
     case "toggle":
       return true;
+    case "mounted":
+      return false;
   }
 
   return true;

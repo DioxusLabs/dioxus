@@ -10,8 +10,8 @@
 use dioxus_core::{
     BorrowedAttributeValue, ElementId, Mutation, Template, TemplateAttribute, TemplateNode,
 };
-use dioxus_html::{event_bubbles, CompositionData, FileEngine, FormData};
-use dioxus_interpreter_js::{save_template, Channel};
+use dioxus_html::{event_bubbles, CompositionData, FileEngine, FormData, MountedData};
+use dioxus_interpreter_js::{get_node, save_template, Channel};
 use futures_channel::mpsc;
 use js_sys::Array;
 use rustc_hash::FxHashMap;
@@ -28,6 +28,7 @@ pub struct WebsysDom {
     templates: FxHashMap<String, u32>,
     max_template_id: u32,
     pub(crate) interpreter: Channel,
+    event_channel: mpsc::UnboundedSender<UiEvent>,
 }
 
 pub struct UiEvent {
@@ -35,7 +36,6 @@ pub struct UiEvent {
     pub bubbles: bool,
     pub element: ElementId,
     pub data: Rc<dyn Any>,
-    pub event: Event,
 }
 
 impl WebsysDom {
@@ -49,8 +49,9 @@ impl WebsysDom {
         };
         let interpreter = Channel::default();
 
-        let handler: Closure<dyn FnMut(&Event)> =
-            Closure::wrap(Box::new(move |event: &web_sys::Event| {
+        let handler: Closure<dyn FnMut(&Event)> = Closure::wrap(Box::new({
+            let event_channel = event_channel.clone();
+            move |event: &web_sys::Event| {
                 let name = event.type_();
                 let element = walk_event_for_id(event);
                 let bubbles = dioxus_html::event_bubbles(name.as_str());
@@ -74,10 +75,10 @@ impl WebsysDom {
                         bubbles,
                         element,
                         data,
-                        event: event.clone(),
                     });
                 }
-            }));
+            }
+        }));
 
         dioxus_interpreter_js::initilize(
             root.clone().unchecked_into(),
@@ -90,6 +91,7 @@ impl WebsysDom {
             interpreter,
             templates: FxHashMap::default(),
             max_template_id: 0,
+            event_channel,
         }
     }
 
@@ -161,6 +163,8 @@ impl WebsysDom {
     pub fn apply_edits(&mut self, mut edits: Vec<Mutation>) {
         use Mutation::*;
         let i = &mut self.interpreter;
+        // we need to apply the mount events last, so we collect them here
+        let mut to_mount = Vec::new();
         for edit in &edits {
             match edit {
                 AppendChildren { id, m } => i.append_children(id.0 as u32, *m as u32),
@@ -211,18 +215,43 @@ impl WebsysDom {
                 },
                 SetText { value, id } => i.set_text(id.0 as u32, value),
                 NewEventListener { name, id, .. } => {
-                    console::log_1(&format!("new event listener: {}", name).into());
-                    i.new_event_listener(name, id.0 as u32, event_bubbles(name) as u8);
+                    match *name {
+                        // mounted events are fired immediately after the element is mounted.
+                        "mounted" => {
+                            to_mount.push(*id);
+                        }
+                        _ => {
+                            i.new_event_listener(name, id.0 as u32, event_bubbles(name) as u8);
+                        }
+                    }
                 }
-                RemoveEventListener { name, id } => {
-                    i.remove_event_listener(name, id.0 as u32, event_bubbles(name) as u8)
-                }
+                RemoveEventListener { name, id } => match *name {
+                    "mounted" => {}
+                    _ => {
+                        i.remove_event_listener(name, id.0 as u32, event_bubbles(name) as u8);
+                    }
+                },
                 Remove { id } => i.remove(id.0 as u32),
                 PushRoot { id } => i.push_root(id.0 as u32),
             }
         }
         edits.clear();
         i.flush();
+
+        for id in to_mount {
+            let node = get_node(id.0 as u32);
+            if let Some(element) = node.dyn_ref::<Element>() {
+                log::info!("mounted event fired: {}", id.0);
+                let data: MountedData = element.into();
+                let data = Rc::new(data);
+                let _ = self.event_channel.unbounded_send(UiEvent {
+                    name: "mounted".to_string(),
+                    bubbles: false,
+                    element: id,
+                    data,
+                });
+            }
+        }
     }
 }
 
