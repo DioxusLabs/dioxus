@@ -22,6 +22,13 @@ members = [
     "packages/rsx-rosetta",
     "packages/signals",
     "packages/hot-reload",
+    "packages/fullstack",
+    "packages/fullstack/server-macro",
+    "packages/fullstack/examples/axum-hello-world",
+    "packages/fullstack/examples/axum-router",
+    "packages/fullstack/examples/axum-desktop",
+    "packages/fullstack/examples/salvo-hello-world",
+    "packages/fullstack/examples/warp-hello-world",
     "docs/guide",
     # Full project examples
     "examples/tailwind",
