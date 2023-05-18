@@ -23,6 +23,8 @@ members = [
     "packages/signals",
     "packages/hot-reload",
     "docs/guide",
+    # Full project examples
+    "examples/tailwind",
     "examples/PWA-example",
 ]
 
