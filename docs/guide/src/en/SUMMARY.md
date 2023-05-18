@@ -31,6 +31,7 @@
   - [Error Handling](best_practices/error_handling.md)
   - [Antipatterns](best_practices/antipatterns.md)
 - [Publishing](publishing/index.md)
+
   - [Desktop](publishing/desktop.md)
   - [Web](publishing/web.md)
 
@@ -40,5 +41,8 @@
 
 ---
 
-[Roadmap](roadmap.md)
-[Contributing](contributing.md)
+- [Contributing](contributing/index.md)
+  - [Project Structure](contributing/project_structure.md)
+  - [Walkthrough of Internals](contributing/walkthrough_readme.md)
+  - [Guiding Principles](contributing/guiding_principles.md)
+  - [Roadmap](contributing/roadmap.md)
