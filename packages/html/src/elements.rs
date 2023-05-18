@@ -31,16 +31,16 @@ macro_rules! impl_attribute {
 
     (
         $(#[$attr_method:meta])*
-        $fil:ident: $vil:ident (in $ns:ident),
+        $fil:ident: $vil:ident (in $ns:literal),
     ) => {
-        pub const $fil: AttributeDiscription = (stringify!($fil), Some(stringify!($ns)), false)
+        pub const $fil: AttributeDiscription = (stringify!($fil), Some($ns), false)
     };
 
     (
         $(#[$attr_method:meta])*
-        $fil:ident: $vil:ident (in $ns:ident : volatile),
+        $fil:ident: $vil:ident (in $ns:literal : volatile),
     ) => {
-        pub const $fil: AttributeDiscription = (stringify!($fil), Some(stringify!($ns)), true)
+        pub const $fil: AttributeDiscription = (stringify!($fil), Some($ns), true)
     };
 }
 
@@ -71,10 +71,10 @@ macro_rules! impl_attribute_match {
     };
 
     (
-        $attr:ident $fil:ident: $vil:ident (in $ns:ident),
+        $attr:ident $fil:ident: $vil:ident (in $ns:literal),
     ) => {
         if $attr == stringify!($fil) {
-            return Some((stringify!(fil), Some(stringify!(ns))));
+            return Some((stringify!(fil), Some(ns)));
         }
     };
 }
@@ -110,7 +110,7 @@ macro_rules! impl_element {
 
     (
         $(#[$attr:meta])*
-        $name:ident $namespace:tt {
+        $name:ident $namespace:literal {
             $(
                 $(#[$attr_method:meta])*
                 $fil:ident: $vil:ident $extra:tt,
@@ -130,7 +130,35 @@ macro_rules! impl_element {
             $(
                 impl_attribute!(
                     $(#[$attr_method])*
-                    $fil: $vil in $namespace $extra
+                    $fil: $vil ($extra),
+                );
+            )*
+        }
+    };
+
+    (
+        $(#[$attr:meta])*
+        $element:ident [$name:literal, $namespace:tt] {
+            $(
+                $(#[$attr_method:meta])*
+                $fil:ident: $vil:ident $extra:tt,
+            )*
+        }
+    ) => {
+        #[allow(non_camel_case_types)]
+        $(#[$attr])*
+        pub struct $element;
+
+        impl SvgAttributes for $element {}
+
+        impl $element {
+            pub const TAG_NAME: &'static str = $name;
+            pub const NAME_SPACE: Option<&'static str> = Some($namespace);
+
+            $(
+                impl_attribute!(
+                    $(#[$attr_method])*
+                    $fil: $vil ($extra),
                 );
             )*
         }
@@ -192,7 +220,7 @@ macro_rules! impl_element_match_attributes {
         if $el == stringify!($name) {
             $(
                 impl_attribute_match!(
-                    $attr $fil: $vil in $namespace $extra
+                    $attr $fil: $vil ($extra),
                 );
             )*
         }
@@ -1599,7 +1627,7 @@ builder_constructors! {
     // /// Build a
     // /// [`<use>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/use)
     // /// element.
-    // use "http://www.w3.org/2000/svg" {};
-
-
+    r#use ["use", "http://www.w3.org/2000/svg"] {
+        href: String DEFAULT,
+    };
 }
