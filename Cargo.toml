@@ -30,6 +30,8 @@ members = [
     "packages/fullstack/examples/salvo-hello-world",
     "packages/fullstack/examples/warp-hello-world",
     "docs/guide",
+    # Full project examples
+    "examples/tailwind",
     "examples/PWA-example",
 ]
 

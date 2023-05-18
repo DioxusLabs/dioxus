@@ -41,6 +41,11 @@ features = [
     "FocusEvent",
     "CompositionEvent",
     "ClipboardEvent",
+    "Element",
+    "DomRect",
+    "ScrollIntoViewOptions",
+    "ScrollLogicalPosition",
+    "ScrollBehavior",
 ]
 
 [dev-dependencies]

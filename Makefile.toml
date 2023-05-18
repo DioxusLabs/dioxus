@@ -42,10 +42,10 @@ private = true
 [tasks.test]
 dependencies = ["build"]
 command = "cargo"
-args = ["test", "--lib", "--bins", "--tests", "--examples", "--workspace", "--exclude", "dioxus-router"]
+args = ["test", "--lib", "--bins", "--tests", "--examples", "--workspace", "--exclude", "dioxus-router", "--exclude", "dioxus-desktop"]
 private = true
 
 [tasks.test-with-browser]
-env = { CARGO_MAKE_WORKSPACE_INCLUDE_MEMBERS = ["**/packages/router"] }
+env = { CARGO_MAKE_WORKSPACE_INCLUDE_MEMBERS = ["**/packages/router", "**/packages/desktop"] }
 private = true
 workspace = true

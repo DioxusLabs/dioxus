@@ -57,4 +57,17 @@ hot-reload = ["dioxus-hot-reload"]
 [dev-dependencies]
 dioxus-core-macro = { path = "../core-macro" }
 dioxus-hooks = { path = "../hooks" }
-# image = "0.24.0" # enable this when generating a new desktop image
+dioxus = { path = "../dioxus" }
+exitcode = "1.1.2"
+scraper = "0.16.0"
+
+# These tests need to be run on the main thread, so they cannot use rust's test harness.
+[[test]]
+name = "check_events"
+path = "headless_tests/events.rs"
+harness = false
+
+[[test]]
+name = "check_rendering"
+path = "headless_tests/rendering.rs"
+harness = false
