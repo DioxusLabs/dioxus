@@ -172,7 +172,7 @@ pub fn render<R: Driver>(
                             .unwrap();
 
                         // the root node fills the entire area
-                        let mut style = *taffy.style(root_node).unwrap();
+                        let mut style = taffy.style(root_node).unwrap().clone();
                         let new_size = Size {
                             width: Dimension::Points(width),
                             height: Dimension::Points(height),
