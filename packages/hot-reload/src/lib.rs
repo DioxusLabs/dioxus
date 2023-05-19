@@ -194,7 +194,6 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(cfg: Config<Ctx>) {
                                 println!("Connected to hot reloading 🚀");
                             }
                         }
-                        std::thread::sleep(std::time::Duration::from_millis(10));
                         if *aborted.lock().unwrap() {
                             break;
                         }
@@ -250,7 +249,7 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(cfg: Config<Ctx>) {
                 };
 
                 for evt in rx {
-                    if chrono::Local::now().timestamp() > last_update_time {
+                    if chrono::Local::now().timestamp_millis() >= last_update_time {
                         if let Ok(evt) = evt {
                             let real_paths = evt
                                 .paths
@@ -322,7 +321,7 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(cfg: Config<Ctx>) {
                                 }
                             }
                         }
-                        last_update_time = chrono::Local::now().timestamp();
+                        last_update_time = chrono::Local::now().timestamp_millis();
                     }
                 }
             });
