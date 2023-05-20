@@ -31,11 +31,11 @@ shipyard = { version = "0.6.2", features = ["proc", "std"], default-features = f
 rand = "0.8.5"
 dioxus = { path = "../dioxus", version = "^0.3.0" }
 tokio = { version = "*", features = ["full"] }
-dioxus-native-core = { path = ".", features = ["dioxus", "taffy"] }
+dioxus-native-core = { path = ".", features = ["dioxus", "layout-attributes"] }
 dioxus-native-core-macro = { path = "../native-core-macro" }
 
 [features]
 default = []
-taffy = ["dep:taffy", "dep:lightningcss"]
+layout-attributes = ["dep:taffy", "dep:lightningcss"]
 dioxus = ["dioxus-core"]
 parallel = ["shipyard/parallel"]

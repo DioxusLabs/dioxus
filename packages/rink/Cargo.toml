@@ -14,7 +14,7 @@ license = "MIT/Apache-2.0"
 
 [dependencies]
 dioxus-html = { path = "../html", version = "^0.3.0" }
-dioxus-native-core = { path = "../native-core", version = "^0.2.0", features = ["taffy"] }
+dioxus-native-core = { path = "../native-core", version = "^0.2.0", features = ["layout-attributes"] }
 dioxus-native-core-macro = { path = "../native-core-macro", version = "^0.3.0" }
 
 tui = "0.17.0"

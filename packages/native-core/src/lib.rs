@@ -9,7 +9,7 @@ use rustc_hash::FxHasher;
 
 #[cfg(feature = "dioxus")]
 pub mod dioxus;
-#[cfg(feature = "taffy")]
+#[cfg(feature = "layout-attributes")]
 pub mod layout_attributes;
 pub mod node;
 pub mod node_ref;
