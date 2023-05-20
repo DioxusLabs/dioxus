@@ -5,6 +5,8 @@ use syn::{Ident, LitStr};
 
 use proc_macro2::TokenStream as TokenStream2;
 
+use crate::nest::Layout;
+use crate::nest::LayoutId;
 use crate::query::QuerySegment;
 use crate::segment::parse_route_segments;
 use crate::segment::RouteSegment;
@@ -40,24 +42,30 @@ pub struct Route {
     pub comp_name: Ident,
     pub props_name: Ident,
     pub route: String,
-    pub route_segments: Vec<RouteSegment>,
+    pub segments: Vec<RouteSegment>,
     pub query: Option<QuerySegment>,
+    pub layouts: Vec<LayoutId>,
+    pub variant: syn::Variant,
 }
 
 impl Route {
-    pub fn parse(root_route: String, input: syn::Variant) -> syn::Result<Self> {
-        let route_attr = input
+    pub fn parse(
+        root_route: String,
+        layouts: Vec<LayoutId>,
+        variant: syn::Variant,
+    ) -> syn::Result<Self> {
+        let route_attr = variant
             .attrs
             .iter()
             .find(|attr| attr.path.is_ident("route"))
             .ok_or_else(|| {
                 syn::Error::new_spanned(
-                    input.clone(),
+                    variant.clone(),
                     "Routable variants must have a #[route(...)] attribute",
                 )
             })?;
 
-        let route_name = input.ident.clone();
+        let route_name = variant.ident.clone();
         let args = route_attr.parse_args::<RouteArgs>()?;
         let route = root_route + &args.route.value();
         let file_based = args.comp_name.is_none();
@@ -68,53 +76,115 @@ impl Route {
             .props_name
             .unwrap_or_else(|| format_ident!("{}Props", comp_name));
 
-        let (route_segments, query) = parse_route_segments(&input, &route)?;
+        let named_fields = match &variant.fields {
+            syn::Fields::Named(fields) => fields,
+            _ => {
+                return Err(syn::Error::new_spanned(
+                    variant.clone(),
+                    "Routable variants must have named fields",
+                ))
+            }
+        };
+
+        let (route_segments, query) = parse_route_segments(&variant.ident, named_fields, &route)?;
 
         Ok(Self {
             comp_name,
             props_name,
             route_name,
-            route_segments,
+            segments: route_segments,
             route,
             file_based,
             query,
+            layouts,
+            variant,
         })
     }
 
-    pub fn display_match(&self) -> TokenStream2 {
+    pub fn display_match(&self, layouts: &[Layout]) -> TokenStream2 {
         let name = &self.route_name;
-        let dynamic_segments = self.dynamic_segments();
-        let write_segments = self.route_segments.iter().map(|s| s.write_segment());
+        let dynamic_segments = self.dynamic_segments(layouts);
+        let write_layouts = self.layouts.iter().map(|id| layouts[id.0].write());
+        let write_segments = self.segments.iter().map(|s| s.write_segment());
         let write_query = self.query.as_ref().map(|q| q.write());
 
         quote! {
             Self::#name { #(#dynamic_segments,)* } => {
+                #(#write_layouts)*
                 #(#write_segments)*
                 #write_query
             }
         }
     }
 
-    pub fn routable_match(&self) -> TokenStream2 {
+    pub fn routable_match(&self, layouts: &[Layout], index: usize) -> Option<TokenStream2> {
         let name = &self.route_name;
-        let dynamic_segments: Vec<_> = self.dynamic_segments().collect();
-        let props_name = &self.props_name;
-        let comp_name = &self.comp_name;
+        let dynamic_segments = self.dynamic_segments(layouts);
 
-        quote! {
-            Self::#name { #(#dynamic_segments,)* } => {
-                let comp = #props_name { #(#dynamic_segments,)* };
-                let cx = cx.bump().alloc(Scoped {
-                    props: cx.bump().alloc(comp),
-                    scope: cx,
-                });
-                #comp_name(cx)
+        match index.cmp(&self.layouts.len()) {
+            std::cmp::Ordering::Less => {
+                let layout = self.layouts[index];
+                let render_layout = layouts[layout.0].routable_match();
+                // This is a layout
+                Some(quote! {
+                    #[allow(unused)]
+                    Self::#name { #(#dynamic_segments,)* } => {
+                        #render_layout
+                    }
+                })
             }
+            std::cmp::Ordering::Equal => {
+                let dynamic_segments_from_route = self.dynamic_segments_from_route();
+                let props_name = &self.props_name;
+                let comp_name = &self.comp_name;
+                // This is the final route
+                Some(quote! {
+                    #[allow(unused)]
+                    Self::#name { #(#dynamic_segments,)* } => {
+                        let comp = #props_name { #(#dynamic_segments_from_route,)* };
+                        let cx = cx.bump().alloc(Scoped {
+                            props: cx.bump().alloc(comp),
+                            scope: cx,
+                        });
+                        #comp_name(cx)
+                    }
+                })
+            }
+            _ => None,
         }
     }
 
-    fn dynamic_segments(&self) -> impl Iterator<Item = TokenStream2> + '_ {
-        let segments = self.route_segments.iter().filter_map(|seg| {
+    fn dynamic_segment_types<'a>(
+        &'a self,
+        layouts: &'a [Layout],
+    ) -> impl Iterator<Item = TokenStream2> + 'a {
+        let layouts = self
+            .layouts
+            .iter()
+            .flat_map(|id| layouts[id.0].dynamic_segment_types());
+        let segments = self.segments.iter().filter_map(|seg| {
+            let ty = seg.ty()?;
+
+            Some(quote! {
+                #ty
+            })
+        });
+        let query = self
+            .query
+            .as_ref()
+            .map(|q| {
+                let ty = q.ty();
+                quote! {
+                    #ty
+                }
+            })
+            .into_iter();
+
+        layouts.chain(segments.chain(query))
+    }
+
+    fn dynamic_segments_from_route(&self) -> impl Iterator<Item = TokenStream2> + '_ {
+        let segments = self.segments.iter().filter_map(|seg| {
             seg.name().map(|name| {
                 quote! {
                     #name
@@ -135,8 +205,21 @@ impl Route {
         segments.chain(query)
     }
 
-    pub fn construct(&self, enum_name: Ident) -> TokenStream2 {
-        let segments = self.dynamic_segments();
+    fn dynamic_segments<'a>(
+        &'a self,
+        layouts: &'a [Layout],
+    ) -> impl Iterator<Item = TokenStream2> + 'a {
+        let layouts = self
+            .layouts
+            .iter()
+            .flat_map(|id| layouts[id.0].dynamic_segments());
+        let dynamic_segments = self.dynamic_segments_from_route();
+
+        layouts.chain(dynamic_segments)
+    }
+
+    pub fn construct(&self, enum_name: Ident, layouts: &[Layout]) -> TokenStream2 {
+        let segments = self.dynamic_segments(layouts);
         let name = &self.route_name;
 
         quote! {
@@ -156,7 +239,7 @@ impl Route {
         let mut error_variants = Vec::new();
         let mut display_match = Vec::new();
 
-        for (i, segment) in self.route_segments.iter().enumerate() {
+        for (i, segment) in self.segments.iter().enumerate() {
             let error_name = segment.error_name(i);
             match segment {
                 RouteSegment::Static(index) => {
@@ -203,6 +286,16 @@ impl Route {
         match &self.query {
             Some(query) => query.parse(),
             None => quote! {},
+        }
+    }
+
+    pub fn variant(&self, layouts: &[Layout]) -> TokenStream2 {
+        let name = &self.route_name;
+        let segments = self.dynamic_segments(layouts);
+        let types = self.dynamic_segment_types(layouts);
+
+        quote! {
+            #name { #(#segments: #types,)* }
         }
     }
 }

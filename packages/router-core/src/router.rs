@@ -1,7 +1,8 @@
+#![allow(non_snake_case)]
 use crate::history::HistoryProvider;
 use dioxus::prelude::*;
 
-use std::str::FromStr;
+use std::{cell::RefCell, rc::Rc, str::FromStr, sync::Arc};
 
 #[derive(Debug, PartialEq)]
 pub struct RouteParseError<E: std::fmt::Display> {
@@ -18,25 +19,36 @@ impl<E: std::fmt::Display> std::fmt::Display for RouteParseError<E> {
     }
 }
 
-struct Router<R: Routable, H: HistoryProvider>
-where
-    <R as FromStr>::Err: std::fmt::Display,
-{
-    history: H,
-    route: R,
+#[derive(Clone)]
+pub struct Router {
+    subscribers: Rc<RefCell<Vec<ScopeId>>>,
+    update_any: Arc<dyn Fn(ScopeId)>,
+    history: Rc<dyn HistoryProvider>,
+    route: Rc<RefCell<Option<Rc<dyn RouteRenderable>>>>,
 }
 
-impl<R: Routable, H: HistoryProvider> Router<R, H>
-where
-    <R as FromStr>::Err: std::fmt::Display,
-{
-    fn new(history: H) -> Result<Self, R::Err> {
-        let path = history.current_path();
-        Ok(Self {
-            history,
-            route: R::from_str(path.as_str())?,
-        })
+impl Router {
+    fn set_route<R: Routable + 'static>(&self, route: R)
+    where
+        R::Err: std::fmt::Display,
+    {
+        *self.route.borrow_mut() = Some(Rc::new(route));
+        for subscriber in self.subscribers.borrow().iter() {
+            (self.update_any)(*subscriber);
+        }
     }
+}
+
+fn use_router(cx: &ScopeState) -> &Router {
+    use_context(cx).unwrap()
+}
+
+fn use_route(cx: &ScopeState) -> Rc<dyn RouteRenderable> {
+    let router = use_router(cx);
+    cx.use_hook(|| {
+        router.subscribers.borrow_mut().push(cx.scope_id());
+    });
+    router.route.borrow().clone().unwrap()
 }
 
 pub trait FromQuery {
@@ -104,25 +116,93 @@ impl<I: std::iter::FromIterator<String>> FromRouteSegments for I {
 pub struct RouterProps {
     pub current_route: String,
 }
-
-pub trait Routable: FromStr + std::fmt::Display + Clone
+pub trait Routable: std::fmt::Display + std::str::FromStr + 'static
 where
     <Self as FromStr>::Err: std::fmt::Display,
 {
-    fn render(self, cx: &ScopeState) -> Element;
+    fn render<'a>(&self, cx: &'a ScopeState, level: usize) -> Element<'a>;
+}
 
-    fn comp(cx: Scope<RouterProps>) -> Element
-    where
-        Self: 'static,
-    {
-        let router = Self::from_str(&cx.props.current_route);
-        match router {
-            Ok(router) => router.render(cx),
-            Err(err) => {
-                render! {
-                    pre {
-                        "{err}"
-                    }
+trait RoutableFactory {
+    type Err: std::fmt::Display;
+    type Routable: Routable + FromStr<Err = Self::Err>;
+}
+
+impl<R: Routable + FromStr> RoutableFactory for R
+where
+    <R as FromStr>::Err: std::fmt::Display,
+{
+    type Err = <R as FromStr>::Err;
+    type Routable = R;
+}
+
+trait RouteRenderable: std::fmt::Display + 'static {
+    fn render<'a>(&self, cx: &'a ScopeState, level: usize) -> Element<'a>;
+}
+
+impl<R: Routable> RouteRenderable for R
+where
+    <R as FromStr>::Err: std::fmt::Display,
+{
+    fn render<'a>(&self, cx: &'a ScopeState, level: usize) -> Element<'a> {
+        self.render(cx, level)
+    }
+}
+
+#[derive(Clone)]
+struct OutletContext {
+    current_level: usize,
+}
+
+fn use_outlet_context(cx: &ScopeState) -> &OutletContext {
+    let outlet_context = use_context(cx).unwrap();
+    outlet_context
+}
+
+impl OutletContext {
+    fn render(cx: &ScopeState) -> Element<'_> {
+        let outlet = use_outlet_context(cx);
+        let current_level = outlet.current_level;
+        cx.provide_context({
+            OutletContext {
+                current_level: current_level + 1,
+            }
+        });
+
+        use_route(cx).render(cx, current_level)
+    }
+}
+
+pub fn Outlet(cx: Scope) -> Element {
+    OutletContext::render(cx)
+}
+
+pub fn Router<R: Routable, H: HistoryProvider + Default + 'static>(
+    cx: Scope<RouterProps>,
+) -> Element
+where
+    <R as FromStr>::Err: std::fmt::Display,
+{
+    let current_route = R::from_str(&cx.props.current_route);
+    let router = use_context_provider(cx, || Router {
+        subscribers: Rc::default(),
+        update_any: cx.schedule_update_any(),
+        history: Rc::<H>::default(),
+        route: Rc::new(RefCell::new(None)),
+    });
+
+    use_context_provider(cx, || OutletContext { current_level: 1 });
+
+    match current_route {
+        Ok(current_route) => {
+            router.set_route(current_route);
+
+            router.route.borrow().as_ref().unwrap().render(cx, 0)
+        }
+        Err(err) => {
+            render! {
+                pre {
+                    "{err}"
                 }
             }
         }

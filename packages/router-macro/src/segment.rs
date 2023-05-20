@@ -1,5 +1,5 @@
 use quote::{format_ident, quote};
-use syn::{Ident, Type, Variant};
+use syn::{Ident, Type};
 
 use proc_macro2::{Span, TokenStream as TokenStream2};
 
@@ -18,6 +18,14 @@ impl RouteSegment {
             Self::Static(_) => None,
             Self::Dynamic(ident, _) => Some(ident.clone()),
             Self::CatchAll(ident, _) => Some(ident.clone()),
+        }
+    }
+
+    pub fn ty(&self) -> Option<&Type> {
+        match self {
+            Self::Static(_) => None,
+            Self::Dynamic(_, ty) => Some(ty),
+            Self::CatchAll(_, ty) => Some(ty),
         }
     }
 
@@ -123,7 +131,8 @@ pub fn static_segment_idx(idx: usize) -> Ident {
 }
 
 pub fn parse_route_segments(
-    varient: &Variant,
+    route_name: &Ident,
+    fields: &syn::FieldsNamed,
     route: &str,
 ) -> syn::Result<(Vec<RouteSegment>, Option<QuerySegment>)> {
     let mut route_segments = Vec::new();
@@ -138,7 +147,7 @@ pub fn parse_route_segments(
     let first = iterator.next();
     if first != Some("") {
         return Err(syn::Error::new_spanned(
-            varient,
+            route_name,
             format!(
                 "Routes should start with /. Error found in the route '{}'",
                 route
@@ -156,7 +165,7 @@ pub fn parse_route_segments(
                 segment[1..segment.len() - 1].to_string()
             };
 
-            let field = varient.fields.iter().find(|field| match field.ident {
+            let field = fields.named.iter().find(|field| match field.ident {
                 Some(ref field_ident) => *field_ident == ident,
                 None => false,
             });
@@ -165,10 +174,10 @@ pub fn parse_route_segments(
                 field.ty.clone()
             } else {
                 return Err(syn::Error::new_spanned(
-                    varient,
+                    route_name,
                     format!(
                         "Could not find a field with the name '{}' in the variant '{}'",
-                        ident, varient.ident
+                        ident, route_name
                     ),
                 ));
             };
@@ -202,7 +211,7 @@ pub fn parse_route_segments(
         Some(query) => {
             if query.starts_with('(') && query.ends_with(')') {
                 let query_ident = Ident::new(&query[1..query.len() - 1], Span::call_site());
-                let field = varient.fields.iter().find(|field| match field.ident {
+                let field = fields.named.iter().find(|field| match field.ident {
                     Some(ref field_ident) => field_ident == &query_ident,
                     None => false,
                 });
@@ -211,10 +220,10 @@ pub fn parse_route_segments(
                     field.ty.clone()
                 } else {
                     return Err(syn::Error::new_spanned(
-                        varient,
+                        route_name,
                         format!(
                             "Could not find a field with the name '{}' in the variant '{}'",
-                            query_ident, varient.ident
+                            query_ident, route_name
                         ),
                     ));
                 };

@@ -59,12 +59,22 @@ fn Route6(cx: Scope, extra: Vec<String>) -> Element {
     }
 }
 
+#[inline_props]
+fn Nested(cx: Scope, nested: String) -> Element {
+    render! {
+        div{
+            "Nested: {nested:?}"
+        }
+    }
+}
+
 #[rustfmt::skip]
-#[derive(Routable, Clone, Debug, PartialEq)]
+#[routable]
+#[derive(Clone, Debug, PartialEq)]
 enum Route {
     #[route("/(dynamic)" Route1)]
     Route1 { dynamic: String },
-    #[nest("/hello_world")]
+    #[nest("/(nested)" nested { nested: String } Nested)]
         #[route("/" Route2)]
         Route2 {},
         // #[redirect("/(dynamic)/hello_world")]
