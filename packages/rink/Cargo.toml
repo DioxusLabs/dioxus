@@ -22,7 +22,7 @@ crossterm = "0.23.0"
 anyhow = "1.0.42"
 tokio = { version = "1.15.0", features = ["full"] }
 futures = "0.3.19"
-taffy = "0.2.1"
+taffy = "0.3.12"
 smallvec = "1.6"
 rustc-hash = "1.1.0"
 anymap = "1.0.0-beta.2"

@@ -21,12 +21,11 @@ parking_lot = { version = "0.12.1", features = ["send_guard"] }
 dashmap = "5.4.0"
 
 # for parsing attributes
-taffy = { version = "0.2.1", optional = true }
+taffy = { version = "0.3.12", optional = true }
 lightningcss = { version = "1.0.0-alpha.39", optional = true }
 
 rayon = "1.6.1"
 shipyard = { version = "0.6.2", features = ["proc", "std"], default-features = false }
-shipyard_hierarchy = "0.6.0"
 
 [dev-dependencies]
 rand = "0.8.5"

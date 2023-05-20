@@ -24,7 +24,7 @@ rink = { path = "../rink" }
 crossterm = "0.23.0"
 tokio = { version = "1.15.0", features = ["full"] }
 futures = "0.3.19"
-taffy = "0.2.1"
+taffy = "0.3.12"
 
 [dev-dependencies]
 dioxus = { path = "../dioxus" }

@@ -1,22 +1,16 @@
 #![allow(non_snake_case)]
 
-//! Example: Basic Tailwind usage
-//!
-//! This example shows how an app might be styled with TailwindCSS.
-//!
-//! To minify your tailwind bundle, currently you need to use npm. Follow these instructions:
-//!
-//!     https://dev.to/arctic_hen7/how-to-set-up-tailwind-css-with-yew-and-trunk-il9
-
 use dioxus::prelude::*;
-use dioxus_desktop::Config;
 
 fn main() {
+    #[cfg(not(target_arch = "wasm32"))]
     dioxus_desktop::launch_cfg(
         app,
-        Config::new()
-            .with_custom_head("<script src=\"https://cdn.tailwindcss.com\"></script>".to_string()),
+        dioxus_desktop::Config::new()
+            .with_custom_head(r#"<link rel="stylesheet" href="public/tailwind.css">"#.to_string()),
     );
+    #[cfg(target_arch = "wasm32")]
+    dioxus_web::launch(app);
 }
 
 pub fn app(cx: Scope) -> Element {

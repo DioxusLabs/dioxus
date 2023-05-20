@@ -61,6 +61,7 @@ use futures_util::{pin_mut, FutureExt, StreamExt};
 mod cache;
 mod cfg;
 mod dom;
+mod file_engine;
 mod hot_reload;
 #[cfg(feature = "hydrate")]
 mod rehydrate;
@@ -225,7 +226,7 @@ pub async fn run_with_props<T: 'static>(root: fn(Scope<T>) -> Element, root_prop
     websys_dom.mount();
 
     loop {
-        log::debug!("waiting for work");
+        log::trace!("waiting for work");
 
         // if virtualdom has nothing, wait for it to have something before requesting idle time
         // if there is work then this future resolves immediately.
@@ -253,7 +254,7 @@ pub async fn run_with_props<T: 'static>(root: fn(Scope<T>) -> Element, root_prop
             res = rx.try_next().transpose().unwrap().ok();
         }
 
-        // Todo: This is currently disabled because it has a negative impact on responce times for events but it could be re-enabled for tasks
+        // Todo: This is currently disabled because it has a negative impact on response times for events but it could be re-enabled for tasks
         // Jank free rendering
         //
         // 1. wait for the browser to give us "idle" time

@@ -1,7 +1,9 @@
+mod element;
 pub mod prelude;
 pub mod widgets;
 
 use std::{
+    any::Any,
     ops::Deref,
     rc::Rc,
     sync::{Arc, RwLock},
@@ -12,6 +14,7 @@ use dioxus_html::EventData;
 use dioxus_native_core::dioxus::{DioxusState, NodeImmutableDioxusExt};
 use dioxus_native_core::prelude::*;
 
+use element::{create_mounted_events, find_mount_events};
 pub use rink::{query::Query, Config, RenderingMode, Size, TuiContext};
 use rink::{render, Driver};
 
@@ -37,14 +40,32 @@ pub fn launch_cfg_with_props<Props: 'static>(app: Component<Props>, props: Props
                 mapping: dioxus_state.clone(),
             });
         let muts = vdom.rebuild();
-        let mut rdom = rdom.write().unwrap();
-        dioxus_state
-            .write()
-            .unwrap()
-            .apply_mutations(&mut rdom, muts);
+
+        let mut queued_events = Vec::new();
+
+        {
+            let mut rdom = rdom.write().unwrap();
+            let mut dioxus_state = dioxus_state.write().unwrap();
+
+            // Find any mount events
+            let mounted = dbg!(find_mount_events(&muts));
+
+            dioxus_state.apply_mutations(&mut rdom, muts);
+
+            // Send the mount events
+            create_mounted_events(
+                &vdom,
+                &mut queued_events,
+                mounted
+                    .iter()
+                    .map(|id| (*dbg!(id), dioxus_state.element_to_node_id(*id))),
+            );
+        }
+
         DioxusRenderer {
             vdom,
             dioxus_state,
+            queued_events,
             #[cfg(all(feature = "hot-reload", debug_assertions))]
             hot_reload_rx: {
                 let (hot_reload_tx, hot_reload_rx) =
@@ -62,6 +83,8 @@ pub fn launch_cfg_with_props<Props: 'static>(app: Component<Props>, props: Props
 struct DioxusRenderer {
     vdom: VirtualDom,
     dioxus_state: Rc<RwLock<DioxusState>>,
+    // Events that are queued up to be sent to the vdom next time the vdom is polled
+    queued_events: Vec<(ElementId, &'static str, Rc<dyn Any>, bool)>,
     #[cfg(all(feature = "hot-reload", debug_assertions))]
     hot_reload_rx: tokio::sync::mpsc::UnboundedReceiver<dioxus_hot_reload::HotReloadMsg>,
 }
@@ -71,10 +94,23 @@ impl Driver for DioxusRenderer {
         let muts = self.vdom.render_immediate();
         {
             let mut rdom = rdom.write().unwrap();
-            self.dioxus_state
-                .write()
-                .unwrap()
-                .apply_mutations(&mut rdom, muts);
+
+            {
+                // Find any mount events
+                let mounted = find_mount_events(&muts);
+
+                let mut dioxus_state = self.dioxus_state.write().unwrap();
+                dioxus_state.apply_mutations(&mut rdom, muts);
+
+                // Send the mount events
+                create_mounted_events(
+                    &self.vdom,
+                    &mut self.queued_events,
+                    mounted
+                        .iter()
+                        .map(|id| (*id, dioxus_state.element_to_node_id(*id))),
+                );
+            }
         }
     }
 
@@ -94,6 +130,11 @@ impl Driver for DioxusRenderer {
     }
 
     fn poll_async(&mut self) -> std::pin::Pin<Box<dyn futures::Future<Output = ()> + '_>> {
+        // Add any queued events
+        for (id, event, value, bubbles) in self.queued_events.drain(..) {
+            self.vdom.handle_event(event, value, id, bubbles);
+        }
+
         #[cfg(all(feature = "hot-reload", debug_assertions))]
         return Box::pin(async {
             let hot_reload_wait = self.hot_reload_rx.recv();

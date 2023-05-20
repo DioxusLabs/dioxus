@@ -113,6 +113,9 @@ fn fun_name(
         // Toggle
         "toggle" => Toggle(de(data)?),
 
+        // Mounted
+        "mounted" => Mounted,
+
         // ImageData => "load" | "error";
         // OtherData => "abort" | "afterprint" | "beforeprint" | "beforeunload" | "hashchange" | "languagechange" | "message" | "offline" | "online" | "pagehide" | "pageshow" | "popstate" | "rejectionhandled" | "storage" | "unhandledrejection" | "unload" | "userproximity" | "vrdisplayactivate" | "vrdisplayblur" | "vrdisplayconnect" | "vrdisplaydeactivate" | "vrdisplaydisconnect" | "vrdisplayfocus" | "vrdisplaypointerrestricted" | "vrdisplaypointerunrestricted" | "vrdisplaypresentchange";
         other => {
@@ -151,6 +154,7 @@ pub enum EventData {
     Animation(AnimationData),
     Transition(TransitionData),
     Toggle(ToggleData),
+    Mounted,
 }
 
 impl EventData {
@@ -172,6 +176,7 @@ impl EventData {
             EventData::Animation(data) => Rc::new(data) as Rc<dyn Any>,
             EventData::Transition(data) => Rc::new(data) as Rc<dyn Any>,
             EventData::Toggle(data) => Rc::new(data) as Rc<dyn Any>,
+            EventData::Mounted => Rc::new(MountedData::new(())) as Rc<dyn Any>,
         }
     }
 }
