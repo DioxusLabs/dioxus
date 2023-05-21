@@ -40,7 +40,13 @@ impl<'a> RouteTree<'a> {
             match seg {
                 RouteTreeSegmentData::Static { .. } => 0,
                 RouteTreeSegmentData::Layout { .. } => 1,
-                RouteTreeSegmentData::Route(_) => 1,
+                RouteTreeSegmentData::Route(route) => {
+                    // Routes that end in a catch all segment should be checked last
+                    match route.segments.last() {
+                        Some(RouteSegment::CatchAll(..)) => 2,
+                        _ => 1,
+                    }
+                }
             }
         });
     }
