@@ -72,20 +72,20 @@ fn Nested(cx: Scope, nested: String) -> Element {
 #[routable]
 #[derive(Clone, Debug, PartialEq)]
 enum Route {
-    #[route("/(dynamic)" Route1)]
+    #[route("/:dynamic" Route1)]
     Route1 { dynamic: String },
-    #[nest("/(nested)" nested { nested: String } Nested)]
+    #[route("/:number1/:number2" Route4)]
+    Route4 { number1: u32, number2: u32 },
+    #[nest("/:nested" nested { nested: String } Nested)]
         #[route("/" Route2)]
         Route2 {},
-        // #[redirect("/(dynamic)/hello_world")]
-        #[route("/(dynamic)" Route3)]
+        // #[redirect("/:dynamic/hello_world")]
+        #[route("/:dynamic" Route3)]
         Route3 { dynamic: u32 },
     #[end_nest]
-    #[route("/(number1)/(number2)" Route4)]
-    Route4 { number1: u32, number2: u32 },
-    #[route("/?(query)" Route5)]
+    #[route("/?:query" Route5)]
     Route5 { query: String },
-    #[route("/(...extra)" Route6)]
+    #[route("/:...extra" Route6)]
     Route6 { extra: Vec<String> },
 }
 
@@ -97,7 +97,10 @@ fn display_works() {
 
     assert_eq!(route.to_string(), "/hello");
 
-    let route = Route::Route3 { dynamic: 1234 };
+    let route = Route::Route3 {
+        nested: "hello_world".to_string(),
+        dynamic: 1234,
+    };
 
     assert_eq!(route.to_string(), "/hello_world/1234");
 
@@ -145,9 +148,21 @@ fn from_string_works() {
     );
 
     let w = "/hello_world/1234";
-    assert_eq!(Route::from_str(w), Ok(Route::Route3 { dynamic: 1234 }));
+    assert_eq!(
+        Route::from_str(w),
+        Ok(Route::Route3 {
+            nested: "hello_world".to_string(),
+            dynamic: 1234
+        })
+    );
     let w = "/hello_world/1234/";
-    assert_eq!(Route::from_str(w), Ok(Route::Route3 { dynamic: 1234 }));
+    assert_eq!(
+        Route::from_str(w),
+        Ok(Route::Route3 {
+            nested: "hello_world".to_string(),
+            dynamic: 1234
+        })
+    );
 
     let w = "/hello_world2";
     assert_eq!(
@@ -188,9 +203,14 @@ fn round_trip() {
     assert_eq!(Route::from_str(&route.to_string()), Ok(route));
 
     // Route2
-    for num in 0..100 {
-        let route = Route::Route3 { dynamic: num };
-        assert_eq!(Route::from_str(&route.to_string()), Ok(route));
+    for num1 in 0..100 {
+        for num2 in 0..100 {
+            let route = Route::Route3 {
+                nested: format!("number{num1}"),
+                dynamic: num2,
+            };
+            assert_eq!(Route::from_str(&route.to_string()), Ok(route));
+        }
     }
 
     // Route3

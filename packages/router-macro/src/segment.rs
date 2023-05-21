@@ -156,13 +156,13 @@ pub fn parse_route_segments(
     }
 
     while let Some(segment) = iterator.next() {
-        if segment.starts_with('(') && segment.ends_with(')') {
-            let spread = segment.starts_with("(...");
+        if let Some(segment) = segment.strip_prefix(':') {
+            let spread = segment.starts_with("...");
 
             let ident = if spread {
-                segment[4..segment.len() - 1].to_string()
+                segment[3..].to_string()
             } else {
-                segment[1..segment.len() - 1].to_string()
+                segment.to_string()
             };
 
             let field = fields.named.iter().find(|field| match field.ident {
@@ -209,8 +209,8 @@ pub fn parse_route_segments(
     // check if the route has a query string
     let parsed_query = match query {
         Some(query) => {
-            if query.starts_with('(') && query.ends_with(')') {
-                let query_ident = Ident::new(&query[1..query.len() - 1], Span::call_site());
+            if let Some(query) = query.strip_prefix(':') {
+                let query_ident = Ident::new(query, Span::call_site());
                 let field = fields.named.iter().find(|field| match field.ident {
                     Some(ref field_ident) => field_ident == &query_ident,
                     None => false,
