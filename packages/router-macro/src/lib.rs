@@ -231,6 +231,7 @@ impl RouteEnum {
         quote! {
             #(#type_defs)*
 
+            #[allow(non_camel_case_types)]
             #[derive(Debug, PartialEq)]
             pub enum #match_error_name {
                 #(#error_variants),*
