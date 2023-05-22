@@ -5,8 +5,10 @@ use syn::{Ident, LitStr};
 
 use proc_macro2::TokenStream as TokenStream2;
 
-use crate::nest::Layout;
-use crate::nest::LayoutId;
+use crate::layout::Layout;
+use crate::layout::LayoutId;
+use crate::nest::Nest;
+use crate::nest::NestId;
 use crate::query::QuerySegment;
 use crate::segment::parse_route_segments;
 use crate::segment::RouteSegment;
@@ -44,13 +46,15 @@ pub struct Route {
     pub route: String,
     pub segments: Vec<RouteSegment>,
     pub query: Option<QuerySegment>,
+    pub nests: Vec<NestId>,
     pub layouts: Vec<LayoutId>,
     pub variant: syn::Variant,
+    fields: syn::FieldsNamed,
 }
 
 impl Route {
     pub fn parse(
-        root_route: String,
+        nests: Vec<NestId>,
         layouts: Vec<LayoutId>,
         variant: syn::Variant,
     ) -> syn::Result<Self> {
@@ -67,7 +71,7 @@ impl Route {
 
         let route_name = variant.ident.clone();
         let args = route_attr.parse_args::<RouteArgs>()?;
-        let route = root_route + &args.route.value();
+        let route = args.route.value();
         let file_based = args.comp_name.is_none();
         let comp_name = args
             .comp_name
@@ -86,7 +90,8 @@ impl Route {
             }
         };
 
-        let (route_segments, query) = parse_route_segments(&variant.ident, named_fields, &route)?;
+        let (route_segments, query) =
+            parse_route_segments(variant.ident.span(), named_fields.named.iter(), &route)?;
 
         Ok(Self {
             comp_name,
@@ -96,15 +101,17 @@ impl Route {
             route,
             file_based,
             query,
+            nests,
             layouts,
+            fields: named_fields.clone(),
             variant,
         })
     }
 
-    pub fn display_match(&self, layouts: &[Layout]) -> TokenStream2 {
+    pub fn display_match(&self, nests: &[Nest]) -> TokenStream2 {
         let name = &self.route_name;
-        let dynamic_segments = self.dynamic_segments(layouts);
-        let write_layouts = self.layouts.iter().map(|id| layouts[id.0].write());
+        let dynamic_segments = self.dynamic_segments();
+        let write_layouts = self.nests.iter().map(|id| nests[id.0].write());
         let write_segments = self.segments.iter().map(|s| s.write_segment());
         let write_query = self.query.as_ref().map(|q| q.write());
 
@@ -117,14 +124,19 @@ impl Route {
         }
     }
 
-    pub fn routable_match(&self, layouts: &[Layout], index: usize) -> Option<TokenStream2> {
+    pub fn routable_match(
+        &self,
+        layouts: &[Layout],
+        nests: &[Nest],
+        index: usize,
+    ) -> Option<TokenStream2> {
         let name = &self.route_name;
-        let dynamic_segments = self.dynamic_segments(layouts);
+        let dynamic_segments = self.dynamic_segments();
 
         match index.cmp(&self.layouts.len()) {
             std::cmp::Ordering::Less => {
                 let layout = self.layouts[index];
-                let render_layout = layouts[layout.0].routable_match();
+                let render_layout = layouts[layout.0].routable_match(nests);
                 // This is a layout
                 Some(quote! {
                     #[allow(unused)]
@@ -134,7 +146,7 @@ impl Route {
                 })
             }
             std::cmp::Ordering::Equal => {
-                let dynamic_segments_from_route = self.dynamic_segments_from_route();
+                let dynamic_segments_from_route = self.dynamic_segments();
                 let props_name = &self.props_name;
                 let comp_name = &self.comp_name;
                 // This is the final route
@@ -154,72 +166,15 @@ impl Route {
         }
     }
 
-    fn dynamic_segment_types<'a>(
-        &'a self,
-        layouts: &'a [Layout],
-    ) -> impl Iterator<Item = TokenStream2> + 'a {
-        let layouts = self
-            .layouts
-            .iter()
-            .flat_map(|id| layouts[id.0].dynamic_segment_types());
-        let segments = self.segments.iter().filter_map(|seg| {
-            let ty = seg.ty()?;
-
-            Some(quote! {
-                #ty
-            })
-        });
-        let query = self
-            .query
-            .as_ref()
-            .map(|q| {
-                let ty = q.ty();
-                quote! {
-                    #ty
-                }
-            })
-            .into_iter();
-
-        layouts.chain(segments.chain(query))
+    fn dynamic_segments(&self) -> impl Iterator<Item = TokenStream2> + '_ {
+        self.fields.named.iter().map(|f| {
+            let name = f.ident.as_ref().unwrap();
+            quote! {#name}
+        })
     }
 
-    fn dynamic_segments_from_route(&self) -> impl Iterator<Item = TokenStream2> + '_ {
-        let segments = self.segments.iter().filter_map(|seg| {
-            seg.name().map(|name| {
-                quote! {
-                    #name
-                }
-            })
-        });
-        let query = self
-            .query
-            .as_ref()
-            .map(|q| {
-                let name = q.name();
-                quote! {
-                    #name
-                }
-            })
-            .into_iter();
-
-        segments.chain(query)
-    }
-
-    fn dynamic_segments<'a>(
-        &'a self,
-        layouts: &'a [Layout],
-    ) -> impl Iterator<Item = TokenStream2> + 'a {
-        let layouts = self
-            .layouts
-            .iter()
-            .flat_map(|id| layouts[id.0].dynamic_segments());
-        let dynamic_segments = self.dynamic_segments_from_route();
-
-        layouts.chain(dynamic_segments)
-    }
-
-    pub fn construct(&self, enum_name: Ident, layouts: &[Layout]) -> TokenStream2 {
-        let segments = self.dynamic_segments(layouts);
+    pub fn construct(&self, enum_name: Ident) -> TokenStream2 {
+        let segments = self.dynamic_segments();
         let name = &self.route_name;
 
         quote! {
@@ -289,13 +244,21 @@ impl Route {
         }
     }
 
-    pub fn variant(&self, layouts: &[Layout]) -> TokenStream2 {
+    pub fn variant(&self) -> TokenStream2 {
         let name = &self.route_name;
-        let segments = self.dynamic_segments(layouts);
-        let types = self.dynamic_segment_types(layouts);
+        let fields = self.fields.named.iter().map(|f| {
+            let mut new = f.clone();
+            new.attrs.retain(|a| {
+                !a.path.is_ident("nest")
+                    && !a.path.is_ident("end_nest")
+                    && !a.path.is_ident("layout")
+                    && !a.path.is_ident("end_layout")
+            });
+            new
+        });
 
         quote! {
-            #name { #(#segments: #types,)* }
+            #name { #(#fields,)* }
         }
     }
 }

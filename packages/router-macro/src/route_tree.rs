@@ -4,7 +4,7 @@ use slab::Slab;
 use syn::Ident;
 
 use crate::{
-    nest::Layout,
+    nest::Nest,
     route::Route,
     segment::{static_segment_idx, RouteSegment},
 };
@@ -39,7 +39,7 @@ impl<'a> RouteTree<'a> {
             let seg = self.get(seg).unwrap();
             match seg {
                 RouteTreeSegmentData::Static { .. } => 0,
-                RouteTreeSegmentData::Layout { .. } => 1,
+                RouteTreeSegmentData::Nest { .. } => 1,
                 RouteTreeSegmentData::Route(route) => {
                     // Routes that end in a catch all segment should be checked last
                     match route.segments.last() {
@@ -70,7 +70,7 @@ impl<'a> RouteTree<'a> {
         let element = self.entries.get(element).unwrap();
         match element {
             RouteTreeSegmentData::Static { children, .. } => children.clone(),
-            RouteTreeSegmentData::Layout { children, .. } => children.clone(),
+            RouteTreeSegmentData::Nest { children, .. } => children.clone(),
             _ => Vec::new(),
         }
     }
@@ -79,20 +79,20 @@ impl<'a> RouteTree<'a> {
         let element = self.entries.get_mut(element).unwrap();
         match element {
             RouteTreeSegmentData::Static { children, .. } => Some(children),
-            RouteTreeSegmentData::Layout { children, .. } => Some(children),
+            RouteTreeSegmentData::Nest { children, .. } => Some(children),
             _ => None,
         }
     }
 
     fn children_mut(&mut self, element: usize) -> &mut Vec<usize> {
         self.try_children_mut(element)
-            .expect("Cannot get children of non static or layout segment")
+            .expect("Cannot get children of non static or nest segment")
     }
 
-    pub fn new(routes: &'a [Route], layouts: &'a [Layout]) -> Self {
+    pub fn new(routes: &'a [Route], nests: &'a [Nest]) -> Self {
         let routes = routes
             .iter()
-            .map(|route| RouteIter::new(route, layouts))
+            .map(|route| RouteIter::new(route, nests))
             .collect::<Vec<_>>();
 
         let mut myself = Self::default();
@@ -109,11 +109,11 @@ impl<'a> RouteTree<'a> {
         for mut route in routes {
             let mut current_route: Option<usize> = None;
 
-            // First add a layout if there is one
-            while let Some(layout) = route.next_layout() {
-                let segments_iter: std::slice::Iter<RouteSegment> = layout.segments.iter();
+            // First add all nests
+            while let Some(nest) = route.next_nest() {
+                let segments_iter = nest.segments.iter();
 
-                // Add all static segments of the layout
+                // Add all static segments of the nest
                 'o: for (index, segment) in segments_iter.enumerate() {
                     match segment {
                         RouteSegment::Static(segment) => {
@@ -124,17 +124,12 @@ impl<'a> RouteTree<'a> {
                                     .map(|id| self.children(id))
                                     .unwrap_or_else(|| segments.clone());
 
-                                for seg in segments.iter() {
-                                    let seg = self.get(*seg).unwrap();
-                                    if let RouteTreeSegmentData::Static {
-                                        segment: s,
-                                        children,
-                                        ..
-                                    } = seg
-                                    {
+                                for &seg_id in segments.iter() {
+                                    let seg = self.get(seg_id).unwrap();
+                                    if let RouteTreeSegmentData::Static { segment: s, .. } = seg {
                                         if s == segment {
                                             // If it does, just update the current route
-                                            current_route = children.last().cloned();
+                                            current_route = Some(seg_id);
                                             continue 'o;
                                         }
                                     }
@@ -144,7 +139,10 @@ impl<'a> RouteTree<'a> {
                             let static_segment = RouteTreeSegmentData::Static {
                                 segment,
                                 children: Vec::new(),
-                                error_variant: route.error_variant(),
+                                error_variant: StaticErrorVariant {
+                                    varient_parse_error: nest.error_ident(),
+                                    enum_varient: nest.error_variant(),
+                                },
                                 index,
                             };
 
@@ -155,28 +153,31 @@ impl<'a> RouteTree<'a> {
                                 .map(|id| self.children_mut(id))
                                 .unwrap_or_else(|| &mut segments);
                             current_children.push(static_segment);
+
+                            // Update the current route
+                            current_route = Some(static_segment);
                         }
                         // If there is a dynamic segment, stop adding static segments
                         RouteSegment::Dynamic(..) => break,
                         RouteSegment::CatchAll(..) => {
-                            todo!("Catch all segments are not allowed in layouts")
+                            todo!("Catch all segments are not allowed in nests")
                         }
                     }
                 }
 
-                // Add the layout to the current route
-                let layout = RouteTreeSegmentData::Layout {
-                    layout,
+                // Add the nest to the current route
+                let nest = RouteTreeSegmentData::Nest {
+                    nest,
                     children: Vec::new(),
                 };
 
-                let layout = self.entries.insert(layout);
+                let nest = self.entries.insert(nest);
                 let segments = match current_route.and_then(|id| self.get_mut(id)) {
                     Some(RouteTreeSegmentData::Static { children, .. }) => children,
-                    Some(_) => unreachable!(),
+                    Some(r) => unreachable!("{r:?} is not a static segment"),
                     None => &mut segments,
                 };
-                segments.push(layout);
+                segments.push(nest);
 
                 // Update the current route
                 current_route = segments.last().cloned();
@@ -252,8 +253,8 @@ pub enum RouteTreeSegmentData<'a> {
         index: usize,
         children: Vec<usize>,
     },
-    Layout {
-        layout: &'a Layout,
+    Nest {
+        nest: &'a Nest,
         children: Vec<usize>,
     },
     Route(&'a Route),
@@ -265,7 +266,6 @@ impl<'a> RouteTreeSegmentData<'a> {
         tree: &RouteTree,
         enum_name: syn::Ident,
         error_enum_name: syn::Ident,
-        layouts: &[Layout],
     ) -> TokenStream {
         match self {
             RouteTreeSegmentData::Static {
@@ -282,7 +282,7 @@ impl<'a> RouteTreeSegmentData<'a> {
 
                 let children = children.iter().map(|child| {
                     let child = tree.get(*child).unwrap();
-                    child.to_tokens(tree, enum_name.clone(), error_enum_name.clone(), layouts)
+                    child.to_tokens(tree, enum_name.clone(), error_enum_name.clone())
                 });
 
                 quote! {
@@ -310,7 +310,7 @@ impl<'a> RouteTreeSegmentData<'a> {
                     .enumerate()
                     .skip_while(|(_, seg)| matches!(seg, RouteSegment::Static(_)));
 
-                let construct_variant = route.construct(enum_name, layouts);
+                let construct_variant = route.construct(enum_name);
                 let parse_query = route.parse_query();
 
                 let insure_not_trailing = route
@@ -334,12 +334,12 @@ impl<'a> RouteTreeSegmentData<'a> {
                     &varient_parse_error,
                 )
             }
-            Self::Layout { layout, children } => {
+            Self::Nest { nest, children } => {
                 // At this point, we have matched all static segments, so we can just check if the remaining segments match the route
-                let varient_parse_error: Ident = layout.error_ident();
-                let enum_varient = &layout.layout_name;
+                let varient_parse_error: Ident = nest.error_ident();
+                let enum_varient = nest.error_variant();
 
-                let route_segments = layout
+                let route_segments = nest
                     .segments
                     .iter()
                     .enumerate()
@@ -349,7 +349,7 @@ impl<'a> RouteTreeSegmentData<'a> {
                     .iter()
                     .map(|child| {
                         let child = tree.get(*child).unwrap();
-                        child.to_tokens(tree, enum_name.clone(), error_enum_name.clone(), layouts)
+                        child.to_tokens(tree, enum_name.clone(), error_enum_name.clone())
                     })
                     .collect();
 
@@ -357,7 +357,7 @@ impl<'a> RouteTreeSegmentData<'a> {
                     route_segments.peekable(),
                     parse_children,
                     &error_enum_name,
-                    enum_varient,
+                    &enum_varient,
                     &varient_parse_error,
                 )
             }
@@ -436,27 +436,27 @@ fn return_constructed(
 
 pub struct RouteIter<'a> {
     route: &'a Route,
-    layouts: &'a [Layout],
-    layout_index: usize,
+    nests: &'a [Nest],
+    nest_index: usize,
     static_segment_index: usize,
 }
 
 impl<'a> RouteIter<'a> {
-    fn new(route: &'a Route, layouts: &'a [Layout]) -> Self {
+    fn new(route: &'a Route, nests: &'a [Nest]) -> Self {
         Self {
             route,
-            layouts,
-            layout_index: 0,
+            nests,
+            nest_index: 0,
             static_segment_index: 0,
         }
     }
 
-    fn next_layout(&mut self) -> Option<&'a Layout> {
-        let idx = self.layout_index;
-        let layout_index = self.route.layouts.get(idx)?;
-        let layout = &self.layouts[layout_index.0];
-        self.layout_index += 1;
-        Some(layout)
+    fn next_nest(&mut self) -> Option<&'a Nest> {
+        let idx = self.nest_index;
+        let nest_index = self.route.nests.get(idx)?;
+        let nest = &self.nests[nest_index.0];
+        self.nest_index += 1;
+        Some(nest)
     }
 
     fn next_static_segment(&mut self) -> Option<(usize, &'a str)> {

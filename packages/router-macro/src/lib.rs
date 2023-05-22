@@ -1,15 +1,17 @@
 extern crate proc_macro;
 
-use nest::{Layout, Nest};
+use layout::Layout;
+use nest::{Nest, NestId};
 use proc_macro::TokenStream;
 use quote::{__private::Span, format_ident, quote, ToTokens};
 use route::Route;
-use syn::{parse_macro_input, Ident};
+use syn::{parse::ParseStream, parse_macro_input, Ident};
 
 use proc_macro2::TokenStream as TokenStream2;
 
-use crate::{nest::LayoutId, route_tree::RouteTree};
+use crate::{layout::LayoutId, route_tree::RouteTree};
 
+mod layout;
 mod nest;
 mod query;
 mod route;
@@ -46,10 +48,11 @@ pub fn routable(_: TokenStream, input: TokenStream) -> TokenStream {
 }
 
 struct RouteEnum {
-    vis: syn::Visibility,
     attrs: Vec<syn::Attribute>,
+    vis: syn::Visibility,
     name: Ident,
     routes: Vec<Route>,
+    nests: Vec<Nest>,
     layouts: Vec<Layout>,
 }
 
@@ -57,79 +60,89 @@ impl RouteEnum {
     fn parse(data: syn::ItemEnum) -> syn::Result<Self> {
         let name = &data.ident;
 
-        enum NestRef {
-            Static(String),
-            Dynamic { id: LayoutId },
-        }
-
         let mut routes = Vec::new();
 
         let mut layouts = Vec::new();
+        let mut layout_stack = Vec::new();
 
+        let mut nests = Vec::new();
         let mut nest_stack = Vec::new();
 
-        for variant in data.variants {
+        for variant in &data.variants {
             // Apply the any nesting attributes in order
             for attr in &variant.attrs {
                 if attr.path.is_ident("nest") {
-                    let nest: Nest = attr.parse_args()?;
-                    let nest_ref = match nest {
-                        Nest::Static(s) => NestRef::Static(s),
-                        Nest::Layout(mut l) => {
-                            // if there is a static nest before this, add it to the layout
-                            let mut static_prefix = nest_stack
-                                .iter()
-                                // walk backwards and take all static nests
-                                .rev()
-                                .map_while(|nest| match nest {
-                                    NestRef::Static(s) => Some(s.clone()),
-                                    NestRef::Dynamic { .. } => None,
-                                })
-                                .collect::<Vec<_>>();
-                            // reverse the static prefix so it is in the correct order
-                            static_prefix.reverse();
-
-                            if !static_prefix.is_empty() {
-                                l.add_static_prefix(&static_prefix.join("/"));
+                    let mut children_routes = Vec::new();
+                    {
+                        // add all of the variants of the enum to the children_routes until we hit an end_nest
+                        let mut level = 0;
+                        'o: for variant in &data.variants {
+                            children_routes.push(variant.fields.clone());
+                            for attr in &variant.attrs {
+                                if attr.path.is_ident("nest") {
+                                    level += 1;
+                                } else if attr.path.is_ident("end_nest") {
+                                    level -= 1;
+                                    if level < 0 {
+                                        break 'o;
+                                    }
+                                }
                             }
-
-                            let id = layouts.len();
-                            layouts.push(l);
-                            NestRef::Dynamic { id: LayoutId(id) }
                         }
+                    }
+
+                    let nest_index = nests.len();
+
+                    let parser = |input: ParseStream| {
+                        Nest::parse(
+                            input,
+                            children_routes
+                                .iter()
+                                .filter_map(|f: &syn::Fields| match f {
+                                    syn::Fields::Named(fields) => Some(fields.clone()),
+                                    _ => None,
+                                })
+                                .collect(),
+                            nest_index,
+                        )
                     };
-                    nest_stack.push(nest_ref);
+                    let nest = attr.parse_args_with(parser)?;
+
+                    nests.push(nest);
+                    nest_stack.push(NestId(nest_index));
                 } else if attr.path.is_ident("end_nest") {
                     nest_stack.pop();
+                } else if attr.path.is_ident("layout") {
+                    let layout_index = layouts.len();
+
+                    let parser = |input: ParseStream| {
+                        Layout::parse(input, nest_stack.iter().rev().cloned().collect())
+                    };
+                    let layout = attr.parse_args_with(parser)?;
+
+                    layouts.push(layout);
+                    layout_stack.push(LayoutId(layout_index));
+                } else if attr.path.is_ident("end_layout") {
+                    layout_stack.pop();
                 }
             }
 
-            let mut trailing_static_route = nest_stack
-                .iter()
-                .rev()
-                .map_while(|nest| match nest {
-                    NestRef::Static(s) => Some(s.clone()),
-                    NestRef::Dynamic { .. } => None,
-                })
-                .collect::<Vec<_>>();
-            trailing_static_route.reverse();
-            let active_layouts = nest_stack
-                .iter()
-                .filter_map(|nest| match nest {
-                    NestRef::Static(_) => None,
-                    NestRef::Dynamic { id } => Some(*id),
-                })
-                .collect::<Vec<_>>();
+            let mut active_nests = nest_stack.clone();
+            active_nests.reverse();
+            let mut active_layouts = layout_stack.clone();
+            active_layouts.reverse();
 
-            let route = Route::parse(trailing_static_route.join("/"), active_layouts, variant)?;
+            let route = Route::parse(active_nests, active_layouts, variant.clone())?;
+
             routes.push(route);
         }
 
         let myself = Self {
-            vis: data.vis,
-            attrs: data.attrs,
             name: name.clone(),
+            attrs: data.attrs,
+            vis: data.vis,
             routes,
+            nests,
             layouts,
         };
 
@@ -140,7 +153,7 @@ impl RouteEnum {
         let mut display_match = Vec::new();
 
         for route in &self.routes {
-            display_match.push(route.display_match(&self.layouts));
+            display_match.push(route.display_match(&self.nests));
         }
 
         let name = &self.name;
@@ -158,13 +171,13 @@ impl RouteEnum {
     }
 
     fn parse_impl(&self) -> TokenStream2 {
-        let tree = RouteTree::new(&self.routes, &self.layouts);
+        let tree = RouteTree::new(&self.routes, &self.nests);
         let name = &self.name;
 
         let error_name = format_ident!("{}MatchError", self.name);
         let tokens = tree.roots.iter().map(|&id| {
             let route = tree.get(id).unwrap();
-            route.to_tokens(&tree, self.name.clone(), error_name.clone(), &self.layouts)
+            route.to_tokens(&tree, self.name.clone(), error_name.clone())
         });
 
         quote! {
@@ -217,15 +230,14 @@ impl RouteEnum {
             type_defs.push(route.error_type());
         }
 
-        for layout in &self.layouts {
-            let layout_name = &layout.layout_name;
+        for nest in &self.nests {
+            let error_variant = nest.error_variant();
+            let error_name = nest.error_ident();
+            let route_str = &nest.route;
 
-            let error_name = layout.error_ident();
-            let route_str = &layout.route;
-
-            error_variants.push(quote! { #layout_name(#error_name) });
-            display_match.push(quote! { Self::#layout_name(err) => write!(f, "Layout '{}' ('{}') did not match:\n{}", stringify!(#layout_name), #route_str, err)? });
-            type_defs.push(layout.error_type());
+            error_variants.push(quote! { #error_variant(#error_name) });
+            display_match.push(quote! { Self::#error_variant(err) => write!(f, "Nest '{}' ('{}') did not match:\n{}", stringify!(#error_name), #route_str, err)? });
+            type_defs.push(nest.error_type());
         }
 
         quote! {
@@ -259,7 +271,7 @@ impl RouteEnum {
 
             // Collect all routes that match the current layer
             for route in &self.routes {
-                if let Some(matched) = route.routable_match(&self.layouts, index) {
+                if let Some(matched) = route.routable_match(&self.layouts, &self.nests, index) {
                     routable_match.push(matched);
                 }
             }
@@ -303,7 +315,7 @@ impl ToTokens for RouteEnum {
         let vis = &self.vis;
         let name = &self.name;
         let attrs = &self.attrs;
-        let variants = routes.iter().map(|r| r.variant(&self.layouts));
+        let variants = routes.iter().map(|r| r.variant());
 
         tokens.extend(quote!(
             #(#attrs)*

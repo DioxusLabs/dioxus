@@ -5,7 +5,7 @@ use proc_macro2::{Span, TokenStream as TokenStream2};
 
 use crate::query::QuerySegment;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum RouteSegment {
     Static(String),
     Dynamic(Ident, Type),
@@ -18,14 +18,6 @@ impl RouteSegment {
             Self::Static(_) => None,
             Self::Dynamic(ident, _) => Some(ident.clone()),
             Self::CatchAll(ident, _) => Some(ident.clone()),
-        }
-    }
-
-    pub fn ty(&self) -> Option<&Type> {
-        match self {
-            Self::Static(_) => None,
-            Self::Dynamic(_, ty) => Some(ty),
-            Self::CatchAll(_, ty) => Some(ty),
         }
     }
 
@@ -130,9 +122,9 @@ pub fn static_segment_idx(idx: usize) -> Ident {
     format_ident!("StaticSegment{}ParseError", idx)
 }
 
-pub fn parse_route_segments(
-    route_name: &Ident,
-    fields: &syn::FieldsNamed,
+pub fn parse_route_segments<'a>(
+    route_span: Span,
+    mut fields: impl Iterator<Item = &'a syn::Field>,
     route: &str,
 ) -> syn::Result<(Vec<RouteSegment>, Option<QuerySegment>)> {
     let mut route_segments = Vec::new();
@@ -146,8 +138,8 @@ pub fn parse_route_segments(
     // skip the first empty segment
     let first = iterator.next();
     if first != Some("") {
-        return Err(syn::Error::new_spanned(
-            route_name,
+        return Err(syn::Error::new(
+            route_span,
             format!(
                 "Routes should start with /. Error found in the route '{}'",
                 route
@@ -165,7 +157,7 @@ pub fn parse_route_segments(
                 segment.to_string()
             };
 
-            let field = fields.named.iter().find(|field| match field.ident {
+            let field = fields.find(|field| match field.ident {
                 Some(ref field_ident) => *field_ident == ident,
                 None => false,
             });
@@ -173,12 +165,9 @@ pub fn parse_route_segments(
             let ty = if let Some(field) = field {
                 field.ty.clone()
             } else {
-                return Err(syn::Error::new_spanned(
-                    route_name,
-                    format!(
-                        "Could not find a field with the name '{}' in the variant '{}'",
-                        ident, route_name
-                    ),
+                return Err(syn::Error::new(
+                    route_span,
+                    format!("Could not find a field with the name '{}'", ident,),
                 ));
             };
             if spread {
@@ -188,8 +177,8 @@ pub fn parse_route_segments(
                 ));
 
                 if iterator.next().is_some() {
-                    return Err(syn::Error::new_spanned(
-                        route,
+                    return Err(syn::Error::new(
+                        route_span,
                         "Catch-all route segments must be the last segment in a route. The route segments after the catch-all segment will never be matched.",
                     ));
                 } else {
@@ -211,7 +200,7 @@ pub fn parse_route_segments(
         Some(query) => {
             if let Some(query) = query.strip_prefix(':') {
                 let query_ident = Ident::new(query, Span::call_site());
-                let field = fields.named.iter().find(|field| match field.ident {
+                let field = fields.find(|field| match field.ident {
                     Some(ref field_ident) => field_ident == &query_ident,
                     None => false,
                 });
@@ -219,12 +208,9 @@ pub fn parse_route_segments(
                 let ty = if let Some(field) = field {
                     field.ty.clone()
                 } else {
-                    return Err(syn::Error::new_spanned(
-                        route_name,
-                        format!(
-                            "Could not find a field with the name '{}' in the variant '{}'",
-                            query_ident, route_name
-                        ),
+                    return Err(syn::Error::new(
+                        route_span,
+                        format!("Could not find a field with the name '{}'", query_ident),
                     ));
                 };
 

@@ -24,12 +24,4 @@ impl QuerySegment {
             write!(f, "?{}", #ident)?;
         }
     }
-
-    pub fn name(&self) -> Ident {
-        self.ident.clone()
-    }
-
-    pub fn ty(&self) -> &Type {
-        &self.ty
-    }
 }
