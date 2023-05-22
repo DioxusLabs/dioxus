@@ -190,7 +190,7 @@ impl RouteEnum {
             }
 
             impl std::str::FromStr for #name {
-                type Err = RouteParseError<#error_name>;
+                type Err = dioxus_router::routable::RouteParseError<#error_name>;
 
                 fn from_str(s: &str) -> Result<Self, Self::Err> {
                     let route = s.strip_prefix('/').unwrap_or(s);
@@ -200,7 +200,7 @@ impl RouteEnum {
 
                     #(#tokens)*
 
-                    Err(RouteParseError {
+                    Err(dioxus_router::routable::RouteParseError {
                         attempted_routes: errors,
                     })
                 }
@@ -289,7 +289,7 @@ impl RouteEnum {
         let index_iter = 0..layers.len();
 
         quote! {
-            impl Routable for #name where Self: Clone {
+            impl dioxus_router::routable::Routable for #name where Self: Clone {
                 fn render<'a>(&self, cx: &'a ScopeState, level: usize) -> Element<'a> {
                     let myself = self.clone();
                     match level {

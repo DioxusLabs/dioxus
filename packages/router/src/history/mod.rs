@@ -21,6 +21,8 @@ mod web_hash;
 #[cfg(feature = "web")]
 pub use web_hash::*;
 
+use crate::routable::Routable;
+
 #[cfg(feature = "web")]
 pub(crate) mod web_scroll;
 
@@ -32,7 +34,7 @@ pub(crate) mod web_scroll;
 /// However, you should document all deviations. Also, make sure the navigation is user-friendly.
 /// The described behaviors are designed to mimic a web browser, which most users should already
 /// know. Deviations might confuse them.
-pub trait HistoryProvider {
+pub trait HistoryProvider<R: Routable> {
     /// Get the path of the current URL.
     ///
     /// **Must start** with `/`. **Must _not_ contain** the prefix.
@@ -46,20 +48,8 @@ pub trait HistoryProvider {
     /// assert_eq!(history.current_path(), "/path");
     /// ```
     #[must_use]
-    fn current_path(&self) -> String;
-    /// Get the query string of the current URL.
-    ///
-    /// **Must _not_** start with `?`.
-    ///
-    /// ```rust
-    /// # use dioxus_router_core::history::{HistoryProvider, MemoryHistory};
-    /// let mut history = MemoryHistory::default();
-    /// assert_eq!(history.current_query(), None);
-    ///
-    /// history.push(String::from("?some=value"));
-    /// assert_eq!(history.current_query(), Some("some=value".to_string()));
-    /// ```
-    fn current_query(&self) -> Option<String>;
+    fn current_route(&self) -> &R;
+
     /// Get the current path prefix of the URL.
     ///
     /// Not all [`HistoryProvider`]s need a prefix feature. It is meant for environments where a
@@ -87,6 +77,7 @@ pub trait HistoryProvider {
     fn can_go_back(&self) -> bool {
         true
     }
+
     /// Go back to a previous page.
     ///
     /// If a [`HistoryProvider`] cannot go to a previous page, it should do nothing. This method
@@ -127,6 +118,7 @@ pub trait HistoryProvider {
     fn can_go_forward(&self) -> bool {
         true
     }
+
     /// Go forward to a future page.
     ///
     /// If a [`HistoryProvider`] cannot go to a previous page, it should do nothing. This method
@@ -162,7 +154,8 @@ pub trait HistoryProvider {
     /// assert_eq!(history.current_path(), "/some-other-page");
     /// assert!(history.can_go_back());
     /// ```
-    fn push(&mut self, path: String);
+    fn push(&mut self, route: R);
+
     /// Replace the current page with another one.
     ///
     /// This should merge the current URL with the `path` parameter (which may also include a query
@@ -178,7 +171,7 @@ pub trait HistoryProvider {
     /// assert_eq!(history.current_path(), "/some-other-page");
     /// assert!(!history.can_go_back());
     /// ```
-    fn replace(&mut self, path: String);
+    fn replace(&mut self, path: R);
 
     /// Navigate to an external URL.
     ///

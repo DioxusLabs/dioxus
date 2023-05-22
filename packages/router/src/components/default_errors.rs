@@ -1,15 +1,10 @@
-use crate::{components::Link, hooks::use_route};
+use crate::{components::Link, hooks::use_route, navigation::NavigationTarget, routable::Routable};
 use dioxus::prelude::*;
-use dioxus_router_core::prelude::{named, FailureExternalNavigation as FENName, RootIndex};
 
 #[allow(non_snake_case)]
-pub fn FailureExternalNavigation(cx: Scope) -> Element {
-    let state = use_route(cx).expect(
+pub fn FailureExternalNavigation<R: Routable + Clone>(cx: Scope) -> Element {
+    let href = use_route::<R>(cx).expect(
         "`FailureExternalNavigation` can only be mounted by the router itself, \
-            since it is not exposed",
-    );
-    let href = state.parameter::<FENName>().expect(
-        "`FailureExternalNavigation` cannot be mounted without receiving its parameter, \
             since it is not exposed",
     );
 
@@ -28,7 +23,7 @@ pub fn FailureExternalNavigation(cx: Scope) -> Element {
 }
 
 #[allow(non_snake_case)]
-pub fn FailureNamedNavigation(cx: Scope) -> Element {
+pub fn FailureNamedNavigation<R: Routable + Clone>(cx: Scope) -> Element {
     render! {
         h1 { "Named Navigation Failure!" }
         p {
@@ -40,15 +35,15 @@ pub fn FailureNamedNavigation(cx: Scope) -> Element {
             "We are sorry for the inconvenience. The link below may help to fix the problem, but "
             "there is no guarantee."
         }
-        Link {
-            target: named::<RootIndex>(),
+        Link::<R> {
+            target: NavigationTarget::External("https://google.com".into()),
             "Click here to try to fix the failure."
         }
     }
 }
 
 #[allow(non_snake_case)]
-pub fn FailureRedirectionLimit(cx: Scope) -> Element {
+pub fn FailureRedirectionLimit<R: Routable + Clone>(cx: Scope) -> Element {
     render! {
         h1 { "Redirection Limit Failure!" }
         p {
@@ -60,8 +55,8 @@ pub fn FailureRedirectionLimit(cx: Scope) -> Element {
             "We are sorry for the inconvenience. The link below may help to fix the problem, but "
             "there is no guarantee."
         }
-        Link {
-            target: named::<RootIndex>(),
+        Link::<R> {
+            target: NavigationTarget::External("https://google.com".into()),
             "Click here to try to fix the failure."
         }
     }

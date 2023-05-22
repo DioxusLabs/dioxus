@@ -21,7 +21,7 @@ const INITIAL_URL: &str = "dioxus-router-core://initial_url.invalid/";
 /// was not, because no browser supports WebAssembly without the [History API].
 ///
 /// [History API]: https://developer.mozilla.org/en-US/docs/Web/API/History_API
-pub struct WebHashHistory {
+pub struct WebHashHistory<R: Serialize + DeserializeOwned> {
     do_scroll_restoration: bool,
     history: History,
     listener_navigation: Option<EventListener>,
@@ -121,7 +121,7 @@ impl WebHashHistory {
 }
 
 impl HistoryProvider for WebHashHistory {
-    fn current_path(&self) -> String {
+    fn current_route(&self) -> String {
         self.url()
             .map(|url| url.path().to_string())
             .unwrap_or(String::from("/"))

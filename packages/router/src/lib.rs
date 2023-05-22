@@ -1,6 +1,10 @@
 #![doc = include_str!("../README.md")]
 // cannot use forbid, because props derive macro generates #[allow(missing_docs)]
 #![deny(missing_docs)]
+#![allow(non_snake_case)]
+
+pub mod navigation;
+pub mod routable;
 
 /// Components interacting with the router.
 pub mod components {
@@ -14,19 +18,23 @@ pub mod components {
 
     mod outlet;
     pub use outlet::*;
+
+    mod router;
+    pub use router::*;
 }
 
 mod contexts {
+    pub(crate) mod outlet;
     pub(crate) mod router;
+    pub use router::*;
 }
 
-pub use dioxus_router_core::history;
+mod router_cfg;
+
+pub mod history;
 
 /// Hooks for interacting with the router in components.
 pub mod hooks {
-    mod use_navigate;
-    pub use use_navigate::*;
-
     mod use_router;
     pub use use_router::*;
 
@@ -36,18 +44,10 @@ pub mod hooks {
 
 /// A collection of useful items most applications might need.
 pub mod prelude {
-    pub use dioxus_router_core::prelude::*;
-
     pub use crate::components::*;
+    pub use crate::contexts::*;
     pub use crate::hooks::*;
-
-    /// Wrap a [`Component`](dioxus::core::Component) inside a [`ContentAtom`].
-    ///
-    /// This is purely a convenience function.
-    #[must_use]
-    pub fn comp(component: dioxus::core::Component) -> ContentAtom<dioxus::core::Component> {
-        ContentAtom(component)
-    }
+    pub use dioxus_router_macro::routable;
 }
 
 mod utils {

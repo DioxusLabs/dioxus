@@ -12,19 +12,16 @@ keywords = ["dom", "ui", "gui", "react", "wasm"]
 
 [dependencies]
 anyhow = "1.0.66"
-async-lock = "2.7.0"
 dioxus = { path="../dioxus" }
-dioxus-router-core = { path = "../router-core"}
-futures-channel = "0.3.25"
-futures-util = "0.3.25"
+dioxus-router-macro = { path="../router-macro" }
 log = "0.4.17"
+serde = { version = "1.0.163", features = ["derive"] }
 thiserror = "1.0.37"
+url = "2.3.1"
 
 [features]
-regex = ["dioxus-router-core/regex"]
-serde = ["dioxus-router-core/serde"]
 wasm_test = []
-web = ["dioxus-router-core/web"]
+web = []
 
 [dev-dependencies]
 dioxus = { path = "../dioxus" }

@@ -1,9 +1,6 @@
-use std::sync::Arc;
+use dioxus::prelude::{ScopeId, ScopeState};
 
-use dioxus::prelude::ScopeState;
-use dioxus_router_core::RouterMessage;
-
-use crate::contexts::router::RouterContext;
+use crate::{contexts::router::RouterContext, routable::Routable};
 
 /// A private hook to subscribe to the router.
 ///
@@ -15,16 +12,25 @@ use crate::contexts::router::RouterContext;
 /// - Otherwise [`Some`].
 ///
 /// [`use_router`]: crate::hooks::use_router
-pub(crate) fn use_router_internal(cx: &ScopeState) -> &mut Option<RouterContext> {
-    let id = cx.use_hook(|| Arc::new(cx.scope_id()));
+pub(crate) fn use_router_internal<R: Routable>(cx: &ScopeState) -> &Option<RouterContext<R>> {
+    let inner = cx.use_hook(|| {
+        let router = cx.consume_context::<RouterContext<R>>()?;
 
-    cx.use_hook(|| {
-        let router = cx.consume_context::<RouterContext>()?;
+        let id = cx.scope_id();
+        router.subscribe(id);
 
-        let _ = router
-            .sender
-            .unbounded_send(RouterMessage::Subscribe(id.clone()));
+        Some(Subscription { router, id })
+    });
+    cx.use_hook(|| inner.as_ref().map(|s| s.router.clone()))
+}
 
-        Some(router)
-    })
+struct Subscription<R: Routable> {
+    router: RouterContext<R>,
+    id: ScopeId,
+}
+
+impl<R: Routable> Drop for Subscription<R> {
+    fn drop(&mut self) {
+        self.router.unsubscribe(self.id);
+    }
 }

@@ -203,13 +203,13 @@ impl Route {
                 }
                 RouteSegment::Dynamic(ident, ty) => {
                     let missing_error = segment.missing_error_name().unwrap();
-                    error_variants.push(quote! { #error_name(<#ty as dioxus_router_core::router::FromRouteSegment>::Err) });
+                    error_variants.push(quote! { #error_name(<#ty as dioxus_router::routable::FromRouteSegment>::Err) });
                     display_match.push(quote! { Self::#error_name(err) => write!(f, "Dynamic segment '({}:{})' did not match: {}", stringify!(#ident), stringify!(#ty), err)? });
                     error_variants.push(quote! { #missing_error });
                     display_match.push(quote! { Self::#missing_error => write!(f, "Dynamic segment '({}:{})' was missing", stringify!(#ident), stringify!(#ty))? });
                 }
                 RouteSegment::CatchAll(ident, ty) => {
-                    error_variants.push(quote! { #error_name(<#ty as dioxus_router_core::router::FromRouteSegments>::Err) });
+                    error_variants.push(quote! { #error_name(<#ty as dioxus_router::routable::FromRouteSegments>::Err) });
                     display_match.push(quote! { Self::#error_name(err) => write!(f, "Catch-all segment '({}:{})' did not match: {}", stringify!(#ident), stringify!(#ty), err)? });
                 }
             }

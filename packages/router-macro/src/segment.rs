@@ -80,7 +80,7 @@ impl RouteSegment {
                     {
                         let mut segments = segments.clone();
                         let parsed = if let Some(segment) = segments.next() {
-                            <#ty as dioxus_router_core::router::FromRouteSegment>::from_route_segment(segment).map_err(|err| #error_enum_name::#error_enum_varient(#inner_parse_enum::#error_name(err)))
+                            <#ty as dioxus_router::routable::FromRouteSegment>::from_route_segment(segment).map_err(|err| #error_enum_name::#error_enum_varient(#inner_parse_enum::#error_name(err)))
                         } else {
                             Err(#error_enum_name::#error_enum_varient(#inner_parse_enum::#missing_error_name))
                         };
@@ -101,7 +101,7 @@ impl RouteSegment {
                         let parsed = {
                             let mut segments = segments.clone();
                             let segments: Vec<_> = segments.collect();
-                            <#ty as dioxus_router_core::router::FromRouteSegments>::from_route_segments(&segments).map_err(|err| #error_enum_name::#error_enum_varient(#inner_parse_enum::#error_name(err)))
+                            <#ty as dioxus_router::routable::FromRouteSegments>::from_route_segments(&segments).map_err(|err| #error_enum_name::#error_enum_varient(#inner_parse_enum::#error_name(err)))
                         };
                         match parsed {
                             Ok(#name) => {

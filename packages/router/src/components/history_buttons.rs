@@ -1,8 +1,7 @@
 use dioxus::prelude::*;
-use dioxus_router_core::RouterMessage;
 use log::error;
 
-use crate::utils::use_router_internal::use_router_internal;
+use crate::{routable::Routable, utils::use_router_internal::use_router_internal};
 
 /// The properties for a [`GoBackButton`] or a [`GoForwardButton`].
 #[derive(Debug, Props)]
@@ -52,11 +51,11 @@ pub struct HistoryButtonProps<'a> {
 /// # );
 /// ```
 #[allow(non_snake_case)]
-pub fn GoBackButton<'a>(cx: Scope<'a, HistoryButtonProps<'a>>) -> Element {
+pub fn GoBackButton<'a, R: Routable>(cx: Scope<'a, HistoryButtonProps<'a>>) -> Element {
     let HistoryButtonProps { children } = cx.props;
 
     // hook up to router
-    let router = match use_router_internal(cx) {
+    let router = match use_router_internal::<R>(cx) {
         Some(r) => r,
         #[allow(unreachable_code)]
         None => {
@@ -67,20 +66,14 @@ pub fn GoBackButton<'a>(cx: Scope<'a, HistoryButtonProps<'a>>) -> Element {
             return None;
         }
     };
-    let state = loop {
-        if let Some(state) = router.state.try_read() {
-            break state;
-        }
-    };
-    let sender = router.sender.clone();
 
-    let disabled = !state.can_go_back;
+    let disabled = !router.can_go_back();
 
     render! {
         button {
             disabled: "{disabled}",
             prevent_default: "onclick",
-            onclick: move |_| { let _ = sender.unbounded_send(RouterMessage::GoBack); },
+            onclick: move |_| router.go_back(),
             children
         }
     }
@@ -127,11 +120,11 @@ pub fn GoBackButton<'a>(cx: Scope<'a, HistoryButtonProps<'a>>) -> Element {
 /// # );
 /// ```
 #[allow(non_snake_case)]
-pub fn GoForwardButton<'a>(cx: Scope<'a, HistoryButtonProps<'a>>) -> Element {
+pub fn GoForwardButton<'a, R: Routable>(cx: Scope<'a, HistoryButtonProps<'a>>) -> Element {
     let HistoryButtonProps { children } = cx.props;
 
     // hook up to router
-    let router = match use_router_internal(cx) {
+    let router = match use_router_internal::<R>(cx) {
         Some(r) => r,
         #[allow(unreachable_code)]
         None => {
@@ -142,20 +135,14 @@ pub fn GoForwardButton<'a>(cx: Scope<'a, HistoryButtonProps<'a>>) -> Element {
             return None;
         }
     };
-    let state = loop {
-        if let Some(state) = router.state.try_read() {
-            break state;
-        }
-    };
-    let sender = router.sender.clone();
 
-    let disabled = !state.can_go_back;
+    let disabled = !router.can_go_back();
 
     render! {
         button {
             disabled: "{disabled}",
             prevent_default: "onclick",
-            onclick: move |_| { let _ = sender.unbounded_send(RouterMessage::GoForward); },
+            onclick: move |_| router.go_forward(),
             children
         }
     }

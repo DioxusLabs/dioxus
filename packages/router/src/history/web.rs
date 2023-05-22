@@ -23,7 +23,7 @@ use super::{
 /// in the URL. Otherwise, if a router navigation is triggered, the prefix will be added.
 ///
 /// [History API]: https://developer.mozilla.org/en-US/docs/Web/API/History_API
-pub struct WebHistory {
+pub struct WebHistory<R: Serialize + DeserializeOwned> {
     do_scroll_restoration: bool,
     history: History,
     listener_navigation: Option<EventListener>,
@@ -72,7 +72,7 @@ impl WebHistory {
 }
 
 impl HistoryProvider for WebHistory {
-    fn current_path(&self) -> String {
+    fn current_route(&self) -> String {
         let path = self
             .window
             .location()
