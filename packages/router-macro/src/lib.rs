@@ -5,6 +5,7 @@ use nest::{Nest, NestId};
 use proc_macro::TokenStream;
 use quote::{__private::Span, format_ident, quote, ToTokens};
 use route::Route;
+use segment::RouteSegment;
 use syn::{parse::ParseStream, parse_macro_input, Ident, Token};
 
 use proc_macro2::TokenStream as TokenStream2;
@@ -51,11 +52,15 @@ struct RouteEnum {
     routes: Vec<Route>,
     nests: Vec<Nest>,
     layouts: Vec<Layout>,
+    site_map: Vec<SiteMapSegment>,
 }
 
 impl RouteEnum {
     fn parse(data: syn::ItemEnum) -> syn::Result<Self> {
         let name = &data.ident;
+
+        let mut site_map = Vec::new();
+        let mut site_map_stack: Vec<Vec<SiteMapSegment>> = Vec::new();
 
         let mut routes = Vec::new();
 
@@ -106,10 +111,43 @@ impl RouteEnum {
                     };
                     let nest = attr.parse_args_with(parser)?;
 
+                    // add the current segment to the site map stack
+                    let segments: Vec<_> = nest
+                        .segments
+                        .iter()
+                        .map(|seg| {
+                            let segment_type = seg.into();
+                            SiteMapSegment {
+                                segment_type,
+                                children: Vec::new(),
+                            }
+                        })
+                        .collect();
+                    if !segments.is_empty() {
+                        site_map_stack.push(segments);
+                    }
+
                     nests.push(nest);
                     nest_stack.push(NestId(nest_index));
                 } else if attr.path.is_ident("end_nest") {
                     nest_stack.pop();
+                    // pop the current nest segment off the stack and add it to the parent or the site map
+                    if let Some(segment) = site_map_stack.pop() {
+                        let children = site_map_stack
+                            .last_mut()
+                            .map(|seg| &mut seg.last_mut().unwrap().children)
+                            .unwrap_or(&mut site_map);
+
+                        // Turn the list of segments in the segments stack into a tree
+                        let mut iter = segment.into_iter().rev();
+                        let mut current = iter.next().unwrap();
+                        for mut segment in iter {
+                            segment.children.push(current);
+                            current = segment;
+                        }
+
+                        children.push(current);
+                    }
                 } else if attr.path.is_ident("layout") {
                     let parser = |input: ParseStream| {
                         let bang: Option<Token![!]> = input.parse().ok();
@@ -149,6 +187,16 @@ impl RouteEnum {
 
             let route = Route::parse(active_nests, active_layouts, variant.clone())?;
 
+            // add the route to the site map
+            if let Some(segment) = SiteMapSegment::new(&route.segments) {
+                let parent = site_map_stack.last_mut();
+                let children = match parent {
+                    Some(parent) => &mut parent.last_mut().unwrap().children,
+                    None => &mut site_map,
+                };
+                children.push(segment);
+            }
+
             routes.push(route);
         }
 
@@ -157,6 +205,7 @@ impl RouteEnum {
             routes,
             nests,
             layouts,
+            site_map,
         };
 
         Ok(myself)
@@ -276,6 +325,7 @@ impl RouteEnum {
 
     fn routable_impl(&self) -> TokenStream2 {
         let name = &self.name;
+        let site_map = &self.site_map;
 
         let mut layers = Vec::new();
 
@@ -304,6 +354,10 @@ impl RouteEnum {
 
         quote! {
             impl dioxus_router::routable::Routable for #name where Self: Clone {
+                const SITE_MAP: &'static [dioxus_router::routable::SiteMapSegment] = &[
+                    #(#site_map,)*
+                ];
+
                 fn render<'a>(&self, cx: &'a ScopeState, level: usize) -> Element<'a> {
                     let myself = self.clone();
                     match level {
@@ -311,12 +365,10 @@ impl RouteEnum {
                             #index_iter => {
                                 match myself {
                                     #layers
-                                    // _ => panic!("Route::render called with invalid level {}", level),
                                     _ => None
                                 }
                             },
                         )*
-                        // _ => panic!("Route::render called with invalid level {}", level),
                         _ => None
                     }
                 }
@@ -337,5 +389,78 @@ impl ToTokens for RouteEnum {
             }
             pub use pages::*;
         ));
+    }
+}
+
+struct SiteMapSegment {
+    pub segment_type: SegmentType,
+    pub children: Vec<SiteMapSegment>,
+}
+
+impl SiteMapSegment {
+    fn new(segments: &[RouteSegment]) -> Option<Self> {
+        let mut current = None;
+        // walk backwards through the new segments, adding children as we go
+        for segment in segments.iter().rev() {
+            let segment_type = segment.into();
+            let mut segment = SiteMapSegment {
+                segment_type,
+                children: Vec::new(),
+            };
+            // if we have a current segment, add it as a child
+            if let Some(current) = current.take() {
+                segment.children.push(current)
+            }
+            current = Some(segment);
+        }
+        current
+    }
+}
+
+impl ToTokens for SiteMapSegment {
+    fn to_tokens(&self, tokens: &mut TokenStream2) {
+        let segment_type = &self.segment_type;
+        let children = &self.children;
+
+        tokens.extend(quote! {
+            dioxus_router::routable::SiteMapSegment {
+                segment_type: #segment_type,
+                children: &[
+                    #(#children,)*
+                ]
+            }
+        });
+    }
+}
+
+enum SegmentType {
+    Static(String),
+    Dynamic(String),
+    CatchAll(String),
+}
+
+impl ToTokens for SegmentType {
+    fn to_tokens(&self, tokens: &mut TokenStream2) {
+        match self {
+            SegmentType::Static(s) => {
+                tokens.extend(quote! { dioxus_router::routable::SegmentType::Static(#s) })
+            }
+            SegmentType::Dynamic(s) => {
+                tokens.extend(quote! { dioxus_router::routable::SegmentType::Dynamic(#s) })
+            }
+            SegmentType::CatchAll(s) => {
+                tokens.extend(quote! { dioxus_router::routable::SegmentType::CatchAll(#s) })
+            }
+        }
+    }
+}
+
+impl<'a> From<&'a RouteSegment> for SegmentType {
+    fn from(value: &'a RouteSegment) -> Self {
+        match value {
+            segment::RouteSegment::Static(s) => SegmentType::Static(s.to_string()),
+            segment::RouteSegment::Dynamic(s, _) => SegmentType::Dynamic(s.to_string()),
+            segment::RouteSegment::CatchAll(s, _) => SegmentType::CatchAll(s.to_string()),
+        }
     }
 }

@@ -3,7 +3,7 @@
 #![allow(non_snake_case)]
 use dioxus::prelude::*;
 
-use std::str::FromStr;
+use std::{fmt::Display, str::FromStr};
 
 /// An error that occurs when parsing a route
 #[derive(Debug, PartialEq)]
@@ -95,6 +95,9 @@ impl<I: std::iter::FromIterator<String>> FromRouteSegments for I {
 
 /// Something that can be routed to
 pub trait Routable: std::fmt::Display + std::str::FromStr + Clone + 'static {
+    /// The error that can occur when parsing a route
+    const SITE_MAP: &'static [SiteMapSegment];
+
     /// Render the route at the given level
     fn render<'a>(&self, cx: &'a ScopeState, level: usize) -> Element<'a>;
 }
@@ -122,5 +125,56 @@ where
 {
     fn render<'a>(&self, cx: &'a ScopeState, level: usize) -> Element<'a> {
         self.render(cx, level)
+    }
+}
+
+/// A type erased map of the site structurens
+#[derive(Debug, Clone, PartialEq)]
+pub struct SiteMapSegment {
+    /// The type of the route segment
+    pub segment_type: SegmentType,
+    /// The children of the route segment
+    pub children: &'static [SiteMapSegment],
+}
+
+impl SiteMapSegment {
+    /// Take a map of the site structure and flatten it into a vector of routes
+    pub fn flatten(&self) -> Vec<Vec<SegmentType>> {
+        let mut routes = Vec::new();
+        self.flatten_inner(&mut routes, Vec::new());
+        routes
+    }
+
+    fn flatten_inner(&self, routes: &mut Vec<Vec<SegmentType>>, current: Vec<SegmentType>) {
+        let mut current = current;
+        current.push(self.segment_type.clone());
+        if self.children.is_empty() {
+            routes.push(current);
+        } else {
+            for child in self.children {
+                child.flatten_inner(routes, current.clone());
+            }
+        }
+    }
+}
+
+/// The type of a route segment
+#[derive(Debug, Clone, PartialEq)]
+pub enum SegmentType {
+    /// A static route segment
+    Static(&'static str),
+    /// A dynamic route segment
+    Dynamic(&'static str),
+    /// A catch all route segment
+    CatchAll(&'static str),
+}
+
+impl Display for SegmentType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self {
+            SegmentType::Static(s) => write!(f, "/{}", s),
+            SegmentType::Dynamic(s) => write!(f, "/:{}", s),
+            SegmentType::CatchAll(s) => write!(f, "/:...{}", s),
+        }
     }
 }
