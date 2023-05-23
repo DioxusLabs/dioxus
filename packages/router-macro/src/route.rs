@@ -186,13 +186,10 @@ impl Route {
                 }
             }
             for segment in &self.segments {
-                match segment {
-                    RouteSegment::Dynamic(name, _) => {
-                        if name == f.ident.as_ref().unwrap() {
-                            from_route = true
-                        }
+                if let RouteSegment::Dynamic(name, ..) = segment {
+                    if name == f.ident.as_ref().unwrap() {
+                        from_route = true
                     }
-                    _ => {}
                 }
             }
 
@@ -273,23 +270,6 @@ impl Route {
         }
     }
 
-    pub fn variant(&self) -> TokenStream2 {
-        let name = &self.route_name;
-        let fields = self.fields.named.iter().map(|f| {
-            let mut new = f.clone();
-            new.attrs.retain(|a| {
-                !a.path.is_ident("nest")
-                    && !a.path.is_ident("end_nest")
-                    && !a.path.is_ident("layout")
-                    && !a.path.is_ident("end_layout")
-            });
-            new
-        });
-
-        quote! {
-            #name { #(#fields,)* }
-        }
-    }
 }
 
 impl ToTokens for Route {

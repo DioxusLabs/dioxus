@@ -5,7 +5,7 @@ use nest::{Nest, NestId};
 use proc_macro::TokenStream;
 use quote::{__private::Span, format_ident, quote, ToTokens};
 use route::Route;
-use syn::{parse::ParseStream, parse_macro_input, Ident};
+use syn::{parse::ParseStream, parse_macro_input, Ident, Token};
 
 use proc_macro2::TokenStream as TokenStream2;
 
@@ -18,9 +18,8 @@ mod route;
 mod route_tree;
 mod segment;
 
-// #[proc_macro_derive(Routable, attributes(route, nest, end_nest))]
-#[proc_macro_attribute]
-pub fn routable(_: TokenStream, input: TokenStream) -> TokenStream {
+#[proc_macro_derive(Routable, attributes(route, nest, end_nest, layout, end_layout))]
+pub fn routable(input: TokenStream) -> TokenStream {
     let routes_enum = parse_macro_input!(input as syn::ItemEnum);
 
     let route_enum = match RouteEnum::parse(routes_enum) {
@@ -48,8 +47,6 @@ pub fn routable(_: TokenStream, input: TokenStream) -> TokenStream {
 }
 
 struct RouteEnum {
-    attrs: Vec<syn::Attribute>,
-    vis: syn::Visibility,
     name: Ident,
     routes: Vec<Route>,
     nests: Vec<Nest>,
@@ -62,13 +59,14 @@ impl RouteEnum {
 
         let mut routes = Vec::new();
 
-        let mut layouts = Vec::new();
+        let mut layouts: Vec<Layout> = Vec::new();
         let mut layout_stack = Vec::new();
 
         let mut nests = Vec::new();
         let mut nest_stack = Vec::new();
 
         for variant in &data.variants {
+            let mut excluded = Vec::new();
             // Apply the any nesting attributes in order
             for attr in &variant.attrs {
                 if attr.path.is_ident("nest") {
@@ -113,15 +111,31 @@ impl RouteEnum {
                 } else if attr.path.is_ident("end_nest") {
                     nest_stack.pop();
                 } else if attr.path.is_ident("layout") {
-                    let layout_index = layouts.len();
-
                     let parser = |input: ParseStream| {
-                        Layout::parse(input, nest_stack.iter().rev().cloned().collect())
+                        let bang: Option<Token![!]> = input.parse().ok();
+                        let exclude = bang.is_some();
+                        Ok((
+                            exclude,
+                            Layout::parse(input, nest_stack.iter().rev().cloned().collect())?,
+                        ))
                     };
-                    let layout = attr.parse_args_with(parser)?;
+                    let (exclude, layout): (bool, Layout) = attr.parse_args_with(parser)?;
 
-                    layouts.push(layout);
-                    layout_stack.push(LayoutId(layout_index));
+                    if exclude {
+                        let Some(layout_index) =
+                            layouts.iter().position(|l| l.comp == layout.comp)else{
+                                return Err(syn::Error::new(
+                                    Span::call_site(),
+                                    "Attempted to exclude a layout that does not exist",
+                                ));
+                            }
+                                ;
+                        excluded.push(LayoutId(layout_index));
+                    } else {
+                        let layout_index = layouts.len();
+                        layouts.push(layout);
+                        layout_stack.push(LayoutId(layout_index));
+                    }
                 } else if attr.path.is_ident("end_layout") {
                     layout_stack.pop();
                 }
@@ -130,6 +144,7 @@ impl RouteEnum {
             let mut active_nests = nest_stack.clone();
             active_nests.reverse();
             let mut active_layouts = layout_stack.clone();
+            active_layouts.retain(|&id| !excluded.contains(&id));
             active_layouts.reverse();
 
             let route = Route::parse(active_nests, active_layouts, variant.clone())?;
@@ -139,8 +154,6 @@ impl RouteEnum {
 
         let myself = Self {
             name: name.clone(),
-            attrs: data.attrs,
-            vis: data.vis,
             routes,
             nests,
             layouts,
@@ -315,16 +328,8 @@ impl RouteEnum {
 impl ToTokens for RouteEnum {
     fn to_tokens(&self, tokens: &mut quote::__private::TokenStream) {
         let routes = &self.routes;
-        let vis = &self.vis;
-        let name = &self.name;
-        let attrs = &self.attrs;
-        let variants = routes.iter().map(|r| r.variant());
 
         tokens.extend(quote!(
-            #(#attrs)*
-            #vis enum #name {
-                #(#variants),*
-            }
 
             #[path = "pages"]
             mod pages {

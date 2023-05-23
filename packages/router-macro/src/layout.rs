@@ -9,7 +9,6 @@ pub struct LayoutId(pub usize);
 
 #[derive(Debug)]
 pub struct Layout {
-    pub layout_name: Ident,
     pub comp: Ident,
     pub props_name: Ident,
     pub active_nests: Vec<NestId>,
@@ -37,10 +36,6 @@ impl Layout {
 
 impl Layout {
     pub fn parse(input: syn::parse::ParseStream, active_nests: Vec<NestId>) -> syn::Result<Self> {
-        // Then parse the layout name
-        let _ = input.parse::<syn::Token![,]>();
-        let layout_name: syn::Ident = input.parse()?;
-
         // Then parse the component name
         let _ = input.parse::<syn::Token![,]>();
         let comp: Ident = input.parse()?;
@@ -52,7 +47,6 @@ impl Layout {
             .unwrap_or_else(|_| format_ident!("{}Props", comp.to_string()));
 
         Ok(Self {
-            layout_name,
             comp,
             props_name,
             active_nests,
