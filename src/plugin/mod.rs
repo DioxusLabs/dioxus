@@ -42,7 +42,7 @@ impl PluginManager {
         let manager = lua.create_table().unwrap();
         let name_index = lua.create_table().unwrap();
 
-        let plugin_dir = Self::init_plugin_dir().unwrap();
+        let plugin_dir = Self::init_plugin_dir();
 
         let api = lua.create_table().unwrap();
 
@@ -288,7 +288,7 @@ impl PluginManager {
         Ok(())
     }
 
-    pub fn init_plugin_dir() -> anyhow::Result<PathBuf> {
+    pub fn init_plugin_dir() -> PathBuf {
         let app_path = app_path();
         let plugin_path = app_path.join("plugins");
         if !plugin_path.is_dir() {
@@ -298,7 +298,7 @@ impl PluginManager {
                 log::error!("Failed to init plugin dir, error caused by {}. ", err);
             }
         }
-        Ok(plugin_path)
+        plugin_path
     }
 
     pub fn plugin_list() -> Vec<String> {
