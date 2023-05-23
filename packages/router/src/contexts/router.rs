@@ -76,7 +76,10 @@ impl<R> RouterContext<R>
 where
     R: Routable,
 {
-    pub(crate) fn new(cfg: RouterConfiguration<R>, mark_dirty: Arc<dyn Fn(ScopeId)>) -> Self
+    pub(crate) fn new(
+        cfg: RouterConfiguration<R>,
+        mark_dirty: Arc<dyn Fn(ScopeId) + Sync + Send>,
+    ) -> Self
     where
         R: Clone,
     {
@@ -87,17 +90,32 @@ where
             history: cfg.history,
         }));
 
-        Self {
+        let subscriber_update = mark_dirty.clone();
+        let subscribers = Arc::new(RwLock::new(HashSet::new()));
+
+        let myself = Self {
             state,
-            subscribers: Arc::new(RwLock::new(HashSet::new())),
-            subscriber_update: mark_dirty,
+            subscribers: subscribers.clone(),
+            subscriber_update,
 
             routing_callback: cfg.on_update,
 
             failure_external_navigation: cfg.failure_external_navigation,
             failure_named_navigation: cfg.failure_named_navigation,
             failure_redirection_limit: cfg.failure_redirection_limit,
+        };
+
+        // set the updater
+        {
+            let mut state = myself.state.write().unwrap();
+            state.history.updater(Arc::new(move || {
+                for &id in subscribers.read().unwrap().iter() {
+                    (mark_dirty)(id);
+                }
+            }));
         }
+
+        myself
     }
 
     /// Check whether there is a previous page to navigate back to.
@@ -161,7 +179,7 @@ where
     where
         R: Clone,
     {
-        self.state.read().unwrap().history.current_route().clone()
+        self.state.read().unwrap().history.current_route()
     }
 
     /// The prefix that is currently active.

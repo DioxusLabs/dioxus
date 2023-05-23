@@ -3,7 +3,6 @@ use log::error;
 use std::{cell::RefCell, str::FromStr};
 
 use crate::{
-    history::HistoryProvider,
     prelude::{outlet::OutletContext, RouterContext},
     routable::Routable,
     router_cfg::RouterConfiguration,
@@ -26,9 +25,7 @@ impl<R: Routable> PartialEq for RouterProps<R> {
 }
 
 /// A component that renders the current route.
-pub fn Router<R: Routable + Clone, H: HistoryProvider<R> + Default + 'static>(
-    cx: Scope<RouterProps<R>>,
-) -> Element
+pub fn Router<R: Routable + Clone>(cx: Scope<RouterProps<R>>) -> Element
 where
     <R as FromStr>::Err: std::fmt::Display,
 {

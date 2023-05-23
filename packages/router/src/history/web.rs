@@ -45,6 +45,12 @@ pub struct WebHistory<R: Serialize + DeserializeOwned> {
     phantom: std::marker::PhantomData<R>,
 }
 
+impl<R: Serialize + DeserializeOwned> Default for WebHistory<R> {
+    fn default() -> Self {
+        Self::new(None, true)
+    }
+}
+
 impl<R: Serialize + DeserializeOwned> WebHistory<R> {
     /// Create a new [`WebHistory`].
     ///
@@ -97,9 +103,9 @@ where
     <R as std::str::FromStr>::Err: std::fmt::Display,
 {
     fn current_route(&self) -> R {
-        match get_current(&self.history) {
+        match get_current::<WebHistoryState<_>>(&self.history) {
             // Try to get the route from the history state
-            Some(route) => route,
+            Some(route) => route.state,
             // If that fails, get the route from the current URL
             None => R::from_str(
                 &self

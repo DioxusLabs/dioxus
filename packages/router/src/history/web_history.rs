@@ -1,3 +1,4 @@
+use gloo::console::error;
 use gloo_utils::format::JsValueSerdeExt;
 use serde::{de::DeserializeOwned, Serialize};
 use wasm_bindgen::JsValue;
@@ -24,8 +25,15 @@ pub(crate) fn push_state_and_url<V: Serialize>(
 }
 
 pub(crate) fn get_current<V: DeserializeOwned>(history: &History) -> Option<V> {
-    history
-        .state()
-        .ok()
-        .and_then(|state| state.into_serde().ok())
+    let state = history.state();
+    if let Err(err) = &state {
+        error!(err);
+    }
+    state.ok().and_then(|state| {
+        let deserialized = state.into_serde();
+        if let Err(err) = &deserialized {
+            error!(format!("{}", err));
+        }
+        deserialized.ok()
+    })
 }
