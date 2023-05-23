@@ -31,7 +31,7 @@ impl Serve {
         if self.serve.profile.is_some() {
             crate_config.set_profile(self.serve.profile.unwrap());
         }
-        
+
         if self.serve.features.is_some() {
             crate_config.set_features(self.serve.features.unwrap());
         }

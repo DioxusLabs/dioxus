@@ -21,7 +21,8 @@ impl Plugin {
                 }
             }
             Plugin::AppPath {} => {
-                if let Some(v) = crate::plugin::PluginManager::init_plugin_dir().to_str() {
+                let plugin_dir = crate::plugin::PluginManager::init_plugin_dir();
+                if let Some(v) = plugin_dir.to_str() {
                     println!("{}", v);
                 } else {
                     log::error!("Plugin path get failed.");

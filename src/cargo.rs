@@ -34,7 +34,9 @@ pub fn crate_root() -> Result<PathBuf> {
             }
             None
         })
-        .ok_or_else(|| Error::CargoError("Failed to find directory containing Cargo.toml".to_string()))
+        .ok_or_else(|| {
+            Error::CargoError("Failed to find directory containing Cargo.toml".to_string())
+        })
 }
 
 /// Checks if the directory contains `Cargo.toml`
