@@ -2,12 +2,22 @@ use std::sync::{Arc, Mutex};
 
 use gloo::{events::EventListener, render::AnimationFrame};
 use log::error;
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use web_sys::{window, History, ScrollRestoration, Window};
 
+use crate::routable::Routable;
+
 use super::{
-    web_scroll::{top_left, update_history, update_scroll},
+    web_history::{get_current, push_state_and_url, replace_state_with_url},
+    web_scroll::ScrollPosition,
     HistoryProvider,
 };
+
+#[derive(Deserialize, Serialize)]
+struct WebHistoryState<R> {
+    state: R,
+    scroll: ScrollPosition,
+}
 
 /// A [`HistoryProvider`] that integrates with a browser via the [History API].
 ///
@@ -32,9 +42,10 @@ pub struct WebHistory<R: Serialize + DeserializeOwned> {
     listener_animation_frame: Arc<Mutex<Option<AnimationFrame>>>,
     prefix: Option<String>,
     window: Window,
+    phantom: std::marker::PhantomData<R>,
 }
 
-impl WebHistory {
+impl<R: Serialize + DeserializeOwned> WebHistory<R> {
     /// Create a new [`WebHistory`].
     ///
     /// If `do_scroll_restoration` is [`true`], [`WebHistory`] will take control of the history
@@ -52,9 +63,10 @@ impl WebHistory {
                 let h = history.clone();
                 let document = w.document().expect("`window` has access to `document`");
 
-                Some(EventListener::new(&document, "scroll", move |_| {
-                    update_history(&w, &h);
-                }))
+                // Some(EventListener::new(&document, "scroll", move |_| {
+                //     set_state(&w, &h);
+                // }))
+                None
             }
             false => None,
         };
@@ -65,42 +77,39 @@ impl WebHistory {
             listener_navigation: None,
             listener_scroll,
             listener_animation_frame: Default::default(),
-            prefix: prefix,
+            prefix,
             window,
+            phantom: Default::default(),
         }
+    }
+
+    fn create_state(&self, state: R) -> WebHistoryState<R> {
+        let scroll = self
+            .do_scroll_restoration
+            .then(|| ScrollPosition::of_window(&self.window))
+            .unwrap_or_default();
+        WebHistoryState { state, scroll }
     }
 }
 
-impl HistoryProvider for WebHistory {
-    fn current_route(&self) -> String {
-        let path = self
-            .window
-            .location()
-            .pathname()
-            .unwrap_or_else(|_| String::from("/"));
-
-        match &self.prefix {
-            None => path.to_string(),
-            Some(prefix) => path
-                .starts_with(prefix)
-                .then(|| path.split_at(prefix.len()).1)
-                .unwrap_or("/")
-                .to_string(),
+impl<R: Serialize + DeserializeOwned + Routable> HistoryProvider<R> for WebHistory<R>
+where
+    <R as std::str::FromStr>::Err: std::fmt::Display,
+{
+    fn current_route(&self) -> R {
+        match get_current(&self.history) {
+            // Try to get the route from the history state
+            Some(route) => route,
+            // If that fails, get the route from the current URL
+            None => R::from_str(
+                &self
+                    .window
+                    .location()
+                    .pathname()
+                    .unwrap_or_else(|_| String::from("/")),
+            )
+            .unwrap_or_else(|err| panic!("{}", err)),
         }
-    }
-
-    fn current_query(&self) -> Option<String> {
-        self.window
-            .location()
-            .search()
-            .ok()
-            .map(|mut q| {
-                if q.starts_with('?') {
-                    q.remove(0);
-                }
-                q
-            })
-            .and_then(|q| q.is_empty().then_some(q))
     }
 
     fn current_prefix(&self) -> Option<String> {
@@ -119,18 +128,15 @@ impl HistoryProvider for WebHistory {
         }
     }
 
-    fn push(&mut self, path: String) {
+    fn push(&mut self, state: R) {
         let path = match &self.prefix {
-            None => path,
-            Some(prefix) => format!("{prefix}{path}"),
+            None => format!("{state}"),
+            Some(prefix) => format!("{prefix}{state}"),
         };
 
-        let state = match self.do_scroll_restoration {
-            true => top_left(),
-            false => self.history.state().unwrap_or_default(),
-        };
+        let state = self.create_state(state);
 
-        let nav = self.history.push_state_with_url(&state, "", Some(&path));
+        let nav = push_state_and_url(&self.history, &state, path);
 
         match nav {
             Ok(_) => {
@@ -142,18 +148,15 @@ impl HistoryProvider for WebHistory {
         }
     }
 
-    fn replace(&mut self, path: String) {
+    fn replace(&mut self, state: R) {
         let path = match &self.prefix {
-            None => path,
-            Some(prefix) => format!("{prefix}{path}"),
+            None => format!("{state}"),
+            Some(prefix) => format!("{prefix}{state}"),
         };
 
-        let state = match self.do_scroll_restoration {
-            true => top_left(),
-            false => self.history.state().unwrap_or_default(),
-        };
+        let state = self.create_state(state);
 
-        let nav = self.history.replace_state_with_url(&state, "", Some(&path));
+        let nav = replace_state_with_url(&self.history, &state, Some(&path));
 
         match nav {
             Ok(_) => {
@@ -184,8 +187,8 @@ impl HistoryProvider for WebHistory {
         self.listener_navigation = Some(EventListener::new(&self.window, "popstate", move |_| {
             (*callback)();
             if d {
-                let mut s = s.lock().expect("unpoisoned scroll mutex");
-                *s = Some(update_scroll(&w, &h));
+                // let mut s = s.lock().expect("unpoisoned scroll mutex");
+                // *s = Some(update_scroll(&w, &h));
             }
         }));
     }

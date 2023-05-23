@@ -15,11 +15,13 @@ pub use memory::*;
 mod web;
 #[cfg(feature = "web")]
 pub use web::*;
+#[cfg(feature = "web")]
+pub(crate) mod web_history;
 
-#[cfg(feature = "web")]
-mod web_hash;
-#[cfg(feature = "web")]
-pub use web_hash::*;
+// #[cfg(feature = "web")]
+// mod web_hash;
+// #[cfg(feature = "web")]
+// pub use web_hash::*;
 
 use crate::routable::Routable;
 
@@ -48,7 +50,7 @@ pub trait HistoryProvider<R: Routable> {
     /// assert_eq!(history.current_path(), "/path");
     /// ```
     #[must_use]
-    fn current_route(&self) -> &R;
+    fn current_route(&self) -> R;
 
     /// Get the current path prefix of the URL.
     ///

@@ -94,7 +94,7 @@ impl<I: std::iter::FromIterator<String>> FromRouteSegments for I {
 }
 
 /// Something that can be routed to
-pub trait Routable: std::fmt::Display + std::str::FromStr + 'static {
+pub trait Routable: std::fmt::Display + std::str::FromStr + Clone + 'static {
     /// Render the route at the given level
     fn render<'a>(&self, cx: &'a ScopeState, level: usize) -> Element<'a>;
 }

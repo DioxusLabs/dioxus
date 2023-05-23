@@ -14,14 +14,19 @@ keywords = ["dom", "ui", "gui", "react", "wasm"]
 anyhow = "1.0.66"
 dioxus = { path="../dioxus" }
 dioxus-router-macro = { path="../router-macro" }
+gloo = { version = "0.8.0", optional = true }
 log = "0.4.17"
 serde = { version = "1.0.163", features = ["derive"] }
 thiserror = "1.0.37"
 url = "2.3.1"
+wasm-bindgen = { version = "0.2.86", optional = true }
+web-sys = { version = "0.3.60", optional = true, features = ["ScrollRestoration"] }
+gloo-utils = { version = "0.1.6", optional = true, features = ["serde"] }
 
 [features]
+default = ["web"]
 wasm_test = []
-web = []
+web = ["gloo", "web-sys", "wasm-bindgen", "gloo-utils"]
 
 [dev-dependencies]
 dioxus = { path = "../dioxus" }

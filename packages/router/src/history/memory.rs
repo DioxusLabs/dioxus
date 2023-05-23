@@ -41,8 +41,8 @@ impl<R: Routable> Default for MemoryHistory<R> {
 }
 
 impl<R: Routable> HistoryProvider<R> for MemoryHistory<R> {
-    fn current_route(&self) -> &R {
-        self.current.as_ref().expect("current route is not set")
+    fn current_route(&self) -> R {
+        self.current.clone().expect("current route is not set")
     }
 
     fn can_go_back(&self) -> bool {

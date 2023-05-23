@@ -2,8 +2,11 @@ use std::sync::{Arc, Mutex};
 
 use gloo::{events::EventListener, render::AnimationFrame, utils::window};
 use log::error;
+use serde::{de::DeserializeOwned, Serialize};
 use url::Url;
 use web_sys::{History, ScrollRestoration, Window};
+
+use crate::routable::Routable;
 
 use super::{
     web_scroll::{top_left, update_history, update_scroll},
@@ -29,9 +32,10 @@ pub struct WebHashHistory<R: Serialize + DeserializeOwned> {
     listener_scroll: Option<EventListener>,
     listener_animation_frame: Arc<Mutex<Option<AnimationFrame>>>,
     window: Window,
+    phantom: std::marker::PhantomData<R>,
 }
 
-impl WebHashHistory {
+impl<R: Serialize + DeserializeOwned> WebHashHistory<R> {
     /// Create a new [`WebHashHistory`].
     ///
     /// If `do_scroll_restoration` is [`true`], [`WebHashHistory`] will take control of the history
@@ -67,17 +71,13 @@ impl WebHashHistory {
             listener_scroll,
             listener_animation_frame: Default::default(),
             window,
+            phantom: Default::default(),
         }
     }
 }
 
-impl WebHashHistory {
-    fn join_url_to_hash(&self, path: String) -> Option<String> {
-        if path.starts_with("//") {
-            error!("cannot navigate to paths starting with `//`, got `{path}`");
-            return None;
-        }
-
+impl<R: Serialize + DeserializeOwned> WebHashHistory<R> {
+    fn join_url_to_hash(&self, path: R) -> Option<String> {
         let url = match self.url() {
             Some(c) => match c.join(&path) {
                 Ok(new) => new,
@@ -120,15 +120,11 @@ impl WebHashHistory {
     }
 }
 
-impl HistoryProvider for WebHashHistory {
-    fn current_route(&self) -> String {
+impl<R: Serialize + DeserializeOwned + Routable> HistoryProvider<R> for WebHashHistory<R> {
+    fn current_route(&self) -> R {
         self.url()
             .map(|url| url.path().to_string())
             .unwrap_or(String::from("/"))
-    }
-
-    fn current_query(&self) -> Option<String> {
-        self.url().and_then(|url| url.query().map(String::from))
     }
 
     fn current_prefix(&self) -> Option<String> {
@@ -147,7 +143,7 @@ impl HistoryProvider for WebHashHistory {
         }
     }
 
-    fn push(&mut self, path: String) {
+    fn push(&mut self, path: R) {
         let hash = match self.join_url_to_hash(path) {
             Some(hash) => hash,
             None => return,
@@ -170,7 +166,7 @@ impl HistoryProvider for WebHashHistory {
         }
     }
 
-    fn replace(&mut self, path: String) {
+    fn replace(&mut self, path: R) {
         let hash = match self.join_url_to_hash(path) {
             Some(hash) => hash,
             None => return,
