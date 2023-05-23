@@ -8,7 +8,10 @@ pub(crate) struct OutletContext {
 }
 
 pub(crate) fn use_outlet_context(cx: &ScopeState) -> &OutletContext {
-    let outlet_context = use_context(cx).unwrap();
+    let outlet_context = cx.use_hook(|| {
+        cx.consume_context()
+            .unwrap_or(OutletContext { current_level: 0 })
+    });
     outlet_context
 }
 

@@ -3,10 +3,31 @@ use log::error;
 use std::{cell::RefCell, str::FromStr};
 
 use crate::{
-    prelude::{outlet::OutletContext, RouterContext},
+    prelude::{Outlet, RouterContext},
     routable::Routable,
     router_cfg::RouterConfiguration,
 };
+
+/// The config for [`Router`].
+pub struct RouterCfg<R: Routable> {
+    config: RefCell<Option<RouterConfiguration<R>>>,
+}
+
+impl<R: Routable> Default for RouterCfg<R> {
+    fn default() -> Self {
+        Self {
+            config: RefCell::new(Some(RouterConfiguration::default())),
+        }
+    }
+}
+
+impl<R: Routable> From<RouterConfiguration<R>> for RouterCfg<R> {
+    fn from(value: RouterConfiguration<R>) -> Self {
+        Self {
+            config: RefCell::new(Some(value)),
+        }
+    }
+}
 
 /// The props for [`Router`].
 #[derive(Props)]
@@ -14,7 +35,7 @@ pub struct RouterProps<R: Routable> {
     #[props(into)]
     initial_url: Option<String>,
     #[props(default, into)]
-    config: RefCell<Option<RouterConfiguration<R>>>,
+    config: RouterCfg<R>,
 }
 
 impl<R: Routable> PartialEq for RouterProps<R> {
@@ -29,7 +50,7 @@ pub fn Router<R: Routable + Clone>(cx: Scope<RouterProps<R>>) -> Element
 where
     <R as FromStr>::Err: std::fmt::Display,
 {
-    let router = use_context_provider(cx, || {
+    use_context_provider(cx, || {
         #[allow(unreachable_code, unused_variables)]
         if let Some(outer) = cx.consume_context::<RouterContext<R>>() {
             let msg = "Router components should not be nested within each other";
@@ -38,7 +59,7 @@ where
             panic!("{}", msg);
         }
         let router = RouterContext::new(
-            cx.props.config.take().unwrap_or_default(),
+            cx.props.config.config.take().unwrap_or_default(),
             cx.schedule_update_any(),
         );
         if let Some(initial) = cx.props.initial_url.as_ref() {
@@ -51,7 +72,7 @@ where
         router
     });
 
-    use_context_provider(cx, || OutletContext { current_level: 1 });
-
-    router.current().render(cx, 0)
+    render! {
+        Outlet::<R> {}
+    }
 }

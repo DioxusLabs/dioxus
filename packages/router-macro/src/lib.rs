@@ -297,11 +297,13 @@ impl RouteEnum {
                             #index_iter => {
                                 match myself {
                                     #layers
-                                    _ => panic!("Route::render called with invalid level {}", level),
+                                    // _ => panic!("Route::render called with invalid level {}", level),
+                                    _ => None
                                 }
                             },
                         )*
-                        _ => panic!("Route::render called with invalid level {}", level),
+                        // _ => panic!("Route::render called with invalid level {}", level),
+                        _ => None
                     }
                 }
             }
