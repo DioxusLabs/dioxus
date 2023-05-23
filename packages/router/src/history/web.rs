@@ -1,7 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use gloo::{events::EventListener, render::AnimationFrame};
-use log::error;
+use gloo::{console::error, events::EventListener, render::AnimationFrame};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use web_sys::{window, History, ScrollRestoration, Window};
 
@@ -12,6 +11,16 @@ use super::{
     web_scroll::ScrollPosition,
     HistoryProvider,
 };
+
+fn update_scroll<R: Serialize + DeserializeOwned>(window: &Window, history: &History) {
+    if let Some(WebHistoryState { state, .. }) = get_current::<WebHistoryState<R>>(history) {
+        let scroll = ScrollPosition::of_window(window);
+        let state = WebHistoryState { state, scroll };
+        if let Err(err) = replace_state_with_url(history, &state, None) {
+            error!(err);
+        }
+    }
+}
 
 #[derive(Deserialize, Serialize)]
 struct WebHistoryState<R> {
@@ -45,18 +54,24 @@ pub struct WebHistory<R: Serialize + DeserializeOwned> {
     phantom: std::marker::PhantomData<R>,
 }
 
-impl<R: Serialize + DeserializeOwned> Default for WebHistory<R> {
+impl<R: Serialize + DeserializeOwned + Routable> Default for WebHistory<R>
+where
+    <R as std::str::FromStr>::Err: std::fmt::Display,
+{
     fn default() -> Self {
         Self::new(None, true)
     }
 }
 
-impl<R: Serialize + DeserializeOwned> WebHistory<R> {
+impl<R: Serialize + DeserializeOwned + Routable> WebHistory<R> {
     /// Create a new [`WebHistory`].
     ///
     /// If `do_scroll_restoration` is [`true`], [`WebHistory`] will take control of the history
     /// state. It'll also set the browsers scroll restoration to `manual`.
-    pub fn new(prefix: Option<String>, do_scroll_restoration: bool) -> Self {
+    pub fn new(prefix: Option<String>, do_scroll_restoration: bool) -> Self
+    where
+        <R as std::str::FromStr>::Err: std::fmt::Display,
+    {
         let window = window().expect("access to `window`");
         let history = window.history().expect("`window` has access to `history`");
 
@@ -69,15 +84,14 @@ impl<R: Serialize + DeserializeOwned> WebHistory<R> {
                 let h = history.clone();
                 let document = w.document().expect("`window` has access to `document`");
 
-                // Some(EventListener::new(&document, "scroll", move |_| {
-                //     set_state(&w, &h);
-                // }))
-                None
+                Some(EventListener::new(&document, "scroll", move |_| {
+                    update_scroll::<R>(&w, &h);
+                }))
             }
             false => None,
         };
 
-        Self {
+        let myself = Self {
             do_scroll_restoration,
             history,
             listener_navigation: None,
@@ -86,7 +100,14 @@ impl<R: Serialize + DeserializeOwned> WebHistory<R> {
             prefix,
             window,
             phantom: Default::default(),
-        }
+        };
+
+        let state = myself.current_route();
+
+        let state = myself.create_state(state);
+        let _ = replace_state_with_url(&myself.history, &state, None);
+
+        myself
     }
 
     fn create_state(&self, state: R) -> WebHistoryState<R> {
@@ -124,13 +145,13 @@ where
 
     fn go_back(&mut self) {
         if let Err(e) = self.history.back() {
-            error!("failed to go back: {e:?}")
+            error!("failed to go back: ", e)
         }
     }
 
     fn go_forward(&mut self) {
         if let Err(e) = self.history.forward() {
-            error!("failed to go forward: {e:?}")
+            error!("failed to go forward: ", e)
         }
     }
 
@@ -150,7 +171,7 @@ where
                     self.window.scroll_to_with_x_and_y(0.0, 0.0)
                 }
             }
-            Err(e) => error!("failed to push state: {e:?}"),
+            Err(e) => error!("failed to push state: ", e),
         }
     }
 
@@ -170,7 +191,7 @@ where
                     self.window.scroll_to_with_x_and_y(0.0, 0.0)
                 }
             }
-            Err(e) => error!("failed to replace state: {e:?}"),
+            Err(e) => error!("failed to replace state:", e),
         }
     }
 
@@ -178,7 +199,7 @@ where
         match self.window.location().set_href(&url) {
             Ok(_) => true,
             Err(e) => {
-                error!("failed to navigate to external url (`{url}): {e:?}");
+                error!("failed to navigate to external url (", url, "): ", e);
                 false
             }
         }
@@ -193,8 +214,10 @@ where
         self.listener_navigation = Some(EventListener::new(&self.window, "popstate", move |_| {
             (*callback)();
             if d {
-                // let mut s = s.lock().expect("unpoisoned scroll mutex");
-                // *s = Some(update_scroll(&w, &h));
+                let mut s = s.lock().expect("unpoisoned scroll mutex");
+                if let Some(current_state) = get_current::<WebHistoryState<R>>(&h) {
+                    *s = Some(current_state.scroll.scroll_to(w.clone()));
+                }
             }
         }));
     }
