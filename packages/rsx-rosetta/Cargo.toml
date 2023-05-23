@@ -25,3 +25,6 @@ convert_case = "0.5.0"
 # default = ["html"]
 
 # eventually more output options
+
+[dev-dependencies]
+pretty_assertions = "1.2.1"

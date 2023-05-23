@@ -1,0 +1,14 @@
+[package]
+name = "dioxus_server_macro"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+quote = "1.0.26"
+server_fn_macro = { git = "https://github.com/leptos-rs/leptos", rev = "671b1e4a8fff7a2e05bb621ef08e87be2b18ccae", features = ["stable"] }
+syn = { version = "1", features = ["full"] }
+
+[lib]
+proc-macro = true

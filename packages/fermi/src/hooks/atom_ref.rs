@@ -75,12 +75,35 @@ impl<T: 'static> UseAtomRef<T> {
         self.value.borrow_mut()
     }
 
+    /// Silent write to AtomRef
+    /// does not update Subscribed scopes
     pub fn write_silent(&self) -> RefMut<T> {
         self.value.borrow_mut()
     }
 
+    /// Replace old value with new one
     pub fn set(&self, new: T) {
         self.root.force_update(self.ptr);
         self.root.set(self.ptr, new);
+    }
+
+    /// Do not update provided context on Write ops
+    /// Example:
+    /// ```ignore
+    /// static ATOM_DATA: AtomRef<Collection> = |_| Default::default();
+    /// fn App(cx: Scope) {
+    ///     use_init_atom_root(cx);
+    ///     let atom_data = use_atom_ref(cx, ATOM_DATA);
+    ///     atom_data.unsubscribe(cx);
+    ///     atom_data.write().update();
+    /// }
+    /// ```
+    pub fn unsubscribe(&self, cx: &ScopeState) {
+        self.root.unsubscribe(self.ptr, cx.scope_id());
+    }
+
+    /// Force update of subscribed Scopes
+    pub fn force_update(&self) {
+        self.root.force_update(self.ptr);
     }
 }

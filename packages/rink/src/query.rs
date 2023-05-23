@@ -91,15 +91,7 @@ impl<'a> ElementRef<'a> {
     pub fn layout(&self) -> Option<Layout> {
         let layout = self
             .stretch
-            .layout(
-                self.inner
-                    .get(self.id)
-                    .unwrap()
-                    .get::<TaffyLayout>()
-                    .unwrap()
-                    .node
-                    .ok()?,
-            )
+            .layout(self.inner.get(self.id)?.get::<TaffyLayout>()?.node.ok()?)
             .ok();
         layout.map(|layout| Layout {
             order: layout.order,
