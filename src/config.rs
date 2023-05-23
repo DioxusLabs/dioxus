@@ -236,7 +236,7 @@ impl CrateConfig {
         self
     }
 
-    pub fn  with_cross_origin_policy(&mut self, cross_origin_policy: bool) -> &mut Self {
+    pub fn with_cross_origin_policy(&mut self, cross_origin_policy: bool) -> &mut Self {
         self.cross_origin_policy = cross_origin_policy;
         self
     }

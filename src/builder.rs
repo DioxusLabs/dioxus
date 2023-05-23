@@ -49,7 +49,8 @@ pub fn build(config: &CrateConfig, quiet: bool) -> Result<BuildResult> {
     // [1] Build the .wasm module
     log::info!("🚅 Running build command...");
     let cmd = subprocess::Exec::cmd("cargo");
-    let cmd = cmd.cwd(&crate_dir)
+    let cmd = cmd
+        .cwd(&crate_dir)
         .arg("build")
         .arg("--target")
         .arg("wasm32-unknown-unknown")
@@ -66,25 +67,18 @@ pub fn build(config: &CrateConfig, quiet: bool) -> Result<BuildResult> {
         cmd
     };
 
-    let cmd = if quiet {
-        cmd.arg("--quiet")
-    } else {
-        cmd
-    };
+    let cmd = if quiet { cmd.arg("--quiet") } else { cmd };
 
     let cmd = if config.custom_profile.is_some() {
         let custom_profile = config.custom_profile.as_ref().unwrap();
-        cmd
-            .arg("--profile")
-            .arg(custom_profile)
+        cmd.arg("--profile").arg(custom_profile)
     } else {
         cmd
     };
 
     let cmd = if config.features.is_some() {
         let features_str = config.features.as_ref().unwrap().join(" ");
-        cmd.arg("--features")
-            .arg(features_str)
+        cmd.arg("--features").arg(features_str)
     } else {
         cmd
     };
@@ -394,9 +388,9 @@ fn prettier_build(cmd: subprocess::Exec) -> anyhow::Result<Vec<Diagnostic>> {
                 let message = msg.message;
                 match message.level {
                     cargo_metadata::diagnostic::DiagnosticLevel::Error => {
-                        return Err(anyhow::anyhow!(
-                            message.rendered.unwrap_or("Unknown".into())
-                        ));
+                        return Err(anyhow::anyhow!(message
+                            .rendered
+                            .unwrap_or("Unknown".into())));
                     }
                     cargo_metadata::diagnostic::DiagnosticLevel::Warning => {
                         warning_messages.push(message.clone());

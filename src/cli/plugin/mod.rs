@@ -21,12 +21,11 @@ impl Plugin {
                 }
             }
             Plugin::AppPath {} => {
-                if let Ok(plugin_dir) = crate::plugin::PluginManager::init_plugin_dir() {
-                    if let Some(v) = plugin_dir.to_str() {
-                        println!("{}", v);
-                    } else {
-                        log::error!("Plugin path get failed.");
-                    }
+                let plugin_dir = crate::plugin::PluginManager::init_plugin_dir();
+                if let Some(v) = plugin_dir.to_str() {
+                    println!("{}", v);
+                } else {
+                    log::error!("Plugin path get failed.");
                 }
             }
             Plugin::Add { name: _ } => {

@@ -136,7 +136,12 @@ pub async fn hot_reload_handler(
 }
 
 #[allow(unused_assignments)]
-pub async fn startup_hot_reload(ip: String, port: u16, config: CrateConfig, start_browser: bool) -> Result<()> {
+pub async fn startup_hot_reload(
+    ip: String,
+    port: u16,
+    config: CrateConfig,
+    start_browser: bool,
+) -> Result<()> {
     let first_build_result = crate::builder::build(&config, false)?;
 
     log::info!("🚀 Starting development server...");
@@ -272,11 +277,11 @@ pub async fn startup_hot_reload(ip: String, port: u16, config: CrateConfig, star
     );
 
     let cors = CorsLayer::new()
-    // allow `GET` and `POST` when accessing the resource
-    .allow_methods([Method::GET, Method::POST])
-    // allow requests from any origin
-    .allow_origin(Any)
-    .allow_headers(Any);
+        // allow `GET` and `POST` when accessing the resource
+        .allow_methods([Method::GET, Method::POST])
+        // allow requests from any origin
+        .allow_origin(Any)
+        .allow_headers(Any);
 
     let (coep, coop) = if config.cross_origin_policy {
         (
@@ -296,10 +301,7 @@ pub async fn startup_hot_reload(ip: String, port: u16, config: CrateConfig, star
             HeaderName::from_static("cross-origin-embedder-policy"),
             coep,
         )
-        .override_response_header(
-            HeaderName::from_static("cross-origin-opener-policy"),
-            coop,
-        )
+        .override_response_header(HeaderName::from_static("cross-origin-opener-policy"), coop)
         .and_then(
             move |response: Response<ServeFileSystemResponseBody>| async move {
                 let response = if file_service_config
@@ -456,11 +458,11 @@ pub async fn startup_default(
     PluginManager::on_serve_start(&config)?;
 
     let cors = CorsLayer::new()
-    // allow `GET` and `POST` when accessing the resource
-    .allow_methods([Method::GET, Method::POST])
-    // allow requests from any origin
-    .allow_origin(Any)
-    .allow_headers(Any);
+        // allow `GET` and `POST` when accessing the resource
+        .allow_methods([Method::GET, Method::POST])
+        // allow requests from any origin
+        .allow_origin(Any)
+        .allow_headers(Any);
 
     let (coep, coop) = if config.cross_origin_policy {
         (
@@ -480,10 +482,7 @@ pub async fn startup_default(
             HeaderName::from_static("cross-origin-embedder-policy"),
             coep,
         )
-        .override_response_header(
-            HeaderName::from_static("cross-origin-opener-policy"),
-            coop,
-        )
+        .override_response_header(HeaderName::from_static("cross-origin-opener-policy"), coop)
         .and_then(
             move |response: Response<ServeFileSystemResponseBody>| async move {
                 let response = if file_service_config
