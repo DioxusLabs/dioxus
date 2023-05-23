@@ -51,10 +51,11 @@ impl Nest {
 
 impl Nest {
     pub fn dynamic_segments(&self) -> impl Iterator<Item = TokenStream> + '_ {
-        self.segments
-            .iter()
-            .filter_map(|seg| seg.name())
-            .map(|i| quote! {#i})
+        self.dynamic_segments_names().map(|i| quote! {#i})
+    }
+
+    pub fn dynamic_segments_names(&self) -> impl Iterator<Item = Ident> + '_ {
+        self.segments.iter().filter_map(|seg| seg.name())
     }
 
     pub fn write(&self) -> TokenStream {

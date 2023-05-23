@@ -8,10 +8,7 @@ use web_sys::{History, ScrollRestoration, Window};
 
 use crate::routable::Routable;
 
-use super::{
-    web_scroll::{top_left, update_history, update_scroll},
-    HistoryProvider,
-};
+use super::HistoryProvider;
 
 const INITIAL_URL: &str = "dioxus-router-core://initial_url.invalid/";
 

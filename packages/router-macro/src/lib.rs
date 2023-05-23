@@ -161,6 +161,7 @@ impl RouteEnum {
         quote! {
             impl std::fmt::Display for #name {
                 fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    #[allow(unused)]
                     match self {
                         #(#display_match)*
                     }
@@ -177,7 +178,7 @@ impl RouteEnum {
         let error_name = format_ident!("{}MatchError", self.name);
         let tokens = tree.roots.iter().map(|&id| {
             let route = tree.get(id).unwrap();
-            route.to_tokens(&tree, self.name.clone(), error_name.clone())
+            route.to_tokens(&self.nests, &tree, self.name.clone(), error_name.clone())
         });
 
         quote! {

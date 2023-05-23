@@ -263,6 +263,7 @@ pub enum RouteTreeSegmentData<'a> {
 impl<'a> RouteTreeSegmentData<'a> {
     pub fn to_tokens(
         &self,
+        nests: &[Nest],
         tree: &RouteTree,
         enum_name: syn::Ident,
         error_enum_name: syn::Ident,
@@ -282,7 +283,7 @@ impl<'a> RouteTreeSegmentData<'a> {
 
                 let children = children.iter().map(|child| {
                     let child = tree.get(*child).unwrap();
-                    child.to_tokens(tree, enum_name.clone(), error_enum_name.clone())
+                    child.to_tokens(nests, tree, enum_name.clone(), error_enum_name.clone())
                 });
 
                 quote! {
@@ -310,7 +311,7 @@ impl<'a> RouteTreeSegmentData<'a> {
                     .enumerate()
                     .skip_while(|(_, seg)| matches!(seg, RouteSegment::Static(_)));
 
-                let construct_variant = route.construct(enum_name);
+                let construct_variant = route.construct(nests, enum_name);
                 let parse_query = route.parse_query();
 
                 let insure_not_trailing = route
@@ -349,7 +350,7 @@ impl<'a> RouteTreeSegmentData<'a> {
                     .iter()
                     .map(|child| {
                         let child = tree.get(*child).unwrap();
-                        child.to_tokens(tree, enum_name.clone(), error_enum_name.clone())
+                        child.to_tokens(nests, tree, enum_name.clone(), error_enum_name.clone())
                     })
                     .collect();
 

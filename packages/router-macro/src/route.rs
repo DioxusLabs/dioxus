@@ -173,8 +173,37 @@ impl Route {
         })
     }
 
-    pub fn construct(&self, enum_name: Ident) -> TokenStream2 {
-        let segments = self.dynamic_segments();
+    pub fn construct(&self, nests: &[Nest], enum_name: Ident) -> TokenStream2 {
+        let segments = self.fields.named.iter().map(|f| {
+            let mut from_route = false;
+            for id in &self.nests {
+                let nest = &nests[id.0];
+                if nest
+                    .dynamic_segments_names()
+                    .any(|i| &i == f.ident.as_ref().unwrap())
+                {
+                    from_route = true
+                }
+            }
+            for segment in &self.segments {
+                match segment {
+                    RouteSegment::Dynamic(name, _) => {
+                        if name == f.ident.as_ref().unwrap() {
+                            from_route = true
+                        }
+                    }
+                    _ => {}
+                }
+            }
+
+            let name = f.ident.as_ref().unwrap();
+
+            if from_route {
+                quote! {#name}
+            } else {
+                quote! {#name: Default::default()}
+            }
+        });
         let name = &self.route_name;
 
         quote! {
