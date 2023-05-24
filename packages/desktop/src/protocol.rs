@@ -43,7 +43,7 @@ fn module_loader(root_name: &str) -> String {
     let rootname = "{root_name}";
     let root = window.document.getElementById(rootname);
     if (root != null) {{
-        window.interpreter = new Interpreter(root);
+        window.interpreter = new Interpreter(root, new InterpreterConfig(true));
         window.ipc.postMessage(serializeIpcMessage("initialize"));
     }}
 </script>
