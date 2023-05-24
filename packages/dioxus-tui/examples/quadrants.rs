@@ -1,7 +1,31 @@
+#![allow(non_snake_case)]
+
 use dioxus::prelude::*;
+use dioxus_tui::Config;
 
 fn main() {
-    dioxus_tui::launch(app);
+    dioxus_tui::launch_cfg(app, Config::default());
+}
+
+#[derive(Props, PartialEq)]
+struct QuadrentProps {
+    color: String,
+    text: String,
+}
+
+fn Quadrant(cx: Scope<QuadrentProps>) -> Element {
+    cx.render(rsx! {
+        div {
+            border_width: "1px",
+            width: "50%",
+            height: "100%",
+            background_color: "{cx.props.color}",
+            justify_content: "center",
+            align_items: "center",
+
+            "{cx.props.text}"
+        }
+    })
 }
 
 fn app(cx: Scope) -> Element {
@@ -15,22 +39,13 @@ fn app(cx: Scope) -> Element {
                 width: "100%",
                 height: "50%",
                 flex_direction: "row",
-                div {
-                    border_width: "1px",
-                    width: "50%",
-                    height: "100%",
-                    background_color: "red",
-                    justify_content: "center",
-                    align_items: "center",
-                    "[A]"
-                }
-                div {
-                    width: "50%",
-                    height: "100%",
-                    background_color: "black",
-                    justify_content: "center",
-                    align_items: "center",
-                    "[B]"
+                Quadrant{
+                    color: "red".to_string(),
+                    text: "[A]".to_string()
+                },
+                Quadrant{
+                    color: "black".to_string(),
+                    text: "[B]".to_string()
                 }
             }
 
@@ -38,21 +53,13 @@ fn app(cx: Scope) -> Element {
                 width: "100%",
                 height: "50%",
                 flex_direction: "row",
-                div {
-                    width: "50%",
-                    height: "100%",
-                    background_color: "green",
-                    justify_content: "center",
-                    align_items: "center",
-                    "[C]"
-                }
-                div {
-                    width: "50%",
-                    height: "100%",
-                    background_color: "blue",
-                    justify_content: "center",
-                    align_items: "center",
-                    "[D]"
+                Quadrant{
+                    color: "green".to_string(),
+                    text: "[C]".to_string()
+                },
+                Quadrant{
+                    color: "blue".to_string(),
+                    text: "[D]".to_string()
                 }
             }
         }

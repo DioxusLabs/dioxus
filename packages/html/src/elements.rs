@@ -360,6 +360,11 @@ builder_constructors! {
     header None {};
 
     /// Build a
+    /// [`<hgroup>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/hgroup)
+    /// element.
+    hgroup None {};
+
+    /// Build a
     /// [`<h1>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/h1)
     /// element.
     ///

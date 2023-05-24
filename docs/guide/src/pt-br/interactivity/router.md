@@ -80,4 +80,4 @@ rsx!{
 
 Esta página é apenas uma breve visão geral do roteador para mostrar que existe uma solução poderosa já construída para um problema muito comum. Para obter mais informações sobre o roteador, confira seu livro ou confira alguns dos exemplos.
 
-O roteador tem sua própria documentação! [Disponível aqui](https://dioxuslabs.com/router/guide/).
+O roteador tem sua própria documentação! [Disponível aqui](https://dioxuslabs.com/docs/0.3/router/).
