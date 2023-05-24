@@ -269,7 +269,6 @@ impl Route {
             None => quote! {},
         }
     }
-
 }
 
 impl ToTokens for Route {

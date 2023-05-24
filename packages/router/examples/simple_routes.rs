@@ -113,9 +113,13 @@ fn Route3(cx: Scope, dynamic: String) -> Element {
                     }
                 }
             }
-            else{None}
+            else {
+                None
+            }
         }
-        else{None}
+        else {
+            None
+        }
     }
 }
 
