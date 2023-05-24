@@ -253,7 +253,7 @@ impl Route {
                 fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                     match self {
                         Self::ExtraSegments(segments) => {
-                            write!(f, "Found additional trailing segments: {segments}")?
+                            write!(f, "Found additional trailing segments: {}", segments)?
                         }
                         #(#display_match,)*
                     }
