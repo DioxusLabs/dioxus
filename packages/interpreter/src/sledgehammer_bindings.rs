@@ -117,6 +117,9 @@ mod js {
     export function set_node(id, node) {
         nodes[id] = node;
     }
+    export function get_node(id) {
+        return nodes[id];
+    }
     export function initilize(root, handler) {
         listeners.handler = handler;
         nodes = [root];
@@ -166,6 +169,9 @@ mod js {
 
         #[wasm_bindgen]
         pub fn set_node(id: u32, node: Node);
+
+        #[wasm_bindgen]
+        pub fn get_node(id: u32) -> Node;
 
         #[wasm_bindgen]
         pub fn initilize(root: Node, handler: &Function);

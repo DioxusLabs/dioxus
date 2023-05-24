@@ -1,17 +1,6 @@
 # Server-Side Rendering
 
-The Dioxus VirtualDom can be rendered server-side.
-
-[Example: Dioxus DocSite](https://github.com/dioxusLabs/docsite)
-
-## Multithreaded Support
-
-The Dioxus VirtualDom, sadly, is not currently `Send`. Internally, we use quite a bit of interior mutability which is not thread-safe. This means you can't easily use Dioxus with most web frameworks like Tide, Rocket, Axum, etc.
-
-To solve this, you'll want to spawn a VirtualDom on its own thread and communicate with it via channels.
-
-When working with web frameworks that require `Send`, it is possible to render a VirtualDom immediately to a String – but you cannot hold the VirtualDom across an await point. For retained-state SSR (essentially LiveView), you'll need to create a pool of VirtualDoms.
-
+For lower-level control over the rendering process, you can use the `dioxus-ssr` crate directly. This can be useful when integrating with a web framework that `dioxus-server` does not support, or pre-rendering pages.
 
 ## Setup
 
@@ -21,7 +10,7 @@ Make sure you have Rust and Cargo installed, and then create a new project:
 
 ```shell
 cargo new --bin demo
-cd app
+cd demo
 ```
 
 Add Dioxus and the ssr renderer as dependencies:
@@ -99,6 +88,8 @@ async fn app_endpoint() -> Html<String> {
 }
 ```
 
-And that's it!
+## Multithreaded Support
 
-> You might notice that you cannot hold the VirtualDom across an await point. Dioxus is currently not ThreadSafe, so it _must_ remain on the thread it started. We are working on loosening this requirement.
+The Dioxus VirtualDom, sadly, is not currently `Send`. Internally, we use quite a bit of interior mutability which is not thread-safe.
+When working with web frameworks that require `Send`, it is possible to render a VirtualDom immediately to a String – but you cannot hold the VirtualDom across an await point. For retained-state SSR (essentially LiveView), you'll need to spawn a VirtualDom on its own thread and communicate with it via channels or create a pool of VirtualDoms.
+You might notice that you cannot hold the VirtualDom across an await point. Because Dioxus is currently not ThreadSafe, it _must_ remain on the thread it started. We are working on loosening this requirement.

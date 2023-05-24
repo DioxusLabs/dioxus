@@ -5,22 +5,27 @@
 
 mod cfg;
 mod desktop_context;
+mod element;
 mod escape;
 mod eval;
 mod events;
 mod file_upload;
 mod protocol;
+mod query;
 mod shortcut;
 mod waker;
 mod webview;
 
+use crate::query::QueryResult;
 pub use cfg::Config;
 pub use desktop_context::{
     use_window, use_wry_event_handler, DesktopContext, WryEventHandler, WryEventHandlerId,
 };
 use desktop_context::{EventData, UserWindowEvent, WebviewQueue, WindowEventHandlers};
 use dioxus_core::*;
+use dioxus_html::MountedData;
 use dioxus_html::{native_bind::NativeFileEngine, FormData, HtmlEvent};
+use element::DesktopElement;
 pub use eval::{use_eval, EvalResult};
 use futures_util::{pin_mut, FutureExt};
 use shortcut::ShortcutRegistry;
@@ -221,37 +226,63 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
                 }
 
                 EventData::Ipc(msg) if msg.method() == "user_event" => {
-                    let evt = match serde_json::from_value::<HtmlEvent>(msg.params()) {
+                    let params = msg.params();
+
+                    let evt = match serde_json::from_value::<HtmlEvent>(params) {
                         Ok(value) => value,
                         Err(_) => return,
                     };
 
+                    let HtmlEvent {
+                        element,
+                        name,
+                        bubbles,
+                        data,
+                    } = evt;
+
                     let view = webviews.get_mut(&event.1).unwrap();
 
-                    view.dom
-                        .handle_event(&evt.name, evt.data.into_any(), evt.element, evt.bubbles);
+                    // check for a mounted event placeholder and replace it with a desktop specific element
+                    let as_any = if let dioxus_html::EventData::Mounted = &data {
+                        let query = view
+                            .dom
+                            .base_scope()
+                            .consume_context::<DesktopContext>()
+                            .unwrap()
+                            .query;
+
+                        let element = DesktopElement::new(element, view.webview.clone(), query);
+
+                        Rc::new(MountedData::new(element))
+                    } else {
+                        data.into_any()
+                    };
+
+                    view.dom.handle_event(&name, as_any, element, bubbles);
 
                     send_edits(view.dom.render_immediate(), &view.webview);
+                }
+
+                // When the webview sends a query, we need to send it to the query manager which handles dispatching the data to the correct pending query
+                EventData::Ipc(msg) if msg.method() == "query" => {
+                    let params = msg.params();
+
+                    if let Ok(result) = serde_json::from_value::<QueryResult>(params) {
+                        let view = webviews.get(&event.1).unwrap();
+                        let query = view
+                            .dom
+                            .base_scope()
+                            .consume_context::<DesktopContext>()
+                            .unwrap()
+                            .query;
+
+                        query.send(result);
+                    }
                 }
 
                 EventData::Ipc(msg) if msg.method() == "initialize" => {
                     let view = webviews.get_mut(&event.1).unwrap();
                     send_edits(view.dom.rebuild(), &view.webview);
-                }
-
-                // When the webview chirps back with the result of the eval, we send it to the active receiver
-                //
-                // This currently doesn't perform any targeting to the callsite, so if you eval multiple times at once,
-                // you might the wrong result. This should be fixed
-                EventData::Ipc(msg) if msg.method() == "eval_result" => {
-                    webviews[&event.1]
-                        .dom
-                        .base_scope()
-                        .consume_context::<DesktopContext>()
-                        .unwrap()
-                        .eval
-                        .send(msg.params())
-                        .unwrap();
                 }
 
                 EventData::Ipc(msg) if msg.method() == "browser_open" => {
