@@ -13,7 +13,7 @@ keywords = ["dom", "ui", "gui", "react", "ssr", "fullstack"]
 
 [dependencies]
 # server functions
-server_fn = { git = "https://github.com/leptos-rs/leptos", rev = "671b1e4a8fff7a2e05bb621ef08e87be2b18ccae", features = ["stable"] }
+server_fn = { git = "https://github.com/leptos-rs/leptos", rev = "671b1e4a8fff7a2e05bb621ef08e87be2b18ccae", default-features = false, features = ["stable"] }
 dioxus_server_macro = { path = "server-macro" }
 
 # warp
@@ -56,9 +56,11 @@ dioxus-hot-reload = { path = "../hot-reload" }
 web-sys = { version = "0.3.61", features = ["Window", "Document", "Element", "HtmlDocument", "Storage", "console"] }
 
 [features]
-default = ["hot-reload"]
+default = ["hot-reload", "default-tls"]
 hot-reload = ["serde_json", "tokio-stream", "futures-util"]
 warp = ["dep:warp", "http-body", "ssr"]
 axum = ["dep:axum", "tower-http", "ssr"]
 salvo = ["dep:salvo", "ssr"]
 ssr = ["server_fn/ssr", "tokio", "dioxus-ssr", "hyper", "http"]
+default-tls = ["server_fn/default-tls"]
+rustls = ["server_fn/rustls"]
