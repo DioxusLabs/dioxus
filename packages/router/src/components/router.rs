@@ -13,7 +13,10 @@ pub struct RouterCfg<R: Routable> {
     config: RefCell<Option<RouterConfiguration<R>>>,
 }
 
-impl<R: Routable> Default for RouterCfg<R> {
+impl<R: Routable> Default for RouterCfg<R>
+where
+    <R as FromStr>::Err: std::fmt::Display,
+{
     fn default() -> Self {
         Self {
             config: RefCell::new(Some(RouterConfiguration::default())),
@@ -31,14 +34,20 @@ impl<R: Routable> From<RouterConfiguration<R>> for RouterCfg<R> {
 
 /// The props for [`Router`].
 #[derive(Props)]
-pub struct RouterProps<R: Routable> {
+pub struct RouterProps<R: Routable>
+where
+    <R as FromStr>::Err: std::fmt::Display,
+{
     #[props(into)]
     initial_url: Option<String>,
     #[props(default, into)]
     config: RouterCfg<R>,
 }
 
-impl<R: Routable> PartialEq for RouterProps<R> {
+impl<R: Routable> PartialEq for RouterProps<R>
+where
+    <R as FromStr>::Err: std::fmt::Display,
+{
     fn eq(&self, _: &Self) -> bool {
         // prevent the router from re-rendering when the initial url or config changes
         true

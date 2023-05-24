@@ -58,7 +58,10 @@ pub struct RouterConfiguration<R: Routable> {
     pub on_update: Option<RoutingCallback<R>>,
 }
 
-impl<R: Routable + Clone> Default for RouterConfiguration<R> {
+impl<R: Routable + Clone> Default for RouterConfiguration<R>
+where
+    <R as std::str::FromStr>::Err: std::fmt::Display,
+{
     fn default() -> Self {
         Self {
             failure_external_navigation: FailureExternalNavigation::<R>,

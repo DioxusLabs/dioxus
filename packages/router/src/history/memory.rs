@@ -6,12 +6,15 @@ use super::HistoryProvider;
 
 /// A [`HistoryProvider`] that stores all navigation information in memory.
 pub struct MemoryHistory<R: Routable> {
-    current: Option<R>,
+    current: R,
     history: Vec<R>,
     future: Vec<R>,
 }
 
-impl<R: Routable> MemoryHistory<R> {
+impl<R: Routable> MemoryHistory<R>
+where
+    <R as FromStr>::Err: std::fmt::Display,
+{
     /// Create a [`MemoryHistory`] starting at `path`.
     ///
     /// ```rust
@@ -24,16 +27,19 @@ impl<R: Routable> MemoryHistory<R> {
         let path = path.into();
 
         Ok(Self {
-            current: Some(R::from_str(&path)?),
+            current: R::from_str(&path)?,
             ..Default::default()
         })
     }
 }
 
-impl<R: Routable> Default for MemoryHistory<R> {
+impl<R: Routable> Default for MemoryHistory<R>
+where
+    <R as FromStr>::Err: std::fmt::Display,
+{
     fn default() -> Self {
         Self {
-            current: None,
+            current: "/".parse().unwrap_or_else(|err| panic!("{}", err)),
             history: Vec::new(),
             future: Vec::new(),
         }
@@ -42,7 +48,7 @@ impl<R: Routable> Default for MemoryHistory<R> {
 
 impl<R: Routable> HistoryProvider<R> for MemoryHistory<R> {
     fn current_route(&self) -> R {
-        self.current.clone().expect("current route is not set")
+        self.current.clone()
     }
 
     fn can_go_back(&self) -> bool {
@@ -51,10 +57,8 @@ impl<R: Routable> HistoryProvider<R> for MemoryHistory<R> {
 
     fn go_back(&mut self) {
         if let Some(last) = self.history.pop() {
-            let new = self.current.replace(last);
-            if let Some(new) = new {
-                self.future.push(new);
-            }
+            let old = std::mem::replace(&mut self.current, last);
+            self.future.push(old);
         }
     }
 
@@ -64,23 +68,19 @@ impl<R: Routable> HistoryProvider<R> for MemoryHistory<R> {
 
     fn go_forward(&mut self) {
         if let Some(next) = self.future.pop() {
-            let old = self.current.replace(next);
-            if let Some(old) = old {
-                self.history.push(old);
-            }
+            let old = std::mem::replace(&mut self.current, next);
+            self.history.push(old);
         }
     }
 
     fn push(&mut self, new: R) {
-        if let Some(current) = self.current.take() {
-            self.history.push(current);
-        }
-        self.current = Some(new);
+        let old = std::mem::replace(&mut self.current, new);
+        self.history.push(old);
         self.future.clear();
     }
 
     fn replace(&mut self, path: R) {
-        self.current = Some(path);
+        self.current = path;
     }
 }
 

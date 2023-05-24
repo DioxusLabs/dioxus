@@ -46,6 +46,7 @@ pub mod hooks {
 pub mod prelude {
     pub use crate::components::*;
     pub use crate::contexts::*;
+    pub use crate::history::*;
     pub use crate::hooks::*;
     pub use crate::routable::*;
     pub use crate::router_cfg::RouterConfiguration;

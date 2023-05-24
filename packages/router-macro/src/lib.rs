@@ -244,7 +244,7 @@ impl RouteEnum {
         });
 
         quote! {
-            impl<'a> TryFrom<&'a str> for #name {
+            impl<'a> core::convert::TryFrom<&'a str> for #name {
                 type Error = <Self as std::str::FromStr>::Err;
 
                 fn try_from(s: &'a str) -> Result<Self, Self::Error> {
