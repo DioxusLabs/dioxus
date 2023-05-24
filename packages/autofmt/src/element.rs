@@ -166,7 +166,7 @@ impl Writer<'_> {
     fn write_attributes(
         &mut self,
         attributes: &[ElementAttrNamed],
-        key: &Option<IfmtInput>,
+        key: &Option<Key>,
         sameline: bool,
     ) -> Result {
         let mut attr_iter = attributes.iter().peekable();
@@ -175,11 +175,15 @@ impl Writer<'_> {
             if !sameline {
                 self.out.indented_tabbed_line()?;
             }
-            write!(
-                self.out,
-                "key: \"{}\"",
-                key.source.as_ref().unwrap().value()
-            )?;
+            let key = match key {
+                Key::Formatted(litstr) => write!(
+                    self.out,
+                    "key: \"{}\"",
+                    litstr.source.as_ref().unwrap().value()
+                )?,
+                Key::Raw(expr) => write!(self.out, "key: {}", prettyplease::unparse_expr(expr))?,
+            };
+
             if !attributes.is_empty() {
                 write!(self.out, ",")?;
                 if sameline {

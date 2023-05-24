@@ -13,7 +13,7 @@ use syn::{
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub struct Element {
     pub name: Ident,
-    pub key: Option<IfmtInput>,
+    pub key: Option<Key>,
     pub attributes: Vec<ElementAttrNamed>,
     pub children: Vec<BodyNode>,
     pub _is_static: bool,
@@ -90,6 +90,10 @@ impl Parse for Element {
                         "key" => {
                             key = Some(content.parse()?);
                         }
+                        // {
+                        //     // content.parse()?
+                        //     key = Some(Key::parse(&content)?);
+                        // }
                         "classes" => todo!("custom class list not supported yet"),
                         // "namespace" => todo!("custom namespace not supported yet"),
                         "node_ref" => {
@@ -299,3 +303,30 @@ impl ToTokens for ElementAttrNamed {
 //     mounted_node: Default::default(),
 //     value: ::dioxus::core::AttributeValue::Text(#value),
 // }
+
+#[derive(PartialEq, Eq, Clone, Debug, Hash)]
+pub enum Key {
+    Formatted(IfmtInput),
+    Raw(Expr),
+}
+
+impl Parse for Key {
+    fn parse(input: ParseStream) -> Result<Self> {
+        if input.peek(LitStr) {
+            Ok(Key::Formatted(input.parse()?))
+        } else {
+            Ok(Key::Raw(input.parse()?))
+        }
+    }
+}
+
+impl ToTokens for Key {
+    fn to_tokens(&self, tokens: &mut TokenStream2) {
+        match self {
+            Key::Formatted(s) => tokens.append_all(quote! {
+                __cx.key_value(#s)
+            }),
+            Key::Raw(e) => e.to_tokens(tokens),
+        }
+    }
+}

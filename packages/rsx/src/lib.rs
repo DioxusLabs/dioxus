@@ -163,7 +163,7 @@ impl<'a> ToTokens for TemplateRenderer<'a> {
 
         let key = match self.roots.get(0) {
             Some(BodyNode::Element(el)) if self.roots.len() == 1 => el.key.clone(),
-            Some(BodyNode::Component(comp)) if self.roots.len() == 1 => comp.key().cloned(),
+            Some(BodyNode::Component(comp)) if self.roots.len() == 1 => comp.key(),
             _ => None,
         };
 
