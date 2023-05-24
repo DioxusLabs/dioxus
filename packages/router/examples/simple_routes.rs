@@ -15,7 +15,7 @@ fn main() {
 
 fn root(cx: Scope) -> Element {
     render! {
-        Router::<Route> {
+        Router {
             config: RouterConfiguration {
                 history: {
                     #[cfg(not(target_arch = "wasm32"))]
@@ -39,7 +39,7 @@ fn UserFrame(cx: Scope, user_id: usize) -> Element {
         div {
             background_color: "rgba(0,0,0,50%)",
             "children:"
-            Outlet::<Route> {}
+            Outlet {}
         }
     }
 }
@@ -50,12 +50,12 @@ fn Route1(cx: Scope, user_id: usize, dynamic: usize, extra: String) -> Element {
         pre {
             "Route1{{\n\tuser_id:{user_id},\n\tdynamic:{dynamic},\n\textra:{extra}\n}}"
         }
-        Link::<Route> {
+        Link {
             target: Route::Route1 { user_id: *user_id, dynamic: *dynamic, extra: extra.clone() + "." },
             "Route1 with extra+\".\""
         }
         p { "Footer" }
-        Link::<Route> {
+        Link {
             target: Route::Route3 { dynamic: String::new() },
             "Home"
         }
@@ -70,7 +70,7 @@ fn Route2(cx: Scope, user_id: usize) -> Element {
         }
         (0..*user_id).map(|i| rsx!{ p { "{i}" } }),
         p { "Footer" }
-        Link::<Route> {
+        Link {
             target: Route::Route3 { dynamic: String::new() },
             "Home"
         }
@@ -97,7 +97,7 @@ fn Route3(cx: Scope, dynamic: String) -> Element {
             value: "{current_route.read()}"
         }
         "dynamic: {dynamic}"
-        Link::<Route> {
+        Link {
             target: Route::Route2 { user_id: 8888 },
             "hello world link"
         }
@@ -107,7 +107,7 @@ fn Route3(cx: Scope, dynamic: String) -> Element {
         if let Ok(route) = parsed {
             if route != router_route {
                 render! {
-                    Link::<Route> {
+                    Link {
                         target: route.clone(),
                         "{route}"
                     }

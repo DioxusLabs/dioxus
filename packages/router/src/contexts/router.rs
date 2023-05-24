@@ -19,7 +19,7 @@ pub enum NavigationFailure<R: Routable> {
 }
 
 /// A function the router will call after every routing update.
-pub type RoutingCallback<R> = Arc<dyn Fn(RouterContext<R>) -> Option<NavigationTarget<R>>>;
+pub type RoutingCallback<R> = Arc<dyn Fn(GenericRouterContext<R>) -> Option<NavigationTarget<R>>>;
 
 struct MutableRouterState<R>
 where
@@ -43,7 +43,7 @@ where
 }
 
 /// A collection of router data that manages all routing functionality.
-pub struct RouterContext<R>
+pub struct GenericRouterContext<R>
 where
     R: Routable,
 {
@@ -58,7 +58,7 @@ where
     failure_redirection_limit: fn(Scope) -> Element,
 }
 
-impl<R: Routable> Clone for RouterContext<R> {
+impl<R: Routable> Clone for GenericRouterContext<R> {
     fn clone(&self) -> Self {
         Self {
             state: self.state.clone(),
@@ -72,7 +72,7 @@ impl<R: Routable> Clone for RouterContext<R> {
     }
 }
 
-impl<R> RouterContext<R>
+impl<R> GenericRouterContext<R>
 where
     R: Routable,
 {

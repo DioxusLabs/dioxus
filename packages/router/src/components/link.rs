@@ -9,7 +9,7 @@ use crate::utils::use_router_internal::use_router_internal;
 
 /// The properties for a [`Link`].
 #[derive(Props)]
-pub struct LinkProps<'a, R: Routable> {
+pub struct GenericLinkProps<'a, R: Routable> {
     /// A class to apply to the generate HTML anchor tag if the `target` route is active.
     pub active_class: Option<&'a str>,
     /// The children to render within the generated HTML anchor tag.
@@ -45,7 +45,7 @@ pub struct LinkProps<'a, R: Routable> {
     pub target: NavigationTarget<R>,
 }
 
-impl<R: Routable> Debug for LinkProps<'_, R> {
+impl<R: Routable> Debug for GenericLinkProps<'_, R> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("LinkProps")
             .field("active_class", &self.active_class)
@@ -125,8 +125,8 @@ impl<R: Routable> Debug for LinkProps<'_, R> {
 /// # );
 /// ```
 #[allow(non_snake_case)]
-pub fn Link<'a, R: Routable + Clone>(cx: Scope<'a, LinkProps<'a, R>>) -> Element {
-    let LinkProps {
+pub fn GenericLink<'a, R: Routable + Clone>(cx: Scope<'a, GenericLinkProps<'a, R>>) -> Element {
+    let GenericLinkProps {
         active_class,
         children,
         class,

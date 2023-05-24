@@ -1,4 +1,6 @@
-use crate::{components::Link, hooks::use_route, navigation::NavigationTarget, routable::Routable};
+use crate::{
+    components::GenericLink, hooks::use_route, navigation::NavigationTarget, routable::Routable,
+};
 use dioxus::prelude::*;
 
 #[allow(non_snake_case)]
@@ -35,7 +37,7 @@ pub fn FailureNamedNavigation<R: Routable + Clone>(cx: Scope) -> Element {
             "We are sorry for the inconvenience. The link below may help to fix the problem, but "
             "there is no guarantee."
         }
-        Link::<R> {
+        GenericLink::<R> {
             target: NavigationTarget::External("https://google.com".into()),
             "Click here to try to fix the failure."
         }
@@ -55,7 +57,7 @@ pub fn FailureRedirectionLimit<R: Routable + Clone>(cx: Scope) -> Element {
             "We are sorry for the inconvenience. The link below may help to fix the problem, but "
             "there is no guarantee."
         }
-        Link::<R> {
+        GenericLink::<R> {
             target: NavigationTarget::External("https://google.com".into()),
             "Click here to try to fix the failure."
         }

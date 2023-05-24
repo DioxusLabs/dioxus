@@ -3,7 +3,7 @@ use log::error;
 use std::{cell::RefCell, str::FromStr};
 
 use crate::{
-    prelude::{Outlet, RouterContext},
+    prelude::{GenericOutlet, GenericRouterContext},
     routable::Routable,
     router_cfg::RouterConfiguration,
 };
@@ -34,7 +34,7 @@ impl<R: Routable> From<RouterConfiguration<R>> for RouterCfg<R> {
 
 /// The props for [`Router`].
 #[derive(Props)]
-pub struct RouterProps<R: Routable>
+pub struct GenericRouterProps<R: Routable>
 where
     <R as FromStr>::Err: std::fmt::Display,
 {
@@ -44,7 +44,7 @@ where
     config: RouterCfg<R>,
 }
 
-impl<R: Routable> PartialEq for RouterProps<R>
+impl<R: Routable> PartialEq for GenericRouterProps<R>
 where
     <R as FromStr>::Err: std::fmt::Display,
 {
@@ -55,19 +55,19 @@ where
 }
 
 /// A component that renders the current route.
-pub fn Router<R: Routable + Clone>(cx: Scope<RouterProps<R>>) -> Element
+pub fn GenericRouter<R: Routable + Clone>(cx: Scope<GenericRouterProps<R>>) -> Element
 where
     <R as FromStr>::Err: std::fmt::Display,
 {
     use_context_provider(cx, || {
         #[allow(unreachable_code, unused_variables)]
-        if let Some(outer) = cx.consume_context::<RouterContext<R>>() {
+        if let Some(outer) = cx.consume_context::<GenericRouterContext<R>>() {
             let msg = "Router components should not be nested within each other";
             error!("{msg}, inner will be inactive and transparent");
             #[cfg(debug_assertions)]
             panic!("{}", msg);
         }
-        let router = RouterContext::new(
+        let router = GenericRouterContext::new(
             cx.props.config.config.take().unwrap_or_default(),
             cx.schedule_update_any(),
         );
@@ -82,6 +82,6 @@ where
     });
 
     render! {
-        Outlet::<R> {}
+        GenericOutlet::<R> {}
     }
 }

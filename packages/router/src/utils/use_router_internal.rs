@@ -1,6 +1,6 @@
 use dioxus::prelude::{ScopeId, ScopeState};
 
-use crate::{contexts::router::RouterContext, routable::Routable};
+use crate::{contexts::router::GenericRouterContext, routable::Routable};
 
 /// A private hook to subscribe to the router.
 ///
@@ -12,9 +12,11 @@ use crate::{contexts::router::RouterContext, routable::Routable};
 /// - Otherwise [`Some`].
 ///
 /// [`use_router`]: crate::hooks::use_router
-pub(crate) fn use_router_internal<R: Routable>(cx: &ScopeState) -> &Option<RouterContext<R>> {
+pub(crate) fn use_router_internal<R: Routable>(
+    cx: &ScopeState,
+) -> &Option<GenericRouterContext<R>> {
     let inner = cx.use_hook(|| {
-        let router = cx.consume_context::<RouterContext<R>>()?;
+        let router = cx.consume_context::<GenericRouterContext<R>>()?;
 
         let id = cx.scope_id();
         router.subscribe(id);
@@ -25,7 +27,7 @@ pub(crate) fn use_router_internal<R: Routable>(cx: &ScopeState) -> &Option<Route
 }
 
 struct Subscription<R: Routable> {
-    router: RouterContext<R>,
+    router: GenericRouterContext<R>,
     id: ScopeId,
 }
 

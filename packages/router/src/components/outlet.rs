@@ -44,6 +44,6 @@ use dioxus::prelude::*;
 /// # let _ = vdom.rebuild();
 /// # assert_eq!(dioxus_ssr::render(&vdom), "<h1>App</h1><p>Content</p>");
 /// ```
-pub fn Outlet<R: Routable + Clone>(cx: Scope) -> Element {
+pub fn GenericOutlet<R: Routable + Clone>(cx: Scope) -> Element {
     OutletContext::render::<R>(cx)
 }
