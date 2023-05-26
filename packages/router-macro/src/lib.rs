@@ -13,13 +13,14 @@ use proc_macro2::TokenStream as TokenStream2;
 use crate::{layout::LayoutId, route_tree::RouteTree};
 
 mod layout;
+mod macro2;
 mod nest;
 mod query;
 mod route;
 mod route_tree;
 mod segment;
 
-#[proc_macro_derive(Routable, attributes(route, nest, end_nest, layout, end_layout))]
+#[proc_macro_derive(Routable)]
 pub fn routable(input: TokenStream) -> TokenStream {
     let routes_enum = parse_macro_input!(input as syn::ItemEnum);
 
