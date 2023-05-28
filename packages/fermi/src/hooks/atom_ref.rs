@@ -4,6 +4,7 @@ use std::{
     cell::{Ref, RefCell, RefMut},
     rc::Rc,
 };
+use std::ops::DerefMut;
 
 ///
 ///
@@ -68,6 +69,12 @@ impl<T> Clone for UseAtomRef<T> {
 impl<T: 'static> UseAtomRef<T> {
     pub fn read(&self) -> Ref<T> {
         self.value.borrow()
+    }
+
+    /// This is silent operation
+    /// call `.force_update()` manually if required
+    pub fn with_mut_silent(&self, cb: impl FnOnce(&mut T)) {
+        cb(self.write_silent().deref_mut())
     }
 
     pub fn write(&self) -> RefMut<T> {
