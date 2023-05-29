@@ -70,6 +70,12 @@ impl<T: 'static> UseAtomRef<T> {
         self.value.borrow()
     }
 
+    /// This is silent operation
+    /// call `.force_update()` manually if required
+    pub fn with_mut_silent(&self, cb: impl FnOnce(&mut T)) {
+        cb(&mut *self.write_silent())
+    }
+
     pub fn write(&self) -> RefMut<T> {
         self.root.force_update(self.ptr);
         self.value.borrow_mut()
