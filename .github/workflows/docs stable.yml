@@ -29,7 +29,7 @@ jobs:
           # cd fermi && mdbook build -d ../nightly/fermi && cd ..
 
       - name: Deploy 🚀
-        uses: JamesIves/github-pages-deploy-action@v4.4.1
+        uses: JamesIves/github-pages-deploy-action@v4.4.2
         with:
           branch: gh-pages # The branch the action should deploy to.
           folder: docs/nightly # The folder the action should deploy.
