@@ -1,3 +1,5 @@
+#![allow(unused)]
+#![allow(non_snake_case)]
 // ANCHOR: all
 
 // ANCHOR: main
