@@ -6,8 +6,6 @@ use crate::create_new_window;
 use crate::eval::EvalResult;
 use crate::events::IpcMessage;
 use crate::query::QueryEngine;
-use crate::shortcut::IntoKeyCode;
-use crate::shortcut::IntoModifersState;
 use crate::shortcut::ShortcutId;
 use crate::shortcut::ShortcutRegistry;
 use crate::shortcut::ShortcutRegistryError;
@@ -18,6 +16,7 @@ use dioxus_core::VirtualDom;
 #[cfg(all(feature = "hot-reload", debug_assertions))]
 use dioxus_hot_reload::HotReloadMsg;
 use slab::Slab;
+use wry::application::accelerator::Accelerator;
 use wry::application::event::Event;
 use wry::application::event_loop::EventLoopProxy;
 use wry::application::event_loop::EventLoopWindowTarget;
@@ -237,15 +236,11 @@ impl DesktopContext {
     /// Linux: Only works on x11. See [this issue](https://github.com/tauri-apps/tao/issues/331) for more information.
     pub fn create_shortcut(
         &self,
-        key: impl IntoKeyCode,
-        modifiers: impl IntoModifersState,
+        accelerator: Accelerator,
         callback: impl FnMut() + 'static,
     ) -> Result<ShortcutId, ShortcutRegistryError> {
-        self.shortcut_manager.add_shortcut(
-            modifiers.into_modifiers_state(),
-            key.into_key_code(),
-            Box::new(callback),
-        )
+        self.shortcut_manager
+            .add_shortcut(accelerator, Box::new(callback))
     }
 
     /// Remove a global shortcut
