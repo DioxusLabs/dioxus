@@ -17,30 +17,31 @@ struct SharedSlab {
 pub(crate) struct QueryEngine {
     sender: Rc<tokio::sync::broadcast::Sender<QueryResult>>,
     active_requests: SharedSlab,
+    eval_tx: UnboundedSender<String>,
 }
 
-impl Default for QueryEngine {
-    fn default() -> Self {
+impl QueryEngine {
+    pub(crate) fn new(tx: &UnboundedSender<String>) -> Self {
         let (sender, _) = tokio::sync::broadcast::channel(8);
         Self {
             sender: Rc::new(sender),
             active_requests: SharedSlab::default(),
+            eval_tx: tx.clone(),
         }
     }
 }
 
 impl QueryEngine {
     /// Creates a new query and returns a handle to it. The query will be resolved when the webview returns a result with the same id.
-    pub fn new_query<V: DeserializeOwned>(
-        &self,
-        script: &str,
-        tx: &UnboundedSender<String>,
-    ) -> Query<V> {
+    pub fn new_query<V: DeserializeOwned>(&self, script: &str) -> Query<V> {
         let request_id = self.active_requests.slab.borrow_mut().insert(());
+
+        // subscribe to the query result channel
+        let reciever = self.sender.subscribe();
 
         // start the query
         // We embed the return of the eval in a function so we can send it back to the main thread
-        if let Err(err) = tx.send(format!(
+        if let Err(err) = self.eval_tx.send(format!(
             r#"window.ipc.postMessage(
                 JSON.stringify({{
                     "method":"query",
@@ -57,7 +58,7 @@ impl QueryEngine {
         Query {
             slab: self.active_requests.clone(),
             id: request_id,
-            reciever: self.sender.subscribe(),
+            reciever,
             phantom: std::marker::PhantomData,
         }
     }

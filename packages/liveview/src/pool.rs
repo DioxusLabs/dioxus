@@ -1,4 +1,5 @@
 use crate::{
+    context::LiveviewContext,
     element::LiveviewElement,
     query::{QueryEngine, QueryResult},
     LiveViewError,
@@ -109,7 +110,8 @@ impl<S> LiveViewSocket for S where
 /// As long as your framework can provide a Sink and Stream of Strings, you can use this function.
 ///
 /// You might need to transform the error types of the web backend into the LiveView error type.
-pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), LiveViewError> {
+pub async fn run(vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), LiveViewError> {
+    // Initialize the hot reload system
     #[cfg(all(feature = "hot-reload", debug_assertions))]
     let mut hot_reload_rx = {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
@@ -119,6 +121,13 @@ pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), Li
         rx
     };
 
+    // Create the a proxy for query engine
+    let (query_tx, mut query_rx) = tokio::sync::mpsc::unbounded_channel();
+    let query_engine = QueryEngine::new(&query_tx);
+
+    // Create the liveview context
+    let mut vdom = vdom.with_root_context(LiveviewContext::new(query_engine.clone()));
+
     // todo: use an efficient binary packed format for this
     let edits = serde_json::to_string(&ClientUpdate::Edits(vdom.rebuild())).unwrap();
 
@@ -127,10 +136,6 @@ pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), Li
 
     // send the initial render to the client
     ws.send(edits).await?;
-
-    // Create the a proxy for query engine
-    let (query_tx, mut query_rx) = tokio::sync::mpsc::unbounded_channel();
-    let query_engine = QueryEngine::default();
 
     // desktop uses this wrapper struct thing around the actual event itself
     // this is sorta driven by tao/wry
@@ -165,7 +170,7 @@ pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), Li
                                 IpcMessage::Event(evt) => {
                                     // Intercept the mounted event and insert a custom element type
                                     if let EventData::Mounted = &evt.data {
-                                        let element = LiveviewElement::new(evt.element, query_tx.clone(), query_engine.clone());
+                                        let element = LiveviewElement::new(evt.element, query_engine.clone());
                                         vdom.handle_event(
                                             &evt.name,
                                             Rc::new(MountedData::new(element)),

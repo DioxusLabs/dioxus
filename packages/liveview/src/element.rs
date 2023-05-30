@@ -1,23 +1,17 @@
 use dioxus_core::ElementId;
 use dioxus_html::{geometry::euclid::Rect, MountedResult, RenderedElementBacking};
-use tokio::sync::mpsc::UnboundedSender;
 
 use crate::query::QueryEngine;
 
 /// A mounted element passed to onmounted events
 pub struct LiveviewElement {
     id: ElementId,
-    query_tx: UnboundedSender<String>,
     query: QueryEngine,
 }
 
 impl LiveviewElement {
-    pub(crate) fn new(id: ElementId, tx: UnboundedSender<String>, query: QueryEngine) -> Self {
-        Self {
-            id,
-            query_tx: tx,
-            query,
-        }
+    pub(crate) fn new(id: ElementId, query: QueryEngine) -> Self {
+        Self { id, query }
     }
 }
 
@@ -39,7 +33,7 @@ impl RenderedElementBacking for LiveviewElement {
 
         let fut = self
             .query
-            .new_query::<Option<Rect<f64, f64>>>(&script, &self.query_tx)
+            .new_query::<Option<Rect<f64, f64>>>(&script)
             .resolve();
         Box::pin(async move {
             match fut.await {
@@ -64,10 +58,7 @@ impl RenderedElementBacking for LiveviewElement {
             serde_json::to_string(&behavior).expect("Failed to serialize ScrollBehavior")
         );
 
-        let fut = self
-            .query
-            .new_query::<bool>(&script, &self.query_tx)
-            .resolve();
+        let fut = self.query.new_query::<bool>(&script).resolve();
         Box::pin(async move {
             match fut.await {
                 Ok(true) => Ok(()),
@@ -90,10 +81,7 @@ impl RenderedElementBacking for LiveviewElement {
             self.id.0, focus
         );
 
-        let fut = self
-            .query
-            .new_query::<bool>(&script, &self.query_tx)
-            .resolve();
+        let fut = self.query.new_query::<bool>(&script).resolve();
 
         Box::pin(async move {
             match fut.await {

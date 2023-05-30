@@ -18,7 +18,10 @@ pub mod adapters {
 
 pub use adapters::*;
 
+pub(crate) mod context;
 mod element;
+mod eval;
+pub use eval::*;
 pub mod pool;
 mod query;
 use futures_util::{SinkExt, StreamExt};
