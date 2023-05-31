@@ -44,7 +44,7 @@ This is only possible because the two hooks are always called in the same order,
 
 1. Hooks may be only used in components or other hooks (we'll get to that later)
 2. On every call to the component function
-   1. The same hooks must be called
+   1. The same hooks must be called (except in the case of early returns, as explained later in the [Error Handling chapter](../best_practices/error_handling.md))
    2. In the same order
 3. Hooks name's should start with `use_` so you don't accidentally confuse them with regular functions
 

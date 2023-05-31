@@ -40,53 +40,29 @@ tokio = { version = "1.15.0", features = ["full"] }
 Now, set up your Axum app to respond on an endpoint.
 
 ```rust
-use axum::{response::Html, routing::get, Router};
-use dioxus::prelude::*;
-
-#[tokio::main]
-async fn main() {
-    let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 3000));
-    println!("listening on http://{}", addr);
-
-    axum::Server::bind(&addr)
-        .serve(
-            Router::new()
-                .route("/", get(app_endpoint))
-                .into_make_service(),
-        )
-        .await
-        .unwrap();
-}
+{{#include ../../../examples/hello_world_ssr.rs:main}}
 ```
 
 And then add our endpoint. We can either render `rsx!` directly:
 
 ```rust
-async fn app_endpoint() -> Html<String> {
-    // render the rsx! macro to HTML
-    Html(dioxus_ssr::render_lazy(rsx! {
-        div { "hello world!" }
-    }))
-}
+{{#include ../../../examples/hello_world_ssr.rs:endpoint}}
 ```
 
 Or we can render VirtualDoms.
 
 ```rust
-async fn app_endpoint() -> Html<String> {
-    // create a component that renders a div with the text "hello world"
-    fn app(cx: Scope) -> Element {
-        cx.render(rsx!(div { "hello world" }))
-    }
-    // create a VirtualDom with the app component
-    let mut app = VirtualDom::new(app);
-    // rebuild the VirtualDom before rendering
-    let _ = app.rebuild();
-
-    // render the VirtualDom to HTML
-    Html(dioxus_ssr::render_vdom(&app))
-}
+{{#include ../../../examples/hello_world_ssr.rs:second_endpoint}}
 ```
+
+And then add our app component:
+
+```rust
+{{#include ../../../examples/hello_world_ssr.rs:component}}
+```
+
+And that's it!
+
 
 ## Multithreaded Support
 

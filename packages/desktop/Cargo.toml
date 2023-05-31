@@ -38,6 +38,7 @@ slab = "0.4"
 
 futures-util = "0.3.25"
 rfd = "0.11.3"
+urlencoding = "2.1.2"
 
 [target.'cfg(target_os = "ios")'.dependencies]
 objc = "0.2.7"

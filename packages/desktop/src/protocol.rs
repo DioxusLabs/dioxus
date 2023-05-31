@@ -43,7 +43,7 @@ fn module_loader(root_name: &str) -> String {
     let rootname = "{root_name}";
     let root = window.document.getElementById(rootname);
     if (root != null) {{
-        window.interpreter = new Interpreter(root);
+        window.interpreter = new Interpreter(root, new InterpreterConfig(true));
         window.ipc.postMessage(serializeIpcMessage("initialize"));
     }}
 </script>
@@ -87,7 +87,9 @@ pub(super) fn desktop_handler(
     }
 
     // Else, try to serve a file from the filesystem.
-    let path = PathBuf::from(request.uri().path().trim_start_matches('/'));
+    let decoded = urlencoding::decode(request.uri().path().trim_start_matches('/'))
+        .expect("expected URL to be UTF-8 encoded");
+    let path = PathBuf::from(&*decoded);
 
     // If the path is relative, we'll try to serve it from the assets directory.
     let mut asset = get_asset_root()
