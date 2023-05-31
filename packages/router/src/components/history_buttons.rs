@@ -3,7 +3,7 @@ use log::error;
 
 use crate::{prelude::*, utils::use_router_internal::use_router_internal};
 
-/// The properties for a [`GoBackButton`] or a [`GoForwardButton`].
+/// The properties for a [`GenericGoBackButton`] or a [`GenericGoForwardButton`].
 #[derive(Debug, Props)]
 pub struct GenericHistoryButtonProps<'a> {
     /// The children to render within the generated HTML button tag.
@@ -17,7 +17,7 @@ pub struct GenericHistoryButtonProps<'a> {
 /// The button will disable itself if it is known that no prior history is available.
 ///
 /// # Panic
-/// - When the [`GoBackButton`] is not nested within a [`GenericRouter`] component
+/// - When the [`GenericGoBackButton`] is not nested within a [`GenericRouter`] component
 ///   hook, but only in debug builds.
 ///
 /// # Example
@@ -91,7 +91,7 @@ pub fn GenericGoBackButton<'a, R: Routable>(
 /// The button will disable itself if it is known that no later history is available.
 ///
 /// # Panic
-/// - When the [`GoForwardButton`] is not nested within a [`GenericRouter`] component
+/// - When the [`GenericGoForwardButton`] is not nested within a [`GenericRouter`] component
 ///   hook, but only in debug builds.
 ///
 /// # Example

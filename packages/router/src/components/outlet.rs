@@ -5,7 +5,7 @@ use dioxus::prelude::*;
 ///
 /// Only works as descendant of a [`GenericRouter`] component, otherwise it will be inactive.
 ///
-/// The [`GenericOutlet`] is aware of how many [`Outlet`]s it is nested within. It will render the content
+/// The [`GenericOutlet`] is aware of how many [`GenericOutlet`]s it is nested within. It will render the content
 /// of the active route that is __exactly as deep__.
 ///
 /// # Panic

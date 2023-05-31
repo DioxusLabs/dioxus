@@ -7,7 +7,7 @@ use crate::navigation::NavigationTarget;
 use crate::prelude::*;
 use crate::utils::use_router_internal::use_router_internal;
 
-/// The properties for a [`Link`].
+/// The properties for a [`GenericLink`].
 #[derive(Props)]
 pub struct GenericLinkProps<'a, R: Routable> {
     /// A class to apply to the generate HTML anchor tag if the `target` route is active.
@@ -23,7 +23,7 @@ pub struct GenericLinkProps<'a, R: Routable> {
     pub id: Option<&'a str>,
     /// When [`true`], the `target` route will be opened in a new tab.
     ///
-    /// This does not change whether the [`Link`] is active or not.
+    /// This does not change whether the [`GenericLink`] is active or not.
     #[props(default)]
     pub new_tab: bool,
     /// The onclick event handler.
