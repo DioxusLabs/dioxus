@@ -10,6 +10,7 @@ use crate::layout::LayoutId;
 use crate::nest::Nest;
 use crate::nest::NestId;
 use crate::query::QuerySegment;
+use crate::segment::create_error_type;
 use crate::segment::parse_route_segments;
 use crate::segment::RouteSegment;
 
@@ -90,8 +91,14 @@ impl Route {
             }
         };
 
-        let (route_segments, query) =
-            parse_route_segments(variant.ident.span(), named_fields.named.iter(), &route)?;
+        let (route_segments, query) = parse_route_segments(
+            variant.ident.span(),
+            named_fields
+                .named
+                .iter()
+                .map(|f| (f.ident.as_ref().unwrap(), &f.ty)),
+            &route,
+        )?;
 
         Ok(Self {
             comp_name,
@@ -217,50 +224,7 @@ impl Route {
     pub fn error_type(&self) -> TokenStream2 {
         let error_name = self.error_ident();
 
-        let mut error_variants = Vec::new();
-        let mut display_match = Vec::new();
-
-        for (i, segment) in self.segments.iter().enumerate() {
-            let error_name = segment.error_name(i);
-            match segment {
-                RouteSegment::Static(index) => {
-                    error_variants.push(quote! { #error_name });
-                    display_match.push(quote! { Self::#error_name => write!(f, "Static segment '{}' did not match", #index)? });
-                }
-                RouteSegment::Dynamic(ident, ty) => {
-                    let missing_error = segment.missing_error_name().unwrap();
-                    error_variants.push(quote! { #error_name(<#ty as dioxus_router::routable::FromRouteSegment>::Err) });
-                    display_match.push(quote! { Self::#error_name(err) => write!(f, "Dynamic segment '({}:{})' did not match: {}", stringify!(#ident), stringify!(#ty), err)? });
-                    error_variants.push(quote! { #missing_error });
-                    display_match.push(quote! { Self::#missing_error => write!(f, "Dynamic segment '({}:{})' was missing", stringify!(#ident), stringify!(#ty))? });
-                }
-                RouteSegment::CatchAll(ident, ty) => {
-                    error_variants.push(quote! { #error_name(<#ty as dioxus_router::routable::FromRouteSegments>::Err) });
-                    display_match.push(quote! { Self::#error_name(err) => write!(f, "Catch-all segment '({}:{})' did not match: {}", stringify!(#ident), stringify!(#ty), err)? });
-                }
-            }
-        }
-
-        quote! {
-            #[allow(non_camel_case_types)]
-            #[derive(Debug, PartialEq)]
-            pub enum #error_name {
-                ExtraSegments(String),
-                #(#error_variants,)*
-            }
-
-            impl std::fmt::Display for #error_name {
-                fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                    match self {
-                        Self::ExtraSegments(segments) => {
-                            write!(f, "Found additional trailing segments: {}", segments)?
-                        }
-                        #(#display_match,)*
-                    }
-                    Ok(())
-                }
-            }
-        }
+        create_error_type(error_name, &self.segments)
     }
 
     pub fn parse_query(&self) -> TokenStream2 {

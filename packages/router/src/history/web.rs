@@ -12,7 +12,7 @@ use super::{
     HistoryProvider,
 };
 
-fn update_scroll<R: Serialize + DeserializeOwned>(window: &Window, history: &History) {
+fn update_scroll<R: Serialize + DeserializeOwned + Routable>(window: &Window, history: &History) {
     if let Some(WebHistoryState { state, .. }) = get_current::<WebHistoryState<R>>(history) {
         let scroll = ScrollPosition::of_window(window);
         let state = WebHistoryState { state, scroll };
@@ -42,7 +42,7 @@ struct WebHistoryState<R> {
 /// in the URL. Otherwise, if a router navigation is triggered, the prefix will be added.
 ///
 /// [History API]: https://developer.mozilla.org/en-US/docs/Web/API/History_API
-pub struct WebHistory<R: Serialize + DeserializeOwned> {
+pub struct WebHistory<R: Serialize + DeserializeOwned + Routable> {
     do_scroll_restoration: bool,
     history: History,
     listener_navigation: Option<EventListener>,
@@ -102,10 +102,10 @@ impl<R: Serialize + DeserializeOwned + Routable> WebHistory<R> {
             phantom: Default::default(),
         };
 
-        let state = myself.current_route();
-
-        let state = myself.create_state(state);
-        let _ = replace_state_with_url(&myself.history, &state, None);
+        let current_route = myself.current_route();
+        let current_url = current_route.to_string();
+        let state = myself.create_state(current_route);
+        let _ = replace_state_with_url(&myself.history, &state, Some(&current_url));
 
         myself
     }

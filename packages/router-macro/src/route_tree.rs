@@ -4,13 +4,14 @@ use slab::Slab;
 use syn::Ident;
 
 use crate::{
-    nest::Nest,
+    nest::{Nest, NestId},
+    redirect::Redirect,
     route::Route,
     segment::{static_segment_idx, RouteSegment},
 };
 
 #[derive(Debug, Clone, Default)]
-pub struct RouteTree<'a> {
+pub(crate) struct RouteTree<'a> {
     pub roots: Vec<usize>,
     entries: Slab<RouteTreeSegmentData<'a>>,
 }
@@ -43,6 +44,13 @@ impl<'a> RouteTree<'a> {
                 RouteTreeSegmentData::Route(route) => {
                     // Routes that end in a catch all segment should be checked last
                     match route.segments.last() {
+                        Some(RouteSegment::CatchAll(..)) => 2,
+                        _ => 1,
+                    }
+                }
+                RouteTreeSegmentData::Redirect(redirect) => {
+                    // Routes that end in a catch all segment should be checked last
+                    match redirect.segments.last() {
                         Some(RouteSegment::CatchAll(..)) => 2,
                         _ => 1,
                     }
@@ -89,10 +97,15 @@ impl<'a> RouteTree<'a> {
             .expect("Cannot get children of non static or nest segment")
     }
 
-    pub fn new(routes: &'a [Route], nests: &'a [Nest]) -> Self {
+    pub(crate) fn new(routes: &'a [Route], nests: &'a [Nest], redirects: &'a [Redirect]) -> Self {
         let routes = routes
             .iter()
-            .map(|route| RouteIter::new(route, nests))
+            .map(|route| PathIter::new_route(route, nests))
+            .chain(
+                redirects
+                    .iter()
+                    .map(|redirect| PathIter::new_redirect(redirect, nests)),
+            )
             .collect::<Vec<_>>();
 
         let mut myself = Self::default();
@@ -102,7 +115,7 @@ impl<'a> RouteTree<'a> {
         myself
     }
 
-    pub fn construct(&mut self, routes: Vec<RouteIter<'a>>) -> Vec<usize> {
+    pub fn construct(&mut self, routes: Vec<PathIter<'a>>) -> Vec<usize> {
         let mut segments = Vec::new();
 
         // Add all routes to the tree
@@ -127,7 +140,7 @@ impl<'a> RouteTree<'a> {
                                 for &seg_id in segments.iter() {
                                     let seg = self.get(seg_id).unwrap();
                                     if let RouteTreeSegmentData::Static { segment: s, .. } = seg {
-                                        if s == segment {
+                                        if *s == segment {
                                             // If it does, just update the current route
                                             current_route = Some(seg_id);
                                             continue 'o;
@@ -223,9 +236,7 @@ impl<'a> RouteTree<'a> {
                 }
                 // If there is no static segment, add the route to the current_route
                 None => {
-                    let id = self
-                        .entries
-                        .insert(RouteTreeSegmentData::Route(route.route));
+                    let id = self.entries.insert(route.final_segment);
                     let current_children_mut = current_route
                         .map(|id| self.children_mut(id))
                         .unwrap_or_else(|| &mut segments);
@@ -246,7 +257,7 @@ pub struct StaticErrorVariant {
 
 // First deduplicate the routes by the static part of the route
 #[derive(Debug, Clone)]
-pub enum RouteTreeSegmentData<'a> {
+pub(crate) enum RouteTreeSegmentData<'a> {
     Static {
         segment: &'a str,
         error_variant: StaticErrorVariant,
@@ -258,6 +269,7 @@ pub enum RouteTreeSegmentData<'a> {
         children: Vec<usize>,
     },
     Route(&'a Route),
+    Redirect(&'a Redirect),
 }
 
 impl<'a> RouteTreeSegmentData<'a> {
@@ -362,6 +374,52 @@ impl<'a> RouteTreeSegmentData<'a> {
                     &varient_parse_error,
                 )
             }
+            Self::Redirect(redirect) => {
+                // At this point, we have matched all static segments, so we can just check if the remaining segments match the route
+                let varient_parse_error = redirect.error_ident();
+                let enum_varient = &redirect.error_variant();
+
+                let route_segments = redirect
+                    .segments
+                    .iter()
+                    .enumerate()
+                    .skip_while(|(_, seg)| matches!(seg, RouteSegment::Static(_)));
+
+                let parse_query = redirect.parse_query();
+
+                let insure_not_trailing = redirect
+                    .segments
+                    .last()
+                    .map(|seg| !matches!(seg, RouteSegment::CatchAll(_, _)))
+                    .unwrap_or(true);
+
+                let redirect_function = &redirect.function;
+                let args = redirect_function.inputs.iter().map(|pat| match pat {
+                    syn::Pat::Type(ident) => {
+                        let name = &ident.pat;
+                        quote! {#name}
+                    }
+                    _ => panic!("Expected closure argument to be a typed pattern"),
+                });
+                let return_redirect = quote! {
+                    (#redirect_function)(#(#args,)*)
+                };
+
+                print_route_segment(
+                    route_segments.peekable(),
+                    return_constructed(
+                        insure_not_trailing,
+                        return_redirect,
+                        &error_enum_name,
+                        enum_varient,
+                        &varient_parse_error,
+                        parse_query,
+                    ),
+                    &error_enum_name,
+                    enum_varient,
+                    &varient_parse_error,
+                )
+            }
         }
     }
 }
@@ -435,18 +493,39 @@ fn return_constructed(
     }
 }
 
-pub struct RouteIter<'a> {
-    route: &'a Route,
-    nests: &'a [Nest],
+pub struct PathIter<'a> {
+    final_segment: RouteTreeSegmentData<'a>,
+    active_nests: &'a [NestId],
+    all_nests: &'a [Nest],
+    segments: &'a [RouteSegment],
+    error_ident: Ident,
+    error_variant: Ident,
     nest_index: usize,
     static_segment_index: usize,
 }
 
-impl<'a> RouteIter<'a> {
-    fn new(route: &'a Route, nests: &'a [Nest]) -> Self {
+impl<'a> PathIter<'a> {
+    fn new_route(route: &'a Route, nests: &'a [Nest]) -> Self {
         Self {
-            route,
-            nests,
+            final_segment: RouteTreeSegmentData::Route(route),
+            active_nests: &*route.nests,
+            segments: &*route.segments,
+            error_ident: route.error_ident(),
+            error_variant: route.route_name.clone(),
+            all_nests: nests,
+            nest_index: 0,
+            static_segment_index: 0,
+        }
+    }
+
+    fn new_redirect(redirect: &'a Redirect, nests: &'a [Nest]) -> Self {
+        Self {
+            final_segment: RouteTreeSegmentData::Redirect(redirect),
+            active_nests: &*redirect.nests,
+            segments: &*redirect.segments,
+            error_ident: redirect.error_ident(),
+            error_variant: redirect.error_variant(),
+            all_nests: nests,
             nest_index: 0,
             static_segment_index: 0,
         }
@@ -454,15 +533,15 @@ impl<'a> RouteIter<'a> {
 
     fn next_nest(&mut self) -> Option<&'a Nest> {
         let idx = self.nest_index;
-        let nest_index = self.route.nests.get(idx)?;
-        let nest = &self.nests[nest_index.0];
+        let nest_index = self.active_nests.get(idx)?;
+        let nest = &self.all_nests[nest_index.0];
         self.nest_index += 1;
         Some(nest)
     }
 
     fn next_static_segment(&mut self) -> Option<(usize, &'a str)> {
         let idx = self.static_segment_index;
-        let segment = self.route.segments.get(idx)?;
+        let segment = self.segments.get(idx)?;
         match segment {
             RouteSegment::Static(segment) => {
                 self.static_segment_index += 1;
@@ -474,8 +553,8 @@ impl<'a> RouteIter<'a> {
 
     fn error_variant(&self) -> StaticErrorVariant {
         StaticErrorVariant {
-            varient_parse_error: self.route.error_ident(),
-            enum_varient: self.route.route_name.clone(),
+            varient_parse_error: self.error_ident.clone(),
+            enum_varient: self.error_variant.clone(),
         }
     }
 }

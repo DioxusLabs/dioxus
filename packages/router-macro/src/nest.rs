@@ -2,7 +2,7 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::{Ident, LitStr};
 
-use crate::segment::{parse_route_segments, RouteSegment};
+use crate::segment::{create_error_type, parse_route_segments, RouteSegment};
 
 #[derive(Debug, Clone, Copy)]
 pub struct NestId(pub usize);
@@ -25,7 +25,10 @@ impl Nest {
 
         let route_segments = parse_route_segments(
             route.span(),
-            children_routes.iter().flat_map(|f| f.named.iter()),
+            children_routes
+                .iter()
+                .flat_map(|f| f.named.iter())
+                .map(|f| (f.ident.as_ref().unwrap(), &f.ty)),
             &route.value(),
         )?
         .0;
@@ -79,42 +82,6 @@ impl Nest {
     pub fn error_type(&self) -> TokenStream {
         let error_name = self.error_ident();
 
-        let mut error_variants = Vec::new();
-        let mut display_match = Vec::new();
-
-        for (i, segment) in self.segments.iter().enumerate() {
-            let error_name = segment.error_name(i);
-            match segment {
-                RouteSegment::Static(index) => {
-                    error_variants.push(quote! { #error_name });
-                    display_match.push(quote! { Self::#error_name => write!(f, "Static segment '{}' did not match", #index)? });
-                }
-                RouteSegment::Dynamic(ident, ty) => {
-                    let missing_error = segment.missing_error_name().unwrap();
-                    error_variants.push(quote! { #error_name(<#ty as dioxus_router::routable::FromRouteSegment>::Err) });
-                    display_match.push(quote! { Self::#error_name(err) => write!(f, "Dynamic segment '({}:{})' did not match: {}", stringify!(#ident), stringify!(#ty), err)? });
-                    error_variants.push(quote! { #missing_error });
-                    display_match.push(quote! { Self::#missing_error => write!(f, "Dynamic segment '({}:{})' was missing", stringify!(#ident), stringify!(#ty))? });
-                }
-                _ => todo!(),
-            }
-        }
-
-        quote! {
-            #[allow(non_camel_case_types)]
-            #[derive(Debug, PartialEq)]
-            pub enum #error_name {
-                #(#error_variants,)*
-            }
-
-            impl std::fmt::Display for #error_name {
-                fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                    match self {
-                        #(#display_match,)*
-                    }
-                    Ok(())
-                }
-            }
-        }
+        create_error_type(error_name, &self.segments)
     }
 }

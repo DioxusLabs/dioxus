@@ -45,13 +45,13 @@ fn UserFrame(cx: Scope, user_id: usize) -> Element {
 }
 
 #[inline_props]
-fn Route1(cx: Scope, user_id: usize, dynamic: usize, extra: String) -> Element {
+fn Route1(cx: Scope, user_id: usize, dynamic: usize, query: String, extra: String) -> Element {
     render! {
         pre {
-            "Route1{{\n\tuser_id:{user_id},\n\tdynamic:{dynamic},\n\textra:{extra}\n}}"
+            "Route1{{\n\tuser_id:{user_id},\n\tdynamic:{dynamic},\n\tquery:{query},\n\textra:{extra}\n}}"
         }
         Link {
-            target: Route::Route1 { user_id: *user_id, dynamic: *dynamic, extra: extra.clone() + "." },
+            target: Route::Route1 { user_id: *user_id, dynamic: *dynamic, query: String::new(), extra: extra.clone() + "." },
             "Route1 with extra+\".\""
         }
         p { "Footer" }
@@ -131,12 +131,13 @@ enum Route {
         // Everything inside the nest has the added parameter `user_id: String`
         // UserFrame is a layout component that will receive the `user_id: String` parameter
         #[layout(UserFrame)]
-        // Route1 is a non-layout component that will receive the `user_id: String` and `dynamic: String` parameters
-        #[route("/:dynamic", Route1)]
+            // Route1 is a non-layout component that will receive the `user_id: String` and `dynamic: String` parameters
+            #[route("/:dynamic?:query", Route1)]
             Route1 {
                 // The type is taken from the first instance of the dynamic parameter
                 user_id: usize,
                 dynamic: usize,
+                query: String,
                 extra: String,
             },
             // Route2 is a non-layout component that will receive the `user_id: String` parameter
@@ -146,6 +147,7 @@ enum Route {
             Route2 { user_id: usize },
         #[end_layout]
     #[end_nest]
+    #[redirect("/:id/user", |id: usize| Route::Route3 { dynamic: id.to_string()})]
     #[route("/:dynamic", Route3)]
     Route3 { dynamic: String },
 }

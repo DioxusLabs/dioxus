@@ -124,7 +124,7 @@ pub fn static_segment_idx(idx: usize) -> Ident {
 
 pub fn parse_route_segments<'a>(
     route_span: Span,
-    mut fields: impl Iterator<Item = &'a syn::Field>,
+    mut fields: impl Iterator<Item = (&'a Ident, &'a Type)>,
     route: &str,
 ) -> syn::Result<(Vec<RouteSegment>, Option<QuerySegment>)> {
     let mut route_segments = Vec::new();
@@ -157,13 +157,10 @@ pub fn parse_route_segments<'a>(
                 segment.to_string()
             };
 
-            let field = fields.find(|field| match field.ident {
-                Some(ref field_ident) => *field_ident == ident,
-                None => false,
-            });
+            let field = fields.find(|(name, _)| **name == ident);
 
             let ty = if let Some(field) = field {
-                field.ty.clone()
+                field.1.clone()
             } else {
                 return Err(syn::Error::new(
                     route_span,
@@ -200,13 +197,10 @@ pub fn parse_route_segments<'a>(
         Some(query) => {
             if let Some(query) = query.strip_prefix(':') {
                 let query_ident = Ident::new(query, Span::call_site());
-                let field = fields.find(|field| match field.ident {
-                    Some(ref field_ident) => field_ident == &query_ident,
-                    None => false,
-                });
+                let field = fields.find(|(name, _)| *name == &query_ident);
 
-                let ty = if let Some(field) = field {
-                    field.ty.clone()
+                let ty = if let Some((_, ty)) = field {
+                    ty.clone()
                 } else {
                     return Err(syn::Error::new(
                         route_span,
@@ -226,4 +220,53 @@ pub fn parse_route_segments<'a>(
     };
 
     Ok((route_segments, parsed_query))
+}
+
+pub(crate) fn create_error_type(error_name: Ident, segments: &[RouteSegment]) -> TokenStream2 {
+    let mut error_variants = Vec::new();
+    let mut display_match = Vec::new();
+
+    for (i, segment) in segments.iter().enumerate() {
+        let error_name = segment.error_name(i);
+        match segment {
+            RouteSegment::Static(index) => {
+                error_variants.push(quote! { #error_name });
+                display_match.push(quote! { Self::#error_name => write!(f, "Static segment '{}' did not match", #index)? });
+            }
+            RouteSegment::Dynamic(ident, ty) => {
+                let missing_error = segment.missing_error_name().unwrap();
+                error_variants.push(
+                    quote! { #error_name(<#ty as dioxus_router::routable::FromRouteSegment>::Err) },
+                );
+                display_match.push(quote! { Self::#error_name(err) => write!(f, "Dynamic segment '({}:{})' did not match: {}", stringify!(#ident), stringify!(#ty), err)? });
+                error_variants.push(quote! { #missing_error });
+                display_match.push(quote! { Self::#missing_error => write!(f, "Dynamic segment '({}:{})' was missing", stringify!(#ident), stringify!(#ty))? });
+            }
+            RouteSegment::CatchAll(ident, ty) => {
+                error_variants.push(quote! { #error_name(<#ty as dioxus_router::routable::FromRouteSegments>::Err) });
+                display_match.push(quote! { Self::#error_name(err) => write!(f, "Catch-all segment '({}:{})' did not match: {}", stringify!(#ident), stringify!(#ty), err)? });
+            }
+        }
+    }
+
+    quote! {
+        #[allow(non_camel_case_types)]
+        #[derive(Debug, PartialEq)]
+        pub enum #error_name {
+            ExtraSegments(String),
+            #(#error_variants,)*
+        }
+
+        impl std::fmt::Display for #error_name {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                match self {
+                    Self::ExtraSegments(segments) => {
+                        write!(f, "Found additional trailing segments: {}", segments)?
+                    }
+                    #(#display_match,)*
+                }
+                Ok(())
+            }
+        }
+    }
 }

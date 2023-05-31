@@ -4,6 +4,7 @@ use layout::Layout;
 use nest::{Nest, NestId};
 use proc_macro::TokenStream;
 use quote::{__private::Span, format_ident, quote, ToTokens};
+use redirect::Redirect;
 use route::Route;
 use segment::RouteSegment;
 use syn::{parse::ParseStream, parse_macro_input, Ident, Token};
@@ -13,14 +14,17 @@ use proc_macro2::TokenStream as TokenStream2;
 use crate::{layout::LayoutId, route_tree::RouteTree};
 
 mod layout;
-mod macro2;
 mod nest;
 mod query;
+mod redirect;
 mod route;
 mod route_tree;
 mod segment;
 
-#[proc_macro_derive(Routable)]
+#[proc_macro_derive(
+    Routable,
+    attributes(route, nest, end_nest, layout, end_layout, redirect)
+)]
 pub fn routable(input: TokenStream) -> TokenStream {
     let routes_enum = parse_macro_input!(input as syn::ItemEnum);
 
@@ -69,6 +73,7 @@ pub fn routable(input: TokenStream) -> TokenStream {
 struct RouteEnum {
     vis: syn::Visibility,
     name: Ident,
+    redirects: Vec<Redirect>,
     routes: Vec<Route>,
     nests: Vec<Nest>,
     layouts: Vec<Layout>,
@@ -84,6 +89,8 @@ impl RouteEnum {
         let mut site_map_stack: Vec<Vec<SiteMapSegment>> = Vec::new();
 
         let mut routes = Vec::new();
+
+        let mut redirects = Vec::new();
 
         let mut layouts: Vec<Layout> = Vec::new();
         let mut layout_stack = Vec::new();
@@ -197,6 +204,16 @@ impl RouteEnum {
                     }
                 } else if attr.path.is_ident("end_layout") {
                     layout_stack.pop();
+                } else if attr.path.is_ident("redirect") {
+                    let parser = |input: ParseStream| {
+                        Redirect::parse(
+                            input,
+                            nest_stack.iter().rev().cloned().collect(),
+                            redirects.len(),
+                        )
+                    };
+                    let redirect = attr.parse_args_with(parser)?;
+                    redirects.push(redirect);
                 }
             }
 
@@ -225,6 +242,7 @@ impl RouteEnum {
             vis: vis.clone(),
             name: name.clone(),
             routes,
+            redirects,
             nests,
             layouts,
             site_map,
@@ -256,7 +274,7 @@ impl RouteEnum {
     }
 
     fn parse_impl(&self) -> TokenStream2 {
-        let tree = RouteTree::new(&self.routes, &self.nests);
+        let tree = RouteTree::new(&self.routes, &self.nests, &self.redirects);
         let name = &self.name;
 
         let error_name = format_ident!("{}MatchError", self.name);
@@ -323,6 +341,16 @@ impl RouteEnum {
             error_variants.push(quote! { #error_variant(#error_name) });
             display_match.push(quote! { Self::#error_variant(err) => write!(f, "Nest '{}' ('{}') did not match:\n{}", stringify!(#error_name), #route_str, err)? });
             type_defs.push(nest.error_type());
+        }
+
+        for redirect in &self.redirects {
+            let error_variant = redirect.error_variant();
+            let error_name = redirect.error_ident();
+            let route_str = &redirect.route;
+
+            error_variants.push(quote! { #error_variant(#error_name) });
+            display_match.push(quote! { Self::#error_variant(err) => write!(f, "Redirect '{}' ('{}') did not match:\n{}", stringify!(#error_name), #route_str, err)? });
+            type_defs.push(redirect.error_type());
         }
 
         quote! {
