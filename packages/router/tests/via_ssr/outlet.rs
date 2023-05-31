@@ -1,12 +1,33 @@
+#![allow(non_snake_case, unused)]
+
 use dioxus::prelude::*;
 use dioxus_router::{history::MemoryHistory, prelude::*};
 
 fn prepare(path: impl Into<String>) -> VirtualDom {
-    #![allow(non_snake_case)]
-
     let mut vdom = VirtualDom::new_with_props(App, AppProps { path: path.into() });
     let _ = vdom.rebuild();
     return vdom;
+
+    #[derive(Routable, Clone)]
+    #[rustfmt::skip]
+    enum Route {
+        #[route("/")]
+        RootIndex {},
+        #[nest("/fixed")]
+            #[layout(Fixed)]
+                #[route("/")]
+                FixedIndex {},
+                #[route("/fixed")]
+                FixedFixed {},
+            #[end_layout]
+        #[end_nest]
+        #[nest("/:id")]
+            #[layout(Parameter)]
+                #[route("/")]
+                ParameterIndex { id: u8 },
+                #[route("/fixed")]
+                ParameterFixed { id: u8 },
+    }
 
     #[derive(Debug, Props, PartialEq)]
     struct AppProps {
@@ -14,39 +35,27 @@ fn prepare(path: impl Into<String>) -> VirtualDom {
     }
 
     fn App(cx: Scope<AppProps>) -> Element {
-        use_router(
-            cx,
-            &|| RouterConfiguration {
-                synchronous: true,
-                history: Box::new(MemoryHistory::with_initial_path(cx.props.path.clone()).unwrap()),
-                ..Default::default()
-            },
-            &|| {
-                Segment::content(comp(RootIndex))
-                    .fixed(
-                        "fixed",
-                        Route::content(comp(Fixed)).nested(
-                            Segment::content(comp(FixedIndex)).fixed("fixed", comp(FixedFixed)),
-                        ),
-                    )
-                    .catch_all(ParameterRoute::content::<u8>(comp(Parameter)).nested(
-                        Segment::content(comp(ParameterIndex)).fixed("fixed", comp(ParameterFixed)),
-                    ))
-            },
-        );
+        let cfg = RouterConfiguration {
+            history: Box::new(MemoryHistory::with_initial_path(cx.props.path.clone()).unwrap()),
+            ..Default::default()
+        };
 
         render! {
             h1 { "App" }
-            Outlet { }
+            Router {
+                config: cfg
+            }
         }
     }
 
+    #[inline_props]
     fn RootIndex(cx: Scope) -> Element {
         render! {
             h2 { "Root Index" }
         }
     }
 
+    #[inline_props]
     fn Fixed(cx: Scope) -> Element {
         render! {
             h2 { "Fixed" }
@@ -54,34 +63,37 @@ fn prepare(path: impl Into<String>) -> VirtualDom {
         }
     }
 
+    #[inline_props]
     fn FixedIndex(cx: Scope) -> Element {
         render! {
             h3 { "Fixed - Index" }
         }
     }
 
+    #[inline_props]
     fn FixedFixed(cx: Scope) -> Element {
         render! {
             h3 { "Fixed - Fixed"}
         }
     }
 
-    fn Parameter(cx: Scope) -> Element {
-        let val = use_route(cx)?.parameter::<u8>().unwrap();
-
+    #[inline_props]
+    fn Parameter(cx: Scope, id: u8) -> Element {
         render! {
-            h2 { "Parameter {val}" }
+            h2 { "Parameter {id}" }
             Outlet { }
         }
     }
 
-    fn ParameterIndex(cx: Scope) -> Element {
+    #[inline_props]
+    fn ParameterIndex(cx: Scope, id: u8) -> Element {
         render! {
             h3 { "Parameter - Index" }
         }
     }
 
-    fn ParameterFixed(cx: Scope) -> Element {
+    #[inline_props]
+    fn ParameterFixed(cx: Scope, id: u8) -> Element {
         render! {
             h3 { "Parameter - Fixed" }
         }

@@ -38,8 +38,6 @@ pub struct GenericRouterProps<R: Routable>
 where
     <R as FromStr>::Err: std::fmt::Display,
 {
-    #[props(into)]
-    initial_url: Option<String>,
     #[props(default, into)]
     config: RouterCfg<R>,
 }
@@ -71,13 +69,6 @@ where
             cx.props.config.config.take().unwrap_or_default(),
             cx.schedule_update_any(),
         );
-        if let Some(initial) = cx.props.initial_url.as_ref() {
-            router.replace(
-                initial
-                    .parse()
-                    .unwrap_or_else(|_| panic!("failed to parse initial url")),
-            );
-        }
         router
     });
 

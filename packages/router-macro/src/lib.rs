@@ -57,8 +57,6 @@ pub fn routable(input: TokenStream) -> TokenStream {
             dioxus_router::prelude::use_generic_router::<R>(cx)
         }
 
-        #route_enum
-
         #error_type
 
         #parse_impl
@@ -296,9 +294,13 @@ impl RouteEnum {
                 type Err = dioxus_router::routable::RouteParseError<#error_name>;
 
                 fn from_str(s: &str) -> Result<Self, Self::Err> {
-                    let route = s.strip_prefix('/').unwrap_or(s);
+                    let route = s;
                     let (route, query) = route.split_once('?').unwrap_or((route, ""));
                     let mut segments = route.split('/');
+                    // skip the first empty segment
+                    if s.starts_with('/') {
+                        segments.next();
+                    }
                     let mut errors = Vec::new();
 
                     #(#tokens)*
@@ -424,21 +426,6 @@ impl RouteEnum {
                 }
             }
         }
-    }
-}
-
-impl ToTokens for RouteEnum {
-    fn to_tokens(&self, tokens: &mut quote::__private::TokenStream) {
-        let routes = &self.routes;
-
-        tokens.extend(quote!(
-
-            #[path = "pages"]
-            mod pages {
-                #(#routes)*
-            }
-            pub use pages::*;
-        ));
     }
 }
 

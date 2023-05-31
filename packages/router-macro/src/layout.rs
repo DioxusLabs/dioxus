@@ -1,6 +1,6 @@
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
-use syn::Ident;
+use syn::Path;
 
 use crate::nest::{Nest, NestId};
 
@@ -9,8 +9,8 @@ pub struct LayoutId(pub usize);
 
 #[derive(Debug)]
 pub struct Layout {
-    pub comp: Ident,
-    pub props_name: Ident,
+    pub comp: Path,
+    pub props_name: Path,
     pub active_nests: Vec<NestId>,
 }
 
@@ -38,13 +38,20 @@ impl Layout {
     pub fn parse(input: syn::parse::ParseStream, active_nests: Vec<NestId>) -> syn::Result<Self> {
         // Then parse the component name
         let _ = input.parse::<syn::Token![,]>();
-        let comp: Ident = input.parse()?;
+        let comp: Path = input.parse()?;
 
         // Then parse the props name
         let _ = input.parse::<syn::Token![,]>();
-        let props_name: Ident = input
-            .parse()
-            .unwrap_or_else(|_| format_ident!("{}Props", comp.to_string()));
+        let props_name = input.parse::<Path>().unwrap_or_else(|_| {
+            let last = format_ident!("{}Props", comp.segments.last().unwrap().ident.to_string());
+            let mut segments = comp.segments.clone();
+            segments.pop();
+            segments.push(last.into());
+            Path {
+                leading_colon: None,
+                segments,
+            }
+        });
 
         Ok(Self {
             comp,

@@ -291,12 +291,20 @@ impl<'a> RouteTreeSegmentData<'a> {
                         enum_varient,
                     },
             } => {
-                let error_ident = static_segment_idx(*index);
-
                 let children = children.iter().map(|child| {
                     let child = tree.get(*child).unwrap();
                     child.to_tokens(nests, tree, enum_name.clone(), error_enum_name.clone())
                 });
+
+                if segment.is_empty() {
+                    return quote! {
+                        {
+                            #(#children)*
+                        }
+                    };
+                }
+
+                let error_ident = static_segment_idx(*index);
 
                 quote! {
                     {

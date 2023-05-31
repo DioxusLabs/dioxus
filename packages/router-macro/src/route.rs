@@ -1,6 +1,8 @@
-use quote::{format_ident, quote, ToTokens};
+use quote::{format_ident, quote};
 use syn::parse::Parse;
 use syn::parse::ParseStream;
+use syn::parse_quote;
+use syn::Path;
 use syn::{Ident, LitStr};
 
 use proc_macro2::TokenStream as TokenStream2;
@@ -16,8 +18,8 @@ use crate::segment::RouteSegment;
 
 struct RouteArgs {
     route: LitStr,
-    comp_name: Option<Ident>,
-    props_name: Option<Ident>,
+    comp_name: Option<Path>,
+    props_name: Option<Path>,
 }
 
 impl Parse for RouteArgs {
@@ -40,10 +42,9 @@ impl Parse for RouteArgs {
 
 #[derive(Debug)]
 pub struct Route {
-    pub file_based: bool,
     pub route_name: Ident,
-    pub comp_name: Ident,
-    pub props_name: Ident,
+    pub comp_name: Path,
+    pub props_name: Path,
     pub route: String,
     pub segments: Vec<RouteSegment>,
     pub query: Option<QuerySegment>,
@@ -73,13 +74,20 @@ impl Route {
         let route_name = variant.ident.clone();
         let args = route_attr.parse_args::<RouteArgs>()?;
         let route = args.route.value();
-        let file_based = args.comp_name.is_none();
-        let comp_name = args
-            .comp_name
-            .unwrap_or_else(|| format_ident!("{}", route_name));
-        let props_name = args
-            .props_name
-            .unwrap_or_else(|| format_ident!("{}Props", comp_name));
+        let comp_name = args.comp_name.unwrap_or_else(|| parse_quote!(#route_name));
+        let props_name = args.props_name.unwrap_or_else(|| {
+            let last = format_ident!(
+                "{}Props",
+                comp_name.segments.last().unwrap().ident.to_string()
+            );
+            let mut segments = comp_name.segments.clone();
+            segments.pop();
+            segments.push(last.into());
+            Path {
+                leading_colon: None,
+                segments,
+            }
+        });
 
         let named_fields = match &variant.fields {
             syn::Fields::Named(fields) => fields,
@@ -106,7 +114,6 @@ impl Route {
             route_name,
             segments: route_segments,
             route,
-            file_based,
             query,
             nests,
             layouts,
@@ -232,37 +239,5 @@ impl Route {
             Some(query) => query.parse(),
             None => quote! {},
         }
-    }
-}
-
-impl ToTokens for Route {
-    fn to_tokens(&self, tokens: &mut quote::__private::TokenStream) {
-        if !self.file_based {
-            return;
-        }
-
-        let without_leading_slash = &self.route[1..];
-        let route_path = std::path::Path::new(without_leading_slash);
-        let with_extension = route_path.with_extension("rs");
-        let dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
-        let dir = std::path::Path::new(&dir);
-        let route = dir.join("src").join("pages").join(with_extension.clone());
-
-        // check if the route exists or if not use the index route
-        let route = if route.exists() && !without_leading_slash.is_empty() {
-            with_extension.to_str().unwrap().to_string()
-        } else {
-            route_path.join("index.rs").to_str().unwrap().to_string()
-        };
-
-        let route_name: Ident = self.route_name.clone();
-        let prop_name = &self.props_name;
-
-        tokens.extend(quote!(
-            #[path = #route]
-            #[allow(non_snake_case)]
-            mod #route_name;
-            pub use #route_name::{#prop_name, #route_name};
-        ));
     }
 }

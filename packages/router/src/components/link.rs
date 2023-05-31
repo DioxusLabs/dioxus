@@ -152,18 +152,10 @@ pub fn GenericLink<'a, R: Routable + Clone>(cx: Scope<'a, GenericLinkProps<'a, R
     };
 
     let current_route = router.current();
-    let href = current_route.to_string();
+    let current_url = current_route.to_string();
+    let href = target.to_string();
     let ac = active_class
-        .and_then(|active_class| match target {
-            NavigationTarget::Internal(target) => {
-                if href == target.to_string() {
-                    Some(format!(" {active_class}"))
-                } else {
-                    None
-                }
-            }
-            _ => None,
-        })
+        .and_then(|active_class| (href == current_url).then(|| format!(" {active_class}")))
         .unwrap_or_default();
 
     let id = id.unwrap_or_default();

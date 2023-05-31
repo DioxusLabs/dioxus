@@ -29,6 +29,22 @@ pub enum NavigationTarget<R: Routable> {
     External(String),
 }
 
+impl<R: Routable> From<&str> for NavigationTarget<R>
+where
+    <R as FromStr>::Err: Display,
+{
+    fn from(value: &str) -> Self {
+        Self::from_str(value).unwrap_or_else(|err| match err {
+            NavigationTargetParseError::InvalidUrl(e) => {
+                panic!("Failed to parse `{}` as a URL: {}", value, e)
+            }
+            NavigationTargetParseError::InvalidInternalURL(e) => {
+                panic!("Failed to parse `{}` as a `Routable`: {}", value, e)
+            }
+        })
+    }
+}
+
 impl<R: Routable> From<R> for NavigationTarget<R> {
     fn from(value: R) -> Self {
         Self::Internal(value)

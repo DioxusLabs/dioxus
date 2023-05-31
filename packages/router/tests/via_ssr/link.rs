@@ -1,47 +1,69 @@
+#![allow(non_snake_case)]
+
 use dioxus::prelude::*;
 use dioxus_router::prelude::*;
+use std::str::FromStr;
 
-fn prepare(link: Component) -> String {
-    #![allow(non_snake_case)]
-
-    let mut vdom = VirtualDom::new_with_props(App, AppProps { link });
+fn prepare<R: Routable>() -> String
+where
+    <R as FromStr>::Err: std::fmt::Display,
+{
+    let mut vdom = VirtualDom::new_with_props(
+        App,
+        AppProps::<R> {
+            phantom: std::marker::PhantomData,
+        },
+    );
     let _ = vdom.rebuild();
     return dioxus_ssr::render(&vdom);
 
     #[derive(Props)]
-    struct AppProps {
-        link: Component,
+    struct AppProps<R: Routable> {
+        phantom: std::marker::PhantomData<R>,
     }
 
-    impl PartialEq for AppProps {
+    impl<R: Routable> PartialEq for AppProps<R> {
         fn eq(&self, _other: &Self) -> bool {
             false
         }
     }
 
-    fn App(cx: Scope<AppProps>) -> Element {
-        use_router(
-            cx,
-            &|| RouterConfiguration {
-                synchronous: true,
-                ..Default::default()
-            },
-            &|| Segment::content(comp(cx.props.link)),
-        );
-
+    fn App<R: Routable>(cx: Scope<AppProps<R>>) -> Element
+    where
+        <R as FromStr>::Err: std::fmt::Display,
+    {
         render! {
             h1 { "App" }
-            Outlet { }
+            GenericRouter::<R> {
+                config: RouterConfiguration {
+                    history: Box::<MemoryHistory::<R>>::default(),
+                    ..Default::default()
+                }
+            }
         }
     }
 }
 
 #[test]
 fn href_internal() {
-    fn content(cx: Scope) -> Element {
+    #[derive(Routable, Clone)]
+    enum Route {
+        #[route("/")]
+        Root {},
+        #[route("/test")]
+        Test {},
+    }
+
+    #[inline_props]
+    fn Test(cx: Scope) -> Element {
+        todo!()
+    }
+
+    #[inline_props]
+    fn Root(cx: Scope) -> Element {
         render! {
             Link {
-                target: "/test",
+                target: Route::Test {},
                 "Link"
             }
         }
@@ -57,36 +79,26 @@ fn href_internal() {
         target = r#"target="""#
     );
 
-    assert_eq!(prepare(content), expected);
-}
-
-#[test]
-fn href_named() {
-    fn content(cx: Scope) -> Element {
-        render! {
-            Link {
-                target: named::<RootIndex>(),
-                "Link"
-            }
-        }
-    }
-
-    let expected = format!(
-        "<h1>App</h1><a {href} {default} {class} {id} {rel} {target}>Link</a>",
-        href = r#"href="/""#,
-        default = r#"dioxus-prevent-default="onclick""#,
-        class = r#"class="""#,
-        id = r#"id="""#,
-        rel = r#"rel="""#,
-        target = r#"target="""#
-    );
-
-    assert_eq!(prepare(content), expected);
+    assert_eq!(prepare::<Route>(), expected);
 }
 
 #[test]
 fn href_external() {
-    fn content(cx: Scope) -> Element {
+    #[derive(Routable, Clone)]
+    enum Route {
+        #[route("/")]
+        Root {},
+        #[route("/test")]
+        Test {},
+    }
+
+    #[inline_props]
+    fn Test(cx: Scope) -> Element {
+        todo!()
+    }
+
+    #[inline_props]
+    fn Root(cx: Scope) -> Element {
         render! {
             Link {
                 target: "https://dioxuslabs.com/",
@@ -105,15 +117,29 @@ fn href_external() {
         target = r#"target="""#
     );
 
-    assert_eq!(prepare(content), expected);
+    assert_eq!(prepare::<Route>(), expected);
 }
 
 #[test]
 fn with_class() {
-    fn content(cx: Scope) -> Element {
+    #[derive(Routable, Clone)]
+    enum Route {
+        #[route("/")]
+        Root {},
+        #[route("/test")]
+        Test {},
+    }
+
+    #[inline_props]
+    fn Test(cx: Scope) -> Element {
+        todo!()
+    }
+
+    #[inline_props]
+    fn Root(cx: Scope) -> Element {
         render! {
             Link {
-                target: "/test",
+                target: Route::Test {},
                 class: "test_class",
                 "Link"
             }
@@ -130,12 +156,19 @@ fn with_class() {
         target = r#"target="""#
     );
 
-    assert_eq!(prepare(content), expected);
+    assert_eq!(prepare::<Route>(), expected);
 }
 
 #[test]
 fn with_active_class_active() {
-    fn content(cx: Scope) -> Element {
+    #[derive(Routable, Clone)]
+    enum Route {
+        #[route("/")]
+        Root {},
+    }
+
+    #[inline_props]
+    fn Root(cx: Scope) -> Element {
         render! {
             Link {
                 target: "/",
@@ -156,15 +189,29 @@ fn with_active_class_active() {
         target = r#"target="""#
     );
 
-    assert_eq!(prepare(content), expected);
+    assert_eq!(prepare::<Route>(), expected);
 }
 
 #[test]
 fn with_active_class_inactive() {
-    fn content(cx: Scope) -> Element {
+    #[derive(Routable, Clone)]
+    enum Route {
+        #[route("/")]
+        Root {},
+        #[route("/test")]
+        Test {},
+    }
+
+    #[inline_props]
+    fn Test(cx: Scope) -> Element {
+        todo!()
+    }
+
+    #[inline_props]
+    fn Root(cx: Scope) -> Element {
         render! {
             Link {
-                target: "/test",
+                target: Route::Test {},
                 active_class: "active_class",
                 class: "test_class",
                 "Link"
@@ -182,15 +229,29 @@ fn with_active_class_inactive() {
         target = r#"target="""#
     );
 
-    assert_eq!(prepare(content), expected);
+    assert_eq!(prepare::<Route>(), expected);
 }
 
 #[test]
 fn with_id() {
-    fn content(cx: Scope) -> Element {
+    #[derive(Routable, Clone)]
+    enum Route {
+        #[route("/")]
+        Root {},
+        #[route("/test")]
+        Test {},
+    }
+
+    #[inline_props]
+    fn Test(cx: Scope) -> Element {
+        todo!()
+    }
+
+    #[inline_props]
+    fn Root(cx: Scope) -> Element {
         render! {
             Link {
-                target: "/test",
+                target: Route::Test {},
                 id: "test_id",
                 "Link"
             }
@@ -207,15 +268,29 @@ fn with_id() {
         target = r#"target="""#
     );
 
-    assert_eq!(prepare(content), expected);
+    assert_eq!(prepare::<Route>(), expected);
 }
 
 #[test]
 fn with_new_tab() {
-    fn content(cx: Scope) -> Element {
+    #[derive(Routable, Clone)]
+    enum Route {
+        #[route("/")]
+        Root {},
+        #[route("/test")]
+        Test {},
+    }
+
+    #[inline_props]
+    fn Test(cx: Scope) -> Element {
+        todo!()
+    }
+
+    #[inline_props]
+    fn Root(cx: Scope) -> Element {
         render! {
             Link {
-                target: "/test",
+                target: Route::Test {},
                 new_tab: true,
                 "Link"
             }
@@ -232,12 +307,19 @@ fn with_new_tab() {
         target = r#"target="_blank""#
     );
 
-    assert_eq!(prepare(content), expected);
+    assert_eq!(prepare::<Route>(), expected);
 }
 
 #[test]
 fn with_new_tab_external() {
-    fn content(cx: Scope) -> Element {
+    #[derive(Routable, Clone)]
+    enum Route {
+        #[route("/")]
+        Root {},
+    }
+
+    #[inline_props]
+    fn Root(cx: Scope) -> Element {
         render! {
             Link {
                 target: "https://dioxuslabs.com/",
@@ -257,15 +339,29 @@ fn with_new_tab_external() {
         target = r#"target="_blank""#
     );
 
-    assert_eq!(prepare(content), expected);
+    assert_eq!(prepare::<Route>(), expected);
 }
 
 #[test]
 fn with_rel() {
-    fn content(cx: Scope) -> Element {
+    #[derive(Routable, Clone)]
+    enum Route {
+        #[route("/")]
+        Root {},
+        #[route("/test")]
+        Test {},
+    }
+
+    #[inline_props]
+    fn Test(cx: Scope) -> Element {
+        todo!()
+    }
+
+    #[inline_props]
+    fn Root(cx: Scope) -> Element {
         render! {
             Link {
-                target: "/test",
+                target: Route::Test {},
                 rel: "test_rel",
                 "Link"
             }
@@ -282,5 +378,5 @@ fn with_rel() {
         target = r#"target="""#
     );
 
-    assert_eq!(prepare(content), expected);
+    assert_eq!(prepare::<Route>(), expected);
 }

@@ -132,7 +132,7 @@ enum Route {
         // UserFrame is a layout component that will receive the `user_id: String` parameter
         #[layout(UserFrame)]
             // Route1 is a non-layout component that will receive the `user_id: String` and `dynamic: String` parameters
-            #[route("/:dynamic?:query", Route1)]
+            #[route("/:dynamic?:query")]
             Route1 {
                 // The type is taken from the first instance of the dynamic parameter
                 user_id: usize,
@@ -141,13 +141,13 @@ enum Route {
                 extra: String,
             },
             // Route2 is a non-layout component that will receive the `user_id: String` parameter
-            #[route("/hello_world", Route2)]
+            #[route("/hello_world")]
             // You can opt out of the layout by using the `!` prefix
             #[layout(!UserFrame)]
             Route2 { user_id: usize },
         #[end_layout]
     #[end_nest]
     #[redirect("/:id/user", |id: usize| Route::Route3 { dynamic: id.to_string()})]
-    #[route("/:dynamic", Route3)]
+    #[route("/:dynamic")]
     Route3 { dynamic: String },
 }

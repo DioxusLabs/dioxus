@@ -51,6 +51,17 @@ pub mod prelude {
     pub use crate::routable::*;
     pub use crate::router_cfg::RouterConfiguration;
     pub use dioxus_router_macro::Routable;
+
+    #[doc(hidden)]
+    /// A component with props used in the macro
+    pub trait HasProps {
+        /// The props type of the component.
+        type Props;
+    }
+
+    impl<P> HasProps for dioxus::prelude::Component<P> {
+        type Props = P;
+    }
 }
 
 mod utils {
