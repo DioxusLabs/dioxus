@@ -9,7 +9,7 @@ use crate::{
     router_cfg::RouterConfiguration,
 };
 
-/// The config for [`Router`].
+/// The config for [`GenericRouter`].
 pub struct RouterCfg<R: Routable> {
     config: RefCell<Option<RouterConfiguration<R>>>,
 }
@@ -33,7 +33,7 @@ impl<R: Routable> From<RouterConfiguration<R>> for RouterCfg<R> {
     }
 }
 
-/// The props for [`Router`].
+/// The props for [`GenericRouter`].
 #[derive(Props)]
 pub struct GenericRouterProps<R: Routable + Serialize + DeserializeOwned>
 where

@@ -1,13 +1,10 @@
 use crate::contexts::router::RoutingCallback;
 use crate::history::HistoryProvider;
-use crate::prelude::*;
 use crate::routable::Routable;
 use dioxus::prelude::*;
 use serde::{de::DeserializeOwned, Serialize};
 
-use crate::prelude::default_errors::{
-    FailureExternalNavigation, FailureNamedNavigation, FailureRedirectionLimit,
-};
+use crate::prelude::*;
 
 /// Global configuration options for the router.
 ///
@@ -33,22 +30,8 @@ use crate::prelude::default_errors::{
 pub struct RouterConfiguration<R: Routable> {
     /// A component to render when an external navigation fails.
     ///
-    /// Defaults to a router-internal component called `FailureExternalNavigation`. It is not part
-    /// of the public API. Do not confuse it with
-    /// [`dioxus_router::prelude::FailureExternalNavigation`].
+    /// Defaults to a router-internal component called [`FailureExternalNavigation`]
     pub failure_external_navigation: fn(Scope) -> Element,
-    /// A component to render when a named navigation fails.
-    ///
-    /// Defaults to a router-internal component called `FailureNamedNavigation`. It is not part of
-    /// the public API. Do not confuse it with
-    /// [`dioxus_router::prelude::FailureNamedNavigation`].
-    pub failure_named_navigation: fn(Scope) -> Element,
-    /// A component to render when the redirect limit is reached.
-    ///
-    /// Defaults to a router-internal component called `FailureRedirectionLimit`. It is not part of
-    /// the public API. Do not confuse it with
-    /// [`dioxus_router::prelude::FailureRedirectionLimit`].
-    pub failure_redirection_limit: fn(Scope) -> Element,
     /// The [`HistoryProvider`] the router should use.
     ///
     /// Defaults to a default [`MemoryHistory`].
@@ -58,7 +41,7 @@ pub struct RouterConfiguration<R: Routable> {
     /// The callback is invoked after the routing is updated, but before components and hooks are
     /// updated.
     ///
-    /// If the callback returns a [`dioxus_router::navigation::NavigationTarget`] the router will replace the current location
+    /// If the callback returns a [`NavigationTarget`] the router will replace the current location
     /// with it. If no navigation failure was triggered, the router will then updated dependent
     /// components and hooks.
     ///
@@ -76,8 +59,6 @@ where
     fn default() -> Self {
         Self {
             failure_external_navigation: FailureExternalNavigation::<R>,
-            failure_named_navigation: FailureNamedNavigation::<R>,
-            failure_redirection_limit: FailureRedirectionLimit::<R>,
             history: Box::<MemoryHistory<R>>::default(),
             on_update: None,
         }

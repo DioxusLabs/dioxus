@@ -9,7 +9,7 @@ use crate::{
 ///
 /// ```rust
 /// # use dioxus::prelude::*;
-/// # use dioxus_router::{history::*, prelude::*};
+/// # use dioxus_router::prelude::*;
 /// # use serde::{Deserialize, Serialize};
 /// #[derive(Clone, Serialize, Deserialize, Routable)]
 /// enum Route {

@@ -1,7 +1,7 @@
 #![allow(non_snake_case, unused)]
 
 use dioxus::prelude::*;
-use dioxus_router::{history::MemoryHistory, prelude::*};
+use dioxus_router::prelude::*;
 use serde::{Deserialize, Serialize};
 
 fn prepare(path: impl Into<String>) -> VirtualDom {

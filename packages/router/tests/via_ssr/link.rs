@@ -101,7 +101,7 @@ fn href_external() {
     fn Root(cx: Scope) -> Element {
         render! {
             Link {
-                target: "https://dioxuslabs.com/",
+                target: NavigationTarget::External("https://dioxuslabs.com/".into()),
                 "Link"
             }
         }
@@ -171,7 +171,7 @@ fn with_active_class_active() {
     fn Root(cx: Scope) -> Element {
         render! {
             Link {
-                target: "/",
+                target: Route::Root {},
                 active_class: "active_class",
                 class: "test_class",
                 "Link"
@@ -322,7 +322,7 @@ fn with_new_tab_external() {
     fn Root(cx: Scope) -> Element {
         render! {
             Link {
-                target: "https://dioxuslabs.com/",
+                target: NavigationTarget::External("https://dioxuslabs.com/".into()),
                 new_tab: true,
                 "Link"
             }

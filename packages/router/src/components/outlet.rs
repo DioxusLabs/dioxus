@@ -1,15 +1,15 @@
-use crate::{contexts::outlet::OutletContext, routable::Routable};
+use crate::prelude::{outlet::OutletContext, *};
 use dioxus::prelude::*;
 
 /// An outlet for the current content.
 ///
 /// Only works as descendant of a [`GenericRouter`] component, otherwise it will be inactive.
 ///
-/// The [`Outlet`] is aware of how many [`Outlet`]s it is nested within. It will render the content
+/// The [`GenericOutlet`] is aware of how many [`Outlet`]s it is nested within. It will render the content
 /// of the active route that is __exactly as deep__.
 ///
 /// # Panic
-/// - When the [`Outlet`] is not nested within another component calling the [`use_router`] hook,
+/// - When the [`GenericOutlet`] is not nested a [`GenericRouter`] component,
 ///   but only in debug builds.
 ///
 /// # Example

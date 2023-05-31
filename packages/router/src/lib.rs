@@ -7,8 +7,9 @@ pub mod navigation;
 pub mod routable;
 
 /// Components interacting with the router.
-pub mod components {
-    pub(crate) mod default_errors;
+mod components {
+    mod default_errors;
+    pub use default_errors::*;
 
     mod history_buttons;
     pub use history_buttons::*;
@@ -31,10 +32,10 @@ mod contexts {
 
 mod router_cfg;
 
-pub mod history;
+mod history;
 
 /// Hooks for interacting with the router in components.
-pub mod hooks {
+mod hooks {
     mod use_router;
     pub use use_router::*;
 
@@ -48,6 +49,7 @@ pub mod prelude {
     pub use crate::contexts::*;
     pub use crate::history::*;
     pub use crate::hooks::*;
+    pub use crate::navigation::*;
     pub use crate::routable::*;
     pub use crate::router_cfg::RouterConfiguration;
     pub use dioxus_router_macro::Routable;

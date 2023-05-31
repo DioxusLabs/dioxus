@@ -1,6 +1,6 @@
 use dioxus::prelude::*;
 
-use crate::{hooks::use_generic_route, routable::Routable};
+use crate::{routable::Routable, utils::use_router_internal::use_router_internal};
 
 #[derive(Clone)]
 pub(crate) struct OutletContext {
@@ -16,7 +16,10 @@ pub(crate) fn use_outlet_context(cx: &ScopeState) -> &OutletContext {
 }
 
 impl OutletContext {
-    pub(crate) fn render<R: Routable + Clone>(cx: &ScopeState) -> Element<'_> {
+    pub(crate) fn render<R: Routable + Clone>(cx: Scope) -> Element<'_> {
+        let router = use_router_internal::<R>(cx)
+            .as_ref()
+            .expect("Outlet must be inside of a router");
         let outlet = use_outlet_context(cx);
         let current_level = outlet.current_level;
         cx.provide_context({
@@ -25,8 +28,14 @@ impl OutletContext {
             }
         });
 
-        use_generic_route::<R>(cx)
-            .expect("Outlet must be inside of a router")
-            .render(cx, current_level)
+        if let Some(error) = router.render_error(cx) {
+            if current_level == 0 {
+                return Some(error);
+            } else {
+                return None;
+            }
+        }
+
+        router.current().render(cx, current_level)
     }
 }

@@ -1,15 +1,10 @@
-use crate::{
-    components::GenericLink, hooks::use_generic_route, navigation::NavigationTarget,
-    routable::Routable,
-};
+use crate::{hooks::use_generic_router, routable::Routable};
 use dioxus::prelude::*;
 
+/// The default component to render when an external navigation fails.
 #[allow(non_snake_case)]
 pub fn FailureExternalNavigation<R: Routable + Clone>(cx: Scope) -> Element {
-    let href = use_generic_route::<R>(cx).expect(
-        "`FailureExternalNavigation` can only be mounted by the router itself, \
-            since it is not exposed",
-    );
+    let router = use_generic_router::<R>(cx);
 
     render! {
         h1 { "External Navigation Failure!" }
@@ -18,53 +13,10 @@ pub fn FailureExternalNavigation<R: Routable + Clone>(cx: Scope) -> Element {
             "operation has failed. Click the link below to complete the navigation manually."
         }
         a {
-            href: "{href}",
-            rel: "noopener noreferrer",
-            "Click here to fix the failure."
-        }
-    }
-}
-
-#[allow(non_snake_case)]
-pub fn FailureNamedNavigation<R: Routable + Clone>(cx: Scope) -> Element {
-    render! {
-        h1 { "Named Navigation Failure!" }
-        p {
-            "The application has tried to navigate to an unknown name. This is a bug. Please "
-            "inform the developer, so they can fix it."
-            b { "Thank you!" }
-        }
-        p {
-            "We are sorry for the inconvenience. The link below may help to fix the problem, but "
-            "there is no guarantee."
-        }
-        GenericLink::<R> {
-            target: NavigationTarget::Internal(R::from_str("/").unwrap_or_else(|_| {
-                panic!("Failed to parse `/` as a Route")
-            })),
-            "Click here to try to fix the failure."
-        }
-    }
-}
-
-#[allow(non_snake_case)]
-pub fn FailureRedirectionLimit<R: Routable + Clone>(cx: Scope) -> Element {
-    render! {
-        h1 { "Redirection Limit Failure!" }
-        p {
-            "The application seems to have entered into an endless redirection loop. This is a "
-            "bug. Please inform the developer, so they can fix it."
-            b { "Thank you!" }
-        }
-        p {
-            "We are sorry for the inconvenience. The link below may help to fix the problem, but "
-            "there is no guarantee."
-        }
-        GenericLink::<R> {
-            target: NavigationTarget::Internal(R::from_str("/").unwrap_or_else(|_| {
-                panic!("Failed to parse `/` as a Route")
-            })),
-            "Click here to try to fix the failure."
+            onclick: move |_| {
+                router.clear_error()
+            },
+            "Click here to go back"
         }
     }
 }

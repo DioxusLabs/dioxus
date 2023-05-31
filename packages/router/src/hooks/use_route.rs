@@ -10,14 +10,13 @@ use crate::utils::use_router_internal::use_router_internal;
 /// - Otherwise the current route.
 ///
 /// # Panic
-/// - When the calling component is not nested within another component calling the [`use_router`]
-///   hook, but only in debug builds.
+/// - When the calling component is not nested within a [`GenericRouter`] component durring a debug build.
 ///
 /// # Example
 /// ```rust
 /// # use dioxus::prelude::*;
 /// # use serde::{Deserialize, Serialize};
-/// # use dioxus_router::{history::*, prelude::*};
+/// # use dioxus_router::{prelude::*};
 ///
 /// #[derive(Clone, Serialize, Deserialize, Routable)]
 /// enum Route {

@@ -18,7 +18,6 @@ where
     /// Create a [`MemoryHistory`] starting at `path`.
     ///
     /// ```rust
-    /// # use dioxus_router::history::{HistoryProvider, MemoryHistory};
     /// # use dioxus_router::prelude::*;
     /// # use serde::{Deserialize, Serialize};
     /// # use dioxus::prelude::*;

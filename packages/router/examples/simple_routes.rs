@@ -101,6 +101,10 @@ fn Route3(cx: Scope, dynamic: String) -> Element {
             target: Route::Route2 { user_id: 8888 },
             "hello world link"
         }
+        button {
+            onclick: move |_| { router.push(NavigationTarget::External("https://www.google.com".to_string())); },
+            "google link"
+        }
         p { "Site Map" }
         pre { "{site_map:#?}" }
         p { "Dynamic link" }

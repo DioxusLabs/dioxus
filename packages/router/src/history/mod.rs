@@ -1,10 +1,14 @@
 //! History Integration
 //!
-//! dioxus-router-core relies on so-called [`HistoryProvider`]s to store the current URL, and possibly a
+//! dioxus-router-core relies on [`HistoryProvider`]s to store the current Route, and possibly a
 //! history (i.e. a browsers back button) and future (i.e. a browsers forward button).
 //!
-//! To integrate dioxus-router-core with a any type of history, all you have to do is implement the
-//! [`HistoryProvider`] trait. dioxus-router-core also comes with some (for now one) default implementations.
+//! To integrate dioxus-router with a any type of history, all you have to do is implement the
+//! [`HistoryProvider`] trait.
+//!
+//! dioxus-router contains two built in history providers:
+//! 1) [`MemoryHistory`] for desktop/mobile/ssr platforms
+//! 2) [`WebHistory`] for web platforms
 
 use std::sync::Arc;
 
@@ -42,7 +46,6 @@ pub trait HistoryProvider<R: Routable> {
     /// **Must start** with `/`. **Must _not_ contain** the prefix.
     ///
     /// ```rust
-    /// # use dioxus_router::history::{HistoryProvider, MemoryHistory};
     /// # use dioxus_router::prelude::*;
     /// # use serde::{Deserialize, Serialize};
     /// # use dioxus::prelude::*;
@@ -82,7 +85,6 @@ pub trait HistoryProvider<R: Routable> {
     /// If a [`HistoryProvider`] cannot know this, it should return [`true`].
     ///
     /// ```rust
-    /// # use dioxus_router::history::{HistoryProvider, MemoryHistory};
     /// # use dioxus_router::prelude::*;
     /// # use serde::{Deserialize, Serialize};
     /// # use dioxus::prelude::*;   
@@ -110,7 +112,6 @@ pub trait HistoryProvider<R: Routable> {
     /// might be called, even if `can_go_back` returns [`false`].
     ///
     /// ```rust
-    /// # use dioxus_router::history::{HistoryProvider, MemoryHistory};
     /// # use dioxus_router::prelude::*;
     /// # use serde::{Deserialize, Serialize};
     /// # use dioxus::prelude::*;
@@ -144,7 +145,6 @@ pub trait HistoryProvider<R: Routable> {
     /// If a [`HistoryProvider`] cannot know this, it should return [`true`].
     ///
     /// ```rust
-    /// # use dioxus_router::history::{HistoryProvider, MemoryHistory};
     /// # use dioxus_router::prelude::*;
     /// # use serde::{Deserialize, Serialize};
     /// # use dioxus::prelude::*;
@@ -179,7 +179,6 @@ pub trait HistoryProvider<R: Routable> {
     /// might be called, even if `can_go_forward` returns [`false`].
     ///
     /// ```rust
-    /// # use dioxus_router::history::{HistoryProvider, MemoryHistory};
     /// # use dioxus_router::prelude::*;
     /// # use serde::{Deserialize, Serialize};
     /// # use dioxus::prelude::*;
@@ -214,7 +213,6 @@ pub trait HistoryProvider<R: Routable> {
     /// 3. Clear the navigation future.
     ///
     /// ```rust
-    /// # use dioxus_router::history::{HistoryProvider, MemoryHistory};
     /// # use dioxus_router::prelude::*;
     /// # use serde::{Deserialize, Serialize};
     /// # use dioxus::prelude::*;
@@ -245,7 +243,6 @@ pub trait HistoryProvider<R: Routable> {
     /// untouched.
     ///
     /// ```rust
-    /// # use dioxus_router::history::{HistoryProvider, MemoryHistory};
     /// # use dioxus_router::prelude::*;
     /// # use serde::{Deserialize, Serialize};
     /// # use dioxus::prelude::*;
