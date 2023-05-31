@@ -3,12 +3,10 @@ use dioxus::prelude::*;
 
 /// An outlet for the current content.
 ///
-/// Only works as descendant of a component calling [`use_router`], otherwise it will be inactive.
+/// Only works as descendant of a [`GenericRouter`] component, otherwise it will be inactive.
 ///
 /// The [`Outlet`] is aware of how many [`Outlet`]s it is nested within. It will render the content
 /// of the active route that is __exactly as deep__.
-///
-/// [`use_router`]: crate::hooks::use_router
 ///
 /// # Panic
 /// - When the [`Outlet`] is not nested within another component calling the [`use_router`] hook,
@@ -17,32 +15,61 @@ use dioxus::prelude::*;
 /// # Example
 /// ```rust
 /// # use dioxus::prelude::*;
+/// # use serde::{Deserialize, Serialize};
 /// # use dioxus_router::prelude::*;
-/// fn App(cx: Scope) -> Element {
-///     use_router(
-///         &cx,
-///         &|| RouterConfiguration {
-///             synchronous: true, // asynchronicity not needed for doc test
-///             ..Default::default()
-///         },
-///         &|| Segment::content(comp(Content))
-///     );
+/// #[derive(Clone, Serialize, Deserialize, Routable)]
+/// #[rustfmt::skip]
+/// enum Route {
+///     #[nest("/wrap")]
+///         #[layout(Wrapper)] // Every layout component must have one Outlet
+///             #[route("/")]
+///             Child {},
+///         #[end_layout]
+///     #[end_nest]
+///     #[route("/")]
+///     Index {},
+/// }
 ///
+/// #[inline_props]
+/// fn Index(cx: Scope) -> Element {
+///     render! {
+///         div {
+///             "Index"
+///         }
+///     }
+/// }
+///
+/// #[inline_props]
+/// fn Wrapper(cx: Scope) -> Element {
 ///     render! {
 ///         h1 { "App" }
-///         Outlet { } // The content component will be rendered here
+///         Outlet {} // The content of child routes will be rendered here
 ///     }
 /// }
 ///
-/// fn Content(cx: Scope) -> Element {
+/// #[inline_props]
+/// fn Child(cx: Scope) -> Element {
 ///     render! {
-///         p { "Content" }
+///         p {
+///             "Child"
+///         }
 ///     }
 /// }
+///
+/// # fn App(cx: Scope) -> Element {
+/// #     render! {
+/// #         Router {
+/// #             config: RouterConfiguration {
+/// #                 history: Box::new(MemoryHistory::with_initial_path("/wrap").unwrap()),
+/// #                 ..Default::default()
+/// #             }
+/// #         }
+/// #     }
+/// # }
 /// #
 /// # let mut vdom = VirtualDom::new(App);
 /// # let _ = vdom.rebuild();
-/// # assert_eq!(dioxus_ssr::render(&vdom), "<h1>App</h1><p>Content</p>");
+/// # assert_eq!(dioxus_ssr::render(&vdom), "<h1>App</h1><p>Child</p>");
 /// ```
 pub fn GenericOutlet<R: Routable + Clone>(cx: Scope) -> Element {
     OutletContext::render::<R>(cx)

@@ -1,11 +1,12 @@
 use crate::{
-    components::GenericLink, hooks::use_route, navigation::NavigationTarget, routable::Routable,
+    components::GenericLink, hooks::use_generic_route, navigation::NavigationTarget,
+    routable::Routable,
 };
 use dioxus::prelude::*;
 
 #[allow(non_snake_case)]
 pub fn FailureExternalNavigation<R: Routable + Clone>(cx: Scope) -> Element {
-    let href = use_route::<R>(cx).expect(
+    let href = use_generic_route::<R>(cx).expect(
         "`FailureExternalNavigation` can only be mounted by the router itself, \
             since it is not exposed",
     );
@@ -38,7 +39,9 @@ pub fn FailureNamedNavigation<R: Routable + Clone>(cx: Scope) -> Element {
             "there is no guarantee."
         }
         GenericLink::<R> {
-            target: NavigationTarget::External("https://google.com".into()),
+            target: NavigationTarget::Internal(R::from_str("/").unwrap_or_else(|_| {
+                panic!("Failed to parse `/` as a Route")
+            })),
             "Click here to try to fix the failure."
         }
     }
@@ -58,7 +61,9 @@ pub fn FailureRedirectionLimit<R: Routable + Clone>(cx: Scope) -> Element {
             "there is no guarantee."
         }
         GenericLink::<R> {
-            target: NavigationTarget::External("https://google.com".into()),
+            target: NavigationTarget::Internal(R::from_str("/").unwrap_or_else(|_| {
+                panic!("Failed to parse `/` as a Route")
+            })),
             "Click here to try to fix the failure."
         }
     }

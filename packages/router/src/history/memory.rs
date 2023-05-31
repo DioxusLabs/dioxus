@@ -18,16 +18,31 @@ where
     /// Create a [`MemoryHistory`] starting at `path`.
     ///
     /// ```rust
-    /// # use dioxus_router_core::history::{HistoryProvider, MemoryHistory};
-    /// let mut history = MemoryHistory::with_initial_path("/some/path").unwrap();
-    /// assert_eq!(history.current_path(), "/some/path");
+    /// # use dioxus_router::history::{HistoryProvider, MemoryHistory};
+    /// # use dioxus_router::prelude::*;
+    /// # use serde::{Deserialize, Serialize};
+    /// # use dioxus::prelude::*;
+    /// # #[inline_props]
+    /// # fn Index(cx: Scope) -> Element { todo!() }
+    /// # #[inline_props]
+    /// # fn OtherPage(cx: Scope) -> Element { todo!() }
+    /// #[derive(Clone, Serialize, Deserialize, Routable, Debug, PartialEq)]
+    /// enum Route {
+    ///     #[route("/")]
+    ///     Index {},
+    ///     #[route("/some-other-page")]
+    ///     OtherPage {},
+    /// }
+    ///
+    /// let mut history = MemoryHistory::<Route>::with_initial_path("/").unwrap();
+    /// assert_eq!(history.current_route(), Route::Index {});
     /// assert_eq!(history.can_go_back(), false);
     /// ```
-    pub fn with_initial_path(path: impl Into<String>) -> Result<Self, <R as FromStr>::Err> {
-        let path = path.into();
+    pub fn with_initial_path(path: impl AsRef<str>) -> Result<Self, <R as FromStr>::Err> {
+        let path = path.as_ref();
 
         Ok(Self {
-            current: R::from_str(&path)?,
+            current: R::from_str(path)?,
             ..Default::default()
         })
     }
@@ -83,148 +98,3 @@ impl<R: Routable> HistoryProvider<R> for MemoryHistory<R> {
         self.current = path;
     }
 }
-
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-
-//     #[test]
-//     fn default() {
-//         let mem = MemoryHistory::default();
-//         assert_eq!(mem.current, Url::parse(INITIAL_URL).unwrap());
-//         assert_eq!(mem.history, Vec::<String>::new());
-//         assert_eq!(mem.future, Vec::<String>::new());
-//     }
-
-//     #[test]
-//     fn with_initial_path() {
-//         let mem = MemoryHistory::with_initial_path("something").unwrap();
-//         assert_eq!(
-//             mem.current,
-//             Url::parse(&format!("{INITIAL_URL}something")).unwrap()
-//         );
-//         assert_eq!(mem.history, Vec::<String>::new());
-//         assert_eq!(mem.future, Vec::<String>::new());
-//     }
-
-//     #[test]
-//     fn with_initial_path_with_leading_slash() {
-//         let mem = MemoryHistory::with_initial_path("/something").unwrap();
-//         assert_eq!(
-//             mem.current,
-//             Url::parse(&format!("{INITIAL_URL}something")).unwrap()
-//         );
-//         assert_eq!(mem.history, Vec::<String>::new());
-//         assert_eq!(mem.future, Vec::<String>::new());
-//     }
-
-//     #[test]
-//     fn can_go_back() {
-//         let mut mem = MemoryHistory::default();
-//         assert!(!mem.can_go_back());
-
-//         mem.push(String::from("/test"));
-//         assert!(mem.can_go_back());
-//     }
-
-//     #[test]
-//     fn go_back() {
-//         let mut mem = MemoryHistory::default();
-//         mem.push(String::from("/test"));
-//         mem.go_back();
-
-//         assert_eq!(mem.current, Url::parse(INITIAL_URL).unwrap());
-//         assert!(mem.history.is_empty());
-//         assert_eq!(mem.future, vec![format!("{INITIAL_URL}test")]);
-//     }
-
-//     #[test]
-//     fn can_go_forward() {
-//         let mut mem = MemoryHistory::default();
-//         assert!(!mem.can_go_forward());
-
-//         mem.push(String::from("/test"));
-//         mem.go_back();
-
-//         assert!(mem.can_go_forward());
-//     }
-
-//     #[test]
-//     fn go_forward() {
-//         let mut mem = MemoryHistory::default();
-//         mem.push(String::from("/test"));
-//         mem.go_back();
-//         mem.go_forward();
-
-//         assert_eq!(
-//             mem.current,
-//             Url::parse(&format!("{INITIAL_URL}test")).unwrap()
-//         );
-//         assert_eq!(mem.history, vec![INITIAL_URL.to_string()]);
-//         assert!(mem.future.is_empty());
-//     }
-
-//     #[test]
-//     fn push() {
-//         let mut mem = MemoryHistory::default();
-//         mem.push(String::from("/test"));
-
-//         assert_eq!(
-//             mem.current,
-//             Url::parse(&format!("{INITIAL_URL}test")).unwrap()
-//         );
-//         assert_eq!(mem.history, vec![INITIAL_URL.to_string()]);
-//         assert!(mem.future.is_empty());
-//     }
-
-//     #[test]
-//     #[should_panic = r#"cannot navigate to paths starting with "//": //test"#]
-//     #[cfg(debug_assertions)]
-//     fn push_debug() {
-//         let mut mem = MemoryHistory::default();
-//         mem.push(String::from("//test"));
-//     }
-
-//     #[test]
-//     #[cfg(not(debug_assertions))]
-//     fn push_release() {
-//         let mut mem = MemoryHistory::default();
-//         mem.push(String::from("//test"));
-
-//         assert_eq!(mem.current, Url::parse(INITIAL_URL).unwrap());
-//         assert!(mem.history.is_empty())
-//     }
-
-//     #[test]
-//     fn replace() {
-//         let mut mem = MemoryHistory::default();
-//         mem.push(String::from("/test"));
-//         mem.push(String::from("/other"));
-//         mem.go_back();
-//         mem.replace(String::from("/replace"));
-
-//         assert_eq!(
-//             mem.current,
-//             Url::parse(&format!("{INITIAL_URL}replace")).unwrap()
-//         );
-//         assert_eq!(mem.history, vec![INITIAL_URL.to_string()]);
-//         assert_eq!(mem.future, vec![format!("{INITIAL_URL}other")]);
-//     }
-
-//     #[test]
-//     #[should_panic = r#"cannot navigate to paths starting with "//": //test"#]
-//     #[cfg(debug_assertions)]
-//     fn replace_debug() {
-//         let mut mem = MemoryHistory::default();
-//         mem.replace(String::from("//test"));
-//     }
-
-//     #[test]
-//     #[cfg(not(debug_assertions))]
-//     fn replace_release() {
-//         let mut mem = MemoryHistory::default();
-//         mem.replace(String::from("//test"));
-
-//         assert_eq!(mem.current, Url::parse(INITIAL_URL).unwrap());
-//     }
-// }

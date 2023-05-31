@@ -4,7 +4,7 @@ use dioxus::prelude::*;
 use log::error;
 
 use crate::navigation::NavigationTarget;
-use crate::routable::Routable;
+use crate::prelude::*;
 use crate::utils::use_router_internal::use_router_internal;
 
 /// The properties for a [`Link`].
@@ -63,56 +63,54 @@ impl<R: Routable> Debug for GenericLinkProps<'_, R> {
 
 /// A link to navigate to another route.
 ///
-/// Only works as descendant of a component calling [`use_router`], otherwise it will be inactive.
+/// Only works as descendant of a [`GenericRouter`] component, otherwise it will be inactive.
 ///
-/// Unlike a regular HTML anchor, a [`Link`] allows the router to handle the navigation and doesn't
+/// Unlike a regular HTML anchor, a [`GenericLink`] allows the router to handle the navigation and doesn't
 /// cause the browser to load a new page.
 ///
-/// However, in the background a [`Link`] still generates an anchor, which you can use for styling
+/// However, in the background a [`GenericLink`] still generates an anchor, which you can use for styling
 /// as normal.
 ///
-/// [`use_router`]: crate::hooks::use_router
-///
 /// # External targets
-/// When the [`Link`]s target is an [`External`] target, that is used as the `href` directly. This
-/// means that a [`Link`] can always navigate to an [`External`] target.
-///
-/// This is different from a [`Navigator`], which can only navigate to external targets when the
-/// routers [`HistoryProvider`] supports it.
-///
-/// [`External`]: dioxus_router_core::navigation::NavigationTarget::External
-/// [`HistoryProvider`]: dioxus_router_core::history::HistoryProvider
-/// [`Navigator`]: dioxus_router_core::Navigator
+/// When the [`GenericLink`]s target is an [`NavigationTarget::External`] target, that is used as the `href` directly. This
+/// means that a [`GenericLink`] can always navigate to an [`NavigationTarget::External`] target, even if the [`HistoryProvider`] does not support it.
 ///
 /// # Panic
-/// - When the [`Link`] is not nested within another component calling the [`use_router`] hook, but
+/// - When the [`GenericLink`] is not nested within a [`GenericRouter`], but
 ///   only in debug builds.
 ///
 /// # Example
 /// ```rust
 /// # use dioxus::prelude::*;
 /// # use dioxus_router::prelude::*;
+/// # use serde::{Deserialize, Serialize};
+///
+/// #[derive(Clone, Serialize, Deserialize, Routable)]
+/// enum Route {
+///     #[route("/")]
+///     Index {},
+/// }
+///
 /// fn App(cx: Scope) -> Element {
-///     use_router(
-///         &cx,
-///         &|| RouterConfiguration {
-///             synchronous: true, // asynchronicity not needed for doc test
-///             ..Default::default()
-///         },
-///         &|| Segment::empty()
-///     );
-///
 ///     render! {
-///         Link {
-///             active_class: "active",
-///             class: "link_class",
-///             exact: true,
-///             id: "link_id",
-///             new_tab: true,
-///             rel: "link_rel",
-///             target: "/",
+///         Router {}
+///     }
+/// }
 ///
-///             "A fully configured link"
+/// #[inline_props]
+/// fn Index(cx: Scope) -> Element {
+///     render! {
+///         render! {
+///             Link {
+///                 active_class: "active",
+///                 class: "link_class",
+///                 id: "link_id",
+///                 new_tab: true,
+///                 rel: "link_rel",
+///                 target: Route::Index {},
+///    
+///                 "A fully configured link"
+///             }
 ///         }
 ///     }
 /// }

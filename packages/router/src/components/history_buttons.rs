@@ -1,41 +1,44 @@
 use dioxus::prelude::*;
 use log::error;
 
-use crate::{routable::Routable, utils::use_router_internal::use_router_internal};
+use crate::{prelude::*, utils::use_router_internal::use_router_internal};
 
 /// The properties for a [`GoBackButton`] or a [`GoForwardButton`].
 #[derive(Debug, Props)]
-pub struct HistoryButtonProps<'a> {
+pub struct GenericHistoryButtonProps<'a> {
     /// The children to render within the generated HTML button tag.
     pub children: Element<'a>,
 }
 
 /// A button to go back through the navigation history. Similar to a browsers back button.
 ///
-/// Only works as descendant of a component calling [`use_router`], otherwise it will be inactive.
+/// Only works as descendant of a [`GenericRouter`] component, otherwise it will be inactive.
 ///
 /// The button will disable itself if it is known that no prior history is available.
 ///
-/// [`use_router`]: crate::hooks::use_router
-///
 /// # Panic
-/// - When the [`GoBackButton`] is not nested within another component calling the [`use_router`]
+/// - When the [`GoBackButton`] is not nested within a [`GenericRouter`] component
 ///   hook, but only in debug builds.
 ///
 /// # Example
 /// ```rust
 /// # use dioxus::prelude::*;
 /// # use dioxus_router::prelude::*;
-/// fn App(cx: Scope) -> Element {
-///     use_router(
-///         &cx,
-///         &|| RouterConfiguration {
-///             synchronous: true, // asynchronicity not needed for doc test
-///             ..Default::default()
-///         },
-///         &|| Segment::empty()
-///     );
+/// # use serde::{Deserialize, Serialize};
+/// #[derive(Clone, Serialize, Deserialize, Routable)]
+/// enum Route {
+///     #[route("/")]
+///     Index {},
+/// }
 ///
+/// fn App(cx: Scope) -> Element {
+///     render! {
+///         Router {}
+///     }
+/// }
+///
+/// #[inline_props]
+/// fn Index(cx: Scope) -> Element {
 ///     render! {
 ///         GoBackButton {
 ///             "go back"
@@ -51,8 +54,10 @@ pub struct HistoryButtonProps<'a> {
 /// # );
 /// ```
 #[allow(non_snake_case)]
-pub fn GoBackButton<'a, R: Routable>(cx: Scope<'a, HistoryButtonProps<'a>>) -> Element {
-    let HistoryButtonProps { children } = cx.props;
+pub fn GenericGoBackButton<'a, R: Routable>(
+    cx: Scope<'a, GenericHistoryButtonProps<'a>>,
+) -> Element {
+    let GenericHistoryButtonProps { children } = cx.props;
 
     // hook up to router
     let router = match use_router_internal::<R>(cx) {
@@ -81,30 +86,33 @@ pub fn GoBackButton<'a, R: Routable>(cx: Scope<'a, HistoryButtonProps<'a>>) -> E
 
 /// A button to go forward through the navigation history. Similar to a browsers forward button.
 ///
-/// Only works as descendant of a component calling [`use_router`], otherwise it will be inactive.
+/// Only works as descendant of a [`GenericRouter`] component, otherwise it will be inactive.
 ///
 /// The button will disable itself if it is known that no later history is available.
 ///
-/// [`use_router`]: crate::hooks::use_router
-///
 /// # Panic
-/// - When the [`GoForwardButton`] is not nested within another component calling the [`use_router`]
+/// - When the [`GoForwardButton`] is not nested within a [`GenericRouter`] component
 ///   hook, but only in debug builds.
 ///
 /// # Example
 /// ```rust
 /// # use dioxus::prelude::*;
 /// # use dioxus_router::prelude::*;
-/// fn App(cx: Scope) -> Element {
-///     use_router(
-///         &cx,
-///         &|| RouterConfiguration {
-///             synchronous: true, // asynchronicity not needed for doc test
-///             ..Default::default()
-///         },
-///         &|| Segment::empty()
-///     );
+/// # use serde::{Deserialize, Serialize};
+/// #[derive(Clone, Serialize, Deserialize, Routable)]
+/// enum Route {
+///     #[route("/")]
+///     Index {},
+/// }
 ///
+/// fn App(cx: Scope) -> Element {
+///     render! {
+///         Router {}
+///     }
+/// }
+///
+/// #[inline_props]
+/// fn Index(cx: Scope) -> Element {
 ///     render! {
 ///         GoForwardButton {
 ///             "go forward"
@@ -120,8 +128,10 @@ pub fn GoBackButton<'a, R: Routable>(cx: Scope<'a, HistoryButtonProps<'a>>) -> E
 /// # );
 /// ```
 #[allow(non_snake_case)]
-pub fn GoForwardButton<'a, R: Routable>(cx: Scope<'a, HistoryButtonProps<'a>>) -> Element {
-    let HistoryButtonProps { children } = cx.props;
+pub fn GenericGoForwardButton<'a, R: Routable>(
+    cx: Scope<'a, GenericHistoryButtonProps<'a>>,
+) -> Element {
+    let GenericHistoryButtonProps { children } = cx.props;
 
     // hook up to router
     let router = match use_router_internal::<R>(cx) {

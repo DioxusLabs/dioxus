@@ -2,13 +2,14 @@
 
 use dioxus::prelude::*;
 use dioxus_router::{history::MemoryHistory, prelude::*};
+use serde::{Deserialize, Serialize};
 
 fn prepare(path: impl Into<String>) -> VirtualDom {
     let mut vdom = VirtualDom::new_with_props(App, AppProps { path: path.into() });
     let _ = vdom.rebuild();
     return vdom;
 
-    #[derive(Routable, Clone)]
+    #[derive(Routable, Clone, Serialize, Deserialize)]
     #[rustfmt::skip]
     enum Route {
         #[route("/")]

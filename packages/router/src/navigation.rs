@@ -12,18 +12,42 @@ pub enum NavigationTarget<R: Routable> {
     /// An internal path that the router can navigate to by itself.
     ///
     /// ```rust
-    /// # use dioxus_router_core::navigation::NavigationTarget;
-    /// let explicit = NavigationTarget::Internal(String::from("/internal"));
-    /// let implicit: NavigationTarget = "/internal".into();
+    /// # use dioxus::prelude::*;
+    /// # use dioxus_router::prelude::*;
+    /// # use dioxus_router::navigation::NavigationTarget;
+    /// # use serde::{Deserialize, Serialize};
+    /// # #[inline_props]
+    /// # fn Index(cx: Scope) -> Element {
+    /// #     todo!()
+    /// # }
+    /// #[derive(Clone, Serialize, Deserialize, Routable, PartialEq, Debug)]
+    /// enum Route {
+    ///     #[route("/")]
+    ///     Index {},
+    /// }
+    /// let explicit = NavigationTarget::Internal(Route::Index {});
+    /// let implicit: NavigationTarget::<Route> = "/".into();
     /// assert_eq!(explicit, implicit);
     /// ```
     Internal(R),
     /// An external target that the router doesn't control.
     ///
     /// ```rust
-    /// # use dioxus_router_core::navigation::NavigationTarget;
-    /// let explicit = NavigationTarget::External(String::from("https://dioxuslabs.com/"));
-    /// let implicit: NavigationTarget = "https://dioxuslabs.com/".into();
+    /// # use dioxus::prelude::*;
+    /// # use dioxus_router::prelude::*;
+    /// # use dioxus_router::navigation::NavigationTarget;
+    /// # use serde::{Deserialize, Serialize};
+    /// # #[inline_props]
+    /// # fn Index(cx: Scope) -> Element {
+    /// #     todo!()
+    /// # }
+    /// #[derive(Clone, Serialize, Deserialize, Routable, PartialEq, Debug)]
+    /// enum Route {
+    ///     #[route("/")]
+    ///     Index {},
+    /// }
+    /// let explicit = NavigationTarget::<Route>::External(String::from("https://dioxuslabs.com/"));
+    /// let implicit: NavigationTarget::<Route> = "https://dioxuslabs.com/".into();
     /// assert_eq!(explicit, implicit);
     /// ```
     External(String),

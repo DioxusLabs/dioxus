@@ -17,10 +17,8 @@ const INITIAL_URL: &str = "dioxus-router-core://initial_url.invalid/";
 ///
 /// Early web applications used the hash to store the current path because there was no other way
 /// for them to interact with the history without triggering a browser navigation, as the
-/// [History API] did not yet exist. While this implementation could have been written that way, it
+/// [History API](https://developer.mozilla.org/en-US/docs/Web/API/History_API) did not yet exist. While this implementation could have been written that way, it
 /// was not, because no browser supports WebAssembly without the [History API].
-///
-/// [History API]: https://developer.mozilla.org/en-US/docs/Web/API/History_API
 pub struct WebHashHistory<R: Serialize + DeserializeOwned> {
     do_scroll_restoration: bool,
     history: History,

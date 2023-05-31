@@ -7,13 +7,10 @@
 
 [crates-badge]: https://img.shields.io/crates/v/dioxus-router.svg
 [crates-url]: https://crates.io/crates/dioxus-router
-
 [mit-badge]: https://img.shields.io/badge/license-MIT-blue.svg
 [mit-url]: https://github.com/dioxuslabs/dioxus/blob/master/LICENSE
-
 [actions-badge]: https://github.com/dioxuslabs/dioxus/actions/workflows/main.yml/badge.svg
 [actions-url]: https://github.com/dioxuslabs/dioxus/actions?query=workflow%3ACI+branch%3Amaster
-
 [discord-badge]: https://img.shields.io/discord/899851952891002890.svg?logo=discord&style=flat-square
 [discord-url]: https://discord.gg/XgGxMSkvUM
 
@@ -28,38 +25,49 @@ Dioxus Router is a first-party Router for all your Dioxus Apps. It provides an
 interface similar to React Router, but takes advantage of types for more
 expressiveness.
 
-```rust ,no_run
+```rust, no_run
+#![allow(non_snake_case)]
+
 use dioxus::prelude::*;
 use dioxus_router::prelude::*;
+use serde::{Deserialize, Serialize};
+use std::str::FromStr;
+
+#[rustfmt::skip]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Routable)]
+enum Route {
+    #[nest("/blog")]
+        #[layout(Blog)]
+            #[route("/")]
+            BlogList {},
+
+            #[route("/:blog_id")]
+            BlogPost { blog_id: usize },
+        #[end_layout]
+    #[end_nest]
+    #[route("/")]
+    Index {},
+}
+
 
 fn App(cx: Scope) -> Element {
-    use_router(
-        &cx,
-        &|| Default::default(),
-        &|| Segment::content(comp(Index)).fixed(
-            "blog",
-            Route::content(comp(Blog)).nested(
-                Segment::content(comp(BlogList))
-                    .catch_all((comp(BlogPost), BlogPost))
-            )
-        )
-    );
-
     render! {
-        Outlet { }
+        Router { }
     }
 }
 
+#[inline_props]
 fn Index(cx: Scope) -> Element {
     render! {
         h1 { "Index" }
         Link {
-            target: "/blog",
+            target: Route::BlogList {},
             "Go to the blog"
         }
     }
 }
 
+#[inline_props]
 fn Blog(cx: Scope) -> Element {
     render! {
         h1 { "Blog" }
@@ -67,21 +75,23 @@ fn Blog(cx: Scope) -> Element {
     }
 }
 
+#[inline_props]
 fn BlogList(cx: Scope) -> Element {
     render! {
         h2 { "List of blog posts" }
         Link {
-            target: "/blog/1",
+            target: Route::BlogPost { blog_id: 0 },
             "Blog post 1"
         }
         Link {
-            target: "/blog/1",
+            target: Route::BlogPost { blog_id: 1 },
             "Blog post 2"
         }
     }
 }
 
-fn BlogPost(cx: Scope) -> Element {
+#[inline_props]
+fn BlogPost(cx: Scope, blog_id: usize) -> Element {
     render! {
         h2 { "Blog Post" }
     }
@@ -96,6 +106,7 @@ You need to enable the right features for the platform you're targeting since th
 - Join the discord and ask questions!
 
 ## License
+
 This project is licensed under the [MIT license].
 
 [mit license]: https://github.com/DioxusLabs/dioxus/blob/master/LICENSE-MIT

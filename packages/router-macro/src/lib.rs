@@ -53,8 +53,20 @@ pub fn routable(input: TokenStream) -> TokenStream {
             dioxus_router::prelude::GenericLink(cx)
         }
 
-        #vis fn use_router<R: dioxus_router::prelude::Routable + Clone>(cx: &dioxus::prelude::ScopeState) -> &dioxus_router::prelude::GenericRouterContext<R> {
-            dioxus_router::prelude::use_generic_router::<R>(cx)
+        #vis fn GoBackButton<'a>(cx: dioxus::prelude::Scope<'a, dioxus_router::prelude::GenericHistoryButtonProps<'a>>) -> dioxus::prelude::Element<'a> {
+            dioxus_router::prelude::GenericGoBackButton::<#name>(cx)
+        }
+
+        #vis fn GoForwardButton<'a>(cx: dioxus::prelude::Scope<'a, dioxus_router::prelude::GenericHistoryButtonProps<'a>>) -> dioxus::prelude::Element<'a> {
+            dioxus_router::prelude::GenericGoForwardButton::<#name>(cx)
+        }
+
+        #vis fn use_router(cx: &dioxus::prelude::ScopeState) -> &dioxus_router::prelude::GenericRouterContext<#name> {
+            dioxus_router::prelude::use_generic_router(cx)
+        }
+
+        #vis fn use_route(cx: &dioxus::prelude::ScopeState) -> Option<#name> {
+            dioxus_router::prelude::use_generic_route(cx)
         }
 
         #error_type

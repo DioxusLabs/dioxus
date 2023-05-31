@@ -1,7 +1,9 @@
 use crate::contexts::router::RoutingCallback;
-use crate::history::{HistoryProvider, MemoryHistory};
+use crate::history::HistoryProvider;
+use crate::prelude::*;
 use crate::routable::Routable;
 use dioxus::prelude::*;
+use serde::{de::DeserializeOwned, Serialize};
 
 use crate::prelude::default_errors::{
     FailureExternalNavigation, FailureNamedNavigation, FailureRedirectionLimit,
@@ -11,9 +13,20 @@ use crate::prelude::default_errors::{
 ///
 /// This implements [`Default`], so you can use it like this:
 /// ```rust,no_run
-/// # use dioxus_router::prelude::RouterConfiguration;
+/// # use dioxus_router::prelude::*;
+/// # use serde::{Deserialize, Serialize};
+/// # use dioxus::prelude::*;
+/// # #[inline_props]
+/// # fn Index(cx: Scope) -> Element {
+/// #     todo!()
+/// # }
+/// #[derive(Clone, Serialize, Deserialize, Routable)]
+/// enum Route {
+///     #[route("/")]
+///     Index {},
+/// }
 /// let cfg = RouterConfiguration {
-///     synchronous: false,
+///     history: Box::<WebHistory<Route>>::default(),
 ///     ..Default::default()
 /// };
 /// ```
@@ -22,19 +35,19 @@ pub struct RouterConfiguration<R: Routable> {
     ///
     /// Defaults to a router-internal component called `FailureExternalNavigation`. It is not part
     /// of the public API. Do not confuse it with
-    /// [`dioxus_router_core::prelude::FailureExternalNavigation`].
+    /// [`dioxus_router::prelude::FailureExternalNavigation`].
     pub failure_external_navigation: fn(Scope) -> Element,
     /// A component to render when a named navigation fails.
     ///
     /// Defaults to a router-internal component called `FailureNamedNavigation`. It is not part of
     /// the public API. Do not confuse it with
-    /// [`dioxus_router_core::prelude::FailureNamedNavigation`].
+    /// [`dioxus_router::prelude::FailureNamedNavigation`].
     pub failure_named_navigation: fn(Scope) -> Element,
     /// A component to render when the redirect limit is reached.
     ///
     /// Defaults to a router-internal component called `FailureRedirectionLimit`. It is not part of
     /// the public API. Do not confuse it with
-    /// [`dioxus_router_core::prelude::FailureRedirectionLimit`].
+    /// [`dioxus_router::prelude::FailureRedirectionLimit`].
     pub failure_redirection_limit: fn(Scope) -> Element,
     /// The [`HistoryProvider`] the router should use.
     ///
@@ -45,7 +58,7 @@ pub struct RouterConfiguration<R: Routable> {
     /// The callback is invoked after the routing is updated, but before components and hooks are
     /// updated.
     ///
-    /// If the callback returns a [`NavigationTarget`] the router will replace the current location
+    /// If the callback returns a [`dioxus_router::navigation::NavigationTarget`] the router will replace the current location
     /// with it. If no navigation failure was triggered, the router will then updated dependent
     /// components and hooks.
     ///
@@ -53,12 +66,10 @@ pub struct RouterConfiguration<R: Routable> {
     /// navigation failure occurs.
     ///
     /// Defaults to [`None`].
-    ///
-    /// [`NavigationTarget`]: dioxus_router_core::navigation::NavigationTarget
     pub on_update: Option<RoutingCallback<R>>,
 }
 
-impl<R: Routable + Clone> Default for RouterConfiguration<R>
+impl<R: Routable + Clone + Serialize + DeserializeOwned> Default for RouterConfiguration<R>
 where
     <R as std::str::FromStr>::Err: std::fmt::Display,
 {

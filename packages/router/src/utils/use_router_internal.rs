@@ -1,6 +1,6 @@
 use dioxus::prelude::{ScopeId, ScopeState};
 
-use crate::{contexts::router::GenericRouterContext, routable::Routable};
+use crate::{contexts::router::GenericRouterContext, prelude::*};
 
 /// A private hook to subscribe to the router.
 ///
@@ -8,10 +8,8 @@ use crate::{contexts::router::GenericRouterContext, routable::Routable};
 /// single component, but not recommended. Multiple subscriptions will be discarded.
 ///
 /// # Return values
-/// - [`None`], when the current component isn't a descendant of a [`use_router`] component.
+/// - [`None`], when the current component isn't a descendant of a [`GenericRouter`] component.
 /// - Otherwise [`Some`].
-///
-/// [`use_router`]: crate::hooks::use_router
 pub(crate) fn use_router_internal<R: Routable>(
     cx: &ScopeState,
 ) -> &Option<GenericRouterContext<R>> {

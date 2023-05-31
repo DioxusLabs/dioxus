@@ -1,5 +1,6 @@
 use dioxus::prelude::*;
 use log::error;
+use serde::{de::DeserializeOwned, Serialize};
 use std::{cell::RefCell, str::FromStr};
 
 use crate::{
@@ -13,7 +14,7 @@ pub struct RouterCfg<R: Routable> {
     config: RefCell<Option<RouterConfiguration<R>>>,
 }
 
-impl<R: Routable> Default for RouterCfg<R>
+impl<R: Routable + Serialize + DeserializeOwned> Default for RouterCfg<R>
 where
     <R as FromStr>::Err: std::fmt::Display,
 {
@@ -34,7 +35,7 @@ impl<R: Routable> From<RouterConfiguration<R>> for RouterCfg<R> {
 
 /// The props for [`Router`].
 #[derive(Props)]
-pub struct GenericRouterProps<R: Routable>
+pub struct GenericRouterProps<R: Routable + Serialize + DeserializeOwned>
 where
     <R as FromStr>::Err: std::fmt::Display,
 {
@@ -42,7 +43,7 @@ where
     config: RouterCfg<R>,
 }
 
-impl<R: Routable> PartialEq for GenericRouterProps<R>
+impl<R: Routable + Serialize + DeserializeOwned> PartialEq for GenericRouterProps<R>
 where
     <R as FromStr>::Err: std::fmt::Display,
 {
@@ -53,7 +54,9 @@ where
 }
 
 /// A component that renders the current route.
-pub fn GenericRouter<R: Routable + Clone>(cx: Scope<GenericRouterProps<R>>) -> Element
+pub fn GenericRouter<R: Routable + Clone + Serialize + DeserializeOwned>(
+    cx: Scope<GenericRouterProps<R>>,
+) -> Element
 where
     <R as FromStr>::Err: std::fmt::Display,
 {

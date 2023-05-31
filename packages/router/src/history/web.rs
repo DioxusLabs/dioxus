@@ -28,7 +28,7 @@ struct WebHistoryState<R> {
     scroll: ScrollPosition,
 }
 
-/// A [`HistoryProvider`] that integrates with a browser via the [History API].
+/// A [`HistoryProvider`] that integrates with a browser via the [History API](https://developer.mozilla.org/en-US/docs/Web/API/History_API).
 ///
 /// # Prefix
 /// This [`HistoryProvider`] supports a prefix, which can be used for web apps that aren't located
@@ -40,8 +40,6 @@ struct WebHistoryState<R> {
 ///
 /// Application developers are responsible for not rendering the router if the prefix is not present
 /// in the URL. Otherwise, if a router navigation is triggered, the prefix will be added.
-///
-/// [History API]: https://developer.mozilla.org/en-US/docs/Web/API/History_API
 pub struct WebHistory<R: Serialize + DeserializeOwned + Routable> {
     do_scroll_restoration: bool,
     history: History,

@@ -31,7 +31,7 @@ pub(crate) mod web_scroll;
 /// An integration with some kind of navigation history.
 ///
 /// Depending on your use case, your implementation may deviate from the described procedure. This
-/// is fine, as long as both `current_path` and `current_query` match the described format.
+/// is fine, as long as both `current_route` and `current_query` match the described format.
 ///
 /// However, you should document all deviations. Also, make sure the navigation is user-friendly.
 /// The described behaviors are designed to mimic a web browser, which most users should already
@@ -42,12 +42,26 @@ pub trait HistoryProvider<R: Routable> {
     /// **Must start** with `/`. **Must _not_ contain** the prefix.
     ///
     /// ```rust
-    /// # use dioxus_router_core::history::{HistoryProvider, MemoryHistory};
-    /// let mut history = MemoryHistory::default();
-    /// assert_eq!(history.current_path(), "/");
+    /// # use dioxus_router::history::{HistoryProvider, MemoryHistory};
+    /// # use dioxus_router::prelude::*;
+    /// # use serde::{Deserialize, Serialize};
+    /// # use dioxus::prelude::*;
+    /// # #[inline_props]
+    /// # fn Index(cx: Scope) -> Element { todo!() }
+    /// # #[inline_props]
+    /// # fn OtherPage(cx: Scope) -> Element { todo!() }
+    /// #[derive(Clone, Serialize, Deserialize, Routable, Debug, PartialEq)]
+    /// enum Route {
+    ///     #[route("/")]
+    ///     Index {},
+    ///     #[route("/some-other-page")]
+    ///     OtherPage {},
+    /// }
+    /// let mut history = MemoryHistory::<Route>::default();
+    /// assert_eq!(history.current_route().to_string(), "/");
     ///
-    /// history.push(String::from("/path"));
-    /// assert_eq!(history.current_path(), "/path");
+    /// history.push(Route::OtherPage {});
+    /// assert_eq!(history.current_route().to_string(), "/some-other-page");
     /// ```
     #[must_use]
     fn current_route(&self) -> R;
@@ -68,11 +82,21 @@ pub trait HistoryProvider<R: Routable> {
     /// If a [`HistoryProvider`] cannot know this, it should return [`true`].
     ///
     /// ```rust
-    /// # use dioxus_router_core::history::{HistoryProvider, MemoryHistory};
-    /// let mut history = MemoryHistory::default();
+    /// # use dioxus_router::history::{HistoryProvider, MemoryHistory};
+    /// # use dioxus_router::prelude::*;
+    /// # use serde::{Deserialize, Serialize};
+    /// # use dioxus::prelude::*;   
+    /// # #[inline_props]
+    /// # fn Index(cx: Scope) -> Element { todo!() }
+    /// #[derive(Clone, Serialize, Deserialize, Routable, Debug, PartialEq)]
+    /// enum Route {
+    ///     #[route("/")]
+    ///     Index {},
+    /// }
+    /// let mut history = MemoryHistory::<Route>::default();
     /// assert_eq!(history.can_go_back(), false);
     ///
-    /// history.push(String::from("/some-other-page"));
+    /// history.push(Route::Index {});
     /// assert_eq!(history.can_go_back(), true);
     /// ```
     #[must_use]
@@ -86,18 +110,32 @@ pub trait HistoryProvider<R: Routable> {
     /// might be called, even if `can_go_back` returns [`false`].
     ///
     /// ```rust
-    /// # use dioxus_router_core::history::{HistoryProvider, MemoryHistory};
-    /// let mut history = MemoryHistory::default();
-    /// assert_eq!(history.current_path(), "/");
+    /// # use dioxus_router::history::{HistoryProvider, MemoryHistory};
+    /// # use dioxus_router::prelude::*;
+    /// # use serde::{Deserialize, Serialize};
+    /// # use dioxus::prelude::*;
+    /// # #[inline_props]
+    /// # fn Index(cx: Scope) -> Element { todo!() }
+    /// # #[inline_props]
+    /// # fn OtherPage(cx: Scope) -> Element { todo!() }
+    /// #[derive(Clone, Serialize, Deserialize, Routable, Debug, PartialEq)]
+    /// enum Route {
+    ///     #[route("/")]
+    ///     Index {},
+    ///     #[route("/some-other-page")]
+    ///     OtherPage {},
+    /// }
+    /// let mut history = MemoryHistory::<Route>::default();
+    /// assert_eq!(history.current_route().to_string(), "/");
     ///
     /// history.go_back();
-    /// assert_eq!(history.current_path(), "/");
+    /// assert_eq!(history.current_route().to_string(), "/");
     ///
-    /// history.push(String::from("/some-other-page"));
-    /// assert_eq!(history.current_path(), "/some-other-page");
+    /// history.push(Route::OtherPage {});
+    /// assert_eq!(history.current_route().to_string(), "/some-other-page");
     ///
     /// history.go_back();
-    /// assert_eq!(history.current_path(), "/");
+    /// assert_eq!(history.current_route().to_string(), "/");
     /// ```
     fn go_back(&mut self);
 
@@ -106,11 +144,25 @@ pub trait HistoryProvider<R: Routable> {
     /// If a [`HistoryProvider`] cannot know this, it should return [`true`].
     ///
     /// ```rust
-    /// # use dioxus_router_core::history::{HistoryProvider, MemoryHistory};
-    /// let mut history = MemoryHistory::default();
+    /// # use dioxus_router::history::{HistoryProvider, MemoryHistory};
+    /// # use dioxus_router::prelude::*;
+    /// # use serde::{Deserialize, Serialize};
+    /// # use dioxus::prelude::*;
+    /// # #[inline_props]
+    /// # fn Index(cx: Scope) -> Element { todo!() }
+    /// # #[inline_props]
+    /// # fn OtherPage(cx: Scope) -> Element { todo!() }
+    /// #[derive(Clone, Serialize, Deserialize, Routable, Debug, PartialEq)]
+    /// enum Route {
+    ///     #[route("/")]
+    ///     Index {},
+    ///     #[route("/some-other-page")]
+    ///     OtherPage {},
+    /// }
+    /// let mut history = MemoryHistory::<Route>::default();
     /// assert_eq!(history.can_go_forward(), false);
     ///
-    /// history.push(String::from("/some-other-page"));
+    /// history.push(Route::OtherPage {});
     /// assert_eq!(history.can_go_forward(), false);
     ///
     /// history.go_back();
@@ -127,16 +179,30 @@ pub trait HistoryProvider<R: Routable> {
     /// might be called, even if `can_go_forward` returns [`false`].
     ///
     /// ```rust
-    /// # use dioxus_router_core::history::{HistoryProvider, MemoryHistory};
-    /// let mut history = MemoryHistory::default();
-    /// history.push(String::from("/some-other-page"));
-    /// assert_eq!(history.current_path(), "/some-other-page");
+    /// # use dioxus_router::history::{HistoryProvider, MemoryHistory};
+    /// # use dioxus_router::prelude::*;
+    /// # use serde::{Deserialize, Serialize};
+    /// # use dioxus::prelude::*;
+    /// # #[inline_props]
+    /// # fn Index(cx: Scope) -> Element { todo!() }
+    /// # #[inline_props]
+    /// # fn OtherPage(cx: Scope) -> Element { todo!() }
+    /// #[derive(Clone, Serialize, Deserialize, Routable, Debug, PartialEq)]
+    /// enum Route {
+    ///     #[route("/")]
+    ///     Index {},
+    ///     #[route("/some-other-page")]
+    ///     OtherPage {},
+    /// }
+    /// let mut history = MemoryHistory::<Route>::default();
+    /// history.push(Route::OtherPage {});
+    /// assert_eq!(history.current_route(), Route::OtherPage {});
     ///
     /// history.go_back();
-    /// assert_eq!(history.current_path(), "/");
+    /// assert_eq!(history.current_route(), Route::Index {});
     ///
     /// history.go_forward();
-    /// assert_eq!(history.current_path(), "/some-other-page");
+    /// assert_eq!(history.current_route(), Route::OtherPage {});
     /// ```
     fn go_forward(&mut self);
 
@@ -148,12 +214,26 @@ pub trait HistoryProvider<R: Routable> {
     /// 3. Clear the navigation future.
     ///
     /// ```rust
-    /// # use dioxus_router_core::history::{HistoryProvider, MemoryHistory};
-    /// let mut history = MemoryHistory::default();
-    /// assert_eq!(history.current_path(), "/");
+    /// # use dioxus_router::history::{HistoryProvider, MemoryHistory};
+    /// # use dioxus_router::prelude::*;
+    /// # use serde::{Deserialize, Serialize};
+    /// # use dioxus::prelude::*;
+    /// # #[inline_props]
+    /// # fn Index(cx: Scope) -> Element { todo!() }
+    /// # #[inline_props]
+    /// # fn OtherPage(cx: Scope) -> Element { todo!() }
+    /// #[derive(Clone, Serialize, Deserialize, Routable, Debug, PartialEq)]
+    /// enum Route {
+    ///     #[route("/")]
+    ///     Index {},
+    ///     #[route("/some-other-page")]
+    ///     OtherPage {},
+    /// }
+    /// let mut history = MemoryHistory::<Route>::default();
+    /// assert_eq!(history.current_route(), Route::Index {});
     ///
-    /// history.push(String::from("/some-other-page"));
-    /// assert_eq!(history.current_path(), "/some-other-page");
+    /// history.push(Route::OtherPage {});
+    /// assert_eq!(history.current_route(), Route::OtherPage {});
     /// assert!(history.can_go_back());
     /// ```
     fn push(&mut self, route: R);
@@ -165,12 +245,26 @@ pub trait HistoryProvider<R: Routable> {
     /// untouched.
     ///
     /// ```rust
-    /// # use dioxus_router_core::history::{HistoryProvider, MemoryHistory};
-    /// let mut history = MemoryHistory::default();
-    /// assert_eq!(history.current_path(), "/");
+    /// # use dioxus_router::history::{HistoryProvider, MemoryHistory};
+    /// # use dioxus_router::prelude::*;
+    /// # use serde::{Deserialize, Serialize};
+    /// # use dioxus::prelude::*;
+    /// # #[inline_props]
+    /// # fn Index(cx: Scope) -> Element { todo!() }
+    /// # #[inline_props]
+    /// # fn OtherPage(cx: Scope) -> Element { todo!() }
+    /// #[derive(Clone, Serialize, Deserialize, Routable, Debug, PartialEq)]
+    /// enum Route {
+    ///     #[route("/")]
+    ///     Index {},
+    ///     #[route("/some-other-page")]
+    ///     OtherPage {},
+    /// }
+    /// let mut history = MemoryHistory::<Route>::default();
+    /// assert_eq!(history.current_route(), Route::Index {});
     ///
-    /// history.replace(String::from("/some-other-page"));
-    /// assert_eq!(history.current_path(), "/some-other-page");
+    /// history.replace(Route::OtherPage {});
+    /// assert_eq!(history.current_route(), Route::OtherPage {});
     /// assert!(!history.can_go_back());
     /// ```
     fn replace(&mut self, path: R);

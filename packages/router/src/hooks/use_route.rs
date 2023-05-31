@@ -1,17 +1,13 @@
 use dioxus::prelude::ScopeState;
 
-use crate::{routable::Routable, utils::use_router_internal::use_router_internal};
+use crate::prelude::*;
+use crate::utils::use_router_internal::use_router_internal;
 
 /// A hook that provides access to information about the current routing location.
 ///
 /// # Return values
-/// - [`RouterError::NotInsideRouter`], when the calling component is not nested within another
-///   component calling the [`use_router`] hook.
-/// - Otherwise [`Ok`].
-///
-/// # Important usage information
-/// Make sure to [`drop`] the returned [`RwLockReadGuard`] when done rendering. Otherwise the router
-/// will be frozen.
+/// - None, when not called inside a [`GenericRouter`] component.
+/// - Otherwise the current route.
 ///
 /// # Panic
 /// - When the calling component is not nested within another component calling the [`use_router`]
@@ -20,28 +16,25 @@ use crate::{routable::Routable, utils::use_router_internal::use_router_internal}
 /// # Example
 /// ```rust
 /// # use dioxus::prelude::*;
+/// # use serde::{Deserialize, Serialize};
 /// # use dioxus_router::{history::*, prelude::*};
-/// fn App(cx: Scope) -> Element {
-///     use_router(
-///         &cx,
-///         &|| RouterConfiguration {
-///             synchronous: true, // asynchronicity not needed for doc test
-///             history: Box::new(MemoryHistory::with_initial_path("/some/path").unwrap()),
-///             ..Default::default()
-///         },
-///         &|| Segment::empty()
-///     );
 ///
+/// #[derive(Clone, Serialize, Deserialize, Routable)]
+/// enum Route {
+///     #[route("/")]
+///     Index {},
+/// }
+///
+/// fn App(cx: Scope) -> Element {
 ///     render! {
 ///         h1 { "App" }
-///         Content { }
+///         Router {}
 ///     }
 /// }
 ///
-/// fn Content(cx: Scope) -> Element {
-///     let state = use_route(&cx)?;
-///     let path = state.path.clone();
-///
+/// #[inline_props]
+/// fn Index(cx: Scope) -> Element {
+///     let path = use_route(&cx).unwrap();
 ///     render! {
 ///         h2 { "Current Path" }
 ///         p { "{path}" }
@@ -50,11 +43,9 @@ use crate::{routable::Routable, utils::use_router_internal::use_router_internal}
 /// #
 /// # let mut vdom = VirtualDom::new(App);
 /// # let _ = vdom.rebuild();
-/// # assert_eq!(dioxus_ssr::render(&vdom), "<h1>App</h1><h2>Current Path</h2><p>/some/path</p>")
+/// # assert_eq!(dioxus_ssr::render(&vdom), "<h1>App</h1><h2>Current Path</h2><p>/</p>")
 /// ```
-///
-/// [`use_router`]: crate::hooks::use_router
-pub fn use_route<R: Routable + Clone>(cx: &ScopeState) -> Option<R> {
+pub fn use_generic_route<R: Routable + Clone>(cx: &ScopeState) -> Option<R> {
     match use_router_internal(cx) {
         Some(r) => Some(r.current()),
         None => {

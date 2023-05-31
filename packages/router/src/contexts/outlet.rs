@@ -1,6 +1,6 @@
 use dioxus::prelude::*;
 
-use crate::{hooks::use_route, routable::Routable};
+use crate::{hooks::use_generic_route, routable::Routable};
 
 #[derive(Clone)]
 pub(crate) struct OutletContext {
@@ -25,7 +25,7 @@ impl OutletContext {
             }
         });
 
-        use_route::<R>(cx)
+        use_generic_route::<R>(cx)
             .expect("Outlet must be inside of a router")
             .render(cx, current_level)
     }

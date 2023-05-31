@@ -149,7 +149,8 @@ where
     /// Push a new location.
     ///
     /// The previous location will be available to go back to.
-    pub fn push(&self, target: NavigationTarget<R>) -> Option<NavigationFailure<R>> {
+    pub fn push(&self, target: impl Into<NavigationTarget<R>>) -> Option<NavigationFailure<R>> {
+        let target = target.into();
         let mut state = self.state_mut();
         match target {
             NavigationTarget::Internal(p) => state.history.push(p),
@@ -163,7 +164,8 @@ where
     /// Replace the current location.
     ///
     /// The previous location will **not** be available to go back to.
-    pub fn replace(&self, target: NavigationTarget<R>) -> Option<NavigationFailure<R>> {
+    pub fn replace(&self, target: impl Into<NavigationTarget<R>>) -> Option<NavigationFailure<R>> {
+        let target = target.into();
         let mut state = self.state_mut();
         match target {
             NavigationTarget::Internal(p) => state.history.replace(p),
@@ -264,7 +266,7 @@ where
 //         struct TestHistory {}
 
 //         impl HistoryProvider for TestHistory {
-//             fn current_path(&self) -> String {
+//             fn current_route(&self) -> String {
 //                 todo!()
 //             }
 
@@ -758,7 +760,7 @@ where
 //         struct TestHistory {}
 
 //         impl HistoryProvider for TestHistory {
-//             fn current_path(&self) -> String {
+//             fn current_route(&self) -> String {
 //                 String::from("/")
 //             }
 
