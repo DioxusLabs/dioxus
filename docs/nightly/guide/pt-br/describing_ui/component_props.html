@@ -1,0 +1,465 @@
+<!DOCTYPE HTML>
+<html lang="en" class="sidebar-visible no-js light">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Props - Documentação do Dioxus</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+        <meta name="description" content="Introdução ao Dioxus, um framework portátil, de alto desempenho e ergonômico para criar interfaces de usuário multiplataforma em Rust.">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff" />
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="../highlight.css">
+        <link rel="stylesheet" href="../tomorrow-night.css">
+        <link rel="stylesheet" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+        <!-- MathJax -->
+        <script async type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    </head>
+    <body>
+        <!-- Provide site root to javascript -->
+        <script type="text/javascript">
+            var path_to_root = "../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script type="text/javascript">
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script type="text/javascript">
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('no-js')
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add('js');
+        </script>
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script type="text/javascript">
+            var html = document.querySelector('html');
+            var sidebar = 'hidden';
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            }
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded affix "><a href="../index.html">Introdução</a></li><li class="chapter-item expanded "><a href="../getting_started/index.html"><strong aria-hidden="true">1.</strong> Introdução Rápida as Plataformas</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../getting_started/desktop.html"><strong aria-hidden="true">1.1.</strong> Desktop</a></li><li class="chapter-item expanded "><a href="../getting_started/web.html"><strong aria-hidden="true">1.2.</strong> Web</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../getting_started/hot_reload.html"><strong aria-hidden="true">1.2.1.</strong> Hot Reload</a></li></ol></li><li class="chapter-item expanded "><a href="../getting_started/ssr.html"><strong aria-hidden="true">1.3.</strong> Renderização por Servidor</a></li><li class="chapter-item expanded "><a href="../getting_started/tui.html"><strong aria-hidden="true">1.4.</strong> Interface do Terminal</a></li><li class="chapter-item expanded "><a href="../getting_started/mobile.html"><strong aria-hidden="true">1.5.</strong> Móvel</a></li></ol></li><li class="chapter-item expanded "><a href="../describing_ui/index.html"><strong aria-hidden="true">2.</strong> Descrevendo a Interface do Usuário</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../describing_ui/special_attributes.html"><strong aria-hidden="true">2.1.</strong> Atributos Especiais</a></li><li class="chapter-item expanded "><a href="../describing_ui/components.html"><strong aria-hidden="true">2.2.</strong> Componentes</a></li><li class="chapter-item expanded "><a href="../describing_ui/component_props.html" class="active"><strong aria-hidden="true">2.3.</strong> Props</a></li><li class="chapter-item expanded "><a href="../describing_ui/component_children.html"><strong aria-hidden="true">2.4.</strong> Componente Filho</a></li></ol></li><li class="chapter-item expanded "><a href="../interactivity/index.html"><strong aria-hidden="true">3.</strong> Interatividade</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../interactivity/event_handlers.html"><strong aria-hidden="true">3.1.</strong> Manipuladores de Eventos</a></li><li class="chapter-item expanded "><a href="../interactivity/hooks.html"><strong aria-hidden="true">3.2.</strong> Hooks &amp; Estado de Componentes</a></li><li class="chapter-item expanded "><a href="../interactivity/user_input.html"><strong aria-hidden="true">3.3.</strong> Entradas do Usuário</a></li><li class="chapter-item expanded "><a href="../interactivity/sharing_state.html"><strong aria-hidden="true">3.4.</strong> Estado Compartilhado</a></li><li class="chapter-item expanded "><a href="../interactivity/custom_hooks.html"><strong aria-hidden="true">3.5.</strong> Hooks Personalizados</a></li><li class="chapter-item expanded "><a href="../interactivity/dynamic_rendering.html"><strong aria-hidden="true">3.6.</strong> Renderização Dinâmica</a></li><li class="chapter-item expanded "><a href="../interactivity/roteador.html"><strong aria-hidden="true">3.7.</strong> Roteamento</a></li></ol></li><li class="chapter-item expanded "><a href="../async/index.html"><strong aria-hidden="true">4.</strong> Assincronia</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../async/use_future.html"><strong aria-hidden="true">4.1.</strong> UseFuture</a></li><li class="chapter-item expanded "><a href="../async/use_coroutine.html"><strong aria-hidden="true">4.2.</strong> UseCoroutine</a></li><li class="chapter-item expanded "><a href="../async/spawn.html"><strong aria-hidden="true">4.3.</strong> Gerando Futures</a></li></ol></li><li class="chapter-item expanded "><a href="../best_practices/index.html"><strong aria-hidden="true">5.</strong> Práticas Recomendadas</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../best_practices/error_handling.html"><strong aria-hidden="true">5.1.</strong> Tratamento de erros</a></li><li class="chapter-item expanded "><a href="../best_practices/antipatterns.html"><strong aria-hidden="true">5.2.</strong> Antipadrões</a></li></ol></li><li class="chapter-item expanded "><a href="../publishing/index.html"><strong aria-hidden="true">6.</strong> Publicação</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../publishing/desktop.html"><strong aria-hidden="true">6.1.</strong> Desktop</a></li><li class="chapter-item expanded "><a href="../publishing/web.html"><strong aria-hidden="true">6.2.</strong> Web</a></li><li class="spacer"></li></ol></li><li class="chapter-item expanded "><a href="../custom_renderer/index.html"><strong aria-hidden="true">7.</strong> Renderizador Personalizado</a></li><li class="spacer"></li><li class="chapter-item expanded affix "><a href="../roadmap.html">Roteiro</a></li><li class="chapter-item expanded affix "><a href="../contributing.html">Contribuindo</a></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky bordered">
+                    <div class="left-buttons">
+                        <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </button>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light (default)</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                        <button id="language-toggle" class="icon-button" type="button" title="Select language" aria-label="Select language" aria-haspopup="true" aria-expanded="false" aria-controls="language-list">
+                            <i class="fa fa-globe"></i>
+                        </button>
+                        <ul id="language-list" class="language-popup" aria-label="Languages" role="menu">
+                            <li role="none"><a href="../../en/describing_ui/component_props.html"><button role="menuitem" class="language" id="light">English</button></a></li>
+                            <li role="none"><a href="../../pt-br/describing_ui/component_props.html"><button role="menuitem" class="language" id="light">Português Brasileiro</button></a></li>
+                        </ul>
+                    </div>
+
+                    <h1 class="menu-title">Documentação do Dioxus</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/DioxusLabs/dioxus/edit/master/docs/guide" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+                        <a href="https://github.com/DioxusLabs/dioxus/edit/master/docs/guide/src/describing_ui/component_props.md" title="Suggest an edit" aria-label="Suggest an edit">
+                            <i id="git-edit-button" class="fa fa-edit"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script type="text/javascript">
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="props-de-componentes"><a class="header" href="#props-de-componentes">Props de Componentes</a></h1>
+<p>Assim como você pode passar argumentos para uma função, você pode passar <em>props</em> para um componente que personaliza seu comportamento! Os componentes que vimos até agora não aceitam <em>props</em> – então vamos escrever alguns componentes que aceitam.</p>
+<h2 id="deriveprops"><a class="header" href="#deriveprops"><code>#[derive(Props)]</code></a></h2>
+<p><em>Props</em> de componente são uma única estrutura anotada com <code>#[derive(Props)]</code>. Para um componente aceitar <em>props</em>, o tipo de seu argumento deve ser <code>Scope&lt;YourPropsStruct&gt;</code>. Então, você pode acessar o valor das <em>props</em> usando <code>cx.props</code>.</p>
+<p>Existem 2 tipos de estruturas Props:</p>
+<ul>
+<li><code>props</code> próprios:
+<ul>
+<li>Não tem uma vida útil associada</li>
+<li>Implementam <code>PartialEq</code>, permitindo a memoização (se os <em>props</em> não mudarem, o Dioxus não renderizará novamente o componente)</li>
+</ul>
+</li>
+<li><code>props</code> emprestados:
+<ul>
+<li><a href="https://doc.rust-lang.org/beta/rust-by-example/scope/borrow.html">Emprestado</a> de um componente pai</li>
+<li>Não pode ser memoizado devido a restrições de tempo de vida (Rust's lifetime)</li>
+</ul>
+</li>
+</ul>
+<h3 id="props-próprios"><a class="header" href="#props-próprios">Props Próprios</a></h3>
+<p><em>Props</em> próprios são muito simples – eles não emprestam nada. Exemplo:</p>
+<pre><pre class="playground"><code class="language-rust edition2018">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// Remember: Owned props must implement `PartialEq`!
+#[derive(PartialEq, Props)]
+struct LikesProps {
+    score: i32,
+}
+
+fn Likes(cx: Scope&lt;LikesProps&gt;) -&gt; Element {
+    cx.render(rsx! {
+        div {
+            &quot;This post has &quot;,
+            b { &quot;{cx.props.score}&quot; },
+            &quot; likes&quot;
+        }
+    })
+}
+<span class="boring">}
+</span></code></pre></pre>
+<p>Você pode então passar valores de <em>prop</em> para o componente da mesma forma que você passaria atributos para um elemento:</p>
+<pre><pre class="playground"><code class="language-rust edition2018">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>fn App(cx: Scope) -&gt; Element {
+    cx.render(rsx! {
+        Likes {
+            score: 42,
+        },
+    })
+}
+<span class="boring">}
+</span></code></pre></pre>
+<p><img src="./images/component_owned_props_screenshot.png" alt="Screenshot: Likes component" /></p>
+<h3 id="props-emprestados"><a class="header" href="#props-emprestados">Props Emprestados</a></h3>
+<p>Possuir <em>props</em> funciona bem se seus <em>props</em> forem fáceis de copiar – como um único número. Mas e se precisarmos passar um tipo de dados maior, como uma <code>String</code> de um componente <code>App</code> para um subcomponente <code>TitleCard</code>? Uma solução ingênua pode ser <a href="https://doc.rust-lang.org/std/clone/trait.Clone.html"><code>.clone()</code></a> a <code>String</code>, criando uma cópia dela para o subcomponente – mas isso seria ineficiente, especialmente para <code>Strings</code> maiores.</p>
+<p>Rust permite algo mais eficiente – emprestar a <code>String</code> como um <code>&amp;str</code> – é para isso que servem as <em>props emprestadas</em>!</p>
+<pre><pre class="playground"><code class="language-rust edition2018">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>#[derive(Props)]
+struct TitleCardProps&lt;'a&gt; {
+    title: &amp;'a str,
+}
+
+fn TitleCard&lt;'a&gt;(cx: Scope&lt;'a, TitleCardProps&lt;'a&gt;&gt;) -&gt; Element {
+    cx.render(rsx! {
+        h1 { &quot;{cx.props.title}&quot; }
+    })
+}
+<span class="boring">}
+</span></code></pre></pre>
+<p>Podemos então usar o componente assim:</p>
+<pre><pre class="playground"><code class="language-rust edition2018">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>fn App(cx: Scope) -&gt; Element {
+    let hello = &quot;Hello Dioxus!&quot;;
+
+    cx.render(rsx!(TitleCard { title: hello }))
+}
+<span class="boring">}
+</span></code></pre></pre>
+<p><img src="./images/component_borrowed_props_screenshot.png" alt="Screenshot: TitleCard component" /></p>
+<h2 id="props-de-option"><a class="header" href="#props-de-option">Props de Option</a></h2>
+<p>A macro <code>#[derive(Props)]</code> tem alguns recursos que permitem personalizar o comportamento dos adereços.</p>
+<h3 id="props-opcionais"><a class="header" href="#props-opcionais">Props Opcionais</a></h3>
+<p>Você pode criar campos opcionais usando o tipo <code>Option&lt;…&gt;</code> para um campo:</p>
+<pre><pre class="playground"><code class="language-rust edition2018">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>#[derive(Props)]
+struct OptionalProps&lt;'a&gt; {
+    title: &amp;'a str,
+    subtitle: Option&lt;&amp;'a str&gt;,
+}
+
+fn Title&lt;'a&gt;(cx: Scope&lt;'a, OptionalProps&gt;) -&gt; Element&lt;'a&gt; {
+    cx.render(rsx!(h1{
+        &quot;{cx.props.title}: &quot;,
+        cx.props.subtitle.unwrap_or(&quot;No subtitle provided&quot;),
+    }))
+}
+<span class="boring">}
+</span></code></pre></pre>
+<p>Em seguida, você pode optar por fornecê-los ou não:</p>
+<pre><pre class="playground"><code class="language-rust edition2018">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>Title {
+    title: &quot;Some Title&quot;,
+},
+Title {
+    title: &quot;Some Title&quot;,
+    subtitle: &quot;Some Subtitle&quot;,
+},
+// Providing an Option explicitly won't compile though:
+// Title {
+//     title: &quot;Some Title&quot;,
+//     subtitle: None,
+// },
+<span class="boring">}
+</span></code></pre></pre>
+<h3 id="option-explicitamente-obrigatórias"><a class="header" href="#option-explicitamente-obrigatórias"><code>Option</code> Explicitamente Obrigatórias</a></h3>
+<p>Se você quiser exigir explicitamente uma <code>Option</code>, e não uma <em>prop</em> opcional, você pode anotá-la com <code>#[props(!optional)]</code>:</p>
+<pre><pre class="playground"><code class="language-rust edition2018">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>#[derive(Props)]
+struct ExplicitOptionProps&lt;'a&gt; {
+    title: &amp;'a str,
+    #[props(!optional)]
+    subtitle: Option&lt;&amp;'a str&gt;,
+}
+
+fn ExplicitOption&lt;'a&gt;(cx: Scope&lt;'a, ExplicitOptionProps&gt;) -&gt; Element&lt;'a&gt; {
+    cx.render(rsx!(h1 {
+        &quot;{cx.props.title}: &quot;,
+        cx.props.subtitle.unwrap_or(&quot;No subtitle provided&quot;),
+    }))
+}
+<span class="boring">}
+</span></code></pre></pre>
+<p>Então, você tem que passar explicitamente <code>Some(&quot;str&quot;)</code> ou <code>None</code>:</p>
+<pre><pre class="playground"><code class="language-rust edition2018">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>ExplicitOption {
+    title: &quot;Some Title&quot;,
+    subtitle: None,
+},
+ExplicitOption {
+    title: &quot;Some Title&quot;,
+    subtitle: Some(&quot;Some Title&quot;),
+},
+// This won't compile:
+// ExplicitOption {
+//     title: &quot;Some Title&quot;,
+// },
+<span class="boring">}
+</span></code></pre></pre>
+<h3 id="props-padrão"><a class="header" href="#props-padrão">Props Padrão</a></h3>
+<p>Você pode usar <code>#[props(default = 42)]</code> para tornar um campo opcional e especificar seu valor padrão:</p>
+<pre><pre class="playground"><code class="language-rust edition2018">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>#[derive(PartialEq, Props)]
+struct DefaultProps {
+    // default to 42 when not provided
+    #[props(default = 42)]
+    number: i64,
+}
+
+fn DefaultComponent(cx: Scope&lt;DefaultProps&gt;) -&gt; Element {
+    cx.render(rsx!(h1 { &quot;{cx.props.number}&quot; }))
+}
+<span class="boring">}
+</span></code></pre></pre>
+<p>Então, da mesma forma que <em>props</em> opcionais, você não precisa fornecê-lo:</p>
+<pre><pre class="playground"><code class="language-rust edition2018">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>DefaultComponent {
+    number: 5,
+},
+DefaultComponent {},
+<span class="boring">}
+</span></code></pre></pre>
+<h3 id="conversão-automática-com-into"><a class="header" href="#conversão-automática-com-into">Conversão Automática com <code>.into</code></a></h3>
+<p>É comum que as funções Rust aceitem <code>impl Into&lt;SomeType&gt;</code> em vez de apenas <code>SomeType</code> para suportar uma ampla gama de parâmetros. Se você quiser uma funcionalidade semelhante com <em>props</em>, você pode usar <code>#[props(into)]</code>. Por exemplo, você pode adicioná-lo em uma prop <code>String</code> – e <code>&amp;str</code> também será aceito automaticamente, pois pode ser convertido em <code>String</code>:</p>
+<pre><pre class="playground"><code class="language-rust edition2018">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>#[derive(PartialEq, Props)]
+struct IntoProps {
+    #[props(into)]
+    string: String,
+}
+
+fn IntoComponent(cx: Scope&lt;IntoProps&gt;) -&gt; Element {
+    cx.render(rsx!(h1 { &quot;{cx.props.string}&quot; }))
+}
+<span class="boring">}
+</span></code></pre></pre>
+<p>Então, você pode usá-lo assim:</p>
+<pre><pre class="playground"><code class="language-rust edition2018">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>IntoComponent {
+    string: &quot;some &amp;str&quot;,
+},
+<span class="boring">}
+</span></code></pre></pre>
+<h2 id="a-macro-inline_props"><a class="header" href="#a-macro-inline_props">A macro <code>inline_props</code></a></h2>
+<p>Até agora, todas as funções <code>Component</code> que vimos tinham uma <em>struct</em> <code>ComponentProps</code> correspondente para passar em <em>props</em>. Isso foi bastante verboso... Não seria legal ter <em>props</em> como argumentos de função simples? Então não precisaríamos definir uma estrutura Props, e ao invés de digitar <code>cx.props.whatever</code>, poderíamos usar <code>whatever</code> diretamente!</p>
+<p><code>inline_props</code> permite que você faça exatamente isso. Em vez de digitar a versão &quot;completa&quot;:</p>
+<pre><pre class="playground"><code class="language-rust edition2018">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>#[derive(Props, PartialEq)]
+struct TitleCardProps {
+    title: String,
+}
+
+fn TitleCard(cx: Scope&lt;TitleCardProps&gt;) -&gt; Element {
+    cx.render(rsx!{
+        h1 { &quot;{cx.props.title}&quot; }
+    })
+}
+<span class="boring">}
+</span></code></pre></pre>
+<p>...você pode definir uma função que aceita <em>props</em> como argumentos. Então, basta anotá-lo com <code>#[inline_props]</code>, e a macro irá transformá-lo em um componente regular para você:</p>
+<pre><pre class="playground"><code class="language-rust edition2018">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>#[inline_props]
+fn TitleCard(cx: Scope, title: String) -&gt; Element {
+    cx.render(rsx!{
+        h1 { &quot;{title}&quot; }
+    })
+}
+<span class="boring">}
+</span></code></pre></pre>
+<blockquote>
+<p>Embora o novo Componente seja mais curto e fácil de ler, essa macro não deve ser usada por autores de bibliotecas, pois você tem menos controle sobre a documentação do Prop.</p>
+</blockquote>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../describing_ui/components.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next" href="../describing_ui/component_children.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../describing_ui/components.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next" href="../describing_ui/component_children.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+        <script type="text/javascript">
+            window.playground_line_numbers = true;
+        </script>
+
+        <script type="text/javascript">
+            window.playground_copyable = true;
+        </script>
+
+        <script src="../ace.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../editor.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../mode-rust.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../theme-dawn.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../theme-tomorrow_night.js" type="text/javascript" charset="utf-8"></script>
+
+        <script src="../elasticlunr.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../mark.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../searcher.js" type="text/javascript" charset="utf-8"></script>
+
+        <script src="../clipboard.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../highlight.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../book.js" type="text/javascript" charset="utf-8"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </body>
+</html>

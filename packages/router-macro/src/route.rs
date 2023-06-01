@@ -189,25 +189,28 @@ impl Route {
 
     pub fn construct(&self, nests: &[Nest], enum_name: Ident) -> TokenStream2 {
         let segments = self.fields.named.iter().map(|f| {
+            let name = f.ident.as_ref().unwrap();
+
             let mut from_route = false;
+
             for id in &self.nests {
                 let nest = &nests[id.0];
-                if nest
-                    .dynamic_segments_names()
-                    .any(|i| &i == f.ident.as_ref().unwrap())
-                {
+                if nest.dynamic_segments_names().any(|i| &i == name) {
                     from_route = true
                 }
             }
             for segment in &self.segments {
-                if let RouteSegment::Dynamic(name, ..) = segment {
-                    if name == f.ident.as_ref().unwrap() {
+                if let RouteSegment::Dynamic(other, ..) = segment {
+                    if other == name {
                         from_route = true
                     }
                 }
             }
-
-            let name = f.ident.as_ref().unwrap();
+            if let Some(query) = &self.query {
+                if &query.ident == name {
+                    from_route = true
+                }
+            }
 
             if from_route {
                 quote! {#name}

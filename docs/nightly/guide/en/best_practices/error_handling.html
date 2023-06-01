@@ -1,0 +1,367 @@
+<!DOCTYPE HTML>
+<html lang="en" class="sidebar-visible no-js light">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Error Handling</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff" />
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="../highlight.css">
+        <link rel="stylesheet" href="../tomorrow-night.css">
+        <link rel="stylesheet" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+        <!-- MathJax -->
+        <script async type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    </head>
+    <body>
+        <!-- Provide site root to javascript -->
+        <script type="text/javascript">
+            var path_to_root = "../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script type="text/javascript">
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script type="text/javascript">
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('no-js')
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add('js');
+        </script>
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script type="text/javascript">
+            var html = document.querySelector('html');
+            var sidebar = 'hidden';
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            }
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded affix "><a href="../index.html">Introduction</a></li><li class="chapter-item expanded "><a href="../getting_started/index.html"><strong aria-hidden="true">1.</strong> Getting Started</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../getting_started/desktop.html"><strong aria-hidden="true">1.1.</strong> Desktop</a></li><li class="chapter-item expanded "><a href="../getting_started/web.html"><strong aria-hidden="true">1.2.</strong> Web</a></li><li class="chapter-item expanded "><a href="../getting_started/ssr.html"><strong aria-hidden="true">1.3.</strong> Server-Side Rendering</a></li><li class="chapter-item expanded "><a href="../getting_started/fullstack.html"><strong aria-hidden="true">1.4.</strong> Fullstack</a></li><li class="chapter-item expanded "><a href="../getting_started/liveview.html"><strong aria-hidden="true">1.5.</strong> Liveview</a></li><li class="chapter-item expanded "><a href="../getting_started/tui.html"><strong aria-hidden="true">1.6.</strong> Terminal UI</a></li><li class="chapter-item expanded "><a href="../getting_started/mobile.html"><strong aria-hidden="true">1.7.</strong> Mobile</a></li><li class="chapter-item expanded "><a href="../getting_started/hot_reload.html"><strong aria-hidden="true">1.8.</strong> Hot Reloading</a></li></ol></li><li class="chapter-item expanded "><a href="../describing_ui/index.html"><strong aria-hidden="true">2.</strong> Describing the UI</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../describing_ui/special_attributes.html"><strong aria-hidden="true">2.1.</strong> Special Attributes</a></li><li class="chapter-item expanded "><a href="../describing_ui/components.html"><strong aria-hidden="true">2.2.</strong> Components</a></li><li class="chapter-item expanded "><a href="../describing_ui/component_props.html"><strong aria-hidden="true">2.3.</strong> Props</a></li><li class="chapter-item expanded "><a href="../describing_ui/component_children.html"><strong aria-hidden="true">2.4.</strong> Component Children</a></li></ol></li><li class="chapter-item expanded "><a href="../interactivity/index.html"><strong aria-hidden="true">3.</strong> Interactivity</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../interactivity/event_handlers.html"><strong aria-hidden="true">3.1.</strong> Event Listeners</a></li><li class="chapter-item expanded "><a href="../interactivity/hooks.html"><strong aria-hidden="true">3.2.</strong> Hooks &amp; Component State</a></li><li class="chapter-item expanded "><a href="../interactivity/user_input.html"><strong aria-hidden="true">3.3.</strong> User Input</a></li><li class="chapter-item expanded "><a href="../interactivity/sharing_state.html"><strong aria-hidden="true">3.4.</strong> Sharing State</a></li><li class="chapter-item expanded "><a href="../interactivity/custom_hooks.html"><strong aria-hidden="true">3.5.</strong> Custom Hooks</a></li><li class="chapter-item expanded "><a href="../interactivity/dynamic_rendering.html"><strong aria-hidden="true">3.6.</strong> Dynamic Rendering</a></li><li class="chapter-item expanded "><a href="../interactivity/router.html"><strong aria-hidden="true">3.7.</strong> Routing</a></li></ol></li><li class="chapter-item expanded "><a href="../async/index.html"><strong aria-hidden="true">4.</strong> Async</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../async/use_future.html"><strong aria-hidden="true">4.1.</strong> UseFuture</a></li><li class="chapter-item expanded "><a href="../async/use_coroutine.html"><strong aria-hidden="true">4.2.</strong> UseCoroutine</a></li><li class="chapter-item expanded "><a href="../async/spawn.html"><strong aria-hidden="true">4.3.</strong> Spawning Futures</a></li></ol></li><li class="chapter-item expanded "><a href="../best_practices/index.html"><strong aria-hidden="true">5.</strong> Best Practices</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../best_practices/error_handling.html" class="active"><strong aria-hidden="true">5.1.</strong> Error Handling</a></li><li class="chapter-item expanded "><a href="../best_practices/antipatterns.html"><strong aria-hidden="true">5.2.</strong> Antipatterns</a></li></ol></li><li class="chapter-item expanded "><a href="../publishing/index.html"><strong aria-hidden="true">6.</strong> Publishing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../publishing/desktop.html"><strong aria-hidden="true">6.1.</strong> Desktop</a></li><li class="chapter-item expanded "><a href="../publishing/web.html"><strong aria-hidden="true">6.2.</strong> Web</a></li><li class="spacer"></li></ol></li><li class="chapter-item expanded "><a href="../fullstack/index.html"><strong aria-hidden="true">7.</strong> Fullstack</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../fullstack/getting_started.html"><strong aria-hidden="true">7.1.</strong> Getting Started</a></li><li class="chapter-item expanded "><a href="../fullstack/server_functions.html"><strong aria-hidden="true">7.2.</strong> Communicating with the Server</a></li><li class="spacer"></li></ol></li><li class="chapter-item expanded "><a href="../custom_renderer/index.html"><strong aria-hidden="true">8.</strong> Custom Renderer</a></li><li class="spacer"></li><li class="chapter-item expanded "><a href="../contributing/index.html"><strong aria-hidden="true">9.</strong> Contributing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../contributing/project_structure.html"><strong aria-hidden="true">9.1.</strong> Project Structure</a></li><li class="chapter-item expanded "><a href="../contributing/walkthrough_readme.html"><strong aria-hidden="true">9.2.</strong> Walkthrough of Internals</a></li><li class="chapter-item expanded "><a href="../contributing/guiding_principles.html"><strong aria-hidden="true">9.3.</strong> Guiding Principles</a></li><li class="chapter-item expanded "><a href="../contributing/roadmap.html"><strong aria-hidden="true">9.4.</strong> Roadmap</a></li></ol></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky bordered">
+                    <div class="left-buttons">
+                        <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </button>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light (default)</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                        <button id="language-toggle" class="icon-button" type="button" title="Select language" aria-label="Select language" aria-haspopup="true" aria-expanded="false" aria-controls="language-list">
+                            <i class="fa fa-globe"></i>
+                        </button>
+                        <ul id="language-list" class="language-popup" aria-label="Languages" role="menu">
+                            <li role="none"><a href="../../en/best_practices/error_handling.html"><button role="menuitem" class="language" id="light">English</button></a></li>
+                            <li role="none"><a href="../../pt-br/best_practices/error_handling.html"><button role="menuitem" class="language" id="light">Português Brasileiro</button></a></li>
+                        </ul>
+                    </div>
+
+                    <h1 class="menu-title"></h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/DioxusLabs/dioxus/edit/master/docs/guide" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+                        <a href="https://github.com/DioxusLabs/dioxus/edit/master/docs/guide/src/best_practices/error_handling.md" title="Suggest an edit" aria-label="Suggest an edit">
+                            <i id="git-edit-button" class="fa fa-edit"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script type="text/javascript">
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="error-handling"><a class="header" href="#error-handling">Error handling</a></h1>
+<p>A selling point of Rust for web development is the reliability of always knowing where errors can occur and being forced to handle them</p>
+<p>However, we haven't talked about error handling at all in this guide! In this chapter, we'll cover some strategies in handling errors to ensure your app never crashes.</p>
+<h2 id="the-simplest--returning-none"><a class="header" href="#the-simplest--returning-none">The simplest – returning None</a></h2>
+<p>Astute observers might have noticed that <code>Element</code> is actually a type alias for <code>Option&lt;VNode&gt;</code>. You don't need to know what a <code>VNode</code> is, but it's important to recognize that we could actually return nothing at all:</p>
+<pre><pre class="playground"><code class="language-rust edition2018">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>fn App(cx: Scope) -&gt; Element {
+    None
+}
+<span class="boring">}
+</span></code></pre></pre>
+<p>This lets us add in some syntactic sugar for operations we think <em>shouldn't</em> fail, but we're still not confident enough to &quot;unwrap&quot; on.</p>
+<blockquote>
+<p>The nature of <code>Option&lt;VNode&gt;</code> might change in the future as the <code>try</code> trait gets upgraded.</p>
+</blockquote>
+<pre><pre class="playground"><code class="language-rust edition2018">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>fn App(cx: Scope) -&gt; Element {
+    // immediately return &quot;None&quot;
+    let name = cx.use_hook(|_| Some(&quot;hi&quot;))?;
+}
+<span class="boring">}
+</span></code></pre></pre>
+<h2 id="early-return-on-result"><a class="header" href="#early-return-on-result">Early return on result</a></h2>
+<p>Because Rust can't accept both Options and Results with the existing try infrastructure, you'll need to manually handle Results. This can be done by converting them into Options or by explicitly handling them.</p>
+<pre><pre class="playground"><code class="language-rust edition2018">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>fn App(cx: Scope) -&gt; Element {
+    // Convert Result to Option
+    let name = cx.use_hook(|_| &quot;1.234&quot;).parse().ok()?;
+
+
+    // Early return
+    let count = cx.use_hook(|_| &quot;1.234&quot;);
+    let val = match count.parse() {
+        Ok(val) =&gt; val
+        Err(err) =&gt; return cx.render(rsx!{ &quot;Parsing failed&quot; })
+    };
+}
+<span class="boring">}
+</span></code></pre></pre>
+<p>Notice that while hooks in Dioxus do not like being called in conditionals or loops, they <em>are</em> okay with early returns. Returning an error state early is a completely valid way of handling errors.</p>
+<h2 id="match-results"><a class="header" href="#match-results">Match results</a></h2>
+<p>The next &quot;best&quot; way of handling errors in Dioxus is to match on the error locally. This is the most robust way of handling errors, though it doesn't scale to architectures beyond a single component.</p>
+<p>To do this, we simply have an error state built into our component:</p>
+<pre><pre class="playground"><code class="language-rust edition2018">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>let err = use_state(cx, || None);
+<span class="boring">}
+</span></code></pre></pre>
+<p>Whenever we perform an action that generates an error, we'll set that error state. We can then match on the error in a number of ways (early return, return Element, etc).</p>
+<pre><pre class="playground"><code class="language-rust edition2018">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>fn Commandline(cx: Scope) -&gt; Element {
+    let error = use_state(cx, || None);
+
+    cx.render(match *error {
+        Some(error) =&gt; rsx!(
+            h1 { &quot;An error occured&quot; }
+        )
+        None =&gt; rsx!(
+            input {
+                oninput: move |_| error.set(Some(&quot;bad thing happened!&quot;)),
+            }
+        )
+    })
+}
+<span class="boring">}
+</span></code></pre></pre>
+<h2 id="passing-error-states-through-components"><a class="header" href="#passing-error-states-through-components">Passing error states through components</a></h2>
+<p>If you're dealing with a handful of components with minimal nesting, you can just pass the error handle into child components.</p>
+<pre><pre class="playground"><code class="language-rust edition2018">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>fn Commandline(cx: Scope) -&gt; Element {
+    let error = use_state(cx, || None);
+
+    if let Some(error) = **error {
+        return cx.render(rsx!{ &quot;An error occured&quot; });
+    }
+
+    cx.render(rsx!{
+        Child { error: error.clone() }
+        Child { error: error.clone() }
+        Child { error: error.clone() }
+        Child { error: error.clone() }
+    })
+}
+<span class="boring">}
+</span></code></pre></pre>
+<p>Much like before, our child components can manually set the error during their own actions. The advantage to this pattern is that we can easily isolate error states to a few components at a time, making our app more predictable and robust.</p>
+<h2 id="going-global"><a class="header" href="#going-global">Going global</a></h2>
+<p>A strategy for handling cascaded errors in larger apps is through signaling an error using global state. This particular pattern involves creating an &quot;error&quot; context, and then setting it wherever relevant. This particular method is not as &quot;sophisticated&quot; as React's error boundary, but it is more fitting for Rust.</p>
+<p>To get started, consider using a built-in hook like <code>use_context</code> and <code>use_context_provider</code> or Fermi. Of course, it's pretty easy to roll your own hook too.</p>
+<p>At the &quot;top&quot; of our architecture, we're going to want to explicitly declare a value that could be an error.</p>
+<pre><pre class="playground"><code class="language-rust edition2018">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>enum InputError {
+    None,
+    TooLong,
+    TooShort,
+}
+
+static INPUT_ERROR: Atom&lt;InputError&gt; = |_| InputError::None;
+<span class="boring">}
+</span></code></pre></pre>
+<p>Then, in our top level component, we want to explicitly handle the possible error state for this part of the tree.</p>
+<pre><pre class="playground"><code class="language-rust edition2018">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>fn TopLevel(cx: Scope) -&gt; Element {
+    let error = use_read(cx, INPUT_ERROR);
+
+    match error {
+        TooLong =&gt; return cx.render(rsx!{ &quot;FAILED: Too long!&quot; }),
+        TooShort =&gt; return cx.render(rsx!{ &quot;FAILED: Too Short!&quot; }),
+        _ =&gt; {}
+    }
+}
+<span class="boring">}
+</span></code></pre></pre>
+<p>Now, whenever a downstream component has an error in its actions, it can simply just set its own error state:</p>
+<pre><pre class="playground"><code class="language-rust edition2018">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>fn Commandline(cx: Scope) -&gt; Element {
+    let set_error = use_set(cx, INPUT_ERROR);
+
+    cx.render(rsx!{
+        input {
+            oninput: move |evt| {
+                if evt.value.len() &gt; 20 {
+                    set_error(InputError::TooLong);
+                }
+            }
+        }
+    })
+}
+<span class="boring">}
+</span></code></pre></pre>
+<p>This approach to error handling is best in apps that have &quot;well defined&quot; error states. Consider using a crate like <code>thiserror</code> or <code>anyhow</code> to simplify the generation of the error types.</p>
+<p>This pattern is widely popular in many contexts and is particularly helpful whenever your code generates a non-recoverable error. You can gracefully capture these &quot;global&quot; error states without panicking or mucking up state.</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../best_practices/index.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next" href="../best_practices/antipatterns.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../best_practices/index.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next" href="../best_practices/antipatterns.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+        <script type="text/javascript">
+            window.playground_line_numbers = true;
+        </script>
+
+        <script type="text/javascript">
+            window.playground_copyable = true;
+        </script>
+
+        <script src="../ace.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../editor.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../mode-rust.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../theme-dawn.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../theme-tomorrow_night.js" type="text/javascript" charset="utf-8"></script>
+
+        <script src="../elasticlunr.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../mark.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../searcher.js" type="text/javascript" charset="utf-8"></script>
+
+        <script src="../clipboard.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../highlight.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../book.js" type="text/javascript" charset="utf-8"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </body>
+</html>

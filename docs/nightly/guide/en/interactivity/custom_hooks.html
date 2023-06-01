@@ -1,0 +1,435 @@
+<!DOCTYPE HTML>
+<html lang="en" class="sidebar-visible no-js light">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Custom Hooks</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff" />
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="../highlight.css">
+        <link rel="stylesheet" href="../tomorrow-night.css">
+        <link rel="stylesheet" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+        <!-- MathJax -->
+        <script async type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    </head>
+    <body>
+        <!-- Provide site root to javascript -->
+        <script type="text/javascript">
+            var path_to_root = "../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script type="text/javascript">
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script type="text/javascript">
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('no-js')
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add('js');
+        </script>
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script type="text/javascript">
+            var html = document.querySelector('html');
+            var sidebar = 'hidden';
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            }
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded affix "><a href="../index.html">Introduction</a></li><li class="chapter-item expanded "><a href="../getting_started/index.html"><strong aria-hidden="true">1.</strong> Getting Started</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../getting_started/desktop.html"><strong aria-hidden="true">1.1.</strong> Desktop</a></li><li class="chapter-item expanded "><a href="../getting_started/web.html"><strong aria-hidden="true">1.2.</strong> Web</a></li><li class="chapter-item expanded "><a href="../getting_started/ssr.html"><strong aria-hidden="true">1.3.</strong> Server-Side Rendering</a></li><li class="chapter-item expanded "><a href="../getting_started/fullstack.html"><strong aria-hidden="true">1.4.</strong> Fullstack</a></li><li class="chapter-item expanded "><a href="../getting_started/liveview.html"><strong aria-hidden="true">1.5.</strong> Liveview</a></li><li class="chapter-item expanded "><a href="../getting_started/tui.html"><strong aria-hidden="true">1.6.</strong> Terminal UI</a></li><li class="chapter-item expanded "><a href="../getting_started/mobile.html"><strong aria-hidden="true">1.7.</strong> Mobile</a></li><li class="chapter-item expanded "><a href="../getting_started/hot_reload.html"><strong aria-hidden="true">1.8.</strong> Hot Reloading</a></li></ol></li><li class="chapter-item expanded "><a href="../describing_ui/index.html"><strong aria-hidden="true">2.</strong> Describing the UI</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../describing_ui/special_attributes.html"><strong aria-hidden="true">2.1.</strong> Special Attributes</a></li><li class="chapter-item expanded "><a href="../describing_ui/components.html"><strong aria-hidden="true">2.2.</strong> Components</a></li><li class="chapter-item expanded "><a href="../describing_ui/component_props.html"><strong aria-hidden="true">2.3.</strong> Props</a></li><li class="chapter-item expanded "><a href="../describing_ui/component_children.html"><strong aria-hidden="true">2.4.</strong> Component Children</a></li></ol></li><li class="chapter-item expanded "><a href="../interactivity/index.html"><strong aria-hidden="true">3.</strong> Interactivity</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../interactivity/event_handlers.html"><strong aria-hidden="true">3.1.</strong> Event Listeners</a></li><li class="chapter-item expanded "><a href="../interactivity/hooks.html"><strong aria-hidden="true">3.2.</strong> Hooks &amp; Component State</a></li><li class="chapter-item expanded "><a href="../interactivity/user_input.html"><strong aria-hidden="true">3.3.</strong> User Input</a></li><li class="chapter-item expanded "><a href="../interactivity/sharing_state.html"><strong aria-hidden="true">3.4.</strong> Sharing State</a></li><li class="chapter-item expanded "><a href="../interactivity/custom_hooks.html" class="active"><strong aria-hidden="true">3.5.</strong> Custom Hooks</a></li><li class="chapter-item expanded "><a href="../interactivity/dynamic_rendering.html"><strong aria-hidden="true">3.6.</strong> Dynamic Rendering</a></li><li class="chapter-item expanded "><a href="../interactivity/router.html"><strong aria-hidden="true">3.7.</strong> Routing</a></li></ol></li><li class="chapter-item expanded "><a href="../async/index.html"><strong aria-hidden="true">4.</strong> Async</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../async/use_future.html"><strong aria-hidden="true">4.1.</strong> UseFuture</a></li><li class="chapter-item expanded "><a href="../async/use_coroutine.html"><strong aria-hidden="true">4.2.</strong> UseCoroutine</a></li><li class="chapter-item expanded "><a href="../async/spawn.html"><strong aria-hidden="true">4.3.</strong> Spawning Futures</a></li></ol></li><li class="chapter-item expanded "><a href="../best_practices/index.html"><strong aria-hidden="true">5.</strong> Best Practices</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../best_practices/error_handling.html"><strong aria-hidden="true">5.1.</strong> Error Handling</a></li><li class="chapter-item expanded "><a href="../best_practices/antipatterns.html"><strong aria-hidden="true">5.2.</strong> Antipatterns</a></li></ol></li><li class="chapter-item expanded "><a href="../publishing/index.html"><strong aria-hidden="true">6.</strong> Publishing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../publishing/desktop.html"><strong aria-hidden="true">6.1.</strong> Desktop</a></li><li class="chapter-item expanded "><a href="../publishing/web.html"><strong aria-hidden="true">6.2.</strong> Web</a></li><li class="spacer"></li></ol></li><li class="chapter-item expanded "><a href="../fullstack/index.html"><strong aria-hidden="true">7.</strong> Fullstack</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../fullstack/getting_started.html"><strong aria-hidden="true">7.1.</strong> Getting Started</a></li><li class="chapter-item expanded "><a href="../fullstack/server_functions.html"><strong aria-hidden="true">7.2.</strong> Communicating with the Server</a></li><li class="spacer"></li></ol></li><li class="chapter-item expanded "><a href="../custom_renderer/index.html"><strong aria-hidden="true">8.</strong> Custom Renderer</a></li><li class="spacer"></li><li class="chapter-item expanded "><a href="../contributing/index.html"><strong aria-hidden="true">9.</strong> Contributing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../contributing/project_structure.html"><strong aria-hidden="true">9.1.</strong> Project Structure</a></li><li class="chapter-item expanded "><a href="../contributing/walkthrough_readme.html"><strong aria-hidden="true">9.2.</strong> Walkthrough of Internals</a></li><li class="chapter-item expanded "><a href="../contributing/guiding_principles.html"><strong aria-hidden="true">9.3.</strong> Guiding Principles</a></li><li class="chapter-item expanded "><a href="../contributing/roadmap.html"><strong aria-hidden="true">9.4.</strong> Roadmap</a></li></ol></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky bordered">
+                    <div class="left-buttons">
+                        <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </button>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light (default)</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                        <button id="language-toggle" class="icon-button" type="button" title="Select language" aria-label="Select language" aria-haspopup="true" aria-expanded="false" aria-controls="language-list">
+                            <i class="fa fa-globe"></i>
+                        </button>
+                        <ul id="language-list" class="language-popup" aria-label="Languages" role="menu">
+                            <li role="none"><a href="../../en/interactivity/custom_hooks.html"><button role="menuitem" class="language" id="light">English</button></a></li>
+                            <li role="none"><a href="../../pt-br/interactivity/custom_hooks.html"><button role="menuitem" class="language" id="light">Português Brasileiro</button></a></li>
+                        </ul>
+                    </div>
+
+                    <h1 class="menu-title"></h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/DioxusLabs/dioxus/edit/master/docs/guide" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+                        <a href="https://github.com/DioxusLabs/dioxus/edit/master/docs/guide/src/interactivity/custom_hooks.md" title="Suggest an edit" aria-label="Suggest an edit">
+                            <i id="git-edit-button" class="fa fa-edit"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script type="text/javascript">
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="custom-hooks"><a class="header" href="#custom-hooks">Custom Hooks</a></h1>
+<p>Hooks are a great way to encapsulate business logic. If none of the existing hooks work for your problem, you can write your own.</p>
+<p>When writing your hook, you can make a function that accepts <code>cx: &amp;ScopeState</code> as a parameter to accept a scope with any Props.</p>
+<h2 id="composing-hooks"><a class="header" href="#composing-hooks">Composing Hooks</a></h2>
+<p>To avoid repetition, you can encapsulate business logic based on existing hooks to create a new hook.</p>
+<p>For example, if many components need to access an <code>AppSettings</code> struct, you can create a &quot;shortcut&quot; hook:</p>
+<pre><pre class="playground"><code class="language-rust edition2018">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>fn use_settings(cx: &amp;ScopeState) -&gt; &amp;UseSharedState&lt;AppSettings&gt; {
+    use_shared_state::&lt;AppSettings&gt;(cx).expect(&quot;App settings not provided&quot;)
+}
+<span class="boring">}
+</span></code></pre></pre>
+<p>Or if you want to wrap a hook that persists reloads with the storage API, you can build on top of the use_ref hook to work with mutable state:</p>
+<pre><pre class="playground"><code class="language-rust edition2018">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use gloo_storage::{LocalStorage, Storage};
+use serde::{de::DeserializeOwned, Serialize};
+
+/// A persistent storage hook that can be used to store data across application reloads.
+#[allow(clippy::needless_return)]
+pub fn use_persistent&lt;T: Serialize + DeserializeOwned + Default + 'static&gt;(
+    cx: &amp;ScopeState,
+    // A unique key for the storage entry
+    key: impl ToString,
+    // A function that returns the initial value if the storage entry is empty
+    init: impl FnOnce() -&gt; T,
+) -&gt; &amp;UsePersistent&lt;T&gt; {
+    // Use the use_ref hook to create a mutable state for the storage entry
+    let state = use_ref(cx, move || {
+        // This closure will run when the hook is created
+        let key = key.to_string();
+        let value = LocalStorage::get(key.as_str()).ok().unwrap_or_else(init);
+        StorageEntry { key, value }
+    });
+
+    // Wrap the state in a new struct with a custom API
+    // Note: We use use_hook here so that this hook is easier to use in closures in the rsx. Any values with the same lifetime as the ScopeState can be used in the closure without cloning.
+    cx.use_hook(|| UsePersistent {
+        inner: state.clone(),
+    })
+}
+
+struct StorageEntry&lt;T&gt; {
+    key: String,
+    value: T,
+}
+
+/// Storage that persists across application reloads
+pub struct UsePersistent&lt;T: 'static&gt; {
+    inner: UseRef&lt;StorageEntry&lt;T&gt;&gt;,
+}
+
+impl&lt;T: Serialize + DeserializeOwned + Clone + 'static&gt; UsePersistent&lt;T&gt; {
+    /// Returns a reference to the value
+    pub fn get(&amp;self) -&gt; T {
+        self.inner.read().value.clone()
+    }
+
+    /// Sets the value
+    pub fn set(&amp;self, value: T) {
+        let mut inner = self.inner.write();
+        // Write the new value to local storage
+        LocalStorage::set(inner.key.as_str(), &amp;value);
+        inner.value = value;
+    }
+}
+<span class="boring">}
+</span></code></pre></pre>
+<h2 id="custom-hook-logic"><a class="header" href="#custom-hook-logic">Custom Hook Logic</a></h2>
+<p>You can use <a href="https://docs.rs/dioxus/latest/dioxus/prelude/struct.ScopeState.html#method.use_hook"><code>cx.use_hook</code></a> to build your own hooks. In fact, this is what all the standard hooks are built on!</p>
+<p><code>use_hook</code> accepts a single closure for initializing the hook. It will be only run the first time the component is rendered. The return value of that closure will be used as the value of the hook – Dioxus will take it, and store it for as long as the component is alive. On every render (not just the first one!), you will get a reference to this value.</p>
+<blockquote>
+<p>Note: You can implement <a href="https://doc.rust-lang.org/std/ops/trait.Drop.html"><code>Drop</code></a> for your hook value – it will be dropped then the component is unmounted (no longer in the UI)</p>
+</blockquote>
+<p>Inside the initialization closure, you will typically make calls to other <code>cx</code> methods. For example:</p>
+<ul>
+<li>The <code>use_state</code> hook tracks state in the hook value, and uses <a href="https://docs.rs/dioxus/latest/dioxus/prelude/struct.ScopeState.html#method.schedule_update"><code>cx.schedule_update</code></a> to make Dioxus re-render the component whenever it changes.</li>
+</ul>
+<p>Here is a simplified implementation of the <code>use_state</code> hook:</p>
+<pre><pre class="playground"><code class="language-rust edition2018">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use std::cell::RefCell;
+use std::rc::Rc;
+use std::sync::Arc;
+
+#[derive(Clone)]
+struct UseState&lt;T&gt; {
+    value: Rc&lt;RefCell&lt;T&gt;&gt;,
+    update: Arc&lt;dyn Fn()&gt;,
+}
+
+fn my_use_state&lt;T: 'static&gt;(cx: &amp;ScopeState, init: impl FnOnce() -&gt; T) -&gt; &amp;UseState&lt;T&gt; {
+    cx.use_hook(|| {
+        // The update function will trigger a re-render in the component cx is attached to
+        let update = cx.schedule_update();
+        // Create the initial state
+        let value = Rc::new(RefCell::new(init()));
+
+        UseState { value, update }
+    })
+}
+
+impl&lt;T: Clone&gt; UseState&lt;T&gt; {
+    fn get(&amp;self) -&gt; T {
+        self.value.borrow().clone()
+    }
+
+    fn set(&amp;self, value: T) {
+        // Update the state
+        *self.value.borrow_mut() = value;
+        // Trigger a re-render on the component the state is from
+        (self.update)();
+    }
+}
+<span class="boring">}
+</span></code></pre></pre>
+<ul>
+<li>The <code>use_context</code> hook calls <a href="https://docs.rs/dioxus/latest/dioxus/prelude/struct.ScopeState.html#method.consume_context"><code>cx.consume_context</code></a> (which would be expensive to call on every render) to get some context from the scope</li>
+</ul>
+<p>Here is an implementation of the <code>use_context</code> and <code>use_context_provider</code> hooks:</p>
+<pre><pre class="playground"><code class="language-rust edition2018">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub fn use_context&lt;T: 'static + Clone&gt;(cx: &amp;ScopeState) -&gt; Option&lt;&amp;T&gt; {
+    cx.use_hook(|| cx.consume_context::&lt;T&gt;()).as_ref()
+}
+
+pub fn use_context_provider&lt;T: 'static + Clone&gt;(cx: &amp;ScopeState, f: impl FnOnce() -&gt; T) -&gt; &amp;T {
+    cx.use_hook(|| {
+        let val = f();
+        // Provide the context state to the scope
+        cx.provide_context(val.clone());
+        val
+    })
+}
+
+<span class="boring">}
+</span></code></pre></pre>
+<h2 id="hook-anti-patterns"><a class="header" href="#hook-anti-patterns">Hook Anti-Patterns</a></h2>
+<p>When writing a custom hook, you should avoid the following anti-patterns:</p>
+<ul>
+<li>!Clone Hooks: To allow hooks to be used within async blocks, the hooks must be Clone. To make a hook clone, you can wrap data in Rc or Arc and avoid lifetimes in hooks.</li>
+</ul>
+<p>This version of use_state may seem more efficient, but it is not cloneable:</p>
+<pre><pre class="playground"><code class="language-rust edition2018">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use std::cell::RefCell;
+use std::rc::Rc;
+use std::sync::Arc;
+
+struct UseState&lt;'a, T&gt; {
+    value: &amp;'a RefCell&lt;T&gt;,
+    update: Arc&lt;dyn Fn()&gt;,
+}
+
+fn my_use_state&lt;T: 'static&gt;(cx: &amp;ScopeState, init: impl FnOnce() -&gt; T) -&gt; UseState&lt;T&gt; {
+    // The update function will trigger a re-render in the component cx is attached to
+    let update = cx.schedule_update();
+    // Create the initial state
+    let value = cx.use_hook(|| RefCell::new(init()));
+
+    UseState { value, update }
+}
+
+impl&lt;T: Clone&gt; UseState&lt;'_, T&gt; {
+    fn get(&amp;self) -&gt; T {
+        self.value.borrow().clone()
+    }
+
+    fn set(&amp;self, value: T) {
+        // Update the state
+        *self.value.borrow_mut() = value;
+        // Trigger a re-render on the component the state is from
+        (self.update)();
+    }
+}
+<span class="boring">}
+</span></code></pre></pre>
+<p>If we try to use this hook in an async block, we will get a compile error:</p>
+<pre><pre class="playground"><code class="language-rust edition2018">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>fn FutureComponent(cx: &amp;ScopeState) -&gt; Element {
+    let my_state = my_use_state(cx, || 0);
+    cx.spawn({
+        to_owned![my_state];
+        async move {
+            my_state.set(1);
+        }
+    });
+
+    todo!()
+}
+<span class="boring">}
+</span></code></pre></pre>
+<p>But with the original version, we can use it in an async block:</p>
+<pre><pre class="playground"><code class="language-rust edition2018">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>fn FutureComponent(cx: &amp;ScopeState) -&gt; Element {
+    let my_state = use_state(cx, || 0);
+    cx.spawn({
+        to_owned![my_state];
+        async move {
+            my_state.set(1);
+        }
+    });
+
+    todo!()
+}
+<span class="boring">}
+</span></code></pre></pre>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../interactivity/sharing_state.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next" href="../interactivity/dynamic_rendering.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../interactivity/sharing_state.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next" href="../interactivity/dynamic_rendering.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+        <script type="text/javascript">
+            window.playground_line_numbers = true;
+        </script>
+
+        <script type="text/javascript">
+            window.playground_copyable = true;
+        </script>
+
+        <script src="../ace.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../editor.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../mode-rust.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../theme-dawn.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../theme-tomorrow_night.js" type="text/javascript" charset="utf-8"></script>
+
+        <script src="../elasticlunr.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../mark.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../searcher.js" type="text/javascript" charset="utf-8"></script>
+
+        <script src="../clipboard.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../highlight.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../book.js" type="text/javascript" charset="utf-8"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </body>
+</html>

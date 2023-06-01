@@ -1,0 +1,823 @@
+<!DOCTYPE HTML>
+<html lang="en" class="sidebar-visible no-js light">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Custom Renderer</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff" />
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="../highlight.css">
+        <link rel="stylesheet" href="../tomorrow-night.css">
+        <link rel="stylesheet" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+        <!-- MathJax -->
+        <script async type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    </head>
+    <body>
+        <!-- Provide site root to javascript -->
+        <script type="text/javascript">
+            var path_to_root = "../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script type="text/javascript">
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script type="text/javascript">
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('no-js')
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add('js');
+        </script>
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script type="text/javascript">
+            var html = document.querySelector('html');
+            var sidebar = 'hidden';
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            }
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded affix "><a href="../index.html">Introduction</a></li><li class="chapter-item expanded "><a href="../getting_started/index.html"><strong aria-hidden="true">1.</strong> Getting Started</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../getting_started/desktop.html"><strong aria-hidden="true">1.1.</strong> Desktop</a></li><li class="chapter-item expanded "><a href="../getting_started/web.html"><strong aria-hidden="true">1.2.</strong> Web</a></li><li class="chapter-item expanded "><a href="../getting_started/ssr.html"><strong aria-hidden="true">1.3.</strong> Server-Side Rendering</a></li><li class="chapter-item expanded "><a href="../getting_started/fullstack.html"><strong aria-hidden="true">1.4.</strong> Fullstack</a></li><li class="chapter-item expanded "><a href="../getting_started/liveview.html"><strong aria-hidden="true">1.5.</strong> Liveview</a></li><li class="chapter-item expanded "><a href="../getting_started/tui.html"><strong aria-hidden="true">1.6.</strong> Terminal UI</a></li><li class="chapter-item expanded "><a href="../getting_started/mobile.html"><strong aria-hidden="true">1.7.</strong> Mobile</a></li><li class="chapter-item expanded "><a href="../getting_started/hot_reload.html"><strong aria-hidden="true">1.8.</strong> Hot Reloading</a></li></ol></li><li class="chapter-item expanded "><a href="../describing_ui/index.html"><strong aria-hidden="true">2.</strong> Describing the UI</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../describing_ui/special_attributes.html"><strong aria-hidden="true">2.1.</strong> Special Attributes</a></li><li class="chapter-item expanded "><a href="../describing_ui/components.html"><strong aria-hidden="true">2.2.</strong> Components</a></li><li class="chapter-item expanded "><a href="../describing_ui/component_props.html"><strong aria-hidden="true">2.3.</strong> Props</a></li><li class="chapter-item expanded "><a href="../describing_ui/component_children.html"><strong aria-hidden="true">2.4.</strong> Component Children</a></li></ol></li><li class="chapter-item expanded "><a href="../interactivity/index.html"><strong aria-hidden="true">3.</strong> Interactivity</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../interactivity/event_handlers.html"><strong aria-hidden="true">3.1.</strong> Event Listeners</a></li><li class="chapter-item expanded "><a href="../interactivity/hooks.html"><strong aria-hidden="true">3.2.</strong> Hooks &amp; Component State</a></li><li class="chapter-item expanded "><a href="../interactivity/user_input.html"><strong aria-hidden="true">3.3.</strong> User Input</a></li><li class="chapter-item expanded "><a href="../interactivity/sharing_state.html"><strong aria-hidden="true">3.4.</strong> Sharing State</a></li><li class="chapter-item expanded "><a href="../interactivity/custom_hooks.html"><strong aria-hidden="true">3.5.</strong> Custom Hooks</a></li><li class="chapter-item expanded "><a href="../interactivity/dynamic_rendering.html"><strong aria-hidden="true">3.6.</strong> Dynamic Rendering</a></li><li class="chapter-item expanded "><a href="../interactivity/router.html"><strong aria-hidden="true">3.7.</strong> Routing</a></li></ol></li><li class="chapter-item expanded "><a href="../async/index.html"><strong aria-hidden="true">4.</strong> Async</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../async/use_future.html"><strong aria-hidden="true">4.1.</strong> UseFuture</a></li><li class="chapter-item expanded "><a href="../async/use_coroutine.html"><strong aria-hidden="true">4.2.</strong> UseCoroutine</a></li><li class="chapter-item expanded "><a href="../async/spawn.html"><strong aria-hidden="true">4.3.</strong> Spawning Futures</a></li></ol></li><li class="chapter-item expanded "><a href="../best_practices/index.html"><strong aria-hidden="true">5.</strong> Best Practices</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../best_practices/error_handling.html"><strong aria-hidden="true">5.1.</strong> Error Handling</a></li><li class="chapter-item expanded "><a href="../best_practices/antipatterns.html"><strong aria-hidden="true">5.2.</strong> Antipatterns</a></li></ol></li><li class="chapter-item expanded "><a href="../publishing/index.html"><strong aria-hidden="true">6.</strong> Publishing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../publishing/desktop.html"><strong aria-hidden="true">6.1.</strong> Desktop</a></li><li class="chapter-item expanded "><a href="../publishing/web.html"><strong aria-hidden="true">6.2.</strong> Web</a></li><li class="spacer"></li></ol></li><li class="chapter-item expanded "><a href="../fullstack/index.html"><strong aria-hidden="true">7.</strong> Fullstack</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../fullstack/getting_started.html"><strong aria-hidden="true">7.1.</strong> Getting Started</a></li><li class="chapter-item expanded "><a href="../fullstack/server_functions.html"><strong aria-hidden="true">7.2.</strong> Communicating with the Server</a></li><li class="spacer"></li></ol></li><li class="chapter-item expanded "><a href="../custom_renderer/index.html" class="active"><strong aria-hidden="true">8.</strong> Custom Renderer</a></li><li class="spacer"></li><li class="chapter-item expanded "><a href="../contributing/index.html"><strong aria-hidden="true">9.</strong> Contributing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../contributing/project_structure.html"><strong aria-hidden="true">9.1.</strong> Project Structure</a></li><li class="chapter-item expanded "><a href="../contributing/walkthrough_readme.html"><strong aria-hidden="true">9.2.</strong> Walkthrough of Internals</a></li><li class="chapter-item expanded "><a href="../contributing/guiding_principles.html"><strong aria-hidden="true">9.3.</strong> Guiding Principles</a></li><li class="chapter-item expanded "><a href="../contributing/roadmap.html"><strong aria-hidden="true">9.4.</strong> Roadmap</a></li></ol></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky bordered">
+                    <div class="left-buttons">
+                        <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </button>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light (default)</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                        <button id="language-toggle" class="icon-button" type="button" title="Select language" aria-label="Select language" aria-haspopup="true" aria-expanded="false" aria-controls="language-list">
+                            <i class="fa fa-globe"></i>
+                        </button>
+                        <ul id="language-list" class="language-popup" aria-label="Languages" role="menu">
+                            <li role="none"><a href="../../en/custom_renderer/index.html"><button role="menuitem" class="language" id="light">English</button></a></li>
+                            <li role="none"><a href="../../pt-br/custom_renderer/index.html"><button role="menuitem" class="language" id="light">Português Brasileiro</button></a></li>
+                        </ul>
+                    </div>
+
+                    <h1 class="menu-title"></h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/DioxusLabs/dioxus/edit/master/docs/guide" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+                        <a href="https://github.com/DioxusLabs/dioxus/edit/master/docs/guide/src/custom_renderer/index.md" title="Suggest an edit" aria-label="Suggest an edit">
+                            <i id="git-edit-button" class="fa fa-edit"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script type="text/javascript">
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="custom-renderer"><a class="header" href="#custom-renderer">Custom Renderer</a></h1>
+<p>Dioxus is an incredibly portable framework for UI development. The lessons, knowledge, hooks, and components you acquire over time can always be used for future projects. However, sometimes those projects cannot leverage a supported renderer or you need to implement your own better renderer.</p>
+<p>Great news: the design of the renderer is entirely up to you! We provide suggestions and inspiration with the 1st party renderers, but only really require processing <code>Mutations</code> and sending <code>UserEvents</code>.</p>
+<h2 id="the-specifics"><a class="header" href="#the-specifics">The specifics:</a></h2>
+<p>Implementing the renderer is fairly straightforward. The renderer needs to:</p>
+<ol>
+<li>Handle the stream of edits generated by updates to the virtual DOM</li>
+<li>Register listeners and pass events into the virtual DOM's event system</li>
+</ol>
+<p>Essentially, your renderer needs to process edits and generate events to update the VirtualDOM. From there, you'll have everything needed to render the VirtualDOM to the screen.</p>
+<p>Internally, Dioxus handles the tree relationship, diffing, memory management, and the event system, leaving as little as possible required for renderers to implement themselves.</p>
+<p>For reference, check out the <a href="https://github.com/DioxusLabs/dioxus/tree/master/packages/interpreter">javascript interpreter</a> or <a href="https://github.com/DioxusLabs/dioxus/tree/master/packages/dioxus-tui">tui renderer</a> as a starting point for your custom renderer.</p>
+<h2 id="templates"><a class="header" href="#templates">Templates</a></h2>
+<p>Dioxus is built around the concept of <a href="https://docs.rs/dioxus-core/latest/dioxus_core/prelude/struct.Template.html">Templates</a>. Templates describe a UI tree known at compile time with dynamic parts filled at runtime. This is useful internally to make skip diffing static nodes, but it is also useful for the renderer to reuse parts of the UI tree. This can be useful for things like a list of items. Each item could contain some static parts and some dynamic parts. The renderer can use the template to create a static part of the UI once, clone it for each element in the list, and then fill in the dynamic parts.</p>
+<h2 id="mutations"><a class="header" href="#mutations">Mutations</a></h2>
+<p>The <code>Mutation</code> type is a serialized enum that represents an operation that should be applied to update the UI. The variants roughly follow this set:</p>
+<pre><pre class="playground"><code class="language-rust edition2018">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>enum Mutation {
+    AppendChildren,
+    AssignId,
+    CreatePlaceholder,
+    CreateTextNode,
+    HydrateText,
+    LoadTemplate,
+    ReplaceWith,
+    ReplacePlaceholder,
+    InsertAfter,
+    InsertBefore,
+    SetAttribute,
+    SetText,
+    NewEventListener,
+    RemoveEventListener,
+    Remove,
+    PushRoot,
+}
+<span class="boring">}
+</span></code></pre></pre>
+<p>The Dioxus diffing mechanism operates as a <a href="https://en.wikipedia.org/wiki/Stack_machine">stack machine</a> where the <a href="https://docs.rs/dioxus-core/latest/dioxus_core/enum.Mutation.html#variant.LoadTemplate">LoadTemplate</a>, <a href="https://docs.rs/dioxus-core/latest/dioxus_core/enum.Mutation.html#variant.CreatePlaceholder">CreatePlaceholder</a>, and <a href="https://docs.rs/dioxus-core/latest/dioxus_core/enum.Mutation.html#variant.CreateTextNode">CreateTextNode</a> mutations pushes a new &quot;real&quot; DOM node onto the stack and <a href="https://docs.rs/dioxus-core/latest/dioxus_core/enum.Mutation.html#variant.AppendChildren">AppendChildren</a>, <a href="https://docs.rs/dioxus-core/latest/dioxus_core/enum.Mutation.html#variant.InsertAfter">InsertAfter</a>, <a href="https://docs.rs/dioxus-core/latest/dioxus_core/enum.Mutation.html#variant.InsertBefore">InsertBefore</a>, <a href="https://docs.rs/dioxus-core/latest/dioxus_core/enum.Mutation.html#variant.ReplacePlaceholder">ReplacePlaceholder</a>, and <a href="https://docs.rs/dioxus-core/latest/dioxus_core/enum.Mutation.html#variant.ReplaceWith">ReplaceWith</a> all remove nodes from the stack.</p>
+<h2 id="node-storage"><a class="header" href="#node-storage">Node storage</a></h2>
+<p>Dioxus saves and loads elements with IDs. Inside the VirtualDOM, this is just tracked as as a u64.</p>
+<p>Whenever a <code>CreateElement</code> edit is generated during diffing, Dioxus increments its node counter and assigns that new element its current NodeCount. The RealDom is responsible for remembering this ID and pushing the correct node when id is used in a mutation. Dioxus reclaims the IDs of elements when removed. To stay in sync with Dioxus you can use a sparse Vec (Vec&lt;Option<T>&gt;) with possibly unoccupied items. You can use the ids as indexes into the Vec for elements, and grow the Vec when an id does not exist.</p>
+<h3 id="an-example"><a class="header" href="#an-example">An Example</a></h3>
+<p>For the sake of understanding, let's consider this example – a very simple UI declaration:</p>
+<pre><pre class="playground"><code class="language-rust edition2018">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>rsx!( h1 {&quot;count: {x}&quot;} )
+<span class="boring">}
+</span></code></pre></pre>
+<h4 id="building-templates"><a class="header" href="#building-templates">Building Templates</a></h4>
+<p>The above rsx will create a template that contains one static h1 tag and a placeholder for a dynamic text node. The template contains the static parts of the UI, and ids for the dynamic parts along with the paths to access them.</p>
+<p>The template will look something like this:</p>
+<pre><pre class="playground"><code class="language-rust edition2018">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>Template {
+    // Some id that is unique for the entire project
+    name: &quot;main.rs:1:1:0&quot;,
+    // The root nodes of the template
+    roots: &amp;[
+        TemplateNode::Element {
+            tag: &quot;h1&quot;,
+            namespace: None,
+            attrs: &amp;[],
+            children: &amp;[
+                TemplateNode::DynamicText {
+                    id: 0
+                },
+            ],
+        }
+    ],
+    // the path to each of the dynamic nodes
+    node_paths: &amp;[
+        // the path to dynamic node with a id of 0
+        &amp;[
+            // on the first root node
+            0,
+            // the first child of the root node
+            0,
+        ]
+    ],
+    // the path to each of the dynamic attributes
+    attr_paths: &amp;'a [&amp;'a [u8]],
+}
+<span class="boring">}
+</span></code></pre></pre>
+<blockquote>
+<p>For more detailed docs about the struture of templates see the <a href="https://docs.rs/dioxus-core/latest/dioxus_core/prelude/struct.Template.html">Template api docs</a></p>
+</blockquote>
+<p>This template will be sent to the renderer in the <a href="https://docs.rs/dioxus-core/latest/dioxus_core/struct.Mutations.html#structfield.templates">list of templates</a> supplied with the mutations the first time it is used. Any time the renderer encounters a <a href="https://docs.rs/dioxus-core/latest/dioxus_core/enum.Mutation.html#variant.LoadTemplate">LoadTemplate</a> mutation after this, it should clone the template and store it in the given id.</p>
+<p>For dynamic nodes and dynamic text nodes, a placeholder node should be created and inserted into the UI so that the node can be modified later.</p>
+<p>In HTML renderers, this template could look like this:</p>
+<pre><code class="language-html">&lt;h1&gt;&quot;&quot;&lt;/h1&gt;
+</code></pre>
+<h4 id="applying-mutations"><a class="header" href="#applying-mutations">Applying Mutations</a></h4>
+<p>After the renderer has created all of the new templates, it can begin to process the mutations.</p>
+<p>When the renderer starts, it should contain the Root node on the stack and store the Root node with an id of 0. The Root node is the top-level node of the UI. In HTML, this is the <code>&lt;div id=&quot;main&quot;&gt;</code> element.</p>
+<pre><pre class="playground"><code class="language-rust edition2018">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>instructions: []
+stack: [
+    RootNode,
+]
+nodes: [
+    RootNode,
+]
+<span class="boring">}
+</span></code></pre></pre>
+<p>The first mutation is a <code>LoadTemplate</code> mutation. This tells the renderer to load a root from the template with the given id. The renderer will then push the root node of the template onto the stack and store it with an id for later. In this case, the root node is an h1 element.</p>
+<pre><pre class="playground"><code class="language-rust edition2018">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>instructions: [
+    LoadTemplate {
+        // the id of the template
+        name: &quot;main.rs:1:1:0&quot;,
+        // the index of the root node in the template
+        index: 0,
+        // the id to store
+        id: ElementId(1),
+    }
+]
+stack: [
+    RootNode,
+    &lt;h1&gt;&quot;&quot;&lt;/h1&gt;,
+]
+nodes: [
+    RootNode,
+    &lt;h1&gt;&quot;&quot;&lt;/h1&gt;,
+]
+<span class="boring">}
+</span></code></pre></pre>
+<p>Next, Dioxus will create the dynamic text node. The diff algorithm decides that this node needs to be created, so Dioxus will generate the Mutation <code>HydrateText</code>. When the renderer receives this instruction, it will navigate to the placeholder text node in the template and replace it with the new text.</p>
+<pre><pre class="playground"><code class="language-rust edition2018">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>instructions: [
+    LoadTemplate {
+        name: &quot;main.rs:1:1:0&quot;,
+        index: 0,
+        id: ElementId(1),
+    },
+    HydrateText {
+        // the id to store the text node
+        id: ElementId(2),
+        // the text to set
+        text: &quot;count: 0&quot;,
+    }
+]
+stack: [
+    RootNode,
+    &lt;h1&gt;&quot;count: 0&quot;&lt;/h1&gt;,
+]
+nodes: [
+    RootNode,
+    &lt;h1&gt;&quot;count: 0&quot;&lt;/h1&gt;,
+    &quot;count: 0&quot;,
+]
+<span class="boring">}
+</span></code></pre></pre>
+<p>Remember, the h1 node is not attached to anything (it is unmounted) so Dioxus needs to generate an Edit that connects the h1 node to the Root. It depends on the situation, but in this case, we use <code>AppendChildren</code>. This pops the text node off the stack, leaving the Root element as the next element on the stack.</p>
+<pre><pre class="playground"><code class="language-rust edition2018">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>instructions: [
+    LoadTemplate {
+        name: &quot;main.rs:1:1:0&quot;,
+        index: 0,
+        id: ElementId(1),
+    },
+    HydrateText {
+        id: ElementId(2),
+        text: &quot;count: 0&quot;,
+    },
+    AppendChildren {
+        // the id of the parent node
+        id: ElementId(0),
+        // the number of nodes to pop off the stack and append
+        m: 1
+    }
+]
+stack: [
+    RootNode,
+]
+nodes: [
+    RootNode,
+    &lt;h1&gt;&quot;count: 0&quot;&lt;/h1&gt;,
+    &quot;count: 0&quot;,
+]
+<span class="boring">}
+</span></code></pre></pre>
+<p>Over time, our stack looked like this:</p>
+<pre><pre class="playground"><code class="language-rust edition2018">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>[Root]
+[Root, &lt;h1&gt;&quot;&quot;&lt;/h1&gt;]
+[Root, &lt;h1&gt;&quot;count: 0&quot;&lt;/h1&gt;]
+[Root]
+<span class="boring">}
+</span></code></pre></pre>
+<p>Conveniently, this approach completely separates the Virtual DOM and the Real DOM. Additionally, these edits are serializable, meaning we can even manage UIs across a network connection. This little stack machine and serialized edits make Dioxus independent of platform specifics.</p>
+<p>Dioxus is also really fast. Because Dioxus splits the diff and patch phase, it's able to make all the edits to the RealDOM in a very short amount of time (less than a single frame) making rendering very snappy. It also allows Dioxus to cancel large diffing operations if higher priority work comes in while it's diffing.</p>
+<p>This little demo serves to show exactly how a Renderer would need to process a mutation stream to build UIs.</p>
+<h2 id="event-loop"><a class="header" href="#event-loop">Event loop</a></h2>
+<p>Like most GUIs, Dioxus relies on an event loop to progress the VirtualDOM. The VirtualDOM itself can produce events as well, so it's important for your custom renderer can handle those too.</p>
+<p>The code for the WebSys implementation is straightforward, so we'll add it here to demonstrate how simple an event loop is:</p>
+<pre><code class="language-rust  ignore">pub async fn run(&amp;mut self) -&gt; dioxus_core::error::Result&lt;()&gt; {
+    // Push the body element onto the WebsysDom's stack machine
+    let mut websys_dom = crate::new::WebsysDom::new(prepare_websys_dom());
+    websys_dom.stack.push(root_node);
+
+    // Rebuild or hydrate the virtualdom
+    let mutations = self.internal_dom.rebuild();
+    websys_dom.apply_mutations(mutations);
+
+    // Wait for updates from the real dom and progress the virtual dom
+    loop {
+        let user_input_future = websys_dom.wait_for_event();
+        let internal_event_future = self.internal_dom.wait_for_work();
+
+        match select(user_input_future, internal_event_future).await {
+            Either::Left((_, _)) =&gt; {
+                let mutations = self.internal_dom.work_with_deadline(|| false);
+                websys_dom.apply_mutations(mutations);
+            },
+            Either::Right((event, _)) =&gt; websys_dom.handle_event(event),
+        }
+
+        // render
+    }
+}
+</code></pre>
+<p>It's important to decode what the real events are for your event system into Dioxus' synthetic event system (synthetic meaning abstracted). This simply means matching your event type and creating a Dioxus <code>UserEvent</code> type. Right now, the virtual event system is modeled almost entirely around the HTML spec, but we are interested in slimming it down.</p>
+<pre><code class="language-rust  ignore">fn virtual_event_from_websys_event(event: &amp;web_sys::Event) -&gt; VirtualEvent {
+    match event.type_().as_str() {
+        &quot;keydown&quot; =&gt; {
+            let event: web_sys::KeyboardEvent = event.clone().dyn_into().unwrap();
+            UserEvent::KeyboardEvent(UserEvent {
+                scope_id: None,
+                priority: EventPriority::Medium,
+                name: &quot;keydown&quot;,
+                // This should be whatever element is focused
+                element: Some(ElementId(0)),
+                data: Arc::new(KeyboardData{
+                    char_code: event.char_code(),
+                    key: event.key(),
+                    key_code: event.key_code(),
+                    alt_key: event.alt_key(),
+                    ctrl_key: event.ctrl_key(),
+                    meta_key: event.meta_key(),
+                    shift_key: event.shift_key(),
+                    location: event.location(),
+                    repeat: event.repeat(),
+                    which: event.which(),
+                })
+            })
+        }
+        _ =&gt; todo!()
+    }
+}
+</code></pre>
+<h2 id="custom-raw-elements"><a class="header" href="#custom-raw-elements">Custom raw elements</a></h2>
+<p>If you need to go as far as relying on custom elements/attributes for your renderer – you totally can. This still enables you to use Dioxus' reactive nature, component system, shared state, and other features, but will ultimately generate different nodes. All attributes and listeners for the HTML and SVG namespace are shuttled through helper structs that essentially compile away. You can drop in your elements any time you want, with little hassle. However, you must be sure your renderer can handle the new namespace.</p>
+<p>For more examples and information on how to create custom namespaces, see the <a href="https://github.com/DioxusLabs/dioxus/blob/master/packages/html/README.md#how-to-extend-it"><code>dioxus_html</code> crate</a>.</p>
+<h1 id="native-core"><a class="header" href="#native-core">Native Core</a></h1>
+<p>If you are creating a renderer in rust, the <a href="https://github.com/DioxusLabs/dioxus/tree/master/packages/native-core">native-core</a> crate provides some utilities to implement a renderer. It provides an abstraction over Mutations and Templates and contains helpers that can handle the layout and text editing for you.</p>
+<h2 id="the-realdom"><a class="header" href="#the-realdom">The RealDom</a></h2>
+<p>The <code>RealDom</code> is a higher-level abstraction over updating the Dom. It uses an entity component system to manage the state of nodes. This system allows you to modify insert and modify arbitrary components on nodes. On top of this, the RealDom provides a way to manage a tree of nodes, and the State trait provides a way to automatically add and update these components when the tree is modified. It also provides a way to apply <code>Mutations</code> to the RealDom.</p>
+<h3 id="example"><a class="header" href="#example">Example</a></h3>
+<p>Let's build a toy renderer with borders, size, and text color.
+Before we start let's take a look at an example element we can render:</p>
+<pre><pre class="playground"><code class="language-rust edition2018">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>cx.render(rsx!{
+    div{
+        color: &quot;red&quot;,
+        p{
+            border: &quot;1px solid black&quot;,
+            &quot;hello world&quot;
+        }
+    }
+})
+<span class="boring">}
+</span></code></pre></pre>
+<p>In this tree, the color depends on the parent's color. The layout depends on the children's layout, the current text, and the text size. The border depends on only the current node.</p>
+<p>In the following diagram arrows represent dataflow:</p>
+<p><a href="https://mermaid.live/edit#pako:eNqllV1vgjAUhv8K6W4wkQVa2QdLdrHsdlfukmSptEhjoaSWqTH-9xVwONAKst70g5739JzzlO5BJAgFAYi52EQJlsr6fAszS7d1sVhKnCdWJDJFt6peLVs5-9owohK7HFrVcFJ_pxnpmK8VVvRkTJikkWIiaxy1dhP23bUwW1WW5WbPrrqJ4ziR4EJ6dtVN2ls5y1ZztePUcrWZFCvqVEcPPDffvlyS1XoLIQnVgnVvVPR6FU9Zc-6dV453ojjOPbuetRJ57gIeXQR3cez7rjtteZyZQ2j5MqmjqwE0ZW0VKx9RKtgpFewp1aw3sXXFy6TWgiYlv8mfq1scD8ofbBCAfQg8_AMBOAyBxzEIwA4CxgQ99QbQkjnD2KT7_CfxGF8_9WXQEsq5sDZCcjICOXRCri4h6r3NA38Q6Jdi1EOx5w3DGDYYI6MUvJFjM3VoGHUeGoMd6mBnDmh2E3fo7O4Yhf0x4OkBmIKUyhQzol_GfbkcApXQlIYg0EOC5SoEYXbQ-3ChxHyXRSBQsqBTUOREx_7OsAY3BUGM-VqvUsKUkB_1U6vf05gtweEHTk4_HQ"><img src="https://mermaid.ink/img/pako:eNqllV1vgjAUhv8K6W4wkQVa2QdLdrHsdlfukmSptEhjoaSWqTH-9xVwONAKst70g5739JzzlO5BJAgFAYi52EQJlsr6fAszS7d1sVhKnCdWJDJFt6peLVs5-9owohK7HFrVcFJ_pxnpmK8VVvRkTJikkWIiaxy1dhP23bUwW1WW5WbPrrqJ4ziR4EJ6dtVN2ls5y1ZztePUcrWZFCvqVEcPPDffvlyS1XoLIQnVgnVvVPR6FU9Zc-6dV453ojjOPbuetRJ57gIeXQR3cez7rjtteZyZQ2j5MqmjqwE0ZW0VKx9RKtgpFewp1aw3sXXFy6TWgiYlv8mfq1scD8ofbBCAfQg8_AMBOAyBxzEIwA4CxgQ99QbQkjnD2KT7_CfxGF8_9WXQEsq5sDZCcjICOXRCri4h6r3NA38Q6Jdi1EOx5w3DGDYYI6MUvJFjM3VoGHUeGoMd6mBnDmh2E3fo7O4Yhf0x4OkBmIKUyhQzol_GfbkcApXQlIYg0EOC5SoEYXbQ-3ChxHyXRSBQsqBTUOREx_7OsAY3BUGM-VqvUsKUkB_1U6vf05gtweEHTk4_HQ?type=png" alt="" /></a></p>
+<p>To help in building a Dom, native-core provides the State trait and a RealDom struct. The State trait provides a way to describe how states in a node depend on other states in its relatives. By describing how to update a single node from its relations, native-core will derive a way to update the states of all nodes for you. Once you have a state you can provide it as a generic to RealDom. RealDom provides all of the methods to interact and update your new dom.</p>
+<p>Native Core cannot create all of the required methods for the State trait, but it can derive some of them. To implement the State trait, you must implement the following methods and let the <code>#[partial_derive_state]</code> macro handle the rest:</p>
+<pre><code class="language-rust  ignore">// All states must derive Component (https://docs.rs/shipyard/latest/shipyard/derive.Component.html)
+// They also must implement Default or provide a custom implementation of create in the State trait
+#[derive(Default, Component)]
+struct MyState;
+
+/// Derive some of the boilerplate for the State implementation
+#[partial_derive_state]
+impl State for MyState {
+    // The states of the parent nodes this state depends on
+    type ParentDependencies = ();
+
+    // The states of the child nodes this state depends on
+    type ChildDependencies = (Self,);
+
+    // The states of the current node this state depends on
+    type NodeDependencies = ();
+
+    // The parts of the current text, element, or placeholder node in the tree that this state depends on
+    const NODE_MASK: NodeMaskBuilder&lt;'static&gt; = NodeMaskBuilder::new();
+
+    // How to update the state of the current node based on the state of the parent nodes, child nodes, and the current node
+    // Returns true if the node was updated and false if the node was not updated
+    fn update&lt;'a&gt;(
+        &amp;mut self,
+        // The view of the current node limited to the parts this state depends on
+        _node_view: NodeView&lt;()&gt;,
+        // The state of the current node that this state depends on
+        _node: &lt;Self::NodeDependencies as Dependancy&gt;::ElementBorrowed&lt;'a&gt;,
+        // The state of the parent nodes that this state depends on
+        _parent: Option&lt;&lt;Self::ParentDependencies as Dependancy&gt;::ElementBorrowed&lt;'a&gt;&gt;,
+        // The state of the child nodes that this state depends on
+        _children: Vec&lt;&lt;Self::ChildDependencies as Dependancy&gt;::ElementBorrowed&lt;'a&gt;&gt;,
+        // The context of the current node used to pass global state into the tree
+        _context: &amp;SendAnyMap,
+    ) -&gt; bool {
+        todo!()
+    }
+
+    // partial_derive_state will generate a default implementation of all the other methods
+}
+</code></pre>
+<p>Lets take a look at how to implement the State trait for a simple renderer.</p>
+<pre><pre class="playground"><code class="language-rust edition2018">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>struct FontSize(f64);
+
+// All states need to derive Component
+#[derive(Default, Debug, Copy, Clone, Component)]
+struct Size(f64, f64);
+
+/// Derive some of the boilerplate for the State implementation
+#[partial_derive_state]
+impl State for Size {
+    type ParentDependencies = ();
+
+    // The size of the current node depends on the size of its children
+    type ChildDependencies = (Self,);
+
+    type NodeDependencies = ();
+
+    // Size only cares about the width, height, and text parts of the current node
+    const NODE_MASK: NodeMaskBuilder&lt;'static&gt; = NodeMaskBuilder::new()
+        // Get access to the width and height attributes
+        .with_attrs(AttributeMaskBuilder::Some(&amp;[&quot;width&quot;, &quot;height&quot;]))
+        // Get access to the text of the node
+        .with_text();
+
+    fn update&lt;'a&gt;(
+        &amp;mut self,
+        node_view: NodeView&lt;()&gt;,
+        _node: &lt;Self::NodeDependencies as Dependancy&gt;::ElementBorrowed&lt;'a&gt;,
+        _parent: Option&lt;&lt;Self::ParentDependencies as Dependancy&gt;::ElementBorrowed&lt;'a&gt;&gt;,
+        children: Vec&lt;&lt;Self::ChildDependencies as Dependancy&gt;::ElementBorrowed&lt;'a&gt;&gt;,
+        context: &amp;SendAnyMap,
+    ) -&gt; bool {
+        let font_size = context.get::&lt;FontSize&gt;().unwrap().0;
+        let mut width;
+        let mut height;
+        if let Some(text) = node_view.text() {
+            // if the node has text, use the text to size our object
+            width = text.len() as f64 * font_size;
+            height = font_size;
+        } else {
+            // otherwise, the size is the maximum size of the children
+            width = children
+                .iter()
+                .map(|(item,)| item.0)
+                .reduce(|accum, item| if accum &gt;= item { accum } else { item })
+                .unwrap_or(0.0);
+
+            height = children
+                .iter()
+                .map(|(item,)| item.1)
+                .reduce(|accum, item| if accum &gt;= item { accum } else { item })
+                .unwrap_or(0.0);
+        }
+        // if the node contains a width or height attribute it overrides the other size
+        for a in node_view.attributes().into_iter().flatten() {
+            match &amp;*a.attribute.name {
+                &quot;width&quot; =&gt; width = a.value.as_float().unwrap(),
+                &quot;height&quot; =&gt; height = a.value.as_float().unwrap(),
+                // because Size only depends on the width and height, no other attributes will be passed to the member
+                _ =&gt; panic!(),
+            }
+        }
+        // to determine what other parts of the dom need to be updated we return a boolean that marks if this member changed
+        let changed = (width != self.0) || (height != self.1);
+        *self = Self(width, height);
+        changed
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Default, Component)]
+struct TextColor {
+    r: u8,
+    g: u8,
+    b: u8,
+}
+
+#[partial_derive_state]
+impl State for TextColor {
+    // TextColor depends on the TextColor part of the parent
+    type ParentDependencies = (Self,);
+
+    type ChildDependencies = ();
+
+    type NodeDependencies = ();
+
+    // TextColor only cares about the color attribute of the current node
+    const NODE_MASK: NodeMaskBuilder&lt;'static&gt; =
+        // Get access to the color attribute
+        NodeMaskBuilder::new().with_attrs(AttributeMaskBuilder::Some(&amp;[&quot;color&quot;]));
+
+    fn update&lt;'a&gt;(
+        &amp;mut self,
+        node_view: NodeView&lt;()&gt;,
+        _node: &lt;Self::NodeDependencies as Dependancy&gt;::ElementBorrowed&lt;'a&gt;,
+        parent: Option&lt;&lt;Self::ParentDependencies as Dependancy&gt;::ElementBorrowed&lt;'a&gt;&gt;,
+        _children: Vec&lt;&lt;Self::ChildDependencies as Dependancy&gt;::ElementBorrowed&lt;'a&gt;&gt;,
+        _context: &amp;SendAnyMap,
+    ) -&gt; bool {
+        // TextColor only depends on the color tag, so getting the first tag is equivilent to looking through all tags
+        let new = match node_view
+            .attributes()
+            .and_then(|mut attrs| attrs.next())
+            .and_then(|attr| attr.value.as_text())
+        {
+            // if there is a color tag, translate it
+            Some(&quot;red&quot;) =&gt; TextColor { r: 255, g: 0, b: 0 },
+            Some(&quot;green&quot;) =&gt; TextColor { r: 0, g: 255, b: 0 },
+            Some(&quot;blue&quot;) =&gt; TextColor { r: 0, g: 0, b: 255 },
+            Some(color) =&gt; panic!(&quot;unknown color {color}&quot;),
+            // otherwise check if the node has a parent and inherit that color
+            None =&gt; match parent {
+                Some((parent,)) =&gt; *parent,
+                None =&gt; Self::default(),
+            },
+        };
+        // check if the member has changed
+        let changed = new != *self;
+        *self = new;
+        changed
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Default, Component)]
+struct Border(bool);
+
+#[partial_derive_state]
+impl State for Border {
+    // TextColor depends on the TextColor part of the parent
+    type ParentDependencies = (Self,);
+
+    type ChildDependencies = ();
+
+    type NodeDependencies = ();
+
+    // Border does not depended on any other member in the current node
+    const NODE_MASK: NodeMaskBuilder&lt;'static&gt; =
+        // Get access to the border attribute
+        NodeMaskBuilder::new().with_attrs(AttributeMaskBuilder::Some(&amp;[&quot;border&quot;]));
+
+    fn update&lt;'a&gt;(
+        &amp;mut self,
+        node_view: NodeView&lt;()&gt;,
+        _node: &lt;Self::NodeDependencies as Dependancy&gt;::ElementBorrowed&lt;'a&gt;,
+        _parent: Option&lt;&lt;Self::ParentDependencies as Dependancy&gt;::ElementBorrowed&lt;'a&gt;&gt;,
+        _children: Vec&lt;&lt;Self::ChildDependencies as Dependancy&gt;::ElementBorrowed&lt;'a&gt;&gt;,
+        _context: &amp;SendAnyMap,
+    ) -&gt; bool {
+        // check if the node contians a border attribute
+        let new = Self(
+            node_view
+                .attributes()
+                .and_then(|mut attrs| attrs.next().map(|a| a.attribute.name == &quot;border&quot;))
+                .is_some(),
+        );
+        // check if the member has changed
+        let changed = new != *self;
+        *self = new;
+        changed
+    }
+}
+<span class="boring">}
+</span></code></pre></pre>
+<p>Now that we have our state, we can put it to use in our RealDom. We can update the RealDom with apply_mutations to update the structure of the dom (adding, removing, and changing properties of nodes) and then update_state to update the States for each of the nodes that changed.</p>
+<pre><pre class="playground"><code class="language-rust edition2018">fn main() -&gt; Result&lt;(), Box&lt;dyn std::error::Error&gt;&gt; {
+    fn app(cx: Scope) -&gt; Element {
+        let count = use_state(cx, || 0);
+
+        use_future(cx, (count,), |(count,)| async move {
+            loop {
+                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                count.set(*count + 1);
+            }
+        });
+
+        cx.render(rsx! {
+            div{
+                color: &quot;red&quot;,
+                &quot;{count}&quot;
+            }
+        })
+    }
+
+    // create the vdom, the real_dom, and the binding layer between them
+    let mut vdom = VirtualDom::new(app);
+    let mut rdom: RealDom = RealDom::new([
+        Border::to_type_erased(),
+        TextColor::to_type_erased(),
+        Size::to_type_erased(),
+    ]);
+    let mut dioxus_intigration_state = DioxusState::create(&amp;mut rdom);
+
+    let mutations = vdom.rebuild();
+    // update the structure of the real_dom tree
+    dioxus_intigration_state.apply_mutations(&amp;mut rdom, mutations);
+    let mut ctx = SendAnyMap::new();
+    // set the font size to 3.3
+    ctx.insert(FontSize(3.3));
+    // update the State for nodes in the real_dom tree
+    let _to_rerender = rdom.update_state(ctx);
+
+    // we need to run the vdom in a async runtime
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()?
+        .block_on(async {
+            loop {
+                // wait for the vdom to update
+                vdom.wait_for_work().await;
+
+                // get the mutations from the vdom
+                let mutations = vdom.render_immediate();
+
+                // update the structure of the real_dom tree
+                dioxus_intigration_state.apply_mutations(&amp;mut rdom, mutations);
+
+                // update the state of the real_dom tree
+                let mut ctx = SendAnyMap::new();
+                // set the font size to 3.3
+                ctx.insert(FontSize(3.3));
+                let _to_rerender = rdom.update_state(ctx);
+
+                // render...
+                rdom.traverse_depth_first(|node| {
+                    let indent = &quot; &quot;.repeat(node.height() as usize);
+                    let color = *node.get::&lt;TextColor&gt;().unwrap();
+                    let size = *node.get::&lt;Size&gt;().unwrap();
+                    let border = *node.get::&lt;Border&gt;().unwrap();
+                    let id = node.id();
+                    let node = node.node_type();
+                    let node_type = &amp;*node;
+                    println!(&quot;{indent}{id:?} {color:?} {size:?} {border:?} {node_type:?}&quot;);
+                });
+            }
+        })
+}
+</code></pre></pre>
+<h2 id="layout"><a class="header" href="#layout">Layout</a></h2>
+<p>For most platforms, the layout of the Elements will stay the same. The <a href="https://docs.rs/dioxus-native-core/latest/dioxus_native_core/layout_attributes/index.html">layout_attributes</a> module provides a way to apply HTML attributes a <a href="https://docs.rs/taffy/latest/taffy/index.html">Taffy</a> layout style.</p>
+<h2 id="text-editing"><a class="header" href="#text-editing">Text Editing</a></h2>
+<p>To make it easier to implement text editing in rust renderers, <code>native-core</code> also contains a renderer-agnostic cursor system. The cursor can handle text editing, selection, and movement with common keyboard shortcuts integrated.</p>
+<pre><pre class="playground"><code class="language-rust edition2018">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>fn text_editing() {
+    let mut cursor = Cursor::default();
+    let mut text = String::new();
+
+    // handle keyboard input with a max text length of 10
+    cursor.handle_input(
+        &amp;Code::ArrowRight,
+        &amp;Key::ArrowRight,
+        &amp;Modifiers::empty(),
+        &amp;mut text,
+        10,
+    );
+
+    // mannually select text between characters 0-5 on the first line (this could be from dragging with a mouse)
+    cursor.start = Pos::new(0, 0);
+    cursor.end = Some(Pos::new(5, 0));
+
+    // delete the selected text and move the cursor to the start of the selection
+    cursor.delete_selection(&amp;mut text);
+}
+<span class="boring">}
+</span></code></pre></pre>
+<h2 id="conclusion"><a class="header" href="#conclusion">Conclusion</a></h2>
+<p>That should be it! You should have nearly all the knowledge required on how to implement your renderer. We're super interested in seeing Dioxus apps brought to custom desktop renderers, mobile renderers, video game UI, and even augmented reality! If you're interested in contributing to any of these projects, don't be afraid to reach out or join the <a href="https://discord.gg/XgGxMSkvUM">community</a>.</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../fullstack/server_functions.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next" href="../contributing/index.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../fullstack/server_functions.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next" href="../contributing/index.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+        <script type="text/javascript">
+            window.playground_line_numbers = true;
+        </script>
+
+        <script type="text/javascript">
+            window.playground_copyable = true;
+        </script>
+
+        <script src="../ace.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../editor.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../mode-rust.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../theme-dawn.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../theme-tomorrow_night.js" type="text/javascript" charset="utf-8"></script>
+
+        <script src="../elasticlunr.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../mark.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../searcher.js" type="text/javascript" charset="utf-8"></script>
+
+        <script src="../clipboard.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../highlight.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../book.js" type="text/javascript" charset="utf-8"></script>
+
+        <!-- Custom JS scripts -->
+
+
+    </body>
+</html>

@@ -31,6 +31,7 @@ members = [
     "packages/fullstack/examples/salvo-hello-world",
     "packages/fullstack/examples/warp-hello-world",
     "docs/guide",
+    "docs/router",
     # Full project examples
     "examples/tailwind",
     "examples/PWA-example",
