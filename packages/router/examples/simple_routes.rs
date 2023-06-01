@@ -120,10 +120,9 @@ fn Route3(cx: Scope, dynamic: String) -> Element {
 enum Route {
     // Nests with parameters have types taken from child routes
     #[nest("/user/:user_id")]
-        // Everything inside the nest has the added parameter `user_id: String`
-        // UserFrame is a layout component that will receive the `user_id: String` parameter
+        // Everything inside the nest has the added parameter `user_id: usize`
+        // UserFrame is a layout component that will receive the `user_id: usize` parameter
         #[layout(UserFrame)]
-            // Route1 is a non-layout component that will receive the `user_id: String` and `dynamic: String` parameters
             #[route("/:dynamic?:query")]
             Route1 {
                 // The type is taken from the first instance of the dynamic parameter
@@ -132,7 +131,6 @@ enum Route {
                 query: String,
                 extra: String,
             },
-            // Route2 is a non-layout component that will receive the `user_id: String` parameter
             #[route("/hello_world")]
             // You can opt out of the layout by using the `!` prefix
             #[layout(!UserFrame)]

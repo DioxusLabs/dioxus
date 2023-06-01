@@ -21,11 +21,65 @@ mod route;
 mod route_tree;
 mod segment;
 
+/// Derives the Routable trait for an enum of routes
+///
+/// Each varient must:
+/// 1. Be struct-like with {}'s
+/// 2. Contain all of the dynamic parameters of the current and nested routes
+/// 3. Have a #[route("route")] attribute
+///
+/// Route Segments:
+/// 1. Static Segments: "/static"
+/// 2. Dynamic Segments: "/:dynamic" (where dynamic has a type that is FromStr in all child Variants)
+/// 3. Catch all Segments: "/:...segments" (where segments has a type that is FromSegments in all child Variants)
+/// 4. Query Segments: "/?:query" (where query has a type that is FromQuery in all child Variants)
+///
+/// Routes are matched:
+/// 1. By there specificity this order: Query Routes ("/?:query"), Static Routes ("/route"), Dynamic Routes ("/:route"), Catch All Routes ("/:...route")
+/// 2. By the order they are defined in the enum
+///
+/// All features:
+/// ```rust, skip
+/// #[rustfmt::skip]
+/// #[derive(Clone, Debug, PartialEq, Routable)]
+/// enum Route {
+///     // Define routes with the route macro. If the name of the component is not the same as the variant, you can specify it as the second parameter and the props type as the third
+///     #[route("/", IndexComponent, ComponentProps)]
+///     Index {},
+///     // Nests with parameters have types taken from child routes
+///     // Everything inside the nest has the added parameter `user_id: usize`
+///     #[nest("/user/:user_id")]
+///         // All children of layouts will be rendered inside the Outlet in the layout component
+///         // Creates a Layout UserFrame that has the parameter `user_id: usize`
+///         #[layout(UserFrame)]
+///             // If there is a component with the name Route1 and props with the name Route1Props, you do not need to pass in the component and type
+///             #[route("/:dynamic?:query")]
+///             Route1 {
+///                 // The type is taken from the first instance of the dynamic parameter
+///                 user_id: usize,
+///                 dynamic: usize,
+///                 query: String,
+///                 extra: String,
+///             },
+///             #[route("/hello_world")]
+///             // You can opt out of the layout by using the `!` prefix
+///             #[layout(!UserFrame)]
+///             Route2 { user_id: usize },
+///         // End layouts with #[end_layout]
+///         #[end_layout]
+///     // End nests with #[end_nest]
+///     #[end_nest]
+///     // Redirects take a path and a function that takes the parameters from the path and returns a new route
+///     #[redirect("/:id/user", |id: usize| Route::Route3 { dynamic: id.to_string()})]
+///     #[route("/:dynamic")]
+///     Route3 { dynamic: String },
+/// }
+/// ```
 #[proc_macro_derive(
     Routable,
     attributes(route, nest, end_nest, layout, end_layout, redirect)
 )]
-pub fn routable(input: TokenStream) -> TokenStream {
+pub fn Routable(input: TokenStream) -> TokenStream {
     let routes_enum = parse_macro_input!(input as syn::ItemEnum);
 
     let route_enum = match RouteEnum::parse(routes_enum) {

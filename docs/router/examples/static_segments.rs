@@ -25,5 +25,4 @@ fn HelloWorld(cx: Scope) -> Element {
 }
 // ANCHOR_END: route
 
-
 fn main() {}
