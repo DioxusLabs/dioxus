@@ -9,25 +9,26 @@ use crate::{
 };
 
 /// The config for [`GenericRouter`].
-pub struct RouterCfg<R: Routable> {
-    config: RefCell<Option<RouterConfiguration<R>>>,
+pub struct RouterConfigFactory<R: Routable> {
+    #[allow(clippy::type_complexity)]
+    config: RefCell<Option<Box<dyn FnOnce() -> RouterConfiguration<R>>>>,
 }
 
-impl<R: Routable> Default for RouterCfg<R>
+impl<R: Routable> Default for RouterConfigFactory<R>
 where
     <R as FromStr>::Err: std::fmt::Display,
 {
     fn default() -> Self {
-        Self {
-            config: RefCell::new(Some(RouterConfiguration::default())),
-        }
+        Self::from(RouterConfiguration::default)
     }
 }
 
-impl<R: Routable> From<RouterConfiguration<R>> for RouterCfg<R> {
-    fn from(value: RouterConfiguration<R>) -> Self {
+impl<R: Routable, F: FnOnce() -> RouterConfiguration<R> + 'static> From<F>
+    for RouterConfigFactory<R>
+{
+    fn from(value: F) -> Self {
         Self {
-            config: RefCell::new(Some(value)),
+            config: RefCell::new(Some(Box::new(value))),
         }
     }
 }
@@ -39,7 +40,7 @@ where
     <R as FromStr>::Err: std::fmt::Display,
 {
     #[props(default, into)]
-    config: RouterCfg<R>,
+    config: RouterConfigFactory<R>,
 }
 
 impl<R: Routable> PartialEq for GenericRouterProps<R>
@@ -66,7 +67,11 @@ where
             panic!("{}", msg);
         }
         let router = GenericRouterContext::new(
-            cx.props.config.config.take().unwrap_or_default(),
+            (cx.props
+                .config
+                .config
+                .take()
+                .expect("use_context_provider ran twice"))(),
             cx.schedule_update_any(),
         );
         router

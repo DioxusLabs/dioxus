@@ -15,7 +15,7 @@ use crate::{
 pub struct ExternalNavigationFailure(String);
 
 /// A function the router will call after every routing update.
-pub type RoutingCallback<R> = Arc<dyn Fn(GenericRouterContext<R>) -> Option<NavigationTarget<R>>>;
+pub(crate) type RoutingCallback<R> = Arc<dyn Fn(GenericRouterContext<R>) -> Option<NavigationTarget<R>>>;
 
 struct MutableRouterState<R>
 where

@@ -14,18 +14,7 @@ fn main() {
 
 fn root(cx: Scope) -> Element {
     render! {
-        Router {
-            config: RouterConfiguration {
-                history: {
-                    #[cfg(not(target_arch = "wasm32"))]
-                    let history = Box::<MemoryHistory::<Route>>::default();
-                    #[cfg(target_arch = "wasm32")]
-                    let history = Box::<WebHistory::<Route>>::default();
-                    history
-                },
-                ..Default::default()
-            }
-        }
+        Router {}
     }
 }
 

@@ -1,10 +1,9 @@
 #![allow(non_snake_case)]
 use dioxus::prelude::*;
 use dioxus_router::prelude::*;
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::str::FromStr;
 
-fn prepare<R: Routable + Serialize + DeserializeOwned>() -> String
+fn prepare<R: Routable>() -> String
 where
     <R as FromStr>::Err: std::fmt::Display,
 {
@@ -28,17 +27,14 @@ where
         }
     }
 
-    fn App<R: Routable + Serialize + DeserializeOwned>(cx: Scope<AppProps<R>>) -> Element
+    fn App<R: Routable>(cx: Scope<AppProps<R>>) -> Element
     where
         <R as FromStr>::Err: std::fmt::Display,
     {
         render! {
             h1 { "App" }
             GenericRouter::<R> {
-                config: RouterConfiguration {
-                    history: Box::<MemoryHistory::<R>>::default(),
-                    ..Default::default()
-                }
+                config: || RouterConfiguration::default().history(MemoryHistory::default())
             }
         }
     }
@@ -46,7 +42,7 @@ where
 
 #[test]
 fn href_internal() {
-    #[derive(Routable, Clone, Serialize, Deserialize)]
+    #[derive(Routable, Clone)]
     enum Route {
         #[route("/")]
         Root {},
@@ -84,7 +80,7 @@ fn href_internal() {
 
 #[test]
 fn href_external() {
-    #[derive(Routable, Clone, Serialize, Deserialize)]
+    #[derive(Routable, Clone)]
     enum Route {
         #[route("/")]
         Root {},
@@ -122,7 +118,7 @@ fn href_external() {
 
 #[test]
 fn with_class() {
-    #[derive(Routable, Clone, Serialize, Deserialize)]
+    #[derive(Routable, Clone)]
     enum Route {
         #[route("/")]
         Root {},
@@ -161,7 +157,7 @@ fn with_class() {
 
 #[test]
 fn with_active_class_active() {
-    #[derive(Routable, Clone, Serialize, Deserialize)]
+    #[derive(Routable, Clone)]
     enum Route {
         #[route("/")]
         Root {},
@@ -194,7 +190,7 @@ fn with_active_class_active() {
 
 #[test]
 fn with_active_class_inactive() {
-    #[derive(Routable, Clone, Serialize, Deserialize)]
+    #[derive(Routable, Clone)]
     enum Route {
         #[route("/")]
         Root {},
@@ -234,7 +230,7 @@ fn with_active_class_inactive() {
 
 #[test]
 fn with_id() {
-    #[derive(Routable, Clone, Serialize, Deserialize)]
+    #[derive(Routable, Clone)]
     enum Route {
         #[route("/")]
         Root {},
@@ -273,7 +269,7 @@ fn with_id() {
 
 #[test]
 fn with_new_tab() {
-    #[derive(Routable, Clone, Serialize, Deserialize)]
+    #[derive(Routable, Clone)]
     enum Route {
         #[route("/")]
         Root {},
@@ -312,7 +308,7 @@ fn with_new_tab() {
 
 #[test]
 fn with_new_tab_external() {
-    #[derive(Routable, Clone, Serialize, Deserialize)]
+    #[derive(Routable, Clone)]
     enum Route {
         #[route("/")]
         Root {},
@@ -344,7 +340,7 @@ fn with_new_tab_external() {
 
 #[test]
 fn with_rel() {
-    #[derive(Routable, Clone, Serialize, Deserialize)]
+    #[derive(Routable, Clone)]
     enum Route {
         #[route("/")]
         Root {},

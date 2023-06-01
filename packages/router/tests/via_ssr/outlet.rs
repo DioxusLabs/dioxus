@@ -2,14 +2,13 @@
 
 use dioxus::prelude::*;
 use dioxus_router::prelude::*;
-use serde::{Deserialize, Serialize};
 
 fn prepare(path: impl Into<String>) -> VirtualDom {
     let mut vdom = VirtualDom::new_with_props(App, AppProps { path: path.into() });
     let _ = vdom.rebuild();
     return vdom;
 
-    #[derive(Routable, Clone, Serialize, Deserialize)]
+    #[derive(Routable, Clone)]
     #[rustfmt::skip]
     enum Route {
         #[route("/")]
@@ -36,15 +35,13 @@ fn prepare(path: impl Into<String>) -> VirtualDom {
     }
 
     fn App(cx: Scope<AppProps>) -> Element {
-        let cfg = RouterConfiguration {
-            history: Box::new(MemoryHistory::with_initial_path(cx.props.path.clone()).unwrap()),
-            ..Default::default()
-        };
-
         render! {
             h1 { "App" }
             Router {
-                config: cfg
+                config: {
+                    let path = cx.props.path.clone();
+                    move || RouterConfiguration::default().history(MemoryHistory::with_initial_path(path).unwrap())
+                }
             }
         }
     }

@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::contexts::router::RoutingCallback;
 use crate::history::HistoryProvider;
 use crate::routable::Routable;
@@ -7,7 +9,7 @@ use crate::prelude::*;
 
 /// Global configuration options for the router.
 ///
-/// This implements [`Default`], so you can use it like this:
+/// This implements [`Default`] and follows the builder pattern, so you can use it like this:
 /// ```rust,no_run
 /// # use dioxus_router::prelude::*;
 /// # use serde::{Deserialize, Serialize};
@@ -21,20 +23,34 @@ use crate::prelude::*;
 ///     #[route("/")]
 ///     Index {},
 /// }
-/// let cfg = RouterConfiguration {
-///     history: Box::<WebHistory<Route>>::default(),
-///     ..Default::default()
-/// };
+/// let cfg = RouterConfiguration::default().history(WebHistory<Route>::default());
 /// ```
 pub struct RouterConfiguration<R: Routable> {
-    /// A component to render when an external navigation fails.
-    ///
-    /// Defaults to a router-internal component called [`FailureExternalNavigation`]
-    pub failure_external_navigation: fn(Scope) -> Element,
-    /// The [`HistoryProvider`] the router should use.
-    ///
-    /// Defaults to a default [`MemoryHistory`].
-    pub history: Box<dyn HistoryProvider<R>>,
+    pub(crate) failure_external_navigation: fn(Scope) -> Element,
+    pub(crate) history: Box<dyn HistoryProvider<R>>,
+    pub(crate) on_update: Option<RoutingCallback<R>>,
+}
+
+impl<R: Routable + Clone> Default for RouterConfiguration<R>
+where
+    <R as std::str::FromStr>::Err: std::fmt::Display,
+{
+    fn default() -> Self {
+        Self {
+            failure_external_navigation: FailureExternalNavigation::<R>,
+            history: {
+                #[cfg(all(target_arch = "wasm32", feature = "web"))]
+                let history = Box::<MemoryHistory<R>>::default();
+                #[cfg(not(all(target_arch = "wasm32", feature = "web")))]
+                let history = Box::<MemoryHistory<R>>::default();
+                history
+            },
+            on_update: None,
+        }
+    }
+}
+
+impl<R: Routable> RouterConfiguration<R> {
     /// A function to be called whenever the routing is updated.
     ///
     /// The callback is invoked after the routing is updated, but before components and hooks are
@@ -48,18 +64,33 @@ pub struct RouterConfiguration<R: Routable> {
     /// navigation failure occurs.
     ///
     /// Defaults to [`None`].
-    pub on_update: Option<RoutingCallback<R>>,
-}
-
-impl<R: Routable + Clone> Default for RouterConfiguration<R>
-where
-    <R as std::str::FromStr>::Err: std::fmt::Display,
-{
-    fn default() -> Self {
+    pub fn on_update(
+        self,
+        callback: impl Fn(GenericRouterContext<R>) -> Option<NavigationTarget<R>> + 'static,
+    ) -> Self {
         Self {
-            failure_external_navigation: FailureExternalNavigation::<R>,
-            history: Box::<MemoryHistory<R>>::default(),
-            on_update: None,
+            on_update: Some(Arc::new(callback)),
+            ..self
+        }
+    }
+
+    /// The [`HistoryProvider`] the router should use.
+    ///
+    /// Defaults to a default [`MemoryHistory`].
+    pub fn history(self, history: impl HistoryProvider<R> + 'static) -> Self {
+        Self {
+            history: Box::new(history),
+            ..self
+        }
+    }
+
+    /// A component to render when an external navigation fails.
+    ///
+    /// Defaults to a router-internal component called [`FailureExternalNavigation`]
+    pub fn failure_external_navigation(self, component: fn(Scope) -> Element) -> Self {
+        Self {
+            failure_external_navigation: component,
+            ..self
         }
     }
 }
