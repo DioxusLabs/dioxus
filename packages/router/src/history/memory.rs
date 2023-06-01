@@ -33,17 +33,15 @@ where
     ///     OtherPage {},
     /// }
     ///
-    /// let mut history = MemoryHistory::<Route>::with_initial_path("/").unwrap();
+    /// let mut history = MemoryHistory::<Route>::with_initial_path(Route::Index {}).unwrap();
     /// assert_eq!(history.current_route(), Route::Index {});
     /// assert_eq!(history.can_go_back(), false);
     /// ```
-    pub fn with_initial_path(path: impl AsRef<str>) -> Result<Self, <R as FromStr>::Err> {
-        let path = path.as_ref();
-
-        Ok(Self {
-            current: R::from_str(path)?,
+    pub fn with_initial_path(path: R) -> Self {
+        Self {
+            current: path,
             ..Default::default()
-        })
+        }
     }
 }
 

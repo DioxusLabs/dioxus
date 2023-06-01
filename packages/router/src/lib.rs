@@ -56,7 +56,7 @@ pub mod prelude {
     pub use crate::hooks::*;
     pub use crate::navigation::*;
     pub use crate::routable::*;
-    pub use crate::router_cfg::RouterConfiguration;
+    pub use crate::router_cfg::RouterConfig;
     pub use dioxus_router_macro::Routable;
 
     #[doc(hidden)]

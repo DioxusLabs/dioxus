@@ -7,7 +7,7 @@ use dioxus::prelude::*;
 
 use crate::{
     history::HistoryProvider, navigation::NavigationTarget, routable::Routable,
-    router_cfg::RouterConfiguration,
+    router_cfg::RouterConfig,
 };
 
 /// An error that can occur when navigating.
@@ -15,7 +15,8 @@ use crate::{
 pub struct ExternalNavigationFailure(String);
 
 /// A function the router will call after every routing update.
-pub(crate) type RoutingCallback<R> = Arc<dyn Fn(GenericRouterContext<R>) -> Option<NavigationTarget<R>>>;
+pub(crate) type RoutingCallback<R> =
+    Arc<dyn Fn(GenericRouterContext<R>) -> Option<NavigationTarget<R>>>;
 
 struct MutableRouterState<R>
 where
@@ -70,10 +71,7 @@ impl<R> GenericRouterContext<R>
 where
     R: Routable,
 {
-    pub(crate) fn new(
-        cfg: RouterConfiguration<R>,
-        mark_dirty: Arc<dyn Fn(ScopeId) + Sync + Send>,
-    ) -> Self
+    pub(crate) fn new(cfg: RouterConfig<R>, mark_dirty: Arc<dyn Fn(ScopeId) + Sync + Send>) -> Self
     where
         R: Clone,
     {

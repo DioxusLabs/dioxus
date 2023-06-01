@@ -4,97 +4,109 @@ use dioxus::prelude::*;
 use dioxus_router::prelude::*;
 
 fn main() {
-    dioxus_desktop::launch(app);
+    #[cfg(target_arch = "wasm32")]
+    dioxus_web::launch(App);
+    #[cfg(not(target_arch = "wasm32"))]
+    dioxus_desktop::launch(App);
 }
 
-fn app(cx: Scope) -> Element {
-    use_router(cx, &RouterConfiguration::default, &|| {
-        Segment::content(comp(Home))
-            .fixed(
-                "users",
-                Route::empty()
-                    .nested(Segment::content(comp(UserList)).catch_all((comp(User), UserId {}))),
-            )
-            .fixed(
-                "blog",
-                Route::empty().nested(
-                    Segment::content(comp(BlogList)).catch_all((comp(BlogPost), PostId {})),
-                ),
-            )
-            .fallback(comp(E404))
-    });
-
-    cx.render(rsx! {
-        ul {
-            li { Link { target: "/", "Go home!" } }
-            li { Link { target: "/users", "List all users" } }
-            li { Link { target: "/blog", "Blog posts" }}
-        }
-
-        Outlet { }
-    })
+// ANCHOR: router
+#[derive(Routable, Clone)]
+#[rustfmt::skip]
+enum Route {
+    #[layout(NavBar)]
+        #[route("/")]
+        Home {},
+        #[nest("/blog")]
+            #[layout(Blog)]
+                #[route("/")]
+                BlogList {},
+                #[route("/blog/:name")]
+                BlogPost { name: String },
+            #[end_layout]
+        #[end_nest]
+    #[end_layout]
+    #[nest("/myblog")]
+        #[redirect("/", || Route::BlogList {})]
+        #[redirect("/:name", |name: String| Route::BlogPost { name })]
+    #[end_nest]
+    #[route("/:...route")]
+    PageNotFound {
+        route: Vec<String>,
+    },
 }
+// ANCHOR_END: router
 
-fn Home(cx: Scope) -> Element {
-    render!(h1 { "Home" })
-}
-
-fn BlogList(cx: Scope) -> Element {
+fn App(cx: Scope) -> Element {
     render! {
-        h1 { "Blog Posts" }
-        ul {
-            li { Link { target: "/blog/1", "First blog post" } }
-            li { Link { target: "/blog/2", "Second blog post" } }
-            li { Link { target: "/blog/3", "Third blog post" } }
-        }
+        Router {}
     }
 }
 
-struct PostId;
-fn BlogPost(cx: Scope) -> Element {
-    let post = use_route(cx)?.parameter::<PostId>().unwrap();
-
-    cx.render(rsx! {
-        div {
-            h1 { "Reading blog post: {post}" }
-            p { "example blog post" }
-        }
-    })
-}
-
-fn UserList(cx: Scope) -> Element {
+#[inline_props]
+fn NavBar(cx: Scope) -> Element {
     render! {
-        h1 { "Users" }
-        ul {
-            li { Link { target: "/users/bill", "Bill" } }
-            li { Link { target: "/users/jeremy", "Jeremy" } }
-            li { Link { target: "/users/adrian", "Adrian" } }
-        }
-    }
-}
-
-struct UserId;
-fn User(cx: Scope) -> Element {
-    let state = use_route(cx)?;
-
-    let user = state.parameter::<UserId>().unwrap();
-
-    let query = state.query.as_ref().cloned().unwrap_or_default();
-    let bold = query.contains("bold") && !query.contains("bold=false");
-
-    cx.render(rsx! {
-        div {
-            h1 { "Showing user: {user}" }
-
-            if bold {
-                rsx!{ b { "bold" } }
-            } else {
-                rsx!{ i { "italic" } }
+        nav {
+            ul {
+                li { Link { target: Route::Home {}, "Home" } }
+                li { Link { target: Route::BlogList {}, "Blog" } }
             }
         }
-    })
+        Outlet {}
+    }
 }
 
-fn E404(cx: Scope) -> Element {
-    render!(h1 { "Error 404 - Page not Found" })
+#[inline_props]
+fn Home(cx: Scope) -> Element {
+    render! {
+        h1 { "Welcome to the Dioxus Blog!" }
+    }
+}
+
+#[inline_props]
+fn Blog(cx: Scope) -> Element {
+    render! {
+        h1 { "Blog" }
+        Outlet {}
+    }
+}
+
+#[inline_props]
+fn BlogList(cx: Scope) -> Element {
+    render! {
+        h2 { "Choose a post" }
+        ul {
+            li {
+                Link {
+                    target: Route::BlogPost { name: "Blog post 1".into() },
+                    "Read the first blog post"
+                }
+            }
+            li {
+                Link {
+                    target: Route::BlogPost { name: "Blog post 2".into() },
+                    "Read the second blog post"
+                }
+            }
+        }
+    }
+}
+
+#[inline_props]
+fn BlogPost(cx: Scope, name: String) -> Element {
+    render! {
+        h2 { "Blog Post: {name}"}
+    }
+}
+
+#[inline_props]
+fn PageNotFound(cx: Scope, route: Vec<String>) -> Element {
+    render! {
+        h1 { "Page not found" }
+        p { "We are terribly sorry, but the page you requested doesn't exist." }
+        pre {
+            color: "red",
+            "log:\nattemped to navigate to: {route:?}"
+        }
+    }
 }

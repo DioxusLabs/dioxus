@@ -8,7 +8,7 @@
 #![allow(non_snake_case)]
 use dioxus::prelude::*;
 use dioxus_fullstack::prelude::*;
-use dioxus_router::*;
+use dioxus_router::prelude::*;
 use serde::{Deserialize, Serialize};
 
 fn main() {
@@ -34,6 +34,8 @@ fn main() {
         }));
 
         use axum::extract::State;
+        use std::str::FromStr;
+
         PostServerData::register().unwrap();
         GetServerData::register().unwrap();
         tokio::runtime::Runtime::new()
@@ -57,7 +59,7 @@ fn main() {
                                         &ServeConfigBuilder::new(
                                             App,
                                             AppProps {
-                                                route: Some(format!("http://{addr}{uri}")),
+                                                route: Route::from_str(&uri.to_string()).ok(),
                                             },
                                         )
                                         .build(),
@@ -74,48 +76,64 @@ fn main() {
     }
 }
 
-#[derive(Clone, Debug, Props, PartialEq, Serialize, Deserialize)]
-struct AppProps {
-    route: Option<String>,
+#[derive(Clone, Routable, Serialize, Deserialize, Debug, PartialEq)]
+enum Route {
+    #[route("/")]
+    Home {},
+    #[route("/blog")]
+    Blog {},
 }
 
-fn App(cx: Scope<AppProps>) -> Element {
-    cx.render(rsx! {
-        Router {
-            initial_url: cx.props.route.clone(),
-
-            Route { to: "/blog",
-                Link {
-                    to: "/",
-                    "Go to counter"
-                }
-                table {
-                    tbody {
+#[inline_props]
+fn Blog(cx: Scope) -> Element {
+    render! {
+        Link {
+            target: Route::Home {},
+            "Go to counter"
+        }
+        table {
+            tbody {
+                for _ in 0..100 {
+                    tr {
                         for _ in 0..100 {
-                            tr {
-                                for _ in 0..100 {
-                                    td { "hello world!" }
-                                }
-                            }
+                            td { "hello world!" }
                         }
                     }
                 }
-            },
-            // Fallback
-            Route { to: "",
-                Counter {}
-            },
+            }
+        }
+    }
+}
+
+#[derive(Clone, Debug, Props, PartialEq, Serialize, Deserialize)]
+struct AppProps {
+    route: Option<Route>,
+}
+
+fn App(cx: Scope<AppProps>) -> Element {
+    #[cfg(feature = "ssr")]
+    let initial_route = cx.props.route.clone().unwrap_or(Route::Home {});
+    cx.render(rsx! {
+        Router {
+            config: move || RouterConfig::default().history({
+                #[cfg(feature = "ssr")]
+                let history = MemoryHistory::with_initial_path(initial_route);
+                #[cfg(feature = "web")]
+                let history = WebHistory::default();
+                history
+            })
         }
     })
 }
 
-fn Counter(cx: Scope) -> Element {
+#[inline_props]
+fn Home(cx: Scope) -> Element {
     let mut count = use_state(cx, || 0);
     let text = use_state(cx, || "...".to_string());
 
     cx.render(rsx! {
         Link {
-            to: "/blog",
+            target: Route::Blog {}
             "Go to blog"
         }
         div{

@@ -5,13 +5,13 @@ use std::{cell::RefCell, str::FromStr};
 use crate::{
     prelude::{GenericOutlet, GenericRouterContext},
     routable::Routable,
-    router_cfg::RouterConfiguration,
+    router_cfg::RouterConfig,
 };
 
 /// The config for [`GenericRouter`].
 pub struct RouterConfigFactory<R: Routable> {
     #[allow(clippy::type_complexity)]
-    config: RefCell<Option<Box<dyn FnOnce() -> RouterConfiguration<R>>>>,
+    config: RefCell<Option<Box<dyn FnOnce() -> RouterConfig<R>>>>,
 }
 
 impl<R: Routable> Default for RouterConfigFactory<R>
@@ -19,13 +19,11 @@ where
     <R as FromStr>::Err: std::fmt::Display,
 {
     fn default() -> Self {
-        Self::from(RouterConfiguration::default)
+        Self::from(RouterConfig::default)
     }
 }
 
-impl<R: Routable, F: FnOnce() -> RouterConfiguration<R> + 'static> From<F>
-    for RouterConfigFactory<R>
-{
+impl<R: Routable, F: FnOnce() -> RouterConfig<R> + 'static> From<F> for RouterConfigFactory<R> {
     fn from(value: F) -> Self {
         Self {
             config: RefCell::new(Some(Box::new(value))),

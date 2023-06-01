@@ -23,15 +23,15 @@ use crate::prelude::*;
 ///     #[route("/")]
 ///     Index {},
 /// }
-/// let cfg = RouterConfiguration::default().history(WebHistory<Route>::default());
+/// let cfg = RouterConfig::default().history(WebHistory<Route>::default());
 /// ```
-pub struct RouterConfiguration<R: Routable> {
+pub struct RouterConfig<R: Routable> {
     pub(crate) failure_external_navigation: fn(Scope) -> Element,
     pub(crate) history: Box<dyn HistoryProvider<R>>,
     pub(crate) on_update: Option<RoutingCallback<R>>,
 }
 
-impl<R: Routable + Clone> Default for RouterConfiguration<R>
+impl<R: Routable + Clone> Default for RouterConfig<R>
 where
     <R as std::str::FromStr>::Err: std::fmt::Display,
 {
@@ -50,7 +50,7 @@ where
     }
 }
 
-impl<R: Routable> RouterConfiguration<R> {
+impl<R: Routable> RouterConfig<R> {
     /// A function to be called whenever the routing is updated.
     ///
     /// The callback is invoked after the routing is updated, but before components and hooks are
