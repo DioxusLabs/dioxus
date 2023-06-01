@@ -79,7 +79,7 @@ mod segment;
     Routable,
     attributes(route, nest, end_nest, layout, end_layout, redirect)
 )]
-pub fn Routable(input: TokenStream) -> TokenStream {
+pub fn routable(input: TokenStream) -> TokenStream {
     let routes_enum = parse_macro_input!(input as syn::ItemEnum);
 
     let route_enum = match RouteEnum::parse(routes_enum) {
