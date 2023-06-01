@@ -8,10 +8,11 @@ Fallback routes allow us to do that.
 > path, like web apps running in the browser.
 
 ## A single global fallback
+
 To catch all cases of invalid paths within our app, we can simply add a fallback
 route to our root [`Segment`].
 
-```rust
+```rust, no_run
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
 use dioxus::prelude::*;
@@ -59,6 +60,7 @@ fn App(cx: Scope) -> Element {
 ```
 
 ## More specific fallback routes
+
 In some cases we might want to show different fallback content depending on what
 section of our app the user is in.
 
@@ -73,7 +75,7 @@ will then replace the global fallback whenever our [`Segment`] was active.
 Note the `.clear_fallback(false)` part. If we didn't add this, the fallback
 content would be rendered inside the `Settings` component.
 
-```rust
+```rust, no_run
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
 use dioxus::prelude::*;

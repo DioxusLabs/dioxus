@@ -11,7 +11,7 @@ In most cases we want to add the router to the root component of our app. This
 way, we can ensure that we have access to all its functionality everywhere. We
 add it by using the [`use_router`] hook
 
-```rust
+```rust, no_run
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
 use dioxus::prelude::*;

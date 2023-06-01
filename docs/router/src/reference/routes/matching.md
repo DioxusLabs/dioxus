@@ -14,10 +14,11 @@ _Matching_ routes make it easy to implement such behavior.
 > unfit for all other purposes.
 
 ## Code Example
+
 > Notice that the parameter of a _matching route_ has the same type as a
 > [_catch all route_](./catch_all.md).
 
-```rust
+```rust, no_run
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
 # use dioxus::prelude::*;
@@ -112,6 +113,7 @@ fn App(cx: Scope) -> Element {
 ```
 
 ## Matcher
+
 In the example above, both _matching routes_ use a regular expression to specify
 when they match. However, _matching routes_ are not limited to those. They
 accept all types that implement the [`Matcher`] trait.
@@ -119,7 +121,7 @@ accept all types that implement the [`Matcher`] trait.
 For example, you could (but probably shouldn't) implement a matcher, that
 matches all values with an even number of characters:
 
-```rust,no_run
+```rust, no_run
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus_router;
 # use dioxus_router::prelude::*;

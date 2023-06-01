@@ -10,6 +10,7 @@ functionality with catch all routes.
 > The parameter will be URL decoded.
 
 ## Creating a content component
+
 We start by creating a component that uses the parameters value.
 
 We can get the current state of the router using the [`use_route`] hook. From
@@ -23,7 +24,7 @@ will later also define on our route.
 > The [`use_route`] hook can only be used in components nested within a
 > component that called [`use_router`].
 
-```rust,no_run
+```rust, no_run
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
 use dioxus::prelude::*;
@@ -45,6 +46,7 @@ fn Greeting(cx: Scope) -> Element {
 ```
 
 ## Defining the routes
+
 Now we can define our route. Unlike a fixed [`Route`], a [`ParameterRoute`]
 needs two arguments to be created.
 
@@ -54,7 +56,7 @@ needs two arguments to be created.
 > For that reason, the example below would not work in practice, but showing
 > both forms (explicit and short) is more important for this example.
 
-```rust,no_run
+```rust, no_run
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
 # use dioxus::prelude::*;
@@ -83,6 +85,7 @@ fn App(cx: Scope) -> Element {
 ```
 
 ## Interaction with other routes
+
 Each individual [`Segment`] can only ever have one active route. This means that
 when a [`Segment`] has more than just a catch all route, the router has to
 decide which is active. It does that this way:
@@ -105,11 +108,13 @@ by the path, i.e. `//`.
 >
 > If you absolutely need an empty parameter on the root [`Segment`], a URL like
 > this _could_ work:
+>
 > - `https://your-site.example//` for web sites
 > - `dioxus://index.html//` for desktop apps
 
 ## Full Code
-```rust
+
+```rust, no_run
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
 # use dioxus::prelude::*;

@@ -4,10 +4,11 @@ Sometimes we want our application to navigate to another page without having the
 user click on a link. This is called programmatic navigation.
 
 ## Acquiring a [`Navigator`]
+
 To use programmatic navigation, we first have to acquire a [`Navigator`]. For
 that purpose we can use the [`use_navigate`] hook.
 
-```rust,no_run
+```rust, no_run
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
 use dioxus::prelude::*;
@@ -23,7 +24,9 @@ fn Content(cx: Scope) -> Element {
 ```
 
 ## Triggering a Navigation
+
 We can use the [`Navigator`] to trigger four different kinds of navigation:
+
 - `push` will navigate to the target. It works like a regular anchor tag.
 - `replace` works like `push`, except that it replaces the current history entry
   instead of adding a new one. This means the prior page cannot be restored with
@@ -32,7 +35,7 @@ We can use the [`Navigator`] to trigger four different kinds of navigation:
 - `Go forward` works like the browsers forward button (the opposite of the back
   button).
 
-```rust,no_run
+```rust, no_run
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
 # use dioxus::prelude::*;
@@ -64,6 +67,7 @@ You might have noticed that, like [`Link`], the [`Navigator`]s `push` and
 [`Internal`], [`Named`] and [`External`].
 
 ## External Navigation Targets
+
 Unlike a [`Link`], the [`Navigator`] cannot rely on the browser (or webview) to
 handle navigation to external targets via a generated anchor element.
 

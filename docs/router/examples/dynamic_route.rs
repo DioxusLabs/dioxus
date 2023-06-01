@@ -19,17 +19,13 @@ enum Route {
         Home {},
         #[nest("/blog")]
             #[layout(Blog)]
-                #[route("/")]
-                BlogList {},
-                #[route("/blog/:name")]
-                BlogPost { name: String },
+            #[route("/")]
+            BlogList {},
+            #[route("/blog/:name")]
+            BlogPost { name: String },
             #[end_layout]
         #[end_nest]
     #[end_layout]
-    #[nest("/myblog")]
-        #[redirect("/", || Route::BlogList {})]
-        #[redirect("/:name", |name: String| Route::BlogPost { name })]
-    #[end_nest]
     #[route("/:...route")]
     PageNotFound {
         route: Vec<String>,
@@ -63,6 +59,7 @@ fn Home(cx: Scope) -> Element {
     }
 }
 
+// ANCHOR: blog
 #[inline_props]
 fn Blog(cx: Scope) -> Element {
     render! {
@@ -70,7 +67,9 @@ fn Blog(cx: Scope) -> Element {
         Outlet {}
     }
 }
+// ANCHOR_END: blog
 
+// ANCHOR: blog_list
 #[inline_props]
 fn BlogList(cx: Scope) -> Element {
     render! {
@@ -91,13 +90,17 @@ fn BlogList(cx: Scope) -> Element {
         }
     }
 }
+// ANCHOR_END: blog_list
 
+// ANCHOR: blog_post
+// The name prop comes from the /:name route segment
 #[inline_props]
 fn BlogPost(cx: Scope, name: String) -> Element {
     render! {
         h2 { "Blog Post: {name}"}
     }
 }
+// ANCHOR_END: blog_post
 
 #[inline_props]
 fn PageNotFound(cx: Scope, route: Vec<String>) -> Element {

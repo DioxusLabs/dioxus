@@ -4,6 +4,7 @@ In some cases we might want to run custom code when the current route changes.
 For this reason, the [`RouterConfiguration`] exposes an `on_update` field.
 
 ## How does the callback behave?
+
 The `on_update` is called whenever the current routing information changes. It
 is called after the router updated its internal state, but before depended
 components and hooks are updated.
@@ -19,7 +20,8 @@ initiated the navigation, was found as a redirect target or returned by the
 `on_update` itself.
 
 ## Code Example
-```rust
+
+```rust, no_run
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
 # extern crate dioxus_router;

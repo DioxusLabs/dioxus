@@ -1,65 +1,39 @@
 # Redirection Perfection
+
 You're well on your way to becoming a routing master!
 
-In this chapter we will cover utilizing redirects so you can take Rickrolling to
-the next level.
+In this chapter, we will cover creating redirects
 
-## What Is This Redirect Thing?
+## Creating Redirects
+
 A redirect is very simple. When dioxus encounters a redirect while finding out
 what components to render, it will redirect the user to the target of the
 redirect.
 
 As a simple example, let's say you want user to still land on your blog, even
-if they used the path `/myblog`.
+if they used the path `/myblog` or `/myblog/:name`.
 
-All we need to do is update our route definition in our app component:
-```rust,no_run
-# // Hidden lines (like this one) make the documentation tests work.
-# extern crate dioxus;
-# use dioxus::prelude::*;
-# extern crate dioxus_router;
-# use dioxus_router::prelude::*;
-# fn Blog(cx: Scope) -> Element { unimplemented!() }
-# fn BlogList(cx: Scope) -> Element { unimplemented!() }
-# struct PostId;
-# struct BlogPostName;
-# fn BlogPost(cx: Scope) -> Element { unimplemented!() }
-# fn Home(cx: Scope) -> Element { unimplemented!() }
-# fn NavBar(cx: Scope) -> Element { unimplemented!() }
-# fn PageNotFound(cx: Scope) -> Element { unimplemented!() }
-# fn App(cx: Scope) -> Element {
-use_router(
-    cx,
-    &|| RouterConfiguration::default(),
-    &|| {
-        Segment::content(comp(Home))
-            .fixed("blog", Route::content(comp(Blog)).nested(
-                Segment::content(comp(BlogList)).catch_all(
-                    ParameterRoute::content::<PostId>(comp(BlogPost))
-                        .name::<BlogPostName>()
-                )
-            ))
-            .fixed("myblog", "/blog") // this is new
-            .fallback(comp(PageNotFound))
-    }
-);
-# unimplemented!()
-# }
+Redirects are special attributes in the router enum that accept a route and a closure
+with the route parameters. The closure should return a route to redirect to.
+
+Let's add a redirect to our router enum:
+
+```rust, no_run
+{{#include ../../examples/full_example.rs:router}}
 ```
 
 That's it! Now your users will be redirected to the blog.
 
-Notice that the `"/blog"` `str` is a [navigation target](./navigation-targets.md).
-We could also use external or named targets.
-
 ### Conclusion
-Well done! You've completed the Dioxus Router guide book. You've built a small
+
+Well done! You've completed the Dioxus Router guide. You've built a small
 application and learned about the many things you can do with Dioxus Router.
-To continue your journey, you can find a list of challenges down below, or you
+To continue your journey, you attempt a challenge listed below, look at the [router examples](https://github.com/DioxusLabs/dioxus/tree/master/packages/router/examples), or
 can check out the [API reference](https://docs.rs/dioxus-router/).
 
 ### Challenges
-- Organize your components into seperate files for better maintainability.
+
+- Organize your components into separate files for better maintainability.
 - Give your app some style if you haven't already.
 - Build an about page so your visitors know who you are.
 - Add a user system that uses URL parameters.

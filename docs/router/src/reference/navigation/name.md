@@ -11,6 +11,7 @@ automatically create the actual path to navigate to, even inserting required
 parameters.
 
 _Named_ navigation has a few advantages over _path-based_ navigation:
+
 - Links can be created without knowing the actual path.
 - It is much easier to find all links to a specific route.
 - The router knows what links are invalid (and will panic in debug builds).
@@ -27,7 +28,8 @@ _Named_ navigation has a few advantages over _path-based_ navigation:
 > certain conditions. None of these names can be used for app defined routes.
 
 ## Code Example
-```rust
+
+```rust, no_run
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
 use dioxus::prelude::*;
@@ -90,11 +92,12 @@ fn App(cx: Scope) -> Element {
 ```
 
 ## Check if a name is present
+
 You can check if a specific name is present for the current route. This works
 similar to getting the value of a [parameter route](../routes/parameter.md) and
 the same restrictions apply.
 
-```rust,no_run
+```rust, no_run
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
 use dioxus::prelude::*;

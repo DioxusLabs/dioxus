@@ -3,7 +3,7 @@
 [`Outlet`]s tell the router where to render content. In the following example
 the active routes content will be rendered within the [`Outlet`].
 
-```rust
+```rust, no_run
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
 # use dioxus::prelude::*;
@@ -45,24 +45,21 @@ fn App(cx: Scope) -> Element {
 
 The example above will output the following HTML (line breaks added for
 readability):
+
 ```html
-<header>
-    header
-</header>
-<h1>
-    Index
-</h1>
-<footer>
-    footer
-</footer>
+<header>header</header>
+<h1>Index</h1>
+<footer>footer</footer>
 ```
 
 ## Nested Outlets
+
 When using nested routes, we need to provide equally nested [`Outlet`]s.
 
 > Learn more about [nested routes](./routes/nested.md) in their own chapter.
 
 ## Named Outlets
+
 When building complex apps, we often need to display multiple pieces of content
 simultaneously. For example, we might have a sidebar that changes its content in
 sync with the main part of the page.
@@ -74,7 +71,7 @@ tell the router about our content.
 We then can use a named [`Outlet`] in our output, to tell the router where to
 put the side content.
 
-```rust
+```rust, no_run
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
 # use dioxus::prelude::*;
@@ -127,23 +124,21 @@ fn App(cx: Scope) -> Element {
 
 The example above will output the following HTML (line breaks added for
 readability):
+
 ```html
-<main>
-    Main Content
-</main>
-<aside>
-    Side Content
-</aside>
+<main>Main Content</main>
+<aside>Side Content</aside>
 ```
 
 ## Outlet depth override
+
 When nesting [`Outlet`]s, they communicate with each other. This allows the
 nested [`Outlet`] to render the content of the nested route.
 
 We can override the detected value. Be careful when doing so, it is incredibly
 easy to create an unterminated recursion. See below for an example of that.
 
-```rust
+```rust, no_run
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
 # use dioxus::prelude::*;
@@ -197,17 +192,17 @@ fn App(cx: Scope) -> Element {
 
 The example above will output the following HTML (line breaks added for
 readability):
+
 ```html
-<h2>
-    Nested
-</h2>
+<h2>Nested</h2>
 ```
 
 ### Outlet recursion
+
 This code will create a crash due to an unterminated recursion using
 [`Outlet`]s.
 
-```rust,no_run
+```rust, no_run
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
 # use dioxus::prelude::*;

@@ -1,11 +1,13 @@
 # Multiple Components & Redirects
 
 ## Multiple Components
+
 When creating complex apps we sometimes want to have multiple pieces of content
 side by side. The router allows us to do this. For more details see the section
 about [named `Outlet`s](../outlets.md#named-outlets).
 
 ## Redirects
+
 In some cases we may want to redirect our users to another page whenever they
 open a specific path. We can tell the router to do this when defining our
 routes.
@@ -16,7 +18,7 @@ routes.
 In the following example we will redirect everybody from `/` and `/start` to
 `/home`.
 
-```rust
+```rust, no_run
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
 use dioxus::prelude::*;

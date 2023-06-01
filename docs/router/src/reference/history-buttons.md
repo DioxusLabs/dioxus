@@ -14,7 +14,7 @@ forward buttons:
 > If you want to navigate through the history programmatically, take a look at
 > [`programmatic navigation`](./navigation/programmatic.md).
 
-```rust, no_run
+```rust, no_run, no_run
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
 use dioxus::prelude::*;

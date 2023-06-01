@@ -5,8 +5,10 @@ generating all pages), Dioxus Router provides functions to extract that
 information from a [`Segment`].
 
 ## Preparing an app
+
 We will start by preparing an app with some routes like we normally would.
-```rust
+
+```rust, no_run
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
 use dioxus::prelude::*;
@@ -74,10 +76,11 @@ fn App(cx: Scope) -> Element {
 ```
 
 ## Modifying the app to make using sitemaps easier
+
 Preparing our app for sitemap generation is quite easy. We just need to extract
 our segment definition into its own function.
 
-```rust,no_run
+```rust, no_run
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
 # use dioxus::prelude::*;
@@ -117,13 +120,14 @@ fn prepare_routes() -> Segment<Component> {
 ```
 
 ## Sitemaps with parameter names
+
 The first variant to generate sitemaps is very simple. It finds all routes
 within the [`Segment`] and adds them to the returned `Vec`.
 
 Matching and parameter routes are represented by their `key`, prefixed with `\`.
 Besides that `\`, all paths are URL encoded.
 
-```rust
+```rust, no_run
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
 # use dioxus::prelude::*;
@@ -161,6 +165,7 @@ assert_eq!(sitemap, expected);
 ```
 
 ## Sitemaps with actual parameter values
+
 The second variant to generate sitemaps is a bit more involved. When it
 encounters a parameter route, it inserts all values with a matching `key` that
 were provided to it.
@@ -169,7 +174,7 @@ Matching routes only add their path if the value matches their regex.
 
 All paths are URL encoded.
 
-```rust
+```rust, no_run
 # // Hidden lines (like this one) make the documentation tests work.
 use std::collections::{BTreeMap, HashSet};
 # extern crate dioxus;

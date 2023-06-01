@@ -15,7 +15,8 @@ the [`Link`] component is more convenient to use, as it automatically sets the
 `rel` attribute for the link, when the target is external.
 
 ## Code Example
-```rust
+
+```rust, no_run
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
 use dioxus::prelude::*;

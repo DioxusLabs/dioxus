@@ -34,7 +34,7 @@ You can override it by setting the `failure_external_navigation` value of the
 [`RouterConfiguration`]. The external URL will be provided via the
 [`FailureExternalNavigation`] parameter.
 
-```rust,no_run
+```rust, no_run
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
 # use dioxus::prelude::*;

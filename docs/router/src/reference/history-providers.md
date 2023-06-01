@@ -15,7 +15,7 @@ By default the router uses the [`MemoryHistory`]. It might be changed to use
 
 You can override the default history:
 
-```rust,no_run
+```rust, no_run
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
 use dioxus::prelude::*;
