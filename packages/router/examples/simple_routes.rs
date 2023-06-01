@@ -2,7 +2,6 @@
 
 use dioxus::prelude::*;
 use dioxus_router::prelude::*;
-use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
 fn main() {
@@ -128,7 +127,7 @@ fn Route3(cx: Scope, dynamic: String) -> Element {
 }
 
 #[rustfmt::skip]
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Routable)]
+#[derive(Clone, Debug, PartialEq, Routable)]
 enum Route {
     // Nests with parameters have types taken from child routes
     #[nest("/user/:user_id")]
