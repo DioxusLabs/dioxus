@@ -25,9 +25,11 @@ mod components {
 }
 
 mod contexts {
+    pub(crate) mod navigator;
     pub(crate) mod outlet;
     pub(crate) mod router;
-    pub use router::*;
+    pub use navigator::*;
+    pub(crate) use router::*;
 }
 
 mod router_cfg;
@@ -37,10 +39,13 @@ mod history;
 /// Hooks for interacting with the router in components.
 mod hooks {
     mod use_router;
-    pub use use_router::*;
+    pub(crate) use use_router::*;
 
     mod use_route;
     pub use use_route::*;
+
+    mod use_navigator;
+    pub use use_navigator::*;
 }
 
 /// A collection of useful items most applications might need.

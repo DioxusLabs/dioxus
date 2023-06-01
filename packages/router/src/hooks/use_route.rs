@@ -5,6 +5,8 @@ use crate::utils::use_router_internal::use_router_internal;
 
 /// A hook that provides access to information about the current routing location.
 ///
+/// > The Routable macro will define a version of this hook with an explicit type.
+///
 /// # Return values
 /// - None, when not called inside a [`GenericRouter`] component.
 /// - Otherwise the current route.

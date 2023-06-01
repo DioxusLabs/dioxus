@@ -61,12 +61,12 @@ pub fn routable(input: TokenStream) -> TokenStream {
             dioxus_router::prelude::GenericGoForwardButton::<#name>(cx)
         }
 
-        #vis fn use_router(cx: &dioxus::prelude::ScopeState) -> &dioxus_router::prelude::GenericRouterContext<#name> {
-            dioxus_router::prelude::use_generic_router(cx)
-        }
-
         #vis fn use_route(cx: &dioxus::prelude::ScopeState) -> Option<#name> {
             dioxus_router::prelude::use_generic_route(cx)
+        }
+
+        #vis fn use_navigator(cx: &dioxus::prelude::ScopeState) -> &dioxus_router::prelude::GenericNavigator<#name> {
+            dioxus_router::prelude::use_generic_navigator(cx)
         }
 
         #error_type

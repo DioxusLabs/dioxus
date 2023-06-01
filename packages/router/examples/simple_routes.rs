@@ -79,10 +79,10 @@ fn Route2(cx: Scope, user_id: usize) -> Element {
 
 #[inline_props]
 fn Route3(cx: Scope, dynamic: String) -> Element {
-    let router = use_router(cx);
-    let router_route = router.current();
-    let current_route = use_ref(cx, String::new);
-    let parsed = Route::from_str(&current_route.read());
+    let navigator = use_navigator(cx);
+    let current_route = use_route(cx)?;
+    let current_route_str = use_ref(cx, String::new);
+    let parsed = Route::from_str(&current_route_str.read());
 
     let site_map = Route::SITE_MAP
         .iter()
@@ -92,9 +92,9 @@ fn Route3(cx: Scope, dynamic: String) -> Element {
     render! {
         input {
             oninput: move |evt| {
-                *current_route.write() = evt.value.clone();
+                *current_route_str.write() = evt.value.clone();
             },
-            value: "{current_route.read()}"
+            value: "{current_route_str.read()}"
         }
         "dynamic: {dynamic}"
         Link {
@@ -102,14 +102,14 @@ fn Route3(cx: Scope, dynamic: String) -> Element {
             "hello world link"
         }
         button {
-            onclick: move |_| { router.push(NavigationTarget::External("https://www.google.com".to_string())); },
+            onclick: move |_| { navigator.push(NavigationTarget::External("https://www.google.com".to_string())); },
             "google link"
         }
         p { "Site Map" }
         pre { "{site_map:#?}" }
         p { "Dynamic link" }
         if let Ok(route) = parsed {
-            if route != router_route {
+            if route != current_route {
                 render! {
                     Link {
                         target: route.clone(),
