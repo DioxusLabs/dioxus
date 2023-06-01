@@ -7,7 +7,7 @@ pub mod navigation;
 pub mod routable;
 
 /// Components interacting with the router.
-mod components {
+pub mod components {
     mod default_errors;
     pub use default_errors::*;
 
@@ -37,7 +37,7 @@ mod router_cfg;
 mod history;
 
 /// Hooks for interacting with the router in components.
-mod hooks {
+pub mod hooks {
     mod use_router;
     pub(crate) use use_router::*;
 

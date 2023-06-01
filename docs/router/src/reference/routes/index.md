@@ -1,143 +1,65 @@
 # Defining Routes
 
-When creating a router we need to pass it a [`Segment`]. It tells the router
-about all the routes of our app.
+When creating a [`Routable`] enum, we can define routes for our application using the `route("path")` attribute.
 
-## Example content
+## Route Segments
 
-To get a good understanding of how we define routes we first need to prepare
-some example content, so we can see the routing in action.
+Each route is made up of segments. Most segments are separated by `/` characters in the path.
 
-```rust, no_run
-# // Hidden lines (like this one) make the documentation tests work.
-# extern crate dioxus;
-use dioxus::prelude::*;
-# extern crate dioxus_router;
-use dioxus_router::prelude::*;
+There are four fundamental types of segments:
 
-fn Index(cx: Scope) -> Element {
-    render! {
-        h1 { "Welcome to our test site!" }
-    }
-}
+1. [Static segments](#static-segments) are fixed strings that must be present in the path.
+2. [Dynamic segments](#dynamic-segments) are types that can be parsed from a segment.
+3. [Catch-all segments](#catch-all-segments) are types that can be parsed from multiple segments.
+4. [Query segments](#query-segments) are types that can be parsed from the query string.
 
-fn Other(cx: Scope) -> Element {
-    render! {
-        p { "some other content" }
-    }
-}
-```
+Routes are matched:
 
-## Index routes
+- First, from most specific to least specific (Static then Dynamic then Catch All) (Query is always matched)
+- Then, if multiple routes match the same path, the order in which they are defined in the enum is followed.
 
-The easiest thing to do is to define an index route.
+## Static segments
 
-Index routes act very similar to `index.html` files in most web servers. They
-are active, when we don't specify a route.
-
-> Note that we wrap our `Index` component with [`comp`]. This is because of
-> rust type system requirements.
+Fixed routes match a specific path. For example, the route `#[route("/about")]` will match the path `/about`.
 
 ```rust, no_run
-# // Hidden lines (like this one) make the documentation tests work.
-# extern crate dioxus;
-# use dioxus::prelude::*;
-# extern crate dioxus_router;
-# use dioxus_router::prelude::*;
-# fn Index(cx: Scope) -> Element { unimplemented!() }
-#
-fn App(cx: Scope) -> Element {
-    use_router(
-        cx,
-        &|| RouterConfiguration {
-            ..Default::default()
-        },
-        &|| Segment::content(comp(Index))
-    );
-
-    // ...
-    # unimplemented!()
-}
+{{#include ../../../examples/static_segments.rs:route}}
 ```
 
-## Fixed routes
+## Dynamic Segments
 
-It is almost as easy to define a fixed route.
+Dynamic segments are in the form of `:name` where `name` is
+the name of the field in the route variant. If the segment is parsed
+successfully then the route matches, otherwise the matching continues.
 
-Fixed routes work similar to how web servers treat files. They are active, when
-specified in the path. In the example, the path must be `/other`.
-
-> The path will be URL decoded before checking if it matches our route.
+The segment can be of any type that implements `FromStr`.
 
 ```rust, no_run
-# // Hidden lines (like this one) make the documentation tests work.
-# extern crate dioxus;
-# use dioxus::prelude::*;
-# extern crate dioxus_router;
-# use dioxus_router::prelude::*;
-# fn Index(cx: Scope) -> Element { unimplemented!() }
-# fn Other(cx: Scope) -> Element { unimplemented!() }
-#
-fn App(cx: Scope) -> Element {
-    use_router(
-        cx,
-        &|| RouterConfiguration {
-            ..Default::default()
-        },
-        &|| Segment::content(comp(Index)).fixed("other", comp(Other))
-        //                                      ^ note the absence of a / prefix
-    );
-
-    // ...
-    # unimplemented!()
-}
+{{#include ../../../examples/dynamic_segments.rs:route}}
 ```
 
-## Full Code
+## Catch All Segments
+
+Catch All segments are in the form of `:...name` where `name` is the name of the field in the route variant. If the segments are parsed successfully then the route matches, otherwise the matching continues.
+
+The segment can be of any type that implements `FromSegments`. (Vec<String> implements this by default)
+
+Catch All segments must be the _last route segment_ in the path (query segments are not counted) and cannot be included in nests.
 
 ```rust, no_run
-# // Hidden lines (like this one) make the documentation tests work.
-# extern crate dioxus;
-use dioxus::prelude::*;
-# extern crate dioxus_router;
-use dioxus_router::{history::MemoryHistory, prelude::*};
-# extern crate dioxus_ssr;
-
-fn Index(cx: Scope) -> Element {
-    render! {
-        h1 { "Welcome to our test site!" }
-    }
-}
-
-fn Other(cx: Scope) -> Element {
-    render! {
-        p { "some other content" }
-    }
-}
-
-fn App(cx: Scope) -> Element {
-    use_router(
-        cx,
-        &|| RouterConfiguration {
-            # synchronous: true,
-            # history: Box::new(MemoryHistory::with_initial_path("/other").unwrap()),
-            ..Default::default()
-        },
-        &|| Segment::content(comp(Index)).fixed("other", comp(Other))
-    );
-
-    render! {
-        Outlet { }
-    }
-}
-#
-# let mut vdom = VirtualDom::new(App);
-# vdom.rebuild();
-# assert_eq!(
-#     dioxus_ssr::render(&vdom),
-#     "<p>some other content</p>"
-# );
+{{#include ../../../examples/catch_all_segments.rs:route}}
 ```
 
-[`comp`]: https://docs.rs/dioxus-router/latest/dioxus_router/prelude/fn.comp.html
-[`Segment`]: https://docs.rs/dioxus-router-core/latest/dioxus_router_core/routes/struct.Segment.html
+## Query Segments
+
+Query segments are in the form of `?:name` where `name` is the name of the field in the route variant.
+
+Unlike [Dynamic Segments](#dynamic-segments) and [Catch All Segments](#catch-all-segments), parsing a Query segment must not fail.
+
+The segment can be of any type that implements `FromQuery`.
+
+Query segments must be the _after all route segments_ and cannot be included in nests.
+
+```rust, no_run
+{{#include ../../../examples/query_segments.rs:route}}
+```

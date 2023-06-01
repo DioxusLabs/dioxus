@@ -9,7 +9,6 @@ enum Route {
     // The home page is at the / route
     #[route("/")]
     // If the name of the component and variant are the same you can omit the component and props name
-    // If they are different you can specify them like this:
     // #[route("/", ComponentName, PropsName)]
     Home {},
 }
@@ -19,7 +18,9 @@ enum Route {
 #[inline_props]
 fn App(cx: Scope) -> Element {
     render! {
-        Router {}
+        Router {
+            config: || RouterConfig::default().history(WebHistory::default())
+        }
     }
 }
 // ANCHOR_END: app

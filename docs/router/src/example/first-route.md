@@ -13,7 +13,7 @@ First, we need an actual page to route to! Let's add a homepage component:
 {{#include ../../examples/first_route.rs:home}}
 ```
 
-## To Route or Not to Route
+## Creating Routes
 
 We want to use Dioxus Router to separate our application into different "pages".
 Dioxus Router will then determine which page to render based on the URL path.
@@ -35,7 +35,7 @@ you enter a different path for the URL, nothing should be displayed.
 This is because we told Dioxus Router to render the `Home` component only when
 the URL path is `/`.
 
-## What if a Route Doesn't Exist?
+## Fallback Route
 
 In our example, when a route doesn't exist Dioxus Router doesn't render anything. Many sites also have a "404" page when a path does not exist. Let's add one to our site.
 
