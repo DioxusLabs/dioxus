@@ -74,6 +74,9 @@ mod js {
                         node.value = value;
                     }
                     break;
+                case "initial_value":
+                    node.defaultValue = value;
+                    break;
                 case "checked":
                     node.checked = value === "true";
                     break;

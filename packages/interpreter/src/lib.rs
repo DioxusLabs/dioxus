@@ -10,3 +10,13 @@ mod bindings;
 
 #[cfg(feature = "web")]
 pub use bindings::Interpreter;
+
+// Common bindings for minimal usage.
+#[cfg(feature = "minimal_bindings")]
+pub mod minimal_bindings {
+    use wasm_bindgen::{prelude::wasm_bindgen, JsValue};
+    #[wasm_bindgen(module = "/src/setAttributeInner.js")]
+    extern "C" {
+        pub fn setAttributeInner(node: JsValue, name: &str, value: JsValue, ns: Option<&str>);
+    }
+}

@@ -1,3 +1,5 @@
+import setAttributeInner from "./setAttributeInner";
+
 class ListenerMap {
   constructor(root) {
     // bubbling events can listen at the root element
@@ -153,10 +155,10 @@ class Interpreter {
       this.RemoveAttribute(id, field, ns);
     } else {
       const node = this.nodes[id];
-      this.SetAttributeInner(node, field, value, ns);
+      setAttributeInner(node, field, value, ns);
     }
   }
-  SetAttributeInner(node, field, value, ns) {
+  /*SetAttributeInner(node, field, value, ns) {
     const name = field;
     if (ns === "style") {
       // ????? why do we need to do this
@@ -172,6 +174,9 @@ class Interpreter {
           if (value !== node.value) {
             node.value = value;
           }
+          break;
+        case "initial_value":
+          node.defaultValue = value;
           break;
         case "checked":
           node.checked = value === "true" || value === true;
@@ -191,7 +196,7 @@ class Interpreter {
           }
       }
     }
-  }
+  }*/
   RemoveAttribute(root, field, ns) {
     const name = field;
     const node = this.nodes[root];
