@@ -17,13 +17,27 @@ fn main() {
 }
 
 fn app(cx: Scope) -> Element {
-    use_router(cx, &RouterConfiguration::default, &|| {
-        Segment::content(comp(Home))
-            .fixed("games", comp(Games))
-            .fixed("play", comp(Play))
-            .fixed("settings", comp(Settings))
-    });
+    render! {
+        Router {}
+    }
+}
 
+#[derive(Routable, Clone)]
+#[rustfmt::skip]
+enum Route {
+    #[layout(Footer)]
+        #[route("/")]
+        Home {},
+        #[route("/games")]
+        Games {},
+        #[route("/play")]
+        Play {},
+        #[route("/settings")]
+        Settings {},
+}
+
+#[inline_props]
+fn Footer(cx: Scope) -> Element {
     render! {
         div {
             Outlet { }
@@ -34,28 +48,32 @@ fn app(cx: Scope) -> Element {
 
             nav {
                 ul {
-                    li { Link { target: "/", "Home" } }
-                    li { Link { target: "/games", "Games" } }
-                    li { Link { target: "/play", "Play" } }
-                    li { Link { target: "/settings", "Settings" } }
+                    li { Link { target: Route::Home {}, "Home" } }
+                    li { Link { target: Route::Games {}, "Games" } }
+                    li { Link { target: Route::Play {}, "Play" } }
+                    li { Link { target: Route::Settings {}, "Settings" } }
                 }
             }
         }
     }
 }
 
+#[inline_props]
 fn Home(cx: Scope) -> Element {
     render!("Home")
 }
 
+#[inline_props]
 fn Games(cx: Scope) -> Element {
     render!("Games")
 }
 
+#[inline_props]
 fn Play(cx: Scope) -> Element {
     render!("Play")
 }
 
+#[inline_props]
 fn Settings(cx: Scope) -> Element {
     render!("Settings")
 }

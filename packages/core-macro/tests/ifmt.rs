@@ -21,7 +21,7 @@ fn formatting_compiles() {
     // function calls in formatings work
     assert_eq!(
         format_args_f!("{x.borrow():?}").to_string(),
-        format!("{:?}", x.borrow())
+        format!("{:?}", x)
     );
 
     // allows duplicate format args

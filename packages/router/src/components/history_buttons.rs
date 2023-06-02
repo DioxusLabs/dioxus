@@ -24,8 +24,7 @@ pub struct GenericHistoryButtonProps<'a> {
 /// ```rust
 /// # use dioxus::prelude::*;
 /// # use dioxus_router::prelude::*;
-/// # use serde::{Deserialize, Serialize};
-/// #[derive(Clone, Serialize, Deserialize, Routable)]
+/// #[derive(Clone, Routable)]
 /// enum Route {
 ///     #[route("/")]
 ///     Index {},
@@ -98,8 +97,7 @@ pub fn GenericGoBackButton<'a, R: Routable>(
 /// ```rust
 /// # use dioxus::prelude::*;
 /// # use dioxus_router::prelude::*;
-/// # use serde::{Deserialize, Serialize};
-/// #[derive(Clone, Serialize, Deserialize, Routable)]
+/// #[derive(Clone, Routable)]
 /// enum Route {
 ///     #[route("/")]
 ///     Index {},

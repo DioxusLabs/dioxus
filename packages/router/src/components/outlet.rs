@@ -15,9 +15,8 @@ use dioxus::prelude::*;
 /// # Example
 /// ```rust
 /// # use dioxus::prelude::*;
-/// # use serde::{Deserialize, Serialize};
 /// # use dioxus_router::prelude::*;
-/// #[derive(Clone, Serialize, Deserialize, Routable)]
+/// #[derive(Clone, Routable)]
 /// #[rustfmt::skip]
 /// enum Route {
 ///     #[nest("/wrap")]
@@ -59,10 +58,7 @@ use dioxus::prelude::*;
 /// # fn App(cx: Scope) -> Element {
 /// #     render! {
 /// #         Router {
-/// #             config: RouterConfiguration {
-/// #                 history: Box::new(MemoryHistory::with_initial_path("/wrap").unwrap()),
-/// #                 ..Default::default()
-/// #             }
+/// #             config: || RouterConfig::default().history(MemoryHistory::with_initial_path(Route::Child {}))
 /// #         }
 /// #     }
 /// # }

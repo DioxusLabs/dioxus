@@ -19,12 +19,11 @@ pub enum NavigationTarget<R: Routable> {
     /// # use dioxus::prelude::*;
     /// # use dioxus_router::prelude::*;
     /// # use dioxus_router::navigation::NavigationTarget;
-    /// # use serde::{Deserialize, Serialize};
     /// # #[inline_props]
     /// # fn Index(cx: Scope) -> Element {
     /// #     todo!()
     /// # }
-    /// #[derive(Clone, Serialize, Deserialize, Routable, PartialEq, Debug)]
+    /// #[derive(Clone, Routable, PartialEq, Debug)]
     /// enum Route {
     ///     #[route("/")]
     ///     Index {},
@@ -40,12 +39,11 @@ pub enum NavigationTarget<R: Routable> {
     /// # use dioxus::prelude::*;
     /// # use dioxus_router::prelude::*;
     /// # use dioxus_router::navigation::NavigationTarget;
-    /// # use serde::{Deserialize, Serialize};
     /// # #[inline_props]
     /// # fn Index(cx: Scope) -> Element {
     /// #     todo!()
     /// # }
-    /// #[derive(Clone, Serialize, Deserialize, Routable, PartialEq, Debug)]
+    /// #[derive(Clone, Routable, PartialEq, Debug)]
     /// enum Route {
     ///     #[route("/")]
     ///     Index {},

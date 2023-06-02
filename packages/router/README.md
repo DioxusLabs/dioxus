@@ -30,11 +30,10 @@ expressiveness.
 
 use dioxus::prelude::*;
 use dioxus_router::prelude::*;
-use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
 #[rustfmt::skip]
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Routable)]
+#[derive(Clone, Debug, PartialEq, Routable)]
 enum Route {
     #[nest("/blog")]
         #[layout(Blog)]

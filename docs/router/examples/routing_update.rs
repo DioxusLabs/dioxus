@@ -29,9 +29,9 @@ fn app(cx: Scope) -> Element {
     render! {
         Router {
             config: || RouterConfig::default().on_update(|state|{
-                (state.current() == Route::Index {}).then(|| {
+                (state.current() == Route::Index {}).then_some(
                     NavigationTarget::Internal(Route::Home {})
-                })
+                )
             })
         }
     }

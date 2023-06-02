@@ -1,13 +1,21 @@
 //! Tiny CRM: A port of the Yew CRM example to Dioxus.
 #![allow(non_snake_case)]
-
-use std::sync::{Arc, Mutex};
-
 use dioxus::prelude::*;
 use dioxus_router::prelude::*;
 
 fn main() {
     dioxus_desktop::launch(App);
+}
+
+#[derive(Routable, Clone)]
+#[rustfmt::skip]
+enum Route {
+    #[route("/")]
+    ClientList {},
+    #[route("/new")]
+    ClientAdd {},
+    #[route("/settings")]
+    Settings {},
 }
 
 #[derive(Clone, Debug, Default)]
@@ -17,22 +25,10 @@ pub struct Client {
     pub description: String,
 }
 
-type ClientContext = Arc<Mutex<Vec<Client>>>;
+type ClientContext = Vec<Client>;
 
 fn App(cx: Scope) -> Element {
-    use_router(cx, &RouterConfiguration::default, &|| {
-        Segment::content(comp(ClientList))
-            .fixed(
-                "new",
-                Route::content(comp(ClientAdd)).name::<ClientAddName>(),
-            )
-            .fixed(
-                "settings",
-                Route::content(comp(Settings)).name::<SettingsName>(),
-            )
-    });
-
-    use_context_provider::<ClientContext>(cx, Default::default);
+    use_shared_state_provider::<ClientContext>(cx, Default::default);
 
     render! {
         link {
@@ -50,28 +46,29 @@ fn App(cx: Scope) -> Element {
 
         h1 { "Dioxus CRM Example" }
 
-        Outlet { }
+        Router {}
     }
 }
 
+#[inline_props]
 fn ClientList(cx: Scope) -> Element {
-    let clients = use_context::<ClientContext>(cx).unwrap();
+    let clients = use_shared_state::<ClientContext>(cx).unwrap();
 
     cx.render(rsx! {
         h2 { "List of Clients" }
 
         Link {
-            target: named::<ClientAddName>(),
+            target: Route::ClientAdd {},
             class: "pure-button pure-button-primary",
             "Add Client"
         }
         Link {
-            target: named::<SettingsName>(),
+            target: Route::Settings {},
             class: "pure-button",
             "Settings"
         }
 
-        clients.lock().unwrap().iter().map(|client| rsx! {
+        clients.read().iter().map(|client| rsx! {
             div {
                 class: "client",
                 style: "margin-bottom: 50px",
@@ -83,14 +80,14 @@ fn ClientList(cx: Scope) -> Element {
     })
 }
 
-struct ClientAddName;
+#[inline_props]
 fn ClientAdd(cx: Scope) -> Element {
-    let clients = use_context::<ClientContext>(cx).unwrap();
+    let clients = use_shared_state::<ClientContext>(cx).unwrap();
     let first_name = use_state(cx, String::new);
     let last_name = use_state(cx, String::new);
     let description = use_state(cx, String::new);
 
-    let navigator = use_navigate(cx).unwrap();
+    let navigator = use_navigator(cx);
 
     cx.render(rsx! {
         h2 { "Add new Client" }
@@ -98,7 +95,7 @@ fn ClientAdd(cx: Scope) -> Element {
         form {
             class: "pure-form pure-form-aligned",
             onsubmit: move |_| {
-                let mut clients = clients.lock().unwrap();
+                let mut clients = clients.write();
 
                 clients.push(Client {
                     first_name: first_name.to_string(),
@@ -106,7 +103,7 @@ fn ClientAdd(cx: Scope) -> Element {
                     description: description.to_string(),
                 });
 
-                navigator.push(named::<RootIndex>());
+                navigator.push(Route::ClientList {});
             },
 
             fieldset {
@@ -164,7 +161,7 @@ fn ClientAdd(cx: Scope) -> Element {
                         "Save"
                     }
                     Link {
-                        target: named::<RootIndex>(),
+                        target: Route::ClientList {},
                         class: "pure-button pure-button-primary red",
                         "Cancel"
                     }
@@ -176,9 +173,9 @@ fn ClientAdd(cx: Scope) -> Element {
     })
 }
 
-struct SettingsName;
+#[inline_props]
 fn Settings(cx: Scope) -> Element {
-    let clients = use_context::<ClientContext>(cx).unwrap();
+    let clients = use_shared_state::<ClientContext>(cx).unwrap();
 
     cx.render(rsx! {
         h2 { "Settings" }
@@ -186,14 +183,14 @@ fn Settings(cx: Scope) -> Element {
         button {
             class: "pure-button pure-button-primary red",
             onclick: move |_| {
-                let mut clients = clients.lock().unwrap();
+                let mut clients = clients.write();
                 clients.clear();
             },
             "Remove all Clients"
         }
 
         Link {
-            target: named::<RootIndex>(),
+            target: Route::ClientList {},
             class: "pure-button",
             "Go back"
         }

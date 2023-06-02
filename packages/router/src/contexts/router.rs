@@ -22,17 +22,6 @@ struct MutableRouterState<R>
 where
     R: Routable,
 {
-    /// Whether there is a previous page to navigate back to.
-    ///
-    /// Even if this is [`true`], there might not be a previous page. However, it is nonetheless
-    /// safe to tell the router to go back.
-    can_go_back: bool,
-    /// Whether there is a future page to navigate forward to.
-    ///
-    /// Even if this is [`true`], there might not be a future page. However, it is nonetheless safe
-    /// to tell the router to go forward.
-    can_go_forward: bool,
-
     /// The current prefix.
     prefix: Option<String>,
 
@@ -76,8 +65,6 @@ where
         R: Clone,
     {
         let state = Arc::new(RwLock::new(MutableRouterState {
-            can_go_back: false,
-            can_go_forward: false,
             prefix: Default::default(),
             history: cfg.history,
             unresolved_error: None,
@@ -112,13 +99,13 @@ where
     /// Check whether there is a previous page to navigate back to.
     #[must_use]
     pub fn can_go_back(&self) -> bool {
-        self.state.read().unwrap().can_go_back
+        self.state.read().unwrap().history.can_go_back()
     }
 
     /// Check whether there is a future page to navigate forward to.
     #[must_use]
     pub fn can_go_forward(&self) -> bool {
-        self.state.read().unwrap().can_go_forward
+        self.state.read().unwrap().history.can_go_forward()
     }
 
     /// Go back to the previous location.

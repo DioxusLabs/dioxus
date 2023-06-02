@@ -17,10 +17,9 @@ use crate::utils::use_router_internal::use_router_internal;
 /// # Example
 /// ```rust
 /// # use dioxus::prelude::*;
-/// # use serde::{Deserialize, Serialize};
 /// # use dioxus_router::{prelude::*};
 ///
-/// #[derive(Clone, Serialize, Deserialize, Routable)]
+/// #[derive(Clone, Routable)]
 /// enum Route {
 ///     #[route("/")]
 ///     Index {},

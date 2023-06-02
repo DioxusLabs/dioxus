@@ -12,18 +12,17 @@ use crate::prelude::*;
 /// This implements [`Default`] and follows the builder pattern, so you can use it like this:
 /// ```rust,no_run
 /// # use dioxus_router::prelude::*;
-/// # use serde::{Deserialize, Serialize};
 /// # use dioxus::prelude::*;
 /// # #[inline_props]
 /// # fn Index(cx: Scope) -> Element {
 /// #     todo!()
 /// # }
-/// #[derive(Clone, Serialize, Deserialize, Routable)]
+/// #[derive(Clone, Routable)]
 /// enum Route {
 ///     #[route("/")]
 ///     Index {},
 /// }
-/// let cfg = RouterConfig::default().history(WebHistory<Route>::default());
+/// let cfg = RouterConfig::default().history(WebHistory::<Route>::default());
 /// ```
 pub struct RouterConfig<R: Routable> {
     pub(crate) failure_external_navigation: fn(Scope) -> Element,

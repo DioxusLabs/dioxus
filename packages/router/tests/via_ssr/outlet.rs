@@ -39,8 +39,8 @@ fn prepare(path: impl Into<String>) -> VirtualDom {
             h1 { "App" }
             Router {
                 config: {
-                    let path = cx.props.path.clone();
-                    move || RouterConfiguration::default().history(MemoryHistory::with_initial_path(path).unwrap())
+                    let path = cx.props.path.parse().unwrap();
+                    move || RouterConfig::default().history(MemoryHistory::with_initial_path(path))
                 }
             }
         }

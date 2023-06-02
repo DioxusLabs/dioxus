@@ -8,10 +8,6 @@ fn main() {
 }
 
 fn app(cx: Scope) -> Element {
-    use_router(cx, &RouterConfiguration::default, &|| {
-        Segment::content(comp(Home)).fixed("settings", comp(Settings))
-    });
-
     cx.render(rsx! (
         div {
             p {
@@ -27,20 +23,39 @@ fn app(cx: Scope) -> Element {
             }
         }
         div {
-            Outlet { }
-            p { "----"}
-            ul {
-                Link { target: "/", li { "Router link to home" } },
-                Link { target: "/settings", li { "Router link to settings" } },
-            }
+            Router {}
         }
     ))
 }
 
+#[derive(Routable, Clone)]
+#[rustfmt::skip]
+enum Route {
+    #[layout(Header)]
+        #[route("/")]
+        Home {},
+        #[route("/settings")]
+        Settings {},
+}
+
+#[inline_props]
+fn Header(cx: Scope) -> Element {
+    render! {
+        h1 { "Your app here" }
+        ul {
+            li { Link { target: Route::Home {}, "home" } }
+            li { Link { target: Route::Settings {}, "settings" } }
+        }
+        Outlet {}
+    }
+}
+
+#[inline_props]
 fn Home(cx: Scope) -> Element {
     render!(h1 { "Home" })
 }
 
+#[inline_props]
 fn Settings(cx: Scope) -> Element {
     render!(h1 { "Settings" })
 }

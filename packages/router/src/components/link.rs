@@ -83,9 +83,8 @@ impl<R: Routable> Debug for GenericLinkProps<'_, R> {
 /// ```rust
 /// # use dioxus::prelude::*;
 /// # use dioxus_router::prelude::*;
-/// # use serde::{Deserialize, Serialize};
 ///
-/// #[derive(Clone, Serialize, Deserialize, Routable)]
+/// #[derive(Clone, Routable)]
 /// enum Route {
 ///     #[route("/")]
 ///     Index {},

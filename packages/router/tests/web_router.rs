@@ -1,19 +1,15 @@
 #![cfg(feature = "wasm_test")]
 #![allow(non_snake_case)]
 
-use std::sync::Arc;
-
 use dioxus::prelude::*;
 use dioxus_router::prelude::*;
 use gloo::utils::document;
-use serde::{Deserialize, Serialize};
-use std::str::FromStr;
 use wasm_bindgen_test::*;
 
 wasm_bindgen_test_configure!(run_in_browser);
 
 #[rustfmt::skip]
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Routable)]
+#[derive(Clone, Debug, PartialEq, Routable)]
 enum Route {
     #[route("/")]
     Home {},
@@ -25,12 +21,7 @@ enum Route {
 }
 
 fn App(cx: Scope) -> Element {
-    render!(Router {
-        config: RouterConfiguration {
-            history: Box::<WebHistory<Route>>::default(),
-            ..Default::default()
-        }
-    })
+    render!(Router {})
 }
 
 #[inline_props]

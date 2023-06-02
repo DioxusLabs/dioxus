@@ -34,7 +34,7 @@ where
         render! {
             h1 { "App" }
             GenericRouter::<R> {
-                config: || RouterConfiguration::default().history(MemoryHistory::default())
+                config: || RouterConfig::default().history(MemoryHistory::default())
             }
         }
     }

@@ -18,7 +18,7 @@ static REGISTERED_SERVER_FUNCTIONS: once_cell::sync::Lazy<
 /// The registry of all Dioxus server functions.
 pub struct DioxusServerFnRegistry;
 
-#[cfg(any(feature = "ssr"))]
+#[cfg(feature = "ssr")]
 impl server_fn::ServerFunctionRegistry<DioxusServerContext> for DioxusServerFnRegistry {
     type Error = ServerRegistrationFnError;
 

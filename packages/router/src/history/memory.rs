@@ -19,13 +19,12 @@ where
     ///
     /// ```rust
     /// # use dioxus_router::prelude::*;
-    /// # use serde::{Deserialize, Serialize};
     /// # use dioxus::prelude::*;
     /// # #[inline_props]
     /// # fn Index(cx: Scope) -> Element { todo!() }
     /// # #[inline_props]
     /// # fn OtherPage(cx: Scope) -> Element { todo!() }
-    /// #[derive(Clone, Serialize, Deserialize, Routable, Debug, PartialEq)]
+    /// #[derive(Clone, Routable, Debug, PartialEq)]
     /// enum Route {
     ///     #[route("/")]
     ///     Index {},
@@ -33,7 +32,7 @@ where
     ///     OtherPage {},
     /// }
     ///
-    /// let mut history = MemoryHistory::<Route>::with_initial_path(Route::Index {}).unwrap();
+    /// let mut history = MemoryHistory::<Route>::with_initial_path(Route::Index {});
     /// assert_eq!(history.current_route(), Route::Index {});
     /// assert_eq!(history.can_go_back(), false);
     /// ```
