@@ -143,13 +143,13 @@ impl WebsysDom {
                             Some(ns) => minimal_bindings::setAttributeInner(
                                 el.clone().into(),
                                 name,
-                                JsValue::from_str(*value),
+                                JsValue::from_str(value),
                                 Some(ns),
                             ),
                             None => minimal_bindings::setAttributeInner(
                                 el.clone().into(),
                                 name,
-                                JsValue::from_str(*value),
+                                JsValue::from_str(value),
                                 None,
                             ),
                         }
