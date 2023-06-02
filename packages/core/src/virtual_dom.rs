@@ -389,64 +389,70 @@ impl VirtualDom {
             // Loop through each dynamic attribute (in a depth first order) in this template before moving up to the template's parent.
             while let Some(el_ref) = parent_path {
                 // safety: we maintain references of all vnodes in the element slab
-                let template = unsafe { el_ref.template.unwrap().as_ref() };
-                let node_template = template.template.get();
-                let target_path = el_ref.path;
+                if let Some(template) = el_ref.template {
+                    let template = unsafe { template.as_ref() };
+                    let node_template = template.template.get();
+                    let target_path = el_ref.path;
 
-                for (idx, attr) in template.dynamic_attrs.iter().enumerate() {
-                    let this_path = node_template.attr_paths[idx];
+                    for (idx, attr) in template.dynamic_attrs.iter().enumerate() {
+                        let this_path = node_template.attr_paths[idx];
 
-                    // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
-                    if attr.name.trim_start_matches("on") == name
-                        && target_path.is_decendant(&this_path)
-                    {
-                        listeners.push(&attr.value);
+                        // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
+                        if attr.name.trim_start_matches("on") == name
+                            && target_path.is_decendant(&this_path)
+                        {
+                            listeners.push(&attr.value);
 
-                        // Break if this is the exact target element.
-                        // This means we won't call two listeners with the same name on the same element. This should be
-                        // documented, or be rejected from the rsx! macro outright
-                        if target_path == this_path {
-                            break;
+                            // Break if this is the exact target element.
+                            // This means we won't call two listeners with the same name on the same element. This should be
+                            // documented, or be rejected from the rsx! macro outright
+                            if target_path == this_path {
+                                break;
+                            }
                         }
                     }
-                }
 
-                // Now that we've accumulated all the parent attributes for the target element, call them in reverse order
-                // We check the bubble state between each call to see if the event has been stopped from bubbling
-                for listener in listeners.drain(..).rev() {
-                    if let AttributeValue::Listener(listener) = listener {
-                        if let Some(cb) = listener.borrow_mut().as_deref_mut() {
-                            cb(uievent.clone());
-                        }
+                    // Now that we've accumulated all the parent attributes for the target element, call them in reverse order
+                    // We check the bubble state between each call to see if the event has been stopped from bubbling
+                    for listener in listeners.drain(..).rev() {
+                        if let AttributeValue::Listener(listener) = listener {
+                            if let Some(cb) = listener.borrow_mut().as_deref_mut() {
+                                cb(uievent.clone());
+                            }
 
-                        if !uievent.propagates.get() {
-                            return;
+                            if !uievent.propagates.get() {
+                                return;
+                            }
                         }
                     }
-                }
 
-                parent_path = template.parent.and_then(|id| self.elements.get(id.0));
+                    parent_path = dbg!(template.parent).and_then(|id| self.elements.get(id.0));
+                } else {
+                    break;
+                }
             }
         } else {
             // Otherwise, we just call the listener on the target element
             if let Some(el_ref) = parent_path {
                 // safety: we maintain references of all vnodes in the element slab
-                let template = unsafe { el_ref.template.unwrap().as_ref() };
-                let node_template = template.template.get();
-                let target_path = el_ref.path;
+                if let Some(template) = el_ref.template {
+                    let template = unsafe { template.as_ref() };
+                    let node_template = template.template.get();
+                    let target_path = el_ref.path;
 
-                for (idx, attr) in template.dynamic_attrs.iter().enumerate() {
-                    let this_path = node_template.attr_paths[idx];
+                    for (idx, attr) in template.dynamic_attrs.iter().enumerate() {
+                        let this_path = node_template.attr_paths[idx];
 
-                    // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
-                    // Only call the listener if this is the exact target element.
-                    if attr.name.trim_start_matches("on") == name && target_path == this_path {
-                        if let AttributeValue::Listener(listener) = &attr.value {
-                            if let Some(cb) = listener.borrow_mut().as_deref_mut() {
-                                cb(uievent.clone());
+                        // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
+                        // Only call the listener if this is the exact target element.
+                        if attr.name.trim_start_matches("on") == name && target_path == this_path {
+                            if let AttributeValue::Listener(listener) = &attr.value {
+                                if let Some(cb) = listener.borrow_mut().as_deref_mut() {
+                                    cb(uievent.clone());
+                                }
+
+                                break;
                             }
-
-                            break;
                         }
                     }
                 }
