@@ -296,7 +296,7 @@ class Interpreter {
 
         for (let attr of node.attrs) {
           if (attr.type == "Static") {
-            this.SetAttributeInner(el, attr.name, attr.value, attr.namespace);
+            setAttributeInner(el, attr.name, attr.value, attr.namespace);
           }
         }
 
