@@ -65,6 +65,10 @@ name = "axum"
 required-features = ["axum"]
 
 [[example]]
+name = "eval"
+required-features = ["axum"]
+
+[[example]]
 name = "salvo"
 required-features = ["salvo"]
 
