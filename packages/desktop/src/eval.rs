@@ -31,6 +31,19 @@ impl IntoFuture for EvalResult {
 }
 
 /// Get a closure that executes any JavaScript in the WebView context.
+///
+/// ```rust
+/// fn app(cx: Scope) -> Element {
+///     let eval = use_eval(cx);
+///     let result = eval(r#"
+///         // You can return values from javascript
+///         return document.getElementById("test-id").getAttribute("class");
+///     "#);
+///     cx.spawn(async move {
+///         println!("{:?}", result.await);
+///     });
+/// }
+/// ```
 pub fn use_eval(cx: &ScopeState) -> &Rc<dyn Fn(String) -> EvalResult> {
     let desktop = use_window(cx);
     &*cx.use_hook(|| {

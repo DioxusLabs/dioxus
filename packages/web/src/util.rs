@@ -22,6 +22,19 @@ use serde_json::Value;
 ///
 /// The closure will panic if the provided script is not valid JavaScript code
 /// or if it returns an uncaught error.
+///
+/// ```rust
+/// fn app(cx: Scope) -> Element {
+///     let eval = use_eval(cx);
+///     let result = eval(r#"
+///         // You can return values from javascript
+///         return document.getElementById("test-id").getAttribute("class");
+///     "#);
+///     cx.spawn(async move {
+///         println!("{:?}", result.await);
+///     });
+/// }
+/// ```
 pub fn use_eval<S: std::string::ToString>(cx: &ScopeState) -> &dyn Fn(S) -> EvalResult {
     cx.use_hook(|| {
         |script: S| {
