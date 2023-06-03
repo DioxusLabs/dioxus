@@ -1,4 +1,4 @@
-import setAttributeInner from "./common";
+import { setAttributeInner } from "./common.js";
 
 class ListenerMap {
   constructor(root) {
