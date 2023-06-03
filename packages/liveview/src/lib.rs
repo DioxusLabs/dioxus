@@ -26,6 +26,7 @@ pub mod pool;
 mod query;
 use futures_util::{SinkExt, StreamExt};
 pub use pool::*;
+pub use query::QueryError;
 
 pub trait WebsocketTx: SinkExt<String, Error = LiveViewError> {}
 impl<T> WebsocketTx for T where T: SinkExt<String, Error = LiveViewError> {}

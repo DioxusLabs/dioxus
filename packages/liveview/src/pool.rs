@@ -142,6 +142,8 @@ pub async fn run(vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), LiveVi
     #[derive(serde::Deserialize, Debug)]
     #[serde(tag = "method", content = "params")]
     enum IpcMessage {
+        #[serde(rename = "initialize")]
+        Initialize {},
         #[serde(rename = "user_event")]
         Event(HtmlEvent),
         #[serde(rename = "query")]
@@ -165,36 +167,38 @@ pub async fn run(vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), LiveVi
                         ws.send("__pong__".to_string()).await?;
                     }
                     Some(Ok(evt)) => {
-                        if let Ok(message) = serde_json::from_str::<IpcMessage>(evt) {
-                            match message {
-                                IpcMessage::Event(evt) => {
-                                    // Intercept the mounted event and insert a custom element type
-                                    if let EventData::Mounted = &evt.data {
-                                        let element = LiveviewElement::new(evt.element, query_engine.clone());
-                                        vdom.handle_event(
-                                            &evt.name,
-                                            Rc::new(MountedData::new(element)),
-                                            evt.element,
-                                            evt.bubbles,
-                                        );
-                                    }
-                                    else{
-                                        vdom.handle_event(
-                                            &evt.name,
-                                            evt.data.into_any(),
-                                            evt.element,
-                                            evt.bubbles,
-                                        );
-                                    }
+                        match serde_json::from_str::<IpcMessage>(evt) {
+                            Ok(IpcMessage::Initialize{}) =>{}
+                            Ok(IpcMessage::Event(evt)) => {
+                                // Intercept the mounted event and insert a custom element type
+                                if let EventData::Mounted = &evt.data {
+                                    let element = LiveviewElement::new(evt.element, query_engine.clone());
+                                    vdom.handle_event(
+                                        &evt.name,
+                                        Rc::new(MountedData::new(element)),
+                                        evt.element,
+                                        evt.bubbles,
+                                    );
                                 }
-                                IpcMessage::Query(result) => {
-                                    query_engine.send(result);
-                                },
+                                else{
+                                    vdom.handle_event(
+                                        &evt.name,
+                                        evt.data.into_any(),
+                                        evt.element,
+                                        evt.bubbles,
+                                    );
+                                }
                             }
+                            Ok(IpcMessage::Query(result)) => {
+                                query_engine.send(result);
+                            },
+                            Err(e) => log::error!("{e}")
                         }
                     }
                     // log this I guess? when would we get an error here?
-                    Some(Err(_e)) => {}
+                    Some(Err(e)) => {
+                        log::error!("{e}");
+                    }
                     None => return Ok(()),
                 }
             }

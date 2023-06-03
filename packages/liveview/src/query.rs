@@ -110,5 +110,6 @@ pub enum QueryError {
 #[derive(Clone, Debug, Deserialize)]
 pub(crate) struct QueryResult {
     id: usize,
+    #[serde(default)]
     data: Value,
 }
