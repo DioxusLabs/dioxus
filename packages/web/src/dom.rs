@@ -17,7 +17,7 @@ use js_sys::Array;
 use rustc_hash::FxHashMap;
 use std::{any::Any, rc::Rc, sync::Arc};
 use wasm_bindgen::{closure::Closure, prelude::wasm_bindgen, JsCast, JsValue};
-use web_sys::{console, Document, Element, Event, HtmlElement};
+use web_sys::{console, Document, Element, Event};
 
 use crate::{file_engine::WebFileEngine, Config};
 
@@ -135,24 +135,12 @@ impl WebsysDom {
                         namespace,
                     } = attr
                     {
-                        match namespace {
-                            Some(ns) if *ns == "style" => {
-                                el.dyn_ref::<HtmlElement>()
-                                    .map(|f| f.style().set_property(name, value));
-                            }
-                            Some(ns) => minimal_bindings::setAttributeInner(
-                                el.clone().into(),
-                                name,
-                                JsValue::from_str(value),
-                                Some(ns),
-                            ),
-                            None => minimal_bindings::setAttributeInner(
-                                el.clone().into(),
-                                name,
-                                JsValue::from_str(value),
-                                None,
-                            ),
-                        }
+                        minimal_bindings::setAttributeInner(
+                            el.clone().into(),
+                            name,
+                            JsValue::from_str(value),
+                            *namespace,
+                        );
                     }
                 }
                 for child in *children {
