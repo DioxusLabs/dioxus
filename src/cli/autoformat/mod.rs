@@ -1,5 +1,5 @@
 use futures::{stream::FuturesUnordered, StreamExt};
-use std::{process::exit, fs};
+use std::{fs, process::exit};
 
 use super::*;
 
@@ -60,7 +60,7 @@ impl Autoformat {
                             println!("failed to write formatted content to file: {}", e);
                         }
                     }
-                },
+                }
                 Err(e) => {
                     eprintln!("failed to open file: {}", e);
                     exit(1);
