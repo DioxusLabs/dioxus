@@ -4,7 +4,7 @@
 
 Type Define:
 ```
-Stdio: "Inhert" | "Piped" | "Null"
+Stdio: "Inherit" | "Piped" | "Null"
 ```
 
 ### `exec(commands: [string], stdout: Stdio, stderr: Stdio)`

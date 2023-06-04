@@ -3,7 +3,7 @@ use std::process::{Command, Stdio};
 use mlua::{FromLua, UserData};
 
 enum StdioFromString {
-    Inhert,
+    Inherit,
     Piped,
     Null,
 }
@@ -12,19 +12,19 @@ impl<'lua> FromLua<'lua> for StdioFromString {
         if let mlua::Value::String(v) = lua_value {
             let v = v.to_str().unwrap();
             return Ok(match v.to_lowercase().as_str() {
-                "inhert" => Self::Inhert,
+                "inherit" => Self::Inherit,
                 "piped" => Self::Piped,
                 "null" => Self::Null,
-                _ => Self::Inhert,
+                _ => Self::Inherit,
             });
         }
-        Ok(Self::Inhert)
+        Ok(Self::Inherit)
     }
 }
 impl StdioFromString {
     pub fn to_stdio(self) -> Stdio {
         match self {
-            StdioFromString::Inhert => Stdio::inherit(),
+            StdioFromString::Inherit => Stdio::inherit(),
             StdioFromString::Piped => Stdio::piped(),
             StdioFromString::Null => Stdio::null(),
         }
