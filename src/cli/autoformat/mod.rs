@@ -57,7 +57,7 @@ impl Autoformat {
                             println!("formatted {}", file);
                         }
                         Err(e) => {
-                            println!("failed to write formatted content to file: {}", e);
+                            eprintln!("failed to write formatted content to file: {}", e);
                         }
                     }
                 }
