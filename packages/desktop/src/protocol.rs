@@ -1,4 +1,4 @@
-use dioxus_interpreter_js::INTERPRETER_JS;
+use dioxus_interpreter_js::{COMMON_JS, INTERPRETER_JS};
 use std::{
     borrow::Cow,
     path::{Path, PathBuf},
@@ -37,7 +37,7 @@ fn module_loader(root_name: &str) -> String {
     );
     format!(
         r#"
-<script>
+<script type="module">
     {js}
 
     let rootname = "{root_name}";
@@ -83,6 +83,11 @@ pub(super) fn desktop_handler(
         return Response::builder()
             .header("Content-Type", "text/html")
             .body(Cow::from(body))
+            .map_err(From::from);
+    } else if request.uri().path() == "/common.js" {
+        return Response::builder()
+            .header("Content-Type", "text/javascript")
+            .body(Cow::from(COMMON_JS.as_bytes()))
             .map_err(From::from);
     }
 
