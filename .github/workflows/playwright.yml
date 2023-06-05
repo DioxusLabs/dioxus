@@ -16,6 +16,8 @@ jobs:
         node-version: 16
     - name: Install dependencies
       run: npm ci
+    - name: Install Playwright
+      run: npm install -D @playwright/test
     - name: Install Playwright Browsers
       run: npx playwright install --with-deps
     - name: Install Rust
@@ -25,8 +27,10 @@ jobs:
         toolchain: stable
         override: true
     - uses: Swatinem/rust-cache@v2
-    - uses: actions/checkout@v3
-    - uses: actions-rs/cargo@v1
+    - name: Install WASM toolchain
+      run: rustup target add wasm32-unknown-unknown
+    - name: Install Dioxus CLI
+      uses: actions-rs/cargo@v1
       with:
         command: install
         args: --git https://github.com/DioxusLabs/cli
