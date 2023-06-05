@@ -39,7 +39,8 @@ pub enum LiveViewError {
 use once_cell::sync::Lazy;
 
 static INTERPRETER_JS: Lazy<String> = Lazy::new(|| {
-    let interpreter = dioxus_interpreter_js::INTERPRETER_JS;
+    let interpreter = dioxus_interpreter_js::js_as_single_string();
+
     let serialize_file_uploads = r#"if (
       target.tagName === "INPUT" &&
       (event.type === "change" || event.type === "input")
@@ -78,13 +79,7 @@ static INTERPRETER_JS: Lazy<String> = Lazy::new(|| {
       }
     }"#;
 
-    let interpreter = interpreter.replace("/*POST_EVENT_SERIALIZATION*/", serialize_file_uploads);
-    interpreter.replace("import { setAttributeInner } from \"./common.js\";", "")
-});
-
-static COMMON_JS: Lazy<String> = Lazy::new(|| {
-    let common = dioxus_interpreter_js::COMMON_JS;
-    common.replace("export", "")
+    interpreter.replace("/*POST_EVENT_SERIALIZATION*/", serialize_file_uploads)
 });
 
 static MAIN_JS: &str = include_str!("./main.js");
@@ -95,13 +90,11 @@ static MAIN_JS: &str = include_str!("./main.js");
 /// processing user events and returning edits to the liveview instance
 pub fn interpreter_glue(url: &str) -> String {
     let js = &*INTERPRETER_JS;
-    let common = &*COMMON_JS;
     format!(
         r#"
 <script>
     var WS_ADDR = "{url}";
     {js}
-    {common}
     {MAIN_JS}
     main();
 </script>

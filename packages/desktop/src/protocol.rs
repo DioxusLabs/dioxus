@@ -1,4 +1,3 @@
-use dioxus_interpreter_js::{COMMON_JS, INTERPRETER_JS};
 use std::{
     borrow::Cow,
     path::{Path, PathBuf},
@@ -9,7 +8,9 @@ use wry::{
 };
 
 fn module_loader(root_name: &str) -> String {
-    let js = INTERPRETER_JS.replace(
+    let interpreter = dioxus_interpreter_js::js_as_single_string();
+
+    let js = interpreter.replace(
         "/*POST_HANDLE_EDITS*/",
         r#"// Prevent file inputs from opening the file dialog on click
     let inputs = document.querySelectorAll("input");
@@ -37,7 +38,7 @@ fn module_loader(root_name: &str) -> String {
     );
     format!(
         r#"
-<script type="module">
+<script>
     {js}
 
     let rootname = "{root_name}";
@@ -83,11 +84,6 @@ pub(super) fn desktop_handler(
         return Response::builder()
             .header("Content-Type", "text/html")
             .body(Cow::from(body))
-            .map_err(From::from);
-    } else if request.uri().path() == "/common.js" {
-        return Response::builder()
-            .header("Content-Type", "text/javascript")
-            .body(Cow::from(COMMON_JS.as_bytes()))
             .map_err(From::from);
     }
 
