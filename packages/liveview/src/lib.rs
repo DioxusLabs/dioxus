@@ -77,14 +77,14 @@ static INTERPRETER_JS: Lazy<String> = Lazy::new(|| {
         return;
       }
     }"#;
-    
+
     let interpreter = interpreter.replace("/*POST_EVENT_SERIALIZATION*/", serialize_file_uploads);
     interpreter.replace("import { setAttributeInner } from \"./common.js\";", "")
 });
 
 static COMMON_JS: Lazy<String> = Lazy::new(|| {
-  let common = dioxus_interpreter_js::COMMON_JS;
-  common.replace("export", "")
+    let common = dioxus_interpreter_js::COMMON_JS;
+    common.replace("export", "")
 });
 
 static MAIN_JS: &str = include_str!("./main.js");
