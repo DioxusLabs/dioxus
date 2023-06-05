@@ -33,6 +33,10 @@ members = [
     # Full project examples
     "examples/tailwind",
     "examples/PWA-example",
+    # Playwrite tests
+    "playwrite-tests/liveview",
+    "playwrite-tests/web",
+    "playwrite-tests/fullstack",
 ]
 
 # This is a "virtual package"
