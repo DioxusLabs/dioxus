@@ -75,7 +75,7 @@ module.exports = defineConfig({
     {
       command: 'cargo run --package dioxus-playwrite-liveview-test --bin dioxus-playwrite-liveview-test',
       port: 3030,
-      timeout: 120 * 1000,
+      timeout: 10 * 60 * 1000,
       reuseExistingServer: !process.env.CI,
       stdout: "pipe",
     },
@@ -83,7 +83,7 @@ module.exports = defineConfig({
       cwd: path.join(process.cwd(), 'playwrite-tests', 'web'),
       command: 'dioxus serve',
       port: 8080,
-      timeout: 120 * 1000,
+      timeout: 10 * 60 * 1000,
       reuseExistingServer: !process.env.CI,
       stdout: "pipe",
     },
@@ -91,7 +91,7 @@ module.exports = defineConfig({
       cwd: path.join(process.cwd(), 'playwrite-tests', 'fullstack'),
       command: 'dioxus build --features web\ncargo run --release --features ssr --no-default-features',
       port: 3333,
-      timeout: 120 * 1000,
+      timeout: 10 * 60 * 1000,
       reuseExistingServer: !process.env.CI,
       stdout: "pipe",
     }
