@@ -7,14 +7,21 @@ pub(crate) struct FileDiologRequest {
     #[serde(default)]
     accept: Option<String>,
     multiple: bool,
+    directory: bool,
     pub event: String,
     pub target: usize,
     pub bubbles: bool,
 }
 
-pub(crate) fn get_file_event(request: &FileDiologRequest) -> Vec<PathBuf> {
-    let mut dialog = rfd::FileDialog::new();
+fn get_file_event_for_folder(request: &FileDiologRequest, dialog: rfd::FileDialog) -> Vec<PathBuf> {
+    if request.multiple {
+        dialog.pick_folders().into_iter().flatten().collect()
+    } else {
+        dialog.pick_folder().into_iter().collect()
+    }
+}
 
+fn get_file_event_for_file(request: &FileDiologRequest, mut dialog: rfd::FileDialog) -> Vec<PathBuf> {
     let filters: Vec<_> = request
         .accept
         .as_deref()
@@ -30,13 +37,21 @@ pub(crate) fn get_file_event(request: &FileDiologRequest) -> Vec<PathBuf> {
 
     dialog = dialog.add_filter("name", file_extensions.as_slice());
 
-    let files: Vec<_> = if request.multiple {
+    if request.multiple {
         dialog.pick_files().into_iter().flatten().collect()
     } else {
         dialog.pick_file().into_iter().collect()
-    };
+    }
+}
 
-    files
+pub(crate) fn get_file_event(request: &FileDiologRequest) -> Vec<PathBuf> {
+    let dialog = rfd::FileDialog::new();
+
+    if request.directory {
+        get_file_event_for_folder(request, dialog)
+    } else {
+        get_file_event_for_file(request, dialog)
+    }
 }
 
 enum Filters {

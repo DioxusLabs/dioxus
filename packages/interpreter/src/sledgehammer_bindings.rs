@@ -143,6 +143,7 @@ mod js {
         autofocus: true,
         autoplay: true,
         checked: true,
+        directory: true,
         controls: true,
         default: true,
         defer: true,
