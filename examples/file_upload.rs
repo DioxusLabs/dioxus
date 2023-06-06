@@ -7,14 +7,26 @@ fn main() {
 }
 
 fn App(cx: Scope) -> Element {
+    let enable_directory_upload = use_state(cx, || false);
     let files_uploaded: &UseRef<Vec<String>> = use_ref(cx, Vec::new);
 
     cx.render(rsx! {
+        label {
+            input {
+                r#type: "checkbox",
+                checked: "{enable_directory_upload}",
+                oninput: move |evt| {
+                    enable_directory_upload.set(evt.value.parse().unwrap());
+                },
+            },
+            "Enable directory upload"
+        }
+
         input {
             r#type: "file",
             accept: ".txt, .rs",
             multiple: true,
-            directory: true,
+            directory: **enable_directory_upload,
             onchange: |evt| {
                 to_owned![files_uploaded];
                 async move {

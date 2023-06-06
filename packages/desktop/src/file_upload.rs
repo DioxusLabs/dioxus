@@ -21,7 +21,10 @@ fn get_file_event_for_folder(request: &FileDiologRequest, dialog: rfd::FileDialo
     }
 }
 
-fn get_file_event_for_file(request: &FileDiologRequest, mut dialog: rfd::FileDialog) -> Vec<PathBuf> {
+fn get_file_event_for_file(
+    request: &FileDiologRequest,
+    mut dialog: rfd::FileDialog,
+) -> Vec<PathBuf> {
     let filters: Vec<_> = request
         .accept
         .as_deref()

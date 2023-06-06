@@ -24,7 +24,7 @@ fn module_loader(root_name: &str) -> String {
             let target_id = find_real_id(target);
             if (target_id !== null) {
               const send = (event_name) => {
-                const message = serializeIpcMessage("file_diolog", { accept: target.getAttribute("accept"), directory: target.hasAttribute("directory"), multiple: target.hasAttribute("multiple"), target: parseInt(target_id), bubbles: event_bubbles(event_name), event: event_name });
+                const message = serializeIpcMessage("file_diolog", { accept: target.getAttribute("accept"), directory: target.getAttribute("webkitdirectory") === "true", multiple: target.hasAttribute("multiple"), target: parseInt(target_id), bubbles: event_bubbles(event_name), event: event_name });
                 window.ipc.postMessage(message);
               };
               send("change&input");
