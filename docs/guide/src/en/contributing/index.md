@@ -41,7 +41,7 @@ cargo check --workspace --examples --tests
 cargo clippy --workspace --examples --tests -- -D warnings
 ```
 
-- Browser tests are automated with [Playwrite](https://playwright.dev/docs/intro#installing-playwright)
+- Browser tests are automated with [Playwright](https://playwright.dev/docs/intro#installing-playwright)
 
 ```sh
 npx playwright test
