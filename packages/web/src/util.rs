@@ -23,6 +23,13 @@ pub fn use_eval<S: ToString>(cx: &ScopeState) -> &dyn Fn(S) -> UseEval {
     cx.use_hook(|| eval)
 }
 
+const PROMISE_WRAPPER: &str = r#"
+    return new Promise(async (resolve, _reject) => {
+        {JS_CODE}
+        resolve(null);
+    });
+    "#;
+
 /// UseEval
 pub struct UseEval {
     dioxus: Dioxus,
@@ -36,13 +43,15 @@ impl UseEval {
         let received2 = received.clone();
 
         let a = Closure::<dyn FnMut(JsValue)>::new(move |data| {
-           received2.borrow_mut().push(data);
+            received2.borrow_mut().push(data);
         });
 
         let dioxus = Dioxus::new(a.as_ref().unchecked_ref());
         a.forget();
 
-        Function::new_with_args("dioxus", &js).call1(&JsValue::NULL, &dioxus).unwrap();
+        // Wrap the evaluated JS in a promise so that wasm can continue running (send/receive data from js)
+        let code = PROMISE_WRAPPER.replace("{JS_CODE}", &js);
+        Function::new_with_args("dioxus", &code).call1(&JsValue::NULL, &dioxus).unwrap();
 
         Self {
             dioxus,
@@ -54,7 +63,6 @@ impl UseEval {
     pub fn send(&self, data: JsValue) {
         self.dioxus.rustSend(data);
     }
-
     /// Receives a message from the evaluated JS code. Last in, first out.
     pub fn recv(&self) -> JsValue {
         loop {
@@ -76,52 +84,3 @@ extern "C" {
     pub fn rustSend(this: &Dioxus, data: JsValue);
 
 }
-
-/*pub fn use_eval<S: std::string::ToString>(cx: &ScopeState) -> &dyn Fn(S) -> EvalResult {
-    cx.use_hook(|| {
-        |script: S| {
-            let body = script.to_string();
-            EvalResult {
-                value: if let Ok(value) =
-                    js_sys::Function::new_no_args(&body).call0(&wasm_bindgen::JsValue::NULL)
-                {
-                    if let Ok(stringified) = js_sys::JSON::stringify(&value) {
-                        if !stringified.is_undefined() && stringified.is_valid_utf16() {
-                            let string: String = stringified.into();
-                            Value::from_str(&string)
-                        } else {
-                            Err(serde_json::Error::custom("Failed to stringify result"))
-                        }
-                    } else {
-                        Err(serde_json::Error::custom("Failed to stringify result"))
-                    }
-                } else {
-                    Err(serde_json::Error::custom("Failed to execute script"))
-                },
-            }
-        }
-    })
-}
-
-/// A wrapper around the result of a JavaScript evaluation.
-/// This implements IntoFuture to be compatible with the desktop renderer's EvalResult.
-pub struct EvalResult {
-    value: Result<Value, serde_json::Error>,
-}
-
-impl EvalResult {
-    /// Get the result of the Javascript execution.
-    pub fn get(self) -> Result<Value, serde_json::Error> {
-        self.value
-    }
-}
-
-impl IntoFuture for EvalResult {
-    type Output = Result<Value, serde_json::Error>;
-
-    type IntoFuture = Ready<Result<Value, serde_json::Error>>;
-
-    fn into_future(self) -> Self::IntoFuture {
-        std::future::ready(self.value)
-    }
-}*/
