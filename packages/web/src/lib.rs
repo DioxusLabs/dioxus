@@ -54,7 +54,7 @@
 //     - Do DOM work in the next requestAnimationFrame callback
 
 pub use crate::cfg::Config;
-pub use crate::util::{use_eval, EvalResult};
+pub use crate::util::{use_eval, UseEval};
 use dioxus_core::{Element, Scope, VirtualDom};
 use futures_util::{pin_mut, FutureExt, StreamExt};
 
