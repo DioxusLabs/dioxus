@@ -8,6 +8,7 @@ use std::{
 use syn::{spanned::Spanned, Expr, ExprIf};
 
 use crate::buffer::Buffer;
+use crate::ifmt_to_string;
 
 #[derive(Debug)]
 pub struct Writer<'a> {
@@ -147,16 +148,16 @@ impl<'a> Writer<'a> {
 
             total += match &attr.attr {
                 ElementAttr::AttrText { value, name } => {
-                    value.source.as_ref().unwrap().value().len() + name.span().line_length() + 6
+                    ifmt_to_string(value).len() + name.span().line_length() + 6
                 }
                 ElementAttr::AttrExpression { name, value } => {
                     value.span().line_length() + name.span().line_length() + 6
                 }
                 ElementAttr::CustomAttrText { value, name } => {
-                    value.source.as_ref().unwrap().value().len() + name.value().len() + 6
+                    ifmt_to_string(value).len() + name.to_token_stream().to_string().len() + 6
                 }
                 ElementAttr::CustomAttrExpression { name, value } => {
-                    name.value().len() + value.span().line_length() + 6
+                    name.to_token_stream().to_string().len() + value.span().line_length() + 6
                 }
                 ElementAttr::EventTokens { tokens, name } => {
                     let location = Location::new(tokens.span().start());
