@@ -1,8 +1,9 @@
 //! Utilities specific to websys
 
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, rc::Rc, collections::VecDeque, task::{Poll, Context}, pin::Pin};
 
 use dioxus_core::*;
+use futures_util::{Stream, StreamExt};
 use js_sys::Function;
 use wasm_bindgen::prelude::*;
 
@@ -33,13 +34,13 @@ const PROMISE_WRAPPER: &str = r#"
 /// UseEval
 pub struct UseEval {
     dioxus: Dioxus,
-    received: Rc<RefCell<Vec<JsValue>>>,
+    received: Rc<RefCell<MessageQueue>>,
 }
 
 impl UseEval {
     /// Create a new UseEval with the specified JS
     pub fn new(js: String) -> Self {
-        let received = Rc::new(RefCell::new(Vec::new()));
+        let received = Rc::new(RefCell::new(MessageQueue::new()));
         let received2 = received.clone();
 
         let a = Closure::<dyn FnMut(JsValue)>::new(move |data| {
@@ -63,12 +64,52 @@ impl UseEval {
     pub fn send(&self, data: JsValue) {
         self.dioxus.rustSend(data);
     }
-    /// Receives a message from the evaluated JS code. Last in, first out.
-    pub fn recv(&self) -> JsValue {
+    /// Receives a message from the evaluated JS code. First in, first out.
+    /// This can't be used at the same time as ``recv`` or messages may be lost.
+    pub fn recv_sync(&self) -> JsValue {
         loop {
-            if let Some(data) = self.received.as_ref().clone().into_inner().pop() {
+            if let Some(data) = self.received.as_ref().clone().borrow_mut().pop() {
                 return data;
             }
+        }
+    }
+    /// Waits for a new message and returns it. First in, first out.
+    /// This can't be used at the same time as ``recv_sync` or messages may be lost.
+    pub async fn recv(&self) -> JsValue {
+        let mut queue = self.received.as_ref().clone().borrow_mut();
+        queue.next().await.expect("stream should never return None")
+    }
+}
+
+pub struct MessageQueue {
+    queue: VecDeque<JsValue>,
+}
+
+impl MessageQueue {
+    pub fn new() -> Self {
+        Self { queue: VecDeque::new() }
+    }
+
+    /// Pops an item off the front
+    pub fn pop(&mut self) -> Option<JsValue> {
+        self.queue.pop_front()
+    }
+
+    /// Pushes an item onto the back
+    pub fn push(&mut self, value: JsValue) {
+        self.queue.push_back(value);
+    }
+}
+
+impl Stream for MessageQueue {
+    type Item = JsValue;
+
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        if let Some(value) = self.pop() {
+            Poll::Ready(Some(value))
+        } else {
+            cx.waker().wake_by_ref();
+            Poll::Pending
         }
     }
 }
