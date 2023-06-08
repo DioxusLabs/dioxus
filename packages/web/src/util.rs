@@ -1,6 +1,12 @@
 //! Utilities specific to websys
 
-use std::{cell::RefCell, rc::Rc, collections::VecDeque, task::{Poll, Context}, pin::Pin};
+use std::{
+    cell::RefCell,
+    collections::VecDeque,
+    pin::Pin,
+    rc::Rc,
+    task::{Context, Poll},
+};
 
 use dioxus_core::*;
 use futures_util::{Stream, StreamExt};
@@ -15,12 +21,9 @@ use wasm_bindgen::prelude::*;
 /// parts is practically asking for a hacker to find an XSS vulnerability in
 /// it. **This applies especially to web targets, where the JavaScript context
 /// has access to most, if not all of your application data.**
-pub fn use_eval<S: ToString>(cx: &ScopeState) -> &dyn Fn(S) -> UseEval {
-    let eval = |script: S| {
-        let js = script.to_string();
-        UseEval::new(js)
-    };
-
+pub fn use_eval<S: ToString>(cx: &ScopeState, code: S) -> &mut UseEval {
+    let js = code.to_string();
+    let eval = UseEval::new(js);
     cx.use_hook(|| eval)
 }
 
@@ -35,6 +38,8 @@ const PROMISE_WRAPPER: &str = r#"
 pub struct UseEval {
     dioxus: Dioxus,
     received: Rc<RefCell<MessageQueue>>,
+    code: String,
+    ran: bool,
 }
 
 impl UseEval {
@@ -52,12 +57,23 @@ impl UseEval {
 
         // Wrap the evaluated JS in a promise so that wasm can continue running (send/receive data from js)
         let code = PROMISE_WRAPPER.replace("{JS_CODE}", &js);
-        Function::new_with_args("dioxus", &code).call1(&JsValue::NULL, &dioxus).unwrap();
 
         Self {
             dioxus,
             received,
+            code,
+            ran: false,
         }
+    }
+
+    /// Run the evaluated JS code
+    /// # Panics
+    /// Will panic if the JS code is invalid.
+    pub fn run(&mut self) {
+        Function::new_with_args("dioxus", &self.code)
+            .call1(&JsValue::NULL, &self.dioxus)
+            .unwrap();
+        self.ran = true;
     }
 
     /// Send a message to the evaluated JS code
@@ -67,6 +83,10 @@ impl UseEval {
     /// Receives a message from the evaluated JS code. First in, first out.
     /// This can't be used at the same time as ``recv`` or messages may be lost.
     pub fn recv_sync(&self) -> JsValue {
+        if !self.ran {
+            panic!("Js code has not been ran. Please call UseEval.run() before using UseEval.recv_sync()");
+        }
+
         loop {
             if let Some(data) = self.received.as_ref().clone().borrow_mut().pop() {
                 return data;
@@ -87,7 +107,9 @@ pub struct MessageQueue {
 
 impl MessageQueue {
     pub fn new() -> Self {
-        Self { queue: VecDeque::new() }
+        Self {
+            queue: VecDeque::new(),
+        }
     }
 
     /// Pops an item off the front
