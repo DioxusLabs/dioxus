@@ -624,7 +624,7 @@ fn print_console_info(ip: &String, port: u16, config: &CrateConfig, options: Pre
         format!("http://localhost:{}/", port).blue()
     );
     println!(
-        "\t> NetWork : {}",
+        "\t> Network : {}",
         format!("http://{}:{}/", ip, port).blue()
     );
     println!("");
