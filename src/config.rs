@@ -186,15 +186,21 @@ impl CrateConfig {
 
         let manifest = cargo_toml::Manifest::from_path(&cargo_def).unwrap();
 
-        // We just assume they're using a 'main.rs'
-        // Anyway, we've already parsed the manifest, so it should be easy to change the type
-        let output_filename = manifest
-            .bin
-            .first()
-            .or(manifest.lib.as_ref())
-            .and_then(|product| product.name.clone())
-            .or_else(|| manifest.package.as_ref().map(|pkg| pkg.name.clone()))
-            .expect("No lib found from cargo metadata");
+        let output_filename = {
+            match &manifest.package.as_ref().unwrap().default_run {
+                Some(default_run_target) => {
+                    default_run_target.to_owned()
+                },
+                None => {
+                    manifest.bin.iter().find(|b| b.name == manifest.package.as_ref().map(|pkg| pkg.name.clone()))
+                        .or(manifest.bin.iter().find(|b| b.path == Some("src/main.rs".to_owned())))
+                        .or(manifest.bin.first())
+                        .or(manifest.lib.as_ref())
+                        .and_then(|prod| prod.name.clone())
+                        .expect("No executable or library found from cargo metadata.")
+                }
+            }
+        };
         let executable = ExecutableType::Binary(output_filename);
 
         let release = false;
