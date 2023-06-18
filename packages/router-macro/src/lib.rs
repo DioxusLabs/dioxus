@@ -253,13 +253,12 @@ impl RouteEnum {
 
                     if exclude {
                         let Some(layout_index) =
-                            layouts.iter().position(|l| l.comp == layout.comp)else{
+                            layouts.iter().position(|l| l.comp == layout.comp) else {
                                 return Err(syn::Error::new(
                                     Span::call_site(),
                                     "Attempted to exclude a layout that does not exist",
                                 ));
-                            }
-                                ;
+                            };
                         excluded.push(LayoutId(layout_index));
                     } else {
                         let layout_index = layouts.len();
@@ -285,7 +284,6 @@ impl RouteEnum {
             active_nests.reverse();
             let mut active_layouts = layout_stack.clone();
             active_layouts.retain(|&id| !excluded.contains(&id));
-            active_layouts.reverse();
 
             let route = Route::parse(active_nests, active_layouts, variant.clone())?;
 
