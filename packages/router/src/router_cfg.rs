@@ -30,6 +30,28 @@ pub struct RouterConfig<R: Routable> {
     pub(crate) on_update: Option<RoutingCallback<R>>,
 }
 
+#[cfg(feature = "serde")]
+impl<R: Routable + Clone> Default for RouterConfig<R>
+where
+    <R as std::str::FromStr>::Err: std::fmt::Display,
+    R: serde::Serialize + serde::de::DeserializeOwned,
+{
+    fn default() -> Self {
+        Self {
+            failure_external_navigation: FailureExternalNavigation::<R>,
+            history: {
+                #[cfg(all(target_arch = "wasm32", feature = "web"))]
+                let history = Box::<WebHistory<R>>::default();
+                #[cfg(not(all(target_arch = "wasm32", feature = "web")))]
+                let history = Box::<MemoryHistory<R>>::default();
+                history
+            },
+            on_update: None,
+        }
+    }
+}
+
+#[cfg(not(feature = "serde"))]
 impl<R: Routable + Clone> Default for RouterConfig<R>
 where
     <R as std::str::FromStr>::Err: std::fmt::Display,

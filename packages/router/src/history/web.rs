@@ -104,8 +104,18 @@ impl<R: Routable> WebHistory<R> {
         let myself = Self::new_inner(
             prefix,
             do_scroll_restoration,
-            EventListener::new(&document, "scroll", move |_| {
-                update_scroll::<R>(&w, &h);
+            EventListener::new(&document, "scroll", {
+                let mut last_updated = 0.0;
+                move |evt| {
+                    // the time stamp in milliseconds
+                    let time_stamp = evt.time_stamp();
+                    // throttle the scroll event to 100ms
+                    if (time_stamp - last_updated) < 100.0 {
+                        return;
+                    }
+                    update_scroll::<R>(&w, &h);
+                    last_updated = time_stamp;
+                }
             }),
         );
 
@@ -134,8 +144,18 @@ impl<R: Routable> WebHistory<R> {
         let myself = Self::new_inner(
             prefix,
             do_scroll_restoration,
-            EventListener::new(&document, "scroll", move |_| {
-                update_scroll::<R>(&w, &h);
+            EventListener::new(&document, "scroll", {
+                let mut last_updated = 0.0;
+                move |evt| {
+                    // the time stamp in milliseconds
+                    let time_stamp = evt.time_stamp();
+                    // throttle the scroll event to 100ms
+                    if (time_stamp - last_updated) < 100.0 {
+                        return;
+                    }
+                    update_scroll::<R>(&w, &h);
+                    last_updated = time_stamp;
+                }
             }),
         );
 
