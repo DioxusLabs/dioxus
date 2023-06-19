@@ -14,7 +14,7 @@ keywords = ["dom", "ui", "gui", "react"]
 dioxus-core = { path = "../core", version = "^0.3.0", optional = true }
 
 keyboard-types = "0.6.2"
-taffy = "0.2.1"
+taffy = "0.3.12"
 smallvec = "1.6"
 rustc-hash = "1.1.0"
 anymap = "1.0.0-beta.2"

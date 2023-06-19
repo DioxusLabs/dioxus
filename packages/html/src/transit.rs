@@ -115,6 +115,9 @@ fn fun_name(
 
         "load" | "error" => Image(de(data)?),
 
+        // Mounted
+        "mounted" => Mounted,
+
         // OtherData => "abort" | "afterprint" | "beforeprint" | "beforeunload" | "hashchange" | "languagechange" | "message" | "offline" | "online" | "pagehide" | "pageshow" | "popstate" | "rejectionhandled" | "storage" | "unhandledrejection" | "unload" | "userproximity" | "vrdisplayactivate" | "vrdisplayblur" | "vrdisplayconnect" | "vrdisplaydeactivate" | "vrdisplaydisconnect" | "vrdisplayfocus" | "vrdisplaypointerrestricted" | "vrdisplaypointerunrestricted" | "vrdisplaypresentchange";
         other => {
             return Err(serde_value::DeserializerError::UnknownVariant(
@@ -154,6 +157,7 @@ pub enum EventData {
     Transition(TransitionData),
     Toggle(ToggleData),
     Image(ImageData),
+    Mounted,
 }
 
 impl EventData {
@@ -176,6 +180,7 @@ impl EventData {
             EventData::Transition(data) => Rc::new(data) as Rc<dyn Any>,
             EventData::Toggle(data) => Rc::new(data) as Rc<dyn Any>,
             EventData::Image(data) => Rc::new(data) as Rc<dyn Any>,
+            EventData::Mounted => Rc::new(MountedData::new(())) as Rc<dyn Any>,
         }
     }
 }

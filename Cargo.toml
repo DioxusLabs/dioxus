@@ -22,7 +22,16 @@ members = [
     "packages/rsx-rosetta",
     "packages/signals",
     "packages/hot-reload",
+    "packages/fullstack",
+    "packages/fullstack/server-macro",
+    "packages/fullstack/examples/axum-hello-world",
+    "packages/fullstack/examples/axum-router",
+    "packages/fullstack/examples/axum-desktop",
+    "packages/fullstack/examples/salvo-hello-world",
+    "packages/fullstack/examples/warp-hello-world",
     "docs/guide",
+    # Full project examples
+    "examples/tailwind",
     "examples/PWA-example",
 ]
 
@@ -62,7 +71,7 @@ tokio = { version = "1.16.1", features = ["full"] }
 reqwest = { version = "0.11.9", features = ["json"] }
 fern = { version = "0.6.0", features = ["colored"] }
 thiserror = "1.0.30"
-env_logger = "0.9.0"
+env_logger = "0.10.0"
 simple_logger = "4.0.0"
 
 [profile.release]

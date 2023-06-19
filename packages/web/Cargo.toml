@@ -1,6 +1,6 @@
 [package]
 name = "dioxus-web"
-version = "0.3.1"
+version = "0.3.2"
 authors = ["Jonathan Kelley"]
 edition = "2018"
 description = "Dioxus VirtualDOM renderer for the web browser using websys"
@@ -14,7 +14,8 @@ keywords = ["dom", "ui", "gui", "react", "wasm"]
 dioxus-core = { path = "../core", version = "^0.3.0", features = ["serialize"] }
 dioxus-html = { path = "../html", version = "^0.3.0", features = ["wasm-bind"] }
 dioxus-interpreter-js = { path = "../interpreter", version = "^0.3.0", features = [
-    "sledgehammer"
+    "sledgehammer",
+    "minimal_bindings",
 ] }
 
 js-sys = "0.3.56"

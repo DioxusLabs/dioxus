@@ -64,7 +64,7 @@ Example: suppose you have a list of comments you want to render. Then, you can r
 
 ### Inline for loops
 
-Because of how common it is to render a list of items, Dioxus provides a shorthand for this. Instead of using `.iter, `.map`, and `rsx`, you can use a `for` loop with a body of rsx code:
+Because of how common it is to render a list of items, Dioxus provides a shorthand for this. Instead of using `.iter`, `.map`, and `rsx`, you can use a `for` loop with a body of rsx code:
 
 ```rust
 {{#include ../../../examples/rendering_lists.rs:render_list_for_loop}}
