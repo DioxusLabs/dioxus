@@ -16,8 +16,8 @@ use futures_channel::mpsc;
 use js_sys::Array;
 use rustc_hash::FxHashMap;
 use std::{any::Any, rc::Rc, sync::Arc};
-use web_sys::{Document, Element, Event, HtmlElement};
 use wasm_bindgen::{closure::Closure, prelude::wasm_bindgen, JsCast, JsValue};
+use web_sys::{Document, Element, Event};
 
 use crate::{file_engine::WebFileEngine, Config};
 
