@@ -76,7 +76,7 @@ pub trait DioxusRouterExt {
     /// use dioxus_fullstack::prelude::*;
     ///
     /// struct ServerFunctionHandler {
-    ///     server_fn: ServerFunction,
+    ///     server_fn: server_fn::ServerFnTraitObj<DioxusServerContext>,
     /// }
     ///
     /// #[handler]
