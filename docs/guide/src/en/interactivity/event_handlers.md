@@ -29,7 +29,7 @@ To learn what the different event types for HTML provide, read the [events modul
 
 Some events will trigger first on the element the event originated at upward. For example, a click event on a `button` inside a `div` would first trigger the button's event listener and then the div's event listener.
 
-> For more information about event propigation see [the mdn docs on event bubling](https://developer.mozilla.org/en-US/docs/Learn/JavaScript/Building_blocks/Events#event_bubbling)
+> For more information about event propagation see [the mdn docs on event bubbling](https://developer.mozilla.org/en-US/docs/Learn/JavaScript/Building_blocks/Events#event_bubbling)
 
 If you want to prevent this behavior, you can call `stop_propagation()` on the event:
 
