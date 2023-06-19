@@ -34,7 +34,7 @@ pub mod prelude {
     #[cfg(feature = "ssr")]
     pub use crate::server_context::RequestParts;
     pub use crate::server_context::{DioxusServerContext, HasServerContext};
-    pub use crate::server_fn::ServerFn;
+    pub use crate::server_fn::DioxusServerFn;
     #[cfg(feature = "ssr")]
     pub use crate::server_fn::{ServerFnTraitObj, ServerFunction};
     pub use dioxus_server_macro::*;

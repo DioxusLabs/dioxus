@@ -16,9 +16,6 @@ fn main() {
         use axum::extract::State;
         use axum::routing::get;
 
-        // Register the server function before starting the server
-        DoubleServer::register().unwrap();
-
         tokio::runtime::Runtime::new()
             .unwrap()
             .block_on(async move {
