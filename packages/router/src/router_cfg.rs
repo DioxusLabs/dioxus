@@ -39,7 +39,7 @@ where
             failure_external_navigation: FailureExternalNavigation::<R>,
             history: {
                 #[cfg(all(target_arch = "wasm32", feature = "web"))]
-                let history = Box::<MemoryHistory<R>>::default();
+                let history = Box::<WebHistory<R>>::default();
                 #[cfg(not(all(target_arch = "wasm32", feature = "web")))]
                 let history = Box::<MemoryHistory<R>>::default();
                 history
