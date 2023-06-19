@@ -18,6 +18,7 @@ impl Layout {
     pub fn routable_match(&self, nests: &[Nest]) -> TokenStream {
         let props_name = &self.props_name;
         let comp_name = &self.comp;
+        let name_str = self.comp.segments.last().unwrap().ident.to_string();
         let dynamic_segments = self
             .active_nests
             .iter()
@@ -25,11 +26,10 @@ impl Layout {
 
         quote! {
             let comp = #props_name { #(#dynamic_segments,)* };
-            let cx = cx.bump().alloc(Scoped {
-                props: cx.bump().alloc(comp),
-                scope: cx,
-            });
-            #comp_name(cx)
+            let dynamic = cx.component(#comp_name, comp, #name_str);
+            render! {
+                dynamic
+            }
         }
     }
 }

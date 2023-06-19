@@ -145,6 +145,7 @@ impl Route {
         index: usize,
     ) -> Option<TokenStream2> {
         let name = &self.route_name;
+        let name_str = name.to_string();
         let dynamic_segments = self.dynamic_segments();
 
         match index.cmp(&self.layouts.len()) {
@@ -168,11 +169,10 @@ impl Route {
                     #[allow(unused)]
                     Self::#name { #(#dynamic_segments,)* } => {
                         let comp = #props_name { #(#dynamic_segments_from_route,)* };
-                        let cx = cx.bump().alloc(Scoped {
-                            props: cx.bump().alloc(comp),
-                            scope: cx,
-                        });
-                        #comp_name(cx)
+                        let dynamic = cx.component(#comp_name, comp, #name_str);
+                        render! {
+                            dynamic
+                        }
                     }
                 })
             }
