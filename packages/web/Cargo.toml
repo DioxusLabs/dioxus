@@ -27,7 +27,7 @@ console_error_panic_hook = { version = "0.1.7", optional = true }
 once_cell = "1.9.0"
 anyhow = "1.0.53"
 gloo-timers = { version = "0.2.3", features = ["futures"] }
-futures-util = { workspace = true }
+futures-util = { workspace = true, features = ["std", "async-await", "async-await-macro"] }
 smallstr = "0.2.0"
 futures-channel = { workspace = true }
 serde_json = { version = "1.0" }
