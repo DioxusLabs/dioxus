@@ -40,6 +40,6 @@ pub use render_template::*;
 mod eval;
 
 pub mod prelude {
-    pub use crate::events::*;
     pub use crate::eval::*;
+    pub use crate::events::*;
 }

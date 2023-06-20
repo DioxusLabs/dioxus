@@ -60,11 +60,11 @@ use futures_util::{pin_mut, FutureExt, StreamExt};
 mod cache;
 mod cfg;
 mod dom;
+mod eval;
 mod file_engine;
 mod hot_reload;
 #[cfg(feature = "hydrate")]
 mod rehydrate;
-mod eval;
 
 // Currently disabled since it actually slows down immediate rendering
 // todo: only schedule non-immediate renders through ric/raf
@@ -166,7 +166,7 @@ pub async fn run_with_props<T: 'static>(root: fn(Scope<T>) -> Element, root_prop
     log::info!("Starting up");
 
     let mut dom = VirtualDom::new_with_props(root, root_props);
-    
+
     // Eval
     let cx = dom.base_scope();
     eval::init_eval(cx);

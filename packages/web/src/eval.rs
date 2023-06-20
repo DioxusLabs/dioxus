@@ -15,7 +15,7 @@ pub fn init_eval(cx: &ScopeState) {
 /// Reprents the web-target's provider of evaluators.
 pub struct WebEvalProvider;
 impl EvalProvider for WebEvalProvider {
-    fn new_evaluator(&self, js: String) -> Box<dyn Evaluator> {
+    fn new_evaluator(&self, _cx: &ScopeState, js: String) -> Box<dyn Evaluator> {
         Box::new(WebEvaluator::new(js))
     }
 }
@@ -49,7 +49,7 @@ impl WebEvaluator {
                     // Can't really do much here.
                     log::error!("failed to serialize JsValue to serde_json::Value (eval communication) - {}", e.to_string());
                     return;
-                },
+                }
             }
         });
 
@@ -86,10 +86,6 @@ impl Evaluator for WebEvaluator {
 
     /// Sends a message to the evaluated JavaScript.
     fn send(&self, data: serde_json::Value) -> Result<(), EvalError> {
-        if !self.ran {
-            return Err(EvalError::NotRan);
-        }
-
         let data = match serde_wasm_bindgen::to_value::<serde_json::Value>(&data) {
             Ok(d) => d,
             Err(e) => return Err(EvalError::Communication(e.to_string())),
@@ -100,13 +96,16 @@ impl Evaluator for WebEvaluator {
     }
 
     /// Receives a message from the evaluated JavaScript.
-    async fn recv(&self) -> Result<serde_json::Value, EvalError> {
+    async fn recv(&mut self) -> Result<serde_json::Value, EvalError> {
         if !self.ran {
             return Err(EvalError::NotRan);
         }
         let mut queue = self.received.as_ref().clone().borrow_mut();
         Ok(queue.next().await.expect("stream should never return None"))
     }
+
+    // No cleanup required
+    fn done(&mut self) {}
 }
 
 #[wasm_bindgen(module = "/src/eval.js")]

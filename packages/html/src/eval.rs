@@ -11,15 +11,20 @@ use std::{
 /// A struct that implements EvalProvider is sent through [`ScopeState`]'s provide_context function
 /// so that [`use_eval`] can provide a platform agnostic interface for evaluating JavaScript code.
 pub trait EvalProvider {
-    fn new_evaluator(&self, js: String) -> Box<dyn Evaluator>;
+    fn new_evaluator(&self, cx: &ScopeState, js: String) -> Box<dyn Evaluator>;
 }
 
 /// The platform's evaluator.
 #[async_trait(?Send)]
 pub trait Evaluator {
+    /// Runs the evaluated JavaScript.
     fn run(&mut self) -> Result<(), EvalError>;
+    /// Sends a message to the evaluated JavaScript.
     fn send(&self, data: serde_json::Value) -> Result<(), EvalError>;
-    async fn recv(&self) -> Result<serde_json::Value, EvalError>;
+    /// Receives a message from the evaluated JavaScript.
+    async fn recv(&mut self) -> Result<serde_json::Value, EvalError>;
+    /// Cleans up any evaluation artifacts.
+    fn done(&mut self);
 }
 
 /// Get a struct that can execute any JavaScript.
@@ -36,7 +41,7 @@ pub fn use_eval<S: ToString>(cx: &ScopeState, js: S) -> &mut UseEval {
             .consume_context::<Rc<dyn EvalProvider>>()
             .expect("evaluator not provided");
 
-        let evaluator = eval_provider.new_evaluator(js.to_string());
+        let evaluator = eval_provider.new_evaluator(cx, js.to_string());
 
         UseEval::new(evaluator)
     })
@@ -64,8 +69,13 @@ impl UseEval {
     }
 
     /// Receives a [`serde_json::Value`] from the evaluated JavaScript.
-    pub async fn recv(&self) -> Result<serde_json::Value, EvalError> {
+    pub async fn recv(&mut self) -> Result<serde_json::Value, EvalError> {
         self.evaluator.recv().await
+    }
+
+    /// Cleans up any evaluation artifacts.
+    pub fn done(&mut self) {
+        self.evaluator.done();
     }
 }
 
@@ -107,12 +117,11 @@ impl Stream for MessageQueue {
     }
 }
 
-
 /// Represents an error when evaluating JavaScript
 #[derive(Debug)]
 pub enum EvalError {
     /// The evaluator's ``run`` method hasn't been called.
-    /// Messages cannot be sent or received at this time.
+    /// Messages cannot be received at this time.
     NotRan,
     /// The provides JavaScript is not valid and can't be ran.
     InvalidJs(String),

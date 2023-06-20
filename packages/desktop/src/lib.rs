@@ -26,7 +26,7 @@ use dioxus_core::*;
 use dioxus_html::MountedData;
 use dioxus_html::{native_bind::NativeFileEngine, FormData, HtmlEvent};
 use element::DesktopElement;
-pub use eval::{use_eval, EvalResult};
+use eval::init_eval;
 use futures_util::{pin_mut, FutureExt};
 use shortcut::ShortcutRegistry;
 pub use shortcut::{use_global_shortcut, ShortcutHandle, ShortcutId, ShortcutRegistryError};
@@ -150,12 +150,19 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
 
     let shortcut_manager = ShortcutRegistry::new(&event_loop);
 
+    // Create a dom
+    let dom = VirtualDom::new_with_props(root, props);
+    let cx = dom.base_scope();
+
+    // Init eval
+    init_eval(cx);
+
     // By default, we'll create a new window when the app starts
     queue.borrow_mut().push(create_new_window(
         cfg,
         &event_loop,
         &proxy,
-        VirtualDom::new_with_props(root, props),
+        dom,
         &queue,
         &event_handlers,
         shortcut_manager.clone(),

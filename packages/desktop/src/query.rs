@@ -13,11 +13,14 @@ struct SharedSlab {
     slab: Rc<RefCell<Slab<()>>>,
 }
 
+const QUEUE_NAME: &str = "__msg_queues";
+
 /// Handles sending and receiving arbitrary queries from the webview. Queries can be resolved non-sequentially, so we use ids to track them.
 #[derive(Clone)]
 pub(crate) struct QueryEngine {
     sender: Rc<tokio::sync::broadcast::Sender<QueryResult>>,
     active_requests: SharedSlab,
+    active_queues: SharedSlab,
 }
 
 impl Default for QueryEngine {
@@ -26,6 +29,7 @@ impl Default for QueryEngine {
         Self {
             sender: Rc::new(sender),
             active_requests: SharedSlab::default(),
+            active_queues: SharedSlab::default(),
         }
     }
 }
@@ -56,6 +60,45 @@ impl QueryEngine {
             id: request_id,
             reciever: self.sender.subscribe(),
             phantom: std::marker::PhantomData,
+            queue_slab: None,
+            queue_id: None,
+        }
+    }
+
+    pub fn new_query_with_comm<V: DeserializeOwned>(
+        &self,
+        script: &str,
+        webview: &WebView,
+    ) -> Query<V> {
+        let request_id = self.active_requests.slab.borrow_mut().insert(());
+        let queue_id = self.active_queues.slab.borrow_mut().insert(());
+
+        let code = format!(
+            r#"
+            if !window.{QUEUE_NAME} {{
+                window.{QUEUE_NAME} = [];
+            }}
+
+            let _request_id = {request_id};
+            let _message_queue = window.{QUEUE_NAME}[{queue_id}];
+            {script}
+            "#
+        );
+
+        print!("{}", code);
+        println!();
+
+        if let Err(err) = webview.evaluate_script(&code) {
+            log::warn!("Query error: {err}");
+        }
+
+        Query {
+            slab: self.active_requests.clone(),
+            id: request_id,
+            reciever: self.sender.subscribe(),
+            phantom: std::marker::PhantomData,
+            queue_slab: Some(self.active_queues.clone()),
+            queue_id: Some(queue_id),
         }
     }
 
@@ -68,6 +111,8 @@ impl QueryEngine {
 pub(crate) struct Query<V: DeserializeOwned> {
     slab: SharedSlab,
     id: usize,
+    queue_slab: Option<SharedSlab>,
+    queue_id: Option<usize>,
     reciever: tokio::sync::broadcast::Receiver<QueryResult>,
     phantom: std::marker::PhantomData<V>,
 }
@@ -89,9 +134,62 @@ impl<V: DeserializeOwned> Query<V> {
         };
 
         // Remove the query from the slab
-        self.slab.slab.borrow_mut().remove(self.id);
-
+        self.cleanup();
         result
+    }
+
+    /// Send a message to the query
+    pub fn send<S: ToString>(&self, webview: &WebView, message: S) -> Result<(), QueryError> {
+        let queue_id = match self.queue_id {
+            Some(id) => id,
+            None => {
+                return Err(QueryError::SendError(
+                    "query is not of comm type".to_string(),
+                ))
+            }
+        };
+
+        let data = message.to_string();
+        let script = format!(
+            r#"
+            if !window.{QUEUE_NAME} {{
+                window.{QUEUE_NAME} = [];
+            }}
+            let message_queue = window.{QUEUE_NAME}[{queue_id}];
+            message_queue.push({data});
+            "#
+        );
+
+        webview
+            .evaluate_script(&script)
+            .map_err(|e| QueryError::SendError(e.to_string()))?;
+
+        Ok(())
+    }
+
+    pub async fn recv(&mut self) -> Result<Value, QueryError> {
+        loop {
+            println!("LOOPING");
+            match self.reciever.recv().await {
+                Ok(result) => {
+                    println!("OK");
+                    if result.id == self.id {
+                        return Ok(result.data);
+                    }
+                }
+                Err(err) => {
+                    println!("ERR");
+                    return Err(QueryError::RecvError(err));
+                }
+            }
+        }
+    }
+
+    pub fn cleanup(&mut self) {
+        self.slab.slab.borrow_mut().remove(self.id);
+        if let Some(queue_slab) = &self.queue_slab {
+            queue_slab.slab.borrow_mut().remove(self.queue_id.unwrap());
+        }
     }
 }
 
@@ -99,6 +197,8 @@ impl<V: DeserializeOwned> Query<V> {
 pub enum QueryError {
     #[error("Error receiving query result: {0}")]
     RecvError(RecvError),
+    #[error("Error sending message to query: {0}")]
+    SendError(String),
     #[error("Error deserializing query result: {0}")]
     DeserializeError(serde_json::Error),
 }
