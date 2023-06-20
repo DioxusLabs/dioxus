@@ -45,7 +45,11 @@ impl WebEvaluator {
         let a = Closure::<dyn FnMut(JsValue)>::new(move |data| {
             match serde_wasm_bindgen::from_value::<serde_json::Value>(data) {
                 Ok(data) => received2.borrow_mut().push(data),
-                Err(_) => return, // Can't really do much here.
+                Err(e) => {
+                    // Can't really do much here.
+                    log::error!("failed to serialize JsValue to serde_json::Value (eval communication) - {}", e.to_string());
+                    return;
+                },
             }
         });
 
