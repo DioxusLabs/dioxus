@@ -58,12 +58,12 @@ impl UseEval {
         self.evaluator.run()
     }
 
-    /// Sends a [`JsValue`] to the evaluated JavaScript.
+    /// Sends a [`serde_json::Value`] to the evaluated JavaScript.
     pub fn send(&self, data: serde_json::Value) -> Result<(), EvalError> {
         self.evaluator.send(data)
     }
 
-    /// Receives a [`JsValue`] from the evaluated JavaScript.
+    /// Receives a [`serde_json::Value`] from the evaluated JavaScript.
     pub async fn recv(&self) -> Result<serde_json::Value, EvalError> {
         self.evaluator.recv().await
     }

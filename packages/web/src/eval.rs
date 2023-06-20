@@ -6,11 +6,13 @@ use js_sys::Function;
 use std::{cell::RefCell, rc::Rc};
 use wasm_bindgen::prelude::*;
 
+/// Provides the WebEvalProvider through [`cx.provide_context`].
 pub fn init_eval(cx: &ScopeState) {
     let provider: Rc<dyn EvalProvider> = Rc::new(WebEvalProvider {});
     cx.provide_context(provider);
 }
 
+/// Reprents the web-target's provider of evaluators.
 pub struct WebEvalProvider;
 impl EvalProvider for WebEvalProvider {
     fn new_evaluator(&self, js: String) -> Box<dyn Evaluator> {
@@ -18,6 +20,7 @@ impl EvalProvider for WebEvalProvider {
     }
 }
 
+/// Required to avoid blocking the Rust WASM thread.
 const PROMISE_WRAPPER: &str = r#"
     return new Promise(async (resolve, _reject) => {
         {JS_CODE}
@@ -25,6 +28,7 @@ const PROMISE_WRAPPER: &str = r#"
     });
     "#;
 
+/// Reprents a web-target's JavaScript evaluator.
 pub struct WebEvaluator {
     dioxus: Dioxus,
     received: Rc<RefCell<MessageQueue>>,
@@ -33,6 +37,7 @@ pub struct WebEvaluator {
 }
 
 impl WebEvaluator {
+    /// Creates a new evaluator for web-based targets.
     pub fn new(js: String) -> Self {
         let received = Rc::new(RefCell::new(MessageQueue::new()));
         let received2 = received.clone();
@@ -61,6 +66,7 @@ impl WebEvaluator {
 
 #[async_trait(?Send)]
 impl Evaluator for WebEvaluator {
+    /// Runs the evaluated JavaScript.
     fn run(&mut self) -> Result<(), EvalError> {
         if let Err(e) =
             Function::new_with_args("dioxus", &self.code).call1(&JsValue::NULL, &self.dioxus)
@@ -74,6 +80,7 @@ impl Evaluator for WebEvaluator {
         Ok(())
     }
 
+    /// Sends a message to the evaluated JavaScript.
     fn send(&self, data: serde_json::Value) -> Result<(), EvalError> {
         if !self.ran {
             return Err(EvalError::NotRan);
@@ -88,6 +95,7 @@ impl Evaluator for WebEvaluator {
         Ok(())
     }
 
+    /// Receives a message from the evaluated JavaScript.
     async fn recv(&self) -> Result<serde_json::Value, EvalError> {
         if !self.ran {
             return Err(EvalError::NotRan);
