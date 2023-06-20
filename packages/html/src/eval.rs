@@ -7,7 +7,6 @@ use std::{
     rc::Rc,
     task::{Context, Poll},
 };
-use wasm_bindgen::JsValue;
 
 /// A struct that implements EvalProvider is sent through [`ScopeState`]'s provide_context function
 /// so that [`use_eval`] can provide a platform agnostic interface for evaluating JavaScript code.
@@ -19,8 +18,8 @@ pub trait EvalProvider {
 #[async_trait(?Send)]
 pub trait Evaluator {
     fn run(&mut self) -> Result<(), EvalError>;
-    fn send(&self, data: JsValue) -> Result<(), EvalError>;
-    async fn recv(&self) -> Result<JsValue, EvalError>;
+    fn send(&self, data: serde_json::Value) -> Result<(), EvalError>;
+    async fn recv(&self) -> Result<serde_json::Value, EvalError>;
 }
 
 /// Get a struct that can execute any JavaScript.
@@ -60,12 +59,12 @@ impl UseEval {
     }
 
     /// Sends a [`JsValue`] to the evaluated JavaScript.
-    pub fn send(&self, data: JsValue) -> Result<(), EvalError> {
+    pub fn send(&self, data: serde_json::Value) -> Result<(), EvalError> {
         self.evaluator.send(data)
     }
 
     /// Receives a [`JsValue`] from the evaluated JavaScript.
-    pub async fn recv(&self) -> Result<JsValue, EvalError> {
+    pub async fn recv(&self) -> Result<serde_json::Value, EvalError> {
         self.evaluator.recv().await
     }
 }
@@ -73,7 +72,7 @@ impl UseEval {
 /// MessageQueue is a wrapper around a [`VecDeque`] that implements future-util's [`Stream`] trait.
 #[derive(Debug)]
 pub struct MessageQueue {
-    queue: VecDeque<JsValue>,
+    queue: VecDeque<serde_json::Value>,
 }
 
 impl MessageQueue {
@@ -85,18 +84,18 @@ impl MessageQueue {
     }
 
     /// Pops an item off the front.
-    pub fn pop(&mut self) -> Option<JsValue> {
+    pub fn pop(&mut self) -> Option<serde_json::Value> {
         self.queue.pop_front()
     }
 
     /// Pushes an item onto the back.
-    pub fn push(&mut self, value: JsValue) {
+    pub fn push(&mut self, value: serde_json::Value) {
         self.queue.push_back(value);
     }
 }
 
 impl Stream for MessageQueue {
-    type Item = JsValue;
+    type Item = serde_json::Value;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         if let Some(value) = self.pop() {
@@ -117,4 +116,6 @@ pub enum EvalError {
     NotRan,
     /// The provides JavaScript is not valid and can't be ran.
     InvalidJs(String),
+    /// Represents an error communicating between JavaScript and Rust.
+    Communication(String),
 }

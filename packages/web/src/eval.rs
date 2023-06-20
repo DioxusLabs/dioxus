@@ -38,7 +38,10 @@ impl WebEvaluator {
         let received2 = received.clone();
 
         let a = Closure::<dyn FnMut(JsValue)>::new(move |data| {
-            received2.borrow_mut().push(data);
+            match serde_wasm_bindgen::from_value::<serde_json::Value>(data) {
+                Ok(data) => received2.borrow_mut().push(data),
+                Err(_) => return, // Can't really do much here.
+            }
         });
 
         let dioxus = Dioxus::new(a.as_ref().unchecked_ref());
@@ -71,15 +74,21 @@ impl Evaluator for WebEvaluator {
         Ok(())
     }
 
-    fn send(&self, data: JsValue) -> Result<(), EvalError> {
+    fn send(&self, data: serde_json::Value) -> Result<(), EvalError> {
         if !self.ran {
             return Err(EvalError::NotRan);
         }
+
+        let data = match serde_wasm_bindgen::to_value::<serde_json::Value>(&data) {
+            Ok(d) => d,
+            Err(e) => return Err(EvalError::Communication(e.to_string())),
+        };
+
         self.dioxus.rustSend(data);
         Ok(())
     }
 
-    async fn recv(&self) -> Result<JsValue, EvalError> {
+    async fn recv(&self) -> Result<serde_json::Value, EvalError> {
         if !self.ran {
             return Err(EvalError::NotRan);
         }
