@@ -8,9 +8,6 @@ use dioxus_fullstack::prelude::*;
 
 #[tokio::main]
 async fn main() {
-    PostServerData::register().unwrap();
-    GetServerData::register().unwrap();
-
     let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 8080));
     axum::Server::bind(&addr)
         .serve(

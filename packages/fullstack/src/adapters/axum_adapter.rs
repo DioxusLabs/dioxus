@@ -12,7 +12,6 @@
 //!     dioxus_web::launch_cfg(app, dioxus_web::Config::new().hydrate(true));
 //!     #[cfg(feature = "ssr")]
 //!     {
-//!         GetServerData::register().unwrap();
 //!         tokio::runtime::Runtime::new()
 //!             .unwrap()
 //!             .block_on(async move {
@@ -107,7 +106,7 @@ pub trait DioxusRouterExt<S> {
     fn register_server_fns_with_handler<H, T>(
         self,
         server_fn_route: &'static str,
-        handler: impl Fn(ServerFunction) -> H,
+        handler: impl FnMut(server_fn::ServerFnTraitObj<DioxusServerContext>) -> H,
     ) -> Self
     where
         H: Handler<T, S>,
@@ -232,7 +231,7 @@ where
     fn register_server_fns_with_handler<H, T>(
         self,
         server_fn_route: &'static str,
-        mut handler: impl FnMut(ServerFunction) -> H,
+        mut handler: impl FnMut(server_fn::ServerFnTraitObj<DioxusServerContext>) -> H,
     ) -> Self
     where
         H: Handler<T, S, Body>,
@@ -243,7 +242,7 @@ where
         for server_fn_path in DioxusServerFnRegistry::paths_registered() {
             let func = DioxusServerFnRegistry::get(server_fn_path).unwrap();
             let full_route = format!("{server_fn_route}/{server_fn_path}");
-            match func.encoding {
+            match func.encoding() {
                 Encoding::Url | Encoding::Cbor => {
                     router = router.route(&full_route, post(handler(func)));
                 }
@@ -314,7 +313,7 @@ where
         let cfg = cfg.into();
 
         // Add server functions and render index.html
-        self.serve_static_assets(&cfg.assets_path)
+        self.serve_static_assets(cfg.assets_path)
             .route(
                 "/",
                 get(render_handler).with_state((cfg, SSRState::default())),
@@ -371,7 +370,7 @@ async fn render_handler<P: Clone + serde::Serialize + Send + Sync + 'static>(
 /// A default handler for server functions. It will deserialize the request, call the server function, and serialize the response.
 pub async fn server_fn_handler(
     server_context: DioxusServerContext,
-    function: ServerFunction,
+    function: server_fn::ServerFnTraitObj<DioxusServerContext>,
     parts: Arc<RequestParts>,
     body: Body,
 ) -> impl IntoResponse {
@@ -389,11 +388,11 @@ pub async fn server_fn_handler(
                 .expect("couldn't spawn runtime")
                 .block_on(async {
                     let query = &query_string.into();
-                    let data = match &function.encoding {
+                    let data = match &function.encoding() {
                         Encoding::Url | Encoding::Cbor => &body,
                         Encoding::GetJSON | Encoding::GetCBOR => query,
                     };
-                    let resp = match (function.trait_obj)(server_context.clone(), &data).await {
+                    let resp = match function.call(server_context.clone(), data).await {
                         Ok(serialized) => {
                             // if this is Accept: application/json then send a serialized JSON response
                             let accept_header = parts
