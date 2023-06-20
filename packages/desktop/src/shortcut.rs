@@ -3,132 +3,14 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 use dioxus_core::ScopeState;
 use dioxus_html::input_data::keyboard_types::Modifiers;
 use slab::Slab;
+use crate::{use_window, DesktopContext};
 use wry::application::{
     accelerator::{Accelerator, AcceleratorId},
     event_loop::EventLoopWindowTarget,
-    global_shortcut::{GlobalShortcut, ShortcutManager, ShortcutManagerError},
     keyboard::{KeyCode, ModifiersState},
 };
 
-use crate::{use_window, DesktopContext};
 
-#[derive(Clone)]
-pub(crate) struct ShortcutRegistry {
-    manager: Rc<RefCell<ShortcutManager>>,
-    shortcuts: ShortcutMap,
-}
-
-type ShortcutMap = Rc<RefCell<HashMap<AcceleratorId, Shortcut>>>;
-
-struct Shortcut {
-    shortcut: GlobalShortcut,
-    callbacks: Slab<Box<dyn FnMut()>>,
-}
-
-impl Shortcut {
-    fn insert(&mut self, callback: Box<dyn FnMut()>) -> usize {
-        self.callbacks.insert(callback)
-    }
-
-    fn remove(&mut self, id: usize) {
-        let _ = self.callbacks.remove(id);
-    }
-
-    fn is_empty(&self) -> bool {
-        self.callbacks.is_empty()
-    }
-}
-
-impl ShortcutRegistry {
-    pub fn new<T>(target: &EventLoopWindowTarget<T>) -> Self {
-        Self {
-            manager: Rc::new(RefCell::new(ShortcutManager::new(target))),
-            shortcuts: Rc::new(RefCell::new(HashMap::new())),
-        }
-    }
-
-    pub(crate) fn call_handlers(&self, id: AcceleratorId) {
-        if let Some(Shortcut { callbacks, .. }) = self.shortcuts.borrow_mut().get_mut(&id) {
-            for (_, callback) in callbacks.iter_mut() {
-                (callback)();
-            }
-        }
-    }
-
-    pub(crate) fn add_shortcut(
-        &self,
-        modifiers: impl Into<Option<ModifiersState>>,
-        key: KeyCode,
-        callback: Box<dyn FnMut()>,
-    ) -> Result<ShortcutId, ShortcutRegistryError> {
-        let accelerator = Accelerator::new(modifiers, key);
-        let accelerator_id = accelerator.clone().id();
-        let mut shortcuts = self.shortcuts.borrow_mut();
-        Ok(
-            if let Some(callbacks) = shortcuts.get_mut(&accelerator_id) {
-                let id = callbacks.insert(callback);
-                ShortcutId {
-                    id: accelerator_id,
-                    number: id,
-                }
-            } else {
-                match self.manager.borrow_mut().register(accelerator) {
-                    Ok(global_shortcut) => {
-                        let mut slab = Slab::new();
-                        let id = slab.insert(callback);
-                        let shortcut = Shortcut {
-                            shortcut: global_shortcut,
-                            callbacks: slab,
-                        };
-                        shortcuts.insert(accelerator_id, shortcut);
-                        ShortcutId {
-                            id: accelerator_id,
-                            number: id,
-                        }
-                    }
-                    Err(ShortcutManagerError::InvalidAccelerator(shortcut)) => {
-                        return Err(ShortcutRegistryError::InvalidShortcut(shortcut))
-                    }
-                    Err(err) => return Err(ShortcutRegistryError::Other(Box::new(err))),
-                }
-            },
-        )
-    }
-
-    pub(crate) fn remove_shortcut(&self, id: ShortcutId) {
-        let mut shortcuts = self.shortcuts.borrow_mut();
-        if let Some(callbacks) = shortcuts.get_mut(&id.id) {
-            callbacks.remove(id.number);
-            if callbacks.is_empty() {
-                if let Some(shortcut) = shortcuts.remove(&id.id) {
-                    let _ = self.manager.borrow_mut().unregister(shortcut.shortcut);
-                }
-            }
-        }
-    }
-
-    pub(crate) fn remove_all(&self) {
-        let mut shortcuts = self.shortcuts.borrow_mut();
-        shortcuts.clear();
-        let _ = self.manager.borrow_mut().unregister_all();
-        // prevent CTRL+R from reloading the page which breaks apps
-        let _ = self.add_shortcut(
-            Some(ModifiersState::CONTROL),
-            KeyCode::KeyR,
-            Box::new(|| {}),
-        );
-    }
-}
-
-#[non_exhaustive]
-#[derive(Debug)]
-/// An error that can occur when registering a shortcut.
-pub enum ShortcutRegistryError {
-    /// The shortcut is invalid.
-    InvalidShortcut(String),
-    /// An unknown error occurred.
-    Other(Box<dyn std::error::Error>),
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 /// An global id for a shortcut.
@@ -142,6 +24,16 @@ pub struct ShortcutHandle {
     desktop: DesktopContext,
     /// The id of the shortcut
     pub shortcut_id: ShortcutId,
+}
+
+#[non_exhaustive]
+#[derive(Debug)]
+/// An error that can occur when registering a shortcut.
+pub enum ShortcutRegistryError {
+    /// The shortcut is invalid.
+    InvalidShortcut(String),
+    /// An unknown error occurred.
+    Other(Box<dyn std::error::Error>),
 }
 
 /// Get a closure that executes any JavaScript in the WebView context.
@@ -166,6 +58,162 @@ pub fn use_global_shortcut(
             shortcut_id: id?,
         })
     })
+}
+
+#[cfg(target_os = "ios")]
+pub use mobile::*;
+
+#[cfg(target_os = "ios")]
+mod mobile {
+    use super::*;
+
+    #[derive(Clone)]
+    pub struct ShortcutRegistry;
+
+    impl ShortcutRegistry {
+        pub fn new<T>(target: &EventLoopWindowTarget<T>) -> Self {
+            todo!()
+        }
+
+        pub(crate) fn call_handlers(&self, id: AcceleratorId) {
+            todo!()
+        }
+
+        pub(crate) fn add_shortcut(
+            &self,
+            modifiers: impl Into<Option<ModifiersState>>,
+            key: KeyCode,
+            callback: Box<dyn FnMut()>,
+        ) -> Result<ShortcutId, ShortcutRegistryError> {
+            todo!()
+        }
+
+        pub(crate) fn remove_shortcut(&self, id: ShortcutId) {
+            todo!()
+        }
+
+        pub(crate) fn remove_all(&self) {
+            todo!()
+        }
+    }
+}
+
+
+#[cfg(not(target_os = "ios"))]
+pub use desktop::*;
+
+#[cfg(not(target_os = "ios"))]
+mod desktop {
+    use super::*;
+    use wry::application::global_shortcut::{GlobalShortcut, ShortcutManager, ShortcutManagerError};
+
+    #[derive(Clone)]
+    pub(crate) struct ShortcutRegistry {
+        manager: Rc<RefCell<ShortcutManager>>,
+        shortcuts: ShortcutMap,
+    }
+
+    type ShortcutMap = Rc<RefCell<HashMap<AcceleratorId, Shortcut>>>;
+
+    struct Shortcut {
+        shortcut: GlobalShortcut,
+        callbacks: Slab<Box<dyn FnMut()>>,
+    }
+
+    impl Shortcut {
+        fn insert(&mut self, callback: Box<dyn FnMut()>) -> usize {
+            self.callbacks.insert(callback)
+        }
+
+        fn remove(&mut self, id: usize) {
+            let _ = self.callbacks.remove(id);
+        }
+
+        fn is_empty(&self) -> bool {
+            self.callbacks.is_empty()
+        }
+    }
+
+    impl ShortcutRegistry {
+        pub fn new<T>(target: &EventLoopWindowTarget<T>) -> Self {
+            Self {
+                manager: Rc::new(RefCell::new(ShortcutManager::new(target))),
+                shortcuts: Rc::new(RefCell::new(HashMap::new())),
+            }
+        }
+
+        pub(crate) fn call_handlers(&self, id: AcceleratorId) {
+            if let Some(Shortcut { callbacks, .. }) = self.shortcuts.borrow_mut().get_mut(&id) {
+                for (_, callback) in callbacks.iter_mut() {
+                    (callback)();
+                }
+            }
+        }
+
+        pub(crate) fn add_shortcut(
+            &self,
+            modifiers: impl Into<Option<ModifiersState>>,
+            key: KeyCode,
+            callback: Box<dyn FnMut()>,
+        ) -> Result<ShortcutId, ShortcutRegistryError> {
+            let accelerator = Accelerator::new(modifiers, key);
+            let accelerator_id = accelerator.clone().id();
+            let mut shortcuts = self.shortcuts.borrow_mut();
+            Ok(
+                if let Some(callbacks) = shortcuts.get_mut(&accelerator_id) {
+                    let id = callbacks.insert(callback);
+                    ShortcutId {
+                        id: accelerator_id,
+                        number: id,
+                    }
+                } else {
+                    match self.manager.borrow_mut().register(accelerator) {
+                        Ok(global_shortcut) => {
+                            let mut slab = Slab::new();
+                            let id = slab.insert(callback);
+                            let shortcut = Shortcut {
+                                shortcut: global_shortcut,
+                                callbacks: slab,
+                            };
+                            shortcuts.insert(accelerator_id, shortcut);
+                            ShortcutId {
+                                id: accelerator_id,
+                                number: id,
+                            }
+                        }
+                        Err(ShortcutManagerError::InvalidAccelerator(shortcut)) => {
+                            return Err(ShortcutRegistryError::InvalidShortcut(shortcut))
+                        }
+                        Err(err) => return Err(ShortcutRegistryError::Other(Box::new(err))),
+                    }
+                },
+            )
+        }
+
+        pub(crate) fn remove_shortcut(&self, id: ShortcutId) {
+            let mut shortcuts = self.shortcuts.borrow_mut();
+            if let Some(callbacks) = shortcuts.get_mut(&id.id) {
+                callbacks.remove(id.number);
+                if callbacks.is_empty() {
+                    if let Some(shortcut) = shortcuts.remove(&id.id) {
+                        let _ = self.manager.borrow_mut().unregister(shortcut.shortcut);
+                    }
+                }
+            }
+        }
+
+        pub(crate) fn remove_all(&self) {
+            let mut shortcuts = self.shortcuts.borrow_mut();
+            shortcuts.clear();
+            let _ = self.manager.borrow_mut().unregister_all();
+            // prevent CTRL+R from reloading the page which breaks apps
+            let _ = self.add_shortcut(
+                Some(ModifiersState::CONTROL),
+                KeyCode::KeyR,
+                Box::new(|| {}),
+            );
+        }
+    }
 }
 
 impl ShortcutHandle {
