@@ -54,7 +54,6 @@
 //     - Do DOM work in the next requestAnimationFrame callback
 
 pub use crate::cfg::Config;
-pub use crate::util::{use_eval, UseEval};
 use dioxus_core::{Element, Scope, VirtualDom};
 use futures_util::{pin_mut, FutureExt, StreamExt};
 
@@ -65,7 +64,7 @@ mod file_engine;
 mod hot_reload;
 #[cfg(feature = "hydrate")]
 mod rehydrate;
-mod util;
+mod eval;
 
 // Currently disabled since it actually slows down immediate rendering
 // todo: only schedule non-immediate renders through ric/raf
@@ -167,6 +166,10 @@ pub async fn run_with_props<T: 'static>(root: fn(Scope<T>) -> Element, root_prop
     log::info!("Starting up");
 
     let mut dom = VirtualDom::new_with_props(root, root_props);
+    
+    // Eval
+    let cx = dom.base_scope();
+    eval::init_eval(cx);
 
     #[cfg(feature = "panic_hook")]
     if cfg.default_panic_hook {
