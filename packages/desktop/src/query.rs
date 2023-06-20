@@ -75,18 +75,20 @@ impl QueryEngine {
 
         let code = format!(
             r#"
-            if !window.{QUEUE_NAME} {{
+            if (!window.{QUEUE_NAME}) {{
                 window.{QUEUE_NAME} = [];
             }}
 
             let _request_id = {request_id};
+
+            if (!window.{QUEUE_NAME}[{queue_id}]) {{
+                window.{QUEUE_NAME}[{queue_id}] = [];
+            }}
             let _message_queue = window.{QUEUE_NAME}[{queue_id}];
+
             {script}
             "#
         );
-
-        print!("{}", code);
-        println!();
 
         if let Err(err) = webview.evaluate_script(&code) {
             log::warn!("Query error: {err}");
@@ -134,7 +136,7 @@ impl<V: DeserializeOwned> Query<V> {
         };
 
         // Remove the query from the slab
-        self.cleanup();
+        self.cleanup(None);
         result
     }
 
@@ -152,11 +154,14 @@ impl<V: DeserializeOwned> Query<V> {
         let data = message.to_string();
         let script = format!(
             r#"
-            if !window.{QUEUE_NAME} {{
+            if (!window.{QUEUE_NAME}) {{
                 window.{QUEUE_NAME} = [];
             }}
-            let message_queue = window.{QUEUE_NAME}[{queue_id}];
-            message_queue.push({data});
+
+            if (!window.{QUEUE_NAME}[{queue_id}]) {{
+                window.{QUEUE_NAME}[{queue_id}] = [];
+            }}
+            window.{QUEUE_NAME}[{queue_id}].push({data});
             "#
         );
 
@@ -169,10 +174,8 @@ impl<V: DeserializeOwned> Query<V> {
 
     pub async fn recv(&mut self) -> Result<Value, QueryError> {
         loop {
-            println!("LOOPING");
             match self.reciever.recv().await {
                 Ok(result) => {
-                    println!("OK");
                     if result.id == self.id {
                         return Ok(result.data);
                     }
@@ -185,10 +188,24 @@ impl<V: DeserializeOwned> Query<V> {
         }
     }
 
-    pub fn cleanup(&mut self) {
+    pub fn cleanup(&mut self, webview: Option<&WebView>) {
         self.slab.slab.borrow_mut().remove(self.id);
+
         if let Some(queue_slab) = &self.queue_slab {
-            queue_slab.slab.borrow_mut().remove(self.queue_id.unwrap());
+            let queue_id = self.queue_id.unwrap();
+
+            _ = webview.unwrap().evaluate_script(&format!(
+                r#"
+                    if (!window.{QUEUE_NAME}) {{
+                        window.{QUEUE_NAME} = [];
+                    }}
+
+                    if (window.{QUEUE_NAME}[{queue_id}]) {{
+                        window.{QUEUE_NAME}[{queue_id}] = [];
+                    }}
+                "#
+            ));
+            queue_slab.slab.borrow_mut().remove(queue_id);
         }
     }
 }

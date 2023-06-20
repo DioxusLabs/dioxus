@@ -29,7 +29,6 @@ pub struct DesktopEvaluator {
 const DIOXUS_CODE: &str = r#"
     let dioxus = {
         recv: function () {
-            console.log("RECV");
             return new Promise((resolve, _reject) => {
                 // Ever 50 ms check for new data
                 let timeout = setTimeout(() => {
@@ -37,8 +36,8 @@ const DIOXUS_CODE: &str = r#"
                 while (true) {
                     let data = _message_queue.shift();
                     if (data) {
-                    msg = data;
-                    break;
+                        msg = data;
+                        break;
                     }
                 }
                 clearTimeout(timeout);
@@ -48,7 +47,6 @@ const DIOXUS_CODE: &str = r#"
         },
 
         send: function (value) {
-            console.log("SEND: "+_request_id);
             window.ipc.postMessage(
                 JSON.stringify({
                     "method":"query",
@@ -67,9 +65,12 @@ impl DesktopEvaluator {
     pub fn new(desktop_ctx: DesktopContext, js: String) -> Self {
         let code = format!(
             r#"
-            console.log("brrr");
             {DIOXUS_CODE}
-            {js}
+
+            new Promise(async (resolve, _reject) => {{
+                {js}
+                resolve(null);
+            }});
             "#
         );
 
@@ -106,6 +107,6 @@ impl Evaluator for DesktopEvaluator {
 
     /// Cleans up evaluation artifacts
     fn done(&mut self) {
-        self.query.cleanup();
+        self.query.cleanup(Some(&self.desktop_ctx.webview));
     }
 }
