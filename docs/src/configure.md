@@ -24,6 +24,7 @@ We use `toml` to define some info for `dioxus` project.
    ```
    asset_dir = "public"
    ```
+5. ***sub_package*** - the sub package in the workspace to build
 
 ### Application.Tools
 
@@ -58,6 +59,11 @@ Web platform application config:
    # HTML title tag content
    title = "dioxus app | ⛺"
    ```
+2. ***base_path*** - The base path to build the appliation for serving at. This can be useful when serving your application in a subdirectory in a domain. For example when building a site to be served on github pages.
+   ```
+   # The application will be served at domain.com/my_application/
+   base_path = "my_application"
+   ```
 
 ### Web.Watcher
 
@@ -71,6 +77,10 @@ Web platform `dev-server` watcher config:
 2. ***watch_path*** - which files & directories will be watcher monitoring.
    ```
    watch_path = ["src", "public"]
+   ```
+3. ***index_on_404*** - If enabled, Dioxus CLI will serve the root page when a route is not found. *This is needed when serving an application that uses the router*
+   ```
+   index_on_404 = true
    ```
 
 ### Web.Resource
