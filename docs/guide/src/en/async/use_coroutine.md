@@ -146,7 +146,7 @@ async fn editor_service(rx: UnboundedReceiver<EditorCommand>) {
 We can combine coroutines with [Fermi](https://docs.rs/fermi/latest/fermi/index.html) to emulate Redux Toolkit's Thunk system with much less headache. This lets us store all of our app's state *within* a task and then simply update the "view" values stored in Atoms. It cannot be understated how powerful this technique is: we get all the perks of native Rust tasks with the optimizations and ergonomics of global state. This means your *actual* state does not need to be tied up in a system like Fermi or Redux – the only Atoms that need to exist are those that are used to drive the display/UI.
 
 ```rust
-static USERNAME: Atom<String> = |_| "default".to_string();
+static USERNAME: Atom<String> = Atom(|_| "default".to_string());
 
 fn app(cx: Scope) -> Element {
     let atoms = use_atom_root(cx);
@@ -159,7 +159,7 @@ fn app(cx: Scope) -> Element {
 }
 
 fn Banner(cx: Scope) -> Element {
-    let username = use_read(cx, USERNAME);
+    let username = use_read(cx, &USERNAME);
 
     cx.render(rsx!{
         h1 { "Welcome back, {username}" }
@@ -177,8 +177,8 @@ enum SyncAction {
 }
 
 async fn sync_service(mut rx: UnboundedReceiver<SyncAction>, atoms: AtomRoot) {
-    let username = atoms.write(USERNAME);
-    let errors = atoms.write(ERRORS);
+    let username = atoms.write(&USERNAME);
+    let errors = atoms.write(&ERRORS);
 
     while let Ok(msg) = rx.next().await {
         match msg {
