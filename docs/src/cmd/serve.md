@@ -1,6 +1,6 @@
 # Serve
 
-The `dioxus serve` can start a dev server (include hot-reload tool) to run the project.
+The `dioxus serve` can start a dev server with hot-reloading
 
 ```
 dioxus-serve 
@@ -13,53 +13,43 @@ OPTIONS:
         --example <EXAMPLE>      [default: ""]
         --platform <PLATFORM>    [default: "default_platform"]
         --release                [default: false]
+        --hot-reload             [default: false]ß
 ```
 
-You can use this command to build project and start a `dev server` :
+You can use this command to build project and start a dev server:
 
 ```
 dioxus serve
 ```
 
-## Target platform
-
-Use option `platform` choose build target platform:
-
-```
-# for desktop project
-dioxus serve --platform desktop
-```
-
-`platform` only supports `desktop` & `web`.
-
-`dev-server` only for `web` project.
-
-```
-# for web project
-dioxus serve --platform web
-```
-
 ## Serve Example
 
-You can use `--example {name}` to start a example code.
+You can use the `example` option to serve a example:
 
 ```
-# build `example/test` code
+# serve the `test` example
 dioxus serve --exmaple test
 ```
 
 ## Open Browser
 
-You can add `--open` flag to open system default browser when server startup.
+You can add the `--open` option to open system default browser when server startup:
 
 ```
 dioxus serve --open
 ```
 
+## RSX Hot Reloading
+
+You can add the `--hot-reload` flag to enable [rsx hot reloading](https://dioxuslabs.com/docs/0.3/guide/en/getting_started/hot_reload.html). This will allow you to reload some rsx changes without a full recompile:
+
+```
+dioxus serve --open
+```
 
 ## Cross Origin Policy
 
-use `cross-origin-policy` can change corss-origin header in serverside.
+You can add the `cross-origin-policy` option to change cross-origin header to:
 
 ```
   Cross-Origin-Opener-Policy: same-origin

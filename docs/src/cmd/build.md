@@ -15,7 +15,7 @@ OPTIONS:
         --release                [default: false]
 ```
 
-You can use this command to build project to `out_dir` :
+You can use this command to build a project:
 
 ```
 dioxus build --release
@@ -23,14 +23,14 @@ dioxus build --release
 
 ## Target platform
 
-Use option `platform` choose build target platform:
+Use the `platform` option to choose your target platform:
 
 ```
 # for desktop project
 dioxus build --platform desktop
 ```
 
-`platform` only supports `desktop` & `web`.
+`platform` currently only supports `desktop` & `web`.
 
 ```
 # for web project
@@ -39,9 +39,9 @@ dioxus build --platform web
 
 ## Build Example
 
-You can use `--example {name}` to build a example code.
+You can use the `example` option to select a example to build:
 
 ```
-# build `example/test` code
+# build the `test` example
 dioxus build --exmaple test
 ```

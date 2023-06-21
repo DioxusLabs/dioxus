@@ -1,16 +1,16 @@
 # Clean
 
-`dioxus clean` will call `target clean` and remove `out_dir` directory.
+`dioxus clean` will clear the build artifacts (the out_dir and the cargo cache)
 
 ```
 dioxus-clean 
-Clean output artifacts
+Clean build artifacts
 
 USAGE:
     dioxus clean
 ```
 
-you can use this command to clean all build cache and the `out_dir` content.
+# Example
 
 ```
 dioxus clean
