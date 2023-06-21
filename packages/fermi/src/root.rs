@@ -1,21 +1,11 @@
-use std::{
-    any::{Any, TypeId},
-    cell::RefCell,
-    collections::HashMap,
-    rc::Rc,
-    sync::Arc,
-};
+use std::{any::Any, cell::RefCell, collections::HashMap, rc::Rc, sync::Arc};
 
 use dioxus_core::ScopeId;
 use im_rc::HashSet;
 
 use crate::Readable;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct AtomId {
-    pub ptr: *const (),
-    pub type_id: TypeId,
-}
+pub type AtomId = *const ();
 
 pub struct AtomRoot {
     pub atoms: RefCell<HashMap<AtomId, Slot>>,
@@ -54,15 +44,7 @@ impl AtomRoot {
         // initialize the value if it's not already initialized
         if let Some(slot) = atoms.get_mut(&f.unique_id()) {
             slot.subscribers.insert(scope);
-            match slot.value.clone().downcast() {
-                Ok(res) => res,
-                Err(e) => panic!(
-                    "Downcasting atom failed: {:?}. Has typeid of {:?} but needs typeid of {:?}",
-                    f.unique_id(),
-                    e.type_id(),
-                    TypeId::of::<V>()
-                ),
-            }
+            slot.value.clone().downcast().unwrap()
         } else {
             let value = Rc::new(f.init());
             let mut subscribers = HashSet::new();
