@@ -23,9 +23,12 @@ wasm-bindgen = { version = "0.2.86", optional = true }
 web-sys = { version = "0.3.60", optional = true, features = ["ScrollRestoration"] }
 js-sys = { version = "0.3.63", optional = true }
 gloo-utils = { version = "0.1.6", optional = true }
+dioxus-ssr = { path = "../ssr", optional = true }
+lru = { version = "0.10.0", optional = true }
 
 [features]
-default = ["web"]
+default = ["web", "ssr"]
+ssr = ["dioxus-ssr", "lru"]
 wasm_test = []
 serde = ["dep:serde", "gloo-utils/serde"]
 web = ["gloo", "web-sys", "wasm-bindgen", "gloo-utils", "js-sys"]

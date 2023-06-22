@@ -2,74 +2,33 @@
 
 use dioxus::prelude::*;
 use dioxus_router::prelude::*;
-use std::io::prelude::*;
-use std::{path::PathBuf, str::FromStr};
+use dioxus_router::ssr::{DefaultRenderer, IncrementalRendererConfig};
 
 fn main() {
-    render_static_pages();
-}
+    let mut renderer = IncrementalRendererConfig::new(DefaultRenderer {
+        before_body: r#"<!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width,
+            initial-scale=1.0">
+            <title>Dioxus Application</title>
+        </head>
+        <body>"#
+            .to_string(),
+        after_body: r#"</body>
+        </html>"#
+            .to_string(),
+    })
+    .static_dir("./static")
+    .memory_cache_limit(5)
+    .build();
 
-fn render_static_pages() {
-    for route in Route::SITE_MAP
-        .iter()
-        .flat_map(|seg| seg.flatten().into_iter())
-    {
-        // check if this is a static segment
-        let mut file_path = PathBuf::from("./");
-        let mut full_path = String::new();
-        let mut is_static = true;
-        for segment in &route {
-            match segment {
-                SegmentType::Static(s) => {
-                    file_path.push(s);
-                    full_path += "/";
-                    full_path += s;
-                }
-                _ => {
-                    // skip routes with any dynamic segments
-                    is_static = false;
-                    break;
-                }
-            }
-        }
+    renderer.pre_cache_static::<Route>();
 
-        if is_static {
-            let route = Route::from_str(&full_path).unwrap();
-            let mut vdom = VirtualDom::new_with_props(RenderPath, RenderPathProps { path: route });
-            let _ = vdom.rebuild();
-
-            file_path.push("index.html");
-            std::fs::create_dir_all(file_path.parent().unwrap()).unwrap();
-            let mut file = std::fs::File::create(file_path).unwrap();
-
-            let body = dioxus_ssr::render(&vdom);
-            let html = format!(
-                r#"
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{}</title>
-</head>
-<body>
-    {}
-</body>
-</html>
-"#,
-                full_path, body
-            );
-            file.write_all(html.as_bytes()).unwrap();
-        }
-    }
-}
-
-#[inline_props]
-fn RenderPath(cx: Scope, path: Route) -> Element {
-    let path = path.clone();
-    render! {
-        Router {
-            config: || RouterConfig::default().history(MemoryHistory::with_initial_path(path))
+    for _ in 0..2 {
+        for id in 0..10 {
+            renderer.render(Route::Post { id });
         }
     }
 }
@@ -84,7 +43,16 @@ fn Blog(cx: Scope) -> Element {
 }
 
 #[inline_props]
-fn Post(cx: Scope) -> Element {
+fn Post(cx: Scope, id: usize) -> Element {
+    render! {
+        div {
+            "PostId: {id}"
+        }
+    }
+}
+
+#[inline_props]
+fn PostHome(cx: Scope) -> Element {
     render! {
         div {
             "Post"
@@ -107,8 +75,12 @@ enum Route {
     #[nest("/blog")]
         #[route("/")]
         Blog {},
-        #[route("/post")]
-        Post {},
+        #[route("/post/index")]
+        PostHome {},
+        #[route("/post/:id")]
+        Post {
+            id: usize,
+        },
     #[end_nest]
     #[route("/")]
     Home {},

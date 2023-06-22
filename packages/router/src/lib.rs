@@ -6,6 +6,9 @@
 pub mod navigation;
 pub mod routable;
 
+#[cfg(feature = "ssr")]
+pub mod ssr;
+
 /// Components interacting with the router.
 pub mod components {
     mod default_errors;
