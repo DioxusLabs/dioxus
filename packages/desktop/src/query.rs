@@ -14,17 +14,9 @@ struct SharedSlab {
 }
 
 /// Handles sending and receiving arbitrary queries from the webview. Queries can be resolved non-sequentially, so we use ids to track them.
-#[derive(Clone)]
+#[derive(Default, Clone)]
 pub(crate) struct QueryEngine {
     active_requests: SharedSlab,
-}
-
-impl Default for QueryEngine {
-    fn default() -> Self {
-        Self {
-            active_requests: SharedSlab::default(),
-        }
-    }
 }
 
 impl QueryEngine {
