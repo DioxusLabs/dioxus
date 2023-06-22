@@ -2,6 +2,7 @@
 
 use dioxus::prelude::*;
 use dioxus_router::prelude::*;
+
 use dioxus_router::ssr::{DefaultRenderer, IncrementalRendererConfig};
 
 fn main() {
@@ -21,7 +22,6 @@ fn main() {
             .to_string(),
     })
     .static_dir("./static")
-    .memory_cache_limit(5)
     .build();
 
     renderer.pre_cache_static::<Route>();

@@ -132,8 +132,16 @@ impl<R: RenderHTML> IncrementalRenderer<R> {
         let file = std::fs::File::create(dbg!(file_path)).unwrap();
         let mut file = std::io::BufWriter::new(file);
         file.write_all(html.as_bytes()).unwrap();
+        self.add_to_memory_cache(route, html);
+    }
+
+    fn add_to_memory_cache<K: AsRef<str> + ToString, V: ToString>(&mut self, route: K, html: V) {
         if let Some(cache) = self.memory_cache.as_mut() {
-            cache.put(route, html);
+            if cache.contains(route.as_ref()) {
+                cache.promote(route.as_ref())
+            } else {
+                cache.put(route.to_string(), html.to_string());
+            }
         }
     }
 
@@ -143,15 +151,14 @@ impl<R: RenderHTML> IncrementalRenderer<R> {
             .as_mut()
             .and_then(|cache| cache.get(&route).cloned())
         {
-            println!("memory cache hit");
             Some(cache_hit)
         } else {
             let file_path = self.route_as_path(&route);
-            if let Ok(file) = dbg!(std::fs::File::open(file_path)) {
+            if let Ok(file) = std::fs::File::open(file_path) {
                 let mut file = std::io::BufReader::new(file);
                 let mut html = String::new();
                 file.read_to_string(&mut html).ok()?;
-                println!("file cache hit");
+                self.add_to_memory_cache(route, html.clone());
                 Some(html)
             } else {
                 None
