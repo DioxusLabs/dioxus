@@ -380,7 +380,17 @@ fn prettier_build(cmd: subprocess::Exec) -> anyhow::Result<Vec<Diagnostic>> {
     );
     pb.set_message("💼 Waiting to start build the project...");
 
-    let stdout = cmd.stream_stdout()?;
+    struct StopSpinOnDrop(ProgressBar);
+
+    impl Drop for StopSpinOnDrop {
+        fn drop(&mut self) {
+            self.0.finish_and_clear();
+        }
+    }
+
+    StopSpinOnDrop(pb.clone());
+
+    let stdout = cmd.detached().stream_stdout()?;
     let reader = std::io::BufReader::new(stdout);
     for message in cargo_metadata::Message::parse_stream(reader) {
         match message.unwrap() {
@@ -388,9 +398,11 @@ fn prettier_build(cmd: subprocess::Exec) -> anyhow::Result<Vec<Diagnostic>> {
                 let message = msg.message;
                 match message.level {
                     cargo_metadata::diagnostic::DiagnosticLevel::Error => {
-                        return Err(anyhow::anyhow!(message
-                            .rendered
-                            .unwrap_or("Unknown".into())));
+                        return {
+                            Err(anyhow::anyhow!(message
+                                .rendered
+                                .unwrap_or("Unknown".into())))
+                        };
                     }
                     cargo_metadata::diagnostic::DiagnosticLevel::Warning => {
                         warning_messages.push(message.clone());
@@ -407,7 +419,6 @@ fn prettier_build(cmd: subprocess::Exec) -> anyhow::Result<Vec<Diagnostic>> {
             }
             Message::BuildFinished(finished) => {
                 if finished.success {
-                    pb.finish_and_clear();
                     log::info!("👑 Build done.");
                 } else {
                     std::process::exit(1);
