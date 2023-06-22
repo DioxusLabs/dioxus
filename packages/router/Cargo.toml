@@ -25,10 +25,12 @@ js-sys = { version = "0.3.63", optional = true }
 gloo-utils = { version = "0.1.6", optional = true }
 dioxus-ssr = { path = "../ssr", optional = true }
 lru = { version = "0.10.0", optional = true }
+radix_trie = { version = "0.2.1", optional = true }
+rustc-hash = "1.1.0"
 
 [features]
 default = ["web", "ssr"]
-ssr = ["dioxus-ssr", "lru"]
+ssr = ["dioxus-ssr", "lru", "radix_trie"]
 wasm_test = []
 serde = ["dep:serde", "gloo-utils/serde"]
 web = ["gloo", "web-sys", "wasm-bindgen", "gloo-utils", "js-sys"]
@@ -36,6 +38,11 @@ web = ["gloo", "web-sys", "wasm-bindgen", "gloo-utils", "js-sys"]
 [dev-dependencies]
 dioxus = { path = "../dioxus" }
 dioxus-ssr = { path = "../ssr" }
+criterion = "0.3"
+
+[[bench]]
+name = "incremental"
+harness = false
 
 [target.'cfg(not(target_family = "wasm"))'.dev-dependencies]
 dioxus-desktop = { path = "../desktop" }

@@ -1,5 +1,7 @@
 #![allow(non_snake_case)]
 
+use std::time::Duration;
+
 use dioxus::prelude::*;
 use dioxus_router::prelude::*;
 
@@ -22,13 +24,16 @@ fn main() {
             .to_string(),
     })
     .static_dir("./static")
+    .invalidate_after(Duration::from_secs(10))
     .build();
 
-    renderer.pre_cache_static::<Route>();
+    renderer.pre_cache_static_routes::<Route>().unwrap();
 
-    for _ in 0..2 {
+    for _ in 0..1_000_000 {
         for id in 0..10 {
-            renderer.render(Route::Post { id });
+            renderer
+                .render(Route::Post { id }, &mut std::io::sink())
+                .unwrap();
         }
     }
 }
