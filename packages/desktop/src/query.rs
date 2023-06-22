@@ -72,10 +72,8 @@ pub(crate) struct Query<V: DeserializeOwned> {
 impl<V: DeserializeOwned> Query<V> {
     /// Resolve the query
     pub async fn resolve(self) -> Result<V, QueryError> {
-        let result = self.receiver.await.map_err(QueryError::RecvError)?;
-        let result = V::deserialize(result).map_err(QueryError::DeserializeError);
-
-        result
+        let value = self.receiver.await.map_err(QueryError::RecvError)?;
+        V::deserialize(value).map_err(QueryError::DeserializeError)
     }
 }
 
