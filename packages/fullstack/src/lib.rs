@@ -10,6 +10,8 @@ mod props_html;
 mod adapters;
 #[cfg(all(debug_assertions, feature = "hot-reload", feature = "ssr"))]
 mod hot_reload;
+#[cfg(feature = "router")]
+mod incremental;
 #[cfg(feature = "ssr")]
 mod render;
 #[cfg(feature = "ssr")]
