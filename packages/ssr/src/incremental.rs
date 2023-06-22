@@ -2,15 +2,13 @@
 
 #![allow(non_snake_case)]
 
-use crate::prelude::*;
-use dioxus::prelude::*;
+use dioxus_core::{Element, Scope, VirtualDom};
 use rustc_hash::FxHasher;
 use std::{
     hash::BuildHasherDefault,
     io::Write,
     num::NonZeroUsize,
     path::{Path, PathBuf},
-    str::FromStr,
     time::{Duration, SystemTime},
 };
 
@@ -62,6 +60,7 @@ impl RenderHTML for DefaultRenderer {
 }
 
 /// A configuration for the incremental renderer.
+#[derive(Debug, Clone)]
 pub struct IncrementalRendererConfig<R: RenderHTML> {
     static_dir: PathBuf,
     memory_cache_limit: usize,
@@ -69,9 +68,9 @@ pub struct IncrementalRendererConfig<R: RenderHTML> {
     render: R,
 }
 
-impl Default for IncrementalRendererConfig<DefaultRenderer> {
+impl<R: RenderHTML + Default> Default for IncrementalRendererConfig<R> {
     fn default() -> Self {
-        Self::new(DefaultRenderer::default())
+        Self::new(R::default())
     }
 }
 
@@ -112,7 +111,7 @@ impl<R: RenderHTML> IncrementalRendererConfig<R> {
                 .map(|limit| lru::LruCache::with_hasher(limit, Default::default())),
             invalidate_after: self.invalidate_after,
             render: self.render,
-            ssr_renderer: dioxus_ssr::Renderer::new(),
+            ssr_renderer: crate::Renderer::new(),
         }
     }
 }
@@ -120,45 +119,74 @@ impl<R: RenderHTML> IncrementalRendererConfig<R> {
 /// An incremental renderer.
 pub struct IncrementalRenderer<R: RenderHTML> {
     static_dir: PathBuf,
+    #[allow(clippy::type_complexity)]
     memory_cache:
         Option<lru::LruCache<String, (SystemTime, Vec<u8>), BuildHasherDefault<FxHasher>>>,
     invalidate_after: Option<Duration>,
-    ssr_renderer: dioxus_ssr::Renderer,
+    ssr_renderer: crate::Renderer,
     render: R,
 }
 
 impl<R: RenderHTML> IncrementalRenderer<R> {
+    /// Get the inner renderer.
+    pub fn renderer(&self) -> &crate::Renderer {
+        &self.ssr_renderer
+    }
+
+    /// Get the inner renderer mutably.
+    pub fn renderer_mut(&mut self) -> &mut crate::Renderer {
+        &mut self.ssr_renderer
+    }
+
     /// Create a new incremental renderer builder.
     pub fn builder(renderer: R) -> IncrementalRendererConfig<R> {
         IncrementalRendererConfig::new(renderer)
+    }
+
+    /// Remove a route from the cache.
+    pub fn invalidate(&mut self, route: &str) {
+        if let Some(cache) = &mut self.memory_cache {
+            cache.pop(route);
+        }
+        if let Some(path) = self.find_file(route) {
+            let _ = std::fs::remove_file(path.full_path);
+        }
+    }
+
+    /// Remove all routes from the cache.
+    pub fn invalidate_all(&mut self) {
+        if let Some(cache) = &mut self.memory_cache {
+            cache.clear();
+        }
+        // clear the static directory
+        let _ = std::fs::remove_dir_all(&self.static_dir);
     }
 
     fn track_timestamps(&self) -> bool {
         self.invalidate_after.is_some()
     }
 
-    fn render_and_cache<Rt>(
+    fn render_and_cache<P: 'static>(
         &mut self,
-        route: Rt,
+        route: String,
+        comp: fn(Scope<P>) -> Element,
+        props: P,
         output: &mut impl Write,
-    ) -> Result<(), IncrementalRendererError>
-    where
-        Rt: Routable,
-        <Rt as FromStr>::Err: std::fmt::Display,
-    {
-        let route_str = route.to_string();
-        let mut vdom = VirtualDom::new_with_props(RenderPath, RenderPathProps { path: route });
+        modify_vdom: impl FnOnce(&mut VirtualDom),
+    ) -> Result<(), IncrementalRendererError> {
+        let mut vdom = VirtualDom::new_with_props(comp, props);
+        modify_vdom(&mut vdom);
         let _ = vdom.rebuild();
 
         let mut html_buffer = WriteBuffer { buffer: Vec::new() };
         self.render.render_before_body(&mut html_buffer)?;
-        self.ssr_renderer.render_to(&mut html_buffer, &mut vdom)?;
+        self.ssr_renderer.render_to(&mut html_buffer, &vdom)?;
         self.render.render_after_body(&mut html_buffer)?;
         let html_buffer = html_buffer.buffer;
 
         output.write_all(&html_buffer)?;
 
-        self.add_to_cache(route_str, html_buffer)
+        self.add_to_cache(route, html_buffer)
     }
 
     fn add_to_cache(
@@ -181,7 +209,7 @@ impl<R: RenderHTML> IncrementalRenderer<R> {
 
     fn add_to_memory_cache(&mut self, route: String, html: Vec<u8>) {
         if let Some(cache) = self.memory_cache.as_mut() {
-            cache.put(route.to_string(), (SystemTime::now(), html));
+            cache.put(route, (SystemTime::now(), html));
         }
     }
 
@@ -228,23 +256,37 @@ impl<R: RenderHTML> IncrementalRenderer<R> {
     }
 
     /// Render a route or get it from cache.
-    pub fn render<Rt>(
+    pub fn render<P: 'static>(
         &mut self,
-        route: Rt,
+        route: String,
+        component: fn(Scope<P>) -> Element,
+        props: P,
         output: &mut impl Write,
-    ) -> Result<(), IncrementalRendererError>
-    where
-        Rt: Routable,
-        <Rt as FromStr>::Err: std::fmt::Display,
-    {
+        modify_vdom: impl FnOnce(&mut VirtualDom),
+    ) -> Result<(), IncrementalRendererError> {
         // check if this route is cached
         if !self.search_cache(route.to_string(), output)? {
             // if not, create it
-            self.render_and_cache(route, output)?;
+            self.render_and_cache(route, component, props, output, modify_vdom)?;
             log::trace!("cache miss");
         }
 
         Ok(())
+    }
+
+    /// Render a route or get it from cache to a string.
+    pub fn render_to_string<P: 'static>(
+        &mut self,
+        route: String,
+        component: fn(Scope<P>) -> Element,
+        props: P,
+        output: &mut String,
+        modify_vdom: impl FnOnce(&mut VirtualDom),
+    ) -> Result<(), IncrementalRendererError> {
+        unsafe {
+            // SAFETY: The renderer will only write utf8 to the buffer
+            self.render(route, component, props, output.as_mut_vec(), modify_vdom)
+        }
     }
 
     fn find_file(&self, route: &str) -> Option<ValidCachedPath> {
@@ -300,48 +342,6 @@ impl<R: RenderHTML> IncrementalRenderer<R> {
         file_path.set_extension("html");
         file_path
     }
-
-    /// Pre-cache all static routes.
-    pub fn pre_cache_static_routes<Rt>(&mut self) -> Result<(), IncrementalRendererError>
-    where
-        Rt: Routable,
-        <Rt as FromStr>::Err: std::fmt::Display,
-    {
-        for route in Rt::SITE_MAP
-            .iter()
-            .flat_map(|seg| seg.flatten().into_iter())
-        {
-            // check if this is a static segment
-            let mut is_static = true;
-            let mut full_path = String::new();
-            for segment in &route {
-                match segment {
-                    SegmentType::Static(s) => {
-                        full_path += "/";
-                        full_path += s;
-                    }
-                    _ => {
-                        // skip routes with any dynamic segments
-                        is_static = false;
-                        break;
-                    }
-                }
-            }
-
-            if is_static {
-                match Rt::from_str(&full_path) {
-                    Ok(route) => {
-                        let _ = self.render(route, &mut std::io::sink())?;
-                    }
-                    Err(e) => {
-                        log::error!("Error pre-caching static route: {}", e);
-                    }
-                }
-            }
-        }
-
-        Ok(())
-    }
 }
 
 struct WriteBuffer {
@@ -375,7 +375,7 @@ impl ValidCachedPath {
         if value.extension() != Some(std::ffi::OsStr::new("html")) {
             return None;
         }
-        let timestamp = decode_timestamp(&value.file_stem()?.to_str()?)?;
+        let timestamp = decode_timestamp(value.file_stem()?.to_str()?)?;
         let full_path = value;
         Some(Self {
             full_path,
@@ -396,20 +396,6 @@ fn timestamp() -> String {
         .unwrap()
         .as_secs();
     format!("{:x}", timestamp)
-}
-
-#[inline_props]
-fn RenderPath<R>(cx: Scope, path: R) -> Element
-where
-    R: Routable,
-    <R as FromStr>::Err: std::fmt::Display,
-{
-    let path = path.clone();
-    render! {
-        GenericRouter::<R> {
-            config: || RouterConfig::default().history(MemoryHistory::with_initial_path(path))
-        }
-    }
 }
 
 /// An error that can occur while rendering a route or retrieving a cached route.

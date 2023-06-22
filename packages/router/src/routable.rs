@@ -94,9 +94,9 @@ impl<I: std::iter::FromIterator<String>> FromRouteSegments for I {
 }
 
 /// Something that can be:
-/// 1) Converted from a route
-/// 2) Converted to a route
-/// 3) Rendered as a component
+/// 1. Converted from a route
+/// 2. Converted to a route
+/// 3. Rendered as a component
 ///
 /// This trait can be derived using the `#[derive(Routable)]` macro
 pub trait Routable: std::fmt::Display + std::str::FromStr + Clone + 'static {

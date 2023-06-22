@@ -282,7 +282,7 @@ impl DioxusRouterExt for Router {
         self.serve_static_assets(cfg.assets_path)
             .connect_hot_reload()
             .register_server_fns(server_fn_path)
-            .push(Router::with_path("/").get(SSRHandler { cfg }))
+            .push(Router::with_path("/<**any_path>").get(SSRHandler { cfg }))
     }
 
     fn connect_hot_reload(self) -> Self {

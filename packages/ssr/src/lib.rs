@@ -2,6 +2,7 @@
 
 mod cache;
 pub mod config;
+pub mod incremental;
 pub mod renderer;
 pub mod template;
 use dioxus_core::{Element, LazyNodes, Scope, VirtualDom};

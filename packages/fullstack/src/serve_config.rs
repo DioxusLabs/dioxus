@@ -1,10 +1,11 @@
+#![allow(non_snake_case)]
 //! Configeration for how to serve a Dioxus application
 
 use std::fs::File;
 use std::io::Read;
 use std::path::PathBuf;
 
-use dioxus_core::Component;
+use dioxus::prelude::*;
 
 /// A ServeConfig is used to configure how to serve a Dioxus application. It contains information about how to serve static assets, and what content to render with [`dioxus-ssr`].
 #[derive(Clone)]
@@ -14,6 +15,164 @@ pub struct ServeConfigBuilder<P: Clone> {
     pub(crate) root_id: Option<&'static str>,
     pub(crate) index_path: Option<&'static str>,
     pub(crate) assets_path: Option<&'static str>,
+    #[cfg(feature = "router")]
+    pub(crate) incremental: Option<
+        std::sync::Arc<
+            dioxus_ssr::incremental::IncrementalRendererConfig<EmptyIncrementalRenderTemplate>,
+        >,
+    >,
+}
+
+#[cfg(feature = "router")]
+fn default_external_navigation_handler<R>() -> fn(Scope) -> Element
+where
+    R: dioxus_router::prelude::Routable,
+    <R as std::str::FromStr>::Err: std::fmt::Display,
+{
+    dioxus_router::prelude::FailureExternalNavigation::<R>
+}
+
+#[cfg(feature = "router")]
+/// The configeration for the router
+#[derive(Props, serde::Serialize, serde::Deserialize)]
+pub struct FullstackRouterConfig<R>
+where
+    R: dioxus_router::prelude::Routable,
+    <R as std::str::FromStr>::Err: std::fmt::Display,
+{
+    #[serde(skip)]
+    #[serde(default = "default_external_navigation_handler::<R>")]
+    failure_external_navigation: fn(Scope) -> Element,
+    scroll_restoration: bool,
+    #[serde(skip)]
+    phantom: std::marker::PhantomData<R>,
+}
+
+#[cfg(feature = "router")]
+impl<R> Clone for FullstackRouterConfig<R>
+where
+    R: dioxus_router::prelude::Routable,
+    <R as std::str::FromStr>::Err: std::fmt::Display,
+{
+    fn clone(&self) -> Self {
+        Self {
+            failure_external_navigation: self.failure_external_navigation,
+            scroll_restoration: self.scroll_restoration,
+            phantom: std::marker::PhantomData,
+        }
+    }
+}
+
+#[cfg(feature = "router")]
+impl<R> Copy for FullstackRouterConfig<R>
+where
+    R: dioxus_router::prelude::Routable,
+    <R as std::str::FromStr>::Err: std::fmt::Display,
+{
+}
+
+#[cfg(feature = "router")]
+impl<R> Default for FullstackRouterConfig<R>
+where
+    R: dioxus_router::prelude::Routable,
+    <R as std::str::FromStr>::Err: std::fmt::Display,
+{
+    fn default() -> Self {
+        Self {
+            failure_external_navigation: dioxus_router::prelude::FailureExternalNavigation::<R>,
+            scroll_restoration: true,
+            phantom: std::marker::PhantomData,
+        }
+    }
+}
+
+#[cfg(feature = "router")]
+fn RouteWithCfg<R>(cx: Scope<FullstackRouterConfig<R>>) -> Element
+where
+    R: dioxus_router::prelude::Routable,
+    <R as std::str::FromStr>::Err: std::fmt::Display,
+{
+    use dioxus_router::prelude::RouterConfig;
+
+    #[cfg(feature = "ssr")]
+    let context: crate::prelude::DioxusServerContext = cx
+        .consume_context()
+        .expect("RouteWithCfg should be served by dioxus fullstack");
+
+    let cfg = *cx.props;
+    render! {
+        dioxus_router::prelude::GenericRouter::<R> {
+            config: move || {
+                RouterConfig::default()
+                    .failure_external_navigation(cfg.failure_external_navigation)
+                    .history({
+                        #[cfg(feature = "ssr")]
+                        let history = dioxus_router::prelude::MemoryHistory::with_initial_path(
+                            context
+                                .request_parts()
+                                .uri
+                                .to_string()
+                                .parse()
+                                .unwrap_or_else(|err| {
+                                    log::error!("Failed to parse uri: {}", err);
+                                    "/"
+                                        .parse()
+                                        .unwrap_or_else(|err| {
+                                            panic!("Failed to parse uri: {}", err);
+                                        })
+                                }),
+                        );
+                        #[cfg(not(feature = "ssr"))]
+                        let history = dioxus_router::prelude::WebHistory::new(
+                            None,
+                            cfg.scroll_restoration,
+                        );
+                        history
+                    })
+            },
+        }
+    }
+}
+
+#[cfg(feature = "router")]
+/// A template for incremental rendering that does nothing.
+#[derive(Default, Clone)]
+pub struct EmptyIncrementalRenderTemplate;
+
+#[cfg(feature = "router")]
+impl dioxus_ssr::incremental::RenderHTML for EmptyIncrementalRenderTemplate {
+    fn render_after_body<R: std::io::Write>(
+        &self,
+        _: &mut R,
+    ) -> Result<(), dioxus_ssr::incremental::IncrementalRendererError> {
+        Ok(())
+    }
+
+    fn render_before_body<R: std::io::Write>(
+        &self,
+        _: &mut R,
+    ) -> Result<(), dioxus_ssr::incremental::IncrementalRendererError> {
+        Ok(())
+    }
+}
+
+#[cfg(feature = "router")]
+impl<R> ServeConfigBuilder<FullstackRouterConfig<R>>
+where
+    R: dioxus_router::prelude::Routable,
+    <R as std::str::FromStr>::Err: std::fmt::Display,
+{
+    /// Create a new ServeConfigBuilder to serve a router on the server.
+    pub fn new_with_router(cfg: FullstackRouterConfig<R>) -> Self {
+        Self {
+            app: RouteWithCfg::<R>,
+            props: cfg,
+            root_id: None,
+            index_path: None,
+            assets_path: None,
+            incremental: None,
+        }
+    }
 }
 
 impl<P: Clone> ServeConfigBuilder<P> {
@@ -25,7 +184,19 @@ impl<P: Clone> ServeConfigBuilder<P> {
             root_id: None,
             index_path: None,
             assets_path: None,
+            #[cfg(feature = "router")]
+            incremental: None,
         }
+    }
+
+    #[cfg(feature = "router")]
+    /// Enable incremental static generation
+    pub fn incremental(
+        mut self,
+        cfg: dioxus_ssr::incremental::IncrementalRendererConfig<EmptyIncrementalRenderTemplate>,
+    ) -> Self {
+        self.incremental = Some(std::sync::Arc::new(cfg));
+        self
     }
 
     /// Set the path of the index.html file to be served. (defaults to {assets_path}/index.html)
@@ -64,6 +235,8 @@ impl<P: Clone> ServeConfigBuilder<P> {
             props: self.props,
             index,
             assets_path,
+            #[cfg(feature = "router")]
+            incremental: self.incremental,
         }
     }
 }
@@ -106,6 +279,12 @@ pub struct ServeConfig<P: Clone> {
     pub(crate) props: P,
     pub(crate) index: IndexHtml,
     pub(crate) assets_path: &'static str,
+    #[cfg(feature = "router")]
+    pub(crate) incremental: Option<
+        std::sync::Arc<
+            dioxus_ssr::incremental::IncrementalRendererConfig<EmptyIncrementalRenderTemplate>,
+        >,
+    >,
 }
 
 impl<P: Clone> From<ServeConfigBuilder<P>> for ServeConfig<P> {

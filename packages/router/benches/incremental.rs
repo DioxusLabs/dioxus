@@ -6,7 +6,7 @@ use dioxus::prelude::*;
 use dioxus_router::prelude::*;
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use dioxus_router::ssr::{DefaultRenderer, IncrementalRenderer};
+use dioxus_router::incremental::{DefaultRenderer, IncrementalRenderer};
 use dioxus_ssr::Renderer;
 
 pub fn criterion_benchmark(c: &mut Criterion) {

@@ -67,6 +67,31 @@ where
 }
 
 #[cfg(not(feature = "serde"))]
+impl<R: Routable> Default for GenericRouterProps<R>
+where
+    <R as FromStr>::Err: std::fmt::Display,
+{
+    fn default() -> Self {
+        Self {
+            config: RouterConfigFactory::default(),
+        }
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<R: Routable> Default for GenericRouterProps<R>
+where
+    <R as FromStr>::Err: std::fmt::Display,
+    R: serde::Serialize + serde::de::DeserializeOwned,
+{
+    fn default() -> Self {
+        Self {
+            config: RouterConfigFactory::default(),
+        }
+    }
+}
+
+#[cfg(not(feature = "serde"))]
 impl<R: Routable> PartialEq for GenericRouterProps<R>
 where
     <R as FromStr>::Err: std::fmt::Display,

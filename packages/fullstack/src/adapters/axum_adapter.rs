@@ -63,7 +63,6 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use dioxus_core::VirtualDom;
 use server_fn::{Encoding, Payload, ServerFunctionRegistry};
 use std::error::Error;
 use std::sync::Arc;
@@ -311,15 +310,13 @@ where
         cfg: impl Into<ServeConfig<P>>,
     ) -> Self {
         let cfg = cfg.into();
+        let ssr_state = SSRState::new(&cfg);
 
         // Add server functions and render index.html
         self.serve_static_assets(cfg.assets_path)
-            .route(
-                "/",
-                get(render_handler).with_state((cfg, SSRState::default())),
-            )
             .connect_hot_reload()
             .register_server_fns(server_fn_route)
+            .fallback(get(render_handler).with_state((cfg, ssr_state)))
     }
 
     fn connect_hot_reload(self) -> Self {
@@ -358,13 +355,18 @@ async fn render_handler<P: Clone + serde::Serialize + Send + Sync + 'static>(
 ) -> impl IntoResponse {
     let (parts, _) = request.into_parts();
     let parts: Arc<RequestParts> = Arc::new(parts.into());
+    let url = parts.uri.path_and_query().unwrap().to_string();
     let server_context = DioxusServerContext::new(parts);
-    let mut vdom =
-        VirtualDom::new_with_props(cfg.app, cfg.props.clone()).with_root_context(server_context);
-    let _ = vdom.rebuild();
 
-    let rendered = ssr_state.render_vdom(&vdom, &cfg);
-    Full::from(rendered)
+    match ssr_state.render(url, &cfg, |vdom| {
+        vdom.base_scope().provide_context(server_context);
+    }) {
+        Ok(html) => Full::from(html).into_response(),
+        Err(e) => {
+            log::error!("Failed to render page: {}", e);
+            report_err(e).into_response()
+        }
+    }
 }
 
 /// A default handler for server functions. It will deserialize the request, call the server function, and serialize the response.

@@ -1,4 +1,4 @@
-use dioxus_core::ScopeState;
+use dioxus::prelude::ScopeState;
 
 /// A trait for an object that contains a server context
 pub trait HasServerContext {

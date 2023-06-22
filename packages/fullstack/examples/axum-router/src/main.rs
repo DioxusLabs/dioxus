@@ -14,8 +14,8 @@ use serde::{Deserialize, Serialize};
 fn main() {
     #[cfg(feature = "web")]
     dioxus_web::launch_with_props(
-        App,
-        AppProps { route: None },
+        Router,
+        Default::default(),
         dioxus_web::Config::new().hydrate(true),
     );
     #[cfg(feature = "ssr")]
@@ -33,11 +33,6 @@ fn main() {
             true
         }));
 
-        use axum::extract::State;
-        use std::str::FromStr;
-
-        PostServerData::register().unwrap();
-        GetServerData::register().unwrap();
         tokio::runtime::Runtime::new()
             .unwrap()
             .block_on(async move {
@@ -46,28 +41,12 @@ fn main() {
                 axum::Server::bind(&addr)
                     .serve(
                         axum::Router::new()
-                            // Serve the dist/assets folder with the javascript and WASM files created by the CLI
-                            .serve_static_assets("./dist")
-                            // Register server functions
-                            .register_server_fns("")
-                            // Connect to the hot reload server
-                            .connect_hot_reload()
-                            // If the path is unknown, render the application
-                            .fallback(
-                                move |uri: http::uri::Uri, State(ssr_state): State<SSRState>| {
-                                    let rendered = ssr_state.render(
-                                        &ServeConfigBuilder::new(
-                                            App,
-                                            AppProps {
-                                                route: Route::from_str(&uri.to_string()).ok(),
-                                            },
-                                        )
-                                        .build(),
-                                    );
-                                    async move { axum::body::Full::from(rendered) }
-                                },
+                            .serve_dioxus_application(
+                                "",
+                                ServeConfigBuilder::new_with_router(
+                                    dioxus_fullstack::prelude::FullstackRouterConfig::<Route>::default()).incremental(IncrementalRendererConfig::default())
+                                .build(),
                             )
-                            .with_state(SSRState::default())
                             .into_make_service(),
                     )
                     .await
@@ -87,10 +66,7 @@ enum Route {
 #[inline_props]
 fn Blog(cx: Scope) -> Element {
     render! {
-        Link {
-            target: Route::Home {},
-            "Go to counter"
-        }
+        Link { target: Route::Home {}, "Go to counter" }
         table {
             tbody {
                 for _ in 0..100 {
@@ -105,38 +81,14 @@ fn Blog(cx: Scope) -> Element {
     }
 }
 
-#[derive(Clone, Debug, Props, PartialEq, Serialize, Deserialize)]
-struct AppProps {
-    route: Option<Route>,
-}
-
-fn App(cx: Scope<AppProps>) -> Element {
-    #[cfg(feature = "ssr")]
-    let initial_route = cx.props.route.clone().unwrap_or(Route::Home {});
-    cx.render(rsx! {
-        Router {
-            config: move || RouterConfig::default().history({
-                #[cfg(feature = "ssr")]
-                let history = MemoryHistory::with_initial_path(initial_route);
-                #[cfg(feature = "web")]
-                let history = WebHistory::default();
-                history
-            })
-        }
-    })
-}
-
 #[inline_props]
 fn Home(cx: Scope) -> Element {
     let mut count = use_state(cx, || 0);
     let text = use_state(cx, || "...".to_string());
 
     cx.render(rsx! {
-        Link {
-            target: Route::Blog {}
-            "Go to blog"
-        }
-        div{
+        Link { target: Route::Blog {}, "Go to blog" }
+        div {
             h1 { "High-Five counter: {count}" }
             button { onclick: move |_| count += 1, "Up high!" }
             button { onclick: move |_| count -= 1, "Down low!" }

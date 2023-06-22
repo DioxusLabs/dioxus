@@ -5,7 +5,7 @@ use std::time::Duration;
 use dioxus::prelude::*;
 use dioxus_router::prelude::*;
 
-use dioxus_router::ssr::{DefaultRenderer, IncrementalRendererConfig};
+use dioxus_ssr::incremental::{DefaultRenderer, IncrementalRendererConfig};
 
 fn main() {
     let mut renderer = IncrementalRendererConfig::new(DefaultRenderer {

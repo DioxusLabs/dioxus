@@ -10,8 +10,6 @@ mod props_html;
 mod adapters;
 #[cfg(all(debug_assertions, feature = "hot-reload", feature = "ssr"))]
 mod hot_reload;
-#[cfg(feature = "router")]
-mod incremental;
 #[cfg(feature = "ssr")]
 mod render;
 #[cfg(feature = "ssr")]
@@ -31,6 +29,8 @@ pub mod prelude {
     pub use crate::props_html::deserialize_props::get_root_props_from_document;
     #[cfg(feature = "ssr")]
     pub use crate::render::SSRState;
+    #[cfg(all(feature = "router", feature = "ssr"))]
+    pub use crate::serve_config::FullstackRouterConfig;
     #[cfg(feature = "ssr")]
     pub use crate::serve_config::{ServeConfig, ServeConfigBuilder};
     #[cfg(feature = "ssr")]
@@ -40,5 +40,7 @@ pub mod prelude {
     #[cfg(feature = "ssr")]
     pub use crate::server_fn::{ServerFnTraitObj, ServerFunction};
     pub use dioxus_server_macro::*;
+    #[cfg(feature = "ssr")]
+    pub use dioxus_ssr::incremental::IncrementalRendererConfig;
     pub use server_fn::{self, ServerFn as _, ServerFnError};
 }

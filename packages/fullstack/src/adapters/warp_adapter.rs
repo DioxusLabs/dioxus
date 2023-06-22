@@ -169,8 +169,8 @@ pub fn serve_dioxus_application<P: Clone + serde::Serialize + Send + Sync + 'sta
 
     connect_hot_reload()
         .or(register_server_fns(server_fn_route))
-        .or(warp::path::end().and(render_ssr(cfg)))
         .or(serve_dir)
+        .or(render_ssr(cfg))
         .boxed()
 }
 
