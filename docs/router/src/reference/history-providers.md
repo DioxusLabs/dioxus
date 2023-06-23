@@ -3,8 +3,8 @@
 [`HistoryProvider`]s are used by the router to keep track of the navigation history
 and update any external state (e.g. the browser's URL).
 
-The router provides five [`HistoryProvider`]s, but you can also create your own.
-The five default implementations are:
+The router provides two [`HistoryProvider`]s, but you can also create your own.
+The two default implementations are:
 
 - The [`MemoryHistory`] is a custom implementation that works in memory.
 - The [`WebHistory`] integrates with the browser's URL.
