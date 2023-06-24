@@ -194,7 +194,7 @@ impl<R: RenderHTML + std::marker::Send> IncrementalRenderer<R> {
             self.render.render_after_body(&mut *html_buffer)?;
             let html_buffer = html_buffer.buffer;
 
-            output.write_all(&*html_buffer).await?;
+            output.write_all(&html_buffer).await?;
 
             self.add_to_cache(route, html_buffer)
         }
