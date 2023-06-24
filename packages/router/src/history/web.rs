@@ -93,7 +93,7 @@ impl<R: Routable> WebHistory<R> {
     ///
     /// If `do_scroll_restoration` is [`true`], [`WebHistory`] will take control of the history
     /// state. It'll also set the browsers scroll restoration to `manual`.
-    fn new(prefix: Option<String>, do_scroll_restoration: bool) -> Self
+    pub fn new(prefix: Option<String>, do_scroll_restoration: bool) -> Self
     where
         <R as std::str::FromStr>::Err: std::fmt::Display,
     {
@@ -132,7 +132,7 @@ impl<R: Routable> WebHistory<R> {
     ///
     /// If `do_scroll_restoration` is [`true`], [`WebHistory`] will take control of the history
     /// state. It'll also set the browsers scroll restoration to `manual`.
-    fn new(prefix: Option<String>, do_scroll_restoration: bool) -> Self
+    pub fn new(prefix: Option<String>, do_scroll_restoration: bool) -> Self
     where
         <R as std::str::FromStr>::Err: std::fmt::Display,
         R: serde::Serialize + serde::de::DeserializeOwned,

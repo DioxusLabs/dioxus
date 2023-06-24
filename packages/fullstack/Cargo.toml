@@ -59,7 +59,7 @@ dioxus-hot-reload = { path = "../hot-reload" }
 web-sys = { version = "0.3.61", features = ["Window", "Document", "Element", "HtmlDocument", "Storage", "console"] }
 
 [features]
-default = ["hot-reload", "default-tls", "router"]
+default = ["hot-reload", "default-tls"]
 router = ["dioxus-router"]
 hot-reload = ["serde_json", "tokio-stream", "futures-util"]
 warp = ["dep:warp", "http-body", "ssr"]

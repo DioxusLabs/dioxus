@@ -49,7 +49,6 @@
 //! }
 //! ```
 
-use dioxus_core::VirtualDom;
 use hyper::{http::HeaderValue, StatusCode};
 use salvo::{
     async_trait, handler,
@@ -325,18 +324,22 @@ impl<P: Clone + serde::Serialize + Send + Sync + 'static> Handler for SSRHandler
         let renderer_pool = if let Some(renderer) = depot.obtain::<SSRState>() {
             renderer.clone()
         } else {
-            let renderer = SSRState::default();
+            let renderer = SSRState::new(&self.cfg);
             depot.inject(renderer.clone());
             renderer
         };
         let parts: Arc<RequestParts> = Arc::new(extract_parts(req));
+        let route = parts.uri.path().to_string();
         let server_context = DioxusServerContext::new(parts);
-        let mut vdom = VirtualDom::new_with_props(self.cfg.app, self.cfg.props.clone())
-            .with_root_context(server_context.clone());
-        let _ = vdom.rebuild();
 
-        res.write_body(renderer_pool.render_vdom(&vdom, &self.cfg))
-            .unwrap();
+        res.write_body(
+            renderer_pool
+                .render(route, &self.cfg, |vdom| {
+                    vdom.base_scope().provide_context(server_context.clone());
+                })
+                .unwrap(),
+        )
+        .unwrap();
 
         *res.headers_mut() = server_context.take_response_headers();
     }

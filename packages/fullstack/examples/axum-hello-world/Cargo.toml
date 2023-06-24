@@ -16,6 +16,6 @@ serde = "1.0.159"
 execute = "0.2.12"
 
 [features]
-default = ["web"]
+default = []
 ssr = ["axum", "tokio", "dioxus-fullstack/axum"]
 web = ["dioxus-web"]

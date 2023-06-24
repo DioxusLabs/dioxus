@@ -32,6 +32,7 @@ impl SsrRendererPool {
         match self {
             Self::Renderer(pool) => {
                 let mut vdom = VirtualDom::new_with_props(component, props);
+                modify_vdom(&mut vdom);
 
                 let _ = vdom.rebuild();
                 let mut renderer = pool.pull(pre_renderer);

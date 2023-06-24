@@ -1,9 +1,8 @@
 // Run with:
 // ```bash
-// cargo run --bin server --features="ssr"
+// cargo run --bin server --features ssr
 // ```
 
-use axum_desktop::*;
 use dioxus_fullstack::prelude::*;
 
 #[tokio::main]

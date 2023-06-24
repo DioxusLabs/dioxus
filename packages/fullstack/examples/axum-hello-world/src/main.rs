@@ -2,54 +2,13 @@
 //!
 //! ```sh
 //! dioxus build --features web
-//! cargo run --features ssr --no-default-features
+//! cargo run --features ssr
 //! ```
 
-#![allow(non_snake_case)]
+#![allow(non_snake_case, unused)]
 use dioxus::prelude::*;
-use dioxus_fullstack::prelude::*;
+use dioxus_fullstack::{launch, prelude::*};
 use serde::{Deserialize, Serialize};
-
-fn main() {
-    #[cfg(feature = "web")]
-    dioxus_web::launch_with_props(
-        app,
-        get_root_props_from_document().unwrap_or_default(),
-        dioxus_web::Config::new().hydrate(true),
-    );
-    #[cfg(feature = "ssr")]
-    {
-        // Start hot reloading
-        hot_reload_init!(dioxus_hot_reload::Config::new().with_rebuild_callback(|| {
-            execute::shell("dioxus build --features web")
-                .spawn()
-                .unwrap()
-                .wait()
-                .unwrap();
-            execute::shell("cargo run --features ssr --no-default-features")
-                .spawn()
-                .unwrap();
-            true
-        }));
-
-        tokio::runtime::Runtime::new()
-            .unwrap()
-            .block_on(async move {
-                let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 8080));
-                axum::Server::bind(&addr)
-                    .serve(
-                        axum::Router::new()
-                            .serve_dioxus_application(
-                                "",
-                                ServeConfigBuilder::new(app, AppProps { count: 12345 }).build(),
-                            )
-                            .into_make_service(),
-                    )
-                    .await
-                    .unwrap();
-            });
-    }
-}
 
 #[derive(Props, PartialEq, Debug, Default, Serialize, Deserialize, Clone)]
 struct AppProps {
@@ -96,4 +55,11 @@ async fn post_server_data(cx: DioxusServerContext, data: String) -> Result<(), S
 #[server(GetServerData)]
 async fn get_server_data() -> Result<String, ServerFnError> {
     Ok("Hello from the server!".to_string())
+}
+
+fn main() {
+    launch!(@[([127, 0, 0, 1], 8080)], app, {
+        server_cfg: ServeConfigBuilder::new(app, (AppProps { count: 0 })),
+        incremental,
+    });
 }

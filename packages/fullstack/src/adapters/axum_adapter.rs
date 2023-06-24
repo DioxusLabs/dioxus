@@ -56,7 +56,7 @@
 
 use axum::{
     body::{self, Body, BoxBody, Full},
-    extract::{State, WebSocketUpgrade},
+    extract::State,
     handler::Handler,
     http::{Request, Response, StatusCode},
     response::IntoResponse,
@@ -327,7 +327,7 @@ where
                 Router::new()
                     .route(
                         "/disconnect",
-                        get(|ws: WebSocketUpgrade| async {
+                        get(|ws: axum::extract::WebSocketUpgrade| async {
                             ws.on_upgrade(|mut ws| async move {
                                 use axum::extract::ws::Message;
                                 let _ = ws.send(Message::Text("connected".into())).await;
@@ -452,7 +452,7 @@ fn report_err<E: Error>(e: E) -> Response<BoxBody> {
 
 /// A handler for Dioxus web hot reload websocket. This will send the updated static parts of the RSX to the client when they change.
 #[cfg(all(debug_assertions, feature = "hot-reload", feature = "ssr"))]
-pub async fn hot_reload_handler(ws: WebSocketUpgrade) -> impl IntoResponse {
+pub async fn hot_reload_handler(ws: axum::extract::WebSocketUpgrade) -> impl IntoResponse {
     use axum::extract::ws::Message;
     use futures_util::StreamExt;
 

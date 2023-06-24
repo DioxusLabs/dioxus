@@ -50,7 +50,6 @@ use crate::{
     prelude::*, render::SSRState, serve_config::ServeConfig, server_fn::DioxusServerFnRegistry,
 };
 
-use dioxus_core::VirtualDom;
 use server_fn::{Encoding, Payload, ServerFunctionRegistry};
 use std::error::Error;
 use std::sync::Arc;
@@ -168,8 +167,13 @@ pub fn serve_dioxus_application<P: Clone + serde::Serialize + Send + Sync + 'sta
     let serve_dir = warp::fs::dir(cfg.assets_path);
 
     connect_hot_reload()
+        // First register the server functions
         .or(register_server_fns(server_fn_route))
+        // Then the index route
+        .or(path::end().and(render_ssr(cfg.clone())))
+        // Then the static assets
         .or(serve_dir)
+        // Then all other routes
         .or(render_ssr(cfg))
         .boxed()
 }
@@ -180,17 +184,16 @@ pub fn render_ssr<P: Clone + serde::Serialize + Send + Sync + 'static>(
 ) -> impl Filter<Extract = (impl Reply,), Error = warp::Rejection> + Clone {
     warp::get()
         .and(request_parts())
-        .and(with_ssr_state())
-        .map(move |parts, renderer: SSRState| {
+        .and(with_ssr_state(&cfg))
+        .map(move |parts: RequestParts, renderer: SSRState| {
+            let route = parts.uri.path().to_string();
             let parts = Arc::new(parts);
 
             let server_context = DioxusServerContext::new(parts);
 
-            let mut vdom = VirtualDom::new_with_props(cfg.app, cfg.props.clone())
-                .with_root_context(server_context.clone());
-            let _ = vdom.rebuild();
-
-            let html = renderer.render_vdom(&vdom, &cfg);
+            let html = renderer.render(route, &cfg, |vdom| {
+                vdom.base_scope().provide_context(server_context.clone());
+            });
 
             let mut res = Response::builder();
 
@@ -198,7 +201,7 @@ pub fn render_ssr<P: Clone + serde::Serialize + Send + Sync + 'static>(
                 server_context.take_response_headers();
 
             res.header("Content-Type", "text/html")
-                .body(Bytes::from(html))
+                .body(Bytes::from(html.unwrap()))
                 .unwrap()
         })
 }
@@ -230,10 +233,11 @@ pub fn request_parts(
         })
 }
 
-fn with_ssr_state() -> impl Filter<Extract = (SSRState,), Error = std::convert::Infallible> + Clone
-{
-    let state = SSRState::default();
-    warp::any().map(move || state.clone())
+fn with_ssr_state<P: Clone + serde::Serialize + Send + Sync + 'static>(
+    cfg: &ServeConfig<P>,
+) -> impl Filter<Extract = (SSRState,), Error = std::convert::Infallible> + Clone {
+    let renderer = SSRState::new(cfg);
+    warp::any().map(move || renderer.clone())
 }
 
 #[derive(Debug)]
