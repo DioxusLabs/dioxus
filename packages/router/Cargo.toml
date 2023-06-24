@@ -36,7 +36,8 @@ web = ["gloo", "web-sys", "wasm-bindgen", "gloo-utils", "js-sys"]
 [dev-dependencies]
 dioxus = { path = "../dioxus" }
 dioxus-ssr = { path = "../ssr" }
-criterion = "0.3"
+dioxus-router = { path = ".", features = ["ssr"] }
+criterion = { verison = "0.5", features = ["async_tokio", "html_reports"] }
 
 [[bench]]
 name = "incremental"

@@ -7,7 +7,8 @@ use dioxus_router::prelude::*;
 
 use dioxus_ssr::incremental::{DefaultRenderer, IncrementalRendererConfig};
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let mut renderer = IncrementalRendererConfig::new(DefaultRenderer {
         before_body: r#"<!DOCTYPE html>
         <html lang="en">
@@ -27,13 +28,20 @@ fn main() {
     .invalidate_after(Duration::from_secs(10))
     .build();
 
-    renderer.pre_cache_static_routes::<Route>().unwrap();
+    pre_cache_static_routes::<Route, _>(&mut renderer)
+        .await
+        .unwrap();
 
     for _ in 0..1_000_000 {
         for id in 0..10 {
-            renderer
-                .render(Route::Post { id }, &mut std::io::sink())
-                .unwrap();
+            render_route(
+                &mut renderer,
+                Route::Post { id },
+                &mut tokio::io::sink(),
+                |_| {},
+            )
+            .await
+            .unwrap();
         }
     }
 }

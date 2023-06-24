@@ -63,7 +63,9 @@ pub mod prelude {
     pub use dioxus_router_macro::Routable;
 
     #[cfg(feature = "ssr")]
-    pub use dioxus_ssr::incremental::IncrementalRendererConfig;
+    pub use crate::incremental::*;
+    #[cfg(feature = "ssr")]
+    pub use dioxus_ssr::incremental::*;
 
     #[doc(hidden)]
     /// A component with props used in the macro

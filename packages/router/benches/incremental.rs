@@ -6,7 +6,7 @@ use dioxus::prelude::*;
 use dioxus_router::prelude::*;
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use dioxus_router::incremental::{DefaultRenderer, IncrementalRenderer};
+
 use dioxus_ssr::Renderer;
 
 pub fn criterion_benchmark(c: &mut Criterion) {
@@ -31,43 +31,53 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         .build();
 
         b.iter(|| {
-            for id in 0..100 {
-                for id in 0..10 {
-                    renderer
-                        .render(Route::Post { id }, &mut std::io::sink())
-                        .unwrap();
+            tokio::runtime::Runtime::new().unwrap().block_on(async {
+                for id in 0..1000 {
+                    render_route(
+                        &mut renderer,
+                        Route::Post { id },
+                        &mut tokio::io::sink(),
+                        |_| {},
+                    )
+                    .await
+                    .unwrap();
                 }
-            }
+            })
         })
     });
     c.bench_function("build 1000 routes no memory cache", |b| {
-        let mut renderer = IncrementalRenderer::builder(DefaultRenderer {
-            before_body: r#"<!DOCTYPE html>
-            <html lang="en">
-            <head>
-                <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width,
-                initial-scale=1.0">
-                <title>Dioxus Application</title>
-            </head>
-            <body>"#
-                .to_string(),
-            after_body: r#"</body>
-            </html>"#
-                .to_string(),
-        })
-        .static_dir("./static")
-        .memory_cache_limit(0)
-        .invalidate_after(Duration::from_secs(10))
-        .build();
-
-        b.iter(|| {
-            for id in 0..1000 {
-                renderer
-                    .render(Route::Post { id }, &mut std::io::sink())
+        b.to_async(tokio::runtime::Runtime::new().unwrap())
+            .iter(|| async {
+                let mut renderer = IncrementalRenderer::builder(DefaultRenderer {
+                    before_body: r#"<!DOCTYPE html>
+                    <html lang="en">
+                    <head>
+                        <meta charset="UTF-8">
+                        <meta name="viewport" content="width=device-width,
+                        initial-scale=1.0">
+                        <title>Dioxus Application</title>
+                    </head>
+                    <body>"#
+                        .to_string(),
+                    after_body: r#"</body>
+                    </html>"#
+                        .to_string(),
+                })
+                .static_dir("./static")
+                .memory_cache_limit(0)
+                .invalidate_after(Duration::from_secs(10))
+                .build();
+                for id in 0..1000 {
+                    render_route(
+                        &mut renderer,
+                        Route::Post { id },
+                        &mut tokio::io::sink(),
+                        |_| {},
+                    )
+                    .await
                     .unwrap();
-            }
-        })
+                }
+            })
     });
     c.bench_function("build 1000 routes no cache", |b| {
         let mut renderer = Renderer::default();
@@ -94,9 +104,10 @@ pub fn criterion_benchmark(c: &mut Criterion) {
         })
     });
     c.bench_function("cache static", |b| {
-        b.iter(|| {
-            let mut renderer = IncrementalRenderer::builder(DefaultRenderer {
-                before_body: r#"<!DOCTYPE html>
+        b.to_async(tokio::runtime::Runtime::new().unwrap())
+            .iter(|| async {
+                let mut renderer = IncrementalRenderer::builder(DefaultRenderer {
+                    before_body: r#"<!DOCTYPE html>
                 <html lang="en">
                 <head>
                     <meta charset="UTF-8">
@@ -105,16 +116,18 @@ pub fn criterion_benchmark(c: &mut Criterion) {
                     <title>Dioxus Application</title>
                 </head>
                 <body>"#
-                    .to_string(),
-                after_body: r#"</body>
+                        .to_string(),
+                    after_body: r#"</body>
                 </html>"#
-                    .to_string(),
-            })
-            .static_dir("./static")
-            .build();
+                        .to_string(),
+                })
+                .static_dir("./static")
+                .build();
 
-            renderer.pre_cache_static_routes::<Route>().unwrap();
-        })
+                pre_cache_static_routes::<Route, _>(&mut renderer)
+                    .await
+                    .unwrap();
+            })
     });
 }
 

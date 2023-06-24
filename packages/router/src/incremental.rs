@@ -9,7 +9,7 @@ use dioxus_ssr::incremental::{
 use crate::prelude::*;
 
 /// Pre-cache all static routes.
-pub async fn pre_cache_static_routes<R: RenderHTML + Send, Rt>(
+pub async fn pre_cache_static_routes<Rt, R: RenderHTML + Send>(
     renderer: &mut IncrementalRenderer<R>,
 ) -> Result<(), IncrementalRendererError>
 where
