@@ -8,9 +8,11 @@ use std::{
     hash::BuildHasherDefault,
     io::Write,
     num::NonZeroUsize,
+    ops::{Deref, DerefMut},
     path::{Path, PathBuf},
     time::{Duration, SystemTime},
 };
+use tokio::io::{AsyncWrite, AsyncWriteExt, BufReader};
 
 /// Something that can render a HTML page from a body.
 pub trait RenderHTML {
@@ -127,7 +129,7 @@ pub struct IncrementalRenderer<R: RenderHTML> {
     render: R,
 }
 
-impl<R: RenderHTML> IncrementalRenderer<R> {
+impl<R: RenderHTML + std::marker::Send> IncrementalRenderer<R> {
     /// Get the inner renderer.
     pub fn renderer(&self) -> &crate::Renderer {
         &self.ssr_renderer
@@ -166,34 +168,43 @@ impl<R: RenderHTML> IncrementalRenderer<R> {
         self.invalidate_after.is_some()
     }
 
-    fn render_and_cache<P: 'static>(
-        &mut self,
+    fn render_and_cache<'a, P: 'static>(
+        &'a mut self,
         route: String,
         comp: fn(Scope<P>) -> Element,
         props: P,
-        output: &mut impl Write,
+        output: &'a mut (impl AsyncWrite + Unpin + Send),
         modify_vdom: impl FnOnce(&mut VirtualDom),
-    ) -> Result<(), IncrementalRendererError> {
-        let mut vdom = VirtualDom::new_with_props(comp, props);
-        modify_vdom(&mut vdom);
-        let _ = vdom.rebuild();
-
+    ) -> impl std::future::Future<Output = Result<RenderFreshness, IncrementalRendererError>> + 'a + Send
+    {
         let mut html_buffer = WriteBuffer { buffer: Vec::new() };
-        self.render.render_before_body(&mut html_buffer)?;
-        self.ssr_renderer.render_to(&mut html_buffer, &vdom)?;
-        self.render.render_after_body(&mut html_buffer)?;
-        let html_buffer = html_buffer.buffer;
+        let result_1;
+        let result2;
+        {
+            let mut vdom = VirtualDom::new_with_props(comp, props);
+            modify_vdom(&mut vdom);
+            let _ = vdom.rebuild();
 
-        output.write_all(&html_buffer)?;
+            result_1 = self.render.render_before_body(&mut *html_buffer);
+            result2 = self.ssr_renderer.render_to(&mut html_buffer, &vdom);
+        }
+        async move {
+            result_1?;
+            result2?;
+            self.render.render_after_body(&mut *html_buffer)?;
+            let html_buffer = html_buffer.buffer;
 
-        self.add_to_cache(route, html_buffer)
+            output.write_all(&*html_buffer).await?;
+
+            self.add_to_cache(route, html_buffer)
+        }
     }
 
     fn add_to_cache(
         &mut self,
         route: String,
         html: Vec<u8>,
-    ) -> Result<(), IncrementalRendererError> {
+    ) -> Result<RenderFreshness, IncrementalRendererError> {
         let file_path = self.route_as_path(&route);
         if let Some(parent) = file_path.parent() {
             if !parent.exists() {
@@ -204,7 +215,7 @@ impl<R: RenderHTML> IncrementalRenderer<R> {
         let mut file = std::io::BufWriter::new(file);
         file.write_all(&html)?;
         self.add_to_memory_cache(route, html);
-        Ok(())
+        Ok(RenderFreshness::now(self.invalidate_after))
     }
 
     fn add_to_memory_cache(&mut self, route: String, html: Vec<u8>) {
@@ -219,73 +230,83 @@ impl<R: RenderHTML> IncrementalRenderer<R> {
         }
     }
 
-    fn search_cache(
+    async fn search_cache(
         &mut self,
         route: String,
-        output: &mut impl Write,
-    ) -> Result<bool, IncrementalRendererError> {
+        output: &mut (impl AsyncWrite + Unpin + std::marker::Send),
+    ) -> Result<Option<RenderFreshness>, IncrementalRendererError> {
+        // check the memory cache
         if let Some((timestamp, cache_hit)) = self
             .memory_cache
             .as_mut()
             .and_then(|cache| cache.get(&route))
         {
-            if let (Ok(elapsed), Some(invalidate_after)) =
-                (timestamp.elapsed(), self.invalidate_after)
-            {
-                if elapsed < invalidate_after {
+            if let Ok(elapsed) = timestamp.elapsed() {
+                let age = elapsed.as_secs();
+                if let Some(invalidate_after) = self.invalidate_after {
+                    if elapsed < invalidate_after {
+                        log::trace!("memory cache hit {:?}", route);
+                        output.write_all(cache_hit).await?;
+                        let max_age = invalidate_after.as_secs();
+                        return Ok(Some(RenderFreshness::new(age, max_age)));
+                    }
+                } else {
                     log::trace!("memory cache hit {:?}", route);
-                    output.write_all(cache_hit)?;
-                    return Ok(true);
+                    output.write_all(cache_hit).await?;
+                    return Ok(Some(RenderFreshness::new_age(age)));
                 }
-            } else {
-                log::trace!("memory cache hit {:?}", route);
-                output.write_all(cache_hit)?;
-                return Ok(true);
             }
         }
+        // check the file cache
         if let Some(file_path) = self.find_file(&route) {
-            if let Ok(file) = std::fs::File::open(file_path.full_path) {
-                let mut file = std::io::BufReader::new(file);
-                std::io::copy(&mut file, output)?;
-                log::trace!("file cache hit {:?}", route);
-                self.promote_memory_cache(&route);
-                return Ok(true);
+            if let Some(freshness) = file_path.freshness(self.invalidate_after) {
+                if let Ok(file) = tokio::fs::File::open(file_path.full_path).await {
+                    let mut file = BufReader::new(file);
+                    tokio::io::copy_buf(&mut file, output).await?;
+                    log::trace!("file cache hit {:?}", route);
+                    self.promote_memory_cache(&route);
+                    return Ok(Some(freshness));
+                }
             }
         }
-        Ok(false)
+        Ok(None)
     }
 
     /// Render a route or get it from cache.
-    pub fn render<P: 'static>(
+    pub async fn render<P: 'static>(
         &mut self,
         route: String,
         component: fn(Scope<P>) -> Element,
         props: P,
-        output: &mut impl Write,
+        output: &mut (impl AsyncWrite + Unpin + std::marker::Send),
         modify_vdom: impl FnOnce(&mut VirtualDom),
-    ) -> Result<(), IncrementalRendererError> {
+    ) -> Result<RenderFreshness, IncrementalRendererError> {
         // check if this route is cached
-        if !self.search_cache(route.to_string(), output)? {
+        if let Some(freshness) = self.search_cache(route.to_string(), output).await? {
+            Ok(freshness)
+        } else {
             // if not, create it
-            self.render_and_cache(route, component, props, output, modify_vdom)?;
+            let freshness = self
+                .render_and_cache(route, component, props, output, modify_vdom)
+                .await?;
             log::trace!("cache miss");
+            Ok(freshness)
         }
-
-        Ok(())
     }
 
     /// Render a route or get it from cache to a string.
-    pub fn render_to_string<P: 'static>(
+    pub async fn render_to_string<P: 'static>(
         &mut self,
         route: String,
         component: fn(Scope<P>) -> Element,
         props: P,
         output: &mut String,
         modify_vdom: impl FnOnce(&mut VirtualDom),
-    ) -> Result<(), IncrementalRendererError> {
+    ) -> Result<RenderFreshness, IncrementalRendererError> {
         unsafe {
             // SAFETY: The renderer will only write utf8 to the buffer
             self.render(route, component, props, output.as_mut_vec(), modify_vdom)
+                .await
         }
     }
 
@@ -344,6 +365,60 @@ impl<R: RenderHTML> IncrementalRenderer<R> {
     }
 }
 
+/// Information about the freshness of a rendered response
+#[derive(Debug, Clone, Copy)]
+pub struct RenderFreshness {
+    /// The age of the rendered response
+    age: u64,
+    /// The maximum age of the rendered response
+    max_age: Option<u64>,
+}
+
+impl RenderFreshness {
+    /// Create new freshness information
+    pub fn new(age: u64, max_age: u64) -> Self {
+        Self {
+            age,
+            max_age: Some(max_age),
+        }
+    }
+
+    /// Create new freshness information with only the age
+    pub fn new_age(age: u64) -> Self {
+        Self { age, max_age: None }
+    }
+
+    /// Create new freshness information at the current time
+    pub fn now(max_age: Option<Duration>) -> Self {
+        Self {
+            age: 0,
+            max_age: max_age.map(|d| d.as_secs()),
+        }
+    }
+
+    /// Get the age of the rendered response in seconds
+    pub fn age(&self) -> u64 {
+        self.age
+    }
+
+    /// Get the maximum age of the rendered response in seconds
+    pub fn max_age(&self) -> Option<u64> {
+        self.max_age
+    }
+
+    /// Write the freshness to the response headers.
+    pub fn write(&self, headers: &mut http::HeaderMap<http::HeaderValue>) {
+        let age = self.age();
+        headers.insert(http::header::AGE, age.into());
+        if let Some(max_age) = self.max_age() {
+            headers.insert(
+                http::header::CACHE_CONTROL,
+                http::HeaderValue::from_str(&format!("max-age={}", max_age)).unwrap(),
+            );
+        }
+    }
+}
+
 struct WriteBuffer {
     buffer: Vec<u8>,
 }
@@ -355,13 +430,17 @@ impl std::fmt::Write for WriteBuffer {
     }
 }
 
-impl Write for WriteBuffer {
-    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        self.buffer.write(buf)
-    }
+impl Deref for WriteBuffer {
+    type Target = Vec<u8>;
 
-    fn flush(&mut self) -> std::io::Result<()> {
-        self.buffer.flush()
+    fn deref(&self) -> &Self::Target {
+        &self.buffer
+    }
+}
+
+impl DerefMut for WriteBuffer {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.buffer
     }
 }
 
@@ -381,6 +460,12 @@ impl ValidCachedPath {
             full_path,
             timestamp,
         })
+    }
+
+    fn freshness(&self, max_age: Option<std::time::Duration>) -> Option<RenderFreshness> {
+        let age = self.timestamp.elapsed().ok()?.as_secs();
+        let max_age = max_age.map(|max_age| max_age.as_secs());
+        Some(RenderFreshness::new(age, max_age?))
     }
 }
 

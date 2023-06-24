@@ -349,6 +349,17 @@ where
     }
 }
 
+fn apply_request_parts_to_response<B>(
+    parts: &RequestParts,
+    response: &mut axum::response::Response<B>,
+) {
+    let headers = response.headers_mut();
+    for (key, value) in parts.headers.iter() {
+        headers.insert(key, value.clone());
+    }
+}
+
+#[axum::debug_handler]
 async fn render_handler<P: Clone + serde::Serialize + Send + Sync + 'static>(
     State((cfg, ssr_state)): State<(ServeConfig<P>, SSRState)>,
     request: Request<Body>,
@@ -356,12 +367,21 @@ async fn render_handler<P: Clone + serde::Serialize + Send + Sync + 'static>(
     let (parts, _) = request.into_parts();
     let parts: Arc<RequestParts> = Arc::new(parts.into());
     let url = parts.uri.path_and_query().unwrap().to_string();
-    let server_context = DioxusServerContext::new(parts);
+    let server_context = DioxusServerContext::new(parts.clone());
 
-    match ssr_state.render(url, &cfg, |vdom| {
-        vdom.base_scope().provide_context(server_context);
-    }) {
-        Ok(html) => Full::from(html).into_response(),
+    match ssr_state
+        .render(url, &cfg, |vdom| {
+            vdom.base_scope().provide_context(server_context);
+        })
+        .await
+    {
+        Ok(rendered) => {
+            let crate::render::RenderResponse { html, freshness } = rendered;
+            let mut response = axum::response::Html::from(html).into_response();
+            freshness.write(response.headers_mut());
+            apply_request_parts_to_response(&parts, &mut response);
+            response
+        }
         Err(e) => {
             log::error!("Failed to render page: {}", e);
             report_err(e).into_response()

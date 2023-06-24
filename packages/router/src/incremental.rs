@@ -2,103 +2,89 @@
 use std::str::FromStr;
 
 use dioxus::prelude::*;
-use dioxus_ssr::incremental::{IncrementalRenderer, IncrementalRendererError, RenderHTML};
+use dioxus_ssr::incremental::{
+    IncrementalRenderer, IncrementalRendererError, RenderFreshness, RenderHTML,
+};
 
 use crate::prelude::*;
 
-trait IncrementalRendererRouterExt {
-    /// Pre-cache all static routes.
-    fn pre_cache_static_routes<Rt>(&mut self) -> Result<(), IncrementalRendererError>
-    where
-        Rt: Routable,
-        <Rt as FromStr>::Err: std::fmt::Display;
-
-    /// Render a route to a writer.
-    fn render_route<Rt, W, F: FnOnce(&mut VirtualDom)>(
-        &mut self,
-        route: Rt,
-        writer: &mut W,
-        modify_vdom: F,
-    ) -> Result<(), IncrementalRendererError>
-    where
-        Rt: Routable,
-        <Rt as FromStr>::Err: std::fmt::Display,
-        W: std::io::Write;
-}
-
-impl<R: RenderHTML> IncrementalRendererRouterExt for IncrementalRenderer<R> {
-    fn pre_cache_static_routes<Rt>(&mut self) -> Result<(), IncrementalRendererError>
-    where
-        Rt: Routable,
-        <Rt as FromStr>::Err: std::fmt::Display,
+/// Pre-cache all static routes.
+pub async fn pre_cache_static_routes<R: RenderHTML + Send, Rt>(
+    renderer: &mut IncrementalRenderer<R>,
+) -> Result<(), IncrementalRendererError>
+where
+    Rt: Routable,
+    <Rt as FromStr>::Err: std::fmt::Display,
+{
+    for route in Rt::SITE_MAP
+        .iter()
+        .flat_map(|seg| seg.flatten().into_iter())
     {
-        for route in Rt::SITE_MAP
-            .iter()
-            .flat_map(|seg| seg.flatten().into_iter())
-        {
-            // check if this is a static segment
-            let mut is_static = true;
-            let mut full_path = String::new();
-            for segment in &route {
-                match segment {
-                    SegmentType::Static(s) => {
-                        full_path += "/";
-                        full_path += s;
-                    }
-                    _ => {
-                        // skip routes with any dynamic segments
-                        is_static = false;
-                        break;
-                    }
+        // check if this is a static segment
+        let mut is_static = true;
+        let mut full_path = String::new();
+        for segment in &route {
+            match segment {
+                SegmentType::Static(s) => {
+                    full_path += "/";
+                    full_path += s;
                 }
-            }
-
-            if is_static {
-                match Rt::from_str(&full_path) {
-                    Ok(route) => {
-                        self.render_route(route, &mut std::io::sink(), |_| {})?;
-                    }
-                    Err(e) => {
-                        log::error!("Error pre-caching static route: {}", e);
-                    }
+                _ => {
+                    // skip routes with any dynamic segments
+                    is_static = false;
+                    break;
                 }
             }
         }
 
-        Ok(())
+        if is_static {
+            match Rt::from_str(&full_path) {
+                Ok(route) => {
+                    render_route(renderer, route, &mut tokio::io::sink(), |_| {}).await?;
+                }
+                Err(e) => {
+                    log::error!("Error pre-caching static route: {}", e);
+                }
+            }
+        }
     }
 
-    fn render_route<Rt, W, F: FnOnce(&mut VirtualDom)>(
-        &mut self,
-        route: Rt,
-        writer: &mut W,
-        modify_vdom: F,
-    ) -> Result<(), IncrementalRendererError>
+    Ok(())
+}
+
+/// Render a route to a writer.
+pub async fn render_route<R: RenderHTML + Send, Rt, W, F: FnOnce(&mut VirtualDom)>(
+    renderer: &mut IncrementalRenderer<R>,
+    route: Rt,
+    writer: &mut W,
+    modify_vdom: F,
+) -> Result<RenderFreshness, IncrementalRendererError>
+where
+    Rt: Routable,
+    <Rt as FromStr>::Err: std::fmt::Display,
+    W: tokio::io::AsyncWrite + Unpin + Send,
+{
+    #[inline_props]
+    fn RenderPath<R>(cx: Scope, path: R) -> Element
     where
-        Rt: Routable,
-        <Rt as FromStr>::Err: std::fmt::Display,
-        W: std::io::Write,
+        R: Routable,
+        <R as FromStr>::Err: std::fmt::Display,
     {
-        #[inline_props]
-        fn RenderPath<R>(cx: Scope, path: R) -> Element
-        where
-            R: Routable,
-            <R as FromStr>::Err: std::fmt::Display,
-        {
-            let path = path.clone();
-            render! {
-                GenericRouter::<R> {
-                    config: || RouterConfig::default().history(MemoryHistory::with_initial_path(path))
-                }
+        let path = path.clone();
+        render! {
+            GenericRouter::<R> {
+                config: || RouterConfig::default().history(MemoryHistory::with_initial_path(path))
             }
         }
+    }
 
-        self.render(
+    renderer
+        .render(
             route.to_string(),
             RenderPath,
             RenderPathProps { path: route },
             writer,
             modify_vdom,
         )
-    }
+        .await
 }

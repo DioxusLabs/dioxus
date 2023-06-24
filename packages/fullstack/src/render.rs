@@ -3,7 +3,10 @@
 use std::sync::Arc;
 
 use dioxus::prelude::VirtualDom;
-use dioxus_ssr::{incremental::IncrementalRendererConfig, Renderer};
+use dioxus_ssr::{
+    incremental::{IncrementalRendererConfig, RenderFreshness},
+    Renderer,
+};
 
 use crate::prelude::*;
 use dioxus::prelude::*;
@@ -20,7 +23,7 @@ enum SsrRendererPool {
 }
 
 impl SsrRendererPool {
-    fn render_to<P: Clone + 'static>(
+    async fn render_to<P: Clone + 'static>(
         &self,
         cfg: &ServeConfig<P>,
         route: String,
@@ -28,7 +31,7 @@ impl SsrRendererPool {
         props: P,
         to: &mut String,
         modify_vdom: impl FnOnce(&mut VirtualDom),
-    ) -> Result<(), dioxus_ssr::incremental::IncrementalRendererError> {
+    ) -> Result<RenderFreshness, dioxus_ssr::incremental::IncrementalRendererError> {
         match self {
             Self::Renderer(pool) => {
                 let mut vdom = VirtualDom::new_with_props(component, props);
@@ -37,13 +40,16 @@ impl SsrRendererPool {
                 let _ = vdom.rebuild();
                 let mut renderer = pool.pull(pre_renderer);
                 renderer.render_to(to, &vdom)?;
+
+                Ok(RenderFreshness::now(None))
             }
             Self::Incremental(pool) => {
                 let mut renderer = pool.pull(|| incremental_pre_renderer(cfg));
-                renderer.render_to_string(route, component, props, to, modify_vdom)?;
+                Ok(renderer
+                    .render_to_string(route, component, props, to, modify_vdom)
+                    .await?)
             }
         }
-        Ok(())
     }
 }
 
@@ -74,30 +80,36 @@ impl SSRState {
     }
 
     /// Render the application to HTML.
-    pub fn render<P: 'static + Clone + serde::Serialize>(
-        &self,
+    pub fn render<'a, P: 'static + Clone + serde::Serialize + Send + Sync>(
+        &'a self,
         route: String,
-        cfg: &ServeConfig<P>,
-        modify_vdom: impl FnOnce(&mut VirtualDom),
-    ) -> Result<String, dioxus_ssr::incremental::IncrementalRendererError> {
-        let ServeConfig { app, props, .. } = cfg;
+        cfg: &'a ServeConfig<P>,
+        modify_vdom: impl FnOnce(&mut VirtualDom) + Send + 'a,
+    ) -> impl std::future::Future<
+        Output = Result<RenderResponse, dioxus_ssr::incremental::IncrementalRendererError>,
+    > + Send
+           + 'a {
+        async move {
+            let ServeConfig { app, props, .. } = cfg;
 
-        let ServeConfig { index, .. } = cfg;
+            let ServeConfig { index, .. } = cfg;
 
-        let mut html = String::new();
+            let mut html = String::new();
 
-        html += &index.pre_main;
+            html += &index.pre_main;
 
-        self.renderers
-            .render_to(cfg, route, *app, props.clone(), &mut html, modify_vdom)?;
+            let freshness = self
+                .renderers
+                .render_to(cfg, route, *app, props.clone(), &mut html, modify_vdom)
+                .await?;
 
-        // serialize the props
-        let _ = crate::props_html::serialize_props::encode_in_element(&cfg.props, &mut html);
+            // serialize the props
+            let _ = crate::props_html::serialize_props::encode_in_element(&cfg.props, &mut html);
 
-        #[cfg(all(debug_assertions, feature = "hot-reload"))]
-        {
-            // In debug mode, we need to add a script to the page that will reload the page if the websocket disconnects to make full recompile hot reloads work
-            let disconnect_js = r#"(function () {
+            #[cfg(all(debug_assertions, feature = "hot-reload"))]
+            {
+                // In debug mode, we need to add a script to the page that will reload the page if the websocket disconnects to make full recompile hot reloads work
+                let disconnect_js = r#"(function () {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const url = protocol + '//' + window.location.host + '/_dioxus/disconnect';
     const poll_interval = 1000;
@@ -123,14 +135,33 @@ impl SSRState {
     ws.onclose = reload_upon_connect;
 })()"#;
 
-            html += r#"<script>"#;
-            html += disconnect_js;
-            html += r#"</script>"#;
+                html += r#"<script>"#;
+                html += disconnect_js;
+                html += r#"</script>"#;
+            }
+
+            html += &index.post_main;
+
+            Ok(RenderResponse { html, freshness })
         }
+    }
+}
 
-        html += &index.post_main;
+/// A rendered response from the server.
+pub struct RenderResponse {
+    pub(crate) html: String,
+    pub(crate) freshness: RenderFreshness,
+}
 
-        Ok(html)
+impl RenderResponse {
+    /// Get the rendered HTML.
+    pub fn html(&self) -> &str {
+        &self.html
+    }
+
+    /// Get the freshness of the rendered HTML.
+    pub fn freshness(&self) -> RenderFreshness {
+        self.freshness
     }
 }
 

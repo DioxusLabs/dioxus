@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 
 fn main() {
     launch!(@([127, 0, 0, 1], 8080), app, (AppProps { count: 5 }), {
-        incremental,
+        incremental: IncrementalRendererConfig::default().invalidate_after(std::time::Duration::from_secs(120)),
     });
 }
 

@@ -6,13 +6,14 @@
 //! ```
 
 #![allow(non_snake_case)]
+
 use dioxus::prelude::*;
 use dioxus_fullstack::prelude::*;
 use dioxus_router::prelude::*;
 
 fn main() {
     launch_router!(@([127, 0, 0, 1], 8080), Route, {
-        incremental,
+        incremental: IncrementalRendererConfig::default().invalidate_after(std::time::Duration::from_secs(120)),
     });
 }
 

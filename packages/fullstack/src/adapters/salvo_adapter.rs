@@ -332,16 +332,25 @@ impl<P: Clone + serde::Serialize + Send + Sync + 'static> Handler for SSRHandler
         let route = parts.uri.path().to_string();
         let server_context = DioxusServerContext::new(parts);
 
-        res.write_body(
-            renderer_pool
-                .render(route, &self.cfg, |vdom| {
-                    vdom.base_scope().provide_context(server_context.clone());
-                })
-                .unwrap(),
-        )
-        .unwrap();
+        match renderer_pool
+            .render(route, &self.cfg, |vdom| {
+                vdom.base_scope().provide_context(server_context.clone());
+            })
+            .await
+        {
+            Ok(rendered) => {
+                let crate::render::RenderResponse { html, freshness } = rendered;
 
-        *res.headers_mut() = server_context.take_response_headers();
+                res.write_body(html).unwrap();
+
+                *res.headers_mut() = server_context.take_response_headers();
+                freshness.write(res.headers_mut());
+            }
+            Err(err) => {
+                log::error!("Error rendering SSR: {}", err);
+                res.write_body("Error rendering SSR").unwrap();
+            }
+        };
     }
 }
 

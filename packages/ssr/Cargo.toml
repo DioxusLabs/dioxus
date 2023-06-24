@@ -19,6 +19,8 @@ thiserror = "1.0.23"
 rustc-hash = "1.1.0"
 lru = "0.10.0"
 log = "0.4.13"
+http = "0.2.9"
+tokio = { version = "1.28", features = ["full"] }
 
 [dev-dependencies]
 dioxus = { path = "../dioxus", version = "0.3.0" }

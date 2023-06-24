@@ -185,24 +185,42 @@ pub fn render_ssr<P: Clone + serde::Serialize + Send + Sync + 'static>(
     warp::get()
         .and(request_parts())
         .and(with_ssr_state(&cfg))
-        .map(move |parts: RequestParts, renderer: SSRState| {
+        .then(move |parts: RequestParts, renderer: SSRState| {
             let route = parts.uri.path().to_string();
             let parts = Arc::new(parts);
+            let cfg = cfg.clone();
+            async move {
+                let server_context = DioxusServerContext::new(parts);
 
-            let server_context = DioxusServerContext::new(parts);
+                match renderer
+                    .render(route, &cfg, |vdom| {
+                        vdom.base_scope().provide_context(server_context.clone());
+                    })
+                    .await
+                {
+                    Ok(rendered) => {
+                        let crate::render::RenderResponse { html, freshness } = rendered;
 
-            let html = renderer.render(route, &cfg, |vdom| {
-                vdom.base_scope().provide_context(server_context.clone());
-            });
+                        let mut res = Response::builder()
+                            .header("Content-Type", "text/html")
+                            .body(html)
+                            .unwrap();
 
-            let mut res = Response::builder();
+                        let headers_mut = res.headers_mut();
+                        *headers_mut = server_context.take_response_headers();
+                        freshness.write(headers_mut);
 
-            *res.headers_mut().expect("empty request should be valid") =
-                server_context.take_response_headers();
-
-            res.header("Content-Type", "text/html")
-                .body(Bytes::from(html.unwrap()))
-                .unwrap()
+                        res
+                    }
+                    Err(err) => {
+                        log::error!("Failed to render ssr: {}", err);
+                        Response::builder()
+                            .status(500)
+                            .body("Failed to render ssr".into())
+                            .unwrap()
+                    }
+                }
+            }
         })
 }
 
@@ -364,9 +382,8 @@ pub fn connect_hot_reload() -> impl Filter<Extract = (impl Reply,), Error = warp
     #[cfg(not(all(debug_assertions, feature = "hot-reload", feature = "ssr")))]
     {
         warp::path!("_dioxus" / "hot_reload")
-            .and(warp::ws())
             .map(warp::reply)
-            .map(|reply| warp::reply::with_status(reply, warp::http::StatusCode::NOT_FOUND));
+            .map(|reply| warp::reply::with_status(reply, warp::http::StatusCode::NOT_FOUND))
     }
     #[cfg(all(debug_assertions, feature = "hot-reload", feature = "ssr"))]
     {

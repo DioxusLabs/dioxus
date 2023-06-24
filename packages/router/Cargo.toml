@@ -24,10 +24,11 @@ web-sys = { version = "0.3.60", optional = true, features = ["ScrollRestoration"
 js-sys = { version = "0.3.63", optional = true }
 gloo-utils = { version = "0.1.6", optional = true }
 dioxus-ssr = { path = "../ssr", optional = true }
+tokio = { version = "1.28", features = ["full"], optional = true }
 
 [features]
-default = ["web", "ssr"]
-ssr = ["dioxus-ssr"]
+default = ["web"]
+ssr = ["dioxus-ssr", "tokio"]
 wasm_test = []
 serde = ["dep:serde", "gloo-utils/serde"]
 web = ["gloo", "web-sys", "wasm-bindgen", "gloo-utils", "js-sys"]
