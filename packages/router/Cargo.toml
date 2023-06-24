@@ -36,11 +36,15 @@ web = ["gloo", "web-sys", "wasm-bindgen", "gloo-utils", "js-sys"]
 [dev-dependencies]
 dioxus = { path = "../dioxus" }
 dioxus-ssr = { path = "../ssr" }
-dioxus-router = { path = ".", features = ["ssr"] }
 criterion = { verison = "0.5", features = ["async_tokio", "html_reports"] }
+
+[[example]]
+name = "static_generation"
+required-features = ["ssr"]
 
 [[bench]]
 name = "incremental"
+required-features = ["ssr"]
 harness = false
 
 [target.'cfg(not(target_family = "wasm"))'.dev-dependencies]
