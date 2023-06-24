@@ -11,9 +11,9 @@ macro_rules! launch_router {
         $router_cfg
     };
 
-    (@[$address:expr], $route:ty, $(cfg: $router_cfg:expr,)? {$($rule:ident $(: $cfg:expr)?,)*}) => {
+    (@$address:expr, $route:ty, $(cfg: $router_cfg:expr,)? {$($rule:ident $(: $cfg:expr)?,)*}) => {
         dioxus_fullstack::launch!(
-            @[$address],
+            @$address,
             dioxus_fullstack::router::RouteWithCfg::<$route>,
             (dioxus_fullstack::launch_router!(@router_config $($router_cfg)?)),
             {
@@ -87,7 +87,7 @@ macro_rules! launch {
         $props
     };
 
-    (@[$address:expr], $comp:path, $(( $props:expr ),)? {$($rule:ident $(: $cfg:expr)?,)*}) => {
+    (@ $address:expr, $comp:path, $(( $props:expr ),)? {$($rule:ident $(: $cfg:expr)?,)*}) => {
         #[cfg(feature = "web")]
         {
             #[allow(unused)]

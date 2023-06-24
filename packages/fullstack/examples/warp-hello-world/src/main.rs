@@ -11,7 +11,7 @@ use dioxus_fullstack::prelude::*;
 use serde::{Deserialize, Serialize};
 
 fn main() {
-    launch!(@[([127, 0, 0, 1], 8080)], app, (AppProps { count: 5 }), {
+    launch!(@([127, 0, 0, 1], 8080), app, (AppProps { count: 5 }), {
         incremental,
     });
 }

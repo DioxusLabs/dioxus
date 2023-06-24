@@ -11,7 +11,7 @@ use dioxus_fullstack::prelude::*;
 use dioxus_router::prelude::*;
 
 fn main() {
-    launch_router!(@[([127, 0, 0, 1], 8080)], Route, {
+    launch_router!(@([127, 0, 0, 1], 8080), Route, {
         incremental,
     });
 }

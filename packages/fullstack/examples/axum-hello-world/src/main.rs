@@ -58,7 +58,7 @@ async fn get_server_data() -> Result<String, ServerFnError> {
 }
 
 fn main() {
-    launch!(@[([127, 0, 0, 1], 8080)], app, {
+    launch!(@([127, 0, 0, 1], 8080), app, {
         server_cfg: ServeConfigBuilder::new(app, (AppProps { count: 0 })),
         incremental,
     });
