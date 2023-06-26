@@ -359,7 +359,6 @@ fn apply_request_parts_to_response<B>(
     }
 }
 
-#[axum::debug_handler]
 async fn render_handler<P: Clone + serde::Serialize + Send + Sync + 'static>(
     State((cfg, ssr_state)): State<(ServeConfig<P>, SSRState)>,
     request: Request<Body>,
