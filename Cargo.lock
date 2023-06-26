@@ -401,6 +401,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cfg-expr"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0bbc13bf6290a6b202cc3efb36f7ec2b739a80634215630c8053a313edf6abef"
+dependencies = [
+ "smallvec",
+]
+
+[[package]]
 name = "cfg-if"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -727,8 +736,7 @@ dependencies = [
 [[package]]
 name = "dioxus-autofmt"
 version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "935ac336dd077436505f2eda7b7b81515093e8a3fb352ac514cd6901dbd302e7"
+source = "git+https://github.com/DioxusLabs/dioxus#11c9abcf7ce731ccb4a44c52de383c090ab319af"
 dependencies = [
  "dioxus-rsx",
  "prettier-please",
@@ -795,8 +803,7 @@ dependencies = [
 [[package]]
 name = "dioxus-core"
 version = "0.3.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4e4d15b0bb9c58d015b2295f240600dd76e427758377569fa33783afc295706a"
+source = "git+https://github.com/DioxusLabs/dioxus#11c9abcf7ce731ccb4a44c52de383c090ab319af"
 dependencies = [
  "bumpalo",
  "bumpslab",
@@ -814,8 +821,7 @@ dependencies = [
 [[package]]
 name = "dioxus-html"
 version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7682a6615e4e5a460cd3293ce420451abffb719c84c4b54e297b17365f601fb4"
+source = "git+https://github.com/DioxusLabs/dioxus#11c9abcf7ce731ccb4a44c52de383c090ab319af"
 dependencies = [
  "async-trait",
  "dioxus-core",
@@ -831,11 +837,11 @@ dependencies = [
 [[package]]
 name = "dioxus-rsx"
 version = "0.0.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e8544632e20f462a64f26502c91e7cf6ae3b30d82956e70543644d2c16b6659d"
+source = "git+https://github.com/DioxusLabs/dioxus#11c9abcf7ce731ccb4a44c52de383c090ab319af"
 dependencies = [
  "dioxus-core",
  "internment",
+ "krates",
  "proc-macro2",
  "quote",
  "serde",
@@ -1010,6 +1016,12 @@ dependencies = [
  "redox_syscall 0.2.16",
  "windows-sys 0.48.0",
 ]
+
+[[package]]
+name = "fixedbitset"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0ce7134b9999ecaf8bcd65542e436736ef32ddca1b3e06094cb6ec5755203b80"
 
 [[package]]
 name = "flate2"
@@ -1681,6 +1693,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "krates"
+version = "0.12.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "942c43a6cba1c201dfe81a943c89fa5c9140b34993e0c027f542c80b92e319a7"
+dependencies = [
+ "cargo_metadata",
+ "cfg-expr",
+ "petgraph",
+ "semver",
+]
+
+[[package]]
 name = "lazy_static"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2181,6 +2205,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "petgraph"
+version = "0.6.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4dd7d28ee937e54fe3080c91faa1c3a46c06de6252988a7f4592ba2310ef22a4"
+dependencies = [
+ "fixedbitset",
+ "indexmap",
+]
+
+[[package]]
 name = "pin-project"
 version = "1.0.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2454,8 +2488,7 @@ dependencies = [
 [[package]]
 name = "rsx-rosetta"
 version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "593810f58a97e3a45e23b84437d5323c2420b46f73cf38fe49133eb59a7524bb"
+source = "git+https://github.com/DioxusLabs/dioxus#11c9abcf7ce731ccb4a44c52de383c090ab319af"
 dependencies = [
  "convert_case",
  "dioxus-autofmt",

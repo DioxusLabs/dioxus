@@ -77,11 +77,11 @@ ctrlc = "3.2.3"
 # dioxus-rsx = "0.0.1"
 gitignore = "1.0.7"
 
-dioxus-rsx = { version = "0.0.3" }
-dioxus-html = { version = "0.3", features = ["hot-reload-context"] }
-dioxus-core = { version = "0.3", features = ["serialize"] }
-dioxus-autofmt = "0.3.0"
-rsx-rosetta = { version = "0.3" }
+dioxus-rsx = { git = "https://github.com/DioxusLabs/dioxus" }
+dioxus-html = { git = "https://github.com/DioxusLabs/dioxus", features = ["hot-reload-context"] }
+dioxus-core = { git = "https://github.com/DioxusLabs/dioxus", features = ["serialize"] }
+dioxus-autofmt = { git = "https://github.com/DioxusLabs/dioxus" }
+rsx-rosetta = { git = "https://github.com/DioxusLabs/dioxus" }
 open = "4.1.0"
 
 [[bin]]
