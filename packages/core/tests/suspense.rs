@@ -1,7 +1,6 @@
 use dioxus::core::ElementId;
 use dioxus::core::{Mutation::*, SuspenseContext};
 use dioxus::prelude::*;
-use std::future::IntoFuture;
 use std::rc::Rc;
 use std::time::Duration;
 use tokio::time::sleep;
@@ -71,7 +70,7 @@ fn suspense_boundary(cx: Scope) -> Element {
 }
 
 fn suspense_child(cx: Scope) -> Element {
-    use_future!(cx, || tokio::time::sleep(Duration::from_millis(10))).await;
+    use_future!(cx, || tokio::time::sleep(Duration::from_millis(10))).suspend()?;
 
     cx.render(rsx!(suspense_text {}))
 }
@@ -87,5 +86,8 @@ fn suspense_text(cx: Scope) -> Element {
         1234
     });
 
-    cx.render(rsx!( div { "Hello! {username}, you are {age}, {_user} {_age}" } ))
+    // join both futures together before rendering
+    let (username, age) = (username.suspend()?, age.suspend()?);
+
+    cx.render(rsx!( div { "Hello! {username}, you are {age}" } ))
 }

@@ -3,7 +3,7 @@ use dioxus_core::{ScopeState, TaskId};
 use std::{
     any::Any,
     cell::{Cell, RefCell},
-    future::{Future, IntoFuture},
+    future::Future,
     rc::Rc,
     sync::Arc,
 };
@@ -143,6 +143,10 @@ impl<T> UseFuture<T> {
         self.task.get()
     }
 
+    pub fn suspend(&self) -> Option<&T> {
+        todo!()
+    }
+
     /// Get the current state of the future.
     pub fn state(&self) -> UseFutureState<T> {
         match (&self.task.get(), &self.value()) {
@@ -160,36 +164,6 @@ impl<T> UseFuture<T> {
         }
     }
 }
-
-impl<'a, T> IntoFuture for &'a UseFuture<T> {
-    type Output = &'a T;
-    type IntoFuture = UseFutureAwait<'a, T>;
-    fn into_future(self) -> Self::IntoFuture {
-        UseFutureAwait { hook: self }
-    }
-}
-
-pub struct UseFutureAwait<'a, T> {
-    hook: &'a UseFuture<T>,
-}
-
-impl<'a, T> Future for UseFutureAwait<'a, T> {
-    type Output = &'a T;
-
-    fn poll(
-        self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Self::Output> {
-        match self.hook.values.borrow_mut().last().cloned() {
-            Some(value) => std::task::Poll::Ready(unsafe { &*value }),
-            None => {
-                self.hook.waker.replace(Some(cx.waker().clone()));
-                std::task::Poll::Pending
-            }
-        }
-    }
-}
-
 pub trait UseFutureDep: Sized + Clone {
     type Out;
     fn out(&self) -> Self::Out;
