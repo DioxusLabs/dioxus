@@ -32,7 +32,6 @@ impl VirtualDom {
             node_arena_2: BumpFrame::new(0),
             spawned_tasks: Default::default(),
             render_cnt: Default::default(),
-            hook_arena: Default::default(),
             hook_list: Default::default(),
             hook_idx: Default::default(),
             shared_contexts: Default::default(),

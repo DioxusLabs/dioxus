@@ -15,7 +15,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use slab::{Slab, VacantEntry};
 use std::{
     any::{Any, TypeId},
-    cell::{Cell, RefCell},
+    cell::{Cell, RefCell, UnsafeCell},
     fmt::{Arguments, Debug},
     future::Future,
     ops::{Index, IndexMut},
@@ -170,8 +170,7 @@ pub struct ScopeState {
 
     pub(crate) height: u32,
 
-    pub(crate) hook_arena: Bump,
-    pub(crate) hook_list: RefCell<Vec<*mut dyn Any>>,
+    pub(crate) hook_list: RefCell<Vec<UnsafeCell<Box<dyn Any>>>>,
     pub(crate) hook_idx: Cell<usize>,
 
     pub(crate) shared_contexts: RefCell<FxHashMap<TypeId, Box<dyn Any>>>,
@@ -644,15 +643,15 @@ impl<'src> ScopeState {
         let mut hook_list = self.hook_list.try_borrow_mut().expect("The hook list is already borrowed: This error is likely caused by trying to use a hook inside a hook which violates the rules of hooks.");
 
         if cur_hook >= hook_list.len() {
-            hook_list.push(self.hook_arena.alloc(initializer()));
+            hook_list.push(UnsafeCell::new(Box::new(initializer())));
         }
 
         hook_list
             .get(cur_hook)
             .and_then(|inn| {
                 self.hook_idx.set(cur_hook + 1);
-                let raw_box = unsafe { &mut **inn };
-                raw_box.downcast_mut::<State>()
+                let raw_box = unsafe { &mut *inn.get() };
+                raw_box.as_mut().downcast_mut::<State>()
             })
             .expect(
                 r###"
