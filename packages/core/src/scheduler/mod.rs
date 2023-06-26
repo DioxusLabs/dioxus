@@ -30,9 +30,6 @@ pub(crate) struct Scheduler {
 
     /// Tasks created with cx.spawn
     pub tasks: RefCell<Slab<LocalTask>>,
-
-    /// Async components
-    pub leaves: RefCell<Slab<SuspenseLeaf>>,
 }
 
 impl Scheduler {
@@ -40,7 +37,6 @@ impl Scheduler {
         Rc::new(Scheduler {
             sender,
             tasks: RefCell::new(Slab::new()),
-            leaves: RefCell::new(Slab::new()),
         })
     }
 }

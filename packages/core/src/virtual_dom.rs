@@ -335,7 +335,8 @@ impl VirtualDom {
     /// Determine if the tree is at all suspended. Used by SSR and other outside mechanisms to determine if the tree is
     /// ready to be rendered.
     pub fn has_suspended_work(&self) -> bool {
-        !self.scheduler.leaves.borrow().is_empty()
+        todo!()
+        // !self.scheduler.leaves.borrow().is_empty()
     }
 
     /// Call a listener inside the VirtualDom with data from outside the VirtualDom.
@@ -574,7 +575,6 @@ impl VirtualDom {
             }
             // If an error occurs, we should try to render the default error component and context where the error occured
             RenderReturn::Aborted(_placeholder) => panic!("Cannot catch errors during rebuild"),
-            RenderReturn::Pending(_) => unreachable!("Root scope cannot be an async component"),
         }
 
         self.finalize()
@@ -680,24 +680,26 @@ impl VirtualDom {
                 continue;
             }
 
-            // If there's no pending suspense, then we have no reason to wait for anything
-            if self.scheduler.leaves.borrow().is_empty() {
-                return self.finalize();
-            }
+            todo!();
 
-            // Poll the suspense leaves in the meantime
-            let mut work = self.wait_for_work();
+            // // If there's no pending suspense, then we have no reason to wait for anything
+            // if self.scheduler.leaves.borrow().is_empty() {
+            //     return self.finalize();
+            // }
 
-            // safety: this is okay since we don't touch the original future
-            let pinned = unsafe { std::pin::Pin::new_unchecked(&mut work) };
+            // // Poll the suspense leaves in the meantime
+            // let mut work = self.wait_for_work();
 
-            // If the deadline is exceded (left) then we should return the mutations we have
-            use futures_util::future::{select, Either};
-            if let Either::Left((_, _)) = select(&mut deadline, pinned).await {
-                // release the borrowed
-                drop(work);
-                return self.finalize();
-            }
+            // // safety: this is okay since we don't touch the original future
+            // let pinned = unsafe { std::pin::Pin::new_unchecked(&mut work) };
+
+            // // If the deadline is exceded (left) then we should return the mutations we have
+            // use futures_util::future::{select, Either};
+            // if let Either::Left((_, _)) = select(&mut deadline, pinned).await {
+            //     // release the borrowed
+            //     drop(work);
+            //     return self.finalize();
+            // }
         }
     }
 

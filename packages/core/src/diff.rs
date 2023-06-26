@@ -30,7 +30,7 @@ impl<'b> VirtualDom {
                 .try_load_node()
                 .expect("Call rebuild before diffing");
 
-            use RenderReturn::{Aborted, Pending, Ready};
+            use RenderReturn::{Aborted, Ready};
 
             match (old, new) {
                 // Normal pathway
@@ -42,27 +42,12 @@ impl<'b> VirtualDom {
                 // Just move over the placeholder
                 (Aborted(l), Aborted(r)) => r.id.set(l.id.get()),
 
-                // Becomes async, do nothing while we wait
-                (Ready(_nodes), Pending(_fut)) => self.diff_ok_to_async(_nodes, scope),
-
                 // Placeholder becomes something
                 // We should also clear the error now
                 (Aborted(l), Ready(r)) => self.replace_placeholder(l, [r]),
-
-                (Aborted(_), Pending(_)) => todo!("async should not resolve here"),
-                (Pending(_), Ready(_)) => todo!("async should not resolve here"),
-                (Pending(_), Aborted(_)) => todo!("async should not resolve here"),
-                (Pending(_), Pending(_)) => {
-                    // All suspense should resolve before we diff it again
-                    panic!("Should not roll from suspense to suspense.");
-                }
             };
         }
         self.scope_stack.pop();
-    }
-
-    fn diff_ok_to_async(&mut self, _new: &'b VNode<'b>, _scope: ScopeId) {
-        //
     }
 
     fn diff_ok_to_err(&mut self, l: &'b VNode<'b>, p: &'b VPlaceholder) {
@@ -735,7 +720,6 @@ impl<'b> VirtualDom {
                         match unsafe { self.scopes[scope].root_node().extend_lifetime_ref() } {
                             RenderReturn::Ready(node) => self.push_all_real_nodes(node),
                             RenderReturn::Aborted(_node) => todo!(),
-                            _ => todo!(),
                         }
                     }
                 }
@@ -937,7 +921,6 @@ impl<'b> VirtualDom {
         match unsafe { self.scopes[scope].root_node().extend_lifetime_ref() } {
             RenderReturn::Ready(t) => self.remove_node(t, gen_muts),
             RenderReturn::Aborted(placeholder) => self.remove_placeholder(placeholder, gen_muts),
-            _ => todo!(),
         };
 
         // Restore the props back to the vcomponent in case it gets rendered again
