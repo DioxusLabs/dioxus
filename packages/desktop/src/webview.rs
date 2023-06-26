@@ -64,6 +64,10 @@ pub fn build(
         webview = webview.with_browser_accelerator_keys(false);
     }
 
+    if let Some(color) = cfg.background_color {
+        webview = webview.with_background_color(color);
+    }
+
     // These are commented out because wry is currently broken in wry
     // let mut web_context = WebContext::new(cfg.data_dir.clone());
     // .with_web_context(&mut web_context);

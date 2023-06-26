@@ -23,6 +23,7 @@ pub struct Config {
     pub(crate) custom_head: Option<String>,
     pub(crate) custom_index: Option<String>,
     pub(crate) root_name: String,
+    pub(crate) background_color: Option<(u8, u8, u8, u8)>,
 }
 
 type DropHandler = Box<dyn Fn(&Window, FileDropEvent) -> bool>;
@@ -50,6 +51,7 @@ impl Config {
             custom_head: None,
             custom_index: None,
             root_name: "main".to_string(),
+            background_color: None,
         }
     }
 
@@ -135,6 +137,14 @@ impl Config {
     /// This is akint to calling React.render() on the element with the specified name.
     pub fn with_root_name(mut self, name: impl Into<String>) -> Self {
         self.root_name = name.into();
+        self
+    }
+
+    /// Sets the background color of the WebView.
+    /// This will be set before the HTML is rendered and can be used to prevent flashing when the page loads.
+    /// Accepts a color in RGBA format
+    pub fn with_background_color(mut self, color: (u8, u8, u8, u8)) -> Self {
+        self.background_color = Some(color);
         self
     }
 }
