@@ -1,14 +1,9 @@
 use super::*;
-use crate::custom_error;
+use cargo_generate::{GenerateArgs, TemplatePath};
 
-/// Build the Rust WASM app and all of its assets.
 #[derive(Clone, Debug, Default, Deserialize, Parser)]
 #[clap(name = "create")]
 pub struct Create {
-    /// Init project name
-    #[clap(default_value = ".")]
-    name: String,
-
     /// Template path
     #[clap(default_value = "gh:dioxuslabs/dioxus-template", long)]
     template: String,
@@ -16,69 +11,66 @@ pub struct Create {
 
 impl Create {
     pub fn create(self) -> Result<()> {
-        if Self::name_valid_check(self.name.clone()) {
-            return custom_error!("❗Unsupported project name: '{}'.", &self.name);
-        }
+        let mut args = GenerateArgs::default();
+        args.template_path = TemplatePath {
+            auto_path: Some(self.template),
+            ..Default::default()
+        };
 
-        let project_path = PathBuf::from(&self.name);
+        let path = cargo_generate::generate(args)?;
 
-        if project_path.join("Dioxus.toml").is_file() || project_path.join("Cargo.toml").is_file() {
-            return custom_error!("🧨 Folder '{}' is initialized.", &self.name);
-        }
-
-        log::info!("🔧 Start: Creating new project '{}'.", self.name);
-
-        let output = Command::new("cargo")
-            .arg("generate")
-            .arg("--help")
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .output()?;
-
+        // first run cargo fmt
+        let mut cmd = Command::new("cargo");
+        let cmd = cmd.arg("fmt").current_dir(&path);
+        let output = cmd.output().expect("failed to execute process");
         if !output.status.success() {
-            log::warn!("Tool is not installed: cargo-generate, try to install it.");
-            let install_output = Command::new("cargo")
-                .arg("install")
-                .arg("cargo-generate")
-                .stdout(Stdio::inherit())
-                .stderr(Stdio::inherit())
-                .output()?;
-            if !install_output.status.success() {
-                return custom_error!("Try to install cargo-generate failed.");
-            }
+            log::error!("cargo fmt failed");
+            log::error!("stdout: {}", String::from_utf8_lossy(&output.stdout));
+            log::error!("stderr: {}", String::from_utf8_lossy(&output.stderr));
         }
 
-        let generate_output = Command::new("cargo")
-            .arg("generate")
-            .arg(&self.template)
-            .arg("--name")
-            .arg(&self.name)
-            .arg("--force")
-            .stdout(Stdio::piped())
-            .stderr(Stdio::inherit())
-            .output()?;
+        // then format the toml
+        let toml_paths = [path.join("Cargo.toml"), path.join("Dioxus.toml")];
+        for toml_path in &toml_paths {
+            let toml = std::fs::read_to_string(toml_path)?;
+            let mut toml = toml.parse::<toml_edit::Document>().map_err(|e| {
+                anyhow::anyhow!(
+                    "failed to parse toml at {}: {}",
+                    toml_path.display(),
+                    e.to_string()
+                )
+            })?;
 
-        if !generate_output.status.success() {
-            return custom_error!("Generate project failed. Try to update cargo-generate.");
+            toml.as_table_mut().fmt();
+
+            let as_string = toml.to_string();
+            let new_string = remove_tripple_newlines(&as_string);
+            let mut file = std::fs::File::create(toml_path)?;
+            file.write_all(new_string.as_bytes())?;
         }
 
-        let mut dioxus_file = File::open(project_path.join("Dioxus.toml"))?;
-        let mut meta_file = String::new();
-        dioxus_file.read_to_string(&mut meta_file)?;
-        meta_file = meta_file.replace("{{project-name}}", &self.name);
-        meta_file = meta_file.replace("{{default-platform}}", "web");
-        File::create(project_path.join("Dioxus.toml"))?.write_all(meta_file.as_bytes())?;
+        // remove any tripple newlines from the readme
+        let readme_path = path.join("README.md");
+        let readme = std::fs::read_to_string(&readme_path)?;
+        let new_readme = remove_tripple_newlines(&readme);
+        let mut file = std::fs::File::create(readme_path)?;
+        file.write_all(new_readme.as_bytes())?;
 
-        println!();
-        log::info!("💡 Project initialized:");
-        log::info!("🎯> cd ./{}", self.name);
-        log::info!("🎯> dioxus serve");
+        log::info!("Generated project at {}", path.display());
 
         Ok(())
     }
+}
 
-    fn name_valid_check(name: String) -> bool {
-        let r = Regex::new(r"^[a-zA-Z][a-zA-Z0-9\-_]$").unwrap();
-        r.is_match(&name)
+fn remove_tripple_newlines(string: &str) -> String {
+    let mut new_string = String::new();
+    for char in string.chars() {
+        if char == '\n' {
+            if new_string.ends_with("\n\n") {
+                continue;
+            }
+        }
+        new_string.push(char);
     }
+    new_string
 }

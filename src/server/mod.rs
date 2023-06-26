@@ -150,7 +150,8 @@ pub async fn startup_hot_reload(
 
     let dist_path = config.out_dir.clone();
     let (reload_tx, _) = broadcast::channel(100);
-    let FileMapBuildResult { map, errors } = FileMap::<HtmlCtx>::create(config.crate_dir.clone()).unwrap();
+    let FileMapBuildResult { map, errors } =
+        FileMap::<HtmlCtx>::create(config.crate_dir.clone()).unwrap();
     for err in errors {
         log::error!("{}", err);
     }
@@ -219,8 +220,7 @@ pub async fn startup_hot_reload(
                         let mut map = file_map.lock().unwrap();
 
                         match map.update_rsx(&path, &crate_dir) {
-                            
-                            Ok( UpdateResult::UpdatedRsx(msgs) )=> {
+                            Ok(UpdateResult::UpdatedRsx(msgs)) => {
                                 messages.extend(msgs);
                             }
                             Ok(UpdateResult::NeedsRebuild) => {

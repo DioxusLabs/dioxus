@@ -22,7 +22,7 @@ pub struct Translate {
     pub raw: Option<String>,
 
     /// Output file, stdout if not present
-    #[clap(parse(from_os_str))]
+    #[arg(short, long)]
     pub output: Option<PathBuf>,
 }
 

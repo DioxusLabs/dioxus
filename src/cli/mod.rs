@@ -17,7 +17,6 @@ use crate::{
 };
 use clap::{Parser, Subcommand};
 use html_parser::Dom;
-use regex::Regex;
 use serde::Deserialize;
 use std::{
     fs::{remove_dir_all, File},
