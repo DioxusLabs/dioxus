@@ -6,7 +6,7 @@ use syn::Ident;
 use crate::{
     nest::{Nest, NestId},
     redirect::Redirect,
-    route::Route,
+    route::{Route, RouteType},
     segment::{static_segment_idx, RouteSegment},
 };
 
@@ -334,11 +334,14 @@ impl<'a> RouteTreeSegmentData<'a> {
                 let construct_variant = route.construct(nests, enum_name);
                 let parse_query = route.parse_query();
 
-                let insure_not_trailing = route
-                    .segments
-                    .last()
-                    .map(|seg| !matches!(seg, RouteSegment::CatchAll(_, _)))
-                    .unwrap_or(true);
+                let insure_not_trailing = match route.ty {
+                    RouteType::Leaf { .. } => route
+                        .segments
+                        .last()
+                        .map(|seg| !matches!(seg, RouteSegment::CatchAll(_, _)))
+                        .unwrap_or(true),
+                    RouteType::Child(_) => false,
+                };
 
                 print_route_segment(
                     route_segments.peekable(),

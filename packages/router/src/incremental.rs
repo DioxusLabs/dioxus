@@ -25,6 +25,7 @@ where
         let mut full_path = String::new();
         for segment in &route {
             match segment {
+                SegmentType::Child => {}
                 SegmentType::Static(s) => {
                     full_path += "/";
                     full_path += s;
@@ -43,6 +44,7 @@ where
                     render_route(renderer, route, &mut tokio::io::sink(), |_| {}).await?;
                 }
                 Err(e) => {
+                    log::info!("@ route: {}", full_path);
                     log::error!("Error pre-caching static route: {}", e);
                 }
             }

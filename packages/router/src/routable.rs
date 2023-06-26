@@ -172,12 +172,15 @@ pub enum SegmentType {
     Dynamic(&'static str),
     /// A catch all route segment
     CatchAll(&'static str),
+    /// A child router
+    Child,
 }
 
 impl Display for SegmentType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self {
             SegmentType::Static(s) => write!(f, "/{}", s),
+            SegmentType::Child => Ok(()),
             SegmentType::Dynamic(s) => write!(f, "/:{}", s),
             SegmentType::CatchAll(s) => write!(f, "/:...{}", s),
         }

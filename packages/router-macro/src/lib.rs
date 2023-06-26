@@ -5,9 +5,9 @@ use nest::{Nest, NestId};
 use proc_macro::TokenStream;
 use quote::{__private::Span, format_ident, quote, ToTokens};
 use redirect::Redirect;
-use route::Route;
+use route::{Route, RouteType};
 use segment::RouteSegment;
-use syn::{parse::ParseStream, parse_macro_input, Ident, Token};
+use syn::{parse::ParseStream, parse_macro_input, Ident, Token, Type};
 
 use proc_macro2::TokenStream as TokenStream2;
 
@@ -73,11 +73,13 @@ mod segment;
 ///     #[redirect("/:id/user", |id: usize| Route::Route3 { dynamic: id.to_string()})]
 ///     #[route("/:dynamic")]
 ///     Route3 { dynamic: String },
+///     #[child]
+///     NestedRoute(NestedRoute),
 /// }
 /// ```
 #[proc_macro_derive(
     Routable,
-    attributes(route, nest, end_nest, layout, end_layout, redirect)
+    attributes(route, nest, end_nest, layout, end_layout, redirect, child)
 )]
 pub fn routable(input: TokenStream) -> TokenStream {
     let routes_enum = parse_macro_input!(input as syn::ItemEnum);
@@ -124,12 +126,12 @@ pub fn routable(input: TokenStream) -> TokenStream {
         }
 
         #error_type
+        
+        #display_impl
+        
+        #routable_impl
 
         #parse_impl
-
-        #display_impl
-
-        #routable_impl
     }
     .into()
 }
@@ -288,7 +290,33 @@ impl RouteEnum {
             let route = Route::parse(active_nests, active_layouts, variant.clone())?;
 
             // add the route to the site map
-            if let Some(segment) = SiteMapSegment::new(&route.segments) {
+            let mut segment = SiteMapSegment::new(&route.segments);
+            if let RouteType::Child(child) = &route.ty {
+                let new_segment = SiteMapSegment {
+                    segment_type: SegmentType::Child(child.clone()),
+                    children: Vec::new(),
+                };
+                match &mut segment {
+                    Some(segment) => {
+                        fn set_last_child_to(
+                            segment: &mut SiteMapSegment,
+                            new_segment: SiteMapSegment,
+                        ) {
+                            if let Some(last) = segment.children.last_mut() {
+                                set_last_child_to(last, new_segment);
+                            } else {
+                                segment.children = vec![new_segment];
+                            }
+                        }
+                        set_last_child_to(segment, new_segment);
+                    }
+                    None => {
+                        segment = Some(new_segment);
+                    }
+                }
+            }
+
+            if let Some(segment) = segment {
                 let parent = site_map_stack.last_mut();
                 let children = match parent {
                     Some(parent) => &mut parent.last_mut().unwrap().children,
@@ -443,30 +471,12 @@ impl RouteEnum {
         let name = &self.name;
         let site_map = &self.site_map;
 
-        let mut layers = Vec::new();
+        let mut matches = Vec::new();
 
-        loop {
-            let index = layers.len();
-            let mut routable_match = Vec::new();
-
-            // Collect all routes that match the current layer
-            for route in &self.routes {
-                if let Some(matched) = route.routable_match(&self.layouts, &self.nests, index) {
-                    routable_match.push(matched);
-                }
-            }
-
-            // All routes are exhausted
-            if routable_match.is_empty() {
-                break;
-            }
-
-            layers.push(quote! {
-                #(#routable_match)*
-            });
+        // Collect all routes matches
+        for route in &self.routes {
+            matches.push(route.routable_match(&self.layouts, &self.nests));
         }
-
-        let index_iter = 0..layers.len();
 
         quote! {
             impl dioxus_router::routable::Routable for #name where Self: Clone {
@@ -476,15 +486,8 @@ impl RouteEnum {
 
                 fn render<'a>(&self, cx: &'a ScopeState, level: usize) -> Element<'a> {
                     let myself = self.clone();
-                    match level {
-                        #(
-                            #index_iter => {
-                                match myself {
-                                    #layers
-                                    _ => None
-                                }
-                            },
-                        )*
+                    match (level, myself) {
+                        #(#matches)*
                         _ => None
                     }
                 }
@@ -521,14 +524,25 @@ impl SiteMapSegment {
 impl ToTokens for SiteMapSegment {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         let segment_type = &self.segment_type;
-        let children = &self.children;
+        let children = if let SegmentType::Child(ty) = &self.segment_type {
+            quote! { #ty::SITE_MAP }
+        } else {
+            let children = self
+                .children
+                .iter()
+                .map(|child| child.to_token_stream())
+                .collect::<Vec<_>>();
+            quote! {
+                &[
+                    #(#children,)*
+                ]
+            }
+        };
 
         tokens.extend(quote! {
             dioxus_router::routable::SiteMapSegment {
                 segment_type: #segment_type,
-                children: &[
-                    #(#children,)*
-                ]
+                children: #children,
             }
         });
     }
@@ -538,6 +552,7 @@ enum SegmentType {
     Static(String),
     Dynamic(String),
     CatchAll(String),
+    Child(Type),
 }
 
 impl ToTokens for SegmentType {
@@ -551,6 +566,9 @@ impl ToTokens for SegmentType {
             }
             SegmentType::CatchAll(s) => {
                 tokens.extend(quote! { dioxus_router::routable::SegmentType::CatchAll(#s) })
+            }
+            SegmentType::Child(_) => {
+                tokens.extend(quote! { dioxus_router::routable::SegmentType::Child })
             }
         }
     }

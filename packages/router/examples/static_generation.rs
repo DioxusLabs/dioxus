@@ -28,22 +28,25 @@ async fn main() {
     .invalidate_after(Duration::from_secs(10))
     .build();
 
+    println!(
+        "SITE MAP:\n{}",
+        Route::SITE_MAP
+            .iter()
+            .flat_map(|route| route.flatten().into_iter())
+            .map(|route| {
+                route
+                    .iter()
+                    .map(|segment| segment.to_string())
+                    .collect::<Vec<_>>()
+                    .join("")
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
+
     pre_cache_static_routes::<Route, _>(&mut renderer)
         .await
         .unwrap();
-
-    for _ in 0..1_000_000 {
-        for id in 0..10 {
-            render_route(
-                &mut renderer,
-                Route::Post { id },
-                &mut tokio::io::sink(),
-                |_| {},
-            )
-            .await
-            .unwrap();
-        }
-    }
 }
 
 #[inline_props]
@@ -82,6 +85,64 @@ fn Home(cx: Scope) -> Element {
     }
 }
 
+mod inner {
+    use dioxus::prelude::*;
+    use dioxus_router::prelude::*;
+
+    #[rustfmt::skip]
+    #[derive(Clone, Debug, PartialEq, Routable)]
+    pub enum Route {
+        #[nest("/blog")]
+            #[route("/")]
+            Blog {},
+            #[route("/post/index")]
+            PostHome {},
+            #[route("/post/:id")]
+            Post {
+                id: usize,
+            },
+        #[end_nest]
+        #[route("/")]
+        Home {},
+    }
+
+    #[inline_props]
+    fn Blog(cx: Scope) -> Element {
+        render! {
+            div {
+                "Blog"
+            }
+        }
+    }
+
+    #[inline_props]
+    fn Post(cx: Scope, id: usize) -> Element {
+        render! {
+            div {
+                "PostId: {id}"
+            }
+        }
+    }
+
+    #[inline_props]
+    fn PostHome(cx: Scope) -> Element {
+        render! {
+            div {
+                "Post"
+            }
+        }
+    }
+
+    #[inline_props]
+    fn Home(cx: Scope) -> Element {
+        render! {
+            div {
+                "Home"
+            }
+        }
+    }
+}
+
 #[rustfmt::skip]
 #[derive(Clone, Debug, PartialEq, Routable)]
 enum Route {
@@ -97,4 +158,6 @@ enum Route {
     #[end_nest]
     #[route("/")]
     Home {},
+    #[child("/hello_world")]
+    HelloWorldRoute(inner::Route)
 }
