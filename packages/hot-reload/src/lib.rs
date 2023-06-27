@@ -160,7 +160,18 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(cfg: Config<Ctx>) {
         let file_map = Arc::new(Mutex::new(file_map));
 
         #[cfg(target_os = "macos")]
-        clear_socket_file();
+        {
+            // On unix, if you force quit the application, it can leave the file socket open
+            // This will cause the local socket listener to fail to open
+            // We check if the file socket is already open from an old session and then delete it
+            let paths = ["./dioxusin", "./@dioxusin"];
+            for path in paths {
+                let path = PathBuf::from(path);
+                if path.exists() {
+                    let _ = std::fs::remove_file(path);
+                }
+            }
+        }
 
         match LocalSocketListener::bind("@dioxusin") {
             Ok(local_socket_stream) => {
@@ -332,20 +343,6 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(cfg: Config<Ctx>) {
                 });
             }
             Err(error) => println!("failed to connect to hot reloading\n{error}"),
-        }
-    }
-}
-
-#[cfg(target_os = "macos")]
-fn clear_socket_file() {
-    // On unix, if you force quit the application, it can leave the file socket open
-    // This will cause the local socket listener to fail to open
-    // We check if the file socket is already open from an old session and then delete it
-    let paths = ["./dioxusin", "./@dioxusin"];
-    for path in paths {
-        let path = PathBuf::from(path);
-        if path.exists() {
-            let _ = std::fs::remove_file(path);
         }
     }
 }
