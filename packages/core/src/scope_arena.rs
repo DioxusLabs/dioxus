@@ -2,9 +2,9 @@ use crate::{
     any_props::AnyProps,
     bump_frame::BumpFrame,
     innerlude::DirtyScope,
-    nodes::RenderReturn,
     scopes::{ScopeId, ScopeState},
     virtual_dom::VirtualDom,
+    Element,
 };
 use std::mem;
 
@@ -45,7 +45,7 @@ impl VirtualDom {
         Some(scope)
     }
 
-    pub(crate) fn run_scope(&mut self, scope_id: ScopeId) -> &RenderReturn {
+    pub(crate) fn run_scope(&mut self, scope_id: ScopeId) -> &Element {
         // Cycle to the next frame and then reset it
         // This breaks any latent references, invalidating every pointer referencing into it.
         // Remove all the outdated listeners
@@ -62,7 +62,8 @@ impl VirtualDom {
             let props: &dyn AnyProps = scope.props.as_ref().unwrap().as_ref();
             let props: &dyn AnyProps = mem::transmute(props);
 
-            props.render(scope).extend_lifetime()
+            todo!()
+            // props.render(scope)
         };
 
         let scope = &self.scopes[scope_id];
@@ -83,7 +84,8 @@ impl VirtualDom {
             id: scope.id,
         });
 
+        todo!()
         // rebind the lifetime now that its stored internally
-        unsafe { allocated.extend_lifetime_ref() }
+        // unsafe { allocated }
     }
 }

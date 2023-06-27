@@ -5,7 +5,7 @@ use crate::mutations::Mutation::*;
 use crate::nodes::VNode;
 use crate::nodes::{DynamicNode, TemplateNode};
 use crate::virtual_dom::VirtualDom;
-use crate::{AttributeValue, ElementId, RenderReturn, ScopeId, SuspenseContext, Template};
+use crate::{AttributeValue, ElementId, ScopeId, SuspenseContext, Template};
 use std::cell::Cell;
 use std::iter::Peekable;
 use std::rc::Rc;
@@ -504,17 +504,16 @@ impl<'b> VirtualDom {
         component: &'b VComponent<'b>,
         idx: usize,
     ) -> usize {
-        use RenderReturn::*;
-
         // Load up a ScopeId for this vcomponent
         let scope = self.load_scope_from_vcomponent(component);
 
         component.scope.set(Some(scope));
 
-        match unsafe { self.run_scope(scope).extend_lifetime_ref() } {
-            Ready(t) => self.mount_component(scope, template, t, idx),
-            Aborted(t) => self.mount_aborted(template, t),
-        }
+        todo!()
+        // match unsafe { self.run_scope(scope).extend_lifetime_ref() } {
+        //     Ready(t) => self.mount_component(scope, template, t, idx),
+        //     Aborted(t) => self.mount_aborted(template, t),
+        // }
     }
 
     /// Load a scope from a vcomponent. If the props don't exist, that means the component is currently "live"

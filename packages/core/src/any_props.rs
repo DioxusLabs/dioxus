@@ -1,6 +1,5 @@
 use crate::{
     innerlude::Scoped,
-    nodes::RenderReturn,
     scopes::{Scope, ScopeState},
     Element,
 };
@@ -13,7 +12,7 @@ use std::panic::AssertUnwindSafe;
 /// This should not be implemented outside this module
 pub(crate) unsafe trait AnyProps<'a> {
     fn props_ptr(&self) -> *const ();
-    fn render(&'a self, bump: &'a ScopeState) -> RenderReturn<'a>;
+    fn render(&'a self, bump: &'a ScopeState) -> Element<'a>;
     unsafe fn memoize(&self, other: &dyn AnyProps) -> bool;
 }
 
@@ -52,7 +51,7 @@ unsafe impl<'a, P> AnyProps<'a> for VProps<'a, P> {
         (self.memo)(real_us, real_other)
     }
 
-    fn render(&'a self, cx: &'a ScopeState) -> RenderReturn<'a> {
+    fn render(&'a self, cx: &'a ScopeState) -> Element<'a> {
         let res = std::panic::catch_unwind(AssertUnwindSafe(move || {
             // Call the render function directly
             let scope: &mut Scoped<P> = cx.bump().alloc(Scoped {
@@ -60,15 +59,17 @@ unsafe impl<'a, P> AnyProps<'a> for VProps<'a, P> {
                 scope: cx,
             });
 
-            match (self.render_fn)(scope) {
-                Some(el) => RenderReturn::Ready(el),
-                None => RenderReturn::default(),
-            }
+            todo!()
+            // match (self.render_fn)(scope) {
+            //     Some(el) => RenderReturn::Ready(el),
+            //     None => RenderReturn::default(),
+            // }
         }));
 
-        match res {
-            Ok(e) => e,
-            Err(_) => RenderReturn::default(),
-        }
+        todo!()
+        // match res {
+        //     Ok(e) => e,
+        //     Err(_) => RenderReturn::default(),
+        // }
     }
 }

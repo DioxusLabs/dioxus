@@ -7,7 +7,6 @@ use crate::{
     arena::{ElementId, ElementRef},
     innerlude::{DirtyScope, ErrorBoundary, Mutations, Scheduler, SchedulerMsg, ScopeSlab},
     mutations::Mutation,
-    nodes::RenderReturn,
     nodes::{Template, TemplateId},
     scheduler::SuspenseId,
     scopes::{ScopeId, ScopeState},
@@ -527,17 +526,18 @@ impl VirtualDom {
         self.register_template_first_byte_index(template);
         // iterating a slab is very inefficient, but this is a rare operation that will only happen during development so it's fine
         for scope in self.scopes.iter() {
-            if let Some(RenderReturn::Ready(sync)) = scope.try_root_node() {
-                if sync.template.get().name.rsplit_once(':').unwrap().0
-                    == template.name.rsplit_once(':').unwrap().0
-                {
-                    let height = scope.height;
-                    self.dirty_scopes.insert(DirtyScope {
-                        height,
-                        id: scope.id,
-                    });
-                }
-            }
+            todo!()
+            // if let Some(RenderReturn::Ready(sync)) = scope.try_root_node() {
+            //     if sync.template.get().name.rsplit_once(':').unwrap().0
+            //         == template.name.rsplit_once(':').unwrap().0
+            //     {
+            //         let height = scope.height;
+            //         self.dirty_scopes.insert(DirtyScope {
+            //             height,
+            //             id: scope.id,
+            //         });
+            //     }
+            // }
         }
     }
 
@@ -562,20 +562,21 @@ impl VirtualDom {
     /// apply_edits(edits);
     /// ```
     pub fn rebuild(&mut self) -> Mutations {
-        match unsafe { self.run_scope(ScopeId(0)).extend_lifetime_ref() } {
-            // Rebuilding implies we append the created elements to the root
-            RenderReturn::Ready(node) => {
-                let m = self.create_scope(ScopeId(0), node);
-                self.mutations.edits.push(Mutation::AppendChildren {
-                    id: ElementId(0),
-                    m,
-                });
-            }
-            // If an error occurs, we should try to render the default error component and context where the error occured
-            RenderReturn::Aborted(_placeholder) => panic!("Cannot catch errors during rebuild"),
-        }
+        todo!()
+        // match unsafe { self.run_scope(ScopeId(0)) } {
+        //     // Rebuilding implies we append the created elements to the root
+        //     RenderReturn::Ready(node) => {
+        //         let m = self.create_scope(ScopeId(0), node);
+        //         self.mutations.edits.push(Mutation::AppendChildren {
+        //             id: ElementId(0),
+        //             m,
+        //         });
+        //     }
+        //     // If an error occurs, we should try to render the default error component and context where the error occured
+        //     RenderReturn::Aborted(_placeholder) => panic!("Cannot catch errors during rebuild"),
+        // }
 
-        self.finalize()
+        // self.finalize()
     }
 
     /// Render whatever the VirtualDom has ready as fast as possible without requiring an executor to progress

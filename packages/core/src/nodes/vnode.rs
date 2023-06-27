@@ -1,5 +1,7 @@
 use super::BoxedCellSlice;
-use crate::{any_props::AnyProps, Attribute, Element, ElementId, ScopeId, Template, TemplateNode};
+use crate::{
+    any_props::AnyProps, Attribute, Element, ElementId, ScopeId, ScopeState, Template, TemplateNode,
+};
 use std::{
     cell::{Cell, RefCell},
     fmt::Debug,
@@ -44,6 +46,25 @@ impl<'a> VNode<'a> {
             template: Cell::new(Template {
                 name: "dioxus-empty",
                 roots: &[],
+                node_paths: &[],
+                attr_paths: &[],
+            }),
+        })
+    }
+
+    /// Create a template with a single placeholder node that will participate in diffing
+    ///
+    /// Used when components are rendered but escaped via `None`.
+    pub fn placeholder(cx: &'a ScopeState) -> Element<'a> {
+        Some(VNode {
+            key: None,
+            parent: None,
+            root_ids: BoxedCellSlice::default(),
+            dynamic_nodes: cx.bump().alloc([DynamicNode::default()]),
+            dynamic_attrs: &[],
+            template: Cell::new(Template {
+                name: "dioxus-placeholder",
+                roots: &[TemplateNode::Dynamic { id: 0 }],
                 node_paths: &[],
                 attr_paths: &[],
             }),

@@ -20,39 +20,6 @@ pub use into_vnode::*;
 
 pub type TemplateId = &'static str;
 
-/// The actual state of the component's most recent computation
-///
-/// Because Dioxus accepts components in the form of `async fn(Scope) -> Result<VNode>`, we need to support both
-/// sync and async versions.
-///
-/// Dioxus will do its best to immediately resolve any async components into a regular Element, but as an implementor
-/// you might need to handle the case where there's no node immediately ready.
-pub enum RenderReturn<'a> {
-    /// A currently-available element
-    Ready(VNode<'a>),
-
-    /// The component aborted rendering early. It might've thrown an error.
-    ///
-    /// In its place we've produced a placeholder to locate its spot in the dom when
-    /// it recovers.
-    Aborted(VPlaceholder),
-}
-
-impl<'a> Default for RenderReturn<'a> {
-    fn default() -> Self {
-        RenderReturn::Aborted(VPlaceholder::default())
-    }
-}
-
-impl<'a> RenderReturn<'a> {
-    pub(crate) unsafe fn extend_lifetime_ref<'c>(&self) -> &'c RenderReturn<'c> {
-        unsafe { std::mem::transmute(self) }
-    }
-    pub(crate) unsafe fn extend_lifetime<'c>(self) -> RenderReturn<'c> {
-        unsafe { std::mem::transmute(self) }
-    }
-}
-
 pub trait IntoTemplate<'a> {
     fn into_template(self, _cx: &'a ScopeState) -> VNode<'a>;
 }
