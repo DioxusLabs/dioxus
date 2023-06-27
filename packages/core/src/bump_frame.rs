@@ -2,6 +2,9 @@ use crate::nodes::RenderReturn;
 use bumpalo::Bump;
 use std::cell::{Cell, UnsafeCell};
 
+/// A "frame" similar to a buffer used in GPU programming.
+///
+/// This frame stores a list of elements that are attached to a lifetime.
 pub(crate) struct BumpFrame {
     pub bump: UnsafeCell<Bump>,
     pub node: Cell<*const RenderReturn<'static>>,

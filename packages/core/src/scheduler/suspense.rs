@@ -32,14 +32,8 @@ let data = use_future(cx, || fetch_data(props)).suspend()?;
 let data = use_suspense(cx, || fetch_data(props))?;
  */
 
-use futures_util::task::ArcWake;
-
-use super::SchedulerMsg;
 use crate::ElementId;
-use crate::{innerlude::Mutations, Element, ScopeId};
-use std::future::Future;
-use std::sync::Arc;
-use std::task::Waker;
+use crate::{innerlude::Mutations, ScopeId};
 use std::{
     cell::{Cell, RefCell},
     collections::HashSet,
@@ -68,18 +62,5 @@ impl SuspenseContext {
             placeholder: Cell::new(None),
             created_on_stack: Cell::new(0),
         }
-    }
-}
-
-pub struct SuspenseHandle {
-    pub(crate) id: SuspenseId,
-    pub(crate) tx: futures_channel::mpsc::UnboundedSender<SchedulerMsg>,
-}
-
-impl ArcWake for SuspenseHandle {
-    fn wake_by_ref(arc_self: &Arc<Self>) {
-        _ = arc_self
-            .tx
-            .unbounded_send(SchedulerMsg::SuspenseNotified(arc_self.id));
     }
 }

@@ -144,7 +144,7 @@ impl<T> UseFuture<T> {
     }
 
     pub fn suspend(&self) -> Option<&T> {
-        todo!()
+        self.value()
     }
 
     /// Get the current state of the future.

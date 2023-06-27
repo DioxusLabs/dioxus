@@ -486,7 +486,6 @@ impl VirtualDom {
                 Some(msg) => match msg {
                     SchedulerMsg::Immediate(id) => self.mark_dirty(id),
                     SchedulerMsg::TaskNotified(task) => self.handle_task_wakeup(task),
-                    SchedulerMsg::SuspenseNotified(id) => self.handle_suspense_wakeup(id),
                 },
 
                 // If they're not ready, then we should wait for them to be ready
@@ -514,7 +513,6 @@ impl VirtualDom {
             match msg {
                 SchedulerMsg::Immediate(id) => self.mark_dirty(id),
                 SchedulerMsg::TaskNotified(task) => self.handle_task_wakeup(task),
-                SchedulerMsg::SuspenseNotified(id) => self.handle_suspense_wakeup(id),
             }
         }
     }
@@ -680,26 +678,24 @@ impl VirtualDom {
                 continue;
             }
 
-            todo!();
-
             // // If there's no pending suspense, then we have no reason to wait for anything
             // if self.scheduler.leaves.borrow().is_empty() {
             //     return self.finalize();
             // }
 
-            // // Poll the suspense leaves in the meantime
-            // let mut work = self.wait_for_work();
+            // Poll the suspense leaves in the meantime
+            let mut work = self.wait_for_work();
 
-            // // safety: this is okay since we don't touch the original future
-            // let pinned = unsafe { std::pin::Pin::new_unchecked(&mut work) };
+            // safety: this is okay since we don't touch the original future
+            let pinned = unsafe { std::pin::Pin::new_unchecked(&mut work) };
 
-            // // If the deadline is exceded (left) then we should return the mutations we have
-            // use futures_util::future::{select, Either};
-            // if let Either::Left((_, _)) = select(&mut deadline, pinned).await {
-            //     // release the borrowed
-            //     drop(work);
-            //     return self.finalize();
-            // }
+            // If the deadline is exceded (left) then we should return the mutations we have
+            use futures_util::future::{select, Either};
+            if let Either::Left((_, _)) = select(&mut deadline, pinned).await {
+                // release the borrowed
+                drop(work);
+                return self.finalize();
+            }
         }
     }
 

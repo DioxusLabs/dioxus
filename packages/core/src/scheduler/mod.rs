@@ -1,5 +1,6 @@
 use crate::ScopeId;
 use slab::Slab;
+use std::{cell::RefCell, rc::Rc};
 
 mod suspense;
 mod task;
@@ -18,12 +19,7 @@ pub(crate) enum SchedulerMsg {
 
     /// A task has woken and needs to be progressed
     TaskNotified(TaskId),
-
-    /// A task has woken and needs to be progressed
-    SuspenseNotified(SuspenseId),
 }
-
-use std::{cell::RefCell, rc::Rc};
 
 pub(crate) struct Scheduler {
     pub sender: futures_channel::mpsc::UnboundedSender<SchedulerMsg>,
@@ -33,7 +29,7 @@ pub(crate) struct Scheduler {
 }
 
 impl Scheduler {
-    pub fn new(sender: futures_channel::mpsc::UnboundedSender<SchedulerMsg>) -> Rc<Self> {
+    pub(crate) fn new(sender: futures_channel::mpsc::UnboundedSender<SchedulerMsg>) -> Rc<Self> {
         Rc::new(Scheduler {
             sender,
             tasks: RefCell::new(Slab::new()),

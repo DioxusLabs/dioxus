@@ -2,7 +2,6 @@ use crate::{
     any_props::AnyProps,
     bump_frame::BumpFrame,
     innerlude::DirtyScope,
-    innerlude::{SuspenseHandle, SuspenseId},
     nodes::RenderReturn,
     scopes::{ScopeId, ScopeState},
     virtual_dom::VirtualDom,
@@ -16,8 +15,8 @@ impl VirtualDom {
         name: &'static str,
     ) -> &ScopeState {
         let parent = self.acquire_current_scope_raw();
-        let entry = self.scopes.vacant_entry();
         let height = unsafe { parent.map(|f| (*f).height + 1).unwrap_or(0) };
+        let entry = self.scopes.vacant_entry();
         let id = entry.key();
 
         entry.insert(ScopeState {

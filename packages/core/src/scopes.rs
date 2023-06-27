@@ -6,7 +6,7 @@ use crate::{
     innerlude::{DynamicNode, EventHandler, VComponent, VText},
     innerlude::{ErrorBoundary, Scheduler, SchedulerMsg},
     lazynodes::LazyNodes,
-    nodes::{ComponentReturn, IntoAttributeValue, IntoDynNode, RenderReturn},
+    nodes::{IntoAttributeValue, IntoDynNode, RenderReturn},
     AnyValue, Attribute, AttributeValue, Element, Event, Properties, TaskId,
 };
 use bumpalo::{boxed::Box as BumpBox, Bump};
@@ -529,20 +529,18 @@ impl<'src> ScopeState {
     /// Create a new [`DynamicNode::Component`] variant
     ///
     ///
-    /// The given component can be any of four signatures. Remember that an [`Element`] is really a [`Result<VNode>`].
+    /// The given component can be any of two signatures. Remember that an [`Element`] is really a [`Option<VNode>`].
     ///
     /// ```rust, ignore
     /// // Without explicit props
     /// fn(Scope) -> Element;
-    /// async fn(Scope<'_>) -> Element;
     ///
     /// // With explicit props
     /// fn(Scope<Props>) -> Element;
-    /// async fn(Scope<Props<'_>>) -> Element;
     /// ```
-    pub fn component<P, A, F: ComponentReturn<'src, A>>(
+    pub fn component<P>(
         &'src self,
-        component: fn(Scope<'src, P>) -> F,
+        component: fn(Scope<'src, P>) -> Element<'src>,
         props: P,
         fn_name: &'static str,
     ) -> DynamicNode<'src>
