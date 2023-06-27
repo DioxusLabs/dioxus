@@ -6,7 +6,7 @@ This walkthrough will take you through the internals of the Hello World example 
 
 We start will a hello world program. This program renders a desktop app with the text "Hello World" in a webview.
 
-```rust
+```rust, no_run
 {{#include ../../../../../examples/readme.rs}}
 ```
 
@@ -16,7 +16,7 @@ We start will a hello world program. This program renders a desktop app with the
 
 Before the Rust compiler runs the program, it will expand all macros. Here is what the hello world example looks like expanded:
 
-```rust
+```rust, no_run
 {{#include ../../../examples/readme_expanded.rs}}
 ```
 
@@ -40,7 +40,7 @@ Before we dive into the initial render in the virtual dom, we need to discuss wh
 
 The Virtual Dom roughly looks like this:
 
-```rust
+```rust, no_run
 pub struct VirtualDom {
     // All the templates that have been created or set durring hot reloading
     pub(crate) templates: FxHashMap<TemplateId, FxHashMap<usize, Template<'static>>>,

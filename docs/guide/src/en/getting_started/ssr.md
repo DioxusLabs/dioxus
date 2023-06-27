@@ -39,7 +39,7 @@ tokio = { version = "1.15.0", features = ["full"] }
 
 Now, set up your Axum app to respond on an endpoint.
 
-```rust
+```rust, no_run
 use axum::{response::Html, routing::get, Router};
 use dioxus::prelude::*;
 
@@ -61,7 +61,7 @@ async fn main() {
 
 And then add our endpoint. We can either render `rsx!` directly:
 
-```rust
+```rust, no_run
 async fn app_endpoint() -> Html<String> {
     // render the rsx! macro to HTML
     Html(dioxus_ssr::render_lazy(rsx! {
@@ -72,7 +72,7 @@ async fn app_endpoint() -> Html<String> {
 
 Or we can render VirtualDoms.
 
-```rust
+```rust, no_run
 async fn app_endpoint() -> Html<String> {
     // create a component that renders a div with the text "hello world"
     fn app(cx: Scope) -> Element {

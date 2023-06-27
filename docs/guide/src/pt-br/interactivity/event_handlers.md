@@ -8,7 +8,7 @@ Os manipuladores de eventos são semelhantes aos atributos regulares, mas seus n
 
 Por exemplo, para manipular cliques em um elemento, podemos especificar um manipulador `onclick`:
 
-```rust
+```rust, no_run
 {{#include ../../../examples/event_click.rs:rsx}}
 ```
 
@@ -29,7 +29,7 @@ Para saber o que os diferentes tipos de eventos fornecem, leia os [documentos do
 
 Quando você tem, por exemplo um `button` dentro de um `div`, qualquer clique no `button` também é um clique no `div`. Por esta razão, Dioxus propaga o evento click: primeiro, ele é acionado no elemento alvo, depois nos elementos pai. Se você quiser evitar esse comportamento, você pode chamar `cancel_bubble()` no evento:
 
-```rust
+```rust, no_run
 {{#include ../../../examples/event_click.rs:rsx}}
 ```
 
@@ -39,7 +39,7 @@ Alguns eventos têm um comportamento padrão. Para eventos de teclado, isso pode
 
 Em alguns casos, você pode querer evitar esse comportamento padrão. Para isso, você pode adicionar o atributo `prevent_default` com o nome do manipulador cujo comportamento padrão você deseja interromper. Este atributo é especial: você pode anexá-lo várias vezes para vários atributos:
 
-```rust
+```rust, no_run
 {{#include ../../../examples/event_prevent_default.rs:prevent_default}}
 ```
 
@@ -51,13 +51,13 @@ Quaisquer manipuladores de eventos ainda serão chamados.
 
 Às vezes, você pode querer criar um componente que aceite um manipulador de eventos. Um exemplo simples seria um componente `FancyButton`, que aceita um manipulador `on_click`:
 
-```rust
+```rust, no_run
 {{#include ../../../examples/event_handler_prop.rs:component_with_handler}}
 ```
 
 Então, você pode usá-lo como qualquer outro manipulador:
 
-```rust
+```rust, no_run
 {{#include ../../../examples/event_handler_prop.rs:usage}}
 ```
 
