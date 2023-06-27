@@ -21,23 +21,13 @@ pub fn App(cx: Scope) -> Element {
 pub fn DarkModeToggle(cx: Scope) -> Element {
     let dark_mode = use_shared_state::<DarkMode>(cx).unwrap();
 
-    let style = if dark_mode.read().0 {
-        "color:white"
-    } else {
-        ""
-    };
-
-    cx.render(rsx!(label {
-        style: "{style}",
-        "Dark Mode",
-        input {
-            r#type: "checkbox",
-            oninput: move |event| {
-                let is_enabled = event.value == "true";
-                dark_mode.write().0 = is_enabled;
-            },
+    render!(input {
+        r#type: "checkbox",
+        oninput: move |event| {
+            let is_enabled = event.value == "true";
+            dark_mode.write().0 = is_enabled;
         },
-    }))
+    })
 }
 
 fn AppBody(cx: Scope) -> Element {
