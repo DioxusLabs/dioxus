@@ -44,7 +44,7 @@ macro_rules! launch {
     (@hot_reload $server_cfg:ident) => {
         #[cfg(feature = "ssr")]
         {
-            hot_reload_init!(dioxus_hot_reload::Config::new().with_rebuild_callback(|| {
+            dioxus_fullstack::prelude::hot_reload_init!(dioxus_hot_reload::Config::new().with_rebuild_callback(|| {
                 std::process::Command::new("cargo")
                     .args(&["run", "--features", "ssr"])
                     .spawn()
@@ -65,7 +65,7 @@ macro_rules! launch {
     (@hot_reload $server_cfg:ident $hot_reload_cfg:expr) => {
         #[cfg(feature = "ssr")]
         {
-            hot_reload_init!($hot_reload_cfg);
+            dioxus_fullstack::prelude::hot_reload_init!($hot_reload_cfg);
         }
     };
 
@@ -94,7 +94,7 @@ macro_rules! launch {
             let web_cfg = dioxus_web::Config::new();
 
             $(
-                launch!(@$rule server_cfg $($cfg)?);
+                dioxus_fullstack::prelude::launch!(@$rule server_cfg $($cfg)?);
             )*
 
             dioxus_web::launch_with_props(
@@ -105,10 +105,10 @@ macro_rules! launch {
         }
         #[cfg(feature = "ssr")]
         {
-            let server_cfg = ServeConfigBuilder::new($comp, launch!(@props_type $($props)?));
+            let server_cfg = dioxus_fullstack::prelude::ServeConfigBuilder::new($comp, dioxus_fullstack::prelude::launch!(@props_type $($props)?));
 
             $(
-                launch!(@$rule server_cfg $($cfg)?);
+                dioxus_fullstack::prelude::launch!(@$rule server_cfg $($cfg)?);
             )*
 
             tokio::runtime::Runtime::new()
