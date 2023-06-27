@@ -85,64 +85,6 @@ fn Home(cx: Scope) -> Element {
     }
 }
 
-mod inner {
-    use dioxus::prelude::*;
-    use dioxus_router::prelude::*;
-
-    #[rustfmt::skip]
-    #[derive(Clone, Debug, PartialEq, Routable)]
-    pub enum Route {
-        #[nest("/blog")]
-            #[route("/")]
-            Blog {},
-            #[route("/post/index")]
-            PostHome {},
-            #[route("/post/:id")]
-            Post {
-                id: usize,
-            },
-        #[end_nest]
-        #[route("/")]
-        Home {},
-    }
-
-    #[inline_props]
-    fn Blog(cx: Scope) -> Element {
-        render! {
-            div {
-                "Blog"
-            }
-        }
-    }
-
-    #[inline_props]
-    fn Post(cx: Scope, id: usize) -> Element {
-        render! {
-            div {
-                "PostId: {id}"
-            }
-        }
-    }
-
-    #[inline_props]
-    fn PostHome(cx: Scope) -> Element {
-        render! {
-            div {
-                "Post"
-            }
-        }
-    }
-
-    #[inline_props]
-    fn Home(cx: Scope) -> Element {
-        render! {
-            div {
-                "Home"
-            }
-        }
-    }
-}
-
 #[rustfmt::skip]
 #[derive(Clone, Debug, PartialEq, Routable)]
 enum Route {
@@ -158,6 +100,4 @@ enum Route {
     #[end_nest]
     #[route("/")]
     Home {},
-    #[child("/hello_world")]
-    HelloWorldRoute(inner::Route)
 }
