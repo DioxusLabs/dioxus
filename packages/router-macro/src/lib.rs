@@ -293,7 +293,7 @@ impl RouteEnum {
             let mut segment = SiteMapSegment::new(&route.segments);
             if let RouteType::Child(child) = &route.ty {
                 let new_segment = SiteMapSegment {
-                    segment_type: SegmentType::Child(child.clone()),
+                    segment_type: SegmentType::Child(child.ty.clone()),
                     children: Vec::new(),
                 };
                 match &mut segment {
