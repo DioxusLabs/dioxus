@@ -1,15 +1,15 @@
 # Configure Project
 
-This chapter will introduce `Dioxus.toml` and anatomy the config file.
+This chapter will introduce `Dioxus.toml` and anatomize the config file. Be aware that if the config file is present in the folder, some fields must be filled out, or the CLI tool will abort. The mandatory [table headers](https://toml.io/en/v1.0.0#table) and keys will have a '✍' sign beside it.
 
 ## Structure
 
 We use `toml` to define some info for `dioxus` project.
 
-### Application
+### Application ✍
 
-1. ***name*** - project name & title
-2. ***default_platform*** - which platform target for this project.
+1. ***name*** ✍ - project name & title
+2. ***default_platform*** ✍ - which platform target for this project.
    ```
    # current support: web, desktop
    # default: web
@@ -49,7 +49,7 @@ You can combine different tools with `dioxus`.
 
     Note : Dioxus will automatically include the generated tailwind file in the `index.html`
 
-### Web.App
+### Web.App ✍
 
 Web platform application config:
 
@@ -59,7 +59,7 @@ Web platform application config:
    title = "dioxus app | ⛺"
    ```
 
-### Web.Watcher
+### Web.Watcher ✍
 
 Web platform `dev-server` watcher config:
 
@@ -73,7 +73,7 @@ Web platform `dev-server` watcher config:
    watch_path = ["src", "public"]
    ```
 
-### Web.Resource
+### Web.Resource ✍
 
 Include some `CSS Javascript` resources into html file.
 
@@ -96,7 +96,7 @@ Include some `CSS Javascript` resources into html file.
     ]
    ```
 
-### Web.Resource.Dev
+### Web.Resource.Dev ✍
 
 Only include resources at `Dev` mode.
 
