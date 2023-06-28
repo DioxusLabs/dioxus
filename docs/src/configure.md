@@ -1,12 +1,15 @@
 # Configure Project
 
+
 This chapter will introduce you to how to configure the CLI with your `Dioxus.toml` file
+
+Be aware that if the config file is present in the folder, some fields must be filled out, or the CLI tool will abort. The mandatory [table headers](https://toml.io/en/v1.0.0#table) and keys will have a '✍' sign beside it.
 
 ## Structure
 
 The CLI uses a `Dioxus.toml` file in the root of your crate to define some configuration for your `dioxus` project.
 
-### Application
+### Application ✍
 
 General application confiration:
 
@@ -14,8 +17,9 @@ General application confiration:
 [application]
 # configuration
 ```
+1. ***name*** ✍ - project name & title
+2. ***default_platform*** ✍ - which platform target for this project.
 
-1. ***name*** - Project name
    ```
    name = "my-project"
    ```
@@ -39,7 +43,7 @@ General application confiration:
    sub_package = "my-crate"
    ```
 
-### Web.App
+### Web.App ✍
 
 Configeration specific to web applications:
 
@@ -59,7 +63,7 @@ Configeration specific to web applications:
    base_path = "my_application"
    ```
 
-### Web.Watcher
+### Web.Watcher ✍
 
 Configeration related to the development server:
 
@@ -81,7 +85,7 @@ Configeration related to the development server:
    index_on_404 = true
    ```
 
-### Web.Resource
+### Web.Resource ✍
 
 Configeration related to static resources your application uses:
 ```
@@ -108,7 +112,7 @@ Configeration related to static resources your application uses:
     ]
    ```
 
-### Web.Resource.Dev
+### Web.Resource.Dev ✍
 
 Configeration related to static resources your application uses in development:
 ```

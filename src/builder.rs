@@ -380,7 +380,17 @@ fn prettier_build(cmd: subprocess::Exec) -> anyhow::Result<Vec<Diagnostic>> {
     );
     pb.set_message("💼 Waiting to start build the project...");
 
-    let stdout = cmd.stream_stdout()?;
+    struct StopSpinOnDrop(ProgressBar);
+
+    impl Drop for StopSpinOnDrop {
+        fn drop(&mut self) {
+            self.0.finish_and_clear();
+        }
+    }
+
+    StopSpinOnDrop(pb.clone());
+
+    let stdout = cmd.detached().stream_stdout()?;
     let reader = std::io::BufReader::new(stdout);
     for message in cargo_metadata::Message::parse_stream(reader) {
         match message.unwrap() {
@@ -388,9 +398,11 @@ fn prettier_build(cmd: subprocess::Exec) -> anyhow::Result<Vec<Diagnostic>> {
                 let message = msg.message;
                 match message.level {
                     cargo_metadata::diagnostic::DiagnosticLevel::Error => {
-                        return Err(anyhow::anyhow!(message
-                            .rendered
-                            .unwrap_or("Unknown".into())));
+                        return {
+                            Err(anyhow::anyhow!(message
+                                .rendered
+                                .unwrap_or("Unknown".into())))
+                        };
                     }
                     cargo_metadata::diagnostic::DiagnosticLevel::Warning => {
                         warning_messages.push(message.clone());
@@ -407,7 +419,6 @@ fn prettier_build(cmd: subprocess::Exec) -> anyhow::Result<Vec<Diagnostic>> {
             }
             Message::BuildFinished(finished) => {
                 if finished.success {
-                    pb.finish_and_clear();
                     log::info!("👑 Build done.");
                 } else {
                     std::process::exit(1);
@@ -462,7 +473,8 @@ pub fn gen_page(config: &DioxusConfig, serve: bool) -> String {
     {
         style_str.push_str("<link rel=\"stylesheet\" href=\"tailwind.css\">\n");
     }
-    html = html.replace("{style_include}", &style_str);
+
+    replace_or_insert_before("{style_include}", &style_str, "</head", &mut html);
 
     let mut script_str = String::new();
     for script in script_list {
@@ -472,7 +484,7 @@ pub fn gen_page(config: &DioxusConfig, serve: bool) -> String {
         ))
     }
 
-    html = html.replace("{script_include}", &script_str);
+    replace_or_insert_before("{script_include}", &script_str, "</body", &mut html);
 
     if serve {
         html += &format!(
@@ -481,12 +493,33 @@ pub fn gen_page(config: &DioxusConfig, serve: bool) -> String {
         );
     }
 
-    html = html.replace("{app_name}", &config.application.name);
-
-    html = match &config.web.app.base_path {
-        Some(path) => html.replace("{base_path}", path),
-        None => html.replace("{base_path}", "."),
+    let base_path = match &config.web.app.base_path {
+        Some(path) => path,
+        None => ".",
     };
+    let app_name = &config.application.name;
+    // Check if a script already exists
+    if html.contains("{app_name}") && html.contains("{base_path}") {
+        html = html.replace("{app_name}", app_name);
+
+        html = html.replace("{base_path}", base_path);
+    } else {
+        // If not, insert the script
+        html = html.replace(
+            "</body",
+            &format!(
+                r#"<script type="module">
+    import init from "/{base_path}/assets/dioxus/{app_name}.js";
+    init("/{base_path}/assets/dioxus/{app_name}_bg.wasm").then(wasm => {{
+      if (wasm.__wbindgen_start == undefined) {{
+        wasm.main();
+      }}
+    }});
+    </script>
+    </body"#
+            ),
+        );
+    }
 
     let title = config
         .web
@@ -495,7 +528,22 @@ pub fn gen_page(config: &DioxusConfig, serve: bool) -> String {
         .clone()
         .unwrap_or_else(|| "dioxus | ⛺".into());
 
-    html.replace("{app_title}", &title)
+    replace_or_insert_before("{app_title}", &title, "</title", &mut html);
+
+    html
+}
+
+fn replace_or_insert_before(
+    replace: &str,
+    with: &str,
+    or_insert_before: &str,
+    content: &mut String,
+) {
+    if content.contains(replace) {
+        *content = content.replace(replace, with);
+    } else {
+        *content = content.replace(or_insert_before, &format!("{}{}", with, or_insert_before));
+    }
 }
 
 // this function will build some assets file
