@@ -52,7 +52,7 @@ cargo add dioxus-web
 
 Edit your `main.rs`:
 
-```rust
+```rust, no_run
 {{#include ../../../examples/hello_world_web.rs}}
 ```
 
