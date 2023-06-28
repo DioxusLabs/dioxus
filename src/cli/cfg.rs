@@ -4,7 +4,7 @@ use super::*;
 #[derive(Clone, Debug, Default, Deserialize, Parser)]
 pub struct ConfigOptsBuild {
     /// The index HTML file to drive the bundling process [default: index.html]
-    #[clap(parse(from_os_str))]
+    #[arg(long)]
     pub target: Option<PathBuf>,
 
     /// Build in release mode [default: false]
@@ -37,7 +37,7 @@ pub struct ConfigOptsBuild {
 #[derive(Clone, Debug, Default, Deserialize, Parser)]
 pub struct ConfigOptsServe {
     /// The index HTML file to drive the bundling process [default: index.html]
-    #[clap(parse(from_os_str))]
+    #[arg(short, long)]
     pub target: Option<PathBuf>,
 
     /// Port of dev server

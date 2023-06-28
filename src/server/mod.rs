@@ -150,10 +150,11 @@ pub async fn startup_hot_reload(
 
     let dist_path = config.out_dir.clone();
     let (reload_tx, _) = broadcast::channel(100);
-    let map = FileMap::<HtmlCtx>::new(config.crate_dir.clone());
-    // for err in errors {
-    //     log::error!("{}", err);
-    // }
+    let FileMapBuildResult { map, errors } =
+        FileMap::<HtmlCtx>::create(config.crate_dir.clone()).unwrap();
+    for err in errors {
+        log::error!("{}", err);
+    }
     let file_map = Arc::new(Mutex::new(map));
     let build_manager = Arc::new(BuildManager {
         config: config.clone(),
@@ -219,10 +220,10 @@ pub async fn startup_hot_reload(
                         let mut map = file_map.lock().unwrap();
 
                         match map.update_rsx(&path, &crate_dir) {
-                            UpdateResult::UpdatedRsx(msgs) => {
+                            Ok(UpdateResult::UpdatedRsx(msgs)) => {
                                 messages.extend(msgs);
                             }
-                            UpdateResult::NeedsRebuild => {
+                            Ok(UpdateResult::NeedsRebuild) => {
                                 match build_manager.rebuild() {
                                     Ok(res) => {
                                         print_console_info(
@@ -241,6 +242,9 @@ pub async fn startup_hot_reload(
                                     }
                                 }
                                 return;
+                            }
+                            Err(err) => {
+                                log::error!("{}", err);
                             }
                         }
                     }
