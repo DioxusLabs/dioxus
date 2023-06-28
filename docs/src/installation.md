@@ -1,12 +1,10 @@
 # Installation
 
-There are multiple ways to install the Dioxus CLI tool. Choose any one of the methods below that best suit your needs.
+Choose any one of the methods below to install the Dioxus CLI:
 
-## Install from latest master version
+## Install from latest git version
 
-We suggest you use `github master` version to install it now.
-
-We have not yet released the latest version to `crates.io`
+To get the most up to date bug fixes and features of the Dioxus CLI, you can install the development version from git.
 
 ```
 cargo install --git https://github.com/Dioxuslabs/cli
@@ -17,8 +15,8 @@ and install it in Cargo's global binary directory (`~/.cargo/bin/` by default).
 
 ## Install from `crates.io` version
 
+The published version of the Dioxus CLI is updated less often, but should be more stable than the git version of the Dioxus CLI.
+
 ```
 cargo install dioxus-cli
 ```
-
-Make sure to add the Cargo bin directory to your `PATH`.
