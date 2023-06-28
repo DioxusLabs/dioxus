@@ -12,19 +12,19 @@ keywords = ["dom", "ui", "gui", "react", "wasm"]
 
 [dependencies]
 anyhow = "1.0.66"
-dioxus = { path="../dioxus" }
-dioxus-router-macro = { path="../router-macro" }
+dioxus = { workspace = true }
+dioxus-router-macro = { workspace = true }
 gloo = { version = "0.8.0", optional = true }
-log = "0.4.17"
-serde = { version = "1.0.163", features = ["derive"], optional = true }
+log = { workspace = true }
+serde = { version = "1", features = ["derive"], optional = true }
 thiserror = "1.0.37"
 url = "2.3.1"
-wasm-bindgen = { version = "0.2.86", optional = true }
+wasm-bindgen = { workspace = true, optional = true }
 web-sys = { version = "0.3.60", optional = true, features = ["ScrollRestoration"] }
 js-sys = { version = "0.3.63", optional = true }
 gloo-utils = { version = "0.1.6", optional = true }
-dioxus-ssr = { path = "../ssr", optional = true }
-tokio = { version = "1.28", features = ["full"], optional = true }
+dioxus-ssr = { workspace = true, optional = true }
+tokio = { workspace = true, features = ["full"], optional = true }
 
 [features]
 default = ["web"]
@@ -52,8 +52,8 @@ dioxus-desktop = { path = "../desktop" }
 
 [target.'cfg(target_family = "wasm")'.dev-dependencies]
 console_error_panic_hook = "0.1.7"
-dioxus-router = { path = ".", features = ["web"] }
-dioxus-web = { path= "../web" }
+dioxus-router = { workspace = true, features = ["web"] }
+dioxus-web = { workspace = true }
 gloo = "0.8.0"
 wasm-bindgen-test = "0.3.33"
 wasm-logger = "0.2.0"

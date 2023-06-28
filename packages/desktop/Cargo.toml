@@ -12,31 +12,31 @@ keywords = ["dom", "ui", "gui", "react"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-dioxus-core = { path = "../core", version = "^0.3.0", features = ["serialize"] }
-dioxus-html = { path = "../html", features = ["serialize", "native-bind"], version = "^0.3.0" }
-dioxus-interpreter-js = { path = "../interpreter", version = "^0.3.0" }
-dioxus-hot-reload = { path = "../hot-reload", optional = true }
+dioxus-core = { workspace = true, features = ["serialize"] }
+dioxus-html = { workspace = true, features = ["serialize", "native-bind"] }
+dioxus-interpreter-js = { workspace = true }
+dioxus-hot-reload = { workspace = true, optional = true }
 
 serde = "1.0.136"
 serde_json = "1.0.79"
 thiserror = "1.0.30"
-log = "0.4.14"
+log = { workspace = true }
 wry = { version = "0.27.2" }
-futures-channel = "0.3.21"
-tokio = { version = "1.27", features = [
+futures-channel = { workspace = true }
+tokio = { workspace = true, features = [
     "sync",
     "rt-multi-thread",
     "rt",
     "time",
     "macros",
     "fs",
-], optional = true, default-features = false }
+], optional = true }
 webbrowser = "0.8.0"
 infer = "0.11.0"
 dunce = "1.0.2"
-slab = "0.4"
+slab = { workspace = true }
 
-futures-util = "0.3.25"
+futures-util = { workspace = true }
 rfd = "0.11.3"
 urlencoding = "2.1.2"
 
@@ -56,9 +56,9 @@ tray = ["wry/tray"]
 hot-reload = ["dioxus-hot-reload"]
 
 [dev-dependencies]
-dioxus-core-macro = { path = "../core-macro" }
-dioxus-hooks = { path = "../hooks" }
-dioxus = { path = "../dioxus" }
+dioxus-core-macro = { workspace = true }
+dioxus-hooks = { workspace = true }
+dioxus = { workspace = true }
 exitcode = "1.1.2"
 scraper = "0.16.0"
 
