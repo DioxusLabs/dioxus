@@ -136,28 +136,26 @@ function fmtDocument(document: vscode.TextDocument) {
 		const [editor,] = vscode.window.visibleTextEditors.filter(editor => editor.document.fileName === document.fileName);
 		if (!editor) return; // Need an editor to apply text edits.
 
-		const text = document.getText();
 		const fileDir = document.fileName.slice(0, document.fileName.lastIndexOf('\\'));
-
-		const child_proc = spawn(serverPath, ["fmt", "--file", text], {
+		const child_proc = spawn(serverPath, ["fmt", "--file", document.fileName], {
 			cwd: fileDir ? fileDir : undefined,
 		});
 
 		let result = '';
 		child_proc.stdout?.on('data', data => result += data);
 
-		type RsxEdit = {
+		/*type RsxEdit = {
 			formatted: string,
 			start: number,
 			end: number
-		}
+		}*/
 
 		child_proc.on('close', () => {
 			if (child_proc.exitCode !== 0) {
 				vscode.window.showWarningMessage(`Errors occurred while formatting. Make sure you have the most recent Dioxus-CLI installed!\nDioxus-CLI exited with exit code ${child_proc.exitCode}\n\nData from Dioxus-CLI:\n${result}`);
 				return;
 			}
-			if (result.length === 0) return;
+			/*if (result.length === 0) return;
 
 			// Used for error message:
 			const originalResult = result;
@@ -245,9 +243,10 @@ function fmtDocument(document: vscode.TextDocument) {
 					undoStopAfter: false,
 					undoStopBefore: false
 				});
+		
 			} catch (err) {
 				vscode.window.showWarningMessage(`Errors occurred while formatting. Make sure you have the most recent Dioxus-CLI installed!\n${err}\n\nData from Dioxus-CLI:\n${originalResult}`);
-			}
+			}*/
 		});
 
 		child_proc.on('error', (err) => {
@@ -257,6 +256,7 @@ function fmtDocument(document: vscode.TextDocument) {
 		vscode.window.showWarningMessage(`Errors occurred while formatting. Make sure you have the most recent Dioxus-CLI installed! \n${error}`);
 	}
 }
+
 
 
 // I'm using the approach defined in rust-analyzer here

@@ -1,5 +1,5 @@
 use futures::{stream::FuturesUnordered, StreamExt};
-use std::process::exit;
+use std::{fs, process::exit};
 
 use super::*;
 
@@ -44,10 +44,28 @@ impl Autoformat {
             }
         }
 
+        // Format single file
         if let Some(file) = self.file {
-            let edits = dioxus_autofmt::fmt_file(&file);
-            let as_json = serde_json::to_string(&edits).unwrap();
-            println!("{}", as_json);
+            let file_content = fs::read_to_string(&file);
+
+            match file_content {
+                Ok(s) => {
+                    let edits = dioxus_autofmt::fmt_file(&s);
+                    let out = dioxus_autofmt::apply_formats(&s, edits);
+                    match fs::write(&file, out) {
+                        Ok(_) => {
+                            println!("formatted {}", file);
+                        }
+                        Err(e) => {
+                            eprintln!("failed to write formatted content to file: {}", e);
+                        }
+                    }
+                }
+                Err(e) => {
+                    eprintln!("failed to open file: {}", e);
+                    exit(1);
+                }
+            }
         }
 
         Ok(())
