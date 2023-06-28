@@ -25,7 +25,7 @@ Dioxus is built around the concept of [Templates](https://docs.rs/dioxus-core/la
 
 The `Mutation` type is a serialized enum that represents an operation that should be applied to update the UI. The variants roughly follow this set:
 
-```rust
+```rust, no_run
 enum Mutation {
     AppendChildren,
     AssignId,
@@ -58,7 +58,7 @@ Whenever a `CreateElement` edit is generated during diffing, Dioxus increments i
 
 For the sake of understanding, let's consider this example – a very simple UI declaration:
 
-```rust
+```rust, no_run
 rsx!( h1 {"count: {x}"} )
 ```
 
@@ -68,7 +68,7 @@ The above rsx will create a template that contains one static h1 tag and a place
 
 The template will look something like this:
 
-```rust
+```rust, no_run
 Template {
     // Some id that is unique for the entire project
     name: "main.rs:1:1:0",
@@ -118,7 +118,7 @@ After the renderer has created all of the new templates, it can begin to process
 
 When the renderer starts, it should contain the Root node on the stack and store the Root node with an id of 0. The Root node is the top-level node of the UI. In HTML, this is the `<div id="main">` element.
 
-```rust
+```rust, no_run
 instructions: []
 stack: [
     RootNode,
@@ -130,7 +130,7 @@ nodes: [
 
 The first mutation is a `LoadTemplate` mutation. This tells the renderer to load a root from the template with the given id. The renderer will then push the root node of the template onto the stack and store it with an id for later. In this case, the root node is an h1 element.
 
-```rust
+```rust, no_run
 instructions: [
     LoadTemplate {
         // the id of the template
@@ -153,7 +153,7 @@ nodes: [
 
 Next, Dioxus will create the dynamic text node. The diff algorithm decides that this node needs to be created, so Dioxus will generate the Mutation `HydrateText`. When the renderer receives this instruction, it will navigate to the placeholder text node in the template and replace it with the new text.
 
-```rust
+```rust, no_run
 instructions: [
     LoadTemplate {
         name: "main.rs:1:1:0",
@@ -180,7 +180,7 @@ nodes: [
 
 Remember, the h1 node is not attached to anything (it is unmounted) so Dioxus needs to generate an Edit that connects the h1 node to the Root. It depends on the situation, but in this case, we use `AppendChildren`. This pops the text node off the stack, leaving the Root element as the next element on the stack.
 
-```rust
+```rust, no_run
 instructions: [
     LoadTemplate {
         name: "main.rs:1:1:0",
@@ -210,7 +210,7 @@ nodes: [
 
 Over time, our stack looked like this:
 
-```rust
+```rust, no_run
 [Root]
 [Root, <h1>""</h1>]
 [Root, <h1>"count: 0"</h1>]
@@ -229,7 +229,7 @@ Like most GUIs, Dioxus relies on an event loop to progress the VirtualDOM. The V
 
 The code for the WebSys implementation is straightforward, so we'll add it here to demonstrate how simple an event loop is:
 
-```rust, ignore
+```rust, no_run, ignore
 pub async fn run(&mut self) -> dioxus_core::error::Result<()> {
     // Push the body element onto the WebsysDom's stack machine
     let mut websys_dom = crate::new::WebsysDom::new(prepare_websys_dom());
@@ -259,7 +259,7 @@ pub async fn run(&mut self) -> dioxus_core::error::Result<()> {
 
 It's important to decode what the real events are for your event system into Dioxus' synthetic event system (synthetic meaning abstracted). This simply means matching your event type and creating a Dioxus `UserEvent` type. Right now, the virtual event system is modeled almost entirely around the HTML spec, but we are interested in slimming it down.
 
-```rust, ignore
+```rust, no_run, ignore
 fn virtual_event_from_websys_event(event: &web_sys::Event) -> VirtualEvent {
     match event.type_().as_str() {
         "keydown" => {
@@ -308,7 +308,7 @@ The `RealDom` is a higher-level abstraction over updating the Dom. It uses an en
 Let's build a toy renderer with borders, size, and text color.
 Before we start let's take a look at an example element we can render:
 
-```rust
+```rust, no_run
 cx.render(rsx!{
     div{
         color: "red",
@@ -380,19 +380,19 @@ To help in building a Dom, native-core provides the State trait and a RealDom st
 
 Native Core cannot create all of the required methods for the State trait, but it can derive some of them. To implement the State trait, you must implement the following methods and let the `#[partial_derive_state]` macro handle the rest:
 
-```rust, ignore
+```rust, no_run, ignore
 {{#include ../../../examples/custom_renderer.rs:derive_state}}
 ```
 
 Lets take a look at how to implement the State trait for a simple renderer.
 
-```rust
+```rust, no_run
 {{#include ../../../examples/custom_renderer.rs:state_impl}}
 ```
 
 Now that we have our state, we can put it to use in our RealDom. We can update the RealDom with apply_mutations to update the structure of the dom (adding, removing, and changing properties of nodes) and then update_state to update the States for each of the nodes that changed.
 
-```rust
+```rust, no_run
 {{#include ../../../examples/custom_renderer.rs:rendering}}
 ```
 
@@ -404,7 +404,7 @@ For most platforms, the layout of the Elements will stay the same. The [layout_a
 
 To make it easier to implement text editing in rust renderers, `native-core` also contains a renderer-agnostic cursor system. The cursor can handle text editing, selection, and movement with common keyboard shortcuts integrated.
 
-```rust
+```rust, no_run
 {{#include ../../../examples/custom_renderer.rs:cursor}}
 ```
 
