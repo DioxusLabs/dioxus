@@ -343,7 +343,7 @@ impl<'a> RouteTreeSegmentData<'a> {
                     RouteType::Child(_) => false,
                 };
 
-                print_route_segment(
+                let print_route_segment = print_route_segment(
                     route_segments.peekable(),
                     return_constructed(
                         insure_not_trailing,
@@ -356,7 +356,32 @@ impl<'a> RouteTreeSegmentData<'a> {
                     &error_enum_name,
                     enum_varient,
                     &varient_parse_error,
-                )
+                );
+
+                match &route.ty {
+                    RouteType::Child(child) => {
+                        let ty = &child.ty;
+                        let child_name = &child.ident;
+
+                        quote! {
+                            let mut trailing = String::new();
+                            for seg in segments.clone() {
+                                trailing += seg;
+                                trailing += "/";
+                            }
+                            trailing.pop();
+                            match #ty::from_str(&trailing).map_err(|err| #error_enum_name::#enum_varient(#varient_parse_error::ChildRoute(err))) {
+                                Ok(#child_name) => {
+                                    #print_route_segment
+                                }
+                                Err(err) => {
+                                    errors.push(err);
+                                }
+                            }
+                        }
+                    }
+                    RouteType::Leaf { .. } => print_route_segment,
+                }
             }
             Self::Nest { nest, children } => {
                 // At this point, we have matched all static segments, so we can just check if the remaining segments match the route

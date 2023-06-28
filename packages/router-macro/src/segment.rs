@@ -222,7 +222,11 @@ pub fn parse_route_segments<'a>(
     Ok((route_segments, parsed_query))
 }
 
-pub(crate) fn create_error_type(error_name: Ident, segments: &[RouteSegment]) -> TokenStream2 {
+pub(crate) fn create_error_type(
+    error_name: Ident,
+    segments: &[RouteSegment],
+    child_type: Option<&Type>,
+) -> TokenStream2 {
     let mut error_variants = Vec::new();
     let mut display_match = Vec::new();
 
@@ -249,11 +253,28 @@ pub(crate) fn create_error_type(error_name: Ident, segments: &[RouteSegment]) ->
         }
     }
 
+    let child_type_variant = child_type
+        .map(|child_type| {
+            quote! { ChildRoute(<#child_type as std::str::FromStr>::Err) }
+        })
+        .into_iter();
+
+    let child_type_error = child_type
+        .map(|_| {
+            quote! {
+                Self::ChildRoute(error) => {
+                    write!(f, "{}", error)?
+                }
+            }
+        })
+        .into_iter();
+
     quote! {
         #[allow(non_camel_case_types)]
         #[derive(Debug, PartialEq)]
         pub enum #error_name {
             ExtraSegments(String),
+            #(#child_type_variant,)*
             #(#error_variants,)*
         }
 
@@ -262,7 +283,8 @@ pub(crate) fn create_error_type(error_name: Ident, segments: &[RouteSegment]) ->
                 match self {
                     Self::ExtraSegments(segments) => {
                         write!(f, "Found additional trailing segments: {}", segments)?
-                    }
+                    },
+                    #(#child_type_error,)*
                     #(#display_match,)*
                 }
                 Ok(())

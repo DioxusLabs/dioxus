@@ -61,11 +61,11 @@ web-sys = { version = "0.3.61", features = ["Window", "Document", "Element", "Ht
 [features]
 default = ["hot-reload", "default-tls"]
 router = ["dioxus-router"]
-hot-reload = ["serde_json", "tokio-stream", "futures-util"]
+hot-reload = ["serde_json", "futures-util"]
 warp = ["dep:warp", "http-body", "ssr"]
 axum = ["dep:axum", "tower-http", "ssr"]
 salvo = ["dep:salvo", "ssr"]
-ssr = ["server_fn/ssr", "tokio", "dioxus-ssr", "hyper", "http", "dioxus-router/ssr"]
+ssr = ["server_fn/ssr", "tokio", "dioxus-ssr", "hyper", "http", "dioxus-router/ssr", "tokio-stream"]
 default-tls = ["server_fn/default-tls"]
 rustls = ["server_fn/rustls"]
 

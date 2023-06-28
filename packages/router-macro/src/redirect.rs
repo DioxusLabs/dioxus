@@ -30,7 +30,7 @@ impl Redirect {
     pub fn error_type(&self) -> TokenStream {
         let error_name = self.error_ident();
 
-        create_error_type(error_name, &self.segments)
+        create_error_type(error_name, &self.segments, None)
     }
 
     pub fn parse_query(&self) -> TokenStream {

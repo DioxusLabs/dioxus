@@ -308,20 +308,11 @@ impl Route {
             RouteType::Child(field) => {
                 let name = &self.route_name;
                 let child_name = field.ident.as_ref().unwrap();
-                let ty = &field.ty;
 
                 quote! {
-                    {
-                        let mut trailing = String::new();
-                        for seg in segments {
-                            trailing += seg;
-                            trailing += "/";
-                        }
-                        trailing.pop();
-                        #enum_name::#name {
-                            #child_name: #ty::from_str(&trailing).unwrap(),
-                            #(#segments,)*
-                        }
+                    #enum_name::#name {
+                        #child_name,
+                        #(#segments,)*
                     }
                 }
             }
@@ -343,8 +334,12 @@ impl Route {
 
     pub fn error_type(&self) -> TokenStream2 {
         let error_name = self.error_ident();
+        let child_type = match &self.ty {
+            RouteType::Child(field) => Some(&field.ty),
+            RouteType::Leaf { .. } => None,
+        };
 
-        create_error_type(error_name, &self.segments)
+        create_error_type(error_name, &self.segments, child_type)
     }
 
     pub fn parse_query(&self) -> TokenStream2 {
