@@ -13,13 +13,13 @@ keywords = ["dom", "ui", "gui", "react", "ssr"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-dioxus-core = { path = "../core", version = "^0.3.0", features = ["serialize"] }
+dioxus-core = { workspace = true, features = ["serialize"] }
 askama_escape = "0.10.3"
 
 [dev-dependencies]
-dioxus = { path = "../dioxus", version = "0.3.0" }
+dioxus = { workspace = true }
 thiserror = "1.0.23"
-log = "0.4.13"
+log = { workspace = true }
 fern = { version = "0.6.0", features = ["colored"] }
 anyhow = "1.0"
 argh = "0.1.4"

@@ -1154,6 +1154,7 @@ builder_constructors! {
         r#type: InputType "type",
         // value: String,
         value: String volatile,
+        initial_value: String DEFAULT,
     };
 
     /// Build a

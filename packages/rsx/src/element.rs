@@ -1,9 +1,13 @@
+use std::fmt::{Display, Formatter};
+
 use super::*;
 
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{
     parse::{Parse, ParseBuffer, ParseStream},
+    punctuated::Punctuated,
+    spanned::Spanned,
     Error, Expr, Ident, LitStr, Result, Token,
 };
 
@@ -12,7 +16,7 @@ use syn::{
 // =======================================
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub struct Element {
-    pub name: Ident,
+    pub name: ElementName,
     pub key: Option<IfmtInput>,
     pub attributes: Vec<ElementAttrNamed>,
     pub children: Vec<BodyNode>,
@@ -22,7 +26,7 @@ pub struct Element {
 
 impl Parse for Element {
     fn parse(stream: ParseStream) -> Result<Self> {
-        let el_name = Ident::parse(stream)?;
+        let el_name = ElementName::parse(stream)?;
 
         // parse the guts
         let content: ParseBuffer;
@@ -181,13 +185,82 @@ impl ToTokens for Element {
 
         tokens.append_all(quote! {
             __cx.element(
-                dioxus_elements::#name,
+                #name,
                 __cx.bump().alloc([ #(#listeners),* ]),
                 __cx.bump().alloc([ #(#attr),* ]),
                 __cx.bump().alloc([ #(#children),* ]),
                 #key,
             )
         });
+    }
+}
+
+#[derive(PartialEq, Eq, Clone, Debug, Hash)]
+pub enum ElementName {
+    Ident(Ident),
+    Custom(LitStr),
+}
+
+impl ElementName {
+    pub(crate) fn tag_name(&self) -> TokenStream2 {
+        match self {
+            ElementName::Ident(i) => quote! { dioxus_elements::#i::TAG_NAME },
+            ElementName::Custom(s) => quote! { #s },
+        }
+    }
+}
+
+impl ElementName {
+    pub fn span(&self) -> Span {
+        match self {
+            ElementName::Ident(i) => i.span(),
+            ElementName::Custom(s) => s.span(),
+        }
+    }
+}
+
+impl PartialEq<&str> for ElementName {
+    fn eq(&self, other: &&str) -> bool {
+        match self {
+            ElementName::Ident(i) => i == *other,
+            ElementName::Custom(s) => s.value() == *other,
+        }
+    }
+}
+
+impl Display for ElementName {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ElementName::Ident(i) => write!(f, "{}", i),
+            ElementName::Custom(s) => write!(f, "{}", s.value()),
+        }
+    }
+}
+
+impl Parse for ElementName {
+    fn parse(stream: ParseStream) -> Result<Self> {
+        let raw = Punctuated::<Ident, Token![-]>::parse_separated_nonempty(stream)?;
+        if raw.len() == 1 {
+            Ok(ElementName::Ident(raw.into_iter().next().unwrap()))
+        } else {
+            let span = raw.span();
+            let tag = raw
+                .into_iter()
+                .map(|ident| ident.to_string())
+                .collect::<Vec<_>>()
+                .join("-");
+            let tag = LitStr::new(&tag, span);
+            Ok(ElementName::Custom(tag))
+        }
+    }
+}
+
+impl ToTokens for ElementName {
+    fn to_tokens(&self, tokens: &mut TokenStream2) {
+        match self {
+            ElementName::Ident(i) => tokens.append_all(quote! { dioxus_elements::#i }),
+            ElementName::Custom(s) => tokens.append_all(quote! { #s }),
+        }
     }
 }
 
@@ -234,7 +307,7 @@ impl ElementAttr {
 
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub struct ElementAttrNamed {
-    pub el_name: Ident,
+    pub el_name: ElementName,
     pub attr: ElementAttr,
 }
 
@@ -242,24 +315,46 @@ impl ToTokens for ElementAttrNamed {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         let ElementAttrNamed { el_name, attr } = self;
 
-        tokens.append_all(match attr {
+        let ns = |name| match el_name {
+            ElementName::Ident(i) => quote! { dioxus_elements::#i::#name.1 },
+            ElementName::Custom(_) => quote! { None },
+        };
+        let volitile = |name| match el_name {
+            ElementName::Ident(_) => quote! { #el_name::#name.2 },
+            ElementName::Custom(_) => quote! { false },
+        };
+        let attribute = |name: &Ident| match el_name {
+            ElementName::Ident(_) => quote! { #el_name::#name.0 },
+            ElementName::Custom(_) => {
+                let as_string = name.to_string();
+                quote!(#as_string)
+            }
+        };
+
+        let attribute = match attr {
             ElementAttr::AttrText { name, value } => {
+                let ns = ns(name);
+                let volitile = volitile(name);
+                let attribute = attribute(name);
                 quote! {
                     __cx.attr(
-                        dioxus_elements::#el_name::#name.0,
+                        #attribute,
                         #value,
-                        dioxus_elements::#el_name::#name.1,
-                        dioxus_elements::#el_name::#name.2
+                        #ns,
+                        #volitile
                     )
                 }
             }
             ElementAttr::AttrExpression { name, value } => {
+                let ns = ns(name);
+                let volitile = volitile(name);
+                let attribute = attribute(name);
                 quote! {
                     __cx.attr(
-                        dioxus_elements::#el_name::#name.0,
+                        #attribute,
                         #value,
-                        dioxus_elements::#el_name::#name.1,
-                        dioxus_elements::#el_name::#name.2
+                        #ns,
+                        #volitile
                     )
                 }
             }
@@ -288,7 +383,9 @@ impl ToTokens for ElementAttrNamed {
                     dioxus_elements::events::#name(__cx, #tokens)
                 }
             }
-        });
+        };
+
+        tokens.append_all(attribute);
     }
 }
 

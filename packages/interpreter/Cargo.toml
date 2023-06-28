@@ -1,6 +1,6 @@
 [package]
 name = "dioxus-interpreter-js"
-version = "0.3.1"
+version = "0.3.3"
 edition = "2018"
 authors = ["Jonathan Kelley"]
 description = "JS Intepreter for Dioxus - a concurrent renderer-agnostic Virtual DOM for interactive user experiences"
@@ -13,7 +13,7 @@ keywords = ["dom", "ui", "gui", "react", "wasm"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-wasm-bindgen = { version = "0.2.79", optional = true }
+wasm-bindgen = { workspace = true, optional = true }
 js-sys = { version = "0.3.56", optional = true }
 web-sys = { version = "0.3.56", optional = true, features = ["Element", "Node"] }
 sledgehammer_bindgen = { version = "0.2.1", optional = true }
@@ -25,3 +25,4 @@ default = []
 serialize = ["serde"]
 web = ["wasm-bindgen", "js-sys", "web-sys"]
 sledgehammer = ["wasm-bindgen", "js-sys", "web-sys", "sledgehammer_bindgen", "sledgehammer_utils"]
+minimal_bindings = []
