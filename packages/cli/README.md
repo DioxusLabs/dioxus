@@ -2,7 +2,7 @@
   <h1>📦✨ Dioxus CLI </h1>
   <p><strong>Tooling to supercharge Dioxus projects</strong></p>
 </div>
-**dioxus-cli** (inspired by wasm-pack and webpack) is a tool for getting Dioxus projects up and running. 
+**dioxus-cli** (inspired by wasm-pack and webpack) is a tool for getting Dioxus projects up and running.
 It handles all build, bundling, development and publishing to simplify web development.
 
 
@@ -14,7 +14,7 @@ cargo install dioxus-cli
 ```
 ### Install from git repository
 ```
-cargo install --git https://github.com/DioxusLabs/cli
+cargo install --git https://github.com/DioxusLabs/dioxus dioxus-cli
 ```
 ### Install from local folder
 ```
@@ -22,7 +22,7 @@ cargo install --path . --debug
 ```
 
 
-## Get Started 
+## Get Started
 
 Use `dioxus create project-name` to initialize a new Dioxus project. <br>
 
