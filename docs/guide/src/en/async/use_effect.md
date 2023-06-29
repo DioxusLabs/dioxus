@@ -7,7 +7,7 @@ Whenever the hooks [dependencies](#dependencies) change, the future will be re-e
 
 ## Dependencies
 
-You might want to call `use_effect` only when some value changes. For example, you might want to fetch a user's data only when the user id changes. You can provide a tuple of "dependencies" to the hook. It will automatically re-run the future when any of those dependencies change.
+You can make the future re-run when some value changes. For example, you might want to fetch a user's data only when the user id changes. You can provide a tuple of "dependencies" to the hook. It will automatically re-run the future when any of those dependencies change.
 
 Example:
 
