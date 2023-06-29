@@ -17,18 +17,15 @@ pub struct ServeConfigBuilder<P: Clone> {
     pub(crate) root_id: Option<&'static str>,
     pub(crate) index_path: Option<&'static str>,
     pub(crate) assets_path: Option<&'static str>,
-    pub(crate) incremental: Option<
-        std::sync::Arc<
-            dioxus_ssr::incremental::IncrementalRendererConfig<EmptyIncrementalRenderTemplate>,
-        >,
-    >,
+    pub(crate) incremental:
+        Option<std::sync::Arc<dioxus_ssr::incremental::IncrementalRendererConfig>>,
 }
 
 /// A template for incremental rendering that does nothing.
 #[derive(Default, Clone)]
 pub struct EmptyIncrementalRenderTemplate;
 
-impl dioxus_ssr::incremental::RenderHTML for EmptyIncrementalRenderTemplate {
+impl dioxus_ssr::incremental::WrapBody for EmptyIncrementalRenderTemplate {
     fn render_after_body<R: std::io::Write>(
         &self,
         _: &mut R,
@@ -70,10 +67,7 @@ impl<P: Clone> ServeConfigBuilder<P> {
     }
 
     /// Enable incremental static generation
-    pub fn incremental(
-        mut self,
-        cfg: dioxus_ssr::incremental::IncrementalRendererConfig<EmptyIncrementalRenderTemplate>,
-    ) -> Self {
+    pub fn incremental(mut self, cfg: dioxus_ssr::incremental::IncrementalRendererConfig) -> Self {
         self.incremental = Some(std::sync::Arc::new(cfg));
         self
     }
@@ -157,11 +151,8 @@ pub struct ServeConfig<P: Clone> {
     pub(crate) props: P,
     pub(crate) index: IndexHtml,
     pub(crate) assets_path: &'static str,
-    pub(crate) incremental: Option<
-        std::sync::Arc<
-            dioxus_ssr::incremental::IncrementalRendererConfig<EmptyIncrementalRenderTemplate>,
-        >,
-    >,
+    pub(crate) incremental:
+        Option<std::sync::Arc<dioxus_ssr::incremental::IncrementalRendererConfig>>,
 }
 
 impl<P: Clone> From<ServeConfigBuilder<P>> for ServeConfig<P> {

@@ -31,6 +31,8 @@ pub mod prelude {
     pub use crate::adapters::warp_adapter::*;
     #[cfg(not(feature = "ssr"))]
     pub use crate::props_html::deserialize_props::get_root_props_from_document;
+    #[cfg(all(feature = "ssr", feature = "router"))]
+    pub use crate::render::pre_cache_static_routes_with_props;
     #[cfg(feature = "ssr")]
     pub use crate::render::SSRState;
     #[cfg(feature = "ssr")]

@@ -1,29 +1,24 @@
 //! A shared pool of renderers for efficient server side rendering.
 
-use std::sync::Arc;
+use std::{fmt::Write, sync::Arc};
 
 use dioxus::prelude::VirtualDom;
 use dioxus_ssr::{
-    incremental::{IncrementalRendererConfig, RenderFreshness},
+    incremental::{IncrementalRendererConfig, RenderFreshness, WrapBody},
     Renderer,
 };
+use serde::Serialize;
 
 use crate::prelude::*;
 use dioxus::prelude::*;
 
 enum SsrRendererPool {
     Renderer(object_pool::Pool<Renderer>),
-    Incremental(
-        object_pool::Pool<
-            dioxus_ssr::incremental::IncrementalRenderer<
-                crate::serve_config::EmptyIncrementalRenderTemplate,
-            >,
-        >,
-    ),
+    Incremental(object_pool::Pool<dioxus_ssr::incremental::IncrementalRenderer>),
 }
 
 impl SsrRendererPool {
-    async fn render_to<P: Clone + 'static>(
+    async fn render_to<P: Clone + Serialize + Send + Sync + 'static>(
         &self,
         cfg: &ServeConfig<P>,
         route: String,
@@ -32,21 +27,28 @@ impl SsrRendererPool {
         to: &mut String,
         modify_vdom: impl FnOnce(&mut VirtualDom),
     ) -> Result<RenderFreshness, dioxus_ssr::incremental::IncrementalRendererError> {
+        let wrapper = FullstackRenderer { cfg };
         match self {
             Self::Renderer(pool) => {
                 let mut vdom = VirtualDom::new_with_props(component, props);
                 modify_vdom(&mut vdom);
 
                 let _ = vdom.rebuild();
+
                 let mut renderer = pool.pull(pre_renderer);
+
+                // SAFETY: The fullstack renderer will only write UTF-8 to the buffer.
+                wrapper.render_before_body(unsafe { &mut to.as_bytes_mut() })?;
                 renderer.render_to(to, &vdom)?;
+                wrapper.render_after_body(unsafe { &mut to.as_bytes_mut() })?;
 
                 Ok(RenderFreshness::now(None))
             }
             Self::Incremental(pool) => {
-                let mut renderer = pool.pull(|| incremental_pre_renderer(cfg));
+                let mut renderer =
+                    pool.pull(|| incremental_pre_renderer(cfg.incremental.as_ref().unwrap()));
                 Ok(renderer
-                    .render_to_string(route, component, props, to, modify_vdom)
+                    .render_to_string(route, component, props, to, modify_vdom, &wrapper)
                     .await?)
             }
         }
@@ -66,7 +68,7 @@ impl SSRState {
             return Self {
                 renderers: Arc::new(SsrRendererPool::Incremental(object_pool::Pool::new(
                     10,
-                    || incremental_pre_renderer(cfg),
+                    || incremental_pre_renderer(cfg.incremental.as_ref().unwrap()),
                 ))),
             };
         }
@@ -90,26 +92,48 @@ impl SSRState {
     > + Send
            + 'a {
         async move {
-            let ServeConfig { app, props, .. } = cfg;
-
-            let ServeConfig { index, .. } = cfg;
-
             let mut html = String::new();
-
-            html += &index.pre_main;
+            let ServeConfig { app, props, .. } = cfg;
 
             let freshness = self
                 .renderers
                 .render_to(cfg, route, *app, props.clone(), &mut html, modify_vdom)
                 .await?;
 
-            // serialize the props
-            let _ = crate::props_html::serialize_props::encode_in_element(&cfg.props, &mut html);
+            Ok(RenderResponse { html, freshness })
+        }
+    }
+}
 
-            #[cfg(all(debug_assertions, feature = "hot-reload"))]
-            {
-                // In debug mode, we need to add a script to the page that will reload the page if the websocket disconnects to make full recompile hot reloads work
-                let disconnect_js = r#"(function () {
+struct FullstackRenderer<'a, P: Clone + Send + Sync + 'static> {
+    cfg: &'a ServeConfig<P>,
+}
+
+impl<'a, P: Clone + Serialize + Send + Sync + 'static> dioxus_ssr::incremental::WrapBody
+    for FullstackRenderer<'a, P>
+{
+    fn render_before_body<R: std::io::Write>(
+        &self,
+        to: &mut R,
+    ) -> Result<(), dioxus_ssr::incremental::IncrementalRendererError> {
+        let ServeConfig { index, .. } = &self.cfg;
+
+        to.write_all(index.pre_main.as_bytes())?;
+
+        Ok(())
+    }
+
+    fn render_after_body<R: std::io::Write>(
+        &self,
+        to: &mut R,
+    ) -> Result<(), dioxus_ssr::incremental::IncrementalRendererError> {
+        // serialize the props
+        crate::props_html::serialize_props::encode_in_element(&self.cfg.props, to)?;
+
+        #[cfg(all(debug_assertions, feature = "hot-reload"))]
+        {
+            // In debug mode, we need to add a script to the page that will reload the page if the websocket disconnects to make full recompile hot reloads work
+            let disconnect_js = r#"(function () {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const url = protocol + '//' + window.location.host + '/_dioxus/disconnect';
     const poll_interval = 1000;
@@ -135,15 +159,16 @@ impl SSRState {
     ws.onclose = reload_upon_connect;
 })()"#;
 
-                html += r#"<script>"#;
-                html += disconnect_js;
-                html += r#"</script>"#;
-            }
-
-            html += &index.post_main;
-
-            Ok(RenderResponse { html, freshness })
+            to.write_all(r#"<script>"#.as_bytes())?;
+            to.write_all(disconnect_js.as_bytes())?;
+            to.write_all(r#"</script>"#.as_bytes())?;
         }
+
+        let ServeConfig { index, .. } = &self.cfg;
+
+        to.write_all(index.post_main.as_bytes())?;
+
+        Ok(())
     }
 }
 
@@ -171,12 +196,29 @@ fn pre_renderer() -> Renderer {
     renderer.into()
 }
 
-fn incremental_pre_renderer<P: Clone>(
-    cfg: &ServeConfig<P>,
-) -> dioxus_ssr::incremental::IncrementalRenderer<crate::serve_config::EmptyIncrementalRenderTemplate>
-{
-    let builder: &IncrementalRendererConfig<_> = &*cfg.incremental.as_ref().unwrap();
-    let mut renderer = builder.clone().build();
+fn incremental_pre_renderer(
+    cfg: &IncrementalRendererConfig,
+) -> dioxus_ssr::incremental::IncrementalRenderer {
+    let mut renderer = cfg.clone().build();
     renderer.renderer_mut().pre_render = true;
     renderer
+}
+
+#[cfg(all(feature = "ssr", feature = "router"))]
+/// Pre-caches all static routes
+pub async fn pre_cache_static_routes_with_props<Rt>(
+    cfg: &crate::prelude::ServeConfig<crate::router::FullstackRouterConfig<Rt>>,
+) -> Result<(), dioxus_ssr::incremental::IncrementalRendererError>
+where
+    Rt: dioxus_router::prelude::Routable + Send + Sync + Serialize,
+    <Rt as std::str::FromStr>::Err: std::fmt::Display,
+{
+    let wrapper = FullstackRenderer { cfg };
+    let mut renderer = incremental_pre_renderer(
+        cfg.incremental
+            .as_ref()
+            .expect("incremental renderer config must be set to pre-cache static routes"),
+    );
+
+    dioxus_router::incremental::pre_cache_static_routes::<Rt, _>(&mut renderer, &wrapper).await
 }

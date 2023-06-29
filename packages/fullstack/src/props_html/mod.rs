@@ -37,7 +37,8 @@ fn serialized_and_deserializes() {
                 };
                 y
             ];
-            serialize_props::serde_to_writable(&data, &mut as_string).unwrap();
+            serialize_props::serde_to_writable(&data, &mut unsafe { as_string.as_bytes_mut() })
+                .unwrap();
 
             println!("{}", as_string);
             println!(

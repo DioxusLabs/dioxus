@@ -3,14 +3,15 @@ use std::str::FromStr;
 
 use dioxus::prelude::*;
 use dioxus_ssr::incremental::{
-    IncrementalRenderer, IncrementalRendererError, RenderFreshness, RenderHTML,
+    IncrementalRenderer, IncrementalRendererError, RenderFreshness, WrapBody,
 };
 
 use crate::prelude::*;
 
 /// Pre-cache all static routes.
-pub async fn pre_cache_static_routes<Rt, R: RenderHTML + Send>(
-    renderer: &mut IncrementalRenderer<R>,
+pub async fn pre_cache_static_routes<Rt, R: WrapBody + Send + Sync>(
+    renderer: &mut IncrementalRenderer,
+    wrapper: &R,
 ) -> Result<(), IncrementalRendererError>
 where
     Rt: Routable,
@@ -41,7 +42,7 @@ where
         if is_static {
             match Rt::from_str(&full_path) {
                 Ok(route) => {
-                    render_route(renderer, route, &mut tokio::io::sink(), |_| {}).await?;
+                    render_route(renderer, route, &mut tokio::io::sink(), |_| {}, wrapper).await?;
                 }
                 Err(e) => {
                     log::info!("@ route: {}", full_path);
@@ -55,11 +56,12 @@ where
 }
 
 /// Render a route to a writer.
-pub async fn render_route<R: RenderHTML + Send, Rt, W, F: FnOnce(&mut VirtualDom)>(
-    renderer: &mut IncrementalRenderer<R>,
+pub async fn render_route<R: WrapBody + Send + Sync, Rt, W, F: FnOnce(&mut VirtualDom)>(
+    renderer: &mut IncrementalRenderer,
     route: Rt,
     writer: &mut W,
     modify_vdom: F,
+    wrapper: &R,
 ) -> Result<RenderFreshness, IncrementalRendererError>
 where
     Rt: Routable,
@@ -87,6 +89,7 @@ where
             RenderPathProps { path: route },
             writer,
             modify_vdom,
+            wrapper,
         )
         .await
 }

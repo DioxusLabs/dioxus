@@ -6,8 +6,8 @@ use base64::Engine;
 #[allow(unused)]
 pub(crate) fn serde_to_writable<T: Serialize>(
     value: &T,
-    mut write_to: impl std::fmt::Write,
-) -> std::fmt::Result {
+    write_to: &mut impl std::io::Write,
+) -> std::io::Result<()> {
     let serialized = postcard::to_allocvec(value).unwrap();
     let compressed = yazi::compress(
         &serialized,
@@ -15,7 +15,7 @@ pub(crate) fn serde_to_writable<T: Serialize>(
         yazi::CompressionLevel::BestSize,
     )
     .unwrap();
-    write_to.write_str(&STANDARD.encode(compressed));
+    write_to.write_all(&STANDARD.encode(compressed).as_bytes())?;
     Ok(())
 }
 
@@ -23,9 +23,10 @@ pub(crate) fn serde_to_writable<T: Serialize>(
 /// Encode data into a element. This is inteded to be used in the server to send data to the client.
 pub(crate) fn encode_in_element<T: Serialize>(
     data: T,
-    mut write_to: impl std::fmt::Write,
-) -> std::fmt::Result {
-    write_to.write_str(r#"<meta hidden="true" id="dioxus-storage" data-serialized=""#)?;
-    serde_to_writable(&data, &mut write_to)?;
-    write_to.write_str(r#"" />"#)
+    write_to: &mut impl std::io::Write,
+) -> std::io::Result<()> {
+    write_to
+        .write_all(r#"<meta hidden="true" id="dioxus-storage" data-serialized=""#.as_bytes())?;
+    serde_to_writable(&data, write_to)?;
+    write_to.write_all(r#"" />"#.as_bytes())
 }

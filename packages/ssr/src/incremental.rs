@@ -15,7 +15,7 @@ use std::{
 use tokio::io::{AsyncWrite, AsyncWriteExt, BufReader};
 
 /// Something that can render a HTML page from a body.
-pub trait RenderHTML {
+pub trait WrapBody {
     /// Render the HTML before the body
     fn render_before_body<R: Write>(&self, to: &mut R) -> Result<(), IncrementalRendererError>;
     /// Render the HTML after the body
@@ -49,7 +49,7 @@ impl Default for DefaultRenderer {
     }
 }
 
-impl RenderHTML for DefaultRenderer {
+impl WrapBody for DefaultRenderer {
     fn render_before_body<R: Write>(&self, to: &mut R) -> Result<(), IncrementalRendererError> {
         to.write_all(self.before_body.as_bytes())?;
         Ok(())
@@ -63,27 +63,25 @@ impl RenderHTML for DefaultRenderer {
 
 /// A configuration for the incremental renderer.
 #[derive(Debug, Clone)]
-pub struct IncrementalRendererConfig<R: RenderHTML> {
+pub struct IncrementalRendererConfig {
     static_dir: PathBuf,
     memory_cache_limit: usize,
     invalidate_after: Option<Duration>,
-    render: R,
 }
 
-impl<R: RenderHTML + Default> Default for IncrementalRendererConfig<R> {
+impl Default for IncrementalRendererConfig {
     fn default() -> Self {
-        Self::new(R::default())
+        Self::new()
     }
 }
 
-impl<R: RenderHTML> IncrementalRendererConfig<R> {
+impl IncrementalRendererConfig {
     /// Create a new incremental renderer configuration.
-    pub fn new(render: R) -> Self {
+    pub fn new() -> Self {
         Self {
             static_dir: PathBuf::from("./static"),
             memory_cache_limit: 10000,
             invalidate_after: None,
-            render,
         }
     }
 
@@ -106,30 +104,28 @@ impl<R: RenderHTML> IncrementalRendererConfig<R> {
     }
 
     /// Build the incremental renderer.
-    pub fn build(self) -> IncrementalRenderer<R> {
+    pub fn build(self) -> IncrementalRenderer {
         IncrementalRenderer {
             static_dir: self.static_dir,
             memory_cache: NonZeroUsize::new(self.memory_cache_limit)
                 .map(|limit| lru::LruCache::with_hasher(limit, Default::default())),
             invalidate_after: self.invalidate_after,
-            render: self.render,
             ssr_renderer: crate::Renderer::new(),
         }
     }
 }
 
 /// An incremental renderer.
-pub struct IncrementalRenderer<R: RenderHTML> {
+pub struct IncrementalRenderer {
     static_dir: PathBuf,
     #[allow(clippy::type_complexity)]
     memory_cache:
         Option<lru::LruCache<String, (SystemTime, Vec<u8>), BuildHasherDefault<FxHasher>>>,
     invalidate_after: Option<Duration>,
     ssr_renderer: crate::Renderer,
-    render: R,
 }
 
-impl<R: RenderHTML + std::marker::Send> IncrementalRenderer<R> {
+impl IncrementalRenderer {
     /// Get the inner renderer.
     pub fn renderer(&self) -> &crate::Renderer {
         &self.ssr_renderer
@@ -141,8 +137,8 @@ impl<R: RenderHTML + std::marker::Send> IncrementalRenderer<R> {
     }
 
     /// Create a new incremental renderer builder.
-    pub fn builder(renderer: R) -> IncrementalRendererConfig<R> {
-        IncrementalRendererConfig::new(renderer)
+    pub fn builder() -> IncrementalRendererConfig {
+        IncrementalRendererConfig::new()
     }
 
     /// Remove a route from the cache.
@@ -168,13 +164,14 @@ impl<R: RenderHTML + std::marker::Send> IncrementalRenderer<R> {
         self.invalidate_after.is_some()
     }
 
-    fn render_and_cache<'a, P: 'static>(
+    fn render_and_cache<'a, P: 'static, R: WrapBody + Send + Sync>(
         &'a mut self,
         route: String,
         comp: fn(Scope<P>) -> Element,
         props: P,
         output: &'a mut (impl AsyncWrite + Unpin + Send),
         modify_vdom: impl FnOnce(&mut VirtualDom),
+        renderer: &'a R,
     ) -> impl std::future::Future<Output = Result<RenderFreshness, IncrementalRendererError>> + 'a + Send
     {
         let mut html_buffer = WriteBuffer { buffer: Vec::new() };
@@ -185,13 +182,13 @@ impl<R: RenderHTML + std::marker::Send> IncrementalRenderer<R> {
             modify_vdom(&mut vdom);
             let _ = vdom.rebuild();
 
-            result_1 = self.render.render_before_body(&mut *html_buffer);
+            result_1 = renderer.render_before_body(&mut *html_buffer);
             result2 = self.ssr_renderer.render_to(&mut html_buffer, &vdom);
         }
         async move {
             result_1?;
             result2?;
-            self.render.render_after_body(&mut *html_buffer)?;
+            renderer.render_after_body(&mut *html_buffer)?;
             let html_buffer = html_buffer.buffer;
 
             output.write_all(&html_buffer).await?;
@@ -273,13 +270,14 @@ impl<R: RenderHTML + std::marker::Send> IncrementalRenderer<R> {
     }
 
     /// Render a route or get it from cache.
-    pub async fn render<P: 'static>(
+    pub async fn render<P: 'static, R: WrapBody + Send + Sync>(
         &mut self,
         route: String,
         component: fn(Scope<P>) -> Element,
         props: P,
         output: &mut (impl AsyncWrite + Unpin + std::marker::Send),
         modify_vdom: impl FnOnce(&mut VirtualDom),
+        renderer: &R,
     ) -> Result<RenderFreshness, IncrementalRendererError> {
         // check if this route is cached
         if let Some(freshness) = self.search_cache(route.to_string(), output).await? {
@@ -287,7 +285,7 @@ impl<R: RenderHTML + std::marker::Send> IncrementalRenderer<R> {
         } else {
             // if not, create it
             let freshness = self
-                .render_and_cache(route, component, props, output, modify_vdom)
+                .render_and_cache(route, component, props, output, modify_vdom, renderer)
                 .await?;
             log::trace!("cache miss");
             Ok(freshness)
@@ -295,18 +293,26 @@ impl<R: RenderHTML + std::marker::Send> IncrementalRenderer<R> {
     }
 
     /// Render a route or get it from cache to a string.
-    pub async fn render_to_string<P: 'static>(
+    pub async fn render_to_string<P: 'static, R: WrapBody + Send + Sync>(
         &mut self,
         route: String,
         component: fn(Scope<P>) -> Element,
         props: P,
         output: &mut String,
         modify_vdom: impl FnOnce(&mut VirtualDom),
+        renderer: &R,
     ) -> Result<RenderFreshness, IncrementalRendererError> {
         unsafe {
             // SAFETY: The renderer will only write utf8 to the buffer
-            self.render(route, component, props, output.as_mut_vec(), modify_vdom)
-                .await
+            self.render(
+                route,
+                component,
+                props,
+                output.as_mut_vec(),
+                modify_vdom,
+                renderer,
+            )
+            .await
         }
     }
 
