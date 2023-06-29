@@ -126,9 +126,9 @@ pub fn routable(input: TokenStream) -> TokenStream {
         }
 
         #error_type
-        
+
         #display_impl
-        
+
         #routable_impl
 
         #parse_impl
