@@ -1,0 +1,8 @@
+version = "Two"
+edition = "2021"
+
+imports_granularity = "Crate"
+#use_small_heuristics = "Max"
+#control_brace_style = "ClosingNextLine"
+normalize_comments = true
+format_code_in_doc_comments = true
