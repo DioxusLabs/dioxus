@@ -2,6 +2,7 @@
 members = [
     "packages/dioxus",
     "packages/core",
+    "packages/cli",
     "packages/core-macro",
     "packages/router",
     "packages/html",
