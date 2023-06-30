@@ -22,7 +22,7 @@ use std::{rc::Rc, sync::RwLock};
 use style_attributes::StyleModifier;
 pub use taffy::{geometry::Point, prelude::*};
 use tokio::select;
-use tui::{backend::CrosstermBackend, layout::Rect, Terminal};
+use tui::{backend::CrosstermBackend, Terminal};
 use widgets::{register_widgets, RinkWidgetResponder, RinkWidgetTraitObject};
 
 mod config;
@@ -176,7 +176,7 @@ pub fn render<R: Driver>(
 
                 if !to_rerender.is_empty() || updated {
                     updated = false;
-                    fn resize(dims: Rect, taffy: &mut Taffy, rdom: &RealDom) {
+                    fn resize(dims: tui::layout::Rect, taffy: &mut Taffy, rdom: &RealDom) {
                         let width = screen_to_layout_space(dims.width);
                         let height = screen_to_layout_space(dims.height);
                         let root_node = rdom
@@ -218,7 +218,7 @@ pub fn render<R: Driver>(
                     } else {
                         let rdom = rdom.read().unwrap();
                         resize(
-                            Rect {
+                            tui::layout::Rect {
                                 x: 0,
                                 y: 0,
                                 width: 1000,
