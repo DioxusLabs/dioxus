@@ -1,9 +1,8 @@
-//! Run with:
-//!
-//! ```sh
-//! dioxus build --features web
-//! cargo run --features ssr --no-default-features
-//! ```
+// This test is used by playwrite configured in the root of the repo
+// Tests:
+// - Server functions
+// - SSR
+// - Hydration
 
 #![allow(non_snake_case)]
 use dioxus::prelude::*;
@@ -32,10 +31,12 @@ fn main() {
             true
         }));
 
+        PostServerData::register().unwrap();
+        GetServerData::register().unwrap();
         tokio::runtime::Runtime::new()
             .unwrap()
             .block_on(async move {
-                let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 8080));
+                let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 3333));
                 axum::Server::bind(&addr)
                     .serve(
                         axum::Router::new()
@@ -61,10 +62,14 @@ fn app(cx: Scope<AppProps>) -> Element {
     let text = use_state(cx, || "...".to_string());
 
     cx.render(rsx! {
-        h1 { "High-Five counter: {count}" }
-        button { onclick: move |_| count += 1, "Up high!" }
-        button { onclick: move |_| count -= 1, "Down low!" }
+        h1 { "hello axum! {count}" }
         button {
+            class: "increment-button",
+            onclick: move |_| count += 1,
+            "Increment"
+        }
+        button {
+            class: "server-button",
             onclick: move |_| {
                 to_owned![text];
                 let sc = cx.sc();
