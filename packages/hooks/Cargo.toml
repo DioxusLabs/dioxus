@@ -1,6 +1,6 @@
 [package]
 name = "dioxus-hooks"
-version = "0.3.0"
+version = "0.3.1"
 authors = ["Jonathan Kelley"]
 edition = "2018"
 description = "Dioxus VirtualDOM renderer for a remote webview instance"
@@ -12,12 +12,12 @@ keywords = ["dom", "ui", "gui", "react"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-dioxus-core = { path = "../../packages/core", version = "^0.3.0" }
-futures-channel = "0.3.21"
-log = "0.4"
+dioxus-core = { workspace = true }
+futures-channel = { workspace = true }
+log = { workspace = true }
 
 
 [dev-dependencies]
-futures-util = { version = "0.3", default-features = false }
-dioxus-core = { path = "../../packages/core", version = "^0.3.0" }
-dioxus = { path = "../../packages/dioxus", version = "^0.3.0" }
+futures-util = { workspace = true, default-features = false }
+dioxus-core = { workspace = true }
+dioxus = { workspace = true }

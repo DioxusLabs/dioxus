@@ -18,7 +18,9 @@ pub mod adapters {
 
 pub use adapters::*;
 
+mod element;
 pub mod pool;
+mod query;
 use futures_util::{SinkExt, StreamExt};
 pub use pool::*;
 
@@ -34,7 +36,57 @@ pub enum LiveViewError {
     SendingFailed,
 }
 
-use dioxus_interpreter_js::INTERPRETER_JS;
+use once_cell::sync::Lazy;
+
+static INTERPRETER_JS: Lazy<String> = Lazy::new(|| {
+    let interpreter = dioxus_interpreter_js::INTERPRETER_JS;
+    let serialize_file_uploads = r#"if (
+      target.tagName === "INPUT" &&
+      (event.type === "change" || event.type === "input")
+    ) {
+      const type = target.getAttribute("type");
+      if (type === "file") {
+        async function read_files() {
+          const files = target.files;
+          const file_contents = {};
+
+          for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+
+            file_contents[file.name] = Array.from(
+              new Uint8Array(await file.arrayBuffer())
+            );
+          }
+          let file_engine = {
+            files: file_contents,
+          };
+          contents.files = file_engine;
+
+          if (realId === null) {
+            return;
+          }
+          const message = serializeIpcMessage("user_event", {
+            name: name,
+            element: parseInt(realId),
+            data: contents,
+            bubbles,
+          });
+          window.ipc.postMessage(message);
+        }
+        read_files();
+        return;
+      }
+    }"#;
+
+    let interpreter = interpreter.replace("/*POST_EVENT_SERIALIZATION*/", serialize_file_uploads);
+    interpreter.replace("import { setAttributeInner } from \"./common.js\";", "")
+});
+
+static COMMON_JS: Lazy<String> = Lazy::new(|| {
+    let common = dioxus_interpreter_js::COMMON_JS;
+    common.replace("export", "")
+});
+
 static MAIN_JS: &str = include_str!("./main.js");
 
 /// This script that gets injected into your app connects this page to the websocket endpoint
@@ -42,11 +94,14 @@ static MAIN_JS: &str = include_str!("./main.js");
 /// Once the endpoint is connected, it will send the initial state of the app, and then start
 /// processing user events and returning edits to the liveview instance
 pub fn interpreter_glue(url: &str) -> String {
+    let js = &*INTERPRETER_JS;
+    let common = &*COMMON_JS;
     format!(
         r#"
 <script>
     var WS_ADDR = "{url}";
-    {INTERPRETER_JS}
+    {js}
+    {common}
     {MAIN_JS}
     main();
 </script>

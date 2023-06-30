@@ -1,17 +1,6 @@
 # Server-Side Rendering
 
-The Dioxus VirtualDom can be rendered server-side.
-
-[Example: Dioxus DocSite](https://github.com/dioxusLabs/docsite)
-
-## Multithreaded Support
-
-The Dioxus VirtualDom, sadly, is not currently `Send`. Internally, we use quite a bit of interior mutability which is not thread-safe. This means you can't easily use Dioxus with most web frameworks like Tide, Rocket, Axum, etc.
-
-To solve this, you'll want to spawn a VirtualDom on its own thread and communicate with it via channels.
-
-When working with web frameworks that require `Send`, it is possible to render a VirtualDom immediately to a String – but you cannot hold the VirtualDom across an await point. For retained-state SSR (essentially LiveView), you'll need to create a pool of VirtualDoms.
-
+For lower-level control over the rendering process, you can use the `dioxus-ssr` crate directly. This can be useful when integrating with a web framework that `dioxus-server` does not support, or pre-rendering pages.
 
 ## Setup
 
@@ -21,7 +10,7 @@ Make sure you have Rust and Cargo installed, and then create a new project:
 
 ```shell
 cargo new --bin demo
-cd app
+cd demo
 ```
 
 Add Dioxus and the ssr renderer as dependencies:
@@ -51,54 +40,32 @@ tokio = { version = "1.15.0", features = ["full"] }
 Now, set up your Axum app to respond on an endpoint.
 
 ```rust
-use axum::{response::Html, routing::get, Router};
-use dioxus::prelude::*;
-
-#[tokio::main]
-async fn main() {
-    let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 3000));
-    println!("listening on http://{}", addr);
-
-    axum::Server::bind(&addr)
-        .serve(
-            Router::new()
-                .route("/", get(app_endpoint))
-                .into_make_service(),
-        )
-        .await
-        .unwrap();
-}
+{{#include ../../../examples/hello_world_ssr.rs:main}}
 ```
 
 And then add our endpoint. We can either render `rsx!` directly:
 
 ```rust
-async fn app_endpoint() -> Html<String> {
-    // render the rsx! macro to HTML
-    Html(dioxus_ssr::render_lazy(rsx! {
-        div { "hello world!" }
-    }))
-}
+{{#include ../../../examples/hello_world_ssr.rs:endpoint}}
 ```
 
 Or we can render VirtualDoms.
 
 ```rust
-async fn app_endpoint() -> Html<String> {
-    // create a component that renders a div with the text "hello world"
-    fn app(cx: Scope) -> Element {
-        cx.render(rsx!(div { "hello world" }))
-    }
-    // create a VirtualDom with the app component
-    let mut app = VirtualDom::new(app);
-    // rebuild the VirtualDom before rendering
-    let _ = app.rebuild();
+{{#include ../../../examples/hello_world_ssr.rs:second_endpoint}}
+```
 
-    // render the VirtualDom to HTML
-    Html(dioxus_ssr::render_vdom(&app))
-}
+And then add our app component:
+
+```rust
+{{#include ../../../examples/hello_world_ssr.rs:component}}
 ```
 
 And that's it!
 
-> You might notice that you cannot hold the VirtualDom across an await point. Dioxus is currently not ThreadSafe, so it _must_ remain on the thread it started. We are working on loosening this requirement.
+
+## Multithreaded Support
+
+The Dioxus VirtualDom, sadly, is not currently `Send`. Internally, we use quite a bit of interior mutability which is not thread-safe.
+When working with web frameworks that require `Send`, it is possible to render a VirtualDom immediately to a String – but you cannot hold the VirtualDom across an await point. For retained-state SSR (essentially LiveView), you'll need to spawn a VirtualDom on its own thread and communicate with it via channels or create a pool of VirtualDoms.
+You might notice that you cannot hold the VirtualDom across an await point. Because Dioxus is currently not ThreadSafe, it _must_ remain on the thread it started. We are working on loosening this requirement.

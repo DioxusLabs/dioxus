@@ -337,7 +337,7 @@ fn child_height(parent: &Node, tree: &impl TreeRef) -> u16 {
 fn set_height(tree: &mut TreeMutView<'_>, node: NodeId, height: u16) {
     let (shadow_tree, light_tree, children) = {
         let mut node_data_mut = &mut tree.1;
-        let mut node = (&mut node_data_mut).get(node).unwrap();
+        let node = (&mut node_data_mut).get(node).unwrap();
         node.height = height;
 
         (

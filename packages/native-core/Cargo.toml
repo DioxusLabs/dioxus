@@ -11,14 +11,14 @@ keywords = ["dom", "ui", "gui", "react"]
 
 
 [dependencies]
-dioxus-core = { path = "../core", version = "^0.3.0", optional = true }
+dioxus-core = { workspace = true, optional = true }
 
 keyboard-types = "0.6.2"
-taffy = "0.2.1"
+taffy = "0.3.12"
 smallvec = "1.6"
-rustc-hash = "1.1.0"
+rustc-hash = { workspace = true }
 anymap = "1.0.0-beta.2"
-slab = "0.4"
+slab = { workspace = true }
 parking_lot = { version = "0.12.1", features = ["send_guard"] }
 crossbeam-deque = "0.8.2"
 dashmap = "5.4.0"
@@ -29,14 +29,13 @@ lightningcss = "1.0.0-alpha.39"
 
 rayon = "1.6.1"
 shipyard = { version = "0.6.2", features = ["proc", "std"], default-features = false }
-shipyard_hierarchy = "0.6.0"
 
 [dev-dependencies]
 rand = "0.8.5"
-dioxus = { path = "../dioxus", version = "^0.3.0" }
-tokio = { version = "*", features = ["full"] }
-dioxus-native-core = { path = ".", features = ["dioxus"] }
-dioxus-native-core-macro = { path = "../native-core-macro" }
+dioxus = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+dioxus-native-core = { workspace = true, features = ["dioxus"] }
+dioxus-native-core-macro = { workspace = true }
 
 [features]
 default = []
