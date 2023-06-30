@@ -21,7 +21,7 @@ Como referência, confira o interpretador `javascript` ou o renderizador `tui` c
 
 O tipo "DomEdit" é uma `enum` serializada que representa uma operação atômica que ocorre no `RealDom`. As variantes seguem aproximadamente este conjunto:
 
-```rust
+```rust, no_run
 enum DomEdit {
     PushRoot,
     AppendChildren,
@@ -48,7 +48,7 @@ O mecanismo de diferenciação Dioxus opera como uma [máquina de pilha] (https:
 
 Para fins de compreensão, vamos considerar este exemplo – uma declaração de interface do usuário muito simples:
 
-```rust
+```rust, no_run
 rsx!( h1 {"hello world"} )
 ```
 
@@ -56,7 +56,7 @@ Para começar, o Dioxus deve primeiro navegar até o contêiner dessa tag h1. Pa
 
 Quando o renderizador recebe essa instrução, ele empurra o `Node` real para sua própria pilha. A pilha do renderizador real ficará assim:
 
-```rust
+```rust, no_run
 instructions: [
     PushRoot(Container)
 ]
@@ -67,7 +67,7 @@ stack: [
 
 Em seguida, o Dioxus encontrará o nó `h1`. O algoritmo `diff` decide que este nó precisa ser criado, então o Dioxus irá gerar o DomEdit `CreateElement`. Quando o renderizador receber esta instrução, ele criará um nó desmontado e o enviará para sua própria pilha (_stack_):
 
-```rust
+```rust, no_run
 instructions: [
     PushRoot(Container),
     CreateElement(h1),
@@ -80,7 +80,7 @@ stack: [
 
 Em seguida, Dioxus vê o nó de texto e gera o DomEdit `CreateTextNode`:
 
-```rust
+```rust, no_run
 instructions: [
     PushRoot(Container),
     CreateElement(h1),
@@ -95,7 +95,7 @@ stack: [
 
 Lembre-se, o nó de texto não está anexado a nada (ele está desmontado), então o Dioxus precisa gerar um _Edit_ que conecte o nó de texto ao elemento `h1`. Depende da situação, mas neste caso usamos `AppendChildren`. Isso remove o nó de texto da _stack_, deixando o elemento `h1` como o próximo elemento na linha.
 
-```rust
+```rust, no_run
 instructions: [
     PushRoot(Container),
     CreateElement(h1),
@@ -110,7 +110,7 @@ stack: [
 
 Chamamos `AppendChildren` novamente, retirando o nó `h1` e anexando-o ao pai:
 
-```rust
+```rust, no_run
 instructions: [
     PushRoot(Container),
     CreateElement(h1),
@@ -125,7 +125,7 @@ stack: [
 
 Finalmente, o contêiner é aberto, pois não precisamos mais dele.
 
-```rust
+```rust, no_run
 instructions: [
     PushRoot(Container),
     CreateElement(h1),
@@ -139,7 +139,7 @@ stack: []
 
 Com o tempo, nossa _stack_ ficou assim:
 
-```rust
+```rust, no_run
 []
 [Container]
 [Container, h1]
@@ -165,7 +165,7 @@ Como a maioria das GUIs, o Dioxus conta com um _loop_ de eventos para progredir 
 
 O código para a implementação do `WebSys` é direto, então vamos adicioná-lo aqui para demonstrar como um `loop` de eventos é simples:
 
-```rust
+```rust, no_run
 pub async fn run(&mut self) -> dioxus_core::error::Result<()> {
     // Push the body element onto the WebsysDom's stack machine
     let mut websys_dom = crate::new::WebsysDom::new(prepare_websys_dom());
@@ -195,7 +195,7 @@ pub async fn run(&mut self) -> dioxus_core::error::Result<()> {
 
 É importante que você decodifique os eventos reais do seu sistema de eventos no sistema de eventos sintético do Dioxus (entenda sintético como abstraído). Isso significa simplesmente combinar seu tipo de evento e criar um tipo Dioxus `UserEvent`. No momento, o sistema `VirtualEvent` é modelado quase inteiramente em torno da especificação HTML, mas estamos interessados em reduzi-lo.
 
-```rust
+```rust, no_run
 fn virtual_event_from_websys_event(event: &web_sys::Event) -> VirtualEvent {
     match event.type_().as_str() {
         "keydown" => {
@@ -233,7 +233,7 @@ Esses elementos personalizados são definidos como estruturas de unidade com imp
 
 Por exemplo, o elemento `div` é (aproximadamente!) definido assim:
 
-```rust
+```rust, no_run
 struct div;
 impl div {
     /// Some glorious documentation about the class property.
@@ -262,7 +262,7 @@ O `RealDom` é uma abstração de nível superior sobre a atualização do Dom. 
 Vamos construir um renderizador de exemplo com bordas, tamanho e cor do texto.
 Antes de começarmos, vamos dar uma olhada em um elemento de exemplo que podemos renderizar:
 
-```rust
+```rust, no_run
 cx.render(rsx!{
     div{
         color: "red",
@@ -280,50 +280,50 @@ No diagrama a seguir, as setas representam o fluxo de dados:
 
 [![](https://mermaid.ink/img/pako:eNqdVNFqgzAU_RXJXizUUZPJmIM-jO0LukdhpCbO0JhIGteW0n9fNK1Oa0brfUnu9VxyzzkXjyCVhIIYZFzu0hwr7X2-JcIzsa3W3wqXuZdKoele22oddfa1Y0Tnfn31muvMfqeCDNq3GmvaNROmaKqZFO1DPTRhP8MOd1fTWYNDvzlmQbBMJZcq9JtjNgY1mLVUhBqQPQeojl3wGCw5PsjqnIe-zXqEL8GZ2Kz0gVMPmoeU3ND4IcuiaLGY2zRouuKncv_qGKv3VodpJe0JVU6QCQ5kgqMyWQVr8hbk4hm1PBcmsuwmnrCVH94rP7xN_ucp8sOB_EPSfz9drYVrkpc_AmH8_yTjJueUc-ntpOJkgt2os9tKjcYlt-DLUiD3UsB2KZCLcwjv3Aq33-g2v0M0xXA0MBy5DUdXi-gcJZriuLmAOSioKjAj5ld8rMsJ0DktaAJicyVYbRKQiJPBVSUx438QpqUCcYb5ls4BrrRcHUTaFizqnWGzR8W5evoFI-bJdw)](https://mermaid-js.github.io/mermaid-live-editor/edit#pako:eNqdVNFqgzAU_RXJXizUUZPJmIM-jO0LukdhpCbO0JhIGteW0n9fNK1Oa0brfUnu9VxyzzkXjyCVhIIYZFzu0hwr7X2-JcIzsa3W3wqXuZdKoele22oddfa1Y0Tnfn31muvMfqeCDNq3GmvaNROmaKqZFO1DPTRhP8MOd1fTWYNDvzlmQbBMJZcq9JtjNgY1mLVUhBqQPQeojl3wGCw5PsjqnIe-zXqEL8GZ2Kz0gVMPmoeU3ND4IcuiaLGY2zRouuKncv_qGKv3VodpJe0JVU6QCQ5kgqMyWQVr8hbk4hm1PBcmsuwmnrCVH94rP7xN_ucp8sOB_EPSfz9drYVrkpc_AmH8_yTjJueUc-ntpOJkgt2os9tKjcYlt-DLUiD3UsB2KZCLcwjv3Aq33-g2v0M0xXA0MBy5DUdXi-gcJZriuLmAOSioKjAj5ld8rMsJ0DktaAJicyVYbRKQiJPBVSUx438QpqUCcYb5ls4BrrRcHUTaFizqnWGzR8W5evoFI-bJdw)
 
-[//]: # '%% mermaid flow chart'
-[//]: # 'flowchart TB'
-[//]: # '    subgraph context'
-[//]: # '        text_width(text width)'
-[//]: # '    end'
-[//]: # '    subgraph state'
-[//]: # '        direction TB'
-[//]: # '        subgraph div state'
-[//]: # '            direction TB'
-[//]: # '            state1(state)-->color1(color)'
-[//]: # '            state1-->border1(border)'
-[//]: # '            text_width-.->layout_width1(layout width)'
-[//]: # '            linkStyle 2 stroke:#ff5500,stroke-width:4px;'
-[//]: # '            state1-->layout_width1'
-[//]: # '        end'
-[//]: # '        subgraph p state'
-[//]: # '            direction TB'
-[//]: # '            state2(state)-->color2(color)'
-[//]: # '            color1-.->color2'
-[//]: # '            linkStyle 5 stroke:#0000ff,stroke-width:4px;'
-[//]: # '            state2-->border2(border)'
-[//]: # '            text_width-.->layout_width2(layout width)'
-[//]: # '            linkStyle 7 stroke:#ff5500,stroke-width:4px;'
-[//]: # '            state2-->layout_width2'
-[//]: # '            layout_width2-.->layout_width1'
-[//]: # '            linkStyle 9 stroke:#00aa00,stroke-width:4px;'
-[//]: # '        end'
-[//]: # '        subgraph hello world state'
-[//]: # '            direction TB'
-[//]: # '            state3(state)-->border3(border)'
-[//]: # '            state3-->color3(color)'
-[//]: # '            color2-.->color3'
-[//]: # '            linkStyle 12 stroke:#0000ff,stroke-width:4px;'
-[//]: # '            text_width-.->layout_width3(layout width)'
-[//]: # '            linkStyle 13 stroke:#ff5500,stroke-width:4px;'
-[//]: # '            state3-->layout_width3'
-[//]: # '            layout_width3-.->layout_width2'
-[//]: # '            linkStyle 15 stroke:#00aa00,stroke-width:4px;'
-[//]: # '        end'
-[//]: # '    end'
+[//]: # "%% mermaid flow chart"
+[//]: # "flowchart TB"
+[//]: # "    subgraph context"
+[//]: # "        text_width(text width)"
+[//]: # "    end"
+[//]: # "    subgraph state"
+[//]: # "        direction TB"
+[//]: # "        subgraph div state"
+[//]: # "            direction TB"
+[//]: # "            state1(state)-->color1(color)"
+[//]: # "            state1-->border1(border)"
+[//]: # "            text_width-.->layout_width1(layout width)"
+[//]: # "            linkStyle 2 stroke:#ff5500,stroke-width:4px;"
+[//]: # "            state1-->layout_width1"
+[//]: # "        end"
+[//]: # "        subgraph p state"
+[//]: # "            direction TB"
+[//]: # "            state2(state)-->color2(color)"
+[//]: # "            color1-.->color2"
+[//]: # "            linkStyle 5 stroke:#0000ff,stroke-width:4px;"
+[//]: # "            state2-->border2(border)"
+[//]: # "            text_width-.->layout_width2(layout width)"
+[//]: # "            linkStyle 7 stroke:#ff5500,stroke-width:4px;"
+[//]: # "            state2-->layout_width2"
+[//]: # "            layout_width2-.->layout_width1"
+[//]: # "            linkStyle 9 stroke:#00aa00,stroke-width:4px;"
+[//]: # "        end"
+[//]: # "        subgraph hello world state"
+[//]: # "            direction TB"
+[//]: # "            state3(state)-->border3(border)"
+[//]: # "            state3-->color3(color)"
+[//]: # "            color2-.->color3"
+[//]: # "            linkStyle 12 stroke:#0000ff,stroke-width:4px;"
+[//]: # "            text_width-.->layout_width3(layout width)"
+[//]: # "            linkStyle 13 stroke:#ff5500,stroke-width:4px;"
+[//]: # "            state3-->layout_width3"
+[//]: # "            layout_width3-.->layout_width2"
+[//]: # "            linkStyle 15 stroke:#00aa00,stroke-width:4px;"
+[//]: # "        end"
+[//]: # "    end"
 
 Para ajudar na construção de um DOM, o núcleo nativo fornece quatro `traits`: `State`, `ChildDepState`, `ParentDepState` e `NodeDepState` e uma estrutura `RealDom`. O `ChildDepState`, `ParentDepState` e `NodeDepState` fornecem uma maneira de descrever como algumas informações em um nó se relacionam com as de seus parentes. Ao fornecer como construir um único nó a partir de suas relações, o native-core derivará uma maneira de atualizar o estado de todos os nós para você com `#[derive(State)]`. Depois de ter um estado, você pode fornecê-lo como genérico ao `RealDom`. `RealDom` fornece todos os métodos para interagir e atualizar seu novo dom.
 
-```rust
+```rust, no_run
 use dioxus_native_core::node_ref::*;
 use dioxus_native_core::state::{ChildDepState, NodeDepState, ParentDepState, State};
 use dioxus_native_core_macro::{sorted_str_slice, State};
@@ -455,7 +455,7 @@ struct ToyState {
 
 Agora que temos nosso estado, podemos colocá-lo em uso em nosso DOM. Você pode atualizar o DOM com `update_state` para atualizar a estrutura do dom (adicionando, removendo e alterando as propriedades dos nós) e então `apply_mutations` para atualizar o `ToyState` para cada um dos nós que foram alterados.
 
-```rust
+```rust, no_run
 fn main(){
     fn app(cx: Scope) -> Element {
         cx.render(rsx!{

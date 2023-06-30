@@ -39,7 +39,7 @@ tokio = { version = "*", features = ["full"] }
 
 Now, set up your Axum app to serve the Dioxus app.
 
-```rust
+```rust, no_run
 {{#include ../../../examples/server_basic.rs}}
 ```
 
@@ -72,7 +72,7 @@ web = ["dioxus-web"]
 
 Next, we need to modify our `main.rs` to use either hydrate on the client or render on the server depending on the active features.
 
-```rust
+```rust, no_run
 {{#include ../../../examples/hydration.rs}}
 ```
 
@@ -95,7 +95,7 @@ To do this, we must remove the serve_dioxus_application and replace it with a cu
 
 The only thing we need to change on the client is the props. `dioxus-fullstack` will automatically serialize the props it uses to server render the app and send them to the client. In the client section of `main.rs`, we need to add `get_root_props_from_document` to deserialize the props before we hydrate the app.
 
-```rust
+```rust, no_run
 {{#include ../../../examples/hydration_props.rs}}
 ```
 
