@@ -58,7 +58,7 @@ impl UserData for PluginFileSystem {
             let file = PathBuf::from(args.0);
             let target = PathBuf::from(args.1);
             let res = extract_zip(&file, &target);
-            if let Err(_) = res {
+            if res.is_err() {
                 return Ok(false);
             }
             Ok(true)

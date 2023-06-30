@@ -184,7 +184,7 @@ impl CrateConfig {
             None => crate_dir.join("public"),
         };
 
-        let manifest = cargo_toml::Manifest::from_path(&cargo_def).unwrap();
+        let manifest = cargo_toml::Manifest::from_path(cargo_def).unwrap();
 
         let output_filename = {
             match &manifest.package.as_ref().unwrap().default_run {

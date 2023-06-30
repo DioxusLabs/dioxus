@@ -2,6 +2,7 @@ use std::process::{Command, Stdio};
 
 use mlua::{FromLua, UserData};
 
+#[derive(Debug, Clone, Copy)]
 enum StdioFromString {
     Inherit,
     Piped,
@@ -41,7 +42,7 @@ impl UserData for PluginCommander {
                 let stdout = args.1;
                 let stderr = args.2;
 
-                if cmd.len() == 0 {
+                if cmd.is_empty() {
                     return Ok(());
                 }
                 let cmd_name = cmd.get(0).unwrap();

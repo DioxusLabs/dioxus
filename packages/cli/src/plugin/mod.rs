@@ -151,14 +151,12 @@ impl PluginManager {
                                         }
                                     }
                                 }
+                            } else if let Ok(index) = name_index.get::<_, u32>(info.name.clone()) {
+                                let _ = manager.set(index, info.clone());
                             } else {
-                                if let Ok(index) = name_index.get::<_, u32>(info.name.clone()) {
-                                    let _ = manager.set(index, info.clone());
-                                } else {
-                                    let _ = manager.set(index, info.clone());
-                                    index += 1;
-                                    let _ = name_index.set(info.name, index);
-                                }
+                                let _ = manager.set(index, info.clone());
+                                index += 1;
+                                let _ = name_index.set(info.name, index);
                             }
                         }
                         Err(_e) => {
@@ -172,7 +170,7 @@ impl PluginManager {
 
         lua.globals().set("manager", manager).unwrap();
 
-        return Ok(());
+        Ok(())
     }
 
     pub fn on_build_start(crate_config: &CrateConfig, platform: &str) -> anyhow::Result<()> {

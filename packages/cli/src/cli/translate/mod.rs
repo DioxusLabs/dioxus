@@ -39,7 +39,7 @@ impl Translate {
 
         // Write the output
         match self.output {
-            Some(output) => std::fs::write(&output, out)?,
+            Some(output) => std::fs::write(output, out)?,
             None => print!("{}", out),
         }
 
@@ -48,7 +48,7 @@ impl Translate {
 }
 
 pub fn convert_html_to_formatted_rsx(dom: &Dom, component: bool) -> String {
-    let callbody = rsx_rosetta::rsx_from_html(&dom);
+    let callbody = rsx_rosetta::rsx_from_html(dom);
 
     match component {
         true => write_callbody_with_icon_section(callbody),
@@ -114,7 +114,7 @@ fn determine_input(file: Option<String>, raw: Option<String>) -> Result<String> 
     }
 
     if let Some(file) = file {
-        return Ok(std::fs::read_to_string(&file)?);
+        return Ok(std::fs::read_to_string(file)?);
     }
 
     // If neither exist, we try to read from stdin
