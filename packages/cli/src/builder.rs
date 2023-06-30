@@ -50,7 +50,7 @@ pub fn build(config: &CrateConfig, quiet: bool) -> Result<BuildResult> {
     log::info!("🚅 Running build command...");
     let cmd = subprocess::Exec::cmd("cargo");
     let cmd = cmd
-        .cwd(&crate_dir)
+        .cwd(crate_dir)
         .arg("build")
         .arg("--target")
         .arg("wasm32-unknown-unknown")
@@ -152,7 +152,7 @@ pub fn build(config: &CrateConfig, quiet: bool) -> Result<BuildResult> {
                             "-o",
                             target_file.to_str().unwrap(),
                         ];
-                        if config.release == true {
+                        if config.release {
                             args.push("-Oz");
                         }
                         binaryen.call("wasm-opt", args)?;
@@ -192,7 +192,7 @@ pub fn build(config: &CrateConfig, quiet: bool) -> Result<BuildResult> {
                     config_path,
                 ];
 
-                if config.release == true {
+                if config.release {
                     args.push("--minify");
                 }
 
@@ -215,7 +215,7 @@ pub fn build(config: &CrateConfig, quiet: bool) -> Result<BuildResult> {
         depth: 0,
     };
     if asset_dir.is_dir() {
-        for entry in std::fs::read_dir(&asset_dir)? {
+        for entry in std::fs::read_dir(asset_dir)? {
             let path = entry?.path();
             if path.is_file() {
                 std::fs::copy(&path, out_dir.join(path.file_name().unwrap()))?;

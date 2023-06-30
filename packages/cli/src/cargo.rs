@@ -55,7 +55,7 @@ impl Metadata {
     /// TODO @Jon, find a different way that doesn't rely on the cargo metadata command (it's slow)
     pub fn get() -> Result<Self> {
         let output = Command::new("cargo")
-            .args(&["metadata"])
+            .args(["metadata"])
             .output()
             .map_err(|_| Error::CargoError("Manifset".to_string()))?;
 

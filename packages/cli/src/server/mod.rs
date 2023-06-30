@@ -631,7 +631,7 @@ fn print_console_info(ip: &String, port: u16, config: &CrateConfig, options: Pre
         "\t> Network : {}",
         format!("http://{}:{}/", ip, port).blue()
     );
-    println!("");
+    println!();
     println!("\t> Profile : {}", profile.green());
     println!("\t> Hot Reload : {}", hot_reload.cyan());
     if let Some(proxies) = proxies {
@@ -644,14 +644,14 @@ fn print_console_info(ip: &String, port: u16, config: &CrateConfig, options: Pre
     }
     println!("\t> Index Template : {}", custom_html_file.green());
     println!("\t> URL Rewrite [index_on_404] : {}", url_rewrite.purple());
-    println!("");
+    println!();
     println!(
         "\t> Build Time Use : {} millis",
         options.elapsed_time.to_string().green().bold()
     );
-    println!("");
+    println!();
 
-    if options.warnings.len() == 0 {
+    if options.warnings.is_empty() {
         log::info!("{}\n", "A perfect compilation!".green().bold());
     } else {
         log::warn!(
@@ -718,9 +718,9 @@ fn get_ip() -> Option<String> {
     };
 
     match socket.local_addr() {
-        Ok(addr) => return Some(addr.ip().to_string()),
-        Err(_) => return None,
-    };
+        Ok(addr) => Some(addr.ip().to_string()),
+        Err(_) => None,
+    }
 }
 
 async fn ws_handler(

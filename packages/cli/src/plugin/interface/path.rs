@@ -18,10 +18,11 @@ impl UserData for PluginPath {
         methods.add_function("parent", |_, path: String| {
             let current_path = PathBuf::from(&path);
             let parent = current_path.parent();
-            if parent.is_none() {
-                return Ok(path);
+
+            if let Some(parent) = parent {
+                Ok(parent.to_str().unwrap().to_string())
             } else {
-                return Ok(parent.unwrap().to_str().unwrap().to_string());
+                Ok(path)
             }
         });
         methods.add_function("exists", |_, path: String| {

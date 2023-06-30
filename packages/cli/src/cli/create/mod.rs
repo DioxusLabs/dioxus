@@ -11,9 +11,11 @@ pub struct Create {
 
 impl Create {
     pub fn create(self) -> Result<()> {
-        let mut args = GenerateArgs::default();
-        args.template_path = TemplatePath {
-            auto_path: Some(self.template),
+        let args = GenerateArgs {
+            template_path: TemplatePath {
+                auto_path: Some(self.template),
+                ..Default::default()
+            },
             ..Default::default()
         };
 
@@ -65,10 +67,8 @@ impl Create {
 fn remove_tripple_newlines(string: &str) -> String {
     let mut new_string = String::new();
     for char in string.chars() {
-        if char == '\n' {
-            if new_string.ends_with("\n\n") {
-                continue;
-            }
+        if char == '\n' && new_string.ends_with("\n\n") {
+            continue;
         }
         new_string.push(char);
     }

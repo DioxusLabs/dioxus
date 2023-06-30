@@ -19,6 +19,7 @@ use clap::{Parser, Subcommand};
 use html_parser::Dom;
 use serde::Deserialize;
 use std::{
+    fmt::Display,
     fs::{remove_dir_all, File},
     io::{Read, Write},
     path::PathBuf,
@@ -71,19 +72,18 @@ pub enum Commands {
     Plugin(plugin::Plugin),
 }
 
-impl Commands {
-    pub fn to_string(&self) -> String {
+impl Display for Commands {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Commands::Build(_) => "build",
-            Commands::Translate(_) => "translate",
-            Commands::Serve(_) => "serve",
-            Commands::Create(_) => "create",
-            Commands::Clean(_) => "clean",
-            Commands::Config(_) => "config",
-            Commands::Plugin(_) => "plugin",
-            Commands::Version(_) => "version",
-            Commands::Autoformat(_) => "fmt",
+            Commands::Build(_) => write!(f, "build"),
+            Commands::Translate(_) => write!(f, "translate"),
+            Commands::Serve(_) => write!(f, "serve"),
+            Commands::Create(_) => write!(f, "create"),
+            Commands::Clean(_) => write!(f, "clean"),
+            Commands::Config(_) => write!(f, "config"),
+            Commands::Plugin(_) => write!(f, "plugin"),
+            Commands::Version(_) => write!(f, "version"),
+            Commands::Autoformat(_) => write!(f, "fmt"),
         }
-        .to_string()
     }
 }
