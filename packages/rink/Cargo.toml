@@ -18,7 +18,7 @@ dioxus-native-core = { workspace = true }
 dioxus-native-core-macro = { workspace = true }
 
 tui = "0.17.0"
-crossterm = "0.23.0"
+crossterm = "0.26.1"
 anyhow = "1.0.42"
 tokio = { workspace = true, features = ["full"] }
 futures = "0.3.19"
