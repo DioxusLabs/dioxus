@@ -20,7 +20,6 @@ use std::{
 };
 use std::{rc::Rc, sync::RwLock};
 use style_attributes::StyleModifier;
-use taffy::Taffy;
 pub use taffy::{geometry::Point, prelude::*};
 use tokio::select;
 use tui::{backend::CrosstermBackend, layout::Rect, Terminal};

@@ -60,7 +60,7 @@ impl EventData {
 pub struct FormData {
     pub value: String,
 
-    pub values: HashMap<String, String>,
+    pub values: HashMap<String, Vec<String>>,
 
     pub files: Option<Files>,
 }
