@@ -4,10 +4,6 @@
 /// ```rust
 /// use dioxus::prelude::*;
 
-/// fn main() {
-///     dioxus_web::launch(app)
-/// }
-
 /// fn app(cx: Scope) -> Element {
 ///     let state = use_state(cx, || true);
 ///     render! {
@@ -60,7 +56,7 @@
 ///     }
 /// }
 /// ```
-pub fn use_on_unmount<C: FnOnce() + 'static, D: FnOnce() + 'static>(cx: &ScopeState, destroy: D) {
+pub fn use_on_unmount<D: FnOnce() + 'static>(cx: &dioxus_core::ScopeState, destroy: D) {
     cx.use_hook(|| LifeCycle {
         ondestroy: Some(destroy),
     });
