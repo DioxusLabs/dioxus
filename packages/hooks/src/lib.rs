@@ -21,6 +21,9 @@ macro_rules! to_owned {
     )*}
 }
 
+mod use_on_unmount;
+pub use use_on_unmount;
+
 mod usecontext;
 pub use usecontext::*;
 
