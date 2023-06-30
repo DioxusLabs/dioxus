@@ -98,7 +98,8 @@ pub fn render<R: Driver>(
     let event_tx_clone = event_tx.clone();
     if !cfg.headless {
         std::thread::spawn(move || {
-            let tick_rate = Duration::from_millis(1000);
+            // Timeout after 10ms when waiting for events
+            let tick_rate = Duration::from_millis(10);
             loop {
                 if crossterm::event::poll(tick_rate).unwrap() {
                     let evt = crossterm::event::read().unwrap();
@@ -171,7 +172,7 @@ pub fn render<R: Driver>(
                             .unwrap();
 
                         // the root node fills the entire area
-                        let mut style = *taffy.style(root_node).unwrap();
+                        let mut style = taffy.style(root_node).unwrap().clone();
                         let new_size = Size {
                             width: Dimension::Points(width),
                             height: Dimension::Points(height),

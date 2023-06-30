@@ -9,22 +9,22 @@
 
 <div align="center">
   <!-- Crates version -->
-  <a href="https://crates.io/crates/dioxus">
-    <img src="https://img.shields.io/crates/v/dioxus.svg?style=flat-square"
+  <a href="https://crates.io/crates/fermi">
+    <img src="https://img.shields.io/crates/v/fermi.svg?style=flat-square"
     alt="Crates.io version" />
   </a>
   <!-- Downloads -->
-  <a href="https://crates.io/crates/dioxus">
-    <img src="https://img.shields.io/crates/d/dioxus.svg?style=flat-square"
+  <a href="https://crates.io/crates/fermi">
+    <img src="https://img.shields.io/crates/d/fermi.svg?style=flat-square"
       alt="Download" />
   </a>
   <!-- docs -->
-  <a href="https://docs.rs/dioxus">
+  <a href="https://docs.rs/fermi">
     <img src="https://img.shields.io/badge/docs-latest-blue.svg?style=flat-square"
       alt="docs.rs docs" />
   </a>
   <!-- CI -->
-  <a href="https://github.com/jkelleyrtp/dioxus/actions">
+  <a href="https://github.com/DioxusLabs/dioxus/actions">
     <img src="https://github.com/dioxuslabs/dioxus/actions/workflows/main.yml/badge.svg"
       alt="CI status" />
   </a>

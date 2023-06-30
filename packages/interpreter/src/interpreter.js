@@ -1,3 +1,5 @@
+import { setAttributeInner } from "./common.js";
+
 class ListenerMap {
   constructor(root) {
     // bubbling events can listen at the root element
@@ -17,8 +19,7 @@ class ListenerMap {
       } else {
         this.global[event_name].active++;
       }
-    }
-    else {
+    } else {
       const id = element.getAttribute("data-dioxus-id");
       if (!this.local[id]) {
         this.local[id] = {};
@@ -32,11 +33,13 @@ class ListenerMap {
     if (bubbles) {
       this.global[event_name].active--;
       if (this.global[event_name].active === 0) {
-        this.root.removeEventListener(event_name, this.global[event_name].callback);
+        this.root.removeEventListener(
+          event_name,
+          this.global[event_name].callback
+        );
         delete this.global[event_name];
       }
-    }
-    else {
+    } else {
       const id = element.getAttribute("data-dioxus-id");
       delete this.local[id][event_name];
       if (this.local[id].length === 0) {
@@ -52,8 +55,15 @@ class ListenerMap {
   }
 }
 
+class InterpreterConfig {
+  constructor(intercept_link_redirects) {
+    this.intercept_link_redirects = intercept_link_redirects;
+  }
+}
+
 class Interpreter {
-  constructor(root) {
+  constructor(root, config) {
+    this.config = config;
     this.root = root;
     this.listeners = new ListenerMap(root);
     this.nodes = [root];
@@ -143,46 +153,9 @@ class Interpreter {
   SetAttribute(id, field, value, ns) {
     if (value === null) {
       this.RemoveAttribute(id, field, ns);
-    }
-    else {
-      const node = this.nodes[id];
-      this.SetAttributeInner(node, field, value, ns);
-    }
-  }
-  SetAttributeInner(node, field, value, ns) {
-    const name = field;
-    if (ns === "style") {
-      // ????? why do we need to do this
-      if (node.style === undefined) {
-        node.style = {};
-      }
-      node.style[name] = value;
-    } else if (ns != null && ns != undefined) {
-      node.setAttributeNS(ns, name, value);
     } else {
-      switch (name) {
-        case "value":
-          if (value !== node.value) {
-            node.value = value;
-          }
-          break;
-        case "checked":
-          node.checked = value === "true";
-          break;
-        case "selected":
-          node.selected = value === "true";
-          break;
-        case "dangerous_inner_html":
-          node.innerHTML = value;
-          break;
-        default:
-          // https://github.com/facebook/react/blob/8b88ac2592c5f555f315f9440cbb665dd1e7457a/packages/react-dom/src/shared/DOMProperty.js#L352-L364
-          if (value === "false" && bool_attrs.hasOwnProperty(name)) {
-            node.removeAttribute(name);
-          } else {
-            node.setAttribute(name, value);
-          }
-      }
+      const node = this.nodes[id];
+      setAttributeInner(node, field, value, ns);
     }
   }
   RemoveAttribute(root, field, ns) {
@@ -204,6 +177,45 @@ class Interpreter {
       node.removeAttribute(name);
     }
   }
+
+  GetClientRect(id) {
+    const node = this.nodes[id];
+    if (!node) {
+      return;
+    }
+    const rect = node.getBoundingClientRect();
+    return {
+      type: "GetClientRect",
+      origin: [rect.x, rect.y],
+      size: [rect.width, rect.height],
+    };
+  }
+
+  ScrollTo(id, behavior) {
+    const node = this.nodes[id];
+    if (!node) {
+      return false;
+    }
+    node.scrollIntoView({
+      behavior: behavior,
+    });
+    return true;
+  }
+
+  /// Set the focus on the element
+  SetFocus(id, focus) {
+    const node = this.nodes[id];
+    if (!node) {
+      return false;
+    }
+    if (focus) {
+      node.focus();
+    } else {
+      node.blur();
+    }
+    return true;
+  }
+
   handleEdits(edits) {
     for (let template of edits.templates) {
       this.SaveTemplate(template);
@@ -212,6 +224,8 @@ class Interpreter {
     for (let edit of edits.edits) {
       this.handleEdit(edit);
     }
+
+    /*POST_HANDLE_EDITS*/
   }
 
   SaveTemplate(template) {
@@ -243,7 +257,7 @@ class Interpreter {
 
         for (let attr of node.attrs) {
           if (attr.type == "Static") {
-            this.SetAttributeInner(el, attr.name, attr.value, attr.namespace);
+            setAttributeInner(el, attr.name, attr.value, attr.namespace);
           }
         }
 
@@ -342,105 +356,129 @@ class Interpreter {
         this.RemoveEventListener(edit.id, edit.name);
         break;
       case "NewEventListener":
-
         let bubbles = event_bubbles(edit.name);
 
-        // this handler is only provided on desktop implementations since this
-        // method is not used by the web implementation
-        let handler = (event) => {
-          let target = event.target;
-          if (target != null) {
-            let realId = target.getAttribute(`data-dioxus-id`);
-            let shouldPreventDefault = target.getAttribute(
-              `dioxus-prevent-default`
-            );
-
-            if (event.type === "click") {
-              // todo call prevent default if it's the right type of event
-              let a_element = target.closest("a");
-              if (a_element != null) {
-                event.preventDefault();
-                if (shouldPreventDefault !== `onclick` && a_element.getAttribute(`dioxus-prevent-default`) !== `onclick`) {
-                  const href = a_element.getAttribute("href");
-                  if (href !== "" && href !== null && href !== undefined) {
-                    window.ipc.postMessage(
-                      serializeIpcMessage("browser_open", { href })
-                    );
-                  }
-                }
-              }
-
-              // also prevent buttons from submitting
-              if (target.tagName === "BUTTON" && event.type == "submit") {
-                event.preventDefault();
-              }
-            }
-            // walk the tree to find the real element
-            while (realId == null) {
-              // we've reached the root we don't want to send an event
-              if (target.parentElement === null) {
-                return;
-              }
-
-              target = target.parentElement;
-              realId = target.getAttribute(`data-dioxus-id`);
-            }
-
-            shouldPreventDefault = target.getAttribute(
-              `dioxus-prevent-default`
-            );
-
-            let contents = serialize_event(event);
-
-            if (shouldPreventDefault === `on${event.type}`) {
-              event.preventDefault();
-            }
-
-            if (event.type === "submit") {
-              event.preventDefault();
-            }
-
-            if (
-              target.tagName === "FORM" &&
-              (event.type === "submit" || event.type === "input")
-            ) {
-              for (let x = 0; x < target.elements.length; x++) {
-                let element = target.elements[x];
-                let name = element.getAttribute("name");
-                if (name != null) {
-                  if (element.getAttribute("type") === "checkbox") {
-                    // @ts-ignore
-                    contents.values[name] = element.checked ? "true" : "false";
-                  } else if (element.getAttribute("type") === "radio") {
-                    if (element.checked) {
-                      contents.values[name] = element.value;
-                    }
-                  } else {
-                    // @ts-ignore
-                    contents.values[name] =
-                      element.value ?? element.textContent;
-                  }
-                }
-              }
-            }
-
-            if (realId === null) {
-              return;
-            }
-            window.ipc.postMessage(
-              serializeIpcMessage("user_event", {
-                name: edit.name,
-                element: parseInt(realId),
-                data: contents,
-                bubbles,
-              })
-            );
-          }
-        };
-        this.NewEventListener(edit.name, edit.id, bubbles, handler);
+        // if this is a mounted listener, we send the event immediately
+        if (edit.name === "mounted") {
+          window.ipc.postMessage(
+            serializeIpcMessage("user_event", {
+              name: edit.name,
+              element: edit.id,
+              data: null,
+              bubbles,
+            })
+          );
+        } else {
+          this.NewEventListener(edit.name, edit.id, bubbles, (event) => {
+            handler(event, edit.name, bubbles, this.config);
+          });
+        }
         break;
     }
   }
+}
+
+// this handler is only provided on the desktop and liveview implementations since this
+// method is not used by the web implementation
+function handler(event, name, bubbles, config) {
+  let target = event.target;
+  if (target != null) {
+    let preventDefaultRequests = target.getAttribute(`dioxus-prevent-default`);
+
+    if (event.type === "click") {
+      // todo call prevent default if it's the right type of event
+      if (config.intercept_link_redirects) {
+        let a_element = target.closest("a");
+        if (a_element != null) {
+          event.preventDefault();
+
+          let elementShouldPreventDefault =
+            preventDefaultRequests && preventDefaultRequests.includes(`onclick`);
+          let aElementShouldPreventDefault = a_element.getAttribute(
+            `dioxus-prevent-default`
+          );
+          let linkShouldPreventDefault =
+            aElementShouldPreventDefault &&
+            aElementShouldPreventDefault.includes(`onclick`);
+
+          if (!elementShouldPreventDefault && !linkShouldPreventDefault) {
+            const href = a_element.getAttribute("href");
+            if (href !== "" && href !== null && href !== undefined) {
+              window.ipc.postMessage(
+                serializeIpcMessage("browser_open", { href })
+              );
+            }
+          }
+        }
+      }
+
+      // also prevent buttons from submitting
+      if (target.tagName === "BUTTON" && event.type == "submit") {
+        event.preventDefault();
+      }
+    }
+
+    const realId = find_real_id(target);
+
+    if (
+      preventDefaultRequests &&
+      preventDefaultRequests.includes(`on${event.type}`)
+    ) {
+      event.preventDefault();
+    }
+
+    if (event.type === "submit") {
+      event.preventDefault();
+    }
+
+    let contents = serialize_event(event);
+
+    /*POST_EVENT_SERIALIZATION*/
+
+    if (
+      target.tagName === "FORM" &&
+      (event.type === "submit" || event.type === "input")
+    ) {
+      if (
+        target.tagName === "FORM" &&
+        (event.type === "submit" || event.type === "input")
+      ) {
+        const formData = new FormData(target);
+
+        for (let name of formData.keys()) {
+          let value = formData.getAll(name);
+          contents.values[name] = value;
+        }
+      }
+    }
+
+    if (realId === null) {
+      return;
+    }
+    window.ipc.postMessage(
+      serializeIpcMessage("user_event", {
+        name: name,
+        element: parseInt(realId),
+        data: contents,
+        bubbles,
+      })
+    );
+  }
+}
+
+function find_real_id(target) {
+  let realId = target.getAttribute(`data-dioxus-id`);
+  // walk the tree to find the real element
+  while (realId == null) {
+    // we've reached the root we don't want to send an event
+    if (target.parentElement === null) {
+      return;
+    }
+
+    target = target.parentElement;
+    realId = target.getAttribute(`data-dioxus-id`);
+  }
+  return realId;
 }
 
 function get_mouse_data(event) {
@@ -722,34 +760,6 @@ function serialize_event(event) {
 function serializeIpcMessage(method, params = {}) {
   return JSON.stringify({ method, params });
 }
-const bool_attrs = {
-  allowfullscreen: true,
-  allowpaymentrequest: true,
-  async: true,
-  autofocus: true,
-  autoplay: true,
-  checked: true,
-  controls: true,
-  default: true,
-  defer: true,
-  disabled: true,
-  formnovalidate: true,
-  hidden: true,
-  ismap: true,
-  itemscope: true,
-  loop: true,
-  multiple: true,
-  muted: true,
-  nomodule: true,
-  novalidate: true,
-  open: true,
-  playsinline: true,
-  readonly: true,
-  required: true,
-  reversed: true,
-  selected: true,
-  truespeed: true,
-};
 
 function is_element_node(node) {
   return node.nodeType == 1;
@@ -921,6 +931,8 @@ function event_bubbles(event) {
       return true;
     case "toggle":
       return true;
+    case "mounted":
+      return false;
   }
 
   return true;

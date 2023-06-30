@@ -1,4 +1,4 @@
-use dioxus_interpreter_js::INTERPRETER_JS;
+use dioxus_interpreter_js::{COMMON_JS, INTERPRETER_JS};
 use std::{
     borrow::Cow,
     path::{Path, PathBuf},
@@ -9,15 +9,41 @@ use wry::{
 };
 
 fn module_loader(root_name: &str) -> String {
+    let js = INTERPRETER_JS.replace(
+        "/*POST_HANDLE_EDITS*/",
+        r#"// Prevent file inputs from opening the file dialog on click
+    let inputs = document.querySelectorAll("input");
+    for (let input of inputs) {
+      if (!input.getAttribute("data-dioxus-file-listener")) {
+        // prevent file inputs from opening the file dialog on click
+        const type = input.getAttribute("type");
+        if (type === "file") {
+          input.setAttribute("data-dioxus-file-listener", true);
+          input.addEventListener("click", (event) => {
+            let target = event.target;
+            let target_id = find_real_id(target);
+            if (target_id !== null) {
+              const send = (event_name) => {
+                const message = serializeIpcMessage("file_diolog", { accept: target.getAttribute("accept"), multiple: target.hasAttribute("multiple"), target: parseInt(target_id), bubbles: event_bubbles(event_name), event: event_name });
+                window.ipc.postMessage(message);
+              };
+              send("change&input");
+            }
+            event.preventDefault();
+          });
+        }
+      }
+    }"#,
+    );
     format!(
         r#"
-<script>
-    {INTERPRETER_JS}
+<script type="module">
+    {js}
 
     let rootname = "{root_name}";
     let root = window.document.getElementById(rootname);
     if (root != null) {{
-        window.interpreter = new Interpreter(root);
+        window.interpreter = new Interpreter(root, new InterpreterConfig(true));
         window.ipc.postMessage(serializeIpcMessage("initialize"));
     }}
 </script>
@@ -58,10 +84,17 @@ pub(super) fn desktop_handler(
             .header("Content-Type", "text/html")
             .body(Cow::from(body))
             .map_err(From::from);
+    } else if request.uri().path() == "/common.js" {
+        return Response::builder()
+            .header("Content-Type", "text/javascript")
+            .body(Cow::from(COMMON_JS.as_bytes()))
+            .map_err(From::from);
     }
 
     // Else, try to serve a file from the filesystem.
-    let path = PathBuf::from(request.uri().path().trim_start_matches('/'));
+    let decoded = urlencoding::decode(request.uri().path().trim_start_matches('/'))
+        .expect("expected URL to be UTF-8 encoded");
+    let path = PathBuf::from(&*decoded);
 
     // If the path is relative, we'll try to serve it from the assets directory.
     let mut asset = get_asset_root()

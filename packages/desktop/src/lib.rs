@@ -5,28 +5,36 @@
 
 mod cfg;
 mod desktop_context;
+mod element;
 mod escape;
 mod eval;
 mod events;
+mod file_upload;
 mod protocol;
+mod query;
 mod shortcut;
 mod waker;
 mod webview;
 
+use crate::query::QueryResult;
 pub use cfg::Config;
 pub use desktop_context::{
-    use_window, use_wry_event_handler, DesktopContext, WryEventHandler, WryEventHandlerId,
+    use_window, use_wry_event_handler, DesktopService, WryEventHandler, WryEventHandlerId,
 };
-use desktop_context::{EventData, UserWindowEvent, WebviewQueue, WindowEventHandlers};
+use desktop_context::{
+    DesktopContext, EventData, UserWindowEvent, WebviewQueue, WindowEventHandlers,
+};
 use dioxus_core::*;
-use dioxus_html::HtmlEvent;
+use dioxus_html::MountedData;
+use dioxus_html::{native_bind::NativeFileEngine, FormData, HtmlEvent};
+use element::DesktopElement;
 pub use eval::{use_eval, EvalResult};
 use futures_util::{pin_mut, FutureExt};
 use shortcut::ShortcutRegistry;
 pub use shortcut::{use_global_shortcut, ShortcutHandle, ShortcutId, ShortcutRegistryError};
-use std::collections::HashMap;
 use std::rc::Rc;
 use std::task::Waker;
+use std::{collections::HashMap, sync::Arc};
 pub use tao::dpi::{LogicalSize, PhysicalSize};
 use tao::event_loop::{EventLoopProxy, EventLoopWindowTarget};
 pub use tao::window::WindowBuilder;
@@ -144,8 +152,7 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
 
     let shortcut_manager = ShortcutRegistry::new(&event_loop);
 
-    // By default, we'll create a new window when the app starts
-    queue.borrow_mut().push(create_new_window(
+    let web_view = create_new_window(
         cfg,
         &event_loop,
         &proxy,
@@ -153,7 +160,10 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
         &queue,
         &event_handlers,
         shortcut_manager.clone(),
-    ));
+    );
+
+    // By default, we'll create a new window when the app starts
+    queue.borrow_mut().push(web_view);
 
     event_loop.run(move |window_event, event_loop, control_flow| {
         *control_flow = ControlFlow::Wait;
@@ -184,7 +194,7 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
             Event::NewEvents(StartCause::Init)
             | Event::UserEvent(UserWindowEvent(EventData::NewWindow, _)) => {
                 for handler in queue.borrow_mut().drain(..) {
-                    let id = handler.webview.window().id();
+                    let id = handler.desktop_context.webview.window().id();
                     webviews.insert(id, handler);
                     _ = proxy.send_event(UserWindowEvent(EventData::Poll, id));
                 }
@@ -220,37 +230,63 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
                 }
 
                 EventData::Ipc(msg) if msg.method() == "user_event" => {
-                    let evt = match serde_json::from_value::<HtmlEvent>(msg.params()) {
+                    let params = msg.params();
+
+                    let evt = match serde_json::from_value::<HtmlEvent>(params) {
                         Ok(value) => value,
                         Err(_) => return,
                     };
 
+                    let HtmlEvent {
+                        element,
+                        name,
+                        bubbles,
+                        data,
+                    } = evt;
+
                     let view = webviews.get_mut(&event.1).unwrap();
 
-                    view.dom
-                        .handle_event(&evt.name, evt.data.into_any(), evt.element, evt.bubbles);
+                    // check for a mounted event placeholder and replace it with a desktop specific element
+                    let as_any = if let dioxus_html::EventData::Mounted = &data {
+                        let query = view
+                            .dom
+                            .base_scope()
+                            .consume_context::<DesktopContext>()
+                            .unwrap()
+                            .query;
 
-                    send_edits(view.dom.render_immediate(), &view.webview);
+                        let element = DesktopElement::new(element, view.webview.clone(), query);
+
+                        Rc::new(MountedData::new(element))
+                    } else {
+                        data.into_any()
+                    };
+
+                    view.dom.handle_event(&name, as_any, element, bubbles);
+
+                    send_edits(view.dom.render_immediate(), &view.desktop_context.webview);
+                }
+
+                // When the webview sends a query, we need to send it to the query manager which handles dispatching the data to the correct pending query
+                EventData::Ipc(msg) if msg.method() == "query" => {
+                    let params = msg.params();
+
+                    if let Ok(result) = serde_json::from_value::<QueryResult>(params) {
+                        let view = webviews.get(&event.1).unwrap();
+                        let query = view
+                            .dom
+                            .base_scope()
+                            .consume_context::<DesktopContext>()
+                            .unwrap()
+                            .query;
+
+                        query.send(result);
+                    }
                 }
 
                 EventData::Ipc(msg) if msg.method() == "initialize" => {
                     let view = webviews.get_mut(&event.1).unwrap();
-                    send_edits(view.dom.rebuild(), &view.webview);
-                }
-
-                // When the webview chirps back with the result of the eval, we send it to the active receiver
-                //
-                // This currently doesn't perform any targeting to the callsite, so if you eval multiple times at once,
-                // you might the wrong result. This should be fixed
-                EventData::Ipc(msg) if msg.method() == "eval_result" => {
-                    webviews[&event.1]
-                        .dom
-                        .base_scope()
-                        .consume_context::<DesktopContext>()
-                        .unwrap()
-                        .eval
-                        .send(msg.params())
-                        .unwrap();
+                    send_edits(view.dom.rebuild(), &view.desktop_context.webview);
                 }
 
                 EventData::Ipc(msg) if msg.method() == "browser_open" => {
@@ -261,6 +297,34 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
                                 log::error!("Open Browser error: {:?}", e);
                             }
                         }
+                    }
+                }
+
+                EventData::Ipc(msg) if msg.method() == "file_diolog" => {
+                    if let Ok(file_diolog) =
+                        serde_json::from_value::<file_upload::FileDiologRequest>(msg.params())
+                    {
+                        let id = ElementId(file_diolog.target);
+                        let event_name = &file_diolog.event;
+                        let event_bubbles = file_diolog.bubbles;
+                        let files = file_upload::get_file_event(&file_diolog);
+                        let data = Rc::new(FormData {
+                            value: Default::default(),
+                            values: Default::default(),
+                            files: Some(Arc::new(NativeFileEngine::new(files))),
+                        });
+
+                        let view = webviews.get_mut(&event.1).unwrap();
+
+                        if event_name == "change&input" {
+                            view.dom
+                                .handle_event("input", data.clone(), id, event_bubbles);
+                            view.dom.handle_event("change", data, id, event_bubbles);
+                        } else {
+                            view.dom.handle_event(event_name, data, id, event_bubbles);
+                        }
+
+                        send_edits(view.dom.render_immediate(), &view.webview);
                     }
                 }
 
@@ -282,9 +346,8 @@ fn create_new_window(
     shortcut_manager: ShortcutRegistry,
 ) -> WebviewHandler {
     let (webview, web_context) = webview::build(&mut cfg, event_loop, proxy.clone());
-
-    dom.base_scope().provide_context(DesktopContext::new(
-        webview.clone(),
+    let desktop_context = Rc::from(DesktopService::new(
+        webview,
         proxy.clone(),
         event_loop.clone(),
         queue.clone(),
@@ -292,11 +355,14 @@ fn create_new_window(
         shortcut_manager,
     ));
 
-    let id = webview.window().id();
+    dom.base_scope().provide_context(desktop_context.clone());
+
+    let id = desktop_context.webview.window().id();
 
     // We want to poll the virtualdom and the event loop at the same time, so the waker will be connected to both
+
     WebviewHandler {
-        webview,
+        desktop_context,
         dom,
         waker: waker::tao_waker(proxy, id),
         web_context,
@@ -305,7 +371,7 @@ fn create_new_window(
 
 struct WebviewHandler {
     dom: VirtualDom,
-    webview: Rc<wry::webview::WebView>,
+    desktop_context: DesktopContext,
     waker: Waker,
     // This is nessisary because of a bug in wry. Wry assumes the webcontext is alive for the lifetime of the webview. We need to keep the webcontext alive, otherwise the webview will crash
     #[allow(dead_code)]
@@ -331,7 +397,7 @@ fn poll_vdom(view: &mut WebviewHandler) {
             }
         }
 
-        send_edits(view.dom.render_immediate(), &view.webview);
+        send_edits(view.dom.render_immediate(), &view.desktop_context.webview);
     }
 }
 

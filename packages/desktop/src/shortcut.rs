@@ -10,7 +10,7 @@ use wry::application::{
     keyboard::{KeyCode, ModifiersState},
 };
 
-use crate::{use_window, DesktopContext};
+use crate::{desktop_context::DesktopContext, use_window};
 
 #[derive(Clone)]
 pub(crate) struct ShortcutRegistry {
@@ -41,17 +41,10 @@ impl Shortcut {
 
 impl ShortcutRegistry {
     pub fn new<T>(target: &EventLoopWindowTarget<T>) -> Self {
-        let myself = Self {
+        Self {
             manager: Rc::new(RefCell::new(ShortcutManager::new(target))),
             shortcuts: Rc::new(RefCell::new(HashMap::new())),
-        };
-        // prevent CTRL+R from reloading the page which breaks apps
-        let _ = myself.add_shortcut(
-            Some(ModifiersState::CONTROL),
-            KeyCode::KeyR,
-            Box::new(|| {}),
-        );
-        myself
+        }
     }
 
     pub(crate) fn call_handlers(&self, id: AcceleratorId) {

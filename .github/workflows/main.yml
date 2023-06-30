@@ -32,30 +32,19 @@ jobs:
     name: Check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
+      - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: sudo apt-get update
       - run: sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev
       - uses: actions/checkout@v3
-      - uses: actions-rs/cargo@v1
-        with:
-          command: check
-          args: --all --examples --tests
+      - run: cargo check --all --examples --tests
 
   test:
     if: github.event.pull_request.draft == false
     name: Test Suite
     runs-on: ubuntu-latest
     steps:
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
+      - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: sudo apt-get update
       - run: sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev
@@ -63,48 +52,31 @@ jobs:
       - uses: browser-actions/setup-firefox@latest
       - uses: jetli/wasm-pack-action@v0.4.0
       - uses: actions/checkout@v3
-      - uses: actions-rs/cargo@v1
-        with:
-          command: make
-          args: tests
+      - run: cargo make tests
 
   fmt:
     if: github.event.pull_request.draft == false
     name: Rustfmt
     runs-on: ubuntu-latest
     steps:
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
+      - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: rustup component add rustfmt
       - uses: actions/checkout@v3
-      - uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --all -- --check
+      - run: cargo fmt --all -- --check
 
   clippy:
     if: github.event.pull_request.draft == false
     name: Clippy
     runs-on: ubuntu-latest
     steps:
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
+      - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: sudo apt-get update
       - run: sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev
       - run: rustup component add clippy
       - uses: actions/checkout@v3
-      - uses: actions-rs/cargo@v1
-        with:
-          command: clippy
-          args: --workspace --examples --tests -- -D warnings
+      - run: cargo clippy --workspace --examples --tests -- -D warnings
 
   # Coverage is disabled until we can fix it
   # coverage:

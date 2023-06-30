@@ -1,6 +1,7 @@
-use crate::Writer;
+use crate::{ifmt_to_string, Writer};
 use dioxus_rsx::*;
 use proc_macro2::Span;
+use quote::ToTokens;
 use std::{
     fmt::Result,
     fmt::{self, Write},
@@ -175,11 +176,7 @@ impl Writer<'_> {
             if !sameline {
                 self.out.indented_tabbed_line()?;
             }
-            write!(
-                self.out,
-                "key: \"{}\"",
-                key.source.as_ref().unwrap().value()
-            )?;
+            write!(self.out, "key: {}", ifmt_to_string(key))?;
             if !attributes.is_empty() {
                 write!(self.out, ",")?;
                 if sameline {
@@ -216,11 +213,7 @@ impl Writer<'_> {
     fn write_attribute(&mut self, attr: &ElementAttrNamed) -> Result {
         match &attr.attr {
             ElementAttr::AttrText { name, value } => {
-                write!(
-                    self.out,
-                    "{name}: \"{value}\"",
-                    value = value.source.as_ref().unwrap().value()
-                )?;
+                write!(self.out, "{name}: {value}", value = ifmt_to_string(value))?;
             }
             ElementAttr::AttrExpression { name, value } => {
                 let out = prettyplease::unparse_expr(value);
@@ -230,15 +223,15 @@ impl Writer<'_> {
             ElementAttr::CustomAttrText { name, value } => {
                 write!(
                     self.out,
-                    "\"{name}\": \"{value}\"",
-                    name = name.value(),
-                    value = value.source.as_ref().unwrap().value()
+                    "{name}: {value}",
+                    name = name.to_token_stream(),
+                    value = ifmt_to_string(value)
                 )?;
             }
 
             ElementAttr::CustomAttrExpression { name, value } => {
                 let out = prettyplease::unparse_expr(value);
-                write!(self.out, "\"{}\": {}", name.value(), out)?;
+                write!(self.out, "{}: {}", name.to_token_stream(), out)?;
             }
 
             ElementAttr::EventTokens { name, tokens } => {
@@ -276,13 +269,12 @@ impl Writer<'_> {
         let start = location.start();
         let line_start = start.line - 1;
 
-        let this_line = self.src[line_start];
-
-        let beginning = if this_line.len() > start.column {
-            this_line[..start.column].trim()
-        } else {
-            ""
-        };
+        let beginning = self
+            .src
+            .get(line_start)
+            .filter(|this_line| this_line.len() > start.column)
+            .map(|this_line| this_line[..start.column].trim())
+            .unwrap_or_default();
 
         beginning.is_empty()
     }
@@ -316,7 +308,7 @@ impl Writer<'_> {
         }
 
         match children {
-            [BodyNode::Text(ref text)] => Some(text.source.as_ref().unwrap().value().len()),
+            [BodyNode::Text(ref text)] => Some(ifmt_to_string(text).len()),
             [BodyNode::Component(ref comp)] => {
                 let attr_len = self.field_len(&comp.fields, &comp.manual_props);
 
@@ -339,7 +331,7 @@ impl Writer<'_> {
 
                 if el.children.len() == 1 {
                     if let BodyNode::Text(ref text) = el.children[0] {
-                        let value = text.source.as_ref().unwrap().value();
+                        let value = ifmt_to_string(text);
 
                         if value.len() + el.name.to_string().len() + attr_len < 80 {
                             return Some(value.len() + el.name.to_string().len() + attr_len);
@@ -357,7 +349,7 @@ impl Writer<'_> {
                     match item {
                         BodyNode::Component(_) | BodyNode::Element(_) => return None,
                         BodyNode::Text(text) => {
-                            total_count += text.source.as_ref().unwrap().value().len()
+                            total_count += ifmt_to_string(text).len();
                         }
                         BodyNode::RawExpr(expr) => match get_expr_length(expr) {
                             Some(len) => total_count += len,
