@@ -45,7 +45,7 @@ pub fn launch_cfg_with_props<Props: 'static>(app: Component<Props>, props: Props
             let mut dioxus_state = dioxus_state.write().unwrap();
 
             // Find any mount events
-            let mounted = dbg!(find_mount_events(&muts));
+            let mounted = find_mount_events(&muts);
 
             dioxus_state.apply_mutations(&mut rdom, muts);
 
