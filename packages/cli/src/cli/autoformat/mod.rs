@@ -1,5 +1,5 @@
 use futures::{stream::FuturesUnordered, StreamExt};
-use std::{fs, process::exit, path::Path};
+use std::{fs, path::Path, process::exit};
 
 use super::*;
 
