@@ -48,7 +48,6 @@ impl WebEvaluator {
                 Err(e) => {
                     // Can't really do much here.
                     log::error!("failed to serialize JsValue to serde_json::Value (eval communication) - {}", e.to_string());
-                    return;
                 }
             }
         });
@@ -96,11 +95,12 @@ impl Evaluator for WebEvaluator {
     }
 
     /// Receives a message from the evaluated JavaScript.
+    #[allow(clippy::await_holding_refcell_ref)]
     async fn recv(&mut self) -> Result<serde_json::Value, EvalError> {
         if !self.ran {
             return Err(EvalError::NotRan);
         }
-        let mut queue = self.received.as_ref().clone().borrow_mut();
+        let mut queue = self.received.borrow_mut();
         Ok(queue.next().await.expect("stream should never return None"))
     }
 

@@ -106,6 +106,12 @@ impl MessageQueue {
     }
 }
 
+impl Default for MessageQueue {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Stream for MessageQueue {
     type Item = serde_json::Value;
 

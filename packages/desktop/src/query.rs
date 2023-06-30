@@ -126,11 +126,11 @@ impl<V: DeserializeOwned> Query<V> {
             match self.reciever.recv().await {
                 Ok(result) => {
                     if result.id == self.id {
-                        break V::deserialize(result.data).map_err(QueryError::DeserializeError);
+                        break V::deserialize(result.data).map_err(QueryError::Deserialize);
                     }
                 }
                 Err(err) => {
-                    break Err(QueryError::RecvError(err));
+                    break Err(QueryError::Recv(err));
                 }
             }
         };
@@ -144,11 +144,7 @@ impl<V: DeserializeOwned> Query<V> {
     pub fn send<S: ToString>(&self, webview: &WebView, message: S) -> Result<(), QueryError> {
         let queue_id = match self.queue_id {
             Some(id) => id,
-            None => {
-                return Err(QueryError::SendError(
-                    "query is not of comm type".to_string(),
-                ))
-            }
+            None => return Err(QueryError::Send("query is not of comm type".to_string())),
         };
 
         let data = message.to_string();
@@ -167,7 +163,7 @@ impl<V: DeserializeOwned> Query<V> {
 
         webview
             .evaluate_script(&script)
-            .map_err(|e| QueryError::SendError(e.to_string()))?;
+            .map_err(|e| QueryError::Send(e.to_string()))?;
 
         Ok(())
     }
@@ -182,7 +178,7 @@ impl<V: DeserializeOwned> Query<V> {
                 }
                 Err(err) => {
                     println!("ERR");
-                    return Err(QueryError::RecvError(err));
+                    return Err(QueryError::Recv(err));
                 }
             }
         }
@@ -213,11 +209,11 @@ impl<V: DeserializeOwned> Query<V> {
 #[derive(Error, Debug)]
 pub enum QueryError {
     #[error("Error receiving query result: {0}")]
-    RecvError(RecvError),
+    Recv(RecvError),
     #[error("Error sending message to query: {0}")]
-    SendError(String),
+    Send(String),
     #[error("Error deserializing query result: {0}")]
-    DeserializeError(serde_json::Error),
+    Deserialize(serde_json::Error),
 }
 
 #[derive(Clone, Debug, Deserialize)]
