@@ -1,20 +1,17 @@
-use std::rc::Rc;
-
 use dioxus_core::ElementId;
 use dioxus_html::{geometry::euclid::Rect, MountedResult, RenderedElementBacking};
-use wry::webview::WebView;
 
-use crate::query::QueryEngine;
+use crate::{desktop_context::DesktopContext, query::QueryEngine};
 
 /// A mounted element passed to onmounted events
 pub struct DesktopElement {
     id: ElementId,
-    webview: Rc<WebView>,
+    webview: DesktopContext,
     query: QueryEngine,
 }
 
 impl DesktopElement {
-    pub(crate) fn new(id: ElementId, webview: Rc<WebView>, query: QueryEngine) -> Self {
+    pub(crate) fn new(id: ElementId, webview: DesktopContext, query: QueryEngine) -> Self {
         Self { id, webview, query }
     }
 }
@@ -37,7 +34,7 @@ impl RenderedElementBacking for DesktopElement {
 
         let fut = self
             .query
-            .new_query::<Option<Rect<f64, f64>>>(&script, &self.webview)
+            .new_query::<Option<Rect<f64, f64>>>(&script, &self.webview.webview)
             .resolve();
         Box::pin(async move {
             match fut.await {
@@ -64,7 +61,7 @@ impl RenderedElementBacking for DesktopElement {
 
         let fut = self
             .query
-            .new_query::<bool>(&script, &self.webview)
+            .new_query::<bool>(&script, &self.webview.webview)
             .resolve();
         Box::pin(async move {
             match fut.await {
@@ -90,7 +87,7 @@ impl RenderedElementBacking for DesktopElement {
 
         let fut = self
             .query
-            .new_query::<bool>(&script, &self.webview)
+            .new_query::<bool>(&script, &self.webview.webview)
             .resolve();
 
         Box::pin(async move {

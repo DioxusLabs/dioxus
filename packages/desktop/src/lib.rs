@@ -18,12 +18,11 @@ mod webview;
 
 use crate::query::QueryResult;
 pub use cfg::Config;
+pub use desktop_context::DesktopContext;
 pub use desktop_context::{
     use_window, use_wry_event_handler, DesktopService, WryEventHandler, WryEventHandlerId,
 };
-use desktop_context::{
-    DesktopContext, EventData, UserWindowEvent, WebviewQueue, WindowEventHandlers,
-};
+use desktop_context::{EventData, UserWindowEvent, WebviewQueue, WindowEventHandlers};
 use dioxus_core::*;
 use dioxus_html::MountedData;
 use dioxus_html::{native_bind::NativeFileEngine, FormData, HtmlEvent};
@@ -253,9 +252,11 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
                             .base_scope()
                             .consume_context::<DesktopContext>()
                             .unwrap()
-                            .query;
+                            .query
+                            .clone();
 
-                        let element = DesktopElement::new(element, view.webview.clone(), query);
+                        let element =
+                            DesktopElement::new(element, view.desktop_context.clone(), query);
 
                         Rc::new(MountedData::new(element))
                     } else {
@@ -278,7 +279,8 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
                             .base_scope()
                             .consume_context::<DesktopContext>()
                             .unwrap()
-                            .query;
+                            .query
+                            .clone();
 
                         query.send(result);
                     }
@@ -324,7 +326,7 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
                             view.dom.handle_event(event_name, data, id, event_bubbles);
                         }
 
-                        send_edits(view.dom.render_immediate(), &view.webview);
+                        send_edits(view.dom.render_immediate(), &view.desktop_context.webview);
                     }
                 }
 

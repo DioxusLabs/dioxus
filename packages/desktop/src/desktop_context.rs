@@ -72,6 +72,7 @@ pub struct DesktopService {
     pub(crate) views: Rc<RefCell<Vec<*mut objc::runtime::Object>>>,
 }
 
+/// A handle to the [`DesktopService`] that can be passed around.
 pub type DesktopContext = Rc<DesktopService>;
 
 /// A smart pointer to the current window.
