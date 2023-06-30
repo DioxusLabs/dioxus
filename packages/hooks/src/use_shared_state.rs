@@ -71,7 +71,7 @@ impl<T> ProvidedStateInner<T> {
 ///     let current_theme = *theme.read();
 ///
 ///     render! {
-///         match &*theme.read() {
+///         match current_theme {
 ///             Theme::Dark => {
 ///                 "Dark mode"
 ///             }

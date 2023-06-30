@@ -1,5 +1,6 @@
 use crossterm::event::{
-    Event as TermEvent, KeyCode as TermKeyCode, KeyModifiers, MouseButton, MouseEventKind,
+    Event as TermEvent, KeyCode as TermKeyCode, KeyModifiers, ModifierKeyCode, MouseButton,
+    MouseEventKind,
 };
 use dioxus_native_core::prelude::*;
 use dioxus_native_core::real_dom::NodeImmutable;
@@ -800,6 +801,34 @@ fn key_from_crossterm_key_code(key_code: TermKeyCode) -> Key {
         TermKeyCode::Char(c) => Key::Character(c.to_string()),
         TermKeyCode::Null => Key::Unidentified,
         TermKeyCode::Esc => Key::Escape,
+        TermKeyCode::CapsLock => Key::CapsLock,
+        TermKeyCode::ScrollLock => Key::ScrollLock,
+        TermKeyCode::NumLock => Key::NumLock,
+        TermKeyCode::PrintScreen => Key::PrintScreen,
+        TermKeyCode::Pause => Key::Pause,
+        TermKeyCode::Media(crossterm::event::MediaKeyCode::FastForward) => Key::MediaFastForward,
+        TermKeyCode::Media(crossterm::event::MediaKeyCode::PlayPause) => Key::MediaPlayPause,
+        TermKeyCode::Media(crossterm::event::MediaKeyCode::TrackPrevious) => {
+            Key::MediaTrackPrevious
+        }
+        TermKeyCode::Media(crossterm::event::MediaKeyCode::TrackNext) => Key::MediaTrackNext,
+        TermKeyCode::Media(crossterm::event::MediaKeyCode::Stop) => Key::MediaStop,
+        TermKeyCode::Media(crossterm::event::MediaKeyCode::Play) => Key::MediaPlay,
+        TermKeyCode::Media(crossterm::event::MediaKeyCode::Pause) => Key::MediaPause,
+        TermKeyCode::Media(crossterm::event::MediaKeyCode::Record) => Key::MediaRecord,
+        TermKeyCode::Media(crossterm::event::MediaKeyCode::Rewind) => Key::MediaRewind,
+        TermKeyCode::Modifier(modifier) => match modifier {
+            ModifierKeyCode::IsoLevel3Shift
+            | ModifierKeyCode::IsoLevel5Shift
+            | ModifierKeyCode::RightShift
+            | ModifierKeyCode::LeftShift => Key::Shift,
+            ModifierKeyCode::RightControl | ModifierKeyCode::LeftControl => Key::Control,
+            ModifierKeyCode::RightAlt | ModifierKeyCode::LeftAlt => Key::Alt,
+            ModifierKeyCode::RightSuper | ModifierKeyCode::LeftSuper => Key::Super,
+            ModifierKeyCode::RightHyper | ModifierKeyCode::LeftHyper => Key::Hyper,
+            ModifierKeyCode::LeftMeta | ModifierKeyCode::RightMeta => Key::Meta,
+        },
+        _ => Key::Unidentified,
     }
 }
 
@@ -929,8 +958,39 @@ fn guess_code_from_crossterm_key_code(key_code: TermKeyCode) -> Option<Code> {
             '~' => Code::Backquote,
             _ => return None,
         },
-        TermKeyCode::Null => return None,
         TermKeyCode::Esc => Code::Escape,
+        TermKeyCode::CapsLock => Code::CapsLock,
+        TermKeyCode::ScrollLock => Code::ScrollLock,
+        TermKeyCode::NumLock => Code::NumLock,
+        TermKeyCode::PrintScreen => Code::PrintScreen,
+        TermKeyCode::Pause => Code::Pause,
+        TermKeyCode::Menu => Code::ContextMenu,
+        TermKeyCode::Media(crossterm::event::MediaKeyCode::FastForward) => Code::MediaFastForward,
+        TermKeyCode::Media(crossterm::event::MediaKeyCode::PlayPause) => Code::MediaPlayPause,
+        TermKeyCode::Media(crossterm::event::MediaKeyCode::TrackPrevious) => {
+            Code::MediaTrackPrevious
+        }
+        TermKeyCode::Media(crossterm::event::MediaKeyCode::TrackNext) => Code::MediaTrackNext,
+        TermKeyCode::Media(crossterm::event::MediaKeyCode::Stop) => Code::MediaStop,
+        TermKeyCode::Media(crossterm::event::MediaKeyCode::Play) => Code::MediaPlay,
+        TermKeyCode::Media(crossterm::event::MediaKeyCode::Pause) => Code::MediaPause,
+        TermKeyCode::Media(crossterm::event::MediaKeyCode::Record) => Code::MediaRecord,
+        TermKeyCode::Media(crossterm::event::MediaKeyCode::Rewind) => Code::MediaRewind,
+        TermKeyCode::Modifier(modifier) => match modifier {
+            ModifierKeyCode::IsoLevel3Shift
+            | ModifierKeyCode::IsoLevel5Shift
+            | ModifierKeyCode::LeftShift => Code::ShiftLeft,
+            ModifierKeyCode::RightShift => Code::ShiftRight,
+            ModifierKeyCode::RightControl => Code::ControlRight,
+            ModifierKeyCode::LeftControl => Code::ControlLeft,
+            ModifierKeyCode::RightAlt => Code::AltRight,
+            ModifierKeyCode::LeftAlt => Code::AltLeft,
+            ModifierKeyCode::RightSuper | ModifierKeyCode::LeftSuper => Code::Super,
+            ModifierKeyCode::RightHyper | ModifierKeyCode::LeftHyper => Code::Hyper,
+            ModifierKeyCode::LeftMeta => Code::MetaLeft,
+            ModifierKeyCode::RightMeta => Code::MetaRight,
+        },
+        _ => return None,
     };
 
     Some(code)

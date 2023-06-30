@@ -39,19 +39,19 @@ tokio = { version = "1.15.0", features = ["full"] }
 
 Now, set up your Axum app to respond on an endpoint.
 
-```rust
+```rust, no_run
 {{#include ../../../examples/hello_world_ssr.rs:main}}
 ```
 
 And then add our endpoint. We can either render `rsx!` directly:
 
-```rust
+```rust, no_run
 {{#include ../../../examples/hello_world_ssr.rs:endpoint}}
 ```
 
 Or we can render VirtualDoms.
 
-```rust
+```rust, no_run
 {{#include ../../../examples/hello_world_ssr.rs:second_endpoint}}
 ```
 

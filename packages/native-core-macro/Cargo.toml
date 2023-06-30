@@ -20,7 +20,7 @@ quote = "1.0"
 
 [dev-dependencies]
 smallvec = "1.6"
-rustc-hash = "1.1.0"
+rustc-hash = { workspace = true }
 anymap = "0.12.1"
-dioxus = { path = "../dioxus" }
-dioxus-native-core = { path = "../native-core" }
+dioxus = { workspace = true }
+dioxus-native-core = { workspace = true }

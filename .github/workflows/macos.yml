@@ -30,14 +30,7 @@ jobs:
     name: Test Suite
     runs-on: macos-latest
     steps:
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
+      - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - uses: actions/checkout@v3
-      - uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --all --tests
+      - run: cargo test --all --tests

@@ -8,8 +8,7 @@ If you're working with pre-rendered assets, output from templates, or output fro
 
 For example, shipping a markdown-to-Dioxus converter might significantly bloat your final application size. Instead, you'll want to pre-render your markdown to HTML and then include the HTML directly in your output. We use this approach for the [Dioxus homepage](https://dioxuslabs.com):
 
-
-```rust
+```rust, no_run
 {{#include ../../../examples/dangerous_inner_html.rs:dangerous_inner_html}}
 ```
 
@@ -17,21 +16,21 @@ For example, shipping a markdown-to-Dioxus converter might significantly bloat y
 >
 > If you're handling untrusted input, make sure to sanitize your HTML before passing it into `dangerous_inner_html` – or just pass it to a Text Element to escape any HTML tags.
 
-
 ## Boolean Attributes
 
 Most attributes, when rendered, will be rendered exactly as the input you provided. However, some attributes are considered "boolean" attributes and just their presence determines whether they affect the output. For these attributes, a provided value of `"false"` will cause them to be removed from the target element.
 
 So this RSX wouldn't actually render the `hidden` attribute:
 
-```rust
+```rust, no_run
 {{#include ../../../examples/boolean_attribute.rs:boolean_attribute}}
 ```
+
 ```html
 <div>hello</div>
 ```
 
-Not all attributes work like this however. *Only the following attributes* have this behavior:
+Not all attributes work like this however. _Only the following attributes_ have this behavior:
 
 - `allowfullscreen`
 - `allowpaymentrequest`

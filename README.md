@@ -64,7 +64,7 @@ fn app(cx: Scope) -> Element {
 }
 ```
 
-Dioxus can be used to deliver webapps, desktop apps, static sites, mobile apps, TUI apps, liveview apps, and more. Dioxus is entirely renderer agnostic and can be used as platform for any renderer.
+Dioxus can be used to deliver webapps, desktop apps, static sites, mobile apps, TUI apps, liveview apps, and more. Dioxus is entirely renderer agnostic and can be used as a platform for any renderer.
 
 If you know React, then you already know Dioxus.
 
