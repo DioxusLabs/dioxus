@@ -16,6 +16,9 @@ mod shortcut;
 mod waker;
 mod webview;
 
+#[cfg(any(target_os = "ios", target_os = "android"))]
+mod mobile_shortcut;
+
 use crate::query::QueryResult;
 pub use cfg::Config;
 pub use desktop_context::DesktopContext;
@@ -120,15 +123,15 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
 
     // Intialize hot reloading if it is enabled
     #[cfg(all(feature = "hot-reload", debug_assertions))]
-    {
+    dioxus_hot_reload::connect({
         let proxy = proxy.clone();
-        dioxus_hot_reload::connect(move |template| {
+        move |template| {
             let _ = proxy.send_event(UserWindowEvent(
                 EventData::HotReloadEvent(template),
                 unsafe { WindowId::dummy() },
             ));
-        });
-    }
+        }
+    });
 
     // We start the tokio runtime *on this thread*
     // Any future we poll later will use this runtime to spawn tasks and for IO
@@ -304,7 +307,7 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
 
                 EventData::Ipc(msg) if msg.method() == "file_diolog" => {
                     if let Ok(file_diolog) =
-                        serde_json::from_value::<file_upload::FileDiologRequest>(msg.params())
+                        serde_json::from_value::<file_upload::FileDialogRequest>(msg.params())
                     {
                         let id = ElementId(file_diolog.target);
                         let event_name = &file_diolog.event;
@@ -359,15 +362,12 @@ fn create_new_window(
 
     dom.base_scope().provide_context(desktop_context.clone());
 
-    let id = desktop_context.webview.window().id();
-
-    // We want to poll the virtualdom and the event loop at the same time, so the waker will be connected to both
-
     WebviewHandler {
+        // We want to poll the virtualdom and the event loop at the same time, so the waker will be connected to both
+        waker: waker::tao_waker(proxy, desktop_context.webview.window().id()),
         desktop_context,
         dom,
-        waker: waker::tao_waker(proxy, id),
-        web_context,
+        _web_context: web_context,
     }
 }
 
@@ -375,9 +375,10 @@ struct WebviewHandler {
     dom: VirtualDom,
     desktop_context: DesktopContext,
     waker: Waker,
-    // This is nessisary because of a bug in wry. Wry assumes the webcontext is alive for the lifetime of the webview. We need to keep the webcontext alive, otherwise the webview will crash
-    #[allow(dead_code)]
-    web_context: WebContext,
+
+    // Wry assumes the webcontext is alive for the lifetime of the webview.
+    // We need to keep the webcontext alive, otherwise the webview will crash
+    _web_context: WebContext,
 }
 
 /// Poll the virtualdom until it's pending
