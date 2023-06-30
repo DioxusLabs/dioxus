@@ -10,7 +10,7 @@ use wry::application::{
     keyboard::{KeyCode, ModifiersState},
 };
 
-use crate::{use_window, DesktopContext};
+use crate::{desktop_context::DesktopContext, use_window};
 
 #[derive(Clone)]
 pub(crate) struct ShortcutRegistry {

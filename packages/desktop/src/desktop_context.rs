@@ -51,10 +51,9 @@ pub(crate) type WebviewQueue = Rc<RefCell<Vec<WebviewHandler>>>;
 /// ```rust, ignore
 ///     let desktop = cx.consume_context::<DesktopContext>().unwrap();
 /// ```
-#[derive(Clone)]
-pub struct DesktopContext {
+pub struct DesktopService {
     /// The wry/tao proxy to the current window
-    pub webview: Rc<WebView>,
+    pub webview: WebView,
 
     /// The proxy to the event loop
     pub proxy: ProxyType,
@@ -74,8 +73,10 @@ pub struct DesktopContext {
     pub(crate) views: Rc<RefCell<Vec<*mut objc::runtime::Object>>>,
 }
 
+pub type DesktopContext = Rc<DesktopService>;
+
 /// A smart pointer to the current window.
-impl std::ops::Deref for DesktopContext {
+impl std::ops::Deref for DesktopService {
     type Target = Window;
 
     fn deref(&self) -> &Self::Target {
@@ -83,9 +84,9 @@ impl std::ops::Deref for DesktopContext {
     }
 }
 
-impl DesktopContext {
+impl DesktopService {
     pub(crate) fn new(
-        webview: Rc<WebView>,
+        webview: WebView,
         proxy: ProxyType,
         event_loop: EventLoopWindowTarget<UserWindowEvent>,
         webviews: WebviewQueue,
@@ -112,7 +113,7 @@ impl DesktopContext {
     /// You can use this to control other windows from the current window.
     ///
     /// Be careful to not create a cycle of windows, or you might leak memory.
-    pub fn new_window(&self, dom: VirtualDom, cfg: Config) -> Weak<WebView> {
+    pub fn new_window(&self, dom: VirtualDom, cfg: Config) -> Weak<DesktopService> {
         let window = create_new_window(
             cfg,
             &self.event_loop,
@@ -123,7 +124,13 @@ impl DesktopContext {
             self.shortcut_manager.clone(),
         );
 
-        let id = window.webview.window().id();
+        let desktop_context = window
+            .dom
+            .base_scope()
+            .consume_context::<Rc<DesktopService>>()
+            .unwrap();
+
+        let id = window.desktop_context.webview.window().id();
 
         self.proxy
             .send_event(UserWindowEvent(EventData::NewWindow, id))
@@ -133,11 +140,9 @@ impl DesktopContext {
             .send_event(UserWindowEvent(EventData::Poll, id))
             .unwrap();
 
-        let webview = window.webview.clone();
-
         self.pending_windows.borrow_mut().push(window);
 
-        Rc::downgrade(&webview)
+        Rc::downgrade(&desktop_context)
     }
 
     /// trigger the drag-window event
@@ -405,7 +410,7 @@ pub fn use_wry_event_handler(
         let id = desktop.create_wry_event_handler(handler);
 
         WryEventHandler {
-            handlers: desktop.event_handlers,
+            handlers: desktop.event_handlers.clone(),
             id,
         }
     })
