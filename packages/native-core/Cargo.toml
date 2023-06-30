@@ -14,18 +14,16 @@ keywords = ["dom", "ui", "gui", "react"]
 dioxus-core = { workspace = true, optional = true }
 
 keyboard-types = "0.6.2"
-taffy = "0.3.12"
 smallvec = "1.6"
 rustc-hash = { workspace = true }
 anymap = "1.0.0-beta.2"
 slab = { workspace = true }
 parking_lot = { version = "0.12.1", features = ["send_guard"] }
-crossbeam-deque = "0.8.2"
 dashmap = "5.4.0"
-hashbrown = { version = "0.13.2", features = ["raw"] }
 
 # for parsing attributes
-lightningcss = "1.0.0-alpha.39"
+taffy = { version = "0.3.12", optional = true }
+lightningcss = { version = "1.0.0-alpha.39", optional = true }
 
 rayon = "1.6.1"
 shipyard = { version = "0.6.2", features = ["proc", "std"], default-features = false }
@@ -39,5 +37,6 @@ dioxus-native-core-macro = { workspace = true }
 
 [features]
 default = []
+layout-attributes = ["dep:taffy", "dep:lightningcss"]
 dioxus = ["dioxus-core"]
 parallel = ["shipyard/parallel"]
