@@ -157,7 +157,33 @@ fn collect_rs_files(folder: &PathBuf, files: &mut Vec<PathBuf>) {
     }
 }
 
-#[test]
+#[tokio::test]
+async fn test_auto_fmt() {
+    let test_rsx = r#"
+                    //
+
+                    rsx! {
+
+                        div {}
+                    }
+
+                    //
+                    //
+                    //
+
+                    "#
+    .to_string();
+
+    let fmt = Autoformat {
+        check: false,
+        raw: Some(test_rsx),
+        file: None,
+    };
+
+    fmt.autoformat().await.unwrap();
+}
+
+/*#[test]
 fn spawn_properly() {
     let out = Command::new("dioxus")
         .args([
@@ -181,4 +207,4 @@ rsx! {
         .expect("failed to execute process");
 
     dbg!(out);
-}
+}*/
