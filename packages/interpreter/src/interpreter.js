@@ -1,3 +1,5 @@
+import { setAttributeInner } from "./common.js";
+
 class ListenerMap {
   constructor(root) {
     // bubbling events can listen at the root element
@@ -53,8 +55,15 @@ class ListenerMap {
   }
 }
 
+class InterpreterConfig {
+  constructor(intercept_link_redirects) {
+    this.intercept_link_redirects = intercept_link_redirects;
+  }
+}
+
 class Interpreter {
-  constructor(root) {
+  constructor(root, config) {
+    this.config = config;
     this.root = root;
     this.listeners = new ListenerMap(root);
     this.nodes = [root];
@@ -146,43 +155,7 @@ class Interpreter {
       this.RemoveAttribute(id, field, ns);
     } else {
       const node = this.nodes[id];
-      this.SetAttributeInner(node, field, value, ns);
-    }
-  }
-  SetAttributeInner(node, field, value, ns) {
-    const name = field;
-    if (ns === "style") {
-      // ????? why do we need to do this
-      if (node.style === undefined) {
-        node.style = {};
-      }
-      node.style[name] = value;
-    } else if (ns != null && ns != undefined) {
-      node.setAttributeNS(ns, name, value);
-    } else {
-      switch (name) {
-        case "value":
-          if (value !== node.value) {
-            node.value = value;
-          }
-          break;
-        case "checked":
-          node.checked = value === "true" || value === true;
-          break;
-        case "selected":
-          node.selected = value === "true" || value === true;
-          break;
-        case "dangerous_inner_html":
-          node.innerHTML = value;
-          break;
-        default:
-          // https://github.com/facebook/react/blob/8b88ac2592c5f555f315f9440cbb665dd1e7457a/packages/react-dom/src/shared/DOMProperty.js#L352-L364
-          if (value === "false" && bool_attrs.hasOwnProperty(name)) {
-            node.removeAttribute(name);
-          } else {
-            node.setAttribute(name, value);
-          }
-      }
+      setAttributeInner(node, field, value, ns);
     }
   }
   RemoveAttribute(root, field, ns) {
@@ -284,7 +257,7 @@ class Interpreter {
 
         for (let attr of node.attrs) {
           if (attr.type == "Static") {
-            this.SetAttributeInner(el, attr.name, attr.value, attr.namespace);
+            setAttributeInner(el, attr.name, attr.value, attr.namespace);
           }
         }
 
@@ -397,7 +370,7 @@ class Interpreter {
           );
         } else {
           this.NewEventListener(edit.name, edit.id, bubbles, (event) => {
-            handler(event, edit.name, bubbles);
+            handler(event, edit.name, bubbles, this.config);
           });
         }
         break;
@@ -407,32 +380,34 @@ class Interpreter {
 
 // this handler is only provided on the desktop and liveview implementations since this
 // method is not used by the web implementation
-function handler(event, name, bubbles) {
+function handler(event, name, bubbles, config) {
   let target = event.target;
   if (target != null) {
     let preventDefaultRequests = target.getAttribute(`dioxus-prevent-default`);
 
     if (event.type === "click") {
       // todo call prevent default if it's the right type of event
-      let a_element = target.closest("a");
-      if (a_element != null) {
-        event.preventDefault();
+      if (config.intercept_link_redirects) {
+        let a_element = target.closest("a");
+        if (a_element != null) {
+          event.preventDefault();
 
-        let elementShouldPreventDefault =
-          preventDefaultRequests && preventDefaultRequests.includes(`onclick`);
-        let aElementShouldPreventDefault = a_element.getAttribute(
-          `dioxus-prevent-default`
-        );
-        let linkShouldPreventDefault =
-          aElementShouldPreventDefault &&
-          aElementShouldPreventDefault.includes(`onclick`);
+          let elementShouldPreventDefault =
+            preventDefaultRequests && preventDefaultRequests.includes(`onclick`);
+          let aElementShouldPreventDefault = a_element.getAttribute(
+            `dioxus-prevent-default`
+          );
+          let linkShouldPreventDefault =
+            aElementShouldPreventDefault &&
+            aElementShouldPreventDefault.includes(`onclick`);
 
-        if (!elementShouldPreventDefault && !linkShouldPreventDefault) {
-          const href = a_element.getAttribute("href");
-          if (href !== "" && href !== null && href !== undefined) {
-            window.ipc.postMessage(
-              serializeIpcMessage("browser_open", { href })
-            );
+          if (!elementShouldPreventDefault && !linkShouldPreventDefault) {
+            const href = a_element.getAttribute("href");
+            if (href !== "" && href !== null && href !== undefined) {
+              window.ipc.postMessage(
+                serializeIpcMessage("browser_open", { href })
+              );
+            }
           }
         }
       }
@@ -785,34 +760,6 @@ function serialize_event(event) {
 function serializeIpcMessage(method, params = {}) {
   return JSON.stringify({ method, params });
 }
-const bool_attrs = {
-  allowfullscreen: true,
-  allowpaymentrequest: true,
-  async: true,
-  autofocus: true,
-  autoplay: true,
-  checked: true,
-  controls: true,
-  default: true,
-  defer: true,
-  disabled: true,
-  formnovalidate: true,
-  hidden: true,
-  ismap: true,
-  itemscope: true,
-  loop: true,
-  multiple: true,
-  muted: true,
-  nomodule: true,
-  novalidate: true,
-  open: true,
-  playsinline: true,
-  readonly: true,
-  required: true,
-  reversed: true,
-  selected: true,
-  truespeed: true,
-};
 
 function is_element_node(node) {
   return node.nodeType == 1;
@@ -945,10 +892,9 @@ function event_bubbles(event) {
     case "error":
       return false;
     case "loadeddata":
-      return false;
     case "loadedmetadata":
-      return false;
     case "loadstart":
+    case "load":
       return false;
     case "pause":
       return false;

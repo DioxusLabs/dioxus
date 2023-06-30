@@ -13,21 +13,21 @@ license = "MIT/Apache-2.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-dioxus = { path = "../dioxus", version = "^0.3.0" }
-dioxus-core = { path = "../core", version = "^0.3.0", features = ["serialize"] }
-dioxus-html = { path = "../html", version = "^0.3.0" }
-dioxus-native-core = { path = "../native-core", version = "^0.2.0", features = ["dioxus", "layout-attributes"] }
-dioxus-native-core-macro = { path = "../native-core-macro", version = "^0.3.0" }
-dioxus-hot-reload = { path = "../hot-reload", optional = true }
-rink = { path = "../rink" }
+dioxus = { workspace = true }
+dioxus-core = { workspace = true, features = ["serialize"] }
+dioxus-html = { workspace = true }
+dioxus-native-core = { workspace = true, features = ["dioxus"] }
+dioxus-native-core-macro = { workspace = true }
+dioxus-hot-reload = { workspace = true, optional = true }
+rink = { workspace = true }
 
-crossterm = "0.23.0"
-tokio = { version = "1.15.0", features = ["full"] }
+crossterm = "0.26.0"
+tokio = { workspace = true, features = ["full"] }
 futures = "0.3.19"
 taffy = "0.3.12"
 
 [dev-dependencies]
-dioxus = { path = "../dioxus" }
+dioxus = { workspace = true }
 tokio = { version = "1" }
 criterion = "0.3.5"
 

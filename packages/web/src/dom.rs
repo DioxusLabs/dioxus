@@ -11,13 +11,13 @@ use dioxus_core::{
     BorrowedAttributeValue, ElementId, Mutation, Template, TemplateAttribute, TemplateNode,
 };
 use dioxus_html::{event_bubbles, CompositionData, FileEngine, FormData, MountedData};
-use dioxus_interpreter_js::{get_node, save_template, Channel};
+use dioxus_interpreter_js::{get_node, minimal_bindings, save_template, Channel};
 use futures_channel::mpsc;
 use js_sys::Array;
 use rustc_hash::FxHashMap;
 use std::{any::Any, rc::Rc, sync::Arc};
-use wasm_bindgen::{closure::Closure, prelude::wasm_bindgen, JsCast};
-use web_sys::{console, Document, Element, Event, HtmlElement};
+use wasm_bindgen::{closure::Closure, prelude::wasm_bindgen, JsCast, JsValue};
+use web_sys::{Document, Element, Event};
 
 use crate::{file_engine::WebFileEngine, Config};
 
@@ -135,14 +135,12 @@ impl WebsysDom {
                         namespace,
                     } = attr
                     {
-                        match namespace {
-                            Some(ns) if *ns == "style" => {
-                                el.dyn_ref::<HtmlElement>()
-                                    .map(|f| f.style().set_property(name, value));
-                            }
-                            Some(ns) => el.set_attribute_ns(Some(ns), name, value).unwrap(),
-                            None => el.set_attribute(name, value).unwrap(),
-                        }
+                        minimal_bindings::setAttributeInner(
+                            el.clone().into(),
+                            name,
+                            JsValue::from_str(value),
+                            *namespace,
+                        );
                     }
                 }
                 for child in *children {
@@ -259,7 +257,6 @@ impl WebsysDom {
 // We need tests that simulate clicks/etc and make sure every event type works.
 pub fn virtual_event_from_websys_event(event: web_sys::Event, target: Element) -> Rc<dyn Any> {
     use dioxus_html::events::*;
-    console::log_1(&event.clone().into());
 
     match event.type_().as_str() {
         "copy" | "cut" | "paste" => Rc::new(ClipboardData {}),
@@ -295,9 +292,11 @@ pub fn virtual_event_from_websys_event(event: web_sys::Event, target: Element) -
         }
         "transitionend" => Rc::new(TransitionData::from(event)),
         "abort" | "canplay" | "canplaythrough" | "durationchange" | "emptied" | "encrypted"
-        | "ended" | "error" | "loadeddata" | "loadedmetadata" | "loadstart" | "pause" | "play"
+        | "ended" | "loadeddata" | "loadedmetadata" | "loadstart" | "pause" | "play"
         | "playing" | "progress" | "ratechange" | "seeked" | "seeking" | "stalled" | "suspend"
         | "timeupdate" | "volumechange" | "waiting" => Rc::new(MediaData {}),
+        "error" => Rc::new(ImageData { load_error: true }),
+        "load" => Rc::new(ImageData { load_error: false }),
         "toggle" => Rc::new(ToggleData {}),
 
         _ => Rc::new(()),

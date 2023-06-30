@@ -1,4 +1,4 @@
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, rc::Rc, str::FromStr};
 
 use dioxus_core::ScopeState;
 use dioxus_html::input_data::keyboard_types::Modifiers;
@@ -10,7 +10,7 @@ use wry::application::{
     keyboard::{KeyCode, ModifiersState},
 };
 
-use crate::{use_window, DesktopContext};
+use crate::{desktop_context::DesktopContext, use_window};
 
 #[derive(Clone)]
 pub(crate) struct ShortcutRegistry {
@@ -41,17 +41,10 @@ impl Shortcut {
 
 impl ShortcutRegistry {
     pub fn new<T>(target: &EventLoopWindowTarget<T>) -> Self {
-        let myself = Self {
+        Self {
             manager: Rc::new(RefCell::new(ShortcutManager::new(target))),
             shortcuts: Rc::new(RefCell::new(HashMap::new())),
-        };
-        // prevent CTRL+R from reloading the page which breaks apps
-        let _ = myself.add_shortcut(
-            Some(ModifiersState::CONTROL),
-            KeyCode::KeyR,
-            Box::new(|| {}),
-        );
-        myself
+        }
     }
 
     pub(crate) fn call_handlers(&self, id: AcceleratorId) {
@@ -64,11 +57,9 @@ impl ShortcutRegistry {
 
     pub(crate) fn add_shortcut(
         &self,
-        modifiers: impl Into<Option<ModifiersState>>,
-        key: KeyCode,
+        accelerator: Accelerator,
         callback: Box<dyn FnMut()>,
     ) -> Result<ShortcutId, ShortcutRegistryError> {
-        let accelerator = Accelerator::new(modifiers, key);
         let accelerator_id = accelerator.clone().id();
         let mut shortcuts = self.shortcuts.borrow_mut();
         Ok(
@@ -118,12 +109,6 @@ impl ShortcutRegistry {
         let mut shortcuts = self.shortcuts.borrow_mut();
         shortcuts.clear();
         let _ = self.manager.borrow_mut().unregister_all();
-        // prevent CTRL+R from reloading the page which breaks apps
-        let _ = self.add_shortcut(
-            Some(ModifiersState::CONTROL),
-            KeyCode::KeyR,
-            Box::new(|| {}),
-        );
     }
 }
 
@@ -151,22 +136,45 @@ pub struct ShortcutHandle {
     pub shortcut_id: ShortcutId,
 }
 
+pub trait IntoAccelerator {
+    fn accelerator(&self) -> Accelerator;
+}
+
+impl IntoAccelerator for (dioxus_html::KeyCode, ModifiersState) {
+    fn accelerator(&self) -> Accelerator {
+        Accelerator::new(Some(self.1), self.0.into_key_code())
+    }
+}
+
+impl IntoAccelerator for (ModifiersState, dioxus_html::KeyCode) {
+    fn accelerator(&self) -> Accelerator {
+        Accelerator::new(Some(self.0), self.1.into_key_code())
+    }
+}
+
+impl IntoAccelerator for dioxus_html::KeyCode {
+    fn accelerator(&self) -> Accelerator {
+        Accelerator::new(None, self.into_key_code())
+    }
+}
+
+impl IntoAccelerator for &str {
+    fn accelerator(&self) -> Accelerator {
+        Accelerator::from_str(self).unwrap()
+    }
+}
+
 /// Get a closure that executes any JavaScript in the WebView context.
 pub fn use_global_shortcut(
     cx: &ScopeState,
-    key: impl IntoKeyCode,
-    modifiers: impl IntoModifersState,
+    accelerator: impl IntoAccelerator,
     handler: impl FnMut() + 'static,
 ) -> &Result<ShortcutHandle, ShortcutRegistryError> {
     let desktop = use_window(cx);
     cx.use_hook(move || {
         let desktop = desktop.clone();
 
-        let id = desktop.create_shortcut(
-            key.into_key_code(),
-            modifiers.into_modifiers_state(),
-            handler,
-        );
+        let id = desktop.create_shortcut(accelerator.accelerator(), handler);
 
         Ok(ShortcutHandle {
             desktop,

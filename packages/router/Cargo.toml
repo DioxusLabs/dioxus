@@ -11,8 +11,8 @@ keywords = ["dom", "ui", "gui", "react", "wasm"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-dioxus = { path = "../dioxus", version = "0.3.0"}
-futures-channel = "0.3.21"
+dioxus = { workspace = true}
+futures-channel = { workspace = true }
 url = { version = "2.2.2", default-features = false }
 
 # for wasm
@@ -28,12 +28,12 @@ web-sys = { version = "0.3", features = [
     "Window",
     "Location",
 ], optional = true }
-wasm-bindgen = { version = "0.2", optional = true }
+wasm-bindgen = { workspace = true, optional = true }
 js-sys = { version = "0.3", optional = true }
 gloo-events = { version = "0.1.1", optional = true }
-log = "0.4.14"
+log = { workspace = true }
 thiserror = "1.0.30"
-futures-util = "0.3.21"
+futures-util = { workspace = true }
 serde = { version = "1", optional = true }
 serde_urlencoded = { version = "0.7.1", optional = true }
 
@@ -48,13 +48,13 @@ console_error_panic_hook = "0.1.7"
 wasm-logger = "0.2.0"
 wasm-bindgen-test = "0.3"
 gloo-utils = "0.1.2"
-dioxus-web = { path = "../web", version = "0.3.0" }
-# dioxus-desktop = { path = "../desktop", optional = true }
+dioxus-web = { workspace = true }
+# dioxus-desktop = { workspace = true, optional = true }
 
 # not wasm
 
 [target.wasm32-unknown-unknown.dev-dependencies]
-dioxus-router = { path = ".", features = ["web"] }
+dioxus-router = { workspace = true, features = ["web"] }
 
 [dev-dependencies.web-sys]
 version = "0.3"

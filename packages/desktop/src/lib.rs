@@ -19,9 +19,11 @@ mod webview;
 use crate::query::QueryResult;
 pub use cfg::Config;
 pub use desktop_context::{
-    use_window, use_wry_event_handler, DesktopContext, WryEventHandler, WryEventHandlerId,
+    use_window, use_wry_event_handler, DesktopService, WryEventHandler, WryEventHandlerId,
 };
-use desktop_context::{EventData, UserWindowEvent, WebviewQueue, WindowEventHandlers};
+use desktop_context::{
+    DesktopContext, EventData, UserWindowEvent, WebviewQueue, WindowEventHandlers,
+};
 use dioxus_core::*;
 use dioxus_html::MountedData;
 use dioxus_html::{native_bind::NativeFileEngine, FormData, HtmlEvent};
@@ -150,8 +152,7 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
 
     let shortcut_manager = ShortcutRegistry::new(&event_loop);
 
-    // By default, we'll create a new window when the app starts
-    queue.borrow_mut().push(create_new_window(
+    let web_view = create_new_window(
         cfg,
         &event_loop,
         &proxy,
@@ -159,7 +160,10 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
         &queue,
         &event_handlers,
         shortcut_manager.clone(),
-    ));
+    );
+
+    // By default, we'll create a new window when the app starts
+    queue.borrow_mut().push(web_view);
 
     event_loop.run(move |window_event, event_loop, control_flow| {
         *control_flow = ControlFlow::Wait;
@@ -190,7 +194,7 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
             Event::NewEvents(StartCause::Init)
             | Event::UserEvent(UserWindowEvent(EventData::NewWindow, _)) => {
                 for handler in queue.borrow_mut().drain(..) {
-                    let id = handler.webview.window().id();
+                    let id = handler.desktop_context.webview.window().id();
                     webviews.insert(id, handler);
                     _ = proxy.send_event(UserWindowEvent(EventData::Poll, id));
                 }
@@ -260,7 +264,7 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
 
                     view.dom.handle_event(&name, as_any, element, bubbles);
 
-                    send_edits(view.dom.render_immediate(), &view.webview);
+                    send_edits(view.dom.render_immediate(), &view.desktop_context.webview);
                 }
 
                 // When the webview sends a query, we need to send it to the query manager which handles dispatching the data to the correct pending query
@@ -282,7 +286,7 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
 
                 EventData::Ipc(msg) if msg.method() == "initialize" => {
                     let view = webviews.get_mut(&event.1).unwrap();
-                    send_edits(view.dom.rebuild(), &view.webview);
+                    send_edits(view.dom.rebuild(), &view.desktop_context.webview);
                 }
 
                 EventData::Ipc(msg) if msg.method() == "browser_open" => {
@@ -342,9 +346,8 @@ fn create_new_window(
     shortcut_manager: ShortcutRegistry,
 ) -> WebviewHandler {
     let (webview, web_context) = webview::build(&mut cfg, event_loop, proxy.clone());
-
-    dom.base_scope().provide_context(DesktopContext::new(
-        webview.clone(),
+    let desktop_context = Rc::from(DesktopService::new(
+        webview,
         proxy.clone(),
         event_loop.clone(),
         queue.clone(),
@@ -352,11 +355,14 @@ fn create_new_window(
         shortcut_manager,
     ));
 
-    let id = webview.window().id();
+    dom.base_scope().provide_context(desktop_context.clone());
+
+    let id = desktop_context.webview.window().id();
 
     // We want to poll the virtualdom and the event loop at the same time, so the waker will be connected to both
+
     WebviewHandler {
-        webview,
+        desktop_context,
         dom,
         waker: waker::tao_waker(proxy, id),
         web_context,
@@ -365,7 +371,7 @@ fn create_new_window(
 
 struct WebviewHandler {
     dom: VirtualDom,
-    webview: Rc<wry::webview::WebView>,
+    desktop_context: DesktopContext,
     waker: Waker,
     // This is nessisary because of a bug in wry. Wry assumes the webcontext is alive for the lifetime of the webview. We need to keep the webcontext alive, otherwise the webview will crash
     #[allow(dead_code)]
@@ -391,7 +397,7 @@ fn poll_vdom(view: &mut WebviewHandler) {
             }
         }
 
-        send_edits(view.dom.render_immediate(), &view.webview);
+        send_edits(view.dom.render_immediate(), &view.desktop_context.webview);
     }
 }
 

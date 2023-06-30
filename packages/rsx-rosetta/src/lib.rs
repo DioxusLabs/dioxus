@@ -1,6 +1,6 @@
 use convert_case::{Case, Casing};
 use dioxus_rsx::{
-    BodyNode, CallBody, Component, Element, ElementAttr, ElementAttrNamed, IfmtInput,
+    BodyNode, CallBody, Component, Element, ElementAttr, ElementAttrNamed, ElementName, IfmtInput,
 };
 pub use html_parser::{Dom, Node};
 use proc_macro2::{Ident, Span};
@@ -21,7 +21,7 @@ pub fn rsx_node_from_html(node: &Node) -> Option<BodyNode> {
         Node::Text(text) => Some(BodyNode::Text(ifmt_from_text(text))),
         Node::Element(el) => {
             let el_name = el.name.to_case(Case::Snake);
-            let el_name = Ident::new(el_name.as_str(), Span::call_site());
+            let el_name = ElementName::Ident(Ident::new(el_name.as_str(), Span::call_site()));
 
             let mut attributes: Vec<_> = el
                 .attributes

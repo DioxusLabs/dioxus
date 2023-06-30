@@ -11,24 +11,25 @@ documentation = "https://dioxuslabs.com"
 keywords = ["dom", "ui", "gui", "react", "wasm"]
 
 [dependencies]
-dioxus-core = { path = "../core", version = "^0.3.0", features = ["serialize"] }
-dioxus-html = { path = "../html", version = "^0.3.0", features = ["wasm-bind"] }
-dioxus-interpreter-js = { path = "../interpreter", version = "^0.3.0", features = [
-    "sledgehammer"
+dioxus-core = { workspace = true, features = ["serialize"] }
+dioxus-html = { workspace = true, features = ["wasm-bind"] }
+dioxus-interpreter-js = { workspace = true, features = [
+    "sledgehammer",
+    "minimal_bindings",
 ] }
 
 js-sys = "0.3.56"
-wasm-bindgen = { version = "0.2.79", features = ["enable-interning"] }
+wasm-bindgen = { workspace = true, features = ["enable-interning"] }
 wasm-bindgen-futures = "0.4.29"
-log = "0.4.14"
-rustc-hash = "1.1.0"
+log = { workspace = true }
+rustc-hash = { workspace = true }
 console_error_panic_hook = { version = "0.1.7", optional = true }
 once_cell = "1.9.0"
 anyhow = "1.0.53"
 gloo-timers = { version = "0.2.3", features = ["futures"] }
-futures-util = "0.3.19"
+futures-util = { workspace = true, features = ["std", "async-await", "async-await-macro"] }
 smallstr = "0.2.0"
-futures-channel = "0.3.21"
+futures-channel = { workspace = true }
 serde_json = { version = "1.0" }
 serde = { version = "1.0" }
 serde-wasm-bindgen = "0.4.5"
@@ -88,8 +89,8 @@ panic_hook = ["console_error_panic_hook"]
 hydrate = []
 
 [dev-dependencies]
-dioxus = { path = "../dioxus", version = "0.3.0" }
+dioxus = { workspace = true }
 wasm-bindgen-test = "0.3.29"
-dioxus-ssr = { path = "../ssr", version = "0.3.0"}
+dioxus-ssr = { workspace = true}
 wasm-logger = "0.2.0"
-dioxus-web = { path = ".", features = ["hydrate"] }
+dioxus-web = { workspace = true, features = ["hydrate"] }

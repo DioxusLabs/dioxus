@@ -1,4 +1,4 @@
-use crate::{writer::Location, Writer};
+use crate::{ifmt_to_string, writer::Location, Writer};
 use dioxus_rsx::*;
 use quote::ToTokens;
 use std::fmt::{Result, Write};
@@ -170,9 +170,9 @@ impl Writer<'_> {
                 ContentField::Formatted(s) => {
                     write!(
                         self.out,
-                        "{}: \"{}\"",
+                        "{}: {}",
                         name,
-                        s.source.as_ref().unwrap().value()
+                        s.source.as_ref().unwrap().to_token_stream()
                     )?;
                 }
                 ContentField::OnHandlerRaw(exp) => {
@@ -215,7 +215,7 @@ impl Writer<'_> {
         let attr_len = fields
             .iter()
             .map(|field| match &field.content {
-                ContentField::Formatted(s) => s.source.as_ref().unwrap().value().len() ,
+                ContentField::Formatted(s) => ifmt_to_string(s).len() ,
                 ContentField::OnHandlerRaw(exp) | ContentField::ManExpr(exp) => {
                     let formatted = prettyplease::unparse_expr(exp);
                     let len = if formatted.contains('\n') {
