@@ -1,6 +1,6 @@
 //! A shared pool of renderers for efficient server side rendering.
 
-use std::{fmt::Write, sync::Arc};
+use std::sync::Arc;
 
 use dioxus::prelude::VirtualDom;
 use dioxus_ssr::{
