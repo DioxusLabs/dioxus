@@ -105,6 +105,34 @@ pub trait Routable: std::fmt::Display + std::str::FromStr + Clone + 'static {
 
     /// Render the route at the given level
     fn render<'a>(&self, cx: &'a ScopeState, level: usize) -> Element<'a>;
+
+    /// Gets a list of all static routes
+    fn static_routes() -> Vec<Self> {
+        Self::SITE_MAP
+            .iter()
+            .flat_map(|segment| segment.flatten())
+            .filter_map(|route| {
+                if route
+                    .iter()
+                    .all(|segment| matches!(segment, SegmentType::Static(_)))
+                {
+                    Self::from_str(
+                        &route
+                            .iter()
+                            .map(|segment| match segment {
+                                SegmentType::Static(s) => s.to_string(),
+                                _ => unreachable!(),
+                            })
+                            .collect::<Vec<_>>()
+                            .join("/"),
+                    )
+                    .ok()
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
 }
 
 trait RoutableFactory {
