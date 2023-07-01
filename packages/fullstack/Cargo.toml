@@ -17,16 +17,17 @@ server_fn = { git = "https://github.com/leptos-rs/leptos", rev = "15a4e54435eb5a
 dioxus_server_macro = { path = "server-macro" }
 
 # warp
-warp = { version = "0.3.3", optional = true }
+warp = { version = "0.3.5", features = ["compression-gzip"], optional = true }
 http-body = { version = "0.4.5", optional = true }
 
 # axum
 axum = { version = "0.6.1", features = ["ws", "macros"], optional = true }
-tower-http = { version = "0.4.0", optional = true, features = ["fs"] }
+tower-http = { version = "0.4.0", optional = true, features = ["fs", "compression-gzip"] }
+tower = { version = "0.4.13", optional = true }
 axum-macros = "0.3.7"
 
 # salvo
-salvo = { version = "0.37.7", optional = true, features = ["serve-static", "ws"] }
+salvo = { version = "0.37.7", optional = true, features = ["serve-static", "ws", "compression"] }
 serde = "1.0.159"
 
 # Dioxus + SSR
@@ -63,7 +64,7 @@ default = ["hot-reload", "default-tls"]
 router = ["dioxus-router"]
 hot-reload = ["serde_json", "futures-util"]
 warp = ["dep:warp", "http-body", "ssr"]
-axum = ["dep:axum", "tower-http", "ssr"]
+axum = ["dep:axum", "tower-http", "tower", "ssr"]
 salvo = ["dep:salvo", "ssr"]
 ssr = ["server_fn/ssr", "tokio", "dioxus-ssr", "hyper", "http", "dioxus-router/ssr", "tokio-stream"]
 default-tls = ["server_fn/default-tls"]

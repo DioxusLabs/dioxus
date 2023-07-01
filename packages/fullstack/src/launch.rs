@@ -132,10 +132,16 @@ pub async fn launch_server<P: Clone + serde::Serialize + Send + Sync + 'static>(
     #[cfg(all(feature = "axum", not(feature = "warp"), not(feature = "salvo")))]
     {
         use crate::adapters::axum_adapter::DioxusRouterExt;
+        use tower::ServiceBuilder;
+
         axum::Server::bind(&addr)
             .serve(
                 axum::Router::new()
                     .serve_dioxus_application("", cfg)
+                    .layer(
+                        ServiceBuilder::new()
+                            .layer(tower_http::compression::CompressionLayer::new().gzip(true)),
+                    )
                     .into_make_service(),
             )
             .await
@@ -143,14 +149,21 @@ pub async fn launch_server<P: Clone + serde::Serialize + Send + Sync + 'static>(
     }
     #[cfg(all(feature = "warp", not(feature = "axum"), not(feature = "salvo")))]
     {
-        warp::serve(crate::prelude::serve_dioxus_application("", cfg))
-            .run(addr)
-            .await;
+        use warp::Filter;
+        warp::serve(
+            crate::prelude::serve_dioxus_application("", cfg)
+                .with(warp::filters::compression::gzip()),
+        )
+        .run(addr)
+        .await;
     }
     #[cfg(all(feature = "salvo", not(feature = "axum"), not(feature = "warp")))]
     {
         use crate::adapters::salvo_adapter::DioxusRouterExt;
-        let router = salvo::Router::new().serve_dioxus_application("", cfg);
+        let router = salvo::Router::new().serve_dioxus_application("", cfg).hoop(
+            salvo::compression::Compression::new()
+                .with_algos(&[salvo::prelude::CompressionAlgo::Gzip]),
+        );
         salvo::Server::new(salvo::listener::TcpListener::bind(addr))
             .serve(router)
             .await;
