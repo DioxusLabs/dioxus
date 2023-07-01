@@ -36,7 +36,7 @@ macro_rules! launch {
         let web_cfg = dioxus_web::Config::new();
     };
 
-    (@server_cfg $server_cfg:ident $cfg:expr) => {
+    (@serve_cfg $server_cfg:ident $cfg:expr) => {
         #[cfg(feature = "ssr")]
         let $server_cfg = $cfg;
     };
