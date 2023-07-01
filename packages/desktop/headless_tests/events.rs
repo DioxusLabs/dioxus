@@ -29,18 +29,25 @@ pub fn main() {
 
 fn mock_event(cx: &ScopeState, id: &'static str, value: &'static str) {
     use_effect(cx, (), |_| {
-        let desktop_context: DesktopContext = cx.consume_context().unwrap();
-        async move {
-            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-            desktop_context.eval(&format!(
-                r#"let element = document.getElementById('{}');
+        let eval = dioxus_html::prelude::use_eval(
+            cx,
+            format!(
+                r#"
+                let element = document.getElementById('{}');
                 // Dispatch a synthetic event
                 const event = {};
                 console.log(element, event);
                 element.dispatchEvent(event);
                 "#,
                 id, value
-            ));
+            ),
+        );
+        let eval_cloned = eval.clone();
+
+        async move {
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            let mut eval = eval_cloned.borrow_mut();
+            eval.run().unwrap();
         }
     });
 }

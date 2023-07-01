@@ -30,16 +30,26 @@ fn use_inner_html(cx: &ScopeState, id: &'static str) -> Option<String> {
     let value: &UseRef<Option<String>> = use_ref(cx, || None);
     use_effect(cx, (), |_| {
         to_owned![value];
-        let desktop_context: DesktopContext = cx.consume_context().unwrap();
+
+        let eval = dioxus_html::prelude::use_eval(
+            cx,
+            &format!(
+                r#"
+                let element = document.getElementById('{}');
+                dioxus.send(element.innerHTML);
+                "#,
+                id
+            ),
+        );
+        let eval_clone = eval.clone();
+
         async move {
             tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-            let html = desktop_context
-                .eval(&format!(
-                    r#"let element = document.getElementById('{}');
-                return element.innerHTML;"#,
-                    id
-                ))
-                .await;
+
+            let mut eval = eval_clone.borrow_mut();
+            eval.run().unwrap();
+            let html = eval.recv().await;
+
             if let Ok(serde_json::Value::String(html)) = html {
                 println!("html: {}", html);
                 value.set(Some(html));
