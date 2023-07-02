@@ -10,6 +10,7 @@ mod dirty_scope;
 mod error_boundary;
 mod events;
 mod fragment;
+mod global_stack;
 mod lazynodes;
 mod mutations;
 mod nodes;

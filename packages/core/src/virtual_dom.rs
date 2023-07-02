@@ -16,7 +16,10 @@ use crate::{
 use futures_util::{pin_mut, StreamExt};
 use rustc_hash::FxHashMap;
 use slab::Slab;
-use std::{any::Any, borrow::BorrowMut, cell::Cell, collections::BTreeSet, future::Future, rc::Rc};
+use std::{
+    any::Any, borrow::BorrowMut, cell::Cell, collections::BTreeSet, future::Future, rc::Rc,
+    sync::Arc,
+};
 
 /// A virtual node system that progresses user events and diffs UI trees.
 ///
@@ -256,6 +259,7 @@ impl VirtualDom {
         let (tx, rx) = futures_channel::mpsc::unbounded();
         let mut dom = Self {
             rx,
+
             scheduler: Scheduler::new(tx),
             templates: Default::default(),
             scopes: Default::default(),
