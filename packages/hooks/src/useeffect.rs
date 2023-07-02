@@ -14,15 +14,20 @@ use crate::UseFutureDep;
 /// ## Examples
 ///
 /// ```rust, no_run
-///
 /// #[inline_props]
-/// fn Profile(cx: Scope, id: &str) -> Element {
-///     let name = use_state(cx, || "Default name");
+/// fn Profile(cx: Scope, id: usize) -> Element {
+///     let name = use_state(cx, || None);
 ///
-///     use_effect(cx, (id,), |(id,)| async move {
-///         let user = fetch_user(id).await;
-///         name.set(user.name);
+///     // Only fetch the user data when the id changes.
+///     use_effect(cx, (id,), |(id,)| {
+///         to_owned![name];
+///         async move {
+///             let user = fetch_user(id).await;
+///             name.set(user.name);
+///         }
 ///     });
+///
+///     let name = name.get().clone().unwrap_or("Loading...".to_string());
 ///
 ///     render!(
 ///         p { "{name}" }
@@ -30,9 +35,7 @@ use crate::UseFutureDep;
 /// }
 ///
 /// fn app(cx: Scope) -> Element {
-///     render!(
-///         Profile { id: "dioxusLabs" }
-///     )
+///     render!(Profile { id: 0 })
 /// }
 /// ```
 pub fn use_effect<T, F, D>(cx: &ScopeState, dependencies: D, future: impl FnOnce(D::Out) -> F)

@@ -8,16 +8,12 @@ fn Calculator(cx: Scope, number: usize) -> Element {
     let bigger_number = use_memo(cx, (number,), |(number,)| {
         // This will only be calculated when `number` has changed.
         number * 100
-    }):
-
+    });
     render!(
         p { "{bigger_number}" }
     )
 }
-
 fn app(cx: Scope) -> Element {
-    render!(
-        Calculator { number: 0 }
-    )
+    render!(Calculator { number: 0 })
 }
 ```
