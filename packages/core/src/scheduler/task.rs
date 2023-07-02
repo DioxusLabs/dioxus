@@ -19,7 +19,7 @@ pub struct TaskId(pub usize);
 /// the task itself is the waker
 pub(crate) struct LocalTask {
     pub scope: ScopeId,
-    pub(super) task: RefCell<Pin<Box<dyn Future<Output = ()> + 'static>>>,
+    pub task: RefCell<Pin<Box<dyn Future<Output = ()> + 'static>>>,
     pub waker: Waker,
 }
 

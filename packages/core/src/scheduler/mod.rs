@@ -4,7 +4,6 @@ use std::{cell::RefCell, rc::Rc};
 
 mod suspense;
 mod task;
-mod wait;
 
 pub use suspense::*;
 pub use task::*;

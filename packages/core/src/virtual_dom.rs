@@ -10,12 +10,15 @@ use crate::{
     nodes::{Template, TemplateId},
     scheduler::SuspenseId,
     scopes::{ScopeId, ScopeState},
-    AttributeValue, Element, Event, Scope, SuspenseContext,
+    AttributeValue, Element, Event, Scope, SuspenseContext, TaskId,
 };
 use futures_util::{pin_mut, StreamExt};
 use rustc_hash::FxHashMap;
 use slab::Slab;
-use std::{any::Any, borrow::BorrowMut, cell::Cell, collections::BTreeSet, future::Future, rc::Rc};
+use std::{
+    any::Any, borrow::BorrowMut, cell::Cell, collections::BTreeSet, future::Future, rc::Rc,
+    task::Context,
+};
 
 /// A virtual node system that progresses user events and diffs UI trees.
 ///
@@ -513,6 +516,32 @@ impl VirtualDom {
                 SchedulerMsg::Immediate(id) => self.mark_dirty(id),
                 SchedulerMsg::TaskNotified(task) => self.handle_task_wakeup(task),
             }
+        }
+    }
+
+    /// Handle notifications by tasks inside the scheduler
+    ///
+    /// This is precise, meaning we won't poll every task, just tasks that have woken up as notified to use by the
+    /// queue
+    fn handle_task_wakeup(&mut self, id: TaskId) {
+        let mut tasks = self.scheduler.tasks.borrow_mut();
+
+        let task = match tasks.get(id.0) {
+            Some(task) => task,
+            // The task was removed from the scheduler, so we can just ignore it
+            None => return,
+        };
+
+        let mut cx = Context::from_waker(&task.waker);
+
+        // If the task completes...
+        if task.task.borrow_mut().as_mut().poll(&mut cx).is_ready() {
+            // Remove it from the scope so we dont try to double drop it when the scope dropes
+            let scope = &self.scopes[task.scope];
+            scope.spawned_tasks.borrow_mut().remove(&id);
+
+            // Remove it from the scheduler
+            tasks.try_remove(id.0);
         }
     }
 
