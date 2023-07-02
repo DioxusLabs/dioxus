@@ -19,9 +19,7 @@ fn app(cx: Scope) -> Element {
 
     let receiver = eval.receiver();
 
-    let future = use_future(cx, (), |_| async move {
-        receiver.recv().await.unwrap()
-    });
+    let future = use_future(cx, (), |_| async move { receiver.recv().await.unwrap() });
 
     match future.value() {
         Some(v) => {
@@ -30,10 +28,8 @@ fn app(cx: Scope) -> Element {
                 p { "{v}" }
             ))
         }
-        _ => {
-            cx.render(rsx!(
-                p { "hello" }
-            ))
-        }
+        _ => cx.render(rsx!(
+            p { "hello" }
+        )),
     }
 }
