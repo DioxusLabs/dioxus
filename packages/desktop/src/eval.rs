@@ -20,12 +20,6 @@ impl EvalProvider for DesktopEvalProvider {
     }
 }
 
-/// Reprents a desktop-target's JavaScript evaluator.
-pub struct DesktopEvaluator {
-    desktop_ctx: DesktopContext,
-    query: Query<serde_json::Value>,
-}
-
 const DIOXUS_CODE: &str = r#"
     let dioxus = {
         recv: function () {
@@ -60,6 +54,13 @@ const DIOXUS_CODE: &str = r#"
     }
     "#;
 
+/// Reprents a desktop-target's JavaScript evaluator.
+pub struct DesktopEvaluator {
+    desktop_ctx: DesktopContext,
+    query: Query<serde_json::Value>,
+    receiver: async_channel::Receiver<serde_json::Value>,
+}
+
 impl DesktopEvaluator {
     /// Creates a new evaluator for desktop-based targets.
     pub fn new(desktop_ctx: DesktopContext, js: String) -> Self {
@@ -74,11 +75,17 @@ impl DesktopEvaluator {
             "#
         );
 
+        let (sender, receiver) = async_channel::unbounded();
+
         let query = desktop_ctx
             .query
-            .new_query_with_comm(&code, &desktop_ctx.webview);
+            .new_query_with_comm(&code, &desktop_ctx.webview, sender);
 
-        Self { desktop_ctx, query }
+        Self {
+            desktop_ctx,
+            query,
+            receiver,
+        }
     }
 }
 
@@ -97,12 +104,9 @@ impl Evaluator for DesktopEvaluator {
         Ok(())
     }
 
-    /// Receives a message from the evaluated JavaScript.
-    async fn recv(&mut self) -> Result<serde_json::Value, EvalError> {
-        match self.query.recv().await {
-            Ok(d) => Ok(d),
-            Err(e) => Err(EvalError::Communication(e.to_string())),
-        }
+    /// Gets an UnboundedReceiver to receive messages from the evaluated JavaScript.
+    fn receiver(&mut self) -> async_channel::Receiver<serde_json::Value> {
+        self.receiver.clone()
     }
 
     /// Cleans up evaluation artifacts

@@ -1,9 +1,8 @@
 use async_trait::async_trait;
 use dioxus_core::ScopeState;
-use dioxus_html::prelude::{EvalError, EvalProvider, Evaluator, MessageQueue};
-use futures_util::StreamExt;
+use dioxus_html::prelude::{EvalError, EvalProvider, Evaluator};
 use js_sys::Function;
-use std::{cell::RefCell, rc::Rc};
+use std::rc::Rc;
 use wasm_bindgen::prelude::*;
 
 /// Provides the WebEvalProvider through [`cx.provide_context`].
@@ -31,7 +30,7 @@ const PROMISE_WRAPPER: &str = r#"
 /// Reprents a web-target's JavaScript evaluator.
 pub struct WebEvaluator {
     dioxus: Dioxus,
-    received: Rc<RefCell<MessageQueue>>,
+    receiver: async_channel::Receiver<serde_json::Value>,
     code: String,
     ran: bool,
 }
@@ -39,12 +38,12 @@ pub struct WebEvaluator {
 impl WebEvaluator {
     /// Creates a new evaluator for web-based targets.
     pub fn new(js: String) -> Self {
-        let received = Rc::new(RefCell::new(MessageQueue::new()));
-        let received2 = received.clone();
+        let (sender, receiver) = async_channel::unbounded();
 
+        // This Rc cloning mess hurts but it seems to work..
         let a = Closure::<dyn FnMut(JsValue)>::new(move |data| {
             match serde_wasm_bindgen::from_value::<serde_json::Value>(data) {
-                Ok(data) => received2.borrow_mut().push(data),
+                Ok(data) => _ = sender.send_blocking(data),
                 Err(e) => {
                     // Can't really do much here.
                     log::error!("failed to serialize JsValue to serde_json::Value (eval communication) - {}", e.to_string());
@@ -60,7 +59,7 @@ impl WebEvaluator {
 
         Self {
             dioxus,
-            received,
+            receiver,
             code,
             ran: false,
         }
@@ -94,14 +93,9 @@ impl Evaluator for WebEvaluator {
         Ok(())
     }
 
-    /// Receives a message from the evaluated JavaScript.
-    #[allow(clippy::await_holding_refcell_ref)]
-    async fn recv(&mut self) -> Result<serde_json::Value, EvalError> {
-        if !self.ran {
-            return Err(EvalError::NotRan);
-        }
-        let mut queue = self.received.borrow_mut();
-        Ok(queue.next().await.expect("stream should never return None"))
+    /// Gets an UnboundedReceiver to receive messages from the evaluated JavaScript.
+    fn receiver(&mut self) -> async_channel::Receiver<serde_json::Value> {
+        self.receiver.clone()
     }
 
     // No cleanup required

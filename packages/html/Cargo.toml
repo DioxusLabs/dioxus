@@ -23,7 +23,7 @@ async-trait = "0.1.58"
 serde-value = "0.7.0"
 tokio = { workspace = true, features = ["fs", "io-util"], optional = true }
 rfd = { version = "0.11.3", optional = true }
-futures-util = "0.3.28"
+async-channel = "1.8.0"
 serde_json = { version = "1", optional = true }
 
 [dependencies.web-sys]

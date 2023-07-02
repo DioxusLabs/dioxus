@@ -4,7 +4,7 @@ use serde::{de::DeserializeOwned, Deserialize};
 use serde_json::Value;
 use slab::Slab;
 use thiserror::Error;
-use tokio::sync::broadcast::error::RecvError;
+use tokio::{sync::broadcast::error::RecvError, task::JoinHandle};
 use wry::webview::WebView;
 
 /// Tracks what query ids are currently active
@@ -62,6 +62,7 @@ impl QueryEngine {
             phantom: std::marker::PhantomData,
             queue_slab: None,
             queue_id: None,
+            thread_handle: None,
         }
     }
 
@@ -69,6 +70,7 @@ impl QueryEngine {
         &self,
         script: &str,
         webview: &WebView,
+        sender: async_channel::Sender<serde_json::Value>,
     ) -> Query<V> {
         let request_id = self.active_requests.slab.borrow_mut().insert(());
         let queue_id = self.active_queues.slab.borrow_mut().insert(());
@@ -94,6 +96,18 @@ impl QueryEngine {
             log::warn!("Query error: {err}");
         }
 
+        let thread_receiver = self.sender.subscribe();
+        let thread_handle: JoinHandle<()> = tokio::spawn(async move {
+            let mut receiver = thread_receiver;
+            loop {
+                if let Ok(result) = receiver.recv().await {
+                    if result.id == request_id {
+                        _ = sender.send(result.data).await;
+                    }
+                }
+            }
+        });
+
         Query {
             slab: self.active_requests.clone(),
             id: request_id,
@@ -101,6 +115,7 @@ impl QueryEngine {
             phantom: std::marker::PhantomData,
             queue_slab: Some(self.active_queues.clone()),
             queue_id: Some(queue_id),
+            thread_handle: Some(thread_handle),
         }
     }
 
@@ -115,6 +130,7 @@ pub(crate) struct Query<V: DeserializeOwned> {
     id: usize,
     queue_slab: Option<SharedSlab>,
     queue_id: Option<usize>,
+    thread_handle: Option<JoinHandle<()>>,
     reciever: tokio::sync::broadcast::Receiver<QueryResult>,
     phantom: std::marker::PhantomData<V>,
 }
@@ -168,23 +184,11 @@ impl<V: DeserializeOwned> Query<V> {
         Ok(())
     }
 
-    pub async fn recv(&mut self) -> Result<Value, QueryError> {
-        loop {
-            match self.reciever.recv().await {
-                Ok(result) => {
-                    if result.id == self.id {
-                        return Ok(result.data);
-                    }
-                }
-                Err(err) => {
-                    println!("ERR");
-                    return Err(QueryError::Recv(err));
-                }
-            }
-        }
-    }
-
     pub fn cleanup(&mut self, webview: Option<&WebView>) {
+        if let Some(handle) = &self.thread_handle {
+            handle.abort();
+        }
+
         self.slab.slab.borrow_mut().remove(self.id);
 
         if let Some(queue_slab) = &self.queue_slab {
