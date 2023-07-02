@@ -29,6 +29,8 @@ pub fn main() {
 
 fn mock_event(cx: &ScopeState, id: &'static str, value: &'static str) {
     use_effect(cx, (), |_| {
+        std::thread::sleep(std::time::Duration::from_millis(100));
+
         let eval = dioxus_html::prelude::use_eval(
             cx,
             format!(
@@ -42,13 +44,10 @@ fn mock_event(cx: &ScopeState, id: &'static str, value: &'static str) {
                 id, value
             ),
         );
-        let eval_cloned = eval.clone();
+        eval.run().unwrap();
+        eval.done();
 
-        async move {
-            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-            let mut eval = eval_cloned.borrow_mut();
-            eval.run().unwrap();
-        }
+        async {}
     });
 }
 

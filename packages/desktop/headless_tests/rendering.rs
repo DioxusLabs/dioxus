@@ -31,30 +31,28 @@ fn use_inner_html(cx: &ScopeState, id: &'static str) -> Option<String> {
     use_effect(cx, (), |_| {
         to_owned![value];
 
+        std::thread::sleep(std::time::Duration::from_millis(100));
         let eval = dioxus_html::prelude::use_eval(
             cx,
             &format!(
                 r#"
-                let element = document.getElementById('{}');
-                dioxus.send(element.innerHTML);
-                "#,
+                    let element = document.getElementById('{}');
+                    dioxus.send(element.innerHTML);
+                    "#,
                 id
             ),
         );
-        let eval_clone = eval.clone();
+        eval.run().unwrap();
 
-        async move {
-            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        let html = eval.receiver().recv_blocking();
+        eval.done();
 
-            let mut eval = eval_clone.borrow_mut();
-            eval.run().unwrap();
-            let html = eval.recv().await;
-
-            if let Ok(serde_json::Value::String(html)) = html {
-                println!("html: {}", html);
-                value.set(Some(html));
-            }
+        if let Ok(serde_json::Value::String(html)) = html {
+            println!("html: {}", html);
+            value.set(Some(html));
         }
+
+        async {}
     });
     value.read().clone()
 }
