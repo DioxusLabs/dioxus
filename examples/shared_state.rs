@@ -1,44 +1,77 @@
 #![allow(non_snake_case)]
 
+use std::collections::HashMap;
+
 use dioxus::prelude::*;
 
 fn main() {
     dioxus_desktop::launch(App);
 }
 
-struct DarkMode(bool);
+#[derive(Default)]
+struct CoolData {
+    data: HashMap<usize, String>,
+}
+
+impl CoolData {
+    pub fn new(data: HashMap<usize, String>) -> Self {
+        Self { data }
+    }
+
+    pub fn view(&self, id: &usize) -> Option<&String> {
+        self.data.get(id)
+    }
+
+    pub fn set(&mut self, id: usize, data: String) {
+        self.data.insert(id, data);
+    }
+}
 
 #[rustfmt::skip]
 pub fn App(cx: Scope) -> Element {
-    use_shared_state_provider(cx, || DarkMode(false));
+    use_shared_state_provider(cx, || CoolData::new(HashMap::from([
+        (0, "Hello, World!".to_string()),
+        (1, "Dioxus is amazing!".to_string())
+    ])));
 
     render!(
-        DarkModeToggle {},
-        AppBody {}
+        DataEditor {
+            id: 0
+        }
+        DataEditor {
+            id: 1
+        }
+        DataView {
+            id: 0
+        }
+        DataView {
+            id: 1
+        }
     )
 }
 
-pub fn DarkModeToggle(cx: Scope) -> Element {
-    let dark_mode = use_shared_state::<DarkMode>(cx).unwrap();
+#[inline_props]
+fn DataEditor(cx: Scope, id: usize) -> Element {
+    let cool_data = use_shared_state::<CoolData>(cx).unwrap().read();
 
-    render!(input {
-        r#type: "checkbox",
-        oninput: move |event| {
-            let is_enabled = event.value == "true";
-            dark_mode.write().0 = is_enabled;
-        },
+    let my_data = &cool_data.view(&id).unwrap();
+
+    render!(p {
+        "{my_data}"
     })
 }
 
-fn AppBody(cx: Scope) -> Element {
-    let dark_mode = use_shared_state::<DarkMode>(cx).unwrap();
+#[inline_props]
+fn DataView(cx: Scope, id: usize) -> Element {
+    let cool_data = use_shared_state::<CoolData>(cx).unwrap();
 
-    let is_dark_mode = dark_mode.read().0;
-    let answer = if is_dark_mode { "Yes" } else { "No" };
+    let oninput = |e: FormEvent| cool_data.write().set(*id, e.value.clone());
 
-    render!(
-        p {
-            "Is Dark mode enabled? {answer}"
-        }
-    )
+    let cool_data = cool_data.read();
+    let my_data = &cool_data.view(&id).unwrap();
+
+    render!(input {
+        oninput: oninput,
+        value: "{my_data}"
+    })
 }
