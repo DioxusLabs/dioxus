@@ -10,7 +10,7 @@ use dioxus_rsx::{
     hot_reload::{FileMap, FileMapBuildResult, UpdateResult},
     HotReloadingContext,
 };
-use interprocess::local_socket::{LocalSocketListener, LocalSocketStream};
+use interprocess_docfix::local_socket::{LocalSocketListener, LocalSocketStream};
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 
 pub use dioxus_html::HtmlCtx;

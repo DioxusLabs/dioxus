@@ -1,4 +1,4 @@
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, rc::Rc, str::FromStr};
 
 use dioxus_core::ScopeState;
 use dioxus_html::input_data::keyboard_types::Modifiers;
@@ -6,11 +6,24 @@ use slab::Slab;
 use wry::application::{
     accelerator::{Accelerator, AcceleratorId},
     event_loop::EventLoopWindowTarget,
-    global_shortcut::{GlobalShortcut, ShortcutManager, ShortcutManagerError},
     keyboard::{KeyCode, ModifiersState},
 };
 
-use crate::{use_window, DesktopContext};
+use crate::{desktop_context::DesktopContext, use_window};
+
+#[cfg(any(
+    target_os = "windows",
+    target_os = "macos",
+    target_os = "linux",
+    target_os = "dragonfly",
+    target_os = "freebsd",
+    target_os = "netbsd",
+    target_os = "openbsd"
+))]
+use wry::application::global_shortcut::{GlobalShortcut, ShortcutManager, ShortcutManagerError};
+
+#[cfg(any(target_os = "ios", target_os = "android"))]
+pub use crate::mobile_shortcut::*;
 
 #[derive(Clone)]
 pub(crate) struct ShortcutRegistry {
@@ -21,6 +34,7 @@ pub(crate) struct ShortcutRegistry {
 type ShortcutMap = Rc<RefCell<HashMap<AcceleratorId, Shortcut>>>;
 
 struct Shortcut {
+    #[allow(unused)]
     shortcut: GlobalShortcut,
     callbacks: Slab<Box<dyn FnMut()>>,
 }
@@ -57,11 +71,9 @@ impl ShortcutRegistry {
 
     pub(crate) fn add_shortcut(
         &self,
-        modifiers: impl Into<Option<ModifiersState>>,
-        key: KeyCode,
+        accelerator: Accelerator,
         callback: Box<dyn FnMut()>,
     ) -> Result<ShortcutId, ShortcutRegistryError> {
-        let accelerator = Accelerator::new(modifiers, key);
         let accelerator_id = accelerator.clone().id();
         let mut shortcuts = self.shortcuts.borrow_mut();
         Ok(
@@ -100,8 +112,9 @@ impl ShortcutRegistry {
         if let Some(callbacks) = shortcuts.get_mut(&id.id) {
             callbacks.remove(id.number);
             if callbacks.is_empty() {
-                if let Some(shortcut) = shortcuts.remove(&id.id) {
-                    let _ = self.manager.borrow_mut().unregister(shortcut.shortcut);
+                if let Some(_shortcut) = shortcuts.remove(&id.id) {
+                    #[cfg(not(target_os = "ios"))]
+                    let _ = self.manager.borrow_mut().unregister(_shortcut.shortcut);
                 }
             }
         }
@@ -111,12 +124,6 @@ impl ShortcutRegistry {
         let mut shortcuts = self.shortcuts.borrow_mut();
         shortcuts.clear();
         let _ = self.manager.borrow_mut().unregister_all();
-        // prevent CTRL+R from reloading the page which breaks apps
-        let _ = self.add_shortcut(
-            Some(ModifiersState::CONTROL),
-            KeyCode::KeyR,
-            Box::new(|| {}),
-        );
     }
 }
 
@@ -144,22 +151,45 @@ pub struct ShortcutHandle {
     pub shortcut_id: ShortcutId,
 }
 
+pub trait IntoAccelerator {
+    fn accelerator(&self) -> Accelerator;
+}
+
+impl IntoAccelerator for (dioxus_html::KeyCode, ModifiersState) {
+    fn accelerator(&self) -> Accelerator {
+        Accelerator::new(Some(self.1), self.0.into_key_code())
+    }
+}
+
+impl IntoAccelerator for (ModifiersState, dioxus_html::KeyCode) {
+    fn accelerator(&self) -> Accelerator {
+        Accelerator::new(Some(self.0), self.1.into_key_code())
+    }
+}
+
+impl IntoAccelerator for dioxus_html::KeyCode {
+    fn accelerator(&self) -> Accelerator {
+        Accelerator::new(None, self.into_key_code())
+    }
+}
+
+impl IntoAccelerator for &str {
+    fn accelerator(&self) -> Accelerator {
+        Accelerator::from_str(self).unwrap()
+    }
+}
+
 /// Get a closure that executes any JavaScript in the WebView context.
 pub fn use_global_shortcut(
     cx: &ScopeState,
-    key: impl IntoKeyCode,
-    modifiers: impl IntoModifersState,
+    accelerator: impl IntoAccelerator,
     handler: impl FnMut() + 'static,
 ) -> &Result<ShortcutHandle, ShortcutRegistryError> {
     let desktop = use_window(cx);
     cx.use_hook(move || {
         let desktop = desktop.clone();
 
-        let id = desktop.create_shortcut(
-            key.into_key_code(),
-            modifiers.into_modifiers_state(),
-            handler,
-        );
+        let id = desktop.create_shortcut(accelerator.accelerator(), handler);
 
         Ok(ShortcutHandle {
             desktop,

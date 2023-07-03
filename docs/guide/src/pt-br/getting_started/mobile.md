@@ -59,7 +59,7 @@ simple_logger = "*"
 
 Edite seu `lib.rs`:
 
-```rust
+```rust, no_run
 use dioxus::prelude::*;
 
 fn main() {

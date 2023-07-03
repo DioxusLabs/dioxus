@@ -2,6 +2,7 @@
 members = [
     "packages/dioxus",
     "packages/core",
+    "packages/cli",
     "packages/core-macro",
     "packages/router",
     "packages/html",
@@ -33,6 +34,10 @@ members = [
     # Full project examples
     "examples/tailwind",
     "examples/PWA-example",
+    # Playwrite tests
+    "playwrite-tests/liveview",
+    "playwrite-tests/web",
+    "playwrite-tests/fullstack",
 ]
 
 # dependencies that are shared across packages

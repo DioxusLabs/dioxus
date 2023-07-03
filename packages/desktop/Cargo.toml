@@ -37,8 +37,10 @@ dunce = "1.0.2"
 slab = { workspace = true }
 
 futures-util = { workspace = true }
-rfd = "0.11.3"
 urlencoding = "2.1.2"
+
+[target.'cfg(not(target_os = "ios"))'.dependencies]
+rfd = "0.11.3"
 
 [target.'cfg(target_os = "ios")'.dependencies]
 objc = "0.2.7"

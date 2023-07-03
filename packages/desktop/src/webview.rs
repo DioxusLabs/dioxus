@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use crate::desktop_context::EventData;
 use crate::protocol;
 use crate::{desktop_context::UserWindowEvent, Config};
@@ -13,7 +11,7 @@ pub fn build(
     cfg: &mut Config,
     event_loop: &EventLoopWindowTarget<UserWindowEvent>,
     proxy: EventLoopProxy<UserWindowEvent>,
-) -> (Rc<WebView>, WebContext) {
+) -> (WebView, WebContext) {
     let builder = cfg.window.clone();
     let window = builder.build(event_loop).unwrap();
     let file_handler = cfg.file_drop_handler.take();
@@ -96,5 +94,5 @@ pub fn build(
         webview = webview.with_devtools(true);
     }
 
-    (Rc::new(webview.build().unwrap()), web_context)
+    (webview.build().unwrap(), web_context)
 }

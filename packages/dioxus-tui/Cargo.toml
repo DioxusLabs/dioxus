@@ -21,7 +21,7 @@ dioxus-native-core-macro = { workspace = true }
 dioxus-hot-reload = { workspace = true, optional = true }
 rink = { workspace = true }
 
-crossterm = "0.23.0"
+crossterm = "0.26.0"
 tokio = { workspace = true, features = ["full"] }
 futures = "0.3.19"
 taffy = "0.3.12"
