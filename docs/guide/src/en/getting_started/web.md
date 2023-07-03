@@ -17,7 +17,7 @@ Examples:
 
 The Web is the best-supported target platform for Dioxus.
 
-- Because your app will be compiled to WASM you have access to browser APIs through [wasm-bingen](https://rustwasm.github.io/docs/wasm-bindgen/introduction.html).
+- Because your app will be compiled to WASM you have access to browser APIs through [wasm-bindgen](https://rustwasm.github.io/docs/wasm-bindgen/introduction.html).
 - Dioxus provides hydration to resume apps that are rendered on the server. See the [fullstack](fullstack.md) getting started guide for more information.
 
 ## Tooling
