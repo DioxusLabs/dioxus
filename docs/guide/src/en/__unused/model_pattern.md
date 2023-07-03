@@ -1,12 +1,10 @@
-
-
 ## Using UseRef with "models"
 
 One option for state management that UseRef enables is the development of a "model" for your components. This particular pattern enables you to model your state with regular structs.
 
 For instance, our calculator example uses a struct to model the state.
 
-```rust
+```rust, no_run
 
 struct Calculator {
     display_value: String,
@@ -18,7 +16,7 @@ struct Calculator {
 
 Our component is really simple – we just call `use_ref` to get an initial calculator state.
 
-```rust
+```rust, no_run
 fn app(cx: Scope) -> Element {
     let state = use_ref(cx, Calculator::new);
 
@@ -30,7 +28,7 @@ fn app(cx: Scope) -> Element {
 
 In our UI, we can then use `read` and a helper method to get data out of the model.
 
-```rust
+```rust, no_run
 // Our accessor method
 impl Calculator {
     fn formatted_display(&self) -> String {
@@ -49,7 +47,7 @@ cx.render(rsx!{
 
 To modify the state, we can setup a helper method and then attach it to a callback.
 
-```rust
+```rust, no_run
 // our helper
 impl Calculator {
     fn clear_display(&mut self) {
@@ -64,4 +62,3 @@ cx.render(rsx!{
     }
 })
 ```
-

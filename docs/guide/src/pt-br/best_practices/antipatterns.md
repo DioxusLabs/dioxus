@@ -8,7 +8,7 @@ Os fragmentos não montam um elemento físico no DOM imediatamente, então o Dio
 
 Apenas os nós Componente e Fragmento são suscetíveis a esse problema. O Dioxus atenua isso com componentes fornecendo uma API para registrar o estado compartilhado sem o padrão _Context Provider_.
 
-```rust
+```rust, no_run
 {{#include ../../../examples/anti_patterns.rs:nested_fragments}}
 ```
 
@@ -16,7 +16,7 @@ Apenas os nós Componente e Fragmento são suscetíveis a esse problema. O Dioxu
 
 Conforme descrito no capítulo de renderização condicional, os itens da lista devem ter _keys_ exclusivas associadas aos mesmos itens nas renderizações. Isso ajuda o Dioxus a associar o estado aos componentes contidos e garante um bom desempenho de diferenciação. Não omita as _keys_, a menos que você saiba que a lista é estática e nunca será alterada.
 
-```rust
+```rust, no_run
 {{#include ../../../examples/anti_patterns.rs:iter_keys}}
 ```
 

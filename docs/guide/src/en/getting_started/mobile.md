@@ -5,8 +5,8 @@ Build a mobile app with Dioxus!
 Example: [Todo App](https://github.com/DioxusLabs/example-projects/blob/master/ios_demo)
 
 ## Support
-Mobile is currently the least-supported renderer target for Dioxus. Mobile apps are rendered with either the platform's WebView or experimentally through [WGPU](https://github.com/DioxusLabs/blitz). WebView doesn't support animations, transparency, and native widgets.
 
+Mobile is currently the least-supported renderer target for Dioxus. Mobile apps are rendered with either the platform's WebView or experimentally through [WGPU](https://github.com/DioxusLabs/blitz). WebView doesn't support animations, transparency, and native widgets.
 
 Mobile support is currently best suited for CRUD-style apps, ideally for internal teams who need to develop quickly but don't care much about animations or native widgets.
 
@@ -59,7 +59,7 @@ simple_logger = "*"
 
 Edit your `lib.rs`:
 
-```rust
+```rust, no_run
 use dioxus::prelude::*;
 
 fn main() {

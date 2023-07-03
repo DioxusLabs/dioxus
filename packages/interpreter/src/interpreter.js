@@ -892,10 +892,9 @@ function event_bubbles(event) {
     case "error":
       return false;
     case "loadeddata":
-      return false;
     case "loadedmetadata":
-      return false;
     case "loadstart":
+    case "load":
       return false;
     case "pause":
       return false;

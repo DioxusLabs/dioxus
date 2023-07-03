@@ -20,12 +20,11 @@ Thanks to these amazing folks for their code contributions:
 - [@oovm](https://github.com/oovm)
 - [@6asaaki](https://github.com/6asaaki)
 
-
 Just over two months in, and we already a ton of awesome changes to Dioxus!
 
 Dioxus is a recently-released library for building interactive user interfaces (GUI) with Rust. It is built around a Virtual DOM, making it portable for the web, desktop, server, mobile, and more. Dioxus looks and feels just like React, so if you know React, then you'll feel right at home.
 
-```rust
+```rust, no_run
 fn app(cx: Scope) -> Element {
     let mut count = use_state(cx, || 0);
 
@@ -39,7 +38,7 @@ fn app(cx: Scope) -> Element {
 
 # What's new?
 
-A *ton* of stuff happened in this release; 550+ commits, 23 contributors, 2 minor releases, and 6 backers on Open Collective.
+A _ton_ of stuff happened in this release; 550+ commits, 23 contributors, 2 minor releases, and 6 backers on Open Collective.
 
 Some of the major new features include:
 
@@ -52,11 +51,9 @@ Some of the major new features include:
 
 We also fixed and improved a bunch of stuff - check out the full list down below.
 
-
 ## A New Renderer: Your terminal!
 
 When Dioxus was initially released, we had very simple support for logging Dioxus elements out as TUI elements. In the past month or so, [@Demonthos](https://github.com/Demonthos) really stepped up and made the new crate a reality.
-
 
 ![Imgur](https://i.imgur.com/GL7uu3r.png)
 
@@ -66,15 +63,13 @@ The new TUI renderer even supports mouse movements, keyboard input, async tasks,
     <source src="https://i.imgur.com/q25tZST.mp4" type="video/mp4">
 </vido>
 
-
-
 ## New Router
 
 We totally revamped the router, switching away from the old yew-router approach to the more familiar [React-Router](http://reactrouter.com). It's less type-safe but provides more flexibility and support for beautiful URLs.
 
-Apps with routers are *really* simple now. It's easy to compose the "Router", a "Route", and "Links" to define how your app is laid out:
+Apps with routers are _really_ simple now. It's easy to compose the "Router", a "Route", and "Links" to define how your app is laid out:
 
-```rust
+```rust, no_run
 fn app(cx: Scope) -> Element {
     cx.render(rsx! {
         Router {
@@ -97,7 +92,7 @@ fn app(cx: Scope) -> Element {
 
 We're also using hooks to parse the URL parameters and segments so you can interact with the router from anywhere deeply nested in your app.
 
-```rust
+```rust, no_run
 #[derive(Deserialize)]
 struct Query { name: String }
 
@@ -122,7 +117,7 @@ Managing state in your app can be challenging. Building global state management 
 
 Fermi uses the concept of "Atoms" for global state. These individual values can be get/set from anywhere in your app. Using state with Fermi is basically as simple as `use_state`.
 
-```rust
+```rust, no_run
 // Create a single value in an "Atom"
 static TITLE: Atom<&str> = |_| "Hello";
 
@@ -152,7 +147,8 @@ fn Child(cx: Scope) -> Element {
 For internal components, explicitly declaring props structs can become tedious. That's why we've built the new `inline_props` macro. This macro lets you inline your props definition right into your component function arguments.
 
 Simply add the `inline_props` macro to your component:
-```rust
+
+```rust, no_run
 #[inline_props]
 fn Child<'a>(
     cx: Scope,
@@ -174,9 +170,9 @@ You won't be able to document each field or attach attributes so you should refr
 
 ## Props optional fields
 
-Sometimes you don't want to specify *every* value in a component's props, since there might a lot. That's why the `Props` macro now supports optional fields. You can use a combination of `default`, `strip_option`, and `optional` to tune the exact behavior of properties fields.
+Sometimes you don't want to specify _every_ value in a component's props, since there might a lot. That's why the `Props` macro now supports optional fields. You can use a combination of `default`, `strip_option`, and `optional` to tune the exact behavior of properties fields.
 
-```rust
+```rust, no_run
 #[derive(Props, PartialEq)]
 struct ChildProps {
     #[props(default = "client")]
@@ -207,16 +203,15 @@ Under the hood, we have a new string interning engine to cache commonly used tag
 
 Overall, Dioxus apps are even more snappy than before.
 
-
 Before and after:
 ![Before and After](https://imgur.com/byTBGlO.png)
-
 
 ## Dioxus Desktop Window Context
 
 A very welcome change, thanks AGAIN to [@mrxiaozhuox](https://github.com/mrxiaozhuox) is support for imperatively controlling the desktop window from your Dioxus code.
 
 A bunch of new methods were added:
+
 - Minimize and maximize window
 - Close window
 - Focus window
@@ -240,10 +235,9 @@ Unlike its counterpart, `Trunk.rs`, the dioxus-cli supports running examples and
 
 Working with async isn't the easiest part of Rust. To help improve things, we've upgraded async support across the board in Dioxus.
 
-
 First, we upgraded the `use_future` hook. It now supports dependencies, which let you regenerate a future on the fly as its computed values change. It's never been easier to add datafetching to your Rust Web Apps:
 
-```rust
+```rust, no_run
 fn RenderDog(cx: Scope, breed: String) -> Element {
     let dog_request = use_future(cx, (breed,), |(breed,)| async move {
         reqwest::get(format!("https://dog.ceo/api/breed/{}/images/random", breed))
@@ -263,7 +257,7 @@ fn RenderDog(cx: Scope, breed: String) -> Element {
 
 Additionally, we added better support for coroutines. You can now start, stop, resume, and message with asynchronous tasks. The coroutine is automatically exposed to the rest of your app via the Context API. For the vast majority of apps, Coroutines can satisfy all of your state management needs:
 
-```rust
+```rust, no_run
 fn App(cx: Scope) -> Element {
     let sync_task = use_coroutine(cx, |rx| async move {
         connect_to_server().await;
@@ -313,6 +307,7 @@ We've covered the major headlining features, but there were so many more!
 - Right-click menus are now disabled by default
 
 ## Fixes
+
 - Windows support improved across the board
 - Linux support improved across the board
 - Bug in Calculator example
@@ -329,6 +324,7 @@ A ton more! Dioxus is now much more stable than it was at release!
 - The ContextAPI no longer uses RC to share state - anything that is `Clone` can be shared
 
 ## Community Additions
+
 - [Styled Components macro](https://github.com/Zomatree/Revolt-Client/blob/master/src/utils.rs#14-27) [@Zomatree](https://github.com/Zomatree)
 - [Dioxus-Websocket hook](https://github.com/FruitieX/dioxus-websocket-hooks) [@FruitieX](https://github.com/FruitieX)
 - [Home automation server app](https://github.com/FruitieX/homectl) [@FruitieX](https://github.com/FruitieX)
@@ -363,5 +359,3 @@ If you're interested in building an app with Dioxus, make sure to check us out o
 - [Reddit](http://reddit.com/r/dioxus/)
 - [Discord](https://discord.gg/XgGxMSkvUM)
 - [Twitter](http://twitter.com/dioxuslabs)
-
-
