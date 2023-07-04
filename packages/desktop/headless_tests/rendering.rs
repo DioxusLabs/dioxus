@@ -67,7 +67,7 @@ fn check_html_renders(cx: Scope) -> Element {
 
     let desktop_context: DesktopContext = cx.consume_context().unwrap();
 
-    if let Some(raw_html) = inner_html.as_deref() {
+    if let Some(raw_html) = inner_html {
         println!("{}", raw_html);
         let fragment = scraper::Html::parse_fragment(raw_html);
         println!("fragment: {}", fragment.html());
