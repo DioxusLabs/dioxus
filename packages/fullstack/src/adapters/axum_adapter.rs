@@ -366,7 +366,7 @@ async fn render_handler<P: Clone + serde::Serialize + Send + Sync + 'static>(
     let (parts, _) = request.into_parts();
     let parts: Arc<RequestParts> = Arc::new(parts.into());
     let url = parts.uri.path_and_query().unwrap().to_string();
-    let server_context = DioxusServerContext::new(dbg!(parts.clone()));
+    let server_context = DioxusServerContext::new(parts.clone());
 
     match ssr_state
         .render(url, &cfg, |vdom| {

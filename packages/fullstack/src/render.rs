@@ -27,7 +27,6 @@ impl SsrRendererPool {
         to: &mut String,
         modify_vdom: impl FnOnce(&mut VirtualDom),
     ) -> Result<RenderFreshness, dioxus_ssr::incremental::IncrementalRendererError> {
-        println!("{:?}", route);
         let wrapper = FullstackRenderer { cfg };
         match self {
             Self::Renderer(pool) => {
