@@ -1,5 +1,6 @@
 use dioxus::prelude::*;
 use dioxus_desktop::DesktopContext;
+use std::rc::Rc;
 
 pub(crate) fn check_app_exits(app: Component) {
     use dioxus_desktop::tao::window::WindowBuilder;
@@ -16,7 +17,7 @@ pub(crate) fn check_app_exits(app: Component) {
 
     dioxus_desktop::launch_cfg(
         app,
-        Config::new().with_window(WindowBuilder::new().with_visible(false)),
+        Config::new().with_window(WindowBuilder::new().with_visible(true)),
     );
 
     should_panic.store(false, std::sync::atomic::Ordering::SeqCst);
@@ -26,48 +27,52 @@ fn main() {
     check_app_exits(check_html_renders);
 }
 
-fn use_inner_html(cx: &ScopeState, id: &'static str) -> Option<String> {
-    let value: &UseRef<Option<String>> = use_ref(cx, || None);
-    use_effect(cx, (), |_| {
-        to_owned![value];
+fn use_inner_html<'a>(cx: &'a ScopeState, id: &'static str) -> &'a UseFuture<serde_json::Value> {
+    let eval_provider = cx
+        .consume_context::<Rc<dyn EvalProvider>>()
+        .expect("evaluator not provided");
 
-        std::thread::sleep(std::time::Duration::from_millis(100));
-        let eval = dioxus_html::prelude::use_eval(
-            cx,
-            &format!(
-                r#"
-                    let element = document.getElementById('{}');
-                    dioxus.send(element.innerHTML);
-                    "#,
-                id
-            ),
-        );
+    let js = format!(
+        r#"
+        let element = document.getElementById('{}');
+        dioxus.send(element.innerHTML);
+        "#,
+        id
+    );
+
+    let mut eval = UseEval::new(eval_provider.new_evaluator(cx, js));
+
+    use_future(cx, (), |_| async move {
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         eval.run().unwrap();
-
-        let html = eval.receiver().recv_blocking();
-        eval.done();
-
-        if let Ok(serde_json::Value::String(html)) = html {
-            println!("html: {}", html);
-            value.set(Some(html));
-        }
-
-        async {}
-    });
-    value.read().clone()
+        eval.receiver().recv().await.unwrap()
+    })
 }
 
 const EXPECTED_HTML: &str = r#"<div id="5" style="width: 100px; height: 100px; color: rgb(0, 0, 0);"><input type="checkbox"><h1>text</h1><div><p>hello world</p></div></div>"#;
 
 fn check_html_renders(cx: Scope) -> Element {
-    let inner_html = use_inner_html(cx, "main_div");
+    let future = use_inner_html(cx, "main_div");
+    let inner_html = match future.value() {
+        Some(data) => {
+            if let serde_json::Value::String(html) = data {
+                println!("html: {}", html);
+                Some(html)
+            } else {
+                None
+            }
+        }
+        None => None,
+    };
+
     let desktop_context: DesktopContext = cx.consume_context().unwrap();
 
     if let Some(raw_html) = inner_html.as_deref() {
+        println!("{}", raw_html);
         let fragment = scraper::Html::parse_fragment(raw_html);
-        println!("fragment: {:?}", fragment.html());
+        println!("fragment: {}", fragment.html());
         let expected = scraper::Html::parse_fragment(EXPECTED_HTML);
-        println!("fragment: {:?}", expected.html());
+        println!("expected: {}", expected.html());
         if fragment == expected {
             println!("html matches");
             desktop_context.close();

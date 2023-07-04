@@ -77,18 +77,20 @@ impl QueryEngine {
 
         let code = format!(
             r#"
-            if (!window.{QUEUE_NAME}) {{
-                window.{QUEUE_NAME} = [];
+            {{
+                if (!window.{QUEUE_NAME}) {{
+                    window.{QUEUE_NAME} = [];
+                }}
+
+                let _request_id = {request_id};
+
+                if (!window.{QUEUE_NAME}[{queue_id}]) {{
+                    window.{QUEUE_NAME}[{queue_id}] = [];
+                }}
+                let _message_queue = window.{QUEUE_NAME}[{queue_id}];
+
+                {script}
             }}
-
-            let _request_id = {request_id};
-
-            if (!window.{QUEUE_NAME}[{queue_id}]) {{
-                window.{QUEUE_NAME}[{queue_id}] = [];
-            }}
-            let _message_queue = window.{QUEUE_NAME}[{queue_id}];
-
-            {script}
             "#
         );
 

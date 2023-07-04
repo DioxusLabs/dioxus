@@ -30,16 +30,14 @@ pub trait Evaluator {
 /// parts is practically asking for a hacker to find an XSS vulnerability in
 /// it. **This applies especially to web targets, where the JavaScript context
 /// has access to most, if not all of your application data.**
-pub fn use_eval<S: ToString>(cx: &ScopeState, js: S) -> &mut UseEval {
-    cx.use_hook(|| {
-        let eval_provider = cx
-            .consume_context::<Rc<dyn EvalProvider>>()
-            .expect("evaluator not provided");
+pub fn use_eval<S: ToString>(cx: &ScopeState, js: S) -> UseEval {
+    let eval_provider = cx
+        .consume_context::<Rc<dyn EvalProvider>>()
+        .expect("evaluator not provided");
 
-        let evaluator = eval_provider.new_evaluator(cx, js.to_string());
+    let evaluator = eval_provider.new_evaluator(cx, js.to_string());
 
-        UseEval::new(evaluator)
-    })
+    UseEval::new(evaluator)
 }
 
 /// A wrapper around the target platform's evaluator.

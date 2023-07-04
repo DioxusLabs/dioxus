@@ -57,8 +57,10 @@ const DIOXUS_CODE: &str = r#"
 /// Reprents a desktop-target's JavaScript evaluator.
 pub struct DesktopEvaluator {
     desktop_ctx: DesktopContext,
-    query: Query<serde_json::Value>,
+    query: Option<Query<serde_json::Value>>,
+    sender: async_channel::Sender<serde_json::Value>,
     receiver: async_channel::Receiver<serde_json::Value>,
+    code: String,
 }
 
 impl DesktopEvaluator {
@@ -77,14 +79,12 @@ impl DesktopEvaluator {
 
         let (sender, receiver) = async_channel::unbounded();
 
-        let query = desktop_ctx
-            .query
-            .new_query_with_comm(&code, &desktop_ctx.webview, sender);
-
         Self {
             desktop_ctx,
-            query,
+            query: None,
+            sender,
             receiver,
+            code,
         }
     }
 }
@@ -93,15 +93,29 @@ impl DesktopEvaluator {
 impl Evaluator for DesktopEvaluator {
     /// Runs the evaluated JavaScript.
     fn run(&mut self) -> Result<(), EvalError> {
+        let desktop_ctx = &self.desktop_ctx;
+
+        let query = desktop_ctx.query.new_query_with_comm(
+            &self.code,
+            &desktop_ctx.webview,
+            self.sender.clone(),
+        );
+
+        self.query = Some(query);
+
         Ok(())
     }
 
     /// Sends a message to the evaluated JavaScript.
     fn send(&self, data: serde_json::Value) -> Result<(), EvalError> {
-        if let Err(e) = self.query.send(&self.desktop_ctx.webview, data) {
-            return Err(EvalError::Communication(e.to_string()));
+        if let Some(query) = &self.query {
+            if let Err(e) = query.send(&self.desktop_ctx.webview, data) {
+                return Err(EvalError::Communication(e.to_string()));
+            }
+            Ok(())
+        } else {
+            Err(EvalError::NotRan)
         }
-        Ok(())
     }
 
     /// Gets an UnboundedReceiver to receive messages from the evaluated JavaScript.
@@ -111,6 +125,8 @@ impl Evaluator for DesktopEvaluator {
 
     /// Cleans up evaluation artifacts
     fn done(&mut self) {
-        self.query.cleanup(Some(&self.desktop_ctx.webview));
+        if let Some(query) = &mut self.query {
+            query.cleanup(Some(&self.desktop_ctx.webview));
+        }
     }
 }

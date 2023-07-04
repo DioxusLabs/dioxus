@@ -5,7 +5,7 @@ fn app(cx: Scope) -> Element {
     let mut num = use_state(cx, || 0);
     let eval_result = use_state(cx, String::new);
 
-    let eval = dioxus_html::prelude::use_eval(
+    let mut eval = dioxus_html::prelude::use_eval(
         cx,
         r#"
             window.document.title = 'Hello from Dioxus Eval!';
