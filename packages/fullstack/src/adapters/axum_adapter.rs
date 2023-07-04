@@ -350,12 +350,12 @@ where
 }
 
 fn apply_request_parts_to_response<B>(
-    parts: &RequestParts,
+    headers: hyper::header::HeaderMap,
     response: &mut axum::response::Response<B>,
 ) {
-    let headers = response.headers_mut();
-    for (key, value) in parts.headers.iter() {
-        headers.insert(key, value.clone());
+    let mut_headers = response.headers_mut();
+    for (key, value) in headers.iter() {
+        mut_headers.insert(key, value.clone());
     }
 }
 
@@ -366,11 +366,11 @@ async fn render_handler<P: Clone + serde::Serialize + Send + Sync + 'static>(
     let (parts, _) = request.into_parts();
     let parts: Arc<RequestParts> = Arc::new(parts.into());
     let url = parts.uri.path_and_query().unwrap().to_string();
-    let server_context = DioxusServerContext::new(parts.clone());
+    let server_context = DioxusServerContext::new(dbg!(parts.clone()));
 
     match ssr_state
         .render(url, &cfg, |vdom| {
-            vdom.base_scope().provide_context(server_context);
+            vdom.base_scope().provide_context(server_context.clone());
         })
         .await
     {
@@ -378,7 +378,8 @@ async fn render_handler<P: Clone + serde::Serialize + Send + Sync + 'static>(
             let crate::render::RenderResponse { html, freshness } = rendered;
             let mut response = axum::response::Html::from(html).into_response();
             freshness.write(response.headers_mut());
-            apply_request_parts_to_response(&parts, &mut response);
+            let headers = server_context.take_response_headers();
+            apply_request_parts_to_response(headers, &mut response);
             response
         }
         Err(e) => {
