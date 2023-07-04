@@ -22,6 +22,7 @@ dioxus-rsx = { workspace = true }
 
 # testing
 [dev-dependencies]
+dioxus = { workspace = true }
 rustversion = "1.0"
 trybuild = "1.0"
 

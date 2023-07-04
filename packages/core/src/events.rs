@@ -53,7 +53,7 @@ impl<T> Event<T> {
     /// rsx! {
     ///     button {
     ///         onclick: move |evt: Event<MouseData>| {
-    ///             evt.cancel_bubble();
+    ///             evt.stop_propagation();
     ///         }
     ///     }
     /// }

@@ -55,7 +55,14 @@ serde_json = "1"
 
 [features]
 default = ["serialize"]
-serialize = ["serde", "serde_repr", "serde_json", "euclid/serde", "keyboard-types/serde", "dioxus-core/serialize"]
+serialize = [
+    "serde",
+    "serde_repr",
+    "serde_json",
+    "euclid/serde",
+    "keyboard-types/serde",
+    "dioxus-core/serialize",
+]
 wasm-bind = ["web-sys", "wasm-bindgen"]
-native-bind = ["tokio", "rfd"]
+native-bind = ["tokio"]
 hot-reload-context = ["dioxus-rsx"]

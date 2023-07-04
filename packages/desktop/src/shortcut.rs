@@ -6,11 +6,24 @@ use slab::Slab;
 use wry::application::{
     accelerator::{Accelerator, AcceleratorId},
     event_loop::EventLoopWindowTarget,
-    global_shortcut::{GlobalShortcut, ShortcutManager, ShortcutManagerError},
     keyboard::{KeyCode, ModifiersState},
 };
 
 use crate::{desktop_context::DesktopContext, use_window};
+
+#[cfg(any(
+    target_os = "windows",
+    target_os = "macos",
+    target_os = "linux",
+    target_os = "dragonfly",
+    target_os = "freebsd",
+    target_os = "netbsd",
+    target_os = "openbsd"
+))]
+use wry::application::global_shortcut::{GlobalShortcut, ShortcutManager, ShortcutManagerError};
+
+#[cfg(any(target_os = "ios", target_os = "android"))]
+pub use crate::mobile_shortcut::*;
 
 #[derive(Clone)]
 pub(crate) struct ShortcutRegistry {
@@ -21,6 +34,7 @@ pub(crate) struct ShortcutRegistry {
 type ShortcutMap = Rc<RefCell<HashMap<AcceleratorId, Shortcut>>>;
 
 struct Shortcut {
+    #[allow(unused)]
     shortcut: GlobalShortcut,
     callbacks: Slab<Box<dyn FnMut()>>,
 }
@@ -98,8 +112,9 @@ impl ShortcutRegistry {
         if let Some(callbacks) = shortcuts.get_mut(&id.id) {
             callbacks.remove(id.number);
             if callbacks.is_empty() {
-                if let Some(shortcut) = shortcuts.remove(&id.id) {
-                    let _ = self.manager.borrow_mut().unregister(shortcut.shortcut);
+                if let Some(_shortcut) = shortcuts.remove(&id.id) {
+                    #[cfg(not(target_os = "ios"))]
+                    let _ = self.manager.borrow_mut().unregister(_shortcut.shortcut);
                 }
             }
         }

@@ -25,14 +25,10 @@ fn main() {
                 .unwrap()
                 .wait()
                 .unwrap();
-            execute::shell("cargo run --features ssr --no-default-features")
-                .spawn()
-                .unwrap();
+            execute::shell("cargo run --features ssr").spawn().unwrap();
             true
         }));
 
-        PostServerData::register().unwrap();
-        GetServerData::register().unwrap();
         tokio::runtime::Runtime::new()
             .unwrap()
             .block_on(async move {

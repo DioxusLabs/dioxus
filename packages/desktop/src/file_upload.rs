@@ -1,9 +1,10 @@
-use std::{path::PathBuf, str::FromStr};
+#![allow(unused)]
 
 use serde::Deserialize;
+use std::{path::PathBuf, str::FromStr};
 
 #[derive(Debug, Deserialize)]
-pub(crate) struct FileDiologRequest {
+pub(crate) struct FileDialogRequest {
     #[serde(default)]
     accept: Option<String>,
     multiple: bool,
@@ -12,7 +13,13 @@ pub(crate) struct FileDiologRequest {
     pub bubbles: bool,
 }
 
-pub(crate) fn get_file_event(request: &FileDiologRequest) -> Vec<PathBuf> {
+#[cfg(target_os = "ios")]
+pub(crate) fn get_file_event(_request: &FileDialogRequest) -> Vec<PathBuf> {
+    vec![]
+}
+
+#[cfg(not(target_os = "ios"))]
+pub(crate) fn get_file_event(request: &FileDialogRequest) -> Vec<PathBuf> {
     let mut dialog = rfd::FileDialog::new();
 
     let filters: Vec<_> = request
