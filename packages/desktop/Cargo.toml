@@ -48,6 +48,7 @@ objc_id = "0.1.1"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 core-foundation = "0.9.3"
+objc = "0.2.7"
 
 [features]
 default = ["tokio_runtime", "hot-reload"]
