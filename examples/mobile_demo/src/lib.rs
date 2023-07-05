@@ -1,15 +1,8 @@
 use anyhow::Result;
+use dioxus::prelude::*;
+use dioxus_desktop::Config;
 #[cfg(target_os = "android")]
 use wry::android_binding;
-use wry::{
-    application::{
-        event::{Event, StartCause, WindowEvent},
-        event_loop::{ControlFlow, EventLoop, EventLoopWindowTarget},
-        window::WindowBuilder,
-    },
-    http::Response,
-    webview::{WebView, WebViewBuilder},
-};
 
 #[cfg(target_os = "android")]
 fn init_logging() {
@@ -54,13 +47,40 @@ pub extern "C" fn start_app() {
 pub fn main() -> Result<()> {
     init_logging();
 
-    use dioxus::prelude::*;
-
-    dioxus_desktop::launch(|cx| {
-        cx.render(rsx! {
-            "hello world!"
-        })
-    });
+    // Right now we're going through dioxus-desktop but we'd like to go through dioxus-mobile
+    // That will seed the index.html with some fixes that prevent the page from scrolling/zooming etc
+    dioxus_desktop::launch_cfg(
+        app,
+        // Note that we have to disable the viewport goofiness of the browser.
+        // Dioxus_mobile should do this for us
+        Config::default().with_custom_index(include_str!("index.html").to_string()),
+    );
 
     Ok(())
+}
+
+fn app(cx: Scope) -> Element {
+    let items = cx.use_hook(|| vec![1, 2, 3]);
+
+    log::debug!("Hello from the app");
+
+    render! {
+        div {
+            h1 { "Hello, Mobile"}
+            div { margin_left: "auto", margin_right: "auto", width: "200px", padding: "10px", border: "1px solid black",
+                button {
+                    onclick: move|_| {
+                        println!("Clicked!");
+                        items.push(items.len());
+                        cx.needs_update_any(ScopeId(0));
+                        println!("Requested update");
+                    },
+                    "Add item"
+                }
+                for item in items.iter() {
+                    div { "- {item}" }
+                }
+            }
+        }
+    }
 }
