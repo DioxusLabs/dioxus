@@ -34,7 +34,6 @@ members = [
     # Full project examples
     "examples/tailwind",
     "examples/PWA-example",
-    # "examples/ios_demo",
     # Playwrite tests
     "playwrite-tests/liveview",
     "playwrite-tests/web",
