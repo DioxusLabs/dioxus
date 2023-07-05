@@ -22,7 +22,7 @@ pub(crate) struct ElementRef {
     pub template: Option<NonNull<VNode<'static>>>,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum ElementPath {
     Deep(&'static [u8]),
     Root(usize),

@@ -113,7 +113,15 @@ impl ShortcutRegistry {
             callbacks.remove(id.number);
             if callbacks.is_empty() {
                 if let Some(_shortcut) = shortcuts.remove(&id.id) {
-                    #[cfg(not(target_os = "ios"))]
+                    #[cfg(any(
+                        target_os = "windows",
+                        target_os = "macos",
+                        target_os = "linux",
+                        target_os = "dragonfly",
+                        target_os = "freebsd",
+                        target_os = "netbsd",
+                        target_os = "openbsd"
+                    ))]
                     let _ = self.manager.borrow_mut().unregister(_shortcut.shortcut);
                 }
             }
