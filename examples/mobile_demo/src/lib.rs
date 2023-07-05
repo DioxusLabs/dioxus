@@ -1,13 +1,22 @@
 use anyhow::Result;
 #[cfg(target_os = "android")]
 use wry::android_binding;
+use wry::{
+    application::{
+        event::{Event, StartCause, WindowEvent},
+        event_loop::{ControlFlow, EventLoop, EventLoopWindowTarget},
+        window::WindowBuilder,
+    },
+    http::Response,
+    webview::{WebView, WebViewBuilder},
+};
 
 #[cfg(target_os = "android")]
 fn init_logging() {
     android_logger::init_once(
         android_logger::Config::default()
             .with_min_level(log::Level::Trace)
-            .with_tag("android-taurio"),
+            .with_tag("mobile-demo"),
     );
 }
 
@@ -37,7 +46,7 @@ fn _start_app() {
 #[cfg(any(target_os = "android", target_os = "ios"))]
 pub extern "C" fn start_app() {
     #[cfg(target_os = "android")]
-    android_binding!(com_example, android_taurio, _start_app);
+    android_binding!(com_example, mobile_demo, _start_app);
     #[cfg(target_os = "ios")]
     _start_app()
 }
@@ -46,11 +55,12 @@ pub fn main() -> Result<()> {
     init_logging();
 
     use dioxus::prelude::*;
-    fn app(cx: Scope) -> Element {
-        render!("hello dioxus")
-    }
 
-    dioxus_desktop::launch(app);
+    dioxus_desktop::launch(|cx| {
+        cx.render(rsx! {
+            "hello world!"
+        })
+    });
 
     Ok(())
 }

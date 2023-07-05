@@ -123,16 +123,16 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
     let proxy = event_loop.create_proxy();
 
     // Intialize hot reloading if it is enabled
-    // #[cfg(all(feature = "hot-reload", debug_assertions))]
-    // dioxus_hot_reload::connect({
-    //     let proxy = proxy.clone();
-    //     move |template| {
-    //         let _ = proxy.send_event(UserWindowEvent(
-    //             EventData::HotReloadEvent(template),
-    //             unsafe { WindowId::dummy() },
-    //         ));
-    //     }
-    // });
+    #[cfg(all(feature = "hot-reload", debug_assertions))]
+    dioxus_hot_reload::connect({
+        let proxy = proxy.clone();
+        move |template| {
+            let _ = proxy.send_event(UserWindowEvent(
+                EventData::HotReloadEvent(template),
+                unsafe { WindowId::dummy() },
+            ));
+        }
+    });
 
     // We start the tokio runtime *on this thread*
     // Any future we poll later will use this runtime to spawn tasks and for IO

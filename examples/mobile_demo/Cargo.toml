@@ -1,5 +1,5 @@
 [package]
-name = "rustnl-ios"
+name = "mobile-demo"
 version = "0.1.0"
 authors = ["Jonathan Kelley <jkelleyrtp@gmail.com>"]
 edition = "2018"
@@ -8,11 +8,11 @@ edition = "2018"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [[bin]]
-name = "rustnl-ios-desktop"
+name = "mobile-demo-desktop"
 path = "gen/bin/desktop.rs"
 
 [package.metadata.cargo-android]
-app-activity-name = "com.example.rustnl_ios.MainActivity"
+app-activity-name = "com.example.mobile_demo.MainActivity"
 app-dependencies = [
     "androidx.webkit:webkit:1.6.1",
     "androidx.appcompat:appcompat:1.6.1",
@@ -25,9 +25,9 @@ app-theme-parent = "Theme.MaterialComponents.DayNight.DarkActionBar"
 vulkan-validation = false
 
 [package.metadata.cargo-android.env-vars]
-WRY_ANDROID_PACKAGE = "com.example.rustnl_ios"
-WRY_ANDROID_LIBRARY = "rustnl_ios"
-WRY_ANDROID_KOTLIN_FILES_OUT_DIR = "<android-project-dir>/app/src/main/kotlin/com/example/rustnl_ios"
+WRY_ANDROID_PACKAGE = "com.example.mobile_demo"
+WRY_ANDROID_LIBRARY = "mobile_demo"
+WRY_ANDROID_KOTLIN_FILES_OUT_DIR = "<android-project-dir>/app/src/main/kotlin/com/example/mobile_demo"
 
 [package.metadata.cargo-apple.ios]
 frameworks = ["WebKit"]
@@ -35,12 +35,12 @@ frameworks = ["WebKit"]
 [dependencies]
 anyhow = "1.0.56"
 log = "0.4.11"
-im-rc = "15.1.0"
+wry = "0.28.0"
 dioxus = { path = "../../packages/dioxus" }
-dioxus-desktop = { path = "../../packages/desktop", default-features = false, features = [
+dioxus-desktop = { path = "../../packages/desktop", features = [
     "tokio_runtime",
-] }
-wry = { version = "0.28.0" }
+], default-features = false }
+
 
 [target.'cfg(target_os = "android")'.dependencies]
 android_logger = "0.9.0"

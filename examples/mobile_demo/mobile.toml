@@ -1,6 +1,6 @@
 [app]
-name = "rustnl-ios"
-stylized-name = "Rustnl Ios"
+name = "mobile-demo"
+stylized-name = "Mobile Demo"
 domain = "example.com"
 template-pack = "wry"
 
