@@ -72,6 +72,12 @@ impl UseEval {
     }
 }
 
+impl Drop for UseEval {
+    fn drop(&mut self) {
+        self.done();
+    }
+}
+
 /// Represents an error when evaluating JavaScript
 #[derive(Debug)]
 pub enum EvalError {
