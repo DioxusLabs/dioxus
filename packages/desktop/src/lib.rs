@@ -193,7 +193,7 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
 
                 let handler = create_new_window(
                     cfg,
-                    &event_loop,
+                    event_loop,
                     &proxy,
                     VirtualDom::new_with_props(root, props),
                     &queue,
