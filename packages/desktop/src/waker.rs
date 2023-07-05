@@ -14,16 +14,12 @@ pub fn tao_waker(proxy: &EventLoopProxy<UserWindowEvent>, id: WindowId) -> std::
         id: WindowId,
     }
 
-    // this should be implemented by most platforms, but ios is missing this until
-    // https://github.com/tauri-apps/wry/issues/830 is resolved
-    unsafe impl Send for DomHandle {}
-    unsafe impl Sync for DomHandle {}
-
     impl ArcWake for DomHandle {
         fn wake_by_ref(arc_self: &Arc<Self>) {
-            _ = arc_self
-                .proxy
-                .send_event(UserWindowEvent(EventData::Poll, arc_self.id));
+            println!("waking by ref");
+            // _ = arc_self
+            //     .proxy
+            //     .send_event(UserWindowEvent(EventData::Poll, arc_self.id));
         }
     }
 

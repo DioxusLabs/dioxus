@@ -50,9 +50,18 @@ impl Scheduler {
 
         entry.insert(task);
 
+        println!("Sending task notified {task_id:?}");
+
+        let chan = self.sender.clone();
+
+        let is_closed = chan.is_closed();
+        println!("Sending task notified {is_closed}");
+
         self.sender
             .unbounded_send(SchedulerMsg::TaskNotified(task_id))
             .expect("Scheduler should exist");
+
+        println!("Task notified sent");
 
         task_id
     }

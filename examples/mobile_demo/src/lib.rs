@@ -1,3 +1,5 @@
+use std::sync::{Arc, Mutex};
+
 use anyhow::Result;
 use dioxus::prelude::*;
 use dioxus_desktop::Config;
@@ -62,6 +64,52 @@ pub fn main() -> Result<()> {
 fn app(cx: Scope) -> Element {
     let items = cx.use_hook(|| vec![1, 2, 3]);
 
+    let (tx, rx) = &*cx.use_hook(|| {
+        //
+
+        let (tx, rx) = futures_channel::mpsc::unbounded::<()>();
+        (tx, Arc::new(Mutex::new(Some(rx))))
+    });
+    // .unwrap();
+
+    // let (tx, mut rx) = var;
+
+    cx.use_hook(|| {
+        let rx: Arc<Mutex<Option<UnboundedReceiver<()>>>> = rx.clone();
+        cx.spawn(async move {
+            use futures_util::StreamExt;
+            let mut rx = rx.lock().unwrap().take().unwrap();
+            loop {
+                // _rx.next().await;
+                while let Some(_) = rx.next().await {
+                    log::debug!("Got update request");
+                    //     // cx.needs_update_any(ScopeId(0));
+                }
+            }
+        });
+    });
+
+    // // let tx = cx.use_hook(move || tx.clone());
+    // cx.use_hook(|| {
+    //     let rx: Arc<Mutex<Option<UnboundedReceiver<()>>>> = rx.clone();
+    //     tokio::task::spawn(async move {
+    //         use futures_util::StreamExt;
+    //         let mut rx = rx.lock().unwrap().take().unwrap();
+    //         loop {
+    //             // _rx.next().await;
+    //             while let Some(_) = rx.next().await {
+    //                 log::debug!("Got update request");
+    //                 //     // cx.needs_update_any(ScopeId(0));
+    //             }
+    //         }
+    //     });
+    // });
+
+    tx.unbounded_send(()).unwrap();
+    tx.unbounded_send(()).unwrap();
+    tx.unbounded_send(()).unwrap();
+    tx.unbounded_send(()).unwrap();
+    tx.unbounded_send(()).unwrap();
     log::debug!("Hello from the app");
 
     render! {
@@ -72,8 +120,11 @@ fn app(cx: Scope) -> Element {
                     onclick: move|_| {
                         println!("Clicked!");
                         items.push(items.len());
-                        cx.needs_update_any(ScopeId(0));
+                        tx.unbounded_send(()).unwrap();
+                        cx.spawn(async move {});
                         println!("Requested update");
+
+                        cx.needs_update_any(ScopeId(0));
                     },
                     "Add item"
                 }

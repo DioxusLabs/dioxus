@@ -40,6 +40,9 @@ dioxus = { path = "../../packages/dioxus" }
 dioxus-desktop = { path = "../../packages/desktop", features = [
     "tokio_runtime",
 ], default-features = false }
+futures-channel = "0.3.28"
+futures-util = "0.3.28"
+tokio = { version = "1.29.1", features = ["full"] }
 
 
 [target.'cfg(target_os = "android")'.dependencies]
