@@ -34,6 +34,7 @@ pub use eval::{use_eval, EvalResult};
 use futures_util::{pin_mut, FutureExt};
 use shortcut::ShortcutRegistry;
 pub use shortcut::{use_global_shortcut, ShortcutHandle, ShortcutId, ShortcutRegistryError};
+use std::cell::Cell;
 use std::rc::Rc;
 use std::task::Waker;
 use std::{collections::HashMap, sync::Arc};
@@ -154,18 +155,10 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
 
     let shortcut_manager = ShortcutRegistry::new(&event_loop);
 
-    let web_view = create_new_window(
-        cfg,
-        &event_loop,
-        &proxy,
-        VirtualDom::new_with_props(root, props),
-        &queue,
-        &event_handlers,
-        shortcut_manager.clone(),
-    );
-
-    // By default, we'll create a new window when the app starts
-    queue.borrow_mut().push(web_view);
+    // move the props into a cell so we can pop it out later to create the first window
+    // iOS panics if we create a window before the event loop is started
+    let props = Rc::new(Cell::new(Some(props)));
+    let cfg = Rc::new(Cell::new(Some(cfg)));
 
     event_loop.run(move |window_event, event_loop, control_flow| {
         *control_flow = ControlFlow::Wait;
@@ -193,8 +186,27 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
                 _ => {}
             },
 
-            Event::NewEvents(StartCause::Init)
-            | Event::UserEvent(UserWindowEvent(EventData::NewWindow, _)) => {
+            Event::NewEvents(StartCause::Init) => {
+                //
+                let props = props.take().unwrap();
+                let cfg = cfg.take().unwrap();
+
+                let handler = create_new_window(
+                    cfg,
+                    &event_loop,
+                    &proxy,
+                    VirtualDom::new_with_props(root, props),
+                    &queue,
+                    &event_handlers,
+                    shortcut_manager.clone(),
+                );
+
+                let id = handler.desktop_context.webview.window().id();
+                webviews.insert(id, handler);
+                _ = proxy.send_event(UserWindowEvent(EventData::Poll, id));
+            }
+
+            Event::UserEvent(UserWindowEvent(EventData::NewWindow, _)) => {
                 for handler in queue.borrow_mut().drain(..) {
                     let id = handler.desktop_context.webview.window().id();
                     webviews.insert(id, handler);
