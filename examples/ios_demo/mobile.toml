@@ -1,0 +1,8 @@
+[app]
+name = "rustnl-ios"
+stylized-name = "Rustnl Ios"
+domain = "example.com"
+template-pack = "wry"
+
+[apple]
+development-team = "34U4FG9TJ8"

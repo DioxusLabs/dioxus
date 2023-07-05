@@ -34,11 +34,13 @@ members = [
     # Full project examples
     "examples/tailwind",
     "examples/PWA-example",
+    # "examples/ios_demo",
     # Playwrite tests
     "playwrite-tests/liveview",
     "playwrite-tests/web",
     "playwrite-tests/fullstack",
 ]
+exclude = ["examples/ios_demo"]
 
 # dependencies that are shared across packages
 [workspace.dependencies]
