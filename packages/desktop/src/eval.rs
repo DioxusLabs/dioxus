@@ -125,7 +125,7 @@ impl Evaluator for DesktopEvaluator {
 
     /// Cleans up evaluation artifacts
     fn done(&mut self) {
-        if let Some(query) = &mut self.query {
+        if let Some(query) = &mut self.query.take() {
             query.cleanup(Some(&self.desktop_ctx.webview));
         }
     }
