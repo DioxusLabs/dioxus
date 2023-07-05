@@ -33,3 +33,13 @@ From there, just click the "play" button with the right target and the app shoul
 
 Note that clicking play doesn't cause a new build, so you'll need to keep rebuilding the app between changes. The tooling here is very young, so please be patient. If you want to contribute to make things easier, please do! We'll be happy to help.
 
+
+## Running on Android
+
+Again, we want to make sure we have the right targets installed.
+
+The common targets here are
+- aarch64-linux-android
+- armv7-linux-androideabi
+- i686-linux-android
+- x86_64-linux-android

@@ -1,5 +1,7 @@
 use anyhow::Result;
 use dioxus::prelude::*;
+#[cfg(target_os = "android")]
+use wry::android_binding;
 
 pub fn main() -> Result<()> {
     init_logging();
@@ -70,8 +72,6 @@ fn _start_app() {
 }
 
 use dioxus_desktop::Config;
-#[cfg(target_os = "android")]
-use wry::android_binding;
 
 #[no_mangle]
 #[inline(never)]

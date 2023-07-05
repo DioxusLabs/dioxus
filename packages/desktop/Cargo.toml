@@ -39,7 +39,8 @@ slab = { workspace = true }
 futures-util = { workspace = true }
 urlencoding = "2.1.2"
 
-[target.'cfg(not(target_os = "ios"))'.dependencies]
+
+[target.'cfg(any(target_os = "windows",target_os = "macos",target_os = "linux",target_os = "dragonfly", target_os = "freebsd", target_os = "netbsd", target_os = "openbsd"))'.dependencies]
 rfd = "0.11.3"
 
 [target.'cfg(target_os = "ios")'.dependencies]
