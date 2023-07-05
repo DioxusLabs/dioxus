@@ -37,8 +37,10 @@ anyhow = "1.0.56"
 log = "0.4.11"
 im-rc = "15.1.0"
 dioxus = { path = "../../packages/dioxus" }
-dioxus-desktop = { path = "../../packages/desktop" }
-wry = { version = "0.27.2" }
+dioxus-desktop = { path = "../../packages/desktop", default-features = false, features = [
+    "tokio_runtime",
+] }
+wry = { version = "0.28.0" }
 
 [target.'cfg(target_os = "android")'.dependencies]
 android_logger = "0.9.0"
