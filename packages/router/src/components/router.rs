@@ -1,5 +1,4 @@
 use dioxus::prelude::*;
-use log::error;
 use std::{cell::RefCell, str::FromStr};
 
 use crate::{
