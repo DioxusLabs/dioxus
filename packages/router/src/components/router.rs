@@ -121,22 +121,14 @@ where
     <R as FromStr>::Err: std::fmt::Display,
 {
     use_context_provider(cx, || {
-        #[allow(unreachable_code, unused_variables)]
-        if let Some(outer) = cx.consume_context::<GenericRouterContext<R>>() {
-            let msg = "Router components should not be nested within each other";
-            error!("{msg}, inner will be inactive and transparent");
-            #[cfg(debug_assertions)]
-            panic!("{}", msg);
-        }
-        let router = GenericRouterContext::new(
+        GenericRouterContext::new(
             (cx.props
                 .config
                 .config
                 .take()
                 .expect("use_context_provider ran twice"))(),
             cx.schedule_update_any(),
-        );
-        router
+        )
     });
 
     render! {
@@ -152,22 +144,14 @@ where
     R: serde::Serialize + serde::de::DeserializeOwned,
 {
     use_context_provider(cx, || {
-        #[allow(unreachable_code, unused_variables)]
-        if let Some(outer) = cx.consume_context::<GenericRouterContext<R>>() {
-            let msg = "Router components should not be nested within each other";
-            error!("{msg}, inner will be inactive and transparent");
-            #[cfg(debug_assertions)]
-            panic!("{}", msg);
-        }
-        let router = GenericRouterContext::new(
+        GenericRouterContext::new(
             (cx.props
                 .config
                 .config
                 .take()
                 .expect("use_context_provider ran twice"))(),
             cx.schedule_update_any(),
-        );
-        router
+        )
     });
 
     render! {
