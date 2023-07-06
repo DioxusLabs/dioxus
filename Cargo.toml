@@ -30,6 +30,7 @@ members = [
     "packages/fullstack/examples/axum-desktop",
     "packages/fullstack/examples/salvo-hello-world",
     "packages/fullstack/examples/warp-hello-world",
+    "packages/fullstack/examples/static-hydrated",
     "docs/guide",
     "docs/router",
     # Full project examples

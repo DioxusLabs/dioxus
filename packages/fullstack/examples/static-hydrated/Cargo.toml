@@ -1,0 +1,20 @@
+[package]
+name = "static-hydrated"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+dioxus-web = { workspace = true, features = ["hydrate"], optional = true }
+dioxus = { workspace = true }
+dioxus-fullstack = { workspace = true, features = ["router"] }
+dioxus-router = { workspace = true}
+tokio = { workspace = true, features = ["full"], optional = true }
+serde = "1.0.159"
+
+[features]
+default = []
+ssr = ["tokio", "dioxus-fullstack/ssr"]
+web = ["dioxus-web"]
