@@ -20,7 +20,7 @@ mod webview;
 mod mobile_shortcut;
 
 use crate::query::QueryResult;
-pub use cfg::Config;
+pub use cfg::{Config, WindowCloseBehaviour};
 pub use desktop_context::DesktopContext;
 pub use desktop_context::{
     use_window, use_wry_event_handler, DesktopService, WryEventHandler, WryEventHandlerId,
@@ -122,6 +122,8 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
 
     let proxy = event_loop.create_proxy();
 
+    let window_behaviour = cfg.last_window_close_behaviour;
+
     // Intialize hot reloading if it is enabled
     #[cfg(all(feature = "hot-reload", debug_assertions))]
     dioxus_hot_reload::connect({
@@ -169,18 +171,33 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
             Event::WindowEvent {
                 event, window_id, ..
             } => match event {
-                WindowEvent::CloseRequested => {
-                    webviews.remove(&window_id);
+                WindowEvent::CloseRequested => match window_behaviour {
+                    cfg::WindowCloseBehaviour::LastWindowExitsApp => {
+                        webviews.remove(&window_id);
 
-                    if webviews.is_empty() {
-                        *control_flow = ControlFlow::Exit
+                        if webviews.is_empty() {
+                            *control_flow = ControlFlow::Exit
+                        }
                     }
-                }
+                    cfg::WindowCloseBehaviour::LastWindowHides => {
+                        let Some(webview) = webviews.get(&window_id) else {
+                            return;
+                        };
+                        hide_app_window(&webview.desktop_context.webview);
+                    }
+                    cfg::WindowCloseBehaviour::CloseWindow => {
+                        webviews.remove(&window_id);
+                    }
+                },
                 WindowEvent::Destroyed { .. } => {
                     webviews.remove(&window_id);
 
-                    if webviews.is_empty() {
-                        *control_flow = ControlFlow::Exit;
+                    if matches!(
+                        window_behaviour,
+                        cfg::WindowCloseBehaviour::LastWindowExitsApp
+                    ) && webviews.is_empty()
+                    {
+                        *control_flow = ControlFlow::Exit
                     }
                 }
                 _ => {}
@@ -422,4 +439,35 @@ fn send_edits(edits: Mutations, webview: &WebView) {
 
     // todo: use SSE and binary data to send the edits with lower overhead
     _ = webview.evaluate_script(&format!("window.interpreter.handleEdits({serialized})"));
+}
+
+/// Different hide implementations per platform
+#[allow(unused)]
+fn hide_app_window(webview: &WebView) {
+    #[cfg(target_os = "windows")]
+    {
+        use wry::application::platform::windows::WindowExtWindows;
+        webview.window().set_visible(false);
+        webview.window().set_skip_taskbar(true);
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        use wry::application::platform::unix::WindowExtUnix;
+        webview.window().set_visible(false);
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        // webview.window().set_visible(false); has the wrong behaviour on macOS
+        // It will hide the window but not show it again when the user switches
+        // back to the app. `NSApplication::hide:` has the correct behaviour
+        use objc::runtime::Object;
+        use objc::{msg_send, sel, sel_impl};
+        objc::rc::autoreleasepool(|| unsafe {
+            let app: *mut Object = msg_send![objc::class!(NSApplication), sharedApplication];
+            let nil = std::ptr::null_mut::<Object>();
+            let _: () = msg_send![app, hide: nil];
+        });
+    }
 }
