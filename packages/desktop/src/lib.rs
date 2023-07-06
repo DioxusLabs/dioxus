@@ -189,7 +189,7 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
             Event::NewEvents(StartCause::Init) => {
                 let props = props.take().unwrap();
                 let cfg = cfg.take().unwrap();
-              
+
                 // Create a dom
                 let dom = VirtualDom::new_with_props(root, props);
                 let cx = dom.base_scope();
