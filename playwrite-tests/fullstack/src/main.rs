@@ -53,6 +53,7 @@ struct AppProps {
     count: i32,
 }
 
+#[allow(unused)]
 fn app(cx: Scope<AppProps>) -> Element {
     let mut count = use_state(cx, || cx.props.count);
     let text = use_state(cx, || "...".to_string());
