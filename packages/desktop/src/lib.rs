@@ -442,7 +442,7 @@ fn send_edits(edits: Mutations, webview: &WebView) {
 }
 
 /// Different hide implementations per platform
-#[allow(unused_variables)]
+#[allow(unused)]
 fn hide_app_window(webview: &WebView) {
     #[cfg(target_os = "windows")]
     {
