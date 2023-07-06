@@ -38,6 +38,9 @@ fn main() {
     );
 }
 
+#[cfg(not(any(feature = "web", feature = "ssr")))]
+fn main() {}
+
 #[derive(Clone, Routable, Debug, PartialEq, Serialize, Deserialize)]
 enum Route {
     #[route("/")]
