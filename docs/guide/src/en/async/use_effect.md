@@ -1,14 +1,12 @@
 # UseEffect
 
-[`use_effect`](https://docs.rs/dioxus-hooks/latest/dioxus_hooks/fn.use_effect.html) provides a future that executes after the hooks have been applied.
-
-Whenever the hooks [dependencies](#dependencies) change, the future will be re-evaluated. This is useful to syncrhonize with external events.
+[`use_effect`](https://docs.rs/dioxus-hooks/latest/dioxus_hooks/fn.use_effect.html) let's you run a callback that returns a future, only it's [dependencies](#dependencies) change. This is useful to syncrhonize with external events.
 
 ## Dependencies
 
-You can make the future re-run when some value changes. For example, you might want to fetch a user's data only when the user id changes. You can provide a tuple of "dependencies" to the hook. It will automatically re-run the future when any of those dependencies change.
+You can make the callback re-run when some value changes. For example, you might want to fetch a user's data only when the user id changes. You can provide a tuple of "dependencies" to the hook. It will automatically re-run it when any of those dependencies change.
 
-Example:
+## Example
 
 ```rust, no_run
 #[inline_props]
@@ -22,6 +20,12 @@ fn Profile(cx: Scope, id: usize) -> Element {
             let user = fetch_user(id).await;
             name.set(user.name);
         }
+    });
+
+    // Because the dependencies are empty, this will only run once.
+    // An empty tuple is always equal to an empty tuple.
+    use_effect(cx, (), |()| async move {
+        println!("Hello, World!");
     });
 
     let name = name.get().clone().unwrap_or("Loading...".to_string());
