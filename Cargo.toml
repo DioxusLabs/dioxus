@@ -39,6 +39,7 @@ members = [
     "playwrite-tests/web",
     "playwrite-tests/fullstack",
 ]
+exclude = ["examples/mobile_demo"]
 
 # dependencies that are shared across packages
 [workspace.dependencies]
