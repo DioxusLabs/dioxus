@@ -26,6 +26,7 @@ pub(crate) mod innerlude {
     pub use crate::error_boundary::*;
     pub use crate::events::*;
     pub use crate::fragment::*;
+    pub use crate::global_stack::*;
     pub use crate::lazynodes::*;
     pub use crate::mutations::*;
     pub use crate::nodes::RenderReturn;

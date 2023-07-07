@@ -12,24 +12,40 @@
 //! - An event handler is called
 //! - A component is rendered
 
-use std::sync::atomic::AtomicUsize;
+use std::{cell::Cell, sync::atomic::AtomicU64};
+
+use slab::Slab;
 
 use crate::ScopeId;
 
-pub static CURRENT_SCOPE: AtomicUsize = AtomicUsize::new(0);
-
-/// The current scope id.
+/// All the virtualdoms register themselves with this global handle
 ///
-/// This is specific to a virtualdom, so it might not be unique between two calls
-pub fn current_scope() -> ScopeId {
-    let id = CURRENT_SCOPE.load(std::sync::atomic::Ordering::Relaxed);
-    ScopeId(id)
+/// From here, we can inject events to any virtualdom
+///
+/// We can't do things that would require a reference to the dom, but that's okay
+pub struct GlobalHandle {}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct VirtualDomId(u64);
+
+pub static GLOBAL: GlobalHandle = GlobalHandle {};
+
+thread_local! {
+    static CURRENT_VIRTUALDOM: Cell<Option<VirtualDomId>> = Cell::new(None);
 }
 
-pub(crate) fn set_current_scope(id: ScopeId) {
-    CURRENT_SCOPE.store(id.0, std::sync::atomic::Ordering::Relaxed);
-}
+impl GlobalHandle {
+    pub fn next(&self) -> VirtualDomId {
+        todo!()
+    }
 
-pub(crate) fn clear_current_scope(id: ScopeId) {
-    CURRENT_SCOPE.store(0, std::sync::atomic::Ordering::Relaxed);
+    // uses a thread-local to get the currently-running virtualdom on the caller's thread
+    pub fn current_virtualdom() -> Option<VirtualDomId> {
+        CURRENT_VIRTUALDOM.with(|f| f.get())
+    }
+
+    // Spawn a future on the current virtualdom
+    pub fn spawn(&self) {
+        todo!()
+    }
 }

@@ -5,7 +5,8 @@
 use crate::{
     any_props::VProps,
     arena::{ElementId, ElementRef},
-    innerlude::{DirtyScope, ErrorBoundary, Mutations, Scheduler, SchedulerMsg, ScopeSlab},
+    global_stack::VirtualDomId,
+    innerlude::{DirtyScope, ErrorBoundary, Mutations, Scheduler, SchedulerMsg, ScopeSlab, GLOBAL},
     mutations::Mutation,
     nodes::RenderReturn,
     nodes::{Template, TemplateId},
@@ -198,6 +199,8 @@ pub struct VirtualDom {
     pub(crate) rx: futures_channel::mpsc::UnboundedReceiver<SchedulerMsg>,
 
     pub(crate) mutations: Mutations<'static>,
+
+    id: VirtualDomId,
 }
 
 impl VirtualDom {
@@ -259,7 +262,7 @@ impl VirtualDom {
         let (tx, rx) = futures_channel::mpsc::unbounded();
         let mut dom = Self {
             rx,
-
+            id: GLOBAL.next(),
             scheduler: Scheduler::new(tx),
             templates: Default::default(),
             scopes: Default::default(),
