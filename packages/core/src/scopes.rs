@@ -401,13 +401,21 @@ impl<'src> ScopeState {
     /// }
     /// ```
     pub fn provide_context<T: 'static + Clone>(&self, value: T) -> T {
-        let value2 = value.clone();
+        let mut contexts = self.shared_contexts.borrow_mut();
 
-        self.shared_contexts
-            .borrow_mut()
-            .push((TypeId::of::<T>(), Box::new(value)));
+        // If the context exists, swap it out for the new value
+        for ctx in contexts.iter_mut() {
+            // Swap the ptr directly
+            if let Some(ctx) = ctx.1.downcast_mut::<T>() {
+                std::mem::swap(ctx, &mut value.clone());
+                return value;
+            }
+        }
 
-        value2
+        // Else, just push it
+        contexts.push((TypeId::of::<T>(), Box::new(value.clone())));
+
+        value
     }
 
     /// Pushes the future onto the poll queue to be polled after the component renders.
