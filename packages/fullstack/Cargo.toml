@@ -50,7 +50,6 @@ serde_json = { version = "1.0.95", optional = true }
 tokio-stream = { version = "0.1.12", features = ["sync"], optional = true }
 futures-util = { workspace = true, optional = true }
 postcard = { version = "1.0.4", features = ["use-std"] }
-yazi = "0.1.5"
 base64 = "0.21.0"
 
 pin-project = "1.1.2"

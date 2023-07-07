@@ -6,7 +6,6 @@ use base64::Engine;
 #[allow(unused)]
 pub(crate) fn serde_from_string<T: DeserializeOwned>(string: &str) -> Option<T> {
     let decompressed = STANDARD.decode(string.as_bytes()).ok()?;
-    let (decompressed, _) = yazi::decompress(&decompressed, yazi::Format::Zlib).unwrap();
 
     postcard::from_bytes(&decompressed).ok()
 }

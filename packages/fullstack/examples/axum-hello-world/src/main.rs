@@ -41,6 +41,7 @@ fn app(cx: Scope<AppProps>) -> Element {
 }
 
 #[server(PostServerData)]
+#[middleware(Auth(AuthLevel::Admin))]
 async fn post_server_data(
     #[extract] Axum(axum::extract::Host(host), _): Axum<_, _>,
     data: String,

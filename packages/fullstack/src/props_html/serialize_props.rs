@@ -9,13 +9,7 @@ pub(crate) fn serde_to_writable<T: Serialize>(
     write_to: &mut impl std::io::Write,
 ) -> std::io::Result<()> {
     let serialized = postcard::to_allocvec(value).unwrap();
-    let compressed = yazi::compress(
-        &serialized,
-        yazi::Format::Zlib,
-        yazi::CompressionLevel::BestSize,
-    )
-    .unwrap();
-    write_to.write_all(&STANDARD.encode(compressed).as_bytes())?;
+    write_to.write_all(&STANDARD.encode(serialized).as_bytes())?;
     Ok(())
 }
 
