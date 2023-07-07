@@ -41,13 +41,12 @@ fn app(cx: Scope<AppProps>) -> Element {
 }
 
 #[server(PostServerData)]
-async fn post_server_data(data: String) -> Result<(), ServerFnError> {
-    // The server context contains information about the current request and allows you to modify the response.
-    let cx = server_context();
-    cx.response_headers_mut()
-        .insert("Set-Cookie", "foo=bar".parse().unwrap());
+async fn post_server_data(
+    #[extract] Axum(axum::extract::Host(host), _): Axum<_, _>,
+    data: String,
+) -> Result<(), ServerFnError> {
     println!("Server received: {}", data);
-    println!("Request parts are {:?}", cx.request_parts());
+    println!("{:?}", host);
 
     Ok(())
 }

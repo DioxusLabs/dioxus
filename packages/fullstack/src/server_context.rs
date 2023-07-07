@@ -126,7 +126,12 @@ std::thread_local! {
 ///
 /// This function will only provide the current server context if it is called from a server function.
 pub fn server_context() -> DioxusServerContext {
-    SERVER_CONTEXT.with(|ctx| *ctx.borrow_mut().clone())
+    SERVER_CONTEXT.with(|ctx| *ctx.borrow().clone())
+}
+
+/// Extract some part from the current server request.
+pub async fn extract_server_context<E: FromServerContext>() -> Result<E, E::Rejection> {
+    E::from_request(&server_context()).await
 }
 
 pub(crate) fn with_server_context<O>(
@@ -221,8 +226,9 @@ impl<T: Send + Sync + Clone + 'static> FromServerContext for FromContext<T> {
 pub struct Axum<
     I: axum::extract::FromRequestParts<(), Rejection = R>,
     R: axum::response::IntoResponse + std::error::Error,
->(pub(crate) I, std::marker::PhantomData<R>);
+>(pub I, pub std::marker::PhantomData<R>);
 
+#[cfg(feature = "axum")]
 impl<
         I: axum::extract::FromRequestParts<(), Rejection = R>,
         R: axum::response::IntoResponse + std::error::Error,
@@ -235,6 +241,7 @@ impl<
     }
 }
 
+#[cfg(feature = "axum")]
 impl<
         I: axum::extract::FromRequestParts<(), Rejection = R>,
         R: axum::response::IntoResponse + std::error::Error,

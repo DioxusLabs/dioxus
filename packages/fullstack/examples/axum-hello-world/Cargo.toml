@@ -19,3 +19,10 @@ execute = "0.2.12"
 default = []
 ssr = ["axum", "tokio", "dioxus-fullstack/axum"]
 web = ["dioxus-web"]
+
+[profile.release]
+lto = true
+panic = "abort"
+opt-level = 'z'
+strip = true
+codegen-units = 1
