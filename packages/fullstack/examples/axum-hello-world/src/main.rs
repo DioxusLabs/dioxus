@@ -26,12 +26,11 @@ fn app(cx: Scope<AppProps>) -> Element {
         button {
             onclick: move |_| {
                 to_owned![text];
-                let sc = cx.sc();
                 async move {
                     if let Ok(data) = get_server_data().await {
                         println!("Client received: {}", data);
                         text.set(data.clone());
-                        post_server_data(sc, data).await.unwrap();
+                        post_server_data(data).await.unwrap();
                     }
                 }
             },
@@ -42,8 +41,9 @@ fn app(cx: Scope<AppProps>) -> Element {
 }
 
 #[server(PostServerData)]
-async fn post_server_data(cx: DioxusServerContext, data: String) -> Result<(), ServerFnError> {
+async fn post_server_data(data: String) -> Result<(), ServerFnError> {
     // The server context contains information about the current request and allows you to modify the response.
+    let cx = server_context();
     cx.response_headers_mut()
         .insert("Set-Cookie", "foo=bar".parse().unwrap());
     println!("Server received: {}", data);

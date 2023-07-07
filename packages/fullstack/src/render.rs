@@ -9,7 +9,7 @@ use dioxus_ssr::{
 };
 use serde::Serialize;
 
-use crate::prelude::*;
+use crate::{prelude::*, server_context::with_server_context};
 use dioxus::prelude::*;
 
 enum SsrRendererPool {
@@ -25,15 +25,17 @@ impl SsrRendererPool {
         component: Component<P>,
         props: P,
         to: &mut String,
-        modify_vdom: impl FnOnce(&mut VirtualDom),
+        server_context: &DioxusServerContext,
     ) -> Result<RenderFreshness, dioxus_ssr::incremental::IncrementalRendererError> {
         let wrapper = FullstackRenderer { cfg };
         match self {
             Self::Renderer(pool) => {
+                let server_context = Box::new(server_context.clone());
                 let mut vdom = VirtualDom::new_with_props(component, props);
-                modify_vdom(&mut vdom);
 
-                let _ = vdom.rebuild();
+                with_server_context(server_context, || {
+                    let _ = vdom.rebuild();
+                });
 
                 let mut renderer = pool.pull(pre_renderer);
 
@@ -48,7 +50,19 @@ impl SsrRendererPool {
                 let mut renderer =
                     pool.pull(|| incremental_pre_renderer(cfg.incremental.as_ref().unwrap()));
                 Ok(renderer
-                    .render_to_string(route, component, props, to, modify_vdom, &wrapper)
+                    .render_to_string(
+                        route,
+                        component,
+                        props,
+                        to,
+                        |vdom| {
+                            let server_context = Box::new(server_context.clone());
+                            with_server_context(server_context, || {
+                                let _ = vdom.rebuild();
+                            });
+                        },
+                        &wrapper,
+                    )
                     .await?)
             }
         }
@@ -86,7 +100,7 @@ impl SSRState {
         &'a self,
         route: String,
         cfg: &'a ServeConfig<P>,
-        modify_vdom: impl FnOnce(&mut VirtualDom) + Send + 'a,
+        server_context: &'a DioxusServerContext,
     ) -> impl std::future::Future<
         Output = Result<RenderResponse, dioxus_ssr::incremental::IncrementalRendererError>,
     > + Send
@@ -97,7 +111,7 @@ impl SSRState {
 
             let freshness = self
                 .renderers
-                .render_to(cfg, route, *app, props.clone(), &mut html, modify_vdom)
+                .render_to(cfg, route, *app, props.clone(), &mut html, server_context)
                 .await?;
 
             Ok(RenderResponse { html, freshness })

@@ -1,28 +1,6 @@
-use dioxus::prelude::ScopeState;
-
-/// A trait for an object that contains a server context
-pub trait HasServerContext {
-    /// Get the server context from the state
-    fn server_context(&self) -> DioxusServerContext;
-
-    /// A shortcut for `self.server_context()`
-    fn sc(&self) -> DioxusServerContext {
-        self.server_context()
-    }
-}
-
-impl HasServerContext for &ScopeState {
-    fn server_context(&self) -> DioxusServerContext {
-        #[cfg(feature = "ssr")]
-        {
-            self.consume_context().expect("No server context found")
-        }
-        #[cfg(not(feature = "ssr"))]
-        {
-            DioxusServerContext {}
-        }
-    }
-}
+pub use server_fn_impl::*;
+use std::sync::Arc;
+use std::sync::RwLock;
 
 /// A shared context for server functions that contains infomation about the request and middleware state.
 /// This allows you to pass data between your server framework and the server functions. This can be used to pass request information or information about the state of the server. For example, you could pass authentication data though this context to your server functions.
@@ -30,34 +8,24 @@ impl HasServerContext for &ScopeState {
 /// You should not construct this directly inside components. Instead use the `HasServerContext` trait to get the server context from the scope.
 #[derive(Clone)]
 pub struct DioxusServerContext {
-    #[cfg(feature = "ssr")]
     shared_context: std::sync::Arc<
         std::sync::RwLock<anymap::Map<dyn anymap::any::Any + Send + Sync + 'static>>,
     >,
-    #[cfg(feature = "ssr")]
     headers: std::sync::Arc<std::sync::RwLock<hyper::header::HeaderMap>>,
-    #[cfg(feature = "ssr")]
-    pub(crate) parts: std::sync::Arc<RequestParts>,
+    pub(crate) parts: Arc<RwLock<http::request::Parts>>,
 }
 
 #[allow(clippy::derivable_impls)]
 impl Default for DioxusServerContext {
     fn default() -> Self {
         Self {
-            #[cfg(feature = "ssr")]
             shared_context: std::sync::Arc::new(std::sync::RwLock::new(anymap::Map::new())),
-            #[cfg(feature = "ssr")]
             headers: Default::default(),
-            #[cfg(feature = "ssr")]
-            parts: Default::default(),
+            parts: std::sync::Arc::new(RwLock::new(http::request::Request::new(()).into_parts().0)),
         }
     }
 }
 
-#[cfg(feature = "ssr")]
-pub use server_fn_impl::*;
-
-#[cfg(feature = "ssr")]
 mod server_fn_impl {
     use super::*;
     use std::sync::LockResult;
@@ -68,7 +36,7 @@ mod server_fn_impl {
 
     impl DioxusServerContext {
         /// Create a new server context from a request
-        pub fn new(parts: impl Into<Arc<RequestParts>>) -> Self {
+        pub fn new(parts: impl Into<Arc<RwLock<http::request::Parts>>>) -> Self {
             Self {
                 parts: parts.into(),
                 shared_context: Arc::new(RwLock::new(SendSyncAnyMap::new())),
@@ -126,35 +94,170 @@ mod server_fn_impl {
         /// Get the request that triggered:
         /// - The initial SSR render if called from a ScopeState or ServerFn
         /// - The server function to be called if called from a server function after the initial render
-        pub fn request_parts(&self) -> &RequestParts {
-            &self.parts
+        pub fn request_parts(
+            &self,
+        ) -> std::sync::LockResult<RwLockReadGuard<'_, http::request::Parts>> {
+            self.parts.read()
+        }
+
+        /// Get the request that triggered:
+        /// - The initial SSR render if called from a ScopeState or ServerFn
+        /// - The server function to be called if called from a server function after the initial render
+        pub fn request_parts_mut(
+            &self,
+        ) -> std::sync::LockResult<RwLockWriteGuard<'_, http::request::Parts>> {
+            self.parts.write()
+        }
+
+        /// Extract some part from the request
+        pub async fn extract<R: std::error::Error, T: FromServerContext<Rejection = R>>(
+            &self,
+        ) -> Result<T, R> {
+            T::from_request(self).await
         }
     }
+}
 
-    /// Associated parts of an HTTP Request
-    #[derive(Debug, Default)]
-    pub struct RequestParts {
-        /// The request's method
-        pub method: http::Method,
-        /// The request's URI
-        pub uri: http::Uri,
-        /// The request's version
-        pub version: http::Version,
-        /// The request's headers
-        pub headers: http::HeaderMap<http::HeaderValue>,
-        /// The request's extensions
-        pub extensions: http::Extensions,
-    }
+std::thread_local! {
+    static SERVER_CONTEXT: std::cell::RefCell<Box<DioxusServerContext>> = std::cell::RefCell::new(Box::new(DioxusServerContext::default() ));
+}
 
-    impl From<http::request::Parts> for RequestParts {
-        fn from(parts: http::request::Parts) -> Self {
-            Self {
-                method: parts.method,
-                uri: parts.uri,
-                version: parts.version,
-                headers: parts.headers,
-                extensions: parts.extensions,
-            }
+/// Get information about the current server request.
+///
+/// This function will only provide the current server context if it is called from a server function.
+pub fn server_context() -> DioxusServerContext {
+    SERVER_CONTEXT.with(|ctx| *ctx.borrow_mut().clone())
+}
+
+pub(crate) fn with_server_context<O>(
+    context: Box<DioxusServerContext>,
+    f: impl FnOnce() -> O,
+) -> (O, Box<DioxusServerContext>) {
+    // before polling the future, we need to set the context
+    let prev_context = SERVER_CONTEXT.with(|ctx| ctx.replace(context));
+    // poll the future, which may call server_context()
+    let result = f();
+    // after polling the future, we need to restore the context
+    (result, SERVER_CONTEXT.with(|ctx| ctx.replace(prev_context)))
+}
+
+/// A future that provides the server context to the inner future
+#[pin_project::pin_project]
+pub struct ProvideServerContext<F: std::future::Future> {
+    context: Option<Box<DioxusServerContext>>,
+    #[pin]
+    f: F,
+}
+
+impl<F: std::future::Future> ProvideServerContext<F> {
+    /// Create a new future that provides the server context to the inner future
+    pub fn new(f: F, context: DioxusServerContext) -> Self {
+        Self {
+            context: Some(Box::new(context)),
+            f,
         }
+    }
+}
+
+impl<F: std::future::Future> std::future::Future for ProvideServerContext<F> {
+    type Output = F::Output;
+
+    fn poll(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Self::Output> {
+        let this = self.project();
+        let context = this.context.take().unwrap();
+        let (result, context) = with_server_context(context, || this.f.poll(cx));
+        *this.context = Some(context);
+        result
+    }
+}
+
+/// A trait for extracting types from the server context
+#[async_trait::async_trait(?Send)]
+pub trait FromServerContext: Sized {
+    /// The error type returned when extraction fails. This type must implement `IntoResponse`.
+    type Rejection: std::error::Error;
+
+    /// Extract this type from the server context.
+    async fn from_request(req: &DioxusServerContext) -> Result<Self, Self::Rejection>;
+}
+
+/// A type was not found in the server context
+pub struct NotFoundInServerContext<T: 'static>(std::marker::PhantomData<T>);
+
+impl<T: 'static> std::fmt::Debug for NotFoundInServerContext<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let type_name = std::any::type_name::<T>();
+        write!(f, "`{type_name}` not found in server context")
+    }
+}
+
+impl<T: 'static> std::fmt::Display for NotFoundInServerContext<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let type_name = std::any::type_name::<T>();
+        write!(f, "`{type_name}` not found in server context")
+    }
+}
+
+impl<T: 'static> std::error::Error for NotFoundInServerContext<T> {}
+
+pub struct FromContext<T: std::marker::Send + std::marker::Sync + Clone + 'static>(pub(crate) T);
+
+#[async_trait::async_trait(?Send)]
+impl<T: Send + Sync + Clone + 'static> FromServerContext for FromContext<T> {
+    type Rejection = NotFoundInServerContext<T>;
+
+    async fn from_request(req: &DioxusServerContext) -> Result<Self, Self::Rejection> {
+        Ok(Self(req.clone().get::<T>().ok_or_else(|| {
+            NotFoundInServerContext::<T>(std::marker::PhantomData::<T>)
+        })?))
+    }
+}
+
+#[cfg(feature = "axum")]
+/// An adapter for axum extractors for the server context
+pub struct Axum<
+    I: axum::extract::FromRequestParts<(), Rejection = R>,
+    R: axum::response::IntoResponse + std::error::Error,
+>(pub(crate) I, std::marker::PhantomData<R>);
+
+impl<
+        I: axum::extract::FromRequestParts<(), Rejection = R>,
+        R: axum::response::IntoResponse + std::error::Error,
+    > std::ops::Deref for Axum<I, R>
+{
+    type Target = I;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<
+        I: axum::extract::FromRequestParts<(), Rejection = R>,
+        R: axum::response::IntoResponse + std::error::Error,
+    > std::ops::DerefMut for Axum<I, R>
+{
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+#[cfg(feature = "axum")]
+#[async_trait::async_trait(?Send)]
+impl<
+        I: axum::extract::FromRequestParts<(), Rejection = R>,
+        R: axum::response::IntoResponse + std::error::Error,
+    > FromServerContext for Axum<I, R>
+{
+    type Rejection = R;
+
+    async fn from_request(req: &DioxusServerContext) -> Result<Self, Self::Rejection> {
+        Ok(Self(
+            I::from_request_parts(&mut *req.request_parts_mut().unwrap(), &()).await?,
+            std::marker::PhantomData,
+        ))
     }
 }

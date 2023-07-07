@@ -170,7 +170,7 @@ impl IncrementalRenderer {
         comp: fn(Scope<P>) -> Element,
         props: P,
         output: &'a mut (impl AsyncWrite + Unpin + Send),
-        modify_vdom: impl FnOnce(&mut VirtualDom),
+        rebuild_with: impl FnOnce(&mut VirtualDom),
         renderer: &'a R,
     ) -> impl std::future::Future<Output = Result<RenderFreshness, IncrementalRendererError>> + 'a + Send
     {
@@ -179,8 +179,7 @@ impl IncrementalRenderer {
         let result2;
         {
             let mut vdom = VirtualDom::new_with_props(comp, props);
-            modify_vdom(&mut vdom);
-            let _ = vdom.rebuild();
+            rebuild_with(&mut vdom);
 
             result_1 = renderer.render_before_body(&mut *html_buffer);
             result2 = self.ssr_renderer.render_to(&mut html_buffer, &vdom);
@@ -276,7 +275,7 @@ impl IncrementalRenderer {
         component: fn(Scope<P>) -> Element,
         props: P,
         output: &mut (impl AsyncWrite + Unpin + std::marker::Send),
-        modify_vdom: impl FnOnce(&mut VirtualDom),
+        rebuild_with: impl FnOnce(&mut VirtualDom),
         renderer: &R,
     ) -> Result<RenderFreshness, IncrementalRendererError> {
         // check if this route is cached
@@ -285,7 +284,7 @@ impl IncrementalRenderer {
         } else {
             // if not, create it
             let freshness = self
-                .render_and_cache(route, component, props, output, modify_vdom, renderer)
+                .render_and_cache(route, component, props, output, rebuild_with, renderer)
                 .await?;
             log::trace!("cache miss");
             Ok(freshness)
@@ -299,7 +298,7 @@ impl IncrementalRenderer {
         component: fn(Scope<P>) -> Element,
         props: P,
         output: &mut String,
-        modify_vdom: impl FnOnce(&mut VirtualDom),
+        rebuild_with: impl FnOnce(&mut VirtualDom),
         renderer: &R,
     ) -> Result<RenderFreshness, IncrementalRendererError> {
         unsafe {
@@ -309,7 +308,7 @@ impl IncrementalRenderer {
                 component,
                 props,
                 output.as_mut_vec(),
-                modify_vdom,
+                rebuild_with,
                 renderer,
             )
             .await

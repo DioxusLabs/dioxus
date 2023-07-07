@@ -75,7 +75,7 @@ pub trait DioxusRouterExt {
     /// use dioxus_fullstack::prelude::*;
     ///
     /// struct ServerFunctionHandler {
-    ///     server_fn: server_fn::ServerFnTraitObj<DioxusServerContext>,
+    ///     server_fn: server_fn::ServerFnTraitObj<()>,
     /// }
     ///
     /// #[handler]
@@ -108,7 +108,7 @@ pub trait DioxusRouterExt {
     fn register_server_fns_with_handler<H>(
         self,
         server_fn_route: &'static str,
-        handler: impl Fn(server_fn::ServerFnTraitObj<DioxusServerContext>) -> H,
+        handler: impl Fn(server_fn::ServerFnTraitObj<()>) -> H,
     ) -> Self
     where
         H: Handler + 'static;
@@ -202,7 +202,7 @@ impl DioxusRouterExt for Router {
     fn register_server_fns_with_handler<H>(
         self,
         server_fn_route: &'static str,
-        mut handler: impl FnMut(server_fn::ServerFnTraitObj<DioxusServerContext>) -> H,
+        mut handler: impl FnMut(server_fn::ServerFnTraitObj<()>) -> H,
     ) -> Self
     where
         H: Handler + 'static,
@@ -333,9 +333,7 @@ impl<P: Clone + serde::Serialize + Send + Sync + 'static> Handler for SSRHandler
         let server_context = DioxusServerContext::new(parts);
 
         match renderer_pool
-            .render(route, &self.cfg, |vdom| {
-                vdom.base_scope().provide_context(server_context.clone());
-            })
+            .render(route, &self.cfg, &server_context)
             .await
         {
             Ok(rendered) => {
@@ -357,14 +355,14 @@ impl<P: Clone + serde::Serialize + Send + Sync + 'static> Handler for SSRHandler
 /// A default handler for server functions. It will deserialize the request body, call the server function, and serialize the response.
 pub struct ServerFnHandler {
     server_context: DioxusServerContext,
-    function: server_fn::ServerFnTraitObj<DioxusServerContext>,
+    function: server_fn::ServerFnTraitObj<()>,
 }
 
 impl ServerFnHandler {
     /// Create a new server function handler with the given server context and server function.
     pub fn new(
         server_context: impl Into<DioxusServerContext>,
-        function: server_fn::ServerFnTraitObj<DioxusServerContext>,
+        function: server_fn::ServerFnTraitObj<()>,
     ) -> Self {
         let server_context = server_context.into();
         Self {
@@ -413,7 +411,12 @@ impl ServerFnHandler {
                             Encoding::Url | Encoding::Cbor => &body,
                             Encoding::GetJSON | Encoding::GetCBOR => &query,
                         };
-                        let resp = function.call(server_context, data).await;
+                        let server_function_future = function.call((), data);
+                        let server_function_future = ProvideServerContext::new(
+                            server_function_future,
+                            server_context.clone(),
+                        );
+                        let resp = server_function_future.await;
 
                         resp_tx.send(resp).unwrap();
                     })

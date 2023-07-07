@@ -54,15 +54,11 @@ use server_fn_macro::*;
 ///   or response or other server-only dependencies, but it does *not* have access to reactive state that exists in the client.
 #[proc_macro_attribute]
 pub fn server(args: proc_macro::TokenStream, s: TokenStream) -> TokenStream {
-    let context = ServerContext {
-        ty: syn::parse_quote!(DioxusServerContext),
-        path: syn::parse_quote!(::dioxus_fullstack::prelude::DioxusServerContext),
-    };
     match server_macro_impl(
         args.into(),
         s.into(),
         syn::parse_quote!(::dioxus_fullstack::prelude::ServerFnTraitObj),
-        Some(context),
+        None,
         Some(syn::parse_quote!(::dioxus_fullstack::prelude::server_fn)),
     ) {
         Err(e) => e.to_compile_error().into(),

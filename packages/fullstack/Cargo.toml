@@ -13,7 +13,7 @@ keywords = ["dom", "ui", "gui", "react", "ssr", "fullstack"]
 
 [dependencies]
 # server functions
-server_fn = { git = "https://github.com/leptos-rs/leptos", rev = "15a4e54435eb5a539afb75891292bcccd2cc8e85", default-features = false, features = ["stable"] }
+server_fn = { git = "https://github.com/leptos-rs/leptos", rev = "6b90e1babd425c9a324181c86e3fd1b942c9b10f", default-features = false }
 dioxus_server_macro = { path = "server-macro" }
 
 # warp
@@ -52,6 +52,9 @@ futures-util = { workspace = true, optional = true }
 postcard = { version = "1.0.4", features = ["use-std"] }
 yazi = "0.1.5"
 base64 = "0.21.0"
+
+pin-project = "1.1.2"
+async-trait = "0.1.71"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 dioxus-hot-reload = { workspace = true }

@@ -64,8 +64,8 @@ use axum::{
     Router,
 };
 use server_fn::{Encoding, Payload, ServerFunctionRegistry};
-use std::error::Error;
 use std::sync::Arc;
+use std::sync::RwLock;
 use tokio::task::spawn_blocking;
 
 use crate::{
@@ -91,7 +91,7 @@ pub trait DioxusRouterExt<S> {
     ///                .register_server_fns_with_handler("", |func| {
     ///                    move |req: Request<Body>| async move {
     ///                        let (parts, body) = req.into_parts();
-    ///                        let parts: Arc<RequestParts> = Arc::new(parts.into());
+    ///                        let parts: Arc<http::request::Parts> = Arc::new(parts.into());
     ///                        let server_context = DioxusServerContext::new(parts.clone());
     ///                        server_fn_handler(server_context, func.clone(), parts, body).await
     ///                    }
@@ -105,7 +105,7 @@ pub trait DioxusRouterExt<S> {
     fn register_server_fns_with_handler<H, T>(
         self,
         server_fn_route: &'static str,
-        handler: impl FnMut(server_fn::ServerFnTraitObj<DioxusServerContext>) -> H,
+        handler: impl FnMut(server_fn::ServerFnTraitObj<()>) -> H,
     ) -> Self
     where
         H: Handler<T, S>,
@@ -230,7 +230,7 @@ where
     fn register_server_fns_with_handler<H, T>(
         self,
         server_fn_route: &'static str,
-        mut handler: impl FnMut(server_fn::ServerFnTraitObj<DioxusServerContext>) -> H,
+        mut handler: impl FnMut(server_fn::ServerFnTraitObj<()>) -> H,
     ) -> Self
     where
         H: Handler<T, S, Body>,
@@ -257,7 +257,7 @@ where
         self.register_server_fns_with_handler(server_fn_route, |func| {
             move |req: Request<Body>| async move {
                 let (parts, body) = req.into_parts();
-                let parts: Arc<RequestParts> = Arc::new(parts.into());
+                let parts: Arc<RwLock<http::request::Parts>> = Arc::new(parts.into());
                 let server_context = DioxusServerContext::new(parts.clone());
                 server_fn_handler(server_context, func.clone(), parts, body).await
             }
@@ -364,16 +364,11 @@ async fn render_handler<P: Clone + serde::Serialize + Send + Sync + 'static>(
     request: Request<Body>,
 ) -> impl IntoResponse {
     let (parts, _) = request.into_parts();
-    let parts: Arc<RequestParts> = Arc::new(parts.into());
     let url = parts.uri.path_and_query().unwrap().to_string();
+    let parts: Arc<RwLock<http::request::Parts>> = Arc::new(RwLock::new(parts.into()));
     let server_context = DioxusServerContext::new(parts.clone());
 
-    match ssr_state
-        .render(url, &cfg, |vdom| {
-            vdom.base_scope().provide_context(server_context.clone());
-        })
-        .await
-    {
+    match ssr_state.render(url, &cfg, &server_context).await {
         Ok(rendered) => {
             let crate::render::RenderResponse { html, freshness } = rendered;
             let mut response = axum::response::Html::from(html).into_response();
@@ -392,8 +387,8 @@ async fn render_handler<P: Clone + serde::Serialize + Send + Sync + 'static>(
 /// A default handler for server functions. It will deserialize the request, call the server function, and serialize the response.
 pub async fn server_fn_handler(
     server_context: DioxusServerContext,
-    function: server_fn::ServerFnTraitObj<DioxusServerContext>,
-    parts: Arc<RequestParts>,
+    function: server_fn::ServerFnTraitObj<()>,
+    parts: Arc<RwLock<http::request::Parts>>,
     body: Body,
 ) -> impl IntoResponse {
     let body = hyper::body::to_bytes(body).await;
@@ -403,7 +398,13 @@ pub async fn server_fn_handler(
 
     // Because the future returned by `server_fn_handler` is `Send`, and the future returned by this function must be send, we need to spawn a new runtime
     let (resp_tx, resp_rx) = tokio::sync::oneshot::channel();
-    let query_string = parts.uri.query().unwrap_or_default().to_string();
+    let query_string = parts
+        .read()
+        .unwrap()
+        .uri
+        .query()
+        .unwrap_or_default()
+        .to_string();
     spawn_blocking({
         move || {
             tokio::runtime::Runtime::new()
@@ -414,9 +415,13 @@ pub async fn server_fn_handler(
                         Encoding::Url | Encoding::Cbor => &body,
                         Encoding::GetJSON | Encoding::GetCBOR => query,
                     };
-                    let resp = match function.call(server_context.clone(), data).await {
+                    let server_function_future = function.call((), data);
+                    let server_function_future =
+                        ProvideServerContext::new(server_function_future, server_context.clone());
+                    let resp = match server_function_future.await {
                         Ok(serialized) => {
                             // if this is Accept: application/json then send a serialized JSON response
+                            let parts = parts.read().unwrap();
                             let accept_header = parts
                                 .headers
                                 .get("Accept")
@@ -463,7 +468,7 @@ pub async fn server_fn_handler(
     resp_rx.await.unwrap()
 }
 
-fn report_err<E: Error>(e: E) -> Response<BoxBody> {
+fn report_err<E: std::fmt::Display>(e: E) -> Response<BoxBody> {
     Response::builder()
         .status(StatusCode::INTERNAL_SERVER_ERROR)
         .body(body::boxed(format!("Error: {}", e)))

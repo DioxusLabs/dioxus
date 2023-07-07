@@ -91,7 +91,7 @@ pub fn register_server_fns_with_handler<H, F, R>(
     mut handler: H,
 ) -> BoxedFilter<(R,)>
 where
-    H: FnMut(String, server_fn::ServerFnTraitObj<DioxusServerContext>) -> F,
+    H: FnMut(String, server_fn::ServerFnTraitObj<()>) -> F,
     F: Filter<Extract = (R,), Error = warp::Rejection> + Send + Sync + 'static,
     F::Extract: Send,
     R: Reply + 'static,
@@ -192,12 +192,7 @@ pub fn render_ssr<P: Clone + serde::Serialize + Send + Sync + 'static>(
             async move {
                 let server_context = DioxusServerContext::new(parts);
 
-                match renderer
-                    .render(route, &cfg, |vdom| {
-                        vdom.base_scope().provide_context(server_context.clone());
-                    })
-                    .await
-                {
+                match renderer.render(route, &cfg, &server_context).await {
                     Ok(rendered) => {
                         let crate::render::RenderResponse { html, freshness } = rendered;
 
@@ -270,8 +265,8 @@ impl warp::reject::Reject for RecieveFailed {}
 
 /// A default handler for server functions. It will deserialize the request body, call the server function, and serialize the response.
 pub async fn server_fn_handler(
-    server_context: impl Into<DioxusServerContext>,
-    function: server_fn::ServerFnTraitObj<DioxusServerContext>,
+    server_context: impl Into<(DioxusServerContext)>,
+    function: server_fn::ServerFnTraitObj<()>,
     parts: RequestParts,
     body: Bytes,
 ) -> Result<Box<dyn warp::Reply>, warp::Rejection> {
@@ -299,7 +294,10 @@ pub async fn server_fn_handler(
                         Encoding::Url | Encoding::Cbor => &body,
                         Encoding::GetJSON | Encoding::GetCBOR => &query,
                     };
-                    let resp = match function.call(server_context.clone(), data).await {
+                    let server_function_future = function.call((), data);
+                    let server_function_future =
+                        ProvideServerContext::new(server_function_future, server_context.clone());
+                    let resp = match server_function_future.await {
                         Ok(serialized) => {
                             // if this is Accept: application/json then send a serialized JSON response
                             let accept_header = parts
