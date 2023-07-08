@@ -1,3 +1,4 @@
+#[cfg(feature = "plugin")]
 use crate::plugin::PluginManager;
 
 use super::*;
@@ -38,6 +39,7 @@ impl Build {
                 .clone()
         });
 
+        #[cfg(feature = "plugin")]
         let _ = PluginManager::on_build_start(&crate_config, &platform);
 
         match platform.as_str() {
@@ -69,6 +71,7 @@ impl Build {
         )?;
         file.write_all(temp.as_bytes())?;
 
+        #[cfg(feature = "plugin")]
         let _ = PluginManager::on_build_finish(&crate_config, &platform);
 
         Ok(())

@@ -62,7 +62,7 @@ dioxus-tui = { path = "packages/dioxus-tui" }
 rink = { path = "packages/rink" }
 dioxus-native-core = { path = "packages/native-core" }
 dioxus-native-core-macro = { path = "packages/native-core-macro" }
-dioxus-rsx-rosetta = { path = "packages/rsx-rosetta" }
+rsx-rosetta = { path = "packages/rsx-rosetta" }
 dioxus-signals = { path = "packages/signals" }
 dioxus-hot-reload = { path = "packages/hot-reload" }
 dioxus-fullstack = { path = "packages/fullstack" }
