@@ -4,9 +4,8 @@ version = "0.3.1"
 authors = ["Jonathan Kelley"]
 edition = "2021"
 description = "CLI tool for developing, testing, and publishing Dioxus apps"
+repository = "https://github.com/DioxusLabs/dioxus/"
 license = "MIT/Apache-2.0"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 # cli core
