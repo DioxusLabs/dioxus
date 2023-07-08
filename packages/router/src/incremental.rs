@@ -42,7 +42,16 @@ where
         if is_static {
             match Rt::from_str(&full_path) {
                 Ok(route) => {
-                    render_route(renderer, route, &mut tokio::io::sink(), |_| {}, wrapper).await?;
+                    render_route(
+                        renderer,
+                        route,
+                        &mut tokio::io::sink(),
+                        |vdom| {
+                            let _ = vdom.rebuild();
+                        },
+                        wrapper,
+                    )
+                    .await?;
                 }
                 Err(e) => {
                     log::info!("@ route: {}", full_path);

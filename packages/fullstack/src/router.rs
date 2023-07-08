@@ -12,9 +12,7 @@ where
     use dioxus_router::prelude::RouterConfig;
 
     #[cfg(feature = "ssr")]
-    let context: crate::prelude::DioxusServerContext = cx
-        .consume_context()
-        .expect("RouteWithCfg should be served by dioxus fullstack");
+    let context = crate::prelude::server_context();
 
     let cfg = *cx.props;
     render! {
