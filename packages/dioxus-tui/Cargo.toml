@@ -5,12 +5,9 @@ authors = ["Jonathan Kelley, @dementhos"]
 edition = "2021"
 description = "TUI-based renderer for Dioxus"
 repository = "https://github.com/DioxusLabs/dioxus/"
-homepage = "https://dioxuslabs.com"
-documentation = "https://dioxuslabs.com"
+homepage = "https://dioxuslabs.com/docs/0.3/guide/en/getting_started/tui.html"
 keywords = ["dom", "ui", "gui", "react", "terminal"]
 license = "MIT/Apache-2.0"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 dioxus = { workspace = true }
