@@ -55,7 +55,7 @@
 //! ```
 
 use axum::{
-    body::{self, Body, BoxBody, Full},
+    body::{self, Body, BoxBody},
     extract::State,
     handler::Handler,
     http::{Request, Response, StatusCode},
@@ -63,10 +63,10 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use server_fn::{Encoding, Payload, ServerFunctionRegistry};
+use server_fn::{Encoding, ServerFunctionRegistry};
 use std::sync::Arc;
 use std::sync::RwLock;
-use tokio::task::spawn_blocking;
+
 
 use crate::{
     prelude::*, render::SSRState, serve_config::ServeConfig, server_context::DioxusServerContext,
@@ -264,7 +264,7 @@ where
                     let res = service.run(req);
                     match res.await {
                         Ok(res) => Ok::<_, std::convert::Infallible>(res.map(|b| b.into())),
-                        Err(e) => {
+                        Err(_e) => {
                             let mut res = Response::new(Body::empty());
                             *res.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
                             Ok(res)
