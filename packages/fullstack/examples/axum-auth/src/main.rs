@@ -149,7 +149,7 @@ pub async fn get_permissions(
     let current_user = auth.current_user.clone().unwrap_or_default();
 
     // lets check permissions only and not worry about if they are anon or not
-    if !axum_session_auth::Auth::<crate::auth::User, i64, sqlx::SqlitePool>::build([axum::http::Method::GET], false)
+    if !axum_session_auth::Auth::<crate::auth::User, i64, sqlx::SqlitePool>::build([axum::http::Method::POST], false)
         .requires(axum_session_auth::Rights::any([
             axum_session_auth::Rights::permission("Category::View"),
             axum_session_auth::Rights::permission("Admin::View"),
