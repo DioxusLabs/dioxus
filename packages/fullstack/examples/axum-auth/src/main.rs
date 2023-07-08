@@ -61,8 +61,7 @@ fn main() {
                         >::new(Some(pool))
                         .with_config(auth_config),
                     )
-                    .layer(axum_session::SessionLayer::new(session_store))
-                    ;
+                    .layer(axum_session::SessionLayer::new(session_store));
 
                 // run it
                 let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 3000));
@@ -123,39 +122,35 @@ fn app(cx: Scope) -> Element {
 
 #[server(GetUserName)]
 pub async fn get_user_name(
-    #[extract]
-    session : crate::auth::Session
+    #[extract] session: crate::auth::Session,
 ) -> Result<String, ServerFnError> {
-    Ok(session.0.current_user.unwrap().username
-    .to_string())
+    Ok(session.0.current_user.unwrap().username.to_string())
 }
 
 #[server(Login)]
-pub async fn login(
-    #[extract]
-    auth: crate::auth::Session
-) -> Result<(), ServerFnError> {
+pub async fn login(#[extract] auth: crate::auth::Session) -> Result<(), ServerFnError> {
     auth.login_user(2);
     Ok(())
 }
 
 #[server(Permissions)]
 pub async fn get_permissions(
-    #[extract]
-    method: axum::http::Method,
-    #[extract]
-    auth: crate::auth::Session,
+    #[extract] method: axum::http::Method,
+    #[extract] auth: crate::auth::Session,
 ) -> Result<String, ServerFnError> {
     let current_user = auth.current_user.clone().unwrap_or_default();
 
     // lets check permissions only and not worry about if they are anon or not
-    if !axum_session_auth::Auth::<crate::auth::User, i64, sqlx::SqlitePool>::build([axum::http::Method::POST], false)
-        .requires(axum_session_auth::Rights::any([
-            axum_session_auth::Rights::permission("Category::View"),
-            axum_session_auth::Rights::permission("Admin::View"),
-        ]))
-        .validate(&current_user, &method, None)
-        .await
+    if !axum_session_auth::Auth::<crate::auth::User, i64, sqlx::SqlitePool>::build(
+        [axum::http::Method::POST],
+        false,
+    )
+    .requires(axum_session_auth::Rights::any([
+        axum_session_auth::Rights::permission("Category::View"),
+        axum_session_auth::Rights::permission("Admin::View"),
+    ]))
+    .validate(&current_user, &method, None)
+    .await
     {
         return Ok(format!(
             "User {}, Does not have permissions needed to view this page please login",

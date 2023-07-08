@@ -1,9 +1,18 @@
 use async_trait::async_trait;
-use axum::{http::Method, routing::get, Router, response::{Response, IntoResponse}};
+use axum::{
+    http::Method,
+    response::{IntoResponse, Response},
+    routing::get,
+    Router,
+};
 use axum_session::{SessionConfig, SessionLayer, SessionSqlitePool, SessionStore};
 use axum_session_auth::*;
+use core::pin::Pin;
+use dioxus_fullstack::prelude::*;
 use serde::{Deserialize, Serialize};
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePool, SqlitePoolOptions};
+use std::error::Error;
+use std::future::Future;
 use std::{collections::HashSet, net::SocketAddr, str::FromStr};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -183,17 +192,29 @@ pub async fn connect_to_database() -> SqlitePool {
         .unwrap()
 }
 
-pub struct Session(pub axum_session_auth::AuthSession<crate::auth::User, i64, axum_session_auth::SessionSqlitePool, sqlx::SqlitePool>);
+pub struct Session(
+    pub  axum_session_auth::AuthSession<
+        crate::auth::User,
+        i64,
+        axum_session_auth::SessionSqlitePool,
+        sqlx::SqlitePool,
+    >,
+);
 
-impl  std::ops::Deref for Session {
-    type Target = axum_session_auth::AuthSession<crate::auth::User, i64, axum_session_auth::SessionSqlitePool, sqlx::SqlitePool>;
+impl std::ops::Deref for Session {
+    type Target = axum_session_auth::AuthSession<
+        crate::auth::User,
+        i64,
+        axum_session_auth::SessionSqlitePool,
+        sqlx::SqlitePool,
+    >;
 
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl  std::ops::DerefMut for Session {
+impl std::ops::DerefMut for Session {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
@@ -211,19 +232,31 @@ impl std::fmt::Display for AuthSessionLayerNotFound {
 impl std::error::Error for AuthSessionLayerNotFound {}
 
 impl IntoResponse for AuthSessionLayerNotFound {
-        fn into_response(self) -> Response {
-            (http::status::StatusCode::INTERNAL_SERVER_ERROR, "AuthSessionLayer was not found").into_response()
-        }
+    fn into_response(self) -> Response {
+        (
+            http::status::StatusCode::INTERNAL_SERVER_ERROR,
+            "AuthSessionLayer was not found",
+        )
+            .into_response()
     }
+}
 
 #[async_trait]
 impl<S: std::marker::Sync + std::marker::Send> axum::extract::FromRequestParts<S> for Session {
     type Rejection = AuthSessionLayerNotFound;
 
-    async fn from_request_parts(parts: &mut http::request::Parts, state: &S) -> Result<Self, Self::Rejection> {
-        axum_session_auth::AuthSession::<crate::auth::User, i64, axum_session_auth::SessionSqlitePool, sqlx::SqlitePool>::from_request_parts(parts, state)
-            .await
-            .map(Session)
-            .map_err(|_| AuthSessionLayerNotFound)
+    async fn from_request_parts(
+        parts: &mut http::request::Parts,
+        state: &S,
+    ) -> Result<Self, Self::Rejection> {
+        axum_session_auth::AuthSession::<
+            crate::auth::User,
+            i64,
+            axum_session_auth::SessionSqlitePool,
+            sqlx::SqlitePool,
+        >::from_request_parts(parts, state)
+        .await
+        .map(Session)
+        .map_err(|_| AuthSessionLayerNotFound)
     }
 }

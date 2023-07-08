@@ -28,6 +28,7 @@ sqlx = { version = "0.7.0", features = [
 ], optional = true }
 anyhow = "1.0.71"
 http = { version = "0.2.9", optional = true }
+tower = { version = "0.4.13", optional = true }
 
 [dependencies.axum_session]
 version = "0.3.0"
@@ -41,7 +42,7 @@ optional = true
 
 [features]
 default = []
-ssr = ["axum", "tokio", "dioxus-fullstack/axum", "tower-http", "simple_logger", "async-trait", "sqlx", "axum_session", "axum_session_auth", "http"]
+ssr = ["axum", "tokio", "dioxus-fullstack/axum", "tower-http", "simple_logger", "async-trait", "sqlx", "axum_session", "axum_session_auth", "http", "tower"]
 web = ["dioxus-web"]
 
 [profile.release]
