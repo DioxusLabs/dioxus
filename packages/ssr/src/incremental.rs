@@ -291,30 +291,6 @@ impl IncrementalRenderer {
         }
     }
 
-    /// Render a route or get it from cache to a string.
-    pub async fn render_to_string<P: 'static, R: WrapBody + Send + Sync>(
-        &mut self,
-        route: String,
-        component: fn(Scope<P>) -> Element,
-        props: P,
-        output: &mut String,
-        rebuild_with: impl FnOnce(&mut VirtualDom),
-        renderer: &R,
-    ) -> Result<RenderFreshness, IncrementalRendererError> {
-        unsafe {
-            // SAFETY: The renderer will only write utf8 to the buffer
-            self.render(
-                route,
-                component,
-                props,
-                output.as_mut_vec(),
-                rebuild_with,
-                renderer,
-            )
-            .await
-        }
-    }
-
     fn find_file(&self, route: &str) -> Option<ValidCachedPath> {
         let mut file_path = self.static_dir.clone();
         for segment in route.split('/') {

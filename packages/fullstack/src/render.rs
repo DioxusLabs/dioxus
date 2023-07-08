@@ -24,7 +24,7 @@ impl SsrRendererPool {
         route: String,
         component: Component<P>,
         props: P,
-        to: &mut String,
+        to: &mut WriteBuffer,
         server_context: &DioxusServerContext,
     ) -> Result<RenderFreshness, dioxus_ssr::incremental::IncrementalRendererError> {
         let wrapper = FullstackRenderer { cfg };
@@ -40,9 +40,9 @@ impl SsrRendererPool {
                 let mut renderer = pool.pull(pre_renderer);
 
                 // SAFETY: The fullstack renderer will only write UTF-8 to the buffer.
-                wrapper.render_before_body(unsafe { &mut to.as_mut_vec() })?;
+                wrapper.render_before_body(&mut **to)?;
                 renderer.render_to(to, &vdom)?;
-                wrapper.render_after_body(unsafe { &mut to.as_mut_vec() })?;
+                wrapper.render_after_body(&mut **to)?;
 
                 Ok(RenderFreshness::now(None))
             }
@@ -50,11 +50,11 @@ impl SsrRendererPool {
                 let mut renderer =
                     pool.pull(|| incremental_pre_renderer(cfg.incremental.as_ref().unwrap()));
                 Ok(renderer
-                    .render_to_string(
+                    .render(
                         route,
                         component,
                         props,
-                        to,
+                        &mut **to,
                         |vdom| {
                             let server_context = Box::new(server_context.clone());
                             with_server_context(server_context, || {
@@ -106,7 +106,7 @@ impl SSRState {
     > + Send
            + 'a {
         async move {
-            let mut html = String::new();
+            let mut html = WriteBuffer { buffer: Vec::new() };
             let ServeConfig { app, props, .. } = cfg;
 
             let freshness = self
@@ -114,7 +114,12 @@ impl SSRState {
                 .render_to(cfg, route, *app, props.clone(), &mut html, server_context)
                 .await?;
 
-            Ok(RenderResponse { html, freshness })
+            Ok(RenderResponse {
+                html: String::from_utf8(html.buffer).map_err(|err| {
+                    dioxus_ssr::incremental::IncrementalRendererError::Other(Box::new(err))
+                })?,
+                freshness,
+            })
         }
     }
 }
@@ -235,4 +240,29 @@ where
     );
 
     dioxus_router::incremental::pre_cache_static_routes::<Rt, _>(&mut renderer, &wrapper).await
+}
+
+struct WriteBuffer {
+    buffer: Vec<u8>,
+}
+
+impl std::fmt::Write for WriteBuffer {
+    fn write_str(&mut self, s: &str) -> std::fmt::Result {
+        self.buffer.extend_from_slice(s.as_bytes());
+        Ok(())
+    }
+}
+
+impl std::ops::Deref for WriteBuffer {
+    type Target = Vec<u8>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.buffer
+    }
+}
+
+impl std::ops::DerefMut for WriteBuffer {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.buffer
+    }
 }
