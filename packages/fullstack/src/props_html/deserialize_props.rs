@@ -26,6 +26,6 @@ pub fn get_root_props_from_document<T: DeserializeOwned>() -> Option<T> {
             .get_element_by_id("dioxus-storage")?
             .get_attribute("data-serialized")?;
 
-        serde_from_string(&attribute)
+        serde_from_bytes(attribute.as_bytes())
     }
 }

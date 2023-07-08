@@ -1,0 +1,52 @@
+[package]
+name = "axum-auth"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+dioxus-web = { workspace = true, features = ["hydrate"], optional = true }
+dioxus = { workspace = true }
+dioxus-fullstack = { workspace = true }
+axum = { version = "0.6.12", optional = true }
+tokio = { workspace = true, features = ["full"], optional = true }
+serde = "1.0.159"
+execute = "0.2.12"
+tower-http = { version = "0.4.1", features = ["auth"], optional = true }
+simple_logger = { version = "4.2.0", optional = true }
+async-trait = { version = "0.1.71", optional = true }
+sqlx = { version = "0.7.0", features = [
+    "macros",
+    "migrate",
+    "postgres",
+    "sqlite",
+    "_unstable-all-types",
+    "tls-rustls",
+    "runtime-tokio",
+], optional = true }
+anyhow = "1.0.71"
+http = { version = "0.2.9", optional = true }
+
+[dependencies.axum_session]
+version = "0.3.0"
+features = ["sqlite-rustls"]
+optional = true
+
+[dependencies.axum_session_auth]
+version = "0.3.0"
+features = ["sqlite-rustls"]
+optional = true
+
+[features]
+default = []
+ssr = ["axum", "tokio", "dioxus-fullstack/axum", "tower-http", "simple_logger", "async-trait", "sqlx", "axum_session", "axum_session_auth", "http"]
+web = ["dioxus-web"]
+
+[profile.release]
+lto = true
+panic = "abort"
+opt-level = 'z'
+strip = true
+codegen-units = 1
