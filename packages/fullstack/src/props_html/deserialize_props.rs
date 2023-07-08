@@ -4,8 +4,8 @@ use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 
 #[allow(unused)]
-pub(crate) fn serde_from_string<T: DeserializeOwned>(string: &str) -> Option<T> {
-    let decompressed = STANDARD.decode(string.as_bytes()).ok()?;
+pub(crate) fn serde_from_bytes<T: DeserializeOwned>(string: &[u8]) -> Option<T> {
+    let decompressed = STANDARD.decode(string).ok()?;
 
     postcard::from_bytes(&decompressed).ok()
 }

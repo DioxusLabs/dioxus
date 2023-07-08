@@ -23,7 +23,7 @@ fn serialized_and_deserializes() {
 
     for x in 0..10usize {
         for y in 0..10 {
-            let mut as_string = String::new();
+            let mut as_string: Vec<u8> = Vec::new();
             let data = vec![
                 Data {
                     a: x as u32,
@@ -37,10 +37,9 @@ fn serialized_and_deserializes() {
                 };
                 y
             ];
-            serialize_props::serde_to_writable(&data, &mut unsafe { as_string.as_bytes_mut() })
-                .unwrap();
+            serialize_props::serde_to_writable(&data, &mut as_string).unwrap();
 
-            println!("{}", as_string);
+            println!("{:?}", as_string);
             println!(
                 "original size: {}",
                 std::mem::size_of::<Data>() * data.len()
@@ -48,7 +47,7 @@ fn serialized_and_deserializes() {
             println!("serialized size: {}", to_allocvec(&data).unwrap().len());
             println!("compressed size: {}", as_string.len());
 
-            let decoded: Vec<Data> = deserialize_props::serde_from_string(&as_string).unwrap();
+            let decoded: Vec<Data> = deserialize_props::serde_from_bytes(&as_string).unwrap();
             assert_eq!(data, decoded);
         }
     }
