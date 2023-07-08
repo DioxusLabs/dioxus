@@ -89,7 +89,7 @@ module.exports = defineConfig({
     },
     {
       cwd: path.join(process.cwd(), 'playwrite-tests', 'fullstack'),
-      command: 'dioxus build --features web\ncargo run --release --features ssr --no-default-features',
+      command: 'dioxus build --features web --release\ncargo run --release --features ssr --no-default-features',
       port: 3333,
       timeout: 10 * 60 * 1000,
       reuseExistingServer: !process.env.CI,

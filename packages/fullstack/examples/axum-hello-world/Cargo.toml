@@ -15,6 +15,7 @@ tokio = { workspace = true, features = ["full"], optional = true }
 serde = "1.0.159"
 execute = "0.2.12"
 tower-http = { version = "0.4.1", features = ["auth"] }
+simple_logger = "4.2.0"
 
 [features]
 default = []

@@ -41,7 +41,6 @@ fn app(cx: Scope<AppProps>) -> Element {
 }
 
 #[server(PostServerData)]
-#[middleware(tower_http::validate_request::ValidateRequestHeaderLayer::bearer("passwordlol"))]
 async fn post_server_data(
     #[extract] axum::extract::Host(host): axum::extract::Host,
     data: String,
@@ -59,7 +58,6 @@ async fn get_server_data() -> Result<String, ServerFnError> {
 
 fn main() {
     launch!(@([127, 0, 0, 1], 8080), app, {
-        serve_cfg: ServeConfigBuilder::new(app, (AppProps { count: 0 })),
-        incremental: IncrementalRendererConfig::default().invalidate_after(std::time::Duration::from_secs(120)),
+        serve_cfg: ServeConfigBuilder::new(app, AppProps { count: 0 }),
     });
 }

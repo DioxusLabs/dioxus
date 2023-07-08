@@ -40,9 +40,9 @@ impl SsrRendererPool {
                 let mut renderer = pool.pull(pre_renderer);
 
                 // SAFETY: The fullstack renderer will only write UTF-8 to the buffer.
-                wrapper.render_before_body(unsafe { &mut to.as_bytes_mut() })?;
+                wrapper.render_before_body(unsafe { &mut to.as_mut_vec() })?;
                 renderer.render_to(to, &vdom)?;
-                wrapper.render_after_body(unsafe { &mut to.as_bytes_mut() })?;
+                wrapper.render_after_body(unsafe { &mut to.as_mut_vec() })?;
 
                 Ok(RenderFreshness::now(None))
             }

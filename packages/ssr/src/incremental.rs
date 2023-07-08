@@ -497,4 +497,7 @@ pub enum IncrementalRendererError {
     /// An IO error occurred while rendering a route.
     #[error("IoError: {0}")]
     IoError(#[from] std::io::Error),
+    /// An IO error occurred while rendering a route.
+    #[error("Other: {0}")]
+    Other(#[from] Box<dyn std::error::Error + Send + Sync>),
 }
