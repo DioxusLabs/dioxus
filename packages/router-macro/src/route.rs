@@ -117,7 +117,7 @@ impl Route {
                                 f.attrs
                                     .iter()
                                     .any(|attr| attr.path.is_ident("child"))
-                                    || f.ident.as_ref().unwrap().to_string() == "child"
+                                    || *f.ident.as_ref().unwrap() == "child"
                             });
                             match child_field{
                                 Some(child) => {

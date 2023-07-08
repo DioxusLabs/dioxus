@@ -85,10 +85,7 @@ pub fn server(args: proc_macro::TokenStream, s: TokenStream) -> TokenStream {
 
     // extract all #[middleware] attributes
     let mut middlewares: Vec<Middleware> = vec![];
-    function.attrs = function
-        .attrs
-        .into_iter()
-        .filter(|attr| {
+    function.attrs.retain(|attr| {
             if attr.meta.path().is_ident("middleware") {
                 if let Ok(middleware) = attr.parse_args() {
                     middlewares.push(middleware);
@@ -99,8 +96,7 @@ pub fn server(args: proc_macro::TokenStream, s: TokenStream) -> TokenStream {
             } else {
                 true
             }
-        })
-        .collect();
+        });
 
     let ItemFn {
         attrs,
@@ -137,7 +133,7 @@ pub fn server(args: proc_macro::TokenStream, s: TokenStream) -> TokenStream {
     match server_macro_impl(
         quote::quote!(#args),
         mapped_body,
-        trait_obj_wrapper.clone(),
+        trait_obj_wrapper,
         None,
         Some(server_fn_path.clone()),
     ) {
