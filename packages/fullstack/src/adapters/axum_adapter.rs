@@ -67,7 +67,6 @@ use server_fn::{Encoding, ServerFunctionRegistry};
 use std::sync::Arc;
 use std::sync::RwLock;
 
-
 use crate::{
     prelude::*, render::SSRState, serve_config::ServeConfig, server_context::DioxusServerContext,
     server_fn::DioxusServerFnRegistry,

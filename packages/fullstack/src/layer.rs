@@ -2,7 +2,6 @@ use std::pin::Pin;
 
 use http::{Request, Response};
 
-
 pub trait Layer: Send + Sync + 'static {
     fn layer(&self, inner: BoxedService) -> BoxedService;
 }
