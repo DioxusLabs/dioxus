@@ -86,17 +86,17 @@ pub fn server(args: proc_macro::TokenStream, s: TokenStream) -> TokenStream {
     // extract all #[middleware] attributes
     let mut middlewares: Vec<Middleware> = vec![];
     function.attrs.retain(|attr| {
-            if attr.meta.path().is_ident("middleware") {
-                if let Ok(middleware) = attr.parse_args() {
-                    middlewares.push(middleware);
-                    false
-                } else {
-                    true
-                }
+        if attr.meta.path().is_ident("middleware") {
+            if let Ok(middleware) = attr.parse_args() {
+                middlewares.push(middleware);
+                false
             } else {
                 true
             }
-        });
+        } else {
+            true
+        }
+    });
 
     let ItemFn {
         attrs,
