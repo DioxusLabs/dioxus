@@ -3,17 +3,22 @@
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![deny(missing_docs)]
 
-pub use adapters::*;
+pub use once_cell;
 
 mod props_html;
 
 #[cfg(feature = "router")]
 pub mod router;
 
+#[cfg(feature = "ssr")]
 mod adapters;
+#[cfg(feature = "ssr")]
+pub use adapters::*;
 #[cfg(all(debug_assertions, feature = "hot-reload", feature = "ssr"))]
 mod hot_reload;
 pub mod launch;
+#[cfg(feature = "ssr")]
+mod layer;
 #[cfg(feature = "ssr")]
 mod render;
 #[cfg(feature = "ssr")]
@@ -47,7 +52,7 @@ pub mod prelude {
     };
     pub use crate::server_fn::DioxusServerFn;
     #[cfg(feature = "ssr")]
-    pub use crate::server_fn::{ServerFnTraitObj, ServerFunction};
+    pub use crate::server_fn::{ServerFnMiddleware, ServerFnTraitObj, ServerFunction};
     pub use crate::{launch, launch_router};
     pub use dioxus_server_macro::*;
     #[cfg(feature = "ssr")]

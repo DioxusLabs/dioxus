@@ -40,6 +40,39 @@ impl ServerFnTraitObj {
 server_fn::inventory::collect!(ServerFnTraitObj);
 
 #[cfg(any(feature = "ssr", doc))]
+/// Middleware for a server function
+pub struct ServerFnMiddleware {
+    /// The prefix of the server function.
+    pub prefix: &'static str,
+    /// The url of the server function.
+    pub url: &'static str,
+    /// The middleware layers.
+    pub middleware: fn() -> Vec<std::sync::Arc<dyn crate::layer::Layer>>,
+}
+
+#[cfg(any(feature = "ssr", doc))]
+pub(crate) static MIDDLEWARE: once_cell::sync::Lazy<
+    std::collections::HashMap<
+        (&'static str, &'static str),
+        Vec<std::sync::Arc<dyn crate::layer::Layer>>,
+    >,
+> = once_cell::sync::Lazy::new(|| {
+    let mut map: std::collections::HashMap<
+        (&'static str, &'static str),
+        Vec<std::sync::Arc<dyn crate::layer::Layer>>,
+    > = std::collections::HashMap::new();
+    for middleware in server_fn::inventory::iter::<ServerFnMiddleware> {
+        map.entry((middleware.prefix, middleware.url))
+            .or_default()
+            .extend((middleware.middleware)().iter().cloned());
+    }
+    map
+});
+
+#[cfg(any(feature = "ssr", doc))]
+server_fn::inventory::collect!(ServerFnMiddleware);
+
+#[cfg(any(feature = "ssr", doc))]
 /// A server function that can be called on serializable arguments and returns a serializable result.
 pub type ServerFunction = server_fn::SerializedFnTraitObj<()>;
 

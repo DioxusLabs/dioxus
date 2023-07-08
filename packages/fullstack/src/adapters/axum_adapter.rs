@@ -255,11 +255,22 @@ where
 
     fn register_server_fns(self, server_fn_route: &'static str) -> Self {
         self.register_server_fns_with_handler(server_fn_route, |func| {
-            move |req: Request<Body>| async move {
-                let (parts, body) = req.into_parts();
-                let parts: Arc<RwLock<http::request::Parts>> = Arc::new(parts.into());
-                let server_context = DioxusServerContext::new(parts.clone());
-                server_fn_handler(server_context, func.clone(), parts, body).await
+            use crate::layer::Service;
+            move |req: Request<Body>| {
+                let mut service = crate::server_fn_service(Default::default(), func);
+                async move {
+                    let (req, body) = req.into_parts();
+                    let req = Request::from_parts(req, body);
+                    let res = service.run(req);
+                    match res.await {
+                        Ok(res) => Ok::<_, std::convert::Infallible>(res.map(|b| b.into())),
+                        Err(e) => {
+                            let mut res = Response::new(Body::empty());
+                            *res.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
+                            Ok(res)
+                        }
+                    }
+                }
             }
         })
     }
@@ -373,7 +384,7 @@ async fn render_handler<P: Clone + serde::Serialize + Send + Sync + 'static>(
             let crate::render::RenderResponse { html, freshness } = rendered;
             let mut response = axum::response::Html::from(html).into_response();
             freshness.write(response.headers_mut());
-            let headers = server_context.take_response_headers();
+            let headers = server_context.response_parts().unwrap().headers.clone();
             apply_request_parts_to_response(headers, &mut response);
             response
         }
@@ -382,90 +393,6 @@ async fn render_handler<P: Clone + serde::Serialize + Send + Sync + 'static>(
             report_err(e).into_response()
         }
     }
-}
-
-/// A default handler for server functions. It will deserialize the request, call the server function, and serialize the response.
-pub async fn server_fn_handler(
-    server_context: DioxusServerContext,
-    function: server_fn::ServerFnTraitObj<()>,
-    parts: Arc<RwLock<http::request::Parts>>,
-    body: Body,
-) -> impl IntoResponse {
-    let body = hyper::body::to_bytes(body).await;
-    let Ok(body) = body else {
-        return report_err(body.err().unwrap());
-    };
-
-    // Because the future returned by `server_fn_handler` is `Send`, and the future returned by this function must be send, we need to spawn a new runtime
-    let (resp_tx, resp_rx) = tokio::sync::oneshot::channel();
-    let query_string = parts
-        .read()
-        .unwrap()
-        .uri
-        .query()
-        .unwrap_or_default()
-        .to_string();
-    spawn_blocking({
-        move || {
-            tokio::runtime::Runtime::new()
-                .expect("couldn't spawn runtime")
-                .block_on(async {
-                    let query = &query_string.into();
-                    let data = match &function.encoding() {
-                        Encoding::Url | Encoding::Cbor => &body,
-                        Encoding::GetJSON | Encoding::GetCBOR => query,
-                    };
-                    let server_function_future = function.call((), data);
-                    let server_function_future =
-                        ProvideServerContext::new(server_function_future, server_context.clone());
-                    let resp = match server_function_future.await {
-                        Ok(serialized) => {
-                            // if this is Accept: application/json then send a serialized JSON response
-                            let parts = parts.read().unwrap();
-                            let accept_header = parts
-                                .headers
-                                .get("Accept")
-                                .and_then(|value| value.to_str().ok());
-                            let mut res = Response::builder();
-                            *res.headers_mut().expect("empty response should be valid") =
-                                server_context.take_response_headers();
-                            if accept_header == Some("application/json")
-                                || accept_header
-                                    == Some(
-                                        "application/\
-                                                 x-www-form-urlencoded",
-                                    )
-                                || accept_header == Some("application/cbor")
-                            {
-                                res = res.status(StatusCode::OK);
-                            }
-
-                            let resp = match serialized {
-                                Payload::Binary(data) => res
-                                    .header("Content-Type", "application/cbor")
-                                    .body(body::boxed(Full::from(data))),
-                                Payload::Url(data) => res
-                                    .header(
-                                        "Content-Type",
-                                        "application/\
-                                        x-www-form-urlencoded",
-                                    )
-                                    .body(body::boxed(data)),
-                                Payload::Json(data) => res
-                                    .header("Content-Type", "application/json")
-                                    .body(body::boxed(data)),
-                            };
-
-                            resp.unwrap()
-                        }
-                        Err(e) => report_err(e),
-                    };
-
-                    resp_tx.send(resp).unwrap();
-                })
-        }
-    });
-    resp_rx.await.unwrap()
 }
 
 fn report_err<E: std::fmt::Display>(e: E) -> Response<BoxBody> {

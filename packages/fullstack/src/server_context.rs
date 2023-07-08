@@ -2,7 +2,7 @@ pub use server_fn_impl::*;
 use std::sync::Arc;
 use std::sync::RwLock;
 
-/// A shared context for server functions that contains infomation about the request and middleware state.
+/// A shared context for server functions that contains information about the request and middleware state.
 /// This allows you to pass data between your server framework and the server functions. This can be used to pass request information or information about the state of the server. For example, you could pass authentication data though this context to your server functions.
 ///
 /// You should not construct this directly inside components. Instead use the `HasServerContext` trait to get the server context from the scope.
@@ -11,7 +11,7 @@ pub struct DioxusServerContext {
     shared_context: std::sync::Arc<
         std::sync::RwLock<anymap::Map<dyn anymap::any::Any + Send + Sync + 'static>>,
     >,
-    headers: std::sync::Arc<std::sync::RwLock<hyper::header::HeaderMap>>,
+    response_parts: std::sync::Arc<std::sync::RwLock<http::response::Parts>>,
     pub(crate) parts: Arc<RwLock<http::request::Parts>>,
 }
 
@@ -20,7 +20,9 @@ impl Default for DioxusServerContext {
     fn default() -> Self {
         Self {
             shared_context: std::sync::Arc::new(std::sync::RwLock::new(anymap::Map::new())),
-            headers: Default::default(),
+            response_parts: std::sync::Arc::new(RwLock::new(
+                http::response::Response::new(()).into_parts().0,
+            )),
             parts: std::sync::Arc::new(RwLock::new(http::request::Request::new(()).into_parts().0)),
         }
     }
@@ -40,7 +42,9 @@ mod server_fn_impl {
             Self {
                 parts: parts.into(),
                 shared_context: Arc::new(RwLock::new(SendSyncAnyMap::new())),
-                headers: Default::default(),
+                response_parts: std::sync::Arc::new(RwLock::new(
+                    http::response::Response::new(()).into_parts().0,
+                )),
             }
         }
 
@@ -60,35 +64,16 @@ mod server_fn_impl {
                 .map(|_| ())
         }
 
-        /// Get the headers from the server context
-        pub fn response_headers(&self) -> RwLockReadGuard<'_, hyper::header::HeaderMap> {
-            self.try_response_headers()
-                .expect("Failed to get headers from server context")
+        /// Get the response parts from the server context
+        pub fn response_parts(&self) -> LockResult<RwLockReadGuard<'_, http::response::Parts>> {
+            self.response_parts.read()
         }
 
-        /// Try to get the headers from the server context
-        pub fn try_response_headers(
+        /// Get the response parts from the server context
+        pub fn response_parts_mut(
             &self,
-        ) -> LockResult<RwLockReadGuard<'_, hyper::header::HeaderMap>> {
-            self.headers.read()
-        }
-
-        /// Get the headers mutably from the server context
-        pub fn response_headers_mut(&self) -> RwLockWriteGuard<'_, hyper::header::HeaderMap> {
-            self.try_response_headers_mut()
-                .expect("Failed to get headers mutably from server context")
-        }
-
-        /// Try to get the headers mut from the server context
-        pub fn try_response_headers_mut(
-            &self,
-        ) -> LockResult<RwLockWriteGuard<'_, hyper::header::HeaderMap>> {
-            self.headers.write()
-        }
-
-        pub(crate) fn take_response_headers(&self) -> hyper::header::HeaderMap {
-            let mut headers = self.headers.write().unwrap();
-            std::mem::take(&mut *headers)
+        ) -> LockResult<RwLockWriteGuard<'_, http::response::Parts>> {
+            self.response_parts.write()
         }
 
         /// Get the request that triggered:
@@ -124,13 +109,15 @@ std::thread_local! {
 
 /// Get information about the current server request.
 ///
-/// This function will only provide the current server context if it is called from a server function.
+/// This function will only provide the current server context if it is called from a server function or on the server rendering a request.
 pub fn server_context() -> DioxusServerContext {
     SERVER_CONTEXT.with(|ctx| *ctx.borrow().clone())
 }
 
 /// Extract some part from the current server request.
-pub async fn extract_server_context<E: FromServerContext>() -> Result<E, E::Rejection> {
+///
+/// This function will only provide the current server context if it is called from a server function or on the server rendering a request.
+pub async fn extract_server_context<E: FromServerContext<I>, I>() -> Result<E, E::Rejection> {
     E::from_request(&server_context()).await
 }
 
@@ -181,8 +168,8 @@ impl<F: std::future::Future> std::future::Future for ProvideServerContext<F> {
 
 /// A trait for extracting types from the server context
 #[async_trait::async_trait(?Send)]
-pub trait FromServerContext: Sized {
-    /// The error type returned when extraction fails. This type must implement `IntoResponse`.
+pub trait FromServerContext<I = ()>: Sized {
+    /// The error type returned when extraction fails. This type must implement `std::error::Error`.
     type Rejection: std::error::Error;
 
     /// Extract this type from the server context.
@@ -223,48 +210,18 @@ impl<T: Send + Sync + Clone + 'static> FromServerContext for FromContext<T> {
 
 #[cfg(feature = "axum")]
 /// An adapter for axum extractors for the server context
-pub struct Axum<
-    I: axum::extract::FromRequestParts<(), Rejection = R>,
-    R: axum::response::IntoResponse + std::error::Error,
->(pub I, pub std::marker::PhantomData<R>);
-
-#[cfg(feature = "axum")]
-impl<
-        I: axum::extract::FromRequestParts<(), Rejection = R>,
-        R: axum::response::IntoResponse + std::error::Error,
-    > std::ops::Deref for Axum<I, R>
-{
-    type Target = I;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-#[cfg(feature = "axum")]
-impl<
-        I: axum::extract::FromRequestParts<(), Rejection = R>,
-        R: axum::response::IntoResponse + std::error::Error,
-    > std::ops::DerefMut for Axum<I, R>
-{
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
+pub struct Axum;
 
 #[cfg(feature = "axum")]
 #[async_trait::async_trait(?Send)]
 impl<
         I: axum::extract::FromRequestParts<(), Rejection = R>,
         R: axum::response::IntoResponse + std::error::Error,
-    > FromServerContext for Axum<I, R>
+    > FromServerContext<Axum> for I
 {
     type Rejection = R;
 
     async fn from_request(req: &DioxusServerContext) -> Result<Self, Self::Rejection> {
-        Ok(Self(
-            I::from_request_parts(&mut *req.request_parts_mut().unwrap(), &()).await?,
-            std::marker::PhantomData,
-        ))
+        Ok(I::from_request_parts(&mut *req.request_parts_mut().unwrap(), &()).await?)
     }
 }

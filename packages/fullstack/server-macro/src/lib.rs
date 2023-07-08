@@ -1,7 +1,13 @@
+use convert_case::{Case, Converter};
 use proc_macro::TokenStream;
+use proc_macro2::Literal;
 use quote::{ToTokens, __private::TokenStream as TokenStream2};
 use server_fn_macro::*;
-use syn::{parse::Parse, spanned::Spanned, ItemFn};
+use syn::{
+    parse::{Parse, ParseStream},
+    spanned::Spanned,
+    Ident, ItemFn, Token,
+};
 
 /// Declares that a function is a [server function](dioxus_fullstack). This means that
 /// its body will only run on the server, i.e., when the `ssr` feature is enabled.
@@ -77,6 +83,25 @@ pub fn server(args: proc_macro::TokenStream, s: TokenStream) -> TokenStream {
         })
         .collect();
 
+    // extract all #[middleware] attributes
+    let mut middlewares: Vec<Middleware> = vec![];
+    function.attrs = function
+        .attrs
+        .into_iter()
+        .filter(|attr| {
+            if attr.meta.path().is_ident("middleware") {
+                if let Ok(middleware) = attr.parse_args() {
+                    middlewares.push(middleware);
+                    false
+                } else {
+                    true
+                }
+            } else {
+                true
+            }
+        })
+        .collect();
+
     let ItemFn {
         attrs,
         vis,
@@ -91,15 +116,49 @@ pub fn server(args: proc_macro::TokenStream, s: TokenStream) -> TokenStream {
         }
     };
 
+    let server_fn_path: syn::Path = syn::parse_quote!(::dioxus_fullstack::prelude::server_fn);
+    let trait_obj_wrapper: syn::Type =
+        syn::parse_quote!(::dioxus_fullstack::prelude::ServerFnTraitObj);
+    let mut args: ServerFnArgs = match syn::parse(args) {
+        Ok(args) => args,
+        Err(e) => return e.to_compile_error().into(),
+    };
+    if args.struct_name.is_none() {
+        let upper_cammel_case_name = Converter::new()
+            .from_case(Case::Snake)
+            .to_case(Case::UpperCamel)
+            .convert(&sig.ident.to_string());
+        args.struct_name = Some(Ident::new(
+            &format!("{}", upper_cammel_case_name),
+            sig.ident.span(),
+        ));
+    }
+    let struct_name = args.struct_name.as_ref().unwrap();
     match server_macro_impl(
-        args.into(),
+        quote::quote!(#args),
         mapped_body,
-        syn::parse_quote!(::dioxus_fullstack::prelude::ServerFnTraitObj),
+        trait_obj_wrapper.clone(),
         None,
-        Some(syn::parse_quote!(::dioxus_fullstack::prelude::server_fn)),
+        Some(server_fn_path.clone()),
     ) {
         Err(e) => e.to_compile_error().into(),
-        Ok(s) => s.to_token_stream().into(),
+        Ok(tokens) => quote::quote! {
+            #tokens
+            #[cfg(feature = "ssr")]
+            #server_fn_path::inventory::submit! {
+                ::dioxus_fullstack::prelude::ServerFnMiddleware {
+                    prefix: #struct_name::PREFIX,
+                    url: #struct_name::URL,
+                    middleware: || vec![
+                        #(
+                            std::sync::Arc::new(#middlewares),
+                        ),*
+                    ]
+                }
+            }
+        }
+        .to_token_stream()
+        .into(),
     }
 }
 
@@ -139,5 +198,73 @@ impl Parse for Extractor {
             }
             _ => Err(syn::Error::new(arg.span(), "expected a typed argument")),
         }
+    }
+}
+
+#[derive(Debug)]
+struct Middleware {
+    expr: syn::Expr,
+}
+
+impl ToTokens for Middleware {
+    fn to_tokens(&self, tokens: &mut TokenStream2) {
+        let expr = &self.expr;
+        tokens.extend(quote::quote! {
+            #expr
+        });
+    }
+}
+
+impl Parse for Middleware {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let arg: syn::Expr = input.parse()?;
+        Ok(Middleware { expr: arg })
+    }
+}
+
+struct ServerFnArgs {
+    struct_name: Option<Ident>,
+    _comma: Option<Token![,]>,
+    prefix: Option<Literal>,
+    _comma2: Option<Token![,]>,
+    encoding: Option<Literal>,
+    _comma3: Option<Token![,]>,
+    fn_path: Option<Literal>,
+}
+
+impl ToTokens for ServerFnArgs {
+    fn to_tokens(&self, tokens: &mut TokenStream2) {
+        let struct_name = self.struct_name.as_ref().map(|s| quote::quote! { #s, });
+        let prefix = self.prefix.as_ref().map(|p| quote::quote! { #p, });
+        let encoding = self.encoding.as_ref().map(|e| quote::quote! { #e, });
+        let fn_path = self.fn_path.as_ref().map(|f| quote::quote! { #f, });
+        tokens.extend(quote::quote! {
+            #struct_name
+            #prefix
+            #encoding
+            #fn_path
+        })
+    }
+}
+
+impl Parse for ServerFnArgs {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let struct_name = input.parse()?;
+        let _comma = input.parse()?;
+        let prefix = input.parse()?;
+        let _comma2 = input.parse()?;
+        let encoding = input.parse()?;
+        let _comma3 = input.parse()?;
+        let fn_path = input.parse()?;
+
+        Ok(Self {
+            struct_name,
+            _comma,
+            prefix,
+            _comma2,
+            encoding,
+            _comma3,
+            fn_path,
+        })
     }
 }

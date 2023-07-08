@@ -41,9 +41,9 @@ fn app(cx: Scope<AppProps>) -> Element {
 }
 
 #[server(PostServerData)]
-#[middleware(Auth(AuthLevel::Admin))]
+#[middleware(tower_http::validate_request::ValidateRequestHeaderLayer::bearer("passwordlol"))]
 async fn post_server_data(
-    #[extract] Axum(axum::extract::Host(host), _): Axum<_, _>,
+    #[extract] axum::extract::Host(host): axum::extract::Host,
     data: String,
 ) -> Result<(), ServerFnError> {
     println!("Server received: {}", data);

@@ -19,11 +19,12 @@ dioxus_server_macro = { path = "server-macro" }
 # warp
 warp = { version = "0.3.5", features = ["compression-gzip"], optional = true }
 http-body = { version = "0.4.5", optional = true }
+http-body-util = "0.1.0-rc.2"
 
 # axum
 axum = { version = "0.6.1", features = ["ws", "macros"], optional = true }
 tower-http = { version = "0.4.0", optional = true, features = ["fs", "compression-gzip"] }
-tower = { version = "0.4.13", optional = true }
+tower = { version = "0.4.13", features = ["util"], optional = true }
 axum-macros = "0.3.7"
 
 # salvo
@@ -54,6 +55,8 @@ base64 = "0.21.0"
 
 pin-project = "1.1.2"
 async-trait = "0.1.71"
+bytes = "1.4.0"
+tower-layer = "0.3.2"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 dioxus-hot-reload = { workspace = true }
@@ -65,10 +68,10 @@ web-sys = { version = "0.3.61", features = ["Window", "Document", "Element", "Ht
 default = ["hot-reload", "default-tls"]
 router = ["dioxus-router"]
 hot-reload = ["serde_json", "futures-util"]
-warp = ["dep:warp", "http-body", "ssr"]
-axum = ["dep:axum", "tower-http", "tower", "ssr"]
+warp = ["dep:warp", "ssr"]
+axum = ["dep:axum", "tower-http", "ssr"]
 salvo = ["dep:salvo", "ssr"]
-ssr = ["server_fn/ssr", "tokio", "dioxus-ssr", "hyper", "http", "dioxus-router/ssr", "tokio-stream"]
+ssr = ["server_fn/ssr", "tokio", "dioxus-ssr", "tower", "hyper", "http", "http-body", "dioxus-router/ssr", "tokio-stream"]
 default-tls = ["server_fn/default-tls"]
 rustls = ["server_fn/rustls"]
 

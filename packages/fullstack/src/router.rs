@@ -26,7 +26,7 @@ where
                         #[cfg(feature = "ssr")]
                         let history = dioxus_router::prelude::MemoryHistory::with_initial_path(
                             context
-                                .request_parts()
+                                .request_parts().unwrap()
                                 .uri
                                 .to_string()
                                 .parse()
