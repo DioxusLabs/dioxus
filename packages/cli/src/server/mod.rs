@@ -1,4 +1,4 @@
-use crate::{builder, plugin::PluginManager, serve::Serve, BuildResult, CrateConfig, Result};
+use crate::{builder, serve::Serve, BuildResult, CrateConfig, Result};
 use axum::{
     body::{Full, HttpBody},
     extract::{ws::Message, Extension, TypedHeader, WebSocketUpgrade},
@@ -29,6 +29,10 @@ use tower_http::{
     cors::{Any, CorsLayer},
     ServiceBuilderExt,
 };
+
+#[cfg(feature = "plugin")]
+use plugin::PluginManager;
+
 mod proxy;
 
 pub struct BuildManager {
@@ -63,9 +67,10 @@ struct WsReloadState {
 
 pub async fn startup(port: u16, config: CrateConfig, start_browser: bool) -> Result<()> {
     // ctrl-c shutdown checker
-    let crate_config = config.clone();
+    let _crate_config = config.clone();
     let _ = ctrlc::set_handler(move || {
-        let _ = PluginManager::on_serve_shutdown(&crate_config);
+        #[cfg(feature = "plugin")]
+        let _ = PluginManager::on_serve_shutdown(&_crate_config);
         std::process::exit(0);
     });
 
@@ -146,6 +151,7 @@ pub async fn startup_hot_reload(
 
     log::info!("🚀 Starting development server...");
 
+    #[cfg(feature = "plugin")]
     PluginManager::on_serve_start(&config)?;
 
     let dist_path = config.out_dir.clone();
@@ -426,6 +432,8 @@ pub async fn startup_default(
                                 elapsed_time: res.elapsed_time,
                             },
                         );
+
+                        #[cfg(feature = "plugin")]
                         let _ = PluginManager::on_serve_rebuild(
                             chrono::Local::now().timestamp(),
                             e.paths,
@@ -459,6 +467,7 @@ pub async fn startup_default(
         },
     );
 
+    #[cfg(feature = "plugin")]
     PluginManager::on_serve_start(&config)?;
 
     let cors = CorsLayer::new()

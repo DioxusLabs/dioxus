@@ -9,7 +9,6 @@ license = "MIT/Apache-2.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-
 # cli core
 clap = { version = "4.2", features = ["derive"] }
 thiserror = "1.0.30"
@@ -58,10 +57,7 @@ flate2 = "1.0.22"
 tar = "0.4.38"
 zip = "0.6.2"
 tower = "0.4.12"
-
 syn = { version = "1.0", features = ["full", "extra-traits"] }
-
-
 proc-macro2 = { version = "1.0", features = ["span-locations"] }
 lazy_static = "1.4.0"
 
@@ -72,21 +68,31 @@ mlua = { version = "0.8.1", features = [
     "async",
     "send",
     "macros",
-] }
+], optional = true }
 ctrlc = "3.2.3"
-# dioxus-rsx = "0.0.1"
 gitignore = "1.0.7"
-
-dioxus-rsx = { git = "https://github.com/DioxusLabs/dioxus" }
-dioxus-html = { git = "https://github.com/DioxusLabs/dioxus", features = ["hot-reload-context"] }
-dioxus-core = { git = "https://github.com/DioxusLabs/dioxus", features = ["serialize"] }
-dioxus-autofmt = { git = "https://github.com/DioxusLabs/dioxus" }
-rsx-rosetta = { git = "https://github.com/DioxusLabs/dioxus" }
 open = "4.1.0"
 cargo-generate = "0.18.3"
 toml_edit = "0.19.11"
+# dioxus-rsx = "0.0.1"
+
+dioxus-autofmt = { workspace = true }
+rsx-rosetta = { workspace = true }
+dioxus-rsx = { workspace = true }
+dioxus-html = { workspace = true, features = ["hot-reload-context"] }
+dioxus-core = { workspace = true, features = ["serialize"] }
+
+[features]
+default = []
+plugin = ["mlua"]
+
+# install path dx and dioxus as the same command
+# so, they're not really aliases
+# eventually dx will defer to the right version of dioxus
+[[bin]]
+path = "src/main.rs"
+name = "dioxus"
 
 [[bin]]
 path = "src/main.rs"
-
-name = "dioxus"
+name = "dx"
