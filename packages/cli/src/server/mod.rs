@@ -422,6 +422,8 @@ pub async fn startup_default(
                 match build_manager.rebuild() {
                     Ok(res) => {
                         last_update_time = chrono::Local::now().timestamp();
+
+                        #[allow(clippy::redundant_clone)]
                         print_console_info(
                             &watcher_ip,
                             port,
