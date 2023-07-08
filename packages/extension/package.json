@@ -24,6 +24,10 @@
         "onCommand:extension.formatRsxDocument"
     ],
     "main": "./out/main",
+    "extensionKind": [
+        "ui",
+        "workspace"
+    ],
     "contributes": {
         "commands": [
             {
@@ -73,7 +77,7 @@
     "scripts": {
         "vscode:prepublish": "npm run build-base -- --minify",
         "package": "vsce package -o rust-analyzer.vsix",
-        "build-base": "esbuild ./src/main.ts --bundle --outfile=out/main.js --external:vscode --format=cjs --platform=node --target=node16",
+        "build-base": "node src/build.js",
         "build": "npm run build-base -- --sourcemap",
         "watch": "npm run build-base -- --sourcemap --watch",
         "lint": "prettier --check . && eslint -c .eslintrc.js --ext ts ./src ./tests",
@@ -88,15 +92,17 @@
         "@typescript-eslint/parser": "^5.30.5",
         "cross-env": "^7.0.3",
         "esbuild": "^0.14.27",
+        "esbuild-plugin-wasm": "^1.1.0",
         "eslint": "^8.19.0",
-        "typescript": "^4.7.4",
         "eslint-config-prettier": "^8.5.0",
         "ovsx": "^0.5.1",
         "prettier": "^2.6.2",
         "tslib": "^2.3.0",
+        "typescript": "^4.7.4",
         "vsce": "^2.7.0"
     },
     "dependencies": {
+        "dioxus-ext": "./pkg",
         "vsce": "^2.9.2"
     }
 }
