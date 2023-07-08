@@ -1,7 +1,7 @@
 use std::pin::Pin;
 
 use http::{Request, Response};
-use hyper::Body;
+
 
 pub trait Layer: Send + Sync + 'static {
     fn layer(&self, inner: BoxedService) -> BoxedService;
@@ -66,7 +66,7 @@ impl tower::Service<http::Request<hyper::body::Body>> for BoxedService {
 
     fn poll_ready(
         &mut self,
-        cx: &mut std::task::Context<'_>,
+        _cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Result<(), Self::Error>> {
         Ok(()).into()
     }

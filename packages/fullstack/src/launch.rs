@@ -1,4 +1,5 @@
 //! Launch helper macros for fullstack apps
+#![allow(unused)]
 
 #[macro_export]
 /// Launch a server with a router
