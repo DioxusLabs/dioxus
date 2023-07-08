@@ -6,7 +6,7 @@ One of the most reliable state management patterns in large Dioxus apps is `fan-
 
 With `fan-out`, our individual components at "leaf" position of our VirtualDom are "pure", making them easily reusable, testable, and deterministic. For instance, the "title" bar of our app might be a fairly complicated component.
 
-```rust
+```rust, no_run
 #[derive(Props, PartialEq)]
 struct TitlebarProps {
     title: String,
@@ -26,7 +26,7 @@ fn Titlebar(cx: Scope<TitlebarProps>) -> Element {
 
 If we used global state like use_context or fermi, we might be tempted to inject our `use_read` directly into the component.
 
-```rust
+```rust, no_run
 fn Titlebar(cx: Scope<TitlebarProps>) -> Element {
     let title = use_read(cx, TITLE);
     let subtitle = use_read(cx, SUBTITLE);
@@ -41,7 +41,7 @@ For many apps – this is a fine pattern, especially if the component is a one-o
 
 To enable our titlebar component to be used across apps, we want to lift our atoms upwards and out of the Titlebar component. We would organize a bunch of other components in this section of the app to share some of the same state.
 
-```rust
+```rust, no_run
 fn DocsiteTitlesection(cx: Scope) {
     let title = use_read(cx, TITLE);
     let subtitle = use_read(cx, SUBTITLE);

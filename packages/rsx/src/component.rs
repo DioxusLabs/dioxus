@@ -231,30 +231,28 @@ impl Parse for ComponentField {
         let name = Ident::parse_any(input)?;
         input.parse::<Token![:]>()?;
 
-        if name.to_string().starts_with("on") {
-            let content = ContentField::OnHandlerRaw(input.parse()?);
-            return Ok(Self { name, content });
-        }
-
-        if name == "key" {
-            let content = ContentField::Formatted(input.parse()?);
-            return Ok(Self { name, content });
-        }
-        if input.peek(LitStr) {
-            let forked = input.fork();
-            let t: LitStr = forked.parse()?;
-            // the string literal must either be the end of the input or a followed by a comma
-            if (forked.is_empty() || forked.peek(Token![,])) && is_literal_foramtted(&t) {
+        let content = {
+            if name.to_string().starts_with("on") {
+                ContentField::OnHandlerRaw(input.parse()?)
+            } else if name == "key" {
                 let content = ContentField::Formatted(input.parse()?);
                 return Ok(Self { name, content });
+            } else if input.peek(LitStr) {
+                let forked = input.fork();
+                let t: LitStr = forked.parse()?;
+                // the string literal must either be the end of the input or a followed by a comma
+                if (forked.is_empty() || forked.peek(Token![,])) && is_literal_foramtted(&t) {
+                    ContentField::Formatted(input.parse()?)
+                } else {
+                    ContentField::ManExpr(input.parse()?)
+                }
+            } else {
+                ContentField::ManExpr(input.parse()?)
             }
+        };
+        if input.peek(LitStr) || input.peek(Ident) {
+            missing_trailing_comma!(content.span());
         }
-
-        if input.peek(LitStr) && input.peek2(LitStr) {
-            missing_trailing_comma!(input.span());
-        }
-
-        let content = ContentField::ManExpr(input.parse()?);
         Ok(Self { name, content })
     }
 }
