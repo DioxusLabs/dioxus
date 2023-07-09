@@ -14,8 +14,6 @@ mod element;
 mod expr;
 mod writer;
 
-use wasm_bindgen::prelude::*;
-
 /// A modification to the original file to be applied by an IDE
 ///
 /// Right now this re-writes entire rsx! blocks at a time, instead of precise line-by-line changes.
