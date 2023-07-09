@@ -17,10 +17,9 @@ proc-macro2 = { version = "1.0.6", features = ["span-locations"] }
 quote = "1.0"
 syn = { version = "1.0.11", features = ["full", "extra-traits"] }
 serde = { version = "1.0.136", features = ["derive"] }
-prettyplease = { package = "prettier-please", version = "0.1.16",  features = [
+prettyplease = { package = "prettier-please", version = "0.1.16", features = [
     "verbatim",
 ] }
-wasm-bindgen.workspace = true
 
 [dev-dependencies]
 pretty_assertions = "1.2.1"
