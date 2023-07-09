@@ -72,7 +72,7 @@
         }
     },
     "scripts": {
-        "vscode:prepublish": "npm run build-base -- --minify",
+        "vscode:prepublish": "npm run build-base",
         "// package": "vsce package -o rust-analyzer.vsix",
         "// build-base": "node src/build.js",
         "build-wasm": "cargo build --target wasm32-unknown-unknown --release && cp ../../target/wasm32-unknown-unknown/release/dioxus_ext.wasm pkg/",
