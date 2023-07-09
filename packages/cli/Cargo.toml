@@ -24,7 +24,7 @@ fs_extra = "1.2.0"
 cargo_toml = "0.11.4"
 futures = "0.3.21"
 notify = { version = "5.0.0-pre.16", features = ["serde"] }
-html_parser = "0.6.2"
+html_parser.workspace = true
 binary-install = "0.0.2"
 convert_case = "0.5.0"
 cargo_metadata = "0.15.0"
