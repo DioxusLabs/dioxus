@@ -25,10 +25,3 @@ pub fn translate_rsx(contents: String, component: bool) -> String {
 
     out
 }
-
-// rsx! {
-//     div {}
-//     div {}
-//     div {}
-//     div {} div {}
-// }

@@ -12,7 +12,7 @@
 	},
 	"exclude": [
 		"node_modules",
-		".vscode-test"
-		// "src/pkg"
+		".vscode-test",
+		"out"
 	]
 }

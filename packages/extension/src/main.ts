@@ -1,9 +1,9 @@
 import * as vscode from 'vscode';
-import { translate_rsx } from 'dioxus-ext';
-
+import init, { translate_rsx } from 'dioxus-ext';
 
 export async function activate(context: vscode.ExtensionContext) {
-
+	const wasmSourceCode = await vscode.workspace.fs.readFile(vscode.Uri.joinPath(context.extensionUri, "./pkg/dioxus_ext_bg.wasm"));
+	const wasmPromise = await init(wasmSourceCode);
 
 	context.subscriptions.push(
 		vscode.commands.registerCommand('extension.htmlToDioxusRsx', () => translate(false)),
@@ -15,6 +15,7 @@ export async function activate(context: vscode.ExtensionContext) {
 }
 
 function translate(component: boolean) {
+
 	const editor = vscode.window.activeTextEditor;
 
 	if (!editor) return;
@@ -32,23 +33,6 @@ function translate(component: boolean) {
 	} else {
 		vscode.window.showWarningMessage(`Errors occurred while translating, make sure this block of HTML is valid`);
 	}
-
-	// const params = ["translate"];
-	// if (component) params.push("--component");
-	// params.push("--raw", html);
-
-	// const child_proc = spawn(serverPath, params);
-
-	// let result = '';
-	// child_proc.stdout?.on('data', data => result += data);
-
-	// child_proc.on('close', () => {
-	// 	if (result.length > 0) editor.edit(editBuilder => editBuilder.replace(editor.selection, result));
-	// });
-
-	// child_proc.on('error', (err) => {
-	// 	vscode.window.showWarningMessage(`Errors occurred while translating. Make sure you have the most recent Dioxus-CLI installed! \n${err}`);
-	// });
 }
 
 
