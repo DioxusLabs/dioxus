@@ -18,11 +18,7 @@
         "Programming Languages"
     ],
     "activationEvents": [
-        "*",
-        "onCommand:extension.htmlToDioxusRsx",
-        "onCommand:extension.htmlToDioxusComponent",
-        "onCommand:extension.formatRsx",
-        "onCommand:extension.formatRsxDocument"
+        "onLanguage:rust"
     ],
     "main": "./out/main.js",
     "extensionKind": [

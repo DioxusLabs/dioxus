@@ -20,6 +20,7 @@ serde = { version = "1.0.136", features = ["derive"] }
 prettyplease = { package = "prettier-please", version = "0.1.16",  features = [
     "verbatim",
 ] }
+wasm-bindgen.workspace = true
 
 [dev-dependencies]
 pretty_assertions = "1.2.1"

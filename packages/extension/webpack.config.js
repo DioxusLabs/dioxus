@@ -1,5 +1,4 @@
 //@ts-check
-
 'use strict';
 
 const path = require('path');
@@ -9,13 +8,8 @@ const webpack = require('webpack');
 const config = {
   target: 'webworker', // vscode extensions run in webworker context for VS Code web 📖 -> https://webpack.js.org/configuration/target/#target
   experiments: {
-
       asyncWebAssembly: true,
       layers: true,
-
-
-    // asyncWebAssembly: true,
-    // syncWebAssembly: true,
   },
   entry: './src/main.ts', // the entry point of this extension, 📖 -> https://webpack.js.org/configuration/entry-context/
   output: {
@@ -55,10 +49,6 @@ const config = {
           }
         ]
       }
-      // {
-      //   test: /\.wasm$/,
-      //   type: "asset/inline",
-      // }
     ]
   },
 
