@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import init, { translate_rsx, format_file } from 'dioxus-ext';
+import init, * as dioxus from 'dioxus-ext';
 
 export async function activate(context: vscode.ExtensionContext) {
 	// Load the wasm from the file system
@@ -25,19 +25,19 @@ export async function activate(context: vscode.ExtensionContext) {
 }
 
 function translate(component: boolean) {
-
+	// Load the activate editor
 	const editor = vscode.window.activeTextEditor;
-
 	if (!editor) return;
 
+	// Get the selected text
 	const html = editor.document.getText(editor.selection);
 	if (html.length == 0) {
 		vscode.window.showWarningMessage("Please select HTML fragment before invoking this command!");
 		return;
 	}
 
-	const out = translate_rsx(html, component);
-
+	// Translate the HTML to RSX
+	const out = dioxus.translate_rsx(html, component);
 	if (out.length > 0) {
 		editor.edit(editBuilder => editBuilder.replace(editor.selection, out));
 	} else {
@@ -90,10 +90,15 @@ function fmtDocument(document: vscode.TextDocument) {
 		if (!editor) return; // Need an editor to apply text edits.
 
 		const contents = editor.document.getText();
-		const formatted = format_file(contents);
+		const formatted = dioxus.format_file(contents);
 
+		// Replace the entire text document
+		// Yes, this is a bit heavy handed, but the dioxus side doesn't know the line/col scheme that vscode is using
 		if (formatted.length() > 0) {
-			editor.edit(editBuilder => editBuilder.replace(new vscode.Range(0, 0, document.lineCount, 0), formatted.formatted()));
+			editor.edit(editBuilder => {
+				const range = new vscode.Range(0, 0, document.lineCount, 0);
+				editBuilder.replace(range, formatted.formatted());
+			});
 		}
 	} catch (error) {
 		vscode.window.showWarningMessage(`Errors occurred while formatting. Make sure you have the most recent Dioxus-CLI installed! \n${error}`);

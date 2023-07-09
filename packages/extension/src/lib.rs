@@ -27,6 +27,11 @@ impl FormatBlockInstance {
     pub fn formatted(&self) -> String {
         self.new.clone()
     }
+
+    #[wasm_bindgen]
+    pub fn length(&self) -> usize {
+        self._edits.len()
+    }
 }
 
 #[wasm_bindgen]
