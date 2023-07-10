@@ -3,11 +3,10 @@ name = "dioxus"
 version = "0.3.2"
 authors = ["Jonathan Kelley", "Dioxus Labs", "ealmloff"]
 edition = "2021"
-description = "Core functionality for Dioxus - a concurrent renderer-agnostic Virtual DOM for interactive user experiences"
+description = "Portable, performant, and ergonomic framework for building cross-platform user interfaces in Rust"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
-homepage = "https://dioxuslabs.com"
-documentation = "https://dioxuslabs.com"
+homepage = "https://dioxuslabs.com/docs/0.3/guide/en/index.html"
 keywords = ["dom", "ui", "gui", "react", "wasm"]
 rust-version = "1.65.0"
 

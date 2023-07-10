@@ -110,9 +110,7 @@ impl VirtualDom {
 
         // Drop all the hooks once the children are dropped
         // this means we'll drop hooks bottom-up
-        for hook in scope.hook_list.get_mut().drain(..) {
-            drop(hook);
-        }
+        scope.hooks.get_mut().clear();
 
         // Drop all the futures once the hooks are dropped
         for task_id in scope.spawned_tasks.borrow_mut().drain() {

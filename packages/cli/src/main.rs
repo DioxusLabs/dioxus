@@ -1,6 +1,10 @@
 use anyhow::anyhow;
 use clap::Parser;
-use dioxus_cli::{plugin::PluginManager, *};
+use dioxus_cli::*;
+
+#[cfg(feature = "plugin")]
+use dioxus_cli::plugin::PluginManager;
+
 use Commands::*;
 
 #[tokio::main]
@@ -9,14 +13,15 @@ async fn main() -> anyhow::Result<()> {
 
     set_up_logging();
 
-    let dioxus_config = DioxusConfig::load()
+    let _dioxus_config = DioxusConfig::load()
         .map_err(|e| anyhow!("Failed to load `Dioxus.toml` because: {e}"))?
         .unwrap_or_else(|| {
             log::warn!("You appear to be creating a Dioxus project from scratch; we will use the default config");
             DioxusConfig::default()
         });
 
-    PluginManager::init(dioxus_config.plugin)
+    #[cfg(feature = "plugin")]
+    PluginManager::init(_dioxus_config.plugin)
         .map_err(|e| anyhow!("🚫 Plugin system initialization failed: {e}"))?;
 
     match args.action {
@@ -45,6 +50,7 @@ async fn main() -> anyhow::Result<()> {
             .config()
             .map_err(|e| anyhow!("🚫 Configuring new project failed: {}", e)),
 
+        #[cfg(feature = "plugin")]
         Plugin(opts) => opts
             .plugin()
             .await
