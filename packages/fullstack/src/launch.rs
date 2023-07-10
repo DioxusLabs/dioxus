@@ -161,11 +161,12 @@ pub async fn launch_server<P: Clone + serde::Serialize + Send + Sync + 'static>(
     #[cfg(all(feature = "salvo", not(feature = "axum"), not(feature = "warp")))]
     {
         use crate::adapters::salvo_adapter::DioxusRouterExt;
+        use salvo::conn::Listener;
         let router = salvo::Router::new().serve_dioxus_application("", cfg).hoop(
             salvo::compression::Compression::new()
-                .with_algos(&[salvo::prelude::CompressionAlgo::Gzip]),
+                .enable_gzip(salvo::prelude::CompressionLevel::Default),
         );
-        salvo::Server::new(salvo::listener::TcpListener::bind(addr))
+        salvo::Server::new(salvo::conn::tcp::TcpListener::new(addr).bind().await)
             .serve(router)
             .await;
     }

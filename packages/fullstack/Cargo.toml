@@ -28,7 +28,7 @@ tower = { version = "0.4.13", features = ["util"], optional = true }
 axum-macros = "0.3.7"
 
 # salvo
-salvo = { version = "0.37.7", optional = true, features = ["serve-static", "ws", "compression"] }
+salvo = { version = "0.46.0", optional = true, features = ["serve-static", "websocket", "compression"] }
 serde = "1.0.159"
 
 # Dioxus + SSR
