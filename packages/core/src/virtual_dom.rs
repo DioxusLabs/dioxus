@@ -176,7 +176,7 @@ use std::{any::Any, borrow::BorrowMut, cell::Cell, collections::BTreeSet, future
 /// ```
 pub struct VirtualDom {
     // Maps a template path to a map of byteindexes to templates
-    pub(crate) templates: FxHashMap<TemplateId, FxHashMap<usize, Template<'static>>>,
+    pub(crate) templates: FxHashMap<TemplateId, FxHashMap<usize, &'static Template<'static>>>,
     pub(crate) scopes: ScopeSlab,
     pub(crate) dirty_scopes: BTreeSet<DirtyScope>,
     pub(crate) scheduler: Rc<Scheduler>,
@@ -399,14 +399,14 @@ impl VirtualDom {
 
                         // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
                         if attr.name.trim_start_matches("on") == name
-                            && target_path.is_decendant(&this_path)
+                            && target_path.is_decendant(&this_path.as_ref())
                         {
                             listeners.push(&attr.value);
 
                             // Break if this is the exact target element.
                             // This means we won't call two listeners with the same name on the same element. This should be
                             // documented, or be rejected from the rsx! macro outright
-                            if target_path == this_path {
+                            if target_path == &this_path {
                                 break;
                             }
                         }
@@ -445,7 +445,7 @@ impl VirtualDom {
 
                         // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
                         // Only call the listener if this is the exact target element.
-                        if attr.name.trim_start_matches("on") == name && target_path == this_path {
+                        if attr.name.trim_start_matches("on") == name && target_path == &this_path {
                             if let AttributeValue::Listener(listener) = &attr.value {
                                 if let Some(cb) = listener.borrow_mut().as_deref_mut() {
                                     cb(uievent.clone());

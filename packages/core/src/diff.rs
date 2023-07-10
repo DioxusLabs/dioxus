@@ -994,7 +994,7 @@ fn templates_are_different(left_template: &VNode, right_template: &VNode) -> boo
     let left_template_name = left_template.template.get().name;
     let right_template_name = right_template.template.get().name;
     // we want to re-create the node if the template name is different by pointer even if the value is the same so that we can detect when hot reloading changes the template
-    !std::ptr::eq(left_template_name, right_template_name)
+    !std::ptr::eq(left_template_name.as_ptr(), right_template_name.as_ptr())
 }
 
 fn matching_components<'a>(
@@ -1045,13 +1045,13 @@ fn is_dyn_node_only_child(node: &VNode, idx: usize) -> bool {
 
     for i in 1..path.len() - 1 {
         match static_node {
-            TemplateNode::Element { children, .. } => static_node = &children[path[i] as usize],
+            TemplateNode::Element { children, .. } => static_node = &children.0[path[i] as usize],
             _ => return false,
         }
     }
 
     match static_node {
-        TemplateNode::Element { children, .. } => children.len() == 1,
+        TemplateNode::Element { children, .. } => children.0.len() == 1,
         _ => false,
     }
 }

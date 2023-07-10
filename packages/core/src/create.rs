@@ -6,14 +6,15 @@ use crate::nodes::VNode;
 use crate::nodes::{DynamicNode, TemplateNode};
 use crate::virtual_dom::VirtualDom;
 use crate::{AttributeValue, ElementId, RenderReturn, ScopeId, SuspenseContext, Template};
+use std::borrow::Cow;
 use std::cell::Cell;
 use std::iter::Peekable;
 use std::rc::Rc;
 use TemplateNode::*;
 
 #[cfg(debug_assertions)]
-fn sort_bfs(paths: &[&'static [u8]]) -> Vec<(usize, &'static [u8])> {
-    let mut with_indecies = paths.iter().copied().enumerate().collect::<Vec<_>>();
+fn sort_bfs<'a>(paths: &'a Cow<'a, [Cow<[u8]>]>) -> Vec<(usize, &'a Cow<'a, [u8]>)> {
+    let mut with_indecies = paths.as_ref().iter().enumerate().collect::<Vec<_>>();
     with_indecies.sort_unstable_by(|(_, a), (_, b)| {
         let mut a = a.iter();
         let mut b = b.iter();
@@ -127,8 +128,8 @@ impl<'b> VirtualDom {
         #[cfg(debug_assertions)]
         let (attrs_sorted, nodes_sorted) = {
             (
-                sort_bfs(node.template.get().attr_paths),
-                sort_bfs(node.template.get().node_paths),
+                sort_bfs(&node.template.get().attr_paths),
+                sort_bfs(&node.template.get().node_paths),
             )
         };
         #[cfg(debug_assertions)]
@@ -371,7 +372,10 @@ impl<'b> VirtualDom {
     }
 
     /// Insert a new template into the VirtualDom's template registry
-    pub(crate) fn register_template_first_byte_index(&mut self, mut template: Template<'static>) {
+    pub(crate) fn register_template_first_byte_index(
+        &mut self,
+        mut template: &'static Template<'static>,
+    ) {
         // First, make sure we mark the template as seen, regardless if we process it
         let (path, _) = template.name.rsplit_once(':').unwrap();
         if let Some((_, old_template)) = self
@@ -401,7 +405,7 @@ impl<'b> VirtualDom {
     /// Insert a new template into the VirtualDom's template registry
     // used in conditional compilation
     #[allow(unused_mut)]
-    pub(crate) fn register_template(&mut self, mut template: Template<'static>) {
+    pub(crate) fn register_template(&mut self, mut template: &'static Template<'static>) {
         let (path, byte_index) = template.name.rsplit_once(':').unwrap();
         let byte_index = byte_index.parse::<usize>().unwrap();
         // First, check if we've already seen this template

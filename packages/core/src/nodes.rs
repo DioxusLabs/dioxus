@@ -5,6 +5,7 @@ use bumpalo::boxed::Box as BumpBox;
 use bumpalo::Bump;
 use std::{
     any::{Any, TypeId},
+    borrow::Cow,
     cell::{Cell, RefCell, UnsafeCell},
     fmt::{Arguments, Debug},
     future::Future,
@@ -54,7 +55,7 @@ pub struct VNode<'a> {
     pub parent: Option<ElementId>,
 
     /// The static nodes and static descriptor of the template
-    pub template: Cell<Template<'static>>,
+    pub template: Cell<&'static Template<'static>>,
 
     /// The IDs for the roots of this template - to be used when moving the template around and removing it from
     /// the actual Dom
@@ -169,18 +170,20 @@ impl Iterator for BoxedCellSliceIter<'_> {
 impl<'a> VNode<'a> {
     /// Create a template with no nodes that will be skipped over during diffing
     pub fn empty() -> Element<'a> {
+        static EMPTY_TEMPLATE: Template<'static> = Template {
+            name: "dioxus-empty",
+            roots: Cow::Borrowed(&[]),
+            node_paths: Cow::Borrowed(&[]),
+            attr_paths: Cow::Borrowed(&[]),
+        };
+
         Some(VNode {
             key: None,
             parent: None,
             root_ids: BoxedCellSlice::default(),
             dynamic_nodes: &[],
             dynamic_attrs: &[],
-            template: Cell::new(Template {
-                name: "dioxus-empty",
-                roots: &[],
-                node_paths: &[],
-                attr_paths: &[],
-            }),
+            template: Cell::new(&EMPTY_TEMPLATE),
         })
     }
 
@@ -206,93 +209,30 @@ impl<'a> VNode<'a> {
 /// For this to work properly, the [`Template::name`] *must* be unique across your entire project. This can be done via variety of
 /// ways, with the suggested approach being the unique code location (file, line, col, etc).
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Debug, Clone, Copy, PartialEq, Hash, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Hash, Eq, PartialOrd, Ord)]
 pub struct Template<'a> {
     /// The name of the template. This must be unique across your entire program for template diffing to work properly
     ///
     /// If two templates have the same name, it's likely that Dioxus will panic when diffing.
-    #[cfg_attr(
-        feature = "serialize",
-        serde(deserialize_with = "deserialize_string_leaky")
-    )]
     pub name: &'a str,
 
     /// The list of template nodes that make up the template
     ///
     /// Unlike react, calls to `rsx!` can have multiple roots. This list supports that paradigm.
-    #[cfg_attr(feature = "serialize", serde(deserialize_with = "deserialize_leaky"))]
-    pub roots: &'a [TemplateNode<'a>],
+    ///
+    pub roots: Cow<'a, [TemplateNode<'a>]>,
 
     /// The paths of each node relative to the root of the template.
     ///
     /// These will be one segment shorter than the path sent to the renderer since those paths are relative to the
     /// topmost element, not the `roots` field.
-    #[cfg_attr(
-        feature = "serialize",
-        serde(deserialize_with = "deserialize_bytes_leaky")
-    )]
-    pub node_paths: &'a [&'a [u8]],
+    pub node_paths: Cow<'a, [Cow<'a, [u8]>]>,
 
     /// The paths of each dynamic attribute relative to the root of the template
     ///
     /// These will be one segment shorter than the path sent to the renderer since those paths are relative to the
     /// topmost element, not the `roots` field.
-    #[cfg_attr(
-        feature = "serialize",
-        serde(deserialize_with = "deserialize_bytes_leaky")
-    )]
-    pub attr_paths: &'a [&'a [u8]],
-}
-
-#[cfg(feature = "serialize")]
-fn deserialize_string_leaky<'a, 'de, D>(deserializer: D) -> Result<&'a str, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    use serde::Deserialize;
-
-    let deserialized = String::deserialize(deserializer)?;
-    Ok(&*Box::leak(deserialized.into_boxed_str()))
-}
-
-#[cfg(feature = "serialize")]
-fn deserialize_bytes_leaky<'a, 'de, D>(deserializer: D) -> Result<&'a [&'a [u8]], D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    use serde::Deserialize;
-
-    let deserialized = Vec::<Vec<u8>>::deserialize(deserializer)?;
-    let deserialized = deserialized
-        .into_iter()
-        .map(|v| &*Box::leak(v.into_boxed_slice()))
-        .collect::<Vec<_>>();
-    Ok(&*Box::leak(deserialized.into_boxed_slice()))
-}
-
-#[cfg(feature = "serialize")]
-fn deserialize_leaky<'a, 'de, T: serde::Deserialize<'de>, D>(
-    deserializer: D,
-) -> Result<&'a [T], D::Error>
-where
-    T: serde::Deserialize<'de>,
-    D: serde::Deserializer<'de>,
-{
-    use serde::Deserialize;
-
-    let deserialized = Box::<[T]>::deserialize(deserializer)?;
-    Ok(&*Box::leak(deserialized))
-}
-
-#[cfg(feature = "serialize")]
-fn deserialize_option_leaky<'a, 'de, D>(deserializer: D) -> Result<Option<&'static str>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    use serde::Deserialize;
-
-    let deserialized = Option::<String>::deserialize(deserializer)?;
-    Ok(deserialized.map(|deserialized| &*Box::leak(deserialized.into_boxed_str())))
+    pub attr_paths: Cow<'a, [Cow<'a, [u8]>]>,
 }
 
 impl<'a> Template<'a> {
@@ -310,7 +250,7 @@ impl<'a> Template<'a> {
 /// A statically known node in a layout.
 ///
 /// This can be created at compile time, saving the VirtualDom time when diffing the tree
-#[derive(Debug, Clone, Copy, PartialEq, Hash, Eq, PartialOrd, Ord)]
+#[derive(Clone, Debug, PartialEq, Hash, Eq, PartialOrd, Ord)]
 #[cfg_attr(
     feature = "serialize",
     derive(serde::Serialize, serde::Deserialize),
@@ -330,21 +270,15 @@ pub enum TemplateNode<'a> {
         ///
         /// In HTML, this would be a valid URI that defines a namespace for all elements below it
         /// SVG is an example of this namespace
-        #[cfg_attr(
-            feature = "serialize",
-            serde(deserialize_with = "deserialize_option_leaky")
-        )]
-        namespace: Option<&'a str>,
+        namespace: Option<Cow<'a, str>>,
 
         /// A list of possibly dynamic attribues for this element
         ///
         /// An attribute on a DOM node, such as `id="my-thing"` or `href="https://example.com"`.
-        #[cfg_attr(feature = "serialize", serde(deserialize_with = "deserialize_leaky"))]
-        attrs: &'a [TemplateAttribute<'a>],
+        attrs: Cow<'a, [TemplateAttribute<'a>]>,
 
         /// A list of template nodes that define another set of template nodes
-        #[cfg_attr(feature = "serialize", serde(deserialize_with = "deserialize_leaky"))]
-        children: &'a [TemplateNode<'a>],
+        children: Children<Cow<'a, [TemplateNode<'a>]>>,
     },
 
     /// This template node is just a piece of static text
@@ -367,6 +301,10 @@ pub enum TemplateNode<'a> {
         id: usize,
     },
 }
+
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug, PartialEq, Hash, Eq, PartialOrd, Ord)]
+struct Children<T>(pub T);
 
 /// A node created at runtime
 ///
@@ -456,7 +394,7 @@ pub struct VPlaceholder {
 }
 
 /// An attribute of the TemplateNode, created at compile time
-#[derive(Debug, PartialEq, Hash, Eq, PartialOrd, Ord)]
+#[derive(Debug, PartialEq, Clone, Hash, Eq, PartialOrd, Ord)]
 #[cfg_attr(
     feature = "serialize",
     derive(serde::Serialize, serde::Deserialize),
