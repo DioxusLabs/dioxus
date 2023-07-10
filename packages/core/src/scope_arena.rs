@@ -1,8 +1,7 @@
 use crate::{
     any_props::AnyProps,
     bump_frame::BumpFrame,
-    innerlude::DirtyScope,
-    scopes::{ScopeId, ScopeState},
+    innerlude::{DirtyScope, ScopeId, ScopeState},
     virtual_dom::VirtualDom,
     Element,
 };

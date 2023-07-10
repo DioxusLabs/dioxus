@@ -1,10 +1,9 @@
 use crate::{
     any_props::AnyProps,
     arena::ElementId,
-    innerlude::{BorrowedAttributeValue, DirtyScope, VComponent, VPlaceholder, VText},
+    innerlude::{BorrowedAttributeValue, DirtyScope, ScopeId, VComponent, VPlaceholder, VText},
     mutations::Mutation,
     nodes::{DynamicNode, VNode},
-    scopes::ScopeId,
     virtual_dom::VirtualDom,
     Attribute, TemplateNode,
 };

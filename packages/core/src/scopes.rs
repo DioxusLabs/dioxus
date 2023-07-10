@@ -1,186 +1,43 @@
 use crate::{
     any_props::AnyProps,
     any_props::VProps,
-    arena::ElementId,
     bump_frame::BumpFrame,
     hook_list::HookList,
     innerlude::{DynamicNode, EventHandler, VComponent, VText},
     innerlude::{ErrorBoundary, Scheduler, SchedulerMsg},
     lazynodes::LazyNodes,
     nodes::{IntoAttributeValue, IntoDynNode},
-    AnyValue, Attribute, AttributeValue, Element, Event, Properties, TaskId,
+    AnyValue, Attribute, AttributeValue, Element, Event, Properties, Scope, ScopeId, TaskId,
 };
 use bumpalo::{boxed::Box as BumpBox, Bump};
-use bumpslab::{BumpSlab, Slot};
 use rustc_hash::FxHashSet;
-use slab::{Slab, VacantEntry};
 use std::{
     any::{Any, TypeId},
-    cell::{Cell, RefCell, UnsafeCell},
+    cell::{Cell, RefCell},
     fmt::{Arguments, Debug},
     future::Future,
-    ops::{Index, IndexMut},
     rc::Rc,
     sync::Arc,
 };
-
-/// A wrapper around the [`Scoped`] object that contains a reference to the [`ScopeState`] and properties for a given
-/// component.
-///
-/// The [`Scope`] is your handle to the [`crate::VirtualDom`] and the component state. Every component is given its own
-/// [`ScopeState`] and merged with its properties to create a [`Scoped`].
-///
-/// The [`Scope`] handle specifically exists to provide a stable reference to these items for the lifetime of the
-/// component render.
-pub type Scope<'a, T = ()> = &'a Scoped<'a, T>;
-
-// This ScopedType exists because we want to limit the amount of monomorphization that occurs when making inner
-// state type generic over props. When the state is generic, it causes every method to be monomorphized for every
-// instance of Scope<T> in the codebase.
-//
-//
-/// A wrapper around a component's [`ScopeState`] and properties. The [`ScopeState`] provides the majority of methods
-/// for the VirtualDom and component state.
-pub struct Scoped<'a, T = ()> {
-    /// The component's state and handle to the scheduler.
-    ///
-    /// Stores things like the custom bump arena, spawn functions, hooks, and the scheduler.
-    pub scope: &'a ScopeState,
-
-    /// The component's properties.
-    pub props: &'a T,
-}
-
-impl<'a, T> std::ops::Deref for Scoped<'a, T> {
-    type Target = &'a ScopeState;
-    fn deref(&self) -> &Self::Target {
-        &self.scope
-    }
-}
-
-/// A component's unique identifier.
-///
-/// `ScopeId` is a `usize` that acts a key for the internal slab of Scopes. This means that the key is not unqiue across
-/// time. We do try and guarantee that between calls to `wait_for_work`, no ScopeIds will be recycled in order to give
-/// time for any logic that relies on these IDs to properly update.
-#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
-pub struct ScopeId(pub usize);
-
-/// A thin wrapper around a BumpSlab that uses ids to index into the slab.
-pub(crate) struct ScopeSlab {
-    slab: BumpSlab<ScopeState>,
-    // a slab of slots of stable pointers to the ScopeState in the bump slab
-    entries: Slab<Slot<'static, ScopeState>>,
-}
-
-impl Drop for ScopeSlab {
-    fn drop(&mut self) {
-        // Bump slab doesn't drop its contents, so we need to do it manually
-        for slot in self.entries.drain() {
-            self.slab.remove(slot);
-        }
-    }
-}
-
-impl Default for ScopeSlab {
-    fn default() -> Self {
-        Self {
-            slab: BumpSlab::new(),
-            entries: Slab::new(),
-        }
-    }
-}
-
-impl ScopeSlab {
-    pub(crate) fn get(&self, id: ScopeId) -> Option<&ScopeState> {
-        self.entries.get(id.0).map(|slot| unsafe { &*slot.ptr() })
-    }
-
-    pub(crate) fn get_mut(&mut self, id: ScopeId) -> Option<&mut ScopeState> {
-        self.entries
-            .get(id.0)
-            .map(|slot| unsafe { &mut *slot.ptr_mut() })
-    }
-
-    pub(crate) fn vacant_entry(&mut self) -> ScopeSlabEntry {
-        let entry = self.entries.vacant_entry();
-        ScopeSlabEntry {
-            slab: &mut self.slab,
-            entry,
-        }
-    }
-
-    pub(crate) fn remove(&mut self, id: ScopeId) {
-        self.slab.remove(self.entries.remove(id.0));
-    }
-
-    pub(crate) fn contains(&self, id: ScopeId) -> bool {
-        self.entries.contains(id.0)
-    }
-
-    pub(crate) fn iter(&self) -> impl Iterator<Item = &ScopeState> {
-        self.entries.iter().map(|(_, slot)| unsafe { &*slot.ptr() })
-    }
-}
-
-pub(crate) struct ScopeSlabEntry<'a> {
-    slab: &'a mut BumpSlab<ScopeState>,
-    entry: VacantEntry<'a, Slot<'static, ScopeState>>,
-}
-
-impl<'a> ScopeSlabEntry<'a> {
-    pub(crate) fn key(&self) -> ScopeId {
-        ScopeId(self.entry.key())
-    }
-
-    pub(crate) fn insert(self, scope: ScopeState) -> &'a ScopeState {
-        let slot = self.slab.push(scope);
-        // this is safe because the slot is only ever accessed with the lifetime of the borrow of the slab
-        let slot = unsafe { std::mem::transmute(slot) };
-        let entry = self.entry.insert(slot);
-        unsafe { &*entry.ptr() }
-    }
-}
-
-impl Index<ScopeId> for ScopeSlab {
-    type Output = ScopeState;
-    fn index(&self, id: ScopeId) -> &Self::Output {
-        self.get(id).unwrap()
-    }
-}
-
-impl IndexMut<ScopeId> for ScopeSlab {
-    fn index_mut(&mut self, id: ScopeId) -> &mut Self::Output {
-        self.get_mut(id).unwrap()
-    }
-}
 
 /// A component's state separate from its props.
 ///
 /// This struct exists to provide a common interface for all scopes without relying on generics.
 pub struct ScopeState {
     pub(crate) render_cnt: Cell<usize>,
+    pub(crate) id: ScopeId,
+    pub(crate) height: u32,
     pub(crate) name: &'static str,
 
     pub(crate) node_arena_1: BumpFrame,
     pub(crate) node_arena_2: BumpFrame,
-
     pub(crate) parent: Option<*const ScopeState>,
-    pub(crate) id: ScopeId,
-
-    pub(crate) height: u32,
-
     pub(crate) hooks: HookList,
-
     pub(crate) shared_contexts: RefCell<Vec<(TypeId, Box<dyn Any>)>>,
-
     pub(crate) tasks: Rc<Scheduler>,
     pub(crate) spawned_tasks: RefCell<FxHashSet<TaskId>>,
-
     pub(crate) borrowed_props: RefCell<Vec<*const VComponent<'static>>>,
     pub(crate) attributes_to_drop: RefCell<Vec<*const Attribute<'static>>>,
-
     pub(crate) props: Option<Box<dyn AnyProps<'static>>>,
 }
 
@@ -654,5 +511,10 @@ impl<'src> ScopeState {
     #[allow(clippy::mut_from_ref)]
     pub fn use_hook<State: 'static>(&self, initializer: impl FnOnce() -> State) -> &mut State {
         self.hooks.use_hook(initializer)
+    }
+
+    /// Mark this component as suspended
+    pub fn suspend(&self) -> Option<crate::VNode<'_>> {
+        return None;
     }
 }

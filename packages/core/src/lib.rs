@@ -17,6 +17,8 @@ mod nodes;
 mod properties;
 mod scheduler;
 mod scope_arena;
+mod scope_slab;
+mod scoped;
 mod scopes;
 mod virtual_dom;
 
@@ -31,6 +33,8 @@ pub(crate) mod innerlude {
     pub use crate::nodes::*;
     pub use crate::properties::*;
     pub use crate::scheduler::*;
+    pub use crate::scope_slab::*;
+    pub use crate::scoped::*;
     pub use crate::scopes::*;
     pub use crate::virtual_dom::*;
 

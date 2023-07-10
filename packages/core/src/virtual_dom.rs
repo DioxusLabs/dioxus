@@ -4,14 +4,16 @@
 
 use crate::{
     any_props::VProps,
-    arena::{ElementId, ElementRef},
-    innerlude::{DirtyScope, ErrorBoundary, Mutations, Scheduler, SchedulerMsg, ScopeSlab},
+    innerlude::{
+        DirtyScope, ElementId, ElementRef, ErrorBoundary, Mutations, Scheduler, SchedulerMsg,
+        ScopeId, ScopeSlab, ScopeState,
+    },
     mutations::Mutation,
     nodes::{Template, TemplateId},
     scheduler::SuspenseId,
-    scopes::{ScopeId, ScopeState},
     AttributeValue, Element, Event, Scope, SuspenseContext, TaskId,
 };
+use futures_channel::mpsc::UnboundedReceiver;
 use futures_util::{pin_mut, StreamExt};
 use rustc_hash::FxHashMap;
 use slab::Slab;
@@ -180,8 +182,8 @@ pub struct VirtualDom {
     // Maps a template path to a map of byteindexes to templates
     pub(crate) templates: FxHashMap<TemplateId, FxHashMap<usize, Template<'static>>>,
     pub(crate) scopes: ScopeSlab,
+
     pub(crate) dirty_scopes: BTreeSet<DirtyScope>,
-    pub(crate) scheduler: Rc<Scheduler>,
 
     // Every element is actually a dual reference - one to the template and the other to the dynamic node in that template
     pub(crate) elements: Slab<ElementRef>,
@@ -190,13 +192,11 @@ pub struct VirtualDom {
     pub(crate) scope_stack: Vec<ScopeId>,
     pub(crate) collected_leaves: Vec<SuspenseId>,
 
-    // Whenever a suspense tree is finished, we push its boundary onto this stack.
-    // When "render_with_deadline" is called, we pop the stack and return the mutations
-    pub(crate) finished_fibers: Vec<ScopeId>,
-
-    pub(crate) rx: futures_channel::mpsc::UnboundedReceiver<SchedulerMsg>,
-
     pub(crate) mutations: Mutations<'static>,
+
+    // Scheduler stuff
+    pub(crate) scheduler: Rc<Scheduler>,
+    pub(crate) scheduler_rx: UnboundedReceiver<SchedulerMsg>,
 }
 
 impl VirtualDom {
@@ -256,8 +256,9 @@ impl VirtualDom {
     /// ```
     pub fn new_with_props<P: 'static>(root: fn(Scope<P>) -> Element, root_props: P) -> Self {
         let (tx, rx) = futures_channel::mpsc::unbounded();
+
         let mut dom = Self {
-            rx,
+            scheduler_rx: rx,
             scheduler: Scheduler::new(tx),
             templates: Default::default(),
             scopes: Default::default(),
@@ -265,7 +266,6 @@ impl VirtualDom {
             scope_stack: Vec::new(),
             dirty_scopes: BTreeSet::new(),
             collected_leaves: Vec::new(),
-            finished_fibers: Vec::new(),
             mutations: Mutations::default(),
         };
 
@@ -273,6 +273,9 @@ impl VirtualDom {
             Box::new(VProps::new(root, |_, _| unreachable!(), root_props)),
             "app",
         );
+
+        // Mark this as dirty right away so render it from render_with_deadline
+        root.needs_update();
 
         // The root component is always a suspense boundary for any async children
         // This could be unexpected, so we might rethink this behavior later
@@ -492,16 +495,16 @@ impl VirtualDom {
 
                 // If they're not ready, then we should wait for them to be ready
                 None => {
-                    match self.rx.try_next() {
+                    match self.scheduler_rx.try_next() {
                         Ok(Some(val)) => some_msg = Some(val),
                         Ok(None) => return,
                         Err(_) => {
                             // If we have any dirty scopes, or finished fiber trees then we should exit
-                            if !self.dirty_scopes.is_empty() || !self.finished_fibers.is_empty() {
+                            if !self.dirty_scopes.is_empty() {
                                 return;
                             }
 
-                            some_msg = self.rx.next().await
+                            some_msg = self.scheduler_rx.next().await
                         }
                     }
                 }
@@ -511,7 +514,7 @@ impl VirtualDom {
 
     /// Process all events in the queue until there are no more left
     pub fn process_events(&mut self) {
-        while let Ok(Some(msg)) = self.rx.try_next() {
+        while let Ok(Some(msg)) = self.scheduler_rx.try_next() {
             match msg {
                 SchedulerMsg::Immediate(id) => self.mark_dirty(id),
                 SchedulerMsg::TaskNotified(task) => self.handle_task_wakeup(task),
@@ -634,99 +637,103 @@ impl VirtualDom {
     pub async fn render_with_deadline(&mut self, deadline: impl Future<Output = ()>) -> Mutations {
         pin_mut!(deadline);
 
+        // Poll any events that have occured since the last render
         self.process_events();
 
-        loop {
-            // first, unload any complete suspense trees
-            for finished_fiber in self.finished_fibers.drain(..) {
-                let scope = &self.scopes[finished_fiber];
-                let context = scope.has_context::<Rc<SuspenseContext>>().unwrap();
+        // Write out our mutations
+        self.finalize()
 
-                self.mutations
-                    .templates
-                    .append(&mut context.mutations.borrow_mut().templates);
+        // loop {
+        //     // first, unload any complete suspense trees
+        //     for finished_fiber in self.finished_fibers.drain(..) {
+        //         let scope = &self.scopes[finished_fiber];
+        //         let context = scope.has_context::<Rc<SuspenseContext>>().unwrap();
 
-                self.mutations
-                    .edits
-                    .append(&mut context.mutations.borrow_mut().edits);
+        //         self.mutations
+        //             .templates
+        //             .append(&mut context.mutations.borrow_mut().templates);
 
-                // TODO: count how many nodes are on the stack?
-                self.mutations.push(Mutation::ReplaceWith {
-                    id: context.placeholder.get().unwrap(),
-                    m: 1,
-                })
-            }
+        //         self.mutations
+        //             .edits
+        //             .append(&mut context.mutations.borrow_mut().edits);
 
-            // Next, diff any dirty scopes
-            // We choose not to poll the deadline since we complete pretty quickly anyways
-            if let Some(dirty) = self.dirty_scopes.iter().next().cloned() {
-                self.dirty_scopes.remove(&dirty);
+        //         // TODO: count how many nodes are on the stack?
+        //         self.mutations.push(Mutation::ReplaceWith {
+        //             id: context.placeholder.get().unwrap(),
+        //             m: 1,
+        //         })
+        //     }
 
-                // If the scope doesn't exist for whatever reason, then we should skip it
-                if !self.scopes.contains(dirty.id) {
-                    continue;
-                }
+        //     // Next, diff any dirty scopes
+        //     // We choose not to poll the deadline since we complete pretty quickly anyways
+        //     if let Some(dirty) = self.dirty_scopes.iter().next().cloned() {
+        //         self.dirty_scopes.remove(&dirty);
 
-                // if the scope is currently suspended, then we should skip it, ignoring any tasks calling for an update
-                if self.is_scope_suspended(dirty.id) {
-                    continue;
-                }
+        //         // If the scope doesn't exist for whatever reason, then we should skip it
+        //         if !self.scopes.contains(dirty.id) {
+        //             continue;
+        //         }
 
-                // Save the current mutations length so we can split them into boundary
-                let mutations_to_this_point = self.mutations.edits.len();
+        //         // if the scope is currently suspended, then we should skip it, ignoring any tasks calling for an update
+        //         if self.is_scope_suspended(dirty.id) {
+        //             continue;
+        //         }
 
-                // Run the scope and get the mutations
-                self.run_scope(dirty.id);
-                self.diff_scope(dirty.id);
+        //         // Save the current mutations length so we can split them into boundary
+        //         let mutations_to_this_point = self.mutations.edits.len();
 
-                // If suspended leaves are present, then we should find the boundary for this scope and attach things
-                // No placeholder necessary since this is a diff
-                if !self.collected_leaves.is_empty() {
-                    let mut boundary = self.scopes[dirty.id]
-                        .consume_context::<Rc<SuspenseContext>>()
-                        .unwrap();
+        //         // Run the scope and get the mutations
+        //         self.run_scope(dirty.id);
+        //         self.diff_scope(dirty.id);
 
-                    let boundary_mut = boundary.borrow_mut();
+        //         // If suspended leaves are present, then we should find the boundary for this scope and attach things
+        //         // No placeholder necessary since this is a diff
+        //         if !self.collected_leaves.is_empty() {
+        //             let mut boundary = self.scopes[dirty.id]
+        //                 .consume_context::<Rc<SuspenseContext>>()
+        //                 .unwrap();
 
-                    // Attach mutations
-                    boundary_mut
-                        .mutations
-                        .borrow_mut()
-                        .edits
-                        .extend(self.mutations.edits.split_off(mutations_to_this_point));
+        //             let boundary_mut = boundary.borrow_mut();
 
-                    // Attach suspended leaves
-                    boundary
-                        .waiting_on
-                        .borrow_mut()
-                        .extend(self.collected_leaves.drain(..));
-                }
-            }
+        //             // Attach mutations
+        //             boundary_mut
+        //                 .mutations
+        //                 .borrow_mut()
+        //                 .edits
+        //                 .extend(self.mutations.edits.split_off(mutations_to_this_point));
 
-            // If there's more work, then just continue, plenty of work to do
-            if !self.dirty_scopes.is_empty() {
-                continue;
-            }
+        //             // Attach suspended leaves
+        //             boundary
+        //                 .waiting_on
+        //                 .borrow_mut()
+        //                 .extend(self.collected_leaves.drain(..));
+        //         }
+        //     }
 
-            // // If there's no pending suspense, then we have no reason to wait for anything
-            // if self.scheduler.leaves.borrow().is_empty() {
-            //     return self.finalize();
-            // }
+        //     // If there's more work, then just continue, plenty of work to do
+        //     if !self.dirty_scopes.is_empty() {
+        //         continue;
+        //     }
 
-            // Poll the suspense leaves in the meantime
-            let mut work = self.wait_for_work();
+        //     // // If there's no pending suspense, then we have no reason to wait for anything
+        //     // if self.scheduler.leaves.borrow().is_empty() {
+        //     //     return self.finalize();
+        //     // }
 
-            // safety: this is okay since we don't touch the original future
-            let pinned = unsafe { std::pin::Pin::new_unchecked(&mut work) };
+        //     // Poll the suspense leaves in the meantime
+        //     let mut work = self.wait_for_work();
 
-            // If the deadline is exceded (left) then we should return the mutations we have
-            use futures_util::future::{select, Either};
-            if let Either::Left((_, _)) = select(&mut deadline, pinned).await {
-                // release the borrowed
-                drop(work);
-                return self.finalize();
-            }
-        }
+        //     // safety: this is okay since we don't touch the original future
+        //     let pinned = unsafe { std::pin::Pin::new_unchecked(&mut work) };
+
+        //     // If the deadline is exceded (left) then we should return the mutations we have
+        //     use futures_util::future::{select, Either};
+        //     if let Either::Left((_, _)) = select(&mut deadline, pinned).await {
+        //         // release the borrowed
+        //         drop(work);
+        //         return self.finalize();
+        //     }
+        // }
     }
 
     /// Swap the current mutations with a new

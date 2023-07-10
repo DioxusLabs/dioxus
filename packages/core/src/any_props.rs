@@ -1,8 +1,4 @@
-use crate::{
-    innerlude::Scoped,
-    scopes::{Scope, ScopeState},
-    Element,
-};
+use crate::innerlude::{Element, Scope, ScopeState, Scoped};
 use std::panic::AssertUnwindSafe;
 
 /// A trait that essentially allows VComponentProps to be used generically
