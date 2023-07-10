@@ -3,6 +3,7 @@ use crate::{
     any_props::VProps,
     arena::ElementId,
     bump_frame::BumpFrame,
+    hook_list::HookList,
     innerlude::{DynamicNode, EventHandler, VComponent, VText},
     innerlude::{ErrorBoundary, Scheduler, SchedulerMsg},
     lazynodes::LazyNodes,
@@ -170,8 +171,7 @@ pub struct ScopeState {
 
     pub(crate) height: u32,
 
-    pub(crate) hooks: RefCell<Vec<Box<UnsafeCell<dyn Any>>>>,
-    pub(crate) hook_idx: Cell<usize>,
+    pub(crate) hooks: HookList,
 
     pub(crate) shared_contexts: RefCell<Vec<(TypeId, Box<dyn Any>)>>,
 
@@ -182,7 +182,6 @@ pub struct ScopeState {
     pub(crate) attributes_to_drop: RefCell<Vec<*const Attribute<'static>>>,
 
     pub(crate) props: Option<Box<dyn AnyProps<'static>>>,
-    pub(crate) placeholder: Cell<Option<ElementId>>,
 }
 
 impl<'src> ScopeState {
@@ -654,28 +653,6 @@ impl<'src> ScopeState {
     /// ```
     #[allow(clippy::mut_from_ref)]
     pub fn use_hook<State: 'static>(&self, initializer: impl FnOnce() -> State) -> &mut State {
-        let cur_hook = self.hook_idx.get();
-        let mut hooks = self.hooks.try_borrow_mut().expect("The hook list is already borrowed: This error is likely caused by trying to use a hook inside a hook which violates the rules of hooks.");
-
-        if cur_hook >= hooks.len() {
-            hooks.push(Box::new(UnsafeCell::new(initializer())));
-        }
-
-        hooks
-            .get(cur_hook)
-            .and_then(|inn| {
-                self.hook_idx.set(cur_hook + 1);
-                let raw_ref = unsafe { &mut *inn.get() };
-                raw_ref.downcast_mut::<State>()
-            })
-            .expect(
-                r###"
-                Unable to retrieve the hook that was initialized at this index.
-                Consult the `rules of hooks` to understand how to use hooks properly.
-
-                You likely used the hook in a conditional. Hooks rely on consistent ordering between renders.
-                Functions prefixed with "use" should never be called conditionally.
-                "###,
-            )
+        self.hooks.use_hook(initializer)
     }
 }

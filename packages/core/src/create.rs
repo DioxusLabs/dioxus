@@ -539,54 +539,47 @@ impl<'b> VirtualDom {
         // is encountered
         let mutations_to_this_point = self.mutations.edits.len();
 
-        // Create the component's root element
-        let created = self.create_scope(scope, new);
+        // // Create the component's root element
+        // let created = self.create_scope(scope, new);
 
-        // If there are no suspense leaves below us, then just don't bother checking anything suspense related
-        if self.collected_leaves.is_empty() {
-            return created;
-        }
+        // // If there are no suspense leaves below us, then just don't bother checking anything suspense related
+        // if self.collected_leaves.is_empty() {
+        //     return created;
+        // }
 
-        // If running the scope has collected some leaves and *this* component is a boundary, then handle the suspense
-        let boundary = match self.scopes[scope].has_context::<Rc<SuspenseContext>>() {
-            Some(boundary) => boundary,
-            _ => return created,
-        };
+        // // If running the scope has collected some leaves and *this* component is a boundary, then handle the suspense
+        // let boundary = match self.scopes[scope].has_context::<Rc<SuspenseContext>>() {
+        //     Some(boundary) => boundary,
+        //     _ => return created,
+        // };
 
-        // Since this is a boundary, use its placeholder within the template as the placeholder for the suspense tree
-        let new_id = self.next_element(new, parent.template.get().node_paths[idx]);
+        // // Since this is a boundary, use its placeholder within the template as the placeholder for the suspense tree
+        // let new_id = self.next_element(new, parent.template.get().node_paths[idx]);
 
-        // Now connect everything to the boundary
-        self.scopes[scope].placeholder.set(Some(new_id));
+        // // Now connect everything to the boundary
+        // self.scopes[scope].placeholder.set(Some(new_id));
 
-        // This involves breaking off the mutations to this point, and then creating a new placeholder for the boundary
-        // Note that we break off dynamic mutations only - since static mutations aren't rendered immediately
-        let split_off = unsafe {
-            std::mem::transmute::<Vec<Mutation>, Vec<Mutation>>(
-                self.mutations.edits.split_off(mutations_to_this_point),
-            )
-        };
-        boundary.mutations.borrow_mut().edits.extend(split_off);
-        boundary.created_on_stack.set(created);
-        boundary
-            .waiting_on
-            .borrow_mut()
-            .extend(self.collected_leaves.drain(..));
+        // // This involves breaking off the mutations to this point, and then creating a new placeholder for the boundary
+        // // Note that we break off dynamic mutations only - since static mutations aren't rendered immediately
+        // let split_off = unsafe {
+        //     std::mem::transmute::<Vec<Mutation>, Vec<Mutation>>(
+        //         self.mutations.edits.split_off(mutations_to_this_point),
+        //     )
+        // };
+        // boundary.mutations.borrow_mut().edits.extend(split_off);
+        // boundary.created_on_stack.set(created);
+        // boundary
+        //     .waiting_on
+        //     .borrow_mut()
+        //     .extend(self.collected_leaves.drain(..));
 
-        // Now assign the placeholder in the DOM
-        self.mutations.push(AssignId {
-            id: new_id,
-            path: &parent.template.get().node_paths[idx][1..],
-        });
+        // // Now assign the placeholder in the DOM
+        // self.mutations.push(AssignId {
+        //     id: new_id,
+        //     path: &parent.template.get().node_paths[idx][1..],
+        // });
 
         0
-    }
-
-    fn mount_aborted(&mut self, parent: &'b VNode<'b>, placeholder: &VPlaceholder) -> usize {
-        let id = self.next_element(parent, &[]);
-        self.mutations.push(Mutation::CreatePlaceholder { id });
-        placeholder.id.set(Some(id));
-        1
     }
 
     fn set_slot(

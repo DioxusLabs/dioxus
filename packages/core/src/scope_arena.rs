@@ -26,13 +26,11 @@ impl VirtualDom {
             name,
             props: Some(props),
             tasks: self.scheduler.clone(),
-            placeholder: Default::default(),
             node_arena_1: BumpFrame::new(0),
             node_arena_2: BumpFrame::new(0),
             spawned_tasks: Default::default(),
             render_cnt: Default::default(),
             hooks: Default::default(),
-            hook_idx: Default::default(),
             shared_contexts: Default::default(),
             borrowed_props: Default::default(),
             attributes_to_drop: Default::default(),
@@ -56,7 +54,7 @@ impl VirtualDom {
 
             let scope = &self.scopes[scope_id];
 
-            scope.hook_idx.set(0);
+            scope.hooks.new_render();
 
             // safety: due to how we traverse the tree, we know that the scope is not currently aliased
             let props: &dyn AnyProps = scope.props.as_ref().unwrap().as_ref();
