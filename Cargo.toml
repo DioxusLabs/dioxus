@@ -2,7 +2,9 @@
 members = [
     "packages/dioxus",
     "packages/core",
+    "packages/cli",
     "packages/core-macro",
+    "packages/extension",
     "packages/router",
     "packages/html",
     "packages/hooks",
@@ -33,7 +35,47 @@ members = [
     # Full project examples
     "examples/tailwind",
     "examples/PWA-example",
+    # Playwrite tests
+    "playwrite-tests/liveview",
+    "playwrite-tests/web",
+    "playwrite-tests/fullstack",
 ]
+exclude = ["examples/mobile_demo"]
+
+# dependencies that are shared across packages
+[workspace.dependencies]
+dioxus = { path = "packages/dioxus" }
+dioxus-core = { path = "packages/core" }
+dioxus-core-macro = { path = "packages/core-macro" }
+dioxus-router = { path = "packages/router" }
+dioxus-html = { path = "packages/html" }
+dioxus-hooks = { path = "packages/hooks" }
+dioxus-web = { path = "packages/web" }
+dioxus-ssr = { path = "packages/ssr" }
+dioxus-desktop = { path = "packages/desktop" }
+dioxus-mobile = { path = "packages/mobile" }
+dioxus-interpreter-js = { path = "packages/interpreter" }
+fermi = { path = "packages/fermi" }
+dioxus-liveview = { path = "packages/liveview" }
+dioxus-autofmt = { path = "packages/autofmt" }
+dioxus-rsx = { path = "packages/rsx" }
+dioxus-tui = { path = "packages/dioxus-tui" }
+rink = { path = "packages/rink" }
+dioxus-native-core = { path = "packages/native-core" }
+dioxus-native-core-macro = { path = "packages/native-core-macro" }
+rsx-rosetta = { path = "packages/rsx-rosetta" }
+dioxus-signals = { path = "packages/signals" }
+dioxus-hot-reload = { path = "packages/hot-reload" }
+dioxus-fullstack = { path = "packages/fullstack" }
+dioxus_server_macro = { path = "packages/fullstack/server-macro" }
+log = "0.4.19"
+tokio = "1.28"
+slab = "0.4.2"
+futures-channel = "0.3.21"
+futures-util = { version = "0.3", default-features = false }
+rustc-hash = "1.1.0"
+wasm-bindgen = "0.2.87"
+html_parser = "0.7.0"
 
 # This is a "virtual package"
 # It is not meant to be published, but is used so "cargo run --example XYZ" works properly
@@ -52,12 +94,12 @@ rust-version = "1.60.0"
 publish = false
 
 [dev-dependencies]
-dioxus = { path = "./packages/dioxus" }
-dioxus-desktop = { path = "./packages/desktop", features = ["transparent"] }
-dioxus-ssr = { path = "./packages/ssr" }
-dioxus-router = { path = "./packages/router" }
-dioxus-signals = { path = "./packages/signals" }
-fermi = { path = "./packages/fermi" }
+dioxus = { workspace = true }
+dioxus-desktop = { workspace = true, features = ["transparent"] }
+dioxus-ssr = { workspace = true }
+dioxus-router = { workspace = true }
+dioxus-signals = { workspace = true }
+fermi = { workspace = true }
 futures-util = "0.3.21"
 log = "0.4.14"
 num-format = "0.4.0"

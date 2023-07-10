@@ -24,7 +24,7 @@ fn App(cx: Scope) -> Element {
 
         input {
             r#type: "file",
-            accept: ".txt, .rs",
+            accept: ".txt,.rs",
             multiple: true,
             directory: **enable_directory_upload,
             onchange: |evt| {

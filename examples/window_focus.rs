@@ -2,9 +2,12 @@ use dioxus::prelude::*;
 use dioxus_desktop::tao::event::WindowEvent;
 use dioxus_desktop::use_wry_event_handler;
 use dioxus_desktop::wry::application::event::Event as WryEvent;
+use dioxus_desktop::{Config, WindowCloseBehaviour};
 
 fn main() {
-    dioxus_desktop::launch(app);
+    let cfg = Config::new().with_close_behaviour(WindowCloseBehaviour::CloseWindow);
+
+    dioxus_desktop::launch_cfg(app, cfg);
 }
 
 fn app(cx: Scope) -> Element {

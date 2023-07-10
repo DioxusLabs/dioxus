@@ -4,7 +4,7 @@
 
 Dioxus is a portable, performant, and ergonomic framework for building cross-platform user interfaces in Rust. This guide will help you get started with writing Dioxus apps for the Web, Desktop, Mobile, and more.
 
-```rust
+```rust, no_run
 fn app(cx: Scope) -> Element {
     let mut count = use_state(cx, || 0);
 
@@ -18,7 +18,7 @@ fn app(cx: Scope) -> Element {
 
 Dioxus is heavily inspired by React. If you know React, getting started with Dioxus will be a breeze.
 
-> This guide assumes you already know some [Rust](https://www.rust-lang.org/)! If not, we recommend reading [*the book*](https://doc.rust-lang.org/book/ch01-00-getting-started.html) to learn Rust first.
+> This guide assumes you already know some [Rust](https://www.rust-lang.org/)! If not, we recommend reading [_the book_](https://doc.rust-lang.org/book/ch01-00-getting-started.html) to learn Rust first.
 
 ## Features
 
@@ -31,9 +31,10 @@ Dioxus is heavily inspired by React. If you know React, getting started with Dio
 
 ### Multiplatform
 
-Dioxus is a *portable* toolkit, meaning the Core implementation can run anywhere with no platform-dependent linking. Unlike many other Rust frontend toolkits, Dioxus is not intrinsically linked to WebSys. In fact, every element and event listener can be swapped out at compile time. By default, Dioxus ships with the `html` feature enabled, but this can be disabled depending on your target renderer.
+Dioxus is a _portable_ toolkit, meaning the Core implementation can run anywhere with no platform-dependent linking. Unlike many other Rust frontend toolkits, Dioxus is not intrinsically linked to WebSys. In fact, every element and event listener can be swapped out at compile time. By default, Dioxus ships with the `html` feature enabled, but this can be disabled depending on your target renderer.
 
 Right now, we have several 1st-party renderers:
+
 - WebSys (for WASM): Great support
 - Tao/Tokio (for Desktop apps): Good support
 - Tao/Tokio (for Mobile apps): Poor support

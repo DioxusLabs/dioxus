@@ -25,6 +25,7 @@ const bool_attrs = {
   reversed: true,
   selected: true,
   truespeed: true,
+  webkitdirectory: true,
 };
 
 export function setAttributeInner(node, field, value, ns) {
@@ -48,21 +49,25 @@ export function setAttributeInner(node, field, value, ns) {
         node.defaultValue = value;
         break;
       case "checked":
-        node.checked = value === "true" || value === true;
+        node.checked = truthy(value);
         break;
       case "selected":
-        node.selected = value === "true" || value === true;
+        node.selected = truthy(value);
         break;
       case "dangerous_inner_html":
         node.innerHTML = value;
         break;
       default:
         // https://github.com/facebook/react/blob/8b88ac2592c5f555f315f9440cbb665dd1e7457a/packages/react-dom/src/shared/DOMProperty.js#L352-L364
-        if (value === "false" && bool_attrs.hasOwnProperty(name)) {
+        if (!truthy(value) && bool_attrs.hasOwnProperty(name)) {
           node.removeAttribute(name);
         } else {
           node.setAttribute(name, value);
         }
     }
   }
+}
+
+function truthy(val) {
+  return val === "true" || val === true;
 }

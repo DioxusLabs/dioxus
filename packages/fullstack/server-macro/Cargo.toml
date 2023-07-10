@@ -7,8 +7,8 @@ edition = "2021"
 
 [dependencies]
 quote = "1.0.26"
-server_fn_macro = { git = "https://github.com/leptos-rs/leptos", rev = "671b1e4a8fff7a2e05bb621ef08e87be2b18ccae", features = ["stable"] }
-syn = { version = "1", features = ["full"] }
+server_fn_macro = { git = "https://github.com/leptos-rs/leptos", rev = "15a4e54435eb5a539afb75891292bcccd2cc8e85", features = ["stable"] }
+syn = { version = "2", features = ["full"] }
 
 [lib]
 proc-macro = true

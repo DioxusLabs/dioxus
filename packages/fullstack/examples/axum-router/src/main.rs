@@ -34,8 +34,6 @@ fn main() {
         }));
 
         use axum::extract::State;
-        PostServerData::register().unwrap();
-        GetServerData::register().unwrap();
         tokio::runtime::Runtime::new()
             .unwrap()
             .block_on(async move {

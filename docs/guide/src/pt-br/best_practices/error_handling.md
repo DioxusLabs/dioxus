@@ -8,7 +8,7 @@ No entanto, não falamos sobre tratamento de erros neste guia! Neste capítulo, 
 
 Observadores astutos podem ter notado que `Element` é na verdade um alias de tipo para `Option<VNode>`. Você não precisa saber o que é um `VNode`, mas é importante reconhecer que não poderíamos retornar nada:
 
-```rust
+```rust, no_run
 fn App(cx: Scope) -> Element {
     None
 }
@@ -18,7 +18,7 @@ Isso nos permite adicionar um pouco de açúcar sintático para operações que 
 
 > A natureza de `Option<VNode>` pode mudar no futuro à medida que a característica `try` for atualizada.
 
-```rust
+```rust, no_run
 fn App(cx: Scope) -> Element {
     // immediately return "None"
     let name = cx.use_hook(|_| Some("hi"))?;
@@ -29,7 +29,7 @@ fn App(cx: Scope) -> Element {
 
 Como o Rust não pode aceitar opções e resultados com a infraestrutura _try_ existente, você precisará manipular os resultados manualmente. Isso pode ser feito convertendo-os em `Option` ou manipulando-os explicitamente.
 
-```rust
+```rust, no_run
 fn App(cx: Scope) -> Element {
     // Convert Result to Option
     let name = cx.use_hook(|_| "1.234").parse().ok()?;
@@ -52,13 +52,13 @@ A próxima "melhor" maneira de lidar com erros no Dioxus é combinar (`match`) o
 
 Para fazer isso, simplesmente temos um estado de erro embutido em nosso componente:
 
-```rust
+```rust, no_run
 let err = use_state(cx, || None);
 ```
 
 Sempre que realizarmos uma ação que gere um erro, definiremos esse estado de erro. Podemos então combinar o erro de várias maneiras (retorno antecipado, elemento de retorno etc.).
 
-```rust
+```rust, no_run
 fn Commandline(cx: Scope) -> Element {
     let error = use_state(cx, || None);
 
@@ -79,7 +79,7 @@ fn Commandline(cx: Scope) -> Element {
 
 Se você estiver lidando com alguns componentes com um mínimo de aninhamento, basta passar o identificador de erro para componentes filhos.
 
-```rust
+```rust, no_run
 fn Commandline(cx: Scope) -> Element {
     let error = use_state(cx, || None);
 
@@ -106,7 +106,7 @@ Para começar, considere usar um _hook_ embutido como `use_context` e `use_conte
 
 No "topo" de nossa arquitetura, queremos declarar explicitamente um valor que pode ser um erro.
 
-```rust
+```rust, no_run
 enum InputError {
     None,
     TooLong,
@@ -118,7 +118,7 @@ static INPUT_ERROR: Atom<InputError> = |_| InputError::None;
 
 Então, em nosso componente de nível superior, queremos tratar explicitamente o possível estado de erro para esta parte da árvore.
 
-```rust
+```rust, no_run
 fn TopLevel(cx: Scope) -> Element {
     let error = use_read(cx, INPUT_ERROR);
 
@@ -132,7 +132,7 @@ fn TopLevel(cx: Scope) -> Element {
 
 Agora, sempre que um componente _downstream_ tiver um erro em suas ações, ele pode simplesmente definir seu próprio estado de erro:
 
-```rust
+```rust, no_run
 fn Commandline(cx: Scope) -> Element {
     let set_error = use_set(cx, INPUT_ERROR);
 

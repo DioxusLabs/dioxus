@@ -1,9 +1,10 @@
-use std::{path::PathBuf, str::FromStr};
+#![allow(unused)]
 
 use serde::Deserialize;
+use std::{path::PathBuf, str::FromStr};
 
 #[derive(Debug, Deserialize)]
-pub(crate) struct FileDiologRequest {
+pub(crate) struct FileDialogRequest {
     #[serde(default)]
     accept: Option<String>,
     multiple: bool,
@@ -13,7 +14,7 @@ pub(crate) struct FileDiologRequest {
     pub bubbles: bool,
 }
 
-fn get_file_event_for_folder(request: &FileDiologRequest, dialog: rfd::FileDialog) -> Vec<PathBuf> {
+fn get_file_event_for_folder(request: &FileDialogRequest, dialog: rfd::FileDialog) -> Vec<PathBuf> {
     if request.multiple {
         dialog.pick_folders().into_iter().flatten().collect()
     } else {
@@ -22,7 +23,7 @@ fn get_file_event_for_folder(request: &FileDiologRequest, dialog: rfd::FileDialo
 }
 
 fn get_file_event_for_file(
-    request: &FileDiologRequest,
+    request: &FileDialogRequest,
     mut dialog: rfd::FileDialog,
 ) -> Vec<PathBuf> {
     let filters: Vec<_> = request
@@ -40,14 +41,38 @@ fn get_file_event_for_file(
 
     dialog = dialog.add_filter("name", file_extensions.as_slice());
 
-    if request.multiple {
+    let files: Vec<_> = if request.multiple {
         dialog.pick_files().into_iter().flatten().collect()
     } else {
         dialog.pick_file().into_iter().collect()
-    }
+    };
+
+    files
 }
 
-pub(crate) fn get_file_event(request: &FileDiologRequest) -> Vec<PathBuf> {
+#[cfg(not(any(
+target_os = "windows",
+target_os = "macos",
+target_os = "linux",
+target_os = "dragonfly",
+target_os = "freebsd",
+target_os = "netbsd",
+target_os = "openbsd"
+)))]
+pub(crate) fn get_file_event(_request: &FileDialogRequest) -> Vec<PathBuf> {
+    vec![]
+}
+
+#[cfg(any(
+target_os = "windows",
+target_os = "macos",
+target_os = "linux",
+target_os = "dragonfly",
+target_os = "freebsd",
+target_os = "netbsd",
+target_os = "openbsd"
+))]
+pub(crate) fn get_file_event(request: &FileDialogRequest) -> Vec<PathBuf> {
     let dialog = rfd::FileDialog::new();
 
     if request.directory {

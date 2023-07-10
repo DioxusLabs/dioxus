@@ -23,7 +23,7 @@ cargo add dioxus-tui
 
 Em seguida, edite seu `main.rs` com o modelo básico.
 
-```rust
+```rust, no_run
 {{#include ../../../examples/hello_world_tui.rs}}
 ```
 
@@ -35,7 +35,7 @@ cargo run
 
 Pressione "ctrl-c" para fechar o aplicativo. Para mudar de "ctrl-c" para apenas "q" para sair, você pode iniciar o aplicativo com uma configuração para desativar o sair padrão e usar a raiz TuiContext para sair por conta própria.
 
-```rust
+```rust, no_run
 {{#include ../../../examples/hello_world_tui_no_ctrl_c.rs}}
 ```
 

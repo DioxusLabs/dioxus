@@ -21,7 +21,7 @@ $ cargo add dioxus --features desktop
 
 Edit your `main.rs`:
 
-```rust
+```rust, no_run
 // main.rs
 use dioxus::prelude::*;
 

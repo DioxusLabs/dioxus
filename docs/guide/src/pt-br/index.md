@@ -4,7 +4,7 @@
 
 Dioxus é uma estrutura portátil, de alto desempenho e ergonômica para a construção de interfaces de usuário multiplataforma no Rust. Este guia irá ajudá-lo a começar a escrever aplicativos Dioxus para a Web, Desktop, Mobile e muito mais.
 
-```rust
+```rust, no_run
 fn app(cx: Scope) -> Element {
     let mut count = use_state(cx, || 0);
 
