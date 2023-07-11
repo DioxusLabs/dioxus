@@ -39,7 +39,7 @@ features = [
     "FocusEvent",
     "CompositionEvent",
     "ClipboardEvent",
-    "DragEvent"
+    "DragEvent",
     "Element",
     "DomRect",
     "ScrollIntoViewOptions",
