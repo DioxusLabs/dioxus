@@ -76,6 +76,7 @@ futures-util = { version = "0.3", default-features = false }
 rustc-hash = "1.1.0"
 wasm-bindgen = "0.2.87"
 html_parser = "0.7.0"
+thiserror = "1.0.30"
 
 # This is a "virtual package"
 # It is not meant to be published, but is used so "cargo run --example XYZ" works properly
@@ -112,9 +113,9 @@ rand = { version = "0.8.4", features = ["small_rng"] }
 tokio = { version = "1.16.1", features = ["full"] }
 reqwest = { version = "0.11.9", features = ["json"] }
 fern = { version = "0.6.0", features = ["colored"] }
-thiserror = "1.0.30"
 env_logger = "0.10.0"
 simple_logger = "4.0.0"
+thiserror = { workspace = true }
 
 [profile.release]
 opt-level = 3

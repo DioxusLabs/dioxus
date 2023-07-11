@@ -121,30 +121,96 @@ pub struct UseSharedState<T> {
     pub(crate) inner: Rc<RefCell<ProvidedStateInner<T>>>,
 }
 
+#[derive(thiserror::Error, Debug)]
+pub enum UseSharedStateError {
+    #[error("{type_name} is already borrowed, so it cannot be borrowed mutably.")]
+    AlreadyBorrowed {
+        source: core::cell::BorrowMutError,
+        type_name: &'static str,
+    },
+    #[error("{type_name} is already borrowed mutably, so it cannot be borrowed anymore.")]
+    AlreadyBorrowedMutably {
+        source: core::cell::BorrowError,
+        type_name: &'static str,
+    },
+}
+
+pub type UseSharedStateResult<T> = Result<T, UseSharedStateError>;
+
 impl<T> UseSharedState<T> {
     /// Notify all consumers of the state that it has changed. (This is called automatically when you call "write")
     pub fn notify_consumers(&self) {
         self.inner.borrow_mut().notify_consumers();
     }
 
+    /// Try reading the shared state
+    pub fn try_read(&self) -> UseSharedStateResult<Ref<'_, T>> {
+        self.inner
+            .try_borrow()
+            .map_err(|source| UseSharedStateError::AlreadyBorrowedMutably {
+                source,
+                type_name: std::any::type_name::<Self>(),
+            })
+            .map(|value| Ref::map(value, |inner| &inner.value))
+    }
     /// Read the shared value
     pub fn read(&self) -> Ref<'_, T> {
-        Ref::map(self.inner.borrow(), |inner| &inner.value)
+        match self.try_read() {
+            Ok(value) => value,
+            Err(message) => panic!(
+                "Reading the shared state failed: {}\n({:?})",
+                message, message
+            ),
+        }
     }
 
+    /// Try writing the shared state
+    pub fn try_write(&self) -> UseSharedStateResult<RefMut<'_, T>> {
+        self.inner
+            .try_borrow_mut()
+            .map_err(|source| UseSharedStateError::AlreadyBorrowed {
+                source,
+                type_name: std::any::type_name::<Self>(),
+            })
+            .map(|mut value| {
+                value.notify_consumers();
+                RefMut::map(value, |inner| &mut inner.value)
+            })
+    }
     /// Calling "write" will force the component to re-render
     ///
     ///
     // TODO: We prevent unncessary notifications only in the hook, but we should figure out some more global lock
     pub fn write(&self) -> RefMut<'_, T> {
-        let mut value = self.inner.borrow_mut();
-        value.notify_consumers();
-        RefMut::map(value, |inner| &mut inner.value)
+        match self.try_write() {
+            Ok(value) => value,
+            Err(message) => panic!(
+                "Writing to shared state failed: {}\n({:?})",
+                message, message
+            ),
+        }
     }
 
-    /// Allows the ability to write the value without forcing a re-render
+    /// Tries writing the value without forcing a re-render
+    pub fn try_write_silent(&self) -> UseSharedStateResult<RefMut<'_, T>> {
+        self.inner
+            .try_borrow_mut()
+            .map_err(|source| UseSharedStateError::AlreadyBorrowed {
+                source,
+                type_name: std::any::type_name::<Self>(),
+            })
+            .map(|value| RefMut::map(value, |inner| &mut inner.value))
+    }
+
+    /// Writes the value without forcing a re-render
     pub fn write_silent(&self) -> RefMut<'_, T> {
-        RefMut::map(self.inner.borrow_mut(), |inner| &mut inner.value)
+        match self.try_write_silent() {
+            Ok(value) => value,
+            Err(message) => panic!(
+                "Writing to shared state silently failed: {}\n({:?})",
+                message, message
+            ),
+        }
     }
 }
 
