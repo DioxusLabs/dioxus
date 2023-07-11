@@ -10,6 +10,7 @@ use axum::{
     routing::{get, get_service},
     Router,
 };
+use axum_server::tls_rustls::RustlsConfig;
 use cargo_metadata::diagnostic::Diagnostic;
 use colored::Colorize;
 use dioxus_core::Template;
@@ -82,6 +83,34 @@ pub async fn startup(port: u16, config: CrateConfig, start_browser: bool) -> Res
         startup_default(ip, port, config, start_browser).await?
     }
     Ok(())
+}
+
+/// Returns an enum of rustls config and a bool if mkcert isn't installed
+async fn get_rustls(config: &CrateConfig) -> (Option<RustlsConfig>, bool) {
+    let config = &config.dioxus_config.web.https;
+    if config.enabled != Some(true) {
+        return (None, false);
+    }
+
+    match config.mkcert {
+        // mkcert, use it
+        Some(true) => {
+            todo!()
+        }
+        // not mkcert
+        Some(false) => {
+            // get paths to cert & key
+            if let (Some(key), Some(cert)) = (config.key_path.clone(), config.cert_path.clone()) {
+                let rustls = RustlsConfig::from_pem_file(cert, key).await.unwrap();
+                return (Some(rustls), false);
+            } else {
+                // missing cert or key
+                return (None, false);
+            }
+        }
+        // other
+        _ => return (None, false),
+    }
 }
 
 pub struct HotReloadState {
@@ -274,6 +303,9 @@ pub async fn startup_hot_reload(
         }
     }
 
+    // HTTPS
+    let rustls_config = get_rustls(&config).await;
+
     // start serve dev-server at 0.0.0.0:8080
     print_console_info(
         &ip,
@@ -368,13 +400,19 @@ pub async fn startup_hot_reload(
 
     let addr = format!("0.0.0.0:{}", port).parse().unwrap();
 
-    let server = axum::Server::bind(&addr).serve(router.into_make_service());
-
     if start_browser {
-        let _ = open::that(format!("http://{}", addr));
+        if config.dioxus_config.web.https.enabled == Some(true) {
+            let _ = open::that(format!("https://{}", addr));
+        } else {
+            let _ = open::that(format!("http://{}", addr));
+        }
     }
 
-    server.await?;
+    if let (Some(rustls), _) = rustls_config {
+        axum_server::bind_rustls(addr, rustls).serve(router.into_make_service()).await?;
+    } else {
+        axum::Server::bind(&addr).serve(router.into_make_service()).await?;
+    }
 
     Ok(())
 }
@@ -456,6 +494,9 @@ pub async fn startup_default(
             )
             .unwrap();
     }
+
+    // HTTPS
+    let rustls_config = get_rustls(&config).await;
 
     // start serve dev-server at 0.0.0.0
     print_console_info(
@@ -550,13 +591,20 @@ pub async fn startup_default(
         .layer(Extension(ws_reload_state));
 
     let addr = format!("0.0.0.0:{}", port).parse().unwrap();
-    let server = axum::Server::bind(&addr).serve(router.into_make_service());
 
     if start_browser {
-        let _ = open::that(format!("http://{}", addr));
+        if config.dioxus_config.web.https.enabled == Some(true) {
+            let _ = open::that(format!("https://{}", addr));
+        } else {
+            let _ = open::that(format!("http://{}", addr));
+        }
     }
 
-    server.await?;
+    if let (Some(rustls), _) = rustls_config {
+        axum_server::bind_rustls(addr, rustls).serve(router.into_make_service()).await?;
+    } else {
+        axum::Server::bind(&addr).serve(router.into_make_service()).await?;
+    }
 
     Ok(())
 }
@@ -634,14 +682,28 @@ fn print_console_info(ip: &String, port: u16, config: &CrateConfig, options: Pre
             .bold()
         );
     }
-    println!(
-        "\t> Local : {}",
-        format!("http://localhost:{}/", port).blue()
-    );
-    println!(
-        "\t> Network : {}",
-        format!("http://{}:{}/", ip, port).blue()
-    );
+
+    if config.dioxus_config.web.https.enabled == Some(true) {
+        println!(
+            "\t> Local : {}",
+            format!("https://localhost:{}/", port).blue()
+        );
+        println!(
+            "\t> Network : {}",
+            format!("https://{}:{}/", ip, port).blue()
+        );
+        println!("\t> HTTPS : {}", format!("Enabled").green());
+    } else {
+        println!(
+            "\t> Local : {}",
+            format!("http://localhost:{}/", port).blue()
+        );
+        println!(
+            "\t> Network : {}",
+            format!("http://{}:{}/", ip, port).blue()
+        );
+        println!("\t> HTTPS : {}", format!("Disabled").red());
+    }
     println!();
     println!("\t> Profile : {}", profile.green());
     println!("\t> Hot Reload : {}", hot_reload.cyan());
