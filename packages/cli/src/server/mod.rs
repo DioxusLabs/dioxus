@@ -19,6 +19,7 @@ use notify::{RecommendedWatcher, Watcher};
 use std::{
     net::UdpSocket,
     path::PathBuf,
+    process::Command,
     sync::{Arc, Mutex},
 };
 use tokio::sync::broadcast::{self, Sender};
@@ -107,7 +108,11 @@ pub async fn serve_default(
         update: reload_tx.clone(),
     });
 
-    // start serve dev-server at 0.0.0.0
+    // HTTPS
+    // Before console info so it can stop if mkcert isn't installed or fails
+    let rustls_config = get_rustls(&config).await?;
+
+    // Print serve info
     print_console_info(
         &ip,
         port,
@@ -119,14 +124,11 @@ pub async fn serve_default(
         },
     );
 
-    // HTTPS
-    let rustls_config = get_rustls(&config).await;
-
     // Router
     let router = setup_router(config, ws_reload_state, None).await?;
 
     // Start server
-    start_server(port, router, start_browser, rustls_config.0).await?;
+    start_server(port, router, start_browser, rustls_config).await?;
 
     Ok(())
 }
@@ -182,6 +184,10 @@ pub async fn serve_hot_reload(
     )
     .await?;
 
+    // HTTPS
+    // Before console info so it can stop if mkcert isn't installed or fails
+    let rustls_config = get_rustls(&config).await?;
+
     // Print serve info
     print_console_info(
         &ip,
@@ -194,44 +200,73 @@ pub async fn serve_hot_reload(
         },
     );
 
-    // HTTPS
-    let rustls_config = get_rustls(&config).await;
-
     // Router
     let router = setup_router(config, ws_reload_state, Some(hot_reload_state)).await?;
 
     // Start server
-    start_server(port, router, start_browser, rustls_config.0).await?;
+    start_server(port, router, start_browser, rustls_config).await?;
 
     Ok(())
 }
 
 /// Returns an enum of rustls config and a bool if mkcert isn't installed
-async fn get_rustls(config: &CrateConfig) -> (Option<RustlsConfig>, bool) {
-    let config = &config.dioxus_config.web.https;
-    if config.enabled != Some(true) {
-        return (None, false);
+async fn get_rustls(config: &CrateConfig) -> Result<Option<RustlsConfig>> {
+    let web_config = &config.dioxus_config.web.https;
+    if web_config.enabled != Some(true) {
+        return Ok(None);
     }
 
-    match config.mkcert {
+    let (cert_path, key_path) = match web_config.mkcert {
         // mkcert, use it
         Some(true) => {
-            todo!()
+            _ = fs::create_dir("ssl");
+            let cmd = Command::new("mkcert")
+                .args([
+                    "-install",
+                    "-key-file",
+                    "ssl/key.pem",
+                    "-cert-file",
+                    "ssl/cert.pem",
+                    "localhost",
+                    "::1",
+                    "127.0.0.1",
+                ])
+                .spawn();
+
+            match cmd {
+                Err(e) => {
+                    match e.kind() {
+                        io::ErrorKind::NotFound => log::error!("mkcert is not installed. See https://github.com/FiloSottile/mkcert#installation for installation instructions."),
+                        e => log::error!("an error occured while generating mkcert certificates: {}", e.to_string()),
+                    };
+                    return Err("failed to generate mkcert certificates".into());
+                }
+                Ok(mut cmd) => {
+                    cmd.wait()?;
+                }
+            }
+
+            (PathBuf::from("ssl/cert.pem"), PathBuf::from("ssl/key.pem"))
         }
         // not mkcert
         Some(false) => {
             // get paths to cert & key
-            if let (Some(key), Some(cert)) = (config.key_path.clone(), config.cert_path.clone()) {
-                let rustls = RustlsConfig::from_pem_file(cert, key).await.unwrap();
-                (Some(rustls), false)
+            if let (Some(key), Some(cert)) =
+                (web_config.key_path.clone(), web_config.cert_path.clone())
+            {
+                (cert, key)
             } else {
                 // missing cert or key
-                (None, false)
+                return Err("https is enabled but cert or key path is missing".into());
             }
         }
         // other
-        _ => (None, false),
-    }
+        _ => return Ok(None),
+    };
+
+    Ok(Some(
+        RustlsConfig::from_pem_file(cert_path, key_path).await?,
+    ))
 }
 
 /// Sets up and returns a router
