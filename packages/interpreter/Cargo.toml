@@ -10,8 +10,6 @@ homepage = "https://dioxuslabs.com"
 documentation = "https://docs.rs/dioxus"
 keywords = ["dom", "ui", "gui", "react", "wasm"]
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
 wasm-bindgen = { workspace = true, optional = true }
 js-sys = { version = "0.3.56", optional = true }

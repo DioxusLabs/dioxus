@@ -6,11 +6,8 @@ edition = "2018"
 description = "Dioxus render-to-string"
 license = "MIT/Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
-homepage = "https://dioxuslabs.com"
-documentation = "https://dioxuslabs.com"
+homepage = "https://dioxuslabs.com/docs/0.3/guide/en/getting_started/ssr.html"
 keywords = ["dom", "ui", "gui", "react", "ssr"]
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 dioxus-core = { workspace = true, features = ["serialize"] }
