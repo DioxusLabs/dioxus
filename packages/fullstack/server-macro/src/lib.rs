@@ -124,10 +124,7 @@ pub fn server(args: proc_macro::TokenStream, s: TokenStream) -> TokenStream {
             .from_case(Case::Snake)
             .to_case(Case::UpperCamel)
             .convert(&sig.ident.to_string());
-        args.struct_name = Some(Ident::new(
-            &format!("{}", upper_cammel_case_name),
-            sig.ident.span(),
-        ));
+        args.struct_name = Some(Ident::new(&upper_cammel_case_name, sig.ident.span()));
     }
     let struct_name = args.struct_name.as_ref().unwrap();
     match server_macro_impl(
