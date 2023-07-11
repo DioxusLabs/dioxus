@@ -9,7 +9,7 @@ description = "Build server-side apps with Dioxus"
 license = "MIT/Apache-2.0"
 
 [dependencies]
-thiserror = "1.0.38"
+thiserror = { workspace = true }
 log = { workspace = true }
 slab = { workspace = true }
 futures-util = { workspace = true, default-features = false, features = [

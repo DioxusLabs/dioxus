@@ -153,6 +153,7 @@ impl<T> UseSharedState<T> {
             })
             .map(|value| Ref::map(value, |inner| &inner.value))
     }
+
     /// Read the shared value
     pub fn read(&self) -> Ref<'_, T> {
         match self.try_read() {
@@ -177,6 +178,7 @@ impl<T> UseSharedState<T> {
                 RefMut::map(value, |inner| &mut inner.value)
             })
     }
+
     /// Calling "write" will force the component to re-render
     ///
     ///

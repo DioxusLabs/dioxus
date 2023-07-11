@@ -34,7 +34,7 @@ http = { version = "0.2.9", optional = true }
 
 log = { workspace = true }
 once_cell = "1.17.1"
-thiserror = "1.0.40"
+thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full"], optional = true }
 object-pool = "0.5.4"
 anymap = "0.12.1"

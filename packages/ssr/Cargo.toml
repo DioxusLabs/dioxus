@@ -15,7 +15,7 @@ askama_escape = "0.10.3"
 
 [dev-dependencies]
 dioxus = { workspace = true }
-thiserror = "1.0.23"
+thiserror = { workspace = true }
 log = { workspace = true }
 fern = { version = "0.6.0", features = ["colored"] }
 anyhow = "1.0"

@@ -30,7 +30,7 @@ wasm-bindgen = { workspace = true, optional = true }
 js-sys = { version = "0.3", optional = true }
 gloo-events = { version = "0.1.1", optional = true }
 log = { workspace = true }
-thiserror = "1.0.30"
+thiserror = { workspace = true }
 futures-util = { workspace = true }
 serde = { version = "1", optional = true }
 serde_urlencoded = { version = "0.7.1", optional = true }
