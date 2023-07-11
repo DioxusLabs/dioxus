@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use crate::desktop_context::EventData;
 use crate::protocol;
 use crate::{desktop_context::UserWindowEvent, Config};
@@ -13,7 +11,7 @@ pub fn build(
     cfg: &mut Config,
     event_loop: &EventLoopWindowTarget<UserWindowEvent>,
     proxy: EventLoopProxy<UserWindowEvent>,
-) -> (Rc<WebView>, WebContext) {
+) -> (WebView, WebContext) {
     let builder = cfg.window.clone();
     let window = builder.build(event_loop).unwrap();
     let file_handler = cfg.file_drop_handler.take();
@@ -62,6 +60,10 @@ pub fn build(
         webview = webview.with_browser_accelerator_keys(false);
     }
 
+    if let Some(color) = cfg.background_color {
+        webview = webview.with_background_color(color);
+    }
+
     // These are commented out because wry is currently broken in wry
     // let mut web_context = WebContext::new(cfg.data_dir.clone());
     // .with_web_context(&mut web_context);
@@ -90,5 +92,5 @@ pub fn build(
         webview = webview.with_devtools(true);
     }
 
-    (Rc::new(webview.build().unwrap()), web_context)
+    (webview.build().unwrap(), web_context)
 }

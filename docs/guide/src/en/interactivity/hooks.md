@@ -14,9 +14,10 @@ Hooks allow us to create state in our components. Hooks are Rust functions that 
 
 For example, you might have seen the counter example, in which state (a number) is tracked using the `use_state` hook:
 
-```rust
+```rust, no_run
 {{#include ../../../examples/hooks_counter.rs:component}}
 ```
+
 ![Screenshot: counter app](./images/counter.png)
 
 Every time the component's state changes, it re-renders, and the component function is called, so you can describe what you want the new UI to look like. You don't have to worry about "changing" anything – just describe what you want in terms of the state, and Dioxus will take care of the rest!
@@ -25,9 +26,10 @@ Every time the component's state changes, it re-renders, and the component funct
 
 You can use multiple hooks in the same component if you want:
 
-```rust
+```rust, no_run
 {{#include ../../../examples/hooks_counter_two_state.rs:component}}
 ```
+
 ![Screenshot: app with two counters](./images/counter_two_state.png)
 
 ## Rules of Hooks
@@ -36,7 +38,7 @@ The above example might seem a bit magic, since Rust functions are typically not
 
 But how can Dioxus differentiate between multiple hooks in the same component? As you saw in the second example, both `use_state` functions were called with the same parameters, so how come they can return different things when the counters are different?
 
-```rust
+```rust, no_run
 {{#include ../../../examples/hooks_counter_two_state.rs:use_state_calls}}
 ```
 
@@ -44,24 +46,27 @@ This is only possible because the two hooks are always called in the same order,
 
 1. Hooks may be only used in components or other hooks (we'll get to that later)
 2. On every call to the component function
-   1. The same hooks must be called
+   1. The same hooks must be called (except in the case of early returns, as explained later in the [Error Handling chapter](../best_practices/error_handling.md))
    2. In the same order
 3. Hooks name's should start with `use_` so you don't accidentally confuse them with regular functions
 
 These rules mean that there are certain things you can't do with hooks:
 
 ### No Hooks in Conditionals
-```rust
+
+```rust, no_run
 {{#include ../../../examples/hooks_bad.rs:conditional}}
 ```
 
 ### No Hooks in Closures
-```rust
+
+```rust, no_run
 {{#include ../../../examples/hooks_bad.rs:closure}}
 ```
 
 ### No Hooks in Loops
-```rust
+
+```rust, no_run
 {{#include ../../../examples/hooks_bad.rs:loop}}
 ```
 
@@ -75,9 +80,8 @@ Thankfully, there is another hook for that, `use_ref`! It is similar to `use_sta
 
 Here's a simple example that keeps a list of events in a `use_ref`. We can acquire write access to the state with `.with_mut()`, and then just `.push` a new value to the state:
 
-```rust
+```rust, no_run
 {{#include ../../../examples/hooks_use_ref.rs:component}}
 ```
 
 > The return values of `use_state` and `use_ref` (`UseState` and `UseRef`, respectively) are in some ways similar to [`Cell`](https://doc.rust-lang.org/std/cell/) and [`RefCell`](https://doc.rust-lang.org/std/cell/struct.RefCell.html) – they provide interior mutability. However, these Dioxus wrappers also ensure that the component gets re-rendered whenever you change the state.
-

@@ -8,7 +8,7 @@ Event handlers are similar to regular attributes, but their name usually starts 
 
 For example, to handle clicks on an element, we can specify an `onclick` handler:
 
-```rust
+```rust, no_run
 {{#include ../../../examples/event_click.rs:rsx}}
 ```
 
@@ -29,11 +29,11 @@ To learn what the different event types for HTML provide, read the [events modul
 
 Some events will trigger first on the element the event originated at upward. For example, a click event on a `button` inside a `div` would first trigger the button's event listener and then the div's event listener.
 
-> For more information about event propigation see [the mdn docs on event bubling](https://developer.mozilla.org/en-US/docs/Learn/JavaScript/Building_blocks/Events#event_bubbling)
+> For more information about event propagation see [the mdn docs on event bubbling](https://developer.mozilla.org/en-US/docs/Learn/JavaScript/Building_blocks/Events#event_bubbling)
 
 If you want to prevent this behavior, you can call `stop_propagation()` on the event:
 
-```rust
+```rust, no_run
 {{#include ../../../examples/event_nested.rs:rsx}}
 ```
 
@@ -41,27 +41,27 @@ If you want to prevent this behavior, you can call `stop_propagation()` on the e
 
 Some events have a default behavior. For keyboard events, this might be entering the typed character. For mouse events, this might be selecting some text.
 
-In some instances, might want to avoid this default behavior. For this, you can add the `prevent_default` attribute with the name of the handler whose default behavior you want to stop. This attribute is special: you can attach it multiple times for multiple attributes:
+In some instances, might want to avoid this default behavior. For this, you can add the `prevent_default` attribute with the name of the handler whose default behavior you want to stop. This attribute can be used for multiple handlers using their name separated by spaces:
 
-```rust
+```rust, no_run
 {{#include ../../../examples/event_prevent_default.rs:prevent_default}}
 ```
 
 Any event handlers will still be called.
 
-> Normally, in React or JavaScript, you'd call "preventDefault" on the event in the callback. Dioxus does *not* currently support this behavior. Note: this means you cannot conditionally prevent default behavior based on the data in the event.
+> Normally, in React or JavaScript, you'd call "preventDefault" on the event in the callback. Dioxus does _not_ currently support this behavior. Note: this means you cannot conditionally prevent default behavior based on the data in the event.
 
 ## Handler Props
 
 Sometimes, you might want to make a component that accepts an event handler. A simple example would be a `FancyButton` component, which accepts an `on_click` handler:
 
-```rust
+```rust, no_run
 {{#include ../../../examples/event_handler_prop.rs:component_with_handler}}
 ```
 
 Then, you can use it like any other handler:
 
-```rust
+```rust, no_run
 {{#include ../../../examples/event_handler_prop.rs:usage}}
 ```
 

@@ -81,10 +81,11 @@ impl State for TaffyLayout {
             };
             if let PossiblyUninitalized::Initialized(n) = self.node {
                 if self.style != style {
-                    taffy.set_style(n, style).unwrap();
+                    taffy.set_style(n, style.clone()).unwrap();
                 }
             } else {
-                self.node = PossiblyUninitalized::Initialized(taffy.new_leaf(style).unwrap());
+                self.node =
+                    PossiblyUninitalized::Initialized(taffy.new_leaf(style.clone()).unwrap());
                 changed = true;
             }
         } else {
@@ -117,69 +118,90 @@ impl State for TaffyLayout {
                 child_layout.push(l.node.unwrap());
             }
 
-            fn scale_dimention(d: Dimension) -> Dimension {
+            fn scale_dimension(d: Dimension) -> Dimension {
                 match d {
                     Dimension::Points(p) => Dimension::Points(unit_to_layout_space(p)),
                     Dimension::Percent(p) => Dimension::Percent(p),
                     Dimension::Auto => Dimension::Auto,
-                    Dimension::Undefined => Dimension::Undefined,
                 }
             }
-            let style = Style {
-                position: Rect {
-                    left: scale_dimention(style.position.left),
-                    right: scale_dimention(style.position.right),
-                    top: scale_dimention(style.position.top),
-                    bottom: scale_dimention(style.position.bottom),
+
+            fn scale_length_percentage_auto(d: LengthPercentageAuto) -> LengthPercentageAuto {
+                match d {
+                    LengthPercentageAuto::Points(p) => {
+                        LengthPercentageAuto::Points(unit_to_layout_space(p))
+                    }
+                    LengthPercentageAuto::Percent(p) => LengthPercentageAuto::Percent(p),
+                    LengthPercentageAuto::Auto => LengthPercentageAuto::Auto,
+                }
+            }
+
+            fn scale_length_percentage(d: LengthPercentage) -> LengthPercentage {
+                match d {
+                    LengthPercentage::Points(p) => {
+                        LengthPercentage::Points(unit_to_layout_space(p))
+                    }
+                    LengthPercentage::Percent(p) => LengthPercentage::Percent(p),
+                }
+            }
+
+            let scaled_style = Style {
+                inset: Rect {
+                    left: scale_length_percentage_auto(style.inset.left),
+                    right: scale_length_percentage_auto(style.inset.right),
+                    top: scale_length_percentage_auto(style.inset.top),
+                    bottom: scale_length_percentage_auto(style.inset.bottom),
                 },
                 margin: Rect {
-                    left: scale_dimention(style.margin.left),
-                    right: scale_dimention(style.margin.right),
-                    top: scale_dimention(style.margin.top),
-                    bottom: scale_dimention(style.margin.bottom),
+                    left: scale_length_percentage_auto(style.margin.left),
+                    right: scale_length_percentage_auto(style.margin.right),
+                    top: scale_length_percentage_auto(style.margin.top),
+                    bottom: scale_length_percentage_auto(style.margin.bottom),
                 },
                 padding: Rect {
-                    left: scale_dimention(style.padding.left),
-                    right: scale_dimention(style.padding.right),
-                    top: scale_dimention(style.padding.top),
-                    bottom: scale_dimention(style.padding.bottom),
+                    left: scale_length_percentage(style.padding.left),
+                    right: scale_length_percentage(style.padding.right),
+                    top: scale_length_percentage(style.padding.top),
+                    bottom: scale_length_percentage(style.padding.bottom),
                 },
                 border: Rect {
-                    left: scale_dimention(style.border.left),
-                    right: scale_dimention(style.border.right),
-                    top: scale_dimention(style.border.top),
-                    bottom: scale_dimention(style.border.bottom),
+                    left: scale_length_percentage(style.border.left),
+                    right: scale_length_percentage(style.border.right),
+                    top: scale_length_percentage(style.border.top),
+                    bottom: scale_length_percentage(style.border.bottom),
                 },
                 gap: Size {
-                    width: scale_dimention(style.gap.width),
-                    height: scale_dimention(style.gap.height),
+                    width: scale_length_percentage(style.gap.width),
+                    height: scale_length_percentage(style.gap.height),
                 },
-                flex_basis: scale_dimention(style.flex_basis),
+                flex_basis: scale_dimension(style.flex_basis),
                 size: Size {
-                    width: scale_dimention(style.size.width),
-                    height: scale_dimention(style.size.height),
+                    width: scale_dimension(style.size.width),
+                    height: scale_dimension(style.size.height),
                 },
                 min_size: Size {
-                    width: scale_dimention(style.min_size.width),
-                    height: scale_dimention(style.min_size.height),
+                    width: scale_dimension(style.min_size.width),
+                    height: scale_dimension(style.min_size.height),
                 },
                 max_size: Size {
-                    width: scale_dimention(style.max_size.width),
-                    height: scale_dimention(style.max_size.height),
+                    width: scale_dimension(style.max_size.width),
+                    height: scale_dimension(style.max_size.height),
                 },
-                ..style
+                ..style.clone()
             };
 
             if let PossiblyUninitalized::Initialized(n) = self.node {
                 if self.style != style {
-                    taffy.set_style(n, style).unwrap();
+                    taffy.set_style(n, scaled_style).unwrap();
                 }
                 if taffy.children(n).unwrap() != child_layout {
                     taffy.set_children(n, &child_layout).unwrap();
                 }
             } else {
                 self.node = PossiblyUninitalized::Initialized(
-                    taffy.new_with_children(style, &child_layout).unwrap(),
+                    taffy
+                        .new_with_children(scaled_style, &child_layout)
+                        .unwrap(),
                 );
                 changed = true;
             }

@@ -284,6 +284,17 @@ where
     Ok(&*Box::leak(deserialized))
 }
 
+#[cfg(feature = "serialize")]
+fn deserialize_option_leaky<'a, 'de, D>(deserializer: D) -> Result<Option<&'static str>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::Deserialize;
+
+    let deserialized = Option::<String>::deserialize(deserializer)?;
+    Ok(deserialized.map(|deserialized| &*Box::leak(deserialized.into_boxed_str())))
+}
+
 impl<'a> Template<'a> {
     /// Is this template worth caching at all, since it's completely runtime?
     ///
@@ -319,6 +330,10 @@ pub enum TemplateNode<'a> {
         ///
         /// In HTML, this would be a valid URI that defines a namespace for all elements below it
         /// SVG is an example of this namespace
+        #[cfg_attr(
+            feature = "serialize",
+            serde(deserialize_with = "deserialize_option_leaky")
+        )]
         namespace: Option<&'a str>,
 
         /// A list of possibly dynamic attribues for this element

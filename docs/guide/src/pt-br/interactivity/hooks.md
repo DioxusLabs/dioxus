@@ -14,7 +14,7 @@ Para lógica com estado, você pode usar _hooks_. _Hooks_ são funções Rust qu
 
 Por exemplo, você pode ter visto o exemplo do contador, no qual o estado (um número) é rastreado usando o _hook_ `use_state`:
 
-```rust
+```rust, no_run
 {{#include ../../../examples/hooks_counter.rs:component}}
 ```
 
@@ -26,7 +26,7 @@ Toda vez que o estado do componente muda, ele é renderizado novamente e a funç
 
 Você pode usar vários _hooks_ no mesmo componente se quiser:
 
-```rust
+```rust, no_run
 {{#include ../../../examples/hooks_counter_two_state.rs:component}}
 ```
 
@@ -38,7 +38,7 @@ O exemplo acima pode parecer um pouco mágico, já que as funções Rust normalm
 
 Mas como Dioxus pode diferenciar entre vários _hooks_ no mesmo componente? Como você viu no segundo exemplo, ambas as funções `use_state` foram chamadas com os mesmos parâmetros, então como elas podem retornar coisas diferentes quando os contadores são diferentes?
 
-```rust
+```rust, no_run
 {{#include ../../../examples/hooks_counter_two_state.rs:use_state_calls}}
 ```
 
@@ -54,19 +54,19 @@ Essas regras significam que há certas coisas que você não pode fazer com _hoo
 
 ### Sem Hooks em Condicionais
 
-```rust
+```rust, no_run
 {{#include ../../../examples/hooks_bad.rs:conditional}}
 ```
 
 ### Sem Hooks em Closures
 
-```rust
+```rust, no_run
 {{#include ../../../examples/hooks_bad.rs:closure}}
 ```
 
 ### Sem Hooks em Loops
 
-```rust
+```rust, no_run
 {{#include ../../../examples/hooks_bad.rs:loop}}
 ```
 
@@ -80,7 +80,7 @@ Felizmente, existe outro _hook_ para isso, `use_ref`! É semelhante ao `use_stat
 
 Aqui está um exemplo simples que mantém uma lista de eventos em um `use_ref`. Podemos adquirir acesso de escrita ao estado com `.write()`, e então apenas `.push` um novo valor para o estado:
 
-```rust
+```rust, no_run
 {{#include ../../../examples/hooks_use_ref.rs:component}}
 ```
 

@@ -1,0 +1,37 @@
+{
+    "name": "dioxus",
+    "remoteUser": "vscode",
+    "build": {
+        "dockerfile": "./Dockerfile",
+        "context": "."
+    },
+    "features": {
+        "ghcr.io/devcontainers/features/common-utils:2": {
+            "installZsh": "true",
+            "username": "vscode",
+            "uid": "1000",
+            "gid": "1000",
+            "upgradePackages": "true"
+        }
+    },
+    "containerEnv": {
+        "RUST_LOG": "INFO"
+    },
+    "customizations": {
+        "vscode": {
+            "settings": {
+                "files.watcherExclude": {
+                    "**/target/**": true
+                },
+                "[rust]": {
+                    "editor.formatOnSave": true
+                }
+            },
+            "extensions": [
+                "rust-lang.rust-analyzer",
+                "tamasfe.even-better-toml",
+                "serayuzgur.crates"
+            ]
+        }
+    }
+}

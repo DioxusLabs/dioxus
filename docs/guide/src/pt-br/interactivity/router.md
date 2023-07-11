@@ -26,7 +26,7 @@ dioxus-router = { version = "*" }
 
 Ao contrário de outros roteadores no ecossistema Rust, nosso roteador é construído de forma declarativa. Isso torna possível compor o layout do nosso aplicativo simplesmente organizando os componentes.
 
-```rust
+```rust, no_run
 rsx!{
     Router {
         Route { to: "/home", Home {} }
@@ -41,7 +41,7 @@ Podemos corrigir isso de duas maneiras:
 
 - Uma página 404 de _fallback_
 
-```rust
+```rust, no_run
 rsx!{
     Router {
         Route { to: "/home", Home {} }
@@ -53,7 +53,7 @@ rsx!{
 
 - Redirecionar 404 para _Home_
 
-```rust
+```rust, no_run
 rsx!{
     Router {
         Route { to: "/home", Home {} }
@@ -67,7 +67,7 @@ rsx!{
 
 Para que nosso aplicativo navegue nessas rotas, podemos fornecer elementos clicáveis chamados Links. Eles simplesmente envolvem elementos `<a>` que, quando clicados, navegam no aplicativo para o local determinado.
 
-```rust
+```rust, no_run
 rsx!{
     Link {
         to: "/home",
@@ -80,4 +80,4 @@ rsx!{
 
 Esta página é apenas uma breve visão geral do roteador para mostrar que existe uma solução poderosa já construída para um problema muito comum. Para obter mais informações sobre o roteador, confira seu livro ou confira alguns dos exemplos.
 
-O roteador tem sua própria documentação! [Disponível aqui](https://dioxuslabs.com/router/guide/).
+O roteador tem sua própria documentação! [Disponível aqui](https://dioxuslabs.com/docs/0.3/router/).

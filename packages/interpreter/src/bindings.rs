@@ -6,10 +6,14 @@ use web_sys::Element;
 
 #[wasm_bindgen(module = "/src/interpreter.js")]
 extern "C" {
+    pub type InterpreterConfig;
+    #[wasm_bindgen(constructor)]
+    pub fn new(intercept_link_redirects: bool) -> InterpreterConfig;
+
     pub type Interpreter;
 
     #[wasm_bindgen(constructor)]
-    pub fn new(arg: Element) -> Interpreter;
+    pub fn new(arg: Element, config: InterpreterConfig) -> Interpreter;
 
     #[wasm_bindgen(method)]
     pub fn SaveTemplate(this: &Interpreter, template: JsValue);

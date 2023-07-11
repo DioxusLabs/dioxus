@@ -1,5 +1,4 @@
 use dioxus::prelude::*;
-use dioxus_desktop::tao::keyboard::ModifiersState;
 use dioxus_desktop::use_global_shortcut;
 
 fn main() {
@@ -8,7 +7,8 @@ fn main() {
 
 fn app(cx: Scope) -> Element {
     let toggled = use_state(cx, || false);
-    use_global_shortcut(cx, KeyCode::S, ModifiersState::CONTROL, {
+
+    use_global_shortcut(cx, "ctrl+s", {
         to_owned![toggled];
         move || toggled.modify(|t| !*t)
     });

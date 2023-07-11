@@ -1,21 +1,47 @@
-use std::{path::PathBuf, str::FromStr};
+#![allow(unused)]
 
 use serde::Deserialize;
+use std::{path::PathBuf, str::FromStr};
 
 #[derive(Debug, Deserialize)]
-pub(crate) struct FileDiologRequest {
-    accept: String,
+pub(crate) struct FileDialogRequest {
+    #[serde(default)]
+    accept: Option<String>,
     multiple: bool,
     pub event: String,
     pub target: usize,
     pub bubbles: bool,
 }
 
-pub(crate) fn get_file_event(request: &FileDiologRequest) -> Vec<PathBuf> {
+#[cfg(not(any(
+    target_os = "windows",
+    target_os = "macos",
+    target_os = "linux",
+    target_os = "dragonfly",
+    target_os = "freebsd",
+    target_os = "netbsd",
+    target_os = "openbsd"
+)))]
+pub(crate) fn get_file_event(_request: &FileDialogRequest) -> Vec<PathBuf> {
+    vec![]
+}
+
+#[cfg(any(
+    target_os = "windows",
+    target_os = "macos",
+    target_os = "linux",
+    target_os = "dragonfly",
+    target_os = "freebsd",
+    target_os = "netbsd",
+    target_os = "openbsd"
+))]
+pub(crate) fn get_file_event(request: &FileDialogRequest) -> Vec<PathBuf> {
     let mut dialog = rfd::FileDialog::new();
 
     let filters: Vec<_> = request
         .accept
+        .as_deref()
+        .unwrap_or_default()
         .split(',')
         .filter_map(|s| Filters::from_str(s).ok())
         .collect();

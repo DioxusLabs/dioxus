@@ -18,7 +18,9 @@ pub mod adapters {
 
 pub use adapters::*;
 
+mod element;
 pub mod pool;
+mod query;
 use futures_util::{SinkExt, StreamExt};
 pub use pool::*;
 
@@ -64,7 +66,13 @@ static INTERPRETER_JS: Lazy<String> = Lazy::new(|| {
       }
     }"#;
 
-    interpreter.replace("/*POST_EVENT_SERIALIZATION*/", serialize_file_uploads)
+    let interpreter = interpreter.replace("/*POST_EVENT_SERIALIZATION*/", serialize_file_uploads);
+    interpreter.replace("import { setAttributeInner } from \"./common.js\";", "")
+});
+
+static COMMON_JS: Lazy<String> = Lazy::new(|| {
+    let common = dioxus_interpreter_js::COMMON_JS;
+    common.replace("export", "")
 });
 
 static MAIN_JS: &str = include_str!("./main.js");
@@ -75,11 +83,13 @@ static MAIN_JS: &str = include_str!("./main.js");
 /// processing user events and returning edits to the liveview instance
 pub fn interpreter_glue(url: &str) -> String {
     let js = &*INTERPRETER_JS;
+    let common = &*COMMON_JS;
     format!(
         r#"
 <script>
     var WS_ADDR = "{url}";
     {js}
+    {common}
     {MAIN_JS}
     main();
 </script>

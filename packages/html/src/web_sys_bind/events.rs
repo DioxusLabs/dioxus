@@ -4,14 +4,18 @@ use crate::events::{
 };
 use crate::geometry::{ClientPoint, Coordinates, ElementPoint, PagePoint, ScreenPoint};
 use crate::input_data::{decode_key_location, decode_mouse_button_set, MouseButton};
-use crate::DragData;
+use crate::{
+    DragData, MountedData, MountedError, MountedResult, RenderedElementBacking, ScrollBehavior,
+};
 use keyboard_types::{Code, Key, Modifiers};
 use std::convert::TryInto;
+use std::future::Future;
+use std::pin::Pin;
 use std::str::FromStr;
-use wasm_bindgen::JsCast;
+use wasm_bindgen::{JsCast, JsValue};
 use web_sys::{
-    AnimationEvent, CompositionEvent, Event, KeyboardEvent, MouseEvent, PointerEvent, TouchEvent,
-    TransitionEvent, WheelEvent,
+    AnimationEvent, CompositionEvent, Event, KeyboardEvent, MouseEvent, PointerEvent,
+    ScrollIntoViewOptions, TouchEvent, TransitionEvent, WheelEvent,
 };
 
 macro_rules! uncheck_convert {
@@ -194,3 +198,64 @@ impl From<&TransitionEvent> for TransitionData {
         }
     }
 }
+
+impl From<&web_sys::Element> for MountedData {
+    fn from(e: &web_sys::Element) -> Self {
+        MountedData::new(e.clone())
+    }
+}
+
+impl RenderedElementBacking for web_sys::Element {
+    fn get_client_rect(
+        &self,
+    ) -> Pin<Box<dyn Future<Output = MountedResult<euclid::Rect<f64, f64>>>>> {
+        let rect = self.get_bounding_client_rect();
+        let result = Ok(euclid::Rect::new(
+            euclid::Point2D::new(rect.left(), rect.top()),
+            euclid::Size2D::new(rect.width(), rect.height()),
+        ));
+        Box::pin(async { result })
+    }
+
+    fn get_raw_element(&self) -> MountedResult<&dyn std::any::Any> {
+        Ok(self)
+    }
+
+    fn scroll_to(
+        &self,
+        behavior: ScrollBehavior,
+    ) -> Pin<Box<dyn Future<Output = MountedResult<()>>>> {
+        match behavior {
+            ScrollBehavior::Instant => self.scroll_into_view_with_scroll_into_view_options(
+                ScrollIntoViewOptions::new().behavior(web_sys::ScrollBehavior::Instant),
+            ),
+            ScrollBehavior::Smooth => self.scroll_into_view_with_scroll_into_view_options(
+                ScrollIntoViewOptions::new().behavior(web_sys::ScrollBehavior::Smooth),
+            ),
+        }
+
+        Box::pin(async { Ok(()) })
+    }
+
+    fn set_focus(&self, focus: bool) -> Pin<Box<dyn Future<Output = MountedResult<()>>>> {
+        let result = self
+            .dyn_ref::<web_sys::HtmlElement>()
+            .ok_or_else(|| MountedError::OperationFailed(Box::new(FocusError(self.into()))))
+            .and_then(|e| {
+                (if focus { e.focus() } else { e.blur() })
+                    .map_err(|err| MountedError::OperationFailed(Box::new(FocusError(err))))
+            });
+        Box::pin(async { result })
+    }
+}
+
+#[derive(Debug)]
+struct FocusError(JsValue);
+
+impl std::fmt::Display for FocusError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "failed to focus element {:?}", self.0)
+    }
+}
+
+impl std::error::Error for FocusError {}

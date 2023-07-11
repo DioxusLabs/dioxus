@@ -12,7 +12,7 @@ Por exemplo, suponha que queremos construir um editor de memes. Queremos ter uma
 
 Começamos com um componente `Meme`, responsável por renderizar um meme com uma determinada legenda:
 
-```rust
+```rust, no_run
 {{#include ../../../examples/meme_editor.rs:meme_component}}
 ```
 
@@ -20,13 +20,13 @@ Começamos com um componente `Meme`, responsável por renderizar um meme com uma
 
 Também criamos um editor de legendas, totalmente desacoplado do meme. O editor de legendas não deve armazenar a legenda em si – caso contrário, como iremos fornecê-la ao componente `Meme`? Em vez disso, ele deve aceitar a legenda atual como um suporte, bem como um manipulador de eventos para delegar eventos de entrada para:
 
-```rust
+```rust, no_run
 {{#include ../../../examples/meme_editor.rs:caption_editor}}
 ```
 
 Finalmente, um terceiro componente renderizará os outros dois como filhos. Ele será responsável por manter o estado e passar os _props_ relevantes.
 
-```rust
+```rust, no_run
 {{#include ../../../examples/meme_editor.rs:meme_editor}}
 ```
 
@@ -46,19 +46,19 @@ A Dioxus oferece uma solução melhor do que esta "perfuração com hélice" –
 
 Primeiro, temos que criar um _struct_ para nossa configuração de modo escuro:
 
-```rust
+```rust, no_run
 {{#include ../../../examples/meme_editor_dark_mode.rs:DarkMode_struct}}
 ```
 
 Agora, em um componente de nível superior (como `App`), podemos fornecer o contexto `DarkMode` para todos os componentes filhos:
 
-```rust
+```rust, no_run
 {{#include ../../../examples/meme_editor_dark_mode.rs:context_provider}}
 ```
 
 Como resultado, qualquer componente filho de `App` (direto ou não), pode acessar o contexto `DarkMode`.
 
-```rust
+```rust, no_run
 {{#include ../../../examples/meme_editor_dark_mode.rs:use_context}}
 ```
 
@@ -66,6 +66,6 @@ Como resultado, qualquer componente filho de `App` (direto ou não), pode acessa
 
 Por exemplo, aqui está como implementaríamos a alternância do modo escuro, que lê o contexto (para determinar a cor que deve renderizar) e grava nele (para alternar o modo escuro):
 
-```rust
+```rust, no_run
 {{#include ../../../examples/meme_editor_dark_mode.rs:toggle}}
 ```
