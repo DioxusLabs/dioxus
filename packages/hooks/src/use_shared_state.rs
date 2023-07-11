@@ -2,6 +2,7 @@ use dioxus_core::{ScopeId, ScopeState};
 use std::{
     cell::{Ref, RefCell, RefMut},
     collections::HashSet,
+    panic::Location,
     rc::Rc,
     sync::Arc,
 };
@@ -123,15 +124,17 @@ pub struct UseSharedState<T> {
 
 #[derive(thiserror::Error, Debug)]
 pub enum UseSharedStateError {
-    #[error("{type_name} is already borrowed, so it cannot be borrowed mutably.")]
+    #[error("[{caller}] {type_name} is already borrowed, so it cannot be borrowed mutably.")]
     AlreadyBorrowed {
         source: core::cell::BorrowMutError,
         type_name: &'static str,
+        caller: &'static Location<'static>,
     },
-    #[error("{type_name} is already borrowed mutably, so it cannot be borrowed anymore.")]
+    #[error("[caller] {type_name} is already borrowed mutably, so it cannot be borrowed anymore.")]
     AlreadyBorrowedMutably {
         source: core::cell::BorrowError,
         type_name: &'static str,
+        caller: &'static Location<'static>,
     },
 }
 
@@ -144,17 +147,20 @@ impl<T> UseSharedState<T> {
     }
 
     /// Try reading the shared state
+    #[track_caller]
     pub fn try_read(&self) -> UseSharedStateResult<Ref<'_, T>> {
         self.inner
             .try_borrow()
             .map_err(|source| UseSharedStateError::AlreadyBorrowedMutably {
                 source,
                 type_name: std::any::type_name::<Self>(),
+                caller: Location::caller(),
             })
             .map(|value| Ref::map(value, |inner| &inner.value))
     }
 
     /// Read the shared value
+    #[track_caller]
     pub fn read(&self) -> Ref<'_, T> {
         match self.try_read() {
             Ok(value) => value,
@@ -166,12 +172,14 @@ impl<T> UseSharedState<T> {
     }
 
     /// Try writing the shared state
+    #[track_caller]
     pub fn try_write(&self) -> UseSharedStateResult<RefMut<'_, T>> {
         self.inner
             .try_borrow_mut()
             .map_err(|source| UseSharedStateError::AlreadyBorrowed {
                 source,
                 type_name: std::any::type_name::<Self>(),
+                caller: Location::caller(),
             })
             .map(|mut value| {
                 value.notify_consumers();
@@ -183,6 +191,7 @@ impl<T> UseSharedState<T> {
     ///
     ///
     // TODO: We prevent unncessary notifications only in the hook, but we should figure out some more global lock
+    #[track_caller]
     pub fn write(&self) -> RefMut<'_, T> {
         match self.try_write() {
             Ok(value) => value,
@@ -194,17 +203,20 @@ impl<T> UseSharedState<T> {
     }
 
     /// Tries writing the value without forcing a re-render
+    #[track_caller]
     pub fn try_write_silent(&self) -> UseSharedStateResult<RefMut<'_, T>> {
         self.inner
             .try_borrow_mut()
             .map_err(|source| UseSharedStateError::AlreadyBorrowed {
                 source,
                 type_name: std::any::type_name::<Self>(),
+                caller: Location::caller(),
             })
             .map(|value| RefMut::map(value, |inner| &mut inner.value))
     }
 
     /// Writes the value without forcing a re-render
+    #[track_caller]
     pub fn write_silent(&self) -> RefMut<'_, T> {
         match self.try_write_silent() {
             Ok(value) => value,
