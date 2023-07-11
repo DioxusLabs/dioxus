@@ -1155,6 +1155,8 @@ builder_constructors! {
         // value: String,
         value: String volatile,
         initial_value: String DEFAULT,
+
+        _liveview_truncate_at: usize "1048576",
     };
 
     /// Build a

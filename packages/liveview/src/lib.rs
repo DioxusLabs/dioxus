@@ -45,20 +45,25 @@ static INTERPRETER_JS: Lazy<String> = Lazy::new(|| {
       (event.type === "change" || event.type === "input")
     ) {
       const type = target.getAttribute("type");
+      const _liveview_truncate_at = target.getAttribute("_liveview_truncate_at");
+        
       if (type === "file") {
         async function read_files() {
           const files = target.files;
           const file_contents = {};
+          const file_sizes = {};
 
           for (let i = 0; i < files.length; i++) {
             const file = files[i];
 
             file_contents[file.name] = Array.from(
-              new Uint8Array(await file.arrayBuffer())
+              new Uint8Array(await file.slice(0, _liveview_truncate_at).arrayBuffer())
             );
+            file_sizes[file.name] = file.size;
           }
           let file_engine = {
             files: file_contents,
+            sizes: file_sizes
           };
           contents.files = file_engine;
 

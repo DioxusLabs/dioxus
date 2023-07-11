@@ -27,6 +27,9 @@ pub struct FormData {
 #[derive(serde::Serialize, serde::Deserialize)]
 struct SerializedFileEngine {
     files: HashMap<String, Vec<u8>>,
+
+    #[serde(default)]
+    sizes: Option<HashMap<String, usize>>,
 }
 
 #[cfg(feature = "serialize")]
@@ -35,6 +38,16 @@ impl FileEngine for SerializedFileEngine {
     fn files(&self) -> Vec<String> {
         self.files.keys().cloned().collect()
     }
+
+    /*    fn sizes(&self) -> HashMap<String, usize> {
+            match self.sizes {
+                Some(ref sizes) => sizes.clone(),
+                None => {
+                    self.files.iter().map(|(k, v)| (k.clone(), v.len())).collect()
+                }
+            }
+        }
+    */
 
     async fn read_file(&self, file: &str) -> Option<Vec<u8>> {
         self.files.get(file).cloned()
