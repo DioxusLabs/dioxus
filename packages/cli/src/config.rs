@@ -107,6 +107,7 @@ pub struct WebConfig {
     pub proxy: Option<Vec<WebProxyConfig>>,
     pub watcher: WebWatcherConfig,
     pub resource: WebResourceConfig,
+    #[serde(default)]
     pub https: WebHttpsConfig,
 }
 
@@ -141,7 +142,7 @@ pub struct WebDevResourceConfig {
     pub script: Option<Vec<PathBuf>>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct WebHttpsConfig {
     pub enabled: Option<bool>,
     pub mkcert: Option<bool>,
