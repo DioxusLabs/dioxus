@@ -178,7 +178,7 @@ impl<T> UseSharedState<T> {
     }
 
     /// Try reading the shared state
-    #[track_caller]
+    #[cfg_attr(debug_assertions, track_caller)]
     pub fn try_read(&self) -> UseSharedStateResult<Ref<'_, T>> {
         self.inner
             .try_borrow()
@@ -191,7 +191,7 @@ impl<T> UseSharedState<T> {
     }
 
     /// Read the shared value
-    #[track_caller]
+    #[cfg_attr(debug_assertions, track_caller)]
     pub fn read(&self) -> Ref<'_, T> {
         match self.try_read() {
             Ok(value) => value,
@@ -203,7 +203,7 @@ impl<T> UseSharedState<T> {
     }
 
     /// Try writing the shared state
-    #[track_caller]
+    #[cfg_attr(debug_assertions, track_caller)]
     pub fn try_write(&self) -> UseSharedStateResult<RefMut<'_, T>> {
         self.inner
             .try_borrow_mut()
@@ -222,7 +222,7 @@ impl<T> UseSharedState<T> {
     ///
     ///
     // TODO: We prevent unncessary notifications only in the hook, but we should figure out some more global lock
-    #[track_caller]
+    #[cfg_attr(debug_assertions, track_caller)]
     pub fn write(&self) -> RefMut<'_, T> {
         match self.try_write() {
             Ok(value) => value,
@@ -234,7 +234,7 @@ impl<T> UseSharedState<T> {
     }
 
     /// Tries writing the value without forcing a re-render
-    #[track_caller]
+    #[cfg_attr(debug_assertions, track_caller)]
     pub fn try_write_silent(&self) -> UseSharedStateResult<RefMut<'_, T>> {
         self.inner
             .try_borrow_mut()
@@ -247,7 +247,7 @@ impl<T> UseSharedState<T> {
     }
 
     /// Writes the value without forcing a re-render
-    #[track_caller]
+    #[cfg_attr(debug_assertions, track_caller)]
     pub fn write_silent(&self) -> RefMut<'_, T> {
         match self.try_write_silent() {
             Ok(value) => value,
