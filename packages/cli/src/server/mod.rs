@@ -12,7 +12,6 @@ use axum::{
 };
 use axum_server::tls_rustls::RustlsConfig;
 use cargo_metadata::diagnostic::Diagnostic;
-use colored::Colorize;
 use dioxus_core::Template;
 use dioxus_html::HtmlCtx;
 use dioxus_rsx::hot_reload::*;
@@ -20,10 +19,9 @@ use notify::{RecommendedWatcher, Watcher};
 use std::{
     net::UdpSocket,
     path::PathBuf,
-    process::Command,
     sync::{Arc, Mutex},
 };
-use tokio::sync::broadcast;
+use tokio::sync::broadcast::{self, Sender};
 use tower::ServiceBuilder;
 use tower_http::services::fs::{ServeDir, ServeFileSystemResponseBody};
 use tower_http::{
@@ -35,6 +33,12 @@ use tower_http::{
 use plugin::PluginManager;
 
 mod proxy;
+
+mod hot_reload;
+use hot_reload::*;
+
+mod output;
+use output::*;
 
 pub struct BuildManager {
     config: CrateConfig,
@@ -77,11 +81,128 @@ pub async fn startup(port: u16, config: CrateConfig, start_browser: bool) -> Res
 
     let ip = get_ip().unwrap_or(String::from("0.0.0.0"));
 
-    if config.hot_reload {
-        startup_hot_reload(ip, port, config, start_browser).await?
-    } else {
-        startup_default(ip, port, config, start_browser).await?
+    match config.hot_reload {
+        true => serve_hot_reload(ip, port, config, start_browser).await?,
+        false => serve_default(ip, port, config, start_browser).await?,
     }
+
+    Ok(())
+}
+
+/// Start the server without hot reload
+pub async fn serve_default(
+    ip: String,
+    port: u16,
+    config: CrateConfig,
+    start_browser: bool,
+) -> Result<()> {
+    let first_build_result = crate::builder::build(&config, false)?;
+
+    log::info!("🚀 Starting development server...");
+
+    // WS Reload Watching
+    let (reload_tx, _) = broadcast::channel(100);
+    setup_file_watcher(&config, port, ip.clone(), reload_tx.clone()).await?;
+    let ws_reload_state = Arc::new(WsReloadState {
+        update: reload_tx.clone(),
+    });
+
+    // start serve dev-server at 0.0.0.0
+    print_console_info(
+        &ip,
+        port,
+        &config,
+        PrettierOptions {
+            changed: vec![],
+            warnings: first_build_result.warnings,
+            elapsed_time: first_build_result.elapsed_time,
+        },
+    );
+
+    // HTTPS
+    let rustls_config = get_rustls(&config).await;
+
+    // Router
+    let router = setup_router(config, ws_reload_state, None).await?;
+
+    // Start server
+    start_server(port, router, start_browser, rustls_config.0).await?;
+
+    Ok(())
+}
+
+/// Start dx serve with hot reload
+pub async fn serve_hot_reload(
+    ip: String,
+    port: u16,
+    config: CrateConfig,
+    start_browser: bool,
+) -> Result<()> {
+    let first_build_result = crate::builder::build(&config, false)?;
+
+    log::info!("🚀 Starting development server...");
+
+    // Setup hot reload
+    let (reload_tx, _) = broadcast::channel(100);
+    let FileMapBuildResult { map, errors } =
+        FileMap::<HtmlCtx>::create(config.crate_dir.clone()).unwrap();
+
+    for err in errors {
+        log::error!("{}", err);
+    }
+
+    let file_map = Arc::new(Mutex::new(map));
+    let build_manager = Arc::new(BuildManager {
+        config: config.clone(),
+        reload_tx: reload_tx.clone(),
+    });
+
+    let hot_reload_tx = broadcast::channel(100).0;
+
+    // States
+    let hot_reload_state = Arc::new(HotReloadState {
+        messages: hot_reload_tx.clone(),
+        build_manager: build_manager.clone(),
+        file_map: file_map.clone(),
+        watcher_config: config.clone(),
+    });
+
+    let ws_reload_state = Arc::new(WsReloadState {
+        update: reload_tx.clone(),
+    });
+
+    // Setup file watcher
+    setup_file_watcher_hot_reload(
+        &config,
+        port,
+        ip.clone(),
+        hot_reload_tx,
+        file_map,
+        build_manager,
+    )
+    .await?;
+
+    // Print serve info
+    print_console_info(
+        &ip,
+        port,
+        &config,
+        PrettierOptions {
+            changed: vec![],
+            warnings: first_build_result.warnings,
+            elapsed_time: first_build_result.elapsed_time,
+        },
+    );
+
+    // HTTPS
+    let rustls_config = get_rustls(&config).await;
+
+    // Router
+    let router = setup_router(config, ws_reload_state, Some(hot_reload_state)).await?;
+
+    // Start server
+    start_server(port, router, start_browser, rustls_config.0).await?;
+
     Ok(())
 }
 
@@ -102,111 +223,169 @@ async fn get_rustls(config: &CrateConfig) -> (Option<RustlsConfig>, bool) {
             // get paths to cert & key
             if let (Some(key), Some(cert)) = (config.key_path.clone(), config.cert_path.clone()) {
                 let rustls = RustlsConfig::from_pem_file(cert, key).await.unwrap();
-                return (Some(rustls), false);
+                (Some(rustls), false)
             } else {
                 // missing cert or key
-                return (None, false);
+                (None, false)
             }
         }
         // other
-        _ => return (None, false),
+        _ => (None, false),
     }
 }
 
-pub struct HotReloadState {
-    pub messages: broadcast::Sender<Template<'static>>,
-    pub build_manager: Arc<BuildManager>,
-    pub file_map: Arc<Mutex<FileMap<HtmlCtx>>>,
-    pub watcher_config: CrateConfig,
-}
-
-pub async fn hot_reload_handler(
-    ws: WebSocketUpgrade,
-    _: Option<TypedHeader<headers::UserAgent>>,
-    Extension(state): Extension<Arc<HotReloadState>>,
-) -> impl IntoResponse {
-    ws.on_upgrade(|mut socket| async move {
-        log::info!("🔥 Hot Reload WebSocket connected");
-        {
-            // update any rsx calls that changed before the websocket connected.
-            {
-                log::info!("🔮 Finding updates since last compile...");
-                let templates: Vec<_> = {
-                    state
-                        .file_map
-                        .lock()
-                        .unwrap()
-                        .map
-                        .values()
-                        .filter_map(|(_, template_slot)| *template_slot)
-                        .collect()
-                };
-                for template in templates {
-                    if socket
-                        .send(Message::Text(serde_json::to_string(&template).unwrap()))
-                        .await
-                        .is_err()
-                    {
-                        return;
-                    }
-                }
-            }
-            log::info!("finished");
-        }
-
-        let mut rx = state.messages.subscribe();
-        loop {
-            if let Ok(rsx) = rx.recv().await {
-                if socket
-                    .send(Message::Text(serde_json::to_string(&rsx).unwrap()))
-                    .await
-                    .is_err()
-                {
-                    break;
-                };
-            }
-        }
-    })
-}
-
-#[allow(unused_assignments)]
-pub async fn startup_hot_reload(
-    ip: String,
-    port: u16,
+/// Sets up and returns a router
+async fn setup_router(
     config: CrateConfig,
+    ws_reload: Arc<WsReloadState>,
+    hot_reload: Option<Arc<HotReloadState>>,
+) -> Result<Router> {
+    // Setup cors
+    let cors = CorsLayer::new()
+        // allow `GET` and `POST` when accessing the resource
+        .allow_methods([Method::GET, Method::POST])
+        // allow requests from any origin
+        .allow_origin(Any)
+        .allow_headers(Any);
+
+    let (coep, coop) = if config.cross_origin_policy {
+        (
+            HeaderValue::from_static("require-corp"),
+            HeaderValue::from_static("same-origin"),
+        )
+    } else {
+        (
+            HeaderValue::from_static("unsafe-none"),
+            HeaderValue::from_static("unsafe-none"),
+        )
+    };
+
+    // Create file service
+    let file_service_config = config.clone();
+    let file_service = ServiceBuilder::new()
+        .override_response_header(
+            HeaderName::from_static("cross-origin-embedder-policy"),
+            coep,
+        )
+        .override_response_header(HeaderName::from_static("cross-origin-opener-policy"), coop)
+        .and_then(
+            move |response: Response<ServeFileSystemResponseBody>| async move {
+                let response = if file_service_config
+                    .dioxus_config
+                    .web
+                    .watcher
+                    .index_on_404
+                    .unwrap_or(false)
+                    && response.status() == StatusCode::NOT_FOUND
+                {
+                    let body = Full::from(
+                        // TODO: Cache/memoize this.
+                        std::fs::read_to_string(
+                            file_service_config
+                                .crate_dir
+                                .join(file_service_config.out_dir)
+                                .join("index.html"),
+                        )
+                        .ok()
+                        .unwrap(),
+                    )
+                    .map_err(|err| match err {})
+                    .boxed();
+                    Response::builder()
+                        .status(StatusCode::OK)
+                        .body(body)
+                        .unwrap()
+                } else {
+                    response.map(|body| body.boxed())
+                };
+                Ok(response)
+            },
+        )
+        .service(ServeDir::new(config.crate_dir.join(&config.out_dir)));
+
+    // Setup websocket
+    let mut router = Router::new().route("/_dioxus/ws", get(ws_handler));
+
+    // Setup proxy
+    for proxy_config in config.dioxus_config.web.proxy.unwrap_or_default() {
+        router = proxy::add_proxy(router, &proxy_config)?;
+    }
+
+    // Route file service
+    router = router.fallback(get_service(file_service).handle_error(
+        |error: std::io::Error| async move {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Unhandled internal error: {}", error),
+            )
+        },
+    ));
+
+    // Setup routes
+    router = router
+        .route("/_dioxus/hot_reload", get(hot_reload_handler))
+        .layer(cors)
+        .layer(Extension(ws_reload));
+
+    if let Some(hot_reload) = hot_reload {
+        router = router.layer(Extension(hot_reload))
+    }
+
+    Ok(router)
+}
+
+/// Starts dx serve with no hot reload
+async fn start_server(
+    port: u16,
+    router: Router,
     start_browser: bool,
+    rustls: Option<RustlsConfig>,
 ) -> Result<()> {
-    let first_build_result = crate::builder::build(&config, false)?;
-
-    log::info!("🚀 Starting development server...");
-
+    // If plugins, call on_serve_start event
     #[cfg(feature = "plugin")]
     PluginManager::on_serve_start(&config)?;
 
-    let dist_path = config.out_dir.clone();
-    let (reload_tx, _) = broadcast::channel(100);
-    let FileMapBuildResult { map, errors } =
-        FileMap::<HtmlCtx>::create(config.crate_dir.clone()).unwrap();
-    for err in errors {
-        log::error!("{}", err);
-    }
-    let file_map = Arc::new(Mutex::new(map));
-    let build_manager = Arc::new(BuildManager {
-        config: config.clone(),
-        reload_tx: reload_tx.clone(),
-    });
-    let hot_reload_tx = broadcast::channel(100).0;
-    let hot_reload_state = Arc::new(HotReloadState {
-        messages: hot_reload_tx.clone(),
-        build_manager: build_manager.clone(),
-        file_map: file_map.clone(),
-        watcher_config: config.clone(),
-    });
+    // Parse address
+    let addr = format!("0.0.0.0:{}", port).parse().unwrap();
 
-    let crate_dir = config.crate_dir.clone();
-    let ws_reload_state = Arc::new(WsReloadState {
-        update: reload_tx.clone(),
-    });
+    // Open the browser
+    if start_browser {
+        match rustls {
+            Some(_) => _ = open::that(format!("https://{}", addr)),
+            None => _ = open::that(format!("http://{}", addr)),
+        }
+    }
+
+    // Start the server with or without rustls
+    match rustls {
+        Some(rustls) => {
+            axum_server::bind_rustls(addr, rustls)
+                .serve(router.into_make_service())
+                .await?
+        }
+        None => {
+            axum::Server::bind(&addr)
+                .serve(router.into_make_service())
+                .await?
+        }
+    }
+
+    Ok(())
+}
+
+/// Sets up a file watcher
+async fn setup_file_watcher(
+    config: &CrateConfig,
+    port: u16,
+    watcher_ip: String,
+    reload_tx: Sender<()>,
+) -> Result<()> {
+    let build_manager = BuildManager {
+        config: config.clone(),
+        reload_tx,
+    };
+
+    let mut last_update_time = chrono::Local::now().timestamp();
 
     // file watcher: check file change
     let allow_watch_path = config
@@ -218,7 +397,70 @@ pub async fn startup_hot_reload(
         .unwrap_or_else(|| vec![PathBuf::from("src")]);
 
     let watcher_config = config.clone();
-    let watcher_ip = ip.clone();
+    let mut watcher = notify::recommended_watcher(move |info: notify::Result<notify::Event>| {
+        let config = watcher_config.clone();
+        if let Ok(e) = info {
+            if chrono::Local::now().timestamp() > last_update_time {
+                match build_manager.rebuild() {
+                    Ok(res) => {
+                        last_update_time = chrono::Local::now().timestamp();
+
+                        #[allow(clippy::redundant_clone)]
+                        print_console_info(
+                            &watcher_ip,
+                            port,
+                            &config,
+                            PrettierOptions {
+                                changed: e.paths.clone(),
+                                warnings: res.warnings,
+                                elapsed_time: res.elapsed_time,
+                            },
+                        );
+
+                        #[cfg(feature = "plugin")]
+                        let _ = PluginManager::on_serve_rebuild(
+                            chrono::Local::now().timestamp(),
+                            e.paths,
+                        );
+                    }
+                    Err(e) => log::error!("{}", e),
+                }
+            }
+        }
+    })
+    .unwrap();
+
+    for sub_path in allow_watch_path {
+        watcher
+            .watch(
+                &config.crate_dir.join(sub_path),
+                notify::RecursiveMode::Recursive,
+            )
+            .unwrap();
+    }
+    Ok(())
+}
+
+// Todo: reduce duplication and merge with setup_file_watcher()
+/// Sets up a file watcher with hot reload
+async fn setup_file_watcher_hot_reload(
+    config: &CrateConfig,
+    port: u16,
+    watcher_ip: String,
+    hot_reload_tx: Sender<Template<'static>>,
+    file_map: Arc<Mutex<FileMap<HtmlCtx>>>,
+    build_manager: Arc<BuildManager>,
+) -> Result<()> {
+    // file watcher: check file change
+    let allow_watch_path = config
+        .dioxus_config
+        .web
+        .watcher
+        .watch_path
+        .clone()
+        .unwrap_or_else(|| vec![PathBuf::from("src")]);
+
+    let watcher_config = config.clone();
     let mut last_update_time = chrono::Local::now().timestamp();
 
     let mut watcher = RecommendedWatcher::new(
@@ -254,7 +496,7 @@ pub async fn startup_hot_reload(
                         // find changes to the rsx in the file
                         let mut map = file_map.lock().unwrap();
 
-                        match map.update_rsx(&path, &crate_dir) {
+                        match map.update_rsx(&path, &config.crate_dir) {
                             Ok(UpdateResult::UpdatedRsx(msgs)) => {
                                 messages.extend(msgs);
                             }
@@ -303,482 +545,10 @@ pub async fn startup_hot_reload(
         }
     }
 
-    // HTTPS
-    let rustls_config = get_rustls(&config).await;
-
-    // start serve dev-server at 0.0.0.0:8080
-    print_console_info(
-        &ip,
-        port,
-        &config,
-        PrettierOptions {
-            changed: vec![],
-            warnings: first_build_result.warnings,
-            elapsed_time: first_build_result.elapsed_time,
-        },
-    );
-
-    let cors = CorsLayer::new()
-        // allow `GET` and `POST` when accessing the resource
-        .allow_methods([Method::GET, Method::POST])
-        // allow requests from any origin
-        .allow_origin(Any)
-        .allow_headers(Any);
-
-    let (coep, coop) = if config.cross_origin_policy {
-        (
-            HeaderValue::from_static("require-corp"),
-            HeaderValue::from_static("same-origin"),
-        )
-    } else {
-        (
-            HeaderValue::from_static("unsafe-none"),
-            HeaderValue::from_static("unsafe-none"),
-        )
-    };
-
-    let file_service_config = config.clone();
-    let file_service = ServiceBuilder::new()
-        .override_response_header(
-            HeaderName::from_static("cross-origin-embedder-policy"),
-            coep,
-        )
-        .override_response_header(HeaderName::from_static("cross-origin-opener-policy"), coop)
-        .and_then(
-            move |response: Response<ServeFileSystemResponseBody>| async move {
-                let response = if file_service_config
-                    .dioxus_config
-                    .web
-                    .watcher
-                    .index_on_404
-                    .unwrap_or(false)
-                    && response.status() == StatusCode::NOT_FOUND
-                {
-                    let body = Full::from(
-                        // TODO: Cache/memoize this.
-                        std::fs::read_to_string(
-                            file_service_config
-                                .crate_dir
-                                .join(file_service_config.out_dir)
-                                .join("index.html"),
-                        )
-                        .ok()
-                        .unwrap(),
-                    )
-                    .map_err(|err| match err {})
-                    .boxed();
-                    Response::builder()
-                        .status(StatusCode::OK)
-                        .body(body)
-                        .unwrap()
-                } else {
-                    response.map(|body| body.boxed())
-                };
-                Ok(response)
-            },
-        )
-        .service(ServeDir::new(config.crate_dir.join(&dist_path)));
-
-    let mut router = Router::new().route("/_dioxus/ws", get(ws_handler));
-    for proxy_config in config.dioxus_config.web.proxy.unwrap_or_default() {
-        router = proxy::add_proxy(router, &proxy_config)?;
-    }
-    router = router.fallback(get_service(file_service).handle_error(
-        |error: std::io::Error| async move {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Unhandled internal error: {}", error),
-            )
-        },
-    ));
-
-    let router = router
-        .route("/_dioxus/hot_reload", get(hot_reload_handler))
-        .layer(cors)
-        .layer(Extension(ws_reload_state))
-        .layer(Extension(hot_reload_state));
-
-    let addr = format!("0.0.0.0:{}", port).parse().unwrap();
-
-    if start_browser {
-        if config.dioxus_config.web.https.enabled == Some(true) {
-            let _ = open::that(format!("https://{}", addr));
-        } else {
-            let _ = open::that(format!("http://{}", addr));
-        }
-    }
-
-    if let (Some(rustls), _) = rustls_config {
-        axum_server::bind_rustls(addr, rustls).serve(router.into_make_service()).await?;
-    } else {
-        axum::Server::bind(&addr).serve(router.into_make_service()).await?;
-    }
-
     Ok(())
 }
 
-pub async fn startup_default(
-    ip: String,
-    port: u16,
-    config: CrateConfig,
-    start_browser: bool,
-) -> Result<()> {
-    let first_build_result = crate::builder::build(&config, false)?;
-
-    log::info!("🚀 Starting development server...");
-
-    let dist_path = config.out_dir.clone();
-
-    let (reload_tx, _) = broadcast::channel(100);
-
-    let build_manager = BuildManager {
-        config: config.clone(),
-        reload_tx: reload_tx.clone(),
-    };
-
-    let ws_reload_state = Arc::new(WsReloadState {
-        update: reload_tx.clone(),
-    });
-
-    let mut last_update_time = chrono::Local::now().timestamp();
-
-    // file watcher: check file change
-    let allow_watch_path = config
-        .dioxus_config
-        .web
-        .watcher
-        .watch_path
-        .clone()
-        .unwrap_or_else(|| vec![PathBuf::from("src")]);
-
-    let watcher_config = config.clone();
-    let watcher_ip = ip.clone();
-    let mut watcher = notify::recommended_watcher(move |info: notify::Result<notify::Event>| {
-        let config = watcher_config.clone();
-        if let Ok(e) = info {
-            if chrono::Local::now().timestamp() > last_update_time {
-                match build_manager.rebuild() {
-                    Ok(res) => {
-                        last_update_time = chrono::Local::now().timestamp();
-
-                        #[allow(clippy::redundant_clone)]
-                        print_console_info(
-                            &watcher_ip,
-                            port,
-                            &config,
-                            PrettierOptions {
-                                changed: e.paths.clone(),
-                                warnings: res.warnings,
-                                elapsed_time: res.elapsed_time,
-                            },
-                        );
-
-                        #[cfg(feature = "plugin")]
-                        let _ = PluginManager::on_serve_rebuild(
-                            chrono::Local::now().timestamp(),
-                            e.paths,
-                        );
-                    }
-                    Err(e) => log::error!("{}", e),
-                }
-            }
-        }
-    })
-    .unwrap();
-
-    for sub_path in allow_watch_path {
-        watcher
-            .watch(
-                &config.crate_dir.join(sub_path),
-                notify::RecursiveMode::Recursive,
-            )
-            .unwrap();
-    }
-
-    // HTTPS
-    let rustls_config = get_rustls(&config).await;
-
-    // start serve dev-server at 0.0.0.0
-    print_console_info(
-        &ip,
-        port,
-        &config,
-        PrettierOptions {
-            changed: vec![],
-            warnings: first_build_result.warnings,
-            elapsed_time: first_build_result.elapsed_time,
-        },
-    );
-
-    #[cfg(feature = "plugin")]
-    PluginManager::on_serve_start(&config)?;
-
-    let cors = CorsLayer::new()
-        // allow `GET` and `POST` when accessing the resource
-        .allow_methods([Method::GET, Method::POST])
-        // allow requests from any origin
-        .allow_origin(Any)
-        .allow_headers(Any);
-
-    let (coep, coop) = if config.cross_origin_policy {
-        (
-            HeaderValue::from_static("require-corp"),
-            HeaderValue::from_static("same-origin"),
-        )
-    } else {
-        (
-            HeaderValue::from_static("unsafe-none"),
-            HeaderValue::from_static("unsafe-none"),
-        )
-    };
-
-    let file_service_config = config.clone();
-    let file_service = ServiceBuilder::new()
-        .override_response_header(
-            HeaderName::from_static("cross-origin-embedder-policy"),
-            coep,
-        )
-        .override_response_header(HeaderName::from_static("cross-origin-opener-policy"), coop)
-        .and_then(
-            move |response: Response<ServeFileSystemResponseBody>| async move {
-                let response = if file_service_config
-                    .dioxus_config
-                    .web
-                    .watcher
-                    .index_on_404
-                    .unwrap_or(false)
-                    && response.status() == StatusCode::NOT_FOUND
-                {
-                    let body = Full::from(
-                        // TODO: Cache/memoize this.
-                        std::fs::read_to_string(
-                            file_service_config
-                                .crate_dir
-                                .join(file_service_config.out_dir)
-                                .join("index.html"),
-                        )
-                        .ok()
-                        .unwrap(),
-                    )
-                    .map_err(|err| match err {})
-                    .boxed();
-                    Response::builder()
-                        .status(StatusCode::OK)
-                        .body(body)
-                        .unwrap()
-                } else {
-                    response.map(|body| body.boxed())
-                };
-                Ok(response)
-            },
-        )
-        .service(ServeDir::new(config.crate_dir.join(&dist_path)));
-
-    let mut router = Router::new().route("/_dioxus/ws", get(ws_handler));
-    for proxy_config in config.dioxus_config.web.proxy.unwrap_or_default() {
-        router = proxy::add_proxy(router, &proxy_config)?;
-    }
-    router = router
-        .fallback(
-            get_service(file_service).handle_error(|error: std::io::Error| async move {
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    format!("Unhandled internal error: {}", error),
-                )
-            }),
-        )
-        .layer(cors)
-        .layer(Extension(ws_reload_state));
-
-    let addr = format!("0.0.0.0:{}", port).parse().unwrap();
-
-    if start_browser {
-        if config.dioxus_config.web.https.enabled == Some(true) {
-            let _ = open::that(format!("https://{}", addr));
-        } else {
-            let _ = open::that(format!("http://{}", addr));
-        }
-    }
-
-    if let (Some(rustls), _) = rustls_config {
-        axum_server::bind_rustls(addr, rustls).serve(router.into_make_service()).await?;
-    } else {
-        axum::Server::bind(&addr).serve(router.into_make_service()).await?;
-    }
-
-    Ok(())
-}
-
-#[derive(Debug, Default)]
-pub struct PrettierOptions {
-    changed: Vec<PathBuf>,
-    warnings: Vec<Diagnostic>,
-    elapsed_time: u128,
-}
-
-fn print_console_info(ip: &String, port: u16, config: &CrateConfig, options: PrettierOptions) {
-    if let Ok(native_clearseq) = Command::new(if cfg!(target_os = "windows") {
-        "cls"
-    } else {
-        "clear"
-    })
-    .output()
-    {
-        print!("{}", String::from_utf8_lossy(&native_clearseq.stdout));
-    } else {
-        // Try ANSI-Escape characters
-        print!("\x1b[2J\x1b[H");
-    }
-
-    // for path in &changed {
-    //     let path = path
-    //         .strip_prefix(crate::crate_root().unwrap())
-    //         .unwrap()
-    //         .to_path_buf();
-    //     log::info!("Updated {}", format!("{}", path.to_str().unwrap()).green());
-    // }
-
-    let mut profile = if config.release { "Release" } else { "Debug" }.to_string();
-    if config.custom_profile.is_some() {
-        profile = config.custom_profile.as_ref().unwrap().to_string();
-    }
-    let hot_reload = if config.hot_reload { "RSX" } else { "Normal" };
-    let crate_root = crate::cargo::crate_root().unwrap();
-    let custom_html_file = if crate_root.join("index.html").is_file() {
-        "Custom [index.html]"
-    } else {
-        "Default"
-    };
-    let url_rewrite = if config
-        .dioxus_config
-        .web
-        .watcher
-        .index_on_404
-        .unwrap_or(false)
-    {
-        "True"
-    } else {
-        "False"
-    };
-
-    let proxies = config.dioxus_config.web.proxy.as_ref();
-
-    if options.changed.is_empty() {
-        println!(
-            "{} @ v{} [{}] \n",
-            "Dioxus".bold().green(),
-            crate::DIOXUS_CLI_VERSION,
-            chrono::Local::now().format("%H:%M:%S").to_string().dimmed()
-        );
-    } else {
-        println!(
-            "Project Reloaded: {}\n",
-            format!(
-                "Changed {} files. [{}]",
-                options.changed.len(),
-                chrono::Local::now().format("%H:%M:%S").to_string().dimmed()
-            )
-            .purple()
-            .bold()
-        );
-    }
-
-    if config.dioxus_config.web.https.enabled == Some(true) {
-        println!(
-            "\t> Local : {}",
-            format!("https://localhost:{}/", port).blue()
-        );
-        println!(
-            "\t> Network : {}",
-            format!("https://{}:{}/", ip, port).blue()
-        );
-        println!("\t> HTTPS : {}", format!("Enabled").green());
-    } else {
-        println!(
-            "\t> Local : {}",
-            format!("http://localhost:{}/", port).blue()
-        );
-        println!(
-            "\t> Network : {}",
-            format!("http://{}:{}/", ip, port).blue()
-        );
-        println!("\t> HTTPS : {}", format!("Disabled").red());
-    }
-    println!();
-    println!("\t> Profile : {}", profile.green());
-    println!("\t> Hot Reload : {}", hot_reload.cyan());
-    if let Some(proxies) = proxies {
-        if !proxies.is_empty() {
-            println!("\t> Proxies :");
-            for proxy in proxies {
-                println!("\t\t- {}", proxy.backend.blue());
-            }
-        }
-    }
-    println!("\t> Index Template : {}", custom_html_file.green());
-    println!("\t> URL Rewrite [index_on_404] : {}", url_rewrite.purple());
-    println!();
-    println!(
-        "\t> Build Time Use : {} millis",
-        options.elapsed_time.to_string().green().bold()
-    );
-    println!();
-
-    if options.warnings.is_empty() {
-        log::info!("{}\n", "A perfect compilation!".green().bold());
-    } else {
-        log::warn!(
-            "{}",
-            format!(
-                "There were {} warning messages during the build.",
-                options.warnings.len() - 1
-            )
-            .yellow()
-            .bold()
-        );
-        // for info in &options.warnings {
-        //     let message = info.message.clone();
-        //     if message == format!("{} warnings emitted", options.warnings.len() - 1) {
-        //         continue;
-        //     }
-        //     let mut console = String::new();
-        //     for span in &info.spans {
-        //         let file = &span.file_name;
-        //         let line = (span.line_start, span.line_end);
-        //         let line_str = if line.0 == line.1 {
-        //             line.0.to_string()
-        //         } else {
-        //             format!("{}~{}", line.0, line.1)
-        //         };
-        //         let code = span.text.clone();
-        //         let span_info = if code.len() == 1 {
-        //             let code = code.get(0).unwrap().text.trim().blue().bold().to_string();
-        //             format!(
-        //                 "[{}: {}]: '{}' --> {}",
-        //                 file,
-        //                 line_str,
-        //                 code,
-        //                 message.yellow().bold()
-        //             )
-        //         } else {
-        //             let code = code
-        //                 .iter()
-        //                 .enumerate()
-        //                 .map(|(_i, s)| format!("\t{}\n", s.text).blue().bold().to_string())
-        //                 .collect::<String>();
-        //             format!("[{}: {}]:\n{}\n#:{}", file, line_str, code, message)
-        //         };
-        //         console = format!("{console}\n\t{span_info}");
-        //     }
-        //     println!("{console}");
-        // }
-        // println!(
-        //     "\n{}\n",
-        //     "Resolving all warnings will help your code run better!".yellow()
-        // );
-    }
-}
-
+/// Get the network ip
 fn get_ip() -> Option<String> {
     let socket = match UdpSocket::bind("0.0.0.0:0") {
         Ok(s) => s,
@@ -796,6 +566,7 @@ fn get_ip() -> Option<String> {
     }
 }
 
+/// Handle websockets
 async fn ws_handler(
     ws: WebSocketUpgrade,
     _: Option<TypedHeader<headers::UserAgent>>,
