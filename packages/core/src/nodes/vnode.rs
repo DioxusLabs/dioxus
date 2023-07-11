@@ -37,6 +37,7 @@ pub struct VNode<'a> {
 impl<'a> VNode<'a> {
     /// Create a template with no nodes that will be skipped over during diffing
     pub fn empty() -> Element<'a> {
+        panic!();
         Some(VNode {
             key: None,
             parent: None,
@@ -56,6 +57,7 @@ impl<'a> VNode<'a> {
     ///
     /// Used when components are rendered but escaped via `None`.
     pub fn placeholder(cx: &'a ScopeState) -> Element<'a> {
+        panic!();
         Some(VNode {
             key: None,
             parent: None,

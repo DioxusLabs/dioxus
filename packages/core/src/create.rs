@@ -11,57 +11,6 @@ use std::iter::Peekable;
 use std::rc::Rc;
 use TemplateNode::*;
 
-#[cfg(debug_assertions)]
-fn sort_bfs(paths: &[&'static [u8]]) -> Vec<(usize, &'static [u8])> {
-    let mut with_indecies = paths.iter().copied().enumerate().collect::<Vec<_>>();
-    with_indecies.sort_unstable_by(|(_, a), (_, b)| {
-        let mut a = a.iter();
-        let mut b = b.iter();
-        loop {
-            match (a.next(), b.next()) {
-                (Some(a), Some(b)) => {
-                    if a != b {
-                        return a.cmp(b);
-                    }
-                }
-                // The shorter path goes first
-                (None, Some(_)) => return std::cmp::Ordering::Less,
-                (Some(_), None) => return std::cmp::Ordering::Greater,
-                (None, None) => return std::cmp::Ordering::Equal,
-            }
-        }
-    });
-    with_indecies
-}
-
-#[test]
-#[cfg(debug_assertions)]
-fn sorting() {
-    let r: [(usize, &[u8]); 5] = [
-        (0, &[0, 1]),
-        (1, &[0, 2]),
-        (2, &[1, 0]),
-        (3, &[1, 0, 1]),
-        (4, &[1, 2]),
-    ];
-    assert_eq!(
-        sort_bfs(&[&[0, 1,], &[0, 2,], &[1, 0,], &[1, 0, 1,], &[1, 2,],]),
-        r
-    );
-    let r: [(usize, &[u8]); 6] = [
-        (0, &[0]),
-        (1, &[0, 1]),
-        (2, &[0, 1, 2]),
-        (3, &[1]),
-        (4, &[1, 2]),
-        (5, &[2]),
-    ];
-    assert_eq!(
-        sort_bfs(&[&[0], &[0, 1], &[0, 1, 2], &[1], &[1, 2], &[2],]),
-        r
-    );
-}
-
 impl<'b> VirtualDom {
     /// Create a new template [`VNode`] and write it to the [`Mutations`] buffer.
     ///
@@ -78,7 +27,12 @@ impl<'b> VirtualDom {
         // check for a overriden template
         #[cfg(debug_assertions)]
         {
-            let (path, byte_index) = node.template.get().name.rsplit_once(':').unwrap();
+            let (path, byte_index) = node
+                .template
+                .get()
+                .name
+                .rsplit_once(':')
+                .expect("Failed to locate template name");
             if let Some(template) = self
                 .templates
                 .get(path)
@@ -509,15 +463,18 @@ impl<'b> VirtualDom {
 
         component.scope.set(Some(scope));
 
-        todo!()
-        // match unsafe { self.run_scope(scope).extend_lifetime_ref() } {
-        //     Ready(t) => self.mount_component(scope, template, t, idx),
-        //     Aborted(t) => self.mount_aborted(template, t),
-        // }
+        let nodes = self.scopes[scope].try_root_node().unwrap();
+
+        self.mount_component(scope, template, template, idx)
+        // todo!()
+        // // match unsafe { self.run_scope(scope).extend_lifetime_ref() } {
+        // //     Ready(t) => self.mount_component(scope, template, t, idx),
+        // //     Aborted(t) => self.mount_aborted(template, t),
+        // // }
     }
 
     /// Load a scope from a vcomponent. If the props don't exist, that means the component is currently "live"
-    fn load_scope_from_vcomponent(&mut self, component: &VComponent) -> ScopeId {
+    pub fn load_scope_from_vcomponent(&mut self, component: &VComponent) -> ScopeId {
         component
             .props
             .take()
@@ -616,4 +573,55 @@ fn collect_dyn_node_range(
     }
 
     Some((start, end))
+}
+
+#[cfg(debug_assertions)]
+fn sort_bfs(paths: &[&'static [u8]]) -> Vec<(usize, &'static [u8])> {
+    let mut with_indecies = paths.iter().copied().enumerate().collect::<Vec<_>>();
+    with_indecies.sort_unstable_by(|(_, a), (_, b)| {
+        let mut a = a.iter();
+        let mut b = b.iter();
+        loop {
+            match (a.next(), b.next()) {
+                (Some(a), Some(b)) => {
+                    if a != b {
+                        return a.cmp(b);
+                    }
+                }
+                // The shorter path goes first
+                (None, Some(_)) => return std::cmp::Ordering::Less,
+                (Some(_), None) => return std::cmp::Ordering::Greater,
+                (None, None) => return std::cmp::Ordering::Equal,
+            }
+        }
+    });
+    with_indecies
+}
+
+#[test]
+#[cfg(debug_assertions)]
+fn sorting() {
+    let r: [(usize, &[u8]); 5] = [
+        (0, &[0, 1]),
+        (1, &[0, 2]),
+        (2, &[1, 0]),
+        (3, &[1, 0, 1]),
+        (4, &[1, 2]),
+    ];
+    assert_eq!(
+        sort_bfs(&[&[0, 1,], &[0, 2,], &[1, 0,], &[1, 0, 1,], &[1, 2,],]),
+        r
+    );
+    let r: [(usize, &[u8]); 6] = [
+        (0, &[0]),
+        (1, &[0, 1]),
+        (2, &[0, 1, 2]),
+        (3, &[1]),
+        (4, &[1, 2]),
+        (5, &[2]),
+    ];
+    assert_eq!(
+        sort_bfs(&[&[0], &[0, 1], &[0, 1, 2], &[1], &[1, 2], &[2],]),
+        r
+    );
 }

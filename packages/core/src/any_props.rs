@@ -49,23 +49,21 @@ unsafe impl<'a, P> AnyProps<'a> for VProps<'a, P> {
 
     fn render(&'a self, cx: &'a ScopeState) -> Element<'a> {
         let res = std::panic::catch_unwind(AssertUnwindSafe(move || {
-            // Call the render function directly
+            // Make sure the scope is valid for the lifetime of the component
             let scope: &mut Scoped<P> = cx.bump().alloc(Scoped {
                 props: &self.props,
                 scope: cx,
             });
 
-            todo!()
-            // match (self.render_fn)(scope) {
-            //     Some(el) => RenderReturn::Ready(el),
-            //     None => RenderReturn::default(),
-            // }
+            // Call the render function directlty
+            (self.render_fn)(scope)
         }));
 
-        todo!()
-        // match res {
-        //     Ok(e) => e,
-        //     Err(_) => RenderReturn::default(),
-        // }
+        // Todo: we want to catch errors and throw them up to the root
+        // Eventually we will throw them into the error boundary
+        match res {
+            Ok(e) => e,
+            Err(_) => None,
+        }
     }
 }

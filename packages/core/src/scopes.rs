@@ -7,7 +7,8 @@ use crate::{
     innerlude::{ErrorBoundary, Scheduler, SchedulerMsg},
     lazynodes::LazyNodes,
     nodes::{IntoAttributeValue, IntoDynNode},
-    AnyValue, Attribute, AttributeValue, Element, Event, Properties, Scope, ScopeId, TaskId,
+    AnyValue, Attribute, AttributeValue, Element, Event, Properties, Scope, ScopeId,
+    SuspenseContext, TaskId,
 };
 use bumpalo::{boxed::Box as BumpBox, Bump};
 use rustc_hash::FxHashSet;
@@ -28,6 +29,7 @@ pub struct ScopeState {
     pub(crate) id: ScopeId,
     pub(crate) height: u32,
     pub(crate) name: &'static str,
+    pub(crate) suspended: Cell<bool>,
 
     pub(crate) node_arena_1: BumpFrame,
     pub(crate) node_arena_2: BumpFrame,
@@ -515,6 +517,15 @@ impl<'src> ScopeState {
 
     /// Mark this component as suspended
     pub fn suspend(&self) -> Option<crate::VNode<'_>> {
+        self.suspended.set(true);
+
         return None;
+    }
+
+    /// Walk the context tree until we find the nearest boundary
+    pub fn is_suspended(&self) -> bool {
+        self.consume_context::<Rc<SuspenseContext>>()
+            .unwrap()
+            .is_ready()
     }
 }

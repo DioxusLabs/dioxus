@@ -1,6 +1,27 @@
 //! # Virtual DOM Implementation for Rust
 //!
 //! This module provides the primary mechanics to create a hook-based, concurrent VDOM for Rust.
+//!
+/*
+
+
+We use a three-phase reconciliation process to update the DOM:
+- Progress state changes
+- Diff the new state with the old state
+- Apply the diff to the DOM and commit the changes
+
+Each phase should be idempotent - we should be able to progress state changes all we want and then diff and apply the
+changes at any time. Suspense is built on this - components call themselves repeatedly until
+
+
+
+
+
+
+
+
+
+*/
 
 use crate::{
     any_props::VProps,
@@ -11,11 +32,11 @@ use crate::{
     mutations::Mutation,
     nodes::{Template, TemplateId},
     scheduler::SuspenseId,
-    AttributeValue, Element, Event, Scope, SuspenseContext, TaskId,
+    AttributeValue, DynamicNode, Element, Event, Scope, SuspenseContext, TaskId,
 };
 use futures_channel::mpsc::UnboundedReceiver;
 use futures_util::{pin_mut, StreamExt};
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use slab::Slab;
 use std::{
     any::Any, borrow::BorrowMut, cell::Cell, collections::BTreeSet, future::Future, rc::Rc,
@@ -183,6 +204,10 @@ pub struct VirtualDom {
     pub(crate) templates: FxHashMap<TemplateId, FxHashMap<usize, Template<'static>>>,
     pub(crate) scopes: ScopeSlab,
 
+    // These are renders we've accumulated from needs_update from within components
+    pub(crate) queued_renders: BTreeSet<DirtyScope>,
+
+    // These are dirty scopes that need to be diffed since they were marked as dirty during rendering
     pub(crate) dirty_scopes: BTreeSet<DirtyScope>,
 
     // Every element is actually a dual reference - one to the template and the other to the dynamic node in that template
@@ -197,6 +222,9 @@ pub struct VirtualDom {
     // Scheduler stuff
     pub(crate) scheduler: Rc<Scheduler>,
     pub(crate) scheduler_rx: UnboundedReceiver<SchedulerMsg>,
+
+    // Suspense stuff
+    pub(crate) suspense_roots: FxHashSet<ScopeId>,
 }
 
 impl VirtualDom {
@@ -257,6 +285,7 @@ impl VirtualDom {
     pub fn new_with_props<P: 'static>(root: fn(Scope<P>) -> Element, root_props: P) -> Self {
         let (tx, rx) = futures_channel::mpsc::unbounded();
 
+        // Create the empty dom, we will populate here in a sec
         let mut dom = Self {
             scheduler_rx: rx,
             scheduler: Scheduler::new(tx),
@@ -264,11 +293,15 @@ impl VirtualDom {
             scopes: Default::default(),
             elements: Default::default(),
             scope_stack: Vec::new(),
+            queued_renders: BTreeSet::new(),
             dirty_scopes: BTreeSet::new(),
             collected_leaves: Vec::new(),
             mutations: Mutations::default(),
+            suspense_roots: Default::default(),
         };
 
+        // Create the root scope
+        // There is no diffing of the props here, hence the unreachable
         let root = dom.new_scope(
             Box::new(VProps::new(root, |_, _| unreachable!(), root_props)),
             "app",
@@ -282,9 +315,6 @@ impl VirtualDom {
         //
         // We *could* just panic if the suspense boundary is not found
         root.provide_context(Rc::new(SuspenseContext::new(ScopeId(0))));
-
-        // Unlike react, we provide a default error boundary that just renders the error as a string
-        root.provide_context(Rc::new(ErrorBoundary::new(ScopeId(0))));
 
         // the root element is always given element ID 0 since it's the container for the entire tree
         dom.elements.insert(ElementRef::none());
@@ -312,6 +342,15 @@ impl VirtualDom {
     pub fn with_root_context<T: Clone + 'static>(self, context: T) -> Self {
         self.base_scope().provide_context(context);
         self
+    }
+
+    pub fn queue_render(&mut self, id: ScopeId) {
+        if let Some(scope) = self.scopes.get(id) {
+            self.queued_renders.insert(DirtyScope {
+                height: scope.height,
+                id,
+            });
+        }
     }
 
     /// Manually mark a scope as requiring a re-render
@@ -489,7 +528,11 @@ impl VirtualDom {
             match some_msg.take() {
                 // If a bunch of messages are ready in a sequence, try to pop them off synchronously
                 Some(msg) => match msg {
-                    SchedulerMsg::Immediate(id) => self.mark_dirty(id),
+                    // Queue this scope for rendering
+                    // Note this won't queue the scope for diffing as it might be suspended
+                    SchedulerMsg::Immediate(id) => self.queue_render(id),
+
+                    // Go poll the scheduler
                     SchedulerMsg::TaskNotified(task) => self.handle_task_wakeup(task),
                 },
 
@@ -500,7 +543,7 @@ impl VirtualDom {
                         Ok(None) => return,
                         Err(_) => {
                             // If we have any dirty scopes, or finished fiber trees then we should exit
-                            if !self.dirty_scopes.is_empty() {
+                            if !self.dirty_scopes.is_empty() || !self.queued_renders.is_empty() {
                                 return;
                             }
 
@@ -516,7 +559,7 @@ impl VirtualDom {
     pub fn process_events(&mut self) {
         while let Ok(Some(msg)) = self.scheduler_rx.try_next() {
             match msg {
-                SchedulerMsg::Immediate(id) => self.mark_dirty(id),
+                SchedulerMsg::Immediate(id) => self.queue_render(id),
                 SchedulerMsg::TaskNotified(task) => self.handle_task_wakeup(task),
             }
         }
@@ -629,16 +672,181 @@ impl VirtualDom {
         }
     }
 
-    /// Render what you can given the timeline and then move on
+    // Compute the diff for a scope
+    // Once we hit a memoization barrier, we will stop
+    pub fn compute_diff(&mut self, scope: ScopeId) -> Mutations {
+        self.diff_scope(scope);
+        self.finalize()
+    }
+
+    fn queue_dynamic_node(&mut self, node: &DynamicNode) {
+        match node {
+            DynamicNode::Component(c) => {
+                // Check if the props have changed and we need to queue a render for the child
+
+                let id = self.load_scope_from_vcomponent(c);
+
+                c.scope.set(Some(id));
+
+                println!("queueing render for component {:?}", c);
+                self.queue_render(id);
+            }
+            DynamicNode::Fragment(f) => {
+                for node in f.iter() {
+                    for node in node.dynamic_nodes.iter() {
+                        self.queue_dynamic_node(node);
+                    }
+                }
+            }
+            DynamicNode::Text(_) => {}
+            DynamicNode::Placeholder(_) => {}
+        }
+    }
+
+    /// Wait for all suspense to be resolved
     ///
-    /// It's generally a good idea to put some sort of limit on the suspense process in case a future is having issues.
+    /// When you follow this method up with render_immediate, you can be sure that all suspended components have been resolved
+    pub async fn wait_for_suspsnese(&mut self) {
+        loop {
+            // Poll any events that have occured since the last render
+            self.process_events();
+
+            println!("processed events {:#?}", self.queued_renders);
+
+            // First, progress all components that were enqueued
+            // Eventually we need recursion protection here
+            if let Some(queued) = self.queued_renders.iter().next().cloned() {
+                self.queued_renders.remove(&queued);
+
+                // If the scope doesn't exist for whatever reason, then we should skip it
+                if !self.scopes.contains(queued.id) {
+                    continue;
+                }
+
+                // render the component
+                // If the component creates new components, those will be added to the queued_renders list
+                let els = self.run_scope(queued.id);
+                let els: &Element = unsafe { std::mem::transmute(els) };
+
+                if let Some(el) = els.as_ref() {
+                    // If the component created new nodes, we should run those
+                    for node in el.dynamic_nodes.iter() {
+                        self.queue_dynamic_node(node);
+                    }
+                }
+            }
+
+            println!("Waiting for work...");
+
+            // Keep going if there is more work to do
+            if !self.queued_renders.is_empty() {
+                println!(
+                    "Continuing because queued renders: {:#?}",
+                    self.queued_renders
+                );
+                continue;
+            }
+
+            // If all suspense is resolved, break
+            if self.suspense_roots.is_empty() {
+                break;
+            }
+
+            println!("Suspense roots: {:#?}", self.suspense_roots);
+
+            // Wait for a wakeup
+            self.wait_for_work().await;
+        }
+    }
+
+    /// Progress state without generating mutations
     ///
-    /// If no suspense trees are present
+    /// Useful in SSR scenarios where you want to progress whatever suspense exists and then render that.
+    pub async fn progress(&mut self, deadline: impl Future<Output = ()>) {
+        pin_mut!(deadline);
+
+        loop {
+            // Poll any events that have occured since the last render
+            self.process_events();
+
+            println!("processed events {:#?}", self.queued_renders);
+
+            // First, progress all components that were enqueued
+            // Eventually we need recursion protection here
+            if let Some(queued) = self.queued_renders.iter().next().cloned() {
+                self.queued_renders.remove(&queued);
+
+                // If the scope doesn't exist for whatever reason, then we should skip it
+                if !self.scopes.contains(queued.id) {
+                    continue;
+                }
+
+                // render the component
+                // If the component creates new components, those will be added to the queued_renders list
+                let els = self.run_scope(queued.id);
+            }
+
+            println!("Waiting for work...");
+
+            // Poll futures in the meantime
+            let mut work = self.wait_for_work();
+
+            // safety: this is okay since we don't touch the original future
+            let pinned = unsafe { std::pin::Pin::new_unchecked(&mut work) };
+
+            // If the deadline is exceded (left) then we should return the mutations we have
+            use futures_util::future::{select, Either};
+            if let Either::Left((_, _)) = select(&mut deadline, pinned).await {
+                println!("deadline reached");
+                // release the borrowed
+                drop(work);
+                return;
+            }
+        }
+    }
+
+    /// Render what you can given the deadline.
+    ///
+    /// The "deadline" here is *only* used to determine when to stop rendering suspense trees. If you are trying to batch
+    /// mutations between frames, you should call "progress" with the deadline, and then call "render_immediate" to get the
+    /// immediate mutations. We suggest providing a slightly shorter deadline than your frame time since render_immediate
+    /// might take some time
     pub async fn render_with_deadline(&mut self, deadline: impl Future<Output = ()>) -> Mutations {
         pin_mut!(deadline);
 
-        // Poll any events that have occured since the last render
-        self.process_events();
+        // We're going to loop until we know that:
+        // 1. There are no more suspense trees to render
+        // 2. There are no more dirty scopes
+        // 3. The deadline has been reached
+        loop {
+            // 1. Progress all state until suspense is finished
+            //
+            // First, progress all state that makes sense to progress
+            // If there are suspense blocks, we need to wait until they're done before we can diff them
+            loop {
+                // Poll any events that have occured since the last render
+                self.process_events();
+
+                // First, progress all components that were enqueued
+                // Eventually we need recursion protection here
+                if let Some(queued) = self.queued_renders.iter().next().cloned() {
+                    self.queued_renders.remove(&queued);
+
+                    // If the scope doesn't exist for whatever reason, then we should skip it
+                    if !self.scopes.contains(queued.id) {
+                        continue;
+                    }
+
+                    // render the component
+                    // If the component creates new components, those will be added to the queued_renders list
+                    let els = self.run_scope(queued.id);
+                }
+            }
+        }
+
+        // Now that we've progress all components that are enqueued, we want to see if we can diff any components
+        // Note that we can't diff components that are suspended
+        // We need to wait until those suspense trees are done before we can write them out
 
         // Write out our mutations
         self.finalize()
@@ -745,6 +953,6 @@ impl VirtualDom {
 impl Drop for VirtualDom {
     fn drop(&mut self) {
         // Simply drop this scope which drops all of its children
-        self.drop_scope(ScopeId(0), true);
+        // self.drop_scope(ScopeId(0), true);
     }
 }

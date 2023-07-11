@@ -3,7 +3,7 @@ use crate::{
     bump_frame::BumpFrame,
     innerlude::{DirtyScope, ScopeId, ScopeState},
     virtual_dom::VirtualDom,
-    Element,
+    Element, VNode,
 };
 use std::mem;
 
@@ -24,6 +24,7 @@ impl VirtualDom {
             height,
             name,
             props: Some(props),
+            suspended: false.into(),
             tasks: self.scheduler.clone(),
             node_arena_1: BumpFrame::new(0),
             node_arena_2: BumpFrame::new(0),
@@ -42,38 +43,52 @@ impl VirtualDom {
         Some(scope)
     }
 
+    // Run the component, only overwriting the "new" BumpBuffer
+    // The old is preserved and will need to be committed manually
+    //
+    // We will traverse the output and inject any new components into another queue to be further processed. TBD on that
     pub(crate) fn run_scope(&mut self, scope_id: ScopeId) -> &Element {
-        // Cycle to the next frame and then reset it
+        // Break all dowsnstream dependent references before we start messing with stuff up here
+        //
         // This breaks any latent references, invalidating every pointer referencing into it.
         // Remove all the outdated listeners
         self.ensure_drop_safety(scope_id);
 
-        let new_nodes = unsafe {
+        // These are the new nodes!
+        // Safety: we promise that we're only overwriting the new frame and that we've released all downstream references
+        let new_nodes: Element<'_> = unsafe {
             self.scopes[scope_id].previous_frame().bump_mut().reset();
 
             let scope = &self.scopes[scope_id];
 
+            // Wipe the lifetime
+            let scope: &ScopeState = std::mem::transmute(scope);
+
+            // Reset hooks and the suspended status
             scope.hooks.new_render();
+            scope.suspended.set(false);
 
             // safety: due to how we traverse the tree, we know that the scope is not currently aliased
             let props: &dyn AnyProps = scope.props.as_ref().unwrap().as_ref();
             let props: &dyn AnyProps = mem::transmute(props);
 
-            todo!()
-            // props.render(scope)
+            props.render(scope)
         };
 
         let scope = &self.scopes[scope_id];
 
         // We write on top of the previous frame and then make it the current by pushing the generation forward
-        let frame = scope.previous_frame();
+        let frame = scope.current_frame();
+
+        // Get a stable pointer to these nodes by allocating them
+        let allocated = &*frame.bump().alloc(new_nodes);
 
         // set the new head of the bump frame
-        let allocated = &*frame.bump().alloc(new_nodes);
         frame.node.set(allocated);
 
-        // And move the render generation forward by one
-        scope.render_cnt.set(scope.render_cnt.get() + 1);
+        // This should only be done when we commit the render
+        // // And move the render generation forward by one
+        // scope.render_cnt.set(scope.render_cnt.get() + 1);
 
         // remove this scope from dirty scopes
         self.dirty_scopes.remove(&DirtyScope {
@@ -81,8 +96,15 @@ impl VirtualDom {
             id: scope.id,
         });
 
-        todo!()
+        if scope.suspended.get() {
+            println!("add scope from suspense {:?}", scope.id);
+            self.suspense_roots.insert(scope.id);
+        } else {
+            println!("removing from suspense {:?}", scope.id);
+            self.suspense_roots.remove(&scope.id);
+        }
+
         // rebind the lifetime now that its stored internally
-        // unsafe { allocated }
+        unsafe { std::mem::transmute(allocated) }
     }
 }

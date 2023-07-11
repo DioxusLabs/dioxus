@@ -18,17 +18,41 @@ impl<'b> VirtualDom {
         self.scope_stack.push(scope);
         unsafe {
             // Load the old and new bump arenas
-            let old = scope_state
-                .previous_frame()
-                .try_load_node()
-                .expect("Call rebuild before diffing");
+            let old = scope_state.previous_frame().try_load_node();
 
             let new = scope_state
                 .current_frame()
                 .try_load_node()
                 .expect("Call rebuild before diffing");
 
-            todo!()
+            let Some(old) = old else {
+                dbg!("Creating node!", scope);
+
+                match new {
+                    // Create the new node
+                    Some(new) => self.create(new),
+
+                    // Create a placeholder instead
+                    None => todo!(),
+                };
+                return;
+            };
+
+            match (old, new) {
+                (Some(l), Some(r)) => {
+                    dbg!("Diffing node!", scope);
+                    self.diff_node(l, r)
+                }
+                (None, Some(r)) => {
+                    self.create(r);
+                }
+                (Some(l), None) => {
+                    self.create(l);
+                }
+                _ => todo!(),
+            }
+
+            // todo!()
             // match (old, new) {
             //     // Normal pathway
             //     (Ready(l), Ready(r)) => self.diff_node(l, r),
@@ -73,7 +97,15 @@ impl<'b> VirtualDom {
         // If hot reloading is enabled, we need to make sure we're using the latest template
         #[cfg(debug_assertions)]
         {
-            let (path, byte_index) = right_template.template.get().name.rsplit_once(':').unwrap();
+            let local_tempalte = right_template.template.get();
+
+            dbg!(local_tempalte.name);
+
+            let (path, byte_index) = local_tempalte
+                .name
+                .rsplit_once(':')
+                .expect("Failed to locate template name");
+
             if let Some(map) = self.templates.get(path) {
                 let byte_index = byte_index.parse::<usize>().unwrap();
                 if let Some(&template) = map.get(&byte_index) {

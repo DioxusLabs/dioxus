@@ -9,11 +9,16 @@ pub(crate) struct HookList {
     pub(crate) hook_idx: Cell<usize>,
 }
 
+static BORROW_ERR: &str = r#"The hook list is already borrowed.
+This error is likely caused by trying to use a hook inside a hook which violates the rules of hooks."#;
+
 impl HookList {
+    /// Reset the hook index back to the original state, but don't clear the hooks
     pub(crate) fn new_render(&self) {
         self.hook_idx.set(0);
     }
 
+    /// Clear the hook list and reset it back to the initial state
     pub(crate) fn clear(&self) {
         self.hooks.borrow_mut().clear();
         self.hook_idx.set(0);
@@ -24,7 +29,8 @@ impl HookList {
         initializer: impl FnOnce() -> State,
     ) -> &mut State {
         let cur_hook = self.hook_idx.get();
-        let mut hooks = self.hooks.try_borrow_mut().expect("The hook list is already borrowed: This error is likely caused by trying to use a hook inside a hook which violates the rules of hooks.");
+
+        let mut hooks = self.hooks.try_borrow_mut().expect(BORROW_ERR);
 
         if cur_hook >= hooks.len() {
             hooks.push(Box::new(UnsafeCell::new(initializer())));

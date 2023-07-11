@@ -47,9 +47,6 @@ pub(crate) struct SuspenseId(pub usize);
 pub struct SuspenseContext {
     pub(crate) id: ScopeId,
     pub(crate) waiting_on: RefCell<HashSet<SuspenseId>>,
-    pub(crate) mutations: RefCell<Mutations<'static>>,
-    pub(crate) placeholder: Cell<Option<ElementId>>,
-    pub(crate) created_on_stack: Cell<usize>,
 }
 
 impl SuspenseContext {
@@ -58,9 +55,10 @@ impl SuspenseContext {
         Self {
             id,
             waiting_on: Default::default(),
-            mutations: RefCell::new(Mutations::default()),
-            placeholder: Cell::new(None),
-            created_on_stack: Cell::new(0),
         }
+    }
+
+    pub fn is_ready(&self) -> bool {
+        self.waiting_on.borrow().is_empty()
     }
 }
