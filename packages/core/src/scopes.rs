@@ -30,6 +30,7 @@ pub struct ScopeState {
     pub(crate) height: u32,
     pub(crate) name: &'static str,
     pub(crate) suspended: Cell<bool>,
+    pub(crate) committed: Cell<bool>,
 
     pub(crate) node_arena_1: BumpFrame,
     pub(crate) node_arena_2: BumpFrame,

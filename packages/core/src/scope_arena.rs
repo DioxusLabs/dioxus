@@ -25,6 +25,7 @@ impl VirtualDom {
             name,
             props: Some(props),
             suspended: false.into(),
+            committed: false.into(),
             tasks: self.scheduler.clone(),
             node_arena_1: BumpFrame::new(0),
             node_arena_2: BumpFrame::new(0),

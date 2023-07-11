@@ -13,7 +13,8 @@ We use a three-phase reconciliation process to update the DOM:
 Each phase should be idempotent - we should be able to progress state changes all we want and then diff and apply the
 changes at any time. Suspense is built on this - components call themselves repeatedly until
 
-
+Because dioxus relies on a bump allocator, a component will re-render into the same bump arena multiple times until the
+state is committed to the dom. I would like to get rid of this and switch to a garbage collector.
 
 
 
