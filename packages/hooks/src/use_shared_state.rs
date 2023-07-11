@@ -1,11 +1,60 @@
+use self::error::{UseSharedStateError, UseSharedStateResult};
 use dioxus_core::{ScopeId, ScopeState};
 use std::{
     cell::{Ref, RefCell, RefMut},
     collections::HashSet,
-    panic::Location,
     rc::Rc,
     sync::Arc,
 };
+
+pub mod error {
+    use std::panic::Location;
+
+    #[macro_export]
+    macro_rules! debug_location {
+        () => {{
+            #[cfg(debug_assertions)]
+            {
+                Some(std::panic::Location::caller())
+            }
+            #[cfg(not(debug_assertions))]
+            {
+                None
+            }
+        }};
+    }
+    fn display_location(location: Option<&&Location<'_>>) -> String {
+        location
+            .map(|location| format!("[{location}] "))
+            .unwrap_or_else(String::new)
+    }
+
+    #[derive(thiserror::Error, Debug)]
+    pub enum UseSharedStateError {
+        #[error(
+        "{}{type_name} is already borrowed, so it cannot be borrowed mutably.",
+        display_location(.location.as_ref())
+    )]
+        AlreadyBorrowed {
+            source: core::cell::BorrowMutError,
+            type_name: &'static str,
+            /// Only available in debug mode
+            location: Option<&'static Location<'static>>,
+        },
+        #[error(
+        "{}{type_name} is already borrowed mutably, so it cannot be borrowed anymore.",
+        display_location(.location.as_ref())
+    )]
+        AlreadyBorrowedMutably {
+            source: core::cell::BorrowError,
+            type_name: &'static str,
+            /// Only available in debug mode
+            location: Option<&'static Location<'static>>,
+        },
+    }
+
+    pub type UseSharedStateResult<T> = Result<T, UseSharedStateError>;
+}
 
 type ProvidedState<T> = Rc<RefCell<ProvidedStateInner<T>>>;
 
@@ -122,24 +171,6 @@ pub struct UseSharedState<T> {
     pub(crate) inner: Rc<RefCell<ProvidedStateInner<T>>>,
 }
 
-#[derive(thiserror::Error, Debug)]
-pub enum UseSharedStateError {
-    #[error("[{caller}] {type_name} is already borrowed, so it cannot be borrowed mutably.")]
-    AlreadyBorrowed {
-        source: core::cell::BorrowMutError,
-        type_name: &'static str,
-        caller: &'static Location<'static>,
-    },
-    #[error("[caller] {type_name} is already borrowed mutably, so it cannot be borrowed anymore.")]
-    AlreadyBorrowedMutably {
-        source: core::cell::BorrowError,
-        type_name: &'static str,
-        caller: &'static Location<'static>,
-    },
-}
-
-pub type UseSharedStateResult<T> = Result<T, UseSharedStateError>;
-
 impl<T> UseSharedState<T> {
     /// Notify all consumers of the state that it has changed. (This is called automatically when you call "write")
     pub fn notify_consumers(&self) {
@@ -154,7 +185,7 @@ impl<T> UseSharedState<T> {
             .map_err(|source| UseSharedStateError::AlreadyBorrowedMutably {
                 source,
                 type_name: std::any::type_name::<Self>(),
-                caller: Location::caller(),
+                location: crate::debug_location!(),
             })
             .map(|value| Ref::map(value, |inner| &inner.value))
     }
@@ -179,7 +210,7 @@ impl<T> UseSharedState<T> {
             .map_err(|source| UseSharedStateError::AlreadyBorrowed {
                 source,
                 type_name: std::any::type_name::<Self>(),
-                caller: Location::caller(),
+                location: crate::debug_location!(),
             })
             .map(|mut value| {
                 value.notify_consumers();
@@ -210,7 +241,7 @@ impl<T> UseSharedState<T> {
             .map_err(|source| UseSharedStateError::AlreadyBorrowed {
                 source,
                 type_name: std::any::type_name::<Self>(),
-                caller: Location::caller(),
+                location: crate::debug_location!(),
             })
             .map(|value| RefMut::map(value, |inner| &mut inner.value))
     }
