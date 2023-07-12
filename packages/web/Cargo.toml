@@ -92,4 +92,6 @@ dioxus = { workspace = true }
 wasm-bindgen-test = "0.3.29"
 dioxus-ssr = { workspace = true}
 wasm-logger = "0.2.0"
+gloo-timers = "0.2.3"
+gloo-dialogs = "0.1.1"
 dioxus-web = { workspace = true, features = ["hydrate"] }
