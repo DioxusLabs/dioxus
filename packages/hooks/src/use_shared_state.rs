@@ -365,7 +365,7 @@ impl<T> Clone for UseSharedState<T> {
         Self {
             inner: self.inner.clone(),
             #[cfg(debug_assertions)]
-            previous_borrow: Default::default(),
+            previous_borrow: self.previous_borrow.clone(),
         }
     }
 }
