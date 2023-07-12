@@ -263,19 +263,19 @@ impl<T> UseSharedState<T> {
     #[cfg_attr(debug_assertions, track_caller)]
     #[cfg_attr(debug_assertions, inline(never))]
     pub fn try_read(&self) -> UseSharedStateResult<Ref<'_, T>> {
-        self.inner
-            .try_borrow()
-            .map_err(|source| UseSharedStateError::AlreadyBorrowedMutably {
+        match self.inner.try_borrow() {
+            Ok(value) => {
+                self.debug_track_borrow();
+                Ok(Ref::map(value, |inner| &inner.value))
+            }
+            Err(source) => Err(UseSharedStateError::AlreadyBorrowedMutably {
                 source,
                 type_name: std::any::type_name::<Self>(),
                 location: debug_location!(),
                 #[cfg(debug_assertions)]
                 previous_borrow: *self.previous_borrow.borrow(),
-            })
-            .map(|value| {
-                self.debug_track_borrow();
-                Ref::map(value, |inner| &inner.value)
-            })
+            }),
+        }
     }
 
     /// Read the shared value
@@ -295,20 +295,20 @@ impl<T> UseSharedState<T> {
     #[cfg_attr(debug_assertions, track_caller)]
     #[cfg_attr(debug_assertions, inline(never))]
     pub fn try_write(&self) -> UseSharedStateResult<RefMut<'_, T>> {
-        self.inner
-            .try_borrow_mut()
-            .map_err(|source| UseSharedStateError::AlreadyBorrowed {
+        match self.inner.try_borrow_mut() {
+            Ok(mut value) => {
+                self.debug_track_borrow_mut();
+                value.notify_consumers();
+                Ok(RefMut::map(value, |inner| &mut inner.value))
+            }
+            Err(source) => Err(UseSharedStateError::AlreadyBorrowed {
                 source,
                 type_name: std::any::type_name::<Self>(),
                 location: crate::debug_location!(),
                 #[cfg(debug_assertions)]
                 previous_borrow: *self.previous_borrow.borrow(),
-            })
-            .map(|mut value| {
-                value.notify_consumers();
-                self.debug_track_borrow_mut();
-                RefMut::map(value, |inner| &mut inner.value)
-            })
+            }),
+        }
     }
 
     /// Calling "write" will force the component to re-render
@@ -331,19 +331,19 @@ impl<T> UseSharedState<T> {
     #[cfg_attr(debug_assertions, track_caller)]
     #[cfg_attr(debug_assertions, inline(never))]
     pub fn try_write_silent(&self) -> UseSharedStateResult<RefMut<'_, T>> {
-        self.inner
-            .try_borrow_mut()
-            .map_err(|source| UseSharedStateError::AlreadyBorrowed {
+        match self.inner.try_borrow_mut() {
+            Ok(value) => {
+                self.debug_track_borrow_mut();
+                Ok(RefMut::map(value, |inner| &mut inner.value))
+            }
+            Err(source) => Err(UseSharedStateError::AlreadyBorrowed {
                 source,
                 type_name: std::any::type_name::<Self>(),
                 location: crate::debug_location!(),
                 #[cfg(debug_assertions)]
                 previous_borrow: *self.previous_borrow.borrow(),
-            })
-            .map(|value| {
-                self.debug_track_borrow_mut();
-                RefMut::map(value, |inner| &mut inner.value)
-            })
+            }),
+        }
     }
 
     /// Writes the value without forcing a re-render
