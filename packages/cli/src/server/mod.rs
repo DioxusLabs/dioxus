@@ -209,6 +209,9 @@ pub async fn serve_hot_reload(
     Ok(())
 }
 
+const DEFAULT_KEY_PATH: &str = "ssl/key.pem";
+const DEFAULT_CERT_PATH: &str = "ssl/cert.pem";
+
 /// Returns an enum of rustls config and a bool if mkcert isn't installed
 async fn get_rustls(config: &CrateConfig) -> Result<Option<RustlsConfig>> {
     let web_config = &config.dioxus_config.web.https;
@@ -219,14 +222,29 @@ async fn get_rustls(config: &CrateConfig) -> Result<Option<RustlsConfig>> {
     let (cert_path, key_path) = match web_config.mkcert {
         // mkcert, use it
         Some(true) => {
-            _ = fs::create_dir("ssl");
+            // Get paths to store certs, otherwise use ssl/item.pem
+            let key_path = web_config
+                .key_path
+                .clone()
+                .unwrap_or(DEFAULT_KEY_PATH.to_string());
+
+            let cert_path = web_config
+                .cert_path
+                .clone()
+                .unwrap_or(DEFAULT_CERT_PATH.to_string());
+
+            // Create ssl directory if using defaults
+            if key_path == DEFAULT_KEY_PATH && cert_path == DEFAULT_CERT_PATH {
+                fs::create_dir("ssl")?;
+            }
+
             let cmd = Command::new("mkcert")
                 .args([
                     "-install",
                     "-key-file",
-                    "ssl/key.pem",
+                    &key_path,
                     "-cert-file",
-                    "ssl/cert.pem",
+                    &cert_path,
                     "localhost",
                     "::1",
                     "127.0.0.1",
@@ -246,7 +264,7 @@ async fn get_rustls(config: &CrateConfig) -> Result<Option<RustlsConfig>> {
                 }
             }
 
-            (PathBuf::from("ssl/cert.pem"), PathBuf::from("ssl/key.pem"))
+            (cert_path, key_path)
         }
         // not mkcert
         Some(false) => {

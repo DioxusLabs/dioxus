@@ -146,8 +146,8 @@ pub struct WebDevResourceConfig {
 pub struct WebHttpsConfig {
     pub enabled: Option<bool>,
     pub mkcert: Option<bool>,
-    pub key_path: Option<PathBuf>,
-    pub cert_path: Option<PathBuf>,
+    pub key_path: Option<String>,
+    pub cert_path: Option<String>,
 }
 
 #[derive(Debug, Clone)]
