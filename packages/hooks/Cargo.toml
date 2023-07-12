@@ -21,3 +21,4 @@ thiserror = { workspace = true }
 futures-util = { workspace = true, default-features = false }
 dioxus-core = { workspace = true }
 dioxus = { workspace = true }
+debug-cell = "0.1.1"
