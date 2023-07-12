@@ -44,6 +44,7 @@ pub mod diagnostics {
 
     impl<T> super::UseSharedState<T> {
         #[cfg_attr(debug_assertions, track_caller)]
+        #[cfg_attr(debug_assertions, inline(never))]
         #[allow(unused_must_use)]
         pub(super) fn debug_track_borrow(&self) {
             #[cfg(debug_assertions)]
@@ -53,6 +54,7 @@ pub mod diagnostics {
         }
 
         #[cfg_attr(debug_assertions, track_caller)]
+        #[cfg_attr(debug_assertions, inline(never))]
         #[allow(unused_must_use)]
         pub(super) fn debug_track_borrow_mut(&self) {
             #[cfg(debug_assertions)]
@@ -63,6 +65,7 @@ pub mod diagnostics {
     }
     impl PreviousBorrow {
         #[track_caller]
+        #[inline(never)]
         pub fn borrowed() -> Self {
             Self {
                 location: *Location::caller(),
@@ -71,6 +74,7 @@ pub mod diagnostics {
         }
 
         #[track_caller]
+        #[inline(never)]
         pub fn borrowed_mut() -> Self {
             Self {
                 location: *Location::caller(),
@@ -257,6 +261,7 @@ impl<T> UseSharedState<T> {
 
     /// Try reading the shared state
     #[cfg_attr(debug_assertions, track_caller)]
+    #[cfg_attr(debug_assertions, inline(never))]
     pub fn try_read(&self) -> UseSharedStateResult<Ref<'_, T>> {
         self.inner
             .try_borrow()
@@ -275,6 +280,7 @@ impl<T> UseSharedState<T> {
 
     /// Read the shared value
     #[cfg_attr(debug_assertions, track_caller)]
+    #[cfg_attr(debug_assertions, inline(never))]
     pub fn read(&self) -> Ref<'_, T> {
         match self.try_read() {
             Ok(value) => value,
@@ -287,6 +293,7 @@ impl<T> UseSharedState<T> {
 
     /// Try writing the shared state
     #[cfg_attr(debug_assertions, track_caller)]
+    #[cfg_attr(debug_assertions, inline(never))]
     pub fn try_write(&self) -> UseSharedStateResult<RefMut<'_, T>> {
         self.inner
             .try_borrow_mut()
@@ -309,6 +316,7 @@ impl<T> UseSharedState<T> {
     ///
     // TODO: We prevent unncessary notifications only in the hook, but we should figure out some more global lock
     #[cfg_attr(debug_assertions, track_caller)]
+    #[cfg_attr(debug_assertions, inline(never))]
     pub fn write(&self) -> RefMut<'_, T> {
         match self.try_write() {
             Ok(value) => value,
@@ -321,6 +329,7 @@ impl<T> UseSharedState<T> {
 
     /// Tries writing the value without forcing a re-render
     #[cfg_attr(debug_assertions, track_caller)]
+    #[cfg_attr(debug_assertions, inline(never))]
     pub fn try_write_silent(&self) -> UseSharedStateResult<RefMut<'_, T>> {
         self.inner
             .try_borrow_mut()
@@ -339,6 +348,7 @@ impl<T> UseSharedState<T> {
 
     /// Writes the value without forcing a re-render
     #[cfg_attr(debug_assertions, track_caller)]
+    #[cfg_attr(debug_assertions, inline(never))]
     pub fn write_silent(&self) -> RefMut<'_, T> {
         match self.try_write_silent() {
             Ok(value) => value,
