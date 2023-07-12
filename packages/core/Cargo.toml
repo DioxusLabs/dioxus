@@ -27,8 +27,6 @@ slab = { workspace = true }
 
 futures-channel = { workspace = true }
 
-indexmap = "1.7"
-
 smallbox = "0.8.1"
 log = { workspace = true }
 
