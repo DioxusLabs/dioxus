@@ -60,7 +60,7 @@ impl<'a, V: FromAnyValue> NodeView<'a, V> {
             NodeType::Element(ElementNode { attributes, .. }) => Some(
                 attributes
                     .iter()
-                    .filter(move |(attr, _)| self.mask.attritutes.contains_attribute(&attr.name))
+                    .filter(move |(attr, _)| self.mask.attritutes.contains(&attr.name))
                     .map(|(attr, val)| OwnedAttributeView {
                         attribute: attr,
                         value: val,
@@ -107,8 +107,8 @@ pub enum AttributeMask {
 }
 
 impl AttributeMask {
-    /// Check if the given attribute is visible
-    fn contains_attribute(&self, attr: &str) -> bool {
+    /// Check if the mask contains the given attribute
+    pub fn contains(&self, attr: &str) -> bool {
         match self {
             AttributeMask::All => true,
             AttributeMask::Some(attrs) => attrs.contains(attr),
@@ -187,9 +187,19 @@ impl NodeMask {
         self.attritutes = self.attritutes.union(&attributes);
     }
 
+    /// Get the mask for the attributes
+    pub fn attributes(&self) -> &AttributeMask {
+        &self.attritutes
+    }
+
     /// Set the mask to view the tag
     pub fn set_tag(&mut self) {
         self.tag = true;
+    }
+
+    /// Get the mask for the tag
+    pub fn tag(&self) -> bool {
+        self.tag
     }
 
     /// Set the mask to view the namespace
@@ -197,14 +207,29 @@ impl NodeMask {
         self.namespace = true;
     }
 
+    /// Get the mask for the namespace
+    pub fn namespace(&self) -> bool {
+        self.namespace
+    }
+
     /// Set the mask to view the text
     pub fn set_text(&mut self) {
         self.text = true;
     }
 
+    /// Get the mask for the text
+    pub fn text(&self) -> bool {
+        self.text
+    }
+
     /// Set the mask to view the listeners
     pub fn set_listeners(&mut self) {
         self.listeners = true;
+    }
+
+    /// Get the mask for the listeners
+    pub fn listeners(&self) -> bool {
+        self.listeners
     }
 }
 

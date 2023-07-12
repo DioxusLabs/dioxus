@@ -25,12 +25,6 @@ impl<T> PossiblyUninitalized<T> {
             _ => panic!("uninitalized"),
         }
     }
-    pub fn ok(self) -> Option<T> {
-        match self {
-            Self::Initialized(i) => Some(i),
-            _ => None,
-        }
-    }
 }
 impl<T> Default for PossiblyUninitalized<T> {
     fn default() -> Self {
@@ -53,6 +47,9 @@ impl State for TaffyLayout {
     const NODE_MASK: NodeMaskBuilder<'static> = NodeMaskBuilder::new()
         .with_attrs(AttributeMaskBuilder::Some(SORTED_LAYOUT_ATTRS))
         .with_text();
+
+    // The layout state should be effected by the shadow dom
+    const TRAVERSE_SHADOW_DOM: bool = true;
 
     fn update<'a>(
         &mut self,
