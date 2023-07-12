@@ -1,0 +1,24 @@
+[package]
+name = "axum-router"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+dioxus-web = { workspace = true, features=["hydrate"], optional = true }
+dioxus = { workspace = true }
+dioxus-router = { workspace = true }
+dioxus-fullstack = { workspace = true }
+axum = { version = "0.6.12", optional = true }
+tokio = { workspace = true, features = ["full"], optional = true }
+serde = "1.0.159"
+tower-http = { version = "0.4.0", features = ["fs"], optional = true }
+http = { version = "0.2.9", optional = true }
+execute = "0.2.12"
+
+[features]
+default = ["web"]
+ssr = ["axum", "tokio", "dioxus-fullstack/axum", "tower-http", "http"]
+web = ["dioxus-web", "dioxus-router/web"]

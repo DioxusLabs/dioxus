@@ -224,14 +224,14 @@ pub fn partial_derive_state(_: TokenStream, input: TokenStream) -> TokenStream {
     let get_parent_view = {
         if parent_dependencies.is_empty() {
             quote! {
-                let raw_parent = tree.parent_id(id).map(|_| ());
+                let raw_parent = tree.parent_id_advanced(id, Self::TRAVERSE_SHADOW_DOM).map(|_| ());
             }
         } else {
             let temps = (0..parent_dependencies.len())
                 .map(|i| format_ident!("__temp{}", i))
                 .collect::<Vec<_>>();
             quote! {
-                let raw_parent = tree.parent_id(id).and_then(|parent_id| {
+                let raw_parent = tree.parent_id_advanced(id, Self::TRAVERSE_SHADOW_DOM).and_then(|parent_id| {
                     let raw_parent: Option<(#(*const #parent_dependencies,)*)> = (#(&#parent_view,)*).get(parent_id).ok().map(|c| {
                         let (#(#temps,)*) = c;
                         (#(#temps as *const _,)*)
@@ -261,14 +261,14 @@ pub fn partial_derive_state(_: TokenStream, input: TokenStream) -> TokenStream {
     let get_child_view = {
         if child_dependencies.is_empty() {
             quote! {
-                let raw_children: Vec<_> = tree.children_ids(id).into_iter().map(|_| ()).collect();
+                let raw_children: Vec<_> = tree.children_ids_advanced(id, Self::TRAVERSE_SHADOW_DOM).into_iter().map(|_| ()).collect();
             }
         } else {
             let temps = (0..child_dependencies.len())
                 .map(|i| format_ident!("__temp{}", i))
                 .collect::<Vec<_>>();
             quote! {
-                let raw_children: Vec<_> = tree.children_ids(id).into_iter().filter_map(|id| {
+                let raw_children: Vec<_> = tree.children_ids_advanced(id, Self::TRAVERSE_SHADOW_DOM).into_iter().filter_map(|id| {
                     let raw_children: Option<(#(*const #child_dependencies,)*)> = (#(&#child_view,)*).get(id).ok().map(|c| {
                         let (#(#temps,)*) = c;
                         (#(#temps as *const _,)*)
@@ -325,7 +325,7 @@ pub fn partial_derive_state(_: TokenStream, input: TokenStream) -> TokenStream {
 
             #(#items)*
 
-            fn workload_system(type_id: std::any::TypeId, dependants: dioxus_native_core::exports::FxHashSet<std::any::TypeId>, pass_direction: dioxus_native_core::prelude::PassDirection) -> dioxus_native_core::exports::shipyard::WorkloadSystem {
+            fn workload_system(type_id: std::any::TypeId, dependants: std::sync::Arc<dioxus_native_core::prelude::Dependants>, pass_direction: dioxus_native_core::prelude::PassDirection) -> dioxus_native_core::exports::shipyard::WorkloadSystem {
                 use dioxus_native_core::exports::shipyard::{IntoWorkloadSystem, Get, AddComponent};
                 use dioxus_native_core::tree::TreeRef;
                 use dioxus_native_core::prelude::{NodeType, NodeView};

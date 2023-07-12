@@ -7,20 +7,20 @@ description = "HTML Element pack for Dioxus - a concurrent renderer-agnostic Vir
 license = "MIT/Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com"
-documentation = "https://dioxuslabs.com"
 keywords = ["dom", "ui", "gui", "react"]
 
 [dependencies]
-dioxus-core = { path = "../core", version = "^0.3.0" }
-dioxus-rsx = { path = "../rsx", version = "^0.0.3", optional = true }
+dioxus-core = { workspace = true }
+dioxus-rsx = { workspace = true, optional = true }
 serde = { version = "1", features = ["derive"], optional = true }
 serde_repr = { version = "0.1", optional = true }
-wasm-bindgen = { version = "0.2.79", optional = true }
+wasm-bindgen = { workspace = true, optional = true }
 euclid = "0.22.7"
 enumset = "1.0.11"
 keyboard-types = "0.6.2"
 async-trait = "0.1.58"
 serde-value = "0.7.0"
+tokio = { workspace = true, features = ["fs", "io-util"], optional = true }
 
 [dependencies.web-sys]
 optional = true
@@ -39,6 +39,11 @@ features = [
     "FocusEvent",
     "CompositionEvent",
     "ClipboardEvent",
+    "Element",
+    "DomRect",
+    "ScrollIntoViewOptions",
+    "ScrollLogicalPosition",
+    "ScrollBehavior",
 ]
 
 [dev-dependencies]
@@ -46,6 +51,13 @@ serde_json = "1"
 
 [features]
 default = ["serialize"]
-serialize = ["serde", "serde_repr", "euclid/serde", "keyboard-types/serde", "dioxus-core/serialize"]
+serialize = [
+    "serde",
+    "serde_repr",
+    "euclid/serde",
+    "keyboard-types/serde",
+    "dioxus-core/serialize",
+]
 wasm-bind = ["web-sys", "wasm-bindgen"]
+native-bind = ["tokio"]
 hot-reload-context = ["dioxus-rsx"]

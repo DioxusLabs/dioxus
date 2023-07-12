@@ -1,0 +1,6 @@
+{
+    "Lua.diagnostics.globals": [
+        "plugin_logger",
+        "PLUGIN_DOWNLOADER"
+    ]
+}

@@ -50,7 +50,16 @@ impl Parse for BodyNode {
             return Ok(BodyNode::Text(stream.parse()?));
         }
 
+        // if this is a dash-separated path, it's a web component (custom element)
         let body_stream = stream.fork();
+        if let Ok(ElementName::Custom(name)) = body_stream.parse::<ElementName>() {
+            if name.value().contains('-') && body_stream.peek(token::Brace) {
+                return Ok(BodyNode::Element(stream.parse::<Element>()?));
+            }
+        }
+
+        let body_stream = stream.fork();
+
         if let Ok(path) = body_stream.parse::<syn::Path>() {
             // this is an Element if path match of:
             // - one ident

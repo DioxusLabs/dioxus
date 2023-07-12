@@ -7,7 +7,7 @@ use crate::{
     nodes::{DynamicNode, VNode},
     scopes::ScopeId,
     virtual_dom::VirtualDom,
-    Attribute, AttributeValue, TemplateNode,
+    Attribute, TemplateNode,
 };
 
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -125,10 +125,8 @@ impl<'b> VirtualDom {
                     .mounted_element
                     .set(left_attr.mounted_element.get());
 
-                // We want to make sure anything listener that gets pulled is valid
-                if let AttributeValue::Listener(_) = right_attr.value {
-                    self.update_template(left_attr.mounted_element.get(), right_template);
-                }
+                // We want to make sure anything that gets pulled is valid
+                self.update_template(left_attr.mounted_element.get(), right_template);
 
                 // If the attributes are different (or volatile), we need to update them
                 if left_attr.value != right_attr.value || left_attr.volatile {

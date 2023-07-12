@@ -33,6 +33,7 @@ mod form;
 mod image;
 mod keyboard;
 mod media;
+mod mounted;
 mod mouse;
 mod pointer;
 mod scroll;
@@ -51,6 +52,7 @@ pub use form::*;
 pub use image::*;
 pub use keyboard::*;
 pub use media::*;
+pub use mounted::*;
 pub use mouse::*;
 pub use pointer::*;
 pub use scroll::*;
@@ -127,6 +129,7 @@ pub fn event_bubbles(evt: &str) -> bool {
         "loadeddata" => false,
         "loadedmetadata" => false,
         "loadstart" => false,
+        "load" => false,
         "pause" => false,
         "play" => false,
         "playing" => false,
@@ -144,6 +147,7 @@ pub fn event_bubbles(evt: &str) -> bool {
         "animationiteration" => true,
         "transitionend" => true,
         "toggle" => true,
+        "mounted" => false,
         _ => true,
     }
 }

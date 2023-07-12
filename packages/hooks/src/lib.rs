@@ -1,24 +1,53 @@
 #[macro_export]
-/// A helper macro for using hooks in async environements.
+/// A helper macro for using hooks and properties in async environements.
 ///
 /// # Usage
 ///
 ///
-/// ```ignore
+/// ```
+/// # use dioxus::prelude::*;
+/// #
+/// # #[derive(Props, PartialEq)]
+/// # struct Props {
+/// #    prop: String,
+/// # }
+/// # fn Component(cx: Scope<Props>) -> Element {
+///
 /// let (data) = use_ref(cx, || {});
 ///
 /// let handle_thing = move |_| {
-///     to_owned![data]
+///     to_owned![data, cx.props.prop];
 ///     cx.spawn(async move {
 ///         // do stuff
 ///     });
-/// }
+/// };
+/// # handle_thing(());
+/// # None }
 /// ```
 macro_rules! to_owned {
-    ($($es:ident),+) => {$(
+    // Rule matching simple symbols without a path
+    ($es:ident $(, $($rest:tt)*)?) => {
         #[allow(unused_mut)]
         let mut $es = $es.to_owned();
-    )*}
+        $( to_owned![$($rest)*] )?
+    };
+
+    // We need to find the last element in a path, for this we need to unstack the path part by
+    // part using, separating what we have with a '@'
+    ($($deref:ident).* $(, $($rest:tt)*)?) => {
+        to_owned![@ $($deref).* $(, $($rest)*)?]
+    };
+
+    // Take the head of the path and add it to the list of $deref
+    ($($deref:ident)* @ $head:ident $( . $tail:ident)+ $(, $($rest:tt)*)?) => {
+        to_owned![$($deref)* $head @ $($tail).+ $(, $($rest)*)?]
+    };
+    // We have exhausted the path, use the last as a name
+    ($($deref:ident)* @ $last:ident $(, $($rest:tt)*)? ) => {
+        #[allow(unused_mut)]
+        let mut $last = $($deref .)* $last .to_owned();
+        $(to_owned![$($rest)*])?
+    };
 }
 
 mod usecontext;

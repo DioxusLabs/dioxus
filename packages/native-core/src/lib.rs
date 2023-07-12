@@ -7,8 +7,10 @@ use std::hash::BuildHasherDefault;
 use node_ref::NodeMask;
 use rustc_hash::FxHasher;
 
+pub mod custom_element;
 #[cfg(feature = "dioxus")]
 pub mod dioxus;
+#[cfg(feature = "layout-attributes")]
 pub mod layout_attributes;
 pub mod node;
 pub mod node_ref;
@@ -17,6 +19,7 @@ mod passes;
 pub mod real_dom;
 pub mod tree;
 pub mod utils;
+
 pub use shipyard::EntityId as NodeId;
 
 pub mod exports {
@@ -35,7 +38,7 @@ pub mod prelude {
     pub use crate::node::{ElementNode, FromAnyValue, NodeType, OwnedAttributeView, TextNode};
     pub use crate::node_ref::{AttributeMaskBuilder, NodeMaskBuilder, NodeView};
     pub use crate::passes::{run_pass, PassDirection, RunPassView, TypeErasedState};
-    pub use crate::passes::{Dependancy, DependancyView, State};
+    pub use crate::passes::{Dependancy, DependancyView, Dependants, State};
     pub use crate::real_dom::{NodeImmutable, NodeMut, NodeRef, RealDom};
     pub use crate::NodeId;
     pub use crate::SendAnyMap;

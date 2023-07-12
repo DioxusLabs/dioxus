@@ -3,7 +3,7 @@ use crate::cache::StringCache;
 use dioxus_core::{prelude::*, AttributeValue, DynamicNode, RenderReturn};
 use std::collections::HashMap;
 use std::fmt::Write;
-use std::rc::Rc;
+use std::sync::Arc;
 
 /// A virtualdom renderer that caches the templates it has seen for faster rendering
 #[derive(Default)]
@@ -25,7 +25,7 @@ pub struct Renderer {
     pub skip_components: bool,
 
     /// A cache of templates that have been rendered
-    template_cache: HashMap<&'static str, Rc<StringCache>>,
+    template_cache: HashMap<&'static str, Arc<StringCache>>,
 }
 
 impl Renderer {
@@ -67,7 +67,7 @@ impl Renderer {
         let entry = self
             .template_cache
             .entry(template.template.get().name)
-            .or_insert_with(|| Rc::new(StringCache::from_template(template).unwrap()))
+            .or_insert_with(|| Arc::new(StringCache::from_template(template).unwrap()))
             .clone();
 
         let mut inner_html = None;
@@ -89,6 +89,10 @@ impl Renderer {
                                 write!(buf, " {}=\"{}\"", attr.name, value)?
                             }
                             AttributeValue::Bool(value) => write!(buf, " {}={}", attr.name, value)?,
+                            AttributeValue::Int(value) => write!(buf, " {}={}", attr.name, value)?,
+                            AttributeValue::Float(value) => {
+                                write!(buf, " {}={}", attr.name, value)?
+                            }
                             _ => {}
                         };
                     }
