@@ -103,7 +103,11 @@ pub async fn serve_default(
 
     // WS Reload Watching
     let (reload_tx, _) = broadcast::channel(100);
-    setup_file_watcher(&config, port, ip.clone(), reload_tx.clone()).await?;
+
+    // We got to own watcher so that it exists for the duration of serve
+    // Otherwise full reload won't work.
+    let _watcher = setup_file_watcher(&config, port, ip.clone(), reload_tx.clone()).await?;
+
     let ws_reload_state = Arc::new(WsReloadState {
         update: reload_tx.clone(),
     });
@@ -174,7 +178,9 @@ pub async fn serve_hot_reload(
     });
 
     // Setup file watcher
-    setup_file_watcher_hot_reload(
+    // We got to own watcher so that it exists for the duration of serve
+    // Otherwise hot reload won't work.
+    let _watcher = setup_file_watcher_hot_reload(
         &config,
         port,
         ip.clone(),
@@ -235,7 +241,7 @@ async fn get_rustls(config: &CrateConfig) -> Result<Option<RustlsConfig>> {
 
             // Create ssl directory if using defaults
             if key_path == DEFAULT_KEY_PATH && cert_path == DEFAULT_CERT_PATH {
-                fs::create_dir("ssl")?;
+                _ = fs::create_dir("ssl");
             }
 
             let cmd = Command::new("mkcert")
@@ -432,7 +438,7 @@ async fn setup_file_watcher(
     port: u16,
     watcher_ip: String,
     reload_tx: Sender<()>,
-) -> Result<()> {
+) -> Result<RecommendedWatcher> {
     let build_manager = BuildManager {
         config: config.clone(),
         reload_tx,
@@ -491,7 +497,7 @@ async fn setup_file_watcher(
             )
             .unwrap();
     }
-    Ok(())
+    Ok(watcher)
 }
 
 // Todo: reduce duplication and merge with setup_file_watcher()
@@ -503,7 +509,7 @@ async fn setup_file_watcher_hot_reload(
     hot_reload_tx: Sender<Template<'static>>,
     file_map: Arc<Mutex<FileMap<HtmlCtx>>>,
     build_manager: Arc<BuildManager>,
-) -> Result<()> {
+) -> Result<RecommendedWatcher> {
     // file watcher: check file change
     let allow_watch_path = config
         .dioxus_config
@@ -598,7 +604,7 @@ async fn setup_file_watcher_hot_reload(
         }
     }
 
-    Ok(())
+    Ok(watcher)
 }
 
 /// Get the network ip
