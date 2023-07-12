@@ -42,6 +42,22 @@ pub mod diagnostics {
         pub kind: BorrowKind,
     }
 
+    impl PreviousBorrow {
+        pub fn display_opt(value: &Option<Self>) -> String {
+            value
+                .as_ref()
+                .map(|value| value.to_string())
+                .unwrap_or_default()
+        }
+    }
+
+    impl std::fmt::Display for PreviousBorrow {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            let Self { location, kind } = self;
+            write!(f, "{location} ({kind:?})")
+        }
+    }
+
     impl<T> super::UseSharedState<T> {
         #[cfg_attr(debug_assertions, track_caller)]
         #[cfg_attr(debug_assertions, inline(never))]
@@ -90,7 +106,8 @@ pub mod error {
         #[cfg_attr(
             debug_assertions,
             error(
-            "[{location}] {type_name} is already borrowed at [{previous_borrow:?}], so it cannot be borrowed mutably."
+                "[{location}] {type_name} is already borrowed at [{previous_borrow}], so it cannot be borrowed mutably.",
+                previous_borrow = super::diagnostics::PreviousBorrow::display_opt(.previous_borrow)
             )
          )]
         #[cfg_attr(
@@ -108,7 +125,8 @@ pub mod error {
         #[cfg_attr(
             debug_assertions,
             error(
-            "[{location}] {type_name} is already borrowed mutably at [{previous_borrow:?}], so it cannot be borrowed anymore."
+                "[{location}] {type_name} is already borrowed mutably at [{previous_borrow}], so it cannot be borrowed anymore.",
+                previous_borrow = super::diagnostics::PreviousBorrow::display_opt(.previous_borrow)
             )
          )]
         #[cfg_attr(
