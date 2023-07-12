@@ -117,7 +117,7 @@ pub fn server_context() -> DioxusServerContext {
 /// Extract some part from the current server request.
 ///
 /// This function will only provide the current server context if it is called from a server function or on the server rendering a request.
-pub async fn extract_server_context<E: FromServerContext<I>, I>() -> Result<E, E::Rejection> {
+pub async fn extract<E: FromServerContext<I>, I>() -> Result<E, E::Rejection> {
     E::from_request(&server_context()).await
 }
 

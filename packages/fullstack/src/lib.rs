@@ -47,8 +47,7 @@ pub mod prelude {
     pub use crate::server_context::Axum;
     #[cfg(feature = "ssr")]
     pub use crate::server_context::{
-        extract_server_context, server_context, DioxusServerContext, FromServerContext,
-        ProvideServerContext,
+        extract, server_context, DioxusServerContext, FromServerContext, ProvideServerContext,
     };
     pub use crate::server_fn::DioxusServerFn;
     #[cfg(feature = "ssr")]

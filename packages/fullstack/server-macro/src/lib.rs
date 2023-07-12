@@ -5,7 +5,6 @@ use quote::{ToTokens, __private::TokenStream as TokenStream2};
 use server_fn_macro::*;
 use syn::{
     parse::{Parse, ParseStream},
-    spanned::Spanned,
     Ident, ItemFn, Token,
 };
 
@@ -67,22 +66,6 @@ pub fn server(args: proc_macro::TokenStream, s: TokenStream) -> TokenStream {
         Err(e) => return e.into(),
     };
 
-    // find all arguments with the #[extract] attribute
-    let mut extractors: Vec<Extractor> = vec![];
-    function.sig.inputs = function
-        .sig
-        .inputs
-        .into_iter()
-        .filter(|arg| {
-            if let Ok(extractor) = syn::parse2(arg.clone().into_token_stream()) {
-                extractors.push(extractor);
-                false
-            } else {
-                true
-            }
-        })
-        .collect();
-
     // extract all #[middleware] attributes
     let mut middlewares: Vec<Middleware> = vec![];
     function.attrs.retain(|attr| {
@@ -107,7 +90,6 @@ pub fn server(args: proc_macro::TokenStream, s: TokenStream) -> TokenStream {
     let mapped_body = quote::quote! {
         #(#attrs)*
         #vis #sig {
-            #(#extractors)*
             #block
         }
     };
@@ -152,45 +134,6 @@ pub fn server(args: proc_macro::TokenStream, s: TokenStream) -> TokenStream {
         }
         .to_token_stream()
         .into(),
-    }
-}
-
-struct Extractor {
-    pat: syn::PatType,
-}
-
-impl ToTokens for Extractor {
-    fn to_tokens(&self, tokens: &mut TokenStream2) {
-        let pat = &self.pat;
-        tokens.extend(quote::quote! {
-            let #pat = ::dioxus_fullstack::prelude::extract_server_context().await?;
-        });
-    }
-}
-
-impl Parse for Extractor {
-    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        let arg: syn::FnArg = input.parse()?;
-        match arg {
-            syn::FnArg::Typed(mut pat_type) => {
-                let mut contains_extract = false;
-                pat_type.attrs.retain(|attr| {
-                    let is_extract = attr.path().is_ident("extract");
-                    if is_extract {
-                        contains_extract = true;
-                    }
-                    !is_extract
-                });
-                if !contains_extract {
-                    return Err(syn::Error::new(
-                        pat_type.span(),
-                        "expected an argument with the #[extract] attribute",
-                    ));
-                }
-                Ok(Extractor { pat: pat_type })
-            }
-            _ => Err(syn::Error::new(arg.span(), "expected a typed argument")),
-        }
     }
 }
 
