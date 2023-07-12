@@ -20,3 +20,4 @@ log = { workspace = true }
 futures-util = { workspace = true, default-features = false }
 dioxus-core = { workspace = true }
 dioxus = { workspace = true }
+web-sys = { version = "0.3.64", features = ["Document", "Window", "Element"] }
