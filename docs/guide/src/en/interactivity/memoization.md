@@ -1,6 +1,6 @@
 # Memoization
 
-[`use_memo`](https://docs.rs/dioxus-hooks/latest/dioxus_hooks/fn.use_memo.html) let's you memorize values and therefore save computation time. This is useful for expensive calculations.
+[`use_memo`](https://docs.rs/dioxus-hooks/latest/dioxus_hooks/fn.use_memo.html) let's you memorize values and thus save computation time. This is useful for expensive calculations.
 
 ```rust, no_run
 #[inline_props]
