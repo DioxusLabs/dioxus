@@ -23,7 +23,7 @@ mod segment;
 
 /// Derives the Routable trait for an enum of routes
 ///
-/// Each varient must:
+/// Each variant must:
 /// 1. Be struct-like with {}'s
 /// 2. Contain all of the dynamic parameters of the current and nested routes
 /// 3. Have a #[route("route")] attribute
@@ -75,6 +75,124 @@ mod segment;
 ///     Route3 { dynamic: String },
 ///     #[child]
 ///     NestedRoute(NestedRoute),
+/// }
+/// ```
+///
+/// # `#[route("path", component, props)]`
+///
+/// The `#[route]` attribute is used to define a route. It takes up to 3 parameters:
+/// - `path`: The path to the enum variant (relative to the parent nest)
+/// - (optional) `component`: The component to render when the route is matched. If not specified, the name of the variant is used
+/// - (optional) `props`: The props type for the component. If not specified, the name of the variant with `Props` appended is used
+///
+/// Routes are the most basic attribute. They allow you to define a route and the component to render when the route is matched. The component must take all dynamic parameters of the route and all parent nests.
+/// The next variant will be tied to the component. If you link to that variant, the component will be rendered.
+///
+/// ```rust, skip
+/// #[derive(Clone, Debug, PartialEq, Routable)]
+/// enum Route {
+///     // Define routes that renders the IndexComponent that takes the IndexProps
+///     // The Index component will be rendered when the route is matched (e.g. when the user navigates to /)
+///     #[route("/", Index, IndexProps)]
+///     Index {},
+/// }
+/// ```
+///
+/// # `#[redirect("path", function)]`
+///
+/// The `#[redirect]` attribute is used to define a redirect. It takes 2 parameters:
+/// - `path`: The path to the enum variant (relative to the parent nest)
+/// - `function`: A function that takes the parameters from the path and returns a new route
+///
+/// ```rust, skip
+/// #[derive(Clone, Debug, PartialEq, Routable)]
+/// enum Route {
+///     // Redirects the /:id route to the Index route
+///     #[redirect("/:id", |_: usize| Route::Index {})]
+///     #[route("/", Index, IndexProps)]
+///     Index {},
+/// }
+/// ```
+///
+/// Redirects allow you to redirect a route to another route. The function must take all dynamic parameters of the route and all parent nests.
+///
+/// # `#[nest("path")]`
+///
+/// The `#[nest]` attribute is used to define a nest. It takes 1 parameter:
+/// - `path`: The path to the nest (relative to the parent nest)
+///
+/// Nests effect all nests, routes and redirects defined until the next `#[end_nest]` attribute. All children of nests are relative to the nest route and must include all dynamic parameters of the nest.
+///
+/// ```rust, skip
+/// #[derive(Clone, Debug, PartialEq, Routable)]
+/// enum Route {
+///     // Nests all child routes in the /blog route
+///     #[nest("/blog")]
+///         // This is at /blog/:id
+///         #[redirect("/:id", |_: usize| Route::Index {})]
+///         // This is at /blog
+///         #[route("/", Index, IndexProps)]
+///         Index {},
+/// }
+/// ```
+///
+/// # `#[end_nest]`
+///
+/// The `#[end_nest]` attribute is used to end a nest. It takes no parameters.
+///
+/// ```rust, skip
+/// #[derive(Clone, Debug, PartialEq, Routable)]
+/// enum Route {
+///     #[nest("/blog")]
+///         // This is at /blog/:id
+///         #[redirect("/:id", |_: usize| Route::Index {})]
+///         // This is at /blog
+///         #[route("/", Index, IndexProps)]
+///         Index {},
+///     // Ends the nest
+///     #[end_nest]
+///     // This is at /
+///     #[route("/")]
+///     Home {},
+/// }
+/// ```
+///
+/// # `#[layout(component)]`
+///
+/// The `#[layout]` attribute is used to define a layout. It takes 2 parameters:
+/// - `component`: The component to render when the route is matched. If not specified, the name of the variant is used
+/// - (optional) `props`: The props type for the component. If not specified, the name of the variant with `Props` appended is used
+///
+/// The layout component allows you to wrap all children of the layout in a component. The child routes are rendered in the Outlet of the layout component. The layout component must take all dynamic parameters of the nests it is nested in.
+///
+/// ```rust, skip
+/// #[derive(Clone, Debug, PartialEq, Routable)]
+/// enum Route {
+///     #[layout(BlogFrame)]
+///         #[redirect("/:id", |_: usize| Route::Index {})]
+///         // Index will be rendered in the Outlet of the BlogFrame component
+///         #[route("/", Index, IndexProps)]
+///         Index {},
+/// }
+/// ```
+///
+/// # `#[end_layout]`
+///
+/// The `#[end_layout]` attribute is used to end a layout. It takes no parameters.
+///
+/// ```rust, skip
+/// #[derive(Clone, Debug, PartialEq, Routable)]
+/// enum Route {
+///     #[layout(BlogFrame)]
+///         #[redirect("/:id", |_: usize| Route::Index {})]
+///         // Index will be rendered in the Outlet of the BlogFrame component
+///         #[route("/", Index, IndexProps)]
+///         Index {},
+///     // Ends the layout
+///     #[end_layout]
+///     // This will be rendered standalone
+///     #[route("/")]
+///     Home {},
 /// }
 /// ```
 #[proc_macro_derive(
