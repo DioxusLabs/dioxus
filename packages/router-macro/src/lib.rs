@@ -26,7 +26,7 @@ mod segment;
 /// Each variant must:
 /// 1. Be struct-like with {}'s
 /// 2. Contain all of the dynamic parameters of the current and nested routes
-/// 3. Have a #[route("route")] attribute
+/// 3. Have a `#[route("route")]` attribute
 ///
 /// Route Segments:
 /// 1. Static Segments: "/static"
