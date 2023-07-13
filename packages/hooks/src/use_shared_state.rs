@@ -1,17 +1,15 @@
 use self::error::{UseSharedStateError, UseSharedStateResult};
 use dioxus_core::{ScopeId, ScopeState};
-use std::{
-    cell::{Ref, RefCell, RefMut},
-    collections::HashSet,
-    rc::Rc,
-    sync::Arc,
+use std::{collections::HashSet, rc::Rc, sync::Arc};
+
+#[cfg(debug_assertions)]
+pub use debug_cell::{
+    error::{BorrowError, BorrowMutError},
+    Ref, RefCell, RefMut,
 };
 
 #[cfg(not(debug_assertions))]
-type Location = ();
-
-#[cfg(debug_assertions)]
-type Location = &'static std::panic::Location<'static>;
+pub use std::cell::{BorrowError, BorrowMutError, Ref, RefCell, RefMut};
 
 #[macro_export]
 macro_rules! debug_location {
@@ -27,119 +25,49 @@ macro_rules! debug_location {
     }};
 }
 
-pub mod diagnostics {
-    use std::panic::Location;
-
-    #[derive(Debug, Clone, Copy)]
-    pub enum BorrowKind {
-        Mutable,
-        Immutable,
-    }
-
-    #[derive(Debug, Clone, Copy)]
-    pub struct PreviousBorrow {
-        pub location: Location<'static>,
-        pub kind: BorrowKind,
-    }
-
-    impl PreviousBorrow {
-        pub fn display_opt(value: &Option<Self>) -> String {
-            value
-                .as_ref()
-                .map(|value| value.to_string())
-                .unwrap_or_default()
-        }
-    }
-
-    impl std::fmt::Display for PreviousBorrow {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            let Self { location, kind } = self;
-            write!(f, "{location} ({kind:?})")
-        }
-    }
-
-    impl<T> super::UseSharedState<T> {
-        #[cfg_attr(debug_assertions, track_caller)]
-        #[cfg_attr(debug_assertions, inline(never))]
-        #[allow(unused_must_use)]
-        pub(super) fn debug_track_borrow(&self) {
-            #[cfg(debug_assertions)]
-            self.previous_borrow
-                .borrow_mut()
-                .insert(PreviousBorrow::borrowed());
-        }
-
-        #[cfg_attr(debug_assertions, track_caller)]
-        #[cfg_attr(debug_assertions, inline(never))]
-        #[allow(unused_must_use)]
-        pub(super) fn debug_track_borrow_mut(&self) {
-            #[cfg(debug_assertions)]
-            self.previous_borrow
-                .borrow_mut()
-                .insert(PreviousBorrow::borrowed_mut());
-        }
-    }
-    impl PreviousBorrow {
-        #[track_caller]
-        #[inline(never)]
-        pub fn borrowed() -> Self {
-            Self {
-                location: *Location::caller(),
-                kind: BorrowKind::Immutable,
-            }
-        }
-
-        #[track_caller]
-        #[inline(never)]
-        pub fn borrowed_mut() -> Self {
-            Self {
-                location: *Location::caller(),
-                kind: BorrowKind::Mutable,
-            }
-        }
-    }
-}
-
 pub mod error {
+    fn locations_display(locations: &[&'static std::panic::Location<'static>]) -> String {
+        locations
+            .iter()
+            .map(|location| format!(" - {location}"))
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
     #[derive(thiserror::Error, Debug)]
     pub enum UseSharedStateError {
         #[cfg_attr(
             debug_assertions,
             error(
-                "[{location}] {type_name} is already borrowed at [{previous_borrow}], so it cannot be borrowed mutably.",
-                previous_borrow = super::diagnostics::PreviousBorrow::display_opt(.previous_borrow)
+                "[{0}] {1} is already borrowed at, so it cannot be borrowed mutably. Previous borrows:\n[{2}]\n\n",
+                .source.attempted_at,
+                .type_name,
+                locations_display(&.source.already_borrowed_at)
             )
          )]
         #[cfg_attr(
             not(debug_assertions),
-            error("{type_name} is already borrowed, so it cannot be borrowed mutably.")
+            error("{type_name} is already borrowed, so it cannot be borrowed mutably. (More detail available in debug mode)")
         )]
         AlreadyBorrowed {
-            source: core::cell::BorrowMutError,
+            source: super::BorrowMutError,
             type_name: &'static str,
-            /// Only available in debug mode
-            location: super::Location,
-            #[cfg(debug_assertions)]
-            previous_borrow: Option<super::diagnostics::PreviousBorrow>,
         },
         #[cfg_attr(
             debug_assertions,
             error(
-                "[{location}] {type_name} is already borrowed mutably at [{previous_borrow}], so it cannot be borrowed anymore.",
-                previous_borrow = super::diagnostics::PreviousBorrow::display_opt(.previous_borrow)
+                "[{0}] {1} is already borrowed mutably at [{2}], so it cannot be borrowed anymore.",
+                .source.attempted_at,
+                .type_name,
+                locations_display(&.source.already_borrowed_at)
             )
          )]
         #[cfg_attr(
             not(debug_assertions),
-            error("{type_name} is already borrowed mutably, so it cannot be borrowed anymore.")
+            error("{type_name} is already borrowed mutably, so it cannot be borrowed anymore. (More detail available in debug mode)")
         )]
         AlreadyBorrowedMutably {
-            source: core::cell::BorrowError,
+            source: super::BorrowError,
             type_name: &'static str,
-            /// Only available in debug mode
-            location: super::Location,
-            #[cfg(debug_assertions)]
-            previous_borrow: Option<super::diagnostics::PreviousBorrow>,
         },
     }
 
@@ -259,17 +187,11 @@ impl<T> Drop for UseSharedStateOwner<T> {
 /// State that is shared between components through the context system
 pub struct UseSharedState<T> {
     pub(crate) inner: Rc<RefCell<ProvidedStateInner<T>>>,
-    #[cfg(debug_assertions)]
-    previous_borrow: Rc<RefCell<Option<diagnostics::PreviousBorrow>>>,
 }
 
 impl<T> UseSharedState<T> {
     fn new(inner: Rc<RefCell<ProvidedStateInner<T>>>) -> Self {
-        Self {
-            inner,
-            #[cfg(debug_assertions)]
-            previous_borrow: Default::default(),
-        }
+        Self { inner }
     }
 
     /// Notify all consumers of the state that it has changed. (This is called automatically when you call "write")
@@ -282,16 +204,10 @@ impl<T> UseSharedState<T> {
     #[cfg_attr(debug_assertions, inline(never))]
     pub fn try_read(&self) -> UseSharedStateResult<Ref<'_, T>> {
         match self.inner.try_borrow() {
-            Ok(value) => {
-                self.debug_track_borrow();
-                Ok(Ref::map(value, |inner| &inner.value))
-            }
+            Ok(value) => Ok(Ref::map(value, |inner| &inner.value)),
             Err(source) => Err(UseSharedStateError::AlreadyBorrowedMutably {
                 source,
                 type_name: std::any::type_name::<Self>(),
-                location: debug_location!(),
-                #[cfg(debug_assertions)]
-                previous_borrow: *self.previous_borrow.borrow(),
             }),
         }
     }
@@ -315,16 +231,12 @@ impl<T> UseSharedState<T> {
     pub fn try_write(&self) -> UseSharedStateResult<RefMut<'_, T>> {
         match self.inner.try_borrow_mut() {
             Ok(mut value) => {
-                self.debug_track_borrow_mut();
                 value.notify_consumers();
                 Ok(RefMut::map(value, |inner| &mut inner.value))
             }
             Err(source) => Err(UseSharedStateError::AlreadyBorrowed {
                 source,
                 type_name: std::any::type_name::<Self>(),
-                location: crate::debug_location!(),
-                #[cfg(debug_assertions)]
-                previous_borrow: *self.previous_borrow.borrow(),
             }),
         }
     }
@@ -350,16 +262,10 @@ impl<T> UseSharedState<T> {
     #[cfg_attr(debug_assertions, inline(never))]
     pub fn try_write_silent(&self) -> UseSharedStateResult<RefMut<'_, T>> {
         match self.inner.try_borrow_mut() {
-            Ok(value) => {
-                self.debug_track_borrow_mut();
-                Ok(RefMut::map(value, |inner| &mut inner.value))
-            }
+            Ok(value) => Ok(RefMut::map(value, |inner| &mut inner.value)),
             Err(source) => Err(UseSharedStateError::AlreadyBorrowed {
                 source,
                 type_name: std::any::type_name::<Self>(),
-                location: crate::debug_location!(),
-                #[cfg(debug_assertions)]
-                previous_borrow: *self.previous_borrow.borrow(),
             }),
         }
     }
@@ -382,8 +288,6 @@ impl<T> Clone for UseSharedState<T> {
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
-            #[cfg(debug_assertions)]
-            previous_borrow: self.previous_borrow.clone(),
         }
     }
 }
