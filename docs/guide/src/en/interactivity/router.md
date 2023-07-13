@@ -4,7 +4,6 @@ In many of your apps, you'll want to have different "scenes". For a webpage, the
 
 To unify these platforms, Dioxus provides a first-party solution for scene management called Dioxus Router.
 
-
 ## What is it?
 
 For an app like the Dioxus landing page (https://dioxuslabs.com), we want to have several different scenes:
@@ -20,12 +19,11 @@ The Dioxus router makes it easy to create these scenes. To make sure we're using
 cargo add dioxus-router
 ```
 
-
 ## Using the router
 
 Unlike other routers in the Rust ecosystem, our router is built declaratively. This makes it possible to compose our app layout simply by arranging components.
 
-```rust
+```rust, no_run
 rsx!{
     // All of our routes will be rendered inside this Router component
     Router {
@@ -43,7 +41,7 @@ We can fix this one of two ways:
 
 - A fallback 404 page
 
-```rust
+```rust, no_run
 rsx!{
     Router {
         Route { to: "/home", Home {} }
@@ -54,10 +52,9 @@ rsx!{
 }
 ```
 
-
 - Redirect 404 to home
 
-```rust
+```rust, no_run
 rsx!{
     Router {
         Route { to: "/home", Home {} }
@@ -72,8 +69,7 @@ rsx!{
 
 For our app to navigate these routes, we can provide clickable elements called Links. These simply wrap `<a>` elements that, when clicked, navigate the app to the given location.
 
-
-```rust
+```rust, no_run
 rsx!{
     Link {
         to: "/home",
@@ -84,4 +80,4 @@ rsx!{
 
 ## More reading
 
-This page is just a very brief overview of the router. For more information, check out [the router book](https://dioxuslabs.com/router/guide/) or some of [the router examples](https://github.com/DioxusLabs/dioxus/blob/master/examples/router.rs).
+This page is just a very brief overview of the router. For more information, check out [the router book](https://dioxuslabs.com/docs/0.3/router/) or some of [the router examples](https://github.com/DioxusLabs/dioxus/blob/master/examples/router.rs).

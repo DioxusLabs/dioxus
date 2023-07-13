@@ -104,6 +104,9 @@ pub trait State<V: FromAnyValue + Send + Sync = ()>: Any + Send + Sync {
     /// This is a mask of what aspects of the node are required to update this state
     const NODE_MASK: NodeMaskBuilder<'static>;
 
+    /// Does the state traverse into the shadow dom or pass over it. This should be true for layout and false for styles
+    const TRAVERSE_SHADOW_DOM: bool = false;
+
     /// Update this state in a node, returns if the state was updated
     fn update<'a>(
         &mut self,
@@ -150,6 +153,7 @@ pub trait State<V: FromAnyValue + Send + Sync = ()>: Any + Send + Sync {
             dependants: Default::default(),
             mask: node_mask,
             pass_direction: pass_direction::<V, Self>(),
+            enter_shadow_dom: Self::TRAVERSE_SHADOW_DOM,
             workload: Self::workload_system,
             phantom: PhantomData,
         }
@@ -228,28 +232,42 @@ pub fn run_pass<V: FromAnyValue + Send + Sync>(
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Dependant {
+    pub(crate) type_id: TypeId,
+    pub(crate) enter_shadow_dom: bool,
+}
+
 /// The states that depend on this state
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct Dependants {
     /// The states in the parent direction that should be invalidated when this state is invalidated
-    pub parent: Vec<TypeId>,
+    pub(crate) parent: Vec<Dependant>,
     /// The states in the child direction that should be invalidated when this state is invalidated
-    pub child: Vec<TypeId>,
+    pub(crate) child: Vec<Dependant>,
     /// The states in the node direction that should be invalidated when this state is invalidated
-    pub node: Vec<TypeId>,
+    pub(crate) node: Vec<TypeId>,
 }
 
 impl Dependants {
     fn mark_dirty(&self, dirty: &DirtyNodeStates, id: NodeId, tree: &impl TreeRef, height: u16) {
-        for dependant in &self.child {
-            for id in tree.children_ids(id) {
-                dirty.insert(*dependant, id, height + 1);
+        for &Dependant {
+            type_id,
+            enter_shadow_dom,
+        } in &self.child
+        {
+            for id in tree.children_ids_advanced(id, enter_shadow_dom) {
+                dirty.insert(type_id, id, height + 1);
             }
         }
 
-        for dependant in &self.parent {
-            if let Some(id) = tree.parent_id(id) {
-                dirty.insert(*dependant, id, height - 1);
+        for &Dependant {
+            type_id,
+            enter_shadow_dom,
+        } in &self.parent
+        {
+            if let Some(id) = tree.parent_id_advanced(id, enter_shadow_dom) {
+                dirty.insert(type_id, id, height - 1);
             }
         }
 
@@ -269,6 +287,7 @@ pub struct TypeErasedState<V: FromAnyValue + Send = ()> {
     pub(crate) mask: NodeMask,
     pub(crate) workload: fn(TypeId, Arc<Dependants>, PassDirection) -> WorkloadSystem,
     pub(crate) pass_direction: PassDirection,
+    pub(crate) enter_shadow_dom: bool,
     phantom: PhantomData<V>,
 }
 

@@ -1,0 +1,5 @@
+error: missing trailing comma
+ --> tests/rsx/trailing-comma-0.rs:9:20
+  |
+9 |             class: "foo bar"
+  |                    ^^^^^^^^^

@@ -10,15 +10,16 @@
 use dioxus_core::{
     BorrowedAttributeValue, ElementId, Mutation, Template, TemplateAttribute, TemplateNode,
 };
-use dioxus_html::{event_bubbles, CompositionData, FormData};
-use dioxus_interpreter_js::{save_template, Channel};
+use dioxus_html::{event_bubbles, CompositionData, FileEngine, FormData, MountedData};
+use dioxus_interpreter_js::{get_node, minimal_bindings, save_template, Channel};
 use futures_channel::mpsc;
+use js_sys::Array;
 use rustc_hash::FxHashMap;
-use std::{any::Any, rc::Rc};
-use wasm_bindgen::{closure::Closure, JsCast};
-use web_sys::{Document, Element, Event, HtmlElement};
+use std::{any::Any, rc::Rc, sync::Arc};
+use wasm_bindgen::{closure::Closure, prelude::wasm_bindgen, JsCast, JsValue};
+use web_sys::{Document, Element, Event};
 
-use crate::Config;
+use crate::{file_engine::WebFileEngine, Config};
 
 pub struct WebsysDom {
     document: Document,
@@ -27,6 +28,7 @@ pub struct WebsysDom {
     templates: FxHashMap<String, u32>,
     max_template_id: u32,
     pub(crate) interpreter: Channel,
+    event_channel: mpsc::UnboundedSender<UiEvent>,
 }
 
 pub struct UiEvent {
@@ -34,7 +36,6 @@ pub struct UiEvent {
     pub bubbles: bool,
     pub element: ElementId,
     pub data: Rc<dyn Any>,
-    pub event: Event,
 }
 
 impl WebsysDom {
@@ -48,19 +49,24 @@ impl WebsysDom {
         };
         let interpreter = Channel::default();
 
-        let handler: Closure<dyn FnMut(&Event)> =
-            Closure::wrap(Box::new(move |event: &web_sys::Event| {
+        let handler: Closure<dyn FnMut(&Event)> = Closure::wrap(Box::new({
+            let event_channel = event_channel.clone();
+            move |event: &web_sys::Event| {
                 let name = event.type_();
                 let element = walk_event_for_id(event);
                 let bubbles = dioxus_html::event_bubbles(name.as_str());
                 if let Some((element, target)) = element {
-                    if target
+                    if let Some(prevent_requests) = target
                         .get_attribute("dioxus-prevent-default")
                         .as_deref()
-                        .map(|f| f.trim_start_matches("on"))
-                        == Some(&name)
+                        .map(|f| f.split_whitespace())
                     {
-                        event.prevent_default();
+                        if prevent_requests
+                            .map(|f| f.trim_start_matches("on"))
+                            .any(|f| f == name)
+                        {
+                            event.prevent_default();
+                        }
                     }
 
                     let data = virtual_event_from_websys_event(event.clone(), target);
@@ -69,10 +75,10 @@ impl WebsysDom {
                         bubbles,
                         element,
                         data,
-                        event: event.clone(),
                     });
                 }
-            }));
+            }
+        }));
 
         dioxus_interpreter_js::initilize(
             root.clone().unchecked_into(),
@@ -85,6 +91,7 @@ impl WebsysDom {
             interpreter,
             templates: FxHashMap::default(),
             max_template_id: 0,
+            event_channel,
         }
     }
 
@@ -128,14 +135,12 @@ impl WebsysDom {
                         namespace,
                     } = attr
                     {
-                        match namespace {
-                            Some(ns) if *ns == "style" => {
-                                el.dyn_ref::<HtmlElement>()
-                                    .map(|f| f.style().set_property(name, value));
-                            }
-                            Some(ns) => el.set_attribute_ns(Some(ns), name, value).unwrap(),
-                            None => el.set_attribute(name, value).unwrap(),
-                        }
+                        minimal_bindings::setAttributeInner(
+                            el.clone().into(),
+                            name,
+                            JsValue::from_str(value),
+                            *namespace,
+                        );
                     }
                 }
                 for child in *children {
@@ -156,6 +161,8 @@ impl WebsysDom {
     pub fn apply_edits(&mut self, mut edits: Vec<Mutation>) {
         use Mutation::*;
         let i = &mut self.interpreter;
+        // we need to apply the mount events last, so we collect them here
+        let mut to_mount = Vec::new();
         for edit in &edits {
             match edit {
                 AppendChildren { id, m } => i.append_children(id.0 as u32, *m as u32),
@@ -206,17 +213,43 @@ impl WebsysDom {
                 },
                 SetText { value, id } => i.set_text(id.0 as u32, value),
                 NewEventListener { name, id, .. } => {
-                    i.new_event_listener(name, id.0 as u32, event_bubbles(name) as u8);
+                    match *name {
+                        // mounted events are fired immediately after the element is mounted.
+                        "mounted" => {
+                            to_mount.push(*id);
+                        }
+                        _ => {
+                            i.new_event_listener(name, id.0 as u32, event_bubbles(name) as u8);
+                        }
+                    }
                 }
-                RemoveEventListener { name, id } => {
-                    i.remove_event_listener(name, id.0 as u32, event_bubbles(name) as u8)
-                }
+                RemoveEventListener { name, id } => match *name {
+                    "mounted" => {}
+                    _ => {
+                        i.remove_event_listener(name, id.0 as u32, event_bubbles(name) as u8);
+                    }
+                },
                 Remove { id } => i.remove(id.0 as u32),
                 PushRoot { id } => i.push_root(id.0 as u32),
             }
         }
         edits.clear();
         i.flush();
+
+        for id in to_mount {
+            let node = get_node(id.0 as u32);
+            if let Some(element) = node.dyn_ref::<Element>() {
+                log::info!("mounted event fired: {}", id.0);
+                let data: MountedData = element.into();
+                let data = Rc::new(data);
+                let _ = self.event_channel.unbounded_send(UiEvent {
+                    name: "mounted".to_string(),
+                    bubbles: false,
+                    element: id,
+                    data,
+                });
+            }
+        }
     }
 }
 
@@ -259,9 +292,11 @@ pub fn virtual_event_from_websys_event(event: web_sys::Event, target: Element) -
         }
         "transitionend" => Rc::new(TransitionData::from(event)),
         "abort" | "canplay" | "canplaythrough" | "durationchange" | "emptied" | "encrypted"
-        | "ended" | "error" | "loadeddata" | "loadedmetadata" | "loadstart" | "pause" | "play"
+        | "ended" | "loadeddata" | "loadedmetadata" | "loadstart" | "pause" | "play"
         | "playing" | "progress" | "ratechange" | "seeked" | "seeking" | "stalled" | "suspend"
         | "timeupdate" | "volumechange" | "waiting" => Rc::new(MediaData {}),
+        "error" => Rc::new(ImageData { load_error: true }),
+        "load" => Rc::new(ImageData { load_error: false }),
         "toggle" => Rc::new(ToggleData {}),
 
         _ => Rc::new(()),
@@ -325,64 +360,86 @@ fn read_input_to_data(target: Element) -> Rc<FormData> {
 
     // try to fill in form values
     if let Some(form) = target.dyn_ref::<web_sys::HtmlFormElement>() {
-        let elements = form.elements();
-        for x in 0..elements.length() {
-            let element = elements.item(x).unwrap();
-            if let Some(name) = element.get_attribute("name") {
-                let value: Option<String> = element
-                    .dyn_ref()
-                    .map(|input: &web_sys::HtmlInputElement| {
-                        match input.type_().as_str() {
-                            "checkbox" => {
-                                match input.checked() {
-                                    true => Some("true".to_string()),
-                                    false => Some("false".to_string()),
-                                }
-                            },
-                            "radio" => {
-                                match input.checked() {
-                                    true => Some(input.value()),
-                                    false => None,
-                                }
-                            }
-                            _ => Some(input.value())
-                        }
-                    })
-                    .or_else(|| element.dyn_ref().map(|input: &web_sys::HtmlTextAreaElement| Some(input.value())))
-                    .or_else(|| element.dyn_ref().map(|input: &web_sys::HtmlSelectElement| Some(input.value())))
-                    .or_else(|| Some(element.dyn_ref::<web_sys::HtmlElement>().unwrap().text_content()))
-                    .expect("only an InputElement or TextAreaElement or an element with contenteditable=true can have an oninput event listener");
-                if let Some(value) = value {
-                    values.insert(name, value);
+        let form_data = get_form_data(form);
+        for value in form_data.entries().into_iter().flatten() {
+            if let Ok(array) = value.dyn_into::<Array>() {
+                if let Some(name) = array.get(0).as_string() {
+                    if let Ok(item_values) = array.get(1).dyn_into::<Array>() {
+                        let item_values =
+                            item_values.iter().filter_map(|v| v.as_string()).collect();
+
+                        values.insert(name, item_values);
+                    }
                 }
             }
         }
     }
 
+    let files = target
+        .dyn_ref()
+        .and_then(|input: &web_sys::HtmlInputElement| {
+            input.files().and_then(|files| {
+                WebFileEngine::new(files).map(|f| Arc::new(f) as Arc<dyn FileEngine>)
+            })
+        });
+
     Rc::new(FormData {
         value,
         values,
-        files: None,
+        files,
     })
 }
 
+// web-sys does not expose the keys api for form data, so we need to manually bind to it
+#[wasm_bindgen(inline_js = r#"
+    export function get_form_data(form) {
+        let values = new Map();
+        const formData = new FormData(form);
+
+        for (let name of formData.keys()) {
+            values.set(name, formData.getAll(name));
+        }
+
+        return values;
+    }
+"#)]
+extern "C" {
+    fn get_form_data(form: &web_sys::HtmlFormElement) -> js_sys::Map;
+}
+
 fn walk_event_for_id(event: &web_sys::Event) -> Option<(ElementId, web_sys::Element)> {
-    let mut target = event
+    let target = event
         .target()
         .expect("missing target")
-        .dyn_into::<web_sys::Element>()
-        .expect("not a valid element");
+        .dyn_into::<web_sys::Node>()
+        .expect("not a valid node");
+    let mut current_target_element = target.dyn_ref::<web_sys::Element>().cloned();
 
     loop {
-        match target.get_attribute("data-dioxus-id").map(|f| f.parse()) {
-            Some(Ok(id)) => return Some((ElementId(id), target)),
-            Some(Err(_)) => return None,
+        match (
+            current_target_element
+                .as_ref()
+                .and_then(|el| el.get_attribute("data-dioxus-id").map(|f| f.parse())),
+            current_target_element,
+        ) {
+            // This node is an element, and has a dioxus id, so we can stop walking
+            (Some(Ok(id)), Some(target)) => return Some((ElementId(id), target)),
 
-            // walk the tree upwards until we actually find an event target
-            None => match target.parent_element() {
-                Some(parent) => target = parent,
-                None => return None,
-            },
+            // Walk the tree upwards until we actually find an event target
+            (None, target_element) => {
+                let parent = match target_element.as_ref() {
+                    Some(el) => el.parent_element(),
+                    // if this is the first node and not an element, we need to get the parent from the target node
+                    None => target.parent_element(),
+                };
+                match parent {
+                    Some(parent) => current_target_element = Some(parent),
+                    _ => return None,
+                }
+            }
+
+            // This node is an element with an invalid dioxus id, give up
+            _ => return None,
         }
     }
 }

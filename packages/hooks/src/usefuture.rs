@@ -89,6 +89,14 @@ pub struct UseFuture<T> {
     values: Rc<RefCell<Vec<*mut T>>>,
 }
 
+impl<T> Drop for UseFuture<T> {
+    fn drop(&mut self) {
+        for value in self.values.take().into_iter() {
+            drop(unsafe { Box::from_raw(value) })
+        }
+    }
+}
+
 pub enum UseFutureState<'a, T> {
     Pending,
     Complete(&'a T),

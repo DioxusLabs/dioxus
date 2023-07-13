@@ -12,13 +12,11 @@ TUI support is currently quite experimental. But, if you're willing to venture i
 
 - It uses flexbox for the layout
 - It only supports a subset of the attributes and elements
-- Regular widgets will not work in the tui render, but the tui renderer has its own widget components that start with a capital letter. See the [widgets example](https://github.com/DioxusLabs/dioxus/blob/master/packages/tui/examples/widgets.rs)
+- Regular widgets will not work in the tui render, but the tui renderer has its own widget components that start with a capital letter. See the [widgets example](https://github.com/DioxusLabs/dioxus/blob/master/packages/dioxus-tui/examples/widgets.rs)
 - 1px is one character line height. Your regular CSS px does not translate
 - If your app panics, your terminal is wrecked. This will be fixed eventually
 
-
 ## Getting Set up
-
 
 Start by making a new package and adding Dioxus and the TUI renderer as dependancies.
 
@@ -31,7 +29,7 @@ cargo add dioxus-tui
 
 Then, edit your `main.rs` with the basic template.
 
-```rust
+```rust, no_run
 {{#include ../../../examples/hello_world_tui.rs}}
 ```
 
@@ -43,6 +41,6 @@ cargo run
 
 Press "ctrl-c" to close the app. To switch from "ctrl-c" to just "q" to quit you can launch the app with a configuration to disable the default quit and use the root TuiContext to quit on your own.
 
-```rust
+```rust, no_run
 {{#include ../../../examples/hello_world_tui_no_ctrl_c.rs}}
 ```
