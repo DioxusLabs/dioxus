@@ -64,12 +64,12 @@ fn component_swap() {
         assert_eq!(
             edits.edits,
             [
-                LoadTemplate { name: "template", index: 0, id: ElementId(1) },
                 LoadTemplate { name: "template", index: 0, id: ElementId(2) },
-                LoadTemplate { name: "template", index: 0, id: ElementId(3) },
-                LoadTemplate { name: "template", index: 0, id: ElementId(4) },
-                ReplacePlaceholder { path: &[1], m: 3 },
                 LoadTemplate { name: "template", index: 0, id: ElementId(5) },
+                LoadTemplate { name: "template", index: 0, id: ElementId(7) },
+                LoadTemplate { name: "template", index: 0, id: ElementId(9) },
+                ReplacePlaceholder { path: &[1], m: 3 },
+                LoadTemplate { name: "template", index: 0, id: ElementId(11) },
                 AppendChildren { m: 2, id: ElementId(0) }
             ]
         );
@@ -79,8 +79,8 @@ fn component_swap() {
     assert_eq!(
         dom.render_immediate().santize().edits,
         [
-            LoadTemplate { name: "template", index: 0, id: ElementId(6) },
-            ReplaceWith { id: ElementId(5), m: 1 }
+            LoadTemplate { name: "template", index: 0, id: ElementId(13) },
+            ReplaceWith { id: ElementId(11), m: 1 }
         ]
     );
 
@@ -88,8 +88,8 @@ fn component_swap() {
     assert_eq!(
         dom.render_immediate().santize().edits,
         [
-            LoadTemplate { name: "template", index: 0, id: ElementId(5) },
-            ReplaceWith { id: ElementId(6), m: 1 }
+            LoadTemplate { name: "template", index: 0, id: ElementId(11) },
+            ReplaceWith { id: ElementId(13), m: 1 }
         ]
     );
 
@@ -97,8 +97,8 @@ fn component_swap() {
     assert_eq!(
         dom.render_immediate().santize().edits,
         [
-            LoadTemplate { name: "template", index: 0, id: ElementId(6) },
-            ReplaceWith { id: ElementId(5), m: 1 }
+            LoadTemplate { name: "template", index: 0, id: ElementId(13) },
+            ReplaceWith { id: ElementId(11), m: 1 }
         ]
     );
 }

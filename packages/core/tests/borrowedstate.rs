@@ -11,9 +11,9 @@ fn test_borrowed_state() {
         dom.rebuild().santize().edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(1,) },
-            LoadTemplate { name: "template", index: 0, id: ElementId(2,) },
             LoadTemplate { name: "template", index: 0, id: ElementId(3,) },
-            HydrateText { path: &[0,], value: "Hello w1!", id: ElementId(4,) },
+            LoadTemplate { name: "template", index: 0, id: ElementId(5,) },
+            HydrateText { path: &[0,], value: "Hello w1!", id: ElementId(6,) },
             ReplacePlaceholder { path: &[1,], m: 1 },
             ReplacePlaceholder { path: &[0,], m: 1 },
             AppendChildren { m: 1, id: ElementId(0) },

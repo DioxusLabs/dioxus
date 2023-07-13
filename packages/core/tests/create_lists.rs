@@ -57,12 +57,12 @@ fn list_renders() {
             // Load the outer div
             LoadTemplate { name: "template", index: 0, id: ElementId(1) },
             // Load each template one-by-one, rehydrating it
-            LoadTemplate { name: "template", index: 0, id: ElementId(2) },
-            HydrateText { path: &[1, 0], value: "0", id: ElementId(3) },
-            LoadTemplate { name: "template", index: 0, id: ElementId(4) },
-            HydrateText { path: &[1, 0], value: "1", id: ElementId(5) },
-            LoadTemplate { name: "template", index: 0, id: ElementId(6) },
-            HydrateText { path: &[1, 0], value: "2", id: ElementId(7) },
+            LoadTemplate { name: "template", index: 0, id: ElementId(3) },
+            HydrateText { path: &[1, 0], value: "0", id: ElementId(4) },
+            LoadTemplate { name: "template", index: 0, id: ElementId(5) },
+            HydrateText { path: &[1, 0], value: "1", id: ElementId(6) },
+            LoadTemplate { name: "template", index: 0, id: ElementId(7) },
+            HydrateText { path: &[1, 0], value: "2", id: ElementId(8) },
             // Replace the 0th childn on the div with the 3 templates on the stack
             ReplacePlaceholder { m: 3, path: &[0] },
             // Append the container div to the dom

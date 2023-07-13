@@ -24,7 +24,6 @@ fn keyed_diffing_out_of_order() {
         assert_eq!(
             dom.rebuild().santize().edits,
             [
-                LoadTemplate { name: "template", index: 0, id: ElementId(1,) },
                 LoadTemplate { name: "template", index: 0, id: ElementId(2,) },
                 LoadTemplate { name: "template", index: 0, id: ElementId(3,) },
                 LoadTemplate { name: "template", index: 0, id: ElementId(4,) },
@@ -34,6 +33,7 @@ fn keyed_diffing_out_of_order() {
                 LoadTemplate { name: "template", index: 0, id: ElementId(8,) },
                 LoadTemplate { name: "template", index: 0, id: ElementId(9,) },
                 LoadTemplate { name: "template", index: 0, id: ElementId(10,) },
+                LoadTemplate { name: "template", index: 0, id: ElementId(11,) },
                 AppendChildren { m: 10, id: ElementId(0) },
             ]
         );
@@ -43,8 +43,8 @@ fn keyed_diffing_out_of_order() {
     assert_eq!(
         dom.render_immediate().edits,
         [
-            PushRoot { id: ElementId(7,) },
-            InsertBefore { id: ElementId(5,), m: 1 },
+            PushRoot { id: ElementId(8,) },
+            InsertBefore { id: ElementId(6,), m: 1 },
         ]
     );
 }
@@ -68,9 +68,9 @@ fn keyed_diffing_out_of_order_adds() {
     assert_eq!(
         dom.render_immediate().edits,
         [
+            PushRoot { id: ElementId(6,) },
             PushRoot { id: ElementId(5,) },
-            PushRoot { id: ElementId(4,) },
-            InsertBefore { id: ElementId(1,), m: 2 },
+            InsertBefore { id: ElementId(2,), m: 2 },
         ]
     );
 }
@@ -94,9 +94,9 @@ fn keyed_diffing_out_of_order_adds_3() {
     assert_eq!(
         dom.render_immediate().edits,
         [
+            PushRoot { id: ElementId(6,) },
             PushRoot { id: ElementId(5,) },
-            PushRoot { id: ElementId(4,) },
-            InsertBefore { id: ElementId(2,), m: 2 },
+            InsertBefore { id: ElementId(3,), m: 2 },
         ]
     );
 }
@@ -120,9 +120,9 @@ fn keyed_diffing_out_of_order_adds_4() {
     assert_eq!(
         dom.render_immediate().edits,
         [
+            PushRoot { id: ElementId(6,) },
             PushRoot { id: ElementId(5,) },
-            PushRoot { id: ElementId(4,) },
-            InsertBefore { id: ElementId(3,), m: 2 },
+            InsertBefore { id: ElementId(4,), m: 2 },
         ]
     );
 }
@@ -146,8 +146,8 @@ fn keyed_diffing_out_of_order_adds_5() {
     assert_eq!(
         dom.render_immediate().edits,
         [
-            PushRoot { id: ElementId(5,) },
-            InsertBefore { id: ElementId(4,), m: 1 },
+            PushRoot { id: ElementId(6,) },
+            InsertBefore { id: ElementId(5,), m: 1 },
         ]
     );
 }
@@ -171,9 +171,9 @@ fn keyed_diffing_additions() {
     assert_eq!(
         dom.render_immediate().santize().edits,
         [
-            LoadTemplate { name: "template", index: 0, id: ElementId(6) },
             LoadTemplate { name: "template", index: 0, id: ElementId(7) },
-            InsertAfter { id: ElementId(5), m: 2 }
+            LoadTemplate { name: "template", index: 0, id: ElementId(8) },
+            InsertAfter { id: ElementId(6), m: 2 }
         ]
     );
 }
@@ -197,12 +197,12 @@ fn keyed_diffing_additions_and_moves_on_ends() {
         dom.render_immediate().santize().edits,
         [
             // create 11, 12
-            LoadTemplate { name: "template", index: 0, id: ElementId(5) },
             LoadTemplate { name: "template", index: 0, id: ElementId(6) },
-            InsertAfter { id: ElementId(3), m: 2 },
+            LoadTemplate { name: "template", index: 0, id: ElementId(7) },
+            InsertAfter { id: ElementId(4), m: 2 },
             // move 7 to the front
-            PushRoot { id: ElementId(4) },
-            InsertBefore { id: ElementId(1), m: 1 }
+            PushRoot { id: ElementId(5) },
+            InsertBefore { id: ElementId(2), m: 1 }
         ]
     );
 }
@@ -227,16 +227,16 @@ fn keyed_diffing_additions_and_moves_in_middle() {
         dom.render_immediate().santize().edits,
         [
             // create 5, 6
-            LoadTemplate { name: "template", index: 0, id: ElementId(5) },
             LoadTemplate { name: "template", index: 0, id: ElementId(6) },
-            InsertBefore { id: ElementId(3), m: 2 },
-            // create 7, 8
             LoadTemplate { name: "template", index: 0, id: ElementId(7) },
+            InsertBefore { id: ElementId(4), m: 2 },
+            // create 7, 8
             LoadTemplate { name: "template", index: 0, id: ElementId(8) },
-            InsertBefore { id: ElementId(2), m: 2 },
+            LoadTemplate { name: "template", index: 0, id: ElementId(9) },
+            InsertBefore { id: ElementId(3), m: 2 },
             // move 7
-            PushRoot { id: ElementId(4) },
-            InsertBefore { id: ElementId(1), m: 1 }
+            PushRoot { id: ElementId(5) },
+            InsertBefore { id: ElementId(2), m: 1 }
         ]
     );
 }
@@ -261,16 +261,16 @@ fn controlled_keyed_diffing_out_of_order() {
         dom.render_immediate().santize().edits,
         [
             // remove 7
-            Remove { id: ElementId(4,) },
+            Remove { id: ElementId(5,) },
             // move 4 to after 6
-            PushRoot { id: ElementId(1) },
-            InsertAfter { id: ElementId(3,), m: 1 },
+            PushRoot { id: ElementId(2) },
+            InsertAfter { id: ElementId(4,), m: 1 },
             // create 9 and insert before 6
-            LoadTemplate { name: "template", index: 0, id: ElementId(4) },
-            InsertBefore { id: ElementId(3,), m: 1 },
-            // create 0 and insert before 5
             LoadTemplate { name: "template", index: 0, id: ElementId(5) },
-            InsertBefore { id: ElementId(2,), m: 1 },
+            InsertBefore { id: ElementId(4,), m: 1 },
+            // create 0 and insert before 5
+            LoadTemplate { name: "template", index: 0, id: ElementId(6) },
+            InsertBefore { id: ElementId(3,), m: 1 },
         ]
     );
 }
@@ -293,11 +293,11 @@ fn controlled_keyed_diffing_out_of_order_max_test() {
     assert_eq!(
         dom.render_immediate().santize().edits,
         [
-            Remove { id: ElementId(5,) },
-            LoadTemplate { name: "template", index: 0, id: ElementId(5) },
-            InsertBefore { id: ElementId(3,), m: 1 },
-            PushRoot { id: ElementId(4) },
-            InsertBefore { id: ElementId(1,), m: 1 },
+            Remove { id: ElementId(6,) },
+            LoadTemplate { name: "template", index: 0, id: ElementId(6) },
+            InsertBefore { id: ElementId(4,), m: 1 },
+            PushRoot { id: ElementId(5) },
+            InsertBefore { id: ElementId(2,), m: 1 },
         ]
     );
 }
@@ -322,9 +322,9 @@ fn remove_list() {
     assert_eq!(
         dom.render_immediate().santize().edits,
         [
+            Remove { id: ElementId(6) },
             Remove { id: ElementId(5) },
             Remove { id: ElementId(4) },
-            Remove { id: ElementId(3) },
         ]
     );
 }
@@ -347,12 +347,12 @@ fn no_common_keys() {
     assert_eq!(
         dom.render_immediate().santize().edits,
         [
+            Remove { id: ElementId(4) },
             Remove { id: ElementId(3) },
-            Remove { id: ElementId(2) },
-            LoadTemplate { name: "template", index: 0, id: ElementId(2) },
             LoadTemplate { name: "template", index: 0, id: ElementId(3) },
             LoadTemplate { name: "template", index: 0, id: ElementId(4) },
-            ReplaceWith { id: ElementId(1), m: 3 }
+            LoadTemplate { name: "template", index: 0, id: ElementId(5) },
+            ReplaceWith { id: ElementId(2), m: 3 }
         ]
     );
 }

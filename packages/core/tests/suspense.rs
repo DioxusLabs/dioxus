@@ -39,7 +39,7 @@ fn it_works() {
                         LoadTemplate { name: "template", index: 0, id: ElementId(1) },
                         // hmmmmmmmmm.... with suspense how do we guarantee that IDs increase linearly?
                         // can we even?
-                        AssignId { path: &[1], id: ElementId(3) },
+                        AssignId { path: &[1], id: ElementId(5) },
                         AppendChildren { m: 1, id: ElementId(0) },
                     ]
                 );

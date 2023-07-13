@@ -189,8 +189,8 @@ fn anchors() {
     assert_eq!(
         edits.edits,
         [
-            LoadTemplate { name: "template", index: 0, id: ElementId(1) },
-            CreatePlaceholder { id: ElementId(2) },
+            LoadTemplate { name: "template", index: 0, id: ElementId(2) },
+            CreatePlaceholder { id: ElementId(3) },
             AppendChildren { m: 2, id: ElementId(0) }
         ]
     )

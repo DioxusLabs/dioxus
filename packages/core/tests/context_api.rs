@@ -22,7 +22,7 @@ fn state_shares() {
     assert_eq!(
         dom.rebuild().santize().edits,
         [
-            CreateTextNode { value: "Value is 0", id: ElementId(1,) },
+            CreateTextNode { value: "Value is 0", id: ElementId(3,) },
             AppendChildren { m: 1, id: ElementId(0) },
         ]
     );
@@ -38,7 +38,7 @@ fn state_shares() {
     dom.mark_dirty(ScopeId(2));
     assert_eq!(
         dom.render_immediate().santize().edits,
-        [SetText { value: "Value is 2", id: ElementId(1,) },]
+        [SetText { value: "Value is 2", id: ElementId(3,) },]
     );
 
     dom.mark_dirty(ScopeId(0));
@@ -46,6 +46,6 @@ fn state_shares() {
     let edits = dom.render_immediate();
     assert_eq!(
         edits.santize().edits,
-        [SetText { value: "Value is 3", id: ElementId(1,) },]
+        [SetText { value: "Value is 3", id: ElementId(3,) },]
     );
 }

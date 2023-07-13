@@ -867,7 +867,7 @@ impl<'b> VirtualDom {
     }
 
     fn fragment_to_placeholder(&mut self, l: &'b VFragment<'b>, r: &'b VPlaceholder) {
-        let id = r.id.get().unwrap();
+        let id = l.id.get().unwrap();
         self.reclaim(id);
 
         let l = l.children;
