@@ -1,6 +1,4 @@
 mod element;
-pub mod prelude;
-pub mod widgets;
 
 use std::{
     any::Any,
@@ -10,7 +8,6 @@ use std::{
 };
 
 use dioxus_core::{Component, ElementId, VirtualDom};
-use dioxus_html::EventData;
 use dioxus_native_core::dioxus::{DioxusState, NodeImmutableDioxusExt};
 use dioxus_native_core::prelude::*;
 
@@ -48,7 +45,7 @@ pub fn launch_cfg_with_props<Props: 'static>(app: Component<Props>, props: Props
             let mut dioxus_state = dioxus_state.write().unwrap();
 
             // Find any mount events
-            let mounted = dbg!(find_mount_events(&muts));
+            let mounted = find_mount_events(&muts);
 
             dioxus_state.apply_mutations(&mut rdom, muts);
 
@@ -119,13 +116,14 @@ impl Driver for DioxusRenderer {
         rdom: &Arc<RwLock<RealDom>>,
         id: NodeId,
         event: &str,
-        value: Rc<EventData>,
+        value: Rc<rink::EventData>,
         bubbles: bool,
     ) {
         let id = { rdom.read().unwrap().get(id).unwrap().mounted_id() };
         if let Some(id) = id {
+            let inner_value = value.deref().clone();
             self.vdom
-                .handle_event(event, value.deref().clone().into_any(), id, bubbles);
+                .handle_event(event, inner_value.into_any(), id, bubbles);
         }
     }
 
