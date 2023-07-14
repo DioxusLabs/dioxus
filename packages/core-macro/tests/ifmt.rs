@@ -1,3 +1,5 @@
+#![allow(clippy::all)]
+
 use std::borrow::Borrow;
 
 use dioxus_core_macro::*;
