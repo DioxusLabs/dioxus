@@ -1,6 +1,5 @@
 use dioxus::prelude::*;
 use dioxus_desktop::DesktopContext;
-use std::rc::Rc;
 
 pub(crate) fn check_app_exits(app: Component) {
     use dioxus_desktop::tao::window::WindowBuilder;

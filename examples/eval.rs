@@ -5,13 +5,13 @@ fn main() {
 }
 
 fn app(cx: Scope) -> Element {
-    let eval = dioxus_html::prelude::use_eval(
-        cx,
+    let eval_provider = dioxus_html::prelude::use_eval(cx);
+    let mut eval = eval_provider(
         r#"
         dioxus.send("Hi from JS!");
         let msg = await dioxus.recv();
         console.log(msg);
-        "#,
+    "#,
     );
 
     eval.run().unwrap();
