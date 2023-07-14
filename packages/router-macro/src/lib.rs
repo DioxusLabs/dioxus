@@ -515,6 +515,7 @@ impl RouteEnum {
 
                 fn from_str(s: &str) -> Result<Self, Self::Err> {
                     let route = s;
+                    let (route, _hash) = route.split_once('#').unwrap_or((route, ""));
                     let (route, query) = route.split_once('?').unwrap_or((route, ""));
                     let mut segments = route.split('/');
                     // skip the first empty segment
