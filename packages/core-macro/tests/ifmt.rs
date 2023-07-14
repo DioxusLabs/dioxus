@@ -1,5 +1,3 @@
-use std::borrow::Borrow;
-
 use dioxus_core_macro::*;
 
 #[test]
@@ -20,7 +18,7 @@ fn formatting_compiles() {
 
     // function calls in formatings work
     assert_eq!(
-        format_args_f!("{x.borrow():?}").to_string(),
+        format_args_f!("{x.clone():?}").to_string(),
         format!("{:?}", x)
     );
 

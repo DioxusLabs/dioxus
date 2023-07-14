@@ -62,13 +62,15 @@ impl WrapBody for DefaultRenderer {
     }
 }
 
+type PathMapFn = Arc<dyn Fn(&str) -> PathBuf + Send + Sync>;
+
 /// A configuration for the incremental renderer.
 #[derive(Clone)]
 pub struct IncrementalRendererConfig {
     static_dir: PathBuf,
     memory_cache_limit: usize,
     invalidate_after: Option<Duration>,
-    map_path: Option<Arc<dyn Fn(&str) -> PathBuf + Send + Sync>>,
+    map_path: Option<PathMapFn>,
 }
 
 impl Default for IncrementalRendererConfig {
@@ -143,7 +145,7 @@ pub struct IncrementalRenderer {
         Option<lru::LruCache<String, (SystemTime, Vec<u8>), BuildHasherDefault<FxHasher>>>,
     invalidate_after: Option<Duration>,
     ssr_renderer: crate::Renderer,
-    map_path: Arc<dyn Fn(&str) -> PathBuf + Send + Sync>,
+    map_path: PathMapFn,
 }
 
 impl IncrementalRenderer {
