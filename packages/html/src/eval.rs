@@ -1,12 +1,14 @@
 use async_channel::Receiver;
 use async_trait::async_trait;
 use dioxus_core::ScopeState;
+use std::future::{Future, IntoFuture};
+use std::pin::Pin;
 use std::rc::Rc;
 
 /// A struct that implements EvalProvider is sent through [`ScopeState`]'s provide_context function
 /// so that [`use_eval`] can provide a platform agnostic interface for evaluating JavaScript code.
 pub trait EvalProvider {
-    fn new_evaluator(&self, cx: &ScopeState, js: String) -> Box<dyn Evaluator>;
+    fn new_evaluator(&self, js: String) -> Box<dyn Evaluator>;
 }
 
 /// The platform's evaluator.
@@ -30,15 +32,16 @@ pub trait Evaluator {
 /// parts is practically asking for a hacker to find an XSS vulnerability in
 /// it. **This applies especially to web targets, where the JavaScript context
 /// has access to most, if not all of your application data.**
-pub fn use_eval<S: ToString>(cx: &ScopeState, js: S) -> &mut UseEval {
+pub fn use_eval(cx: &ScopeState) -> &Rc<dyn Fn(&str) -> UseEval> {
     cx.use_hook(|| {
         let eval_provider = cx
             .consume_context::<Rc<dyn EvalProvider>>()
             .expect("evaluator not provided");
 
-        let evaluator = eval_provider.new_evaluator(cx, js.to_string());
-
-        UseEval::new(evaluator)
+        Rc::new(move |script: &str| {
+            let evaluator = eval_provider.new_evaluator(script.to_string());
+            UseEval::new(evaluator)
+        }) as Rc<dyn Fn(&str) -> UseEval>
     })
 }
 
@@ -71,6 +74,22 @@ impl UseEval {
     /// Cleans up any evaluation artifacts.
     pub fn done(&mut self) {
         self.evaluator.done();
+    }
+}
+
+impl IntoFuture for UseEval {
+    type Output = Result<serde_json::Value, EvalError>;
+    type IntoFuture = Pin<Box<dyn Future<Output = Self::Output>>>;
+
+    fn into_future(mut self) -> Self::IntoFuture {
+        Box::pin(async move {
+            self.run()?;
+            let data = self.receiver().recv().await.map_err(|_| {
+                EvalError::Communication("failed to receive value from js".to_string())
+            })?;
+
+            Ok(data)
+        })
     }
 }
 

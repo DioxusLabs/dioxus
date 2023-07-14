@@ -42,11 +42,8 @@ fn mock_event(cx: &ScopeState, id: &'static str, value: &'static str) {
         value, id
     );
 
-    let eval_provider = cx
-        .consume_context::<Rc<dyn EvalProvider>>()
-        .expect("evaluator not provided");
-
-    let mut eval = UseEval::new(eval_provider.new_evaluator(cx, js));
+    let eval_provider = use_eval(cx);
+    let mut eval = eval_provider(&js);
 
     eval.run().unwrap();
     eval.done();

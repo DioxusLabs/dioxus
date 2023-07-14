@@ -28,9 +28,7 @@ fn main() {
 }
 
 fn use_inner_html<'a>(cx: &'a ScopeState, id: &'static str) -> &'a UseFuture<serde_json::Value> {
-    let eval_provider = cx
-        .consume_context::<Rc<dyn EvalProvider>>()
-        .expect("evaluator not provided");
+    let eval_provider = use_eval(cx);
 
     let js = format!(
         r#"
@@ -40,7 +38,7 @@ fn use_inner_html<'a>(cx: &'a ScopeState, id: &'static str) -> &'a UseFuture<ser
         id
     );
 
-    let mut eval = UseEval::new(eval_provider.new_evaluator(cx, js));
+    let mut eval = eval_provider(&js);
 
     use_future(cx, (), |_| async move {
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;

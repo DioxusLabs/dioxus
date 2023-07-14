@@ -5,12 +5,12 @@ fn app(cx: Scope) -> Element {
     let mut num = use_state(cx, || 0);
     let eval_result = use_state(cx, String::new);
 
-    let eval = dioxus_html::prelude::use_eval(
-        cx,
+    let eval_provider = dioxus_html::prelude::use_eval(cx);
+    let mut eval = eval_provider(
         r#"
-            window.document.title = 'Hello from Dioxus Eval!';
-            dioxus.send("returned eval value");
-            "#,
+        window.document.title = 'Hello from Dioxus Eval!';
+        dioxus.send("returned eval value");
+    "#,
     );
 
     cx.render(rsx! {

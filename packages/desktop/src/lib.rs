@@ -209,10 +209,6 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
 
                 // Create a dom
                 let dom = VirtualDom::new_with_props(root, props);
-                let cx = dom.base_scope();
-
-                // Init eval
-                init_eval(cx);
 
                 let handler = create_new_window(
                     cfg,
@@ -395,7 +391,11 @@ fn create_new_window(
         shortcut_manager,
     ));
 
-    dom.base_scope().provide_context(desktop_context.clone());
+    let cx = dom.base_scope();
+    cx.provide_context(desktop_context.clone());
+
+    // Init eval
+    init_eval(cx);
 
     WebviewHandler {
         // We want to poll the virtualdom and the event loop at the same time, so the waker will be connected to both

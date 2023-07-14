@@ -7,16 +7,19 @@ use crate::{query::Query, DesktopContext};
 
 /// Provides the DesktopEvalProvider through [`cx.provide_context`].
 pub fn init_eval(cx: &ScopeState) {
-    let provider: Rc<dyn EvalProvider> = Rc::new(DesktopEvalProvider {});
+    let desktop_ctx = cx.consume_context::<DesktopContext>().unwrap();
+    let provider: Rc<dyn EvalProvider> = Rc::new(DesktopEvalProvider { desktop_ctx });
     cx.provide_context(provider);
 }
 
 /// Reprents the desktop-target's provider of evaluators.
-pub struct DesktopEvalProvider;
+pub struct DesktopEvalProvider {
+    desktop_ctx: DesktopContext,
+}
+
 impl EvalProvider for DesktopEvalProvider {
-    fn new_evaluator(&self, cx: &ScopeState, js: String) -> Box<dyn Evaluator> {
-        let desktop = cx.consume_context::<DesktopContext>().unwrap();
-        Box::new(DesktopEvaluator::new(desktop, js))
+    fn new_evaluator(&self, js: String) -> Box<dyn Evaluator> {
+        Box::new(DesktopEvaluator::new(self.desktop_ctx.clone(), js))
     }
 }
 

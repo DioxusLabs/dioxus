@@ -14,7 +14,7 @@ pub fn init_eval(cx: &ScopeState) {
 /// Reprents the web-target's provider of evaluators.
 pub struct WebEvalProvider;
 impl EvalProvider for WebEvalProvider {
-    fn new_evaluator(&self, _cx: &ScopeState, js: String) -> Box<dyn Evaluator> {
+    fn new_evaluator(&self, js: String) -> Box<dyn Evaluator> {
         Box::new(WebEvaluator::new(js))
     }
 }
