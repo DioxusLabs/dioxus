@@ -41,7 +41,7 @@ impl Config {
                     return Ok(());
                 }
                 let mut file = File::create(conf_path)?;
-                let content = String::from(include_str!("../../assets/dioxus.toml"))
+                let content = String::from(include_str!("../assets/dioxus.toml"))
                     .replace("{{project-name}}", &name)
                     .replace("{{default-platform}}", &platform);
                 file.write_all(content.as_bytes())?;
@@ -53,7 +53,7 @@ impl Config {
             Config::CustomHtml {} => {
                 let html_path = crate_root.join("index.html");
                 let mut file = File::create(html_path)?;
-                let content = include_str!("../../assets/index.html");
+                let content = include_str!("../assets/index.html");
                 file.write_all(content.as_bytes())?;
                 log::info!("🚩 Create custom html file done.");
             }
