@@ -10,6 +10,7 @@ use std::{
     num::NonZeroUsize,
     ops::{Deref, DerefMut},
     path::{Path, PathBuf},
+    sync::Arc,
     time::{Duration, SystemTime},
 };
 use tokio::io::{AsyncWrite, AsyncWriteExt, BufReader};
@@ -62,11 +63,12 @@ impl WrapBody for DefaultRenderer {
 }
 
 /// A configuration for the incremental renderer.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct IncrementalRendererConfig {
     static_dir: PathBuf,
     memory_cache_limit: usize,
     invalidate_after: Option<Duration>,
+    map_path: Option<Arc<dyn Fn(&str) -> PathBuf + Send + Sync>>,
 }
 
 impl Default for IncrementalRendererConfig {
@@ -82,7 +84,15 @@ impl IncrementalRendererConfig {
             static_dir: PathBuf::from("./static"),
             memory_cache_limit: 10000,
             invalidate_after: None,
+            map_path: None,
         }
+    }
+
+    /// Set a mapping from the route to the file path. This will override the default mapping configured with `static_dir`.
+    /// The function should return the path to the folder to store the index.html file in.
+    pub fn map_path<F: Fn(&str) -> PathBuf + Send + Sync + 'static>(mut self, map_path: F) -> Self {
+        self.map_path = Some(Arc::new(map_path));
+        self
     }
 
     /// Set the static directory.
@@ -105,12 +115,22 @@ impl IncrementalRendererConfig {
 
     /// Build the incremental renderer.
     pub fn build(self) -> IncrementalRenderer {
+        let static_dir = self.static_dir.clone();
         IncrementalRenderer {
-            static_dir: self.static_dir,
+            static_dir: self.static_dir.clone(),
             memory_cache: NonZeroUsize::new(self.memory_cache_limit)
                 .map(|limit| lru::LruCache::with_hasher(limit, Default::default())),
             invalidate_after: self.invalidate_after,
             ssr_renderer: crate::Renderer::new(),
+            map_path: self.map_path.unwrap_or_else(move || {
+                Arc::new(move |route: &str| {
+                    let mut path = static_dir.clone();
+                    for segment in route.split('/') {
+                        path.push(segment);
+                    }
+                    path
+                })
+            }),
         }
     }
 }
@@ -123,6 +143,7 @@ pub struct IncrementalRenderer {
         Option<lru::LruCache<String, (SystemTime, Vec<u8>), BuildHasherDefault<FxHasher>>>,
     invalidate_after: Option<Duration>,
     ssr_renderer: crate::Renderer,
+    map_path: Arc<dyn Fn(&str) -> PathBuf + Send + Sync>,
 }
 
 impl IncrementalRenderer {
@@ -331,10 +352,7 @@ impl IncrementalRenderer {
     }
 
     fn route_as_path(&self, route: &str) -> PathBuf {
-        let mut file_path = self.static_dir.clone();
-        for segment in route.split('/') {
-            file_path.push(segment);
-        }
+        let mut file_path = (self.map_path)(route);
         if self.track_timestamps() {
             file_path.push("index");
             file_path.push(timestamp());
