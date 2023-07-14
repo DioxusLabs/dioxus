@@ -18,9 +18,6 @@ pub(crate) enum SchedulerMsg {
 
     /// A task has woken and needs to be progressed
     TaskNotified(TaskId),
-
-    /// A task has woken and needs to be progressed
-    SuspenseNotified(SuspenseId),
 }
 
 use std::{cell::RefCell, rc::Rc};
@@ -30,9 +27,6 @@ pub(crate) struct Scheduler {
 
     /// Tasks created with cx.spawn
     pub tasks: RefCell<Slab<LocalTask>>,
-
-    /// Async components
-    pub leaves: RefCell<Slab<SuspenseLeaf>>,
 }
 
 impl Scheduler {
@@ -40,7 +34,6 @@ impl Scheduler {
         Rc::new(Scheduler {
             sender,
             tasks: RefCell::new(Slab::new()),
-            leaves: RefCell::new(Slab::new()),
         })
     }
 }

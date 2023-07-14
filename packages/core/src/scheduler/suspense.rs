@@ -36,23 +36,3 @@ impl SuspenseContext {
         }
     }
 }
-
-pub(crate) struct SuspenseLeaf {
-    pub(crate) scope_id: ScopeId,
-    pub(crate) notified: Cell<bool>,
-    pub(crate) task: *mut dyn Future<Output = Element<'static>>,
-    pub(crate) waker: Waker,
-}
-
-pub struct SuspenseHandle {
-    pub(crate) id: SuspenseId,
-    pub(crate) tx: futures_channel::mpsc::UnboundedSender<SchedulerMsg>,
-}
-
-impl ArcWake for SuspenseHandle {
-    fn wake_by_ref(arc_self: &Arc<Self>) {
-        _ = arc_self
-            .tx
-            .unbounded_send(SchedulerMsg::SuspenseNotified(arc_self.id));
-    }
-}

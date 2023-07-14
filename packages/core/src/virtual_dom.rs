@@ -335,7 +335,8 @@ impl VirtualDom {
     /// Determine if the tree is at all suspended. Used by SSR and other outside mechanisms to determine if the tree is
     /// ready to be rendered.
     pub fn has_suspended_work(&self) -> bool {
-        !self.scheduler.leaves.borrow().is_empty()
+        todo!()
+        // !self.scheduler.leaves.borrow().is_empty()
     }
 
     /// Call a listener inside the VirtualDom with data from outside the VirtualDom.
@@ -485,7 +486,6 @@ impl VirtualDom {
                 Some(msg) => match msg {
                     SchedulerMsg::Immediate(id) => self.mark_dirty(id),
                     SchedulerMsg::TaskNotified(task) => self.handle_task_wakeup(task),
-                    SchedulerMsg::SuspenseNotified(id) => self.handle_suspense_wakeup(id),
                 },
 
                 // If they're not ready, then we should wait for them to be ready
@@ -513,7 +513,6 @@ impl VirtualDom {
             match msg {
                 SchedulerMsg::Immediate(id) => self.mark_dirty(id),
                 SchedulerMsg::TaskNotified(task) => self.handle_task_wakeup(task),
-                SchedulerMsg::SuspenseNotified(id) => self.handle_suspense_wakeup(id),
             }
         }
     }
@@ -574,7 +573,6 @@ impl VirtualDom {
             }
             // If an error occurs, we should try to render the default error component and context where the error occured
             RenderReturn::Aborted(_placeholder) => panic!("Cannot catch errors during rebuild"),
-            RenderReturn::Pending(_) => unreachable!("Root scope cannot be an async component"),
         }
 
         self.finalize()
@@ -678,11 +676,6 @@ impl VirtualDom {
             // If there's more work, then just continue, plenty of work to do
             if !self.dirty_scopes.is_empty() {
                 continue;
-            }
-
-            // If there's no pending suspense, then we have no reason to wait for anything
-            if self.scheduler.leaves.borrow().is_empty() {
-                return self.finalize();
             }
 
             // Poll the suspense leaves in the meantime

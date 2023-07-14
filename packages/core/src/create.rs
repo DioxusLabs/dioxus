@@ -514,7 +514,6 @@ impl<'b> VirtualDom {
         match unsafe { self.run_scope(scope).extend_lifetime_ref() } {
             Ready(t) => self.mount_component(scope, template, t, idx),
             Aborted(t) => self.mount_aborted(template, t),
-            Pending(_) => self.mount_async(template, idx, scope),
         }
     }
 
@@ -589,24 +588,6 @@ impl<'b> VirtualDom {
         self.mutations.push(Mutation::CreatePlaceholder { id });
         placeholder.id.set(Some(id));
         1
-    }
-
-    /// Take the rendered nodes from a component and handle them if they were async
-    ///
-    /// IE simply assign an ID to the placeholder
-    fn mount_async(&mut self, template: &VNode, idx: usize, scope: ScopeId) -> usize {
-        let new_id = self.next_element(template, template.template.get().node_paths[idx]);
-
-        // Set the placeholder of the scope
-        self.scopes[scope].placeholder.set(Some(new_id));
-
-        // Since the placeholder is already in the DOM, we don't create any new nodes
-        self.mutations.push(AssignId {
-            id: new_id,
-            path: &template.template.get().node_paths[idx][1..],
-        });
-
-        0
     }
 
     fn set_slot(

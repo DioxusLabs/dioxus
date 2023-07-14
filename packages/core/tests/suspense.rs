@@ -59,42 +59,45 @@ fn app(cx: Scope) -> Element {
 }
 
 fn suspense_boundary(cx: Scope) -> Element {
-    cx.use_hook(|| {
-        cx.provide_context(Rc::new(SuspenseContext::new(cx.scope_id())));
-    });
+    todo!()
+    // cx.use_hook(|| {
+    //     cx.provide_context(Rc::new(SuspenseContext::new(cx.scope_id())));
+    // });
 
-    // Ensure the right types are found
-    cx.has_context::<Rc<SuspenseContext>>().unwrap();
+    // // Ensure the right types are found
+    // cx.has_context::<Rc<SuspenseContext>>().unwrap();
 
-    cx.render(rsx!(async_child {}))
+    // cx.render(rsx!(async_child {}))
 }
 
-async fn async_child(cx: Scope<'_>) -> Element {
-    use_future!(cx, || tokio::time::sleep(Duration::from_millis(10))).await;
-    cx.render(rsx!(async_text {}))
+fn async_child(cx: Scope<'_>) -> Element {
+    todo!()
+    // use_future!(cx, || tokio::time::sleep(Duration::from_millis(10))).await;
+    // cx.render(rsx!(async_text {}))
 }
 
-async fn async_text(cx: Scope<'_>) -> Element {
-    let username = use_future!(cx, || async {
-        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-        "async child 1"
-    });
+fn async_text(cx: Scope<'_>) -> Element {
+    todo!()
+    // let username = use_future!(cx, || async {
+    //     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+    //     "async child 1"
+    // });
 
-    let age = use_future!(cx, || async {
-        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-        1234
-    });
+    // let age = use_future!(cx, || async {
+    //     tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+    //     1234
+    // });
 
-    let (_user, _age) = use_future!(cx, || async {
-        tokio::join!(
-            tokio::time::sleep(std::time::Duration::from_secs(1)),
-            tokio::time::sleep(std::time::Duration::from_secs(2))
-        );
-        ("async child 1", 1234)
-    })
-    .await;
+    // let (_user, _age) = use_future!(cx, || async {
+    //     tokio::join!(
+    //         tokio::time::sleep(std::time::Duration::from_secs(1)),
+    //         tokio::time::sleep(std::time::Duration::from_secs(2))
+    //     );
+    //     ("async child 1", 1234)
+    // })
+    // .await;
 
-    let (username, age) = tokio::join!(username.into_future(), age.into_future());
+    // let (username, age) = tokio::join!(username.into_future(), age.into_future());
 
-    cx.render(rsx!( div { "Hello! {username}, you are {age}, {_user} {_age}" } ))
+    // cx.render(rsx!( div { "Hello! {username}, you are {age}, {_user} {_age}" } ))
 }

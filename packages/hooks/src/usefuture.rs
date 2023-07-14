@@ -167,6 +167,10 @@ impl<T> UseFuture<T> {
             (Some(_), None) => UseFutureState::Pending,
         }
     }
+
+    pub fn suspend(&self) -> Option<&T> {
+        todo!()
+    }
 }
 
 impl<'a, T> IntoFuture for &'a UseFuture<T> {
