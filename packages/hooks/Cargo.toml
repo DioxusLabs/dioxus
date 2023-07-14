@@ -24,3 +24,4 @@ debug-cell = { git = "https://github.com/Niedzwiedzw/debug-cell", rev = "3352a1f
 futures-util = { workspace = true, default-features = false }
 dioxus-core = { workspace = true }
 dioxus = { workspace = true }
+web-sys = { version = "0.3.64", features = ["Document", "Window", "Element"] }

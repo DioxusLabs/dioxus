@@ -116,8 +116,3 @@ fern = { version = "0.6.0", features = ["colored"] }
 env_logger = "0.10.0"
 simple_logger = "4.0.0"
 thiserror = { workspace = true }
-
-[profile.release]
-opt-level = 3
-lto = true
-debug = true
