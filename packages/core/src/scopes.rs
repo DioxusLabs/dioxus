@@ -418,6 +418,25 @@ impl<'src> ScopeState {
         value
     }
 
+    /// Provide a context to the root and then consume it
+    ///
+    /// This is intended for "global" state management solutions that would rather be implicit for the entire app.
+    /// Things like signal runtimes and routers are examples of "singletons" that would benefit from lazy initialization.
+    ///
+    /// Note that you should be checking if the context existed before trying to provide a new one. Providing a context
+    /// when a context already exists will swap the context out for the new one, which may not be what you want.
+    pub fn provide_root_context<T: 'static + Clone>(&self, context: T) -> T {
+        let mut parent = self;
+
+        // Walk upwards until there is no more parent - and tada we have the root
+        while let Some(next_parent) = parent.parent {
+            parent = unsafe { &*next_parent };
+            debug_assert_eq!(parent.scope_id(), ScopeId(0));
+        }
+
+        parent.provide_context(context)
+    }
+
     /// Pushes the future onto the poll queue to be polled after the component renders.
     pub fn push_future(&self, fut: impl Future<Output = ()> + 'static) -> TaskId {
         let id = self.tasks.spawn(self.id, fut);
