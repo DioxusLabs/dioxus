@@ -18,7 +18,7 @@ dioxus = { version = "*", features = ["web", "hot_reload"] }
 1. run:
 
 ```
-dioxus serve --hot-reload
+dx serve --hot-reload
 ```
 
 2. alterar algum código dentro de uma macro rsx

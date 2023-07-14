@@ -7,12 +7,12 @@ dioxus-clean
 Clean build artifacts
 
 USAGE:
-    dioxus clean
+    dx clean
 ```
 
 # Example
 
 ```
-dioxus clean
+dx clean
 ```
 

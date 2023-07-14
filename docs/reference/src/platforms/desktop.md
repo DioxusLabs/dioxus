@@ -13,10 +13,10 @@ $ cargo new --bin demo
 $ cd demo
 ```
 
-Add Dioxus with the `desktop` feature:
+Add Dioxus-desktop:
 
 ```shell
-$ cargo add dioxus --features desktop
+$ cargo add dioxus_desktop
 ```
 
 Edit your `main.rs`:
@@ -26,7 +26,7 @@ Edit your `main.rs`:
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus::desktop::launch(app);
+    dioxus_desktop::launch(app);
 }
 
 fn app(cx: Scope) -> Element {

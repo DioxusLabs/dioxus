@@ -60,7 +60,7 @@ fn app(cx: Scope) -> Element {
 
 Our project is now setup! To make sure everything is running correctly, in the root of your project run:
 ```
-dioxus serve --platform web
+dx serve --platform web
 ```
 Then head to [http://localhost:8080](http://localhost:8080) in your browser, and you should see ``Hello, wasm!`` on your screen.
 

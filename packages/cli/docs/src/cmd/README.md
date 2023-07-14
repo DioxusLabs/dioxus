@@ -5,11 +5,11 @@ In this chapter we will introduce all `dioxus-cli` commands.
 > You can also use `dx --help` to get cli help info.
 
 ```
-dioxus
+dx
 Build, bundle, & ship your Dioxus app
 
 USAGE:
-    dioxus [OPTIONS] <SUBCOMMAND>
+    dx [OPTIONS] <SUBCOMMAND>
 
 OPTIONS:
     -h, --help    Print help information

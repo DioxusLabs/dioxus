@@ -7,7 +7,7 @@ dioxus-serve
 Build, watch & serve the Rust WASM app and all of its assets
 
 USAGE:
-    dioxus serve [OPTIONS]
+    dx serve [OPTIONS]
 
 OPTIONS:
         --example <EXAMPLE>      [default: ""]
@@ -19,7 +19,7 @@ OPTIONS:
 You can use this command to build project and start a dev server:
 
 ```
-dioxus serve
+dx serve
 ```
 
 ## Serve Example
@@ -28,7 +28,7 @@ You can use the `example` option to serve a example:
 
 ```
 # serve the `test` example
-dioxus serve --exmaple test
+dx serve --exmaple test
 ```
 
 ## Open Browser
@@ -36,7 +36,7 @@ dioxus serve --exmaple test
 You can add the `--open` option to open system default browser when server startup:
 
 ```
-dioxus serve --open
+dx serve --open
 ```
 
 ## RSX Hot Reloading
@@ -44,7 +44,7 @@ dioxus serve --open
 You can add the `--hot-reload` flag to enable [rsx hot reloading](https://dioxuslabs.com/docs/0.3/guide/en/getting_started/hot_reload.html). This will allow you to reload some rsx changes without a full recompile:
 
 ```
-dioxus serve --open
+dx serve --open
 ```
 
 ## Cross Origin Policy
@@ -57,5 +57,5 @@ You can add the `cross-origin-policy` option to change cross-origin header to:
 ```
 
 ```
-dioxus serve --corss-origin-policy
+dx serve --corss-origin-policy
 ```
