@@ -7,6 +7,7 @@ use std::hash::BuildHasherDefault;
 use node_ref::NodeMask;
 use rustc_hash::FxHasher;
 
+pub mod custom_element;
 #[cfg(feature = "dioxus")]
 pub mod dioxus;
 #[cfg(feature = "layout-attributes")]
@@ -18,6 +19,7 @@ mod passes;
 pub mod real_dom;
 pub mod tree;
 pub mod utils;
+
 pub use shipyard::EntityId as NodeId;
 
 pub mod exports {
