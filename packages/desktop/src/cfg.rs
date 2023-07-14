@@ -11,6 +11,17 @@ use wry::{
 
 // pub(crate) type DynEventHandlerFn = dyn Fn(&mut EventLoop<()>, &mut WebView);
 
+/// The behaviour of the application when the last window is closed.
+#[derive(Copy, Clone, Eq, PartialEq)]
+pub enum WindowCloseBehaviour {
+    /// Default behaviour, closing the last window exits the app
+    LastWindowExitsApp,
+    /// Closing the last window will not actually close it, just hide it
+    LastWindowHides,
+    /// Closing the last window will close it but the app will keep running so that new windows can be opened
+    CloseWindow,
+}
+
 /// The configuration for the desktop application.
 pub struct Config {
     pub(crate) window: WindowBuilder,
@@ -24,6 +35,7 @@ pub struct Config {
     pub(crate) custom_index: Option<String>,
     pub(crate) root_name: String,
     pub(crate) background_color: Option<(u8, u8, u8, u8)>,
+    pub(crate) last_window_close_behaviour: WindowCloseBehaviour,
 }
 
 type DropHandler = Box<dyn Fn(&Window, FileDropEvent) -> bool>;
@@ -52,6 +64,7 @@ impl Config {
             custom_index: None,
             root_name: "main".to_string(),
             background_color: None,
+            last_window_close_behaviour: WindowCloseBehaviour::LastWindowExitsApp,
         }
     }
 
@@ -86,6 +99,12 @@ impl Config {
         // gots to do a swap because the window builder only takes itself as muy self
         // I wish more people knew about returning &mut Self
         self.window = window;
+        self
+    }
+
+    /// Sets the behaviour of the application when the last window is closed.
+    pub fn with_close_behaviour(mut self, behaviour: WindowCloseBehaviour) -> Self {
+        self.last_window_close_behaviour = behaviour;
         self
     }
 

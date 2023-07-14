@@ -3,11 +3,10 @@ name = "dioxus-web"
 version = "0.3.2"
 authors = ["Jonathan Kelley"]
 edition = "2018"
-description = "Dioxus VirtualDOM renderer for the web browser using websys"
+description = "Web renderer for Dioxus using websys"
 license = "MIT/Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
-homepage = "https://dioxuslabs.com"
-documentation = "https://dioxuslabs.com"
+homepage = "https://dioxuslabs.com/docs/0.3/guide/en/getting_started/web.html"
 keywords = ["dom", "ui", "gui", "react", "wasm"]
 
 [dependencies]
@@ -94,4 +93,6 @@ dioxus = { workspace = true }
 wasm-bindgen-test = "0.3.29"
 dioxus-ssr = { workspace = true}
 wasm-logger = "0.2.0"
+gloo-timers = "0.2.3"
+gloo-dialogs = "0.1.1"
 dioxus-web = { workspace = true, features = ["hydrate"] }

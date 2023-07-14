@@ -4,7 +4,6 @@ use crate::{
     innerlude::DirtyScope, nodes::RenderReturn, nodes::VNode, virtual_dom::VirtualDom,
     AttributeValue, DynamicNode, ScopeId,
 };
-use bumpalo::boxed::Box as BumpBox;
 
 /// An Element's unique identifier.
 ///
@@ -110,9 +109,7 @@ impl VirtualDom {
 
         // Drop all the hooks once the children are dropped
         // this means we'll drop hooks bottom-up
-        for hook in scope.hook_list.get_mut().drain(..) {
-            drop(unsafe { BumpBox::from_raw(hook) });
-        }
+        scope.hooks.get_mut().clear();
 
         // Drop all the futures once the hooks are dropped
         for task_id in scope.spawned_tasks.borrow_mut().drain() {

@@ -11,11 +11,11 @@ use crate::{
 };
 use bumpalo::{boxed::Box as BumpBox, Bump};
 use bumpslab::{BumpSlab, Slot};
-use rustc_hash::{FxHashMap, FxHashSet};
+use rustc_hash::FxHashSet;
 use slab::{Slab, VacantEntry};
 use std::{
     any::{Any, TypeId},
-    cell::{Cell, RefCell},
+    cell::{Cell, RefCell, UnsafeCell},
     fmt::{Arguments, Debug},
     future::Future,
     ops::{Index, IndexMut},
@@ -170,11 +170,10 @@ pub struct ScopeState {
 
     pub(crate) height: u32,
 
-    pub(crate) hook_arena: Bump,
-    pub(crate) hook_list: RefCell<Vec<*mut dyn Any>>,
+    pub(crate) hooks: RefCell<Vec<Box<UnsafeCell<dyn Any>>>>,
     pub(crate) hook_idx: Cell<usize>,
 
-    pub(crate) shared_contexts: RefCell<FxHashMap<TypeId, Box<dyn Any>>>,
+    pub(crate) shared_contexts: RefCell<Vec<(TypeId, Box<dyn Any>)>>,
 
     pub(crate) tasks: Rc<Scheduler>,
     pub(crate) spawned_tasks: RefCell<FxHashSet<TaskId>>,
@@ -348,7 +347,9 @@ impl<'src> ScopeState {
     pub fn has_context<T: 'static + Clone>(&self) -> Option<T> {
         self.shared_contexts
             .borrow()
-            .get(&TypeId::of::<T>())?
+            .iter()
+            .find(|(k, _)| *k == TypeId::of::<T>())
+            .map(|(_, v)| v)?
             .downcast_ref::<T>()
             .cloned()
     }
@@ -365,8 +366,13 @@ impl<'src> ScopeState {
         while let Some(parent_ptr) = search_parent {
             // safety: all parent pointers are valid thanks to the bump arena
             let parent = unsafe { &*parent_ptr };
-            if let Some(shared) = parent.shared_contexts.borrow().get(&TypeId::of::<T>()) {
-                return shared.downcast_ref::<T>().cloned();
+            if let Some(shared) = parent
+                .shared_contexts
+                .borrow()
+                .iter()
+                .find(|(k, _)| *k == TypeId::of::<T>())
+            {
+                return shared.1.downcast_ref::<T>().cloned();
             }
             search_parent = parent.parent;
         }
@@ -395,13 +401,21 @@ impl<'src> ScopeState {
     /// }
     /// ```
     pub fn provide_context<T: 'static + Clone>(&self, value: T) -> T {
-        let value2 = value.clone();
+        let mut contexts = self.shared_contexts.borrow_mut();
 
-        self.shared_contexts
-            .borrow_mut()
-            .insert(TypeId::of::<T>(), Box::new(value));
+        // If the context exists, swap it out for the new value
+        for ctx in contexts.iter_mut() {
+            // Swap the ptr directly
+            if let Some(ctx) = ctx.1.downcast_mut::<T>() {
+                std::mem::swap(ctx, &mut value.clone());
+                return value;
+            }
+        }
 
-        value2
+        // Else, just push it
+        contexts.push((TypeId::of::<T>(), Box::new(value.clone())));
+
+        value
     }
 
     /// Pushes the future onto the poll queue to be polled after the component renders.
@@ -641,18 +655,18 @@ impl<'src> ScopeState {
     #[allow(clippy::mut_from_ref)]
     pub fn use_hook<State: 'static>(&self, initializer: impl FnOnce() -> State) -> &mut State {
         let cur_hook = self.hook_idx.get();
-        let mut hook_list = self.hook_list.try_borrow_mut().expect("The hook list is already borrowed: This error is likely caused by trying to use a hook inside a hook which violates the rules of hooks.");
+        let mut hooks = self.hooks.try_borrow_mut().expect("The hook list is already borrowed: This error is likely caused by trying to use a hook inside a hook which violates the rules of hooks.");
 
-        if cur_hook >= hook_list.len() {
-            hook_list.push(self.hook_arena.alloc(initializer()));
+        if cur_hook >= hooks.len() {
+            hooks.push(Box::new(UnsafeCell::new(initializer())));
         }
 
-        hook_list
+        hooks
             .get(cur_hook)
             .and_then(|inn| {
                 self.hook_idx.set(cur_hook + 1);
-                let raw_box = unsafe { &mut **inn };
-                raw_box.downcast_mut::<State>()
+                let raw_ref = unsafe { &mut *inn.get() };
+                raw_ref.downcast_mut::<State>()
             })
             .expect(
                 r###"
