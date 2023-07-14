@@ -33,7 +33,7 @@ jobs:
       uses: actions-rs/cargo@v1
       with:
         command: install
-        args: --git https://github.com/DioxusLabs/cli
+        args: --path packages/cli
     - name: Run Playwright tests
       run: npx playwright test
     - uses: actions/upload-artifact@v3
