@@ -113,14 +113,14 @@ enum InputError {
     TooShort,
 }
 
-static INPUT_ERROR: Atom<InputError> = |_| InputError::None;
+static INPUT_ERROR: Atom<InputError> = Atom(|_| InputError::None);
 ```
 
 Then, in our top level component, we want to explicitly handle the possible error state for this part of the tree.
 
 ```rust, no_run
 fn TopLevel(cx: Scope) -> Element {
-    let error = use_read(cx, INPUT_ERROR);
+    let error = use_read(cx, &INPUT_ERROR);
 
     match error {
         TooLong => return cx.render(rsx!{ "FAILED: Too long!" }),
@@ -134,7 +134,7 @@ Now, whenever a downstream component has an error in its actions, it can simply 
 
 ```rust, no_run
 fn Commandline(cx: Scope) -> Element {
-    let set_error = use_set(cx, INPUT_ERROR);
+    let set_error = use_set(cx, &INPUT_ERROR);
 
     cx.render(rsx!{
         input {

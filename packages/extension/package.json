@@ -1,0 +1,113 @@
+{
+    "name": "dioxus",
+    "displayName": "Dioxus",
+    "description": "Useful tools for working with Dioxus",
+    "version": "0.0.2",
+    "publisher": "DioxusLabs",
+    "private": true,
+    "license": "MIT",
+    "icon": "static/icon.png",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/DioxusLabs/cli"
+    },
+    "engines": {
+        "vscode": "^1.68.1"
+    },
+    "categories": [
+        "Programming Languages"
+    ],
+    "activationEvents": [
+        "onLanguage:rust"
+    ],
+    "main": "./out/main.js",
+    "extensionKind": [
+        "ui",
+        "workspace"
+    ],
+    "contributes": {
+        "commands": [
+            {
+                "command": "extension.htmlToDioxusRsx",
+                "title": "Dioxus: Convert HTML to RSX"
+            },
+            {
+                "command": "extension.htmlToDioxusComponent",
+                "title": "Dioxus: Convert HTML to Component"
+            },
+            {
+                "command": "extension.formatRsx",
+                "title": "Dioxus: Format RSX"
+            },
+            {
+                "command": "extension.formatRsxDocument",
+                "title": "Dioxus: Format RSX Document"
+            }
+        ],
+        "configuration": {
+            "properties": {
+                "dioxus.formatOnSave": {
+                    "type": [
+                        "string"
+                    ],
+                    "default": "followFormatOnSave",
+                    "enum": [
+                        "followFormatOnSave",
+                        "enabled",
+                        "disabled"
+                    ],
+                    "enumItemLabels": [
+                        "Follow the normal formatOnSave config",
+                        "Enabled",
+                        "Disabled"
+                    ],
+                    "enumDescriptions": [
+                        "Only format Rsx when saving files if the editor.formatOnSave config is enabled",
+                        "Always format Rsx when a Rust file is saved",
+                        "Never format Rsx when a file is saved"
+                    ],
+                    "description": "Format RSX when a file is saved."
+                }
+            }
+        }
+    },
+    "scripts": {
+        "vscode:prepublish": "npm run build-base",
+        "// package": "vsce package -o rust-analyzer.vsix",
+        "// build-base": "node src/build.js",
+        "build-wasm": "cargo build --target wasm32-unknown-unknown --release && cp ../../target/wasm32-unknown-unknown/release/dioxus_ext.wasm pkg/",
+        "bind-wasm": "wasm-bindgen --out-dir=pkg --target=web --omit-default-module-path --omit-imports pkg/dioxus_ext.wasm",
+        "build-base": "npm run build-wasm && npm run bind-wasm && webpack",
+        "webpack": "webpack --mode development",
+        "webpack-dev": "webpack --mode development --watch",
+        "package": "webpack --mode production --devtool hidden-source-map",
+        "test-compile": "tsc -p ./",
+        "build": "npm run build-base -- --devtool hidden-source-map",
+        "watch": "npm run build-base -- --devtool hidden-source-map --watch",
+        "lint": "prettier --check . && eslint -c .eslintrc.js --ext ts ./src ./tests",
+        "fix": "prettier --write . && eslint -c .eslintrc.js --ext ts ./src ./tests --fix",
+        "pretest": "tsc && npm run build",
+        "test": "cross-env TEST_VARIABLE=test node ./out/tests/runTests.js"
+    },
+    "devDependencies": {
+        "@types/node": "^18.0.2",
+        "@types/vscode": "^1.68.1",
+        "@typescript-eslint/eslint-plugin": "^5.30.5",
+        "@typescript-eslint/parser": "^5.30.5",
+        "cross-env": "^7.0.3",
+        "eslint": "^8.19.0",
+        "eslint-config-prettier": "^8.5.0",
+        "ovsx": "^0.5.1",
+        "prettier": "^2.6.2",
+        "ts-loader": "^9.4.4",
+        "tslib": "^2.3.0",
+        "typescript": "^4.7.4",
+        "vsce": "^2.7.0",
+        "webpack": "^5.88.1",
+        "webpack-cli": "^5.1.4"
+    },
+    "dependencies": {
+        "dioxus-ext": "./pkg",
+        "vsce": "^2.9.2"
+    }
+}

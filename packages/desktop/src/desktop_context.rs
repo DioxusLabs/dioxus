@@ -52,7 +52,7 @@ pub(crate) type WebviewQueue = Rc<RefCell<Vec<WebviewHandler>>>;
 /// ```
 pub struct DesktopService {
     /// The wry/tao proxy to the current window
-    pub webview: WebView,
+    pub webview: Rc<WebView>,
 
     /// The proxy to the event loop
     pub proxy: ProxyType,
@@ -94,7 +94,7 @@ impl DesktopService {
         shortcut_manager: ShortcutRegistry,
     ) -> Self {
         Self {
-            webview,
+            webview: Rc::new(webview),
             proxy,
             event_loop,
             query: Default::default(),

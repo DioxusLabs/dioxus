@@ -77,6 +77,12 @@ impl Default for DioxusConfig {
                     style: Some(vec![]),
                     script: Some(vec![]),
                 },
+                https: WebHttpsConfig {
+                    enabled: None,
+                    mkcert: None,
+                    key_path: None,
+                    cert_path: None,
+                },
             },
             plugin: toml::Value::Table(toml::map::Map::new()),
         }
@@ -101,6 +107,8 @@ pub struct WebConfig {
     pub proxy: Option<Vec<WebProxyConfig>>,
     pub watcher: WebWatcherConfig,
     pub resource: WebResourceConfig,
+    #[serde(default)]
+    pub https: WebHttpsConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -132,6 +140,14 @@ pub struct WebResourceConfig {
 pub struct WebDevResourceConfig {
     pub style: Option<Vec<PathBuf>>,
     pub script: Option<Vec<PathBuf>>,
+}
+
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+pub struct WebHttpsConfig {
+    pub enabled: Option<bool>,
+    pub mkcert: Option<bool>,
+    pub key_path: Option<String>,
+    pub cert_path: Option<String>,
 }
 
 #[derive(Debug, Clone)]

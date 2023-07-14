@@ -1,11 +1,10 @@
-use dioxus_html::EventData;
 use dioxus_native_core::{
     node::TextNode,
     prelude::*,
     real_dom::{NodeImmutable, NodeTypeMut},
     NodeId,
 };
-use rink::{render, Config, Driver};
+use rink::{render, Config, Driver, EventData};
 use std::rc::Rc;
 use std::sync::{Arc, RwLock};
 

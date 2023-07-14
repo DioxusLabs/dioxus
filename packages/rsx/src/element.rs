@@ -76,10 +76,13 @@ impl Parse for Element {
 
             if content.peek(Ident) && content.peek2(Token![:]) && !content.peek3(Token![:]) {
                 let name = content.parse::<Ident>()?;
-                let ident = name.clone();
 
                 let name_str = name.to_string();
                 content.parse::<Token![:]>()?;
+
+                // The span of the content to be parsed,
+                // for example the `hi` part of `class: "hi"`.
+                let span = content.span();
 
                 if name_str.starts_with("on") {
                     attributes.push(ElementAttrNamed {
@@ -127,7 +130,7 @@ impl Parse for Element {
 
                 // todo: add a message saying you need to include commas between fields
                 if content.parse::<Token![,]>().is_err() {
-                    missing_trailing_comma!(ident.span());
+                    missing_trailing_comma!(span);
                 }
                 continue;
             }
