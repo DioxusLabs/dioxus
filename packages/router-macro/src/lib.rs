@@ -446,6 +446,24 @@ impl RouteEnum {
             routes.push(route);
         }
 
+        // pop any remaining site map segments
+        while let Some(segment) = site_map_stack.pop() {
+            let children = site_map_stack
+                .last_mut()
+                .map(|seg| &mut seg.last_mut().unwrap().children)
+                .unwrap_or(&mut site_map);
+
+            // Turn the list of segments in the segments stack into a tree
+            let mut iter = segment.into_iter().rev();
+            let mut current = iter.next().unwrap();
+            for mut segment in iter {
+                segment.children.push(current);
+                current = segment;
+            }
+
+            children.push(current);
+        }
+
         let myself = Self {
             vis: vis.clone(),
             name: name.clone(),
