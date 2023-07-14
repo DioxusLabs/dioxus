@@ -2,21 +2,27 @@ use dioxus_core::ScopeState;
 
 use crate::UseFutureDep;
 
-/// A hook that provides a callback that executes after the hooks have been applied
+/// A hook that provides a callback that executes if the dependencies change.
+/// This is useful to avoid running computation-expensive calculations even when the data doesn't change.
 ///
-/// Whenever the hooks dependencies change, the callback will be re-evaluated.
-///
-/// - dependencies: a tuple of references to values that are PartialEq + Clone
+/// - dependencies: a tuple of references to values that are `PartialEq` + `Clone`
 ///
 /// ## Examples
 ///
-/// ```rust, ignore
+/// ```rust, no_run
 ///
 /// #[inline_props]
-/// fn app(cx: Scope, name: &str) -> Element {
-///     use_memo(cx, (name,), |(name,)| {
-///         expensive_computation(name);
-///     }))
+/// fn Calculator(cx: Scope, number: usize) -> Element {
+///     let bigger_number = use_memo(cx, (number,), |(number,)| {
+///         // This will only be calculated when `number` has changed.
+///         number * 100
+///     });
+///     render!(
+///         p { "{bigger_number}" }
+///     )
+/// }
+/// fn app(cx: Scope) -> Element {
+///     render!(Calculator { number: 0 })
 /// }
 /// ```
 pub fn use_memo<T, D>(cx: &ScopeState, dependencies: D, callback: impl FnOnce(D::Out) -> T) -> &T
