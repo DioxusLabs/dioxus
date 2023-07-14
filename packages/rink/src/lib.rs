@@ -177,7 +177,6 @@ pub fn render<R: Driver>(
                 if !to_rerender.is_empty() || updated {
                     updated = false;
                     fn resize(dims: tui::layout::Rect, taffy: &mut Taffy, rdom: &RealDom) {
-
                         let width = screen_to_layout_space(dims.width);
                         let height = screen_to_layout_space(dims.height);
                         let root_node = rdom
