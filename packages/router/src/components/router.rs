@@ -119,6 +119,8 @@ pub fn GenericRouter<R: Routable + Clone>(cx: Scope<GenericRouterProps<R>>) -> E
 where
     <R as FromStr>::Err: std::fmt::Display,
 {
+    use crate::prelude::outlet::OutletContext;
+
     use_context_provider(cx, || {
         GenericRouterContext::new(
             (cx.props
@@ -128,6 +130,10 @@ where
                 .expect("use_context_provider ran twice"))(),
             cx.schedule_update_any(),
         )
+    });
+    use_context_provider(cx, || OutletContext::<R> {
+        current_level: 0,
+        _marker: std::marker::PhantomData,
     });
 
     render! {
@@ -151,6 +157,10 @@ where
                 .expect("use_context_provider ran twice"))(),
             cx.schedule_update_any(),
         )
+    });
+    use_context_provider(cx, || OutletContext::<R> {
+        current_level: 0,
+        _marker: std::marker::PhantomData,
     });
 
     render! {

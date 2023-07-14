@@ -4,7 +4,7 @@ use crate::{routable::Routable, utils::use_router_internal::use_router_internal}
 
 pub(crate) struct OutletContext<R> {
     pub current_level: usize,
-    _marker: std::marker::PhantomData<R>,
+    pub _marker: std::marker::PhantomData<R>,
 }
 
 impl<R> Clone for OutletContext<R> {
@@ -19,7 +19,7 @@ impl<R> Clone for OutletContext<R> {
 pub(crate) fn use_outlet_context<R: 'static>(cx: &ScopeState) -> &OutletContext<R> {
     let outlet_context = cx.use_hook(|| {
         cx.consume_context().unwrap_or(OutletContext::<R> {
-            current_level: 0,
+            current_level: 1,
             _marker: std::marker::PhantomData,
         })
     });
