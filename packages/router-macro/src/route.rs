@@ -186,26 +186,37 @@ impl Route {
     pub fn display_match(&self, nests: &[Nest]) -> TokenStream2 {
         let name = &self.route_name;
         let dynamic_segments = self.dynamic_segments();
-        let write_layouts = self.nests.iter().map(|id| nests[id.0].write());
-        let write_segments = self.segments.iter().map(|s| s.write_segment());
         let write_query = self.query.as_ref().map(|q| q.write());
 
         match &self.ty {
             RouteType::Child(field) => {
+                let write_nests = self.nests.iter().map(|id| nests[id.0].write());
+                let write_segments = self.segments.iter().map(|s| s.write_segment());
                 let child = field.ident.as_ref().unwrap();
                 quote! {
                     Self::#name { #(#dynamic_segments,)* #child } => {
                         use std::fmt::Display;
-                        #(#write_layouts)*
-                        #(#write_segments)*
-                        #child.fmt(f);
+                        use std::fmt::Write;
+                        let mut route = String::new();
+                        {
+                            let f = &mut route;
+                            #(#write_nests)*
+                            #(#write_segments)*
+                        }
+                        if route.ends_with('/') {
+                            route.pop();
+                        }
+                        f.write_str(&route)?;
+                        #child.fmt(f)?;
                     }
                 }
             }
             RouteType::Leaf { .. } => {
+                let write_nests = self.nests.iter().map(|id| nests[id.0].write());
+                let write_segments = self.segments.iter().map(|s| s.write_segment());
                 quote! {
                     Self::#name { #(#dynamic_segments,)* } => {
-                        #(#write_layouts)*
+                        #(#write_nests)*
                         #(#write_segments)*
                         #write_query
                     }

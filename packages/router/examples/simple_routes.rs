@@ -96,21 +96,28 @@ fn Route3(cx: Scope, dynamic: String) -> Element {
         p { "Site Map" }
         pre { "{site_map:#?}" }
         p { "Dynamic link" }
-        if let Ok(route) = parsed {
-            if route != current_route {
+        match parsed {
+            Ok(route) => {
+                if route != current_route {
+                    render! {
+                        Link {
+                            target: route.clone(),
+                            "{route}"
+                        }
+                    }
+                }
+                else {
+                    None
+                }
+            }
+            Err(err) => {
                 render! {
-                    Link {
-                        target: route.clone(),
-                        "{route}"
+                    pre {
+                        color: "red",
+                        "Invalid route:\n{err}"
                     }
                 }
             }
-            else {
-                None
-            }
-        }
-        else {
-            None
         }
     }
 }
@@ -118,24 +125,26 @@ fn Route3(cx: Scope, dynamic: String) -> Element {
 #[rustfmt::skip]
 #[derive(Clone, Debug, PartialEq, Routable)]
 enum Route {
-    // Nests with parameters have types taken from child routes
-    #[nest("/user/:user_id")]
-        // Everything inside the nest has the added parameter `user_id: usize`
-        // UserFrame is a layout component that will receive the `user_id: usize` parameter
-        #[layout(UserFrame)]
-            #[route("/:dynamic?:query")]
-            Route1 {
-                // The type is taken from the first instance of the dynamic parameter
-                user_id: usize,
-                dynamic: usize,
-                query: String,
-                extra: String,
-            },
-            #[route("/hello_world")]
-            // You can opt out of the layout by using the `!` prefix
-            #[layout(!UserFrame)]
-            Route2 { user_id: usize },
-        #[end_layout]
+    #[nest("/test")]
+        // Nests with parameters have types taken from child routes
+        #[nest("/user/:user_id")]
+            // Everything inside the nest has the added parameter `user_id: usize`
+            // UserFrame is a layout component that will receive the `user_id: usize` parameter
+            #[layout(UserFrame)]
+                #[route("/:dynamic?:query")]
+                Route1 {
+                    // The type is taken from the first instance of the dynamic parameter
+                    user_id: usize,
+                    dynamic: usize,
+                    query: String,
+                    extra: String,
+                },
+                #[route("/hello_world")]
+                // You can opt out of the layout by using the `!` prefix
+                #[layout(!UserFrame)]
+                Route2 { user_id: usize },
+            #[end_layout]
+        #[end_nest]
     #[end_nest]
     #[redirect("/:id/user", |id: usize| Route::Route3 { dynamic: id.to_string()})]
     #[route("/:dynamic")]

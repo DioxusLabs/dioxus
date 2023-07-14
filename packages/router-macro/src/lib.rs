@@ -364,10 +364,7 @@ impl RouteEnum {
                     let parser = |input: ParseStream| {
                         let bang: Option<Token![!]> = input.parse().ok();
                         let exclude = bang.is_some();
-                        Ok((
-                            exclude,
-                            Layout::parse(input, nest_stack.iter().rev().cloned().collect())?,
-                        ))
+                        Ok((exclude, Layout::parse(input, nest_stack.clone())?))
                     };
                     let (exclude, layout): (bool, Layout) = attr.parse_args_with(parser)?;
 
@@ -389,19 +386,14 @@ impl RouteEnum {
                     layout_stack.pop();
                 } else if attr.path.is_ident("redirect") {
                     let parser = |input: ParseStream| {
-                        Redirect::parse(
-                            input,
-                            nest_stack.iter().rev().cloned().collect(),
-                            redirects.len(),
-                        )
+                        Redirect::parse(input, nest_stack.clone(), redirects.len())
                     };
                     let redirect = attr.parse_args_with(parser)?;
                     redirects.push(redirect);
                 }
             }
 
-            let mut active_nests = nest_stack.clone();
-            active_nests.reverse();
+            let active_nests = nest_stack.clone();
             let mut active_layouts = layout_stack.clone();
             active_layouts.retain(|&id| !excluded.contains(&id));
 

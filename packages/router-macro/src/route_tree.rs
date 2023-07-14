@@ -314,7 +314,7 @@ impl<'a> RouteTreeSegmentData<'a> {
                                 #(#children)*
                             }
                             else {
-                                errors.push(#error_enum_name::#enum_varient(#varient_parse_error::#error_ident))
+                                errors.push(#error_enum_name::#enum_varient(#varient_parse_error::#error_ident(segment.to_string())))
                             }
                         }
                     }

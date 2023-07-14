@@ -58,10 +58,11 @@ impl RouteSegment {
                 quote! {
                     {
                         let mut segments = segments.clone();
-                        let parsed = if let Some(#segment) = segments.next() {
+                        let segment = segments.next();
+                        let parsed = if let Some(#segment) = segment {
                             Ok(())
                         } else {
-                            Err(#error_enum_name::#error_enum_varient(#inner_parse_enum::#error_name))
+                            Err(#error_enum_name::#error_enum_varient(#inner_parse_enum::#error_name(segment.map(|s|s.to_string()).unwrap_or_default())))
                         };
                         match parsed {
                             Ok(_) => {
@@ -234,8 +235,8 @@ pub(crate) fn create_error_type(
         let error_name = segment.error_name(i);
         match segment {
             RouteSegment::Static(index) => {
-                error_variants.push(quote! { #error_name });
-                display_match.push(quote! { Self::#error_name => write!(f, "Static segment '{}' did not match", #index)? });
+                error_variants.push(quote! { #error_name(String) });
+                display_match.push(quote! { Self::#error_name(found) => write!(f, "Static segment '{}' did not match instead found '{found}'", #index)? });
             }
             RouteSegment::Dynamic(ident, ty) => {
                 let missing_error = segment.missing_error_name().unwrap();
