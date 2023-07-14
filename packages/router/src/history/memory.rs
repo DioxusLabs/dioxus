@@ -39,7 +39,8 @@ where
     pub fn with_initial_path(path: R) -> Self {
         Self {
             current: path,
-            ..Default::default()
+            history: Vec::new(),
+            future: Vec::new(),
         }
     }
 }
@@ -52,7 +53,7 @@ where
         Self {
             current: "/".parse().unwrap_or_else(|err| {
                 panic!("index route does not exist:\n{}\n use MemoryHistory::with_initial_path to set a custom path", err)
-        }),
+            }),
             history: Vec::new(),
             future: Vec::new(),
         }

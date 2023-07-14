@@ -60,13 +60,17 @@ impl<R> GenericRouterContext<R>
 where
     R: Routable,
 {
-    pub(crate) fn new(cfg: RouterConfig<R>, mark_dirty: Arc<dyn Fn(ScopeId) + Sync + Send>) -> Self
+    pub(crate) fn new(
+        mut cfg: RouterConfig<R>,
+        mark_dirty: Arc<dyn Fn(ScopeId) + Sync + Send>,
+    ) -> Self
     where
         R: Clone,
+        <R as std::str::FromStr>::Err: std::fmt::Display,
     {
         let state = Arc::new(RwLock::new(MutableRouterState {
             prefix: Default::default(),
-            history: cfg.history,
+            history: cfg.take_history(),
             unresolved_error: None,
         }));
 

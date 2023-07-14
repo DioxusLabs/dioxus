@@ -26,7 +26,7 @@ use crate::prelude::*;
 /// ```
 pub struct RouterConfig<R: Routable> {
     pub(crate) failure_external_navigation: fn(Scope) -> Element,
-    pub(crate) history: Box<dyn HistoryProvider<R>>,
+    pub(crate) history: Option<Box<dyn HistoryProvider<R>>>,
     pub(crate) on_update: Option<RoutingCallback<R>>,
 }
 
@@ -39,15 +39,26 @@ where
     fn default() -> Self {
         Self {
             failure_external_navigation: FailureExternalNavigation::<R>,
-            history: {
-                #[cfg(all(target_arch = "wasm32", feature = "web"))]
-                let history = Box::<WebHistory<R>>::default();
-                #[cfg(not(all(target_arch = "wasm32", feature = "web")))]
-                let history = Box::<MemoryHistory<R>>::default();
-                history
-            },
+            history: None,
             on_update: None,
         }
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<R: Routable + Clone> RouterConfig<R>
+where
+    <R as std::str::FromStr>::Err: std::fmt::Display,
+    R: serde::Serialize + serde::de::DeserializeOwned,
+{
+    pub(crate) fn get_history(self) -> Box<dyn HistoryProvider<R>> {
+        self.history.unwrap_or_else(|| {
+            #[cfg(all(target_arch = "wasm32", feature = "web"))]
+            let history = Box::<WebHistory<R>>::default();
+            #[cfg(not(all(target_arch = "wasm32", feature = "web")))]
+            let history = Box::<MemoryHistory<R>>::default();
+            history
+        })
     }
 }
 
@@ -59,15 +70,25 @@ where
     fn default() -> Self {
         Self {
             failure_external_navigation: FailureExternalNavigation::<R>,
-            history: {
-                #[cfg(all(target_arch = "wasm32", feature = "web"))]
-                let history = Box::<WebHistory<R>>::default();
-                #[cfg(not(all(target_arch = "wasm32", feature = "web")))]
-                let history = Box::<MemoryHistory<R>>::default();
-                history
-            },
+            history: None,
             on_update: None,
         }
+    }
+}
+
+#[cfg(not(feature = "serde"))]
+impl<R: Routable + Clone> RouterConfig<R>
+where
+    <R as std::str::FromStr>::Err: std::fmt::Display,
+{
+    pub(crate) fn take_history(&mut self) -> Box<dyn HistoryProvider<R>> {
+        self.history.take().unwrap_or_else(|| {
+            #[cfg(all(target_arch = "wasm32", feature = "web"))]
+            let history = Box::<WebHistory<R>>::default();
+            #[cfg(not(all(target_arch = "wasm32", feature = "web")))]
+            let history = Box::<MemoryHistory<R>>::default();
+            history
+        })
     }
 }
 
@@ -100,7 +121,7 @@ impl<R: Routable> RouterConfig<R> {
     /// Defaults to a default [`MemoryHistory`].
     pub fn history(self, history: impl HistoryProvider<R> + 'static) -> Self {
         Self {
-            history: Box::new(history),
+            history: Some(Box::new(history)),
             ..self
         }
     }
