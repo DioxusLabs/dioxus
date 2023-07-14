@@ -8,7 +8,7 @@ jobs:
   test:
     if: github.event.pull_request.draft == false
     timeout-minutes: 60
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
     - uses: actions/checkout@v3
     - uses: actions/setup-node@v3
@@ -33,7 +33,7 @@ jobs:
       uses: actions-rs/cargo@v1
       with:
         command: install
-        args: --git https://github.com/DioxusLabs/cli
+        args: --path packages/cli
     - name: Run Playwright tests
       run: npx playwright test
     - uses: actions/upload-artifact@v3
