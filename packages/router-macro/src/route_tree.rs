@@ -187,13 +187,16 @@ impl<'a> RouteTree<'a> {
                 let nest = self.entries.insert(nest);
                 let segments = match current_route.and_then(|id| self.get_mut(id)) {
                     Some(RouteTreeSegmentData::Static { children, .. }) => children,
-                    Some(r) => unreachable!("{r:?} is not a static segment"),
+                    Some(RouteTreeSegmentData::Nest { children, .. }) => children,
+                    Some(r) => {
+                        unreachable!("{current_route:?}\n{r:?} is not a static or nest segment",)
+                    }
                     None => &mut segments,
                 };
                 segments.push(nest);
 
                 // Update the current route
-                current_route = segments.last().cloned();
+                current_route = Some(nest);
             }
 
             match route.next_static_segment() {
