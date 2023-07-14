@@ -1,9 +1,9 @@
 # Translate
 
-`dioxus translate` can translate some `html` file into a Dioxus compoent
+`dx translate` can translate some `html` file into a Dioxus compoent
 
 ```
-dioxus-translate 
+dioxus-translate
 Translate some source file into a Dioxus component
 
 USAGE:

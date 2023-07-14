@@ -1,9 +1,9 @@
 # Clean
 
-`dioxus clean` will clear the build artifacts (the out_dir and the cargo cache)
+`dx clean` will clear the build artifacts (the out_dir and the cargo cache)
 
 ```
-dioxus-clean 
+dioxus-clean
 Clean build artifacts
 
 USAGE:

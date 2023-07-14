@@ -24,7 +24,7 @@ Next, add the server function to your `main.rs`:
 {{#include ../../../examples/server_function.rs}}
 ```
 
-Now, build your client-side bundle with `dioxus build --features web` and run your server with `cargo run --features ssr`. You should see a new button that multiplies the count by 2.
+Now, build your client-side bundle with `dx build --features web` and run your server with `cargo run --features ssr`. You should see a new button that multiplies the count by 2.
 
 ## Conclusion
 

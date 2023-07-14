@@ -1,9 +1,9 @@
 # Serve
 
-The `dioxus serve` can start a dev server with hot-reloading
+The `dx serve` can start a dev server with hot-reloading
 
 ```
-dioxus-serve 
+dioxus-serve
 Build, watch & serve the Rust WASM app and all of its assets
 
 USAGE:

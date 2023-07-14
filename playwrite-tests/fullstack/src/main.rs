@@ -20,7 +20,7 @@ fn main() {
     {
         // Start hot reloading
         hot_reload_init!(dioxus_hot_reload::Config::new().with_rebuild_callback(|| {
-            execute::shell("dioxus build --features web")
+            execute::shell("dx build --features web")
                 .spawn()
                 .unwrap()
                 .wait()

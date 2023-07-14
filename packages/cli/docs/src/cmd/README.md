@@ -2,10 +2,10 @@
 
 In this chapter we will introduce all `dioxus-cli` commands.
 
-> You can also use `dioxus --help` to get cli help info.
+> You can also use `dx --help` to get cli help info.
 
 ```
-dioxus 
+dioxus
 Build, bundle, & ship your Dioxus app
 
 USAGE:

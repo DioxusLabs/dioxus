@@ -4,7 +4,7 @@ Once you have the Dioxus CLI tool installed, you can use it to create dioxus pro
 
 ## Initializing a default project
 
-First, run the `dioxus create` command to create a new project ready to be used with Dioxus and the Dioxus CLI:
+First, run the `dx create` command to create a new project ready to be used with Dioxus and the Dioxus CLI:
 
 ```
 dioxus create hello-dioxus

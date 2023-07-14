@@ -18,7 +18,7 @@ There are plenty Rust Elm-like frameworks in the world - we were not interested 
 The `RSX` DSL is _barely_ a DSL. Rustaceans will find the DSL very similar to simply assembling nested structs, but without the syntactical overhead of "Default" everywhere or having to jump through hoops with the builder pattern. Between RSX, HTML, the Raw Factory API, and the NodeBuilder syntax, there's plenty of options to choose from.
 
 ### What are the build times like? Why on earth would I choose Rust instead of JS/TS/Elm?
-Dioxus builds as roughly as fast as a complex WebPack-TypeScript site. Compile times will be slower than an equivalent TypeScript site, but not unbearably slow. The Wasm compiler backend for Rust is very fast. Iterating on small components is basically instant and larger apps takes a few seconds. In practice, the compiler guarantees of Rust balance out the rebuild times.
+dx builds as roughly as fast as a complex WebPack-TypeScript site. Compile times will be slower than an equivalent TypeScript site, but not unbearably slow. The Wasm compiler backend for Rust is very fast. Iterating on small components is basically instant and larger apps takes a few seconds. In practice, the compiler guarantees of Rust balance out the rebuild times.
 
 ### What about Yew/Seed/Sycamore/Dominator/Dodrio/Percy?
 - Yew and Seed use an Elm-like pattern and don't support SSR or any alternate rendering platforms
