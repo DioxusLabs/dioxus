@@ -2,29 +2,44 @@ use dioxus::prelude::*;
 
 use crate::{routable::Routable, utils::use_router_internal::use_router_internal};
 
-#[derive(Clone)]
-pub(crate) struct OutletContext {
+pub(crate) struct OutletContext<R> {
     pub current_level: usize,
+    _marker: std::marker::PhantomData<R>,
 }
 
-pub(crate) fn use_outlet_context(cx: &ScopeState) -> &OutletContext {
+impl<R> Clone for OutletContext<R> {
+    fn clone(&self) -> Self {
+        OutletContext {
+            current_level: self.current_level,
+            _marker: std::marker::PhantomData,
+        }
+    }
+}
+
+pub(crate) fn use_outlet_context<R: 'static>(cx: &ScopeState) -> &OutletContext<R> {
     let outlet_context = cx.use_hook(|| {
-        cx.consume_context()
-            .unwrap_or(OutletContext { current_level: 0 })
+        cx.consume_context().unwrap_or(OutletContext::<R> {
+            current_level: 0,
+            _marker: std::marker::PhantomData,
+        })
     });
     outlet_context
 }
 
-impl OutletContext {
-    pub(crate) fn render<R: Routable + Clone>(cx: Scope) -> Element<'_> {
+impl<R> OutletContext<R> {
+    pub(crate) fn render(cx: Scope) -> Element<'_>
+    where
+        R: Routable + Clone,
+    {
         let router = use_router_internal::<R>(cx)
             .as_ref()
             .expect("Outlet must be inside of a router");
-        let outlet = use_outlet_context(cx);
+        let outlet: &OutletContext<R> = use_outlet_context(cx);
         let current_level = outlet.current_level;
         cx.provide_context({
-            OutletContext {
+            OutletContext::<R> {
                 current_level: current_level + 1,
+                _marker: std::marker::PhantomData,
             }
         });
 

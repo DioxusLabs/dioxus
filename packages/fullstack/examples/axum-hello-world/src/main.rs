@@ -41,10 +41,8 @@ fn app(cx: Scope<AppProps>) -> Element {
 }
 
 #[server(PostServerData)]
-async fn post_server_data(
-    #[extract] axum::extract::Host(host): axum::extract::Host,
-    data: String,
-) -> Result<(), ServerFnError> {
+async fn post_server_data(data: String) -> Result<(), ServerFnError> {
+    let axum::extract::Host(host): axum::extract::Host = extract()?;
     println!("Server received: {}", data);
     println!("{:?}", host);
 

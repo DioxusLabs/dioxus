@@ -68,5 +68,5 @@ use dioxus::prelude::*;
 /// # assert_eq!(dioxus_ssr::render(&vdom), "<h1>App</h1><p>Child</p>");
 /// ```
 pub fn GenericOutlet<R: Routable + Clone>(cx: Scope) -> Element {
-    OutletContext::render::<R>(cx)
+    OutletContext::<R>::render(cx)
 }
