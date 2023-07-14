@@ -10,8 +10,6 @@ mod rt;
 use dioxus_core::ScopeState;
 pub use rt::*;
 
-use crate::rt::claim_rt;
-
 pub fn use_init_signal_rt(cx: &ScopeState) {
     cx.use_hook(|| {
         let rt = claim_rt(cx.schedule_update_any());
