@@ -50,7 +50,9 @@ where
 {
     fn default() -> Self {
         Self {
-            current: "/".parse().unwrap_or_else(|err| panic!("{}", err)),
+            current: "/".parse().unwrap_or_else(|err| {
+                panic!("index route does not exist:\n{}\n use MemoryHistory::with_initial_path to set a custom path", err)
+        }),
             history: Vec::new(),
             future: Vec::new(),
         }
