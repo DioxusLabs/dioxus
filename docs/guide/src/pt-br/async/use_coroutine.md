@@ -105,7 +105,7 @@ async fn editor_service(rx: UnboundedReceiver<EditorCommand>) {
 Podemos combinar corrotinas com `Fermi` para emular o sistema `Thunk` do **Redux Toolkit** com muito menos dor de cabeça. Isso nos permite armazenar todo o estado do nosso aplicativo _dentro_ de uma tarefa e, em seguida, simplesmente atualizar os valores de "visualização" armazenados em `Atoms`. Não pode ser subestimado o quão poderosa é essa técnica: temos todas as vantagens das tarefas nativas do Rust com as otimizações e ergonomia do estado global. Isso significa que seu estado _real_ não precisa estar vinculado a um sistema como `Fermi` ou `Redux` – os únicos `Atoms` que precisam existir são aqueles que são usados para controlar a interface.
 
 ```rust, no_run
-static USERNAME: Atom<String> = |_| "default".to_string();
+static USERNAME: Atom<String> = Atom(|_| "default".to_string());
 
 fn app(cx: Scope) -> Element {
     let atoms = use_atom_root(cx);
@@ -118,7 +118,7 @@ fn app(cx: Scope) -> Element {
 }
 
 fn Banner(cx: Scope) -> Element {
-    let username = use_read(cx, USERNAME);
+    let username = use_read(cx, &USERNAME);
 
     cx.render(rsx!{
         h1 { "Welcome back, {username}" }
@@ -134,8 +134,8 @@ enum SyncAction {
 }
 
 async fn sync_service(mut rx: UnboundedReceiver<SyncAction>, atoms: AtomRoot) {
-    let username = atoms.write(USERNAME);
-    let errors = atoms.write(ERRORS);
+    let username = atoms.write(&USERNAME);
+    let errors = atoms.write(&ERRORS);
 
     while let Ok(msg) = rx.next().await {
         match msg {

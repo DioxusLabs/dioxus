@@ -10,12 +10,16 @@ use std::collections::VecDeque;
 use std::ops::{Deref, DerefMut};
 use std::sync::{Arc, RwLock};
 
+use crate::custom_element::{
+    CustomElement, CustomElementFactory, CustomElementManager, CustomElementRegistry,
+    CustomElementUpdater,
+};
 use crate::node::{
     ElementNode, FromAnyValue, NodeType, OwnedAttributeDiscription, OwnedAttributeValue, TextNode,
 };
 use crate::node_ref::{NodeMask, NodeMaskBuilder};
-use crate::node_watcher::NodeWatcher;
-use crate::passes::{DirtyNodeStates, PassDirection, TypeErasedState};
+use crate::node_watcher::{AttributeWatcher, NodeWatcher};
+use crate::passes::{Dependant, DirtyNodeStates, PassDirection, TypeErasedState};
 use crate::prelude::AttributeMaskBuilder;
 use crate::tree::{TreeMut, TreeMutView, TreeRef, TreeRefView};
 use crate::NodeId;
@@ -49,6 +53,7 @@ impl Deref for DirtyNodesResult {
 pub(crate) struct NodesDirty<V: FromAnyValue + Send + Sync> {
     passes_updated: FxHashMap<NodeId, FxHashSet<TypeId>>,
     nodes_updated: FxHashMap<NodeId, NodeMask>,
+    nodes_created: FxHashSet<NodeId>,
     pub(crate) passes: Box<[TypeErasedState<V>]>,
 }
 
@@ -92,6 +97,7 @@ impl<V: FromAnyValue + Send + Sync> NodesDirty<V> {
 }
 
 type NodeWatchers<V> = Arc<RwLock<Vec<Box<dyn NodeWatcher<V> + Send + Sync>>>>;
+type AttributeWatchers<V> = Arc<RwLock<Vec<Box<dyn AttributeWatcher<V> + Send + Sync>>>>;
 
 /// A Dom that can sync with the VirtualDom mutations intended for use in lazy renderers.
 /// The render state passes from parent to children and or accumulates state from children to parents.
@@ -108,8 +114,10 @@ pub struct RealDom<V: FromAnyValue + Send + Sync = ()> {
     nodes_listening: FxHashMap<String, FxHashSet<NodeId>>,
     pub(crate) dirty_nodes: NodesDirty<V>,
     node_watchers: NodeWatchers<V>,
+    attribute_watchers: AttributeWatchers<V>,
     workload: ScheduledWorkload,
     root_id: NodeId,
+    custom_elements: Arc<RwLock<CustomElementRegistry<V>>>,
     phantom: std::marker::PhantomData<V>,
 }
 
@@ -123,19 +131,25 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
             let (current, before) = before.split_last_mut().unwrap();
             for state in before.iter_mut().chain(after.iter_mut()) {
                 let dependants = Arc::get_mut(&mut state.dependants).unwrap();
+
+                let current_dependant = Dependant {
+                    type_id: current.this_type_id,
+                    enter_shadow_dom: current.enter_shadow_dom,
+                };
+
                 // If this node depends on the other state as a parent, then the other state should update its children of the current type when it is invalidated
                 if current
                     .parent_dependancies_ids
                     .contains(&state.this_type_id)
-                    && !dependants.child.contains(&current.this_type_id)
+                    && !dependants.child.contains(&current_dependant)
                 {
-                    dependants.child.push(current.this_type_id);
+                    dependants.child.push(current_dependant);
                 }
                 // If this node depends on the other state as a child, then the other state should update its parent of the current type when it is invalidated
                 if current.child_dependancies_ids.contains(&state.this_type_id)
-                    && !dependants.parent.contains(&current.this_type_id)
+                    && !dependants.parent.contains(&current_dependant)
                 {
-                    dependants.parent.push(current.this_type_id);
+                    dependants.parent.push(current_dependant);
                 }
                 // If this node depends on the other state as a sibling, then the other state should update its siblings of the current type when it is invalidated
                 if current.node_dependancies_ids.contains(&state.this_type_id)
@@ -146,15 +160,19 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
             }
             // If the current state depends on itself, then it should update itself when it is invalidated
             let dependants = Arc::get_mut(&mut current.dependants).unwrap();
+            let current_dependant = Dependant {
+                type_id: current.this_type_id,
+                enter_shadow_dom: current.enter_shadow_dom,
+            };
             match current.pass_direction {
                 PassDirection::ChildToParent => {
-                    if !dependants.parent.contains(&current.this_type_id) {
-                        dependants.parent.push(current.this_type_id);
+                    if !dependants.parent.contains(&current_dependant) {
+                        dependants.parent.push(current_dependant);
                     }
                 }
                 PassDirection::ParentToChild => {
-                    if !dependants.child.contains(&current.this_type_id) {
-                        dependants.child.push(current.this_type_id);
+                    if !dependants.child.contains(&current_dependant) {
+                        dependants.child.push(current_dependant);
                     }
                 }
                 _ => {}
@@ -191,10 +209,13 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
                 passes_updated,
                 nodes_updated,
                 passes: tracked_states,
+                nodes_created: [root_id].into_iter().collect(),
             },
             node_watchers: Default::default(),
+            attribute_watchers: Default::default(),
             workload,
             root_id,
+            custom_elements: Default::default(),
             phantom: std::marker::PhantomData,
         }
     }
@@ -211,8 +232,12 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
 
     /// Create a new node of the given type in the dom and return a mutable reference to it.
     pub fn create_node(&mut self, node: impl Into<NodeType<V>>) -> NodeMut<'_, V> {
-        let id = self.world.add_entity(node.into());
+        let node = node.into();
+        let is_element = matches!(node, NodeType::Element(_));
+
+        let id = self.world.add_entity(node);
         self.tree_mut().create_node(id);
+
         self.dirty_nodes
             .passes_updated
             .entry(id)
@@ -220,10 +245,17 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
             .extend(self.dirty_nodes.passes.iter().map(|x| x.this_type_id));
         self.dirty_nodes
             .mark_dirty(id, NodeMaskBuilder::ALL.build());
-        let watchers = self.node_watchers.clone();
-        for watcher in &*watchers.read().unwrap() {
-            watcher.on_node_added(NodeMut::new(id, self));
+        self.dirty_nodes.nodes_created.insert(id);
+
+        // Create a custom element if needed
+        if is_element {
+            let custom_elements = self.custom_elements.clone();
+            custom_elements
+                .read()
+                .unwrap()
+                .add_shadow_dom(NodeMut::new(id, self));
         }
+
         NodeMut::new(id, self)
     }
 
@@ -284,8 +316,48 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
         &mut self,
         ctx: SendAnyMap,
     ) -> (FxDashSet<NodeId>, FxHashMap<NodeId, NodeMask>) {
+        let nodes_created = std::mem::take(&mut self.dirty_nodes.nodes_created);
+
+        // call node watchers
+        {
+            let watchers = self.node_watchers.clone();
+
+            // ignore watchers if they are already being modified
+            if let Ok(mut watchers) = watchers.try_write() {
+                for id in &nodes_created {
+                    for watcher in &mut *watchers {
+                        watcher.on_node_added(NodeMut::new(*id, self));
+                    }
+                }
+            };
+        }
+
         let passes = std::mem::take(&mut self.dirty_nodes.passes_updated);
         let nodes_updated = std::mem::take(&mut self.dirty_nodes.nodes_updated);
+
+        for (node_id, mask) in &nodes_updated {
+            if self.contains(*node_id) {
+                // call attribute watchers but ignore watchers if they are already being modified
+                let watchers = self.attribute_watchers.clone();
+                if let Ok(mut watchers) = watchers.try_write() {
+                    for watcher in &mut *watchers {
+                        watcher.on_attributes_changed(
+                            self.get_mut(*node_id).unwrap(),
+                            mask.attributes(),
+                        );
+                    }
+                };
+
+                // call custom element watchers
+                let node = self.get_mut(*node_id).unwrap();
+                let custom_element_manager =
+                    node.get::<CustomElementManager<V>>().map(|x| x.clone());
+                if let Some(custom_element_manager) = custom_element_manager {
+                    custom_element_manager.on_attributes_changed(node, mask.attributes());
+                }
+            }
+        }
+
         let dirty_nodes =
             DirtyNodeStates::with_passes(self.dirty_nodes.passes.iter().map(|p| p.this_type_id));
         let tree = self.tree_ref();
@@ -312,27 +384,42 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
     }
 
     /// Traverses the dom in a depth first manner, calling the provided function on each node.
-    pub fn traverse_depth_first(&self, mut f: impl FnMut(NodeRef<V>)) {
+    /// If `enter_shadow_dom` is true, then the traversal will enter shadow doms in the tree.
+    pub fn traverse_depth_first_advanced(
+        &self,
+        enter_shadow_dom: bool,
+        mut f: impl FnMut(NodeRef<V>),
+    ) {
         let mut stack = vec![self.root_id()];
         let tree = self.tree_ref();
         while let Some(id) = stack.pop() {
             if let Some(node) = self.get(id) {
                 f(node);
-                let children = tree.children_ids(id);
+                let children = tree.children_ids_advanced(id, enter_shadow_dom);
                 stack.extend(children.iter().copied().rev());
             }
         }
     }
 
+    /// Traverses the dom in a depth first manner, calling the provided function on each node.
+    pub fn traverse_depth_first(&self, f: impl FnMut(NodeRef<V>)) {
+        self.traverse_depth_first_advanced(true, f)
+    }
+
     /// Traverses the dom in a breadth first manner, calling the provided function on each node.
-    pub fn traverse_breadth_first(&self, mut f: impl FnMut(NodeRef<V>)) {
+    /// If `enter_shadow_dom` is true, then the traversal will enter shadow doms in the tree.
+    pub fn traverse_breadth_first_advanced(
+        &self,
+        enter_shadow_doms: bool,
+        mut f: impl FnMut(NodeRef<V>),
+    ) {
         let mut queue = VecDeque::new();
         queue.push_back(self.root_id());
         let tree = self.tree_ref();
         while let Some(id) = queue.pop_front() {
             if let Some(node) = self.get(id) {
                 f(node);
-                let children = tree.children_ids(id);
+                let children = tree.children_ids_advanced(id, enter_shadow_doms);
                 for id in children {
                     queue.push_back(id);
                 }
@@ -340,12 +427,22 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
         }
     }
 
+    /// Traverses the dom in a breadth first manner, calling the provided function on each node.
+    pub fn traverse_breadth_first(&self, f: impl FnMut(NodeRef<V>)) {
+        self.traverse_breadth_first_advanced(true, f);
+    }
+
     /// Traverses the dom in a depth first manner mutably, calling the provided function on each node.
-    pub fn traverse_depth_first_mut(&mut self, mut f: impl FnMut(NodeMut<V>)) {
+    /// If `enter_shadow_dom` is true, then the traversal will enter shadow doms in the tree.
+    pub fn traverse_depth_first_mut_advanced(
+        &mut self,
+        enter_shadow_doms: bool,
+        mut f: impl FnMut(NodeMut<V>),
+    ) {
         let mut stack = vec![self.root_id()];
         while let Some(id) = stack.pop() {
             let tree = self.tree_ref();
-            let mut children = tree.children_ids(id);
+            let mut children = tree.children_ids_advanced(id, enter_shadow_doms);
             drop(tree);
             children.reverse();
             if let Some(node) = self.get_mut(id) {
@@ -356,13 +453,23 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
         }
     }
 
+    /// Traverses the dom in a depth first manner mutably, calling the provided function on each node.
+    pub fn traverse_depth_first_mut(&mut self, f: impl FnMut(NodeMut<V>)) {
+        self.traverse_depth_first_mut_advanced(true, f)
+    }
+
     /// Traverses the dom in a breadth first manner mutably, calling the provided function on each node.
-    pub fn traverse_breadth_first_mut(&mut self, mut f: impl FnMut(NodeMut<V>)) {
+    /// If `enter_shadow_dom` is true, then the traversal will enter shadow doms in the tree.
+    pub fn traverse_breadth_first_mut_advanced(
+        &mut self,
+        enter_shadow_doms: bool,
+        mut f: impl FnMut(NodeMut<V>),
+    ) {
         let mut queue = VecDeque::new();
         queue.push_back(self.root_id());
         while let Some(id) = queue.pop_front() {
             let tree = self.tree_ref();
-            let children = tree.children_ids(id);
+            let children = tree.children_ids_advanced(id, enter_shadow_doms);
             drop(tree);
             if let Some(node) = self.get_mut(id) {
                 f(node);
@@ -373,9 +480,25 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
         }
     }
 
+    /// Traverses the dom in a breadth first manner mutably, calling the provided function on each node.
+    pub fn traverse_breadth_first_mut(&mut self, f: impl FnMut(NodeMut<V>)) {
+        self.traverse_breadth_first_mut_advanced(true, f);
+    }
+
     /// Adds a [`NodeWatcher`] to the dom. Node watchers are called whenever a node is created or removed.
     pub fn add_node_watcher(&mut self, watcher: impl NodeWatcher<V> + 'static + Send + Sync) {
         self.node_watchers.write().unwrap().push(Box::new(watcher));
+    }
+
+    /// Adds an [`AttributeWatcher`] to the dom. Attribute watchers are called whenever an attribute is changed.
+    pub fn add_attribute_watcher(
+        &mut self,
+        watcher: impl AttributeWatcher<V> + 'static + Send + Sync,
+    ) {
+        self.attribute_watchers
+            .write()
+            .unwrap()
+            .push(Box::new(watcher));
     }
 
     /// Returns a reference to the underlying world. Any changes made to the world will not update the reactive system.
@@ -386,6 +509,20 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
     /// Returns a mutable reference to the underlying world. Any changes made to the world will not update the reactive system.
     pub fn raw_world_mut(&mut self) -> &mut World {
         &mut self.world
+    }
+
+    /// Registers a new custom element.
+    pub fn register_custom_element<E: CustomElement<V>>(&mut self) {
+        self.register_custom_element_with_factory::<E, E>()
+    }
+
+    /// Registers a new custom element with a custom factory.
+    pub fn register_custom_element_with_factory<F, U>(&mut self)
+    where
+        F: CustomElementFactory<U, V>,
+        U: CustomElementUpdater<V>,
+    {
+        self.custom_elements.write().unwrap().register::<F, U>()
     }
 }
 
@@ -458,6 +595,14 @@ pub trait NodeImmutable<V: FromAnyValue + Send + Sync = ()>: Sized {
             .then(|| ViewEntry::new(view, self.id()))
     }
 
+    /// Get the ids of the children of the current node, if enter_shadow_dom is true and the current node is a shadow slot, the ids of the nodes under the node the shadow slot is attached to will be returned
+    #[inline]
+    fn children_ids_advanced(&self, id: NodeId, enter_shadow_dom: bool) -> Vec<NodeId> {
+        self.real_dom()
+            .tree_ref()
+            .children_ids_advanced(id, enter_shadow_dom)
+    }
+
     /// Get the ids of the children of the current node
     #[inline]
     fn child_ids(&self) -> Vec<NodeId> {
@@ -474,6 +619,14 @@ pub trait NodeImmutable<V: FromAnyValue + Send + Sync = ()>: Sized {
                 dom: self.real_dom(),
             })
             .collect()
+    }
+
+    /// Get the id of the parent of the current node, if enter_shadow_dom is true and the current node is a shadow root, the node the shadow root is attached to will be returned
+    #[inline]
+    fn parent_id_advanced(&self, id: NodeId, enter_shadow_dom: bool) -> Option<NodeId> {
+        self.real_dom()
+            .tree_ref()
+            .parent_id_advanced(id, enter_shadow_dom)
     }
 
     /// Get the id of the parent of the current node
@@ -585,6 +738,14 @@ impl<'a, V: FromAnyValue + Send + Sync> NodeImmutable<V> for NodeMut<'a, V> {
 }
 
 impl<'a, V: FromAnyValue + Send + Sync> NodeMut<'a, V> {
+    /// Reborrow the node mutably
+    pub fn reborrow(&mut self) -> NodeMut<'_, V> {
+        NodeMut {
+            id: self.id,
+            dom: self.dom,
+        }
+    }
+
     /// Get the real dom this node was created in mutably
     #[inline(always)]
     pub fn real_dom_mut(&mut self) -> &mut RealDom<V> {
@@ -741,6 +902,7 @@ impl<'a, V: FromAnyValue + Send + Sync> NodeMut<'a, V> {
         }
         let id = self.id();
         self.dom.tree_mut().replace(id, new);
+        self.remove();
     }
 
     /// Add an event listener
@@ -798,7 +960,7 @@ impl<'a, V: FromAnyValue + Send + Sync> NodeMut<'a, V> {
     /// mark that this node was removed for the incremental system
     fn mark_removed(&mut self) {
         let watchers = self.dom.node_watchers.clone();
-        for watcher in &*watchers.read().unwrap() {
+        for watcher in &mut *watchers.write().unwrap() {
             watcher.on_node_removed(NodeMut::new(self.id(), self.dom));
         }
     }
@@ -806,9 +968,12 @@ impl<'a, V: FromAnyValue + Send + Sync> NodeMut<'a, V> {
     /// mark that this node was moved for the incremental system
     fn mark_moved(&mut self) {
         let watchers = self.dom.node_watchers.clone();
-        for watcher in &*watchers.read().unwrap() {
-            watcher.on_node_moved(NodeMut::new(self.id(), self.dom));
-        }
+        // ignore watchers if the we are inside of a watcher
+        if let Ok(mut watchers) = watchers.try_write() {
+            for watcher in &mut *watchers {
+                watcher.on_node_moved(NodeMut::new(self.id(), self.dom));
+            }
+        };
     }
 
     /// Get a mutable reference to the type of the current node
@@ -925,6 +1090,15 @@ pub struct ElementNodeMut<'a, V: FromAnyValue + Send + Sync = ()> {
     dirty_nodes: &'a mut NodesDirty<V>,
 }
 
+impl std::fmt::Debug for ElementNodeMut<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ElementNodeMut")
+            .field("id", &self.id)
+            .field("element", &*self.element)
+            .finish()
+    }
+}
+
 impl<V: FromAnyValue + Send + Sync> ElementNodeMut<'_, V> {
     /// Get the current element
     fn element(&self) -> &ElementNode<V> {
@@ -1014,6 +1188,14 @@ impl<V: FromAnyValue + Send + Sync> ElementNodeMut<'_, V> {
                 .build(),
         );
         self.element_mut().attributes.get_mut(name)
+    }
+
+    /// Get an attribute of the element
+    pub fn get_attribute(
+        &self,
+        name: &OwnedAttributeDiscription,
+    ) -> Option<&OwnedAttributeValue<V>> {
+        self.element().attributes.get(name)
     }
 
     /// Get the set of all events the element is listening to
