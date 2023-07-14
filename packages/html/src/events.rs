@@ -129,6 +129,7 @@ pub fn event_bubbles(evt: &str) -> bool {
         "loadeddata" => false,
         "loadedmetadata" => false,
         "loadstart" => false,
+        "load" => false,
         "pause" => false,
         "play" => false,
         "playing" => false,

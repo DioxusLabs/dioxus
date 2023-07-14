@@ -20,6 +20,7 @@ pub(crate) fn check_app_exits(app: Component) {
         Config::new().with_window(WindowBuilder::new().with_visible(false)),
     );
 
+    // Stop deadman's switch
     should_panic.store(false, std::sync::atomic::Ordering::SeqCst);
 }
 

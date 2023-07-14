@@ -234,7 +234,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let _to_rerender = rdom.update_state(ctx);
 
                 // render...
-                rdom.traverse_depth_first(|node| {
+                rdom.traverse_depth_first_advanced(true, |node| {
                     let indent = " ".repeat(node.height() as usize);
                     let color = *node.get::<TextColor>().unwrap();
                     let size = *node.get::<Size>().unwrap();

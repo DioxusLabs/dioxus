@@ -76,7 +76,7 @@ fn app(cx: Scope<AppProps>) -> Element {
                     }
                 }
             },
-            "Run a server function! testing1234"
+            "Run a server function!"
         }
         "Server said: {text}"
     })

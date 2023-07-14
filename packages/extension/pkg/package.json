@@ -1,0 +1,14 @@
+{
+  "name": "dioxus-ext",
+  "version": "0.1.0",
+  "files": [
+    "dioxus_ext_bg.wasm",
+    "dioxus_ext.js",
+    "dioxus_ext.d.ts",
+    "dioxus_ext_bg.js",
+    "dioxus_ext_bg.d.ts",
+    "dioxus_ext_bg.wasm.d.ts"
+  ],
+  "main": "dioxus_ext.js",
+  "types": "dioxus_ext.d.ts"
+}

@@ -20,7 +20,7 @@ cargo add serde
 
 Next, add the server function to your `main.rs`:
 
-```rust
+```rust, no_run
 {{#include ../../../examples/server_function.rs}}
 ```
 

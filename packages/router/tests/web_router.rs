@@ -22,7 +22,7 @@ fn simple_test() {
                 onchange: move |router: RouterContext| log::trace!("route changed to {:?}", router.current_location()),
                 active_class: "is-active",
                 Route { to: "/", Home {} }
-                Route { to: "blog"
+                Route { to: "blog",
                     Route { to: "/", BlogList {} }
                     Route { to: ":id", BlogPost {} }
                 }

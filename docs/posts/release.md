@@ -20,7 +20,7 @@ Dioxus is designed to be familiar for developers already comfortable with React 
 
 To give you an idea of what Dioxus looks like, here's a simple counter app:
 
-```rust
+```rust, no_run
 use dioxus::prelude::*;
 
 fn main() {
@@ -112,8 +112,8 @@ Semantically, TypeScript-React and Rust-Dioxus are very similar. In TypeScript, 
 
 ```tsx
 type CardProps = {
-  title: string,
-  paragraph: string,
+  title: string;
+  paragraph: string;
 };
 
 const Card: FunctionComponent<CardProps> = (props) => {
@@ -122,7 +122,7 @@ const Card: FunctionComponent<CardProps> = (props) => {
     <aside>
       <h2>{props.title}</h2>
       <p> {props.paragraph} </p>
-	  <button onclick={() => set_count(count + 1)}> Count {count} </button>
+      <button onclick={() => set_count(count + 1)}> Count {count} </button>
     </aside>
   );
 };
@@ -130,7 +130,7 @@ const Card: FunctionComponent<CardProps> = (props) => {
 
 In Dioxus, we would define the same component in a similar fashion:
 
-```rust
+```rust, no_run
 #[derive(Props, PartialEq)]
 struct CardProps {
 	title: String,
@@ -176,14 +176,14 @@ $ cd dioxus_example
 
 We then add a dependency on Dioxus to the `Cargo.toml` file, with the "desktop" feature enabled:
 
-```rust
+```rust, no_run
 [dependencies]
 dioxus = { version = "*", features = ["desktop"] }
 ```
 
 We can add our counter from above.
 
-```rust
+```rust, no_run
 use dioxus::prelude::*;
 
 fn main() {
@@ -203,14 +203,13 @@ fn app(cx: Scope) -> Element {
 
 And voilà! We can `cargo run` our app
 
-
 ![Simple Counter Desktop App](/static/counter.png)
 
 ## Support for JSX-style templating
 
 Dioxus ships with a templating macro called RSX, a spin on React's JSX. RSX is very similar to regular struct syntax for Rust so it integrates well with your IDE. If used with [Rust-Analyzer](https://github.com/rust-analyzer/rust-analyzer) (not tested anywhere else) RSX supports code-folding, block selection, bracket pair colorizing, autocompletion, symbol renaming — pretty much anything you would expect from writing regular struct-style code.
 
-```rust
+```rust, no_run
 rsx! {
 	div { "Hello world" }
 	button {
@@ -222,7 +221,7 @@ rsx! {
 
 If macros aren't your style, you can always drop down to the factory API:
 
-```rust
+```rust, no_run
 LazyNodes::new(|f| {
 	f.fragment([
 		f.element(div, [f.text("hello world")], [], None, None)
@@ -245,9 +244,9 @@ To make it easier to work with RSX, we've built a small [VSCode extension](https
 
 Many of the Rust UI frameworks are particularly difficult to work with. Even the ones branded as "ergonomic" are quite challenging to in comparison to TSX/JSX. With Dioxus, we've innovated on a number of Rust patterns to deliver a framework that is actually enjoyable to develop in.
 
-For example, many Rust frameworks require you to clone your data in for *every* closure and handler you use. This can get really clumsy for large apps.
+For example, many Rust frameworks require you to clone your data in for _every_ closure and handler you use. This can get really clumsy for large apps.
 
-```rust
+```rust, no_run
 div()
 	.children([
 		button().onclick(cloned!(name, date, age, description => move |evt| { /* */ })
@@ -258,8 +257,7 @@ div()
 
 Dioxus understands the lifetimes of data borrowed from `Scope`, so you can safely return any borrowed data without declaring explicit captures. Hook handles all implement `Copy` so they can be shared between listeners without any ceremony.
 
-
-```rust
+```rust, no_run
 let name = use_state(cx, || "asd");
 rsx! {
 	div {
@@ -272,7 +270,7 @@ rsx! {
 
 Because we know the lifetime of your handlers, we can also expose this to children. No other Rust frameworks let us share borrowed state through the tree, forcing use of Rc/Arc everywhere. With Dioxus, all the Rc/Arc magic is tucked away in hooks, and just beautiful borrowed interfaces are exposed to your code. You don't need to know how Rc/RefCell work to build a competent Dioxus app.
 
-```rust
+```rust, no_run
 fn app(cx: Scope) -> Element {
 	let name = use_state(cx, || "asd");
 	cx.render(rsx!{
@@ -294,8 +292,7 @@ fn Button<'a>(cx: Scope<'a, Childprops<'a>>) -> Element {
 }
 ```
 
-There's *way* more to this story, but hopefully we've convinced you that Dioxus' DX somewhat approximates JSX/React.
-
+There's _way_ more to this story, but hopefully we've convinced you that Dioxus' DX somewhat approximates JSX/React.
 
 ## Dioxus is perfected for the IDE
 
@@ -335,9 +332,10 @@ We take the performance of Dioxus seriously. Instead of resolving to "good enoug
 
 Dioxus is humbly built off the work done by [Dodrio](https://github.com/fitzgen/dodrio), a now-archived research project by fitzgen exploring the use of bump allocators in UI frameworks.
 
-Dioxus is *substantially* more performant than many of the other Rust DOM-based UI libraries (Yew/Percy) and is *significantly* more performant than React - roughly competitive with InfernoJS. While not as performant as libraries like SolidJS/Sycamore, Dioxus imposes roughly a ~3% overhead over DOM patching, so it's *plenty* fast.
+Dioxus is _substantially_ more performant than many of the other Rust DOM-based UI libraries (Yew/Percy) and is _significantly_ more performant than React - roughly competitive with InfernoJS. While not as performant as libraries like SolidJS/Sycamore, Dioxus imposes roughly a ~3% overhead over DOM patching, so it's _plenty_ fast.
 
 ## Works on Desktop and Mobile
+
 We’ve mentioned before that Dioxus works practically anywhere that Rust does. When running natively as a desktop or mobile app, your Dioxus code will run on its own thread, not inside of a web runtime. This means you can access hardware, file system, and platform APIs directly without needing to go through a shim layer. In our examples, we feature a [file explorer app](https://github.com/DioxusLabs/example-projects/tree/master/file-explorer) and [WiFi scanner app](https://github.com/DioxusLabs/example-projects/tree/master/wifi-scanner) where platform access occurs inside an asynchronous multithreaded coroutine. This solves the problem faced by React Native and other cross-platform toolkits where JavaScript apps incur a massive performance penalty with substantial maintenance overhead associated with platform API shims.
 
 A desktop app:

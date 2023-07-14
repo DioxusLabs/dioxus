@@ -19,13 +19,13 @@ Existem 2 tipos de estruturas Props:
 
 _Props_ próprios são muito simples – eles não emprestam nada. Exemplo:
 
-```rust
+```rust, no_run
 {{#include ../../../examples/component_owned_props.rs:Likes}}
 ```
 
 Você pode então passar valores de _prop_ para o componente da mesma forma que você passaria atributos para um elemento:
 
-```rust
+```rust, no_run
 {{#include ../../../examples/component_owned_props.rs:App}}
 ```
 
@@ -37,13 +37,13 @@ Possuir _props_ funciona bem se seus _props_ forem fáceis de copiar – como um
 
 Rust permite algo mais eficiente – emprestar a `String` como um `&str` – é para isso que servem as _props emprestadas_!
 
-```rust
+```rust, no_run
 {{#include ../../../examples/component_borrowed_props.rs:TitleCard}}
 ```
 
 Podemos então usar o componente assim:
 
-```rust
+```rust, no_run
 {{#include ../../../examples/component_borrowed_props.rs:App}}
 ```
 
@@ -57,13 +57,13 @@ A macro `#[derive(Props)]` tem alguns recursos que permitem personalizar o compo
 
 Você pode criar campos opcionais usando o tipo `Option<…>` para um campo:
 
-```rust
+```rust, no_run
 {{#include ../../../examples/component_props_options.rs:OptionalProps}}
 ```
 
 Em seguida, você pode optar por fornecê-los ou não:
 
-```rust
+```rust, no_run
 {{#include ../../../examples/component_props_options.rs:OptionalProps_usage}}
 ```
 
@@ -71,13 +71,13 @@ Em seguida, você pode optar por fornecê-los ou não:
 
 Se você quiser exigir explicitamente uma `Option`, e não uma _prop_ opcional, você pode anotá-la com `#[props(!optional)]`:
 
-```rust
+```rust, no_run
 {{#include ../../../examples/component_props_options.rs:ExplicitOption}}
 ```
 
 Então, você tem que passar explicitamente `Some("str")` ou `None`:
 
-```rust
+```rust, no_run
 {{#include ../../../examples/component_props_options.rs:ExplicitOption_usage}}
 ```
 
@@ -85,13 +85,13 @@ Então, você tem que passar explicitamente `Some("str")` ou `None`:
 
 Você pode usar `#[props(default = 42)]` para tornar um campo opcional e especificar seu valor padrão:
 
-```rust
+```rust, no_run
 {{#include ../../../examples/component_props_options.rs:DefaultComponent}}
 ```
 
 Então, da mesma forma que _props_ opcionais, você não precisa fornecê-lo:
 
-```rust
+```rust, no_run
 {{#include ../../../examples/component_props_options.rs:DefaultComponent_usage}}
 ```
 
@@ -99,13 +99,13 @@ Então, da mesma forma que _props_ opcionais, você não precisa fornecê-lo:
 
 É comum que as funções Rust aceitem `impl Into<SomeType>` em vez de apenas `SomeType` para suportar uma ampla gama de parâmetros. Se você quiser uma funcionalidade semelhante com _props_, você pode usar `#[props(into)]`. Por exemplo, você pode adicioná-lo em uma prop `String` – e `&str` também será aceito automaticamente, pois pode ser convertido em `String`:
 
-```rust
+```rust, no_run
 {{#include ../../../examples/component_props_options.rs:IntoComponent}}
 ```
 
 Então, você pode usá-lo assim:
 
-```rust
+```rust, no_run
 {{#include ../../../examples/component_props_options.rs:IntoComponent_usage}}
 ```
 
@@ -115,7 +115,7 @@ Até agora, todas as funções `Component` que vimos tinham uma _struct_ `Compon
 
 `inline_props` permite que você faça exatamente isso. Em vez de digitar a versão "completa":
 
-```rust
+```rust, no_run
 #[derive(Props, PartialEq)]
 struct TitleCardProps {
     title: String,
@@ -130,7 +130,7 @@ fn TitleCard(cx: Scope<TitleCardProps>) -> Element {
 
 ...você pode definir uma função que aceita _props_ como argumentos. Então, basta anotá-lo com `#[inline_props]`, e a macro irá transformá-lo em um componente regular para você:
 
-```rust
+```rust, no_run
 #[inline_props]
 fn TitleCard(cx: Scope, title: String) -> Element {
     cx.render(rsx!{

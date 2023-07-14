@@ -10,7 +10,7 @@ https://dmitripavlutin.com/use-react-memo-wisely/
 
 This behavior is defined as an attribute implicit to user components. When in React land you might wrap a component with `react.memo`, Dioxus components are automatically memoized via an implicit attribute. You can manually configure this behavior on any component with "nomemo" to disable memoization.
 
-```rust
+```rust, no_run
 fn test() -> DomTree {
     html! {
         <>
@@ -42,7 +42,7 @@ fn test_component(cx: Scope, name: String) -> Element {
 
 Take a component like this:
 
-```rust
+```rust, no_run
 fn test(cx: Scope) -> DomTree {
     let Bundle { alpha, beta, gamma } = use_context::<SomeContext>(cx);
     html! {

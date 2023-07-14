@@ -21,7 +21,7 @@ Para referência, confira o interpretador JavaScript ou o renderizador TUI como 
 
 O tipo "DomEdit" é uma enumeração serializada que representa uma operação atômica que ocorre no `RealDom`. As variantes seguem aproximadamente este conjunto:
 
-```rust
+```rust, no_run
 enum DomEdit {
     PushRoot,
     AppendChildren,
@@ -48,7 +48,7 @@ O mecanismo de diferenciação do Dioxus opera como uma [máquina de pilha] (htt
 
 Por uma questão de compreensão, vamos considerar este exemplo - uma declaração de interface do usuário muito simples:
 
-```rust
+```rust, no_run
 rsx!( h1 {"hello world"} )
 ```
 
@@ -56,7 +56,7 @@ To get things started, Dioxus must first navigate to the container of this h1 ta
 
 When the renderer receives this instruction, it pushes the actual Node onto its own stack. The real renderer's stack will look like this:
 
-```rust
+```rust, no_run
 instructions: [
     PushRoot(Container)
 ]
@@ -67,7 +67,7 @@ stack: [
 
 Em seguida, o Dioxus encontrará o nó `h1`. O algoritmo `diff` decide que este nó precisa ser criado, então o Dioxus irá gerar o DomEdit `CreateElement`. Quando o renderizador receber esta instrução, ele criará um nó desmontado e o enviará para sua própria pilha:
 
-```rust
+```rust, no_run
 instructions: [
     PushRoot(Container),
     CreateElement(h1),
@@ -80,7 +80,7 @@ stack: [
 
 Em seguida, Dioxus vê o nó de texto e gera o DomEdit `CreateTextNode`:
 
-```rust
+```rust, no_run
 instructions: [
     PushRoot(Container),
     CreateElement(h1),
@@ -95,7 +95,7 @@ stack: [
 
 Lembre-se, o nó de texto não está anexado a nada (ele está desmontado), então o Dioxus precisa gerar um `Edit` que conecte o nó de texto ao elemento `h1`. Depende da situação, mas neste caso usamos `AppendChildren`. Isso remove o nó de texto da pilha, deixando o elemento `h1` como o próximo elemento na linha.
 
-```rust
+```rust, no_run
 instructions: [
     PushRoot(Container),
     CreateElement(h1),
@@ -110,7 +110,7 @@ stack: [
 
 Chamamos `AppendChildren` novamente, retirando o nó `h1` e anexando-o ao pai:
 
-```rust
+```rust, no_run
 instructions: [
     PushRoot(Container),
     CreateElement(h1),
@@ -125,7 +125,7 @@ stack: [
 
 Finalmente, o contêiner é aberto, pois não precisamos mais dele.
 
-```rust
+```rust, no_run
 instructions: [
     PushRoot(Container),
     CreateElement(h1),
@@ -139,7 +139,7 @@ stack: []
 
 Com o tempo, nossa pilha ficou assim:
 
-```rust
+```rust, no_run
 []
 [Container]
 [Container, h1]
@@ -165,7 +165,7 @@ Como a maioria das GUIs, o Dioxus conta com um `loop` de eventos para progredir 
 
 O código para a implementação do `WebSys` é direto, então vamos adicioná-lo aqui para demonstrar como um `loop` de eventos é simples:
 
-```rust
+```rust, no_run
 pub async fn run(&mut self) -> dioxus_core::error::Result<()> {
     // Push the body element onto the WebsysDom's stack machine
     let mut websys_dom = crate::new::WebsysDom::new(prepare_websys_dom());
@@ -195,7 +195,7 @@ pub async fn run(&mut self) -> dioxus_core::error::Result<()> {
 
 É importante que você decodifique os eventos reais do seu sistema de eventos no sistema de eventos sintético do Dioxus (significado sintético abstraído). Isso significa simplesmente combinar seu tipo de evento e criar um tipo Dioxus `UserEvent`. No momento, o sistema `VirtualEvent` é modelado quase inteiramente em torno da especificação HTML, mas estamos interessados em reduzi-lo.
 
-```rust
+```rust, no_run
 fn virtual_event_from_websys_event(event: &web_sys::Event) -> VirtualEvent {
     match event.type_().as_str() {
         "keydown" => {
@@ -234,7 +234,7 @@ Esses elementos personalizados são definidos como `unit struct` com implementa�
 
 Por exemplo, o elemento `div` é (aproximadamente!) definido assim:
 
-```rust
+```rust, no_run
 struct div;
 impl div {
     /// Some glorious documentation about the class property.
@@ -263,7 +263,7 @@ O `RealDom` é uma abstração de nível superior sobre a atualização do DOM. 
 Vamos construir um renderizador de brinquedo com bordas, tamanho e cor do texto.
 Antes de começarmos, vamos dar uma olhada em um elemento de exemplo que podemos renderizar:
 
-```rust
+```rust, no_run
 cx.render(rsx!{
     div{
         color: "red",
@@ -315,7 +315,7 @@ flowchart TB
 
 Para ajudar na construção de um Dom, o núcleo nativo fornece quatro características: `State`, `ChildDepState`, `ParentDepState` e `NodeDepState` e uma estrutura `RealDom`.
 
-```rust
+```rust, no_run
 use dioxus_native_core::node_ref::*;
 use dioxus_native_core::state::{ChildDepState, NodeDepState, ParentDepState, State};
 use dioxus_native_core_macro::{sorted_str_slice, State};
@@ -447,7 +447,7 @@ struct ToyState {
 
 Agora que temos nosso estado, podemos colocá-lo em uso em nosso DOM. Nós podemos atualizar o DOM com `update_state` para atualizar a estrutura do `DOM` (adicionando, removendo e alterando as propriedades dos nós) e então `apply_mutations` para atualizar o `ToyState` para cada um dos nós que foram alterados.
 
-```rust
+```rust, no_run
 fn main(){
     fn app(cx: Scope) -> Element {
         cx.render(rsx!{

@@ -72,6 +72,6 @@ cargo add dioxus-desktop
 
 Edit your `main.rs`:
 
-```rust
+```rust, no_run
 {{#include ../../../examples/hello_world_desktop.rs:all}}
 ```

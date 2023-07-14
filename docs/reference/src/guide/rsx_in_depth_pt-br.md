@@ -2,7 +2,7 @@
 
 A macro RSX facilita muito a montagem de interfaces de usuário complexas com uma sintaxe Rust muito natural:
 
-```rust
+```rust, no_run
 rsx!(
     div {
         button {
@@ -30,7 +30,7 @@ Nesta seção, abordaremos a macro `rsx!` em profundidade. Se você preferir apr
 
 Os atributos devem vir antes dos elementos filhos
 
-```rust
+```rust, no_run
 div {
     hidden: "false",
     "some text"
@@ -57,7 +57,7 @@ A função `render` fornece um alocador **extremamente eficiente** para `VNodes`
 
 Às vezes, escrever `cx.render` é um aborrecimento. O `rsx!` macro aceitará qualquer token seguido por uma vírgula como destino para chamar "render" em:
 
-```rust
+```rust, no_run
 cx.render(rsx!( div {} ))
 // becomes
 render!(div {})
@@ -67,7 +67,7 @@ render!(div {})
 
 Às vezes, você pode não querer renderizar um elemento dada uma condição. O `rsx!` macro aceitará quaisquer tokens contidos diretamente com chaves, desde que resolvam para um tipo que implemente `IntoIterator<VNode>`. Isso nos permite escrever qualquer expressão Rust que resolva para um `VNode`:
 
-```rust
+```rust, no_run
 rsx!({
     if enabled {
         render!(div {"enabled"})
@@ -79,7 +79,7 @@ rsx!({
 
 Uma maneira conveniente de ocultar/mostrar um elemento é retornar um `Option<VNode>`. Quando combinado com `and_then`, podemos controlar sucintamente o estado de exibição dado alguns booleanos:
 
-```rust
+```rust, no_run
 rsx!({
     a.and_then(rsx!(div {"enabled"}))
 })
@@ -87,7 +87,7 @@ rsx!({
 
 É importante notar que a expressão `rsx!()` é tipicamente tardia - esta expressão deve ser _renderizada_ para produzir um `VNode`. Ao usar declarações de `match`, devemos renderizar todos os braços para evitar a regra 'não há dois fechamentos idênticos' que o Rust impõe:
 
-```rust
+```rust, no_run
 // this will not compile!
 match case {
     true => rsx!(div {}),
@@ -105,7 +105,7 @@ match case {
 
 Novamente, porque qualquer coisa que implemente `IntoIterator<VNode>` é válida, podemos usar listas diretamente em nosso `rsx!`:
 
-```rust
+```rust, no_run
 let items = vec!["a", "b", "c"];
 
 cx.render(rsx!{
@@ -117,7 +117,7 @@ cx.render(rsx!{
 
 Às vezes, faz sentido renderizar `VNodes` em uma lista:
 
-```rust
+```rust, no_run
 let mut items = vec![];
 
 for _ in 0..5 {
@@ -135,7 +135,7 @@ No entanto, com listas, Dioxus não sabe exatamente como determinar quais elemen
 
 Nesses casos, é de vital importância especificar uma "chave" ao lado do elemento. As chaves devem ser persistentes entre as renderizações.
 
-```rust
+```rust, no_run
 fn render_list(cx: Scope, items: HashMap<String, Todo>) -> DomTree {
     render!(ul {
         {items.iter().map(|key, item| {
@@ -156,7 +156,7 @@ Existem muitos guias feitos para chaves no React, então recomendamos a leitura 
 
 ### Referência Completa
 
-```rust
+```rust, no_run
 let text = "example";
 
 cx.render(rsx!{

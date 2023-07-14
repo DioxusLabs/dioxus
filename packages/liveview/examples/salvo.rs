@@ -20,7 +20,8 @@ fn app(cx: Scope) -> Element {
 async fn main() {
     pretty_env_logger::init();
 
-    let addr: SocketAddr = ([127, 0, 0, 1], 3030).into();
+    let addr = "127.0.0.1:3030";
+    let acceptor = TcpListener::new(addr).bind().await;
 
     let view = LiveViewPool::new();
 
@@ -31,7 +32,7 @@ async fn main() {
 
     println!("Listening on http://{}", addr);
 
-    Server::new(TcpListener::bind(addr)).serve(router).await;
+    Server::new(acceptor).serve(router).await;
 }
 
 #[handler]

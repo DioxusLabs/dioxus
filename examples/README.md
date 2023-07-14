@@ -40,7 +40,7 @@ cargo run --example hello_world
 
 [all_css](./all_css.rs) - You can specify any CSS attribute
 
-[tailwind](./tailwind.rs) - You can use a library for styling
+[tailwind](./tailwind/) - You can use a library for styling
 
 ## Input Handling
 

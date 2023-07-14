@@ -4,6 +4,7 @@ pub type ImageEvent = Event<ImageData>;
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ImageData {
+    #[cfg_attr(feature = "serialize", serde(default))]
     pub load_error: bool,
 }
 

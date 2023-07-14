@@ -3,32 +3,28 @@ name = "dioxus-liveview"
 version = "0.3.1"
 edition = "2021"
 repository = "https://github.com/DioxusLabs/dioxus/"
-homepage = "https://dioxuslabs.com"
-documentation = "https://dioxuslabs.com"
+homepage = "https://dioxuslabs.com/docs/0.3/guide/en/getting_started/liveview.html"
 keywords = ["dom", "ui", "gui", "react", "liveview"]
 description = "Build server-side apps with Dioxus"
 license = "MIT/Apache-2.0"
 
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
 thiserror = "1.0.38"
-log = "0.4.14"
-slab = "0.4"
-futures-util = { version = "0.3.25", default-features = false, features = [
+log = { workspace = true }
+slab = { workspace = true }
+futures-util = { workspace = true, default-features = false, features = [
     "sink",
 ] }
-futures-channel = { version = "0.3.25", features = ["sink"] }
-tokio = { version = "1.22.0", features = ["time", "macros"] }
+futures-channel = { workspace = true }
+tokio = { workspace = true, features = ["time", "macros"] }
 tokio-stream = { version = "0.1.11", features = ["net"] }
 tokio-util = { version = "0.7.4", features = ["rt"] }
 serde = { version = "1.0.151", features = ["derive"] }
 serde_json = "1.0.91"
-dioxus-html = { path = "../html", features = ["serialize"], version = "^0.3.0" }
-dioxus-core = { path = "../core", features = ["serialize"], version = "^0.3.0" }
-dioxus-interpreter-js = { path = "../interpreter", version = "0.3.0" }
-dioxus-hot-reload = { path = "../hot-reload", optional = true }
+dioxus-html = { workspace = true, features = ["serialize"] }
+dioxus-core = { workspace = true, features = ["serialize"] }
+dioxus-interpreter-js = { workspace = true }
+dioxus-hot-reload = { workspace = true, optional = true }
 
 # warp
 warp = { version = "0.3.3", optional = true }
@@ -37,7 +33,7 @@ warp = { version = "0.3.3", optional = true }
 axum = { version = "0.6.1", optional = true, features = ["ws"] }
 
 # salvo
-salvo = { version = "0.37.7", optional = true, features = ["ws"] }
+salvo = { version = "0.44.1", optional = true, features = ["ws"] }
 once_cell = "1.17.1"
 
 # actix is ... complicated?
@@ -47,11 +43,11 @@ once_cell = "1.17.1"
 
 [dev-dependencies]
 pretty_env_logger = { version = "0.5.0" }
-tokio = { version = "1.22.0", features = ["full"] }
-dioxus = { path = "../dioxus", version = "0.3.0" }
+tokio = { workspace = true, features = ["full"] }
+dioxus = { workspace = true }
 warp = "0.3.3"
 axum = { version = "0.6.1", features = ["ws"] }
-salvo = { version = "0.37.7", features = ["affix", "ws"] }
+salvo = { version = "0.44.1", features = ["affix", "ws"] }
 tower = "0.4.13"
 
 [features]

@@ -8,7 +8,7 @@ Assim como os `Futures` regulares, o código em uma corrotina Dioxus será execu
 
 A configuração básica para corrotinas é o _hook_ `use_coroutine`. A maioria das corrotinas que escrevemos serão _loops_ de pesquisa usando `async`/`await`.
 
-```rust
+```rust, no_run
 fn app(cx: Scope) -> Element {
     let ws: &UseCoroutine<()> = use_coroutine(cx, |rx| async move {
         // Connect to some sort of service
@@ -26,7 +26,7 @@ Para muitos serviços, um _loop_ assíncrono simples lidará com a maioria dos c
 
 No entanto, se quisermos desabilitar temporariamente a corrotina, podemos "pausá-la" usando o método `pause` e "retomá-la" usando o método `resume`:
 
-```rust
+```rust, no_run
 let sync: &UseCoroutine<()> = use_coroutine(cx, |rx| async move {
     // code for syncing
 });
@@ -56,7 +56,7 @@ Você deve ter notado que o encerramento `use_coroutine` recebe um argumento cha
 
 Usando corrotinas, temos a oportunidade de centralizar nossa lógica assíncrona. O parâmetro `rx` é um canal ilimitado para código externo à corrotina para enviar dados _para_ a corrotina. Em vez de fazer um _loop_ em um serviço externo, podemos fazer um _loop_ no próprio canal, processando mensagens de dentro de nosso aplicativo sem precisar gerar um novo `Future`. Para enviar dados para a corrotina, chamaríamos "send" no _handle_.
 
-```rust
+```rust, no_run
 enum ProfileUpdate {
     SetUsername(String),
     SetAge(i32)
@@ -84,7 +84,7 @@ cx.render(rsx!{
 
 Para aplicativos suficientemente complexos, poderíamos criar vários "serviços" úteis diferentes que fazem um _loop_ nos canais para atualizar o aplicativo.
 
-```rust
+```rust, no_run
 let profile = use_coroutine(cx, profile_service);
 let editor = use_coroutine(cx, editor_service);
 let sync = use_coroutine(cx, sync_service);
@@ -104,7 +104,7 @@ async fn editor_service(rx: UnboundedReceiver<EditorCommand>) {
 
 Podemos combinar corrotinas com `Fermi` para emular o sistema `Thunk` do **Redux Toolkit** com muito menos dor de cabeça. Isso nos permite armazenar todo o estado do nosso aplicativo _dentro_ de uma tarefa e, em seguida, simplesmente atualizar os valores de "visualização" armazenados em `Atoms`. Não pode ser subestimado o quão poderosa é essa técnica: temos todas as vantagens das tarefas nativas do Rust com as otimizações e ergonomia do estado global. Isso significa que seu estado _real_ não precisa estar vinculado a um sistema como `Fermi` ou `Redux` – os únicos `Atoms` que precisam existir são aqueles que são usados para controlar a interface.
 
-```rust
+```rust, no_run
 static USERNAME: Atom<String> = Atom(|_| "default".to_string());
 
 fn app(cx: Scope) -> Element {
@@ -128,7 +128,7 @@ fn Banner(cx: Scope) -> Element {
 
 Agora, em nosso serviço de sincronização, podemos estruturar nosso estado como quisermos. Só precisamos atualizar os valores da _view_ quando estiver pronto.
 
-```rust
+```rust, no_run
 enum SyncAction {
     SetUsername(String),
 }
@@ -155,7 +155,7 @@ async fn sync_service(mut rx: UnboundedReceiver<SyncAction>, atoms: AtomRoot) {
 
 Para obter valores de uma corrotina, basta usar um identificador `UseState` e definir o valor sempre que sua corrotina concluir seu trabalho.
 
-```rust
+```rust, no_run
 let sync_status = use_state(cx, || Status::Launching);
 let sync_task = use_coroutine(cx, |rx: UnboundedReceiver<SyncAction>| {
     to_owned![sync_status];
@@ -172,7 +172,7 @@ let sync_task = use_coroutine(cx, |rx: UnboundedReceiver<SyncAction>| {
 
 Os identificadores de corrotina são injetados automaticamente por meio da API de contexto. `use_coroutine_handle` com o tipo de mensagem como genérico pode ser usado para buscar um _handle_.
 
-```rust
+```rust, no_run
 fn Child(cx: Scope) -> Element {
     let sync_task = use_coroutine_handle::<SyncAction>(cx);
 

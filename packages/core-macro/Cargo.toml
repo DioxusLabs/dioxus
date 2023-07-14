@@ -7,9 +7,7 @@ description = "Core macro for Dioxus Virtual DOM"
 license = "MIT/Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com"
-documentation = "https://dioxuslabs.com"
 keywords = ["dom", "ui", "gui", "react"]
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [lib]
 proc-macro = true
@@ -18,10 +16,11 @@ proc-macro = true
 proc-macro2 = { version = "1.0" }
 quote = "1.0"
 syn = { version = "1.0", features = ["full", "extra-traits"] }
-dioxus-rsx = {  path = "../rsx", version = "^0.0.3" }
+dioxus-rsx = { workspace = true }
 
 # testing
 [dev-dependencies]
+dioxus = { workspace = true }
 rustversion = "1.0"
 trybuild = "1.0"
 

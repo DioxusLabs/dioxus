@@ -4,23 +4,21 @@ A selling point of Rust for web development is the reliability of always knowing
 
 However, we haven't talked about error handling at all in this guide! In this chapter, we'll cover some strategies in handling errors to ensure your app never crashes.
 
-
-
 ## The simplest – returning None
 
 Astute observers might have noticed that `Element` is actually a type alias for `Option<VNode>`. You don't need to know what a `VNode` is, but it's important to recognize that we could actually return nothing at all:
 
-```rust
+```rust, no_run
 fn App(cx: Scope) -> Element {
     None
 }
 ```
 
-This lets us add in some syntactic sugar for operations we think *shouldn't* fail, but we're still not confident enough to "unwrap" on.
+This lets us add in some syntactic sugar for operations we think _shouldn't_ fail, but we're still not confident enough to "unwrap" on.
 
 > The nature of `Option<VNode>` might change in the future as the `try` trait gets upgraded.
 
-```rust
+```rust, no_run
 fn App(cx: Scope) -> Element {
     // immediately return "None"
     let name = cx.use_hook(|_| Some("hi"))?;
@@ -31,7 +29,7 @@ fn App(cx: Scope) -> Element {
 
 Because Rust can't accept both Options and Results with the existing try infrastructure, you'll need to manually handle Results. This can be done by converting them into Options or by explicitly handling them.
 
-```rust
+```rust, no_run
 fn App(cx: Scope) -> Element {
     // Convert Result to Option
     let name = cx.use_hook(|_| "1.234").parse().ok()?;
@@ -46,8 +44,7 @@ fn App(cx: Scope) -> Element {
 }
 ```
 
-Notice that while hooks in Dioxus do not like being called in conditionals or loops, they *are* okay with early returns. Returning an error state early is a completely valid way of handling errors.
-
+Notice that while hooks in Dioxus do not like being called in conditionals or loops, they _are_ okay with early returns. Returning an error state early is a completely valid way of handling errors.
 
 ## Match results
 
@@ -55,14 +52,13 @@ The next "best" way of handling errors in Dioxus is to match on the error locall
 
 To do this, we simply have an error state built into our component:
 
-```rust
+```rust, no_run
 let err = use_state(cx, || None);
 ```
 
 Whenever we perform an action that generates an error, we'll set that error state. We can then match on the error in a number of ways (early return, return Element, etc).
 
-
-```rust
+```rust, no_run
 fn Commandline(cx: Scope) -> Element {
     let error = use_state(cx, || None);
 
@@ -83,7 +79,7 @@ fn Commandline(cx: Scope) -> Element {
 
 If you're dealing with a handful of components with minimal nesting, you can just pass the error handle into child components.
 
-```rust
+```rust, no_run
 fn Commandline(cx: Scope) -> Element {
     let error = use_state(cx, || None);
 
@@ -110,8 +106,7 @@ To get started, consider using a built-in hook like `use_context` and `use_conte
 
 At the "top" of our architecture, we're going to want to explicitly declare a value that could be an error.
 
-
-```rust
+```rust, no_run
 enum InputError {
     None,
     TooLong,
@@ -123,7 +118,7 @@ static INPUT_ERROR: Atom<InputError> = Atom(|_| InputError::None);
 
 Then, in our top level component, we want to explicitly handle the possible error state for this part of the tree.
 
-```rust
+```rust, no_run
 fn TopLevel(cx: Scope) -> Element {
     let error = use_read(cx, &INPUT_ERROR);
 
@@ -137,7 +132,7 @@ fn TopLevel(cx: Scope) -> Element {
 
 Now, whenever a downstream component has an error in its actions, it can simply just set its own error state:
 
-```rust
+```rust, no_run
 fn Commandline(cx: Scope) -> Element {
     let set_error = use_set(cx, &INPUT_ERROR);
 

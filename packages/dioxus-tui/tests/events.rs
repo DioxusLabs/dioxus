@@ -47,10 +47,14 @@ fn key_down() {
         tui_ctx.inject_event(Event::Key(KeyEvent {
             code: KeyCode::Tab,
             modifiers: KeyModifiers::NONE,
+            kind: crossterm::event::KeyEventKind::Press,
+            state: crossterm::event::KeyEventState::NONE,
         }));
         tui_ctx.inject_event(Event::Key(KeyEvent {
             code: KeyCode::Char('a'),
             modifiers: KeyModifiers::NONE,
+            kind: crossterm::event::KeyEventKind::Press,
+            state: crossterm::event::KeyEventState::NONE,
         }));
         cx.render(rsx! {
             div {
