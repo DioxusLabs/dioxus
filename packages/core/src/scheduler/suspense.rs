@@ -11,17 +11,10 @@ use std::{
     collections::HashSet,
 };
 
-/// An ID representing an ongoing suspended component
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub(crate) struct SuspenseId(pub usize);
-
 /// A boundary in the VirtualDom that captures all suspended components below it
 pub struct SuspenseContext {
     pub(crate) id: ScopeId,
-    pub(crate) waiting_on: RefCell<HashSet<SuspenseId>>,
-    pub(crate) mutations: RefCell<Mutations<'static>>,
-    pub(crate) placeholder: Cell<Option<ElementId>>,
-    pub(crate) created_on_stack: Cell<usize>,
+    pub(crate) waiting_on: RefCell<HashSet<ScopeId>>,
 }
 
 impl SuspenseContext {
@@ -30,9 +23,10 @@ impl SuspenseContext {
         Self {
             id,
             waiting_on: Default::default(),
-            mutations: RefCell::new(Mutations::default()),
-            placeholder: Cell::new(None),
-            created_on_stack: Cell::new(0),
         }
+    }
+
+    pub fn mark_suspend(&self, id: ScopeId) {
+        self.waiting_on.borrow_mut().insert(id);
     }
 }

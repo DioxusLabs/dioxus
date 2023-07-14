@@ -1,5 +1,5 @@
-use crate::{innerlude::SuspenseContext, ScopeId, TaskId, VirtualDom};
-use std::{rc::Rc, task::Context};
+use crate::{TaskId, VirtualDom};
+use std::task::Context;
 
 impl VirtualDom {
     /// Handle notifications by tasks inside the scheduler
@@ -26,11 +26,5 @@ impl VirtualDom {
             // Remove it from the scheduler
             tasks.try_remove(id.0);
         }
-    }
-
-    pub(crate) fn acquire_suspense_boundary(&self, id: ScopeId) -> Rc<SuspenseContext> {
-        self.scopes[id]
-            .consume_context::<Rc<SuspenseContext>>()
-            .unwrap()
     }
 }

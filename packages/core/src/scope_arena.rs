@@ -25,10 +25,10 @@ impl VirtualDom {
             name,
             props: Some(props),
             tasks: self.scheduler.clone(),
-            placeholder: Default::default(),
             node_arena_1: BumpFrame::new(0),
             node_arena_2: BumpFrame::new(0),
             spawned_tasks: Default::default(),
+            suspended: Default::default(),
             render_cnt: Default::default(),
             hooks: Default::default(),
             hook_idx: Default::default(),
@@ -54,6 +54,7 @@ impl VirtualDom {
             self.scopes[scope_id].previous_frame().bump_mut().reset();
 
             let scope = &self.scopes[scope_id];
+            scope.suspended.set(false);
 
             scope.hook_idx.set(0);
 
@@ -81,6 +82,10 @@ impl VirtualDom {
             height: scope.height,
             id: scope.id,
         });
+
+        if scope.suspended.get() {
+            self.suspended_scopes.insert(scope.id);
+        }
 
         // rebind the lifetime now that its stored internally
         unsafe { allocated.extend_lifetime_ref() }

@@ -1,11 +1,9 @@
 use crate::ScopeId;
 use slab::Slab;
 
-mod suspense;
 mod task;
 mod wait;
 
-pub use suspense::*;
 pub use task::*;
 
 /// The type of message that can be sent to the scheduler.

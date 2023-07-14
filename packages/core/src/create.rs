@@ -5,10 +5,9 @@ use crate::mutations::Mutation::*;
 use crate::nodes::VNode;
 use crate::nodes::{DynamicNode, TemplateNode};
 use crate::virtual_dom::VirtualDom;
-use crate::{AttributeValue, ElementId, RenderReturn, ScopeId, SuspenseContext, Template};
+use crate::{AttributeValue, ElementId, RenderReturn, ScopeId, Template};
 use std::cell::Cell;
 use std::iter::Peekable;
-use std::rc::Rc;
 use TemplateNode::*;
 
 #[cfg(debug_assertions)]
@@ -445,7 +444,7 @@ impl<'b> VirtualDom {
         match node {
             Text(text) => self.create_dynamic_text(template, text, idx),
             Placeholder(place) => self.create_placeholder(place, template, idx),
-            Component(component) => self.create_component_node(template, component, idx),
+            Component(component) => self.create_component_node(template, component),
             Fragment(frag) => frag.iter().map(|child| self.create(child)).sum(),
         }
     }
@@ -502,7 +501,6 @@ impl<'b> VirtualDom {
         &mut self,
         template: &'b VNode<'b>,
         component: &'b VComponent<'b>,
-        idx: usize,
     ) -> usize {
         use RenderReturn::*;
 
@@ -512,7 +510,8 @@ impl<'b> VirtualDom {
         component.scope.set(Some(scope));
 
         match unsafe { self.run_scope(scope).extend_lifetime_ref() } {
-            Ready(t) => self.mount_component(scope, template, t, idx),
+            // Create the component's root element
+            Ready(t) => self.create_scope(scope, t),
             Aborted(t) => self.mount_aborted(template, t),
         }
     }
@@ -527,60 +526,6 @@ impl<'b> VirtualDom {
                 self.new_scope(unbounded_props, component.name).id
             })
             .unwrap_or_else(|| component.scope.get().unwrap())
-    }
-
-    fn mount_component(
-        &mut self,
-        scope: ScopeId,
-        parent: &'b VNode<'b>,
-        new: &'b VNode<'b>,
-        idx: usize,
-    ) -> usize {
-        // Keep track of how many mutations are in the buffer in case we need to split them out if a suspense boundary
-        // is encountered
-        let mutations_to_this_point = self.mutations.edits.len();
-
-        // Create the component's root element
-        let created = self.create_scope(scope, new);
-
-        // If there are no suspense leaves below us, then just don't bother checking anything suspense related
-        if self.collected_leaves.is_empty() {
-            return created;
-        }
-
-        // If running the scope has collected some leaves and *this* component is a boundary, then handle the suspense
-        let boundary = match self.scopes[scope].has_context::<Rc<SuspenseContext>>() {
-            Some(boundary) => boundary,
-            _ => return created,
-        };
-
-        // Since this is a boundary, use its placeholder within the template as the placeholder for the suspense tree
-        let new_id = self.next_element(new, parent.template.get().node_paths[idx]);
-
-        // Now connect everything to the boundary
-        self.scopes[scope].placeholder.set(Some(new_id));
-
-        // This involves breaking off the mutations to this point, and then creating a new placeholder for the boundary
-        // Note that we break off dynamic mutations only - since static mutations aren't rendered immediately
-        let split_off = unsafe {
-            std::mem::transmute::<Vec<Mutation>, Vec<Mutation>>(
-                self.mutations.edits.split_off(mutations_to_this_point),
-            )
-        };
-        boundary.mutations.borrow_mut().edits.extend(split_off);
-        boundary.created_on_stack.set(created);
-        boundary
-            .waiting_on
-            .borrow_mut()
-            .extend(self.collected_leaves.drain(..));
-
-        // Now assign the placeholder in the DOM
-        self.mutations.push(AssignId {
-            id: new_id,
-            path: &parent.template.get().node_paths[idx][1..],
-        });
-
-        0
     }
 
     fn mount_aborted(&mut self, parent: &'b VNode<'b>, placeholder: &VPlaceholder) -> usize {

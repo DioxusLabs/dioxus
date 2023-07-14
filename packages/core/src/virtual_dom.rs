@@ -9,14 +9,13 @@ use crate::{
     mutations::Mutation,
     nodes::RenderReturn,
     nodes::{Template, TemplateId},
-    scheduler::SuspenseId,
     scopes::{ScopeId, ScopeState},
-    AttributeValue, Element, Event, Scope, SuspenseContext,
+    AttributeValue, Element, Event, Scope,
 };
 use futures_util::{pin_mut, StreamExt};
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use slab::Slab;
-use std::{any::Any, borrow::BorrowMut, cell::Cell, collections::BTreeSet, future::Future, rc::Rc};
+use std::{any::Any, cell::Cell, collections::BTreeSet, future::Future, rc::Rc};
 
 /// A virtual node system that progresses user events and diffs UI trees.
 ///
@@ -186,11 +185,9 @@ pub struct VirtualDom {
 
     // While diffing we need some sort of way of breaking off a stream of suspended mutations.
     pub(crate) scope_stack: Vec<ScopeId>,
-    pub(crate) collected_leaves: Vec<SuspenseId>,
 
-    // Whenever a suspense tree is finished, we push its boundary onto this stack.
-    // When "render_with_deadline" is called, we pop the stack and return the mutations
-    pub(crate) finished_fibers: Vec<ScopeId>,
+    // Currently suspended scopes
+    pub(crate) suspended_scopes: FxHashSet<ScopeId>,
 
     pub(crate) rx: futures_channel::mpsc::UnboundedReceiver<SchedulerMsg>,
 
@@ -262,8 +259,7 @@ impl VirtualDom {
             elements: Default::default(),
             scope_stack: Vec::new(),
             dirty_scopes: BTreeSet::new(),
-            collected_leaves: Vec::new(),
-            finished_fibers: Vec::new(),
+            suspended_scopes: FxHashSet::default(),
             mutations: Mutations::default(),
         };
 
@@ -271,12 +267,6 @@ impl VirtualDom {
             Box::new(VProps::new(root, |_, _| unreachable!(), root_props)),
             "app",
         );
-
-        // The root component is always a suspense boundary for any async children
-        // This could be unexpected, so we might rethink this behavior later
-        //
-        // We *could* just panic if the suspense boundary is not found
-        root.provide_context(Rc::new(SuspenseContext::new(ScopeId(0))));
 
         // Unlike react, we provide a default error boundary that just renders the error as a string
         root.provide_context(Rc::new(ErrorBoundary::new(ScopeId(0))));
@@ -317,26 +307,6 @@ impl VirtualDom {
             let height = scope.height;
             self.dirty_scopes.insert(DirtyScope { height, id });
         }
-    }
-
-    /// Determine whether or not a scope is currently in a suspended state
-    ///
-    /// This does not mean the scope is waiting on its own futures, just that the tree that the scope exists in is
-    /// currently suspended.
-    pub fn is_scope_suspended(&self, id: ScopeId) -> bool {
-        !self.scopes[id]
-            .consume_context::<Rc<SuspenseContext>>()
-            .unwrap()
-            .waiting_on
-            .borrow()
-            .is_empty()
-    }
-
-    /// Determine if the tree is at all suspended. Used by SSR and other outside mechanisms to determine if the tree is
-    /// ready to be rendered.
-    pub fn has_suspended_work(&self) -> bool {
-        todo!()
-        // !self.scheduler.leaves.borrow().is_empty()
     }
 
     /// Call a listener inside the VirtualDom with data from outside the VirtualDom.
@@ -495,7 +465,7 @@ impl VirtualDom {
                         Ok(None) => return,
                         Err(_) => {
                             // If we have any dirty scopes, or finished fiber trees then we should exit
-                            if !self.dirty_scopes.is_empty() || !self.finished_fibers.is_empty() {
+                            if !self.dirty_scopes.is_empty() || !self.suspended_scopes.is_empty() {
                                 return;
                             }
 
@@ -596,6 +566,19 @@ impl VirtualDom {
         }
     }
 
+    /// Render the virtual dom, waiting for all suspense to be finished
+    ///
+    /// The mutations will be thrown out, so it's best to use this method for things like SSR that have async content
+    pub async fn wait_for_suspense(&mut self) {
+        loop {
+            if self.suspended_scopes.is_empty() {
+                break;
+            }
+
+            self.wait_for_work().await;
+        }
+    }
+
     /// Render what you can given the timeline and then move on
     ///
     /// It's generally a good idea to put some sort of limit on the suspense process in case a future is having issues.
@@ -607,26 +590,6 @@ impl VirtualDom {
         self.process_events();
 
         loop {
-            // first, unload any complete suspense trees
-            for finished_fiber in self.finished_fibers.drain(..) {
-                let scope = &self.scopes[finished_fiber];
-                let context = scope.has_context::<Rc<SuspenseContext>>().unwrap();
-
-                self.mutations
-                    .templates
-                    .append(&mut context.mutations.borrow_mut().templates);
-
-                self.mutations
-                    .edits
-                    .append(&mut context.mutations.borrow_mut().edits);
-
-                // TODO: count how many nodes are on the stack?
-                self.mutations.push(Mutation::ReplaceWith {
-                    id: context.placeholder.get().unwrap(),
-                    m: 1,
-                })
-            }
-
             // Next, diff any dirty scopes
             // We choose not to poll the deadline since we complete pretty quickly anyways
             if let Some(dirty) = self.dirty_scopes.iter().next().cloned() {
@@ -637,40 +600,9 @@ impl VirtualDom {
                     continue;
                 }
 
-                // if the scope is currently suspended, then we should skip it, ignoring any tasks calling for an update
-                if self.is_scope_suspended(dirty.id) {
-                    continue;
-                }
-
-                // Save the current mutations length so we can split them into boundary
-                let mutations_to_this_point = self.mutations.edits.len();
-
                 // Run the scope and get the mutations
                 self.run_scope(dirty.id);
                 self.diff_scope(dirty.id);
-
-                // If suspended leaves are present, then we should find the boundary for this scope and attach things
-                // No placeholder necessary since this is a diff
-                if !self.collected_leaves.is_empty() {
-                    let mut boundary = self.scopes[dirty.id]
-                        .consume_context::<Rc<SuspenseContext>>()
-                        .unwrap();
-
-                    let boundary_mut = boundary.borrow_mut();
-
-                    // Attach mutations
-                    boundary_mut
-                        .mutations
-                        .borrow_mut()
-                        .edits
-                        .extend(self.mutations.edits.split_off(mutations_to_this_point));
-
-                    // Attach suspended leaves
-                    boundary
-                        .waiting_on
-                        .borrow_mut()
-                        .extend(self.collected_leaves.drain(..));
-                }
             }
 
             // If there's more work, then just continue, plenty of work to do
