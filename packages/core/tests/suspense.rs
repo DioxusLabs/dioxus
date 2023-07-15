@@ -1,8 +1,8 @@
-use dioxus::core::Mutation::*;
+
 use dioxus::prelude::*;
-use std::future::IntoFuture;
-use std::rc::Rc;
-use std::time::Duration;
+
+
+
 
 #[tokio::test]
 async fn it_works() {
@@ -28,7 +28,7 @@ fn app(cx: Scope) -> Element {
 }
 
 fn suspended_child(cx: Scope) -> Element {
-    let mut val = use_state(cx, || 0);
+    let val = use_state(cx, || 0);
 
     if **val < 3 {
         let mut val = val.clone();
