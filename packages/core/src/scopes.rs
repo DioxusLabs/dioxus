@@ -655,7 +655,7 @@ impl<'src> ScopeState {
     }
 
     /// Mark this component as suspended and then return None
-    pub fn suspend(&self) -> Option<()> {
+    pub fn suspend(&self) -> Option<Element> {
         self.suspended.set(true);
         None
     }

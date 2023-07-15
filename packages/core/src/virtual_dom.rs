@@ -572,10 +572,12 @@ impl VirtualDom {
     pub async fn wait_for_suspense(&mut self) {
         loop {
             if self.suspended_scopes.is_empty() {
-                break;
+                return;
             }
 
             self.wait_for_work().await;
+
+            _ = self.render_immediate();
         }
     }
 
