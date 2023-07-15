@@ -52,12 +52,10 @@ fn app(cx: Scope) -> Element {
                 let receiver = eval.receiver();
                 let setter = eval_result.setter();
 
-                wasm_bindgen_futures::spawn_local(async move {
-                    let result = receiver.recv().await;
-                    if let Ok(serde_json::Value::String(string)) = result {
-                        setter(string);
-                    }
-                });
+                let result = receiver.recv_blocking();
+                if let Ok(serde_json::Value::String(string)) = result {
+                    setter(string);
+                }
             },
             "Eval"
         }
