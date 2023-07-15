@@ -1,7 +1,23 @@
 use serde::{de::DeserializeOwned, Serialize};
 
-/// TODO: Document this
-pub fn server_cached<O: 'static + Serialize + DeserializeOwned>(server_fn: impl Fn() -> O) -> O {
+/// This allows you to send data from the server to the client. The data is serialized into the HTML on the server and hydrated on the client.
+///
+/// When you run this function on the client, you need to be careful to insure the order you run it initially is the same order you run it on the server.
+///
+/// If Dioxus fullstack cannot find the data on the client, it will run the closure again to get the data.
+///
+/// # Example
+/// ```rust
+/// use dioxus::prelude::*;
+/// use dioxus_fullstack::prelude::*;
+///
+/// fn app(cx: Scope) -> Element {
+///    let state1 = use_state(cx, || from_server(|| {
+///       1234
+///    }));
+/// }
+/// ```
+pub fn from_server<O: 'static + Serialize + DeserializeOwned>(server_fn: impl Fn() -> O) -> O {
     #[cfg(feature = "ssr")]
     {
         let data =

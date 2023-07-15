@@ -60,5 +60,5 @@ pub mod prelude {
     pub use dioxus_ssr::incremental::IncrementalRendererConfig;
     pub use server_fn::{self, ServerFn as _, ServerFnError};
 
-    pub use use_server::server_cached;
+    pub use use_server::from_server;
 }
