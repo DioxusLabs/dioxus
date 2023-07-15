@@ -21,7 +21,7 @@ fn app_root(cx: Scope<'_>) -> Element {
             .await
     });
 
-    match breeds.suspend()? {
+    match breeds.value()? {
         Ok(breed_list) => cx.render(rsx! {
             div { height: "500px",
                 h1 { "Select a dog breed!" }
@@ -59,7 +59,7 @@ fn breed_pic(cx: Scope, breed: String) -> Element {
             .await
     });
 
-    match fut.suspend()? {
+    match fut.value()? {
         Ok(resp) => render! {
             div {
                 button {
