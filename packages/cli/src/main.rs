@@ -13,7 +13,7 @@ async fn main() -> anyhow::Result<()> {
 
     set_up_logging();
 
-    let _dioxus_config = DioxusConfig::load()
+    let _dioxus_config = DioxusConfig::load(args.bin.clone())
         .map_err(|e| anyhow!("Failed to load `Dioxus.toml` because: {e}"))?
         .unwrap_or_else(|| {
             log::warn!("You appear to be creating a Dioxus project from scratch; we will use the default config");
@@ -30,15 +30,15 @@ async fn main() -> anyhow::Result<()> {
             .map_err(|e| anyhow!("🚫 Translation of HTML into RSX failed: {}", e)),
 
         Build(opts) => opts
-            .build()
+            .build(args.bin.clone())
             .map_err(|e| anyhow!("🚫 Building project failed: {}", e)),
 
         Clean(opts) => opts
-            .clean()
+            .clean(args.bin.clone())
             .map_err(|e| anyhow!("🚫 Cleaning project failed: {}", e)),
 
         Serve(opts) => opts
-            .serve()
+            .serve(args.bin.clone())
             .await
             .map_err(|e| anyhow!("🚫 Serving project failed: {}", e)),
 

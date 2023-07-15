@@ -17,8 +17,19 @@ fn default_plugin() -> toml::Value {
 }
 
 impl DioxusConfig {
-    pub fn load() -> crate::error::Result<Option<DioxusConfig>> {
-        let Ok(crate_dir) = crate::cargo::crate_root() else { return Ok(None); };
+    pub fn load(bin: Option<PathBuf>) -> crate::error::Result<Option<DioxusConfig>> {
+        let crate_dir = crate::cargo::crate_root();
+
+        let crate_dir = match crate_dir {
+            Ok(dir) => {
+                if let Some(bin) = bin {
+                    dir.join(bin)
+                } else {
+                    dir
+                }
+            }
+            Err(_) => return Ok(None),
+        };
 
         // we support either `Dioxus.toml` or `Cargo.toml`
         let Some(dioxus_conf_file) = acquire_dioxus_toml(crate_dir) else {
@@ -177,7 +188,7 @@ pub enum ExecutableType {
 
 impl CrateConfig {
     pub fn new(bin: Option<PathBuf>) -> Result<Self> {
-        let dioxus_config = DioxusConfig::load()?.unwrap_or_default();
+        let dioxus_config = DioxusConfig::load(bin.clone())?.unwrap_or_default();
 
         let crate_root = crate::cargo::crate_root()?;
 
