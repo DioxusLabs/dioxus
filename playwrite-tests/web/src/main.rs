@@ -49,12 +49,10 @@ fn app(cx: Scope) -> Element {
             onclick: move |_| {
                 // Set the window title
                 eval.run().unwrap();
-                let receiver = eval.receiver();
-                let setter = eval_result.setter();
 
-                let result = receiver.recv_blocking();
+                let result = eval.receiver().recv_blocking();
                 if let Ok(serde_json::Value::String(string)) = result {
-                    setter(string);
+                    eval_result.set(string);
                 }
             },
             "Eval"
