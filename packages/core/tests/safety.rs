@@ -1,7 +1,5 @@
 //! Tests related to safety of the library.
 
-
-
 use dioxus::prelude::*;
 
 /// Ensure no issues with not calling rebuild
