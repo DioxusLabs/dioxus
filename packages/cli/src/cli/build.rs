@@ -13,7 +13,7 @@ pub struct Build {
 
 impl Build {
     pub fn build(self) -> Result<()> {
-        let mut crate_config = crate::CrateConfig::new()?;
+        let mut crate_config = crate::CrateConfig::new(self.build.bin)?;
 
         // change the release state.
         crate_config.with_release(self.build.release);

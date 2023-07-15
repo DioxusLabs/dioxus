@@ -32,6 +32,10 @@ pub struct ConfigOptsBuild {
     /// Space separated list of features to activate
     #[clap(long)]
     pub features: Option<Vec<String>>,
+
+    /// The binary to serve
+    #[clap(long)]
+    pub bin: Option<PathBuf>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Parser)]
@@ -86,6 +90,10 @@ pub struct ConfigOptsServe {
     /// Space separated list of features to activate
     #[clap(long)]
     pub features: Option<Vec<String>>,
+
+    /// The binary to serve
+    #[clap(long)]
+    pub bin: Option<PathBuf>,
 }
 
 /// Ensure the given value for `--public-url` is formatted correctly.

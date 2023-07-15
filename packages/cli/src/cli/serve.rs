@@ -16,7 +16,7 @@ pub struct Serve {
 
 impl Serve {
     pub async fn serve(self) -> Result<()> {
-        let mut crate_config = crate::CrateConfig::new()?;
+        let mut crate_config = crate::CrateConfig::new(self.serve.bin)?;
 
         // change the relase state.
         crate_config.with_hot_reload(self.serve.hot_reload);

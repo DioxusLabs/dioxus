@@ -7,7 +7,7 @@ pub struct Clean {}
 
 impl Clean {
     pub fn clean(self) -> Result<()> {
-        let crate_config = crate::CrateConfig::new()?;
+        let crate_config = crate::CrateConfig::new(None)?;
 
         let output = Command::new("cargo")
             .arg("clean")
