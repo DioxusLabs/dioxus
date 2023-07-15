@@ -1,6 +1,9 @@
 use crate::error::Result;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, path::PathBuf};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DioxusConfig {
@@ -30,27 +33,36 @@ impl DioxusConfig {
             }
             Err(_) => return Ok(None),
         };
+        let crate_dir = crate_dir.as_path();
 
-        // we support either `Dioxus.toml` or `Cargo.toml`
         let Some(dioxus_conf_file) = acquire_dioxus_toml(crate_dir) else {
             return Ok(None);
         };
 
+        let dioxus_conf_file = dioxus_conf_file.as_path();
         toml::from_str::<DioxusConfig>(&std::fs::read_to_string(dioxus_conf_file)?)
-            .map_err(|_| crate::Error::Unique("Dioxus.toml parse failed".into()))
+            .map_err(|err| {
+                let error_location = dioxus_conf_file
+                    .strip_prefix(crate_dir)
+                    .unwrap_or(dioxus_conf_file)
+                    .display();
+                crate::Error::Unique(format!("{error_location} {err}"))
+            })
             .map(Some)
     }
 }
 
-fn acquire_dioxus_toml(dir: PathBuf) -> Option<PathBuf> {
+fn acquire_dioxus_toml(dir: &Path) -> Option<PathBuf> {
     // prefer uppercase
-    if dir.join("Dioxus.toml").is_file() {
-        return Some(dir.join("Dioxus.toml"));
+    let uppercase_conf = dir.join("Dioxus.toml");
+    if uppercase_conf.is_file() {
+        return Some(uppercase_conf);
     }
 
     // lowercase is fine too
-    if dir.join("dioxus.toml").is_file() {
-        return Some(dir.join("Dioxus.toml"));
+    let lowercase_conf = dir.join("dioxus.toml");
+    if lowercase_conf.is_file() {
+        return Some(lowercase_conf);
     }
 
     None

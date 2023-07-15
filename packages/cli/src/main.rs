@@ -14,7 +14,7 @@ async fn main() -> anyhow::Result<()> {
     set_up_logging();
 
     let _dioxus_config = DioxusConfig::load(args.bin.clone())
-        .map_err(|e| anyhow!("Failed to load `Dioxus.toml` because: {e}"))?
+        .map_err(|e| anyhow!("Failed to load Dioxus config because: {e}"))?
         .unwrap_or_else(|| {
             log::warn!("You appear to be creating a Dioxus project from scratch; we will use the default config");
             DioxusConfig::default()
