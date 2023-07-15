@@ -1,11 +1,10 @@
-use std::{ panic::AssertUnwindSafe};
-
 use crate::{
     innerlude::Scoped,
     nodes::RenderReturn,
     scopes::{Scope, ScopeState},
     Element,
 };
+use std::panic::AssertUnwindSafe;
 
 /// A trait that essentially allows VComponentProps to be used generically
 ///

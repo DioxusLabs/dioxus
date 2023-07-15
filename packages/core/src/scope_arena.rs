@@ -83,10 +83,12 @@ impl VirtualDom {
             id: scope.id,
         });
 
-        if scope.suspended.get() {
-            self.suspended_scopes.insert(scope.id);
-        } else if !self.suspended_scopes.is_empty() {
-            _ = self.suspended_scopes.remove(&scope.id);
+        if matches!(allocated, RenderReturn::Aborted(_)) {
+            if scope.suspended.get() {
+                self.suspended_scopes.insert(scope.id);
+            } else if !self.suspended_scopes.is_empty() {
+                _ = self.suspended_scopes.remove(&scope.id);
+            }
         }
 
         // rebind the lifetime now that its stored internally
