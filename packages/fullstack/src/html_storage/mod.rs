@@ -1,6 +1,46 @@
-pub(crate) mod deserialize_props;
+use std::sync::atomic::AtomicUsize;
 
-pub(crate) mod serialize_props;
+use serde::{de::DeserializeOwned, Serialize};
+
+pub(crate) mod deserialize;
+
+pub(crate) mod serialize;
+
+#[derive(serde::Serialize, serde::Deserialize, Default)]
+pub(crate) struct HTMLData {
+    pub data: Vec<Vec<u8>>,
+}
+
+impl HTMLData {
+    pub(crate) fn push<T: Serialize>(&mut self, value: &T) {
+        let serialized = postcard::to_allocvec(value).unwrap();
+        self.data.push(serialized);
+    }
+
+    pub(crate) fn cursor(self) -> HTMLDataCursor {
+        HTMLDataCursor {
+            data: self.data,
+            index: AtomicUsize::new(0),
+        }
+    }
+}
+
+pub(crate) struct HTMLDataCursor {
+    data: Vec<Vec<u8>>,
+    index: AtomicUsize,
+}
+
+impl HTMLDataCursor {
+    pub fn take<T: DeserializeOwned>(&self) -> Option<T> {
+        let current = self.index.load(std::sync::atomic::Ordering::SeqCst);
+        if current >= self.data.len() {
+            return None;
+        }
+        let mut cursor = &self.data[current];
+        self.index.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Some(postcard::from_bytes(&mut cursor).unwrap())
+    }
+}
 
 #[test]
 fn serialized_and_deserializes() {
@@ -37,7 +77,7 @@ fn serialized_and_deserializes() {
                 };
                 y
             ];
-            serialize_props::serde_to_writable(&data, &mut as_string).unwrap();
+            serialize::serde_to_writable(&data, &mut as_string).unwrap();
 
             println!("{:?}", as_string);
             println!(
@@ -47,7 +87,7 @@ fn serialized_and_deserializes() {
             println!("serialized size: {}", to_allocvec(&data).unwrap().len());
             println!("compressed size: {}", as_string.len());
 
-            let decoded: Vec<Data> = deserialize_props::serde_from_bytes(&as_string).unwrap();
+            let decoded: Vec<Data> = deserialize::serde_from_bytes(&as_string).unwrap();
             assert_eq!(data, decoded);
         }
     }

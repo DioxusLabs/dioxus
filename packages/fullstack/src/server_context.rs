@@ -1,3 +1,4 @@
+use crate::html_storage::HTMLData;
 pub use server_fn_impl::*;
 use std::sync::Arc;
 use std::sync::RwLock;
@@ -13,6 +14,7 @@ pub struct DioxusServerContext {
     >,
     response_parts: std::sync::Arc<std::sync::RwLock<http::response::Parts>>,
     pub(crate) parts: Arc<RwLock<http::request::Parts>>,
+    html_data: Arc<RwLock<HTMLData>>,
 }
 
 #[allow(clippy::derivable_impls)]
@@ -24,6 +26,7 @@ impl Default for DioxusServerContext {
                 http::response::Response::new(()).into_parts().0,
             )),
             parts: std::sync::Arc::new(RwLock::new(http::request::Request::new(()).into_parts().0)),
+            html_data: Arc::new(RwLock::new(HTMLData::default())),
         }
     }
 }
@@ -45,6 +48,7 @@ mod server_fn_impl {
                 response_parts: std::sync::Arc::new(RwLock::new(
                     http::response::Response::new(()).into_parts().0,
                 )),
+                html_data: Arc::new(RwLock::new(HTMLData::default())),
             }
         }
 
@@ -99,6 +103,21 @@ mod server_fn_impl {
             &self,
         ) -> Result<T, R> {
             T::from_request(self).await
+        }
+
+        /// Insert some data into the html data store
+        pub(crate) async fn push_html_data<T: serde::Serialize>(
+            &self,
+            value: &T,
+        ) -> Result<(), PoisonError<RwLockWriteGuard<'_, HTMLData>>> {
+            self.html_data.write().map(|mut map| {
+                map.push(value);
+            })
+        }
+
+        /// Get the html data store
+        pub(crate) fn html_data(&self) -> LockResult<RwLockReadGuard<'_, HTMLData>> {
+            self.html_data.read()
         }
     }
 }

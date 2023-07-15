@@ -16,10 +16,32 @@ struct AppProps {
 }
 
 fn app(cx: Scope<AppProps>) -> Element {
+    let state1 = server_cached(|| {
+        #[cfg(not(feature = "ssr"))]
+        panic!();
+        12345
+    });
+    assert_eq!(state1, 12345);
+    let state2 = server_cached(|| {
+        #[cfg(not(feature = "ssr"))]
+        panic!();
+        123456
+    });
+    assert_eq!(state2, 123456);
+    let state3 = server_cached(|| {
+        #[cfg(not(feature = "ssr"))]
+        panic!();
+        1234567
+    });
+    assert_eq!(state3, 1234567);
+
     let mut count = use_state(cx, || cx.props.count);
     let text = use_state(cx, || "...".to_string());
 
     cx.render(rsx! {
+        div {
+            "Server state: {state1}, {state2}, {state3}"
+        }
         h1 { "High-Five counter: {count}" }
         button { onclick: move |_| count += 1, "Up high!" }
         button { onclick: move |_| count -= 1, "Down low!" }
@@ -42,7 +64,7 @@ fn app(cx: Scope<AppProps>) -> Element {
 
 #[server(PostServerData)]
 async fn post_server_data(data: String) -> Result<(), ServerFnError> {
-    let axum::extract::Host(host): axum::extract::Host = extract()?;
+    let axum::extract::Host(host): axum::extract::Host = extract().await?;
     println!("Server received: {}", data);
     println!("{:?}", host);
 

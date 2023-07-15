@@ -3,11 +3,36 @@ use serde::de::DeserializeOwned;
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 
+use super::HTMLDataCursor;
+
 #[allow(unused)]
 pub(crate) fn serde_from_bytes<T: DeserializeOwned>(string: &[u8]) -> Option<T> {
     let decompressed = STANDARD.decode(string).ok()?;
 
     postcard::from_bytes(&decompressed).ok()
+}
+
+static SERVER_DATA: once_cell::sync::Lazy<Option<HTMLDataCursor>> =
+    once_cell::sync::Lazy::new(|| {
+        #[cfg(target_arch = "wasm32")]
+        {
+            let attribute = web_sys::window()?
+                .document()?
+                .get_element_by_id("dioxus-storage-data")?
+                .get_attribute("data-serialized")?;
+
+            let data: super::HTMLData = serde_from_bytes(attribute.as_bytes())?;
+
+            Some(data.cursor())
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            None
+        }
+    });
+
+pub(crate) fn take_server_data<T: DeserializeOwned>() -> Option<T> {
+    SERVER_DATA.as_ref()?.take()
 }
 
 #[cfg(not(feature = "ssr"))]
@@ -23,7 +48,7 @@ pub fn get_root_props_from_document<T: DeserializeOwned>() -> Option<T> {
     {
         let attribute = web_sys::window()?
             .document()?
-            .get_element_by_id("dioxus-storage")?
+            .get_element_by_id("dioxus-storage-props")?
             .get_attribute("data-serialized")?;
 
         serde_from_bytes(attribute.as_bytes())

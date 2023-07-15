@@ -5,7 +5,7 @@
 
 pub use once_cell;
 
-mod props_html;
+mod html_storage;
 
 #[cfg(feature = "router")]
 pub mod router;
@@ -26,6 +26,7 @@ mod serve_config;
 #[cfg(feature = "ssr")]
 mod server_context;
 mod server_fn;
+mod use_server;
 
 /// A prelude of commonly used items in dioxus-fullstack.
 pub mod prelude {
@@ -36,7 +37,7 @@ pub mod prelude {
     #[cfg(feature = "warp")]
     pub use crate::adapters::warp_adapter::*;
     #[cfg(not(feature = "ssr"))]
-    pub use crate::props_html::deserialize_props::get_root_props_from_document;
+    pub use crate::html_storage::deserialize::get_root_props_from_document;
     #[cfg(all(feature = "ssr", feature = "router"))]
     pub use crate::render::pre_cache_static_routes_with_props;
     #[cfg(feature = "ssr")]
@@ -52,9 +53,12 @@ pub mod prelude {
     pub use crate::server_fn::DioxusServerFn;
     #[cfg(feature = "ssr")]
     pub use crate::server_fn::{ServerFnMiddleware, ServerFnTraitObj, ServerFunction};
+    use crate::use_server;
     pub use crate::{launch, launch_router};
     pub use dioxus_server_macro::*;
     #[cfg(feature = "ssr")]
     pub use dioxus_ssr::incremental::IncrementalRendererConfig;
     pub use server_fn::{self, ServerFn as _, ServerFnError};
+
+    pub use use_server::server_cached;
 }

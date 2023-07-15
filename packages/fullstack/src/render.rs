@@ -27,7 +27,10 @@ impl SsrRendererPool {
         to: &mut WriteBuffer,
         server_context: &DioxusServerContext,
     ) -> Result<RenderFreshness, dioxus_ssr::incremental::IncrementalRendererError> {
-        let wrapper = FullstackRenderer { cfg };
+        let wrapper = FullstackRenderer {
+            cfg,
+            server_context: server_context.clone(),
+        };
         match self {
             Self::Renderer(pool) => {
                 let server_context = Box::new(server_context.clone());
@@ -126,6 +129,7 @@ impl SSRState {
 
 struct FullstackRenderer<'a, P: Clone + Send + Sync + 'static> {
     cfg: &'a ServeConfig<P>,
+    server_context: DioxusServerContext,
 }
 
 impl<'a, P: Clone + Serialize + Send + Sync + 'static> dioxus_ssr::incremental::WrapBody
@@ -147,7 +151,29 @@ impl<'a, P: Clone + Serialize + Send + Sync + 'static> dioxus_ssr::incremental::
         to: &mut R,
     ) -> Result<(), dioxus_ssr::incremental::IncrementalRendererError> {
         // serialize the props
-        crate::props_html::serialize_props::encode_in_element(&self.cfg.props, to)?;
+        crate::html_storage::serialize::encode_props_in_element(&self.cfg.props, to)?;
+        // serialize the server state
+        crate::html_storage::serialize::encode_in_element(
+            &*self.server_context.html_data().map_err(|err| {
+                dioxus_ssr::incremental::IncrementalRendererError::Other(Box::new({
+                    #[derive(Debug)]
+                    struct HTMLDataReadError;
+
+                    impl std::fmt::Display for HTMLDataReadError {
+                        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                            f.write_str(
+                                "Failed to read the server data to serialize it into the HTML",
+                            )
+                        }
+                    }
+
+                    impl std::error::Error for HTMLDataReadError {}
+
+                    HTMLDataReadError
+                }))
+            })?,
+            to,
+        )?;
 
         #[cfg(all(debug_assertions, feature = "hot-reload"))]
         {
