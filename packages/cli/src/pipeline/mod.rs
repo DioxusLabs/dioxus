@@ -1,6 +1,7 @@
 use crate::Result;
 use std::path::PathBuf;
 
+mod util;
 pub mod wasm;
 
 /// Represents a file's type.
@@ -44,8 +45,9 @@ impl Pipeline {
 
     /// Add a step to the pipeline.
     /// Steps run in the order they are added.
-    pub fn with_step(&mut self, step: Box<dyn PipelineStep>) {
+    pub fn with_step(mut self, step: Box<dyn PipelineStep>) -> Self {
         self.steps.push(step);
+        self
     }
 
     /// Run the pipeline and all steps with it.

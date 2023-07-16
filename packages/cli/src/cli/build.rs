@@ -1,3 +1,5 @@
+use crate::pipeline::{wasm::WasmBuild, BuildConfig, CrateInfo, Pipeline, PipelineConfig};
+
 #[cfg(feature = "plugin")]
 use crate::plugin::PluginManager;
 
@@ -13,9 +15,26 @@ pub struct Build {
 
 impl Build {
     pub fn build(self, bin: Option<PathBuf>) -> Result<()> {
-        let mut crate_config = crate::CrateConfig::new(bin)?;
+        let crate_config = crate::CrateConfig::new(bin)?;
 
-        // change the release state.
+        let config = PipelineConfig::new(
+            CrateInfo::new(
+                None,
+                crate_config.crate_dir,
+                crate_config.dioxus_config.application.name,
+            ),
+            BuildConfig::new(
+                self.build.release,
+                self.build.verbose,
+                self.build.features.unwrap_or(Vec::new()),
+            ),
+        );
+
+        Pipeline::new(config)
+            .with_step(Box::new(WasmBuild {}))
+            .run()?;
+
+        /*// change the release state.
         crate_config.with_release(self.build.release);
         crate_config.with_verbose(self.build.verbose);
 
@@ -72,7 +91,7 @@ impl Build {
         file.write_all(temp.as_bytes())?;
 
         #[cfg(feature = "plugin")]
-        let _ = PluginManager::on_build_finish(&crate_config, &platform);
+        let _ = PluginManager::on_build_finish(&crate_config, &platform);*/
 
         Ok(())
     }
