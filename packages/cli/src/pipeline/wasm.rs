@@ -1,9 +1,9 @@
 use super::{PipelineConfig, PipelineStep};
-use crate::pipeline::{File, FileType, util::pretty_build_output};
+use crate::pipeline::{util::pretty_build_output, File, FileType};
 use std::path::PathBuf;
 
-const DEBUG_TARGET: &str = "/target/wasm32-unknown-unknown/debug";
-const RELEASE_TARGET: &str = "/target/wasm32-unknown-unknown/release";
+const DEBUG_TARGET: &str = "target/wasm32-unknown-unknown/debug";
+const RELEASE_TARGET: &str = "target/wasm32-unknown-unknown/release";
 
 pub struct WasmBuild {}
 
@@ -36,30 +36,31 @@ impl PipelineStep for WasmBuild {
         }
 
         // Run command
-        let cmd_stdout = cmd.detached().stream_stdout().map_err(|e| crate::Error::BuildFailed(e.to_string()))?;
+        let cmd_stdout = cmd
+            .detached()
+            .stream_stdout()
+            .map_err(|e| crate::Error::BuildFailed(e.to_string()))?;
         pretty_build_output(cmd_stdout)?;
 
-        // Get the target 'inner' path
-        // /target/{X}
-        let target_path = if config.build_config.release {
-            PathBuf::from(RELEASE_TARGET)
-        } else {
-            PathBuf::from(DEBUG_TARGET)
-        };
+        // Build the path
+        let mut wasm_out_path = PathBuf::new();
 
         // Get the full path to target
-        // {PATH}/target/{X}
-        let target_path = if let Some(workspace_path) = &config.crate_info.workspace_path {
-            workspace_path.join(target_path)
+        if let Some(workspace_path) = &config.crate_info.workspace_path {
+            wasm_out_path.push(workspace_path);
         } else {
-            config.crate_info.path.join(target_path)
+            wasm_out_path.push(config.crate_info.path.clone());
+        };
+
+        // Get the target 'inner' path
+        if config.build_config.release {
+            wasm_out_path.push(RELEASE_TARGET);
+        } else {
+            wasm_out_path.push(DEBUG_TARGET);
         };
 
         // Get the final path to the built wasm file
-        // {PATH}/target/{X}/{CRATE_NAME}.wasm
-        let wasm_out_path = target_path.join(format!("{}.wasm", config.crate_info.name));
-
-        log::info!("{}", wasm_out_path.to_str().unwrap());
+        wasm_out_path.push(format!("{}.wasm", config.crate_info.name));
 
         // Create the file metadata
         let out_file = File {
