@@ -19,7 +19,7 @@ use std::{
 /// static COUNT: Atom<u32> = |_| 0;
 ///
 /// fn Example(cx: Scope) -> Element {
-///     let mut count = use_atom_state(cx, COUNT);
+///     let mut count = use_atom_state(cx, &COUNT);
 ///
 ///     cx.render(rsx! {
 ///         div {

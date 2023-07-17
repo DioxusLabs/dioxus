@@ -1,8 +1,8 @@
 [package]
-name = "dioxus-playwrite-liveview-test"
+name = "dioxus-playwright-liveview-test"
 version = "0.0.1"
 edition = "2021"
-description = "Playwrite test for Dioxus Liveview"
+description = "Playwright test for Dioxus Liveview"
 license = "MIT/Apache-2.0"
 publish = false
 

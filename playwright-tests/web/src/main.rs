@@ -1,4 +1,4 @@
-// This test is used by playwrite configured in the root of the repo
+// This test is used by playwright configured in the root of the repo
 
 use dioxus::prelude::*;
 use dioxus_web::use_eval;

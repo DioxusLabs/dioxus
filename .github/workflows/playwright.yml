@@ -8,7 +8,7 @@ jobs:
   test:
     if: github.event.pull_request.draft == false
     timeout-minutes: 60
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
     - uses: actions/checkout@v3
     - uses: actions/setup-node@v3

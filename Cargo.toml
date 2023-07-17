@@ -39,10 +39,10 @@ members = [
     # Full project examples
     "examples/tailwind",
     "examples/PWA-example",
-    # Playwrite tests
-    "playwrite-tests/liveview",
-    "playwrite-tests/web",
-    "playwrite-tests/fullstack",
+    # Playwright tests
+    "playwright-tests/liveview",
+    "playwright-tests/web",
+    "playwright-tests/fullstack",
 ]
 exclude = ["examples/mobile_demo"]
 
@@ -120,8 +120,3 @@ fern = { version = "0.6.0", features = ["colored"] }
 thiserror = "1.0.30"
 env_logger = "0.10.0"
 simple_logger = "4.0.0"
-
-[profile.release]
-opt-level = 3
-lto = true
-debug = true
