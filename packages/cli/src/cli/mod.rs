@@ -36,6 +36,10 @@ pub struct Cli {
     /// Enable verbose logging.
     #[clap(short)]
     pub v: bool,
+
+    /// Specify bin target
+    #[clap(global = true, long)]
+    pub bin: Option<String>,
 }
 
 #[derive(Parser)]
