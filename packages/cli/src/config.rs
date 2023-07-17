@@ -20,8 +20,19 @@ fn default_plugin() -> toml::Value {
 }
 
 impl DioxusConfig {
-    pub fn load() -> crate::error::Result<Option<DioxusConfig>> {
-        let Ok(crate_dir) = crate::cargo::crate_root() else { return Ok(None); };
+    pub fn load(bin: Option<PathBuf>) -> crate::error::Result<Option<DioxusConfig>> {
+        let crate_dir = crate::cargo::crate_root();
+
+        let crate_dir = match crate_dir {
+            Ok(dir) => {
+                if let Some(bin) = bin {
+                    dir.join(bin)
+                } else {
+                    dir
+                }
+            }
+            Err(_) => return Ok(None),
+        };
         let crate_dir = crate_dir.as_path();
 
         let Some(dioxus_conf_file) = acquire_dioxus_toml(crate_dir) else {
@@ -188,14 +199,19 @@ pub enum ExecutableType {
 }
 
 impl CrateConfig {
-    pub fn new() -> Result<Self> {
-        let dioxus_config = DioxusConfig::load()?.unwrap_or_default();
+    pub fn new(bin: Option<PathBuf>) -> Result<Self> {
+        let dioxus_config = DioxusConfig::load(bin.clone())?.unwrap_or_default();
+
+        let crate_root = crate::cargo::crate_root()?;
 
         let crate_dir = if let Some(package) = &dioxus_config.application.sub_package {
-            crate::cargo::crate_root()?.join(package)
+            crate_root.join(package)
+        } else if let Some(bin) = bin {
+            crate_root.join(bin)
         } else {
-            crate::cargo::crate_root()?
+            crate_root
         };
+
         let meta = crate::cargo::Metadata::get()?;
         let workspace_dir = meta.workspace_root;
         let target_dir = meta.target_directory;
@@ -214,8 +230,9 @@ impl CrateConfig {
 
         let manifest = cargo_toml::Manifest::from_path(cargo_def).unwrap();
 
-        let output_filename = {
-            match &manifest.package.as_ref().unwrap().default_run {
+        let mut output_filename = String::from("dioxus_app");
+        if let Some(package) = &manifest.package.as_ref() {
+            output_filename = match &package.default_run {
                 Some(default_run_target) => default_run_target.to_owned(),
                 None => manifest
                     .bin
@@ -228,9 +245,10 @@ impl CrateConfig {
                     .or(manifest.bin.first())
                     .or(manifest.lib.as_ref())
                     .and_then(|prod| prod.name.clone())
-                    .expect("No executable or library found from cargo metadata."),
-            }
-        };
+                    .unwrap_or(String::from("dioxus_app")),
+            };
+        }
+
         let executable = ExecutableType::Binary(output_filename);
 
         let release = false;

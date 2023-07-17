@@ -6,8 +6,8 @@ use super::*;
 pub struct Clean {}
 
 impl Clean {
-    pub fn clean(self) -> Result<()> {
-        let crate_config = crate::CrateConfig::new()?;
+    pub fn clean(self, bin: Option<PathBuf>) -> Result<()> {
+        let crate_config = crate::CrateConfig::new(bin)?;
 
         let output = Command::new("cargo")
             .arg("clean")
