@@ -15,7 +15,16 @@ impl PipelineStep for IndexFile {
     fn run(&mut self, config: &mut PipelineConfig) -> crate::Result<()> {
         log::info!("Building `index.html` file...");
 
-        log::info!("Finished building `index.html` file.");
+        
+
         Ok(())
+    }
+    
+    fn pipeline_finished(&mut self, _config: &mut PipelineConfig) -> crate::Result<()> {
+        Ok(())
+    }
+
+    fn priority(&self) -> super::StepPriority {
+        super::StepPriority::Low
     }
 }

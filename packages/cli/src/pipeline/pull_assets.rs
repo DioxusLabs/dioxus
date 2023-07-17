@@ -23,7 +23,14 @@ impl PipelineStep for PullAssets {
         config.input_files.append(&mut public_files);
         config.input_files.append(&mut assets_files);
 
-        log::info!("Finished pulling additional assets.");
         Ok(())
+    }
+
+    fn pipeline_finished(&mut self, _config: &mut PipelineConfig) -> crate::Result<()> {
+        Ok(())
+    }
+
+    fn priority(&self) -> super::StepPriority {
+        super::StepPriority::High
     }
 }

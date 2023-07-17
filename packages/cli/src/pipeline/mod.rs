@@ -1,3 +1,5 @@
+use fs_extra::{dir::CopyOptions as DirCopyOptions, file::CopyOptions as FileCopyOptions};
+
 use crate::{Error, Result};
 use std::path::PathBuf;
 
@@ -7,6 +9,7 @@ pub mod index_file;
 pub mod pull_assets;
 pub mod util;
 pub mod wasm_build;
+pub mod web_out;
 
 /// Represents a pipeline with it's own config and steps.
 pub struct Pipeline {
@@ -32,14 +35,29 @@ impl Pipeline {
 
     /// Run the pipeline and all steps with it.
     pub fn run(mut self) -> Result<()> {
+        // Create staging
+        self.config.create_fresh_staging()?;
+
         // Collect src input files
         let mut files = util::from_dir(PathBuf::from("./src"))?;
         self.config.input_files.append(&mut files);
 
+        // Sort steps by priority
+        self.steps
+            .sort_unstable_by(|a, b| a.priority().cmp(&b.priority()));
+
         // In the future we could add multithreaded support
-        for mut step in self.steps {
+        for step in self.steps.iter_mut() {
             step.run(&mut self.config)?;
         }
+
+        // Everything is finished.
+        for step in self.steps.iter_mut() {
+            step.pipeline_finished(&mut self.config)?;
+        }
+
+        // Delete staging
+        self.config.delete_staging()?;
 
         Ok(())
     }
@@ -58,6 +76,8 @@ pub struct PipelineConfig {
 }
 
 impl PipelineConfig {
+    const STAGING_PATH: &str = "./staging";
+
     /// Create a new PipelineConfig
     pub fn new(crate_info: CrateInfo, build_config: BuildConfig) -> Self {
         Self {
@@ -66,6 +86,56 @@ impl PipelineConfig {
             input_files: Vec::new(),
             output_files: Vec::new(),
         }
+    }
+
+    fn create_fresh_staging(&self) -> Result<()> {
+        self.delete_staging()?;
+        std::fs::create_dir(self.crate_info.path.join(Self::STAGING_PATH))?;
+        Ok(())
+    }
+
+    fn delete_staging(&self) -> Result<()> {
+        let staging_path = self.crate_info.path.join(Self::STAGING_PATH);
+        if staging_path.exists() {
+            std::fs::remove_dir_all(staging_path)?;
+        }
+        Ok(())
+    }
+
+    /// Moves a single file to the staging directory.
+    pub fn copy_file_to_staging(&self, file_path: PathBuf) -> Result<PathBuf> {
+        let file_name = if let Some(file_path) = file_path.file_name() {
+            file_path
+        } else {
+            return Err(Error::ParseError("Failed to get file name.".to_string()));
+        };
+
+        // Get full path
+        let full_path = self
+            .crate_info
+            .path
+            .join(Self::STAGING_PATH)
+            .join(file_name);
+
+        // Copy file
+        fs_extra::file::copy(
+            file_path,
+            full_path.clone(),
+            &FileCopyOptions::new().overwrite(true),
+        )
+        .map_err(|e| Error::CustomError(e.to_string()))?;
+
+        Ok(full_path)
+    }
+
+    pub fn copy_staging_to_dir(&self, dir_path: PathBuf) -> Result<()> {
+        fs_extra::dir::copy(
+            self.crate_info.path.join(Self::STAGING_PATH),
+            dir_path,
+            &DirCopyOptions::new().overwrite(true).content_only(true),
+        )
+        .map_err(|e| Error::CustomError(e.to_string()))?;
+        Ok(())
     }
 }
 
@@ -151,7 +221,20 @@ impl BuildConfig {
     }
 }
 
+/// Represents the priority of the step: How important it is to run first vs last.
+#[derive(Eq, PartialEq, Ord, PartialOrd)]
+pub enum StepPriority {
+    High,
+    Medium,
+    Low,
+}
+
 /// Represents a step in the pipeline.
 pub trait PipelineStep {
+    /// Called when the step needs to run.
     fn run(&mut self, config: &mut PipelineConfig) -> Result<()>;
+    /// Called when the entire pipeline is finished.
+    fn pipeline_finished(&mut self, config: &mut PipelineConfig) -> Result<()>;
+    /// Gets the step's priority.
+    fn priority(&self) -> StepPriority;
 }

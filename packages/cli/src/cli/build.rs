@@ -1,5 +1,5 @@
 use crate::pipeline::{
-    pull_assets::PullAssets, wasm_build::WasmBuild, BuildConfig, CrateInfo, Pipeline, PipelineConfig, index_file::IndexFile,
+    pull_assets::PullAssets, wasm_build::WasmBuild, BuildConfig, CrateInfo, Pipeline, PipelineConfig, index_file::IndexFile, web_out::WebOut,
 };
 
 #[cfg(feature = "plugin")]
@@ -30,6 +30,7 @@ impl Build {
             .with_step(WasmBuild::new())
             .with_step(PullAssets::new())
             .with_step(IndexFile::new())
+            .with_step(WebOut::new())
             .run()?;
 
         /*// change the release state.

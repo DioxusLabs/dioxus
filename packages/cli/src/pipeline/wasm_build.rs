@@ -66,7 +66,8 @@ impl PipelineStep for WasmBuild {
         // Get the final path to the built wasm file
         wasm_out_path.push(format!("{}.wasm", config.crate_info.name));
 
-        log::info!("{:?}", wasm_out_path);
+        // Move output wasm to staging folder
+        let wasm_out_path = config.copy_file_to_staging(wasm_out_path)?;
 
         // Create the file metadata
         let out_file = File {
@@ -78,7 +79,14 @@ impl PipelineStep for WasmBuild {
         // Push it to out files for later processing
         config.output_files.push(out_file);
 
-        log::info!("Finished building wasm.");
         Ok(())
+    }
+
+    fn pipeline_finished(&mut self, _config: &mut PipelineConfig) -> crate::Result<()> {
+        Ok(())
+    }
+
+    fn priority(&self) -> super::StepPriority {
+        super::StepPriority::Low
     }
 }
