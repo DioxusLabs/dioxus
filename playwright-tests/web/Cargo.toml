@@ -1,8 +1,8 @@
 [package]
-name = "dioxus-playwrite-web-test"
+name = "dioxus-playwright-web-test"
 version = "0.0.1"
 edition = "2021"
-description = "Playwrite test for Dioxus Web"
+description = "Playwright test for Dioxus Web"
 license = "MIT/Apache-2.0"
 publish = false
 
