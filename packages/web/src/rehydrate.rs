@@ -115,6 +115,12 @@ impl WebsysDom {
         node: &TemplateNode,
         last_node_was_static_text: &mut bool,
     ) -> Result<(), RehydrationError> {
+        log::trace!("rehydrate template node: {:?}", node);
+        if let Ok(current_child) = current_child {
+            if log::log_enabled!(log::Level::Trace) {
+                web_sys::console::log_1(&current_child.clone().into());
+            }
+        }
         match node {
             TemplateNode::Element {
                 children, attrs, ..
@@ -198,6 +204,12 @@ impl WebsysDom {
         dynamic: &DynamicNode,
         last_node_was_static_text: &mut bool,
     ) -> Result<(), RehydrationError> {
+        log::trace!("rehydrate dynamic node: {:?}", dynamic);
+        if let Ok(current_child) = current_child {
+            if log::log_enabled!(log::Level::Trace) {
+                web_sys::console::log_1(&current_child.clone().into());
+            }
+        }
         match dynamic {
             dioxus_core::DynamicNode::Text(VText { id, .. }) => {
                 // skip comment separator before node
