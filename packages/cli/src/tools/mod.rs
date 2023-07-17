@@ -1,12 +1,13 @@
 use crate::{Error, Result};
-use std::{fs, path::PathBuf};
+use std::{ffi::OsStr, fs, path::PathBuf};
 
 pub mod bindgen;
 
 const APP_DATA_NAME: &str = "dioxus";
 const TEMP_NAME: &str = "temp";
+const TOOLS_NAME: &str = "Tools";
 
-/// Represents teh app's data folder on the host device.
+/// Represents the cli's data folder on the host device.
 pub struct AppStorage {
     path: PathBuf,
 }
@@ -33,7 +34,100 @@ impl AppStorage {
     }
 }
 
-/// Represents the temporary storage in the dioxus data folder.
+/// Represents the cli's tools folder on the host device.
+pub struct ToolStorage {
+    path: PathBuf,
+    installed_tools: Vec<String>,
+}
+
+impl ToolStorage {
+    pub fn get() -> Result<Self> {
+        let app_path = AppStorage::get()?.path();
+        let tools_path = app_path.join(TOOLS_NAME);
+        if !tools_path.is_dir() {
+            fs::create_dir_all(&tools_path).unwrap();
+        }
+
+        // Get installed tools
+        let mut installed_tools = Vec::new();
+
+        for entry in fs::read_dir(&tools_path)? {
+            let entry = entry?;
+            if let Some(name) = entry.path().file_stem().and_then(OsStr::to_str) {
+                installed_tools.push(name.to_string());
+            }
+        }
+
+        Ok(Self {
+            path: tools_path,
+            installed_tools,
+        })
+    }
+
+    /// Get a tool by it's name.
+    pub fn get_tool_by_name(&self, tool_name: String) -> Option<PathBuf> {
+        if !self.is_installed(tool_name) {
+            return None;
+        }
+
+        let tool_path = self.path.join(tool_name);
+        Some(tool_path)
+    }
+
+    /// Check if a tool is installed.
+    pub fn is_installed(&self, tool_name: String) -> bool {
+        self.installed_tools.contains(&tool_name)
+    }
+
+    /// Install a new tool, replacing it if it exists.
+    pub fn install_tool(&mut self, tool_name: String, tool_path: PathBuf) -> Result<PathBuf> {
+        // Delete installed tool
+        if self.is_installed(tool_name) {
+            self.delete_tool(tool_name)?;
+        }
+
+        // Copy new tool
+        let new_tool_path = self.path.join(tool_name);
+        fs_extra::file::copy(
+            new_tool_path,
+            &tool_path,
+            &fs_extra::file::CopyOptions::new()
+                .overwrite(true)
+                .skip_exist(false),
+        )
+        .map_err(|_| {
+            Error::CustomError(format!(
+                "Failed to replace tool `{}` from path `{}`",
+                tool_name,
+                tool_path.display()
+            ))
+        })?;
+
+        Ok(new_tool_path)
+    }
+
+    /// Delete a tool if it exists.
+    pub fn delete_tool(&mut self, tool_name: String) -> Result<()> {
+        let path = self.path.join(tool_name);
+        if !path.exists() {
+            return Err(Error::CustomError(format!(
+                "Tool `{}` doesn't exist and can't be deleted.",
+                tool_name
+            )));
+        }
+
+        fs::remove_file(path)?;
+        self.installed_tools.retain(|x| *x != tool_name);
+
+        Ok(())
+    }
+
+    pub fn path(&self) -> PathBuf {
+        self.path.clone()
+    }
+}
+
+/// Represents the cli's temporary folder on the hot device.
 pub struct TempStorage {
     path: PathBuf,
 }
