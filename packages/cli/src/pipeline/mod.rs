@@ -1,27 +1,12 @@
 use crate::{Error, Result};
 use std::path::PathBuf;
 
-mod util;
+use self::util::File;
+
+pub mod index_file;
+pub mod pull_assets;
+pub mod util;
 pub mod wasm;
-
-/// Represents a file's type.
-pub enum FileType {
-    JavaScript,
-    Css,
-    // SASS & SCSS
-    SassType,
-    Wasm,
-}
-
-/// Represents a File on the device's storage system.
-pub struct File {
-    /// The name of the file.
-    name: String,
-    /// The path to the file.
-    path: PathBuf,
-    /// The file's type.
-    file_type: FileType,
-}
 
 /// Represents a pipeline with it's own config and steps.
 pub struct Pipeline {
@@ -32,11 +17,6 @@ pub struct Pipeline {
 impl Pipeline {
     /// Build a new pipeline.
     pub fn new(config: PipelineConfig) -> Self {
-        // Collect all input files
-
-        // Create config struct
-
-        // Return self
         Self {
             config,
             steps: Vec::new(),
@@ -52,6 +32,10 @@ impl Pipeline {
 
     /// Run the pipeline and all steps with it.
     pub fn run(mut self) -> Result<()> {
+        // Collect src input files
+        let mut files = util::from_dir(PathBuf::from("./src"))?;
+        self.config.input_files.append(&mut files);
+
         // In the future we could add multithreaded support
         for mut step in self.steps {
             step.run(&mut self.config)?;

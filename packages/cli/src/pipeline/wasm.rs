@@ -1,5 +1,6 @@
+use crate::pipeline::util::{File, FileType};
+
 use super::{PipelineConfig, PipelineStep};
-use crate::pipeline::{util::pretty_build_output, File, FileType};
 use std::path::PathBuf;
 
 const DEBUG_TARGET: &str = "target/wasm32-unknown-unknown/debug";
@@ -22,8 +23,7 @@ impl PipelineStep for WasmBuild {
             .cwd(config.crate_info.path.clone())
             .arg("build")
             .arg("--target")
-            .arg("wasm32-unknown-unknown")
-            .arg("--message-format=json");
+            .arg("wasm32-unknown-unknown");
 
         // Set release
         if config.build_config.release {
@@ -42,11 +42,9 @@ impl PipelineStep for WasmBuild {
         }
 
         // Run command
-        let cmd_stdout = cmd
-            .detached()
-            .stream_stdout()
+        _ = cmd
+            .join()
             .map_err(|e| crate::Error::BuildFailed(e.to_string()))?;
-        pretty_build_output(cmd_stdout)?;
 
         // Build the path
         let mut wasm_out_path = PathBuf::new();

@@ -1,4 +1,6 @@
-use crate::pipeline::{wasm::WasmBuild, BuildConfig, CrateInfo, Pipeline, PipelineConfig};
+use crate::pipeline::{
+    pull_assets::PullAssets, wasm::WasmBuild, BuildConfig, CrateInfo, Pipeline, PipelineConfig, index_file::IndexFile,
+};
 
 #[cfg(feature = "plugin")]
 use crate::plugin::PluginManager;
@@ -26,6 +28,8 @@ impl Build {
 
         Pipeline::new(config)
             .with_step(WasmBuild::new())
+            .with_step(PullAssets::new())
+            .with_step(IndexFile::new())
             .run()?;
 
         /*// change the release state.
