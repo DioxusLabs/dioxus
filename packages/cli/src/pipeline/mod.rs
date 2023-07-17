@@ -58,7 +58,7 @@ impl Pipeline {
 
         // Delete staging
         self.config.delete_staging()?;
-
+        log::info!("Pipeline finished successfully!");
         Ok(())
     }
 }

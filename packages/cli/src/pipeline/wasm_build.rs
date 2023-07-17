@@ -16,7 +16,7 @@ impl WasmBuild {
 
 impl PipelineStep for WasmBuild {
     fn run(&mut self, config: &mut PipelineConfig) -> crate::Result<()> {
-        log::info!("Building wasm...");
+        log::info!("Building wasm");
 
         // Construct command
         let mut cmd = subprocess::Exec::cmd("cargo")

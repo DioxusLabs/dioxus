@@ -13,7 +13,7 @@ impl IndexFile {
 
 impl PipelineStep for IndexFile {
     fn run(&mut self, config: &mut PipelineConfig) -> crate::Result<()> {
-        log::info!("Building `index.html` file...");
+        log::info!("Building `index.html` file");
 
         
 

@@ -19,7 +19,7 @@ impl PipelineStep for WebOut {
     }
 
     fn pipeline_finished(&mut self, config: &mut PipelineConfig) -> crate::Result<()> {
-        log::info!("Configuring for web output...");
+        log::info!("Configuring for web output");
 
         // Create dist folder
         let dist_path = PathBuf::from(DIST_PATH);

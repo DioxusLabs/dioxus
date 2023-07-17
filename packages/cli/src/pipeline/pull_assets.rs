@@ -15,7 +15,7 @@ impl PullAssets {
 
 impl PipelineStep for PullAssets {
     fn run(&mut self, config: &mut PipelineConfig) -> crate::Result<()> {
-        log::info!("Pulling additional assets...");
+        log::info!("Pulling additional assets");
 
         let mut public_files = util::from_dir(config.crate_info.path.join(PUBLIC_PATH))?;
         let mut assets_files = util::from_dir(config.crate_info.path.join(ASSETS_PATH))?;
