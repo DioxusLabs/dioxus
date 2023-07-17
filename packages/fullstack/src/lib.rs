@@ -14,6 +14,7 @@ pub mod router;
 mod adapters;
 #[cfg(feature = "ssr")]
 pub use adapters::*;
+mod hooks;
 #[cfg(all(debug_assertions, feature = "hot-reload", feature = "ssr"))]
 mod hot_reload;
 pub mod launch;
@@ -26,7 +27,6 @@ mod serve_config;
 #[cfg(feature = "ssr")]
 mod server_context;
 mod server_fn;
-mod use_server;
 
 /// A prelude of commonly used items in dioxus-fullstack.
 pub mod prelude {
@@ -36,6 +36,7 @@ pub mod prelude {
     pub use crate::adapters::salvo_adapter::*;
     #[cfg(feature = "warp")]
     pub use crate::adapters::warp_adapter::*;
+    use crate::hooks;
     #[cfg(not(feature = "ssr"))]
     pub use crate::html_storage::deserialize::get_root_props_from_document;
     #[cfg(all(feature = "ssr", feature = "router"))]
@@ -53,12 +54,11 @@ pub mod prelude {
     pub use crate::server_fn::DioxusServerFn;
     #[cfg(feature = "ssr")]
     pub use crate::server_fn::{ServerFnMiddleware, ServerFnTraitObj, ServerFunction};
-    use crate::use_server;
     pub use crate::{launch, launch_router};
     pub use dioxus_server_macro::*;
     #[cfg(feature = "ssr")]
     pub use dioxus_ssr::incremental::IncrementalRendererConfig;
     pub use server_fn::{self, ServerFn as _, ServerFnError};
 
-    pub use use_server::from_server;
+    pub use hooks::{server_cached::server_cached, server_future::use_server_future};
 }

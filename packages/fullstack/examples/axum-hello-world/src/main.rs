@@ -16,31 +16,30 @@ struct AppProps {
 }
 
 fn app(cx: Scope<AppProps>) -> Element {
-    let state1 = server_cached(|| {
-        #[cfg(not(feature = "ssr"))]
-        panic!();
-        12345
-    });
-    assert_eq!(state1, 12345);
-    let state2 = server_cached(|| {
-        #[cfg(not(feature = "ssr"))]
-        panic!();
-        123456
-    });
-    assert_eq!(state2, 123456);
-    let state3 = server_cached(|| {
-        #[cfg(not(feature = "ssr"))]
-        panic!();
-        1234567
-    });
-    assert_eq!(state3, 1234567);
+    render! {
+        Child {}
+    }
+}
 
-    let mut count = use_state(cx, || cx.props.count);
+fn Child(cx: Scope) -> Element {
+    let state = use_server_future(cx, (), |()| async move {
+        #[cfg(not(feature = "ssr"))]
+        panic!();
+        #[cfg(feature = "ssr")]
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        return 1;
+    })?;
+
+    log::info!("running child");
+    let state = state.value();
+    log::info!("child state: {:?}", state);
+
+    let mut count = use_state(cx, || 0);
     let text = use_state(cx, || "...".to_string());
 
     cx.render(rsx! {
         div {
-            "Server state: {state1}, {state2}, {state3}"
+            "Server state: {state}"
         }
         h1 { "High-Five counter: {count}" }
         button { onclick: move |_| count += 1, "Up high!" }
@@ -77,6 +76,11 @@ async fn get_server_data() -> Result<String, ServerFnError> {
 }
 
 fn main() {
+    #[cfg(feature = "web")]
+    wasm_logger::init(wasm_logger::Config::default());
+    #[cfg(feature = "ssr")]
+    simple_logger::SimpleLogger::new().init().unwrap();
+
     launch!(@([127, 0, 0, 1], 8080), app, {
         serve_cfg: ServeConfigBuilder::new(app, AppProps { count: 0 }),
     });

@@ -2,19 +2,22 @@
 
 use std::sync::Arc;
 
+use crate::server_context::SERVER_CONTEXT;
 use dioxus::prelude::VirtualDom;
 use dioxus_ssr::{
     incremental::{IncrementalRendererConfig, RenderFreshness, WrapBody},
     Renderer,
 };
 use serde::Serialize;
+use std::sync::RwLock;
+use tokio::task::spawn_blocking;
 
 use crate::{prelude::*, server_context::with_server_context};
 use dioxus::prelude::*;
 
 enum SsrRendererPool {
-    Renderer(object_pool::Pool<Renderer>),
-    Incremental(object_pool::Pool<dioxus_ssr::incremental::IncrementalRenderer>),
+    Renderer(RwLock<Vec<Renderer>>),
+    Incremental(RwLock<Vec<dioxus_ssr::incremental::IncrementalRenderer>>),
 }
 
 impl SsrRendererPool {
@@ -24,49 +27,130 @@ impl SsrRendererPool {
         route: String,
         component: Component<P>,
         props: P,
-        to: &mut WriteBuffer,
         server_context: &DioxusServerContext,
-    ) -> Result<RenderFreshness, dioxus_ssr::incremental::IncrementalRendererError> {
+    ) -> Result<(RenderFreshness, String), dioxus_ssr::incremental::IncrementalRendererError> {
         let wrapper = FullstackRenderer {
-            cfg,
+            cfg: cfg.clone(),
             server_context: server_context.clone(),
         };
         match self {
             Self::Renderer(pool) => {
                 let server_context = Box::new(server_context.clone());
-                let mut vdom = VirtualDom::new_with_props(component, props);
+                let mut renderer = pool.write().unwrap().pop().unwrap_or_else(pre_renderer);
 
-                with_server_context(server_context, || {
-                    let _ = vdom.rebuild();
+                let (tx, rx) = tokio::sync::oneshot::channel();
+
+                spawn_blocking(move || {
+                    tokio::runtime::Runtime::new()
+                        .expect("couldn't spawn runtime")
+                        .block_on(async move {
+                            let mut vdom = VirtualDom::new_with_props(component, props);
+                            let mut to = WriteBuffer { buffer: Vec::new() };
+                            // before polling the future, we need to set the context
+                            let prev_context =
+                                SERVER_CONTEXT.with(|ctx| ctx.replace(server_context));
+                            // poll the future, which may call server_context()
+                            log::info!("Rebuilding vdom");
+                            let _ = vdom.rebuild();
+                            vdom.wait_for_suspense().await;
+                            log::info!("Suspense resolved");
+                            // after polling the future, we need to restore the context
+                            SERVER_CONTEXT.with(|ctx| ctx.replace(prev_context));
+
+                            if let Err(err) = wrapper.render_before_body(&mut *to) {
+                                let _ = tx.send(Err(err));
+                                return;
+                            }
+                            if let Err(err) = renderer.render_to(&mut to, &vdom) {
+                                let _ = tx.send(Err(
+                                    dioxus_router::prelude::IncrementalRendererError::RenderError(
+                                        err,
+                                    ),
+                                ));
+                                return;
+                            }
+                            if let Err(err) = wrapper.render_after_body(&mut *to) {
+                                let _ = tx.send(Err(err));
+                                return;
+                            }
+                            match String::from_utf8(to.buffer) {
+                                Ok(html) => {
+                                    let _ =
+                                        tx.send(Ok((renderer, RenderFreshness::now(None), html)));
+                                }
+                                Err(err) => {
+                                    dioxus_ssr::incremental::IncrementalRendererError::Other(
+                                        Box::new(err),
+                                    );
+                                }
+                            }
+                        });
                 });
-
-                let mut renderer = pool.pull(pre_renderer);
-
-                // SAFETY: The fullstack renderer will only write UTF-8 to the buffer.
-                wrapper.render_before_body(&mut **to)?;
-                renderer.render_to(to, &vdom)?;
-                wrapper.render_after_body(&mut **to)?;
-
-                Ok(RenderFreshness::now(None))
+                let (renderer, freshness, html) = rx.await.unwrap()?;
+                pool.write().unwrap().push(renderer);
+                Ok((freshness, html))
             }
             Self::Incremental(pool) => {
                 let mut renderer =
-                    pool.pull(|| incremental_pre_renderer(cfg.incremental.as_ref().unwrap()));
-                Ok(renderer
-                    .render(
-                        route,
-                        component,
-                        props,
-                        &mut **to,
-                        |vdom| {
-                            let server_context = Box::new(server_context.clone());
-                            with_server_context(server_context, || {
-                                let _ = vdom.rebuild();
-                            });
-                        },
-                        &wrapper,
-                    )
-                    .await?)
+                    pool.write().unwrap().pop().unwrap_or_else(|| {
+                        incremental_pre_renderer(cfg.incremental.as_ref().unwrap())
+                    });
+
+                let (tx, rx) = tokio::sync::oneshot::channel();
+
+                let server_context = server_context.clone();
+                spawn_blocking(move || {
+                    tokio::runtime::Runtime::new()
+                        .expect("couldn't spawn runtime")
+                        .block_on(async move {
+                            let mut to = WriteBuffer { buffer: Vec::new() };
+                            match renderer
+                                .render(
+                                    route,
+                                    component,
+                                    props,
+                                    &mut *to,
+                                    |vdom| {
+                                        Box::pin(async move {
+                                            // before polling the future, we need to set the context
+                                            let prev_context = SERVER_CONTEXT
+                                                .with(|ctx| ctx.replace(Box::new(server_context)));
+                                            // poll the future, which may call server_context()
+                                            log::info!("Rebuilding vdom");
+                                            let _ = vdom.rebuild();
+                                            vdom.wait_for_suspense().await;
+                                            log::info!("Suspense resolved");
+                                            // after polling the future, we need to restore the context
+                                            SERVER_CONTEXT.with(|ctx| ctx.replace(prev_context));
+                                        })
+                                    },
+                                    &wrapper,
+                                )
+                                .await
+                            {
+                                Ok(freshness) => {
+                                    match String::from_utf8(to.buffer).map_err(|err| {
+                                        dioxus_ssr::incremental::IncrementalRendererError::Other(
+                                            Box::new(err),
+                                        )
+                                    }) {
+                                        Ok(html) => {
+                                            let _ = tx.send(Ok((freshness, html)));
+                                        }
+                                        Err(err) => {
+                                            let _ = tx.send(Err(err));
+                                        }
+                                    }
+                                }
+                                Err(err) => {
+                                    let _ = tx.send(Err(err));
+                                }
+                            }
+                        })
+                });
+                let (freshness, html) = rx.await.unwrap()?;
+
+                Ok((freshness, html))
             }
         }
     }
@@ -83,18 +167,22 @@ impl SSRState {
     pub(crate) fn new<P: Clone>(cfg: &ServeConfig<P>) -> Self {
         if cfg.incremental.is_some() {
             return Self {
-                renderers: Arc::new(SsrRendererPool::Incremental(object_pool::Pool::new(
-                    10,
-                    || incremental_pre_renderer(cfg.incremental.as_ref().unwrap()),
-                ))),
+                renderers: Arc::new(SsrRendererPool::Incremental(RwLock::new(vec![
+                    incremental_pre_renderer(cfg.incremental.as_ref().unwrap()),
+                    incremental_pre_renderer(cfg.incremental.as_ref().unwrap()),
+                    incremental_pre_renderer(cfg.incremental.as_ref().unwrap()),
+                    incremental_pre_renderer(cfg.incremental.as_ref().unwrap()),
+                ]))),
             };
         }
 
         Self {
-            renderers: Arc::new(SsrRendererPool::Renderer(object_pool::Pool::new(
-                10,
-                pre_renderer,
-            ))),
+            renderers: Arc::new(SsrRendererPool::Renderer(RwLock::new(vec![
+                pre_renderer(),
+                pre_renderer(),
+                pre_renderer(),
+                pre_renderer(),
+            ]))),
         }
     }
 
@@ -109,31 +197,25 @@ impl SSRState {
     > + Send
            + 'a {
         async move {
-            let mut html = WriteBuffer { buffer: Vec::new() };
             let ServeConfig { app, props, .. } = cfg;
 
-            let freshness = self
+            let (freshness, html) = self
                 .renderers
-                .render_to(cfg, route, *app, props.clone(), &mut html, server_context)
+                .render_to(cfg, route, *app, props.clone(), server_context)
                 .await?;
 
-            Ok(RenderResponse {
-                html: String::from_utf8(html.buffer).map_err(|err| {
-                    dioxus_ssr::incremental::IncrementalRendererError::Other(Box::new(err))
-                })?,
-                freshness,
-            })
+            Ok(RenderResponse { html, freshness })
         }
     }
 }
 
-struct FullstackRenderer<'a, P: Clone + Send + Sync + 'static> {
-    cfg: &'a ServeConfig<P>,
+struct FullstackRenderer<P: Clone + Send + Sync + 'static> {
+    cfg: ServeConfig<P>,
     server_context: DioxusServerContext,
 }
 
-impl<'a, P: Clone + Serialize + Send + Sync + 'static> dioxus_ssr::incremental::WrapBody
-    for FullstackRenderer<'a, P>
+impl<P: Clone + Serialize + Send + Sync + 'static> dioxus_ssr::incremental::WrapBody
+    for FullstackRenderer<P>
 {
     fn render_before_body<R: std::io::Write>(
         &self,
@@ -258,7 +340,10 @@ where
     Rt: dioxus_router::prelude::Routable + Send + Sync + Serialize,
     <Rt as std::str::FromStr>::Err: std::fmt::Display,
 {
-    let wrapper = FullstackRenderer { cfg };
+    let wrapper = FullstackRenderer {
+        cfg: cfg.clone(),
+        server_context: Default::default(),
+    };
     let mut renderer = incremental_pre_renderer(
         cfg.incremental
             .as_ref()

@@ -1,13 +1,10 @@
 #![allow(non_snake_case)]
 
-
-
 use std::{
     ops::{Deref, DerefMut},
-    path::{PathBuf},
-    time::{Duration},
+    path::PathBuf,
+    time::Duration,
 };
-
 
 /// Information about the freshness of a rendered response
 #[derive(Debug, Clone, Copy)]

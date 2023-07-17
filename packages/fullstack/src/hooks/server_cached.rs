@@ -17,7 +17,7 @@ use serde::{de::DeserializeOwned, Serialize};
 ///    }));
 /// }
 /// ```
-pub fn from_server<O: 'static + Serialize + DeserializeOwned>(server_fn: impl Fn() -> O) -> O {
+pub fn server_cached<O: 'static + Serialize + DeserializeOwned>(server_fn: impl Fn() -> O) -> O {
     #[cfg(feature = "ssr")]
     {
         let data = server_fn();

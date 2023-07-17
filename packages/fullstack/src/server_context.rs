@@ -123,7 +123,7 @@ mod server_fn_impl {
 }
 
 std::thread_local! {
-    static SERVER_CONTEXT: std::cell::RefCell<Box<DioxusServerContext>> = std::cell::RefCell::new(Box::new(DioxusServerContext::default() ));
+    pub(crate) static SERVER_CONTEXT: std::cell::RefCell<Box<DioxusServerContext>> = std::cell::RefCell::new(Box::new(DioxusServerContext::default() ));
 }
 
 /// Get information about the current server request.
