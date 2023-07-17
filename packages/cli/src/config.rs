@@ -21,7 +21,9 @@ fn default_plugin() -> toml::Value {
 
 impl DioxusConfig {
     pub fn load() -> crate::error::Result<Option<DioxusConfig>> {
-        let Ok(crate_dir) = crate::cargo::crate_root() else { return Ok(None); };
+        let Ok(crate_dir) = crate::cargo::crate_root() else {
+            return Ok(None);
+        };
         let crate_dir = crate_dir.as_path();
 
         let Some(dioxus_conf_file) = acquire_dioxus_toml(crate_dir) else {

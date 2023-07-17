@@ -369,13 +369,13 @@ impl RouteEnum {
                     let (exclude, layout): (bool, Layout) = attr.parse_args_with(parser)?;
 
                     if exclude {
-                        let Some(layout_index) =
-                            layouts.iter().position(|l| l.comp == layout.comp) else {
-                                return Err(syn::Error::new(
-                                    Span::call_site(),
-                                    "Attempted to exclude a layout that does not exist",
-                                ));
-                            };
+                        let Some(layout_index) = layouts.iter().position(|l| l.comp == layout.comp)
+                        else {
+                            return Err(syn::Error::new(
+                                Span::call_site(),
+                                "Attempted to exclude a layout that does not exist",
+                            ));
+                        };
                         excluded.push(LayoutId(layout_index));
                     } else {
                         let layout_index = layouts.len();

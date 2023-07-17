@@ -9,7 +9,7 @@ use std::{
     hash::BuildHasherDefault,
     io::Write,
     ops::{Deref, DerefMut},
-    path::{PathBuf},
+    path::PathBuf,
     time::{Duration, SystemTime},
 };
 use tokio::io::{AsyncWrite, AsyncWriteExt, BufReader};

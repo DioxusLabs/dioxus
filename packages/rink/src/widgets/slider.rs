@@ -163,7 +163,9 @@ impl Slider {
 
         if let Some(mut div) = rdom.get_mut(self.pre_cursor_div) {
             let node_type = div.node_type_mut();
-            let NodeTypeMut::Element(mut element) = node_type else { panic!("input must be an element") };
+            let NodeTypeMut::Element(mut element) = node_type else {
+                panic!("input must be an element")
+            };
             element.set_attribute(
                 OwnedAttributeDiscription {
                     name: "width".to_string(),
@@ -175,7 +177,9 @@ impl Slider {
 
         if let Some(mut div) = rdom.get_mut(self.post_cursor_div) {
             let node_type = div.node_type_mut();
-            let NodeTypeMut::Element(mut element) = node_type else { panic!("input must be an element") };
+            let NodeTypeMut::Element(mut element) = node_type else {
+                panic!("input must be an element")
+            };
             element.set_attribute(
                 OwnedAttributeDiscription {
                     name: "width".to_string(),
@@ -259,7 +263,9 @@ impl CustomElement for Slider {
 
     fn create(mut root: dioxus_native_core::real_dom::NodeMut) -> Self {
         let node_type = root.node_type();
-        let NodeType::Element(el) = &*node_type else { panic!("input must be an element") };
+        let NodeType::Element(el) = &*node_type else {
+            panic!("input must be an element")
+        };
 
         let value = el.attributes.get(&OwnedAttributeDiscription {
             name: "value".to_string(),
@@ -390,7 +396,9 @@ impl CustomElement for Slider {
             AttributeMask::All => {
                 {
                     let node_type = root.node_type_mut();
-                    let NodeTypeMut::Element(mut el) = node_type else { panic!("input must be an element") };
+                    let NodeTypeMut::Element(mut el) = node_type else {
+                        panic!("input must be an element")
+                    };
                     self.update_value_attr(&el);
                     self.update_size_attr(&mut el);
                     self.update_max_attr(&el);
@@ -403,7 +411,9 @@ impl CustomElement for Slider {
             AttributeMask::Some(attrs) => {
                 {
                     let node_type = root.node_type_mut();
-                    let NodeTypeMut::Element(mut el) = node_type else { panic!("input must be an element") };
+                    let NodeTypeMut::Element(mut el) = node_type else {
+                        panic!("input must be an element")
+                    };
                     if attrs.contains("width") || attrs.contains("height") {
                         self.update_size_attr(&mut el);
                     }

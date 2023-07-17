@@ -136,12 +136,16 @@ async fn autoformat_project(check: bool) -> Result<()> {
 }
 
 fn collect_rs_files(folder: &Path, files: &mut Vec<PathBuf>) {
-    let Ok(folder) = folder.read_dir() else { return };
+    let Ok(folder) = folder.read_dir() else {
+        return;
+    };
 
     // load the gitignore
 
     for entry in folder {
-        let Ok(entry) = entry else { continue; };
+        let Ok(entry) = entry else {
+            continue;
+        };
 
         let path = entry.path();
 
