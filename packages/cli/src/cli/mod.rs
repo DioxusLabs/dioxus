@@ -39,7 +39,7 @@ pub struct Cli {
 
     /// Specify bin target
     #[clap(global = true, long)]
-    pub bin: Option<PathBuf>,
+    pub bin: Option<String>,
 }
 
 #[derive(Parser)]
