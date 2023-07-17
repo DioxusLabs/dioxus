@@ -1,6 +1,6 @@
 // @ts-check
-const { defineConfig, devices } = require('@playwright/test');
-const path = require('path');
+const { defineConfig, devices } = require("@playwright/test");
+const path = require("path");
 
 /**
  * Read environment variables from file.
@@ -12,7 +12,7 @@ const path = require('path');
  * @see https://playwright.dev/docs/test-configuration
  */
 module.exports = defineConfig({
-  testDir: './playwrite-tests',
+  testDir: "./playwright-tests",
   /* Run tests in files in parallel */
   fullyParallel: true,
   /* Fail the build on CI if you accidentally left test.only in the source code. */
@@ -22,21 +22,21 @@ module.exports = defineConfig({
   /* Opt out of parallel tests on CI. */
   workers: process.env.CI ? 1 : undefined,
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
-  reporter: 'html',
+  reporter: "html",
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
     /* Base URL to use in actions like `await page.goto('/')`. */
     // baseURL: 'http://127.0.0.1:3000',
 
     /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
-    trace: 'on-first-retry',
+    trace: "on-first-retry",
   },
 
   /* Configure projects for major browsers */
   projects: [
     {
-      name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      name: "chromium",
+      use: { ...devices["Desktop Chrome"] },
     },
 
     // {
@@ -73,27 +73,29 @@ module.exports = defineConfig({
   /* Run your local dev server before starting the tests */
   webServer: [
     {
-      command: 'cargo run --package dioxus-playwrite-liveview-test --bin dioxus-playwrite-liveview-test',
+      command:
+        "cargo run --package dioxus-playwright-liveview-test --bin dioxus-playwright-liveview-test",
       port: 3030,
       timeout: 10 * 60 * 1000,
       reuseExistingServer: !process.env.CI,
       stdout: "pipe",
     },
     {
-      cwd: path.join(process.cwd(), 'playwrite-tests', 'web'),
-      command: 'dioxus serve',
+      cwd: path.join(process.cwd(), "playwright-tests", "web"),
+      command: "dioxus serve",
       port: 8080,
       timeout: 10 * 60 * 1000,
       reuseExistingServer: !process.env.CI,
       stdout: "pipe",
     },
     {
-      cwd: path.join(process.cwd(), 'playwrite-tests', 'fullstack'),
-      command: 'dioxus build --features web\ncargo run --release --features ssr --no-default-features',
+      cwd: path.join(process.cwd(), "playwright-tests", "fullstack"),
+      command:
+        "dioxus build --features web\ncargo run --release --features ssr --no-default-features",
       port: 3333,
       timeout: 10 * 60 * 1000,
       reuseExistingServer: !process.env.CI,
       stdout: "pipe",
-    }
+    },
   ],
 });
