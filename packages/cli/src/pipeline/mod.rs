@@ -6,7 +6,7 @@ use self::util::File;
 pub mod index_file;
 pub mod pull_assets;
 pub mod util;
-pub mod wasm;
+pub mod wasm_build;
 
 /// Represents a pipeline with it's own config and steps.
 pub struct Pipeline {

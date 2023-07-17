@@ -1,5 +1,5 @@
 use crate::pipeline::{
-    pull_assets::PullAssets, wasm::WasmBuild, BuildConfig, CrateInfo, Pipeline, PipelineConfig, index_file::IndexFile,
+    pull_assets::PullAssets, wasm_build::WasmBuild, BuildConfig, CrateInfo, Pipeline, PipelineConfig, index_file::IndexFile,
 };
 
 #[cfg(feature = "plugin")]
