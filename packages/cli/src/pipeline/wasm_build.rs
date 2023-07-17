@@ -66,6 +66,8 @@ impl PipelineStep for WasmBuild {
         // Get the final path to the built wasm file
         wasm_out_path.push(format!("{}.wasm", config.crate_info.name));
 
+        // Run bindgen on the file
+
         // Move output wasm to staging folder
         let wasm_out_path = config.copy_file_to_staging(wasm_out_path)?;
 

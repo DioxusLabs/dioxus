@@ -1,5 +1,5 @@
 use crate::{Result, Error};
-use std::{path::PathBuf, fs};
+use std::{path::PathBuf, fs, ffi::OsStr};
 
 /// Represents a File on the device's storage system.
 pub struct File {
@@ -81,21 +81,23 @@ pub fn from_dir(dir_path: PathBuf) -> Result<Vec<File>> {
                 // If directory, get files from it
                 from_dir(path)?;
             } else {
-                let file_name = item.file_name();
+                let file_name = path.file_stem().and_then(OsStr::to_str);
+                let file_name = match file_name {
+                    Some(v) => v,
+                    None => return Err(Error::ParseError("Failed to determine file name".to_string())),
+                };
 
-                // Split between actual name and extension
-                let split: Vec<_> = file_name.to_str().unwrap().split(".").collect();
-                if split.len() > 2 {
-                    return Err(Error::ParseError("Failed to determine asset name and extension: there is more than one `.` which is not supported.".to_string()));
-                }
+                let extension = path.extension().and_then(OsStr::to_str);
+                let extension = match extension {
+                    Some(v) => v,
+                    None => return Err(Error::ParseError("Failed to determine file extension".to_string())),
+                };
 
-                // We already know that these exist because of if statement above.
-                let name = split.get(0).unwrap().to_string();
-                let file_type = FileType::from(split.get(1).unwrap().to_string());
+                let file_type = FileType::from(extension.to_string());
 
                 // Add to list of files
                 files.push(File {
-                    name,
+                    name: file_name.to_string(),
                     path,
                     file_type,
                 })
