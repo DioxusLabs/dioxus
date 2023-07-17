@@ -7,6 +7,12 @@ const RELEASE_TARGET: &str = "target/wasm32-unknown-unknown/release";
 
 pub struct WasmBuild {}
 
+impl WasmBuild {
+    pub fn new() -> Box<Self> {
+        Box::new(Self {})
+    }
+}
+
 impl PipelineStep for WasmBuild {
     fn run(&mut self, config: &mut PipelineConfig) -> crate::Result<()> {
         log::info!("Building wasm...");
@@ -61,6 +67,8 @@ impl PipelineStep for WasmBuild {
 
         // Get the final path to the built wasm file
         wasm_out_path.push(format!("{}.wasm", config.crate_info.name));
+
+        log::info!("{:?}", wasm_out_path);
 
         // Create the file metadata
         let out_file = File {

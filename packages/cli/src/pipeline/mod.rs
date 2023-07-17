@@ -1,4 +1,4 @@
-use crate::Result;
+use crate::{Error, Result};
 use std::path::PathBuf;
 
 mod util;
@@ -52,6 +52,7 @@ impl Pipeline {
 
     /// Run the pipeline and all steps with it.
     pub fn run(mut self) -> Result<()> {
+        // In the future we could add multithreaded support
         for mut step in self.steps {
             step.run(&mut self.config)?;
         }
@@ -102,6 +103,46 @@ impl CrateInfo {
             path,
             name,
         }
+    }
+
+    /// Automagically get the crate config from ``Cargo.toml``.
+    pub fn from_toml(target_bin: Option<PathBuf>) -> Result<Self> {
+        let mut workspace_path = PathBuf::from("../");
+        let mut crate_path = PathBuf::from("./");
+
+        // If target bin, we should already be in a workspace
+        if let Some(bin) = target_bin {
+            workspace_path = PathBuf::from("./");
+            crate_path = bin
+        }
+
+        // Check if workspace is actually a workspace
+        let workspace_path = if let Ok(manifest) =
+            cargo_toml::Manifest::from_path(workspace_path.join("Cargo.toml"))
+        {
+            if manifest.workspace.is_some() {
+                Some(workspace_path)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        // Get target crate's Cargo.toml
+        let manifest = cargo_toml::Manifest::from_path(crate_path.join("Cargo.toml"))
+            .map_err(|e| Error::CargoError(e.to_string()))?;
+
+        // Get package name
+        let name = if let Some(package) = manifest.package {
+            package.name
+        } else {
+            return Err(Error::CargoError(
+                "No buildable crates found. Are you running this from the correct path?\nIf this is a workspace, use the --bin flag.".to_string(),
+            ));
+        };
+
+        Ok(Self::new(workspace_path, crate_path, name))
     }
 }
 

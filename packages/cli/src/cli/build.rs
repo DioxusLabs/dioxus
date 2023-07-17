@@ -15,14 +15,8 @@ pub struct Build {
 
 impl Build {
     pub fn build(self, bin: Option<PathBuf>) -> Result<()> {
-        let crate_config = crate::CrateConfig::new(bin)?;
-
         let config = PipelineConfig::new(
-            CrateInfo::new(
-                None,
-                crate_config.crate_dir,
-                crate_config.dioxus_config.application.name,
-            ),
+            CrateInfo::from_toml(bin)?,
             BuildConfig::new(
                 self.build.release,
                 self.build.verbose,
@@ -31,7 +25,7 @@ impl Build {
         );
 
         Pipeline::new(config)
-            .with_step(Box::new(WasmBuild {}))
+            .with_step(WasmBuild::new())
             .run()?;
 
         /*// change the release state.
