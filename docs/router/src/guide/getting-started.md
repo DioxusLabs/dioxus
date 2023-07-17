@@ -6,7 +6,7 @@ If you haven't already, make sure you install the [dioxus-cli](https://dioxuslab
 ```
 $ cargo install dioxus-cli
     ...
-$ rustup target add wasm32-unkown-unknown
+$ rustup target add wasm32-unknown-unknown
     ...
 ```
 
