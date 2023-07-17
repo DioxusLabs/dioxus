@@ -154,7 +154,7 @@ impl<'a, P: Clone + Serialize + Send + Sync + 'static> dioxus_ssr::incremental::
         crate::html_storage::serialize::encode_props_in_element(&self.cfg.props, to)?;
         // serialize the server state
         crate::html_storage::serialize::encode_in_element(
-            &*self.server_context.html_data().map_err(|err| {
+            &*self.server_context.html_data().map_err(|_| {
                 dioxus_ssr::incremental::IncrementalRendererError::Other(Box::new({
                     #[derive(Debug)]
                     struct HTMLDataReadError;

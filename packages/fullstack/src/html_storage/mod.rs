@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use std::sync::atomic::AtomicUsize;
 
 use serde::{de::DeserializeOwned, Serialize};
@@ -34,11 +36,22 @@ impl HTMLDataCursor {
     pub fn take<T: DeserializeOwned>(&self) -> Option<T> {
         let current = self.index.load(std::sync::atomic::Ordering::SeqCst);
         if current >= self.data.len() {
+            log::error!(
+                "Tried to take more data than was available, len: {}, index: {}",
+                self.data.len(),
+                current
+            );
             return None;
         }
         let mut cursor = &self.data[current];
         self.index.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        Some(postcard::from_bytes(&mut cursor).unwrap())
+        match postcard::from_bytes(&mut cursor) {
+            Ok(x) => Some(x),
+            Err(e) => {
+                log::error!("Error deserializing data: {:?}", e);
+                None
+            }
+        }
     }
 }
 

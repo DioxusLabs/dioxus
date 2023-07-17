@@ -106,7 +106,7 @@ mod server_fn_impl {
         }
 
         /// Insert some data into the html data store
-        pub(crate) async fn push_html_data<T: serde::Serialize>(
+        pub(crate) fn push_html_data<T: serde::Serialize>(
             &self,
             value: &T,
         ) -> Result<(), PoisonError<RwLockWriteGuard<'_, HTMLData>>> {

@@ -20,15 +20,15 @@ use serde::{de::DeserializeOwned, Serialize};
 pub fn from_server<O: 'static + Serialize + DeserializeOwned>(server_fn: impl Fn() -> O) -> O {
     #[cfg(feature = "ssr")]
     {
-        let data =
-            crate::html_storage::deserialize::take_server_data().unwrap_or_else(|| server_fn());
+        let data = server_fn();
         let sc = crate::prelude::server_context();
-        sc.push_html_data(&data);
+        if let Err(err) = sc.push_html_data(&data) {
+            log::error!("Failed to push HTML data: {}", err);
+        }
         data
     }
     #[cfg(not(feature = "ssr"))]
     {
-        let data = server_fn();
-        data
+        crate::html_storage::deserialize::take_server_data().unwrap_or_else(|| server_fn())
     }
 }
