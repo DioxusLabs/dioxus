@@ -13,6 +13,7 @@ OPTIONS:
         --example <EXAMPLE>      [default: ""]
         --platform <PLATFORM>    [default: "default_platform"]
         --release                [default: false]
+        --bin                    [default: None]
 ```
 
 You can use this command to build a project:
@@ -35,6 +36,14 @@ dioxus build --platform desktop
 ```
 # for web project
 dioxus build --platform web
+```
+
+## Specify workspace bin
+
+You can add the `--bin` option to select which crate you want Dioxus to build:
+
+```
+dioxus build --bin app
 ```
 
 ## Build Example
