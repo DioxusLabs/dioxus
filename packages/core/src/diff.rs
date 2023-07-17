@@ -30,7 +30,7 @@ impl<'b> VirtualDom {
                 .try_load_node()
                 .expect("Call rebuild before diffing");
 
-            use RenderReturn::{Aborted, Pending, Ready};
+            use RenderReturn::{Aborted, Ready};
 
             match (old, new) {
                 // Normal pathway
@@ -42,27 +42,12 @@ impl<'b> VirtualDom {
                 // Just move over the placeholder
                 (Aborted(l), Aborted(r)) => r.id.set(l.id.get()),
 
-                // Becomes async, do nothing while we wait
-                (Ready(_nodes), Pending(_fut)) => self.diff_ok_to_async(_nodes, scope),
-
                 // Placeholder becomes something
                 // We should also clear the error now
                 (Aborted(l), Ready(r)) => self.replace_placeholder(l, [r]),
-
-                (Aborted(_), Pending(_)) => todo!("async should not resolve here"),
-                (Pending(_), Ready(_)) => todo!("async should not resolve here"),
-                (Pending(_), Aborted(_)) => todo!("async should not resolve here"),
-                (Pending(_), Pending(_)) => {
-                    // All suspense should resolve before we diff it again
-                    panic!("Should not roll from suspense to suspense.");
-                }
             };
         }
         self.scope_stack.pop();
-    }
-
-    fn diff_ok_to_async(&mut self, _new: &'b VNode<'b>, _scope: ScopeId) {
-        //
     }
 
     fn diff_ok_to_err(&mut self, l: &'b VNode<'b>, p: &'b VPlaceholder) {
@@ -139,9 +124,8 @@ impl<'b> VirtualDom {
             .dynamic_nodes
             .iter()
             .zip(right_template.dynamic_nodes.iter())
-            .enumerate()
-            .for_each(|(idx, (left_node, right_node))| {
-                self.diff_dynamic_node(left_node, right_node, right_template, idx);
+            .for_each(|(left_node, right_node)| {
+                self.diff_dynamic_node(left_node, right_node, right_template);
             });
 
         // Make sure the roots get transferred over while we're here
@@ -160,13 +144,12 @@ impl<'b> VirtualDom {
         left_node: &'b DynamicNode<'b>,
         right_node: &'b DynamicNode<'b>,
         node: &'b VNode<'b>,
-        idx: usize,
     ) {
         match (left_node, right_node) {
             (Text(left), Text(right)) => self.diff_vtext(left, right, node),
             (Fragment(left), Fragment(right)) => self.diff_non_empty_fragment(left, right),
             (Placeholder(left), Placeholder(right)) => right.id.set(left.id.get()),
-            (Component(left), Component(right)) => self.diff_vcomponent(left, right, node, idx),
+            (Component(left), Component(right)) => self.diff_vcomponent(left, right, node),
             (Placeholder(left), Fragment(right)) => self.replace_placeholder(left, *right),
             (Fragment(left), Placeholder(right)) => self.node_to_placeholder(left, right),
             _ => todo!("This is an usual custom case for dynamic nodes. We don't know how to handle it yet."),
@@ -190,7 +173,6 @@ impl<'b> VirtualDom {
         left: &'b VComponent<'b>,
         right: &'b VComponent<'b>,
         right_template: &'b VNode<'b>,
-        idx: usize,
     ) {
         if std::ptr::eq(left, right) {
             return;
@@ -198,7 +180,7 @@ impl<'b> VirtualDom {
 
         // Replace components that have different render fns
         if left.render_fn != right.render_fn {
-            return self.replace_vcomponent(right_template, right, idx, left);
+            return self.replace_vcomponent(right_template, right, left);
         }
 
         // Make sure the new vcomponent has the right scopeid associated to it
@@ -235,10 +217,9 @@ impl<'b> VirtualDom {
         &mut self,
         right_template: &'b VNode<'b>,
         right: &'b VComponent<'b>,
-        idx: usize,
         left: &'b VComponent<'b>,
     ) {
-        let m = self.create_component_node(right_template, right, idx);
+        let m = self.create_component_node(right_template, right);
 
         let pre_edits = self.mutations.edits.len();
 
@@ -297,8 +278,7 @@ impl<'b> VirtualDom {
             None => self.replace(left, [right]),
             Some(components) => components
                 .into_iter()
-                .enumerate()
-                .for_each(|(idx, (l, r))| self.diff_vcomponent(l, r, right, idx)),
+                .for_each(|(l, r)| self.diff_vcomponent(l, r, right)),
         }
     }
 
@@ -735,7 +715,6 @@ impl<'b> VirtualDom {
                         match unsafe { self.scopes[scope].root_node().extend_lifetime_ref() } {
                             RenderReturn::Ready(node) => self.push_all_real_nodes(node),
                             RenderReturn::Aborted(_node) => todo!(),
-                            _ => todo!(),
                         }
                     }
                 }
@@ -937,7 +916,6 @@ impl<'b> VirtualDom {
         match unsafe { self.scopes[scope].root_node().extend_lifetime_ref() } {
             RenderReturn::Ready(t) => self.remove_node(t, gen_muts),
             RenderReturn::Aborted(placeholder) => self.remove_placeholder(placeholder, gen_muts),
-            _ => todo!(),
         };
 
         // Restore the props back to the vcomponent in case it gets rendered again

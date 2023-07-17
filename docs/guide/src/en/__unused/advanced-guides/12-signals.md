@@ -94,8 +94,10 @@ Calling `deref` or `deref_mut` is actually more complex than it seems. When a va
 
 Sometimes you want a signal to propagate across your app, either through far-away siblings or through deeply-nested components. In these cases, we use Dirac: Dioxus's first-class state management toolkit. Dirac atoms automatically implement the Signal API. This component will bind the input element to the `TITLE` atom.
 
+
 ```rust, no_run
-const TITLE: Atom<String> = || "".to_string();
+const TITLE: Atom<String> = Atom(|| "".to_string());
+
 const Provider: Component = |cx|{
     let title = use_signal(cx, &TITLE);
     render!(input { value: title })
@@ -131,7 +133,8 @@ By default, Dioxus is limited when you use iter/map. With the `For` component, y
 Dioxus automatically understands how to use your signals when mixed with iterators through `Deref`/`DerefMut`. This lets you efficiently map collections while avoiding the re-rendering of lists. In essence, signals act as a hint to Dioxus on how to avoid un-necessary checks and renders, making your app faster.
 
 ```rust, no_run
-const DICT: AtomFamily<String, String> = |_| {};
+const DICT: AtomFamily<String, String> = AtomFamily(|_| {});
+
 const List: Component = |cx|{
     let dict = use_signal(cx, &DICT);
     cx.render(rsx!(
@@ -140,14 +143,6 @@ const List: Component = |cx|{
         }
     ))
 };
-```
-
-## Remote Signals
-
-Apps that use signals will enjoy a pleasant hybrid of server-side and client-side rendering.
-
-```rust, no_run
-
 ```
 
 ## How does it work?
