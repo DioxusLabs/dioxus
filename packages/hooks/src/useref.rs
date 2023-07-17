@@ -16,7 +16,7 @@ use std::{
 /// writes through the `write` method. Whenever `write` is called, the component
 /// that initialized the hook will be marked as "dirty".
 ///
-/// ```rust, ignore
+/// ```rust, no_run
 /// let val = use_ref(|| HashMap::<u32, String>::new());
 ///
 /// // using `write` will give us a `RefMut` to the inner value, which we can call methods on
@@ -26,7 +26,7 @@ use std::{
 ///
 /// You can avoid this default behavior with `write_silent`
 ///
-/// ```ignore
+/// ```rust, no_run
 /// // with `write_silent`, the component will not be re-rendered
 /// val.write_silent().insert(2, "goodbye".to_string());
 /// ```
@@ -35,7 +35,7 @@ use std::{
 ///
 /// To read values out of the refcell, you can use the `read` method which will retrun a `Ref`.
 ///
-/// ```rust, ignore
+/// ```rust, no_run
 /// let map: Ref<_> = val.read();
 ///
 /// let item = map.get(&1);
@@ -43,7 +43,7 @@ use std::{
 ///
 /// To get an &T out of the RefCell, you need to "reborrow" through the Ref:
 ///
-/// ```rust, ignore
+/// ```rust, no_run
 /// let read = val.read();
 /// let map = &*read;
 /// ```
@@ -54,10 +54,10 @@ use std::{
 /// Typically this will be a collection like a HashMap or a Vec. To create new
 /// elements from the collection, we can use `read()` directly in our rsx!.
 ///
-/// ```rust, ignore
+/// ```rust, no_run
 /// rsx!{
 ///     val.read().iter().map(|(k, v)| {
-///         rsx!{ key: "{k}", value: "{v}" }
+///         rsx!{ key: "{k}", "{v}" }
 ///     })
 /// }
 /// ```
@@ -66,9 +66,9 @@ use std::{
 /// "render" inside the iterator. For some cases you might need to collect into
 /// a temporary Vec.
 ///
-/// ```rust, ignore
+/// ```rust, no_run
 /// let items = val.read().iter().map(|(k, v)| {
-///     cx.render(rsx!{ key: "{k}", value: "{v}" })
+///     cx.render(rsx!{ key: "{k}", "{v}" })
 /// });
 ///
 /// // collect into a Vec
@@ -80,9 +80,9 @@ use std::{
 ///
 /// To access values from a `UseRef` in an async context, you need to detach it
 /// from the current scope's lifetime, making it a `'static` value. This is done
-/// by simply calling `ToOnwed` or `Clone`.
+/// by simply calling `to_owned` or `clone`.
 ///
-/// ```rust, ignore
+/// ```rust, no_run
 /// let val = use_ref(|| HashMap::<u32, String>::new());
 ///
 /// cx.spawn({
@@ -95,15 +95,15 @@ use std::{
 /// ```
 ///
 /// If you're working with lots of values like UseState and UseRef, you can use the
-/// `clone!` macro to make it easier to write the above code.
+/// `to_owned!` macro to make it easier to write the above code.
 ///
-/// ```rust, ignore
+/// ```rust, no_run
 /// let val1 = use_ref(|| HashMap::<u32, String>::new());
 /// let val2 = use_ref(|| HashMap::<u32, String>::new());
 /// let val3 = use_ref(|| HashMap::<u32, String>::new());
 ///
 /// cx.spawn({
-///     clone![val1, val2, val3];
+///     to_owned![val1, val2, val3];
 ///     async move {
 ///         some_work().await;
 ///         val.write().insert(1, "hello".to_string());
@@ -194,7 +194,7 @@ impl<T> UseRef<T> {
     /// Note: You can always "reborrow" the value through the RefCell.
     /// This method just does it for you automatically.
     ///
-    /// ```rust, ignore
+    /// ```rust, no_run
     /// let val = use_ref(|| HashMap::<u32, String>::new());
     ///
     ///
@@ -214,7 +214,7 @@ impl<T> UseRef<T> {
     /// Note: You can always "reborrow" the value through the RefCell.
     /// This method just does it for you automatically.
     ///
-    /// ```rust, ignore
+    /// ```rust, no_run
     /// let val = use_ref(|| HashMap::<u32, String>::new());
     ///
     ///
