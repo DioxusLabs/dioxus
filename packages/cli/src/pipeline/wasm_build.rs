@@ -1,7 +1,4 @@
-use crate::{
-    pipeline::util::{File, FileType, self},
-    tools, Result,
-};
+use crate::{pipeline::util, tools, Result};
 
 use super::{PipelineConfig, PipelineStep};
 use std::path::PathBuf;

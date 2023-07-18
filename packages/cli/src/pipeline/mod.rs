@@ -229,8 +229,11 @@ impl BuildConfig {
 /// Represents the priority of the step: How important it is to run first vs last.
 #[derive(Eq, PartialEq, Ord, PartialOrd)]
 pub enum StepPriority {
+    /// Ideal for steps that generate more files that need to be processed.
     High,
+    /// Ideal for steps that process existing files and convert them into new files.
     Medium,
+    /// Ideal for steps that do final touches, bundling, or similar.
     Low,
 }
 

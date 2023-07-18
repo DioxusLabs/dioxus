@@ -25,6 +25,6 @@ impl PipelineStep for IndexFile {
     }
 
     fn priority(&self) -> super::StepPriority {
-        super::StepPriority::Low
+        super::StepPriority::High
     }
 }
