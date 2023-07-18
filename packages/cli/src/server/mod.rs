@@ -39,18 +39,11 @@ pub mod desktop;
 pub mod web;
 
 /// Sets up a file watcher
-async fn setup_file_watcher(
-    platform: Platform,
+async fn setup_file_watcher<F: Fn() -> Result<BuildResult> + Send + 'static>(
+    build_with: F,
     config: &CrateConfig,
-    reload_tx: Option<Sender<()>>,
     web_info: Option<WebServerInfo>,
 ) -> Result<RecommendedWatcher> {
-    let build_manager = BuildManager {
-        platform,
-        config: config.clone(),
-        reload_tx,
-    };
-
     let mut last_update_time = chrono::Local::now().timestamp();
 
     // file watcher: check file change
@@ -67,7 +60,7 @@ async fn setup_file_watcher(
         let config = watcher_config.clone();
         if let Ok(e) = info {
             if chrono::Local::now().timestamp() > last_update_time {
-                match build_manager.rebuild() {
+                match build_with() {
                     Ok(res) => {
                         last_update_time = chrono::Local::now().timestamp();
 
@@ -108,11 +101,11 @@ async fn setup_file_watcher(
 
 // Todo: reduce duplication and merge with setup_file_watcher()
 /// Sets up a file watcher with hot reload
-async fn setup_file_watcher_hot_reload(
+async fn setup_file_watcher_hot_reload<F: Fn() -> Result<BuildResult> + Send + 'static>(
     config: &CrateConfig,
     hot_reload_tx: Sender<Template<'static>>,
     file_map: Arc<Mutex<FileMap<HtmlCtx>>>,
-    build_manager: Arc<BuildManager>,
+    build_with: F,
     web_info: Option<WebServerInfo>,
 ) -> Result<RecommendedWatcher> {
     // file watcher: check file change
@@ -138,7 +131,7 @@ async fn setup_file_watcher_hot_reload(
                     for path in evt.paths.clone() {
                         // if this is not a rust file, rebuild the whole project
                         if path.extension().and_then(|p| p.to_str()) != Some("rs") {
-                            match build_manager.rebuild() {
+                            match build_with() {
                                 Ok(res) => {
                                     print_console_info(
                                         &config,
@@ -164,7 +157,7 @@ async fn setup_file_watcher_hot_reload(
                                 messages.extend(msgs);
                             }
                             Ok(UpdateResult::NeedsRebuild) => {
-                                match build_manager.rebuild() {
+                                match build_with() {
                                     Ok(res) => {
                                         print_console_info(
                                             &config,
@@ -208,36 +201,4 @@ async fn setup_file_watcher_hot_reload(
     }
 
     Ok(watcher)
-}
-
-pub struct BuildManager {
-    platform: Platform,
-    config: CrateConfig,
-    reload_tx: Option<broadcast::Sender<()>>,
-}
-
-impl BuildManager {
-    fn rebuild(&self) -> Result<BuildResult> {
-        log::info!("🪁 Rebuild project");
-        match self.platform {
-            Platform::Web => {
-                let result = builder::build(&self.config, true)?;
-                // change the websocket reload state to true;
-                // the page will auto-reload.
-                if self
-                    .config
-                    .dioxus_config
-                    .web
-                    .watcher
-                    .reload_html
-                    .unwrap_or(false)
-                {
-                    let _ = Serve::regen_dev_page(&self.config);
-                }
-                let _ = self.reload_tx.as_ref().map(|tx| tx.send(()));
-                Ok(result)
-            }
-            Platform::Desktop => start_desktop(&self.config),
-        }
-    }
 }

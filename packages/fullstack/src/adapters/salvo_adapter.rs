@@ -378,7 +378,7 @@ impl ServerFnHandler {
             .to_vec()
             .into();
         let body = hyper::body::to_bytes(req.body_mut().unwrap()).await;
-        let Ok(body)=body else {
+        let Ok(body) = body else {
             handle_error(body.err().unwrap(), res);
             return;
         };

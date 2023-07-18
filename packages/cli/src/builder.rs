@@ -364,6 +364,7 @@ pub fn build_desktop(config: &CrateConfig, _is_serve: bool) -> Result<BuildResul
                 .display()
         );
     }
+    println!("build desktop done");
 
     Ok(BuildResult {
         warnings: vec![],

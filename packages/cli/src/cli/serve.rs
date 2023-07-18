@@ -57,21 +57,7 @@ impl Serve {
                     .await?;
             }
             cfg::Platform::Desktop => {
-                crate::builder::build_desktop(&crate_config, true)?;
-
-                match &crate_config.executable {
-                    crate::ExecutableType::Binary(name)
-                    | crate::ExecutableType::Lib(name)
-                    | crate::ExecutableType::Example(name) => {
-                        let mut file = crate_config.out_dir.join(name);
-                        if cfg!(windows) {
-                            file.set_extension("exe");
-                        }
-                        Command::new(file.to_str().unwrap())
-                            .stdout(Stdio::inherit())
-                            .output()?;
-                    }
-                }
+                server::desktop::startup(crate_config.clone()).await?;
             }
         }
         Ok(())

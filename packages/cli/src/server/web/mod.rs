@@ -3,7 +3,7 @@ use crate::{
     serve::Serve,
     server::{
         output::{print_console_info, PrettierOptions, WebServerInfo},
-        setup_file_watcher, setup_file_watcher_hot_reload, BuildManager,
+        setup_file_watcher, setup_file_watcher_hot_reload,
     },
     BuildResult, CrateConfig, Result,
 };
@@ -86,9 +86,12 @@ pub async fn serve_default(
     // We got to own watcher so that it exists for the duration of serve
     // Otherwise full reload won't work.
     let _watcher = setup_file_watcher(
-        crate::cfg::Platform::Web,
+        {
+            let config = config.clone();
+            let reload_tx = reload_tx.clone();
+            move || build(&config, &reload_tx)
+        },
         &config,
-        Some(reload_tx.clone()),
         Some(WebServerInfo {
             ip: ip.clone(),
             port,
@@ -148,18 +151,12 @@ pub async fn serve_hot_reload(
     }
 
     let file_map = Arc::new(Mutex::new(map));
-    let build_manager = Arc::new(BuildManager {
-        platform: crate::cfg::Platform::Web,
-        config: config.clone(),
-        reload_tx: Some(reload_tx.clone()),
-    });
 
     let hot_reload_tx = broadcast::channel(100).0;
 
     // States
     let hot_reload_state = Arc::new(HotReloadState {
         messages: hot_reload_tx.clone(),
-        build_manager: build_manager.clone(),
         file_map: file_map.clone(),
         watcher_config: config.clone(),
     });
@@ -175,7 +172,11 @@ pub async fn serve_hot_reload(
         &config,
         hot_reload_tx,
         file_map,
-        build_manager,
+        {
+            let config = config.clone();
+            let reload_tx = reload_tx.clone();
+            move || build(&config, &reload_tx)
+        },
         Some(WebServerInfo {
             ip: ip.clone(),
             port,
@@ -472,4 +473,21 @@ async fn ws_handler(
 
         reload_watcher.await.unwrap();
     })
+}
+
+fn build(config: &CrateConfig, reload_tx: &Sender<()>) -> Result<BuildResult> {
+    let result = builder::build(&config, true)?;
+    // change the websocket reload state to true;
+    // the page will auto-reload.
+    if config
+        .dioxus_config
+        .web
+        .watcher
+        .reload_html
+        .unwrap_or(false)
+    {
+        let _ = Serve::regen_dev_page(&config);
+    }
+    let _ = reload_tx.send(());
+    Ok(result)
 }

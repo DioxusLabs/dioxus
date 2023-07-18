@@ -3,7 +3,7 @@ use crate::{
     serve::Serve,
     server::{
         output::{print_console_info, PrettierOptions, WebServerInfo},
-        setup_file_watcher, setup_file_watcher_hot_reload, BuildManager,
+        setup_file_watcher, setup_file_watcher_hot_reload,
     },
     BuildResult, CrateConfig, Result,
 };
@@ -72,7 +72,15 @@ pub async fn serve_default(config: CrateConfig) -> Result<()> {
 
     // We got to own watcher so that it exists for the duration of serve
     // Otherwise full reload won't work.
-    let _watcher = setup_file_watcher(crate::cfg::Platform::Desktop, &config, None, None).await?;
+    let _watcher = setup_file_watcher(
+        {
+            let config = config.clone();
+            move || start_desktop(&config)
+        },
+        &config,
+        None,
+    )
+    .await?;
 
     // Print serve info
     print_console_info(
@@ -107,15 +115,13 @@ pub async fn serve_hot_reload(config: CrateConfig) -> Result<()> {
     }
 
     let file_map = Arc::new(Mutex::new(map));
-    let build_manager = Arc::new(BuildManager {
-        platform: crate::cfg::Platform::Web,
-        config: config.clone(),
-        reload_tx: None,
-    });
 
     let (hot_reload_tx, mut hot_reload_rx) = broadcast::channel(100);
 
     // States
+    // The open interprocess sockets
+    let channels = Arc::new(Mutex::new(Vec::new()));
+
     // Setup file watcher
     // We got to own watcher so that it exists for the duration of serve
     // Otherwise hot reload won't work.
@@ -123,7 +129,17 @@ pub async fn serve_hot_reload(config: CrateConfig) -> Result<()> {
         &config,
         hot_reload_tx,
         file_map.clone(),
-        build_manager,
+        {
+            let config = config.clone();
+
+            let channels = channels.clone();
+            move || {
+                for channel in &mut *channels.lock().unwrap() {
+                    send_msg(HotReloadMsg::Shutdown, channel);
+                }
+                start_desktop(&config)
+            }
+        },
         None,
     )
     .await?;
@@ -152,8 +168,6 @@ pub async fn serve_hot_reload(config: CrateConfig) -> Result<()> {
             }
         }
     }
-
-    let channels = Arc::new(Mutex::new(Vec::new()));
 
     match LocalSocketListener::bind("@dioxusin") {
         Ok(local_socket_stream) => {
@@ -195,10 +209,6 @@ pub async fn serve_hot_reload(config: CrateConfig) -> Result<()> {
                     }
                 }
             });
-
-            // for channel in &mut *channels.lock().unwrap() {
-            //     send_msg(HotReloadMsg::Shutdown, channel);
-            // }
 
             while let Ok(template) = hot_reload_rx.recv().await {
                 let channels = &mut *channels.lock().unwrap();
