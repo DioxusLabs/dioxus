@@ -28,7 +28,7 @@ pub struct Bindgen {
 }
 
 impl Bindgen {
-    /// Get wasm-bindgen CLI's path.
+    /// Get wasm-bindgen tool.
     pub fn get() -> Result<Self> {
         // Check if exists
         let tool_storage = ToolStorage::get()?;

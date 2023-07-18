@@ -4,6 +4,9 @@ use std::{ffi::OsStr, fs, path::PathBuf};
 mod bindgen;
 pub use bindgen::Bindgen;
 
+mod sass;
+pub use sass::Sass;
+
 const APP_DATA_NAME: &str = "dioxus";
 const TEMP_NAME: &str = "temp";
 const TOOLS_NAME: &str = "tools";
@@ -88,11 +91,16 @@ impl ToolStorage {
         }
 
         // Copy new tool
-        let full_name = format!(
-            "{}.{}",
-            tool_name,
-            tool_path.extension().unwrap().to_str().unwrap()
-        );
+        let full_name = if cfg!(target_os = "windows") {
+            format!(
+                "{}.{}",
+                tool_name.clone(),
+                tool_path.extension().unwrap().to_str().unwrap()
+            )
+        } else {
+            tool_name.clone()
+        };
+
         let new_tool_path = self.path.join(full_name);
         fs_extra::file::copy(
             &tool_path,
@@ -106,6 +114,40 @@ impl ToolStorage {
                 "Failed to replace tool `{}` from path `{}` | {} ",
                 tool_name,
                 tool_path.display(),
+                e.to_string(),
+            ))
+        })?;
+
+        Ok(new_tool_path)
+    }
+
+    /// Install a new tool dir, replacing it if it exists.
+    pub fn install_tool_dir(
+        &mut self,
+        tool_name: String,
+        tool_dir_path: PathBuf,
+    ) -> Result<PathBuf> {
+        // Delete installed tool
+        if self.is_installed(tool_name.clone()) {
+            self.delete_tool(tool_name.clone())?;
+        }
+
+        // Copy new tool
+
+        let new_tool_path = self.path.join(tool_name.clone());
+
+        fs_extra::dir::copy(
+            &tool_dir_path,
+            &new_tool_path,
+            &fs_extra::dir::CopyOptions::new()
+                .overwrite(true)
+                .skip_exist(false),
+        )
+        .map_err(|e| {
+            Error::CustomError(format!(
+                "Failed to replace tool `{}` from path `{}` | {} ",
+                tool_name,
+                tool_dir_path.display(),
                 e.to_string(),
             ))
         })?;

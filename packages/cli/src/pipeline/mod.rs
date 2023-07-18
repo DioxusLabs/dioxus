@@ -1,7 +1,7 @@
 use fs_extra::{dir::CopyOptions as DirCopyOptions, file::CopyOptions as FileCopyOptions};
 
 use crate::{Error, Result};
-use std::path::PathBuf;
+use std::{path::PathBuf, time::Duration};
 
 use self::util::File;
 
@@ -35,6 +35,9 @@ impl Pipeline {
 
     /// Run the pipeline and all steps with it.
     pub fn run(mut self) -> Result<()> {
+        // Benchmarking
+        let time_started = std::time::Instant::now();
+
         // Create staging
         self.config.create_fresh_staging()?;
 
@@ -58,7 +61,13 @@ impl Pipeline {
 
         // Delete staging
         self.config.delete_staging()?;
-        log::info!("Pipeline finished successfully!");
+
+        // End benchmark
+
+        let elapsed = time_started.elapsed();
+        let seconds = elapsed.as_secs();
+        let millis = u32::elapsed.subsec_millis();
+        log::info!("Pipeline finished successfully in {}.{:.1}s!", seconds, millis);
         Ok(())
     }
 }
@@ -100,7 +109,7 @@ impl PipelineConfig {
         }
         Ok(())
     }
-    
+
     /// Returns a [`Pathbuf`] to the staging directory.
     pub fn staging_path(&self) -> PathBuf {
         self.crate_info.path.join(Self::STAGING_PATH)
