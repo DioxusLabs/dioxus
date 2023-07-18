@@ -87,16 +87,16 @@ impl LiveViewPool {
 /// }
 /// ```
 pub trait LiveViewSocket:
-    SinkExt<String, Error = LiveViewError>
-    + StreamExt<Item = Result<String, LiveViewError>>
+    SinkExt<Vec<u8>, Error = LiveViewError>
+    + StreamExt<Item = Result<Vec<u8>, LiveViewError>>
     + Send
     + 'static
 {
 }
 
 impl<S> LiveViewSocket for S where
-    S: SinkExt<String, Error = LiveViewError>
-        + StreamExt<Item = Result<String, LiveViewError>>
+    S: SinkExt<Vec<u8>, Error = LiveViewError>
+        + StreamExt<Item = Result<Vec<u8>, LiveViewError>>
         + Send
         + 'static
 {
