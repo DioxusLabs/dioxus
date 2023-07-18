@@ -160,7 +160,7 @@ pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), Li
                         ws.send(b"__pong__".to_vec()).await?;
                     }
                     Some(Ok(evt)) => {
-                        if let Ok(message) = serde_json::from_str::<IpcMessage>(&*String::from_utf8_lossy(evt)) {
+                        if let Ok(message) = serde_json::from_str::<IpcMessage>(&String::from_utf8_lossy(evt)) {
                             match message {
                                 IpcMessage::Event(evt) => {
                                     // Intercept the mounted event and insert a custom element type
