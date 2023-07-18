@@ -35,10 +35,10 @@ members = [
     # Full project examples
     "examples/tailwind",
     "examples/PWA-example",
-    # Playwrite tests
-    "playwrite-tests/liveview",
-    "playwrite-tests/web",
-    "playwrite-tests/fullstack",
+    # Playwright tests
+    "playwright-tests/liveview",
+    "playwright-tests/web",
+    "playwright-tests/fullstack",
 ]
 exclude = ["examples/mobile_demo"]
 

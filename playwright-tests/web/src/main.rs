@@ -1,4 +1,5 @@
-// This test is used by playwrite configured in the root of the repo
+// This test is used by playwright configured in the root of the repo
+
 use dioxus::prelude::*;
 
 fn app(cx: Scope) -> Element {

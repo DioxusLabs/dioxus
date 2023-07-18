@@ -54,7 +54,7 @@ pub fn App(cx: Scope) -> Element {
 fn DataEditor(cx: Scope, id: usize) -> Element {
     let cool_data = use_shared_state::<CoolData>(cx).unwrap().read();
 
-    let my_data = &cool_data.view(&id).unwrap();
+    let my_data = &cool_data.view(id).unwrap();
 
     render!(p {
         "{my_data}"
@@ -68,7 +68,7 @@ fn DataView(cx: Scope, id: usize) -> Element {
     let oninput = |e: FormEvent| cool_data.write().set(*id, e.value.clone());
 
     let cool_data = cool_data.read();
-    let my_data = &cool_data.view(&id).unwrap();
+    let my_data = &cool_data.view(id).unwrap();
 
     render!(input {
         oninput: oninput,
