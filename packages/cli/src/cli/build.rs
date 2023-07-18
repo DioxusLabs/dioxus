@@ -32,13 +32,10 @@ impl Build {
             crate_config.set_features(self.build.features.unwrap());
         }
 
-        let platform = self.build.platform.unwrap_or_else(|| {
-            crate_config
-                .dioxus_config
-                .application
-                .default_platform
-                .clone()
-        });
+        let platform = self
+            .build
+            .platform
+            .unwrap_or(crate_config.dioxus_config.application.default_platform);
 
         #[cfg(feature = "plugin")]
         let _ = PluginManager::on_build_start(&crate_config, &platform);

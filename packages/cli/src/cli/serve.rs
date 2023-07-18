@@ -34,13 +34,10 @@ impl Serve {
         // Subdirectories don't work with the server
         crate_config.dioxus_config.web.app.base_path = None;
 
-        let platform = self.serve.platform.unwrap_or_else(|| {
-            crate_config
-                .dioxus_config
-                .application
-                .default_platform
-                .clone()
-        });
+        let platform = self
+            .serve
+            .platform
+            .unwrap_or(crate_config.dioxus_config.application.default_platform);
 
         match platform {
             cfg::Platform::Web => {

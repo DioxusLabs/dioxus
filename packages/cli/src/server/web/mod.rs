@@ -473,7 +473,7 @@ async fn ws_handler(
 }
 
 fn build(config: &CrateConfig, reload_tx: &Sender<()>) -> Result<BuildResult> {
-    let result = builder::build(&config, true)?;
+    let result = builder::build(config, true)?;
     // change the websocket reload state to true;
     // the page will auto-reload.
     if config
@@ -483,7 +483,7 @@ fn build(config: &CrateConfig, reload_tx: &Sender<()>) -> Result<BuildResult> {
         .reload_html
         .unwrap_or(false)
     {
-        let _ = Serve::regen_dev_page(&config);
+        let _ = Serve::regen_dev_page(config);
     }
     let _ = reload_tx.send(());
     Ok(result)
