@@ -4,6 +4,7 @@ use std::any::Any;
 use std::cell::Cell;
 use std::cell::Ref;
 use std::cell::RefCell;
+use std::fmt::Debug;
 use std::future::Future;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -27,7 +28,7 @@ pub fn use_server_future<T, F, D>(
     future: impl FnOnce(D::Out) -> F,
 ) -> Option<&UseServerFuture<T>>
 where
-    T: 'static + Serialize + DeserializeOwned,
+    T: 'static + Serialize + DeserializeOwned + Debug,
     F: Future<Output = T> + 'static,
     D: UseFutureDep,
 {
@@ -39,7 +40,24 @@ where
         dependencies: Vec::new(),
     });
 
-    let first_run = { state.value.borrow().as_ref().is_none() };
+    let first_run = { state.value.borrow().as_ref().is_none() && state.task.get().is_none() };
+
+    #[cfg(not(feature = "ssr"))]
+    {
+        if first_run {
+            match crate::html_storage::deserialize::take_server_data() {
+                Some(data) => {
+                    log::trace!("Loaded {data:?} from server");
+                    *state.value.borrow_mut() = Some(Box::new(data));
+                    state.needs_regen.set(false);
+                    return Some(state);
+                }
+                None => {
+                    log::trace!("Failed to load from server... running future");
+                }
+            };
+        }
+    }
 
     if dependencies.clone().apply(&mut state.dependencies) || state.needs_regen.get() {
         // We don't need regen anymore
@@ -70,10 +88,7 @@ where
             }
             #[cfg(not(feature = "ssr"))]
             {
-                data = match crate::html_storage::deserialize::take_server_data() {
-                    Some(data) => data,
-                    None => fut.await,
-                };
+                data = fut.await;
             }
             *value.borrow_mut() = Some(Box::new(data));
 
@@ -82,18 +97,15 @@ where
     }
 
     if first_run {
-        log::trace!("Suspending first run of use_server_future");
-        cx.suspend();
+        #[cfg(feature = "ssr")]
+        {
+            log::trace!("Suspending first run of use_server_future");
+            cx.suspend();
+        }
         None
     } else {
         Some(state)
     }
-}
-
-pub enum FutureState<'a, T> {
-    Pending,
-    Complete(&'a T),
-    Regenerating(&'a T), // the old value
 }
 
 pub struct UseServerFuture<T> {
@@ -102,12 +114,6 @@ pub struct UseServerFuture<T> {
     task: Cell<Option<TaskId>>,
     dependencies: Vec<Box<dyn Any>>,
     value: Rc<RefCell<Option<Box<T>>>>,
-}
-
-pub enum UseFutureState<'a, T> {
-    Pending,
-    Complete(&'a T),
-    Reloading(&'a T),
 }
 
 impl<T> UseServerFuture<T> {

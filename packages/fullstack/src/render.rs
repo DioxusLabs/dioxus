@@ -12,7 +12,7 @@ use serde::Serialize;
 use std::sync::RwLock;
 use tokio::task::spawn_blocking;
 
-use crate::{prelude::*, server_context::with_server_context};
+use crate::prelude::*;
 use dioxus::prelude::*;
 
 enum SsrRendererPool {
@@ -300,6 +300,7 @@ impl<P: Clone + Serialize + Send + Sync + 'static> dioxus_ssr::incremental::Wrap
 }
 
 /// A rendered response from the server.
+#[derive(Debug)]
 pub struct RenderResponse {
     pub(crate) html: String,
     pub(crate) freshness: RenderFreshness,

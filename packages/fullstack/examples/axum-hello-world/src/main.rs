@@ -23,16 +23,13 @@ fn app(cx: Scope<AppProps>) -> Element {
 
 fn Child(cx: Scope) -> Element {
     let state = use_server_future(cx, (), |()| async move {
-        #[cfg(not(feature = "ssr"))]
-        panic!();
-        #[cfg(feature = "ssr")]
-        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-        return 1;
-    })?;
-
-    log::info!("running child");
-    let state = state.value();
-    log::info!("child state: {:?}", state);
+        loop {
+            if let Ok(res) = get_server_data().await {
+                break res;
+            }
+        }
+    })?
+    .value();
 
     let mut count = use_state(cx, || 0);
     let text = use_state(cx, || "...".to_string());
@@ -72,12 +69,12 @@ async fn post_server_data(data: String) -> Result<(), ServerFnError> {
 
 #[server(GetServerData)]
 async fn get_server_data() -> Result<String, ServerFnError> {
-    Ok("Hello from the server!".to_string())
+    Ok(reqwest::get("https://httpbin.org/ip").await?.text().await?)
 }
 
 fn main() {
     #[cfg(feature = "web")]
-    wasm_logger::init(wasm_logger::Config::default());
+    wasm_logger::init(wasm_logger::Config::new(log::Level::Trace));
     #[cfg(feature = "ssr")]
     simple_logger::SimpleLogger::new().init().unwrap();
 
