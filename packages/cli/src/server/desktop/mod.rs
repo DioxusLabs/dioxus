@@ -1,51 +1,24 @@
 use crate::{
-    builder,
-    serve::Serve,
     server::{
-        output::{print_console_info, PrettierOptions, WebServerInfo},
+        output::{print_console_info, PrettierOptions},
         setup_file_watcher, setup_file_watcher_hot_reload,
     },
     BuildResult, CrateConfig, Result,
 };
-use axum::{
-    body::{Full, HttpBody},
-    extract::{ws::Message, Extension, TypedHeader, WebSocketUpgrade},
-    http::{
-        header::{HeaderName, HeaderValue},
-        Method, Response, StatusCode,
-    },
-    response::IntoResponse,
-    routing::{get, get_service},
-    Router,
-};
-use axum_server::tls_rustls::RustlsConfig;
-use cargo_metadata::diagnostic::Diagnostic;
-use dioxus_core::Template;
+
 use dioxus_hot_reload::HotReloadMsg;
 use dioxus_html::HtmlCtx;
 use dioxus_rsx::hot_reload::*;
 use interprocess_docfix::local_socket::LocalSocketListener;
-use notify::{RecommendedWatcher, Watcher};
 use std::{
-    net::UdpSocket,
     path::PathBuf,
-    process::{Child, Command, Stdio},
+    process::{Child, Command},
     sync::{Arc, Mutex, RwLock},
 };
-use tokio::sync::broadcast::{self, Sender};
-use tower::ServiceBuilder;
-use tower_http::services::fs::{ServeDir, ServeFileSystemResponseBody};
-use tower_http::{
-    cors::{Any, CorsLayer},
-    ServiceBuilderExt,
-};
+use tokio::sync::broadcast::{self};
 
 #[cfg(feature = "plugin")]
 use plugin::PluginManager;
-
-struct WsReloadState {
-    update: broadcast::Sender<()>,
-}
 
 pub async fn startup(config: CrateConfig) -> Result<()> {
     // ctrl-c shutdown checker

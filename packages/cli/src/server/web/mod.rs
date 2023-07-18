@@ -19,14 +19,11 @@ use axum::{
     Router,
 };
 use axum_server::tls_rustls::RustlsConfig;
-use cargo_metadata::diagnostic::Diagnostic;
-use dioxus_core::Template;
+
 use dioxus_html::HtmlCtx;
 use dioxus_rsx::hot_reload::*;
-use notify::{RecommendedWatcher, Watcher};
 use std::{
     net::UdpSocket,
-    path::PathBuf,
     process::Command,
     sync::{Arc, Mutex},
 };

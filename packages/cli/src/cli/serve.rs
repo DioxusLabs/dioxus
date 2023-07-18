@@ -1,10 +1,5 @@
 use super::*;
-use std::{
-    fs::create_dir_all,
-    io::Write,
-    path::PathBuf,
-    process::{Command, Stdio},
-};
+use std::{fs::create_dir_all, io::Write, path::PathBuf};
 
 /// Run the WASM project on dev-server
 #[derive(Clone, Debug, Parser)]

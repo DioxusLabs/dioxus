@@ -1,37 +1,15 @@
-use crate::{
-    builder, cfg::Platform, serve::Serve, server::desktop::start_desktop, BuildResult, CrateConfig,
-    Result,
-};
-use axum::{
-    body::{Full, HttpBody},
-    extract::{ws::Message, Extension, TypedHeader, WebSocketUpgrade},
-    http::{
-        header::{HeaderName, HeaderValue},
-        Method, Response, StatusCode,
-    },
-    response::IntoResponse,
-    routing::{get, get_service},
-    Router,
-};
-use axum_server::tls_rustls::RustlsConfig;
+use crate::{BuildResult, CrateConfig, Result};
+
 use cargo_metadata::diagnostic::Diagnostic;
 use dioxus_core::Template;
 use dioxus_html::HtmlCtx;
 use dioxus_rsx::hot_reload::*;
 use notify::{RecommendedWatcher, Watcher};
 use std::{
-    net::UdpSocket,
     path::PathBuf,
-    process::{Command, Stdio},
     sync::{Arc, Mutex},
 };
-use tokio::sync::broadcast::{self, Sender};
-use tower::ServiceBuilder;
-use tower_http::services::fs::{ServeDir, ServeFileSystemResponseBody};
-use tower_http::{
-    cors::{Any, CorsLayer},
-    ServiceBuilderExt,
-};
+use tokio::sync::broadcast::Sender;
 
 mod output;
 use output::*;

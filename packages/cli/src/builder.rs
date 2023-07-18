@@ -12,7 +12,6 @@ use std::{
     io::Read,
     panic,
     path::PathBuf,
-    process::Command,
     time::Duration,
 };
 use wasm_bindgen_cli_support::Bindgen;
