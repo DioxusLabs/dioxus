@@ -133,12 +133,9 @@ impl ToolStorage {
         }
 
         // Copy new tool
-
-        let new_tool_path = self.path.join(tool_name.clone());
-
         fs_extra::dir::copy(
             &tool_dir_path,
-            &new_tool_path,
+            &self.path,
             &fs_extra::dir::CopyOptions::new()
                 .overwrite(true)
                 .skip_exist(false),
@@ -152,7 +149,7 @@ impl ToolStorage {
             ))
         })?;
 
-        Ok(new_tool_path)
+        Ok(self.path.join(tool_name))
     }
 
     /// Delete a tool if it exists.
@@ -165,7 +162,12 @@ impl ToolStorage {
             )));
         }
 
-        fs::remove_file(path)?;
+        if path.is_file() {
+            fs::remove_file(path)?;
+        } else {
+            fs::remove_dir_all(path)?;
+        }
+
         self.installed_tools.retain(|x| *x != tool_name);
 
         Ok(())

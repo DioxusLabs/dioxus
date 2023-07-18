@@ -1,15 +1,14 @@
-use fs_extra::{dir::CopyOptions as DirCopyOptions, file::CopyOptions as FileCopyOptions};
-
-use crate::{Error, Result};
-use std::{path::PathBuf, time::Duration};
-
 use self::util::File;
+use crate::{Error, Result};
+use fs_extra::{dir::CopyOptions as DirCopyOptions, file::CopyOptions as FileCopyOptions};
+use std::path::PathBuf;
 
 pub mod index_file;
 pub mod pull_assets;
 pub mod util;
 pub mod wasm_build;
 pub mod web_out;
+pub mod sass;
 
 /// Represents a pipeline with it's own config and steps.
 pub struct Pipeline {
@@ -65,9 +64,8 @@ impl Pipeline {
         // End benchmark
 
         let elapsed = time_started.elapsed();
-        let seconds = elapsed.as_secs();
-        let millis = u32::elapsed.subsec_millis();
-        log::info!("Pipeline finished successfully in {}.{:.1}s!", seconds, millis);
+        let seconds = elapsed.as_secs_f32();
+        log::info!("Pipeline finished successfully in {:.2}s!", seconds);
         Ok(())
     }
 }
@@ -238,12 +236,16 @@ impl BuildConfig {
 /// Represents the priority of the step: How important it is to run first vs last.
 #[derive(Eq, PartialEq, Ord, PartialOrd)]
 pub enum StepPriority {
+    /// Ideal for steps that pull in additional assets that need to be processed.
+    Highest,
     /// Ideal for steps that generate more files that need to be processed.
     High,
     /// Ideal for steps that process existing files and convert them into new files.
     Medium,
     /// Ideal for steps that do final touches, bundling, or similar.
     Low,
+    /// Ideal for steps that generate the final output.
+    Lowest,
 }
 
 /// Represents a step in the pipeline.

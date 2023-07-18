@@ -96,6 +96,7 @@ impl PipelineStep for WasmBuild {
     }
 
     fn priority(&self) -> super::StepPriority {
+        // This step generates wasm and JS files that can be further optimized.
         super::StepPriority::High
     }
 }

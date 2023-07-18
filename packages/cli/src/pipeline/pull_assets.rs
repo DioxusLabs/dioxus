@@ -31,6 +31,6 @@ impl PipelineStep for PullAssets {
     }
 
     fn priority(&self) -> super::StepPriority {
-        super::StepPriority::High
+        super::StepPriority::Highest
     }
 }

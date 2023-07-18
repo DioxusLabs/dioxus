@@ -2,7 +2,7 @@ use flate2::read::GzDecoder;
 use tar::Archive;
 
 use crate::{tools::TempStorage, Error, Result};
-use std::{fs, path::PathBuf};
+use std::{fs, io::Cursor, path::PathBuf};
 
 use super::ToolStorage;
 
@@ -129,25 +129,23 @@ impl Sass {
         let temp_storage = TempStorage::get()?;
         let path = temp_storage.path().join(TOOL_NAME);
 
-        let tar = GzDecoder::new(bytes.as_ref());
-        let mut archive = Archive::new(tar);
-        archive.unpack(&path)?;
+        if cfg!(target_os = "windows") {
+            let mut zip = zip::ZipArchive::new(Cursor::new(bytes))
+                .map_err(|e| Error::ParseError(e.to_string()))?;
 
-        // Get inner path to exec folder. TODO: Make this 'better'
-        let binding = fs::read_dir(&path)?.nth(0).unwrap()?.file_name();
+            zip.extract(&path)
+                .map_err(|e| Error::ParseError(e.to_string()))?
+        } else {
+            let tar = GzDecoder::new(bytes.as_ref());
+            let mut archive = Archive::new(tar);
+            archive.unpack(&path)?;
+        }
 
-        let dir_name = binding.to_str().unwrap();
+        // Get path to tool folder.
+        let path = path.join(TOOL_NAME);
 
-        let path = path.join(dir_name);
-
-        // Get inner-inner path to executable
-        #[cfg(target_os = "windows")]
-        let bindgen_path = path.join(format!("{}.bat", TOOL_NAME));
-
-        #[cfg(not(target_os = "windows"))]
-        let bindgen_path = path.join(TOOL_NAME);
-
+        // Install tool
         let mut tool_storage = ToolStorage::get()?;
-        tool_storage.install_tool(TOOL_NAME.to_string(), bindgen_path)
+        tool_storage.install_tool_dir(TOOL_NAME.to_string(), path)
     }
 }

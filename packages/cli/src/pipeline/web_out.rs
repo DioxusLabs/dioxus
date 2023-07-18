@@ -35,6 +35,6 @@ impl PipelineStep for WebOut {
     }
 
     fn priority(&self) -> super::StepPriority {
-        super::StepPriority::Low
+        super::StepPriority::Lowest
     }
 }
