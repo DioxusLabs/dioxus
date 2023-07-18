@@ -29,8 +29,8 @@ use notify::{RecommendedWatcher, Watcher};
 use std::{
     net::UdpSocket,
     path::PathBuf,
-    process::{Command, Stdio},
-    sync::{Arc, Mutex},
+    process::{Child, Command, Stdio},
+    sync::{Arc, Mutex, RwLock},
 };
 use tokio::sync::broadcast::{self, Sender};
 use tower::ServiceBuilder;
@@ -66,7 +66,8 @@ pub async fn startup(config: CrateConfig) -> Result<()> {
 
 /// Start the server without hot reload
 pub async fn serve_default(config: CrateConfig) -> Result<()> {
-    let first_build_result = start_desktop(&config)?;
+    let (child, first_build_result) = start_desktop(&config)?;
+    let currently_running_child: RwLock<Child> = RwLock::new(child);
 
     log::info!("🚀 Starting development server...");
 
@@ -75,7 +76,14 @@ pub async fn serve_default(config: CrateConfig) -> Result<()> {
     let _watcher = setup_file_watcher(
         {
             let config = config.clone();
-            move || start_desktop(&config)
+
+            move || {
+                let mut current_child = currently_running_child.write().unwrap();
+                current_child.kill()?;
+                let (child, result) = start_desktop(&config)?;
+                *current_child = child;
+                Ok(result)
+            }
         },
         &config,
         None,
@@ -93,6 +101,8 @@ pub async fn serve_default(config: CrateConfig) -> Result<()> {
         None,
     );
 
+    std::future::pending::<()>().await;
+
     Ok(())
 }
 
@@ -100,7 +110,7 @@ pub async fn serve_default(config: CrateConfig) -> Result<()> {
 
 /// Start dx serve with hot reload
 pub async fn serve_hot_reload(config: CrateConfig) -> Result<()> {
-    let first_build_result = start_desktop(&config)?;
+    let (_, first_build_result) = start_desktop(&config)?;
 
     println!("🚀 Starting development server...");
 
@@ -137,7 +147,7 @@ pub async fn serve_hot_reload(config: CrateConfig) -> Result<()> {
                 for channel in &mut *channels.lock().unwrap() {
                     send_msg(HotReloadMsg::Shutdown, channel);
                 }
-                start_desktop(&config)
+                Ok(start_desktop(&config)?.1)
             }
         },
         None,
@@ -243,7 +253,7 @@ fn send_msg(msg: HotReloadMsg, channel: &mut impl std::io::Write) -> bool {
     }
 }
 
-pub fn start_desktop(config: &CrateConfig) -> Result<BuildResult> {
+pub fn start_desktop(config: &CrateConfig) -> Result<(Child, BuildResult)> {
     // Run the desktop application
     let result = crate::builder::build_desktop(config, true)?;
 
@@ -255,11 +265,9 @@ pub fn start_desktop(config: &CrateConfig) -> Result<BuildResult> {
             if cfg!(windows) {
                 file.set_extension("exe");
             }
-            Command::new(file.to_str().unwrap())
-                .stdout(Stdio::inherit())
-                .spawn()?;
+            let child = Command::new(file.to_str().unwrap()).spawn()?;
+
+            Ok((child, result))
         }
     }
-
-    Ok(result)
 }
