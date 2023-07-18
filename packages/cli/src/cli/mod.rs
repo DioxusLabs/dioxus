@@ -1,6 +1,7 @@
 pub mod autoformat;
 pub mod build;
 pub mod cfg;
+pub mod check;
 pub mod clean;
 pub mod config;
 pub mod create;
@@ -67,6 +68,9 @@ pub enum Commands {
     #[clap(name = "fmt")]
     Autoformat(autoformat::Autoformat),
 
+    #[clap(name = "check")]
+    Check(check::Check),
+
     /// Dioxus config file controls.
     #[clap(subcommand)]
     Config(config::Config),
@@ -88,6 +92,7 @@ impl Display for Commands {
             Commands::Config(_) => write!(f, "config"),
             Commands::Version(_) => write!(f, "version"),
             Commands::Autoformat(_) => write!(f, "fmt"),
+            Commands::Check(_) => write!(f, "check"),
 
             #[cfg(feature = "plugin")]
             Commands::Plugin(_) => write!(f, "plugin"),

@@ -17,6 +17,7 @@ members = [
     "packages/fermi",
     "packages/liveview",
     "packages/autofmt",
+    "packages/check",
     "packages/rsx",
     "packages/dioxus-tui",
     "packages/rink",
@@ -63,6 +64,7 @@ dioxus-interpreter-js = { path = "packages/interpreter" }
 fermi = { path = "packages/fermi" }
 dioxus-liveview = { path = "packages/liveview" }
 dioxus-autofmt = { path = "packages/autofmt" }
+dioxus-check = { path = "packages/check" }
 dioxus-rsx = { path = "packages/rsx" }
 dioxus-tui = { path = "packages/dioxus-tui" }
 rink = { path = "packages/rink" }
