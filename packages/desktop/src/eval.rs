@@ -1,4 +1,4 @@
-use async_trait::async_trait;
+use std::cell::OnceCell;use async_trait::async_trait;
 use dioxus_core::ScopeState;
 use dioxus_html::prelude::{EvalError, EvalProvider, Evaluator};
 use std::rc::Rc;
@@ -18,8 +18,8 @@ pub struct DesktopEvalProvider {
 }
 
 impl EvalProvider for DesktopEvalProvider {
-    fn new_evaluator(&self, js: String) -> Box<dyn Evaluator> {
-        Box::new(DesktopEvaluator::new(self.desktop_ctx.clone(), js))
+    fn new_evaluator(&self, js: String) -> Rc<dyn Evaluator> {
+        Rc::new(DesktopEvaluator::new(self.desktop_ctx.clone(), js))
     }
 }
 
@@ -60,7 +60,7 @@ const DIOXUS_CODE: &str = r#"
 /// Reprents a desktop-target's JavaScript evaluator.
 pub struct DesktopEvaluator {
     desktop_ctx: DesktopContext,
-    query: Option<Query<serde_json::Value>>,
+    query: OnceCell<Query<serde_json::Value>>,
     sender: async_channel::Sender<serde_json::Value>,
     receiver: async_channel::Receiver<serde_json::Value>,
     code: String,
@@ -84,7 +84,7 @@ impl DesktopEvaluator {
 
         Self {
             desktop_ctx,
-            query: None,
+            query: OnceCell::new(),
             sender,
             receiver,
             code,
@@ -95,7 +95,7 @@ impl DesktopEvaluator {
 #[async_trait(?Send)]
 impl Evaluator for DesktopEvaluator {
     /// Runs the evaluated JavaScript.
-    fn run(&mut self) -> Result<(), EvalError> {
+    fn run(&self) -> Result<(), EvalError> {
         let desktop_ctx = &self.desktop_ctx;
 
         let query = desktop_ctx.query.new_query_with_comm(
@@ -104,14 +104,14 @@ impl Evaluator for DesktopEvaluator {
             self.sender.clone(),
         );
 
-        self.query = Some(query);
+        self.query.set(query);
 
         Ok(())
     }
 
     /// Sends a message to the evaluated JavaScript.
     fn send(&self, data: serde_json::Value) -> Result<(), EvalError> {
-        if let Some(query) = &self.query {
+        if let Some(query) = self.query.get() {
             if let Err(e) = query.send(&self.desktop_ctx.webview, data) {
                 return Err(EvalError::Communication(e.to_string()));
             }
@@ -122,12 +122,13 @@ impl Evaluator for DesktopEvaluator {
     }
 
     /// Gets an UnboundedReceiver to receive messages from the evaluated JavaScript.
-    fn receiver(&mut self) -> async_channel::Receiver<serde_json::Value> {
-        self.receiver.clone()
+    async fn recv(&self) -> Result<serde_json::Value, EvalError> {
+        self.receiver.recv().await.map_err(|e| EvalError::Communication(e.to_string()))
     }
+}
 
-    /// Cleans up evaluation artifacts
-    fn done(&mut self) {
+impl Drop for DesktopEvaluator{
+    fn drop(&mut self) {
         if let Some(query) = &mut self.query.take() {
             query.cleanup(Some(&self.desktop_ctx.webview));
         }

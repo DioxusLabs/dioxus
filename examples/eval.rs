@@ -17,13 +17,13 @@ fn app(cx: Scope) -> Element {
     eval.run().unwrap();
     eval.send("Hi from Rust!".into()).unwrap();
 
-    let receiver = eval.receiver();
-
-    let future = use_future(cx, (), |_| async move { receiver.recv().await.unwrap() });
+    let future = use_future(cx, (), |_| {
+        to_owned![eval];
+        async move { eval.recv().await.unwrap() }
+    });
 
     match future.value() {
         Some(v) => {
-            eval.done();
             cx.render(rsx!(
                 p { "{v}" }
             ))

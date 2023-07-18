@@ -8,20 +8,18 @@ use std::rc::Rc;
 /// A struct that implements EvalProvider is sent through [`ScopeState`]'s provide_context function
 /// so that [`use_eval`] can provide a platform agnostic interface for evaluating JavaScript code.
 pub trait EvalProvider {
-    fn new_evaluator(&self, js: String) -> Box<dyn Evaluator>;
+    fn new_evaluator(&self, js: String) -> Rc<dyn Evaluator>;
 }
 
 /// The platform's evaluator.
 #[async_trait(?Send)]
 pub trait Evaluator {
     /// Runs the evaluated JavaScript.
-    fn run(&mut self) -> Result<(), EvalError>;
+    fn run(&self) -> Result<(), EvalError>;
     /// Sends a message to the evaluated JavaScript.
     fn send(&self, data: serde_json::Value) -> Result<(), EvalError>;
     /// Gets an UnboundedReceiver to receive messages from the evaluated JavaScript.
-    fn receiver(&mut self) -> Receiver<serde_json::Value>;
-    /// Cleans up any evaluation artifacts.
-    fn done(&mut self);
+    async fn recv(&self) -> Result<serde_json::Value, EvalError>;
 }
 
 /// Get a struct that can execute any JavaScript.
@@ -46,13 +44,14 @@ pub fn use_eval(cx: &ScopeState) -> &Rc<dyn Fn(&str) -> UseEval> {
 }
 
 /// A wrapper around the target platform's evaluator.
+#[derive(Clone)]
 pub struct UseEval {
-    evaluator: Box<dyn Evaluator + 'static>,
+    evaluator: Rc<dyn Evaluator + 'static>,
 }
 
 impl UseEval {
     /// Creates a new UseEval
-    pub fn new(evaluator: Box<dyn Evaluator + 'static>) -> Self {
+    pub fn new(evaluator: Rc<dyn Evaluator + 'static>) -> Self {
         Self { evaluator }
     }
 
@@ -67,13 +66,8 @@ impl UseEval {
     }
 
     /// Gets an UnboundedReceiver to receive messages from the evaluated JavaScript.
-    pub fn receiver(&mut self) -> Receiver<serde_json::Value> {
-        self.evaluator.receiver()
-    }
-
-    /// Cleans up any evaluation artifacts.
-    pub fn done(&mut self) {
-        self.evaluator.done();
+    pub async fn recv(&self) -> Result<serde_json::Value, EvalError> {
+        self.evaluator.recv().await
     }
 }
 
@@ -84,18 +78,10 @@ impl IntoFuture for UseEval {
     fn into_future(mut self) -> Self::IntoFuture {
         Box::pin(async move {
             self.run()?;
-            let data = self.receiver().recv().await.map_err(|_| {
-                EvalError::Communication("failed to receive value from js".to_string())
-            })?;
+            let data = self.recv().await?;
 
             Ok(data)
         })
-    }
-}
-
-impl Drop for UseEval {
-    fn drop(&mut self) {
-        self.done();
     }
 }
 
