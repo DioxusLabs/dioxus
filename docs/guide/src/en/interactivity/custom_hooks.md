@@ -10,13 +10,13 @@ To avoid repetition, you can encapsulate business logic based on existing hooks 
 
 For example, if many components need to access an `AppSettings` struct, you can create a "shortcut" hook:
 
-```rust
+```rust, no_run
 {{#include ../../../examples/hooks_composed.rs:wrap_context}}
 ```
 
 Or if you want to wrap a hook that persists reloads with the storage API, you can build on top of the use_ref hook to work with mutable state:
 
-```rust
+```rust, no_run
 {{#include ../../../examples/hooks_composed.rs:use_storage}}
 ```
 
@@ -34,7 +34,7 @@ Inside the initialization closure, you will typically make calls to other `cx` m
 
 Here is a simplified implementation of the `use_state` hook:
 
-```rust
+```rust, no_run
 {{#include ../../../examples/hooks_custom_logic.rs:use_state}}
 ```
 
@@ -42,7 +42,7 @@ Here is a simplified implementation of the `use_state` hook:
 
 Here is an implementation of the `use_context` and `use_context_provider` hooks:
 
-```rust
+```rust, no_run
 {{#include ../../../examples/hooks_custom_logic.rs:use_context}}
 ```
 
@@ -54,13 +54,13 @@ When writing a custom hook, you should avoid the following anti-patterns:
 
 This version of use_state may seem more efficient, but it is not cloneable:
 
-```rust
+```rust, no_run
 {{#include ../../../examples/hooks_anti_patterns.rs:non_clone_state}}
 ```
 
 If we try to use this hook in an async block, we will get a compile error:
 
-```rust
+```rust, no_run
 fn FutureComponent(cx: &ScopeState) -> Element {
     let my_state = my_use_state(cx, || 0);
     cx.spawn({
@@ -76,7 +76,7 @@ fn FutureComponent(cx: &ScopeState) -> Element {
 
 But with the original version, we can use it in an async block:
 
-```rust
+```rust, no_run
 fn FutureComponent(cx: &ScopeState) -> Element {
     let my_state = use_state(cx, || 0);
     cx.spawn({

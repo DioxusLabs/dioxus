@@ -46,7 +46,6 @@ fn main() {
     );
     #[cfg(feature = "ssr")]
     {
-        GetMeaning::register().unwrap();
         tokio::runtime::Runtime::new()
             .unwrap()
             .block_on(async move {

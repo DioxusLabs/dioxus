@@ -64,7 +64,7 @@ Adicione um `index.html` para o `Trunk` usar. Certifique-se de que seu elemento 
 
 Edite seu `main.rs`:
 
-```rust
+```rust, no_run
 {{#include ../../../examples/hello_world_web.rs}}
 ```
 

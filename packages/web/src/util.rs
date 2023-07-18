@@ -2,6 +2,7 @@
 
 use std::{
     future::{IntoFuture, Ready},
+    rc::Rc,
     str::FromStr,
 };
 
@@ -22,29 +23,26 @@ use serde_json::Value;
 ///
 /// The closure will panic if the provided script is not valid JavaScript code
 /// or if it returns an uncaught error.
-pub fn use_eval<S: std::string::ToString>(cx: &ScopeState) -> &dyn Fn(S) -> EvalResult {
+pub fn use_eval(cx: &ScopeState) -> &Rc<dyn Fn(String) -> EvalResult> {
     cx.use_hook(|| {
-        |script: S| {
-            let body = script.to_string();
-            EvalResult {
-                value: if let Ok(value) =
-                    js_sys::Function::new_no_args(&body).call0(&wasm_bindgen::JsValue::NULL)
-                {
-                    if let Ok(stringified) = js_sys::JSON::stringify(&value) {
-                        if !stringified.is_undefined() && stringified.is_valid_utf16() {
-                            let string: String = stringified.into();
-                            Value::from_str(&string)
-                        } else {
-                            Err(serde_json::Error::custom("Failed to stringify result"))
-                        }
+        Rc::new(|script: String| EvalResult {
+            value: if let Ok(value) =
+                js_sys::Function::new_no_args(&script).call0(&wasm_bindgen::JsValue::NULL)
+            {
+                if let Ok(stringified) = js_sys::JSON::stringify(&value) {
+                    if !stringified.is_undefined() && stringified.is_valid_utf16() {
+                        let string: String = stringified.into();
+                        Value::from_str(&string)
                     } else {
                         Err(serde_json::Error::custom("Failed to stringify result"))
                     }
                 } else {
-                    Err(serde_json::Error::custom("Failed to execute script"))
-                },
-            }
-        }
+                    Err(serde_json::Error::custom("Failed to stringify result"))
+                }
+            } else {
+                Err(serde_json::Error::custom("Failed to execute script"))
+            },
+        }) as Rc<dyn Fn(String) -> EvalResult>
     })
 }
 

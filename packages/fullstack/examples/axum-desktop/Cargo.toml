@@ -7,12 +7,12 @@ publish = false
 [lib]
 
 [dependencies]
-dioxus-desktop = { path = "../../../desktop", optional = true }
-dioxus = { path = "../../../dioxus" }
-dioxus-router = { path = "../../../router" }
-dioxus-fullstack = { path = "../../" }
+dioxus-desktop = { workspace = true, optional = true }
+dioxus = { workspace = true }
+dioxus-router = { workspace = true }
+dioxus-fullstack = { workspace = true }
 axum = { version = "0.6.12", optional = true }
-tokio = { version = "1.27.0", features = ["full"], optional = true }
+tokio = { workspace = true, features = ["full"], optional = true }
 serde = "1.0.159"
 
 [features]

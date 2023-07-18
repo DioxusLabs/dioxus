@@ -1,6 +1,6 @@
 # Thinking in Reactively
 
-We've finally reached the point in our tutorial where we can talk about the theory of Reactivity. We've talked about defining a declarative view, but not about the aspects that make our code *reactive*.
+We've finally reached the point in our tutorial where we can talk about the theory of Reactivity. We've talked about defining a declarative view, but not about the aspects that make our code _reactive_.
 
 Understanding the theory of reactive programming is essential to making sense of Dioxus and writing effective, performant UIs.
 
@@ -15,7 +15,7 @@ This section is a bit long, but worth the read. We recommend coffee, tea, and/or
 
 ## Reactive Programming
 
-Dioxus is one of a handful of Rust libraries that provide a "Reactive Programming Model". The term "Reactive programming" is a classification of programming paradigm – much like functional or imperative programming. This is a very important distinction since it affects how we *think* about our code.
+Dioxus is one of a handful of Rust libraries that provide a "Reactive Programming Model". The term "Reactive programming" is a classification of programming paradigm – much like functional or imperative programming. This is a very important distinction since it affects how we _think_ about our code.
 
 Reactive programming is a programming model concerned with deriving computations from asynchronous data flow. Most reactive programs are comprised of datasources, intermediate computations, and a final result.
 
@@ -33,7 +33,7 @@ In Reactive Programming, we don't think about whether or not we should reevaluat
 
 In Rust, our reactive app would look something like:
 
-```rust
+```rust, no_run
 fn compute_g(t: i32, seconds: i32) -> bool {
     t > seconds
 }
@@ -55,7 +55,7 @@ The Dioxus VirtualDom provides us a framework for reactive programming. When we 
 
 If we represented the reactive graph presented above in Dioxus, it would look very similar:
 
-```rust
+```rust, no_run
 // Declare a component that holds our datasources and calculates `g`
 fn RenderGraph(cx: Scope) -> Element {
     let seconds = use_datasource(SECONDS);
@@ -83,11 +83,11 @@ fn RenderT(cx: Scope, seconds: i32, constant: i32) -> Element {
 
 With this app, we've defined three components. Our top-level component provides our datasources (the hooks), computation nodes (child components), and a final value (what's "rendered").
 
-Now, whenever the `constant` changes, our `RenderT` component will be re-rendered. However, if `seconds` doesn't change, then we don't need to re-render `RenderG` because the input is the same. If `seconds` *does* change, then both RenderG and RenderT will be reevaluated.
+Now, whenever the `constant` changes, our `RenderT` component will be re-rendered. However, if `seconds` doesn't change, then we don't need to re-render `RenderG` because the input is the same. If `seconds` _does_ change, then both RenderG and RenderT will be reevaluated.
 
 Dioxus is "Reactive" because it provides this framework for us. All we need to do is write our own tiny units of computation and Dioxus figures out which components need to be reevaluated automatically.
 
-These extra checks and algorithms add some overhead, which is why you see projects like [Sycamore](http://sycamore-rs.netlify.app) and [SolidJS](http://solidjs.com) eliminating them altogether. Dioxus is *really* fast, so we're willing to exchange the added overhead for improved developer experience.
+These extra checks and algorithms add some overhead, which is why you see projects like [Sycamore](http://sycamore-rs.netlify.app) and [SolidJS](http://solidjs.com) eliminating them altogether. Dioxus is _really_ fast, so we're willing to exchange the added overhead for improved developer experience.
 
 ## How do we update values in our dataflow graph?
 
@@ -104,7 +104,7 @@ Technically, the root props of the VirtualDom are a third datasource, but since 
 
 For local state in hooks, Dioxus gives us the `use_hook` method which returns an `&mut T` without any requirements. This means raw hook values are not tracked by Dioxus. In fact, we could write a component that modifies a hook value directly:
 
-```rust
+```rust, no_run
 fn app(cx: Scope) -> Element {
     let mut count = cx.use_hook(|_| 0);
     cx.render(rsx!{
@@ -118,7 +118,7 @@ fn app(cx: Scope) -> Element {
 
 However, when this value is written to, the component does not know to be reevaluated. We must explicitly tell Dioxus that this component is "dirty" and needs to be re-rendered. This is done through the `cx.needs_update` method:
 
-```rust
+```rust, no_run
 button {
     onclick: move |_| {
         *count += 1;
@@ -130,7 +130,7 @@ button {
 
 Now, whenever we click the button, the value will change and the component will be re-rendered.
 
-> Re-rendering is when Dioxus calls your function component *again*. Component functions will be called over and over throughout their lifetime, so they should be mostly side-effect free.
+> Re-rendering is when Dioxus calls your function component _again_. Component functions will be called over and over throughout their lifetime, so they should be mostly side-effect free.
 
 ### Understand this!
 
@@ -146,9 +146,9 @@ To make app-global state easier to reason about, Dioxus makes all values provide
 
 In these cases, App-Global state needs to manually track which components need to be re-generated.
 
-To regenerate *any* component in your app, you can get a handle to the Dioxus' internal scheduler through `schedule_update_any`:
+To regenerate _any_ component in your app, you can get a handle to the Dioxus' internal scheduler through `schedule_update_any`:
 
-```rust
+```rust, no_run
 let force_render = cx.schedule_update_any();
 
 // force a render of the root component
@@ -179,9 +179,9 @@ From here, Dioxus computes the difference between these trees and updates the Re
 
 ## Suppressing Renders
 
-So, we know how to make Dioxus render, but how do we *stop* it? What if we *know* that our state didn't change and we shouldn't render and diff new nodes because they'll be exactly the same as the last time?
+So, we know how to make Dioxus render, but how do we _stop_ it? What if we _know_ that our state didn't change and we shouldn't render and diff new nodes because they'll be exactly the same as the last time?
 
-In these cases, you want to reach for *memoization*. In Dioxus, memoization involves preventing a component from rendering again if its props didn't change since the last time it attempted to render.
+In these cases, you want to reach for _memoization_. In Dioxus, memoization involves preventing a component from rendering again if its props didn't change since the last time it attempted to render.
 
 Visually, you can tell that a component will only re-render if the new value is sufficiently different than the old one.
 
@@ -196,7 +196,7 @@ Visually, you can tell that a component will only re-render if the new value is 
 
 This is why when you `derive(Props)`, you must also implement the `PartialEq` trait. To override the memoization strategy for a component, you can simply implement your own PartialEq.
 
-```rust
+```rust, no_run
 struct CustomProps {
     val: i32,
 }
@@ -215,7 +215,7 @@ However, for components that borrow data, it doesn't make sense to implement Par
 
 You can technically override this behavior by implementing the `Props` trait manually, though it's unsafe and easy to mess up:
 
-```rust
+```rust, no_run
 unsafe impl Properties for CustomProps {
     fn memoize(&self, other &Self) -> bool {
         self != other
@@ -224,6 +224,7 @@ unsafe impl Properties for CustomProps {
 ```
 
 TLDR:
+
 - Dioxus checks if props changed between renders
 - If props changed according to PartialEq, Dioxus re-renders the component
 - Props that have a lifetime (ie `<'a>`) will always be re-rendered

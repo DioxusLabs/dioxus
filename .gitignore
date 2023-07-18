@@ -1,4 +1,6 @@
 /target
+/playwright-tests/web/dist
+/playwright-tests/fullstack/dist
 /dist
 Cargo.lock
 .DS_Store
@@ -12,3 +14,7 @@ tarpaulin-report.html
 
 # Jetbrain
 .idea/
+node_modules/
+/test-results/
+/playwright-report/
+/playwright/.cache/

@@ -22,13 +22,11 @@ The desktop renderer comes pre-loaded with the window and notification subtree p
 
 Subtrees also solve the "bridging" issues in React where two different renderers need two different VirtualDoms to work properly. In Dioxus, you only ever need one VirtualDom and the right renderer plugins.
 
-
 ## API
 
 Due to their importance in the hierarchy, Components – not nodes – are treated as subtree roots.
 
-
-```rust
+```rust, no_run
 
 fn Subtree<P>(cx: Scope<P>) -> DomTree {
 

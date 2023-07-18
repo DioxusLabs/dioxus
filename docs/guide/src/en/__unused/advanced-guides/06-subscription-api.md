@@ -2,7 +2,7 @@
 
 Yew subscriptions are used to schedule update for components into the future. The `Context` object can create subscriptions:
 
-```rust
+```rust, no_run
 fn Component(cx: Component) -> DomTree {
     let update = cx.schedule();
 
@@ -19,7 +19,7 @@ The subscription API exposes this functionality allowing hooks and state managem
 some state or event occurs outside of the component. For instance, the `use_context` hook uses this to subscribe components that use a
 particular context.
 
-```rust
+```rust, no_run
 fn use_context<I>(cx: Scope<T>) -> I {
 
 }

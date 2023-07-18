@@ -9,17 +9,33 @@ use crate::UseFutureDep;
 /// If a future is pending when the dependencies change, the previous future
 /// will be allowed to continue
 ///
-/// - dependencies: a tuple of references to values that are PartialEq + Clone
+/// - dependencies: a tuple of references to values that are `PartialEq` + `Clone`
 ///
 /// ## Examples
 ///
-/// ```rust, ignore
-///
+/// ```rust, no_run
 /// #[inline_props]
-/// fn app(cx: Scope, name: &str) -> Element {
-///     use_effect(cx, (name,), |(name,)| async move {
-///         set_title(name);
-///     }))
+/// fn Profile(cx: Scope, id: usize) -> Element {
+///     let name = use_state(cx, || None);
+///
+///     // Only fetch the user data when the id changes.
+///     use_effect(cx, (id,), |(id,)| {
+///         to_owned![name];
+///         async move {
+///             let user = fetch_user(id).await;
+///             name.set(user.name);
+///         }
+///     });
+///
+///     let name = name.get().clone().unwrap_or("Loading...".to_string());
+///
+///     render!(
+///         p { "{name}" }
+///     )
+/// }
+///
+/// fn app(cx: Scope) -> Element {
+///     render!(Profile { id: 0 })
 /// }
 /// ```
 pub fn use_effect<T, F, D>(cx: &ScopeState, dependencies: D, future: impl FnOnce(D::Out) -> F)

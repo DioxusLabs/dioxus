@@ -1,17 +1,16 @@
 # Liveview
 
-Liveview allows apps to *run* on the server and *render* in the browser. It uses WebSockets to communicate between the server and the browser.
+Liveview allows apps to _run_ on the server and _render_ in the browser. It uses WebSockets to communicate between the server and the browser.
 
 Examples:
+
 - [Axum Example](https://github.com/DioxusLabs/dioxus/tree/master/packages/liveview/examples/axum.rs)
 - [Salvo Example](https://github.com/DioxusLabs/dioxus/tree/master/packages/liveview/examples/salvo.rs)
 - [Warp Example](https://github.com/DioxusLabs/dioxus/tree/master/packages/liveview/examples/warp.rs)
 
-
 ## Support
 
 Liveview is currently limited in capability when compared to the Web platform. Liveview apps run on the server in a native thread. This means that browser APIs are not available, so rendering WebGL, Canvas, etc is not as easy as the Web. However, native system APIs are accessible, so streaming, WebSockets, filesystem, etc are all viable APIs.
-
 
 ## Setup
 
@@ -50,17 +49,14 @@ tokio = { version = "1.15.0", features = ["full"] }
 
 Now, set up your Axum app to respond on an endpoint.
 
-
-```rust
+```rust, no_run
 {{#include ../../../examples/hello_world_liveview.rs:glue}}
 ```
 
-
 And then add our app component:
 
-```rust
+```rust, no_run
 {{#include ../../../examples/hello_world_liveview.rs:app}}
 ```
 
 And that's it!
-

@@ -33,8 +33,6 @@ fn main() {
         }));
 
         use salvo::prelude::*;
-        PostServerData::register().unwrap();
-        GetServerData::register().unwrap();
         tokio::runtime::Runtime::new()
             .unwrap()
             .block_on(async move {

@@ -4,7 +4,7 @@ Concurrent mode provides a mechanism for building efficient asynchronous compone
 
 To make a component asynchronous, simply change its function signature to async.
 
-```rust
+```rust, no_run
 fn Example(cx: Scope) -> Vnode {
     rsx!{ <div> "Hello world!" </div> }
 }
@@ -12,7 +12,7 @@ fn Example(cx: Scope) -> Vnode {
 
 becomes
 
-```rust
+```rust, no_run
 async fn Example(cx: Scope) -> Vnode {
     rsx!{ <div> "Hello world!" </div> }
 }
@@ -20,7 +20,7 @@ async fn Example(cx: Scope) -> Vnode {
 
 Now, logic in components can be awaited to delay updates of the component and its children. Like so:
 
-```rust
+```rust, no_run
 async fn Example(cx: Scope) -> Vnode {
     let name = fetch_name().await;
     rsx!{ <div> "Hello {name}" </div> }
@@ -39,7 +39,7 @@ Instead, we suggest using hooks and future combinators that can safely utilize t
 
 As part of our Dioxus hooks crate, we provide a data loader hook which pauses a component until its async dependencies are ready. This caches requests, reruns the fetch if dependencies have changed, and provides the option to render something else while the component is loading.
 
-```rust
+```rust, no_run
 async fn ExampleLoader(cx: Scope) -> Vnode {
     /*
     Fetch, pause the component from rendering at all.
@@ -61,7 +61,7 @@ async fn ExampleLoader(cx: Scope) -> Vnode {
 }
 ```
 
-```rust
+```rust, no_run
 async fn Example(cx: Scope) -> DomTree {
     // Diff this set between the last set
     // Check if we have any outstanding tasks?

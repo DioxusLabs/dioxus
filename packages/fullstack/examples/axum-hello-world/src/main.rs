@@ -32,8 +32,6 @@ fn main() {
             true
         }));
 
-        PostServerData::register().unwrap();
-        GetServerData::register().unwrap();
         tokio::runtime::Runtime::new()
             .unwrap()
             .block_on(async move {
@@ -78,7 +76,7 @@ fn app(cx: Scope<AppProps>) -> Element {
                     }
                 }
             },
-            "Run a server function! testing1234"
+            "Run a server function!"
         }
         "Server said: {text}"
     })

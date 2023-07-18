@@ -11,7 +11,6 @@
 //!     dioxus_web::launch_cfg(app, dioxus_web::Config::new().hydrate(true));
 //!     #[cfg(feature = "ssr")]
 //!     {
-//!         GetServerData::register().unwrap();
 //!         tokio::runtime::Runtime::new()
 //!             .unwrap()
 //!             .block_on(async move {
@@ -93,7 +92,7 @@ pub fn register_server_fns_with_handler<H, F, R>(
     mut handler: H,
 ) -> BoxedFilter<(R,)>
 where
-    H: FnMut(String, ServerFunction) -> F,
+    H: FnMut(String, server_fn::ServerFnTraitObj<DioxusServerContext>) -> F,
     F: Filter<Extract = (R,), Error = warp::Rejection> + Send + Sync + 'static,
     F::Extract: Send,
     R: Reply + 'static,
@@ -104,7 +103,7 @@ where
         let full_route = format!("{server_fn_route}/{server_fn_path}")
             .trim_start_matches('/')
             .to_string();
-        let route = handler(full_route, func.clone()).boxed();
+        let route = handler(full_route, func).boxed();
         if let Some(boxed_filter) = filter.take() {
             filter = Some(boxed_filter.or(route).unify().boxed());
         } else {
@@ -128,7 +127,7 @@ where
 /// ```
 pub fn register_server_fns(server_fn_route: &'static str) -> BoxedFilter<(impl Reply,)> {
     register_server_fns_with_handler(server_fn_route, |full_route, func| {
-        path(full_route.clone())
+        path(full_route)
             .and(warp::post().or(warp::get()).unify())
             .and(request_parts())
             .and(warp::body::bytes())
@@ -250,7 +249,7 @@ impl warp::reject::Reject for RecieveFailed {}
 /// A default handler for server functions. It will deserialize the request body, call the server function, and serialize the response.
 pub async fn server_fn_handler(
     server_context: impl Into<DioxusServerContext>,
-    function: ServerFunction,
+    function: server_fn::ServerFnTraitObj<DioxusServerContext>,
     parts: RequestParts,
     body: Bytes,
 ) -> Result<Box<dyn warp::Reply>, warp::Rejection> {
@@ -274,11 +273,11 @@ pub async fn server_fn_handler(
                         .as_bytes()
                         .to_vec()
                         .into();
-                    let data = match &function.encoding {
+                    let data = match function.encoding() {
                         Encoding::Url | Encoding::Cbor => &body,
                         Encoding::GetJSON | Encoding::GetCBOR => &query,
                     };
-                    let resp = match (function.trait_obj)(server_context.clone(), data).await {
+                    let resp = match function.call(server_context.clone(), data).await {
                         Ok(serialized) => {
                             // if this is Accept: application/json then send a serialized JSON response
                             let accept_header = parts
@@ -373,7 +372,7 @@ pub fn connect_hot_reload() -> impl Filter<Extract = (impl Reply,), Error = warp
         use warp::ws::Message;
 
         let hot_reload = warp::path!("_dioxus" / "hot_reload")
-            .and(warp::any().then(|| crate::hot_reload::spawn_hot_reload()))
+            .and(warp::any().then(crate::hot_reload::spawn_hot_reload))
             .and(warp::ws())
             .map(move |state: &'static HotReloadState, ws: warp::ws::Ws| {
                 #[cfg(all(debug_assertions, feature = "hot-reload", feature = "ssr"))]
@@ -425,7 +424,7 @@ pub fn connect_hot_reload() -> impl Filter<Extract = (impl Reply,), Error = warp
                         struct DisconnectOnDrop(Option<warp::ws::WebSocket>);
                         impl Drop for DisconnectOnDrop {
                             fn drop(&mut self) {
-                                let _ = self.0.take().unwrap().close();
+                                std::mem::drop(self.0.take().unwrap().close());
                             }
                         }
 

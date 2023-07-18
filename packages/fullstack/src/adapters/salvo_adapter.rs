@@ -12,7 +12,6 @@
 //!     #[cfg(feature = "ssr")]
 //!     {
 //!         use salvo::prelude::*;
-//!         GetServerData::register().unwrap();
 //!         tokio::runtime::Runtime::new()
 //!             .unwrap()
 //!             .block_on(async move {
@@ -77,7 +76,7 @@ pub trait DioxusRouterExt {
     /// use dioxus_fullstack::prelude::*;
     ///
     /// struct ServerFunctionHandler {
-    ///     server_fn: ServerFunction,
+    ///     server_fn: server_fn::ServerFnTraitObj<DioxusServerContext>,
     /// }
     ///
     /// #[handler]
@@ -110,7 +109,7 @@ pub trait DioxusRouterExt {
     fn register_server_fns_with_handler<H>(
         self,
         server_fn_route: &'static str,
-        handler: impl Fn(ServerFunction) -> H,
+        handler: impl Fn(server_fn::ServerFnTraitObj<DioxusServerContext>) -> H,
     ) -> Self
     where
         H: Handler + 'static;
@@ -204,7 +203,7 @@ impl DioxusRouterExt for Router {
     fn register_server_fns_with_handler<H>(
         self,
         server_fn_route: &'static str,
-        mut handler: impl FnMut(ServerFunction) -> H,
+        mut handler: impl FnMut(server_fn::ServerFnTraitObj<DioxusServerContext>) -> H,
     ) -> Self
     where
         H: Handler + 'static,
@@ -213,7 +212,7 @@ impl DioxusRouterExt for Router {
         for server_fn_path in DioxusServerFnRegistry::paths_registered() {
             let func = DioxusServerFnRegistry::get(server_fn_path).unwrap();
             let full_route = format!("{server_fn_route}/{server_fn_path}");
-            match func.encoding {
+            match func.encoding() {
                 Encoding::Url | Encoding::Cbor => {
                     router = router.push(Router::with_path(&full_route).post(handler(func)));
                 }
@@ -280,7 +279,7 @@ impl DioxusRouterExt for Router {
     ) -> Self {
         let cfg = cfg.into();
 
-        self.serve_static_assets(&cfg.assets_path)
+        self.serve_static_assets(cfg.assets_path)
             .connect_hot_reload()
             .register_server_fns(server_fn_path)
             .push(Router::with_path("/").get(SSRHandler { cfg }))
@@ -288,8 +287,8 @@ impl DioxusRouterExt for Router {
 
     fn connect_hot_reload(self) -> Self {
         let mut _dioxus_router = Router::with_path("_dioxus");
-        _dioxus_router = _dioxus_router
-            .push(Router::with_path("hot_reload").handle(HotReloadHandler::default()));
+        _dioxus_router =
+            _dioxus_router.push(Router::with_path("hot_reload").handle(HotReloadHandler));
         #[cfg(all(debug_assertions, feature = "hot-reload", feature = "ssr"))]
         {
             _dioxus_router = _dioxus_router.push(Router::with_path("disconnect").handle(ignore_ws));
@@ -346,12 +345,15 @@ impl<P: Clone + serde::Serialize + Send + Sync + 'static> Handler for SSRHandler
 /// A default handler for server functions. It will deserialize the request body, call the server function, and serialize the response.
 pub struct ServerFnHandler {
     server_context: DioxusServerContext,
-    function: ServerFunction,
+    function: server_fn::ServerFnTraitObj<DioxusServerContext>,
 }
 
 impl ServerFnHandler {
     /// Create a new server function handler with the given server context and server function.
-    pub fn new(server_context: impl Into<DioxusServerContext>, function: ServerFunction) -> Self {
+    pub fn new(
+        server_context: impl Into<DioxusServerContext>,
+        function: server_fn::ServerFnTraitObj<DioxusServerContext>,
+    ) -> Self {
         let server_context = server_context.into();
         Self {
             server_context,
@@ -395,11 +397,11 @@ impl ServerFnHandler {
                 tokio::runtime::Runtime::new()
                     .expect("couldn't spawn runtime")
                     .block_on(async move {
-                        let data = match &function.encoding {
+                        let data = match function.encoding() {
                             Encoding::Url | Encoding::Cbor => &body,
                             Encoding::GetJSON | Encoding::GetCBOR => &query,
                         };
-                        let resp = (function.trait_obj)(server_context, data).await;
+                        let resp = function.call(server_context, data).await;
 
                         resp_tx.send(resp).unwrap();
                     })

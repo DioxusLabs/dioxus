@@ -36,7 +36,7 @@ For more information about hot reloading on native platforms and configuration o
 
 Add the following to your main function:
 
-```rust
+```rust, no_run
 fn main() {
     hot_reload_init!();
     // launch your application

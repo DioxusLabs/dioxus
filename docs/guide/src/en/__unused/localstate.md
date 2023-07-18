@@ -6,7 +6,7 @@ The first step to dealing with complexity in your app is to refactor your state 
 
 Let's say we're managing the state for a list of Todos. Whenever we edit the todo, we want the list to update. We might've started building our app but putting everything into a single `use_ref`.
 
-```rust
+```rust, no_run
 struct Todo {
     contents: String,
     is_hovered: bool,
@@ -29,7 +29,7 @@ cx.render(rsx!{
 
 As shown above, whenever the todo is hovered, we want to set its state:
 
-```rust
+```rust, no_run
 todos.write()[0].is_hovered = true;
 ```
 
@@ -37,7 +37,7 @@ As the amount of interactions goes up, so does the complexity of our state. Shou
 
 Instead, let's refactor our Todo component to handle its own state:
 
-```rust
+```rust, no_run
 #[inline_props]
 fn Todo<'a>(cx: Scope, todo: &'a Todo) -> Element {
     let is_hovered = use_state(cx, || false);
@@ -53,16 +53,15 @@ fn Todo<'a>(cx: Scope, todo: &'a Todo) -> Element {
 
 Now, we can simplify our Todo data model to get rid of local UI state:
 
-```rust
+```rust, no_run
 struct Todo {
     contents: String,
 }
 ```
 
-This is not only better for encapsulation and abstraction, but it's only more performant! Whenever a Todo is hovered, we won't need to re-render *every* Todo again – only the Todo that's currently being hovered.
+This is not only better for encapsulation and abstraction, but it's only more performant! Whenever a Todo is hovered, we won't need to re-render _every_ Todo again – only the Todo that's currently being hovered.
 
-
-Wherever possible, you should try to refactor the "view" layer *out* of your data model.
+Wherever possible, you should try to refactor the "view" layer _out_ of your data model.
 
 ## Immutability
 
@@ -72,7 +71,7 @@ In these scenarios consider breaking your `use_ref` into individual `use_state`s
 
 You might've started modeling your component with a struct and use_ref
 
-```rust
+```rust, no_run
 struct State {
     count: i32,
     color: &'static str,
@@ -85,17 +84,17 @@ let state = use_ref(cx, State::new)
 
 The "better" approach for this particular component would be to break the state apart into different values:
 
-```rust
+```rust, no_run
 let count = use_state(cx, || 0);
 let color = use_state(cx, || "red");
 let names = use_state(cx, HashMap::new);
 ```
 
-You might recognize that our "names" value is a HashMap – which is not terribly cheap to clone every time we update its value. To solve this issue, we *highly* suggest using a library like [`im`](https://crates.io/crates/im) which will take advantage of structural sharing to make clones and mutations much cheaper.
+You might recognize that our "names" value is a HashMap – which is not terribly cheap to clone every time we update its value. To solve this issue, we _highly_ suggest using a library like [`im`](https://crates.io/crates/im) which will take advantage of structural sharing to make clones and mutations much cheaper.
 
 When combined with the `make_mut` method on `use_state`, you can get really succinct updates to collections:
 
-```rust
+```rust, no_run
 let todos = use_state(cx, im_rc::HashMap::default);
 
 todos.make_mut().insert("new todo", Todo {
@@ -106,5 +105,3 @@ todos.make_mut().insert("new todo", Todo {
 ## Moving on
 
 This particular local patterns are powerful but is not a cure-all for state management problems. Sometimes your state problems are much larger than just staying local to a component.
-
-

@@ -22,7 +22,7 @@ pub(crate) struct QueryEngine {
 
 impl Default for QueryEngine {
     fn default() -> Self {
-        let (sender, _) = tokio::sync::broadcast::channel(8);
+        let (sender, _) = tokio::sync::broadcast::channel(1000);
         Self {
             sender: Rc::new(sender),
             active_requests: SharedSlab::default(),

@@ -25,9 +25,6 @@ fn main() {
         use axum::routing::get;
         use std::sync::Arc;
 
-        // Register the server function before starting the server
-        DoubleServer::register().unwrap();
-
         tokio::runtime::Runtime::new()
             .unwrap()
             .block_on(async move {

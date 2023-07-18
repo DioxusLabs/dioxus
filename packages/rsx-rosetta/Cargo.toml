@@ -13,9 +13,9 @@ keywords = ["dom", "ui", "gui", "react"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-dioxus-autofmt = { path = "../autofmt", version = "0.3.0" }
-dioxus-rsx = { path = "../rsx" , version = "^0.0.3" }
-html_parser = "0.6.3"
+dioxus-autofmt = { workspace = true }
+dioxus-rsx = { workspace = true }
+html_parser.workspace = true
 proc-macro2 = "1.0.49"
 quote = "1.0.23"
 syn = { version = "1.0.107", features = ["full"] }

@@ -7,34 +7,28 @@ description = "Core functionality for Dioxus - a concurrent renderer-agnostic Vi
 license = "MIT/Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com"
-documentation = "https://dioxuslabs.com"
 keywords = ["dom", "ui", "gui", "react"]
-
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 # Bumpalo is used as a micro heap backing each component
 bumpalo = { version = "3.6", features = ["collections", "boxed"] }
 
 # faster hashmaps
-rustc-hash = "1.1.0"
+rustc-hash = { workspace = true }
 
 # Used in diffing
 longest-increasing-subsequence = "0.1.0"
 
-futures-util = { version = "0.3", default-features = false, features = [
+futures-util = { workspace = true, default-features = false, features = [
     "alloc",
 ] }
 
-slab = "0.4"
+slab = { workspace = true }
 
-futures-channel = "0.3.21"
-
-indexmap = "1.7"
+futures-channel = { workspace = true }
 
 smallbox = "0.8.1"
-log = "0.4.17"
+log = { workspace = true }
 
 # Serialize the Edits for use in Webview/Liveview instances
 serde = { version = "1", features = ["derive"], optional = true }
@@ -42,8 +36,8 @@ serde = { version = "1", features = ["derive"], optional = true }
 bumpslab = { version = "0.2.0" }
 
 [dev-dependencies]
-tokio = { version = "1", features = ["full"] }
-dioxus = { path = "../dioxus" }
+tokio = { workspace = true, features = ["full"] }
+dioxus = { workspace = true }
 pretty_assertions = "1.3.0"
 rand = "0.8.5"
 
