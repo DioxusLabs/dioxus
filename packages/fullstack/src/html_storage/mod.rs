@@ -45,7 +45,7 @@ impl HTMLDataCursor {
         }
         let mut cursor = &self.data[current];
         self.index.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        match postcard::from_bytes(&mut cursor) {
+        match postcard::from_bytes(cursor) {
             Ok(x) => Some(x),
             Err(e) => {
                 log::error!("Error deserializing data: {:?}", e);

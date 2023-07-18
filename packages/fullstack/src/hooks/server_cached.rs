@@ -29,6 +29,6 @@ pub fn server_cached<O: 'static + Serialize + DeserializeOwned>(server_fn: impl 
     }
     #[cfg(not(feature = "ssr"))]
     {
-        crate::html_storage::deserialize::take_server_data().unwrap_or_else(|| server_fn())
+        crate::html_storage::deserialize::take_server_data().unwrap_or_else(server_fn)
     }
 }
