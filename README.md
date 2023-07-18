@@ -152,7 +152,7 @@ Dioxus is also a very extensible platform.
 
 So... Dioxus is great, but why won't it work for me?
 - It's not fully mature yet. APIs are still shifting, things might break (though we try to avoid it)
-- You need to run in a no-std environment.
+- You need to run in a non-std environment.
 - You don't like the React-hooks model of building UIs
 
 
