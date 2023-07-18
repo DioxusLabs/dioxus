@@ -30,7 +30,7 @@ enum Route {
         #[redirect("/", || Route::BlogList {})]
         #[redirect("/:name", |name: String| Route::BlogPost { name })]
     #[end_nest]
-    #[route("/:...route")]
+    #[route("/:..route")]
     PageNotFound {
         route: Vec<String>,
     },

@@ -150,10 +150,10 @@ pub fn parse_route_segments<'a>(
 
     while let Some(segment) = iterator.next() {
         if let Some(segment) = segment.strip_prefix(':') {
-            let spread = segment.starts_with("...");
+            let spread = segment.starts_with("..");
 
             let ident = if spread {
-                segment[3..].to_string()
+                segment[2..].to_string()
             } else {
                 segment.to_string()
             };
