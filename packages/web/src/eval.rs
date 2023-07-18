@@ -14,8 +14,8 @@ pub fn init_eval(cx: &ScopeState) {
 /// Reprents the web-target's provider of evaluators.
 pub struct WebEvalProvider;
 impl EvalProvider for WebEvalProvider {
-    fn new_evaluator(&self, js: String) -> Box<dyn Evaluator> {
-        Box::new(WebEvaluator::new(js))
+    fn new_evaluator(&self, js: String) -> Rc<dyn Evaluator> {
+        Rc::new(WebEvaluator::new(js))
     }
 }
 
@@ -32,7 +32,7 @@ pub struct WebEvaluator {
     dioxus: Dioxus,
     receiver: async_channel::Receiver<serde_json::Value>,
     code: String,
-    ran: bool,
+    ran:std::cell::Cell< bool>,
 }
 
 impl WebEvaluator {
@@ -61,7 +61,7 @@ impl WebEvaluator {
             dioxus,
             receiver,
             code,
-            ran: false,
+            ran: std::cell::Cell::new(false),
         }
     }
 }
@@ -69,7 +69,7 @@ impl WebEvaluator {
 #[async_trait(?Send)]
 impl Evaluator for WebEvaluator {
     /// Runs the evaluated JavaScript.
-    fn run(&mut self) -> Result<(), EvalError> {
+    fn run(&self) -> Result<(), EvalError> {
         if let Err(e) =
             Function::new_with_args("dioxus", &self.code).call1(&JsValue::NULL, &self.dioxus)
         {
@@ -78,7 +78,7 @@ impl Evaluator for WebEvaluator {
             ));
         }
 
-        self.ran = true;
+        self.ran.set(true);
         Ok(())
     }
 
@@ -94,12 +94,9 @@ impl Evaluator for WebEvaluator {
     }
 
     /// Gets an UnboundedReceiver to receive messages from the evaluated JavaScript.
-    fn receiver(&mut self) -> async_channel::Receiver<serde_json::Value> {
-        self.receiver.clone()
+    async fn recv(& self) -> Result<serde_json::Value, EvalError> {
+        self.receiver.recv().await.map_err(|_| EvalError::Communication("failed to receive data from js".to_string()))
     }
-
-    // No cleanup required
-    fn done(&mut self) {}
 }
 
 #[wasm_bindgen(module = "/src/eval.js")]

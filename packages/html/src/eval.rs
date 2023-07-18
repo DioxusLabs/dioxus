@@ -1,4 +1,3 @@
-use async_channel::Receiver;
 use async_trait::async_trait;
 use dioxus_core::ScopeState;
 use std::future::{Future, IntoFuture};
