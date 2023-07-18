@@ -55,10 +55,9 @@ impl Display for IssueReport {
                     writeln!(
                         f,
                         "{:>max_line_num_len$} {} {}",
-                        line_num,
+                        line_num.fg::<LightBlue>(),
                         "|".fg::<LightBlue>(),
                         line,
-                        max_line_num_len = max_line_num_len
                     )?;
                     if line_num == hook_span.start.line {
                         let mut caret = String::new();
@@ -74,7 +73,6 @@ impl Display for IssueReport {
                             "",
                             "|".fg::<LightBlue>(),
                             caret.fg::<BrightRed>(),
-                            max_line_num_len = max_line_num_len
                         )?;
                     }
                 }
