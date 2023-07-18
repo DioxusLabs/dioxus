@@ -1,11 +1,12 @@
 use crate::{Error, Result};
 use std::{ffi::OsStr, fs, path::PathBuf};
 
-pub mod bindgen;
+mod bindgen;
+pub use bindgen::Bindgen;
 
 const APP_DATA_NAME: &str = "dioxus";
 const TEMP_NAME: &str = "temp";
-const TOOLS_NAME: &str = "Tools";
+const TOOLS_NAME: &str = "tools";
 
 /// Represents the cli's data folder on the host device.
 pub struct AppStorage {
@@ -66,7 +67,7 @@ impl ToolStorage {
 
     /// Get a tool by it's name.
     pub fn get_tool_by_name(&self, tool_name: String) -> Option<PathBuf> {
-        if !self.is_installed(tool_name) {
+        if !self.is_installed(tool_name.clone()) {
             return None;
         }
 
@@ -82,24 +83,30 @@ impl ToolStorage {
     /// Install a new tool, replacing it if it exists.
     pub fn install_tool(&mut self, tool_name: String, tool_path: PathBuf) -> Result<PathBuf> {
         // Delete installed tool
-        if self.is_installed(tool_name) {
-            self.delete_tool(tool_name)?;
+        if self.is_installed(tool_name.clone()) {
+            self.delete_tool(tool_name.clone())?;
         }
 
         // Copy new tool
-        let new_tool_path = self.path.join(tool_name);
+        let full_name = format!(
+            "{}.{}",
+            tool_name,
+            tool_path.extension().unwrap().to_str().unwrap()
+        );
+        let new_tool_path = self.path.join(full_name);
         fs_extra::file::copy(
-            new_tool_path,
             &tool_path,
+            &new_tool_path,
             &fs_extra::file::CopyOptions::new()
                 .overwrite(true)
                 .skip_exist(false),
         )
-        .map_err(|_| {
+        .map_err(|e| {
             Error::CustomError(format!(
-                "Failed to replace tool `{}` from path `{}`",
+                "Failed to replace tool `{}` from path `{}` | {} ",
                 tool_name,
-                tool_path.display()
+                tool_path.display(),
+                e.to_string(),
             ))
         })?;
 
@@ -108,11 +115,11 @@ impl ToolStorage {
 
     /// Delete a tool if it exists.
     pub fn delete_tool(&mut self, tool_name: String) -> Result<()> {
-        let path = self.path.join(tool_name);
+        let path = self.path.join(tool_name.clone());
         if !path.exists() {
             return Err(Error::CustomError(format!(
                 "Tool `{}` doesn't exist and can't be deleted.",
-                tool_name
+                tool_name.clone()
             )));
         }
 
@@ -147,7 +154,7 @@ impl TempStorage {
     }
 
     pub fn done(&self) {
-        if fs::remove_dir_all(self.path).is_err() {
+        if fs::remove_dir_all(&self.path).is_err() {
             log::warn!("Failed to delete temp directory after use.");
         }
     }

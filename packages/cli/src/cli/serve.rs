@@ -15,66 +15,69 @@ pub struct Serve {
 }
 
 impl Serve {
-    pub async fn serve(self, bin: Option<PathBuf>) -> Result<()> {
-        let mut crate_config = crate::CrateConfig::new(bin)?;
+    pub fn serve(self, bin: Option<PathBuf>) -> Result<()> {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async {
+            let mut crate_config = crate::CrateConfig::new(bin)?;
 
-        // change the relase state.
-        crate_config.with_hot_reload(self.serve.hot_reload);
-        crate_config.with_cross_origin_policy(self.serve.cross_origin_policy);
-        crate_config.with_release(self.serve.release);
-        crate_config.with_verbose(self.serve.verbose);
+            // change the relase state.
+            crate_config.with_hot_reload(self.serve.hot_reload);
+            crate_config.with_cross_origin_policy(self.serve.cross_origin_policy);
+            crate_config.with_release(self.serve.release);
+            crate_config.with_verbose(self.serve.verbose);
 
-        if self.serve.example.is_some() {
-            crate_config.as_example(self.serve.example.unwrap());
-        }
-
-        if self.serve.profile.is_some() {
-            crate_config.set_profile(self.serve.profile.unwrap());
-        }
-
-        if self.serve.features.is_some() {
-            crate_config.set_features(self.serve.features.unwrap());
-        }
-
-        // Subdirectories don't work with the server
-        crate_config.dioxus_config.web.app.base_path = None;
-
-        let platform = self.serve.platform.unwrap_or_else(|| {
-            crate_config
-                .dioxus_config
-                .application
-                .default_platform
-                .clone()
-        });
-
-        if platform.as_str() == "desktop" {
-            crate::builder::build_desktop(&crate_config, true)?;
-
-            match &crate_config.executable {
-                crate::ExecutableType::Binary(name)
-                | crate::ExecutableType::Lib(name)
-                | crate::ExecutableType::Example(name) => {
-                    let mut file = crate_config.out_dir.join(name);
-                    if cfg!(windows) {
-                        file.set_extension("exe");
-                    }
-                    Command::new(file.to_str().unwrap())
-                        .stdout(Stdio::inherit())
-                        .output()?;
-                }
+            if self.serve.example.is_some() {
+                crate_config.as_example(self.serve.example.unwrap());
             }
-            return Ok(());
-        } else if platform != "web" {
-            return custom_error!("Unsupported platform target.");
-        }
 
-        // generate dev-index page
-        Serve::regen_dev_page(&crate_config)?;
+            if self.serve.profile.is_some() {
+                crate_config.set_profile(self.serve.profile.unwrap());
+            }
 
-        // start the develop server
-        server::startup(self.serve.port, crate_config.clone(), self.serve.open).await?;
+            if self.serve.features.is_some() {
+                crate_config.set_features(self.serve.features.unwrap());
+            }
 
-        Ok(())
+            // Subdirectories don't work with the server
+            crate_config.dioxus_config.web.app.base_path = None;
+
+            let platform = self.serve.platform.unwrap_or_else(|| {
+                crate_config
+                    .dioxus_config
+                    .application
+                    .default_platform
+                    .clone()
+            });
+
+            if platform.as_str() == "desktop" {
+                crate::builder::build_desktop(&crate_config, true)?;
+
+                match &crate_config.executable {
+                    crate::ExecutableType::Binary(name)
+                    | crate::ExecutableType::Lib(name)
+                    | crate::ExecutableType::Example(name) => {
+                        let mut file = crate_config.out_dir.join(name);
+                        if cfg!(windows) {
+                            file.set_extension("exe");
+                        }
+                        Command::new(file.to_str().unwrap())
+                            .stdout(Stdio::inherit())
+                            .output()?;
+                    }
+                }
+                return Ok(());
+            } else if platform != "web" {
+                return custom_error!("Unsupported platform target.");
+            }
+
+            // generate dev-index page
+            Serve::regen_dev_page(&crate_config)?;
+
+            // start the develop server
+            server::startup(self.serve.port, crate_config.clone(), self.serve.open).await?;
+
+            Ok(())
+        })
     }
 
     pub fn regen_dev_page(crate_config: &CrateConfig) -> Result<()> {

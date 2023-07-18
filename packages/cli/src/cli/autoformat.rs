@@ -25,50 +25,53 @@ pub struct Autoformat {
 
 impl Autoformat {
     // Todo: autoformat the entire crate
-    pub async fn autoformat(self) -> Result<()> {
-        // Default to formatting the project
-        if self.raw.is_none() && self.file.is_none() {
-            if let Err(e) = autoformat_project(self.check).await {
-                eprintln!("error formatting project: {}", e);
-                exit(1);
-            }
-        }
-
-        if let Some(raw) = self.raw {
-            if let Some(inner) = dioxus_autofmt::fmt_block(&raw, 0) {
-                println!("{}", inner);
-            } else {
-                // exit process with error
-                eprintln!("error formatting codeblock");
-                exit(1);
-            }
-        }
-
-        // Format single file
-        if let Some(file) = self.file {
-            let file_content = fs::read_to_string(&file);
-
-            match file_content {
-                Ok(s) => {
-                    let edits = dioxus_autofmt::fmt_file(&s);
-                    let out = dioxus_autofmt::apply_formats(&s, edits);
-                    match fs::write(&file, out) {
-                        Ok(_) => {
-                            println!("formatted {}", file);
-                        }
-                        Err(e) => {
-                            eprintln!("failed to write formatted content to file: {}", e);
-                        }
-                    }
-                }
-                Err(e) => {
-                    eprintln!("failed to open file: {}", e);
+    pub fn autoformat(self) -> Result<()> {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async {
+            // Default to formatting the project
+            if self.raw.is_none() && self.file.is_none() {
+                if let Err(e) = autoformat_project(self.check).await {
+                    eprintln!("error formatting project: {}", e);
                     exit(1);
                 }
             }
-        }
 
-        Ok(())
+            if let Some(raw) = self.raw {
+                if let Some(inner) = dioxus_autofmt::fmt_block(&raw, 0) {
+                    println!("{}", inner);
+                } else {
+                    // exit process with error
+                    eprintln!("error formatting codeblock");
+                    exit(1);
+                }
+            }
+
+            // Format single file
+            if let Some(file) = self.file {
+                let file_content = fs::read_to_string(&file);
+
+                match file_content {
+                    Ok(s) => {
+                        let edits = dioxus_autofmt::fmt_file(&s);
+                        let out = dioxus_autofmt::apply_formats(&s, edits);
+                        match fs::write(&file, out) {
+                            Ok(_) => {
+                                println!("formatted {}", file);
+                            }
+                            Err(e) => {
+                                eprintln!("failed to write formatted content to file: {}", e);
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("failed to open file: {}", e);
+                        exit(1);
+                    }
+                }
+            }
+
+            Ok(())
+        })
     }
 }
 
@@ -157,8 +160,8 @@ fn collect_rs_files(folder: &Path, files: &mut Vec<PathBuf>) {
     }
 }
 
-#[tokio::test]
-async fn test_auto_fmt() {
+#[test]
+fn test_auto_fmt() {
     let test_rsx = r#"
                     //
 
@@ -180,7 +183,7 @@ async fn test_auto_fmt() {
         file: None,
     };
 
-    fmt.autoformat().await.unwrap();
+    fmt.autoformat().unwrap();
 }
 
 /*#[test]

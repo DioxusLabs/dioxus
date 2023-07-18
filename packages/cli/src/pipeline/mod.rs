@@ -40,7 +40,7 @@ impl Pipeline {
 
         // Collect src input files
         let mut files = util::from_dir(PathBuf::from("./src"))?;
-        self.config.input_files.append(&mut files);
+        self.config.files.append(&mut files);
 
         // Sort steps by priority
         self.steps
@@ -69,10 +69,8 @@ pub struct PipelineConfig {
     crate_info: CrateInfo,
     /// Information related to how the pipeline should build the target crate.
     build_config: BuildConfig,
-    /// Represents the raw source files.
-    input_files: Vec<File>,
-    /// Represents either a completed or processed artifact from the pipeline.
-    output_files: Vec<File>,
+    /// Represents the files being processed.
+    files: Vec<File>,
 }
 
 impl PipelineConfig {
@@ -83,23 +81,29 @@ impl PipelineConfig {
         Self {
             crate_info,
             build_config,
-            input_files: Vec::new(),
-            output_files: Vec::new(),
+            files: Vec::new(),
         }
     }
 
+    /// Creates an empty staging directory, deleting any existing ones.
     fn create_fresh_staging(&self) -> Result<()> {
         self.delete_staging()?;
         std::fs::create_dir(self.crate_info.path.join(Self::STAGING_PATH))?;
         Ok(())
     }
 
+    /// Deletes the staging directory if it exists.
     fn delete_staging(&self) -> Result<()> {
         let staging_path = self.crate_info.path.join(Self::STAGING_PATH);
         if staging_path.exists() {
             std::fs::remove_dir_all(staging_path)?;
         }
         Ok(())
+    }
+    
+    /// Returns a [`Pathbuf`] to the staging directory.
+    pub fn staging_path(&self) -> PathBuf {
+        self.crate_info.path.join(Self::STAGING_PATH)
     }
 
     /// Moves a single file to the staging directory.
@@ -128,6 +132,7 @@ impl PipelineConfig {
         Ok(full_path)
     }
 
+    /// Copies everything from the staging directory to the specified directory.
     pub fn copy_staging_to_dir(&self, dir_path: PathBuf) -> Result<()> {
         fs_extra::dir::copy(
             self.crate_info.path.join(Self::STAGING_PATH),

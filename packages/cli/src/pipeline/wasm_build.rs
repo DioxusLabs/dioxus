@@ -1,16 +1,34 @@
-use crate::pipeline::util::{File, FileType};
+use crate::{
+    pipeline::util::{File, FileType, self},
+    tools, Result,
+};
 
 use super::{PipelineConfig, PipelineStep};
 use std::path::PathBuf;
 
 const DEBUG_TARGET: &str = "target/wasm32-unknown-unknown/debug";
 const RELEASE_TARGET: &str = "target/wasm32-unknown-unknown/release";
+const STAGING_OUT: &str = "./bindgen_out";
 
 pub struct WasmBuild {}
 
 impl WasmBuild {
     pub fn new() -> Box<Self> {
         Box::new(Self {})
+    }
+
+    /// Runs the wasm-bindgen CLI on the specified wasm file.
+    pub fn run_bindgen(&self, config: &PipelineConfig, file: PathBuf) -> Result<PathBuf> {
+        let out = config.staging_path().join(STAGING_OUT);
+        let release = config.build_config.release;
+
+        tools::Bindgen::get()?
+            .debug(!release)
+            .keep_debug(!release)
+            .no_demangle(!release)
+            .run(file, out.clone())?;
+
+        Ok(out)
     }
 }
 
@@ -67,19 +85,11 @@ impl PipelineStep for WasmBuild {
         wasm_out_path.push(format!("{}.wasm", config.crate_info.name));
 
         // Run bindgen on the file
+        let bindgen_out_path = self.run_bindgen(config, wasm_out_path)?;
 
-        // Move output wasm to staging folder
-        let wasm_out_path = config.copy_file_to_staging(wasm_out_path)?;
-
-        // Create the file metadata
-        let out_file = File {
-            name: config.crate_info.name.clone(),
-            path: wasm_out_path,
-            file_type: FileType::Wasm,
-        };
-
-        // Push it to out files for later processing
-        config.output_files.push(out_file);
+        // Add all output files to config for further processing.
+        let mut bindgen_files = util::from_dir(bindgen_out_path)?;
+        config.files.append(&mut bindgen_files);
 
         Ok(())
     }
@@ -89,6 +99,6 @@ impl PipelineStep for WasmBuild {
     }
 
     fn priority(&self) -> super::StepPriority {
-        super::StepPriority::Low
+        super::StepPriority::High
     }
 }

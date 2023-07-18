@@ -20,8 +20,8 @@ impl PipelineStep for PullAssets {
         let mut public_files = util::from_dir(config.crate_info.path.join(PUBLIC_PATH))?;
         let mut assets_files = util::from_dir(config.crate_info.path.join(ASSETS_PATH))?;
 
-        config.input_files.append(&mut public_files);
-        config.input_files.append(&mut assets_files);
+        config.files.append(&mut public_files);
+        config.files.append(&mut assets_files);
 
         Ok(())
     }

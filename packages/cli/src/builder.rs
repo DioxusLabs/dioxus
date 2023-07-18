@@ -1,7 +1,7 @@
 use crate::{
     config::{CrateConfig, ExecutableType},
     error::{Error, Result},
-    tools::Tool,
+    //tools::Tool,
     DioxusConfig,
 };
 use cargo_metadata::{diagnostic::Diagnostic, Message};
@@ -131,7 +131,7 @@ pub fn build(config: &CrateConfig, quiet: bool) -> Result<BuildResult> {
     }
 
     // check binaryen:wasm-opt tool
-    let dioxus_tools = dioxus_config.application.tools.clone().unwrap_or_default();
+    /*let dioxus_tools = dioxus_config.application.tools.clone().unwrap_or_default();
     if dioxus_tools.contains_key("binaryen") {
         let info = dioxus_tools.get("binaryen").unwrap();
         let binaryen = crate::tools::Tool::Binaryen;
@@ -203,7 +203,7 @@ pub fn build(config: &CrateConfig, quiet: bool) -> Result<BuildResult> {
                 "Tailwind tool not found, you can use `dioxus tool add tailwindcss` to install it."
             );
         }
-    }
+    }*/
 
     // this code will copy all public file to the output dir
     let copy_options = fs_extra::dir::CopyOptions {
@@ -556,7 +556,7 @@ fn build_assets(config: &CrateConfig) -> Result<Vec<PathBuf>> {
     let dioxus_tools = dioxus_config.application.tools.clone().unwrap_or_default();
 
     // check sass tool state
-    let sass = Tool::Sass;
+    /*let sass = Tool::Sass;
     if sass.is_installed() && dioxus_tools.contains_key("sass") {
         let sass_conf = dioxus_tools.get("sass").unwrap();
         if let Some(tab) = sass_conf.as_table() {
@@ -686,7 +686,7 @@ fn build_assets(config: &CrateConfig) -> Result<Vec<PathBuf>> {
                 }
             }
         }
-    }
+    }*/
     // SASS END
 
     Ok(result)

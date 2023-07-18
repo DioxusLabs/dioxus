@@ -47,8 +47,7 @@ fn get_bin(bin: Option<String>) -> Result<Option<PathBuf>> {
     Ok(None)
 }
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
+fn main() -> anyhow::Result<()> {
     let args = Cli::parse();
 
     set_up_logging();
@@ -81,7 +80,6 @@ async fn main() -> anyhow::Result<()> {
 
         Serve(opts) => opts
             .serve(bin.clone())
-            .await
             .map_err(|e| anyhow!("🚫 Serving project failed: {}", e)),
 
         Create(opts) => opts
@@ -95,12 +93,10 @@ async fn main() -> anyhow::Result<()> {
         #[cfg(feature = "plugin")]
         Plugin(opts) => opts
             .plugin()
-            .await
             .map_err(|e| anyhow!("🚫 Error with plugin: {}", e)),
 
         Autoformat(opts) => opts
             .autoformat()
-            .await
             .map_err(|e| anyhow!("🚫 Error autoformatting RSX: {}", e)),
 
         Version(opt) => {
