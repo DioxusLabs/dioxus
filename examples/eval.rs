@@ -23,11 +23,9 @@ fn app(cx: Scope) -> Element {
     });
 
     match future.value() {
-        Some(v) => {
-            cx.render(rsx!(
-                p { "{v}" }
-            ))
-        }
+        Some(v) => cx.render(rsx!(
+            p { "{v}" }
+        )),
         _ => cx.render(rsx!(
             p { "hello" }
         )),

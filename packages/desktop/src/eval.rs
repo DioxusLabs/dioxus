@@ -1,6 +1,7 @@
-use std::cell::OnceCell;use async_trait::async_trait;
+use async_trait::async_trait;
 use dioxus_core::ScopeState;
 use dioxus_html::prelude::{EvalError, EvalProvider, Evaluator};
+use std::cell::OnceCell;
 use std::rc::Rc;
 
 use crate::{query::Query, DesktopContext};
@@ -123,11 +124,14 @@ impl Evaluator for DesktopEvaluator {
 
     /// Gets an UnboundedReceiver to receive messages from the evaluated JavaScript.
     async fn recv(&self) -> Result<serde_json::Value, EvalError> {
-        self.receiver.recv().await.map_err(|e| EvalError::Communication(e.to_string()))
+        self.receiver
+            .recv()
+            .await
+            .map_err(|e| EvalError::Communication(e.to_string()))
     }
 }
 
-impl Drop for DesktopEvaluator{
+impl Drop for DesktopEvaluator {
     fn drop(&mut self) {
         if let Some(query) = &mut self.query.take() {
             query.cleanup(Some(&self.desktop_ctx.webview));

@@ -32,7 +32,7 @@ pub struct WebEvaluator {
     dioxus: Dioxus,
     receiver: async_channel::Receiver<serde_json::Value>,
     code: String,
-    ran:std::cell::Cell< bool>,
+    ran: std::cell::Cell<bool>,
 }
 
 impl WebEvaluator {
@@ -94,8 +94,11 @@ impl Evaluator for WebEvaluator {
     }
 
     /// Gets an UnboundedReceiver to receive messages from the evaluated JavaScript.
-    async fn recv(& self) -> Result<serde_json::Value, EvalError> {
-        self.receiver.recv().await.map_err(|_| EvalError::Communication("failed to receive data from js".to_string()))
+    async fn recv(&self) -> Result<serde_json::Value, EvalError> {
+        self.receiver
+            .recv()
+            .await
+            .map_err(|_| EvalError::Communication("failed to receive data from js".to_string()))
     }
 }
 
