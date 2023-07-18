@@ -47,33 +47,33 @@ impl Serve {
                 .clone()
         });
 
-        if platform.as_str() == "desktop" {
-            crate::builder::build_desktop(&crate_config, true)?;
+        match platform {
+            cfg::Platform::Web => {
+                // generate dev-index page
+                Serve::regen_dev_page(&crate_config)?;
 
-            match &crate_config.executable {
-                crate::ExecutableType::Binary(name)
-                | crate::ExecutableType::Lib(name)
-                | crate::ExecutableType::Example(name) => {
-                    let mut file = crate_config.out_dir.join(name);
-                    if cfg!(windows) {
-                        file.set_extension("exe");
+                // start the develop server
+                server::web::startup(self.serve.port, crate_config.clone(), self.serve.open)
+                    .await?;
+            }
+            cfg::Platform::Desktop => {
+                crate::builder::build_desktop(&crate_config, true)?;
+
+                match &crate_config.executable {
+                    crate::ExecutableType::Binary(name)
+                    | crate::ExecutableType::Lib(name)
+                    | crate::ExecutableType::Example(name) => {
+                        let mut file = crate_config.out_dir.join(name);
+                        if cfg!(windows) {
+                            file.set_extension("exe");
+                        }
+                        Command::new(file.to_str().unwrap())
+                            .stdout(Stdio::inherit())
+                            .output()?;
                     }
-                    Command::new(file.to_str().unwrap())
-                        .stdout(Stdio::inherit())
-                        .output()?;
                 }
             }
-            return Ok(());
-        } else if platform != "web" {
-            return custom_error!("Unsupported platform target.");
         }
-
-        // generate dev-index page
-        Serve::regen_dev_page(&crate_config)?;
-
-        // start the develop server
-        server::startup(self.serve.port, crate_config.clone(), self.serve.open).await?;
-
         Ok(())
     }
 

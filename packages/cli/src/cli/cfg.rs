@@ -1,3 +1,6 @@
+use clap::ValueEnum;
+use serde::Serialize;
+
 use super::*;
 
 /// Config options for the build system.
@@ -26,8 +29,8 @@ pub struct ConfigOptsBuild {
     pub profile: Option<String>,
 
     /// Build platform: support Web & Desktop [default: "default_platform"]
-    #[clap(long)]
-    pub platform: Option<String>,
+    #[clap(long, value_enum)]
+    pub platform: Option<Platform>,
 
     /// Space separated list of features to activate
     #[clap(long)]
@@ -69,8 +72,8 @@ pub struct ConfigOptsServe {
     pub profile: Option<String>,
 
     /// Build platform: support Web & Desktop [default: "default_platform"]
-    #[clap(long)]
-    pub platform: Option<String>,
+    #[clap(long, value_enum)]
+    pub platform: Option<Platform>,
 
     /// Build with hot reloading rsx [default: false]
     #[clap(long)]
@@ -86,6 +89,16 @@ pub struct ConfigOptsServe {
     /// Space separated list of features to activate
     #[clap(long)]
     pub features: Option<Vec<String>>,
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Serialize, Deserialize, Debug)]
+pub enum Platform {
+    #[clap(name = "web")]
+    #[serde(rename = "web")]
+    Web,
+    #[clap(name = "desktop")]
+    #[serde(rename = "desktop")]
+    Desktop,
 }
 
 /// Ensure the given value for `--public-url` is formatted correctly.

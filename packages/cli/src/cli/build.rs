@@ -1,3 +1,4 @@
+use crate::cfg::Platform;
 #[cfg(feature = "plugin")]
 use crate::plugin::PluginManager;
 
@@ -42,15 +43,12 @@ impl Build {
         #[cfg(feature = "plugin")]
         let _ = PluginManager::on_build_start(&crate_config, &platform);
 
-        match platform.as_str() {
-            "web" => {
+        match platform {
+            Platform::Web => {
                 crate::builder::build(&crate_config, false)?;
             }
-            "desktop" => {
+            Platform::Desktop => {
                 crate::builder::build_desktop(&crate_config, false)?;
-            }
-            _ => {
-                return custom_error!("Unsupported platform target.");
             }
         }
 
