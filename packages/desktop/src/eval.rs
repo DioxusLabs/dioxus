@@ -105,7 +105,7 @@ impl Evaluator for DesktopEvaluator {
             self.sender.clone(),
         );
 
-        self.query.set(query);
+        _ = self.query.set(query);
 
         Ok(())
     }

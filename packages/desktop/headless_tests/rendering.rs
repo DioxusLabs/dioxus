@@ -42,7 +42,7 @@ fn use_inner_html<'a>(cx: &'a ScopeState, id: &'static str) -> &'a UseFuture<ser
     use_future(cx, (), |_| async move {
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         eval.run().unwrap();
-        eval.receiver().recv().await.unwrap()
+        eval.recv().await.unwrap()
     })
 }
 
