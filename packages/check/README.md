@@ -1,4 +1,4 @@
-# dioxus-autofmt
+# dioxus-check
 
 
 [![Crates.io][crates-badge]][crates-url]
@@ -26,13 +26,7 @@
 
 ## Overview
 
-`dioxus-autofmt` provides a pretty printer for the `rsx` syntax tree.
-
-
-This is done manually with a via set of formatting rules. The output is not guaranteed to be stable between minor versions of the crate as we might tweak the output.
-
-`dioxus-autofmt` provides an API to perform precision edits as well as just spit out a block of formatted RSX from any RSX syntax tree. This is used by the `rsx-rosetta` crate which can accept various input languages and output valid RSX.
-
+`dioxus-check` analyzes Dioxus source code and reports errors and warnings. Primarily, it enforces the [Rules of Hooks](https://dioxuslabs.com/docs/0.3/guide/en/interactivity/hooks.html#no-hooks-in-conditionals).
 
 ## Contributing
 
