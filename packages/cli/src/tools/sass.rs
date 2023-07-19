@@ -23,8 +23,6 @@ const INSTALL_URL: &str = "https://github.com/sass/dart-sass/releases/download/1
 const INSTALL_URL: &str =
     "https://github.com/sass/dart-sass/releases/download/1.63.6/dart-sass-1.63.6-macos-x64.tar.gz";
 // Linux
-#[cfg(all(target_os = "linux", target_arch = "aarch64"))]
-const INSTALL_URL: &str = "https://github.com/sass/dart-sass/releases/download/1.63.6/dart-sass-1.63.6-linux-arm64.tar.gz";
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 const INSTALL_URL: &str =
     "https://github.com/sass/dart-sass/releases/download/1.63.6/dart-sass-1.63.6-linux-x64.tar.gz";

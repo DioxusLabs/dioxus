@@ -19,7 +19,7 @@ impl SassBuild {
 
 impl PipelineStep for SassBuild {
     fn run(&mut self, config: &mut PipelineConfig) -> crate::Result<()> {
-        log::info!("Building SASS/SCSS files");
+        log::info!("Building SASS/SCSS");
 
         // Get sass
         let sass = tools::Sass::get()?.source_map(false);
@@ -46,7 +46,10 @@ impl PipelineStep for SassBuild {
                 file_type: FileType::Css,
             });
         }
-
+        
+        config
+            .files
+            .retain(|i| i.file_type != FileType::Sass && i.file_type != FileType::Scss);
         config.files.append(&mut new_files);
 
         Ok(())

@@ -5,10 +5,11 @@ use std::path::PathBuf;
 
 pub mod index_file;
 pub mod pull_assets;
+pub mod sass;
 pub mod util;
 pub mod wasm_build;
+pub mod wasm_opt;
 pub mod web_out;
-pub mod sass;
 
 /// Represents a pipeline with it's own config and steps.
 pub struct Pipeline {

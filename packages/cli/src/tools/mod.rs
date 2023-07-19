@@ -1,12 +1,16 @@
 use crate::{Error, Result};
 use std::{ffi::OsStr, fs, path::PathBuf};
+use indicatif::{ProgressBar, ProgressStyle};
 
 mod bindgen;
 pub use bindgen::Bindgen;
 
 mod sass;
-use indicatif::{ProgressBar, ProgressStyle};
 pub use sass::Sass;
+
+mod wasm_opt;
+pub use wasm_opt::WasmOpt;
+
 
 const APP_DATA_NAME: &str = "dioxus";
 const TEMP_NAME: &str = "temp";

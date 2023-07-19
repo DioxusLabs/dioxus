@@ -1,6 +1,6 @@
 use crate::pipeline::{
     index_file::IndexFile, pull_assets::PullAssets, wasm_build::WasmBuild, web_out::WebOut,
-    BuildConfig, CrateInfo, Pipeline, PipelineConfig, sass::SassBuild,
+    BuildConfig, CrateInfo, Pipeline, PipelineConfig, sass::SassBuild, wasm_opt::WasmOpt,
 };
 
 #[cfg(feature = "plugin")]
@@ -31,6 +31,7 @@ impl Build {
             .with_step(PullAssets::new())
             .with_step(SassBuild::new())
             .with_step(WasmBuild::new())
+            .with_step(WasmOpt::new())
             .with_step(IndexFile::new())
             .with_step(WebOut::new())
             .run()?;

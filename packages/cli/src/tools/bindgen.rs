@@ -15,8 +15,6 @@ const INSTALL_URL: &str = "https://github.com/rustwasm/wasm-bindgen/releases/dow
 #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
 const INSTALL_URL: &str = "https://github.com/rustwasm/wasm-bindgen/releases/download/0.2.87/wasm-bindgen-0.2.87-x86_64-apple-darwin.tar.gz";
 // Linux
-#[cfg(all(target_os = "linux", target_arch = "aarch64"))]
-const INSTALL_URL: &str = "https://github.com/rustwasm/wasm-bindgen/releases/download/0.2.87/wasm-bindgen-0.2.87-aarch64-unknown-linux-gnu.tar.gz";
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 const INSTALL_URL: &str = "https://github.com/rustwasm/wasm-bindgen/releases/download/0.2.87/wasm-bindgen-0.2.87-x86_64-unknown-linux-musl.tar.gz";
 
@@ -126,9 +124,7 @@ impl Bindgen {
 
         // Get inner path to exec folder. TODO: Make this 'better'
         let binding = fs::read_dir(&path)?.nth(0).unwrap()?.file_name();
-
         let dir_name = binding.to_str().unwrap();
-
         let path = path.join(dir_name);
 
         // Get inner-inner path to executable
