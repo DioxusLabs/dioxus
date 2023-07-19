@@ -42,7 +42,7 @@ fn mock_event(cx: &ScopeState, id: &'static str, value: &'static str) {
     );
 
     let eval_provider = use_eval(cx);
-    let mut eval = eval_provider(&js);
+    eval_provider(&js).unwrap();
 }
 
 #[allow(deprecated)]
