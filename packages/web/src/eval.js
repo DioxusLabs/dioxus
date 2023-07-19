@@ -1,6 +1,7 @@
 export class Dioxus {
-  constructor(sendCallback) {
+  constructor(sendCallback, returnCallback) {
     this.sendCallback = sendCallback;
+    this.returnCallback = returnCallback;
     this.promiseResolve = null;
     this.received = [];
   }

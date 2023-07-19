@@ -21,7 +21,6 @@ thiserror = "1.0.30"
 log = { workspace = true }
 wry = { version = "0.28.0" }
 futures-channel = { workspace = true }
-async-channel = "1.8.0"
 tokio = { workspace = true, features = [
     "sync",
     "rt-multi-thread",

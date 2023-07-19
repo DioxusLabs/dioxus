@@ -7,18 +7,18 @@ use std::rc::Rc;
 /// A struct that implements EvalProvider is sent through [`ScopeState`]'s provide_context function
 /// so that [`use_eval`] can provide a platform agnostic interface for evaluating JavaScript code.
 pub trait EvalProvider {
-    fn new_evaluator(&self, js: String) -> Rc<dyn Evaluator>;
+    fn new_evaluator(&self, js: String) -> Result<Rc<dyn Evaluator>, EvalError>;
 }
 
 /// The platform's evaluator.
 #[async_trait(?Send)]
 pub trait Evaluator {
-    /// Runs the evaluated JavaScript.
-    fn run(&self) -> Result<(), EvalError>;
     /// Sends a message to the evaluated JavaScript.
     fn send(&self, data: serde_json::Value) -> Result<(), EvalError>;
-    /// Gets an UnboundedReceiver to receive messages from the evaluated JavaScript.
+    /// Receive any queued messages from the evaluated JavaScript.
     async fn recv(&self) -> Result<serde_json::Value, EvalError>;
+    /// Gets the return value of the JavaScript
+    async fn join(&self) -> Result<serde_json::Value, EvalError>;
 }
 
 /// Get a struct that can execute any JavaScript.
@@ -29,16 +29,17 @@ pub trait Evaluator {
 /// parts is practically asking for a hacker to find an XSS vulnerability in
 /// it. **This applies especially to web targets, where the JavaScript context
 /// has access to most, if not all of your application data.**
-pub fn use_eval(cx: &ScopeState) -> &Rc<dyn Fn(&str) -> UseEval> {
-    cx.use_hook(|| {
+pub fn use_eval(cx: &ScopeState) -> &Rc<dyn Fn(&str) -> Result<UseEval, EvalError>> {
+    &*cx.use_hook(|| {
         let eval_provider = cx
             .consume_context::<Rc<dyn EvalProvider>>()
             .expect("evaluator not provided");
 
         Rc::new(move |script: &str| {
-            let evaluator = eval_provider.new_evaluator(script.to_string());
-            UseEval::new(evaluator)
-        }) as Rc<dyn Fn(&str) -> UseEval>
+            eval_provider
+                .new_evaluator(script.to_string())
+                .map(|evaluator| UseEval::new(evaluator))
+        }) as Rc<dyn Fn(&str) -> Result<UseEval, EvalError>>
     })
 }
 
@@ -54,11 +55,6 @@ impl UseEval {
         Self { evaluator }
     }
 
-    /// Runs the evaluated JavaScript.
-    pub fn run(&mut self) -> Result<(), EvalError> {
-        self.evaluator.run()
-    }
-
     /// Sends a [`serde_json::Value`] to the evaluated JavaScript.
     pub fn send(&self, data: serde_json::Value) -> Result<(), EvalError> {
         self.evaluator.send(data)
@@ -68,29 +64,28 @@ impl UseEval {
     pub async fn recv(&self) -> Result<serde_json::Value, EvalError> {
         self.evaluator.recv().await
     }
+
+    /// Gets the return value of the evaluated JavaScript.
+    pub async fn join(self) -> Result<serde_json::Value, EvalError> {
+        self.evaluator.join().await
+    }
 }
 
 impl IntoFuture for UseEval {
     type Output = Result<serde_json::Value, EvalError>;
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output>>>;
 
-    fn into_future(mut self) -> Self::IntoFuture {
-        Box::pin(async move {
-            self.run()?;
-            let data = self.recv().await?;
-
-            Ok(data)
-        })
+    fn into_future(self) -> Self::IntoFuture {
+        Box::pin(self.join())
     }
 }
 
 /// Represents an error when evaluating JavaScript
 #[derive(Debug)]
 pub enum EvalError {
-    /// The evaluator's ``run`` method hasn't been called.
-    /// Messages cannot be received at this time.
-    NotRan,
-    /// The provides JavaScript is not valid and can't be ran.
+    /// The provided JavaScript has already been ran.
+    Finished,
+    /// The provided JavaScript is not valid and can't be ran.
     InvalidJs(String),
     /// Represents an error communicating between JavaScript and Rust.
     Communication(String),

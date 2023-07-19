@@ -1,16 +1,71 @@
 use std::{cell::RefCell, rc::Rc};
 
+use crate::DesktopContext;
 use serde::{de::DeserializeOwned, Deserialize};
 use serde_json::Value;
 use slab::Slab;
 use thiserror::Error;
-use tokio::{sync::broadcast::error::RecvError, task::JoinHandle};
-use wry::webview::WebView;
+use tokio::sync::broadcast::error::RecvError;
+
+const DIOXUS_CODE: &str = r#"
+let dioxus = {
+    recv: function () {
+        return new Promise((resolve, _reject) => {
+            // Ever 50 ms check for new data
+            let timeout = setTimeout(() => {
+                let __msg = null;
+                while (true) {
+                    let __data = _message_queue.shift();
+                    if (__data) {
+                        __msg = __data;
+                        break;
+                    }
+                }
+                clearTimeout(timeout);
+                resolve(__msg);
+            }, 50);
+        });
+    },
+
+    send: function (value) {
+        window.ipc.postMessage(
+            JSON.stringify({
+                "method":"query",
+                "params": {
+                    "id": _request_id,
+                    "data": value,
+                    "returned_value": false
+                }
+            })
+        );
+    }
+}"#;
 
 /// Tracks what query ids are currently active
-#[derive(Default, Clone)]
-struct SharedSlab {
-    slab: Rc<RefCell<Slab<()>>>,
+
+struct SharedSlab<T = ()> {
+    slab: Rc<RefCell<Slab<T>>>,
+}
+
+impl<T> Clone for SharedSlab<T> {
+    fn clone(&self) -> Self {
+        Self {
+            slab: self.slab.clone(),
+        }
+    }
+}
+
+impl<T> Default for SharedSlab<T> {
+    fn default() -> Self {
+        SharedSlab {
+            slab: Rc::new(RefCell::new(Slab::new())),
+        }
+    }
+}
+
+struct QueryEntry {
+    channel_sender: tokio::sync::mpsc::UnboundedSender<Value>,
+    return_sender: Option<tokio::sync::oneshot::Sender<Value>>,
 }
 
 const QUEUE_NAME: &str = "__msg_queues";
@@ -18,39 +73,63 @@ const QUEUE_NAME: &str = "__msg_queues";
 /// Handles sending and receiving arbitrary queries from the webview. Queries can be resolved non-sequentially, so we use ids to track them.
 #[derive(Clone)]
 pub(crate) struct QueryEngine {
-    sender: Rc<tokio::sync::broadcast::Sender<QueryResult>>,
-    active_requests: SharedSlab,
-    active_queues: SharedSlab,
+    active_requests: SharedSlab<QueryEntry>,
 }
 
 impl Default for QueryEngine {
     fn default() -> Self {
-        let (sender, _) = tokio::sync::broadcast::channel(1000);
         Self {
-            sender: Rc::new(sender),
-            active_requests: SharedSlab::default(),
-            active_queues: SharedSlab::default(),
+            active_requests: Default::default(),
         }
     }
 }
 
 impl QueryEngine {
     /// Creates a new query and returns a handle to it. The query will be resolved when the webview returns a result with the same id.
-    pub fn new_query<V: DeserializeOwned>(&self, script: &str, webview: &WebView) -> Query<V> {
-        let request_id = self.active_requests.slab.borrow_mut().insert(());
+    pub fn new_query<V: DeserializeOwned>(
+        &self,
+        script: &str,
+        context: DesktopContext,
+    ) -> Query<V> {
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        let (return_tx, return_rx) = tokio::sync::oneshot::channel();
+        let request_id = self.active_requests.slab.borrow_mut().insert(QueryEntry {
+            channel_sender: tx,
+            return_sender: Some(return_tx),
+        });
 
         // start the query
         // We embed the return of the eval in a function so we can send it back to the main thread
-        if let Err(err) = webview.evaluate_script(&format!(
-            r#"window.ipc.postMessage(
-                JSON.stringify({{
-                    "method":"query",
-                    "params": {{
-                        "id": {request_id},
-                        "data": (function(){{{script}}})()
+        if let Err(err) = context.webview.evaluate_script(&format!(
+            r#"(function(){{
+                (async (resolve, _reject) => {{
+                    {DIOXUS_CODE}
+                    if (!window.{QUEUE_NAME}) {{
+                        window.{QUEUE_NAME} = [];
                     }}
+    
+                    let _request_id = {request_id};
+    
+                    if (!window.{QUEUE_NAME}[{request_id}]) {{
+                        window.{QUEUE_NAME}[{request_id}] = [];
+                    }}
+                    let _message_queue = window.{QUEUE_NAME}[{request_id}];
+    
+                    {script}
+                }})().then((result)=>{{
+                    let returned_value = {{
+                        "method":"query",
+                        "params": {{
+                            "id": {request_id},
+                            "data": result,
+                            "returned_value": true
+                        }}
+                    }};
+                    window.ipc.postMessage(
+                        JSON.stringify(returned_value)
+                    );
                 }})
-            );"#
+            }})();"#
         )) {
             log::warn!("Query error: {err}");
         }
@@ -58,112 +137,54 @@ impl QueryEngine {
         Query {
             slab: self.active_requests.clone(),
             id: request_id,
-            reciever: self.sender.subscribe(),
+            receiver: rx,
+            return_receiver: Some(return_rx),
+            desktop: context,
             phantom: std::marker::PhantomData,
-            queue_slab: None,
-            queue_id: None,
-            thread_handle: None,
         }
     }
 
-    pub fn new_query_with_comm<V: DeserializeOwned>(
-        &self,
-        script: &str,
-        webview: &WebView,
-        sender: async_channel::Sender<serde_json::Value>,
-    ) -> Query<V> {
-        let request_id = self.active_requests.slab.borrow_mut().insert(());
-        let queue_id = self.active_queues.slab.borrow_mut().insert(());
-
-        let code = format!(
-            r#"
-            {{
-                if (!window.{QUEUE_NAME}) {{
-                    window.{QUEUE_NAME} = [];
-                }}
-
-                let _request_id = {request_id};
-
-                if (!window.{QUEUE_NAME}[{queue_id}]) {{
-                    window.{QUEUE_NAME}[{queue_id}] = [];
-                }}
-                let _message_queue = window.{QUEUE_NAME}[{queue_id}];
-
-                {script}
-            }}
-            "#
-        );
-
-        if let Err(err) = webview.evaluate_script(&code) {
-            log::warn!("Query error: {err}");
-        }
-
-        let thread_receiver = self.sender.subscribe();
-        let thread_handle: JoinHandle<()> = tokio::spawn(async move {
-            let mut receiver = thread_receiver;
-            loop {
-                if let Ok(result) = receiver.recv().await {
-                    if result.id == request_id {
-                        _ = sender.send(result.data).await;
-                    }
-                }
-            }
-        });
-
-        Query {
-            slab: self.active_requests.clone(),
-            id: request_id,
-            reciever: self.sender.subscribe(),
-            phantom: std::marker::PhantomData,
-            queue_slab: Some(self.active_queues.clone()),
-            queue_id: Some(queue_id),
-            thread_handle: Some(thread_handle),
-        }
-    }
-
-    /// Send a query result
+    /// Send a query channel message to the correct query
     pub fn send(&self, data: QueryResult) {
-        let _ = self.sender.send(data);
+        let QueryResult {
+            id,
+            data,
+            returned_value,
+        } = data;
+        let mut slab = self.active_requests.slab.borrow_mut();
+        if let Some(entry) = slab.get_mut(id) {
+            if returned_value {
+                if let Some(sender) = entry.return_sender.take() {
+                    let _ = sender.send(data);
+                }
+            } else {
+                let _ = entry.channel_sender.send(data);
+            }
+        }
     }
 }
 
 pub(crate) struct Query<V: DeserializeOwned> {
-    slab: SharedSlab,
+    desktop: DesktopContext,
+    slab: SharedSlab<QueryEntry>,
+    receiver: tokio::sync::mpsc::UnboundedReceiver<Value>,
+    return_receiver: Option<tokio::sync::oneshot::Receiver<Value>>,
     id: usize,
-    queue_slab: Option<SharedSlab>,
-    queue_id: Option<usize>,
-    thread_handle: Option<JoinHandle<()>>,
-    reciever: tokio::sync::broadcast::Receiver<QueryResult>,
     phantom: std::marker::PhantomData<V>,
 }
 
 impl<V: DeserializeOwned> Query<V> {
     /// Resolve the query
     pub async fn resolve(mut self) -> Result<V, QueryError> {
-        let result = loop {
-            match self.reciever.recv().await {
-                Ok(result) => {
-                    if result.id == self.id {
-                        break V::deserialize(result.data).map_err(QueryError::Deserialize);
-                    }
-                }
-                Err(err) => {
-                    break Err(QueryError::Recv(err));
-                }
-            }
-        };
-
-        // Remove the query from the slab
-        self.cleanup(None);
-        result
+        match self.receiver.recv().await {
+            Some(result) => V::deserialize(result).map_err(QueryError::Deserialize),
+            None => Err(QueryError::Recv(RecvError::Closed)),
+        }
     }
 
     /// Send a message to the query
-    pub fn send<S: ToString>(&self, webview: &WebView, message: S) -> Result<(), QueryError> {
-        let queue_id = match self.queue_id {
-            Some(id) => id,
-            None => return Err(QueryError::Send("query is not of comm type".to_string())),
-        };
+    pub fn send<S: ToString>(&self, message: S) -> Result<(), QueryError> {
+        let queue_id = self.id;
 
         let data = message.to_string();
         let script = format!(
@@ -179,36 +200,49 @@ impl<V: DeserializeOwned> Query<V> {
             "#
         );
 
-        webview
+        self.desktop
+            .webview
             .evaluate_script(&script)
             .map_err(|e| QueryError::Send(e.to_string()))?;
 
         Ok(())
     }
 
-    pub fn cleanup(&mut self, webview: Option<&WebView>) {
-        if let Some(handle) = &self.thread_handle {
-            handle.abort();
-        }
+    /// Receive a message from the query
+    pub async fn recv(&mut self) -> Result<Value, QueryError> {
+        self.receiver
+            .recv()
+            .await
+            .ok_or(QueryError::Recv(RecvError::Closed))
+    }
 
+    /// Receive the result of the query
+    pub async fn result(&mut self) -> Result<Value, QueryError> {
+        match self.return_receiver.take() {
+            Some(receiver) => receiver
+                .await
+                .map_err(|_| QueryError::Recv(RecvError::Closed)),
+            None => Err(QueryError::Finished),
+        }
+    }
+}
+
+impl<V: DeserializeOwned> Drop for Query<V> {
+    fn drop(&mut self) {
         self.slab.slab.borrow_mut().remove(self.id);
+        let queue_id = self.id;
 
-        if let Some(queue_slab) = &self.queue_slab {
-            let queue_id = self.queue_id.unwrap();
+        _ = self.desktop.webview.evaluate_script(&format!(
+            r#"
+            if (!window.{QUEUE_NAME}) {{
+                window.{QUEUE_NAME} = [];
+            }}
 
-            _ = webview.unwrap().evaluate_script(&format!(
-                r#"
-                    if (!window.{QUEUE_NAME}) {{
-                        window.{QUEUE_NAME} = [];
-                    }}
-
-                    if (window.{QUEUE_NAME}[{queue_id}]) {{
-                        window.{QUEUE_NAME}[{queue_id}] = [];
-                    }}
-                "#
-            ));
-            queue_slab.slab.borrow_mut().remove(queue_id);
-        }
+            if (window.{QUEUE_NAME}[{queue_id}]) {{
+                window.{QUEUE_NAME}[{queue_id}] = [];
+            }}
+            "#
+        ));
     }
 }
 
@@ -220,10 +254,14 @@ pub enum QueryError {
     Send(String),
     #[error("Error deserializing query result: {0}")]
     Deserialize(serde_json::Error),
+    #[error("Query has already been resolved")]
+    Finished,
 }
 
 #[derive(Clone, Debug, Deserialize)]
 pub(crate) struct QueryResult {
     id: usize,
     data: Value,
+    #[serde(default)]
+    returned_value: bool,
 }
