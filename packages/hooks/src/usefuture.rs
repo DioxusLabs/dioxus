@@ -54,11 +54,6 @@ where
         let schedule_update = state.update.clone();
         let waker = state.waker.clone();
 
-        // Cancel the current future
-        if let Some(current) = state.task.take() {
-            cx.remove_future(current);
-        }
-
         state.task.set(Some(cx.push_future(async move {
             let res = fut.await;
             values.borrow_mut().push(Box::leak(Box::new(res)));
