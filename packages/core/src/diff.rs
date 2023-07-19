@@ -32,11 +32,13 @@ impl<'b> VirtualDom {
 
             use RenderReturn::{Aborted, Ready};
 
-            let id = scope_state.placeholder.get();
-
+            
             match (old, new) {
                 // Normal pathway
-                (Ready(l), Ready(r)) => self.diff_node(l, r, id),
+                (Ready(l), Ready(r)) => {
+                    let id = scope_state.placeholder.get();
+                    self.diff_node(l, r, id)
+                },
 
                 // Unwind the mutations if need be
                 (Ready(l), Aborted(p)) => self.diff_ok_to_err(l, p),

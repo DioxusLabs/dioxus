@@ -4,22 +4,20 @@ on:
     branches: [ main, master ]
   pull_request:
     branches: [ main, master ]
+defaults:
+  run:
+    working-directory: ./playwright-tests
 jobs:
   test:
     if: github.event.pull_request.draft == false
     timeout-minutes: 60
     runs-on: ubuntu-20.04
     steps:
+    # Do our best to cache the toolchain and node install steps
     - uses: actions/checkout@v3
     - uses: actions/setup-node@v3
       with:
         node-version: 16
-    - name: Install dependencies
-      run: npm ci
-    - name: Install Playwright
-      run: npm install -D @playwright/test
-    - name: Install Playwright Browsers
-      run: npx playwright install --with-deps
     - name: Install Rust
       uses: actions-rs/toolchain@v1
       with:
@@ -29,11 +27,18 @@ jobs:
     - uses: Swatinem/rust-cache@v2
     - name: Install WASM toolchain
       run: rustup target add wasm32-unknown-unknown
-    - name: Install Dioxus CLI
-      uses: actions-rs/cargo@v1
-      with:
-        command: install
-        args: --path packages/cli
+    - name: Install dependencies
+      run: npm ci
+    - name: Install Playwright
+      run: npm install -D @playwright/test
+    - name: Install Playwright Browsers
+      run: npx playwright install --with-deps
+    #  Cache the CLI by using cargo run internally
+    # - name: Install Dioxus CLI
+    #   uses: actions-rs/cargo@v1
+    #   with:
+    #     command: install
+    #     args: --path packages/cli
     - name: Run Playwright tests
       run: npx playwright test
     - uses: actions/upload-artifact@v3
