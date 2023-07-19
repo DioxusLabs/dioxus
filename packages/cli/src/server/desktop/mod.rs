@@ -11,7 +11,6 @@ use dioxus_html::HtmlCtx;
 use dioxus_rsx::hot_reload::*;
 use interprocess_docfix::local_socket::LocalSocketListener;
 use std::{
-    path::PathBuf,
     process::{Child, Command},
     sync::{Arc, Mutex, RwLock},
 };
@@ -138,19 +137,7 @@ pub async fn serve_hot_reload(config: CrateConfig) -> Result<()> {
         None,
     );
 
-    #[cfg(target_os = "macos")]
-    {
-        // On unix, if you force quit the application, it can leave the file socket open
-        // This will cause the local socket listener to fail to open
-        // We check if the file socket is already open from an old session and then delete it
-        let paths = ["./dioxusin", "./@dioxusin"];
-        for path in paths {
-            let path = PathBuf::from(path);
-            if path.exists() {
-                let _ = std::fs::remove_file(path);
-            }
-        }
-    }
+    clear_paths();
 
     match LocalSocketListener::bind("@dioxusin") {
         Ok(local_socket_stream) => {
@@ -210,6 +197,21 @@ pub async fn serve_hot_reload(config: CrateConfig) -> Result<()> {
     }
 
     Ok(())
+}
+
+fn clear_paths() {
+    if cfg!(target_os = "macos") {
+        // On unix, if you force quit the application, it can leave the file socket open
+        // This will cause the local socket listener to fail to open
+        // We check if the file socket is already open from an old session and then delete it
+        let paths = ["./dioxusin", "./@dioxusin"];
+        for path in paths {
+            let path = std::path::PathBuf::from(path);
+            if path.exists() {
+                let _ = std::fs::remove_file(path);
+            }
+        }
+    }
 }
 
 fn send_msg(msg: HotReloadMsg, channel: &mut impl std::io::Write) -> bool {
