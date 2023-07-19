@@ -51,26 +51,26 @@ fn get_file_event_for_file(
 }
 
 #[cfg(not(any(
-target_os = "windows",
-target_os = "macos",
-target_os = "linux",
-target_os = "dragonfly",
-target_os = "freebsd",
-target_os = "netbsd",
-target_os = "openbsd"
+    target_os = "windows",
+    target_os = "macos",
+    target_os = "linux",
+    target_os = "dragonfly",
+    target_os = "freebsd",
+    target_os = "netbsd",
+    target_os = "openbsd"
 )))]
 pub(crate) fn get_file_event(_request: &FileDialogRequest) -> Vec<PathBuf> {
     vec![]
 }
 
 #[cfg(any(
-target_os = "windows",
-target_os = "macos",
-target_os = "linux",
-target_os = "dragonfly",
-target_os = "freebsd",
-target_os = "netbsd",
-target_os = "openbsd"
+    target_os = "windows",
+    target_os = "macos",
+    target_os = "linux",
+    target_os = "dragonfly",
+    target_os = "freebsd",
+    target_os = "netbsd",
+    target_os = "openbsd"
 ))]
 pub(crate) fn get_file_event(request: &FileDialogRequest) -> Vec<PathBuf> {
     let dialog = rfd::FileDialog::new();
