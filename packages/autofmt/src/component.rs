@@ -176,7 +176,7 @@ impl Writer<'_> {
                     )?;
                 }
                 ContentField::OnHandlerRaw(exp) => {
-                    let out = prettyplease::unparse(exp);
+                    let out = prettyplease::unparse_expr(exp);
                     let mut lines = out.split('\n').peekable();
                     let first = lines.next().unwrap();
                     write!(self.out, "{name}: {first}")?;
