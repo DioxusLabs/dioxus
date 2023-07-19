@@ -12,6 +12,6 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "@playwright/test": "^1.34.3"
+    "@playwright/test": "^1.36.1"
   }
 }

@@ -81,7 +81,7 @@ module.exports = defineConfig({
       stdout: "pipe",
     },
     {
-      cwd: path.join(process.cwd(), "playwright-tests", "web"),
+      cwd: path.join(process.cwd(), "web"),
       command: "cargo run --package dioxus-cli -- serve",
       port: 8080,
       timeout: 10 * 60 * 1000,
@@ -89,7 +89,7 @@ module.exports = defineConfig({
       stdout: "pipe",
     },
     {
-      cwd: path.join(process.cwd(), 'playwrite-tests', 'fullstack'),
+      cwd: path.join(process.cwd(), 'fullstack'),
       command: 'cargo run --package dioxus-cli -- build --features web --release\ncargo run --release --features ssr',
       port: 3333,
       timeout: 10 * 60 * 1000,
