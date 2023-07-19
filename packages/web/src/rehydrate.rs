@@ -90,7 +90,7 @@ impl WebsysDom {
             // make sure we set the root node ids even if the node is not dynamic
             set_node(
                 hydrated,
-                vnode.root_ids.get(i).ok_or(VNodeNotInitialized)?,
+                *vnode.root_ids.borrow().get(i).ok_or(VNodeNotInitialized)?,
                 current_child.clone()?,
             );
 

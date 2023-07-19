@@ -20,7 +20,7 @@ fn app(cx: Scope) -> Element {
             background_color: "hsl({hue}, 70%, {brightness}%)",
             onmousemove: move |evt| {
                 if let RenderReturn::Ready(node) = cx.root_node() {
-                    if let Some(id) = node.root_ids.get(0){
+                    if let Some(id) = node.root_ids.borrow().get(0).cloned() {
                         let node = tui_query.get(mapping.get_node_id(id).unwrap());
                         let Size{width, height} = node.size().unwrap();
                         let pos = evt.inner().element_coordinates();
