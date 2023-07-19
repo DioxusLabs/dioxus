@@ -5,8 +5,6 @@
 use proc_macro2::LineColumn;
 use syn::{Block, Expr, File, Item, Macro, Stmt};
 
-use crate::expr;
-
 type CollectedMacro<'a> = &'a Macro;
 
 pub fn collect_from_file<'a>(file: &'a File, macros: &mut Vec<CollectedMacro<'a>>) {
@@ -44,8 +42,7 @@ pub fn collect_from_item<'a>(item: &'a Item, macros: &mut Vec<CollectedMacro<'a>
         }
 
         // None of these we can really do anything with at the item level
-        Item::Macro(_)
-        | Item::Enum(_)
+        Item::Enum(_)
         | Item::ExternCrate(_)
         | Item::ForeignMod(_)
         | Item::TraitAlias(_)
@@ -156,7 +153,6 @@ pub fn collect_from_expr<'a>(expr: &'a Expr, macros: &mut Vec<CollectedMacro<'a>
 
         // don't both formatting these for now
         Expr::Array(_)
-        | Expr::Assign(_)
         | Expr::Await(_)
         | Expr::Binary(_)
         | Expr::Break(_)
