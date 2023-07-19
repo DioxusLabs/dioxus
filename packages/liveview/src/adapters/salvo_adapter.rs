@@ -12,14 +12,12 @@ pub fn salvo_socket(ws: WebSocket) -> impl LiveViewSocket {
         .sink_map_err(|_| LiveViewError::SendingFailed)
 }
 
-fn transform_rx(message: Result<Message, salvo::Error>) -> Result<String, LiveViewError> {
+fn transform_rx(message: Result<Message, salvo::Error>) -> Result<Vec<u8>, LiveViewError> {
     let as_bytes = message.map_err(|_| LiveViewError::SendingFailed)?;
 
-    let msg = String::from_utf8(as_bytes.into_bytes()).map_err(|_| LiveViewError::SendingFailed)?;
-
-    Ok(msg)
+    Ok(as_bytes.into())
 }
 
-async fn transform_tx(message: String) -> Result<Message, salvo::Error> {
-    Ok(Message::text(message))
+async fn transform_tx(message: Vec<u8>) -> Result<Message, salvo::Error> {
+    Ok(Message::text(String::from_utf8_lossy(&message).to_string()))
 }

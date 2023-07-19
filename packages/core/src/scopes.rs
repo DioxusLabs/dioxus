@@ -693,13 +693,13 @@ impl<'src> ScopeState {
                 raw_ref.downcast_mut::<State>()
             })
             .expect(
-                r###"
+                r#"
                 Unable to retrieve the hook that was initialized at this index.
                 Consult the `rules of hooks` to understand how to use hooks properly.
 
                 You likely used the hook in a conditional. Hooks rely on consistent ordering between renders.
                 Functions prefixed with "use" should never be called conditionally.
-                "###,
+                "#,
             )
     }
 }
