@@ -18,7 +18,7 @@ Hot reloading is automatically enabled when using the web renderer on debug buil
 1. Run:
 
 ```bash
-dioxus serve --hot-reload
+dx serve --hot-reload
 ```
 
 2. Change some code within a rsx or render macro

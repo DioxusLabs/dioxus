@@ -1098,6 +1098,7 @@ builder_constructors! {
         autofocus: Bool DEFAULT,
         capture: String DEFAULT,
         checked: Bool DEFAULT,
+        directory: Bool "webkitdirectory",
         disabled: Bool DEFAULT,
         form: Id DEFAULT,
         formaction: Uri DEFAULT,

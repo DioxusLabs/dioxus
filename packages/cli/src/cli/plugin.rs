@@ -31,7 +31,7 @@ impl Plugin {
                 }
             }
             Plugin::Add { name: _ } => {
-                log::info!("You can use `dioxus plugin app-path` to get Installation position");
+                log::info!("You can use `dx plugin app-path` to get Installation position");
             }
         }
         Ok(())

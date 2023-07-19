@@ -9,8 +9,8 @@ It is also very much usable as a template for your projects, if you're aiming to
 
 Make sure you have Dioxus CLI installed (if you're unsure, run `cargo install dioxus-cli`).
 
-You can run `dioxus serve` in this directory to start the web server locally, or run
-`dioxus build --release` to build the project so you can deploy it on a separate web-server.
+You can run `dx serve` in this directory to start the web server locally, or run
+`dx build --release` to build the project so you can deploy it on a separate web-server.
 
 ## Project Structure
 ```

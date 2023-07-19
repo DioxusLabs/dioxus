@@ -4,6 +4,7 @@ members = [
     "packages/core",
     "packages/cli",
     "packages/core-macro",
+    "packages/router-macro",
     "packages/extension",
     "packages/router",
     "packages/html",
@@ -29,9 +30,12 @@ members = [
     "packages/fullstack/examples/axum-hello-world",
     "packages/fullstack/examples/axum-router",
     "packages/fullstack/examples/axum-desktop",
+    "packages/fullstack/examples/axum-auth",
     "packages/fullstack/examples/salvo-hello-world",
     "packages/fullstack/examples/warp-hello-world",
+    "packages/fullstack/examples/static-hydrated",
     "docs/guide",
+    "docs/router",
     # Full project examples
     "examples/tailwind",
     "examples/PWA-example",
@@ -48,6 +52,7 @@ dioxus = { path = "packages/dioxus" }
 dioxus-core = { path = "packages/core" }
 dioxus-core-macro = { path = "packages/core-macro" }
 dioxus-router = { path = "packages/router" }
+dioxus-router-macro = { path = "packages/router-macro" }
 dioxus-html = { path = "packages/html" }
 dioxus-hooks = { path = "packages/hooks" }
 dioxus-web = { path = "packages/web" }

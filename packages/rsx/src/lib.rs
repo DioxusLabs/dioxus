@@ -59,8 +59,25 @@ impl CallBody {
         template: Option<CallBody>,
         location: &'static str,
     ) -> Option<Template<'static>> {
-        let mut renderer: TemplateRenderer = TemplateRenderer { roots: &self.roots };
+        let mut renderer: TemplateRenderer = TemplateRenderer {
+            roots: &self.roots,
+            location: None,
+        };
         renderer.update_template::<Ctx>(template, location)
+    }
+
+    /// Render the template with a manually set file location. This should be used when multiple rsx! calls are used in the same macro
+    pub fn render_with_location(&self, location: String) -> TokenStream2 {
+        let body = TemplateRenderer {
+            roots: &self.roots,
+            location: Some(location),
+        };
+
+        quote! {
+            ::dioxus::core::LazyNodes::new( move | __cx: &::dioxus::core::ScopeState| -> ::dioxus::core::VNode {
+                #body
+            })
+        }
     }
 }
 
@@ -85,7 +102,10 @@ impl Parse for CallBody {
 /// Serialize the same way, regardless of flavor
 impl ToTokens for CallBody {
     fn to_tokens(&self, out_tokens: &mut TokenStream2) {
-        let body = TemplateRenderer { roots: &self.roots };
+        let body = TemplateRenderer {
+            roots: &self.roots,
+            location: None,
+        };
 
         out_tokens.append_all(quote! {
             ::dioxus::core::LazyNodes::new( move | __cx: &::dioxus::core::ScopeState| -> ::dioxus::core::VNode {
@@ -102,6 +122,7 @@ impl ToTokens for RenderCallBody {
     fn to_tokens(&self, out_tokens: &mut TokenStream2) {
         let body: TemplateRenderer = TemplateRenderer {
             roots: &self.0.roots,
+            location: None,
         };
 
         out_tokens.append_all(quote! {
@@ -115,6 +136,7 @@ impl ToTokens for RenderCallBody {
 
 pub struct TemplateRenderer<'a> {
     pub roots: &'a [BodyNode],
+    pub location: Option<String>,
 }
 
 impl<'a> TemplateRenderer<'a> {
@@ -185,6 +207,21 @@ impl<'a> ToTokens for TemplateRenderer<'a> {
             out
         });
 
+        let name = match self.location {
+            Some(ref loc) => quote! { #loc },
+            None => quote! {
+                concat!(
+                    file!(),
+                    ":",
+                    line!(),
+                    ":",
+                    column!(),
+                    ":",
+                    #root_col
+                )
+            },
+        };
+
         // Render and release the mutable borrow on context
         let roots = quote! { #( #root_printer ),* };
         let node_printer = &context.dynamic_nodes;
@@ -194,15 +231,7 @@ impl<'a> ToTokens for TemplateRenderer<'a> {
 
         out_tokens.append_all(quote! {
             static TEMPLATE: ::dioxus::core::Template = ::dioxus::core::Template {
-                name: concat!(
-                    file!(),
-                    ":",
-                    line!(),
-                    ":",
-                    column!(),
-                    ":",
-                    #root_col
-                ),
+                name: #name,
                 roots: &[ #roots ],
                 node_paths: &[ #(#node_paths),* ],
                 attr_paths: &[ #(#attr_paths),* ],

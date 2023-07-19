@@ -1,41 +1,84 @@
 #![doc = include_str!("../README.md")]
-#![warn(missing_docs)]
+// cannot use forbid, because props derive macro generates #[allow(missing_docs)]
+#![deny(missing_docs)]
+#![allow(non_snake_case)]
 
-mod hooks {
-    mod use_route;
-    mod use_router;
-    pub use use_route::*;
-    pub use use_router::*;
-}
-pub use hooks::*;
+pub mod navigation;
+pub mod routable;
 
-mod components {
-    #![allow(non_snake_case)]
+#[cfg(feature = "ssr")]
+pub mod incremental;
+
+/// Components interacting with the router.
+pub mod components {
+    mod default_errors;
+    pub use default_errors::*;
+
+    mod history_buttons;
+    pub use history_buttons::*;
 
     mod link;
-    mod redirect;
-    mod route;
-    mod router;
-
     pub use link::*;
-    pub use redirect::*;
-    pub use route::*;
+
+    mod outlet;
+    pub use outlet::*;
+
+    mod router;
     pub use router::*;
 }
-pub use components::*;
 
-mod cfg;
-mod routecontext;
-mod service;
+mod contexts {
+    pub(crate) mod navigator;
+    pub(crate) mod outlet;
+    pub(crate) mod router;
+    pub use navigator::*;
+    pub(crate) use router::*;
+}
 
-pub use routecontext::*;
-pub use service::*;
+mod router_cfg;
 
-/// An error specific to the Router
-#[derive(Debug)]
-pub enum Error {
-    /// The route was not found while trying to navigate to it.
-    ///
-    /// This will force the router to redirect to the 404 page.
-    NotFound,
+mod history;
+
+/// Hooks for interacting with the router in components.
+pub mod hooks {
+    mod use_router;
+    pub(crate) use use_router::*;
+
+    mod use_route;
+    pub use use_route::*;
+
+    mod use_navigator;
+    pub use use_navigator::*;
+}
+
+/// A collection of useful items most applications might need.
+pub mod prelude {
+    pub use crate::components::*;
+    pub use crate::contexts::*;
+    pub use crate::history::*;
+    pub use crate::hooks::*;
+    pub use crate::navigation::*;
+    pub use crate::routable::*;
+    pub use crate::router_cfg::RouterConfig;
+    pub use dioxus_router_macro::Routable;
+
+    #[cfg(feature = "ssr")]
+    pub use crate::incremental::*;
+    #[cfg(feature = "ssr")]
+    pub use dioxus_ssr::incremental::*;
+
+    #[doc(hidden)]
+    /// A component with props used in the macro
+    pub trait HasProps {
+        /// The props type of the component.
+        type Props;
+    }
+
+    impl<P> HasProps for dioxus::prelude::Component<P> {
+        type Props = P;
+    }
+}
+
+mod utils {
+    pub(crate) mod use_router_internal;
 }
