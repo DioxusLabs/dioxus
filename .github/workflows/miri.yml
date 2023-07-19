@@ -6,6 +6,13 @@ on:
     branches:
       - 'auto'
       - 'try'
+    paths:
+      - packages/**
+      - examples/**
+      - src/**
+      - .github/**
+      - lib.rs
+      - Cargo.toml
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
     branches:

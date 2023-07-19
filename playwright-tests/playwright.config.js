@@ -12,7 +12,7 @@ const path = require("path");
  * @see https://playwright.dev/docs/test-configuration
  */
 module.exports = defineConfig({
-  testDir: "./playwright-tests",
+  testDir: ".",
   /* Run tests in files in parallel */
   fullyParallel: true,
   /* Fail the build on CI if you accidentally left test.only in the source code. */
@@ -81,16 +81,16 @@ module.exports = defineConfig({
       stdout: "pipe",
     },
     {
-      cwd: path.join(process.cwd(), "playwright-tests", "web"),
-      command: "dx serve",
+      cwd: path.join(process.cwd(), "web"),
+      command: "cargo run --package dioxus-cli -- serve",
       port: 8080,
       timeout: 10 * 60 * 1000,
       reuseExistingServer: !process.env.CI,
       stdout: "pipe",
     },
     {
-      cwd: path.join(process.cwd(), 'playwrite-tests', 'fullstack'),
-      command: 'dx build --features web --release\ncargo run --release --features ssr',
+      cwd: path.join(process.cwd(), 'fullstack'),
+      command: 'cargo run --package dioxus-cli -- build --features web --release\ncargo run --release --features ssr',
       port: 3333,
       timeout: 10 * 60 * 1000,
       reuseExistingServer: !process.env.CI,
