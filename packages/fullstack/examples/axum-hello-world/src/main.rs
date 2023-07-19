@@ -22,14 +22,8 @@ fn app(cx: Scope<AppProps>) -> Element {
 }
 
 fn Child(cx: Scope) -> Element {
-    let state = use_server_future(cx, (), |()| async move {
-        loop {
-            if let Ok(res) = get_server_data().await {
-                break res;
-            }
-        }
-    })?
-    .value();
+    let state =
+        use_server_future(cx, (), |()| async move { get_server_data().await.unwrap() })?.value();
 
     let mut count = use_state(cx, || 0);
     let text = use_state(cx, || "...".to_string());
