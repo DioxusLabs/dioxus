@@ -82,7 +82,7 @@ module.exports = defineConfig({
     },
     {
       cwd: path.join(process.cwd(), "playwright-tests", "web"),
-      command: "dx serve",
+      command: "cargo run --package dioxus-cli -- serve",
       port: 8080,
       timeout: 10 * 60 * 1000,
       reuseExistingServer: !process.env.CI,
@@ -90,7 +90,7 @@ module.exports = defineConfig({
     },
     {
       cwd: path.join(process.cwd(), 'playwrite-tests', 'fullstack'),
-      command: 'dx build --features web --release\ncargo run --release --features ssr',
+      command: 'cargo run --package dioxus-cli -- build --features web --release\ncargo run --release --features ssr',
       port: 3333,
       timeout: 10 * 60 * 1000,
       reuseExistingServer: !process.env.CI,
