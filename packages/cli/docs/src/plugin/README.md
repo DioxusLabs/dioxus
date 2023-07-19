@@ -2,7 +2,7 @@
 
 > For Cli 0.2.0 we will add `plugin-develop` support.
 
-Before the 0.2.0 we use `dioxus tool` to use & install some plugin, but we think that is not good for extend cli program, some people want tailwind support, some people want sass support, we can't add all this thing in to the cli source code and we don't have time to maintain a lot of tools that user request, so maybe user make plugin by themself is a good choice.
+Before the 0.2.0 we use `dx tool` to use & install some plugin, but we think that is not good for extend cli program, some people want tailwind support, some people want sass support, we can't add all this thing in to the cli source code and we don't have time to maintain a lot of tools that user request, so maybe user make plugin by themself is a good choice.
 
 ### Why Lua ?
 

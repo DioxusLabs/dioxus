@@ -1,7 +1,7 @@
 //! Run with:
 //!
 //! ```sh
-//! dioxus build --features web
+//! dx build --features web
 //! cargo run --features ssr
 //! ```
 

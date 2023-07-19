@@ -29,8 +29,8 @@ General application confiration:
    # default: web
    default_platform = "web"
    ```
-   if you change this to `desktop`, the `dioxus build` will default building a desktop app
-3. ***out_dir*** - The directory to place the build artifacts from `dioxus build` or `dioxus service` into. This is also where the `assets` directory will be copied to
+   if you change this to `desktop`, the `dx build` will default building a desktop app
+3. ***out_dir*** - The directory to place the build artifacts from `dx build` or `dx service` into. This is also where the `assets` directory will be copied to
     ```
     out_dir = "dist"
     ```
