@@ -86,13 +86,6 @@ dioxus-core = { workspace = true, features = ["serialize"] }
 default = []
 plugin = ["mlua"]
 
-# install path dx and dioxus as the same command
-# so, they're not really aliases
-# eventually dx will defer to the right version of dioxus
-[[bin]]
-path = "src/main.rs"
-name = "dioxus"
-
 [[bin]]
 path = "src/main.rs"
 name = "dx"

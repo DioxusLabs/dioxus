@@ -126,7 +126,7 @@ impl Route {
                                 None => {
                                     return Err(syn::Error::new_spanned(
                                         variant.clone(),
-                                        "Routable variants with a #[child(...)] attribute must have a field named \"child\" or a field with a #[child] attribute",
+                                        "Routable variants with a #[child(..)] attribute must have a field named \"child\" or a field with a #[child] attribute",
                                     ));
                                 }
                             }
@@ -134,14 +134,14 @@ impl Route {
                         _ => {
                             return Err(syn::Error::new_spanned(
                                 variant.clone(),
-                                "Routable variants with a #[child(...)] attribute must have named fields",
+                                "Routable variants with a #[child(..)] attribute must have named fields",
                             ))
                         }
                     }
                 } else {
                     return Err(syn::Error::new_spanned(
                             variant.clone(),
-                            "Routable variants must either have a #[route(...)] attribute or a #[child(...)] attribute",
+                            "Routable variants must either have a #[route(..)] attribute or a #[child(..)] attribute",
                         ));
                 }
             }

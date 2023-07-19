@@ -1,13 +1,13 @@
 # Translate
 
-`dioxus translate` can translate some `html` file into a Dioxus compoent
+`dx translate` can translate some `html` file into a Dioxus compoent
 
 ```
-dioxus-translate 
+dioxus-translate
 Translate some source file into a Dioxus component
 
 USAGE:
-    dioxus translate [OPTIONS] [OUTPUT]
+    dx translate [OPTIONS] [OUTPUT]
 
 ARGS:
     <OUTPUT>    Output file, defaults to stdout if not present
@@ -22,7 +22,7 @@ OPTIONS:
 You can use the `file` option to set path to the `html` file to translate:
 
 ```
-dioxus transtale --file ./index.html
+dx transtale --file ./index.html
 ```
 
 ## Output rsx to a file
@@ -30,7 +30,7 @@ dioxus transtale --file ./index.html
 You can pass a file to the traslate command to set the path to write the output of the command to:
 
 ```
-dioxus translate --file ./index.html component.rsx
+dx translate --file ./index.html component.rsx
 ```
 
 ## Output rsx to a file
@@ -38,7 +38,7 @@ dioxus translate --file ./index.html component.rsx
 Setting the `component` option will create a compoent from the HTML:
 
 ```
-dioxus translate --file ./index.html --component
+dx translate --file ./index.html --component
 ```
 
 ## Example

@@ -8,7 +8,7 @@ enum Route {
     #[route("/")]
     Home {},
     // PageNotFound is a catch all route that will match any route and placing the matched segments in the route field
-    #[route("/:...route")]
+    #[route("/:..route")]
     PageNotFound { route: Vec<String> },
 }
 // ANCHOR_END: router

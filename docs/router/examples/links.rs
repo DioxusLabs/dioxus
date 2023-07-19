@@ -11,7 +11,7 @@ enum Route {
         #[route("/")]
         Home {},
     #[end_layout]
-    #[route("/:...route")]
+    #[route("/:..route")]
     PageNotFound { route: Vec<String> },
 }
 // ANCHOR_END: router

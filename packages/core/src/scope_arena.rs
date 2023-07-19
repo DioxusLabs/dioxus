@@ -87,7 +87,7 @@ impl VirtualDom {
             if matches!(allocated, RenderReturn::Aborted(_)) {
                 self.suspended_scopes.insert(scope.id);
             }
-        } else {
+        } else if !self.suspended_scopes.is_empty() {
             _ = self.suspended_scopes.remove(&scope.id);
         }
 

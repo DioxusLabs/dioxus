@@ -31,11 +31,11 @@ mod segment;
 /// Route Segments:
 /// 1. Static Segments: "/static"
 /// 2. Dynamic Segments: "/:dynamic" (where dynamic has a type that is FromStr in all child Variants)
-/// 3. Catch all Segments: "/:...segments" (where segments has a type that is FromSegments in all child Variants)
+/// 3. Catch all Segments: "/:..segments" (where segments has a type that is FromSegments in all child Variants)
 /// 4. Query Segments: "/?:query" (where query has a type that is FromQuery in all child Variants)
 ///
 /// Routes are matched:
-/// 1. By there specificity this order: Query Routes ("/?:query"), Static Routes ("/route"), Dynamic Routes ("/:route"), Catch All Routes ("/:...route")
+/// 1. By there specificity this order: Query Routes ("/?:query"), Static Routes ("/route"), Dynamic Routes ("/:route"), Catch All Routes ("/:..route")
 /// 2. By the order they are defined in the enum
 ///
 /// All features:
@@ -369,13 +369,13 @@ impl RouteEnum {
                     let (exclude, layout): (bool, Layout) = attr.parse_args_with(parser)?;
 
                     if exclude {
-                        let Some(layout_index) =
-                            layouts.iter().position(|l| l.comp == layout.comp) else {
-                                return Err(syn::Error::new(
-                                    Span::call_site(),
-                                    "Attempted to exclude a layout that does not exist",
-                                ));
-                            };
+                        let Some(layout_index) = layouts.iter().position(|l| l.comp == layout.comp)
+                        else {
+                            return Err(syn::Error::new(
+                                Span::call_site(),
+                                "Attempted to exclude a layout that does not exist",
+                            ));
+                        };
                         excluded.push(LayoutId(layout_index));
                     } else {
                         let layout_index = layouts.len();

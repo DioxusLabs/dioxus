@@ -2,15 +2,16 @@
 
 So far our components have had no state like a normal rust functions. However, in a UI component, it is often useful to have stateful functionality to build user interactions. For example, you might want to track whether the user has opened a drop-down, and render different things accordingly.
 
-Hooks allow us to create state in our components. Hooks are Rust functions that take a reference to `ScopeState` (in a component, you can pass `cx`), and provide you with functionality and state.
+Hooks allow us to create state in our components. Hooks are Rust functions that take a reference to [`ScopeState`](https://docs.rs/dioxus/latest/dioxus/prelude/struct.ScopeState.html) (in a component, you can pass `cx`), and provide you with functionality and state.
 
 ## `use_state` Hook
 
 [`use_state`](https://docs.rs/dioxus/latest/dioxus/prelude/fn.use_state.html) is one of the simplest hooks.
 
-- You provide a closure that determines the initial value
+- You provide a closure that determines the initial value: `let mut count = use_state(cx, || 0);`
 - `use_state` gives you the current value, and a way to update it by setting it to something else
-- When the value updates, `use_state` makes the component re-render, and provides you with the new value
+- When the value updates, `use_state` makes the component re-render (along with any other component
+  that references it), and then provides you with the new value.
 
 For example, you might have seen the counter example, in which state (a number) is tracked using the `use_state` hook:
 
@@ -45,10 +46,11 @@ But how can Dioxus differentiate between multiple hooks in the same component? A
 This is only possible because the two hooks are always called in the same order, so Dioxus knows which is which. Because the order you call hooks matters, you must follow certain rules when using hooks:
 
 1. Hooks may be only used in components or other hooks (we'll get to that later)
-2. On every call to the component function
+2. On every call to a component function
    1. The same hooks must be called (except in the case of early returns, as explained later in the [Error Handling chapter](../best_practices/error_handling.md))
    2. In the same order
-3. Hooks name's should start with `use_` so you don't accidentally confuse them with regular functions
+3. Hook names should start with `use_` so you don't accidentally confuse them with regular
+   functions (`use_state()`, `use_ref()`, `use_future()`, etc...)
 
 These rules mean that there are certain things you can't do with hooks:
 
@@ -74,9 +76,12 @@ These rules mean that there are certain things you can't do with hooks:
 
 `use_state` is great for tracking simple values. However, you may notice in the [`UseState` API](https://docs.rs/dioxus/latest/dioxus/hooks/struct.UseState.html) that the only way to modify its value is to replace it with something else (e.g., by calling `set`, or through one of the `+=`, `-=` operators). This works well when it is cheap to construct a value (such as any primitive). But what if you want to maintain more complex data in the components state?
 
-For example, suppose we want to maintain a `Vec` of values. If we stored it with `use_state`, the only way to add a new value to the list would be to create a new `Vec` with the additional value, and put it in the state. This is expensive! We want to modify the existing `Vec` instead.
+For example, suppose we want to maintain a `Vec` of values. If we stored it with `use_state`, the
+only way to add a new value to the list would be to copy the existing `Vec`, add our value to it,
+and then replace the existing `Vec` in the state with it. This is expensive! We want to modify the
+existing `Vec` instead.
 
-Thankfully, there is another hook for that, `use_ref`! It is similar to `use_state`, but it lets you get a mutable reference to the contained data.
+Thankfully, there is another hook for that, `use_ref`! It **is** similar to `use_state`, but it lets you get a mutable reference to the contained data.
 
 Here's a simple example that keeps a list of events in a `use_ref`. We can acquire write access to the state with `.with_mut()`, and then just `.push` a new value to the state:
 
@@ -84,4 +89,18 @@ Here's a simple example that keeps a list of events in a `use_ref`. We can acqui
 {{#include ../../../examples/hooks_use_ref.rs:component}}
 ```
 
-> The return values of `use_state` and `use_ref` (`UseState` and `UseRef`, respectively) are in some ways similar to [`Cell`](https://doc.rust-lang.org/std/cell/) and [`RefCell`](https://doc.rust-lang.org/std/cell/struct.RefCell.html) – they provide interior mutability. However, these Dioxus wrappers also ensure that the component gets re-rendered whenever you change the state.
+> The return values of `use_state` and `use_ref` (
+> [`UseState`](https://docs.rs/dioxus/latest/dioxus/prelude/struct.UseState.html) and
+> [`UseRef`](https://docs.rs/dioxus/latest/dioxus/prelude/struct.UseRef.html), respectively) are in
+> some ways similar to [`Cell`](https://doc.rust-lang.org/std/cell/) and
+> [`RefCell`](https://doc.rust-lang.org/std/cell/struct.RefCell.html) – they provide interior
+> mutability. However, these Dioxus wrappers also ensure that the component gets re-rendered
+> whenever you change the state.
+
+
+## Additional Resources
+
+- [**dioxus_hooks** ](https://docs.rs/dioxus-hooks/latest/dioxus_hooks/) rustdoc
+  - Documents all hook types included with dioxus by default Most of these are also covered in
+  later chapters of this guide.
+- [Hooks Package](https://github.com/DioxusLabs/dioxus/tree/master/packages/hooks)

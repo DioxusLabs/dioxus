@@ -24,6 +24,10 @@ on:
       - lib.rs
       - Cargo.toml
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     if: github.event.pull_request.draft == false

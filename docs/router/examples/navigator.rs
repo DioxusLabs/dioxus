@@ -7,7 +7,7 @@ use dioxus_router::prelude::*;
 enum Route {
     #[route("/")]
     Home {},
-    #[route("/:...route")]
+    #[route("/:..route")]
     PageNotFound { route: Vec<String> },
 }
 
