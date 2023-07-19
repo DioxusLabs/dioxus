@@ -129,12 +129,14 @@ impl<'b> VirtualDom {
             });
 
         // Make sure the roots get transferred over while we're here
-        right_template.root_ids.transfer(&left_template.root_ids);
+        *right_template.root_ids.borrow_mut() = left_template.root_ids.borrow().clone();
+
+        let root_ids = right_template.root_ids.borrow();
 
         // Update the node refs
-        for i in 0..right_template.root_ids.len() {
-            if let Some(root_id) = right_template.root_ids.get(i) {
-                self.update_template(root_id, right_template);
+        for i in 0..root_ids.len() {
+            if let Some(root_id) = root_ids.get(i) {
+                self.update_template(*root_id, right_template);
             }
         }
     }
@@ -686,7 +688,7 @@ impl<'b> VirtualDom {
                     Some(node) => node,
                     None => {
                         self.mutations.push(Mutation::PushRoot {
-                            id: node.root_ids.get(idx).unwrap(),
+                            id: node.root_ids.borrow()[idx],
                         });
                         return 1;
                     }
@@ -821,7 +823,7 @@ impl<'b> VirtualDom {
             if let Some(dy) = node.dynamic_root(idx) {
                 self.remove_dynamic_node(dy, gen_muts);
             } else {
-                let id = node.root_ids.get(idx).unwrap();
+                let id = node.root_ids.borrow()[idx];
                 if gen_muts {
                     self.mutations.push(Mutation::Remove { id });
                 }
@@ -928,7 +930,7 @@ impl<'b> VirtualDom {
 
     fn find_first_element(&self, node: &'b VNode<'b>) -> ElementId {
         match node.dynamic_root(0) {
-            None => node.root_ids.get(0).unwrap(),
+            None => node.root_ids.borrow()[0],
             Some(Text(t)) => t.id.get().unwrap(),
             Some(Fragment(t)) => self.find_first_element(&t[0]),
             Some(Placeholder(t)) => t.id.get().unwrap(),
@@ -944,7 +946,7 @@ impl<'b> VirtualDom {
 
     fn find_last_element(&self, node: &'b VNode<'b>) -> ElementId {
         match node.dynamic_root(node.template.get().roots.len() - 1) {
-            None => node.root_ids.last().unwrap(),
+            None => *node.root_ids.borrow().last().unwrap(),
             Some(Text(t)) => t.id.get().unwrap(),
             Some(Fragment(t)) => self.find_last_element(t.last().unwrap()),
             Some(Placeholder(t)) => t.id.get().unwrap(),

@@ -571,12 +571,15 @@ impl VirtualDom {
     /// The mutations will be thrown out, so it's best to use this method for things like SSR that have async content
     pub async fn wait_for_suspense(&mut self) {
         loop {
+            // println!("waiting for suspense {:?}", self.suspended_scopes);
             if self.suspended_scopes.is_empty() {
                 return;
             }
 
+            // println!("waiting for suspense");
             self.wait_for_work().await;
 
+            // println!("Rendered immediately");
             _ = self.render_immediate();
         }
     }
