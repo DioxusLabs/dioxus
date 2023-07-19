@@ -4,6 +4,9 @@ on:
     branches: [ main, master ]
   pull_request:
     branches: [ main, master ]
+defaults:
+  run:
+    working-directory: ./playwright-tests
 jobs:
   test:
     if: github.event.pull_request.draft == false
@@ -11,6 +14,7 @@ jobs:
     runs-on: ubuntu-20.04
     steps:
     # Do our best to cache the toolchain and node install steps
+    - uses: actions/checkout@v3
     - uses: actions/setup-node@v3
       with:
         node-version: 16
@@ -23,9 +27,6 @@ jobs:
     - uses: Swatinem/rust-cache@v2
     - name: Install WASM toolchain
       run: rustup target add wasm32-unknown-unknown
-    - uses: actions/checkout@v3
-    - name: Enter playwright-tests
-      run: cd playwright-tests
     - name: Install dependencies
       run: npm ci
     - name: Install Playwright
