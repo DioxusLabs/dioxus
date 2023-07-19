@@ -1,11 +1,10 @@
-use std::{marker::PhantomData, panic::AssertUnwindSafe};
-
 use crate::{
     innerlude::Scoped,
-    nodes::{ComponentReturn, RenderReturn},
+    nodes::RenderReturn,
     scopes::{Scope, ScopeState},
     Element,
 };
+use std::panic::AssertUnwindSafe;
 
 /// A trait that essentially allows VComponentProps to be used generically
 ///
@@ -18,19 +17,15 @@ pub(crate) unsafe trait AnyProps<'a> {
     unsafe fn memoize(&self, other: &dyn AnyProps) -> bool;
 }
 
-pub(crate) struct VProps<'a, P, A, F: ComponentReturn<'a, A> = Element<'a>> {
-    pub render_fn: fn(Scope<'a, P>) -> F,
+pub(crate) struct VProps<'a, P> {
+    pub render_fn: fn(Scope<'a, P>) -> Element<'a>,
     pub memo: unsafe fn(&P, &P) -> bool,
     pub props: P,
-    _marker: PhantomData<A>,
 }
 
-impl<'a, P, A, F> VProps<'a, P, A, F>
-where
-    F: ComponentReturn<'a, A>,
-{
+impl<'a, P> VProps<'a, P> {
     pub(crate) fn new(
-        render_fn: fn(Scope<'a, P>) -> F,
+        render_fn: fn(Scope<'a, P>) -> Element<'a>,
         memo: unsafe fn(&P, &P) -> bool,
         props: P,
     ) -> Self {
@@ -38,15 +33,11 @@ where
             render_fn,
             memo,
             props,
-            _marker: PhantomData,
         }
     }
 }
 
-unsafe impl<'a, P, A, F> AnyProps<'a> for VProps<'a, P, A, F>
-where
-    F: ComponentReturn<'a, A>,
-{
+unsafe impl<'a, P> AnyProps<'a> for VProps<'a, P> {
     fn props_ptr(&self) -> *const () {
         &self.props as *const _ as *const ()
     }
@@ -69,12 +60,12 @@ where
                 scope: cx,
             });
 
-            (self.render_fn)(scope).into_return(cx)
+            (self.render_fn)(scope)
         }));
 
         match res {
-            Ok(e) => e,
-            Err(_) => RenderReturn::default(),
+            Ok(Some(e)) => RenderReturn::Ready(e),
+            _ => RenderReturn::default(),
         }
     }
 }

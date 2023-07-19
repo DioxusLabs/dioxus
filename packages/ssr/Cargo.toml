@@ -12,11 +12,15 @@ keywords = ["dom", "ui", "gui", "react", "ssr"]
 [dependencies]
 dioxus-core = { workspace = true, features = ["serialize"] }
 askama_escape = "0.10.3"
+thiserror = "1.0.23"
+rustc-hash = "1.1.0"
+lru = "0.10.0"
+log = "0.4.13"
+http = "0.2.9"
+tokio = { version = "1.28", features = ["full"] }
 
 [dev-dependencies]
 dioxus = { workspace = true }
-thiserror = "1.0.23"
-log = { workspace = true }
 fern = { version = "0.6.0", features = ["colored"] }
 anyhow = "1.0"
 argh = "0.1.4"

@@ -160,7 +160,7 @@ pub fn build(config: &CrateConfig, quiet: bool) -> Result<BuildResult> {
             }
         } else {
             log::warn!(
-                "Binaryen tool not found, you can use `dioxus tool add binaryen` to install it."
+                "Binaryen tool not found, you can use `dx tool add binaryen` to install it."
             );
         }
     }
@@ -199,7 +199,7 @@ pub fn build(config: &CrateConfig, quiet: bool) -> Result<BuildResult> {
             }
         } else {
             log::warn!(
-                "Tailwind tool not found, you can use `dioxus tool add tailwindcss` to install it."
+                "Tailwind tool not found, you can use `dx tool add tailwindcss` to install it."
             );
         }
     }
