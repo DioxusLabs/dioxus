@@ -5,6 +5,8 @@
 use proc_macro2::LineColumn;
 use syn::{Block, Expr, File, Item, Macro, Stmt};
 
+use crate::expr;
+
 type CollectedMacro<'a> = &'a Macro;
 
 pub fn collect_from_file<'a>(file: &'a File, macros: &mut Vec<CollectedMacro<'a>>) {
@@ -42,7 +44,7 @@ pub fn collect_from_item<'a>(item: &'a Item, macros: &mut Vec<CollectedMacro<'a>
         }
 
         // None of these we can really do anything with at the item level
-        Item::Macro2(_)
+        Item::Macro(_)
         | Item::Enum(_)
         | Item::ExternCrate(_)
         | Item::ForeignMod(_)
@@ -61,11 +63,18 @@ pub fn collect_from_block<'a>(block: &'a Block, macros: &mut Vec<CollectedMacro<
         match stmt {
             Stmt::Item(item) => collect_from_item(item, macros),
             Stmt::Local(local) => {
-                if let Some((_eq, init)) = &local.init {
-                    collect_from_expr(init, macros);
+                if let Some(init) = &local.init {
+                    collect_from_expr(&init.expr, macros);
                 }
             }
-            Stmt::Expr(exp) | Stmt::Semi(exp, _) => collect_from_expr(exp, macros),
+            Stmt::Expr(expr, _) => collect_from_expr(expr, macros),
+            Stmt::Macro(mac) => {
+                if mac.mac.path.segments[0].ident == "rsx"
+                    || mac.mac.path.segments[0].ident == "render"
+                {
+                    macros.push(&mac.mac);
+                }
+            }
         }
     }
 }
@@ -147,10 +156,9 @@ pub fn collect_from_expr<'a>(expr: &'a Expr, macros: &mut Vec<CollectedMacro<'a>
 
         // don't both formatting these for now
         Expr::Array(_)
-        | Expr::AssignOp(_)
+        | Expr::Assign(_)
         | Expr::Await(_)
         | Expr::Binary(_)
-        | Expr::Box(_)
         | Expr::Break(_)
         | Expr::Cast(_)
         | Expr::Continue(_)
@@ -167,7 +175,6 @@ pub fn collect_from_expr<'a>(expr: &'a Expr, macros: &mut Vec<CollectedMacro<'a>
         | Expr::Try(_)
         | Expr::TryBlock(_)
         | Expr::Tuple(_)
-        | Expr::Type(_)
         | Expr::Unary(_)
         | Expr::Verbatim(_) => {}
 

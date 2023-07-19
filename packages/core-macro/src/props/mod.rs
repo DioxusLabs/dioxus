@@ -166,8 +166,9 @@ mod field_info {
     use crate::props::type_from_inside_option;
     use proc_macro2::TokenStream;
     use quote::quote;
-    use syn::parse::Error;
     use syn::spanned::Spanned;
+    use syn::Expr;
+    use syn::{parse::Error, punctuated::Punctuated};
 
     use super::util::{
         expr_to_single_string, ident_to_type, path_to_single_string, strip_raw_ident_prefix,
@@ -260,31 +261,32 @@ mod field_info {
         pub fn with(mut self, attrs: &[syn::Attribute]) -> Result<Self, Error> {
             let mut skip_tokens = None;
             for attr in attrs {
-                if path_to_single_string(&attr.path).as_deref() != Some("props") {
+                if path_to_single_string(attr.path()).as_deref() != Some("props") {
                     continue;
                 }
 
-                if attr.tokens.is_empty() {
-                    continue;
-                }
-
-                let as_expr: syn::Expr = syn::parse2(attr.tokens.clone())?;
-                match as_expr {
-                    syn::Expr::Paren(body) => {
-                        self.apply_meta(*body.expr)?;
-                    }
-                    syn::Expr::Tuple(body) => {
-                        for expr in body.elems.into_iter() {
-                            self.apply_meta(expr)?;
+                match &attr.meta {
+                    syn::Meta::List(list) => {
+                        if list.tokens.is_empty() {
+                            continue;
                         }
                     }
                     _ => {
-                        return Err(Error::new_spanned(attr.tokens.clone(), "Expected (<...>)"));
+                        continue;
                     }
                 }
+
+                let as_expr = attr.parse_args_with(
+                    Punctuated::<Expr, syn::Token![,]>::parse_separated_nonempty,
+                )?;
+
+                for expr in as_expr.into_iter() {
+                    self.apply_meta(expr)?;
+                }
+
                 // Stash its span for later (we don’t yet know if it’ll be an error)
                 if self.skip && skip_tokens.is_none() {
-                    skip_tokens = Some(attr.tokens.clone());
+                    skip_tokens = Some(attr.meta.clone());
                 }
             }
 
@@ -461,6 +463,8 @@ mod struct_info {
     use proc_macro2::TokenStream;
     use quote::quote;
     use syn::parse::Error;
+    use syn::punctuated::Punctuated;
+    use syn::Expr;
 
     use super::field_info::{FieldBuilderAttr, FieldInfo};
     use super::util::{
@@ -1082,27 +1086,27 @@ Finally, call `.build()` to create the instance of `{name}`.
         pub fn new(attrs: &[syn::Attribute]) -> Result<TypeBuilderAttr, Error> {
             let mut result = TypeBuilderAttr::default();
             for attr in attrs {
-                if path_to_single_string(&attr.path).as_deref() != Some("builder") {
+                if path_to_single_string(&attr.path()).as_deref() != Some("builder") {
                     continue;
                 }
 
-                if attr.tokens.is_empty() {
-                    continue;
-                }
-                let as_expr: syn::Expr = syn::parse2(attr.tokens.clone())?;
-
-                match as_expr {
-                    syn::Expr::Paren(body) => {
-                        result.apply_meta(*body.expr)?;
-                    }
-                    syn::Expr::Tuple(body) => {
-                        for expr in body.elems.into_iter() {
-                            result.apply_meta(expr)?;
+                match &attr.meta {
+                    syn::Meta::List(list) => {
+                        if list.tokens.is_empty() {
+                            continue;
                         }
                     }
                     _ => {
-                        return Err(Error::new_spanned(attr.tokens.clone(), "Expected (<...>)"));
+                        continue;
                     }
+                }
+
+                let as_expr = attr.parse_args_with(
+                    Punctuated::<Expr, syn::Token![,]>::parse_separated_nonempty,
+                )?;
+
+                for expr in as_expr.into_iter() {
+                    result.apply_meta(expr)?;
                 }
             }
 
