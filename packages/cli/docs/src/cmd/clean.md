@@ -23,5 +23,5 @@ dx clean
 You can add the `--bin` option to select which crate you want Dioxus to clean artifacts from:
 
 ```
-dioxus clean --bin app
+dx clean --bin app
 ```

@@ -7,7 +7,7 @@ Once you have the Dioxus CLI tool installed, you can use it to create dioxus pro
 First, run the `dx create` command to create a new project ready to be used with Dioxus and the Dioxus CLI:
 
 ```
-dioxus create hello-dioxus
+dx create hello-dioxus
 ```
 
 > It will clone a default template from github template: [DioxusLabs/dioxus-template](https://github.com/DioxusLabs/dioxus-template)

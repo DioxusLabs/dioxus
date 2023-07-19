@@ -43,7 +43,7 @@ dx build --platform web
 You can add the `--bin` option to select which crate you want Dioxus to build:
 
 ```
-dioxus build --bin app
+dx build --bin app
 ```
 
 ## Build Example

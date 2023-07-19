@@ -37,7 +37,7 @@ dx serve --exmaple test
 You can add the `--bin` option to select which crate you want Dioxus to build and serve:
 
 ```
-dioxus serve --bin app
+dx serve --bin app
 ```
 
 ## Open Browser
