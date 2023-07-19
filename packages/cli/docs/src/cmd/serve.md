@@ -13,7 +13,8 @@ OPTIONS:
         --example <EXAMPLE>      [default: ""]
         --platform <PLATFORM>    [default: "default_platform"]
         --release                [default: false]
-        --hot-reload             [default: false]ß
+        --hot-reload             [default: false]
+        --bin                    [default: None]
 ```
 
 You can use this command to build project and start a dev server:
@@ -29,6 +30,14 @@ You can use the `example` option to serve a example:
 ```
 # serve the `test` example
 dx serve --exmaple test
+```
+
+## Specify workspace bin
+
+You can add the `--bin` option to select which crate you want Dioxus to build and serve:
+
+```
+dioxus serve --bin app
 ```
 
 ## Open Browser

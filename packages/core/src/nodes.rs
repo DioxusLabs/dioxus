@@ -7,7 +7,6 @@ use std::{
     any::{Any, TypeId},
     cell::{Cell, RefCell, UnsafeCell},
     fmt::{Arguments, Debug},
-    future::Future,
 };
 
 pub type TemplateId = &'static str;
@@ -28,9 +27,6 @@ pub enum RenderReturn<'a> {
     /// In its place we've produced a placeholder to locate its spot in the dom when
     /// it recovers.
     Aborted(VPlaceholder),
-
-    /// An ongoing future that will resolve to a [`Element`]
-    Pending(BumpBox<'a, dyn Future<Output = Element<'a>> + 'a>),
 }
 
 impl<'a> Default for RenderReturn<'a> {
@@ -685,32 +681,6 @@ impl<T: Any + PartialEq + 'static> AnyValue for T {
 
     fn as_any(&self) -> &dyn Any {
         self
-    }
-}
-
-#[doc(hidden)]
-pub trait ComponentReturn<'a, A = ()> {
-    fn into_return(self, cx: &'a ScopeState) -> RenderReturn<'a>;
-}
-
-impl<'a> ComponentReturn<'a> for Element<'a> {
-    fn into_return(self, _cx: &ScopeState) -> RenderReturn<'a> {
-        match self {
-            Some(node) => RenderReturn::Ready(node),
-            None => RenderReturn::default(),
-        }
-    }
-}
-
-#[doc(hidden)]
-pub struct AsyncMarker;
-impl<'a, F> ComponentReturn<'a, AsyncMarker> for F
-where
-    F: Future<Output = Element<'a>> + 'a,
-{
-    fn into_return(self, cx: &'a ScopeState) -> RenderReturn<'a> {
-        let f: &mut dyn Future<Output = Element<'a>> = cx.bump().alloc(self);
-        RenderReturn::Pending(unsafe { BumpBox::from_raw(f) })
     }
 }
 

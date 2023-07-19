@@ -11,13 +11,14 @@ pub fn axum_socket(ws: WebSocket) -> impl LiveViewSocket {
         .sink_map_err(|_| LiveViewError::SendingFailed)
 }
 
-fn transform_rx(message: Result<Message, axum::Error>) -> Result<String, LiveViewError> {
+fn transform_rx(message: Result<Message, axum::Error>) -> Result<Vec<u8>, LiveViewError> {
     message
         .map_err(|_| LiveViewError::SendingFailed)?
         .into_text()
+        .map(|s| s.into_bytes())
         .map_err(|_| LiveViewError::SendingFailed)
 }
 
-async fn transform_tx(message: String) -> Result<Message, axum::Error> {
-    Ok(Message::Text(message))
+async fn transform_tx(message: Vec<u8>) -> Result<Message, axum::Error> {
+    Ok(Message::Text(String::from_utf8_lossy(&message).to_string()))
 }

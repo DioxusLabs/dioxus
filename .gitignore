@@ -1,6 +1,6 @@
 /target
-/playwrite-tests/web/dist
-/playwrite-tests/fullstack/dist
+/playwright-tests/web/dist
+/playwright-tests/fullstack/dist
 /dist
 Cargo.lock
 .DS_Store

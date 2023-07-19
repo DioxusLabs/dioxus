@@ -7,7 +7,10 @@ dioxus-clean
 Clean build artifacts
 
 USAGE:
-    dx clean
+    dx clean [OPTIONS]
+
+OPTIONS:
+        --bin   [default: None]
 ```
 
 # Example
@@ -16,3 +19,9 @@ USAGE:
 dx clean
 ```
 
+# Specify workspace bin
+You can add the `--bin` option to select which crate you want Dioxus to clean artifacts from:
+
+```
+dioxus clean --bin app
+```

@@ -1,6 +1,8 @@
+#![allow(non_snake_case)]
+
 use dioxus::prelude::*;
 use dioxus_desktop::{tao::dpi::LogicalSize, Config, WindowBuilder};
-use dioxus_router::{Link, Route, Router};
+use dioxus_router::prelude::*;
 
 fn main() {
     env_logger::init();
@@ -15,24 +17,63 @@ fn main() {
 }
 
 fn app(cx: Scope) -> Element {
-    cx.render(rsx! {
-        div {
-            Router {
-                Route { to: "/", "Home" }
-                Route { to: "/games", "Games" }
-                Route { to: "/play", "Play" }
-                Route { to: "/settings", "Settings" }
+    render! {
+        Router {}
+    }
+}
 
-                p { "----" }
-                nav {
-                    ul {
-                        Link { to: "/", li { "Home" } }
-                        Link { to: "/games", li { "Games" } }
-                        Link { to: "/play", li { "Play" } }
-                        Link { to: "/settings", li { "Settings" } }
-                    }
+#[derive(Routable, Clone)]
+#[rustfmt::skip]
+enum Route {
+    #[layout(Footer)]
+        #[route("/")]
+        Home {},
+        #[route("/games")]
+        Games {},
+        #[route("/play")]
+        Play {},
+        #[route("/settings")]
+        Settings {},
+}
+
+#[inline_props]
+fn Footer(cx: Scope) -> Element {
+    render! {
+        div {
+            Outlet { }
+
+            p {
+                "----"
+            }
+
+            nav {
+                ul {
+                    li { Link { target: Route::Home {}, "Home" } }
+                    li { Link { target: Route::Games {}, "Games" } }
+                    li { Link { target: Route::Play {}, "Play" } }
+                    li { Link { target: Route::Settings {}, "Settings" } }
                 }
             }
         }
-    })
+    }
+}
+
+#[inline_props]
+fn Home(cx: Scope) -> Element {
+    render!("Home")
+}
+
+#[inline_props]
+fn Games(cx: Scope) -> Element {
+    render!("Games")
+}
+
+#[inline_props]
+fn Play(cx: Scope) -> Element {
+    render!("Play")
+}
+
+#[inline_props]
+fn Settings(cx: Scope) -> Element {
+    render!("Settings")
 }
