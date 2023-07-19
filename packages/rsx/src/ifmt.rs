@@ -20,6 +20,13 @@ pub struct IfmtInput {
 }
 
 impl IfmtInput {
+    pub fn new_static(input: &str) -> Self {
+        Self {
+            source: None,
+            segments: vec![Segment::Literal(input.to_string())],
+        }
+    }
+
     pub fn is_static(&self) -> bool {
         matches!(self.segments.as_slice(), &[Segment::Literal(_)] | &[])
     }

@@ -143,19 +143,25 @@ impl<C: TextLikeController> TextLike<C> {
 
         if let Some(mut text) = rdom.get_mut(self.pre_cursor_text) {
             let node_type = text.node_type_mut();
-            let NodeTypeMut::Text(mut text) = node_type else { panic!("input must be an element") };
+            let NodeTypeMut::Text(mut text) = node_type else {
+                panic!("input must be an element")
+            };
             *text.text_mut() = self.controller.display_text(text_before_first_cursor);
         }
 
         if let Some(mut text) = rdom.get_mut(self.highlighted_text) {
             let node_type = text.node_type_mut();
-            let NodeTypeMut::Text(mut text) = node_type else { panic!("input must be an element") };
+            let NodeTypeMut::Text(mut text) = node_type else {
+                panic!("input must be an element")
+            };
             *text.text_mut() = self.controller.display_text(text_highlighted);
         }
 
         if let Some(mut text) = rdom.get_mut(self.post_cursor_text) {
             let node_type = text.node_type_mut();
-            let NodeTypeMut::Text(mut text) = node_type else { panic!("input must be an element") };
+            let NodeTypeMut::Text(mut text) = node_type else {
+                panic!("input must be an element")
+            };
             *text.text_mut() = self.controller.display_text(text_after_second_cursor);
         }
 
@@ -288,7 +294,9 @@ impl<C: TextLikeController + Send + Sync + Default + 'static> CustomElement for 
 
     fn create(mut root: dioxus_native_core::real_dom::NodeMut) -> Self {
         let node_type = root.node_type();
-        let NodeType::Element(el) = &*node_type else { panic!("input must be an element") };
+        let NodeType::Element(el) = &*node_type else {
+            panic!("input must be an element")
+        };
 
         let value = el
             .attributes
@@ -370,7 +378,9 @@ impl<C: TextLikeController + Send + Sync + Default + 'static> CustomElement for 
             AttributeMask::All => {
                 {
                     let node_type = root.node_type_mut();
-                    let NodeTypeMut::Element(mut el) = node_type else { panic!("input must be an element") };
+                    let NodeTypeMut::Element(mut el) = node_type else {
+                        panic!("input must be an element")
+                    };
                     self.update_value_attr(&el);
                     self.update_size_attr(&mut el);
                     self.update_max_width_attr(&el);
@@ -381,7 +391,9 @@ impl<C: TextLikeController + Send + Sync + Default + 'static> CustomElement for 
             AttributeMask::Some(attrs) => {
                 {
                     let node_type = root.node_type_mut();
-                    let NodeTypeMut::Element(mut el) = node_type else { panic!("input must be an element") };
+                    let NodeTypeMut::Element(mut el) = node_type else {
+                        panic!("input must be an element")
+                    };
                     if attrs.contains("width") || attrs.contains("height") {
                         self.update_size_attr(&mut el);
                     }

@@ -74,10 +74,9 @@ fn app(cx: Scope<usize>) -> Element {
         button {
             onclick: move |_| {
                 to_owned![count];
-                let sc = cx.sc();
                 async move {
                     // Call the server function just like a local async function
-                    if let Ok(new_count) = double_server(sc, *count.current()).await {
+                    if let Ok(new_count) = double_server(*count.current()).await {
                         count.set(new_count);
                     }
                 }
@@ -89,7 +88,8 @@ fn app(cx: Scope<usize>) -> Element {
 
 // We use the "getcbor" encoding to make caching easier
 #[server(DoubleServer, "", "getcbor")]
-async fn double_server(cx: DioxusServerContext, number: usize) -> Result<usize, ServerFnError> {
+async fn double_server(number: usize) -> Result<usize, ServerFnError> {
+    let cx = server_context();
     // Perform some expensive computation or access a database on the server
     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
     let result = number * 2;

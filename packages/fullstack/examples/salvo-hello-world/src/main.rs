@@ -2,49 +2,18 @@
 //!
 //! ```sh
 //! dioxus build --features web
-//! cargo run --features ssr --no-default-features
+//! cargo run --features ssr
 //! ```
 
-#![allow(non_snake_case)]
+#![allow(non_snake_case, unused)]
 use dioxus::prelude::*;
 use dioxus_fullstack::prelude::*;
 use serde::{Deserialize, Serialize};
 
 fn main() {
-    #[cfg(feature = "web")]
-    dioxus_web::launch_with_props(
-        app,
-        get_root_props_from_document().unwrap_or_default(),
-        dioxus_web::Config::new().hydrate(true),
-    );
-    #[cfg(feature = "ssr")]
-    {
-        // Start hot reloading
-        hot_reload_init!(dioxus_hot_reload::Config::new().with_rebuild_callback(|| {
-            execute::shell("dioxus build --features web")
-                .spawn()
-                .unwrap()
-                .wait()
-                .unwrap();
-            execute::shell("cargo run --features ssr --no-default-features")
-                .spawn()
-                .unwrap();
-            true
-        }));
-
-        use salvo::prelude::*;
-        tokio::runtime::Runtime::new()
-            .unwrap()
-            .block_on(async move {
-                let router = Router::new().serve_dioxus_application(
-                    "",
-                    ServeConfigBuilder::new(app, AppProps { count: 12345 }),
-                );
-                Server::new(TcpListener::bind("127.0.0.1:8080"))
-                    .serve(router)
-                    .await;
-            });
-    }
+    launch!(@([127, 0, 0, 1], 8080), app, (AppProps { count: 5 }), {
+        incremental: IncrementalRendererConfig::default().invalidate_after(std::time::Duration::from_secs(120)),
+    });
 }
 
 #[derive(Props, PartialEq, Debug, Default, Serialize, Deserialize, Clone)]
@@ -55,7 +24,6 @@ struct AppProps {
 fn app(cx: Scope<AppProps>) -> Element {
     let mut count = use_state(cx, || cx.props.count);
     let text = use_state(cx, || "...".to_string());
-    let server_context = cx.sc();
 
     cx.render(rsx! {
         h1 { "High-Five counter: {count}" }
@@ -63,12 +31,12 @@ fn app(cx: Scope<AppProps>) -> Element {
         button { onclick: move |_| count -= 1, "Down low!" }
         button {
             onclick: move |_| {
-                to_owned![text, server_context];
+                to_owned![text];
                 async move {
                     if let Ok(data) = get_server_data().await {
                         println!("Client received: {}", data);
                         text.set(data.clone());
-                        post_server_data(server_context, data).await.unwrap();
+                        post_server_data(data).await.unwrap();
                     }
                 }
             },
@@ -79,10 +47,9 @@ fn app(cx: Scope<AppProps>) -> Element {
 }
 
 #[server(PostServerData)]
-async fn post_server_data(cx: DioxusServerContext, data: String) -> Result<(), ServerFnError> {
+async fn post_server_data(data: String) -> Result<(), ServerFnError> {
     // The server context contains information about the current request and allows you to modify the response.
-    cx.response_headers_mut()
-        .insert("Set-Cookie", "foo=bar".parse().unwrap());
+    let cx = server_context();
     println!("Server received: {}", data);
     println!("Request parts are {:?}", cx.request_parts());
 
