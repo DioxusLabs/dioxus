@@ -1,3 +1,5 @@
+#![allow(clippy::await_holding_refcell_ref)]
+
 use async_trait::async_trait;
 use dioxus_core::ScopeState;
 use dioxus_html::prelude::{EvalError, EvalProvider, Evaluator};
@@ -41,6 +43,8 @@ impl DesktopEvaluator {
 
 #[async_trait(?Send)]
 impl Evaluator for DesktopEvaluator {
+    /// # Panics
+    /// This will panic if the query is currently being awaited.
     async fn join(&self) -> Result<serde_json::Value, EvalError> {
         self.query
             .borrow_mut()
@@ -58,6 +62,9 @@ impl Evaluator for DesktopEvaluator {
     }
 
     /// Gets an UnboundedReceiver to receive messages from the evaluated JavaScript.
+    ///
+    /// # Panics
+    /// This will panic if the query is currently being awaited.
     async fn recv(&self) -> Result<serde_json::Value, EvalError> {
         self.query
             .borrow_mut()

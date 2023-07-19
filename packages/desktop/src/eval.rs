@@ -1,3 +1,4 @@
+#![allow(clippy::await_holding_refcell_ref)]
 use async_trait::async_trait;
 use dioxus_core::ScopeState;
 use dioxus_html::prelude::{EvalError, EvalProvider, Evaluator};

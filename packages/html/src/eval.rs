@@ -1,3 +1,5 @@
+#![allow(clippy::await_holding_refcell_ref)]
+
 use async_trait::async_trait;
 use dioxus_core::ScopeState;
 use std::future::{Future, IntoFuture};
@@ -21,6 +23,8 @@ pub trait Evaluator {
     async fn join(&self) -> Result<serde_json::Value, EvalError>;
 }
 
+type EvalCreator = Rc<dyn Fn(&str) -> Result<UseEval, EvalError>>;
+
 /// Get a struct that can execute any JavaScript.
 ///
 /// # Safety
@@ -29,7 +33,7 @@ pub trait Evaluator {
 /// parts is practically asking for a hacker to find an XSS vulnerability in
 /// it. **This applies especially to web targets, where the JavaScript context
 /// has access to most, if not all of your application data.**
-pub fn use_eval(cx: &ScopeState) -> &Rc<dyn Fn(&str) -> Result<UseEval, EvalError>> {
+pub fn use_eval(cx: &ScopeState) -> &EvalCreator {
     &*cx.use_hook(|| {
         let eval_provider = cx
             .consume_context::<Rc<dyn EvalProvider>>()

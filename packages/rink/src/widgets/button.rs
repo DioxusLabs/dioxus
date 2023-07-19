@@ -89,7 +89,7 @@ impl Button {
         }
     }
 
-    fn switch(&mut self, ctx: &mut WidgetContext, node: NodeMut) {
+    fn switch(&mut self, ctx: &WidgetContext, node: NodeMut) {
         let data = FormData {
             value: self.value.to_string(),
             values: HashMap::new(),
@@ -185,7 +185,7 @@ impl RinkWidget for Button {
         event: &crate::Event,
         mut node: dioxus_native_core::real_dom::NodeMut,
     ) {
-        let mut ctx: WidgetContext = {
+        let ctx: WidgetContext = {
             node.real_dom_mut()
                 .raw_world_mut()
                 .borrow::<UniqueView<WidgetContext>>()
@@ -194,7 +194,7 @@ impl RinkWidget for Button {
         };
 
         match event.name {
-            "click" => self.switch(&mut ctx, node),
+            "click" => self.switch(&ctx, node),
             "keydown" => {
                 if let crate::EventData::Keyboard(data) = &event.data {
                     if !data.is_auto_repeating()
@@ -204,7 +204,7 @@ impl RinkWidget for Button {
                             _ => false,
                         }
                     {
-                        self.switch(&mut ctx, node);
+                        self.switch(&ctx, node);
                     }
                 }
             }

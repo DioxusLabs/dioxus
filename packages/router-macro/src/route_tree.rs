@@ -219,7 +219,7 @@ impl<'a> RouteTree<'a> {
                         Some(id) => {
                             // If it exists, add the route to the children of the segment
                             let new_children = self.construct(vec![route]);
-                            self.children_mut(id).extend(new_children.into_iter());
+                            self.children_mut(id).extend(new_children);
                         }
                         None => {
                             // If it doesn't exist, add the route as a new segment

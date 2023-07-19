@@ -160,8 +160,8 @@ impl QueryEngine {
 
 pub(crate) struct Query<V: DeserializeOwned> {
     query_engine: QueryEngine,
-    receiver: tokio::sync::mpsc::UnboundedReceiver<Value>,
-    return_receiver: Option<tokio::sync::oneshot::Receiver<Value>>,
+    pub receiver: tokio::sync::mpsc::UnboundedReceiver<Value>,
+    pub return_receiver: Option<tokio::sync::oneshot::Receiver<Value>>,
     id: usize,
     phantom: std::marker::PhantomData<V>,
 }

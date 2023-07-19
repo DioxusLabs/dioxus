@@ -71,17 +71,9 @@ struct QueryEntry {
 const QUEUE_NAME: &str = "__msg_queues";
 
 /// Handles sending and receiving arbitrary queries from the webview. Queries can be resolved non-sequentially, so we use ids to track them.
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub(crate) struct QueryEngine {
     active_requests: SharedSlab<QueryEntry>,
-}
-
-impl Default for QueryEngine {
-    fn default() -> Self {
-        Self {
-            active_requests: Default::default(),
-        }
-    }
 }
 
 impl QueryEngine {
