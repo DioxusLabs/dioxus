@@ -8,36 +8,24 @@ pub(crate) struct FileDialogRequest {
     #[serde(default)]
     accept: Option<String>,
     multiple: bool,
+    directory: bool,
     pub event: String,
     pub target: usize,
     pub bubbles: bool,
 }
 
-#[cfg(not(any(
-    target_os = "windows",
-    target_os = "macos",
-    target_os = "linux",
-    target_os = "dragonfly",
-    target_os = "freebsd",
-    target_os = "netbsd",
-    target_os = "openbsd"
-)))]
-pub(crate) fn get_file_event(_request: &FileDialogRequest) -> Vec<PathBuf> {
-    vec![]
+fn get_file_event_for_folder(request: &FileDialogRequest, dialog: rfd::FileDialog) -> Vec<PathBuf> {
+    if request.multiple {
+        dialog.pick_folders().into_iter().flatten().collect()
+    } else {
+        dialog.pick_folder().into_iter().collect()
+    }
 }
 
-#[cfg(any(
-    target_os = "windows",
-    target_os = "macos",
-    target_os = "linux",
-    target_os = "dragonfly",
-    target_os = "freebsd",
-    target_os = "netbsd",
-    target_os = "openbsd"
-))]
-pub(crate) fn get_file_event(request: &FileDialogRequest) -> Vec<PathBuf> {
-    let mut dialog = rfd::FileDialog::new();
-
+fn get_file_event_for_file(
+    request: &FileDialogRequest,
+    mut dialog: rfd::FileDialog,
+) -> Vec<PathBuf> {
     let filters: Vec<_> = request
         .accept
         .as_deref()
@@ -60,6 +48,38 @@ pub(crate) fn get_file_event(request: &FileDialogRequest) -> Vec<PathBuf> {
     };
 
     files
+}
+
+#[cfg(not(any(
+target_os = "windows",
+target_os = "macos",
+target_os = "linux",
+target_os = "dragonfly",
+target_os = "freebsd",
+target_os = "netbsd",
+target_os = "openbsd"
+)))]
+pub(crate) fn get_file_event(_request: &FileDialogRequest) -> Vec<PathBuf> {
+    vec![]
+}
+
+#[cfg(any(
+target_os = "windows",
+target_os = "macos",
+target_os = "linux",
+target_os = "dragonfly",
+target_os = "freebsd",
+target_os = "netbsd",
+target_os = "openbsd"
+))]
+pub(crate) fn get_file_event(request: &FileDialogRequest) -> Vec<PathBuf> {
+    let dialog = rfd::FileDialog::new();
+
+    if request.directory {
+        get_file_event_for_folder(request, dialog)
+    } else {
+        get_file_event_for_file(request, dialog)
+    }
 }
 
 enum Filters {

@@ -163,6 +163,7 @@ mod js {
         reversed: true,
         selected: true,
         truespeed: true,
+        webkitdirectory: true,
       };
       function truthy(val) {
         return val === "true" || val === true;

@@ -25,6 +25,7 @@ const bool_attrs = {
   reversed: true,
   selected: true,
   truespeed: true,
+  webkitdirectory: true,
 };
 
 export function setAttributeInner(node, field, value, ns) {
