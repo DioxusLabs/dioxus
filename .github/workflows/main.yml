@@ -93,35 +93,40 @@ jobs:
               os: windows-latest,
               toolchain: '1.65.0',
               cross: false,
-              command: 'test --all --tests'
+              command: 'test',
+              args: '--all --tests'
             }
           - {
               target: x86_64-unknown-linux-gnu,
               os: ubuntu-latest,
               toolchain: '1.65.0',
               cross: false,
-              command: 'test --all --tests'
+              command: 'test',
+              args: '--all --tests'
             }
           - {
               target: x86_64-apple-darwin,
               os: macos-latest,
               toolchain: '1.65.0',
               cross: false,
-              command: 'test --all --tests'
+              command: 'test',
+              args: '--all --tests'
             }
           - {
               target: aarch64-apple-ios,
               os: macos-latest,
               toolchain: '1.65.0',
               cross: false,
-              command: 'build --package dioxus-mobile'
+              command: 'build',
+              args: '--package dioxus-mobile'
             }
           - {
               target: aarch64-linux-android,
               os: ubuntu-latest,
               toolchain: '1.65.0',
               cross: true,
-              command: 'build --package dioxus-mobile'
+              command: 'build',
+              args: '--package dioxus-mobile'
             }
 
     steps:
@@ -151,7 +156,7 @@ jobs:
         with:
           use-cross: ${{ matrix.platform.cross }}
           command: ${{ matrix.platform.command }}
-          args: --target ${{ matrix.platform.target }}
+          args: --target ${{ matrix.platform.target }} ${{ matrix.platform.args }}
 
 
 
