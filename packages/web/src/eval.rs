@@ -46,7 +46,7 @@ impl WebEvaluator {
                 Ok(data) => _ = channel_sender.send_blocking(data),
                 Err(e) => {
                     // Can't really do much here.
-                    log::error!("failed to serialize JsValue to serde_json::Value (eval communication) - {}", e.to_string());
+                    log::error!("failed to serialize JsValue to serde_json::Value (eval communication) - {}", e);
                 }
             }
         });
@@ -63,10 +63,7 @@ impl WebEvaluator {
                     if !stringified.is_undefined() && stringified.is_valid_utf16() {
                         let string: String = stringified.into();
                         Value::from_str(&string).map_err(|e| {
-                            EvalError::Communication(format!(
-                                "Failed to parse result - {}",
-                                e.to_string()
-                            ))
+                            EvalError::Communication(format!("Failed to parse result - {}", e))
                         })?
                     } else {
                         return Err(EvalError::Communication(
