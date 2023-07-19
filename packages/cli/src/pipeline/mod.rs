@@ -65,7 +65,7 @@ impl Pipeline {
 
         let elapsed = time_started.elapsed();
         let seconds = elapsed.as_secs_f32();
-        log::info!("Pipeline finished successfully in {:.2}s!", seconds);
+        log::info!("Pipeline finished successfully in {:.2}s", seconds);
         Ok(())
     }
 }

@@ -5,6 +5,7 @@ mod bindgen;
 pub use bindgen::Bindgen;
 
 mod sass;
+use indicatif::{ProgressBar, ProgressStyle};
 pub use sass::Sass;
 
 const APP_DATA_NAME: &str = "dioxus";
@@ -205,6 +206,33 @@ impl TempStorage {
 }
 
 impl Drop for TempStorage {
+    fn drop(&mut self) {
+        self.done();
+    }
+}
+
+/// A progress 'spinner'
+pub struct ProgressSpinner(ProgressBar);
+
+impl ProgressSpinner {
+    pub fn new(message: &str) -> Self {
+        let pb = ProgressBar::new_spinner();
+        pb.set_message(message.to_string());
+        pb.set_style(
+            ProgressStyle::default_spinner()
+                .tick_strings(&["[.   ]", "[ .  ]", "[  . ]", "[   .]", "[  . ]", "[ .  ]"]),
+        );
+        pb.enable_steady_tick(std::time::Duration::from_millis(50));
+        Self(pb)
+    }
+
+    pub fn done(&self) {
+        self.0.finish_and_clear();
+        log::info!("{}", self.0.message());
+    }
+}
+
+impl Drop for ProgressSpinner {
     fn drop(&mut self) {
         self.done();
     }

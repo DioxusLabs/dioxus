@@ -1,10 +1,8 @@
-use flate2::read::GzDecoder;
-use tar::Archive;
-
+use super::{ProgressSpinner, ToolStorage};
 use crate::{tools::TempStorage, Error, Result};
-use std::{fs, io::Cursor, path::PathBuf};
-
-use super::ToolStorage;
+use flate2::read::GzDecoder;
+use std::{io::Cursor, path::PathBuf};
+use tar::Archive;
 
 const TOOL_NAME: &str = "dart-sass";
 
@@ -86,7 +84,7 @@ impl Sass {
 
     /// Install the latest version of dart-sass CLI.
     fn install() -> Result<PathBuf> {
-        log::info!("Installing dart-sass...");
+        let _pb = ProgressSpinner::new("Installing dart-sass...");
 
         // Download
         let res = reqwest::blocking::get(INSTALL_URL)

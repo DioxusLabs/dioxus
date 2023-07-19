@@ -1,4 +1,4 @@
-use super::ToolStorage;
+use super::{ProgressSpinner, ToolStorage};
 use crate::{tools::TempStorage, Error, Result};
 use flate2::read::GzDecoder;
 use std::{fs, path::PathBuf};
@@ -108,7 +108,7 @@ impl Bindgen {
 
     /// Install the latest version of wasm-bindgen CLI.
     fn install() -> Result<PathBuf> {
-        log::info!("Installing wasm-bindgen...");
+        let _pb = ProgressSpinner::new("Installing wasm-bindgen...");
 
         let res = reqwest::blocking::get(INSTALL_URL)
             .map_err(|_| Error::CustomError("Failed to install wasm-bindgen".to_string()))?;
