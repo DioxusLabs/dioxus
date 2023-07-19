@@ -56,7 +56,7 @@ impl Bindgen {
         })
     }
 
-    pub fn run(self, input: PathBuf, out: PathBuf) -> Result<()> {
+    pub fn run(&self, input: PathBuf, out: PathBuf) -> Result<()> {
         if !out.exists() {
             fs::create_dir_all(&out)?;
         }
@@ -64,7 +64,7 @@ impl Bindgen {
         let input = fs::canonicalize(input)?;
         let out = fs::canonicalize(out)?;
 
-        let mut cmd = subprocess::Exec::cmd(self.exec_path)
+        let mut cmd = subprocess::Exec::cmd(self.exec_path.clone())
             .arg("--no-typescript")
             .arg("--target")
             .arg("web")

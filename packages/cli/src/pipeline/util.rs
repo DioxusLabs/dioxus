@@ -12,6 +12,7 @@ pub struct File {
 }
 
 /// Represents a file's type.
+#[derive(PartialEq, Clone)]
 pub enum FileType {
     Html,
 
@@ -79,7 +80,7 @@ pub fn from_dir(dir_path: PathBuf) -> Result<Vec<File>> {
 
             if path.is_dir() {
                 // If directory, get files from it
-                from_dir(path)?;
+                files.append(&mut from_dir(path)?);
             } else {
                 let file_name = path.file_stem().and_then(OsStr::to_str);
                 let file_name = match file_name {

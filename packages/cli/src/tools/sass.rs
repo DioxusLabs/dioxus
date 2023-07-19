@@ -34,8 +34,6 @@ const INSTALL_URL: &str =
 pub struct Sass {
     exec_path: PathBuf,
     source_map: bool,
-    embed_sources: bool,
-    embed_source_map: bool,
 }
 
 impl Sass {
@@ -50,8 +48,6 @@ impl Sass {
             return Ok(Self {
                 exec_path: tool_path.join(EXEC_NAME),
                 source_map: false,
-                embed_sources: false,
-                embed_source_map: false,
             });
         }
 
@@ -62,20 +58,11 @@ impl Sass {
         Ok(Self {
             exec_path: dir_path.join(EXEC_NAME),
             source_map: false,
-            embed_sources: false,
-            embed_source_map: false,
         })
     }
 
-    pub fn run(self, input: PathBuf, output: PathBuf) -> Result<()> {
-        if !output.exists() {
-            fs::create_dir_all(&output)?;
-        }
-
-        let input = fs::canonicalize(input)?;
-        let output = fs::canonicalize(output)?;
-
-        let mut cmd = subprocess::Exec::cmd(self.exec_path).arg(input).arg(output);
+    pub fn run(&self, input: PathBuf, output: PathBuf) -> Result<()> {
+        let mut cmd = subprocess::Exec::cmd(self.exec_path.clone());
 
         if self.source_map {
             cmd = cmd.arg("--source-map");
@@ -83,19 +70,11 @@ impl Sass {
             cmd = cmd.arg("--no-source-map");
         }
 
-        if self.embed_sources {
-            cmd = cmd.arg("--embed-sources");
-        } else {
-            cmd = cmd.arg("--no-embed-sources");
-        }
-
-        if self.embed_source_map {
-            cmd = cmd.arg("--embed-source-map");
-        } else {
-            cmd = cmd.arg("--no-embed-source-map");
-        }
-
-        _ = cmd.join().map_err(|e| Error::BuildFailed(e.to_string()))?;
+        _ = cmd
+            .arg(input)
+            .arg(output)
+            .join()
+            .map_err(|e| Error::BuildFailed(e.to_string()))?;
 
         Ok(())
     }
@@ -105,20 +84,11 @@ impl Sass {
         self
     }
 
-    pub fn embed_sources(mut self, value: bool) -> Self {
-        self.embed_sources = value;
-        self
-    }
-
-    pub fn embed_source_map(mut self, value: bool) -> Self {
-        self.embed_source_map = value;
-        self
-    }
-
     /// Install the latest version of dart-sass CLI.
     fn install() -> Result<PathBuf> {
         log::info!("Installing dart-sass...");
 
+        // Download
         let res = reqwest::blocking::get(INSTALL_URL)
             .map_err(|_| Error::CustomError("Failed to install dart-sass".to_string()))?;
 
@@ -129,6 +99,8 @@ impl Sass {
         let temp_storage = TempStorage::get()?;
         let path = temp_storage.path().join(TOOL_NAME);
 
+        // If the install is for windows, the content is zipped.
+        // Otherwise the content is tar.gz
         if cfg!(target_os = "windows") {
             let mut zip = zip::ZipArchive::new(Cursor::new(bytes))
                 .map_err(|e| Error::ParseError(e.to_string()))?;

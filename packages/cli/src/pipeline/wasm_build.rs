@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 const DEBUG_TARGET: &str = "target/wasm32-unknown-unknown/debug";
 const RELEASE_TARGET: &str = "target/wasm32-unknown-unknown/release";
-const STAGING_OUT: &str = "./bindgen_out";
+const STAGING_OUT: &str = "./bindgen";
 
 pub struct WasmBuild {}
 
