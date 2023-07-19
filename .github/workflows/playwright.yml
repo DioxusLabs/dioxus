@@ -7,6 +7,11 @@ on:
 defaults:
   run:
     working-directory: ./playwright-tests
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     if: github.event.pull_request.draft == false
