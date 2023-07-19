@@ -7,12 +7,6 @@ fn app(cx: Scope) -> Element {
     let eval_result = use_state(cx, String::new);
 
     let eval_provider = dioxus_html::prelude::use_eval(cx);
-    let eval = eval_provider(
-        r#"
-        window.document.title = 'Hello from Dioxus Eval!';
-        dioxus.send("returned eval value");
-    "#,
-    );
 
     cx.render(rsx! {
         div {
@@ -48,13 +42,14 @@ fn app(cx: Scope) -> Element {
         button {
             class: "eval-button",
             onclick: move |_| {
-                to_owned![eval];
+                let eval = eval_provider(
+                    r#"
+                    window.document.title = 'Hello from Dioxus Eval!';
+                    dioxus.send("returned eval value");
+                "#).unwrap();
                 let setter = eval_result.setter();
                 async move {
-                // Set the window title
-
-                    eval.run().unwrap();
-
+                    // Set the window title
                     let result = eval.recv().await;
                     if let Ok(serde_json::Value::String(string)) = result {
                         setter(string);

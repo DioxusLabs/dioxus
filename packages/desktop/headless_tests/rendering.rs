@@ -37,12 +37,13 @@ fn use_inner_html<'a>(cx: &'a ScopeState, id: &'static str) -> &'a UseFuture<ser
         id
     );
 
-    let mut eval = eval_provider(&js);
-
-    use_future(cx, (), |_| async move {
-        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        eval.run().unwrap();
-        eval.recv().await.unwrap()
+    use_future(cx, (), |_| {
+        to_owned![eval_provider];
+        async move {
+            let eval = eval_provider(&js).unwrap();
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+            eval.recv().await.unwrap()
+        }
     })
 }
 
