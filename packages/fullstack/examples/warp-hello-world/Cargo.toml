@@ -16,6 +16,6 @@ warp = { version = "0.3.3", optional = true }
 execute = "0.2.12"
 
 [features]
-default = ["web"]
+default = []
 ssr = ["warp", "tokio", "dioxus-fullstack/warp"]
 web = ["dioxus-web"]

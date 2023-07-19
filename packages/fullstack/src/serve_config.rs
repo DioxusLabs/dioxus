@@ -1,10 +1,13 @@
+#![allow(non_snake_case)]
 //! Configeration for how to serve a Dioxus application
 
+#[cfg(feature = "router")]
+use crate::router::*;
 use std::fs::File;
 use std::io::Read;
 use std::path::PathBuf;
 
-use dioxus_core::Component;
+use dioxus::prelude::*;
 
 /// A ServeConfig is used to configure how to serve a Dioxus application. It contains information about how to serve static assets, and what content to render with [`dioxus-ssr`].
 #[derive(Clone)]
@@ -14,6 +17,40 @@ pub struct ServeConfigBuilder<P: Clone> {
     pub(crate) root_id: Option<&'static str>,
     pub(crate) index_path: Option<&'static str>,
     pub(crate) assets_path: Option<&'static str>,
+    pub(crate) incremental:
+        Option<std::sync::Arc<dioxus_ssr::incremental::IncrementalRendererConfig>>,
+}
+
+/// A template for incremental rendering that does nothing.
+#[derive(Default, Clone)]
+pub struct EmptyIncrementalRenderTemplate;
+
+impl dioxus_ssr::incremental::WrapBody for EmptyIncrementalRenderTemplate {
+    fn render_after_body<R: std::io::Write>(
+        &self,
+        _: &mut R,
+    ) -> Result<(), dioxus_ssr::incremental::IncrementalRendererError> {
+        Ok(())
+    }
+
+    fn render_before_body<R: std::io::Write>(
+        &self,
+        _: &mut R,
+    ) -> Result<(), dioxus_ssr::incremental::IncrementalRendererError> {
+        Ok(())
+    }
+}
+
+#[cfg(feature = "router")]
+impl<R> ServeConfigBuilder<FullstackRouterConfig<R>>
+where
+    R: dioxus_router::prelude::Routable,
+    <R as std::str::FromStr>::Err: std::fmt::Display,
+{
+    /// Create a new ServeConfigBuilder to serve a router on the server.
+    pub fn new_with_router(cfg: FullstackRouterConfig<R>) -> Self {
+        Self::new(RouteWithCfg::<R>, cfg)
+    }
 }
 
 impl<P: Clone> ServeConfigBuilder<P> {
@@ -25,7 +62,14 @@ impl<P: Clone> ServeConfigBuilder<P> {
             root_id: None,
             index_path: None,
             assets_path: None,
+            incremental: None,
         }
+    }
+
+    /// Enable incremental static generation
+    pub fn incremental(mut self, cfg: dioxus_ssr::incremental::IncrementalRendererConfig) -> Self {
+        self.incremental = Some(std::sync::Arc::new(cfg));
+        self
     }
 
     /// Set the path of the index.html file to be served. (defaults to {assets_path}/index.html)
@@ -64,6 +108,7 @@ impl<P: Clone> ServeConfigBuilder<P> {
             props: self.props,
             index,
             assets_path,
+            incremental: self.incremental,
         }
     }
 }
@@ -106,6 +151,8 @@ pub struct ServeConfig<P: Clone> {
     pub(crate) props: P,
     pub(crate) index: IndexHtml,
     pub(crate) assets_path: &'static str,
+    pub(crate) incremental:
+        Option<std::sync::Arc<dioxus_ssr::incremental::IncrementalRendererConfig>>,
 }
 
 impl<P: Clone> From<ServeConfigBuilder<P>> for ServeConfig<P> {

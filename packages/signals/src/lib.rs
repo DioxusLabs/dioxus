@@ -94,11 +94,7 @@ impl<T: Clone + 'static> std::ops::Deref for Signal<T> {
 
 impl<T> std::clone::Clone for Signal<T> {
     fn clone(&self) -> Self {
-        Self {
-            t: PhantomData,
-            id: self.id,
-            rt: self.rt,
-        }
+        *self
     }
 }
 

@@ -1,8 +1,13 @@
-use crate::RouterContext;
-use dioxus::{core::ScopeState, prelude::use_context};
+use dioxus::prelude::ScopeState;
 
-/// This hook provides access to the `RouterService` for the app.
-pub fn use_router(cx: &ScopeState) -> &RouterContext {
-    use_context::<RouterContext>(cx)
-        .expect("Cannot call use_route outside the scope of a Router component")
+use crate::{
+    prelude::GenericRouterContext, routable::Routable,
+    utils::use_router_internal::use_router_internal,
+};
+
+/// A hook that provides access to information about the router.
+pub fn use_generic_router<R: Routable + Clone>(cx: &ScopeState) -> &GenericRouterContext<R> {
+    use_router_internal(cx)
+        .as_ref()
+        .expect("use_route must have access to a router")
 }

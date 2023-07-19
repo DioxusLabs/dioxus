@@ -2,8 +2,12 @@
 
 mod cache;
 pub mod config;
+mod fs_cache;
+pub mod incremental;
+mod incremental_cfg;
 pub mod renderer;
 pub mod template;
+
 use dioxus_core::{Element, LazyNodes, Scope, VirtualDom};
 use std::cell::Cell;
 

@@ -1,6 +1,6 @@
 # UseEffect
 
-[`use_effect`](https://docs.rs/dioxus-hooks/latest/dioxus_hooks/fn.use_effect.html) lets you run a callback that returns a future, which will be re-run when it's [dependencies](#dependencies) change. This is useful to syncrhonize with external events.
+[`use_effect`](https://docs.rs/dioxus-hooks/latest/dioxus_hooks/fn.use_effect.html) lets you run a callback that returns a future, which will be re-run when its [dependencies](#dependencies) change. This is useful to syncrhonize with external events.
 
 ## Dependencies
 

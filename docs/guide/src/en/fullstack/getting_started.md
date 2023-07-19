@@ -76,7 +76,7 @@ Next, we need to modify our `main.rs` to use either hydrate on the client or ren
 {{#include ../../../examples/hydration.rs}}
 ```
 
-Now, build your client-side bundle with `dioxus build --features web` and run your server with `cargo run --features ssr`. You should see the same page as before, but now you can interact with the buttons!
+Now, build your client-side bundle with `dx build --features web` and run your server with `cargo run --features ssr`. You should see the same page as before, but now you can interact with the buttons!
 
 ## Sycronizing props between the server and client
 
@@ -99,4 +99,4 @@ The only thing we need to change on the client is the props. `dioxus-fullstack` 
 {{#include ../../../examples/hydration_props.rs}}
 ```
 
-Now, build your client-side bundle with `dioxus build --features web` and run your server with `cargo run --features ssr`. Navigate to `http://localhost:8080/1` and you should see the counter start at 1. Navigate to `http://localhost:8080/2` and you should see the counter start at 2.
+Now, build your client-side bundle with `dx build --features web` and run your server with `cargo run --features ssr`. Navigate to `http://localhost:8080/1` and you should see the counter start at 1. Navigate to `http://localhost:8080/2` and you should see the counter start at 2.
