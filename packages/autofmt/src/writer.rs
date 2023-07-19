@@ -197,7 +197,7 @@ impl<'a> Writer<'a> {
             self.out,
             "for {} in {} {{",
             forloop.pat.clone().into_token_stream(),
-            prettyplease::unparse_expr(&*forloop.expr)
+            prettyplease::unparse_expr(&forloop.expr)
         )?;
 
         if forloop.body.is_empty() {

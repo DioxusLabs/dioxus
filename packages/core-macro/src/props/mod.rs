@@ -1086,7 +1086,7 @@ Finally, call `.build()` to create the instance of `{name}`.
         pub fn new(attrs: &[syn::Attribute]) -> Result<TypeBuilderAttr, Error> {
             let mut result = TypeBuilderAttr::default();
             for attr in attrs {
-                if path_to_single_string(&attr.path()).as_deref() != Some("builder") {
+                if path_to_single_string(attr.path()).as_deref() != Some("builder") {
                     continue;
                 }
 
