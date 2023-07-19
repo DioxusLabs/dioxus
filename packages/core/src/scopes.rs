@@ -1,12 +1,11 @@
 use crate::{
     any_props::AnyProps,
     any_props::VProps,
-    arena::ElementId,
     bump_frame::BumpFrame,
     innerlude::{DynamicNode, EventHandler, VComponent, VText},
     innerlude::{ErrorBoundary, Scheduler, SchedulerMsg},
     lazynodes::LazyNodes,
-    nodes::{ComponentReturn, IntoAttributeValue, IntoDynNode, RenderReturn},
+    nodes::{IntoAttributeValue, IntoDynNode, RenderReturn},
     AnyValue, Attribute, AttributeValue, Element, Event, Properties, TaskId,
 };
 use bumpalo::{boxed::Box as BumpBox, Bump};
@@ -169,6 +168,7 @@ pub struct ScopeState {
     pub(crate) id: ScopeId,
 
     pub(crate) height: u32,
+    pub(crate) suspended: Cell<bool>,
 
     pub(crate) hooks: RefCell<Vec<Box<UnsafeCell<dyn Any>>>>,
     pub(crate) hook_idx: Cell<usize>,
@@ -182,7 +182,6 @@ pub struct ScopeState {
     pub(crate) attributes_to_drop: RefCell<Vec<*const Attribute<'static>>>,
 
     pub(crate) props: Option<Box<dyn AnyProps<'static>>>,
-    pub(crate) placeholder: Cell<Option<ElementId>>,
 }
 
 impl<'src> ScopeState {
@@ -574,9 +573,9 @@ impl<'src> ScopeState {
     /// fn(Scope<Props>) -> Element;
     /// async fn(Scope<Props<'_>>) -> Element;
     /// ```
-    pub fn component<P, A, F: ComponentReturn<'src, A>>(
+    pub fn component<P>(
         &'src self,
-        component: fn(Scope<'src, P>) -> F,
+        component: fn(Scope<'src, P>) -> Element<'src>,
         props: P,
         fn_name: &'static str,
     ) -> DynamicNode<'src>
@@ -652,6 +651,12 @@ impl<'src> ScopeState {
         }
 
         // Always return none during a throw
+        None
+    }
+
+    /// Mark this component as suspended and then return None
+    pub fn suspend(&self) -> Option<Element> {
+        self.suspended.set(true);
         None
     }
 
