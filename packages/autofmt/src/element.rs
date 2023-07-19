@@ -48,7 +48,6 @@ impl Writer<'_> {
             key,
             attributes,
             children,
-            _is_static,
             brace,
         } = el;
 

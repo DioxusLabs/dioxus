@@ -56,7 +56,9 @@ impl CustomElement for Input {
         }
 
         let node_type = root.node_type();
-        let NodeType::Element(el) = &*node_type else { panic!("input must be an element") };
+        let NodeType::Element(el) = &*node_type else {
+            panic!("input must be an element")
+        };
         let input_type = el
             .attributes
             .get(&OwnedAttributeDiscription {

@@ -164,6 +164,7 @@ impl ToTokens for Component {
                 if !self.children.is_empty() {
                     let renderer: TemplateRenderer = TemplateRenderer {
                         roots: &self.children,
+                        location: None,
                     };
 
                     toks.append_all(quote! {

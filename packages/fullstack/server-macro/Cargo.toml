@@ -6,9 +6,11 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+proc-macro2 = "1.0.63"
 quote = "1.0.26"
-server_fn_macro = { git = "https://github.com/leptos-rs/leptos", rev = "15a4e54435eb5a539afb75891292bcccd2cc8e85", features = ["stable"] }
+server_fn_macro = { git = "https://github.com/leptos-rs/leptos", rev = "6b90e1babd425c9a324181c86e3fd1b942c9b10f" }
 syn = { version = "2", features = ["full"] }
+convert_case = "0.6.0"
 
 [lib]
 proc-macro = true

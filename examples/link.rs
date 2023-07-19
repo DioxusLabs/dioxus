@@ -1,5 +1,7 @@
+#![allow(non_snake_case)]
+
 use dioxus::prelude::*;
-use dioxus_router::{Link, Route, Router};
+use dioxus_router::prelude::*;
 
 fn main() {
     dioxus_desktop::launch(app);
@@ -21,15 +23,39 @@ fn app(cx: Scope) -> Element {
             }
         }
         div {
-            Router {
-                Route { to: "/", h1 { "Home" } },
-                Route { to: "/settings", h1 { "settings" } },
-                p { "----"}
-                ul {
-                    Link { to: "/", li { "Router link to home" } },
-                    Link { to: "/settings", li { "Router link to settings" } },
-                }
-            }
+            Router {}
         }
     ))
+}
+
+#[derive(Routable, Clone)]
+#[rustfmt::skip]
+enum Route {
+    #[layout(Header)]
+        #[route("/")]
+        Home {},
+        #[route("/settings")]
+        Settings {},
+}
+
+#[inline_props]
+fn Header(cx: Scope) -> Element {
+    render! {
+        h1 { "Your app here" }
+        ul {
+            li { Link { target: Route::Home {}, "home" } }
+            li { Link { target: Route::Settings {}, "settings" } }
+        }
+        Outlet {}
+    }
+}
+
+#[inline_props]
+fn Home(cx: Scope) -> Element {
+    render!(h1 { "Home" })
+}
+
+#[inline_props]
+fn Settings(cx: Scope) -> Element {
+    render!(h1 { "Settings" })
 }

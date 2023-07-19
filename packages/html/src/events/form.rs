@@ -56,10 +56,9 @@ where
 {
     use serde::Deserialize;
 
-    let Ok(file_engine) =
-        SerializedFileEngine::deserialize(deserializer) else{
-            return Ok(None);
-        };
+    let Ok(file_engine) = SerializedFileEngine::deserialize(deserializer) else {
+        return Ok(None);
+    };
 
     let file_engine = std::sync::Arc::new(file_engine);
     Ok(Some(file_engine))

@@ -94,14 +94,18 @@ impl CheckBox {
     fn write_value(&self, mut root: NodeMut) {
         let single_char = {
             let node_type = root.node_type_mut();
-            let NodeTypeMut::Element( el) = node_type else { panic!("input must be an element") };
+            let NodeTypeMut::Element(el) = node_type else {
+                panic!("input must be an element")
+            };
             Self::width(&el) == "1px" || Self::height(&el) == "1px"
         };
         let rdom = root.real_dom_mut();
 
         if let Some(mut text) = rdom.get_mut(self.text_id) {
             let node_type = text.node_type_mut();
-            let NodeTypeMut::Text(mut text) = node_type else { panic!("input must be an element") };
+            let NodeTypeMut::Text(mut text) = node_type else {
+                panic!("input must be an element")
+            };
             let value = if single_char {
                 if self.checked {
                     "☑"
@@ -156,7 +160,9 @@ impl CustomElement for CheckBox {
 
     fn create(mut root: dioxus_native_core::real_dom::NodeMut) -> Self {
         let node_type = root.node_type();
-        let NodeType::Element(el) = &*node_type else { panic!("input must be an element") };
+        let NodeType::Element(el) = &*node_type else {
+            panic!("input must be an element")
+        };
 
         let value = el
             .attributes
@@ -197,7 +203,9 @@ impl CustomElement for CheckBox {
             AttributeMask::All => {
                 {
                     let node_type = root.node_type_mut();
-                    let NodeTypeMut::Element(mut el) = node_type else { panic!("input must be an element") };
+                    let NodeTypeMut::Element(mut el) = node_type else {
+                        panic!("input must be an element")
+                    };
                     self.update_value_attr(&el);
                     self.update_size_attr(&mut el);
                     self.update_checked_attr(&el);
@@ -207,7 +215,9 @@ impl CustomElement for CheckBox {
             AttributeMask::Some(attrs) => {
                 {
                     let node_type = root.node_type_mut();
-                    let NodeTypeMut::Element(mut el) = node_type else { panic!("input must be an element") };
+                    let NodeTypeMut::Element(mut el) = node_type else {
+                        panic!("input must be an element")
+                    };
                     if attrs.contains("width") || attrs.contains("height") {
                         self.update_size_attr(&mut el);
                     }

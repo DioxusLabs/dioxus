@@ -4,10 +4,10 @@ Once you have the Dioxus CLI tool installed, you can use it to create dioxus pro
 
 ## Initializing a default project
 
-First, run the `dioxus create` command to create a new project ready to be used with Dioxus and the Dioxus CLI:
+First, run the `dx create` command to create a new project ready to be used with Dioxus and the Dioxus CLI:
 
 ```
-dioxus create hello-dioxus
+dx create hello-dioxus
 ```
 
 > It will clone a default template from github template: [DioxusLabs/dioxus-template](https://github.com/DioxusLabs/dioxus-template)
@@ -15,7 +15,7 @@ dioxus create hello-dioxus
 >
 > You can choose to create your project from a different template by passing the `template` argument:
 > ```
-> dioxus init hello-dioxus --template=gh:dioxuslabs/dioxus-template
+> dx init hello-dioxus --template=gh:dioxuslabs/dioxus-template
 > ```
 
 Next, move the current directory into your new project:
@@ -33,7 +33,7 @@ cd hello-dioxus
 Finally, create serve your project with the Dioxus CLI:
 
 ```
-dioxus serve
+dx serve
 ```
 
 By default, the CLI serve your site at: [`http://127.0.0.1:8080/`](http://127.0.0.1:8080/)
