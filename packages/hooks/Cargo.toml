@@ -9,12 +9,16 @@ repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com"
 keywords = ["dom", "ui", "gui", "react"]
 
+[features]
+default = []
+nightly-features = []
 
 [dependencies]
 dioxus-core = { workspace = true }
 futures-channel = { workspace = true }
 log = { workspace = true }
-
+thiserror = { workspace = true }
+debug-cell = { git = "https://github.com/Niedzwiedzw/debug-cell", rev = "3352a1f8aff19f56f5e3b2018200a3338fd43d2e" } # waiting for the merge / official DioxusLabs fork
 
 [dev-dependencies]
 futures-util = { workspace = true, default-features = false }

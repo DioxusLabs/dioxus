@@ -10,7 +10,7 @@ license = "MIT OR Apache-2.0"
 [dependencies]
 # cli core
 clap = { version = "4.2", features = ["derive"] }
-thiserror = "1.0.30"
+thiserror = { workspace = true }
 wasm-bindgen-cli-support = "0.2"
 colored = "2.0.0"
 
