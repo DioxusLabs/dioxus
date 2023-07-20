@@ -5,7 +5,7 @@ authors = ["Jonathan Kelley"]
 edition = "2021"
 description = "CLI tool for developing, testing, and publishing Dioxus apps"
 repository = "https://github.com/DioxusLabs/dioxus/"
-license = "MIT/Apache-2.0"
+license = "MIT OR Apache-2.0"
 
 [dependencies]
 # cli core

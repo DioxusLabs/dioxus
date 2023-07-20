@@ -2,7 +2,7 @@
 name = "dioxus-rsx"
 version = "0.0.3"
 edition = "2018"
-license = "MIT/Apache-2.0"
+license = "MIT OR Apache-2.0"
 description = "Core functionality for Dioxus - a concurrent renderer-agnostic Virtual DOM for interactive user experiences"
 repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com"

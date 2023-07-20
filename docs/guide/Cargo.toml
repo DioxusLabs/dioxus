@@ -3,7 +3,7 @@ name = "dioxus-guide"
 version = "0.0.1"
 edition = "2021"
 description = "Dioxus guide, including testable examples"
-license = "MIT/Apache-2.0"
+license = "MIT OR Apache-2.0"
 publish = false
 
 [dev-dependencies]

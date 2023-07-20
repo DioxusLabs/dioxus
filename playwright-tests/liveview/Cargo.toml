@@ -3,7 +3,7 @@ name = "dioxus-playwright-liveview-test"
 version = "0.0.1"
 edition = "2021"
 description = "Playwright test for Dioxus Liveview"
-license = "MIT/Apache-2.0"
+license = "MIT OR Apache-2.0"
 publish = false
 
 [dependencies]
