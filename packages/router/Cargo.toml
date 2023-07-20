@@ -18,10 +18,11 @@ thiserror = { workspace = true }
 futures-util = { workspace = true }
 serde_urlencoded = { version = "0.7.1", optional = true }
 serde = { version = "1", features = ["derive"], optional = true }
-thiserror = "1.0.37"
 url = "2.3.1"
 wasm-bindgen = { workspace = true, optional = true }
-web-sys = { version = "0.3.60", optional = true, features = ["ScrollRestoration"] }
+web-sys = { version = "0.3.60", optional = true, features = [
+    "ScrollRestoration",
+] }
 js-sys = { version = "0.3.63", optional = true }
 gloo-utils = { version = "0.1.6", optional = true }
 dioxus-ssr = { workspace = true, optional = true }
