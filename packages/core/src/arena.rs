@@ -4,7 +4,6 @@ use crate::{
     innerlude::DirtyScope, nodes::RenderReturn, nodes::VNode, virtual_dom::VirtualDom,
     AttributeValue, DynamicNode, ScopeId,
 };
-use bumpalo::boxed::Box as BumpBox;
 
 /// An Element's unique identifier.
 ///
@@ -22,7 +21,7 @@ pub(crate) struct ElementRef {
     pub template: Option<NonNull<VNode<'static>>>,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum ElementPath {
     Deep(&'static [u8]),
     Root(usize),
@@ -92,34 +91,32 @@ impl VirtualDom {
     // Note: This will not remove any ids from the arena
     pub(crate) fn drop_scope(&mut self, id: ScopeId, recursive: bool) {
         self.dirty_scopes.remove(&DirtyScope {
-            height: self.scopes[id].height,
+            height: self.scopes[id.0].height,
             id,
         });
 
         self.ensure_drop_safety(id);
 
         if recursive {
-            if let Some(root) = self.scopes[id].try_root_node() {
+            if let Some(root) = self.scopes[id.0].try_root_node() {
                 if let RenderReturn::Ready(node) = unsafe { root.extend_lifetime_ref() } {
                     self.drop_scope_inner(node)
                 }
             }
         }
 
-        let scope = &mut self.scopes[id];
+        let scope = &mut self.scopes[id.0];
 
         // Drop all the hooks once the children are dropped
         // this means we'll drop hooks bottom-up
-        for hook in scope.hook_list.get_mut().drain(..) {
-            drop(unsafe { BumpBox::from_raw(hook) });
-        }
+        scope.hooks.get_mut().clear();
 
         // Drop all the futures once the hooks are dropped
         for task_id in scope.spawned_tasks.borrow_mut().drain() {
             scope.tasks.remove(task_id);
         }
 
-        self.scopes.remove(id);
+        self.scopes.remove(id.0);
     }
 
     fn drop_scope_inner(&mut self, node: &VNode) {
@@ -140,7 +137,7 @@ impl VirtualDom {
 
     /// Descend through the tree, removing any borrowed props and listeners
     pub(crate) fn ensure_drop_safety(&self, scope_id: ScopeId) {
-        let scope = &self.scopes[scope_id];
+        let scope = &self.scopes[scope_id.0];
 
         // make sure we drop all borrowed props manually to guarantee that their drop implementation is called before we
         // run the hooks (which hold an &mut Reference)

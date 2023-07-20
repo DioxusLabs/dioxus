@@ -8,6 +8,8 @@ use std::fmt::{Result, Write};
 
 use dioxus_rsx::IfmtInput;
 
+use crate::write_ifmt;
+
 /// The output buffer that tracks indent and string
 #[derive(Debug, Default)]
 pub struct Buffer {
@@ -48,7 +50,7 @@ impl Buffer {
     }
 
     pub fn write_text(&mut self, text: &IfmtInput) -> Result {
-        write!(self.buf, "\"{}\"", text.source.as_ref().unwrap().value())
+        write_ifmt(text, &mut self.buf)
     }
 }
 

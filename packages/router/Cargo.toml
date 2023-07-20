@@ -3,59 +3,59 @@ name = "dioxus-router"
 version = "0.3.0"
 edition = "2018"
 description = "Cross-platform router for Dioxus apps"
-license = "MIT/Apache-2.0"
+license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com"
-documentation = "https://dioxuslabs.com"
 keywords = ["dom", "ui", "gui", "react", "wasm"]
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-dioxus = { path = "../dioxus", version = "0.3.0"}
-futures-channel = "0.3.21"
-url = { version = "2.2.2", default-features = false }
-
-# for wasm
-web-sys = { version = "0.3", features = [
-    "Attr",
-    "Document",
-    "History",
-    "HtmlBaseElement",
-    "Event",
-    "NamedNodeMap",
-    "Url",
-    "UrlSearchParams",
-    "Window",
-    "Location",
-], optional = true }
-wasm-bindgen = { version = "0.2", optional = true }
-js-sys = { version = "0.3", optional = true }
-gloo-events = { version = "0.1.1", optional = true }
-log = "0.4.14"
-thiserror = "1.0.30"
-futures-util = "0.3.21"
-serde = { version = "1", optional = true }
+anyhow = "1.0.66"
+dioxus = { workspace = true }
+dioxus-router-macro = { workspace = true }
+gloo = { version = "0.8.0", optional = true }
+log = { workspace = true }
+thiserror = { workspace = true }
+futures-util = { workspace = true }
 serde_urlencoded = { version = "0.7.1", optional = true }
+serde = { version = "1", features = ["derive"], optional = true }
+url = "2.3.1"
+wasm-bindgen = { workspace = true, optional = true }
+web-sys = { version = "0.3.60", optional = true, features = [
+    "ScrollRestoration",
+] }
+js-sys = { version = "0.3.63", optional = true }
+gloo-utils = { version = "0.1.6", optional = true }
+dioxus-ssr = { workspace = true, optional = true }
+tokio = { workspace = true, features = ["full"], optional = true }
 
 [features]
-default = ["query"]
-web = ["web-sys", "gloo-events", "js-sys", "wasm-bindgen"]
-query = ["serde", "serde_urlencoded"]
+default = ["web"]
+ssr = ["dioxus-ssr", "tokio"]
 wasm_test = []
+serde = ["dep:serde", "gloo-utils/serde"]
+web = ["gloo", "web-sys", "wasm-bindgen", "gloo-utils", "js-sys"]
 
 [dev-dependencies]
+dioxus = { path = "../dioxus" }
+dioxus-ssr = { path = "../ssr" }
+criterion = { verison = "0.5", features = ["async_tokio", "html_reports"] }
+
+[[example]]
+name = "static_generation"
+required-features = ["ssr"]
+
+[[bench]]
+name = "incremental"
+required-features = ["ssr"]
+harness = false
+
+[target.'cfg(not(target_family = "wasm"))'.dev-dependencies]
+dioxus-desktop = { path = "../desktop" }
+
+[target.'cfg(target_family = "wasm")'.dev-dependencies]
 console_error_panic_hook = "0.1.7"
+dioxus-router = { workspace = true, features = ["web"] }
+dioxus-web = { workspace = true }
+gloo = "0.8.0"
+wasm-bindgen-test = "0.3.33"
 wasm-logger = "0.2.0"
-wasm-bindgen-test = "0.3"
-gloo-utils = "0.1.2"
-dioxus-web = { path = "../web", version = "0.3.0" }
-# dioxus-desktop = { path = "../desktop", optional = true }
-
-# not wasm
-
-[target.wasm32-unknown-unknown.dev-dependencies]
-dioxus-router = { path = ".", features = ["web"] }
-
-[dev-dependencies.web-sys]
-version = "0.3"
-features = ["Document"]

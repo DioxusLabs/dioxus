@@ -1,36 +1,32 @@
 use std::rc::Rc;
 
+use crate::query::Query;
+use crate::query::QueryError;
 use crate::use_window;
 use dioxus_core::ScopeState;
-use serde::de::Error;
 use std::future::Future;
 use std::future::IntoFuture;
 use std::pin::Pin;
 
 /// A future that resolves to the result of a JavaScript evaluation.
 pub struct EvalResult {
-    pub(crate) broadcast: tokio::sync::broadcast::Sender<serde_json::Value>,
+    pub(crate) query: Query<serde_json::Value>,
 }
 
 impl EvalResult {
-    pub(crate) fn new(sender: tokio::sync::broadcast::Sender<serde_json::Value>) -> Self {
-        Self { broadcast: sender }
+    pub(crate) fn new(query: Query<serde_json::Value>) -> Self {
+        Self { query }
     }
 }
 
 impl IntoFuture for EvalResult {
-    type Output = Result<serde_json::Value, serde_json::Error>;
+    type Output = Result<serde_json::Value, QueryError>;
 
-    type IntoFuture = Pin<Box<dyn Future<Output = Result<serde_json::Value, serde_json::Error>>>>;
+    type IntoFuture = Pin<Box<dyn Future<Output = Result<serde_json::Value, QueryError>>>>;
 
     fn into_future(self) -> Self::IntoFuture {
-        Box::pin(async move {
-            let mut reciever = self.broadcast.subscribe();
-            match reciever.recv().await {
-                Ok(result) => Ok(result),
-                Err(_) => Err(serde_json::Error::custom("No result returned")),
-            }
-        }) as Pin<Box<dyn Future<Output = Result<serde_json::Value, serde_json::Error>>>>
+        Box::pin(self.query.resolve())
+            as Pin<Box<dyn Future<Output = Result<serde_json::Value, QueryError>>>>
     }
 }
 

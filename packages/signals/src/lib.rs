@@ -12,14 +12,18 @@ pub use rt::*;
 
 pub fn use_init_signal_rt(cx: &ScopeState) {
     cx.use_hook(|| {
-        let rt = crate::rt::claim_rt(cx.schedule_update_any());
+        let rt = claim_rt(cx.schedule_update_any());
         cx.provide_context(rt);
     });
 }
 
 pub fn use_signal<T: 'static>(cx: &ScopeState, f: impl FnOnce() -> T) -> Signal<T> {
     cx.use_hook(|| {
-        let rt: &'static SignalRt = cx.consume_context().unwrap();
+        let rt: &'static SignalRt = match cx.consume_context() {
+            Some(rt) => rt,
+            None => cx.provide_context(claim_rt(cx.schedule_update_any())),
+        };
+
         let id = rt.init(f());
         rt.subscribe(id, cx.scope_id());
 
@@ -90,11 +94,7 @@ impl<T: Clone + 'static> std::ops::Deref for Signal<T> {
 
 impl<T> std::clone::Clone for Signal<T> {
     fn clone(&self) -> Self {
-        Self {
-            t: PhantomData,
-            id: self.id,
-            rt: self.rt,
-        }
+        *self
     }
 }
 

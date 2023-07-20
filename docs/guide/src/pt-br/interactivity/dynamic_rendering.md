@@ -6,7 +6,7 @@
 
 Para renderizar diferentes elementos com base em uma condição, você pode usar uma instrução `if-else`:
 
-```rust
+```rust, no_run
 {{#include ../../../examples/conditional_rendering.rs:if_else}}
 ```
 
@@ -16,7 +16,7 @@ Para renderizar diferentes elementos com base em uma condição, você pode usar
 
 Como `Element` é uma `Option<VNode>`, os componentes que aceitam `Element` como _prop_ podem realmente inspecionar seu conteúdo e renderizar coisas diferentes com base nisso. Exemplo:
 
-```rust
+```rust, no_run
 {{#include ../../../examples/component_children_inspect.rs:Clickable}}
 ```
 
@@ -26,7 +26,7 @@ Você não pode modificar o `Element`, mas se precisar de uma versão modificada
 
 Para renderizar nada, você pode retornar `None` de um componente. Isso é útil se você deseja ocultar algo condicionalmente:
 
-```rust
+```rust, no_run
 {{#include ../../../examples/conditional_rendering.rs:conditional_none}}
 ```
 
@@ -47,7 +47,7 @@ Para isso, o Dioxus aceita iteradores que produzem `Element`s. Então precisamos
 
 Exemplo: suponha que você tenha uma lista de comentários que deseja renderizar. Então, você pode renderizá-los assim:
 
-```rust
+```rust, no_run
 {{#include ../../../examples/rendering_lists.rs:render_list}}
 ```
 

@@ -3,7 +3,7 @@ use crate::cache::StringCache;
 use dioxus_core::{prelude::*, AttributeValue, DynamicNode, RenderReturn};
 use std::collections::HashMap;
 use std::fmt::Write;
-use std::rc::Rc;
+use std::sync::Arc;
 
 /// A virtualdom renderer that caches the templates it has seen for faster rendering
 #[derive(Default)]
@@ -25,7 +25,7 @@ pub struct Renderer {
     pub skip_components: bool,
 
     /// A cache of templates that have been rendered
-    template_cache: HashMap<&'static str, Rc<StringCache>>,
+    template_cache: HashMap<&'static str, Arc<StringCache>>,
 }
 
 impl Renderer {
@@ -67,8 +67,10 @@ impl Renderer {
         let entry = self
             .template_cache
             .entry(template.template.get().name)
-            .or_insert_with(|| Rc::new(StringCache::from_template(template).unwrap()))
+            .or_insert_with(|| Arc::new(StringCache::from_template(template).unwrap()))
             .clone();
+
+        let mut inner_html = None;
 
         // We need to keep track of the dynamic styles so we can insert them into the right place
         let mut accumulated_dynamic_styles = Vec::new();
@@ -77,7 +79,9 @@ impl Renderer {
             match segment {
                 Segment::Attr(idx) => {
                     let attr = &template.dynamic_attrs[*idx];
-                    if attr.namespace == Some("style") {
+                    if attr.name == "dangerous_inner_html" {
+                        inner_html = Some(attr);
+                    } else if attr.namespace == Some("style") {
                         accumulated_dynamic_styles.push(attr);
                     } else {
                         match attr.value {
@@ -85,6 +89,10 @@ impl Renderer {
                                 write!(buf, " {}=\"{}\"", attr.name, value)?
                             }
                             AttributeValue::Bool(value) => write!(buf, " {}={}", attr.name, value)?,
+                            AttributeValue::Int(value) => write!(buf, " {}={}", attr.name, value)?,
+                            AttributeValue::Float(value) => {
+                                write!(buf, " {}={}", attr.name, value)?
+                            }
                             _ => {}
                         };
                     }
@@ -165,6 +173,19 @@ impl Renderer {
                         accumulated_dynamic_styles.clear();
                     }
                 }
+
+                Segment::InnerHtmlMarker => {
+                    if let Some(inner_html) = inner_html.take() {
+                        let inner_html = &inner_html.value;
+                        match inner_html {
+                            AttributeValue::Text(value) => write!(buf, "{}", value)?,
+                            AttributeValue::Bool(value) => write!(buf, "{}", value)?,
+                            AttributeValue::Float(f) => write!(buf, "{}", f)?,
+                            AttributeValue::Int(i) => write!(buf, "{}", i)?,
+                            _ => {}
+                        }
+                    }
+                }
             }
         }
 
@@ -208,7 +229,9 @@ fn to_string_works() {
                     StyleMarker {
                         inside_style_tag: false,
                     },
-                    PreRendered(">Hello world 1 --&gt;".into(),),
+                    PreRendered(">".into()),
+                    InnerHtmlMarker,
+                    PreRendered("Hello world 1 --&gt;".into(),),
                     Node(0,),
                     PreRendered(
                         "&lt;-- Hello world 2<div>nest 1</div><div></div><div>nest 2</div>".into(),

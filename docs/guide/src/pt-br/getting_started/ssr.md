@@ -16,7 +16,7 @@ Ao trabalhar com frameworks web que requerem `Send`, é possível renderizar um 
 
 Se você quer apenas renderizar `rsx!` ou um VirtualDom para HTML, confira os documentos da API. É bem simples:
 
-```rust
+```rust, no_run
 // We can render VirtualDoms
 let mut vdom = VirtualDom::new(app);
 let _ = vdom.rebuild();
@@ -61,7 +61,7 @@ tokio = { version = "1.15.0", features = ["full"] }
 
 Agora, configure seu aplicativo Axum para responder em um _endpoint_.
 
-```rust
+```rust, no_run
 use axum::{response::Html, routing::get, Router};
 use dioxus::prelude::*;
 
@@ -83,7 +83,7 @@ async fn main() {
 
 E, em seguida, adicione nosso _endpoint_. Podemos renderizar `rsx!` diretamente:
 
-```rust
+```rust, no_run
 async fn app_endpoint() -> Html<String> {
     Html(dioxus_ssr::render_lazy(rsx! {
             h1 { "hello world!" }
@@ -93,7 +93,7 @@ async fn app_endpoint() -> Html<String> {
 
 Ou podemos renderizar `VirtualDoms`.
 
-```rust
+```rust, no_run
 async fn app_endpoint() -> Html<String> {
     fn app(cx: Scope) -> Element {
         cx.render(rsx!(h1 { "hello world" }))

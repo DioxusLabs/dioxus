@@ -104,6 +104,9 @@ pub trait State<V: FromAnyValue + Send + Sync = ()>: Any + Send + Sync {
     /// This is a mask of what aspects of the node are required to update this state
     const NODE_MASK: NodeMaskBuilder<'static>;
 
+    /// Does the state traverse into the shadow dom or pass over it. This should be true for layout and false for styles
+    const TRAVERSE_SHADOW_DOM: bool = false;
+
     /// Update this state in a node, returns if the state was updated
     fn update<'a>(
         &mut self,
@@ -126,7 +129,7 @@ pub trait State<V: FromAnyValue + Send + Sync = ()>: Any + Send + Sync {
     /// Create a workload system for this state
     fn workload_system(
         type_id: TypeId,
-        dependants: FxHashSet<TypeId>,
+        dependants: Arc<Dependants>,
         pass_direction: PassDirection,
     ) -> WorkloadSystem;
 
@@ -138,12 +141,19 @@ pub trait State<V: FromAnyValue + Send + Sync = ()>: Any + Send + Sync {
         let node_mask = Self::NODE_MASK.build();
         TypeErasedState {
             this_type_id: TypeId::of::<Self>(),
-            combined_dependancy_type_ids: all_dependanices::<V, Self>().iter().copied().collect(),
-            parent_dependant: !Self::ParentDependencies::type_ids().is_empty(),
-            child_dependant: !Self::ChildDependencies::type_ids().is_empty(),
-            dependants: FxHashSet::default(),
+            parent_dependancies_ids: Self::ParentDependencies::type_ids()
+                .iter()
+                .copied()
+                .collect(),
+            child_dependancies_ids: Self::ChildDependencies::type_ids()
+                .iter()
+                .copied()
+                .collect(),
+            node_dependancies_ids: Self::NodeDependencies::type_ids().iter().copied().collect(),
+            dependants: Default::default(),
             mask: node_mask,
             pass_direction: pass_direction::<V, Self>(),
+            enter_shadow_dom: Self::TRAVERSE_SHADOW_DOM,
             workload: Self::workload_system,
             phantom: PhantomData,
         }
@@ -166,13 +176,6 @@ fn pass_direction<V: FromAnyValue + Send + Sync, S: State<V>>() -> PassDirection
     }
 }
 
-fn all_dependanices<V: FromAnyValue + Send + Sync, S: State<V>>() -> Box<[TypeId]> {
-    let mut dependencies = S::ParentDependencies::type_ids().to_vec();
-    dependencies.extend(S::ChildDependencies::type_ids().iter());
-    dependencies.extend(S::NodeDependencies::type_ids().iter());
-    dependencies.into_boxed_slice()
-}
-
 #[doc(hidden)]
 #[derive(Borrow, BorrowInfo)]
 pub struct RunPassView<'a, V: FromAnyValue + Send + Sync = ()> {
@@ -188,7 +191,7 @@ pub struct RunPassView<'a, V: FromAnyValue + Send + Sync = ()> {
 #[doc(hidden)]
 pub fn run_pass<V: FromAnyValue + Send + Sync>(
     type_id: TypeId,
-    dependants: FxHashSet<TypeId>,
+    dependants: Arc<Dependants>,
     pass_direction: PassDirection,
     view: RunPassView<V>,
     mut update_node: impl FnMut(NodeId, &SendAnyMap) -> bool,
@@ -206,11 +209,7 @@ pub fn run_pass<V: FromAnyValue + Send + Sync>(
             while let Some((height, id)) = dirty.pop_front(type_id) {
                 if (update_node)(id, ctx) {
                     nodes_updated.insert(id);
-                    for id in tree.children_ids(id) {
-                        for dependant in &dependants {
-                            dirty.insert(*dependant, id, height + 1);
-                        }
-                    }
+                    dependants.mark_dirty(&dirty, id, &tree, height);
                 }
             }
         }
@@ -218,11 +217,7 @@ pub fn run_pass<V: FromAnyValue + Send + Sync>(
             while let Some((height, id)) = dirty.pop_back(type_id) {
                 if (update_node)(id, ctx) {
                     nodes_updated.insert(id);
-                    if let Some(id) = tree.parent_id(id) {
-                        for dependant in &dependants {
-                            dirty.insert(*dependant, id, height - 1);
-                        }
-                    }
+                    dependants.mark_dirty(&dirty, id, &tree, height);
                 }
             }
         }
@@ -230,11 +225,54 @@ pub fn run_pass<V: FromAnyValue + Send + Sync>(
             while let Some((height, id)) = dirty.pop_back(type_id) {
                 if (update_node)(id, ctx) {
                     nodes_updated.insert(id);
-                    for dependant in &dependants {
-                        dirty.insert(*dependant, id, height);
-                    }
+                    dependants.mark_dirty(&dirty, id, &tree, height);
                 }
             }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Dependant {
+    pub(crate) type_id: TypeId,
+    pub(crate) enter_shadow_dom: bool,
+}
+
+/// The states that depend on this state
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
+pub struct Dependants {
+    /// The states in the parent direction that should be invalidated when this state is invalidated
+    pub(crate) parent: Vec<Dependant>,
+    /// The states in the child direction that should be invalidated when this state is invalidated
+    pub(crate) child: Vec<Dependant>,
+    /// The states in the node direction that should be invalidated when this state is invalidated
+    pub(crate) node: Vec<TypeId>,
+}
+
+impl Dependants {
+    fn mark_dirty(&self, dirty: &DirtyNodeStates, id: NodeId, tree: &impl TreeRef, height: u16) {
+        for &Dependant {
+            type_id,
+            enter_shadow_dom,
+        } in &self.child
+        {
+            for id in tree.children_ids_advanced(id, enter_shadow_dom) {
+                dirty.insert(type_id, id, height + 1);
+            }
+        }
+
+        for &Dependant {
+            type_id,
+            enter_shadow_dom,
+        } in &self.parent
+        {
+            if let Some(id) = tree.parent_id_advanced(id, enter_shadow_dom) {
+                dirty.insert(type_id, id, height - 1);
+            }
+        }
+
+        for dependant in &self.node {
+            dirty.insert(*dependant, id, height);
         }
     }
 }
@@ -242,13 +280,14 @@ pub fn run_pass<V: FromAnyValue + Send + Sync>(
 /// A type erased version of [`State`] that can be added to the [`crate::prelude::RealDom`] with [`crate::prelude::RealDom::new`]
 pub struct TypeErasedState<V: FromAnyValue + Send = ()> {
     pub(crate) this_type_id: TypeId,
-    pub(crate) parent_dependant: bool,
-    pub(crate) child_dependant: bool,
-    pub(crate) combined_dependancy_type_ids: FxHashSet<TypeId>,
-    pub(crate) dependants: FxHashSet<TypeId>,
+    pub(crate) parent_dependancies_ids: FxHashSet<TypeId>,
+    pub(crate) child_dependancies_ids: FxHashSet<TypeId>,
+    pub(crate) node_dependancies_ids: FxHashSet<TypeId>,
+    pub(crate) dependants: Arc<Dependants>,
     pub(crate) mask: NodeMask,
-    pub(crate) workload: fn(TypeId, FxHashSet<TypeId>, PassDirection) -> WorkloadSystem,
+    pub(crate) workload: fn(TypeId, Arc<Dependants>, PassDirection) -> WorkloadSystem,
     pub(crate) pass_direction: PassDirection,
+    pub(crate) enter_shadow_dom: bool,
     phantom: PhantomData<V>,
 }
 
@@ -260,10 +299,18 @@ impl<V: FromAnyValue + Send> TypeErasedState<V> {
             self.pass_direction,
         )
     }
+
+    pub(crate) fn combined_dependancy_type_ids(&self) -> impl Iterator<Item = TypeId> + '_ {
+        self.parent_dependancies_ids
+            .iter()
+            .chain(self.child_dependancies_ids.iter())
+            .chain(self.node_dependancies_ids.iter())
+            .copied()
+    }
 }
 
 /// The direction that a pass should be run in
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub enum PassDirection {
     /// The pass should be run from the root to the leaves
     ParentToChild,

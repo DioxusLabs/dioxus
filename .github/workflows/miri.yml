@@ -6,6 +6,13 @@ on:
     branches:
       - 'auto'
       - 'try'
+    paths:
+      - packages/**
+      - examples/**
+      - src/**
+      - .github/**
+      - lib.rs
+      - Cargo.toml
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
     branches:
@@ -31,7 +38,9 @@ env:
   # - tokio-stream/Cargo.toml
   # rust_min: 1.49.0
 
-
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
@@ -72,7 +81,7 @@ jobs:
         # #[tokio::main] that calls epoll_create1 that Miri does not support.
         # run: cargo miri test --features full --lib --no-fail-fast
         run: |
-          cargo miri test --package dioxus-core --test miri_stress  -- --exact --nocapture
+          cargo miri test --package dioxus-core -- --exact --nocapture
           cargo miri test --package dioxus-native-core --test miri_native  -- --exact --nocapture
 
         # working-directory: tokio

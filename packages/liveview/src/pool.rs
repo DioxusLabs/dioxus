@@ -1,8 +1,13 @@
-use crate::LiveViewError;
-use dioxus_core::prelude::*;
-use dioxus_html::HtmlEvent;
+use crate::{
+    element::LiveviewElement,
+    query::{QueryEngine, QueryResult},
+    LiveViewError,
+};
+use dioxus_core::{prelude::*, Mutations};
+use dioxus_html::{EventData, HtmlEvent, MountedData};
 use futures_util::{pin_mut, SinkExt, StreamExt};
-use std::time::Duration;
+use serde::Serialize;
+use std::{rc::Rc, time::Duration};
 use tokio_util::task::LocalPoolHandle;
 
 #[derive(Clone)]
@@ -82,16 +87,16 @@ impl LiveViewPool {
 /// }
 /// ```
 pub trait LiveViewSocket:
-    SinkExt<String, Error = LiveViewError>
-    + StreamExt<Item = Result<String, LiveViewError>>
+    SinkExt<Vec<u8>, Error = LiveViewError>
+    + StreamExt<Item = Result<Vec<u8>, LiveViewError>>
     + Send
     + 'static
 {
 }
 
 impl<S> LiveViewSocket for S where
-    S: SinkExt<String, Error = LiveViewError>
-        + StreamExt<Item = Result<String, LiveViewError>>
+    S: SinkExt<Vec<u8>, Error = LiveViewError>
+        + StreamExt<Item = Result<Vec<u8>, LiveViewError>>
         + Send
         + 'static
 {
@@ -115,19 +120,27 @@ pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), Li
     };
 
     // todo: use an efficient binary packed format for this
-    let edits = serde_json::to_string(&vdom.rebuild()).unwrap();
+    let edits = serde_json::to_string(&ClientUpdate::Edits(vdom.rebuild())).unwrap();
 
     // pin the futures so we can use select!
     pin_mut!(ws);
 
     // send the initial render to the client
-    ws.send(edits).await?;
+    ws.send(edits.into_bytes()).await?;
+
+    // Create the a proxy for query engine
+    let (query_tx, mut query_rx) = tokio::sync::mpsc::unbounded_channel();
+    let query_engine = QueryEngine::default();
 
     // desktop uses this wrapper struct thing around the actual event itself
     // this is sorta driven by tao/wry
-    #[derive(serde::Deserialize)]
-    struct IpcMessage {
-        params: HtmlEvent,
+    #[derive(serde::Deserialize, Debug)]
+    #[serde(tag = "method", content = "params")]
+    enum IpcMessage {
+        #[serde(rename = "user_event")]
+        Event(HtmlEvent),
+        #[serde(rename = "query")]
+        Query(QueryResult),
     }
 
     loop {
@@ -143,18 +156,47 @@ pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), Li
             evt = ws.next() => {
                 match evt.as_ref().map(|o| o.as_deref()) {
                     // respond with a pong every ping to keep the websocket alive
-                    Some(Ok("__ping__")) => {
-                        ws.send("__pong__".to_string()).await?;
+                    Some(Ok(b"__ping__")) => {
+                        ws.send(b"__pong__".to_vec()).await?;
                     }
                     Some(Ok(evt)) => {
-                        if let Ok(IpcMessage { params }) = serde_json::from_str::<IpcMessage>(evt) {
-                            vdom.handle_event(&params.name, params.data.into_any(), params.element, params.bubbles);
+                        if let Ok(message) = serde_json::from_str::<IpcMessage>(&String::from_utf8_lossy(evt)) {
+                            match message {
+                                IpcMessage::Event(evt) => {
+                                    // Intercept the mounted event and insert a custom element type
+                                    if let EventData::Mounted = &evt.data {
+                                        let element = LiveviewElement::new(evt.element, query_tx.clone(), query_engine.clone());
+                                        vdom.handle_event(
+                                            &evt.name,
+                                            Rc::new(MountedData::new(element)),
+                                            evt.element,
+                                            evt.bubbles,
+                                        );
+                                    }
+                                    else{
+                                        vdom.handle_event(
+                                            &evt.name,
+                                            evt.data.into_any(),
+                                            evt.element,
+                                            evt.bubbles,
+                                        );
+                                    }
+                                }
+                                IpcMessage::Query(result) => {
+                                    query_engine.send(result);
+                                },
+                            }
                         }
                     }
                     // log this I guess? when would we get an error here?
-                    Some(Err(_e)) => {},
+                    Some(Err(_e)) => {}
                     None => return Ok(()),
                 }
+            }
+
+            // handle any new queries
+            Some(query) = query_rx.recv() => {
+                ws.send(serde_json::to_string(&ClientUpdate::Query(query)).unwrap().into_bytes()).await?;
             }
 
             Some(msg) = hot_reload_wait => {
@@ -176,6 +218,20 @@ pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), Li
             .render_with_deadline(tokio::time::sleep(Duration::from_millis(10)))
             .await;
 
-        ws.send(serde_json::to_string(&edits).unwrap()).await?;
+        ws.send(
+            serde_json::to_string(&ClientUpdate::Edits(edits))
+                .unwrap()
+                .into_bytes(),
+        )
+        .await?;
     }
+}
+
+#[derive(Serialize)]
+#[serde(tag = "type", content = "data")]
+enum ClientUpdate<'a> {
+    #[serde(rename = "edits")]
+    Edits(Mutations<'a>),
+    #[serde(rename = "query")]
+    Query(String),
 }

@@ -1,0 +1,45 @@
+[application]
+
+# dioxus project name
+name = "dioxus-cli"
+
+# default platfrom
+# you can also use `dx serve/build --platform XXX` to use other platform
+# value: web | desktop
+default_platform = "desktop"
+
+# Web `build` & `serve` dist path
+out_dir = "dist"
+
+# resource (static) file folder
+asset_dir = "public"
+
+[web.app]
+
+# HTML title tag content
+title = "dioxus | ⛺"
+
+[web.watcher]
+
+watch_path = ["src"]
+
+# include `assets` in web platform
+[web.resource]
+
+# CSS style file
+style = []
+
+# Javascript code file
+script = []
+
+[web.resource.dev]
+
+# Javascript code file
+# serve: [dev-server] only
+script = []
+
+[application.tools]
+
+# use binaryen.wasm-opt for output Wasm file
+# binaryen just will trigger in `web` platform
+binaryen = { wasm_opt = true }

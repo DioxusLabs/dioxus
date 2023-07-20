@@ -5,11 +5,14 @@ Many modern frameworks provide a domain-specific-language for declaring user-int
 With Dioxus, we actually ship two different macros – a macro that mimics JSX (the `html!` macro) and a macro that mimics Rust's native nested-struct syntax (the `rsx!` macro). These macros simply transform their inputs into NodeFactory calls.
 
 For instance, this html! call:
-```rust
+
+```rust, no_run
 html!(<div> "hello world" </div>)
 ```
+
 becomes this NodeFactory call:
-```rust
+
+```rust, no_run
 |f| f.element(
     dioxus_elements::div, // tag
     [], // listeners
@@ -18,6 +21,7 @@ becomes this NodeFactory call:
     None // key
 )
 ```
+
 The NodeFactory API is fairly ergonomic, making it a viable option to use directly. The NodeFactory API is also compile-time correct and has incredible syntax highlighting support. We use what Rust calls a "unit type" – the `dioxus_elements::div` and associated methods to ensure that a `div` can only have attributes associated with `div`s. This lets us tack on relevant documentation, autocomplete support, and jump-to-definition for methods and attributes.
 
 ![Compile time correct syntax](../images/compiletimecorrect.png)
@@ -28,7 +32,7 @@ The html! macro supports a limited subset of the html standard. Rust's macro par
 
 However, writing HTML by hand is a bit tedious – IDE tools for Rust don't support linting/autocomplete/syntax highlighting. We suggest using RSX – it's more natural for Rust programs and _does_ integrate well with Rust IDE tools.
 
-```rust
+```rust, no_run
 let name = "jane";
 let pending = false;
 let count = 10;
@@ -50,7 +54,7 @@ When helpful, the Dioxus VSCode extension provides a way of converting a selecti
 
 It's also a bit easier on the eyes than HTML.
 
-```rust
+```rust, no_run
 dioxus::ssr::render_lazy(rsx! {
     div {
         p {"Hello, {name}!"}

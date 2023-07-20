@@ -1,4 +1,4 @@
-use crate::{writer::Location, Writer};
+use crate::{ifmt_to_string, writer::Location, Writer};
 use dioxus_rsx::*;
 use quote::ToTokens;
 use std::fmt::{Result, Write};
@@ -165,14 +165,21 @@ impl Writer<'_> {
             match &field.content {
                 ContentField::ManExpr(exp) => {
                     let out = prettyplease::unparse_expr(exp);
-                    write!(self.out, "{name}: {out}")?;
+                    let mut lines = out.split('\n').peekable();
+                    let first = lines.next().unwrap();
+                    write!(self.out, "{name}: {first}")?;
+                    for line in lines {
+                        self.out.new_line()?;
+                        self.out.indented_tab()?;
+                        write!(self.out, "{line}")?;
+                    }
                 }
                 ContentField::Formatted(s) => {
                     write!(
                         self.out,
-                        "{}: \"{}\"",
+                        "{}: {}",
                         name,
-                        s.source.as_ref().unwrap().value()
+                        s.source.as_ref().unwrap().to_token_stream()
                     )?;
                 }
                 ContentField::OnHandlerRaw(exp) => {
@@ -215,7 +222,7 @@ impl Writer<'_> {
         let attr_len = fields
             .iter()
             .map(|field| match &field.content {
-                ContentField::Formatted(s) => s.source.as_ref().unwrap().value().len() ,
+                ContentField::Formatted(s) => ifmt_to_string(s).len() ,
                 ContentField::OnHandlerRaw(exp) | ContentField::ManExpr(exp) => {
                     let formatted = prettyplease::unparse_expr(exp);
                     let len = if formatted.contains('\n') {

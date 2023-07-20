@@ -1,7 +1,10 @@
+use std::fmt::{Display, Write};
+
 use crate::writer::*;
 use collect_macros::byte_offset;
-use dioxus_rsx::{BodyNode, CallBody};
+use dioxus_rsx::{BodyNode, CallBody, IfmtInput};
 use proc_macro2::LineColumn;
+use quote::ToTokens;
 use syn::{ExprMacro, MacroDelimiter};
 
 mod buffer;
@@ -55,7 +58,7 @@ pub fn fmt_file(contents: &str) -> Vec<FormattedBlock> {
 
     let mut writer = Writer::new(contents);
 
-    // Dont parse nested macros
+    // Don't parse nested macros
     let mut end_span = LineColumn { column: 0, line: 0 };
     for item in macros {
         let macro_path = &item.path.segments[0].ident;
@@ -65,16 +68,11 @@ pub fn fmt_file(contents: &str) -> Vec<FormattedBlock> {
             continue;
         }
 
-        // item.parse_body::<CallBody>();
         let body = item.parse_body::<CallBody>().unwrap();
 
         let rsx_start = macro_path.span().start();
 
-        writer.out.indent = &writer.src[rsx_start.line - 1]
-            .chars()
-            .take_while(|c| *c == ' ')
-            .count()
-            / 4;
+        writer.out.indent = leading_whitespaces(writer.src[rsx_start.line - 1]) / 4;
 
         write_body(&mut writer, &body);
 
@@ -88,7 +86,8 @@ pub fn fmt_file(contents: &str) -> Vec<FormattedBlock> {
             MacroDelimiter::Paren(b) => b.span,
             MacroDelimiter::Brace(b) => b.span,
             MacroDelimiter::Bracket(b) => b.span,
-        };
+        }
+        .join();
 
         let mut formatted = String::new();
 
@@ -130,8 +129,6 @@ pub fn write_block_out(body: CallBody) -> Option<String> {
 }
 
 fn write_body(buf: &mut Writer, body: &CallBody) {
-    use std::fmt::Write;
-
     if buf.is_short_children(&body.roots).is_some() {
         // write all the indents with spaces and commas between
         for idx in 0..body.roots.len() - 1 {
@@ -207,4 +204,36 @@ pub fn apply_formats(input: &str, blocks: Vec<FormattedBlock>) -> String {
     out.push_str(suffix);
 
     out
+}
+
+struct DisplayIfmt<'a>(&'a IfmtInput);
+
+impl Display for DisplayIfmt<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let inner_tokens = self.0.source.as_ref().unwrap().to_token_stream();
+        inner_tokens.fmt(f)
+    }
+}
+
+pub(crate) fn ifmt_to_string(input: &IfmtInput) -> String {
+    let mut buf = String::new();
+    let display = DisplayIfmt(input);
+    write!(&mut buf, "{}", display).unwrap();
+    buf
+}
+
+pub(crate) fn write_ifmt(input: &IfmtInput, writable: &mut impl Write) -> std::fmt::Result {
+    let display = DisplayIfmt(input);
+    write!(writable, "{}", display)
+}
+
+pub fn leading_whitespaces(input: &str) -> usize {
+    input
+        .chars()
+        .map_while(|c| match c {
+            ' ' => Some(1),
+            '\t' => Some(4),
+            _ => None,
+        })
+        .sum()
 }

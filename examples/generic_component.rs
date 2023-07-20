@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use dioxus::prelude::*;
 
 fn main() {
@@ -5,9 +7,20 @@ fn main() {
 }
 
 fn app(cx: Scope) -> Element {
-    cx.render(rsx! { generic_child::<i32>{} })
+    cx.render(rsx! { generic_child {
+        data: 0i32
+    } })
 }
 
-fn generic_child<T>(cx: Scope) -> Element {
-    cx.render(rsx! { div {} })
+#[derive(PartialEq, Props)]
+struct GenericChildProps<T: Display + PartialEq> {
+    data: T,
+}
+
+fn generic_child<T: Display + PartialEq>(cx: Scope<GenericChildProps<T>>) -> Element {
+    let data = &cx.props.data;
+
+    cx.render(rsx! { div {
+        "{data}"
+    } })
 }

@@ -26,7 +26,7 @@ fn app(cx: Scope) -> Element {
                     onclick: move |_| {
                         use rand::Rng;
                         let mut rng = rand::thread_rng();
-                        val.set(rng.gen_range(1..6));
+                        val.set(rng.gen_range(1..=6));
                     }
                 }
             }

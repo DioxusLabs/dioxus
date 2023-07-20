@@ -13,7 +13,9 @@ rsx! {
 
     // Complex nesting with handlers
     li {
-        Link { class: "flex items-center pl-3 py-3 pr-4 {active_class} rounded", to: "{to}",
+        Link {
+            class: "flex items-center pl-3 py-3 pr-4 {active_class} rounded",
+            to: "{to}",
             span { class: "inline-block mr-3", icons::icon_0 {} }
             span { "{name}" }
             children.is_some().then(|| rsx! {

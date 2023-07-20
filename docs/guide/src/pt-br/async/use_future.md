@@ -4,7 +4,7 @@
 
 Por exemplo, podemos fazer uma solicitação de API dentro de `use_future`:
 
-```rust
+```rust, no_run
 {{#include ../../../examples/use_future.rs:use_future}}
 ```
 
@@ -14,7 +14,7 @@ Podemos usar `.value()` para obter o resultado do `Future`. Na primeira execuç�
 
 Podemos então renderizar esse resultado:
 
-```rust
+```rust, no_run
 {{#include ../../../examples/use_future.rs:render}}
 ```
 
@@ -26,6 +26,6 @@ O identificador `UseFuture` fornece um método `restart`. Ele pode ser usado par
 
 Muitas vezes, você precisará executar o `Future` novamente toda vez que algum valor (por exemplo, uma prop) mudar. Ao invés de `.restart` manualmente, você pode fornecer uma tupla de "dependências" para o gancho. Ele executará automaticamente o `Future` quando qualquer uma dessas dependências for alterada. Exemplo:
 
-```rust
+```rust, no_run
 {{#include ../../../examples/use_future.rs:dependency}}
 ```

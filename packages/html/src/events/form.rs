@@ -10,10 +10,58 @@ pub type FormEvent = Event<FormData>;
 pub struct FormData {
     pub value: String,
 
-    pub values: HashMap<String, String>,
+    pub values: HashMap<String, Vec<String>>,
 
-    #[cfg_attr(feature = "serialize", serde(skip))]
+    #[cfg_attr(
+        feature = "serialize",
+        serde(
+            default,
+            skip_serializing,
+            deserialize_with = "deserialize_file_engine"
+        )
+    )]
     pub files: Option<std::sync::Arc<dyn FileEngine>>,
+}
+
+#[cfg(feature = "serialize")]
+#[derive(serde::Serialize, serde::Deserialize)]
+struct SerializedFileEngine {
+    files: HashMap<String, Vec<u8>>,
+}
+
+#[cfg(feature = "serialize")]
+#[async_trait::async_trait(?Send)]
+impl FileEngine for SerializedFileEngine {
+    fn files(&self) -> Vec<String> {
+        self.files.keys().cloned().collect()
+    }
+
+    async fn read_file(&self, file: &str) -> Option<Vec<u8>> {
+        self.files.get(file).cloned()
+    }
+
+    async fn read_file_to_string(&self, file: &str) -> Option<String> {
+        self.read_file(file)
+            .await
+            .map(|bytes| String::from_utf8_lossy(&bytes).to_string())
+    }
+}
+
+#[cfg(feature = "serialize")]
+fn deserialize_file_engine<'de, D>(
+    deserializer: D,
+) -> Result<Option<std::sync::Arc<dyn FileEngine>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::Deserialize;
+
+    let Ok(file_engine) = SerializedFileEngine::deserialize(deserializer) else {
+        return Ok(None);
+    };
+
+    let file_engine = std::sync::Arc::new(file_engine);
+    Ok(Some(file_engine))
 }
 
 impl PartialEq for FormData {

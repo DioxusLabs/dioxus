@@ -8,7 +8,7 @@ function main() {
 class IPC {
   constructor(root) {
     // connect to the websocket
-    window.interpreter = new Interpreter(root);
+    window.interpreter = new Interpreter(root, new InterpreterConfig(false));
 
     let ws = new WebSocket(WS_ADDR);
 
@@ -26,11 +26,19 @@ class IPC {
       // todo: retry the connection
     };
 
-    ws.onmessage = (event) => {
+    ws.onmessage = (message) => {
       // Ignore pongs
-      if (event.data != "__pong__") {
-        let edits = JSON.parse(event.data);
-        window.interpreter.handleEdits(edits);
+      if (message.data != "__pong__") {
+        const event = JSON.parse(message.data);
+        switch (event.type) {
+          case "edits":
+            let edits = event.data;
+            window.interpreter.handleEdits(edits);
+            break;
+          case "query":
+            Function("Eval", `"use strict";${event.data};`)();
+            break;
+        }
       }
     };
 

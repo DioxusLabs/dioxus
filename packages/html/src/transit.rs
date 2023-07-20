@@ -91,7 +91,7 @@ fn fun_name(
         // Touch
         "touchcancel" | "touchend" | "touchmove" | "touchstart" => Touch(de(data)?),
 
-        // Srcoll
+        // Scroll
         "scroll" => Scroll(de(data)?),
 
         // Wheel
@@ -102,7 +102,7 @@ fn fun_name(
         | "ended" | "interruptbegin" | "interruptend" | "loadeddata" | "loadedmetadata"
         | "loadstart" | "pause" | "play" | "playing" | "progress" | "ratechange" | "seeked"
         | "seeking" | "stalled" | "suspend" | "timeupdate" | "volumechange" | "waiting"
-        | "error" | "load" | "loadend" | "timeout" => Media(de(data)?),
+        | "loadend" | "timeout" => Media(de(data)?),
 
         // Animation
         "animationstart" | "animationend" | "animationiteration" => Animation(de(data)?),
@@ -113,7 +113,11 @@ fn fun_name(
         // Toggle
         "toggle" => Toggle(de(data)?),
 
-        // ImageData => "load" | "error";
+        "load" | "error" => Image(de(data)?),
+
+        // Mounted
+        "mounted" => Mounted,
+
         // OtherData => "abort" | "afterprint" | "beforeprint" | "beforeunload" | "hashchange" | "languagechange" | "message" | "offline" | "online" | "pagehide" | "pageshow" | "popstate" | "rejectionhandled" | "storage" | "unhandledrejection" | "unload" | "userproximity" | "vrdisplayactivate" | "vrdisplayblur" | "vrdisplayconnect" | "vrdisplaydeactivate" | "vrdisplaydisconnect" | "vrdisplayfocus" | "vrdisplaypointerrestricted" | "vrdisplaypointerunrestricted" | "vrdisplaypresentchange";
         other => {
             return Err(serde_value::DeserializerError::UnknownVariant(
@@ -134,6 +138,7 @@ impl HtmlEvent {
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 #[serde(untagged)]
+#[non_exhaustive]
 pub enum EventData {
     Mouse(MouseData),
     Clipboard(ClipboardData),
@@ -151,6 +156,8 @@ pub enum EventData {
     Animation(AnimationData),
     Transition(TransitionData),
     Toggle(ToggleData),
+    Image(ImageData),
+    Mounted,
 }
 
 impl EventData {
@@ -172,6 +179,8 @@ impl EventData {
             EventData::Animation(data) => Rc::new(data) as Rc<dyn Any>,
             EventData::Transition(data) => Rc::new(data) as Rc<dyn Any>,
             EventData::Toggle(data) => Rc::new(data) as Rc<dyn Any>,
+            EventData::Image(data) => Rc::new(data) as Rc<dyn Any>,
+            EventData::Mounted => Rc::new(MountedData::new(())) as Rc<dyn Any>,
         }
     }
 }

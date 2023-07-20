@@ -13,6 +13,7 @@ on:
       - lib.rs
       - Cargo.toml
       - Makefile.toml
+      - playwright-tests/**
 
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
@@ -26,85 +27,124 @@ on:
       - lib.rs
       - Cargo.toml
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check:
     if: github.event.pull_request.draft == false
     name: Check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
+      - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: sudo apt-get update
-      - run: sudo apt install libwebkit2gtk-4.0-dev libgtk-3-dev libayatana-appindicator3-dev
+      - run: sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev
       - uses: actions/checkout@v3
-      - uses: actions-rs/cargo@v1
-        with:
-          command: check
-          args: --all --examples --tests
+      - run: cargo check --all --examples --tests
 
   test:
     if: github.event.pull_request.draft == false
     name: Test Suite
     runs-on: ubuntu-latest
     steps:
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
+      - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: sudo apt-get update
-      - run: sudo apt install libwebkit2gtk-4.0-dev libgtk-3-dev libayatana-appindicator3-dev
+      - run: sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev
       - uses: davidB/rust-cargo-make@v1
       - uses: browser-actions/setup-firefox@latest
       - uses: jetli/wasm-pack-action@v0.4.0
       - uses: actions/checkout@v3
-      - uses: actions-rs/cargo@v1
-        with:
-          command: make
-          args: tests
+      - run: cargo make tests
 
   fmt:
     if: github.event.pull_request.draft == false
     name: Rustfmt
     runs-on: ubuntu-latest
     steps:
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
+      - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: rustup component add rustfmt
       - uses: actions/checkout@v3
-      - uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --all -- --check
+      - run: cargo fmt --all -- --check
 
   clippy:
     if: github.event.pull_request.draft == false
     name: Clippy
     runs-on: ubuntu-latest
     steps:
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
+      - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: sudo apt-get update
-      - run: sudo apt install libwebkit2gtk-4.0-dev libgtk-3-dev libayatana-appindicator3-dev
+      - run: sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev
       - run: rustup component add clippy
       - uses: actions/checkout@v3
-      - uses: actions-rs/cargo@v1
+      - run: cargo clippy --workspace --examples --tests -- -D warnings
+
+  matrix_test:
+    runs-on: ${{ matrix.platform.os }}
+    strategy:
+      matrix:
+        platform:
+          - {
+              target: x86_64-pc-windows-msvc,
+              os: windows-latest,
+              toolchain: '1.70.0',
+              cross: false,
+              command: 'test',
+              args: '--all --tests'
+            }
+          - {
+              target: x86_64-apple-darwin,
+              os: macos-latest,
+              toolchain: '1.70.0',
+              cross: false,
+              command: 'test',
+              args: '--all --tests'
+            }
+          - {
+              target: aarch64-apple-ios,
+              os: macos-latest,
+              toolchain: '1.70.0',
+              cross: false,
+              command: 'build',
+              args: '--package dioxus-mobile'
+            }
+          - {
+              target: aarch64-linux-android,
+              os: ubuntu-latest,
+              toolchain: '1.70.0',
+              cross: true,
+              command: 'build',
+              args: '--package dioxus-mobile'
+            }
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: install stable
+        uses: actions-rs/toolchain@v1
         with:
-          command: clippy
-          args: --workspace --examples --tests -- -D warnings
+          toolchain: ${{ matrix.platform.toolchain }}
+          target: ${{ matrix.platform.target }}
+          override: true
+          default: true
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core -> ../target
+          save-if: ${{ matrix.features.key == 'all' }}
+
+      - name: test
+        uses: actions-rs/cargo@v1
+        with:
+          use-cross: ${{ matrix.platform.cross }}
+          command: ${{ matrix.platform.command }}
+          args: --target ${{ matrix.platform.target }} ${{ matrix.platform.args }}
+
+
 
   # Coverage is disabled until we can fix it
   # coverage:
@@ -126,3 +166,4 @@ jobs:
   #       uses: codecov/codecov-action@v2
   #       with:
   #         fail_ci_if_error: false
+

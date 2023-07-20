@@ -1,24 +1,20 @@
 use crate::{
     any_props::AnyProps,
     any_props::VProps,
-    arena::ElementId,
     bump_frame::BumpFrame,
     innerlude::{DynamicNode, EventHandler, VComponent, VText},
     innerlude::{ErrorBoundary, Scheduler, SchedulerMsg},
     lazynodes::LazyNodes,
-    nodes::{ComponentReturn, IntoAttributeValue, IntoDynNode, RenderReturn},
+    nodes::{IntoAttributeValue, IntoDynNode, RenderReturn},
     AnyValue, Attribute, AttributeValue, Element, Event, Properties, TaskId,
 };
 use bumpalo::{boxed::Box as BumpBox, Bump};
-use bumpslab::{BumpSlab, Slot};
-use rustc_hash::{FxHashMap, FxHashSet};
-use slab::{Slab, VacantEntry};
+use rustc_hash::FxHashSet;
 use std::{
     any::{Any, TypeId},
-    cell::{Cell, RefCell},
+    cell::{Cell, RefCell, UnsafeCell},
     fmt::{Arguments, Debug},
     future::Future,
-    ops::{Index, IndexMut},
     rc::Rc,
     sync::Arc,
 };
@@ -66,95 +62,6 @@ impl<'a, T> std::ops::Deref for Scoped<'a, T> {
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
 pub struct ScopeId(pub usize);
 
-/// A thin wrapper around a BumpSlab that uses ids to index into the slab.
-pub(crate) struct ScopeSlab {
-    slab: BumpSlab<ScopeState>,
-    // a slab of slots of stable pointers to the ScopeState in the bump slab
-    entries: Slab<Slot<'static, ScopeState>>,
-}
-
-impl Drop for ScopeSlab {
-    fn drop(&mut self) {
-        // Bump slab doesn't drop its contents, so we need to do it manually
-        for slot in self.entries.drain() {
-            self.slab.remove(slot);
-        }
-    }
-}
-
-impl Default for ScopeSlab {
-    fn default() -> Self {
-        Self {
-            slab: BumpSlab::new(),
-            entries: Slab::new(),
-        }
-    }
-}
-
-impl ScopeSlab {
-    pub(crate) fn get(&self, id: ScopeId) -> Option<&ScopeState> {
-        self.entries.get(id.0).map(|slot| unsafe { &*slot.ptr() })
-    }
-
-    pub(crate) fn get_mut(&mut self, id: ScopeId) -> Option<&mut ScopeState> {
-        self.entries
-            .get(id.0)
-            .map(|slot| unsafe { &mut *slot.ptr_mut() })
-    }
-
-    pub(crate) fn vacant_entry(&mut self) -> ScopeSlabEntry {
-        let entry = self.entries.vacant_entry();
-        ScopeSlabEntry {
-            slab: &mut self.slab,
-            entry,
-        }
-    }
-
-    pub(crate) fn remove(&mut self, id: ScopeId) {
-        self.slab.remove(self.entries.remove(id.0));
-    }
-
-    pub(crate) fn contains(&self, id: ScopeId) -> bool {
-        self.entries.contains(id.0)
-    }
-
-    pub(crate) fn iter(&self) -> impl Iterator<Item = &ScopeState> {
-        self.entries.iter().map(|(_, slot)| unsafe { &*slot.ptr() })
-    }
-}
-
-pub(crate) struct ScopeSlabEntry<'a> {
-    slab: &'a mut BumpSlab<ScopeState>,
-    entry: VacantEntry<'a, Slot<'static, ScopeState>>,
-}
-
-impl<'a> ScopeSlabEntry<'a> {
-    pub(crate) fn key(&self) -> ScopeId {
-        ScopeId(self.entry.key())
-    }
-
-    pub(crate) fn insert(self, scope: ScopeState) -> &'a ScopeState {
-        let slot = self.slab.push(scope);
-        // this is safe because the slot is only ever accessed with the lifetime of the borrow of the slab
-        let slot = unsafe { std::mem::transmute(slot) };
-        let entry = self.entry.insert(slot);
-        unsafe { &*entry.ptr() }
-    }
-}
-
-impl Index<ScopeId> for ScopeSlab {
-    type Output = ScopeState;
-    fn index(&self, id: ScopeId) -> &Self::Output {
-        self.get(id).unwrap()
-    }
-}
-
-impl IndexMut<ScopeId> for ScopeSlab {
-    fn index_mut(&mut self, id: ScopeId) -> &mut Self::Output {
-        self.get_mut(id).unwrap()
-    }
-}
-
 /// A component's state separate from its props.
 ///
 /// This struct exists to provide a common interface for all scopes without relying on generics.
@@ -169,12 +76,12 @@ pub struct ScopeState {
     pub(crate) id: ScopeId,
 
     pub(crate) height: u32,
+    pub(crate) suspended: Cell<bool>,
 
-    pub(crate) hook_arena: Bump,
-    pub(crate) hook_list: RefCell<Vec<*mut dyn Any>>,
+    pub(crate) hooks: RefCell<Vec<Box<UnsafeCell<dyn Any>>>>,
     pub(crate) hook_idx: Cell<usize>,
 
-    pub(crate) shared_contexts: RefCell<FxHashMap<TypeId, Box<dyn Any>>>,
+    pub(crate) shared_contexts: RefCell<Vec<(TypeId, Box<dyn Any>)>>,
 
     pub(crate) tasks: Rc<Scheduler>,
     pub(crate) spawned_tasks: RefCell<FxHashSet<TaskId>>,
@@ -183,7 +90,6 @@ pub struct ScopeState {
     pub(crate) attributes_to_drop: RefCell<Vec<*const Attribute<'static>>>,
 
     pub(crate) props: Option<Box<dyn AnyProps<'static>>>,
-    pub(crate) placeholder: Cell<Option<ElementId>>,
 }
 
 impl<'src> ScopeState {
@@ -348,7 +254,9 @@ impl<'src> ScopeState {
     pub fn has_context<T: 'static + Clone>(&self) -> Option<T> {
         self.shared_contexts
             .borrow()
-            .get(&TypeId::of::<T>())?
+            .iter()
+            .find(|(k, _)| *k == TypeId::of::<T>())
+            .map(|(_, v)| v)?
             .downcast_ref::<T>()
             .cloned()
     }
@@ -365,8 +273,13 @@ impl<'src> ScopeState {
         while let Some(parent_ptr) = search_parent {
             // safety: all parent pointers are valid thanks to the bump arena
             let parent = unsafe { &*parent_ptr };
-            if let Some(shared) = parent.shared_contexts.borrow().get(&TypeId::of::<T>()) {
-                return shared.downcast_ref::<T>().cloned();
+            if let Some(shared) = parent
+                .shared_contexts
+                .borrow()
+                .iter()
+                .find(|(k, _)| *k == TypeId::of::<T>())
+            {
+                return shared.1.downcast_ref::<T>().cloned();
             }
             search_parent = parent.parent;
         }
@@ -395,13 +308,40 @@ impl<'src> ScopeState {
     /// }
     /// ```
     pub fn provide_context<T: 'static + Clone>(&self, value: T) -> T {
-        let value2 = value.clone();
+        let mut contexts = self.shared_contexts.borrow_mut();
 
-        self.shared_contexts
-            .borrow_mut()
-            .insert(TypeId::of::<T>(), Box::new(value));
+        // If the context exists, swap it out for the new value
+        for ctx in contexts.iter_mut() {
+            // Swap the ptr directly
+            if let Some(ctx) = ctx.1.downcast_mut::<T>() {
+                std::mem::swap(ctx, &mut value.clone());
+                return value;
+            }
+        }
 
-        value2
+        // Else, just push it
+        contexts.push((TypeId::of::<T>(), Box::new(value.clone())));
+
+        value
+    }
+
+    /// Provide a context to the root and then consume it
+    ///
+    /// This is intended for "global" state management solutions that would rather be implicit for the entire app.
+    /// Things like signal runtimes and routers are examples of "singletons" that would benefit from lazy initialization.
+    ///
+    /// Note that you should be checking if the context existed before trying to provide a new one. Providing a context
+    /// when a context already exists will swap the context out for the new one, which may not be what you want.
+    pub fn provide_root_context<T: 'static + Clone>(&self, context: T) -> T {
+        let mut parent = self;
+
+        // Walk upwards until there is no more parent - and tada we have the root
+        while let Some(next_parent) = parent.parent {
+            parent = unsafe { &*next_parent };
+            debug_assert_eq!(parent.scope_id(), ScopeId(0));
+        }
+
+        parent.provide_context(context)
     }
 
     /// Pushes the future onto the poll queue to be polled after the component renders.
@@ -541,9 +481,9 @@ impl<'src> ScopeState {
     /// fn(Scope<Props>) -> Element;
     /// async fn(Scope<Props<'_>>) -> Element;
     /// ```
-    pub fn component<P, A, F: ComponentReturn<'src, A>>(
+    pub fn component<P>(
         &'src self,
-        component: fn(Scope<'src, P>) -> F,
+        component: fn(Scope<'src, P>) -> Element<'src>,
         props: P,
         fn_name: &'static str,
     ) -> DynamicNode<'src>
@@ -622,6 +562,12 @@ impl<'src> ScopeState {
         None
     }
 
+    /// Mark this component as suspended and then return None
+    pub fn suspend(&self) -> Option<Element> {
+        self.suspended.set(true);
+        None
+    }
+
     /// Store a value between renders. The foundational hook for all other hooks.
     ///
     /// Accepts an `initializer` closure, which is run on the first use of the hook (typically the initial render). The return value of this closure is stored for the lifetime of the component, and a mutable reference to it is provided on every render as the return value of `use_hook`.
@@ -641,27 +587,27 @@ impl<'src> ScopeState {
     #[allow(clippy::mut_from_ref)]
     pub fn use_hook<State: 'static>(&self, initializer: impl FnOnce() -> State) -> &mut State {
         let cur_hook = self.hook_idx.get();
-        let mut hook_list = self.hook_list.try_borrow_mut().expect("The hook list is already borrowed: This error is likely caused by trying to use a hook inside a hook which violates the rules of hooks.");
+        let mut hooks = self.hooks.try_borrow_mut().expect("The hook list is already borrowed: This error is likely caused by trying to use a hook inside a hook which violates the rules of hooks.");
 
-        if cur_hook >= hook_list.len() {
-            hook_list.push(self.hook_arena.alloc(initializer()));
+        if cur_hook >= hooks.len() {
+            hooks.push(Box::new(UnsafeCell::new(initializer())));
         }
 
-        hook_list
+        hooks
             .get(cur_hook)
             .and_then(|inn| {
                 self.hook_idx.set(cur_hook + 1);
-                let raw_box = unsafe { &mut **inn };
-                raw_box.downcast_mut::<State>()
+                let raw_ref = unsafe { &mut *inn.get() };
+                raw_ref.downcast_mut::<State>()
             })
             .expect(
-                r###"
+                r#"
                 Unable to retrieve the hook that was initialized at this index.
                 Consult the `rules of hooks` to understand how to use hooks properly.
 
                 You likely used the hook in a conditional. Hooks rely on consistent ordering between renders.
                 Functions prefixed with "use" should never be called conditionally.
-                "###,
+                "#,
             )
     }
 }

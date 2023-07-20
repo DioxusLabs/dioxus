@@ -5,18 +5,17 @@
 use crate::{
     any_props::VProps,
     arena::{ElementId, ElementRef},
-    innerlude::{DirtyScope, ErrorBoundary, Mutations, Scheduler, SchedulerMsg, ScopeSlab},
+    innerlude::{DirtyScope, ErrorBoundary, Mutations, Scheduler, SchedulerMsg},
     mutations::Mutation,
     nodes::RenderReturn,
     nodes::{Template, TemplateId},
-    scheduler::SuspenseId,
     scopes::{ScopeId, ScopeState},
-    AttributeValue, Element, Event, Scope, SuspenseContext,
+    AttributeValue, Element, Event, Scope,
 };
 use futures_util::{pin_mut, StreamExt};
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use slab::Slab;
-use std::{any::Any, borrow::BorrowMut, cell::Cell, collections::BTreeSet, future::Future, rc::Rc};
+use std::{any::Any, cell::Cell, collections::BTreeSet, future::Future, rc::Rc};
 
 /// A virtual node system that progresses user events and diffs UI trees.
 ///
@@ -177,7 +176,7 @@ use std::{any::Any, borrow::BorrowMut, cell::Cell, collections::BTreeSet, future
 pub struct VirtualDom {
     // Maps a template path to a map of byteindexes to templates
     pub(crate) templates: FxHashMap<TemplateId, FxHashMap<usize, Template<'static>>>,
-    pub(crate) scopes: ScopeSlab,
+    pub(crate) scopes: Slab<Box<ScopeState>>,
     pub(crate) dirty_scopes: BTreeSet<DirtyScope>,
     pub(crate) scheduler: Rc<Scheduler>,
 
@@ -186,11 +185,9 @@ pub struct VirtualDom {
 
     // While diffing we need some sort of way of breaking off a stream of suspended mutations.
     pub(crate) scope_stack: Vec<ScopeId>,
-    pub(crate) collected_leaves: Vec<SuspenseId>,
 
-    // Whenever a suspense tree is finished, we push its boundary onto this stack.
-    // When "render_with_deadline" is called, we pop the stack and return the mutations
-    pub(crate) finished_fibers: Vec<ScopeId>,
+    // Currently suspended scopes
+    pub(crate) suspended_scopes: FxHashSet<ScopeId>,
 
     pub(crate) rx: futures_channel::mpsc::UnboundedReceiver<SchedulerMsg>,
 
@@ -262,8 +259,7 @@ impl VirtualDom {
             elements: Default::default(),
             scope_stack: Vec::new(),
             dirty_scopes: BTreeSet::new(),
-            collected_leaves: Vec::new(),
-            finished_fibers: Vec::new(),
+            suspended_scopes: FxHashSet::default(),
             mutations: Mutations::default(),
         };
 
@@ -271,12 +267,6 @@ impl VirtualDom {
             Box::new(VProps::new(root, |_, _| unreachable!(), root_props)),
             "app",
         );
-
-        // The root component is always a suspense boundary for any async children
-        // This could be unexpected, so we might rethink this behavior later
-        //
-        // We *could* just panic if the suspense boundary is not found
-        root.provide_context(Rc::new(SuspenseContext::new(ScopeId(0))));
 
         // Unlike react, we provide a default error boundary that just renders the error as a string
         root.provide_context(Rc::new(ErrorBoundary::new(ScopeId(0))));
@@ -291,14 +281,14 @@ impl VirtualDom {
     ///
     /// This is useful for inserting or removing contexts from a scope, or rendering out its root node
     pub fn get_scope(&self, id: ScopeId) -> Option<&ScopeState> {
-        self.scopes.get(id)
+        self.scopes.get(id.0).map(|f| f.as_ref())
     }
 
     /// Get the single scope at the top of the VirtualDom tree that will always be around
     ///
     /// This scope has a ScopeId of 0 and is the root of the tree
     pub fn base_scope(&self) -> &ScopeState {
-        self.scopes.get(ScopeId(0)).unwrap()
+        self.get_scope(ScopeId(0)).unwrap()
     }
 
     /// Build the virtualdom with a global context inserted into the base scope
@@ -313,29 +303,10 @@ impl VirtualDom {
     ///
     /// Whenever the VirtualDom "works", it will re-render this scope
     pub fn mark_dirty(&mut self, id: ScopeId) {
-        if let Some(scope) = self.scopes.get(id) {
+        if let Some(scope) = self.get_scope(id) {
             let height = scope.height;
             self.dirty_scopes.insert(DirtyScope { height, id });
         }
-    }
-
-    /// Determine whether or not a scope is currently in a suspended state
-    ///
-    /// This does not mean the scope is waiting on its own futures, just that the tree that the scope exists in is
-    /// currently suspended.
-    pub fn is_scope_suspended(&self, id: ScopeId) -> bool {
-        !self.scopes[id]
-            .consume_context::<Rc<SuspenseContext>>()
-            .unwrap()
-            .waiting_on
-            .borrow()
-            .is_empty()
-    }
-
-    /// Determine if the tree is at all suspended. Used by SSR and other outside mechanisms to determine if the tree is
-    /// ready to be rendered.
-    pub fn has_suspended_work(&self) -> bool {
-        !self.scheduler.leaves.borrow().is_empty()
     }
 
     /// Call a listener inside the VirtualDom with data from outside the VirtualDom.
@@ -384,51 +355,79 @@ impl VirtualDom {
             data,
         };
 
-        // Loop through each dynamic attribute in this template before moving up to the template's parent.
-        while let Some(el_ref) = parent_path {
-            // safety: we maintain references of all vnodes in the element slab
-            let template = unsafe { el_ref.template.unwrap().as_ref() };
-            let node_template = template.template.get();
-            let target_path = el_ref.path;
+        // If the event bubbles, we traverse through the tree until we find the target element.
+        if bubbles {
+            // Loop through each dynamic attribute (in a depth first order) in this template before moving up to the template's parent.
+            while let Some(el_ref) = parent_path {
+                // safety: we maintain references of all vnodes in the element slab
+                if let Some(template) = el_ref.template {
+                    let template = unsafe { template.as_ref() };
+                    let node_template = template.template.get();
+                    let target_path = el_ref.path;
 
-            for (idx, attr) in template.dynamic_attrs.iter().enumerate() {
-                let this_path = node_template.attr_paths[idx];
+                    for (idx, attr) in template.dynamic_attrs.iter().enumerate() {
+                        let this_path = node_template.attr_paths[idx];
 
-                // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
-                if attr.name.trim_start_matches("on") == name
-                    && target_path.is_decendant(&this_path)
-                {
-                    listeners.push(&attr.value);
+                        // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
+                        if attr.name.trim_start_matches("on") == name
+                            && target_path.is_decendant(&this_path)
+                        {
+                            listeners.push(&attr.value);
 
-                    // Break if the event doesn't bubble anyways
-                    if !bubbles {
-                        break;
+                            // Break if this is the exact target element.
+                            // This means we won't call two listeners with the same name on the same element. This should be
+                            // documented, or be rejected from the rsx! macro outright
+                            if target_path == this_path {
+                                break;
+                            }
+                        }
                     }
 
-                    // Break if this is the exact target element.
-                    // This means we won't call two listeners with the same name on the same element. This should be
-                    // documented, or be rejected from the rsx! macro outright
-                    if target_path == this_path {
-                        break;
+                    // Now that we've accumulated all the parent attributes for the target element, call them in reverse order
+                    // We check the bubble state between each call to see if the event has been stopped from bubbling
+                    for listener in listeners.drain(..).rev() {
+                        if let AttributeValue::Listener(listener) = listener {
+                            if let Some(cb) = listener.borrow_mut().as_deref_mut() {
+                                cb(uievent.clone());
+                            }
+
+                            if !uievent.propagates.get() {
+                                return;
+                            }
+                        }
+                    }
+
+                    parent_path = template.parent.and_then(|id| self.elements.get(id.0));
+                } else {
+                    break;
+                }
+            }
+        } else {
+            // Otherwise, we just call the listener on the target element
+            if let Some(el_ref) = parent_path {
+                // safety: we maintain references of all vnodes in the element slab
+                if let Some(template) = el_ref.template {
+                    let template = unsafe { template.as_ref() };
+                    let node_template = template.template.get();
+                    let target_path = el_ref.path;
+
+                    for (idx, attr) in template.dynamic_attrs.iter().enumerate() {
+                        let this_path = node_template.attr_paths[idx];
+
+                        // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
+                        // Only call the listener if this is the exact target element.
+                        if attr.name.trim_start_matches("on") == name && target_path == this_path {
+                            if let AttributeValue::Listener(listener) = &attr.value {
+                                if let Some(cb) = listener.borrow_mut().as_deref_mut() {
+                                    cb(uievent.clone());
+                                }
+
+                                break;
+                            }
+                        }
                     }
                 }
             }
-
-            // Now that we've accumulated all the parent attributes for the target element, call them in reverse order
-            // We check the bubble state between each call to see if the event has been stopped from bubbling
-            for listener in listeners.drain(..).rev() {
-                if let AttributeValue::Listener(listener) = listener {
-                    if let Some(cb) = listener.borrow_mut().as_deref_mut() {
-                        cb(uievent.clone());
-                    }
-
-                    if !uievent.propagates.get() {
-                        return;
-                    }
-                }
-            }
-
-            parent_path = template.parent.and_then(|id| self.elements.get(id.0));
         }
     }
 
@@ -457,7 +456,6 @@ impl VirtualDom {
                 Some(msg) => match msg {
                     SchedulerMsg::Immediate(id) => self.mark_dirty(id),
                     SchedulerMsg::TaskNotified(task) => self.handle_task_wakeup(task),
-                    SchedulerMsg::SuspenseNotified(id) => self.handle_suspense_wakeup(id),
                 },
 
                 // If they're not ready, then we should wait for them to be ready
@@ -467,7 +465,7 @@ impl VirtualDom {
                         Ok(None) => return,
                         Err(_) => {
                             // If we have any dirty scopes, or finished fiber trees then we should exit
-                            if !self.dirty_scopes.is_empty() || !self.finished_fibers.is_empty() {
+                            if !self.dirty_scopes.is_empty() || !self.suspended_scopes.is_empty() {
                                 return;
                             }
 
@@ -485,7 +483,6 @@ impl VirtualDom {
             match msg {
                 SchedulerMsg::Immediate(id) => self.mark_dirty(id),
                 SchedulerMsg::TaskNotified(task) => self.handle_task_wakeup(task),
-                SchedulerMsg::SuspenseNotified(id) => self.handle_suspense_wakeup(id),
             }
         }
     }
@@ -499,7 +496,7 @@ impl VirtualDom {
     pub fn replace_template(&mut self, template: Template<'static>) {
         self.register_template_first_byte_index(template);
         // iterating a slab is very inefficient, but this is a rare operation that will only happen during development so it's fine
-        for scope in self.scopes.iter() {
+        for (_, scope) in self.scopes.iter() {
             if let Some(RenderReturn::Ready(sync)) = scope.try_root_node() {
                 if sync.template.get().name.rsplit_once(':').unwrap().0
                     == template.name.rsplit_once(':').unwrap().0
@@ -546,7 +543,6 @@ impl VirtualDom {
             }
             // If an error occurs, we should try to render the default error component and context where the error occured
             RenderReturn::Aborted(_placeholder) => panic!("Cannot catch errors during rebuild"),
-            RenderReturn::Pending(_) => unreachable!("Root scope cannot be an async component"),
         }
 
         self.finalize()
@@ -570,6 +566,24 @@ impl VirtualDom {
         }
     }
 
+    /// Render the virtual dom, waiting for all suspense to be finished
+    ///
+    /// The mutations will be thrown out, so it's best to use this method for things like SSR that have async content
+    pub async fn wait_for_suspense(&mut self) {
+        loop {
+            // println!("waiting for suspense {:?}", self.suspended_scopes);
+            if self.suspended_scopes.is_empty() {
+                return;
+            }
+
+            // println!("waiting for suspense");
+            self.wait_for_work().await;
+
+            // println!("Rendered immediately");
+            _ = self.render_immediate();
+        }
+    }
+
     /// Render what you can given the timeline and then move on
     ///
     /// It's generally a good idea to put some sort of limit on the suspense process in case a future is having issues.
@@ -581,80 +595,24 @@ impl VirtualDom {
         self.process_events();
 
         loop {
-            // first, unload any complete suspense trees
-            for finished_fiber in self.finished_fibers.drain(..) {
-                let scope = &self.scopes[finished_fiber];
-                let context = scope.has_context::<Rc<SuspenseContext>>().unwrap();
-
-                self.mutations
-                    .templates
-                    .append(&mut context.mutations.borrow_mut().templates);
-
-                self.mutations
-                    .edits
-                    .append(&mut context.mutations.borrow_mut().edits);
-
-                // TODO: count how many nodes are on the stack?
-                self.mutations.push(Mutation::ReplaceWith {
-                    id: context.placeholder.get().unwrap(),
-                    m: 1,
-                })
-            }
-
             // Next, diff any dirty scopes
             // We choose not to poll the deadline since we complete pretty quickly anyways
             if let Some(dirty) = self.dirty_scopes.iter().next().cloned() {
                 self.dirty_scopes.remove(&dirty);
 
                 // If the scope doesn't exist for whatever reason, then we should skip it
-                if !self.scopes.contains(dirty.id) {
+                if !self.scopes.contains(dirty.id.0) {
                     continue;
                 }
-
-                // if the scope is currently suspended, then we should skip it, ignoring any tasks calling for an update
-                if self.is_scope_suspended(dirty.id) {
-                    continue;
-                }
-
-                // Save the current mutations length so we can split them into boundary
-                let mutations_to_this_point = self.mutations.edits.len();
 
                 // Run the scope and get the mutations
                 self.run_scope(dirty.id);
                 self.diff_scope(dirty.id);
-
-                // If suspended leaves are present, then we should find the boundary for this scope and attach things
-                // No placeholder necessary since this is a diff
-                if !self.collected_leaves.is_empty() {
-                    let mut boundary = self.scopes[dirty.id]
-                        .consume_context::<Rc<SuspenseContext>>()
-                        .unwrap();
-
-                    let boundary_mut = boundary.borrow_mut();
-
-                    // Attach mutations
-                    boundary_mut
-                        .mutations
-                        .borrow_mut()
-                        .edits
-                        .extend(self.mutations.edits.split_off(mutations_to_this_point));
-
-                    // Attach suspended leaves
-                    boundary
-                        .waiting_on
-                        .borrow_mut()
-                        .extend(self.collected_leaves.drain(..));
-                }
             }
 
             // If there's more work, then just continue, plenty of work to do
             if !self.dirty_scopes.is_empty() {
                 continue;
-            }
-
-            // If there's no pending suspense, then we have no reason to wait for anything
-            if self.scheduler.leaves.borrow().is_empty() {
-                return self.finalize();
             }
 
             // Poll the suspense leaves in the meantime

@@ -1,6 +1,8 @@
+#![cfg(not(miri))]
+
 use dioxus::prelude::Props;
 use dioxus_core::*;
-use std::cell::Cell;
+use std::{cell::Cell, collections::HashSet};
 
 fn random_ns() -> Option<&'static str> {
     let namespace = rand::random::<u8>() % 2;
@@ -165,7 +167,7 @@ fn create_random_template(name: &'static str) -> (Template<'static>, Vec<Dynamic
 }
 
 fn create_random_dynamic_node(cx: &ScopeState, depth: usize) -> DynamicNode {
-    let range = if depth > 3 { 1 } else { 3 };
+    let range = if depth > 5 { 1 } else { 4 };
     match rand::random::<u8>() % range {
         0 => DynamicNode::Placeholder(Default::default()),
         1 => cx.make_node((0..(rand::random::<u8>() % 5)).map(|_| VNode {
@@ -190,12 +192,21 @@ fn create_random_dynamic_node(cx: &ScopeState, depth: usize) -> DynamicNode {
             DepthProps { depth, root: false },
             "create_random_element",
         ),
+        3 => {
+            let data = String::from("borrowed data");
+            let bumpped = cx.bump().alloc(data);
+            cx.component(
+                create_random_element_borrowed,
+                BorrowedDepthProps { borrow: &*bumpped, inner: DepthProps { depth, root: false } },
+                "create_random_element_borrowed",
+            )
+        }
         _ => unreachable!(),
     }
 }
 
 fn create_random_dynamic_attr(cx: &ScopeState) -> Attribute {
-    let value = match rand::random::<u8>() % 6 {
+    let value = match rand::random::<u8>() % 7 {
         0 => AttributeValue::Text(Box::leak(
             format!("{}", rand::random::<usize>()).into_boxed_str(),
         )),
@@ -204,7 +215,16 @@ fn create_random_dynamic_attr(cx: &ScopeState) -> Attribute {
         3 => AttributeValue::Bool(rand::random()),
         4 => cx.any_value(rand::random::<usize>()),
         5 => AttributeValue::None,
-        // Listener(RefCell<Option<ListenerCb<'a>>>),
+        6 => {
+            let value = cx.listener(|e: Event<String>| println!("{:?}", e));
+            return Attribute {
+                name: "ondata",
+                value,
+                namespace: None,
+                mounted_element: Default::default(),
+                volatile: false,
+            };
+        }
         _ => unreachable!(),
     };
     Attribute {
@@ -218,6 +238,19 @@ fn create_random_dynamic_attr(cx: &ScopeState) -> Attribute {
 
 static mut TEMPLATE_COUNT: usize = 0;
 
+#[derive(Props)]
+struct BorrowedDepthProps<'a> {
+    borrow: &'a str,
+    inner: DepthProps,
+}
+
+fn create_random_element_borrowed<'a>(cx: Scope<'a, BorrowedDepthProps<'a>>) -> Element<'a> {
+    println!("{}", cx.props.borrow);
+    let bump = cx.bump();
+    let allocated = bump.alloc(Scoped { scope: cx, props: &cx.props.inner });
+    create_random_element(allocated)
+}
+
 #[derive(PartialEq, Props)]
 struct DepthProps {
     depth: usize,
@@ -225,7 +258,9 @@ struct DepthProps {
 }
 
 fn create_random_element(cx: Scope<DepthProps>) -> Element {
-    cx.needs_update();
+    if rand::random::<usize>() % 10 == 0 {
+        cx.needs_update();
+    }
     let range = if cx.props.root { 2 } else { 3 };
     let node = match rand::random::<usize>() % range {
         0 | 1 => {
@@ -243,7 +278,7 @@ fn create_random_element(cx: Scope<DepthProps>) -> Element {
                 )
                 .into_boxed_str(),
             ));
-            println!("{template:#?}");
+            // println!("{template:#?}");
             let node = VNode {
                 key: None,
                 parent: None,
@@ -276,14 +311,15 @@ fn create_random_element(cx: Scope<DepthProps>) -> Element {
         }
         _ => None,
     };
-    println!("{node:#?}");
+    // println!("{node:#?}");
     node
 }
 
 // test for panics when creating random nodes and templates
+#[cfg(not(miri))]
 #[test]
 fn create() {
-    for _ in 0..100 {
+    for _ in 0..1000 {
         let mut vdom =
             VirtualDom::new_with_props(create_random_element, DepthProps { depth: 0, root: true });
         let _ = vdom.rebuild();
@@ -292,14 +328,35 @@ fn create() {
 
 // test for panics when diffing random nodes
 // This test will change the template every render which is not very realistic, but it helps stress the system
+#[cfg(not(miri))]
 #[test]
 fn diff() {
-    for _ in 0..10 {
+    for _ in 0..100000 {
         let mut vdom =
             VirtualDom::new_with_props(create_random_element, DepthProps { depth: 0, root: true });
         let _ = vdom.rebuild();
-        for _ in 0..10 {
-            let _ = vdom.render_immediate();
+        // A list of all elements that have had event listeners
+        // This is intentionally never cleared, so that we can test that calling event listeners that are removed doesn't cause a panic
+        let mut event_listeners = HashSet::new();
+        for _ in 0..100 {
+            for &id in &event_listeners {
+                println!("firing event on {:?}", id);
+                vdom.handle_event(
+                    "data",
+                    std::rc::Rc::new(String::from("hello world")),
+                    id,
+                    true,
+                );
+            }
+            {
+                let muts = vdom.render_immediate();
+                for mut_ in muts.edits {
+                    if let Mutation::NewEventListener { name, id } = mut_ {
+                        println!("new event listener on {:?} for {:?}", id, name);
+                        event_listeners.insert(id);
+                    }
+                }
+            }
         }
     }
 }

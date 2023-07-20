@@ -26,7 +26,7 @@ impl<'a> RinkBuffer<'a> {
             // panic!("({x}, {y}) is not in {area:?}");
             return;
         }
-        let mut cell = self.buf.get_mut(x, y);
+        let cell = self.buf.get_mut(x, y);
         cell.bg = convert(self.cfg.rendering_mode, new.bg.blend(cell.bg));
         if new.symbol.is_empty() {
             if !cell.symbol.is_empty() {

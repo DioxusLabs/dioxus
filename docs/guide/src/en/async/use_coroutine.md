@@ -8,7 +8,7 @@ Like regular futures, code in a coroutine will run until the next `await` point 
 
 The `use_coroutine` hook allows you to create a coroutine. Most coroutines we write will be polling loops using async/await.
 
-```rust
+```rust, no_run
 fn app(cx: Scope) -> Element {
     let ws: &UseCoroutine<()> = use_coroutine(cx, |rx| async move {
         // Connect to some sort of service
@@ -26,7 +26,7 @@ For many services, a simple async loop will handle the majority of use cases.
 
 However, if we want to temporarily disable the coroutine, we can "pause" it using the `pause` method, and "resume" it using the `resume` method:
 
-```rust
+```rust, no_run
 let sync: &UseCoroutine<()> = use_coroutine(cx, |rx| async move {
     // code for syncing
 });
@@ -58,7 +58,7 @@ The future must be `'static` – so any values captured by the task cannot carry
 
 You can use [to_owned](https://doc.rust-lang.org/std/borrow/trait.ToOwned.html#tymethod.to_owned) to create a clone of the hook handle which can be moved into the async closure.
 
-```rust
+```rust, no_run
 let sync_status = use_state(cx, || Status::Launching);
 let sync_task = use_coroutine(cx, |rx: UnboundedReceiver<SyncAction>| {
     let sync_status = sync_status.to_owned();
@@ -73,7 +73,7 @@ let sync_task = use_coroutine(cx, |rx: UnboundedReceiver<SyncAction>| {
 
 To make this a bit less verbose, Dioxus exports the `to_owned!` macro which will create a binding as shown above, which can be quite helpful when dealing with many values.
 
-```rust
+```rust, no_run
 let sync_status = use_state(cx, || Status::Launching);
 let load_status = use_state(cx, || Status::Launching);
 let sync_task = use_coroutine(cx, |rx: UnboundedReceiver<SyncAction>| {
@@ -88,10 +88,9 @@ let sync_task = use_coroutine(cx, |rx: UnboundedReceiver<SyncAction>| {
 
 You might've noticed the `use_coroutine` closure takes an argument called `rx`. What is that? Well, a common pattern in complex apps is to handle a bunch of async code at once. With libraries like Redux Toolkit, managing multiple promises at once can be challenging and a common source of bugs.
 
-With Coroutines, we can centralize our async logic. The `rx` parameter is an Channel that allows code external to the coroutine to send data *into* the coroutine. Instead of looping on an external service, we can loop on the channel itself, processing messages from within our app without needing to spawn a new future. To send data into the coroutine, we would call "send" on the handle.
+With Coroutines, we can centralize our async logic. The `rx` parameter is an Channel that allows code external to the coroutine to send data _into_ the coroutine. Instead of looping on an external service, we can loop on the channel itself, processing messages from within our app without needing to spawn a new future. To send data into the coroutine, we would call "send" on the handle.
 
-
-```rust
+```rust, no_run
 use futures_util::stream::StreamExt;
 
 enum ProfileUpdate {
@@ -119,13 +118,11 @@ cx.render(rsx!{
 })
 ```
 
-
 > Note: In order to use/run the `rx.next().await` statement you will need to extend the [`Stream`] trait (used by [`UnboundedReceiver`]) by adding 'futures_util' as a dependency to your project and adding the `use futures_util::stream::StreamExt;`.
-
 
 For sufficiently complex apps, we could build a bunch of different useful "services" that loop on channels to update the app.
 
-```rust
+```rust, no_run
 let profile = use_coroutine(cx, profile_service);
 let editor = use_coroutine(cx, editor_service);
 let sync = use_coroutine(cx, sync_service);
@@ -143,10 +140,10 @@ async fn editor_service(rx: UnboundedReceiver<EditorCommand>) {
 }
 ```
 
-We can combine coroutines with [Fermi](https://docs.rs/fermi/latest/fermi/index.html) to emulate Redux Toolkit's Thunk system with much less headache. This lets us store all of our app's state *within* a task and then simply update the "view" values stored in Atoms. It cannot be understated how powerful this technique is: we get all the perks of native Rust tasks with the optimizations and ergonomics of global state. This means your *actual* state does not need to be tied up in a system like Fermi or Redux – the only Atoms that need to exist are those that are used to drive the display/UI.
+We can combine coroutines with [Fermi](https://docs.rs/fermi/latest/fermi/index.html) to emulate Redux Toolkit's Thunk system with much less headache. This lets us store all of our app's state _within_ a task and then simply update the "view" values stored in Atoms. It cannot be understated how powerful this technique is: we get all the perks of native Rust tasks with the optimizations and ergonomics of global state. This means your _actual_ state does not need to be tied up in a system like Fermi or Redux – the only Atoms that need to exist are those that are used to drive the display/UI.
 
-```rust
-static USERNAME: Atom<String> = |_| "default".to_string();
+```rust, no_run
+static USERNAME: Atom<String> = Atom(|_| "default".to_string());
 
 fn app(cx: Scope) -> Element {
     let atoms = use_atom_root(cx);
@@ -159,7 +156,7 @@ fn app(cx: Scope) -> Element {
 }
 
 fn Banner(cx: Scope) -> Element {
-    let username = use_read(cx, USERNAME);
+    let username = use_read(cx, &USERNAME);
 
     cx.render(rsx!{
         h1 { "Welcome back, {username}" }
@@ -169,7 +166,7 @@ fn Banner(cx: Scope) -> Element {
 
 Now, in our sync service, we can structure our state however we want. We only need to update the view values when ready.
 
-```rust
+```rust, no_run
 use futures_util::stream::StreamExt;
 
 enum SyncAction {
@@ -177,8 +174,8 @@ enum SyncAction {
 }
 
 async fn sync_service(mut rx: UnboundedReceiver<SyncAction>, atoms: AtomRoot) {
-    let username = atoms.write(USERNAME);
-    let errors = atoms.write(ERRORS);
+    let username = atoms.write(&USERNAME);
+    let errors = atoms.write(&ERRORS);
 
     while let Ok(msg) = rx.next().await {
         match msg {
@@ -198,7 +195,7 @@ async fn sync_service(mut rx: UnboundedReceiver<SyncAction>, atoms: AtomRoot) {
 
 Coroutine handles are automatically injected through the context API. You can use the `use_coroutine_handle` hook with the message type as a generic to fetch a handle.
 
-```rust
+```rust, no_run
 fn Child(cx: Scope) -> Element {
     let sync_task = use_coroutine_handle::<SyncAction>(cx);
 

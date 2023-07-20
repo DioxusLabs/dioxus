@@ -2,7 +2,7 @@
 
 /*
 - [ ] pub display: Display, ----> taffy doesnt support all display types
-- [x] pub position_type: PositionType,  --> taffy doesnt support everything
+- [x] pub position: Position,  --> taffy doesnt support everything
 - [x] pub direction: Direction,
 
 - [x] pub flex_direction: FlexDirection,
@@ -10,6 +10,14 @@
 - [x] pub flex_grow: f32,
 - [x] pub flex_shrink: f32,
 - [x] pub flex_basis: Dimension,
+
+- [x]pub grid_auto_flow: GridAutoFlow,
+- [x]pub grid_template_rows: GridTrackVec<TrackSizingFunction>,
+- [x]pub grid_template_columns: GridTrackVec<TrackSizingFunction>,
+- [x]pub grid_auto_rows: GridTrackVec<NonRepeatedTrackSizingFunction>,
+- [x]pub grid_auto_columns: GridTrackVec<NonRepeatedTrackSizingFunction>,
+- [x]pub grid_row: Line<GridPlacement>,
+- [x]pub grid_column: Line<GridPlacement>,
 
 - [x] pub overflow: Overflow, ---> taffy doesnt have support for directional overflow
 
@@ -21,20 +29,22 @@
 - [x] pub padding: Rect<Dimension>,
 
 - [x] pub justify_content: JustifyContent,
-- [x] pub position: Rect<Dimension>,
+- [x] pub inset: Rect<Dimension>,
 - [x] pub border: Rect<Dimension>,
 
 - [ ] pub size: Size<Dimension>, ----> seems to only be relevant for input?
 - [ ] pub min_size: Size<Dimension>,
 - [ ] pub max_size: Size<Dimension>,
 
-- [ ] pub aspect_ratio: Number, ----> parsing is done, but taffy doesnt support it
+- [x] pub aspect_ratio: Number,
 */
 
 use lightningcss::properties::border::LineStyle;
-use lightningcss::properties::{align, display, flex, position, size};
+use lightningcss::properties::grid::{TrackBreadth, TrackSizing};
+use lightningcss::properties::{align, border, display, flex, grid, position, size};
+use lightningcss::values::percentage::Percentage;
 use lightningcss::{
-    properties::{align::GapValue, border::BorderSideWidth, Property, PropertyId},
+    properties::{Property, PropertyId},
     stylesheet::ParserOptions,
     traits::Parse,
     values::{
@@ -45,7 +55,7 @@ use lightningcss::{
 };
 use taffy::{
     prelude::*,
-    style::{FlexDirection, PositionType},
+    style::{FlexDirection, Position},
 };
 
 /// Default values for layout attributes
@@ -95,33 +105,35 @@ pub fn apply_layout_attributes_cfg(
                 display::Display::Keyword(display::DisplayKeyword::None) => {
                     style.display = Display::None
                 }
-                display::Display::Pair(pair) => {
-                    if let display::DisplayInside::Flex(_) = pair.inside {
-                        style.display = Display::Flex
+                display::Display::Pair(pair) => match pair.inside {
+                    display::DisplayInside::Flex(_) => {
+                        style.display = Display::Flex;
                     }
-                }
-                _ => (),
+                    display::DisplayInside::Grid => {
+                        style.display = Display::Grid;
+                    }
+                    _ => {}
+                },
+                _ => {}
             },
             Property::Position(position) => {
-                style.position_type = match position {
-                    position::Position::Relative => PositionType::Relative,
-                    position::Position::Absolute => PositionType::Absolute,
+                style.position = match position {
+                    position::Position::Relative => Position::Relative,
+                    position::Position::Absolute => Position::Absolute,
                     _ => return,
                 }
             }
-            Property::Top(top) => style.position.top = convert_length_percentage_or_auto(top),
+            Property::Top(top) => style.inset.top = convert_length_percentage_or_auto(top),
             Property::Bottom(bottom) => {
-                style.position.bottom = convert_length_percentage_or_auto(bottom)
+                style.inset.bottom = convert_length_percentage_or_auto(bottom)
             }
-            Property::Left(left) => style.position.left = convert_length_percentage_or_auto(left),
-            Property::Right(right) => {
-                style.position.right = convert_length_percentage_or_auto(right)
-            }
+            Property::Left(left) => style.inset.left = convert_length_percentage_or_auto(left),
+            Property::Right(right) => style.inset.right = convert_length_percentage_or_auto(right),
             Property::Inset(inset) => {
-                style.position.top = convert_length_percentage_or_auto(inset.top);
-                style.position.bottom = convert_length_percentage_or_auto(inset.bottom);
-                style.position.left = convert_length_percentage_or_auto(inset.left);
-                style.position.right = convert_length_percentage_or_auto(inset.right);
+                style.inset.top = convert_length_percentage_or_auto(inset.top);
+                style.inset.bottom = convert_length_percentage_or_auto(inset.bottom);
+                style.inset.left = convert_length_percentage_or_auto(inset.left);
+                style.inset.right = convert_length_percentage_or_auto(inset.right);
             }
             Property::BorderTopWidth(width) => {
                 style.border.top = convert_border_side_width(width, &config.border_widths);
@@ -164,46 +176,64 @@ pub fn apply_layout_attributes_cfg(
             }
             Property::BorderTopStyle(line_style) => {
                 if line_style != LineStyle::None {
-                    style.border.top =
-                        convert_border_side_width(BorderSideWidth::Medium, &config.border_widths);
+                    style.border.top = convert_border_side_width(
+                        border::BorderSideWidth::Medium,
+                        &config.border_widths,
+                    );
                 }
             }
             Property::BorderBottomStyle(line_style) => {
                 if line_style != LineStyle::None {
-                    style.border.bottom =
-                        convert_border_side_width(BorderSideWidth::Medium, &config.border_widths);
+                    style.border.bottom = convert_border_side_width(
+                        border::BorderSideWidth::Medium,
+                        &config.border_widths,
+                    );
                 }
             }
             Property::BorderLeftStyle(line_style) => {
                 if line_style != LineStyle::None {
-                    style.border.left =
-                        convert_border_side_width(BorderSideWidth::Medium, &config.border_widths);
+                    style.border.left = convert_border_side_width(
+                        border::BorderSideWidth::Medium,
+                        &config.border_widths,
+                    );
                 }
             }
             Property::BorderRightStyle(line_style) => {
                 if line_style != LineStyle::None {
-                    style.border.right =
-                        convert_border_side_width(BorderSideWidth::Medium, &config.border_widths);
+                    style.border.right = convert_border_side_width(
+                        border::BorderSideWidth::Medium,
+                        &config.border_widths,
+                    );
                 }
             }
             Property::BorderStyle(styles) => {
                 if styles.top != LineStyle::None {
-                    style.border.top =
-                        convert_border_side_width(BorderSideWidth::Medium, &config.border_widths);
+                    style.border.top = convert_border_side_width(
+                        border::BorderSideWidth::Medium,
+                        &config.border_widths,
+                    );
                 }
                 if styles.bottom != LineStyle::None {
-                    style.border.bottom =
-                        convert_border_side_width(BorderSideWidth::Medium, &config.border_widths);
+                    style.border.bottom = convert_border_side_width(
+                        border::BorderSideWidth::Medium,
+                        &config.border_widths,
+                    );
                 }
                 if styles.left != LineStyle::None {
-                    style.border.left =
-                        convert_border_side_width(BorderSideWidth::Medium, &config.border_widths);
+                    style.border.left = convert_border_side_width(
+                        border::BorderSideWidth::Medium,
+                        &config.border_widths,
+                    );
                 }
                 if styles.right != LineStyle::None {
-                    style.border.right =
-                        convert_border_side_width(BorderSideWidth::Medium, &config.border_widths);
+                    style.border.right = convert_border_side_width(
+                        border::BorderSideWidth::Medium,
+                        &config.border_widths,
+                    );
                 }
             }
+
+            // Flexbox properties
             Property::FlexDirection(flex_direction, _) => {
                 use FlexDirection::*;
                 style.flex_direction = match flex_direction {
@@ -228,75 +258,123 @@ pub fn apply_layout_attributes_cfg(
                 style.flex_shrink = shrink;
             }
             Property::FlexBasis(basis, _) => {
-                style.flex_basis = convert_length_percentage_or_auto(basis);
+                style.flex_basis = convert_length_percentage_or_auto(basis).into();
             }
             Property::Flex(flex, _) => {
                 style.flex_grow = flex.grow;
                 style.flex_shrink = flex.shrink;
-                style.flex_basis = convert_length_percentage_or_auto(flex.basis);
+                style.flex_basis = convert_length_percentage_or_auto(flex.basis).into();
             }
+
+            // Grid properties
+            Property::GridAutoFlow(grid_auto_flow) => {
+                let is_row = grid_auto_flow.contains(grid::GridAutoFlow::Row);
+                let is_dense = grid_auto_flow.contains(grid::GridAutoFlow::Dense);
+                style.grid_auto_flow = match (is_row, is_dense) {
+                    (true, false) => GridAutoFlow::Row,
+                    (false, false) => GridAutoFlow::Column,
+                    (true, true) => GridAutoFlow::RowDense,
+                    (false, true) => GridAutoFlow::ColumnDense,
+                };
+            }
+            Property::GridTemplateColumns(TrackSizing::TrackList(track_list)) => {
+                style.grid_template_columns = track_list
+                    .items
+                    .into_iter()
+                    .map(convert_grid_track_item)
+                    .collect();
+            }
+            Property::GridTemplateRows(TrackSizing::TrackList(track_list)) => {
+                style.grid_template_rows = track_list
+                    .items
+                    .into_iter()
+                    .map(convert_grid_track_item)
+                    .collect();
+            }
+            Property::GridAutoColumns(grid::TrackSizeList(track_size_list)) => {
+                style.grid_auto_columns = track_size_list
+                    .into_iter()
+                    .map(convert_grid_track_size)
+                    .collect();
+            }
+            Property::GridAutoRows(grid::TrackSizeList(track_size_list)) => {
+                style.grid_auto_rows = track_size_list
+                    .into_iter()
+                    .map(convert_grid_track_size)
+                    .collect();
+            }
+            Property::GridRow(grid_row) => {
+                style.grid_row = Line {
+                    start: convert_grid_placement(grid_row.start),
+                    end: convert_grid_placement(grid_row.end),
+                };
+            }
+            Property::GridColumn(grid_column) => {
+                style.grid_column = Line {
+                    start: convert_grid_placement(grid_column.start),
+                    end: convert_grid_placement(grid_column.end),
+                };
+            }
+
+            // Alignment properties
             Property::AlignContent(align, _) => {
                 use AlignContent::*;
                 style.align_content = match align {
                     align::AlignContent::ContentDistribution(distribution) => match distribution {
-                        align::ContentDistribution::SpaceBetween => SpaceBetween,
-                        align::ContentDistribution::SpaceAround => SpaceAround,
-                        align::ContentDistribution::SpaceEvenly => SpaceEvenly,
-                        align::ContentDistribution::Stretch => Stretch,
+                        align::ContentDistribution::SpaceBetween => Some(SpaceBetween),
+                        align::ContentDistribution::SpaceAround => Some(SpaceAround),
+                        align::ContentDistribution::SpaceEvenly => Some(SpaceEvenly),
+                        align::ContentDistribution::Stretch => Some(Stretch),
                     },
                     align::AlignContent::ContentPosition {
                         value: position, ..
                     } => match position {
-                        align::ContentPosition::Center => Center,
-                        align::ContentPosition::Start | align::ContentPosition::FlexStart => {
-                            FlexStart
-                        }
-                        align::ContentPosition::End | align::ContentPosition::FlexEnd => FlexEnd,
+                        align::ContentPosition::Center => Some(Center),
+                        align::ContentPosition::Start => Some(Start),
+                        align::ContentPosition::FlexStart => Some(FlexStart),
+                        align::ContentPosition::End => Some(End),
+                        align::ContentPosition::FlexEnd => Some(FlexEnd),
                     },
                     _ => return,
                 };
             }
             Property::JustifyContent(justify, _) => {
-                use JustifyContent::*;
+                use AlignContent::*;
                 style.justify_content = match justify {
                     align::JustifyContent::ContentDistribution(distribution) => {
                         match distribution {
-                            align::ContentDistribution::SpaceBetween => SpaceBetween,
-                            align::ContentDistribution::SpaceAround => SpaceAround,
-                            align::ContentDistribution::SpaceEvenly => SpaceEvenly,
+                            align::ContentDistribution::SpaceBetween => Some(SpaceBetween),
+                            align::ContentDistribution::SpaceAround => Some(SpaceAround),
+                            align::ContentDistribution::SpaceEvenly => Some(SpaceEvenly),
                             _ => return,
                         }
                     }
                     align::JustifyContent::ContentPosition {
                         value: position, ..
                     } => match position {
-                        align::ContentPosition::Center => Center,
-                        // start ignores -reverse flex-direction but there is no way to specify that in Taffy
-                        align::ContentPosition::Start | align::ContentPosition::FlexStart => {
-                            FlexStart
-                        }
-                        // end ignores -reverse flex-direction but there is no way to specify that in Taffy
-                        align::ContentPosition::End | align::ContentPosition::FlexEnd => FlexEnd,
+                        align::ContentPosition::Center => Some(Center),
+                        align::ContentPosition::Start => Some(Start),
+                        align::ContentPosition::FlexStart => Some(FlexStart),
+                        align::ContentPosition::End => Some(End),
+                        align::ContentPosition::FlexEnd => Some(FlexEnd),
                     },
                     _ => return,
                 };
             }
             Property::AlignSelf(align, _) => {
-                use AlignSelf::*;
+                use AlignItems::*;
                 style.align_self = match align {
-                    align::AlignSelf::Auto => Auto,
-                    align::AlignSelf::Stretch => Stretch,
-                    align::AlignSelf::BaselinePosition(_) => Baseline,
+                    align::AlignSelf::Auto => None,
+                    align::AlignSelf::Stretch => Some(Stretch),
+                    align::AlignSelf::BaselinePosition(_) => Some(Baseline),
                     align::AlignSelf::SelfPosition {
                         value: position, ..
                     } => match position {
-                        align::SelfPosition::Center => Center,
-                        align::SelfPosition::Start
-                        | align::SelfPosition::SelfStart
-                        | align::SelfPosition::FlexStart => FlexStart,
-                        align::SelfPosition::End
-                        | align::SelfPosition::SelfEnd
-                        | align::SelfPosition::FlexEnd => FlexEnd,
+                        align::SelfPosition::Center => Some(Center),
+                        align::SelfPosition::Start | align::SelfPosition::SelfStart => Some(Start),
+                        align::SelfPosition::FlexStart => Some(FlexStart),
+                        align::SelfPosition::End | align::SelfPosition::SelfEnd => Some(End),
+                        align::SelfPosition::FlexEnd => Some(FlexEnd),
                     },
                     _ => return,
                 };
@@ -304,15 +382,18 @@ pub fn apply_layout_attributes_cfg(
             Property::AlignItems(align, _) => {
                 use AlignItems::*;
                 style.align_items = match align {
-                    align::AlignItems::BaselinePosition(_) => Baseline,
-                    align::AlignItems::Stretch => Stretch,
+                    align::AlignItems::BaselinePosition(_) => Some(Baseline),
+                    align::AlignItems::Stretch => Some(Stretch),
                     align::AlignItems::SelfPosition {
                         value: position, ..
                     } => match position {
-                        align::SelfPosition::Center => Center,
-                        align::SelfPosition::FlexStart => FlexStart,
-                        align::SelfPosition::FlexEnd => FlexEnd,
-                        _ => return,
+                        align::SelfPosition::Center => Some(Center),
+                        align::SelfPosition::FlexStart => Some(FlexStart),
+                        align::SelfPosition::FlexEnd => Some(FlexEnd),
+                        align::SelfPosition::Start | align::SelfPosition::SelfStart => {
+                            Some(FlexEnd)
+                        }
+                        align::SelfPosition::End | align::SelfPosition::SelfEnd => Some(FlexEnd),
                     },
                     _ => return,
                 };
@@ -350,23 +431,23 @@ pub fn apply_layout_attributes_cfg(
                 };
             }
             Property::PaddingTop(padding) => {
-                style.padding.top = convert_length_percentage_or_auto(padding);
+                style.padding.top = convert_padding(padding);
             }
             Property::PaddingBottom(padding) => {
-                style.padding.bottom = convert_length_percentage_or_auto(padding);
+                style.padding.bottom = convert_padding(padding);
             }
             Property::PaddingLeft(padding) => {
-                style.padding.left = convert_length_percentage_or_auto(padding);
+                style.padding.left = convert_padding(padding);
             }
             Property::PaddingRight(padding) => {
-                style.padding.right = convert_length_percentage_or_auto(padding);
+                style.padding.right = convert_padding(padding);
             }
             Property::Padding(padding) => {
                 style.padding = Rect {
-                    top: convert_length_percentage_or_auto(padding.top),
-                    bottom: convert_length_percentage_or_auto(padding.bottom),
-                    left: convert_length_percentage_or_auto(padding.left),
-                    right: convert_length_percentage_or_auto(padding.right),
+                    top: convert_padding(padding.top),
+                    bottom: convert_padding(padding.bottom),
+                    left: convert_padding(padding.left),
+                    right: convert_padding(padding.right),
                 };
             }
             Property::Width(width) => {
@@ -386,59 +467,157 @@ pub fn apply_layout_attributes_cfg(
     }
 }
 
-fn convert_length_value(length_value: LengthValue) -> Dimension {
+fn extract_px_value(length_value: LengthValue) -> f32 {
     match length_value {
-        LengthValue::Px(value) => Dimension::Points(value),
+        LengthValue::Px(value) => value,
         _ => todo!(),
     }
 }
 
-fn convert_dimension_percentage(
+fn convert_length_percentage(
     dimension_percentage: DimensionPercentage<LengthValue>,
-) -> Dimension {
+) -> LengthPercentage {
     match dimension_percentage {
-        DimensionPercentage::Dimension(value) => convert_length_value(value),
-        DimensionPercentage::Percentage(percentage) => Dimension::Percent(percentage.0),
-        _ => todo!(),
+        DimensionPercentage::Dimension(value) => LengthPercentage::Points(extract_px_value(value)),
+        DimensionPercentage::Percentage(percentage) => LengthPercentage::Percent(percentage.0),
+        DimensionPercentage::Calc(_) => todo!(),
+    }
+}
+
+fn convert_padding(dimension_percentage: LengthPercentageOrAuto) -> LengthPercentage {
+    match dimension_percentage {
+        LengthPercentageOrAuto::Auto => unimplemented!(),
+        LengthPercentageOrAuto::LengthPercentage(lp) => match lp {
+            DimensionPercentage::Dimension(value) => {
+                LengthPercentage::Points(extract_px_value(value))
+            }
+            DimensionPercentage::Percentage(percentage) => LengthPercentage::Percent(percentage.0),
+            DimensionPercentage::Calc(_) => unimplemented!(),
+        },
     }
 }
 
 fn convert_length_percentage_or_auto(
-    length_percentage_or_auto: LengthPercentageOrAuto,
-) -> Dimension {
-    match length_percentage_or_auto {
-        LengthPercentageOrAuto::Auto => Dimension::Auto,
-        LengthPercentageOrAuto::LengthPercentage(percentage) => {
-            convert_dimension_percentage(percentage)
-        }
+    dimension_percentage: LengthPercentageOrAuto,
+) -> LengthPercentageAuto {
+    match dimension_percentage {
+        LengthPercentageOrAuto::Auto => LengthPercentageAuto::Auto,
+        LengthPercentageOrAuto::LengthPercentage(lp) => match lp {
+            DimensionPercentage::Dimension(value) => {
+                LengthPercentageAuto::Points(extract_px_value(value))
+            }
+            DimensionPercentage::Percentage(percentage) => {
+                LengthPercentageAuto::Percent(percentage.0)
+            }
+            DimensionPercentage::Calc(_) => todo!(),
+        },
+    }
+}
+
+fn convert_dimension(dimension_percentage: DimensionPercentage<LengthValue>) -> Dimension {
+    match dimension_percentage {
+        DimensionPercentage::Dimension(value) => Dimension::Points(extract_px_value(value)),
+        DimensionPercentage::Percentage(percentage) => Dimension::Percent(percentage.0),
+        DimensionPercentage::Calc(_) => todo!(),
     }
 }
 
 fn convert_border_side_width(
-    border_side_width: BorderSideWidth,
+    border_side_width: border::BorderSideWidth,
     border_width_config: &BorderWidths,
-) -> Dimension {
+) -> LengthPercentage {
     match border_side_width {
-        BorderSideWidth::Length(Length::Value(value)) => convert_length_value(value),
-        BorderSideWidth::Thick => Dimension::Points(border_width_config.thick),
-        BorderSideWidth::Medium => Dimension::Points(border_width_config.medium),
-        BorderSideWidth::Thin => Dimension::Points(border_width_config.thin),
-        _ => todo!(),
+        border::BorderSideWidth::Length(Length::Value(value)) => {
+            LengthPercentage::Points(extract_px_value(value))
+        }
+        border::BorderSideWidth::Thick => LengthPercentage::Points(border_width_config.thick),
+        border::BorderSideWidth::Medium => LengthPercentage::Points(border_width_config.medium),
+        border::BorderSideWidth::Thin => LengthPercentage::Points(border_width_config.thin),
+        border::BorderSideWidth::Length(_) => unimplemented!(),
     }
 }
 
-fn convert_gap_value(gap_value: GapValue) -> Dimension {
+fn convert_gap_value(gap_value: align::GapValue) -> LengthPercentage {
     match gap_value {
-        GapValue::LengthPercentage(dim) => convert_dimension_percentage(dim),
-        GapValue::Normal => Dimension::Auto,
+        align::GapValue::LengthPercentage(dim) => convert_length_percentage(dim),
+        align::GapValue::Normal => LengthPercentage::Points(0.0),
     }
 }
 
 fn convert_size(size: size::Size) -> Dimension {
     match size {
         size::Size::Auto => Dimension::Auto,
-        size::Size::LengthPercentage(length) => convert_dimension_percentage(length),
-        _ => todo!(),
+        size::Size::LengthPercentage(length) => convert_dimension(length),
+        size::Size::MinContent(_) => Dimension::Auto, // Unimplemented, so default auto
+        size::Size::MaxContent(_) => Dimension::Auto, // Unimplemented, so default auto
+        size::Size::FitContent(_) => Dimension::Auto, // Unimplemented, so default auto
+        size::Size::FitContentFunction(_) => Dimension::Auto, // Unimplemented, so default auto
+        size::Size::Stretch(_) => Dimension::Auto,    // Unimplemented, so default auto
+        size::Size::Contain => Dimension::Auto,       // Unimplemented, so default auto
+    }
+}
+
+fn convert_grid_placement(input: grid::GridLine) -> GridPlacement {
+    match input {
+        grid::GridLine::Auto => GridPlacement::Auto,
+        grid::GridLine::Line { index, .. } => line(index as i16),
+        grid::GridLine::Span { index, .. } => span(index as u16),
+        grid::GridLine::Area { .. } => unimplemented!(),
+    }
+}
+
+fn convert_grid_track_item(input: grid::TrackListItem) -> TrackSizingFunction {
+    match input {
+        grid::TrackListItem::TrackSize(size) => {
+            TrackSizingFunction::Single(convert_grid_track_size(size))
+        }
+        grid::TrackListItem::TrackRepeat(_) => todo!(), // TODO: requires TrackRepeat fields to be public!
+    }
+}
+
+fn convert_grid_track_size(input: grid::TrackSize) -> NonRepeatedTrackSizingFunction {
+    match input {
+        grid::TrackSize::TrackBreadth(breadth) => minmax(
+            convert_track_breadth_min(&breadth),
+            convert_track_breadth_max(&breadth),
+        ),
+        grid::TrackSize::MinMax { min, max } => minmax(
+            convert_track_breadth_min(&min),
+            convert_track_breadth_max(&max),
+        ),
+        grid::TrackSize::FitContent(limit) => match limit {
+            DimensionPercentage::Dimension(LengthValue::Px(len)) => minmax(auto(), points(len)),
+            DimensionPercentage::Percentage(Percentage(pct)) => minmax(auto(), percent(pct)),
+            _ => unimplemented!(),
+        },
+    }
+}
+
+fn convert_track_breadth_max(breadth: &TrackBreadth) -> MaxTrackSizingFunction {
+    match breadth {
+        grid::TrackBreadth::Length(length_percentage) => match length_percentage {
+            DimensionPercentage::Dimension(LengthValue::Px(len)) => points(*len),
+            DimensionPercentage::Percentage(Percentage(pct)) => percent(*pct),
+            _ => unimplemented!(),
+        },
+        grid::TrackBreadth::Flex(fraction) => fr(*fraction),
+        grid::TrackBreadth::MinContent => MaxTrackSizingFunction::MinContent,
+        grid::TrackBreadth::MaxContent => MaxTrackSizingFunction::MaxContent,
+        grid::TrackBreadth::Auto => MaxTrackSizingFunction::Auto,
+    }
+}
+
+fn convert_track_breadth_min(breadth: &TrackBreadth) -> MinTrackSizingFunction {
+    match breadth {
+        grid::TrackBreadth::Length(length_percentage) => match length_percentage {
+            DimensionPercentage::Dimension(LengthValue::Px(len)) => points(*len),
+            DimensionPercentage::Percentage(Percentage(pct)) => percent(*pct),
+            _ => unimplemented!(),
+        },
+        grid::TrackBreadth::MinContent => MinTrackSizingFunction::MinContent,
+        grid::TrackBreadth::MaxContent => MinTrackSizingFunction::MaxContent,
+        grid::TrackBreadth::Auto => MinTrackSizingFunction::Auto,
+        grid::TrackBreadth::Flex(_) => MinTrackSizingFunction::Auto,
     }
 }
 

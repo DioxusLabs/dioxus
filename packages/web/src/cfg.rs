@@ -49,15 +49,16 @@ impl Config {
 
     /// Set the name of the element that Dioxus will use as the root.
     ///
-    /// This is akint to calling React.render() on the element with the specified name.
+    /// This is akin to calling React.render() on the element with the specified name.
     pub fn rootname(mut self, name: impl Into<String>) -> Self {
         self.rootname = name.into();
         self
     }
 
-    /// Set the name of the element that Dioxus will use as the root.
+    /// Sets a string cache for wasm bindgen to [intern](https://docs.rs/wasm-bindgen/0.2.84/wasm_bindgen/fn.intern.html). This can help reduce the time it takes for wasm bindgen to pass
+    /// strings from rust to javascript. This can significantly improve pefromance when passing strings to javascript, but can have a negative impact on startup time.
     ///
-    /// This is akint to calling React.render() on the element with the specified name.
+    /// > Currently this cache is only used when creating static elements and attributes.
     pub fn with_string_cache(mut self, cache: Vec<String>) -> Self {
         self.cached_strings = cache;
         self

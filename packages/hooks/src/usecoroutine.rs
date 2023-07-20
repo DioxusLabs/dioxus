@@ -34,6 +34,10 @@ use std::future::Future;
 /// don't care about actions in your app being synchronized, you can use [`use_callback`]
 /// hook to spawn multiple tasks and run them concurrently.
 ///
+/// ### Notice
+/// In order to use ``rx.next().await``, you will need to extend the ``Stream`` trait (used by ``UnboundedReceiver``)
+/// by adding the ``futures-util`` crate as a dependency and adding ``StreamExt`` into scope via ``use futures_util::stream::StreamExt;``
+///
 /// ## Example
 ///
 /// ```rust, ignore
