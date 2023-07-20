@@ -346,7 +346,7 @@ impl VirtualDom {
         | | |       <-- no, broke early
         |           <-- no, broke early
         */
-        let mut parent_path = self.elements.get(element.0);
+        let mut parent_path = self.elements.get(element.0).cloned();
         let mut listeners = vec![];
 
         // We will clone this later. The data itself is wrapped in RC to be used in callbacks if required
@@ -397,7 +397,8 @@ impl VirtualDom {
                         }
                     }
 
-                    parent_path = template.parent.and_then(|id| self.elements.get(id.0));
+                    let _parent = template.parent.borrow();
+                    parent_path = _parent.as_ref().cloned();
                 } else {
                     break;
                 }

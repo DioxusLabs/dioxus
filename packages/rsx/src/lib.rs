@@ -237,7 +237,7 @@ impl<'a> ToTokens for TemplateRenderer<'a> {
                 attr_paths: &[ #(#attr_paths),* ],
             };
             ::dioxus::core::VNode {
-                parent: None,
+                parent: Default::default(),
                 key: #key_tokens,
                 template: std::cell::Cell::new(TEMPLATE),
                 root_ids: Default::default(),

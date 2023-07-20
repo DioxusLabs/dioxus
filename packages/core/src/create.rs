@@ -1,5 +1,7 @@
 use crate::any_props::AnyProps;
-use crate::innerlude::{BorrowedAttributeValue, VComponent, VPlaceholder, VText};
+use crate::innerlude::{
+    BorrowedAttributeValue, ElementPath, ElementRef, VComponent, VPlaceholder, VText,
+};
 use crate::mutations::Mutation;
 use crate::mutations::Mutation::*;
 use crate::nodes::VNode;
@@ -8,6 +10,7 @@ use crate::virtual_dom::VirtualDom;
 use crate::{AttributeValue, ElementId, RenderReturn, ScopeId, Template};
 use std::cell::Cell;
 use std::iter::Peekable;
+use std::ptr::NonNull;
 use TemplateNode::*;
 
 #[cfg(debug_assertions)]
@@ -86,6 +89,8 @@ impl<'b> VirtualDom {
                 node.template.set(*template);
             }
         }
+
+        // node.parent.borrow_mut().replace(self.scope_stack.last().copied());
 
         // Intialize the root nodes slice
         *node.root_ids.borrow_mut() = vec![ElementId(0); node.template.get().roots.len()];
@@ -443,7 +448,7 @@ impl<'b> VirtualDom {
         match node {
             Text(text) => self.create_dynamic_text(template, text, idx),
             Placeholder(place) => self.create_placeholder(place, template, idx),
-            Component(component) => self.create_component_node(template, component),
+            Component(component) => self.create_component_node(template, component, idx),
             Fragment(frag) => frag.iter().map(|child| self.create(child)).sum(),
         }
     }
@@ -500,6 +505,7 @@ impl<'b> VirtualDom {
         &mut self,
         template: &'b VNode<'b>,
         component: &'b VComponent<'b>,
+        idx: usize,
     ) -> usize {
         use RenderReturn::*;
 
@@ -510,7 +516,16 @@ impl<'b> VirtualDom {
 
         match unsafe { self.run_scope(scope).extend_lifetime_ref() } {
             // Create the component's root element
-            Ready(t) => self.create_scope(scope, t),
+            Ready(t) => {
+                // assign the parent
+                let path = template.template.get().node_paths[idx];
+                *t.parent.borrow_mut() = Some(ElementRef {
+                    path: ElementPath::Deep(path),
+                    template: Some(NonNull::new(template as *const _ as *mut _).unwrap()),
+                });
+
+                self.create_scope(scope, t)
+            }
             Aborted(t) => self.mount_aborted(template, t),
         }
     }

@@ -13,12 +13,13 @@ use crate::{
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct ElementId(pub usize);
 
-pub(crate) struct ElementRef {
+#[derive(Debug, Clone)]
+pub struct ElementRef {
     // the pathway of the real element inside the template
-    pub path: ElementPath,
+    pub(crate) path: ElementPath,
 
     // The actual template
-    pub template: Option<NonNull<VNode<'static>>>,
+    pub(crate) template: Option<NonNull<VNode<'static>>>,
 }
 
 #[derive(Clone, Copy, Debug)]
