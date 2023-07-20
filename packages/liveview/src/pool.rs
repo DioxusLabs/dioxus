@@ -87,16 +87,16 @@ impl LiveViewPool {
 /// }
 /// ```
 pub trait LiveViewSocket:
-    SinkExt<String, Error = LiveViewError>
-    + StreamExt<Item = Result<String, LiveViewError>>
+    SinkExt<Vec<u8>, Error = LiveViewError>
+    + StreamExt<Item = Result<Vec<u8>, LiveViewError>>
     + Send
     + 'static
 {
 }
 
 impl<S> LiveViewSocket for S where
-    S: SinkExt<String, Error = LiveViewError>
-        + StreamExt<Item = Result<String, LiveViewError>>
+    S: SinkExt<Vec<u8>, Error = LiveViewError>
+        + StreamExt<Item = Result<Vec<u8>, LiveViewError>>
         + Send
         + 'static
 {
@@ -126,7 +126,7 @@ pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), Li
     pin_mut!(ws);
 
     // send the initial render to the client
-    ws.send(edits).await?;
+    ws.send(edits.into_bytes()).await?;
 
     // Create the a proxy for query engine
     let (query_tx, mut query_rx) = tokio::sync::mpsc::unbounded_channel();
@@ -156,11 +156,11 @@ pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), Li
             evt = ws.next() => {
                 match evt.as_ref().map(|o| o.as_deref()) {
                     // respond with a pong every ping to keep the websocket alive
-                    Some(Ok("__ping__")) => {
-                        ws.send("__pong__".to_string()).await?;
+                    Some(Ok(b"__ping__")) => {
+                        ws.send(b"__pong__".to_vec()).await?;
                     }
                     Some(Ok(evt)) => {
-                        if let Ok(message) = serde_json::from_str::<IpcMessage>(evt) {
+                        if let Ok(message) = serde_json::from_str::<IpcMessage>(&String::from_utf8_lossy(evt)) {
                             match message {
                                 IpcMessage::Event(evt) => {
                                     // Intercept the mounted event and insert a custom element type
@@ -196,7 +196,7 @@ pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), Li
 
             // handle any new queries
             Some(query) = query_rx.recv() => {
-                ws.send(serde_json::to_string(&ClientUpdate::Query(query)).unwrap()).await?;
+                ws.send(serde_json::to_string(&ClientUpdate::Query(query)).unwrap().into_bytes()).await?;
             }
 
             Some(msg) = hot_reload_wait => {
@@ -218,8 +218,12 @@ pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), Li
             .render_with_deadline(tokio::time::sleep(Duration::from_millis(10)))
             .await;
 
-        ws.send(serde_json::to_string(&ClientUpdate::Edits(edits)).unwrap())
-            .await?;
+        ws.send(
+            serde_json::to_string(&ClientUpdate::Edits(edits))
+                .unwrap()
+                .into_bytes(),
+        )
+        .await?;
     }
 }
 

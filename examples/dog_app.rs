@@ -10,7 +10,7 @@ struct ListBreeds {
     message: HashMap<String, Vec<String>>,
 }
 
-async fn app_root(cx: Scope<'_>) -> Element {
+fn app_root(cx: Scope<'_>) -> Element {
     let breed = use_state(cx, || "deerhound".to_string());
 
     let breeds = use_future!(cx, || async move {
@@ -21,13 +21,13 @@ async fn app_root(cx: Scope<'_>) -> Element {
             .await
     });
 
-    match breeds.await {
-        Ok(breeds) => cx.render(rsx! {
+    match breeds.value()? {
+        Ok(breed_list) => cx.render(rsx! {
             div { height: "500px",
                 h1 { "Select a dog breed!" }
                 div { display: "flex",
                     ul { flex: "50%",
-                        for cur_breed in breeds.message.keys().take(10) {
+                        for cur_breed in breed_list.message.keys().take(10) {
                             li { key: "{cur_breed}",
                                 button {
                                     onclick: move |_| breed.set(cur_breed.clone()),
@@ -50,7 +50,7 @@ struct DogApi {
 }
 
 #[inline_props]
-async fn breed_pic(cx: Scope, breed: String) -> Element {
+fn breed_pic(cx: Scope, breed: String) -> Element {
     let fut = use_future!(cx, |breed| async move {
         reqwest::get(format!("https://dog.ceo/api/breed/{breed}/images/random"))
             .await
@@ -59,7 +59,7 @@ async fn breed_pic(cx: Scope, breed: String) -> Element {
             .await
     });
 
-    match fut.await {
+    match fut.value()? {
         Ok(resp) => render! {
             div {
                 button {

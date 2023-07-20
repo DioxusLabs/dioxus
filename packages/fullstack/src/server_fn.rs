@@ -1,13 +1,11 @@
-use crate::server_context::DioxusServerContext;
-
 #[cfg(any(feature = "ssr", doc))]
 #[derive(Clone)]
 /// A trait object for a function that be called on serializable arguments and returns a serializable result.
-pub struct ServerFnTraitObj(server_fn::ServerFnTraitObj<DioxusServerContext>);
+pub struct ServerFnTraitObj(server_fn::ServerFnTraitObj<()>);
 
 #[cfg(any(feature = "ssr", doc))]
 impl std::ops::Deref for ServerFnTraitObj {
-    type Target = server_fn::ServerFnTraitObj<DioxusServerContext>;
+    type Target = server_fn::ServerFnTraitObj<()>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -33,9 +31,7 @@ impl ServerFnTraitObj {
     }
 
     /// Create a new `ServerFnTraitObj` from a `server_fn::ServerFnTraitObj`.
-    pub const fn from_generic_server_fn(
-        server_fn: server_fn::ServerFnTraitObj<DioxusServerContext>,
-    ) -> Self {
+    pub const fn from_generic_server_fn(server_fn: server_fn::ServerFnTraitObj<()>) -> Self {
         Self(server_fn)
     }
 }
@@ -44,8 +40,41 @@ impl ServerFnTraitObj {
 server_fn::inventory::collect!(ServerFnTraitObj);
 
 #[cfg(any(feature = "ssr", doc))]
+/// Middleware for a server function
+pub struct ServerFnMiddleware {
+    /// The prefix of the server function.
+    pub prefix: &'static str,
+    /// The url of the server function.
+    pub url: &'static str,
+    /// The middleware layers.
+    pub middleware: fn() -> Vec<std::sync::Arc<dyn crate::layer::Layer>>,
+}
+
+#[cfg(any(feature = "ssr", doc))]
+pub(crate) static MIDDLEWARE: once_cell::sync::Lazy<
+    std::collections::HashMap<
+        (&'static str, &'static str),
+        Vec<std::sync::Arc<dyn crate::layer::Layer>>,
+    >,
+> = once_cell::sync::Lazy::new(|| {
+    let mut map: std::collections::HashMap<
+        (&'static str, &'static str),
+        Vec<std::sync::Arc<dyn crate::layer::Layer>>,
+    > = std::collections::HashMap::new();
+    for middleware in server_fn::inventory::iter::<ServerFnMiddleware> {
+        map.entry((middleware.prefix, middleware.url))
+            .or_default()
+            .extend((middleware.middleware)().iter().cloned());
+    }
+    map
+});
+
+#[cfg(any(feature = "ssr", doc))]
+server_fn::inventory::collect!(ServerFnMiddleware);
+
+#[cfg(any(feature = "ssr", doc))]
 /// A server function that can be called on serializable arguments and returns a serializable result.
-pub type ServerFunction = server_fn::SerializedFnTraitObj<DioxusServerContext>;
+pub type ServerFunction = server_fn::SerializedFnTraitObj<()>;
 
 #[cfg(any(feature = "ssr", doc))]
 #[allow(clippy::type_complexity)]
@@ -64,7 +93,7 @@ static REGISTERED_SERVER_FUNCTIONS: once_cell::sync::Lazy<
 pub struct DioxusServerFnRegistry;
 
 #[cfg(feature = "ssr")]
-impl server_fn::ServerFunctionRegistry<DioxusServerContext> for DioxusServerFnRegistry {
+impl server_fn::ServerFunctionRegistry<()> for DioxusServerFnRegistry {
     type Error = ServerRegistrationFnError;
 
     fn register_explicit(
@@ -105,7 +134,7 @@ impl server_fn::ServerFunctionRegistry<DioxusServerContext> for DioxusServerFnRe
     }
 
     /// Returns the server function registered at the given URL, or `None` if no function is registered at that URL.
-    fn get(url: &str) -> Option<server_fn::ServerFnTraitObj<DioxusServerContext>> {
+    fn get(url: &str) -> Option<server_fn::ServerFnTraitObj<()>> {
         REGISTERED_SERVER_FUNCTIONS
             .read()
             .ok()
@@ -113,7 +142,7 @@ impl server_fn::ServerFunctionRegistry<DioxusServerContext> for DioxusServerFnRe
     }
 
     /// Returns the server function registered at the given URL, or `None` if no function is registered at that URL.
-    fn get_trait_obj(url: &str) -> Option<server_fn::ServerFnTraitObj<DioxusServerContext>> {
+    fn get_trait_obj(url: &str) -> Option<server_fn::ServerFnTraitObj<()>> {
         Self::get(url)
     }
 
@@ -155,7 +184,7 @@ pub enum ServerRegistrationFnError {
 /// can be queried on the server for routing purposes by calling [server_fn::ServerFunctionRegistry::get].
 ///
 /// Technically, the trait is implemented on a type that describes the server function's arguments, not the function itself.
-pub trait DioxusServerFn: server_fn::ServerFn<DioxusServerContext> {
+pub trait DioxusServerFn: server_fn::ServerFn<()> {
     /// Registers the server function, allowing the client to query it by URL.
     #[cfg(any(feature = "ssr", doc))]
     fn register_explicit() -> Result<(), server_fn::ServerFnError> {
@@ -163,4 +192,4 @@ pub trait DioxusServerFn: server_fn::ServerFn<DioxusServerContext> {
     }
 }
 
-impl<T> DioxusServerFn for T where T: server_fn::ServerFn<DioxusServerContext> {}
+impl<T> DioxusServerFn for T where T: server_fn::ServerFn<()> {}

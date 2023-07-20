@@ -90,7 +90,7 @@ impl WebsysDom {
             // make sure we set the root node ids even if the node is not dynamic
             set_node(
                 hydrated,
-                vnode.root_ids.get(i).ok_or(VNodeNotInitialized)?,
+                *vnode.root_ids.borrow().get(i).ok_or(VNodeNotInitialized)?,
                 current_child.clone()?,
             );
 
@@ -115,6 +115,12 @@ impl WebsysDom {
         node: &TemplateNode,
         last_node_was_static_text: &mut bool,
     ) -> Result<(), RehydrationError> {
+        log::trace!("rehydrate template node: {:?}", node);
+        if let Ok(current_child) = current_child {
+            if log::log_enabled!(log::Level::Trace) {
+                web_sys::console::log_1(&current_child.clone().into());
+            }
+        }
         match node {
             TemplateNode::Element {
                 children, attrs, ..
@@ -198,6 +204,12 @@ impl WebsysDom {
         dynamic: &DynamicNode,
         last_node_was_static_text: &mut bool,
     ) -> Result<(), RehydrationError> {
+        log::trace!("rehydrate dynamic node: {:?}", dynamic);
+        if let Ok(current_child) = current_child {
+            if log::log_enabled!(log::Level::Trace) {
+                web_sys::console::log_1(&current_child.clone().into());
+            }
+        }
         match dynamic {
             dioxus_core::DynamicNode::Text(VText { id, .. }) => {
                 // skip comment separator before node

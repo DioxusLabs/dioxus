@@ -1,6 +1,9 @@
-use crate::error::Result;
+use crate::{cfg::Platform, error::Result};
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, path::PathBuf};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DioxusConfig {
@@ -17,29 +20,49 @@ fn default_plugin() -> toml::Value {
 }
 
 impl DioxusConfig {
-    pub fn load() -> crate::error::Result<Option<DioxusConfig>> {
-        let Ok(crate_dir) = crate::cargo::crate_root() else { return Ok(None); };
+    pub fn load(bin: Option<PathBuf>) -> crate::error::Result<Option<DioxusConfig>> {
+        let crate_dir = crate::cargo::crate_root();
 
-        // we support either `Dioxus.toml` or `Cargo.toml`
+        let crate_dir = match crate_dir {
+            Ok(dir) => {
+                if let Some(bin) = bin {
+                    dir.join(bin)
+                } else {
+                    dir
+                }
+            }
+            Err(_) => return Ok(None),
+        };
+        let crate_dir = crate_dir.as_path();
+
         let Some(dioxus_conf_file) = acquire_dioxus_toml(crate_dir) else {
             return Ok(None);
         };
 
+        let dioxus_conf_file = dioxus_conf_file.as_path();
         toml::from_str::<DioxusConfig>(&std::fs::read_to_string(dioxus_conf_file)?)
-            .map_err(|_| crate::Error::Unique("Dioxus.toml parse failed".into()))
+            .map_err(|err| {
+                let error_location = dioxus_conf_file
+                    .strip_prefix(crate_dir)
+                    .unwrap_or(dioxus_conf_file)
+                    .display();
+                crate::Error::Unique(format!("{error_location} {err}"))
+            })
             .map(Some)
     }
 }
 
-fn acquire_dioxus_toml(dir: PathBuf) -> Option<PathBuf> {
+fn acquire_dioxus_toml(dir: &Path) -> Option<PathBuf> {
     // prefer uppercase
-    if dir.join("Dioxus.toml").is_file() {
-        return Some(dir.join("Dioxus.toml"));
+    let uppercase_conf = dir.join("Dioxus.toml");
+    if uppercase_conf.is_file() {
+        return Some(uppercase_conf);
     }
 
     // lowercase is fine too
-    if dir.join("dioxus.toml").is_file() {
-        return Some(dir.join("Dioxus.toml"));
+    let lowercase_conf = dir.join("dioxus.toml");
+    if lowercase_conf.is_file() {
+        return Some(lowercase_conf);
     }
 
     None
@@ -50,7 +73,7 @@ impl Default for DioxusConfig {
         Self {
             application: ApplicationConfig {
                 name: "dioxus".into(),
-                default_platform: "web".to_string(),
+                default_platform: Platform::Web,
                 out_dir: Some(PathBuf::from("dist")),
                 asset_dir: Some(PathBuf::from("public")),
 
@@ -92,7 +115,7 @@ impl Default for DioxusConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApplicationConfig {
     pub name: String,
-    pub default_platform: String,
+    pub default_platform: Platform,
     pub out_dir: Option<PathBuf>,
     pub asset_dir: Option<PathBuf>,
 
@@ -176,14 +199,19 @@ pub enum ExecutableType {
 }
 
 impl CrateConfig {
-    pub fn new() -> Result<Self> {
-        let dioxus_config = DioxusConfig::load()?.unwrap_or_default();
+    pub fn new(bin: Option<PathBuf>) -> Result<Self> {
+        let dioxus_config = DioxusConfig::load(bin.clone())?.unwrap_or_default();
+
+        let crate_root = crate::cargo::crate_root()?;
 
         let crate_dir = if let Some(package) = &dioxus_config.application.sub_package {
-            crate::cargo::crate_root()?.join(package)
+            crate_root.join(package)
+        } else if let Some(bin) = bin {
+            crate_root.join(bin)
         } else {
-            crate::cargo::crate_root()?
+            crate_root
         };
+
         let meta = crate::cargo::Metadata::get()?;
         let workspace_dir = meta.workspace_root;
         let target_dir = meta.target_directory;
@@ -202,8 +230,9 @@ impl CrateConfig {
 
         let manifest = cargo_toml::Manifest::from_path(cargo_def).unwrap();
 
-        let output_filename = {
-            match &manifest.package.as_ref().unwrap().default_run {
+        let mut output_filename = String::from("dioxus_app");
+        if let Some(package) = &manifest.package.as_ref() {
+            output_filename = match &package.default_run {
                 Some(default_run_target) => default_run_target.to_owned(),
                 None => manifest
                     .bin
@@ -216,9 +245,10 @@ impl CrateConfig {
                     .or(manifest.bin.first())
                     .or(manifest.lib.as_ref())
                     .and_then(|prod| prod.name.clone())
-                    .expect("No executable or library found from cargo metadata."),
-            }
-        };
+                    .unwrap_or(String::from("dioxus_app")),
+            };
+        }
+
         let executable = ExecutableType::Binary(output_filename);
 
         let release = false;

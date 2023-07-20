@@ -59,5 +59,5 @@ Edit your `main.rs`:
 And to serve our app:
 
 ```bash
-dioxus serve
+dx serve
 ```

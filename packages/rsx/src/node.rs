@@ -132,7 +132,10 @@ impl ToTokens for BodyNode {
                     pat, expr, body, ..
                 } = exp;
 
-                let renderer: TemplateRenderer = TemplateRenderer { roots: body };
+                let renderer: TemplateRenderer = TemplateRenderer {
+                    roots: body,
+                    location: None,
+                };
 
                 tokens.append_all(quote! {
                      __cx.make_node(
@@ -219,7 +222,7 @@ impl Parse for ForLoop {
     fn parse(input: ParseStream) -> Result<Self> {
         let for_token: Token![for] = input.parse()?;
 
-        let pat = input.parse()?;
+        let pat = Pat::parse_single(input)?;
 
         let in_token: Token![in] = input.parse()?;
         let expr: Expr = input.call(Expr::parse_without_eager_brace)?;

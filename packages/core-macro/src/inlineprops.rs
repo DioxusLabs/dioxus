@@ -135,7 +135,7 @@ impl ToTokens for InlinePropsBody {
                 quote! { <#struct_generics> },
             )
         } else {
-            let lifetime: LifetimeDef = parse_quote! { 'a };
+            let lifetime: LifetimeParam = parse_quote! { 'a };
 
             let mut fn_generics = generics.clone();
             fn_generics

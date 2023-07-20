@@ -1,10 +1,11 @@
 //! Verify that tasks get polled by the virtualdom properly, and that we escape wait_for_work safely
 
 use dioxus::prelude::*;
-use std::time::Duration;
+use std::{sync::atomic::AtomicUsize, time::Duration};
 
-static mut POLL_COUNT: usize = 0;
+static POLL_COUNT: AtomicUsize = AtomicUsize::new(0);
 
+#[cfg(not(miri))]
 #[tokio::test]
 async fn it_works() {
     let mut dom = VirtualDom::new(app);
@@ -18,7 +19,10 @@ async fn it_works() {
 
     // By the time the tasks are finished, we should've accumulated ticks from two tasks
     // Be warned that by setting the delay to too short, tokio might not schedule in the tasks
-    assert_eq!(unsafe { POLL_COUNT }, 135);
+    assert_eq!(
+        POLL_COUNT.fetch_add(0, std::sync::atomic::Ordering::Relaxed),
+        135
+    );
 }
 
 fn app(cx: Scope) -> Element {
@@ -26,14 +30,14 @@ fn app(cx: Scope) -> Element {
         cx.spawn(async {
             for x in 0..10 {
                 tokio::time::sleep(Duration::from_micros(50)).await;
-                unsafe { POLL_COUNT += x }
+                POLL_COUNT.fetch_add(x, std::sync::atomic::Ordering::Relaxed);
             }
         });
 
         cx.spawn(async {
             for x in 0..10 {
                 tokio::time::sleep(Duration::from_micros(25)).await;
-                unsafe { POLL_COUNT += x * 2 }
+                POLL_COUNT.fetch_add(x * 2, std::sync::atomic::Ordering::Relaxed);
             }
         });
     });

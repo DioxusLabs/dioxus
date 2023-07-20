@@ -12,7 +12,6 @@ use std::{
     io::Read,
     panic,
     path::PathBuf,
-    process::Command,
     time::Duration,
 };
 use wasm_bindgen_cli_support::Bindgen;
@@ -161,7 +160,7 @@ pub fn build(config: &CrateConfig, quiet: bool) -> Result<BuildResult> {
             }
         } else {
             log::warn!(
-                "Binaryen tool not found, you can use `dioxus tool add binaryen` to install it."
+                "Binaryen tool not found, you can use `dx tool add binaryen` to install it."
             );
         }
     }
@@ -200,7 +199,7 @@ pub fn build(config: &CrateConfig, quiet: bool) -> Result<BuildResult> {
             }
         } else {
             log::warn!(
-                "Tailwind tool not found, you can use `dioxus tool add tailwindcss` to install it."
+                "Tailwind tool not found, you can use `dx tool add tailwindcss` to install it."
             );
         }
     }
@@ -244,128 +243,125 @@ pub fn build(config: &CrateConfig, quiet: bool) -> Result<BuildResult> {
     })
 }
 
-pub fn build_desktop(config: &CrateConfig, _is_serve: bool) -> Result<()> {
+pub fn build_desktop(config: &CrateConfig, _is_serve: bool) -> Result<BuildResult> {
     log::info!("🚅 Running build [Desktop] command...");
 
+    let t_start = std::time::Instant::now();
     let ignore_files = build_assets(config)?;
 
-    let mut cmd = Command::new("cargo");
-    cmd.current_dir(&config.crate_dir)
+    let mut cmd = subprocess::Exec::cmd("cargo")
+        .cwd(&config.crate_dir)
         .arg("build")
-        .stdout(std::process::Stdio::inherit())
-        .stderr(std::process::Stdio::inherit());
+        .arg("--message-format=json");
 
     if config.release {
-        cmd.arg("--release");
+        cmd = cmd.arg("--release");
     }
     if config.verbose {
-        cmd.arg("--verbose");
+        cmd = cmd.arg("--verbose");
     }
 
     if config.custom_profile.is_some() {
         let custom_profile = config.custom_profile.as_ref().unwrap();
-        cmd.arg("--profile");
-        cmd.arg(custom_profile);
+        cmd = cmd.arg("--profile").arg(custom_profile);
     }
 
     if config.features.is_some() {
         let features_str = config.features.as_ref().unwrap().join(" ");
-        cmd.arg("--features");
-        cmd.arg(features_str);
+        cmd = cmd.arg("--features").arg(features_str);
     }
 
-    match &config.executable {
+    let cmd = match &config.executable {
         crate::ExecutableType::Binary(name) => cmd.arg("--bin").arg(name),
         crate::ExecutableType::Lib(name) => cmd.arg("--lib").arg(name),
         crate::ExecutableType::Example(name) => cmd.arg("--example").arg(name),
     };
 
-    let output = cmd.output()?;
+    let warning_messages = prettier_build(cmd)?;
 
-    if !output.status.success() {
-        return Err(Error::BuildFailed("Program build failed.".into()));
-    }
+    let release_type = match config.release {
+        true => "release",
+        false => "debug",
+    };
 
-    if output.status.success() {
-        let release_type = match config.release {
-            true => "release",
-            false => "debug",
-        };
-
-        let file_name: String;
-        let mut res_path = match &config.executable {
-            crate::ExecutableType::Binary(name) | crate::ExecutableType::Lib(name) => {
-                file_name = name.clone();
-                config.target_dir.join(release_type).join(name)
-            }
-            crate::ExecutableType::Example(name) => {
-                file_name = name.clone();
-                config
-                    .target_dir
-                    .join(release_type)
-                    .join("examples")
-                    .join(name)
-            }
-        };
-
-        let target_file = if cfg!(windows) {
-            res_path.set_extension("exe");
-            format!("{}.exe", &file_name)
-        } else {
-            file_name
-        };
-
-        if !config.out_dir.is_dir() {
-            create_dir_all(&config.out_dir)?;
+    let file_name: String;
+    let mut res_path = match &config.executable {
+        crate::ExecutableType::Binary(name) | crate::ExecutableType::Lib(name) => {
+            file_name = name.clone();
+            config.target_dir.join(release_type).join(name)
         }
-        copy(res_path, &config.out_dir.join(target_file))?;
+        crate::ExecutableType::Example(name) => {
+            file_name = name.clone();
+            config
+                .target_dir
+                .join(release_type)
+                .join("examples")
+                .join(name)
+        }
+    };
 
-        // this code will copy all public file to the output dir
-        if config.asset_dir.is_dir() {
-            let copy_options = fs_extra::dir::CopyOptions {
-                overwrite: true,
-                skip_exist: false,
-                buffer_size: 64000,
-                copy_inside: false,
-                content_only: false,
-                depth: 0,
-            };
+    let target_file = if cfg!(windows) {
+        res_path.set_extension("exe");
+        format!("{}.exe", &file_name)
+    } else {
+        file_name
+    };
 
-            for entry in std::fs::read_dir(&config.asset_dir)? {
-                let path = entry?.path();
-                if path.is_file() {
-                    std::fs::copy(&path, &config.out_dir.join(path.file_name().unwrap()))?;
-                } else {
-                    match fs_extra::dir::copy(&path, &config.out_dir, &copy_options) {
-                        Ok(_) => {}
-                        Err(e) => {
-                            log::warn!("Error copying dir: {}", e);
-                        }
+    if !config.out_dir.is_dir() {
+        create_dir_all(&config.out_dir)?;
+    }
+    copy(res_path, &config.out_dir.join(target_file))?;
+
+    // this code will copy all public file to the output dir
+    if config.asset_dir.is_dir() {
+        let copy_options = fs_extra::dir::CopyOptions {
+            overwrite: true,
+            skip_exist: false,
+            buffer_size: 64000,
+            copy_inside: false,
+            content_only: false,
+            depth: 0,
+        };
+
+        for entry in std::fs::read_dir(&config.asset_dir)? {
+            let path = entry?.path();
+            if path.is_file() {
+                std::fs::copy(&path, &config.out_dir.join(path.file_name().unwrap()))?;
+            } else {
+                match fs_extra::dir::copy(&path, &config.out_dir, &copy_options) {
+                    Ok(_) => {}
+                    Err(e) => {
+                        log::warn!("Error copying dir: {}", e);
                     }
-                    for ignore in &ignore_files {
-                        let ignore = ignore.strip_prefix(&config.asset_dir).unwrap();
-                        let ignore = config.out_dir.join(ignore);
-                        if ignore.is_file() {
-                            std::fs::remove_file(ignore)?;
-                        }
+                }
+                for ignore in &ignore_files {
+                    let ignore = ignore.strip_prefix(&config.asset_dir).unwrap();
+                    let ignore = config.out_dir.join(ignore);
+                    if ignore.is_file() {
+                        std::fs::remove_file(ignore)?;
                     }
                 }
             }
         }
-
-        log::info!(
-            "🚩 Build completed: [./{}]",
-            config
-                .dioxus_config
-                .application
-                .out_dir
-                .clone()
-                .unwrap_or_else(|| PathBuf::from("dist"))
-                .display()
-        );
     }
 
-    Ok(())
+    log::info!(
+        "🚩 Build completed: [./{}]",
+        config
+            .dioxus_config
+            .application
+            .out_dir
+            .clone()
+            .unwrap_or_else(|| PathBuf::from("dist"))
+            .display()
+    );
+
+    println!("build desktop done");
+
+    Ok(BuildResult {
+        warnings: warning_messages,
+        elapsed_time: (t_start - std::time::Instant::now()).as_millis(),
+    })
 }
 
 fn prettier_build(cmd: subprocess::Exec) -> anyhow::Result<Vec<Diagnostic>> {

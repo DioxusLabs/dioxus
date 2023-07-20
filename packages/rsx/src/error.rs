@@ -1,15 +1,18 @@
 use std::fmt::Display;
 
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 /// An error produced when interperting the rsx
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Error {
     ParseError(ParseError),
     RecompileRequiredError(RecompileReason),
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum RecompileReason {
     Variable(String),
     Expression(String),
@@ -18,14 +21,16 @@ pub enum RecompileReason {
     Attribute(String),
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct CodeLocation {
     pub line: u32,
     pub column: u32,
     pub file_path: &'static str,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ParseError {
     pub message: String,
     pub location: CodeLocation,

@@ -15,18 +15,22 @@
 mod errors;
 mod component;
 mod element;
+#[cfg(feature = "hot_reload")]
 pub mod hot_reload;
 mod ifmt;
 mod node;
 
-use std::{collections::HashMap, fmt::Debug, hash::Hash};
+use std::{fmt::Debug, hash::Hash};
 
 // Re-export the namespaces into each other
 pub use component::*;
+#[cfg(feature = "hot_reload")]
 use dioxus_core::{Template, TemplateAttribute, TemplateNode};
 pub use element::*;
+#[cfg(feature = "hot_reload")]
 pub use hot_reload::HotReloadingContext;
 pub use ifmt::*;
+#[cfg(feature = "hot_reload")]
 use internment::Intern;
 pub use node::*;
 
@@ -38,6 +42,7 @@ use syn::{
     Result, Token,
 };
 
+#[cfg(feature = "hot_reload")]
 // interns a object into a static object, resusing the value if it already exists
 fn intern<T: Eq + Hash + Send + Sync + ?Sized + 'static>(s: impl Into<Intern<T>>) -> &'static T {
     s.into().as_ref()
@@ -50,6 +55,7 @@ pub struct CallBody {
 }
 
 impl CallBody {
+    #[cfg(feature = "hot_reload")]
     /// This will try to create a new template from the current body and the previous body. This will return None if the rsx has some dynamic part that has changed.
     /// This function intentionally leaks memory to create a static template.
     /// Keeping the template static allows us to simplify the core of dioxus and leaking memory in dev mode is less of an issue.
@@ -59,8 +65,25 @@ impl CallBody {
         template: Option<CallBody>,
         location: &'static str,
     ) -> Option<Template<'static>> {
-        let mut renderer: TemplateRenderer = TemplateRenderer { roots: &self.roots };
+        let mut renderer: TemplateRenderer = TemplateRenderer {
+            roots: &self.roots,
+            location: None,
+        };
         renderer.update_template::<Ctx>(template, location)
+    }
+
+    /// Render the template with a manually set file location. This should be used when multiple rsx! calls are used in the same macro
+    pub fn render_with_location(&self, location: String) -> TokenStream2 {
+        let body = TemplateRenderer {
+            roots: &self.roots,
+            location: Some(location),
+        };
+
+        quote! {
+            ::dioxus::core::LazyNodes::new( move | __cx: &::dioxus::core::ScopeState| -> ::dioxus::core::VNode {
+                #body
+            })
+        }
     }
 }
 
@@ -85,7 +108,10 @@ impl Parse for CallBody {
 /// Serialize the same way, regardless of flavor
 impl ToTokens for CallBody {
     fn to_tokens(&self, out_tokens: &mut TokenStream2) {
-        let body = TemplateRenderer { roots: &self.roots };
+        let body = TemplateRenderer {
+            roots: &self.roots,
+            location: None,
+        };
 
         out_tokens.append_all(quote! {
             ::dioxus::core::LazyNodes::new( move | __cx: &::dioxus::core::ScopeState| -> ::dioxus::core::VNode {
@@ -102,6 +128,7 @@ impl ToTokens for RenderCallBody {
     fn to_tokens(&self, out_tokens: &mut TokenStream2) {
         let body: TemplateRenderer = TemplateRenderer {
             roots: &self.0.roots,
+            location: None,
         };
 
         out_tokens.append_all(quote! {
@@ -115,9 +142,11 @@ impl ToTokens for RenderCallBody {
 
 pub struct TemplateRenderer<'a> {
     pub roots: &'a [BodyNode],
+    pub location: Option<String>,
 }
 
 impl<'a> TemplateRenderer<'a> {
+    #[cfg(feature = "hot_reload")]
     fn update_template<Ctx: HotReloadingContext>(
         &mut self,
         previous_call: Option<CallBody>,
@@ -185,6 +214,21 @@ impl<'a> ToTokens for TemplateRenderer<'a> {
             out
         });
 
+        let name = match self.location {
+            Some(ref loc) => quote! { #loc },
+            None => quote! {
+                concat!(
+                    file!(),
+                    ":",
+                    line!(),
+                    ":",
+                    column!(),
+                    ":",
+                    #root_col
+                )
+            },
+        };
+
         // Render and release the mutable borrow on context
         let roots = quote! { #( #root_printer ),* };
         let node_printer = &context.dynamic_nodes;
@@ -194,15 +238,7 @@ impl<'a> ToTokens for TemplateRenderer<'a> {
 
         out_tokens.append_all(quote! {
             static TEMPLATE: ::dioxus::core::Template = ::dioxus::core::Template {
-                name: concat!(
-                    file!(),
-                    ":",
-                    line!(),
-                    ":",
-                    column!(),
-                    ":",
-                    #root_col
-                ),
+                name: #name,
                 roots: &[ #roots ],
                 node_paths: &[ #(#node_paths),* ],
                 attr_paths: &[ #(#attr_paths),* ],
@@ -219,14 +255,16 @@ impl<'a> ToTokens for TemplateRenderer<'a> {
     }
 }
 
+#[cfg(feature = "hot_reload")]
 #[derive(Default, Debug)]
 struct DynamicMapping {
-    attribute_to_idx: HashMap<ElementAttr, Vec<usize>>,
+    attribute_to_idx: std::collections::HashMap<ElementAttr, Vec<usize>>,
     last_attribute_idx: usize,
-    node_to_idx: HashMap<BodyNode, Vec<usize>>,
+    node_to_idx: std::collections::HashMap<BodyNode, Vec<usize>>,
     last_element_idx: usize,
 }
 
+#[cfg(feature = "hot_reload")]
 impl DynamicMapping {
     fn from(nodes: Vec<BodyNode>) -> Self {
         let mut new = Self::default();
@@ -320,6 +358,7 @@ pub struct DynamicContext<'a> {
 }
 
 impl<'a> DynamicContext<'a> {
+    #[cfg(feature = "hot_reload")]
     fn update_node<Ctx: HotReloadingContext>(
         &mut self,
         root: &'a BodyNode,
@@ -529,6 +568,7 @@ impl<'a> DynamicContext<'a> {
     }
 }
 
+#[cfg(feature = "hot_reload")]
 #[test]
 fn create_template() {
     let input = quote! {
@@ -614,6 +654,7 @@ fn create_template() {
     )
 }
 
+#[cfg(feature = "hot_reload")]
 #[test]
 fn diff_template() {
     use dioxus_core::Scope;

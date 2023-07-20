@@ -1,61 +1,169 @@
-use crate::{cfg::RouterCfg, RouterContext, RouterService};
 use dioxus::prelude::*;
+use std::{cell::RefCell, str::FromStr};
 
-/// The props for the [`Router`](fn.Router.html) component.
-#[derive(Props)]
-pub struct RouterProps<'a> {
-    /// The routes and elements that should be rendered when the path matches.
-    ///
-    /// If elements are not contained within Routes, the will be rendered
-    /// regardless of the path.
-    pub children: Element<'a>,
+use crate::{
+    prelude::{GenericOutlet, GenericRouterContext},
+    routable::Routable,
+    router_cfg::RouterConfig,
+};
 
-    /// The URL to point at
-    ///
-    /// This will be used to trim any latent segments from the URL when your app is
-    /// not deployed to the root of the domain.
-    pub base_url: Option<&'a str>,
-
-    /// Hook into the router when the route is changed.
-    ///
-    /// This lets you easily implement redirects
-    #[props(default)]
-    pub onchange: EventHandler<'a, RouterContext>,
-
-    /// Set the active class of all Link components contained in this router.
-    ///
-    /// This is useful if you don't want to repeat the same `active_class` prop value in every Link.
-    /// By default set to `"active"`.
-    pub active_class: Option<&'a str>,
-
-    /// Set the initial url.
-    // This is Option<Option<String>> because we want to be able to either omit the prop or pass in Option<String>
-    #[props(into)]
-    pub initial_url: Option<Option<String>>,
+/// The config for [`GenericRouter`].
+pub struct RouterConfigFactory<R: Routable> {
+    #[allow(clippy::type_complexity)]
+    config: RefCell<Option<Box<dyn FnOnce() -> RouterConfig<R>>>>,
 }
 
-/// A component that conditionally renders children based on the current location of the app.
-///
-/// Uses BrowserRouter in the browser and HashRouter everywhere else.
-///
-/// Will fallback to HashRouter is BrowserRouter is not available, or through configuration.
-#[allow(non_snake_case)]
-pub fn Router<'a>(cx: Scope<'a, RouterProps<'a>>) -> Element {
-    let svc = cx.use_hook(|| {
-        cx.provide_context(RouterService::new(
-            cx,
-            RouterCfg {
-                base_url: cx.props.base_url.map(|s| s.to_string()),
-                active_class: cx.props.active_class.map(|s| s.to_string()),
-                initial_url: cx.props.initial_url.clone().flatten(),
-            },
-        ))
+#[cfg(feature = "serde")]
+impl<R: Routable> Default for RouterConfigFactory<R>
+where
+    <R as FromStr>::Err: std::fmt::Display,
+    R: serde::Serialize + serde::de::DeserializeOwned,
+{
+    fn default() -> Self {
+        Self::from(RouterConfig::default)
+    }
+}
+
+#[cfg(not(feature = "serde"))]
+impl<R: Routable> Default for RouterConfigFactory<R>
+where
+    <R as FromStr>::Err: std::fmt::Display,
+{
+    fn default() -> Self {
+        Self::from(RouterConfig::default)
+    }
+}
+
+impl<R: Routable, F: FnOnce() -> RouterConfig<R> + 'static> From<F> for RouterConfigFactory<R> {
+    fn from(value: F) -> Self {
+        Self {
+            config: RefCell::new(Some(Box::new(value))),
+        }
+    }
+}
+
+#[cfg(feature = "serde")]
+/// The props for [`GenericRouter`].
+#[derive(Props)]
+pub struct GenericRouterProps<R: Routable>
+where
+    <R as FromStr>::Err: std::fmt::Display,
+    R: serde::Serialize + serde::de::DeserializeOwned,
+{
+    #[props(default, into)]
+    config: RouterConfigFactory<R>,
+}
+
+#[cfg(not(feature = "serde"))]
+/// The props for [`GenericRouter`].
+#[derive(Props)]
+pub struct GenericRouterProps<R: Routable>
+where
+    <R as FromStr>::Err: std::fmt::Display,
+{
+    #[props(default, into)]
+    config: RouterConfigFactory<R>,
+}
+
+#[cfg(not(feature = "serde"))]
+impl<R: Routable> Default for GenericRouterProps<R>
+where
+    <R as FromStr>::Err: std::fmt::Display,
+{
+    fn default() -> Self {
+        Self {
+            config: RouterConfigFactory::default(),
+        }
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<R: Routable> Default for GenericRouterProps<R>
+where
+    <R as FromStr>::Err: std::fmt::Display,
+    R: serde::Serialize + serde::de::DeserializeOwned,
+{
+    fn default() -> Self {
+        Self {
+            config: RouterConfigFactory::default(),
+        }
+    }
+}
+
+#[cfg(not(feature = "serde"))]
+impl<R: Routable> PartialEq for GenericRouterProps<R>
+where
+    <R as FromStr>::Err: std::fmt::Display,
+{
+    fn eq(&self, _: &Self) -> bool {
+        // prevent the router from re-rendering when the initial url or config changes
+        true
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<R: Routable> PartialEq for GenericRouterProps<R>
+where
+    <R as FromStr>::Err: std::fmt::Display,
+    R: serde::Serialize + serde::de::DeserializeOwned,
+{
+    fn eq(&self, _: &Self) -> bool {
+        // prevent the router from re-rendering when the initial url or config changes
+        true
+    }
+}
+
+#[cfg(not(feature = "serde"))]
+/// A component that renders the current route.
+pub fn GenericRouter<R: Routable + Clone>(cx: Scope<GenericRouterProps<R>>) -> Element
+where
+    <R as FromStr>::Err: std::fmt::Display,
+{
+    use crate::prelude::outlet::OutletContext;
+
+    use_context_provider(cx, || {
+        GenericRouterContext::new(
+            (cx.props
+                .config
+                .config
+                .take()
+                .expect("use_context_provider ran twice"))(),
+            cx.schedule_update_any(),
+        )
+    });
+    use_context_provider(cx, || OutletContext::<R> {
+        current_level: 0,
+        _marker: std::marker::PhantomData,
     });
 
-    // next time we run the rout_found will be filled
-    if svc.route_found.get().is_none() {
-        cx.props.onchange.call(svc.clone());
+    render! {
+        GenericOutlet::<R> {}
     }
+}
 
-    cx.render(rsx!(&cx.props.children))
+#[cfg(feature = "serde")]
+/// A component that renders the current route.
+pub fn GenericRouter<R: Routable + Clone>(cx: Scope<GenericRouterProps<R>>) -> Element
+where
+    <R as FromStr>::Err: std::fmt::Display,
+    R: serde::Serialize + serde::de::DeserializeOwned,
+{
+    use_context_provider(cx, || {
+        GenericRouterContext::new(
+            (cx.props
+                .config
+                .config
+                .take()
+                .expect("use_context_provider ran twice"))(),
+            cx.schedule_update_any(),
+        )
+    });
+    use_context_provider(cx, || OutletContext::<R> {
+        current_level: 0,
+        _marker: std::marker::PhantomData,
+    });
+
+    render! {
+        GenericOutlet::<R> {}
+    }
 }
