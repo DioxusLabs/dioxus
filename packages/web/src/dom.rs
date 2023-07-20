@@ -75,10 +75,8 @@ impl WebsysDom {
                         if !prevent_event {
                             event.prevent_default();
                         }
-                    } else {
-                        if prevent_event {
-                            event.prevent_default();
-                        }
+                    } else if prevent_event {
+                        event.prevent_default();
                     }
 
                     let data = virtual_event_from_websys_event(event.clone(), target);
