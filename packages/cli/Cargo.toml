@@ -5,12 +5,12 @@ authors = ["Jonathan Kelley"]
 edition = "2021"
 description = "CLI tool for developing, testing, and publishing Dioxus apps"
 repository = "https://github.com/DioxusLabs/dioxus/"
-license = "MIT/Apache-2.0"
+license = "MIT OR Apache-2.0"
 
 [dependencies]
 # cli core
 clap = { version = "4.2", features = ["derive"] }
-thiserror = "1.0.30"
+thiserror = { workspace = true }
 wasm-bindgen-cli-support = "0.2"
 colored = "2.0.0"
 
@@ -57,7 +57,7 @@ flate2 = "1.0.22"
 tar = "0.4.38"
 zip = "0.6.2"
 tower = "0.4.12"
-syn = { version = "1.0", features = ["full", "extra-traits"] }
+syn = { version = "2.0", features = ["full", "extra-traits"] }
 proc-macro2 = { version = "1.0", features = ["span-locations"] }
 lazy_static = "1.4.0"
 

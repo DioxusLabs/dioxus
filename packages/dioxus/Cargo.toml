@@ -33,7 +33,7 @@ futures-util = { workspace = true }
 log = { workspace = true }
 rand = { version = "0.8.4", features = ["small_rng"] }
 criterion = "0.3.5"
-thiserror = "1.0.30"
+thiserror = { workspace = true }
 env_logger = "0.10.0"
 tokio = { workspace = true, features = ["full"] }
 # dioxus-edit-stream = { workspace = true }

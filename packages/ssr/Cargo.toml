@@ -4,7 +4,7 @@ version = "0.3.0"
 authors = ["Jonathan Kelley"]
 edition = "2018"
 description = "Dioxus render-to-string"
-license = "MIT/Apache-2.0"
+license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com/docs/0.3/guide/en/getting_started/ssr.html"
 keywords = ["dom", "ui", "gui", "react", "ssr"]
@@ -21,6 +21,8 @@ tokio = { version = "1.28", features = ["full"] }
 
 [dev-dependencies]
 dioxus = { workspace = true }
+thiserror = { workspace = true }
+log = { workspace = true }
 fern = { version = "0.6.0", features = ["colored"] }
 anyhow = "1.0"
 argh = "0.1.4"
