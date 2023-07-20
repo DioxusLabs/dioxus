@@ -5,6 +5,7 @@ use std::{sync::atomic::AtomicUsize, time::Duration};
 
 static POLL_COUNT: AtomicUsize = AtomicUsize::new(0);
 
+#[cfg(not(miri))]
 #[tokio::test]
 async fn it_works() {
     let mut dom = VirtualDom::new(app);
