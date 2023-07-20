@@ -72,7 +72,7 @@ pub fn fmt_file(contents: &str) -> Vec<FormattedBlock> {
 
         let rsx_start = macro_path.span().start();
 
-        writer.out.indent = leading_whitespaces(&writer.src[rsx_start.line - 1]) / 4;
+        writer.out.indent = leading_whitespaces(writer.src[rsx_start.line - 1]) / 4;
 
         write_body(&mut writer, &body);
 

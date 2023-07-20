@@ -29,7 +29,7 @@ impl Writer<'_> {
         let first_line = &self.src[start.line - 1];
         write!(self.out, "{}", &first_line[start.column - 1..].trim_start())?;
 
-        let prev_block_indent_level = crate::leading_whitespaces(&first_line) / 4;
+        let prev_block_indent_level = crate::leading_whitespaces(first_line) / 4;
 
         for (id, line) in self.src[start.line..end.line].iter().enumerate() {
             writeln!(self.out)?;

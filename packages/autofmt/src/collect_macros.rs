@@ -7,7 +7,7 @@ use syn::{visit::Visit, File, Macro};
 
 type CollectedMacro<'a> = &'a Macro;
 
-pub fn collect_from_file<'a, 'b>(file: &'a File, macros: &'b mut Vec<CollectedMacro<'a>>) {
+pub fn collect_from_file<'a>(file: &'a File, macros: &mut Vec<CollectedMacro<'a>>) {
     MacroCollector::visit_file(&mut MacroCollector { macros }, file);
 }
 
