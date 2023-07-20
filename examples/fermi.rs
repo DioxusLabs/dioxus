@@ -7,11 +7,11 @@ fn main() {
     dioxus_desktop::launch(app)
 }
 
-static NAME: Atom<String> = |_| "world".to_string();
+static NAME: Atom<String> = Atom(|_| "world".to_string());
 
 fn app(cx: Scope) -> Element {
     use_init_atom_root(cx);
-    let name = use_read(cx, NAME);
+    let name = use_read(cx, &NAME);
 
     cx.render(rsx! {
         div { "hello {name}!" }
@@ -21,7 +21,7 @@ fn app(cx: Scope) -> Element {
 }
 
 fn Child(cx: Scope) -> Element {
-    let set_name = use_set(cx, NAME);
+    let set_name = use_set(cx, &NAME);
 
     cx.render(rsx! {
         button {
@@ -31,10 +31,10 @@ fn Child(cx: Scope) -> Element {
     })
 }
 
-static NAMES: AtomRef<Vec<String>> = |_| vec!["world".to_string()];
+static NAMES: AtomRef<Vec<String>> = AtomRef(|_| vec!["world".to_string()]);
 
 fn ChildWithRef(cx: Scope) -> Element {
-    let names = use_atom_ref(cx, NAMES);
+    let names = use_atom_ref(cx, &NAMES);
 
     cx.render(rsx! {
         div {

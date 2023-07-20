@@ -39,6 +39,7 @@ indicatif = "0.17.0-rc.11"
 subprocess = "0.2.9"
 
 axum = { version = "0.5.1", features = ["ws", "headers"] }
+axum-server = { version = "0.5.1", features = ["tls-rustls"] }
 tower-http = { version = "0.2.2", features = ["full"] }
 headers = "0.3.7"
 
@@ -84,13 +85,6 @@ dioxus-core = { workspace = true, features = ["serialize"] }
 [features]
 default = []
 plugin = ["mlua"]
-
-# install path dx and dioxus as the same command
-# so, they're not really aliases
-# eventually dx will defer to the right version of dioxus
-[[bin]]
-path = "src/main.rs"
-name = "dioxus"
 
 [[bin]]
 path = "src/main.rs"

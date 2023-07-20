@@ -1,5 +1,3 @@
-use std::borrow::Borrow;
-
 use dioxus_core_macro::*;
 
 #[test]
@@ -20,8 +18,8 @@ fn formatting_compiles() {
 
     // function calls in formatings work
     assert_eq!(
-        format_args_f!("{x.borrow():?}").to_string(),
-        format!("{:?}", x.borrow())
+        format_args_f!("{blah(&x):?}").to_string(),
+        format!("{:?}", blah(&x))
     );
 
     // allows duplicate format args
@@ -29,4 +27,8 @@ fn formatting_compiles() {
         format_args_f!("{x:?} {x:?}").to_string(),
         format!("{x:?} {x:?}")
     );
+}
+
+fn blah(hi: &(i32, i32)) -> String {
+    format_args_f!("{hi.0} {hi.1}").to_string()
 }

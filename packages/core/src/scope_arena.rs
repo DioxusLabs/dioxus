@@ -2,17 +2,9 @@ use crate::{
     any_props::AnyProps,
     bump_frame::BumpFrame,
     innerlude::DirtyScope,
-    innerlude::{SuspenseHandle, SuspenseId, SuspenseLeaf},
     nodes::RenderReturn,
     scopes::{ScopeId, ScopeState},
     virtual_dom::VirtualDom,
-};
-use futures_util::FutureExt;
-use std::{
-    mem,
-    pin::Pin,
-    sync::Arc,
-    task::{Context, Poll},
 };
 
 impl VirtualDom {
@@ -33,10 +25,10 @@ impl VirtualDom {
             name,
             props: Some(props),
             tasks: self.scheduler.clone(),
-            placeholder: Default::default(),
             node_arena_1: BumpFrame::new(0),
             node_arena_2: BumpFrame::new(0),
             spawned_tasks: Default::default(),
+            suspended: Default::default(),
             render_cnt: Default::default(),
             hooks: Default::default(),
             hook_idx: Default::default(),
@@ -58,72 +50,19 @@ impl VirtualDom {
         // Remove all the outdated listeners
         self.ensure_drop_safety(scope_id);
 
-        let mut new_nodes = unsafe {
+        let new_nodes = unsafe {
             self.scopes[scope_id].previous_frame().bump_mut().reset();
 
             let scope = &self.scopes[scope_id];
+            scope.suspended.set(false);
 
             scope.hook_idx.set(0);
 
             // safety: due to how we traverse the tree, we know that the scope is not currently aliased
             let props: &dyn AnyProps = scope.props.as_ref().unwrap().as_ref();
-            let props: &dyn AnyProps = mem::transmute(props);
+            let props: &dyn AnyProps = std::mem::transmute(props);
 
             props.render(scope).extend_lifetime()
-        };
-
-        // immediately resolve futures that can be resolved
-        if let RenderReturn::Pending(task) = &mut new_nodes {
-            let mut leaves = self.scheduler.leaves.borrow_mut();
-
-            let entry = leaves.vacant_entry();
-            let suspense_id = SuspenseId(entry.key());
-
-            let leaf = SuspenseLeaf {
-                scope_id,
-                task: task.as_mut(),
-                notified: Default::default(),
-                waker: futures_util::task::waker(Arc::new(SuspenseHandle {
-                    id: suspense_id,
-                    tx: self.scheduler.sender.clone(),
-                })),
-            };
-
-            let mut cx = Context::from_waker(&leaf.waker);
-
-            // safety: the task is already pinned in the bump arena
-            let mut pinned = unsafe { Pin::new_unchecked(task.as_mut()) };
-
-            // Keep polling until either we get a value or the future is not ready
-            loop {
-                match pinned.poll_unpin(&mut cx) {
-                    // If nodes are produced, then set it and we can break
-                    Poll::Ready(nodes) => {
-                        new_nodes = match nodes {
-                            Some(nodes) => RenderReturn::Ready(nodes),
-                            None => RenderReturn::default(),
-                        };
-
-                        break;
-                    }
-
-                    // If no nodes are produced but the future woke up immediately, then try polling it again
-                    // This circumvents things like yield_now, but is important is important when rendering
-                    // components that are just a stream of immediately ready futures
-                    _ if leaf.notified.get() => {
-                        leaf.notified.set(false);
-                        continue;
-                    }
-
-                    // If no nodes are produced, then we need to wait for the future to be woken up
-                    // Insert the future into fiber leaves and break
-                    _ => {
-                        entry.insert(leaf);
-                        self.collected_leaves.push(suspense_id);
-                        break;
-                    }
-                };
-            }
         };
 
         let scope = &self.scopes[scope_id];
@@ -143,6 +82,14 @@ impl VirtualDom {
             height: scope.height,
             id: scope.id,
         });
+
+        if scope.suspended.get() {
+            if matches!(allocated, RenderReturn::Aborted(_)) {
+                self.suspended_scopes.insert(scope.id);
+            }
+        } else if !self.suspended_scopes.is_empty() {
+            _ = self.suspended_scopes.remove(&scope.id);
+        }
 
         // rebind the lifetime now that its stored internally
         unsafe { allocated.extend_lifetime_ref() }

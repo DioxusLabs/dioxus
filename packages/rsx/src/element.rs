@@ -20,7 +20,6 @@ pub struct Element {
     pub key: Option<IfmtInput>,
     pub attributes: Vec<ElementAttrNamed>,
     pub children: Vec<BodyNode>,
-    pub _is_static: bool,
     pub brace: syn::token::Brace,
 }
 
@@ -161,7 +160,6 @@ impl Parse for Element {
             attributes,
             children,
             brace,
-            _is_static: false,
         })
     }
 }

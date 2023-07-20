@@ -132,7 +132,10 @@ impl ToTokens for BodyNode {
                     pat, expr, body, ..
                 } = exp;
 
-                let renderer: TemplateRenderer = TemplateRenderer { roots: body };
+                let renderer: TemplateRenderer = TemplateRenderer {
+                    roots: body,
+                    location: None,
+                };
 
                 tokens.append_all(quote! {
                      __cx.make_node(

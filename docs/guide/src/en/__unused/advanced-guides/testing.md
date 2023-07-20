@@ -21,7 +21,7 @@ fn runs_in_browser() {
 Then, when you run
 
 ```console
-dioxus test --chrome
+dx test --chrome
 ```
 
 Dioxus will build and test your code using the Chrome browser as a harness.

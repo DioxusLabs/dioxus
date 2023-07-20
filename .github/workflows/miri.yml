@@ -6,6 +6,13 @@ on:
     branches:
       - 'auto'
       - 'try'
+    paths:
+      - packages/**
+      - examples/**
+      - src/**
+      - .github/**
+      - lib.rs
+      - Cargo.toml
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
     branches:
@@ -31,7 +38,9 @@ env:
   # - tokio-stream/Cargo.toml
   # rust_min: 1.49.0
 
-
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:

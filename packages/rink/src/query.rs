@@ -1,13 +1,14 @@
 use std::sync::{Arc, Mutex, MutexGuard, RwLock, RwLockReadGuard};
 
 use dioxus_native_core::prelude::*;
+use shipyard::Unique;
 use taffy::{
     geometry::Point,
     prelude::{Layout, Size},
     Taffy,
 };
 
-use crate::{layout::TaffyLayout, layout_to_screen_space};
+use crate::{get_abs_layout, layout_to_screen_space};
 
 /// Allows querying the layout of nodes after rendering. It will only provide a correct value after a node is rendered.
 /// Provided as a root context for all tui applictions.
@@ -40,7 +41,7 @@ use crate::{layout::TaffyLayout, layout_to_screen_space};
 ///     })
 /// }
 /// ```
-#[derive(Clone)]
+#[derive(Clone, Unique)]
 pub struct Query {
     pub(crate) rdom: Arc<RwLock<RealDom>>,
     pub(crate) stretch: Arc<Mutex<Taffy>>,
@@ -69,7 +70,7 @@ pub struct ElementRef<'a> {
 }
 
 impl<'a> ElementRef<'a> {
-    fn new(
+    pub(crate) fn new(
         inner: RwLockReadGuard<'a, RealDom>,
         stretch: MutexGuard<'a, Taffy>,
         id: NodeId,
@@ -89,17 +90,20 @@ impl<'a> ElementRef<'a> {
     }
 
     pub fn layout(&self) -> Option<Layout> {
-        let layout = self
-            .stretch
-            .layout(self.inner.get(self.id)?.get::<TaffyLayout>()?.node.ok()?)
-            .ok();
-        layout.map(|layout| Layout {
-            order: layout.order,
-            size: layout.size.map(layout_to_screen_space),
-            location: Point {
-                x: layout_to_screen_space(layout.location.x),
-                y: layout_to_screen_space(layout.location.y),
-            },
-        })
+        get_layout(self.inner.get(self.id).unwrap(), &self.stretch)
     }
+}
+
+pub(crate) fn get_layout(node: NodeRef, stretch: &Taffy) -> Option<Layout> {
+    let layout = get_abs_layout(node, stretch);
+    let pos = layout.location;
+
+    Some(Layout {
+        order: layout.order,
+        size: layout.size.map(layout_to_screen_space),
+        location: Point {
+            x: layout_to_screen_space(pos.x).round(),
+            y: layout_to_screen_space(pos.y).round(),
+        },
+    })
 }
