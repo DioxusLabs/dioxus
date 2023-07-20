@@ -230,23 +230,32 @@ mod js {
         "{node = nodes[$id$]; SetAttributeInner(node, $field$, $value$, $ns$);}"
     }
     fn remove_attribute(id: u32, field: &str<u8, attr>, ns: &str<u8, ns_cache>) {
-        r#"{name = $field$;
-        node = nodes[$id$];
-        if (ns == "style") {
-            node.style.removeProperty(name);
-        } else if (ns !== null && ns !== undefined && ns !== "") {
-            node.removeAttributeNS(ns, name);
-        } else if (name === "value") {
-            node.value = "";
-        } else if (name === "checked") {
-            node.checked = false;
-        } else if (name === "selected") {
-            node.selected = false;
-        } else if (name === "dangerous_inner_html") {
-            node.innerHTML = "";
-        } else {
-            node.removeAttribute(name);
-        }}"#
+        r#"{
+            node = nodes[$id$];
+            if (!ns) {
+                switch (field) {
+                    case "value":
+                        node.value = "";
+                        break;
+                    case "checked":
+                        node.checked = false;
+                        break;
+                    case "selected":
+                        node.selected = false;
+                        break;
+                    case "dangerous_inner_html":
+                        node.innerHTML = "";
+                        break;
+                    default:
+                        node.removeAttribute(field);
+                        break;
+                }
+            } else if (ns == "style") {
+                node.style.removeProperty(name);
+            } else {
+                node.removeAttributeNS(ns, field);
+            }
+        }"#
     }
     fn assign_id(ptr: u32, len: u8, id: u32) {
         "{nodes[$id$] = LoadChild($ptr$, $len$);}"
