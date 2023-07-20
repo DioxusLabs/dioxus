@@ -45,7 +45,17 @@ impl PartialOrd for FocusLevel {
 
 impl Ord for FocusLevel {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.partial_cmp(other).unwrap()
+        match (self, other) {
+            (FocusLevel::Unfocusable, FocusLevel::Unfocusable) => std::cmp::Ordering::Equal,
+            (FocusLevel::Unfocusable, FocusLevel::Focusable) => std::cmp::Ordering::Less,
+            (FocusLevel::Unfocusable, FocusLevel::Ordered(_)) => std::cmp::Ordering::Less,
+            (FocusLevel::Focusable, FocusLevel::Unfocusable) => std::cmp::Ordering::Greater,
+            (FocusLevel::Focusable, FocusLevel::Focusable) => std::cmp::Ordering::Equal,
+            (FocusLevel::Focusable, FocusLevel::Ordered(_)) => std::cmp::Ordering::Greater,
+            (FocusLevel::Ordered(_), FocusLevel::Unfocusable) => std::cmp::Ordering::Greater,
+            (FocusLevel::Ordered(_), FocusLevel::Focusable) => std::cmp::Ordering::Less,
+            (FocusLevel::Ordered(a), FocusLevel::Ordered(b)) => a.cmp(b),
+        }
     }
 }
 
