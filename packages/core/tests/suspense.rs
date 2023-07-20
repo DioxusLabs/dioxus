@@ -1,17 +1,22 @@
 use dioxus::prelude::*;
 
-#[tokio::test]
-async fn it_works() {
+#[test]
+fn it_works() {
     // wait just a moment, not enough time for the boundary to resolve
 
-    let mut dom = VirtualDom::new(app);
-    _ = dom.rebuild();
-    dom.wait_for_suspense().await;
-    let out = dioxus_ssr::pre_render(&dom);
+    tokio::runtime::Builder::new_current_thread()
+        .build()
+        .unwrap()
+        .block_on(async {
+            let mut dom = VirtualDom::new(app);
+            _ = dom.rebuild();
+            dom.wait_for_suspense().await;
+            let out = dioxus_ssr::pre_render(&dom);
 
-    assert_eq!(out, "<div>Waiting for... child</div>");
+            assert_eq!(out, "<div>Waiting for... child</div>");
 
-    dbg!(out);
+            dbg!(out);
+        });
 }
 
 fn app(cx: Scope) -> Element {

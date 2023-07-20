@@ -1,3 +1,5 @@
+#![cfg(not(miri))]
+
 use dioxus::prelude::Props;
 use dioxus_core::*;
 use std::{cell::Cell, collections::HashSet};
@@ -314,6 +316,7 @@ fn create_random_element(cx: Scope<DepthProps>) -> Element {
 }
 
 // test for panics when creating random nodes and templates
+#[cfg(not(miri))]
 #[test]
 fn create() {
     for _ in 0..1000 {
@@ -325,6 +328,7 @@ fn create() {
 
 // test for panics when diffing random nodes
 // This test will change the template every render which is not very realistic, but it helps stress the system
+#[cfg(not(miri))]
 #[test]
 fn diff() {
     for _ in 0..100000 {

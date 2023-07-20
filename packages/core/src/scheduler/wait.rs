@@ -20,7 +20,7 @@ impl VirtualDom {
         // If the task completes...
         if task.task.borrow_mut().as_mut().poll(&mut cx).is_ready() {
             // Remove it from the scope so we dont try to double drop it when the scope dropes
-            let scope = &self.scopes[task.scope];
+            let scope = &self.scopes[task.scope.0];
             scope.spawned_tasks.borrow_mut().remove(&id);
 
             // Remove it from the scheduler
