@@ -1,7 +1,7 @@
 pub const DIOXUS_CLI_VERSION: &str = "0.1.5";
 
-pub mod pipeline;
 pub mod builder;
+pub mod pipeline;
 pub mod server;
 pub mod tools;
 

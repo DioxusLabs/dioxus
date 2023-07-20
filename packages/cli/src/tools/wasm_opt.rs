@@ -1,4 +1,4 @@
-use super::{ProgressSpinner, ToolStorage};
+use super::ToolStorage;
 use crate::{tools::TempStorage, Error, Result};
 use flate2::read::GzDecoder;
 use std::{fs, path::PathBuf};
@@ -50,7 +50,8 @@ impl WasmOpt {
         let cmd = subprocess::Exec::cmd(self.exec_path.clone())
             .arg(input)
             .arg("--output")
-            .arg(output).arg("-Oz");
+            .arg(output)
+            .arg("-Oz");
 
         _ = cmd.join().map_err(|e| Error::BuildFailed(e.to_string()))?;
 
@@ -59,8 +60,6 @@ impl WasmOpt {
 
     /// Install the latest version of wasm-opt CLI.
     fn install() -> Result<PathBuf> {
-        let _pb = ProgressSpinner::new("Installing wasm-opt...");
-
         let res = reqwest::blocking::get(INSTALL_URL)
             .map_err(|_| Error::CustomError("Failed to install wasm-opt".to_string()))?;
 

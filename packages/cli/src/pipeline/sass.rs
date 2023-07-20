@@ -1,6 +1,6 @@
 use std::fs;
 
-use super::{PipelineConfig, PipelineStep};
+use super::{PipelineContext, PipelineStep};
 use crate::{
     pipeline::util::{File, FileType},
     tools,
@@ -18,20 +18,20 @@ impl SassBuild {
 }
 
 impl PipelineStep for SassBuild {
-    fn run(&mut self, config: &mut PipelineConfig) -> crate::Result<()> {
-        log::info!("Building SASS/SCSS");
-
+    fn run(&mut self, config: &mut PipelineContext) -> crate::Result<()> {
         // Get sass
+        config.set_message("Installing dart-sass");
         let sass = tools::Sass::get()?.source_map(false);
-
+        config.set_message("Building sass/scss");
+        
         // Get sass staging
         let staging = config.staging_path().join(STAGING_OUT);
         fs::create_dir(&staging)?;
 
         let mut new_files = Vec::new();
-        for file in config.files.iter() {
+        for file in config.raw_files.iter() {
             // Check if file isn't sass. If true, skip.
-            if file.file_type != FileType::Sass && file.file_type != FileType::Scss {
+            if file.file_type != FileType::SassType {
                 continue;
             }
 
@@ -46,16 +46,13 @@ impl PipelineStep for SassBuild {
                 file_type: FileType::Css,
             });
         }
-        
-        config
-            .files
-            .retain(|i| i.file_type != FileType::Sass && i.file_type != FileType::Scss);
-        config.files.append(&mut new_files);
+
+        config.processed_files.append(&mut new_files);
 
         Ok(())
     }
 
-    fn pipeline_finished(&mut self, _config: &mut PipelineConfig) -> crate::Result<()> {
+    fn pipeline_finished(&mut self, _config: &mut PipelineContext) -> crate::Result<()> {
         Ok(())
     }
 

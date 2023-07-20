@@ -1,6 +1,5 @@
 use crate::{Error, Result};
 use std::{ffi::OsStr, fs, path::PathBuf};
-use indicatif::{ProgressBar, ProgressStyle};
 
 mod bindgen;
 pub use bindgen::Bindgen;
@@ -10,7 +9,6 @@ pub use sass::Sass;
 
 mod wasm_opt;
 pub use wasm_opt::WasmOpt;
-
 
 const APP_DATA_NAME: &str = "dioxus";
 const TEMP_NAME: &str = "temp";
@@ -210,33 +208,6 @@ impl TempStorage {
 }
 
 impl Drop for TempStorage {
-    fn drop(&mut self) {
-        self.done();
-    }
-}
-
-/// A progress 'spinner'
-pub struct ProgressSpinner(ProgressBar);
-
-impl ProgressSpinner {
-    pub fn new(message: &str) -> Self {
-        let pb = ProgressBar::new_spinner();
-        pb.set_message(message.to_string());
-        pb.set_style(
-            ProgressStyle::default_spinner()
-                .tick_strings(&["[.   ]", "[ .  ]", "[  . ]", "[   .]", "[  . ]", "[ .  ]"]),
-        );
-        pb.enable_steady_tick(std::time::Duration::from_millis(50));
-        Self(pb)
-    }
-
-    pub fn done(&self) {
-        self.0.finish_and_clear();
-        log::info!("{}", self.0.message());
-    }
-}
-
-impl Drop for ProgressSpinner {
     fn drop(&mut self) {
         self.done();
     }

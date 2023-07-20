@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use super::{PipelineConfig, PipelineStep};
+use super::{PipelineContext, PipelineStep};
 
 const DIST_PATH: &str = "./dist";
 
@@ -14,13 +14,9 @@ impl WebOut {
 }
 
 impl PipelineStep for WebOut {
-    fn run(&mut self, _config: &mut PipelineConfig) -> crate::Result<()> {
-        Ok(())
-    }
-
-    fn pipeline_finished(&mut self, config: &mut PipelineConfig) -> crate::Result<()> {
-        log::info!("Configuring for web output");
-
+    fn run(&mut self, config: &mut PipelineContext) -> crate::Result<()> {
+        config.set_message("Outputting web files");
+        
         // Create dist folder
         let dist_path = PathBuf::from(DIST_PATH);
         if dist_path.exists() {
@@ -31,6 +27,10 @@ impl PipelineStep for WebOut {
         // Move staging to dist
         config.copy_staging_to_dir(dist_path)?;
 
+        Ok(())
+    }
+
+    fn pipeline_finished(&mut self, _config: &mut PipelineContext) -> crate::Result<()> {
         Ok(())
     }
 

@@ -1,8 +1,8 @@
-use super::{PipelineConfig, PipelineStep};
+use super::{PipelineContext, PipelineStep};
 
 const INDEX_FILE: &str = "./index.html";
 
-/// Builds an index.html file 
+/// Builds an index.html file
 pub struct IndexFile {}
 
 impl IndexFile {
@@ -12,15 +12,11 @@ impl IndexFile {
 }
 
 impl PipelineStep for IndexFile {
-    fn run(&mut self, config: &mut PipelineConfig) -> crate::Result<()> {
-        log::info!("Building `index.html` file");
-
-        
-
+    fn run(&mut self, config: &mut PipelineContext) -> crate::Result<()> {
         Ok(())
     }
-    
-    fn pipeline_finished(&mut self, _config: &mut PipelineConfig) -> crate::Result<()> {
+
+    fn pipeline_finished(&mut self, _config: &mut PipelineContext) -> crate::Result<()> {
         Ok(())
     }
 

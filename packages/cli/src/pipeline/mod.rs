@@ -1,5 +1,5 @@
 use self::util::File;
-use crate::{Error, Result};
+use crate::{Error, ProgressSpinner, Result};
 use fs_extra::{dir::CopyOptions as DirCopyOptions, file::CopyOptions as FileCopyOptions};
 use std::path::PathBuf;
 
@@ -13,13 +13,13 @@ pub mod web_out;
 
 /// Represents a pipeline with it's own config and steps.
 pub struct Pipeline {
-    config: PipelineConfig,
+    config: PipelineContext,
     steps: Vec<Box<dyn PipelineStep>>,
 }
 
 impl Pipeline {
     /// Build a new pipeline.
-    pub fn new(config: PipelineConfig) -> Self {
+    pub fn new(config: PipelineContext) -> Self {
         Self {
             config,
             steps: Vec::new(),
@@ -43,11 +43,14 @@ impl Pipeline {
 
         // Collect src input files
         let mut files = util::from_dir(PathBuf::from("./src"))?;
-        self.config.files.append(&mut files);
+        self.config.raw_files.append(&mut files);
 
         // Sort steps by priority
         self.steps
             .sort_unstable_by(|a, b| a.priority().cmp(&b.priority()));
+
+        let pb = ProgressSpinner::new("Starting pipeline");
+        self.config.progress_spinner = Some(pb.clone());
 
         // In the future we could add multithreaded support
         for step in self.steps.iter_mut() {
@@ -62,34 +65,60 @@ impl Pipeline {
         // Delete staging
         self.config.delete_staging()?;
 
-        // End benchmark
+        // Final messages
+        pb.done_and_clear();
+        for msg in self.config.output_messages.iter() {
+            log::info!("{}", msg);
+        }
 
+        // End benchmark
         let elapsed = time_started.elapsed();
         let seconds = elapsed.as_secs_f32();
         log::info!("Pipeline finished successfully in {:.2}s", seconds);
+
         Ok(())
     }
 }
 
-/// Configures the pipeline with the information it needs to complete.
-pub struct PipelineConfig {
+/// Acts as the single source of information for all pipeline steps.
+pub struct PipelineContext {
     /// Information related to the pipeline's target crate.
     crate_info: CrateInfo,
     /// Information related to how the pipeline should build the target crate.
     build_config: BuildConfig,
-    /// Represents the files being processed.
-    files: Vec<File>,
+    /// Represents raw source files.
+    raw_files: Vec<File>,
+    /// Represents processed files.
+    processed_files: Vec<File>,
+    /// Represents a copy of the pipeline's progress spinner.
+    progress_spinner: Option<ProgressSpinner>,
+    /// A list of messages to emit when the pipeline finishes
+    output_messages: Vec<String>,
 }
 
-impl PipelineConfig {
+impl PipelineContext {
     const STAGING_PATH: &str = "./staging";
 
-    /// Create a new PipelineConfig
+    /// Create a new PipelineContext
     pub fn new(crate_info: CrateInfo, build_config: BuildConfig) -> Self {
         Self {
             crate_info,
             build_config,
-            files: Vec::new(),
+            raw_files: Vec::new(),
+            processed_files: Vec::new(),
+            progress_spinner: None,
+            output_messages: Vec::new(),
+        }
+    }
+
+    pub fn add_output_message<S: ToString>(&mut self, message: S) {
+        let message = message.to_string();
+        self.output_messages.push(message);
+    }
+
+    pub fn set_message<S: ToString>(&self, message: S) {
+        if let Some(pb) = &self.progress_spinner {
+            pb.set_message(message);
         }
     }
 
@@ -252,9 +281,9 @@ pub enum StepPriority {
 /// Represents a step in the pipeline.
 pub trait PipelineStep {
     /// Called when the step needs to run.
-    fn run(&mut self, config: &mut PipelineConfig) -> Result<()>;
+    fn run(&mut self, config: &mut PipelineContext) -> Result<()>;
     /// Called when the entire pipeline is finished.
-    fn pipeline_finished(&mut self, config: &mut PipelineConfig) -> Result<()>;
+    fn pipeline_finished(&mut self, config: &mut PipelineContext) -> Result<()>;
     /// Gets the step's priority.
     fn priority(&self) -> StepPriority;
 }

@@ -1,4 +1,5 @@
 use fern::colors::{Color, ColoredLevelConfig};
+use indicatif::{ProgressBar, ProgressStyle};
 
 pub fn set_up_logging() {
     // configure colors for the whole line
@@ -32,4 +33,42 @@ pub fn set_up_logging() {
         .chain(std::io::stdout())
         .apply()
         .unwrap();
+}
+
+/// A progress 'spinner'
+#[derive(Clone)]
+pub struct ProgressSpinner(ProgressBar);
+
+impl ProgressSpinner {
+    pub fn new<S: ToString>(message: S) -> Self {
+        let message = message.to_string();
+        let pb = ProgressBar::new_spinner();
+        pb.set_message(message.to_string());
+        pb.set_style(
+            ProgressStyle::default_spinner()
+                .tick_strings(&["[.   ]", "[ .  ]", "[  . ]", "[   .]", "[  . ]", "[ .  ]"]),
+        );
+        pb.enable_steady_tick(std::time::Duration::from_millis(50));
+        Self(pb)
+    }
+
+    pub fn set_message<S: ToString>(&self, message: S) {
+        let message = message.to_string();
+        self.0.set_message(message);
+    }
+
+    pub fn done(&self) {
+        self.done_and_clear();
+        log::info!("{}", self.0.message());
+    }
+
+    pub fn done_and_clear(&self) {
+        self.0.finish_and_clear();
+    }
+}
+
+impl Drop for ProgressSpinner {
+    fn drop(&mut self) {
+        self.done_and_clear();
+    }
 }

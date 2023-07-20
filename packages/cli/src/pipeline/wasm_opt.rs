@@ -1,10 +1,7 @@
 use std::fs;
 
-use super::{PipelineConfig, PipelineStep};
-use crate::{
-    pipeline::util::{self, FileType},
-    tools,
-};
+use super::{PipelineContext, PipelineStep};
+use crate::{pipeline::util::FileType, tools};
 
 /// Optimizes wasm files.
 pub struct WasmOpt {}
@@ -16,20 +13,20 @@ impl WasmOpt {
 }
 
 impl PipelineStep for WasmOpt {
-    fn run(&mut self, config: &mut PipelineConfig) -> crate::Result<()> {
+    fn run(&mut self, config: &mut PipelineContext) -> crate::Result<()> {
         if !config.build_config.release {
             return Ok(());
         }
 
         // Get wasm tool
+        config.set_message("Installing wasm-opt");
         let opt = tools::WasmOpt::get()?;
+        config.set_message("Optimizing wasm");
 
-        // Get wasm files in the staging folder
-        let files = util::from_dir(config.staging_path())?;
         let mut bytes_init_total = 0;
         let mut bytes_final_total = 0;
 
-        for file in files.iter() {
+        for file in config.processed_files.iter() {
             // If file isn't wasm, skip it.
             if file.file_type != FileType::Wasm {
                 continue;
@@ -44,11 +41,13 @@ impl PipelineStep for WasmOpt {
         }
 
         let kb_saved = (bytes_init_total - bytes_final_total) / 1000;
-        log::info!("Optimizing WASM saved {}kb", kb_saved);
+        let msg = format!("Optimizing wasm saved {}kb", kb_saved);
+        config.add_output_message(msg);
+
         Ok(())
     }
 
-    fn pipeline_finished(&mut self, _config: &mut PipelineConfig) -> crate::Result<()> {
+    fn pipeline_finished(&mut self, _config: &mut PipelineContext) -> crate::Result<()> {
         Ok(())
     }
 

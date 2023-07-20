@@ -1,4 +1,4 @@
-use super::{PipelineConfig, PipelineStep};
+use super::{PipelineContext, PipelineStep};
 use crate::pipeline::util;
 
 const PUBLIC_PATH: &str = "./public";
@@ -14,19 +14,17 @@ impl PullAssets {
 }
 
 impl PipelineStep for PullAssets {
-    fn run(&mut self, config: &mut PipelineConfig) -> crate::Result<()> {
-        log::info!("Pulling additional assets");
-
+    fn run(&mut self, config: &mut PipelineContext) -> crate::Result<()> {
         let mut public_files = util::from_dir(config.crate_info.path.join(PUBLIC_PATH))?;
         let mut assets_files = util::from_dir(config.crate_info.path.join(ASSETS_PATH))?;
 
-        config.files.append(&mut public_files);
-        config.files.append(&mut assets_files);
+        config.raw_files.append(&mut public_files);
+        config.raw_files.append(&mut assets_files);
 
         Ok(())
     }
 
-    fn pipeline_finished(&mut self, _config: &mut PipelineConfig) -> crate::Result<()> {
+    fn pipeline_finished(&mut self, _config: &mut PipelineContext) -> crate::Result<()> {
         Ok(())
     }
 

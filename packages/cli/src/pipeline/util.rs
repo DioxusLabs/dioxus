@@ -1,5 +1,5 @@
-use crate::{Result, Error};
-use std::{path::PathBuf, fs, ffi::OsStr};
+use crate::{Error, Result};
+use std::{ffi::OsStr, fs, path::PathBuf};
 
 /// Represents a File on the device's storage system.
 pub struct File {
@@ -18,37 +18,37 @@ pub enum FileType {
 
     // Styling
     Css,
-    Scss,
-    Sass,
+    SassType,
 
     // Programming
     JavaScript,
     Rust,
     Wasm,
+    Image,
+    Unknown,
+}
 
-    // Images
-    Png,
-    Jpg,
-    Jpeg,
-    Webp,
-    Apng,
-    Avif,
-    Gif,
-    Svg,
+impl From<&PathBuf> for FileType {
+    fn from(value: &PathBuf) -> Self {
+        let extension = match value.extension().and_then(OsStr::to_str) {
+            Some(ext) => ext.to_string(),
+            None => return Self::Unknown,
+        };
 
-    // Misc file, just copy to dest
-    Misc(String),
+        FileType::from(extension)
+    }
 }
 
 impl From<String> for FileType {
     fn from(value: String) -> Self {
         match value.as_str() {
             "html" => Self::Html,
+            "htm" => Self::Html,
 
             // Styling
             "css" => Self::Css,
-            "scss" => Self::Scss,
-            "sass" => Self::Sass,
+            "scss" => Self::SassType,
+            "sass" => Self::SassType,
 
             // Programming
             "js" => Self::JavaScript,
@@ -56,15 +56,15 @@ impl From<String> for FileType {
             "wasm" => Self::Wasm,
 
             // Images
-            "png" => Self::Png,
-            "jpg" => Self::Jpg,
-            "jpeg" => Self::Jpeg,
-            "webp" => Self::Webp,
-            "apng" => Self::Apng,
-            "avif" => Self::Avif,
-            "gif" => Self::Gif,
-            "svg" => Self::Svg,
-            v => Self::Misc(v.to_string()),
+            "png" => Self::Image,
+            "jpg" => Self::Image,
+            "jpeg" => Self::Image,
+            "webp" => Self::Image,
+            "apng" => Self::Image,
+            "avif" => Self::Image,
+            "gif" => Self::Image,
+            "svg" => Self::Image,
+            _ => Self::Unknown,
         }
     }
 }
@@ -85,16 +85,14 @@ pub fn from_dir(dir_path: PathBuf) -> Result<Vec<File>> {
                 let file_name = path.file_stem().and_then(OsStr::to_str);
                 let file_name = match file_name {
                     Some(v) => v,
-                    None => return Err(Error::ParseError("Failed to determine file name".to_string())),
+                    None => {
+                        return Err(Error::ParseError(
+                            "Failed to determine file name".to_string(),
+                        ))
+                    }
                 };
 
-                let extension = path.extension().and_then(OsStr::to_str);
-                let extension = match extension {
-                    Some(v) => v,
-                    None => return Err(Error::ParseError("Failed to determine file extension".to_string())),
-                };
-
-                let file_type = FileType::from(extension.to_string());
+                let file_type = FileType::from(&path);
 
                 // Add to list of files
                 files.push(File {

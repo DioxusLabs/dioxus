@@ -1,6 +1,6 @@
 use crate::pipeline::{
-    index_file::IndexFile, pull_assets::PullAssets, wasm_build::WasmBuild, web_out::WebOut,
-    BuildConfig, CrateInfo, Pipeline, PipelineConfig, sass::SassBuild, wasm_opt::WasmOpt,
+    index_file::IndexFile, pull_assets::PullAssets, sass::SassBuild, wasm_build::WasmBuild,
+    wasm_opt::WasmOpt, web_out::WebOut, BuildConfig, CrateInfo, Pipeline, PipelineContext,
 };
 
 #[cfg(feature = "plugin")]
@@ -18,7 +18,7 @@ pub struct Build {
 
 impl Build {
     pub fn build(self, bin: Option<PathBuf>) -> Result<()> {
-        let config = PipelineConfig::new(
+        let config = PipelineContext::new(
             CrateInfo::from_toml(bin)?,
             BuildConfig::new(
                 self.build.release,

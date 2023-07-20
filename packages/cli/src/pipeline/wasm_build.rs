@@ -1,6 +1,6 @@
 use crate::{pipeline::util, tools, Result};
 
-use super::{PipelineConfig, PipelineStep};
+use super::{PipelineContext, PipelineStep};
 use std::path::PathBuf;
 
 const DEBUG_TARGET: &str = "target/wasm32-unknown-unknown/debug";
@@ -15,12 +15,15 @@ impl WasmBuild {
     }
 
     /// Runs the wasm-bindgen CLI on the specified wasm file.
-    pub fn run_bindgen(&self, config: &PipelineConfig, file: PathBuf) -> Result<PathBuf> {
+    pub fn run_bindgen(&self, config: &PipelineContext, file: PathBuf) -> Result<PathBuf> {
         let out = config.staging_path().join(STAGING_OUT);
         let release = config.build_config.release;
 
-        tools::Bindgen::get()?
-            .debug(!release)
+        config.set_message("Installing wasm-bindgen");
+        let bindgen = tools::Bindgen::get()?;
+
+        config.set_message("Running wasm-bindgen");
+        bindgen.debug(!release)
             .keep_debug(!release)
             .no_demangle(!release)
             .run(file, out.clone())?;
@@ -30,9 +33,9 @@ impl WasmBuild {
 }
 
 impl PipelineStep for WasmBuild {
-    fn run(&mut self, config: &mut PipelineConfig) -> crate::Result<()> {
-        log::info!("Building wasm");
-
+    fn run(&mut self, config: &mut PipelineContext) -> crate::Result<()> {
+        config.set_message("Building wasm");
+        
         // Construct command
         let mut cmd = subprocess::Exec::cmd("cargo")
             .cwd(config.crate_info.path.clone())
@@ -86,12 +89,12 @@ impl PipelineStep for WasmBuild {
 
         // Add all output files to config for further processing.
         let mut bindgen_files = util::from_dir(bindgen_out_path)?;
-        config.files.append(&mut bindgen_files);
+        config.processed_files.append(&mut bindgen_files);
 
         Ok(())
     }
 
-    fn pipeline_finished(&mut self, _config: &mut PipelineConfig) -> crate::Result<()> {
+    fn pipeline_finished(&mut self, _config: &mut PipelineContext) -> crate::Result<()> {
         Ok(())
     }
 

@@ -1,4 +1,4 @@
-use super::{ProgressSpinner, ToolStorage};
+use super::ToolStorage;
 use crate::{tools::TempStorage, Error, Result};
 use flate2::read::GzDecoder;
 use std::{io::Cursor, path::PathBuf};
@@ -82,8 +82,6 @@ impl Sass {
 
     /// Install the latest version of dart-sass CLI.
     fn install() -> Result<PathBuf> {
-        let _pb = ProgressSpinner::new("Installing dart-sass...");
-
         // Download
         let res = reqwest::blocking::get(INSTALL_URL)
             .map_err(|_| Error::CustomError("Failed to install dart-sass".to_string()))?;
