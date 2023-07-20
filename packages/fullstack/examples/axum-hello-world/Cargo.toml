@@ -16,6 +16,9 @@ serde = "1.0.159"
 execute = "0.2.12"
 tower-http = { version = "0.4.1", features = ["auth"] }
 simple_logger = "4.2.0"
+wasm-logger = "0.2.0"
+log.workspace = true
+reqwest = "0.11.18"
 
 [features]
 default = []

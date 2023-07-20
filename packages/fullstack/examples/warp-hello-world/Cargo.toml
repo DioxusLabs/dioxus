@@ -14,6 +14,10 @@ tokio = { workspace = true, features = ["full"], optional = true }
 serde = "1.0.159"
 warp = { version = "0.3.3", optional = true }
 execute = "0.2.12"
+reqwest = "0.11.18"
+simple_logger = "4.2.0"
+log.workspace = true
+wasm-logger = "0.2.0"
 
 [features]
 default = []

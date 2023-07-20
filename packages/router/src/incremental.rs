@@ -1,4 +1,6 @@
 //! Exentsions to the incremental renderer to support pre-caching static routes.
+use core::pin::Pin;
+use std::future::Future;
 use std::str::FromStr;
 
 use dioxus::prelude::*;
@@ -47,7 +49,9 @@ where
                         route,
                         &mut tokio::io::sink(),
                         |vdom| {
-                            let _ = vdom.rebuild();
+                            Box::pin(async move {
+                                let _ = vdom.wait_for_suspense().await;
+                            })
                         },
                         wrapper,
                     )
@@ -65,7 +69,12 @@ where
 }
 
 /// Render a route to a writer.
-pub async fn render_route<R: WrapBody + Send + Sync, Rt, W, F: FnOnce(&mut VirtualDom)>(
+pub async fn render_route<
+    R: WrapBody + Send + Sync,
+    Rt,
+    W,
+    F: FnOnce(&mut VirtualDom) -> Pin<Box<dyn Future<Output = ()> + '_>>,
+>(
     renderer: &mut IncrementalRenderer,
     route: Rt,
     writer: &mut W,

@@ -6,10 +6,12 @@ use crate::fs_cache::ValidCachedPath;
 use dioxus_core::{Element, Scope, VirtualDom};
 use rustc_hash::FxHasher;
 use std::{
+    future::Future,
     hash::BuildHasherDefault,
     io::Write,
     ops::{Deref, DerefMut},
     path::PathBuf,
+    pin::Pin,
     time::{Duration, SystemTime},
 };
 use tokio::io::{AsyncWrite, AsyncWriteExt, BufReader};
@@ -67,36 +69,29 @@ impl IncrementalRenderer {
         self.invalidate_after.is_some()
     }
 
-    fn render_and_cache<'a, P: 'static, R: WrapBody + Send + Sync>(
+    async fn render_and_cache<'a, P: 'static, R: WrapBody + Send + Sync>(
         &'a mut self,
         route: String,
         comp: fn(Scope<P>) -> Element,
         props: P,
         output: &'a mut (impl AsyncWrite + Unpin + Send),
-        rebuild_with: impl FnOnce(&mut VirtualDom),
+        rebuild_with: impl FnOnce(&mut VirtualDom) -> Pin<Box<dyn Future<Output = ()> + '_>>,
         renderer: &'a R,
-    ) -> impl std::future::Future<Output = Result<RenderFreshness, IncrementalRendererError>> + 'a + Send
-    {
+    ) -> Result<RenderFreshness, IncrementalRendererError> {
         let mut html_buffer = WriteBuffer { buffer: Vec::new() };
-        let result_1;
-        let result2;
         {
             let mut vdom = VirtualDom::new_with_props(comp, props);
-            rebuild_with(&mut vdom);
+            rebuild_with(&mut vdom).await;
 
-            result_1 = renderer.render_before_body(&mut *html_buffer);
-            result2 = self.ssr_renderer.render_to(&mut html_buffer, &vdom);
+            renderer.render_before_body(&mut *html_buffer)?;
+            self.ssr_renderer.render_to(&mut html_buffer, &vdom)?;
         }
-        async move {
-            result_1?;
-            result2?;
-            renderer.render_after_body(&mut *html_buffer)?;
-            let html_buffer = html_buffer.buffer;
+        renderer.render_after_body(&mut *html_buffer)?;
+        let html_buffer = html_buffer.buffer;
 
-            output.write_all(&html_buffer).await?;
+        output.write_all(&html_buffer).await?;
 
-            self.add_to_cache(route, html_buffer)
-        }
+        self.add_to_cache(route, html_buffer)
     }
 
     fn add_to_cache(
@@ -178,7 +173,7 @@ impl IncrementalRenderer {
         component: fn(Scope<P>) -> Element,
         props: P,
         output: &mut (impl AsyncWrite + Unpin + std::marker::Send),
-        rebuild_with: impl FnOnce(&mut VirtualDom),
+        rebuild_with: impl FnOnce(&mut VirtualDom) -> Pin<Box<dyn Future<Output = ()> + '_>>,
         renderer: &R,
     ) -> Result<RenderFreshness, IncrementalRendererError> {
         // check if this route is cached
