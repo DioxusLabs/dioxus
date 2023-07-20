@@ -236,7 +236,7 @@ pub(crate) fn create_error_type(
         match segment {
             RouteSegment::Static(index) => {
                 error_variants.push(quote! { #error_name(String) });
-                display_match.push(quote! { Self::#error_name(found) => write!(f, "Static segment '{}' did not match instead found '{found}'", #index)? });
+                display_match.push(quote! { Self::#error_name(found) => write!(f, "Static segment '{}' did not match instead found '{}'", #index, found)? });
             }
             RouteSegment::Dynamic(ident, ty) => {
                 let missing_error = segment.missing_error_name().unwrap();

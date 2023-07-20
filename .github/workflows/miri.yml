@@ -81,7 +81,7 @@ jobs:
         # #[tokio::main] that calls epoll_create1 that Miri does not support.
         # run: cargo miri test --features full --lib --no-fail-fast
         run: |
-          cargo miri test --package dioxus-core --test miri_stress  -- --exact --nocapture
+          cargo miri test --package dioxus-core -- --exact --nocapture
           cargo miri test --package dioxus-native-core --test miri_native  -- --exact --nocapture
 
         # working-directory: tokio

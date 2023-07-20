@@ -83,6 +83,69 @@ jobs:
       - uses: actions/checkout@v3
       - run: cargo clippy --workspace --examples --tests -- -D warnings
 
+  matrix_test:
+    runs-on: ${{ matrix.platform.os }}
+    strategy:
+      matrix:
+        platform:
+          - {
+              target: x86_64-pc-windows-msvc,
+              os: windows-latest,
+              toolchain: '1.70.0',
+              cross: false,
+              command: 'test',
+              args: '--all --tests'
+            }
+          - {
+              target: x86_64-apple-darwin,
+              os: macos-latest,
+              toolchain: '1.70.0',
+              cross: false,
+              command: 'test',
+              args: '--all --tests'
+            }
+          - {
+              target: aarch64-apple-ios,
+              os: macos-latest,
+              toolchain: '1.70.0',
+              cross: false,
+              command: 'build',
+              args: '--package dioxus-mobile'
+            }
+          - {
+              target: aarch64-linux-android,
+              os: ubuntu-latest,
+              toolchain: '1.70.0',
+              cross: true,
+              command: 'build',
+              args: '--package dioxus-mobile'
+            }
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: install stable
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: ${{ matrix.platform.toolchain }}
+          target: ${{ matrix.platform.target }}
+          override: true
+          default: true
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core -> ../target
+          save-if: ${{ matrix.features.key == 'all' }}
+
+      - name: test
+        uses: actions-rs/cargo@v1
+        with:
+          use-cross: ${{ matrix.platform.cross }}
+          command: ${{ matrix.platform.command }}
+          args: --target ${{ matrix.platform.target }} ${{ matrix.platform.args }}
+
+
+
   # Coverage is disabled until we can fix it
   # coverage:
   #   name: Coverage
@@ -103,3 +166,4 @@ jobs:
   #       uses: codecov/codecov-action@v2
   #       with:
   #         fail_ci_if_error: false
+

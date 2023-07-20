@@ -1,10 +1,5 @@
 use super::*;
-use std::{
-    fs::create_dir_all,
-    io::Write,
-    path::PathBuf,
-    process::{Command, Stdio},
-};
+use std::{fs::create_dir_all, io::Write, path::PathBuf};
 
 /// Run the WASM project on dev-server
 #[derive(Clone, Debug, Parser)]
@@ -39,41 +34,24 @@ impl Serve {
         // Subdirectories don't work with the server
         crate_config.dioxus_config.web.app.base_path = None;
 
-        let platform = self.serve.platform.unwrap_or_else(|| {
-            crate_config
-                .dioxus_config
-                .application
-                .default_platform
-                .clone()
-        });
+        let platform = self
+            .serve
+            .platform
+            .unwrap_or(crate_config.dioxus_config.application.default_platform);
 
-        if platform.as_str() == "desktop" {
-            crate::builder::build_desktop(&crate_config, true)?;
+        match platform {
+            cfg::Platform::Web => {
+                // generate dev-index page
+                Serve::regen_dev_page(&crate_config)?;
 
-            match &crate_config.executable {
-                crate::ExecutableType::Binary(name)
-                | crate::ExecutableType::Lib(name)
-                | crate::ExecutableType::Example(name) => {
-                    let mut file = crate_config.out_dir.join(name);
-                    if cfg!(windows) {
-                        file.set_extension("exe");
-                    }
-                    Command::new(file.to_str().unwrap())
-                        .stdout(Stdio::inherit())
-                        .output()?;
-                }
+                // start the develop server
+                server::web::startup(self.serve.port, crate_config.clone(), self.serve.open)
+                    .await?;
             }
-            return Ok(());
-        } else if platform != "web" {
-            return custom_error!("Unsupported platform target.");
+            cfg::Platform::Desktop => {
+                server::desktop::startup(crate_config.clone()).await?;
+            }
         }
-
-        // generate dev-index page
-        Serve::regen_dev_page(&crate_config)?;
-
-        // start the develop server
-        server::startup(self.serve.port, crate_config.clone(), self.serve.open).await?;
-
         Ok(())
     }
 

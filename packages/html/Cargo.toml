@@ -4,14 +4,14 @@ version = "0.3.1"
 authors = ["Jonathan Kelley"]
 edition = "2018"
 description = "HTML Element pack for Dioxus - a concurrent renderer-agnostic Virtual DOM for interactive user experiences"
-license = "MIT/Apache-2.0"
+license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com"
 keywords = ["dom", "ui", "gui", "react"]
 
 [dependencies]
 dioxus-core = { workspace = true }
-dioxus-rsx = { workspace = true, optional = true }
+dioxus-rsx = { workspace = true, features = ["hot_reload"], optional = true }
 serde = { version = "1", features = ["derive"], optional = true }
 serde_repr = { version = "0.1", optional = true }
 wasm-bindgen = { workspace = true, optional = true }
