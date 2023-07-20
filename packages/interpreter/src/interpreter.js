@@ -159,22 +159,29 @@ class Interpreter {
     }
   }
   RemoveAttribute(root, field, ns) {
-    const name = field;
     const node = this.nodes[root];
-    if (ns == "style") {
+    if (!ns) {
+      switch (field) {
+        case "value":
+          node.value = "";
+          break;
+        case "checked":
+          node.checked = false;
+          break;
+        case "selected":
+          node.selected = false;
+          break;
+        case "dangerous_inner_html":
+          node.innerHTML = "";
+          break;
+        default:
+          node.removeAttribute(field);
+          break;
+      }
+    } else if (ns == "style") {
       node.style.removeProperty(name);
-    } else if (ns !== null || ns !== undefined) {
-      node.removeAttributeNS(ns, name);
-    } else if (name === "value") {
-      node.value = "";
-    } else if (name === "checked") {
-      node.checked = false;
-    } else if (name === "selected") {
-      node.selected = false;
-    } else if (name === "dangerous_inner_html") {
-      node.innerHTML = "";
     } else {
-      node.removeAttribute(name);
+      node.removeAttributeNS(ns, field);
     }
   }
 
