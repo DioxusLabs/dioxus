@@ -86,7 +86,8 @@ pub fn fmt_file(contents: &str) -> Vec<FormattedBlock> {
             MacroDelimiter::Paren(b) => b.span,
             MacroDelimiter::Brace(b) => b.span,
             MacroDelimiter::Bracket(b) => b.span,
-        };
+        }
+        .join();
 
         let mut formatted = String::new();
 

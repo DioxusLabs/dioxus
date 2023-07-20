@@ -57,7 +57,7 @@ flate2 = "1.0.22"
 tar = "0.4.38"
 zip = "0.6.2"
 tower = "0.4.12"
-syn = { version = "1.0", features = ["full", "extra-traits"] }
+syn = { version = "2.0", features = ["full", "extra-traits"] }
 proc-macro2 = { version = "1.0", features = ["span-locations"] }
 lazy_static = "1.4.0"
 

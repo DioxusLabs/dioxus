@@ -286,7 +286,7 @@ impl RouteEnum {
             let mut excluded = Vec::new();
             // Apply the any nesting attributes in order
             for attr in &variant.attrs {
-                if attr.path.is_ident("nest") {
+                if attr.path().is_ident("nest") {
                     let mut children_routes = Vec::new();
                     {
                         // add all of the variants of the enum to the children_routes until we hit an end_nest
@@ -294,9 +294,9 @@ impl RouteEnum {
                         'o: for variant in &data.variants {
                             children_routes.push(variant.fields.clone());
                             for attr in &variant.attrs {
-                                if attr.path.is_ident("nest") {
+                                if attr.path().is_ident("nest") {
                                     level += 1;
-                                } else if attr.path.is_ident("end_nest") {
+                                } else if attr.path().is_ident("end_nest") {
                                     level -= 1;
                                     if level < 0 {
                                         break 'o;
@@ -341,7 +341,7 @@ impl RouteEnum {
 
                     nests.push(nest);
                     nest_stack.push(NestId(nest_index));
-                } else if attr.path.is_ident("end_nest") {
+                } else if attr.path().is_ident("end_nest") {
                     nest_stack.pop();
                     // pop the current nest segment off the stack and add it to the parent or the site map
                     if let Some(segment) = site_map_stack.pop() {
@@ -360,7 +360,7 @@ impl RouteEnum {
 
                         children.push(current);
                     }
-                } else if attr.path.is_ident("layout") {
+                } else if attr.path().is_ident("layout") {
                     let parser = |input: ParseStream| {
                         let bang: Option<Token![!]> = input.parse().ok();
                         let exclude = bang.is_some();
@@ -382,9 +382,9 @@ impl RouteEnum {
                         layouts.push(layout);
                         layout_stack.push(LayoutId(layout_index));
                     }
-                } else if attr.path.is_ident("end_layout") {
+                } else if attr.path().is_ident("end_layout") {
                     layout_stack.pop();
-                } else if attr.path.is_ident("redirect") {
+                } else if attr.path().is_ident("redirect") {
                     let parser = |input: ParseStream| {
                         Redirect::parse(input, nest_stack.clone(), redirects.len())
                     };
