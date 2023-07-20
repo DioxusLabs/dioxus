@@ -517,13 +517,7 @@ impl<'b> VirtualDom {
         match unsafe { self.run_scope(scope).extend_lifetime_ref() } {
             // Create the component's root element
             Ready(t) => {
-                // assign the parent
-                let path = template.template.get().node_paths[idx];
-                *t.parent.borrow_mut() = Some(ElementRef {
-                    path: ElementPath::Deep(path),
-                    template: Some(NonNull::new(template as *const _ as *mut _).unwrap()),
-                });
-
+                assign_boundary_ref(template, idx, t);
                 self.create_scope(scope, t)
             }
             Aborted(t) => self.mount_aborted(template, t),
@@ -559,6 +553,16 @@ impl<'b> VirtualDom {
         slot.set(Some(id));
         id
     }
+}
+
+pub fn assign_boundary_ref(template: &VNode<'_>, idx: usize, t: &VNode<'_>) {
+    // assign the parent
+    let path = template.template.get().node_paths[idx];
+
+    *t.parent.borrow_mut() = Some(ElementRef {
+        path: ElementPath::Deep(path),
+        template: Some(NonNull::new(template as *const _ as *mut _).unwrap()),
+    });
 }
 
 fn collect_dyn_node_range(

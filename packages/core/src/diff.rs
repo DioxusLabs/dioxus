@@ -201,7 +201,7 @@ impl<'b> VirtualDom {
         // If the props are static, then we try to memoize by setting the new with the old
         // The target scopestate still has the reference to the old props, so there's no need to update anything
         // This also implicitly drops the new props since they're not used
-        if left.static_props && unsafe { old.as_ref().unwrap().memoize(new.as_ref()) } {
+        if !(left.static_props && unsafe { old.as_ref().unwrap().memoize(new.as_ref()) }) {
             return;
         }
 
@@ -210,6 +210,8 @@ impl<'b> VirtualDom {
 
         // Now run the component and diff it
         self.run_scope(scope_id);
+
+        // Always diff
         self.diff_scope(scope_id);
 
         self.dirty_scopes.remove(&DirtyScope {

@@ -13,9 +13,21 @@ fn events_propagate() {
     dom.handle_event("click", Rc::new(MouseData::default()), ElementId(1), true);
     assert_eq!(*CLICKS.lock().unwrap(), 1);
 
+    // break reference....
+    for _ in 0..5 {
+        dom.mark_dirty(ScopeId(0));
+        _ = dom.rebuild();
+    }
+
     // Lower click is registered
     dom.handle_event("click", Rc::new(MouseData::default()), ElementId(2), true);
     assert_eq!(*CLICKS.lock().unwrap(), 3);
+
+    // break reference....
+    for _ in 0..5 {
+        dom.mark_dirty(ScopeId(0));
+        _ = dom.rebuild();
+    }
 
     // Stop propagation occurs
     dom.handle_event("click", Rc::new(MouseData::default()), ElementId(2), true);
