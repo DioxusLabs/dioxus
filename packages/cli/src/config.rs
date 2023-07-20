@@ -1,4 +1,4 @@
-use crate::error::Result;
+use crate::{cfg::Platform, error::Result};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
@@ -73,7 +73,7 @@ impl Default for DioxusConfig {
         Self {
             application: ApplicationConfig {
                 name: "dioxus".into(),
-                default_platform: "web".to_string(),
+                default_platform: Platform::Web,
                 out_dir: Some(PathBuf::from("dist")),
                 asset_dir: Some(PathBuf::from("public")),
 
@@ -115,7 +115,7 @@ impl Default for DioxusConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApplicationConfig {
     pub name: String,
-    pub default_platform: String,
+    pub default_platform: Platform,
     pub out_dir: Option<PathBuf>,
     pub asset_dir: Option<PathBuf>,
 
