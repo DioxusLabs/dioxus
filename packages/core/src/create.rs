@@ -88,8 +88,7 @@ impl<'b> VirtualDom {
         }
 
         // Intialize the root nodes slice
-        node.root_ids
-            .intialize(vec![ElementId(0); node.template.get().roots.len()].into_boxed_slice());
+        *node.root_ids.borrow_mut() = vec![ElementId(0); node.template.get().roots.len()];
 
         // The best renderers will have templates prehydrated and registered
         // Just in case, let's create the template using instructions anyways
@@ -328,7 +327,7 @@ impl<'b> VirtualDom {
     fn load_template_root(&mut self, template: &VNode, root_idx: usize) -> ElementId {
         // Get an ID for this root since it's a real root
         let this_id = self.next_root(template, root_idx);
-        template.root_ids.set(root_idx, this_id);
+        template.root_ids.borrow_mut()[root_idx] = this_id;
 
         self.mutations.push(LoadTemplate {
             name: template.template.get().name,

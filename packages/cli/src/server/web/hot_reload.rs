@@ -10,12 +10,10 @@ use dioxus_html::HtmlCtx;
 use dioxus_rsx::hot_reload::FileMap;
 use tokio::sync::broadcast;
 
-use super::BuildManager;
 use crate::CrateConfig;
 
 pub struct HotReloadState {
     pub messages: broadcast::Sender<Template<'static>>,
-    pub build_manager: Arc<BuildManager>,
     pub file_map: Arc<Mutex<FileMap<HtmlCtx>>>,
     pub watcher_config: CrateConfig,
 }

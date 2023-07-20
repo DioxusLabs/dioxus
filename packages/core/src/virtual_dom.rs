@@ -5,7 +5,7 @@
 use crate::{
     any_props::VProps,
     arena::{ElementId, ElementRef},
-    innerlude::{DirtyScope, ErrorBoundary, Mutations, Scheduler, SchedulerMsg, ScopeSlab},
+    innerlude::{DirtyScope, ErrorBoundary, Mutations, Scheduler, SchedulerMsg},
     mutations::Mutation,
     nodes::RenderReturn,
     nodes::{Template, TemplateId},
@@ -176,7 +176,7 @@ use std::{any::Any, cell::Cell, collections::BTreeSet, future::Future, rc::Rc};
 pub struct VirtualDom {
     // Maps a template path to a map of byteindexes to templates
     pub(crate) templates: FxHashMap<TemplateId, FxHashMap<usize, Template<'static>>>,
-    pub(crate) scopes: ScopeSlab,
+    pub(crate) scopes: Slab<Box<ScopeState>>,
     pub(crate) dirty_scopes: BTreeSet<DirtyScope>,
     pub(crate) scheduler: Rc<Scheduler>,
 
@@ -281,14 +281,14 @@ impl VirtualDom {
     ///
     /// This is useful for inserting or removing contexts from a scope, or rendering out its root node
     pub fn get_scope(&self, id: ScopeId) -> Option<&ScopeState> {
-        self.scopes.get(id)
+        self.scopes.get(id.0).map(|f| f.as_ref())
     }
 
     /// Get the single scope at the top of the VirtualDom tree that will always be around
     ///
     /// This scope has a ScopeId of 0 and is the root of the tree
     pub fn base_scope(&self) -> &ScopeState {
-        self.scopes.get(ScopeId(0)).unwrap()
+        self.get_scope(ScopeId(0)).unwrap()
     }
 
     /// Build the virtualdom with a global context inserted into the base scope
@@ -303,7 +303,7 @@ impl VirtualDom {
     ///
     /// Whenever the VirtualDom "works", it will re-render this scope
     pub fn mark_dirty(&mut self, id: ScopeId) {
-        if let Some(scope) = self.scopes.get(id) {
+        if let Some(scope) = self.get_scope(id) {
             let height = scope.height;
             self.dirty_scopes.insert(DirtyScope { height, id });
         }
@@ -496,7 +496,7 @@ impl VirtualDom {
     pub fn replace_template(&mut self, template: Template<'static>) {
         self.register_template_first_byte_index(template);
         // iterating a slab is very inefficient, but this is a rare operation that will only happen during development so it's fine
-        for scope in self.scopes.iter() {
+        for (_, scope) in self.scopes.iter() {
             if let Some(RenderReturn::Ready(sync)) = scope.try_root_node() {
                 if sync.template.get().name.rsplit_once(':').unwrap().0
                     == template.name.rsplit_once(':').unwrap().0
@@ -571,12 +571,15 @@ impl VirtualDom {
     /// The mutations will be thrown out, so it's best to use this method for things like SSR that have async content
     pub async fn wait_for_suspense(&mut self) {
         loop {
+            // println!("waiting for suspense {:?}", self.suspended_scopes);
             if self.suspended_scopes.is_empty() {
                 return;
             }
 
+            // println!("waiting for suspense");
             self.wait_for_work().await;
 
+            // println!("Rendered immediately");
             _ = self.render_immediate();
         }
     }
@@ -598,7 +601,7 @@ impl VirtualDom {
                 self.dirty_scopes.remove(&dirty);
 
                 // If the scope doesn't exist for whatever reason, then we should skip it
-                if !self.scopes.contains(dirty.id) {
+                if !self.scopes.contains(dirty.id.0) {
                     continue;
                 }
 

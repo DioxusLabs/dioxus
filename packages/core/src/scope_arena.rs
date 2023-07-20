@@ -16,9 +16,9 @@ impl VirtualDom {
         let parent = self.acquire_current_scope_raw();
         let entry = self.scopes.vacant_entry();
         let height = unsafe { parent.map(|f| (*f).height + 1).unwrap_or(0) };
-        let id = entry.key();
+        let id = ScopeId(entry.key());
 
-        entry.insert(ScopeState {
+        entry.insert(Box::new(ScopeState {
             parent,
             id,
             height,
@@ -35,13 +35,13 @@ impl VirtualDom {
             shared_contexts: Default::default(),
             borrowed_props: Default::default(),
             attributes_to_drop: Default::default(),
-        })
+        }))
     }
 
     fn acquire_current_scope_raw(&self) -> Option<*const ScopeState> {
         let id = self.scope_stack.last().copied()?;
-        let scope = self.scopes.get(id)?;
-        Some(scope)
+        let scope = self.scopes.get(id.0)?;
+        Some(scope.as_ref())
     }
 
     pub(crate) fn run_scope(&mut self, scope_id: ScopeId) -> &RenderReturn {
@@ -51,9 +51,9 @@ impl VirtualDom {
         self.ensure_drop_safety(scope_id);
 
         let new_nodes = unsafe {
-            self.scopes[scope_id].previous_frame().bump_mut().reset();
+            self.scopes[scope_id.0].previous_frame().bump_mut().reset();
 
-            let scope = &self.scopes[scope_id];
+            let scope = &self.scopes[scope_id.0];
             scope.suspended.set(false);
 
             scope.hook_idx.set(0);
@@ -65,7 +65,7 @@ impl VirtualDom {
             props.render(scope).extend_lifetime()
         };
 
-        let scope = &self.scopes[scope_id];
+        let scope = &self.scopes[scope_id.0];
 
         // We write on top of the previous frame and then make it the current by pushing the generation forward
         let frame = scope.previous_frame();
@@ -83,12 +83,12 @@ impl VirtualDom {
             id: scope.id,
         });
 
-        if matches!(allocated, RenderReturn::Aborted(_)) {
-            if scope.suspended.get() {
+        if scope.suspended.get() {
+            if matches!(allocated, RenderReturn::Aborted(_)) {
                 self.suspended_scopes.insert(scope.id);
-            } else if !self.suspended_scopes.is_empty() {
-                _ = self.suspended_scopes.remove(&scope.id);
             }
+        } else if !self.suspended_scopes.is_empty() {
+            _ = self.suspended_scopes.remove(&scope.id);
         }
 
         // rebind the lifetime now that its stored internally

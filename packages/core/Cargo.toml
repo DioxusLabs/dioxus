@@ -33,8 +33,6 @@ log = { workspace = true }
 # Serialize the Edits for use in Webview/Liveview instances
 serde = { version = "1", features = ["derive"], optional = true }
 
-bumpslab = { version = "0.2.0" }
-
 [dev-dependencies]
 tokio = { workspace = true, features = ["full"] }
 dioxus = { workspace = true }
