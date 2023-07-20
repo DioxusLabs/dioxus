@@ -75,7 +75,7 @@ impl Route {
         let route_attr = variant
             .attrs
             .iter()
-            .find(|attr| attr.path.is_ident("route"));
+            .find(|attr| attr.path().is_ident("route"));
         let route;
         let ty;
         let route_name = variant.ident.clone();
@@ -106,7 +106,7 @@ impl Route {
                 if let Some(route_attr) = variant
                     .attrs
                     .iter()
-                    .find(|attr| attr.path.is_ident("child"))
+                    .find(|attr| attr.path().is_ident("child"))
                 {
                     let args = route_attr.parse_args::<ChildArgs>()?;
                     route = args.route.value();
@@ -116,7 +116,7 @@ impl Route {
                             let child_field = fields.named.iter().find(|f| {
                                 f.attrs
                                     .iter()
-                                    .any(|attr| attr.path.is_ident("child"))
+                                    .any(|attr| attr.path().is_ident("child"))
                                     || *f.ident.as_ref().unwrap() == "child"
                             });
                             match child_field{

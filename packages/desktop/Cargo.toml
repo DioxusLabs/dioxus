@@ -4,7 +4,7 @@ version = "0.3.0"
 authors = ["Jonathan Kelley"]
 edition = "2018"
 description = "WebView renderer for Dioxus"
-license = "MIT/Apache-2.0"
+license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com/docs/0.3/guide/en/getting_started/desktop.html"
 keywords = ["dom", "ui", "gui", "react"]
@@ -17,7 +17,7 @@ dioxus-hot-reload = { workspace = true, optional = true }
 
 serde = "1.0.136"
 serde_json = "1.0.79"
-thiserror = "1.0.30"
+thiserror = { workspace = true }
 log = { workspace = true }
 wry = { version = "0.28.0" }
 futures-channel = { workspace = true }

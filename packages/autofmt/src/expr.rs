@@ -27,41 +27,29 @@ impl Writer<'_> {
         // If the expr is multiline, we want to collect all of its lines together and write them out properly
         // This involves unshifting the first line if it's aligned
         let first_line = &self.src[start.line - 1];
-        write!(
-            self.out,
-            "{}",
-            &first_line[start.column - 1..first_line.len()].trim()
-        )?;
+        write!(self.out, "{}", &first_line[start.column - 1..].trim_start())?;
 
-        let first_prefix = &self.src[start.line - 1][..start.column];
-        let offset = match first_prefix.trim() {
-            "" => 0,
-            _ => first_prefix
-                .chars()
-                .rev()
-                .take_while(|c| c.is_whitespace())
-                .count() as isize,
-        };
+        let prev_block_indent_level = crate::leading_whitespaces(first_line) / 4;
 
         for (id, line) in self.src[start.line..end.line].iter().enumerate() {
             writeln!(self.out)?;
-            // trim the leading whitespace
-            let line = match id {
-                x if x == (end.line - start.line) - 1 => &line[..end.column],
-                _ => line,
+            // check if this is the last line
+            let line = {
+                if id == (end.line - start.line) - 1 {
+                    &line[..end.column]
+                } else {
+                    line
+                }
             };
 
-            if offset < 0 {
-                for _ in 0..-offset {
-                    write!(self.out, " ")?;
-                }
+            // trim the leading whitespace
+            let previous_indent = crate::leading_whitespaces(line) / 4;
+            let offset = previous_indent.saturating_sub(prev_block_indent_level);
+            let required_indent = self.out.indent + offset;
+            self.out.write_tabs(required_indent)?;
 
-                write!(self.out, "{line}")?;
-            } else {
-                let offset = offset as usize;
-                let right = &line[offset..];
-                write!(self.out, "{right}")?;
-            }
+            let line = line.trim_start();
+            write!(self.out, "{line}")?;
         }
 
         Ok(())

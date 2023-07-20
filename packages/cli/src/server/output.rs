@@ -11,7 +11,17 @@ pub struct PrettierOptions {
     pub elapsed_time: u128,
 }
 
-pub fn print_console_info(ip: &String, port: u16, config: &CrateConfig, options: PrettierOptions) {
+#[derive(Debug, Clone)]
+pub struct WebServerInfo {
+    pub ip: String,
+    pub port: u16,
+}
+
+pub fn print_console_info(
+    config: &CrateConfig,
+    options: PrettierOptions,
+    web_info: Option<WebServerInfo>,
+) {
     if let Ok(native_clearseq) = Command::new(if cfg!(target_os = "windows") {
         "cls"
     } else {
@@ -70,26 +80,28 @@ pub fn print_console_info(ip: &String, port: u16, config: &CrateConfig, options:
         );
     }
 
-    if config.dioxus_config.web.https.enabled == Some(true) {
-        println!(
-            "\t> Local : {}",
-            format!("https://localhost:{}/", port).blue()
-        );
-        println!(
-            "\t> Network : {}",
-            format!("https://{}:{}/", ip, port).blue()
-        );
-        println!("\t> HTTPS : {}", "Enabled".to_string().green());
-    } else {
-        println!(
-            "\t> Local : {}",
-            format!("http://localhost:{}/", port).blue()
-        );
-        println!(
-            "\t> Network : {}",
-            format!("http://{}:{}/", ip, port).blue()
-        );
-        println!("\t> HTTPS : {}", "Disabled".to_string().red());
+    if let Some(WebServerInfo { ip, port }) = web_info {
+        if config.dioxus_config.web.https.enabled == Some(true) {
+            println!(
+                "\t> Local : {}",
+                format!("https://localhost:{}/", port).blue()
+            );
+            println!(
+                "\t> Network : {}",
+                format!("https://{}:{}/", ip, port).blue()
+            );
+            println!("\t> HTTPS : {}", "Enabled".to_string().green());
+        } else {
+            println!(
+                "\t> Local : {}",
+                format!("http://localhost:{}/", port).blue()
+            );
+            println!(
+                "\t> Network : {}",
+                format!("http://{}:{}/", ip, port).blue()
+            );
+            println!("\t> HTTPS : {}", "Disabled".to_string().red());
+        }
     }
     println!();
     println!("\t> Profile : {}", profile.green());

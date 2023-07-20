@@ -2,22 +2,26 @@
 name = "dioxus-hot-reload"
 version = "0.1.1"
 edition = "2021"
-license = "MIT/Apache-2.0"
+license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com/docs/0.3/guide/en/getting_started/hot_reload.html"
-description = "Hot reloading utilites for Dioxus"
+description = "Hot reloading utilities for Dioxus"
 keywords = ["dom", "ui", "gui", "react", "hot-reloading"]
 
 [dependencies]
 dioxus-rsx = { workspace = true }
 dioxus-core = { workspace = true, features = ["serialize"] }
-dioxus-html = { workspace = true, features = ["hot-reload-context"] }
+dioxus-html = { workspace = true }
 
 interprocess-docfix = { version = "1.2.2" }
-notify = "5.0.0"
-chrono = { version = "0.4.24", default-features = false, features = ["clock"] }
+notify = { version = "5.0.0", optional = true }
+chrono = { version = "0.4.24", default-features = false, features = ["clock"], optional = true }
 serde_json = "1.0.91"
 serde = { version = "1", features = ["derive"] }
-execute = "0.2.11"
-once_cell = "1.17.0"
-ignore = "0.4.19"
+execute = { version = "0.2.11", optional = true }
+once_cell = { version = "1.17.0", optional = true }
+ignore = { version = "0.4.19", optional = true }
+
+[features]
+default = []
+file_watcher = ["ignore", "chrono", "notify", "execute", "once_cell", "ignore", "dioxus-html/hot-reload-context"]
