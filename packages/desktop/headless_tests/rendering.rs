@@ -26,7 +26,7 @@ fn main() {
     check_app_exits(check_html_renders);
 }
 
-fn use_inner_html<'a>(cx: &'a ScopeState, id: &'static str) -> Option<String> {
+fn use_inner_html(cx: &ScopeState, id: &'static str) -> Option<String> {
     let eval_provider = use_eval(cx);
 
     let value: &UseRef<Option<String>> = use_ref(cx, || None);
