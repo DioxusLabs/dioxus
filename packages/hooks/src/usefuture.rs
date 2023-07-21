@@ -52,6 +52,9 @@ where
             val.set(Some(fut.await));
             task.take();
         })));
+
+        // Mark that we don't need to regenerate
+        state.needs_regen.set(false);
     }
 
     state
