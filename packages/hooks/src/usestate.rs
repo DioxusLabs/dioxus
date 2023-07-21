@@ -274,6 +274,7 @@ impl<T: Clone> UseState<T> {
     /// *val.make_mut() += 1;
     /// ```
     #[must_use]
+    #[allow(clippy::missing_panics_doc)]
     pub fn make_mut(&self) -> RefMut<T> {
         let mut slot = self.slot.borrow_mut();
 

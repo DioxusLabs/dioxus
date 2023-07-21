@@ -3,7 +3,6 @@ use std::rc::Rc;
 use std::rc::Weak;
 
 use crate::create_new_window;
-use crate::eval::EvalResult;
 use crate::events::IpcMessage;
 use crate::query::QueryEngine;
 use crate::shortcut::ShortcutId;
@@ -211,14 +210,6 @@ impl DesktopService {
 
         #[cfg(not(debug_assertions))]
         log::warn!("Devtools are disabled in release builds");
-    }
-
-    /// Evaluate a javascript expression
-    pub fn eval(&self, code: &str) -> EvalResult {
-        // the query id lets us keep track of the eval result and send it back to the main thread
-        let query = self.query.new_query(code, &self.webview);
-
-        EvalResult::new(query)
     }
 
     /// Create a wry event handler that listens for wry events.

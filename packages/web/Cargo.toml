@@ -31,8 +31,9 @@ smallstr = "0.2.0"
 futures-channel = { workspace = true }
 serde_json = { version = "1.0" }
 serde = { version = "1.0" }
-serde-wasm-bindgen = "0.4.5"
+serde-wasm-bindgen = "0.5.0"
 async-trait = "0.1.58"
+async-channel = "1.8.0"
 
 [dependencies.web-sys]
 version = "0.3.56"

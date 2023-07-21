@@ -78,11 +78,7 @@ where
     <R as std::str::FromStr>::Err: std::fmt::Display,
 {
     fn clone(&self) -> Self {
-        Self {
-            failure_external_navigation: self.failure_external_navigation,
-            scroll_restoration: self.scroll_restoration,
-            phantom: std::marker::PhantomData,
-        }
+        *self
     }
 }
 

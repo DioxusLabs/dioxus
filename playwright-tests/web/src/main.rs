@@ -1,12 +1,12 @@
 // This test is used by playwright configured in the root of the repo
 
 use dioxus::prelude::*;
-use dioxus_web::use_eval;
 
 fn app(cx: Scope) -> Element {
     let mut num = use_state(cx, || 0);
-    let eval = use_eval(cx);
     let eval_result = use_state(cx, String::new);
+
+    let eval_provider = dioxus_html::prelude::use_eval(cx);
 
     cx.render(rsx! {
         div {
@@ -42,13 +42,20 @@ fn app(cx: Scope) -> Element {
         button {
             class: "eval-button",
             onclick: move |_| {
-                // Set the window title
-                let result = eval(r#"window.document.title = 'Hello from Dioxus Eval!';
-                return "returned eval value";"#.to_string());
-                if let Ok(serde_json::Value::String(string)) = result.get() {
-                    eval_result.set(string);
-                }
-            },
+                let eval = eval_provider(
+                    r#"
+                    window.document.title = 'Hello from Dioxus Eval!';
+                    dioxus.send("returned eval value");
+                "#).unwrap();
+                let setter = eval_result.setter();
+                async move {
+                    // Set the window title
+                    let result = eval.recv().await;
+                    if let Ok(serde_json::Value::String(string)) = result {
+                        setter(string);
+                    }
+
+            }},
             "Eval"
         }
         div {

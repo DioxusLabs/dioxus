@@ -9,4 +9,5 @@ publish = false
 [dependencies]
 dioxus = { path = "../../packages/dioxus" }
 dioxus-web = { path = "../../packages/web" }
+dioxus-html = { path = "../../packages/html" }
 serde_json = "1.0.96"

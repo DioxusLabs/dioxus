@@ -30,7 +30,7 @@ use dioxus_core::*;
 use dioxus_html::MountedData;
 use dioxus_html::{native_bind::NativeFileEngine, FormData, HtmlEvent};
 use element::DesktopElement;
-pub use eval::{use_eval, EvalResult};
+use eval::init_eval;
 use futures_util::{pin_mut, FutureExt};
 use shortcut::ShortcutRegistry;
 pub use shortcut::{use_global_shortcut, ShortcutHandle, ShortcutId, ShortcutRegistryError};
@@ -204,15 +204,17 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
             },
 
             Event::NewEvents(StartCause::Init) => {
-                //
                 let props = props.take().unwrap();
                 let cfg = cfg.take().unwrap();
+
+                // Create a dom
+                let dom = VirtualDom::new_with_props(root, props);
 
                 let handler = create_new_window(
                     cfg,
                     event_loop,
                     &proxy,
-                    VirtualDom::new_with_props(root, props),
+                    dom,
                     &queue,
                     &event_handlers,
                     shortcut_manager.clone(),
@@ -389,7 +391,11 @@ fn create_new_window(
         shortcut_manager,
     ));
 
-    dom.base_scope().provide_context(desktop_context.clone());
+    let cx = dom.base_scope();
+    cx.provide_context(desktop_context.clone());
+
+    // Init eval
+    init_eval(cx);
 
     WebviewHandler {
         // We want to poll the virtualdom and the event loop at the same time, so the waker will be connected to both

@@ -5,29 +5,34 @@ fn main() {
 }
 
 fn app(cx: Scope) -> Element {
-    let eval = dioxus_desktop::use_eval(cx);
-    let script = use_state(cx, String::new);
-    let output = use_state(cx, String::new);
+    let eval_provider = use_eval(cx);
 
-    cx.render(rsx! {
-        div {
-            p { "Output: {output}" }
-            input {
-                placeholder: "Enter an expression",
-                value: "{script}",
-                oninput: move |e| script.set(e.value.clone()),
-            }
-            button {
-                onclick: move |_| {
-                    to_owned![script, eval, output];
-                    cx.spawn(async move {
-                        if let Ok(res) = eval(script.to_string()).await {
-                            output.set(res.to_string());
-                        }
-                    });
-                },
-                "Execute"
-            }
+    let future = use_future(cx, (), |_| {
+        to_owned![eval_provider];
+        async move {
+            let eval = eval_provider(
+                r#"
+                dioxus.send("Hi from JS!");
+                let msg = await dioxus.recv();
+                console.log(msg);
+                return "hello world";
+            "#,
+            )
+            .unwrap();
+
+            eval.send("Hi from Rust!".into()).unwrap();
+            let res = eval.recv().await.unwrap();
+            println!("{:?}", eval.await);
+            res
         }
-    })
+    });
+
+    match future.value() {
+        Some(v) => cx.render(rsx!(
+            p { "{v}" }
+        )),
+        _ => cx.render(rsx!(
+            p { "hello" }
+        )),
+    }
 }
