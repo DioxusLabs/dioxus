@@ -52,7 +52,13 @@ where
             val.set(Some(fut.await));
             task.take();
         })));
+
+        // Mark that we don't need to regenerate
+        state.needs_regen.set(false);
     }
+
+    // update the current value
+    state.state.current_val = val.current_val.clone();
 
     state
 }
