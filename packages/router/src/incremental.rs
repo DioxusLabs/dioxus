@@ -50,7 +50,8 @@ where
                         &mut tokio::io::sink(),
                         |vdom| {
                             Box::pin(async move {
-                                let _ = vdom.wait_for_suspense().await;
+                                let _ = vdom.rebuild();
+                                vdom.wait_for_suspense().await;
                             })
                         },
                         wrapper,
