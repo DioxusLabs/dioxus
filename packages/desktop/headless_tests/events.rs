@@ -29,20 +29,24 @@ pub fn main() {
 }
 
 fn mock_event(cx: &ScopeState, id: &'static str, value: &'static str) {
-    let js = format!(
-        r#"
-        //console.log("ran");
-        // Dispatch a synthetic event
-        let event = {};
-        let element = document.getElementById('{}');
-        console.log(element, event);
-        element.dispatchEvent(event);
-        "#,
-        value, id
-    );
+    let eval_provider = use_eval(cx).clone();
 
-    let eval_provider = use_eval(cx);
-    eval_provider(&js).unwrap();
+    use_effect(cx, (), move |_| async move {
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        let js = format!(
+            r#"
+                //console.log("ran");
+                // Dispatch a synthetic event
+                let event = {};
+                let element = document.getElementById('{}');
+                console.log(element, event);
+                element.dispatchEvent(event);
+                "#,
+            value, id
+        );
+
+        eval_provider(&js).unwrap();
+    })
 }
 
 #[allow(deprecated)]
@@ -50,82 +54,81 @@ fn app(cx: Scope) -> Element {
     let desktop_context: DesktopContext = cx.consume_context().unwrap();
     let recieved_events = use_state(cx, || 0);
 
-    let on_load = move |_| {
-        // button
-        mock_event(
-            cx,
-            "button",
-            r#"new MouseEvent("click", {
+    // button
+    mock_event(
+        cx,
+        "button",
+        r#"new MouseEvent("click", {
         view: window,
         bubbles: true,
         cancelable: true,
         button: 0,
         })"#,
-        );
-        // mouse_move_div
-        mock_event(
-            cx,
-            "mouse_move_div",
-            r#"new MouseEvent("mousemove", {
+    );
+    // mouse_move_div
+    mock_event(
+        cx,
+        "mouse_move_div",
+        r#"new MouseEvent("mousemove", {
         view: window,
         bubbles: true,
         cancelable: true,
         buttons: 2,
         })"#,
-        );
-        // mouse_click_div
-        mock_event(
-            cx,
-            "mouse_click_div",
-            r#"new MouseEvent("click", {
+    );
+    // mouse_click_div
+    mock_event(
+        cx,
+        "mouse_click_div",
+        r#"new MouseEvent("click", {
         view: window,
         bubbles: true,
         cancelable: true,
         buttons: 2,
         button: 2,
         })"#,
-        );
-        // mouse_dblclick_div
-        mock_event(
-            cx,
-            "mouse_dblclick_div",
-            r#"new MouseEvent("dblclick", {
+    );
+    // mouse_dblclick_div
+    mock_event(
+        cx,
+        "mouse_dblclick_div",
+        r#"new MouseEvent("dblclick", {
         view: window,
         bubbles: true,
         cancelable: true,
         buttons: 1|2,
         button: 2,
         })"#,
-        );
-        // mouse_down_div
-        mock_event(
-            cx,
-            "mouse_down_div",
-            r#"new MouseEvent("mousedown", {
+    );
+    // mouse_down_div
+    mock_event(
+        cx,
+        "mouse_down_div",
+        r#"new MouseEvent("mousedown", {
         view: window,
         bubbles: true,
         cancelable: true,
         buttons: 2,
         button: 2,
         })"#,
-        );
-        // mouse_up_div
-        mock_event(
-            cx,
-            "mouse_up_div",
-            r#"new MouseEvent("mouseup", {
+    );
+    // mouse_up_div
+    mock_event(
+        cx,
+        "mouse_up_div",
+        r#"new MouseEvent("mouseup", {
         view: window,
         bubbles: true,
         cancelable: true,
         buttons: 0,
         button: 0,
         })"#,
-        );
-        // wheel_div
-        mock_event(
-            cx,
-            "wheel_div",
-            r#"new WheelEvent("wheel", {
+    );
+    // wheel_div
+    mock_event(
+        cx,
+        "wheel_div",
+        r#"new WheelEvent("wheel", {
         view: window,
         deltaX: 1.0,
         deltaY: 2.0,
@@ -133,12 +136,12 @@ fn app(cx: Scope) -> Element {
         deltaMode: 0x00,
         bubbles: true,
         })"#,
-        );
-        // key_down_div
-        mock_event(
-            cx,
-            "key_down_div",
-            r#"new KeyboardEvent("keydown", {
+    );
+    // key_down_div
+    mock_event(
+        cx,
+        "key_down_div",
+        r#"new KeyboardEvent("keydown", {
         key: "a",
         code: "KeyA",
         location: 0,
@@ -155,12 +158,12 @@ fn app(cx: Scope) -> Element {
         which: 65,
         bubbles: true,
         })"#,
-        );
-        // key_up_div
-        mock_event(
-            cx,
-            "key_up_div",
-            r#"new KeyboardEvent("keyup", {
+    );
+    // key_up_div
+    mock_event(
+        cx,
+        "key_up_div",
+        r#"new KeyboardEvent("keyup", {
         key: "a",
         code: "KeyA",
         location: 0,
@@ -177,12 +180,12 @@ fn app(cx: Scope) -> Element {
         which: 65,
         bubbles: true,
         })"#,
-        );
-        // key_press_div
-        mock_event(
-            cx,
-            "key_press_div",
-            r#"new KeyboardEvent("keypress", {
+    );
+    // key_press_div
+    mock_event(
+        cx,
+        "key_press_div",
+        r#"new KeyboardEvent("keypress", {
         key: "a",
         code: "KeyA",
         location: 0,
@@ -199,20 +202,19 @@ fn app(cx: Scope) -> Element {
         which: 65,
         bubbles: true,
         })"#,
-        );
-        // focus_in_div
-        mock_event(
-            cx,
-            "focus_in_div",
-            r#"new FocusEvent("focusin", {bubbles: true})"#,
-        );
-        // focus_out_div
-        mock_event(
-            cx,
-            "focus_out_div",
-            r#"new FocusEvent("focusout",{bubbles: true})"#,
-        );
-    };
+    );
+    // focus_in_div
+    mock_event(
+        cx,
+        "focus_in_div",
+        r#"new FocusEvent("focusin", {bubbles: true})"#,
+    );
+    // focus_out_div
+    mock_event(
+        cx,
+        "focus_out_div",
+        r#"new FocusEvent("focusout",{bubbles: true})"#,
+    );
 
     if **recieved_events == 12 {
         println!("all events recieved");
@@ -347,10 +349,6 @@ fn app(cx: Scope) -> Element {
                     println!("{:?}", event.data);
                     recieved_events.modify(|x| *x + 1)
                 }
-            }
-            img {
-                onload: on_load,
-                src: "https://avatars.githubusercontent.com/u/79236386?s=200&v=4",
             }
         }
     })
