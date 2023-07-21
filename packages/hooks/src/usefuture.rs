@@ -57,6 +57,9 @@ where
         state.needs_regen.set(false);
     }
 
+    // update the current value
+    state.state.current_val = val.current_val.clone();
+
     state
 }
 
