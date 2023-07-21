@@ -67,7 +67,7 @@ unsafe impl<'a, P> AnyProps<'a> for VProps<'a, P> {
             Ok(Some(e)) => RenderReturn::Ready(e),
             Ok(None) => RenderReturn::default(),
             Err(err) => {
-                let component_name = std::any::type_name::<P>();
+                let component_name = cx.name();
                 log::error!("Error while rendering component `{component_name}`: {err:?}");
                 RenderReturn::default()
             }
