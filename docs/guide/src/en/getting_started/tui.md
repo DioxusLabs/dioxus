@@ -23,7 +23,7 @@ Start by making a new package and adding Dioxus and the TUI renderer as dependan
 ```shell
 cargo new --bin demo
 cd demo
-cargo add dioxus
+cargo add dioxus@0.2
 cargo add dioxus-tui
 ```
 
