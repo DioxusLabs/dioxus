@@ -29,13 +29,13 @@ pub enum ConditionalInfo {
 pub struct IfInfo {
     /// The span of the `if` statement, e.g. `if true { ... }`.
     pub span: Span,
-    /// The span of the `if` keyword only.
-    pub keyword_span: Span,
+    /// The span of the `if true` part only.
+    pub head_span: Span,
 }
 
 impl IfInfo {
-    pub const fn new(span: Span, keyword_span: Span) -> Self {
-        Self { span, keyword_span }
+    pub const fn new(span: Span, head_span: Span) -> Self {
+        Self { span, head_span }
     }
 }
 
@@ -43,13 +43,13 @@ impl IfInfo {
 pub struct MatchInfo {
     /// The span of the `match` statement, e.g. `match true { ... }`.
     pub span: Span,
-    /// The span of the `match` keyword only.
-    pub keyword_span: Span,
+    /// The span of the `match true` part only.
+    pub head_span: Span,
 }
 
 impl MatchInfo {
-    pub const fn new(span: Span, keyword_span: Span) -> Self {
-        Self { span, keyword_span }
+    pub const fn new(span: Span, head_span: Span) -> Self {
+        Self { span, head_span }
     }
 }
 
@@ -65,12 +65,12 @@ pub enum AnyLoopInfo {
 /// Information about a `for` loop.
 pub struct ForInfo {
     pub span: Span,
-    pub keyword_span: Span,
+    pub head_span: Span,
 }
 
 impl ForInfo {
-    pub const fn new(span: Span, keyword_span: Span) -> Self {
-        Self { span, keyword_span }
+    pub const fn new(span: Span, head_span: Span) -> Self {
+        Self { span, head_span }
     }
 }
 
@@ -78,12 +78,12 @@ impl ForInfo {
 /// Information about a `while` loop.
 pub struct WhileInfo {
     pub span: Span,
-    pub keyword_span: Span,
+    pub head_span: Span,
 }
 
 impl WhileInfo {
-    pub const fn new(span: Span, keyword_span: Span) -> Self {
-        Self { span, keyword_span }
+    pub const fn new(span: Span, head_span: Span) -> Self {
+        Self { span, head_span }
     }
 }
 
@@ -91,12 +91,11 @@ impl WhileInfo {
 /// Information about a `loop` loop.
 pub struct LoopInfo {
     pub span: Span,
-    pub keyword_span: Span,
 }
 
 impl LoopInfo {
-    pub const fn new(span: Span, keyword_span: Span) -> Self {
-        Self { span, keyword_span }
+    pub const fn new(span: Span) -> Self {
+        Self { span }
     }
 }
 
@@ -151,13 +150,35 @@ impl FnInfo {
 #[derive(Debug, Clone, PartialEq, Eq)]
 /// A span of text in a source code file.
 pub struct Span {
+    pub source_text: Option<String>,
     pub start: LineColumn,
     pub end: LineColumn,
+}
+
+impl Span {
+    pub fn new_from_str(source_text: &str, start: LineColumn) -> Self {
+        let mut lines = source_text.lines();
+        let first_line = lines.next().unwrap_or_default();
+        let mut end = LineColumn {
+            line: start.line,
+            column: start.column + first_line.len(),
+        };
+        for line in lines {
+            end.line += 1;
+            end.column = line.len();
+        }
+        Self {
+            source_text: Some(source_text.to_string()),
+            start,
+            end,
+        }
+    }
 }
 
 impl From<proc_macro2::Span> for Span {
     fn from(span: proc_macro2::Span) -> Self {
         Self {
+            source_text: span.source_text(),
             start: span.start().into(),
             end: span.end().into(),
         }

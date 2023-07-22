@@ -29,11 +29,12 @@ pub fn check_file(path: PathBuf, file_content: &str) -> IssueReport {
     let file = syn::parse_file(file_content).unwrap();
     let mut visit_hooks = VisitHooks::new();
     visit_hooks.visit_file(&file);
-    IssueReport {
+    IssueReport::new(
         path,
-        file_content: file_content.to_string(),
-        issues: visit_hooks.issues,
-    }
+        std::env::current_dir().unwrap_or_default(),
+        file_content.to_string(),
+        visit_hooks.issues,
+    )
 }
 
 #[derive(Debug, Clone)]
@@ -175,7 +176,11 @@ impl<'ast> syn::visit::Visit<'ast> for VisitHooks {
     fn visit_expr_if(&mut self, i: &'ast syn::ExprIf) {
         self.context.push(Node::If(IfInfo::new(
             i.span().into(),
-            i.if_token.span().into(),
+            i.if_token
+                .span()
+                .join(i.cond.span())
+                .unwrap_or_else(|| i.span())
+                .into(),
         )));
         syn::visit::visit_expr_if(self, i);
         self.context.pop();
@@ -184,7 +189,11 @@ impl<'ast> syn::visit::Visit<'ast> for VisitHooks {
     fn visit_expr_match(&mut self, i: &'ast syn::ExprMatch) {
         self.context.push(Node::Match(MatchInfo::new(
             i.span().into(),
-            i.match_token.span().into(),
+            i.match_token
+                .span()
+                .join(i.expr.span())
+                .unwrap_or_else(|| i.span())
+                .into(),
         )));
         syn::visit::visit_expr_match(self, i);
         self.context.pop();
@@ -193,7 +202,11 @@ impl<'ast> syn::visit::Visit<'ast> for VisitHooks {
     fn visit_expr_for_loop(&mut self, i: &'ast syn::ExprForLoop) {
         self.context.push(Node::For(ForInfo::new(
             i.span().into(),
-            i.for_token.span().into(),
+            i.for_token
+                .span()
+                .join(i.expr.span())
+                .unwrap_or_else(|| i.span())
+                .into(),
         )));
         syn::visit::visit_expr_for_loop(self, i);
         self.context.pop();
@@ -202,17 +215,19 @@ impl<'ast> syn::visit::Visit<'ast> for VisitHooks {
     fn visit_expr_while(&mut self, i: &'ast syn::ExprWhile) {
         self.context.push(Node::While(WhileInfo::new(
             i.span().into(),
-            i.while_token.span().into(),
+            i.while_token
+                .span()
+                .join(i.cond.span())
+                .unwrap_or_else(|| i.span())
+                .into(),
         )));
         syn::visit::visit_expr_while(self, i);
         self.context.pop();
     }
 
     fn visit_expr_loop(&mut self, i: &'ast syn::ExprLoop) {
-        self.context.push(Node::Loop(LoopInfo::new(
-            i.span().into(),
-            i.loop_token.span().into(),
-        )));
+        self.context
+            .push(Node::Loop(LoopInfo::new(i.span().into())));
         syn::visit::visit_expr_loop(self, i);
         self.context.pop();
     }
@@ -222,5 +237,330 @@ impl<'ast> syn::visit::Visit<'ast> for VisitHooks {
             .push(Node::Closure(ClosureInfo::new(i.span().into())));
         syn::visit::visit_expr_closure(self, i);
         self.context.pop();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::metadata::{
+        AnyLoopInfo, ClosureInfo, ConditionalInfo, ForInfo, HookInfo, IfInfo, LineColumn, LoopInfo,
+        MatchInfo, Span, WhileInfo,
+    };
+    use indoc::indoc;
+    use pretty_assertions::assert_eq;
+
+    use super::*;
+
+    #[test]
+    fn test_no_issues() {
+        let contents = indoc! {r#"
+            fn App(cx: Scope) -> Element {
+                rsx! {
+                    p { "Hello World" }
+                }
+            }
+        "#};
+
+        let report = check_file("app.rs".into(), contents);
+
+        assert_eq!(report.issues, vec![]);
+    }
+
+    #[test]
+    fn test_conditional_hook_if() {
+        let contents = indoc! {r#"
+            fn App(cx: Scope) -> Element {
+                if you_are_happy && you_know_it {
+                    let something = use_state(cx, || "hands");
+                    println!("clap your {something}")
+                }
+            }
+        "#};
+
+        let report = check_file("app.rs".into(), contents);
+
+        assert_eq!(
+            report.issues,
+            vec![Issue::HookInsideConditional(
+                HookInfo::new(
+                    Span::new_from_str(
+                        r#"use_state(cx, || "hands")"#,
+                        LineColumn { line: 3, column: 24 },
+                    ),
+                    Span::new_from_str(
+                        r#"use_state"#,
+                        LineColumn { line: 3, column: 24 },
+                    ),
+                    "use_state".to_string()
+                ),
+                ConditionalInfo::If(IfInfo::new(
+                    Span::new_from_str(
+                        "if you_are_happy && you_know_it {\n        let something = use_state(cx, || \"hands\");\n        println!(\"clap your {something}\")\n    }",
+                        LineColumn { line: 2, column: 4 },
+                    ),
+                    Span::new_from_str(
+                        "if you_are_happy && you_know_it",
+                        LineColumn { line: 2, column: 4 }
+                    )
+                ))
+            )],
+        );
+    }
+
+    #[test]
+    fn test_conditional_hook_match() {
+        let contents = indoc! {r#"
+            fn App(cx: Scope) -> Element {
+                match you_are_happy && you_know_it {
+                    true => {
+                        let something = use_state(cx, || "hands");
+                        println!("clap your {something}")
+                    }
+                    false => {}
+                }
+            }
+        "#};
+
+        let report = check_file("app.rs".into(), contents);
+
+        assert_eq!(
+            report.issues,
+            vec![Issue::HookInsideConditional(
+                HookInfo::new(
+                    Span::new_from_str(r#"use_state(cx, || "hands")"#, LineColumn { line: 4, column: 28 }),
+                    Span::new_from_str(r#"use_state"#, LineColumn { line: 4, column: 28 }),
+                    "use_state".to_string()
+                ),
+                ConditionalInfo::Match(MatchInfo::new(
+                    Span::new_from_str(
+                        "match you_are_happy && you_know_it {\n        true => {\n            let something = use_state(cx, || \"hands\");\n            println!(\"clap your {something}\")\n        }\n        false => {}\n    }",
+                        LineColumn { line: 2, column: 4 },
+                    ),
+                    Span::new_from_str("match you_are_happy && you_know_it", LineColumn { line: 2, column: 4 })
+                ))
+            )]
+        );
+    }
+
+    #[test]
+    fn test_for_loop_hook() {
+        let contents = indoc! {r#"
+            fn App(cx: Scope) -> Element {
+                for _name in &names {
+                    let is_selected = use_state(cx, || false);
+                    println!("selected: {is_selected}");
+                }
+            }
+        "#};
+
+        let report = check_file("app.rs".into(), contents);
+
+        assert_eq!(
+            report.issues,
+            vec![Issue::HookInsideLoop(
+                HookInfo::new(
+                    Span::new_from_str(
+                        "use_state(cx, || false)",
+                        LineColumn { line: 3, column: 26 },
+                    ),
+                    Span::new_from_str(
+                        "use_state",
+                        LineColumn { line: 3, column: 26 },
+                    ),
+                    "use_state".to_string()
+                ),
+                AnyLoopInfo::For(ForInfo::new(
+                    Span::new_from_str(
+                        "for _name in &names {\n        let is_selected = use_state(cx, || false);\n        println!(\"selected: {is_selected}\");\n    }",
+                        LineColumn { line: 2, column: 4 },
+                    ),
+                    Span::new_from_str(
+                        "for _name in &names",
+                        LineColumn { line: 2, column: 4 },
+                    )
+                ))
+            )]
+        );
+    }
+
+    #[test]
+    fn test_while_loop_hook() {
+        let contents = indoc! {r#"
+            fn App(cx: Scope) -> Element {
+                while true {
+                    let something = use_state(cx, || "hands");
+                    println!("clap your {something}")
+                }
+            }
+        "#};
+
+        let report = check_file("app.rs".into(), contents);
+
+        assert_eq!(
+            report.issues,
+            vec![Issue::HookInsideLoop(
+                HookInfo::new(
+                    Span::new_from_str(
+                        r#"use_state(cx, || "hands")"#,
+                        LineColumn { line: 3, column: 24 },
+                    ),
+                    Span::new_from_str(
+                        "use_state",
+                        LineColumn { line: 3, column: 24 },
+                    ),
+                    "use_state".to_string()
+                ),
+                AnyLoopInfo::While(WhileInfo::new(
+                    Span::new_from_str(
+                        "while true {\n        let something = use_state(cx, || \"hands\");\n        println!(\"clap your {something}\")\n    }",
+                        LineColumn { line: 2, column: 4 },
+                    ),
+                    Span::new_from_str(
+                        "while true",
+                        LineColumn { line: 2, column: 4 },
+                    )
+                ))
+            )],
+        );
+    }
+
+    #[test]
+    fn test_loop_hook() {
+        let contents = indoc! {r#"
+            fn App(cx: Scope) -> Element {
+                loop {
+                    let something = use_state(cx, || "hands");
+                    println!("clap your {something}")
+                }
+            }
+        "#};
+
+        let report = check_file("app.rs".into(), contents);
+
+        assert_eq!(
+            report.issues,
+            vec![Issue::HookInsideLoop(
+                HookInfo::new(
+                    Span::new_from_str(
+                        r#"use_state(cx, || "hands")"#,
+                        LineColumn { line: 3, column: 24 },
+                    ),
+                    Span::new_from_str(
+                        "use_state",
+                        LineColumn { line: 3, column: 24 },
+                    ),
+                    "use_state".to_string()
+                ),
+                AnyLoopInfo::Loop(LoopInfo::new(Span::new_from_str(
+                    "loop {\n        let something = use_state(cx, || \"hands\");\n        println!(\"clap your {something}\")\n    }",
+                    LineColumn { line: 2, column: 4 },
+                )))
+            )],
+        );
+    }
+
+    #[test]
+    fn test_conditional_okay() {
+        let contents = indoc! {r#"
+            fn App(cx: Scope) -> Element {
+                let something = use_state(cx, || "hands");
+                if you_are_happy && you_know_it {
+                    println!("clap your {something}")
+                }
+            }
+        "#};
+
+        let report = check_file("app.rs".into(), contents);
+
+        assert_eq!(report.issues, vec![]);
+    }
+
+    #[test]
+    fn test_closure_hook() {
+        let contents = indoc! {r#"
+            fn App(cx: Scope) -> Element {
+                let _a = || {
+                    let b = use_state(cx, || 0);
+                    b.get()
+                };
+            }
+        "#};
+
+        let report = check_file("app.rs".into(), contents);
+
+        assert_eq!(
+            report.issues,
+            vec![Issue::HookInsideClosure(
+                HookInfo::new(
+                    Span::new_from_str(
+                        "use_state(cx, || 0)",
+                        LineColumn {
+                            line: 3,
+                            column: 16
+                        },
+                    ),
+                    Span::new_from_str(
+                        "use_state",
+                        LineColumn {
+                            line: 3,
+                            column: 16
+                        },
+                    ),
+                    "use_state".to_string()
+                ),
+                ClosureInfo::new(Span::new_from_str(
+                    "|| {\n        let b = use_state(cx, || 0);\n        b.get()\n    }",
+                    LineColumn {
+                        line: 2,
+                        column: 13
+                    },
+                ))
+            )]
+        );
+    }
+
+    #[test]
+    fn test_hook_outside_component() {
+        let contents = indoc! {r#"
+            fn not_component_or_hook(cx: Scope) {
+                let _a = use_state(cx, || 0);
+            }
+        "#};
+
+        let report = check_file("app.rs".into(), contents);
+
+        assert_eq!(
+            report.issues,
+            vec![Issue::HookOutsideComponent(HookInfo::new(
+                Span::new_from_str(
+                    "use_state(cx, || 0)",
+                    LineColumn {
+                        line: 2,
+                        column: 13
+                    }
+                ),
+                Span::new_from_str(
+                    "use_state",
+                    LineColumn {
+                        line: 2,
+                        column: 13
+                    },
+                ),
+                "use_state".to_string()
+            ))]
+        );
+    }
+
+    #[test]
+    fn test_hook_inside_hook() {
+        let contents = indoc! {r#"
+            fn use_thing(cx: Scope) {
+                let _a = use_state(cx, || 0);
+            }
+        "#};
+
+        let report = check_file("app.rs".into(), contents);
+
+        assert_eq!(report.issues, vec![]);
     }
 }
