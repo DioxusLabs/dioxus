@@ -10,6 +10,7 @@ pub mod util;
 pub mod wasm_build;
 pub mod wasm_opt;
 pub mod web_out;
+pub mod minify;
 
 /// Represents a pipeline with it's own config and steps.
 pub struct Pipeline {

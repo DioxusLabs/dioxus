@@ -6,7 +6,7 @@ use crate::{
     tools,
 };
 
-const STAGING_OUT: &str = "./sass";
+const STAGING_OUT: &str = "./css";
 
 /// Generates CSS files from any SASS or SCSS files.
 pub struct SassBuild {}
