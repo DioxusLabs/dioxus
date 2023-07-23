@@ -106,3 +106,23 @@ pub fn from_dir(dir_path: PathBuf) -> Result<Vec<File>> {
 
     Ok(files)
 }
+
+/// Represents a message to be diplayed when the pipeline is finished.
+pub struct OutputMessage {
+    pub severity: MessageSeverity,
+    pub message: String,
+}
+
+impl OutputMessage {
+    pub fn new<S: ToString>(severity: MessageSeverity, message: S) -> Self {
+        let message = message.to_string();
+        Self { severity, message }
+    }
+}
+
+/// Represents the severity of the message.
+/// Errors should exit the pipeline, not output as a final message.
+pub enum MessageSeverity {
+    Info,
+    Warn,
+}

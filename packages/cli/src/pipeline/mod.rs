@@ -1,16 +1,16 @@
-use self::util::File;
-use crate::{Error, ProgressSpinner, Result};
+use self::util::{File, OutputMessage};
+use crate::{pipeline::util::MessageSeverity, Error, ProgressSpinner, Result};
 use fs_extra::{dir::CopyOptions as DirCopyOptions, file::CopyOptions as FileCopyOptions};
 use std::path::PathBuf;
 
 pub mod index_file;
+pub mod minify;
 pub mod pull_assets;
 pub mod sass;
 pub mod util;
 pub mod wasm_build;
 pub mod wasm_opt;
 pub mod web_out;
-pub mod minify;
 
 /// Represents a pipeline with it's own config and steps.
 pub struct Pipeline {
@@ -69,7 +69,10 @@ impl Pipeline {
         // Final messages
         pb.done_and_clear();
         for msg in self.config.output_messages.iter() {
-            log::info!("{}", msg);
+            match msg.severity {
+                MessageSeverity::Info => log::info!("{}", msg.message),
+                MessageSeverity::Warn => log::warn!("{}", msg.message),
+            }
         }
 
         // End benchmark
@@ -94,7 +97,7 @@ pub struct PipelineContext {
     /// Represents a copy of the pipeline's progress spinner.
     progress_spinner: Option<ProgressSpinner>,
     /// A list of messages to emit when the pipeline finishes
-    output_messages: Vec<String>,
+    output_messages: Vec<OutputMessage>,
 }
 
 impl PipelineContext {
@@ -112,8 +115,7 @@ impl PipelineContext {
         }
     }
 
-    pub fn add_output_message<S: ToString>(&mut self, message: S) {
-        let message = message.to_string();
+    pub fn add_output_message(&mut self, message: OutputMessage) {
         self.output_messages.push(message);
     }
 

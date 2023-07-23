@@ -1,6 +1,9 @@
 use std::fs;
 
-use super::{PipelineContext, PipelineStep};
+use super::{
+    util::{MessageSeverity, OutputMessage},
+    PipelineContext, PipelineStep,
+};
 use crate::{pipeline::util::FileType, tools};
 
 /// Optimizes wasm files.
@@ -42,7 +45,7 @@ impl PipelineStep for WasmOpt {
 
         let kb_saved = (bytes_init_total - bytes_final_total) / 1000;
         let msg = format!("Optimizing wasm saved {}kb", kb_saved);
-        config.add_output_message(msg);
+        config.add_output_message(OutputMessage::new(MessageSeverity::Info, msg));
 
         Ok(())
     }
