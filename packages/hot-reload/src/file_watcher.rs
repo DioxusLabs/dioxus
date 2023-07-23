@@ -12,6 +12,7 @@ use dioxus_rsx::{
 };
 use interprocess_docfix::local_socket::{LocalSocketListener, LocalSocketStream};
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
+use crate::HotReloadMsg;
 
 pub use dioxus_html::HtmlCtx;
 use serde::{Deserialize, Serialize};
