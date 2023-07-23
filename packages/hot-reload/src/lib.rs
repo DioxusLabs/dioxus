@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "file_watcher")]
 mod file_watcher;
 #[cfg(feature = "file_watcher")]
-use file_watcher::*;
+pub use file_watcher::*;
 
 /// A message the hot reloading server sends to the client
 #[derive(Debug, Serialize, Deserialize, Clone, Copy)]
