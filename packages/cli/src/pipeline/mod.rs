@@ -3,6 +3,7 @@ use crate::{pipeline::util::MessageSeverity, Error, ProgressSpinner, Result};
 use fs_extra::{dir::CopyOptions as DirCopyOptions, file::CopyOptions as FileCopyOptions};
 use std::path::PathBuf;
 
+pub mod image_opt;
 pub mod index_file;
 pub mod minify;
 pub mod pull_assets;
@@ -285,8 +286,10 @@ pub enum StepPriority {
 pub trait PipelineStep {
     /// Called when the step needs to run.
     fn run(&mut self, config: &mut PipelineContext) -> Result<()>;
-    /// Called when the entire pipeline is finished.
-    fn pipeline_finished(&mut self, config: &mut PipelineContext) -> Result<()>;
     /// Gets the step's priority.
     fn priority(&self) -> StepPriority;
+    /// Called when the entire pipeline is finished.
+    fn pipeline_finished(&mut self, _config: &mut PipelineContext) -> Result<()> {
+        Ok(())
+    }
 }

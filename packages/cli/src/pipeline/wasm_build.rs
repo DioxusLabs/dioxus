@@ -94,10 +94,6 @@ impl PipelineStep for WasmBuild {
         Ok(())
     }
 
-    fn pipeline_finished(&mut self, _config: &mut PipelineContext) -> crate::Result<()> {
-        Ok(())
-    }
-
     fn priority(&self) -> super::StepPriority {
         // This step generates wasm and JS files that can be further optimized.
         super::StepPriority::High

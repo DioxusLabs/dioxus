@@ -30,10 +30,6 @@ impl PipelineStep for WebOut {
         Ok(())
     }
 
-    fn pipeline_finished(&mut self, _config: &mut PipelineContext) -> crate::Result<()> {
-        Ok(())
-    }
-
     fn priority(&self) -> super::StepPriority {
         super::StepPriority::Lowest
     }

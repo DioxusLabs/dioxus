@@ -2,6 +2,7 @@ use crate::{Error, Result};
 use std::{ffi::OsStr, fs, path::PathBuf};
 
 /// Represents a File on the device's storage system.
+#[derive(Clone)]
 pub struct File {
     /// The name of the file.
     pub name: String,
@@ -55,15 +56,11 @@ impl From<String> for FileType {
             "rs" => Self::Rust,
             "wasm" => Self::Wasm,
 
-            // Images
+            // Image types processed by pipeline
             "png" => Self::Image,
             "jpg" => Self::Image,
             "jpeg" => Self::Image,
-            "webp" => Self::Image,
-            "apng" => Self::Image,
-            "avif" => Self::Image,
             "gif" => Self::Image,
-            "svg" => Self::Image,
             _ => Self::Unknown,
         }
     }

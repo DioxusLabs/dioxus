@@ -83,6 +83,7 @@ dioxus-html = { workspace = true, features = ["hot-reload-context"] }
 dioxus-core = { workspace = true, features = ["serialize"] }
 lightningcss = "1.0.0-alpha.44"
 minify-js = "0.5.6"
+image = { version = "0.24.6", default-features = false, features = ["png", "jpeg", "gif", "webp-encoder"]}
 
 [features]
 default = []
