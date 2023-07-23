@@ -1,15 +1,15 @@
 use std::io::{BufRead, BufReader};
 
 use dioxus_core::Template;
-#[cfg(file_watcher)]
+#[cfg(feature = "file_watcher")]
 pub use dioxus_html::HtmlCtx;
 use interprocess_docfix::local_socket::LocalSocketStream;
 use serde::{Deserialize, Serialize};
 
-#[cfg(file_watcher)]
+#[cfg(feature = "file_watcher")]
 mod file_watcher;
-#[cfg(file_watcher)]
-use file_watcher::*;
+#[cfg(feature = "file_watcher")]
+pub use file_watcher::*;
 
 /// A message the hot reloading server sends to the client
 #[derive(Debug, Serialize, Deserialize, Clone, Copy)]
