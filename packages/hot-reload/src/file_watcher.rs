@@ -5,6 +5,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use crate::HotReloadMsg;
 use dioxus_core::Template;
 use dioxus_rsx::{
     hot_reload::{FileMap, FileMapBuildResult, UpdateResult},
@@ -12,7 +13,6 @@ use dioxus_rsx::{
 };
 use interprocess_docfix::local_socket::{LocalSocketListener, LocalSocketStream};
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
-use crate::HotReloadMsg;
 
 pub use dioxus_html::HtmlCtx;
 use serde::{Deserialize, Serialize};
