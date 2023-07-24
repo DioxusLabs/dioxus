@@ -1,6 +1,6 @@
 use super::*;
 
-/// Build the Rust WASM app and all of its assets.
+/// Clean build artifacts.
 #[derive(Clone, Debug, Parser)]
 #[clap(name = "clean")]
 pub struct Clean {}
