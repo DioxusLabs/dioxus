@@ -48,8 +48,8 @@ fn NavBar(cx: Scope) -> Element {
     render! {
         nav {
             ul {
-                li { Link { target: Route::Home {}, "Home" } }
-                li { Link { target: Route::BlogList {}, "Blog" } }
+                li { Link { to: Route::Home {}, "Home" } }
+                li { Link { to: Route::BlogList {}, "Blog" } }
             }
         }
         Outlet {}
@@ -78,13 +78,13 @@ fn BlogList(cx: Scope) -> Element {
         ul {
             li {
                 Link {
-                    target: Route::BlogPost { name: "Blog post 1".into() },
+                    to: Route::BlogPost { name: "Blog post 1".into() },
                     "Read the first blog post"
                 }
             }
             li {
                 Link {
-                    target: Route::BlogPost { name: "Blog post 2".into() },
+                    to: Route::BlogPost { name: "Blog post 2".into() },
                     "Read the second blog post"
                 }
             }

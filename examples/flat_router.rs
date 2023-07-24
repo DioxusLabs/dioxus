@@ -48,10 +48,10 @@ fn Footer(cx: Scope) -> Element {
 
             nav {
                 ul {
-                    li { Link { target: Route::Home {}, "Home" } }
-                    li { Link { target: Route::Games {}, "Games" } }
-                    li { Link { target: Route::Play {}, "Play" } }
-                    li { Link { target: Route::Settings {}, "Settings" } }
+                    li { Link { to: Route::Home {}, "Home" } }
+                    li { Link { to: Route::Games {}, "Games" } }
+                    li { Link { to: Route::Play {}, "Play" } }
+                    li { Link { to: Route::Settings {}, "Settings" } }
                 }
             }
         }

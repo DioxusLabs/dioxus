@@ -58,12 +58,12 @@ fn ClientList(cx: Scope) -> Element {
         h2 { "List of Clients" }
 
         Link {
-            target: Route::ClientAdd {},
+            to: Route::ClientAdd {},
             class: "pure-button pure-button-primary",
             "Add Client"
         }
         Link {
-            target: Route::Settings {},
+            to: Route::Settings {},
             class: "pure-button",
             "Settings"
         }
@@ -161,7 +161,7 @@ fn ClientAdd(cx: Scope) -> Element {
                         "Save"
                     }
                     Link {
-                        target: Route::ClientList {},
+                        to: Route::ClientList {},
                         class: "pure-button pure-button-primary red",
                         "Cancel"
                     }
@@ -190,7 +190,7 @@ fn Settings(cx: Scope) -> Element {
         }
 
         Link {
-            target: Route::ClientList {},
+            to: Route::ClientList {},
             class: "pure-button",
             "Go back"
         }

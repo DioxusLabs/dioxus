@@ -26,7 +26,7 @@ fn NavBar(cx: Scope) -> Element {
                     Link {
                         // The Link component will navigate to the route specified
                         // in the target prop which is checked to exist at compile time
-                        target: Route::Home {},
+                        to: Route::Home {},
                         "Home"
                     }
                 }
