@@ -9,7 +9,7 @@ test('button click', async ({ page }) => {
   await expect(main).toContainText('hello axum! 0');
 
   // Click the increment button.
-  let button = await page.locator('button.increment-button');
+  let button = page.locator('button.increment-button');
   await button.click();
 
   // Expect the page to contain the updated counter text.
@@ -80,7 +80,7 @@ test('eval', async ({ page }) => {
   await expect(div).toHaveText('');
 
   // Click the button to run the eval.
-  let button = await page.locator('button.eval-button');
+  let button = page.locator('button.eval-button');
   await button.click();
 
   // Check that the title changed.
