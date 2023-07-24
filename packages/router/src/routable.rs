@@ -106,6 +106,22 @@ pub trait Routable: std::fmt::Display + std::str::FromStr + Clone + 'static {
     /// Render the route at the given level
     fn render<'a>(&self, cx: &'a ScopeState, level: usize) -> Element<'a>;
 
+    /// Checks if this route is a child of the given route
+    fn is_child_of(&self, other: &Self) -> bool {
+        let self_str = self.to_string();
+        let self_str = self_str.trim_matches('/');
+        let other_str = other.to_string();
+        let other_str = other_str.trim_matches('/');
+        let self_segments = self_str.split('/');
+        let other_segments = other_str.split('/');
+        for (self_seg, other_seg) in self_segments.zip(other_segments) {
+            if self_seg != other_seg {
+                return false;
+            }
+        }
+        true
+    }
+
     /// Gets a list of all static routes
     fn static_routes() -> Vec<Self> {
         Self::SITE_MAP
