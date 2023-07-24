@@ -181,7 +181,7 @@ pub trait Routable: std::fmt::Display + std::str::FromStr + Clone + 'static {
         let new_route = segments
             .take(segment_count - 1)
             .fold(String::new(), |mut acc, segment| {
-                acc.push_str("/");
+                acc.push('/');
                 acc.push_str(segment);
                 acc
             });
