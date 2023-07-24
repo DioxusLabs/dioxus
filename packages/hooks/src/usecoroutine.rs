@@ -46,7 +46,7 @@ use std::future::Future;
 ///     Stop,
 /// }
 ///
-/// let chat_client = use_coroutine(cx, |rx: UnboundedReceiver<Action>| async move {
+/// let chat_client = use_coroutine(cx, |mut rx: UnboundedReceiver<Action>| async move {
 ///     while let Some(action) = rx.next().await {
 ///         match action {
 ///             Action::Start => {}
