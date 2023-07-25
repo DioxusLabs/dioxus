@@ -60,6 +60,7 @@ pub mod prelude {
     pub use dioxus_ssr::incremental::IncrementalRendererConfig;
     pub use server_fn::{self, ServerFn as _, ServerFnError};
 
+    /// The result type returned from server functions
     pub type ServerFnServerFnResult<T = ()> = Result<T, ServerFnError>;
 
     pub use hooks::{server_cached::server_cached, server_future::use_server_future};
