@@ -106,6 +106,89 @@ pub trait Routable: std::fmt::Display + std::str::FromStr + Clone + 'static {
     /// Render the route at the given level
     fn render<'a>(&self, cx: &'a ScopeState, level: usize) -> Element<'a>;
 
+    /// Checks if this route is a child of the given route
+    ///
+    /// # Example
+    /// ```rust
+    /// use dioxus_router::prelude::*;
+    /// use dioxus::prelude::*;
+    ///
+    /// #[inline_props]
+    /// fn Home(cx: Scope) -> Element { todo!() }
+    /// #[inline_props]
+    /// fn About(cx: Scope) -> Element { todo!() }
+    ///
+    /// #[derive(Routable, Clone, PartialEq, Debug)]
+    /// enum Route {
+    ///     #[route("/")]
+    ///     Home {},
+    ///     #[route("/about")]
+    ///     About {},
+    /// }
+    ///
+    /// let route = Route::About {};
+    /// let parent = Route::Home {};
+    /// assert!(route.is_child_of(&parent));
+    /// ```
+    fn is_child_of(&self, other: &Self) -> bool {
+        let self_str = self.to_string();
+        let self_str = self_str.trim_matches('/');
+        let other_str = other.to_string();
+        let other_str = other_str.trim_matches('/');
+        if other_str.is_empty() {
+            return true;
+        }
+        let self_segments = self_str.split('/');
+        let other_segments = other_str.split('/');
+        for (self_seg, other_seg) in self_segments.zip(other_segments) {
+            dbg!(self_seg, other_seg);
+            if self_seg != other_seg {
+                return false;
+            }
+        }
+        true
+    }
+
+    /// Get the parent route of this route
+    ///
+    /// # Example
+    /// ```rust
+    /// use dioxus_router::prelude::*;
+    /// use dioxus::prelude::*;
+    ///
+    /// #[inline_props]
+    /// fn Home(cx: Scope) -> Element { todo!() }
+    /// #[inline_props]
+    /// fn About(cx: Scope) -> Element { todo!() }
+    ///
+    /// #[derive(Routable, Clone, PartialEq, Debug)]
+    /// enum Route {
+    ///     #[route("/")]
+    ///     Home {},
+    ///     #[route("/about")]
+    ///     About {},
+    /// }
+    ///
+    /// let route = Route::About {};
+    /// let parent = route.parent().unwrap();
+    /// assert_eq!(parent, Route::Home {});
+    /// ```
+    fn parent(&self) -> Option<Self> {
+        let as_str = self.to_string();
+        let as_str = as_str.trim_matches('/');
+        let segments = as_str.split('/');
+        let segment_count = segments.clone().count();
+        let new_route = segments
+            .take(segment_count - 1)
+            .fold(String::new(), |mut acc, segment| {
+                acc.push('/');
+                acc.push_str(segment);
+                acc
+            });
+
+        Self::from_str(&new_route).ok()
+    }
+
     /// Gets a list of all static routes
     fn static_routes() -> Vec<Self> {
         Self::SITE_MAP
