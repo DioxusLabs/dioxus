@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use syn::{spanned::Spanned, visit::Visit};
+use syn::{spanned::Spanned, visit::Visit, Pat};
 
 use crate::{
     issues::{Issue, IssueReport},
@@ -72,6 +72,20 @@ fn is_hook_ident(ident: &syn::Ident) -> bool {
 
 fn is_component_fn(item_fn: &syn::ItemFn) -> bool {
     returns_element(&item_fn.sig.output)
+}
+
+fn get_closure_hook_body(local: &syn::Local) -> Option<&syn::Expr> {
+    if let Pat::Ident(ident) = &local.pat {
+        if is_hook_ident(&ident.ident) {
+            if let Some((_, expr)) = &local.init {
+                if let syn::Expr::Closure(closure) = &**expr {
+                    return Some(&closure.body);
+                }
+            }
+        }
+    }
+
+    None
 }
 
 fn fn_name_and_name_span(item_fn: &syn::ItemFn) -> (String, Span) {
@@ -173,6 +187,17 @@ impl<'ast> syn::visit::Visit<'ast> for VisitHooks {
         self.context.pop();
     }
 
+    fn visit_local(&mut self, i: &'ast syn::Local) {
+        if let Some(body) = get_closure_hook_body(i) {
+            // if the closure is a hook, we only visit the body of the closure.
+            // this prevents adding a ClosureInfo node to the context
+            syn::visit::visit_expr(self, body);
+        } else {
+            // otherwise visit the whole local
+            syn::visit::visit_local(self, i);
+        }
+    }
+
     fn visit_expr_if(&mut self, i: &'ast syn::ExprIf) {
         self.context.push(Node::If(IfInfo::new(
             i.span().into(),
@@ -252,11 +277,59 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_no_issues() {
+    fn test_no_hooks() {
         let contents = indoc! {r#"
             fn App(cx: Scope) -> Element {
                 rsx! {
                     p { "Hello World" }
+                }
+            }
+        "#};
+
+        let report = check_file("app.rs".into(), contents);
+
+        assert_eq!(report.issues, vec![]);
+    }
+
+    #[test]
+    fn test_hook_correctly_used_inside_component() {
+        let contents = indoc! {r#"
+            fn App(cx: Scope) -> Element {
+                let count = use_state(cx, || 0);
+                rsx! {
+                    p { "Hello World: {count}" }
+                }
+            }
+        "#};
+
+        let report = check_file("app.rs".into(), contents);
+
+        assert_eq!(report.issues, vec![]);
+    }
+
+    #[test]
+    fn test_hook_correctly_used_inside_hook_fn() {
+        let contents = indoc! {r#"
+            fn use_thing(cx: Scope) -> UseState<i32> {
+                use_state(cx, || 0)
+            }
+        "#};
+
+        let report = check_file("use_thing.rs".into(), contents);
+
+        assert_eq!(report.issues, vec![]);
+    }
+
+    #[test]
+    fn test_hook_correctly_used_inside_hook_closure() {
+        let contents = indoc! {r#"
+            fn App(cx: Scope) -> Element {
+                let use_thing = || {
+                    use_state(cx, || 0)
+                };
+                let count = use_thing();
+                rsx! {
+                    p { "Hello World: {count}" }
                 }
             }
         "#};
