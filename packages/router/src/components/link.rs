@@ -42,7 +42,7 @@ pub struct GenericLinkProps<'a, R: Routable> {
     pub rel: Option<&'a str>,
     /// The navigation target. Roughly equivalent to the href attribute of an HTML anchor tag.
     #[props(into)]
-    pub target: NavigationTarget<R>,
+    pub to: NavigationTarget<R>,
 }
 
 impl<R: Routable> Debug for GenericLinkProps<'_, R> {
@@ -56,7 +56,7 @@ impl<R: Routable> Debug for GenericLinkProps<'_, R> {
             .field("onclick", &self.onclick.as_ref().map(|_| "onclick is set"))
             .field("onclick_only", &self.onclick_only)
             .field("rel", &self.rel)
-            .field("target", &self.target.to_string())
+            .field("to", &self.to.to_string())
             .finish()
     }
 }
@@ -106,7 +106,7 @@ impl<R: Routable> Debug for GenericLinkProps<'_, R> {
 ///                 id: "link_id",
 ///                 new_tab: true,
 ///                 rel: "link_rel",
-///                 target: Route::Index {},
+///                 to: Route::Index {},
 ///    
 ///                 "A fully configured link"
 ///             }
@@ -132,7 +132,7 @@ pub fn GenericLink<'a, R: Routable + Clone>(cx: Scope<'a, GenericLinkProps<'a, R
         onclick,
         onclick_only,
         rel,
-        target,
+        to,
     } = cx.props;
 
     // hook up to router
@@ -150,7 +150,7 @@ pub fn GenericLink<'a, R: Routable + Clone>(cx: Scope<'a, GenericLinkProps<'a, R
 
     let current_route = router.current();
     let current_url = current_route.to_string();
-    let href = target.to_string();
+    let href = to.to_string();
     let ac = active_class
         .and_then(|active_class| (href == current_url).then(|| format!(" {active_class}")))
         .unwrap_or_default();
@@ -159,7 +159,7 @@ pub fn GenericLink<'a, R: Routable + Clone>(cx: Scope<'a, GenericLinkProps<'a, R
     let class = format!("{}{ac}", class.unwrap_or_default());
     let tag_target = new_tab.then_some("_blank").unwrap_or_default();
 
-    let is_external = matches!(target, NavigationTarget::External(_));
+    let is_external = matches!(to, NavigationTarget::External(_));
     let is_router_nav = !is_external && !new_tab;
     let prevent_default = is_router_nav.then_some("onclick").unwrap_or_default();
     let rel = rel
@@ -169,7 +169,7 @@ pub fn GenericLink<'a, R: Routable + Clone>(cx: Scope<'a, GenericLinkProps<'a, R
     let do_default = onclick.is_none() || !onclick_only;
     let action = move |event| {
         if do_default && is_router_nav {
-            router.push(target.clone());
+            router.push(to.clone());
         }
 
         if let Some(handler) = onclick {

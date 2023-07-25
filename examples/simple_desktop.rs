@@ -41,11 +41,11 @@ fn NavBar(cx: Scope) -> Element {
     render! {
         h1 { "Your app here" }
         ul {
-            li { Link { target: Route::Home {}, "home" } }
-            li { Link { target: Route::BlogList {}, "blog" } }
-            li { Link { target: Route::BlogPost { post: "tim".into() }, "tims' blog" } }
-            li { Link { target: Route::BlogPost { post: "bill".into() }, "bills' blog" } }
-            li { Link { target: Route::BlogPost { post: "james".into() }, "james amazing' blog" } }
+            li { Link { to: Route::Home {}, "home" } }
+            li { Link { to: Route::BlogList {}, "blog" } }
+            li { Link { to: Route::BlogPost { post: "tim".into() }, "tims' blog" } }
+            li { Link { to: Route::BlogPost { post: "bill".into() }, "bills' blog" } }
+            li { Link { to: Route::BlogPost { post: "james".into() }, "james amazing' blog" } }
         }
         Outlet {}
     }
@@ -70,7 +70,7 @@ fn BlogPost(cx: Scope, post: String) -> Element {
     render! {
         div {
             h3 { "blog post: {post}"  }
-            Link { target: Route::BlogList {}, "back to blog list" }
+            Link { to: Route::BlogList {}, "back to blog list" }
         }
     }
 }

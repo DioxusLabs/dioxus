@@ -60,7 +60,7 @@ fn Index(cx: Scope) -> Element {
     render! {
         h1 { "Index" }
         Link {
-            target: Route::BlogList {},
+            to: Route::BlogList {},
             "Go to the blog"
         }
     }
@@ -79,11 +79,11 @@ fn BlogList(cx: Scope) -> Element {
     render! {
         h2 { "List of blog posts" }
         Link {
-            target: Route::BlogPost { blog_id: 0 },
+            to: Route::BlogPost { blog_id: 0 },
             "Blog post 1"
         }
         Link {
-            target: Route::BlogPost { blog_id: 1 },
+            to: Route::BlogPost { blog_id: 1 },
             "Blog post 2"
         }
     }

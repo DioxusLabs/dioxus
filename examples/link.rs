@@ -43,8 +43,8 @@ fn Header(cx: Scope) -> Element {
     render! {
         h1 { "Your app here" }
         ul {
-            li { Link { target: Route::Home {}, "home" } }
-            li { Link { target: Route::Settings {}, "settings" } }
+            li { Link { to: Route::Home {}, "home" } }
+            li { Link { to: Route::Settings {}, "settings" } }
         }
         Outlet {}
     }
