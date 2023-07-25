@@ -16,12 +16,6 @@ struct AppProps {
 }
 
 fn app(cx: Scope<AppProps>) -> Element {
-    render! {
-        Child {}
-    }
-}
-
-fn Child(cx: Scope) -> Element {
     let state =
         use_server_future(cx, (), |()| async move { get_server_data().await.unwrap() })?.value();
 
@@ -52,7 +46,7 @@ fn Child(cx: Scope) -> Element {
     })
 }
 
-#[server(PostServerData)]
+#[server]
 async fn post_server_data(data: String) -> Result<(), ServerFnError> {
     let axum::extract::Host(host): axum::extract::Host = extract().await?;
     println!("Server received: {}", data);
@@ -61,7 +55,7 @@ async fn post_server_data(data: String) -> Result<(), ServerFnError> {
     Ok(())
 }
 
-#[server(GetServerData)]
+#[server]
 async fn get_server_data() -> Result<String, ServerFnError> {
     Ok(reqwest::get("https://httpbin.org/ip").await?.text().await?)
 }
