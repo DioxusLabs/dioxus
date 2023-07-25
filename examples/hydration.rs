@@ -13,7 +13,8 @@ use dioxus::prelude::*;
 use dioxus_desktop::Config;
 
 fn main() {
-    let vdom = VirtualDom::new(app);
+    let mut vdom = VirtualDom::new(app);
+    let _ = vdom.rebuild();
     let content = dioxus_ssr::pre_render(&vdom);
 
     dioxus_desktop::launch_cfg(app, Config::new().with_prerendered(content));

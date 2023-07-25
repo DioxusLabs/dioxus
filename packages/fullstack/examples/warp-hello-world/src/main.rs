@@ -1,8 +1,8 @@
 //! Run with:
 //!
 //! ```sh
-//! dx build --features web
-//! cargo run --features ssr
+//! dx build --features web --release
+//! cargo run --features ssr --release
 //! ```
 
 #![allow(non_snake_case, unused)]
