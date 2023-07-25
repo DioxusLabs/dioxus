@@ -164,7 +164,8 @@ pub struct SSRState {
 }
 
 impl SSRState {
-    pub(crate) fn new<P: Clone>(cfg: &ServeConfig<P>) -> Self {
+    /// Create a new [`SSRState`].
+    pub fn new<P: Clone>(cfg: &ServeConfig<P>) -> Self {
         if cfg.incremental.is_some() {
             return Self {
                 renderers: Arc::new(SsrRendererPool::Incremental(RwLock::new(vec![
