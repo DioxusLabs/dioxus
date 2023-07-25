@@ -5,22 +5,25 @@ In this chapter we will introduce all `dioxus-cli` commands.
 > You can also use `dx --help` to get cli help info.
 
 ```
-dx
-Build, bundle, & ship your Dioxus app
+Build, Bundle & Ship Dioxus Apps
 
-USAGE:
-    dx [OPTIONS] <SUBCOMMAND>
+Usage: dx [OPTIONS] <COMMAND>
 
-OPTIONS:
-    -h, --help    Print help information
-    -v            Enable verbose logging
+Commands:
+  build      Build the Rust WASM app and all of its assets
+  translate  Translate some source file into Dioxus code
+  serve      Build, watch & serve the Rust WASM app and all of its assets
+  create     Init a new project for Dioxus
+  clean      Clean output artifacts
+  version    Print the version of this extension
+  fmt        Format some rsx
+  check      Check the Rust files in the project for issues
+  config     Dioxus config file controls
+  help       Print this message or the help of the given subcommand(s)
 
-SUBCOMMANDS:
-    build        Build the Dioxus application and all of its assets
-    clean        Clean output artifacts
-    config       Dioxus config file controls
-    create       Init a new project for Dioxus
-    help         Print this message or the help of the given subcommand(s)
-    serve        Build, watch & serve the Rust WASM app and all of its assets
-    translate    Translate some html file into a Dioxus component
+Options:
+  -v               Enable verbose logging
+      --bin <BIN>  Specify bin target
+  -h, --help       Print help
+  -V, --version    Print version
 ```

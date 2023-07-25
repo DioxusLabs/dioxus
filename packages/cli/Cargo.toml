@@ -77,6 +77,7 @@ toml_edit = "0.19.11"
 # dioxus-rsx = "0.0.1"
 
 dioxus-autofmt = { workspace = true }
+dioxus-check = { workspace = true }
 rsx-rosetta = { workspace = true }
 dioxus-rsx = { workspace = true }
 dioxus-html = { workspace = true, features = ["hot-reload-context"] }

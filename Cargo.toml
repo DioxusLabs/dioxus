@@ -17,6 +17,7 @@ members = [
     "packages/fermi",
     "packages/liveview",
     "packages/autofmt",
+    "packages/check",
     "packages/rsx",
     "packages/dioxus-tui",
     "packages/rink",
@@ -63,6 +64,7 @@ dioxus-interpreter-js = { path = "packages/interpreter" }
 fermi = { path = "packages/fermi" }
 dioxus-liveview = { path = "packages/liveview" }
 dioxus-autofmt = { path = "packages/autofmt" }
+dioxus-check = { path = "packages/check" }
 dioxus-rsx = { path = "packages/rsx" }
 dioxus-tui = { path = "packages/dioxus-tui" }
 rink = { path = "packages/rink" }
@@ -82,6 +84,9 @@ rustc-hash = "1.1.0"
 wasm-bindgen = "0.2.87"
 html_parser = "0.7.0"
 thiserror = "1.0.40"
+prettyplease = { package = "prettier-please", version = "0.2", features = [
+    "verbatim",
+] }
 
 # This is a "virtual package"
 # It is not meant to be published, but is used so "cargo run --example XYZ" works properly

@@ -103,6 +103,11 @@ async fn main() -> anyhow::Result<()> {
             .await
             .map_err(|e| anyhow!("🚫 Error autoformatting RSX: {}", e)),
 
+        Check(opts) => opts
+            .check()
+            .await
+            .map_err(|e| anyhow!("🚫 Error checking RSX: {}", e)),
+
         Version(opt) => {
             let version = opt.version();
             println!("{}", version);
