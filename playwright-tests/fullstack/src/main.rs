@@ -84,13 +84,13 @@ fn app(cx: Scope<AppProps>) -> Element {
 }
 
 #[server(PostServerData)]
-async fn post_server_data(data: String) -> Result<(), ServerFnError> {
+async fn post_server_data(data: String) -> ServerFnResult {
     println!("Server received: {}", data);
 
     Ok(())
 }
 
 #[server(GetServerData)]
-async fn get_server_data() -> Result<String, ServerFnError> {
+async fn get_server_data() -> ServerFnResult<String> {
     Ok("Hello from the server!".to_string())
 }

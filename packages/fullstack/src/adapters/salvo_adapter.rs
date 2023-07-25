@@ -44,7 +44,7 @@
 //! }
 //!
 //! #[server(GetServerData)]
-//! async fn get_server_data() -> Result<String, ServerFnError> {
+//! async fn get_server_data() -> ServerFnResult<String> {
 //!     Ok("Hello from the server!".to_string())
 //! }
 //! ```

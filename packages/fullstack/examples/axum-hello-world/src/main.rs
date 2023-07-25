@@ -53,7 +53,7 @@ fn Child(cx: Scope) -> Element {
 }
 
 #[server(PostServerData)]
-async fn post_server_data(data: String) -> Result<(), ServerFnError> {
+async fn post_server_data(data: String) -> ServerFnResult {
     let axum::extract::Host(host): axum::extract::Host = extract().await?;
     println!("Server received: {}", data);
     println!("{:?}", host);
@@ -62,7 +62,7 @@ async fn post_server_data(data: String) -> Result<(), ServerFnError> {
 }
 
 #[server(GetServerData)]
-async fn get_server_data() -> Result<String, ServerFnError> {
+async fn get_server_data() -> ServerFnResult<String> {
     Ok(reqwest::get("https://httpbin.org/ip").await?.text().await?)
 }
 

@@ -53,14 +53,14 @@ fn Child(cx: Scope) -> Element {
 }
 
 #[server(PostServerData)]
-async fn post_server_data(data: String) -> Result<(), ServerFnError> {
+async fn post_server_data(data: String) -> ServerFnResult {
     println!("Server received: {}", data);
 
     Ok(())
 }
 
 #[server(GetServerData)]
-async fn get_server_data() -> Result<String, ServerFnError> {
+async fn get_server_data() -> ServerFnResult<String> {
     Ok(reqwest::get("https://httpbin.org/ip").await?.text().await?)
 }
 

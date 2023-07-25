@@ -121,20 +121,20 @@ fn app(cx: Scope) -> Element {
 }
 
 #[server(GetUserName)]
-pub async fn get_user_name() -> Result<String, ServerFnError> {
+pub async fn get_user_name() -> ServerFnResult<String> {
     let session: crate::auth::Session = extract().await?;
     Ok(session.0.current_user.unwrap().username.to_string())
 }
 
 #[server(Login)]
-pub async fn login() -> Result<(), ServerFnError> {
+pub async fn login() -> ServerFnResult {
     let auth: crate::auth::Session = extract().await?;
     auth.login_user(2);
     Ok(())
 }
 
 #[server(Permissions)]
-pub async fn get_permissions() -> Result<String, ServerFnError> {
+pub async fn get_permissions() -> ServerFnResult<String> {
     let method: axum::http::Method = extract().await?;
     let auth: crate::auth::Session = extract().await?;
     let current_user = auth.current_user.clone().unwrap_or_default();

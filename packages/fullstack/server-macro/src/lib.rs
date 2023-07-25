@@ -34,7 +34,7 @@ use syn::{
 /// # #[derive(Serialize, Deserialize)]
 /// # pub struct Post { }
 /// #[server(ReadPosts, "/api")]
-/// pub async fn read_posts(how_many: u8, query: String) -> Result<Vec<Post>, ServerFnError> {
+/// pub async fn read_posts(how_many: u8, query: String) -> ServerFnResult<Vec<Post>> {
 ///   // do some work on the server to access the database
 ///   todo!()
 /// }
@@ -44,7 +44,7 @@ use syn::{
 /// - **Server functions must be `async`.** Even if the work being done inside the function body
 ///   can run synchronously on the server, from the client’s perspective it involves an asynchronous
 ///   function call.
-/// - **Server functions must return `Result<T, ServerFnError>`.** Even if the work being done
+/// - **Server functions must return `ServerFnResult<T>`.** Even if the work being done
 ///   inside the function body can’t fail, the processes of serialization/deserialization and the
 ///   network call are fallible.
 /// - **Return types must implement [`Serialize`](https://docs.rs/serde/latest/serde/trait.Serialize.html).**
