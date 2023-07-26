@@ -10,7 +10,7 @@
 //! 1) [`MemoryHistory`] for desktop/mobile/ssr platforms
 //! 2) [`WebHistory`] for web platforms
 
-use std::sync::Arc;
+use std::{any::Any, fmt::Display, sync::Arc};
 
 mod memory;
 pub use memory::*;
@@ -276,4 +276,144 @@ pub trait HistoryProvider<R: Routable> {
     /// updates are received, they should call `callback`, which will cause the router to update.
     #[allow(unused_variables)]
     fn updater(&mut self, callback: Arc<dyn Fn() + Send + Sync>) {}
+}
+
+/// Something that can be displayed and is also an [`Any`]
+pub trait AnyDisplay: Display + Any {
+    /// Get a reference to the inner [`Any`] object.
+    fn as_any(&self) -> &dyn Any;
+}
+
+impl dyn AnyDisplay {
+    /// Try to downcast the inner [`Any`] object to a concrete type.
+    pub fn downcast<T: Any + Clone>(self: Box<dyn AnyDisplay>) -> Option<T> {
+        self.as_any().downcast_ref::<T>().cloned()
+    }
+}
+
+impl<T: Display + Any> AnyDisplay for T {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+pub(crate) trait AnyHistoryProvider {
+    #[must_use]
+    fn parse_route(&self, route: &str) -> Result<Box<dyn Any>, String>;
+
+    #[must_use]
+    fn accepts_type_id(&self, type_id: &std::any::TypeId) -> bool;
+
+    #[must_use]
+    fn current_route(&self) -> Box<dyn AnyDisplay>;
+
+    #[must_use]
+    fn current_prefix(&self) -> Option<String> {
+        None
+    }
+
+    #[must_use]
+    fn can_go_back(&self) -> bool {
+        true
+    }
+
+    fn go_back(&mut self);
+
+    #[must_use]
+    fn can_go_forward(&self) -> bool {
+        true
+    }
+
+    fn go_forward(&mut self);
+
+    fn push(&mut self, route: Box<dyn Any>);
+
+    fn replace(&mut self, path: Box<dyn Any>);
+
+    #[allow(unused_variables)]
+    fn external(&mut self, url: String) -> bool {
+        false
+    }
+
+    #[allow(unused_variables)]
+    fn updater(&mut self, callback: Arc<dyn Fn() + Send + Sync>) {}
+}
+
+pub(crate) struct AnyHistoryProviderImplWrapper<R, H> {
+    inner: H,
+    _marker: std::marker::PhantomData<R>,
+}
+
+impl<R, H> AnyHistoryProviderImplWrapper<R, H> {
+    pub fn new(inner: H) -> Self {
+        Self {
+            inner,
+            _marker: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<R, H: Default> Default for AnyHistoryProviderImplWrapper<R, H> {
+    fn default() -> Self {
+        Self::new(H::default())
+    }
+}
+
+impl<R, H> AnyHistoryProvider for AnyHistoryProviderImplWrapper<R, H>
+where
+    R: Routable,
+    <R as std::str::FromStr>::Err: std::fmt::Display,
+    H: HistoryProvider<R>,
+{
+    fn parse_route(&self, route: &str) -> Result<Box<dyn Any>, String> {
+        R::from_str(route)
+            .map_err(|err| err.to_string())
+            .map(|route| Box::new(route) as Box<dyn Any>)
+    }
+
+    fn accepts_type_id(&self, type_id: &std::any::TypeId) -> bool {
+        type_id == &std::any::TypeId::of::<R>()
+    }
+
+    fn current_route(&self) -> Box<dyn AnyDisplay> {
+        let route = self.inner.current_route();
+        println!("current_route {route}");
+        Box::new(route)
+    }
+
+    fn current_prefix(&self) -> Option<String> {
+        self.inner.current_prefix()
+    }
+
+    fn can_go_back(&self) -> bool {
+        self.inner.can_go_back()
+    }
+
+    fn go_back(&mut self) {
+        self.inner.go_back()
+    }
+
+    fn can_go_forward(&self) -> bool {
+        self.inner.can_go_forward()
+    }
+
+    fn go_forward(&mut self) {
+        self.inner.go_forward()
+    }
+
+    fn push(&mut self, route: Box<dyn Any>) {
+        self.inner.push(*route.downcast().unwrap())
+    }
+
+    fn replace(&mut self, path: Box<dyn Any>) {
+        self.inner.replace(*path.downcast().unwrap())
+    }
+
+    fn external(&mut self, url: String) -> bool {
+        self.inner.external(url)
+    }
+
+    fn updater(&mut self, callback: Arc<dyn Fn() + Send + Sync>) {
+        self.inner.updater(callback)
+    }
 }

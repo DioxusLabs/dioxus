@@ -32,7 +32,7 @@ fn NavBar(cx: Scope) -> Element {
                 }
             }
         }
-        Outlet {}
+        Outlet::<Route> {}
     }
 }
 // ANCHOR_END: nav
@@ -41,7 +41,7 @@ fn NavBar(cx: Scope) -> Element {
 #[inline_props]
 fn App(cx: Scope) -> Element {
     render! {
-        Router {}
+        Router::<Route> {}
     }
 }
 // ANCHOR_END: app

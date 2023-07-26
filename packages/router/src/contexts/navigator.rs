@@ -1,10 +1,10 @@
-use crate::prelude::{ExternalNavigationFailure, GenericRouterContext, NavigationTarget, Routable};
+use crate::prelude::{ExternalNavigationFailure, NavigationTarget, Routable, RouterContext};
 
 /// A view into the navigation state of a router.
 #[derive(Clone)]
-pub struct GenericNavigator<R: Routable>(pub(crate) GenericRouterContext<R>);
+pub struct GenericNavigator(pub(crate) RouterContext);
 
-impl<R: Routable> GenericNavigator<R> {
+impl GenericNavigator {
     /// Check whether there is a previous page to navigate back to.
     #[must_use]
     pub fn can_go_back(&self) -> bool {
@@ -34,7 +34,7 @@ impl<R: Routable> GenericNavigator<R> {
     /// Push a new location.
     ///
     /// The previous location will be available to go back to.
-    pub fn push(
+    pub fn push<R: Routable>(
         &self,
         target: impl Into<NavigationTarget<R>>,
     ) -> Option<ExternalNavigationFailure> {
@@ -44,7 +44,7 @@ impl<R: Routable> GenericNavigator<R> {
     /// Replace the current location.
     ///
     /// The previous location will **not** be available to go back to.
-    pub fn replace(
+    pub fn replace<R: Routable>(
         &self,
         target: impl Into<NavigationTarget<R>>,
     ) -> Option<ExternalNavigationFailure> {

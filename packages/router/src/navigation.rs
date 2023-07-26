@@ -11,7 +11,7 @@ use crate::routable::Routable;
 
 /// A target for the router to navigate to.
 #[derive(Clone, PartialEq, Eq, Debug)]
-pub enum NavigationTarget<R: Routable> {
+pub enum NavigationTarget<R> {
     /// An internal path that the router can navigate to by itself.
     ///
     /// ```rust

@@ -37,7 +37,7 @@ fn prepare(path: impl Into<String>) -> VirtualDom {
     fn App(cx: Scope<AppProps>) -> Element {
         render! {
             h1 { "App" }
-            Router {
+            Router::<Route> {
                 config: {
                     let path = cx.props.path.parse().unwrap();
                     move || RouterConfig::default().history(MemoryHistory::with_initial_path(path))
@@ -57,7 +57,7 @@ fn prepare(path: impl Into<String>) -> VirtualDom {
     fn Fixed(cx: Scope) -> Element {
         render! {
             h2 { "Fixed" }
-            Outlet { }
+            Outlet::<Route> { }
         }
     }
 
@@ -79,7 +79,7 @@ fn prepare(path: impl Into<String>) -> VirtualDom {
     fn Parameter(cx: Scope, id: u8) -> Element {
         render! {
             h2 { "Parameter {id}" }
-            Outlet { }
+            Outlet::<Route> { }
         }
     }
 

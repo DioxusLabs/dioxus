@@ -95,7 +95,7 @@ where
     {
         let path = path.clone();
         render! {
-            GenericRouter::<R> {
+            Link::<R> {
                 config: || RouterConfig::default().history(MemoryHistory::with_initial_path(path))
             }
         }

@@ -14,7 +14,7 @@ enum Route {
 #[inline_props]
 fn App(cx: Scope) -> Element {
     render! {
-        Router {}
+        Router::<Route> {}
     }
 }
 

@@ -20,7 +20,7 @@ fn main() {}
 fn GoToDioxus(cx: Scope) -> Element {
     render! {
         Link {
-            to: NavigationTarget::External("https://dioxuslabs.com".into()),
+            to: "https://dioxuslabs.com",
             "ExternalTarget target"
         }
     }

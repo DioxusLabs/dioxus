@@ -1,23 +1,23 @@
 use dioxus::prelude::*;
 use log::error;
 
-use crate::{prelude::*, utils::use_router_internal::use_router_internal};
+use crate::utils::use_router_internal::use_router_internal;
 
-/// The properties for a [`GenericGoBackButton`] or a [`GenericGoForwardButton`].
+/// The properties for a [`GoBackButton`] or a [`GoForwardButton`].
 #[derive(Debug, Props)]
-pub struct GenericHistoryButtonProps<'a> {
+pub struct HistoryButtonProps<'a> {
     /// The children to render within the generated HTML button tag.
     pub children: Element<'a>,
 }
 
 /// A button to go back through the navigation history. Similar to a browsers back button.
 ///
-/// Only works as descendant of a [`GenericRouter`] component, otherwise it will be inactive.
+/// Only works as descendant of a [`Link`] component, otherwise it will be inactive.
 ///
 /// The button will disable itself if it is known that no prior history is available.
 ///
 /// # Panic
-/// - When the [`GenericGoBackButton`] is not nested within a [`GenericRouter`] component
+/// - When the [`GoBackButton`] is not nested within a [`Link`] component
 ///   hook, but only in debug builds.
 ///
 /// # Example
@@ -32,7 +32,7 @@ pub struct GenericHistoryButtonProps<'a> {
 ///
 /// fn App(cx: Scope) -> Element {
 ///     render! {
-///         Router {}
+///         Router::<Route> {}
 ///     }
 /// }
 ///
@@ -53,13 +53,11 @@ pub struct GenericHistoryButtonProps<'a> {
 /// # );
 /// ```
 #[allow(non_snake_case)]
-pub fn GenericGoBackButton<'a, R: Routable>(
-    cx: Scope<'a, GenericHistoryButtonProps<'a>>,
-) -> Element {
-    let GenericHistoryButtonProps { children } = cx.props;
+pub fn GoBackButton<'a>(cx: Scope<'a, HistoryButtonProps<'a>>) -> Element {
+    let HistoryButtonProps { children } = cx.props;
 
     // hook up to router
-    let router = match use_router_internal::<R>(cx) {
+    let router = match use_router_internal(cx) {
         Some(r) => r,
         #[allow(unreachable_code)]
         None => {
@@ -85,12 +83,12 @@ pub fn GenericGoBackButton<'a, R: Routable>(
 
 /// A button to go forward through the navigation history. Similar to a browsers forward button.
 ///
-/// Only works as descendant of a [`GenericRouter`] component, otherwise it will be inactive.
+/// Only works as descendant of a [`Link`] component, otherwise it will be inactive.
 ///
 /// The button will disable itself if it is known that no later history is available.
 ///
 /// # Panic
-/// - When the [`GenericGoForwardButton`] is not nested within a [`GenericRouter`] component
+/// - When the [`GoForwardButton`] is not nested within a [`Link`] component
 ///   hook, but only in debug builds.
 ///
 /// # Example
@@ -105,7 +103,7 @@ pub fn GenericGoBackButton<'a, R: Routable>(
 ///
 /// fn App(cx: Scope) -> Element {
 ///     render! {
-///         Router {}
+///         Router::<Route> {}
 ///     }
 /// }
 ///
@@ -126,13 +124,11 @@ pub fn GenericGoBackButton<'a, R: Routable>(
 /// # );
 /// ```
 #[allow(non_snake_case)]
-pub fn GenericGoForwardButton<'a, R: Routable>(
-    cx: Scope<'a, GenericHistoryButtonProps<'a>>,
-) -> Element {
-    let GenericHistoryButtonProps { children } = cx.props;
+pub fn GoForwardButton<'a>(cx: Scope<'a, HistoryButtonProps<'a>>) -> Element {
+    let HistoryButtonProps { children } = cx.props;
 
     // hook up to router
-    let router = match use_router_internal::<R>(cx) {
+    let router = match use_router_internal(cx) {
         Some(r) => r,
         #[allow(unreachable_code)]
         None => {

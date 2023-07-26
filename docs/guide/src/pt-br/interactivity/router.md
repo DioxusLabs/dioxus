@@ -28,7 +28,7 @@ Ao contrário de outros roteadores no ecossistema Rust, nosso roteador é constr
 
 ```rust, no_run
 rsx!{
-    Router {
+    Router::<Route> {
         Route { to: "/home", Home {} }
         Route { to: "/blog", Blog {} }
     }
@@ -43,7 +43,7 @@ Podemos corrigir isso de duas maneiras:
 
 ```rust, no_run
 rsx!{
-    Router {
+    Router::<Route> {
         Route { to: "/home", Home {} }
         Route { to: "/blog", Blog {} }
         Route { to: "", NotFound {} }
@@ -55,7 +55,7 @@ rsx!{
 
 ```rust, no_run
 rsx!{
-    Router {
+    Router::<Route> {
         Route { to: "/home", Home {} }
         Route { to: "/blog", Blog {} }
         Redirect { from: "", to: "/home" }

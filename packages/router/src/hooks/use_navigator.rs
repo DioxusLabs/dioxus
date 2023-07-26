@@ -1,9 +1,6 @@
 use dioxus::prelude::ScopeState;
 
-use crate::{
-    prelude::{GenericNavigator, GenericRouterContext},
-    routable::Routable,
-};
+use crate::prelude::{GenericNavigator, RouterContext};
 
 /// A hook that provides access to the navigator to change the router history. Unlike [`use_router`], this hook will not cause a rerender when the current route changes
 ///
@@ -22,7 +19,7 @@ use crate::{
 ///
 /// fn App(cx: Scope) -> Element {
 ///     render! {
-///         Router {}
+///         Router::<Route> {}
 ///     }
 /// }
 ///
@@ -50,10 +47,10 @@ use crate::{
 /// # let mut vdom = VirtualDom::new(App);
 /// # let _ = vdom.rebuild();
 /// ```
-pub fn use_generic_navigator<R: Routable + Clone>(cx: &ScopeState) -> &GenericNavigator<R> {
+pub fn use_navigator(cx: &ScopeState) -> &GenericNavigator {
     &*cx.use_hook(|| {
         let router = cx
-            .consume_context::<GenericRouterContext<R>>()
+            .consume_context::<RouterContext>()
             .expect("Must be called in a descendant of a Router component");
 
         GenericNavigator(router)

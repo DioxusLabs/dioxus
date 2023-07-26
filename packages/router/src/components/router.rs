@@ -1,13 +1,9 @@
 use dioxus::prelude::*;
 use std::{cell::RefCell, str::FromStr};
 
-use crate::{
-    prelude::{GenericOutlet, GenericRouterContext},
-    routable::Routable,
-    router_cfg::RouterConfig,
-};
+use crate::{prelude::Outlet, routable::Routable, router_cfg::RouterConfig};
 
-/// The config for [`GenericRouter`].
+/// The config for [`Router`].
 pub struct RouterConfigFactory<R: Routable> {
     #[allow(clippy::type_complexity)]
     config: RefCell<Option<Box<dyn FnOnce() -> RouterConfig<R>>>>,
@@ -43,9 +39,9 @@ impl<R: Routable, F: FnOnce() -> RouterConfig<R> + 'static> From<F> for RouterCo
 }
 
 #[cfg(feature = "serde")]
-/// The props for [`GenericRouter`].
+/// The props for [`Router`].
 #[derive(Props)]
-pub struct GenericRouterProps<R: Routable>
+pub struct RouterProps<R: Routable>
 where
     <R as FromStr>::Err: std::fmt::Display,
     R: serde::Serialize + serde::de::DeserializeOwned,
@@ -55,9 +51,9 @@ where
 }
 
 #[cfg(not(feature = "serde"))]
-/// The props for [`GenericRouter`].
+/// The props for [`Router`].
 #[derive(Props)]
-pub struct GenericRouterProps<R: Routable>
+pub struct RouterProps<R: Routable>
 where
     <R as FromStr>::Err: std::fmt::Display,
 {
@@ -66,7 +62,7 @@ where
 }
 
 #[cfg(not(feature = "serde"))]
-impl<R: Routable> Default for GenericRouterProps<R>
+impl<R: Routable> Default for RouterProps<R>
 where
     <R as FromStr>::Err: std::fmt::Display,
 {
@@ -78,7 +74,7 @@ where
 }
 
 #[cfg(feature = "serde")]
-impl<R: Routable> Default for GenericRouterProps<R>
+impl<R: Routable> Default for RouterProps<R>
 where
     <R as FromStr>::Err: std::fmt::Display,
     R: serde::Serialize + serde::de::DeserializeOwned,
@@ -91,7 +87,7 @@ where
 }
 
 #[cfg(not(feature = "serde"))]
-impl<R: Routable> PartialEq for GenericRouterProps<R>
+impl<R: Routable> PartialEq for RouterProps<R>
 where
     <R as FromStr>::Err: std::fmt::Display,
 {
@@ -102,7 +98,7 @@ where
 }
 
 #[cfg(feature = "serde")]
-impl<R: Routable> PartialEq for GenericRouterProps<R>
+impl<R: Routable> PartialEq for RouterProps<R>
 where
     <R as FromStr>::Err: std::fmt::Display,
     R: serde::Serialize + serde::de::DeserializeOwned,
@@ -115,14 +111,14 @@ where
 
 #[cfg(not(feature = "serde"))]
 /// A component that renders the current route.
-pub fn GenericRouter<R: Routable + Clone>(cx: Scope<GenericRouterProps<R>>) -> Element
+pub fn Router<R: Routable + Clone>(cx: Scope<RouterProps<R>>) -> Element
 where
     <R as FromStr>::Err: std::fmt::Display,
 {
-    use crate::prelude::outlet::OutletContext;
+    use crate::prelude::{outlet::OutletContext, RouterContext};
 
     use_context_provider(cx, || {
-        GenericRouterContext::new(
+        RouterContext::new(
             (cx.props
                 .config
                 .config
@@ -137,19 +133,19 @@ where
     });
 
     render! {
-        GenericOutlet::<R> {}
+        Outlet::<R> {}
     }
 }
 
 #[cfg(feature = "serde")]
 /// A component that renders the current route.
-pub fn GenericRouter<R: Routable + Clone>(cx: Scope<GenericRouterProps<R>>) -> Element
+pub fn Router<R: Routable + Clone>(cx: Scope<RouterProps<R>>) -> Element
 where
     <R as FromStr>::Err: std::fmt::Display,
     R: serde::Serialize + serde::de::DeserializeOwned,
 {
     use_context_provider(cx, || {
-        GenericRouterContext::new(
+        RouterContext::new(
             (cx.props
                 .config
                 .config
@@ -164,6 +160,6 @@ where
     });
 
     render! {
-        GenericOutlet::<R> {}
+        Outlet::<R> {}
     }
 }

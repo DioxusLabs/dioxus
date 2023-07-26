@@ -33,7 +33,7 @@ where
     {
         render! {
             h1 { "App" }
-            GenericRouter::<R> {
+            Router::<R> {
                 config: || RouterConfig::default().history(MemoryHistory::default())
             }
         }
@@ -97,7 +97,7 @@ fn href_external() {
     fn Root(cx: Scope) -> Element {
         render! {
             Link {
-                to: NavigationTarget::External("https://dioxuslabs.com/".into()),
+                to: "https://dioxuslabs.com/",
                 "Link"
             }
         }
@@ -318,7 +318,7 @@ fn with_new_tab_external() {
     fn Root(cx: Scope) -> Element {
         render! {
             Link {
-                to: NavigationTarget::External("https://dioxuslabs.com/".into()),
+                to: "https://dioxuslabs.com/",
                 new_tab: true,
                 "Link"
             }

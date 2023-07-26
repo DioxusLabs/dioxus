@@ -193,7 +193,7 @@ enum Route {
 fn RenderPath(cx: Scope, path: Route) -> Element {
     let path = path.clone();
     render! {
-        Router {
+        Router::<Route> {
             config: || RouterConfig::default().history(MemoryHistory::with_initial_path(path))
         }
     }

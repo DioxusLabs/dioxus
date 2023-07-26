@@ -16,7 +16,7 @@ where
 
     let cfg = *cx.props;
     render! {
-        dioxus_router::prelude::GenericRouter::<R> {
+        dioxus_router::prelude::Router::<R> {
             config: move || {
                 RouterConfig::default()
                     .failure_external_navigation(cfg.failure_external_navigation)
@@ -54,7 +54,7 @@ where
     R: dioxus_router::prelude::Routable,
     <R as std::str::FromStr>::Err: std::fmt::Display,
 {
-    dioxus_router::prelude::FailureExternalNavigation::<R>
+    dioxus_router::prelude::FailureExternalNavigation
 }
 
 /// The configeration for the router
@@ -96,7 +96,7 @@ where
 {
     fn default() -> Self {
         Self {
-            failure_external_navigation: dioxus_router::prelude::FailureExternalNavigation::<R>,
+            failure_external_navigation: dioxus_router::prelude::FailureExternalNavigation,
             scroll_restoration: true,
             phantom: std::marker::PhantomData,
         }

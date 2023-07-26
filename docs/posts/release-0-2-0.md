@@ -72,7 +72,7 @@ Apps with routers are _really_ simple now. It's easy to compose the "Router", a 
 ```rust, no_run
 fn app(cx: Scope) -> Element {
     cx.render(rsx! {
-        Router {
+        Router::<Route> {
             onchange: move |_| log::info!("Route changed!"),
             ul {
                 Link { to: "/",  li { "Go home!" } }
