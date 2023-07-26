@@ -72,9 +72,13 @@ mlua = { version = "0.8.1", features = [
 ctrlc = "3.2.3"
 gitignore = "1.0.7"
 open = "4.1.0"
-cargo-generate = "0.18.3"
+cargo-generate = { git = "https://github.com/Demonthos/cargo-generate", branch = "update-tempfile" }
 toml_edit = "0.19.11"
 # dioxus-rsx = "0.0.1"
+
+# bundling
+tauri-bundler = { version = "2.0.0-alpha.6", features = ["native-tls-vendored"] }
+tauri-utils = "2.0.0-alpha.6"
 
 dioxus-autofmt = { workspace = true }
 dioxus-check = { workspace = true }

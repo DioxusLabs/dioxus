@@ -1,5 +1,6 @@
 pub mod autoformat;
 pub mod build;
+pub mod bundle;
 pub mod cfg;
 pub mod check;
 pub mod clean;
@@ -60,6 +61,9 @@ pub enum Commands {
     /// Clean output artifacts.
     Clean(clean::Clean),
 
+    /// Bundle the Rust desktop app and all of its assets.
+    Bundle(bundle::Bundle),
+
     /// Print the version of this extension
     #[clap(name = "version")]
     Version(version::Version),
@@ -93,6 +97,7 @@ impl Display for Commands {
             Commands::Version(_) => write!(f, "version"),
             Commands::Autoformat(_) => write!(f, "fmt"),
             Commands::Check(_) => write!(f, "check"),
+            Commands::Bundle(_) => write!(f, "bundle"),
 
             #[cfg(feature = "plugin")]
             Commands::Plugin(_) => write!(f, "plugin"),
