@@ -37,6 +37,8 @@ pub struct RouterContext {
     routing_callback: Option<Arc<dyn Fn(RouterContext) -> Option<NavigationTarget<Box<dyn Any>>>>>,
 
     failure_external_navigation: fn(Scope) -> Element,
+
+    any_route_to_string: fn(&dyn Any) -> String,
 }
 
 impl RouterContext {
@@ -79,6 +81,20 @@ impl RouterContext {
             }),
 
             failure_external_navigation: cfg.failure_external_navigation,
+
+            any_route_to_string: |route| {
+                route
+                    .downcast_ref::<R>()
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "Route is not of the expected type: {}\n found typeid: {:?}\n expected typeid: {:?}",
+                            std::any::type_name::<R>(),
+                            route.type_id(),
+                            std::any::TypeId::of::<R>()
+                        )
+                    })
+                    .to_string()
+            },
         };
 
         // set the updater
@@ -189,7 +205,8 @@ impl RouterContext {
 
     /// The route that is currently active.
     pub fn current<R: Routable>(&self) -> R {
-        self.state
+        *self
+            .state
             .read()
             .unwrap()
             .history
@@ -200,12 +217,11 @@ impl RouterContext {
 
     /// The route that is currently active.
     pub fn current_route_string(&self) -> String {
-        self.state
-            .read()
-            .unwrap()
-            .history
-            .current_route()
-            .to_string()
+        self.any_route_to_string(&*self.state.read().unwrap().history.current_route())
+    }
+
+    pub(crate) fn any_route_to_string(&self, route: &dyn Any) -> String {
+        (self.any_route_to_string)(route)
     }
 
     /// The prefix that is currently active.

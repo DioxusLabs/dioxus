@@ -5,7 +5,7 @@ use dioxus::prelude::*;
 use log::error;
 
 use crate::navigation::NavigationTarget;
-use crate::prelude::{AnyDisplay, Routable};
+use crate::prelude::Routable;
 use crate::utils::use_router_internal::use_router_internal;
 
 /// Something that can be converted into a [`NavigationTarget`].
@@ -13,19 +13,21 @@ pub enum IntoRoutable {
     /// A raw string target.
     FromStr(String),
     /// A internal target.
-    Route(Box<dyn AnyDisplay>),
+    Route(Box<dyn Any>),
 }
 
 impl<R: Routable> From<R> for IntoRoutable {
     fn from(value: R) -> Self {
-        IntoRoutable::Route(Box::new(value))
+        IntoRoutable::Route(Box::new(value) as Box<dyn Any>)
     }
 }
 
 impl<R: Routable> From<NavigationTarget<R>> for IntoRoutable {
     fn from(value: NavigationTarget<R>) -> Self {
         match value {
-            NavigationTarget::Internal(route) => IntoRoutable::Route(Box::new(route)),
+            NavigationTarget::Internal(route) => {
+                IntoRoutable::Route(Box::new(route) as Box<dyn Any>)
+            }
             NavigationTarget::External(url) => IntoRoutable::FromStr(url),
         }
     }
@@ -193,7 +195,7 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
     let current_url = router.current_route_string();
     let href = match to {
         IntoRoutable::FromStr(url) => url.to_string(),
-        IntoRoutable::Route(route) => route.to_string(),
+        IntoRoutable::Route(route) => router.any_route_to_string(&**route),
     };
     let parsed_route: NavigationTarget<Box<dyn Any>> = match router.route_from_str(&href) {
         Ok(route) => NavigationTarget::Internal(route.into()),
@@ -219,7 +221,7 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
         if do_default && is_router_nav {
             let href = match to {
                 IntoRoutable::FromStr(url) => url.to_string(),
-                IntoRoutable::Route(route) => route.to_string(),
+                IntoRoutable::Route(route) => router.any_route_to_string(&**route),
             };
             let parsed_route: NavigationTarget<Box<dyn Any>> = match router.route_from_str(&href) {
                 Ok(route) => NavigationTarget::Internal(route.into()),

@@ -10,7 +10,7 @@
 //! 1) [`MemoryHistory`] for desktop/mobile/ssr platforms
 //! 2) [`WebHistory`] for web platforms
 
-use std::{any::Any, fmt::Display, sync::Arc};
+use std::{any::Any, sync::Arc};
 
 mod memory;
 pub use memory::*;
@@ -278,25 +278,6 @@ pub trait HistoryProvider<R: Routable> {
     fn updater(&mut self, callback: Arc<dyn Fn() + Send + Sync>) {}
 }
 
-/// Something that can be displayed and is also an [`Any`]
-pub trait AnyDisplay: Display + Any {
-    /// Get a reference to the inner [`Any`] object.
-    fn as_any(&self) -> &dyn Any;
-}
-
-impl dyn AnyDisplay {
-    /// Try to downcast the inner [`Any`] object to a concrete type.
-    pub fn downcast<T: Any + Clone>(self: Box<dyn AnyDisplay>) -> Option<T> {
-        self.as_any().downcast_ref::<T>().cloned()
-    }
-}
-
-impl<T: Display + Any> AnyDisplay for T {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-}
-
 pub(crate) trait AnyHistoryProvider {
     #[must_use]
     fn parse_route(&self, route: &str) -> Result<Box<dyn Any>, String>;
@@ -305,7 +286,7 @@ pub(crate) trait AnyHistoryProvider {
     fn accepts_type_id(&self, type_id: &std::any::TypeId) -> bool;
 
     #[must_use]
-    fn current_route(&self) -> Box<dyn AnyDisplay>;
+    fn current_route(&self) -> Box<dyn Any>;
 
     #[must_use]
     fn current_prefix(&self) -> Option<String> {
@@ -375,9 +356,10 @@ where
         type_id == &std::any::TypeId::of::<R>()
     }
 
-    fn current_route(&self) -> Box<dyn AnyDisplay> {
+    fn current_route(&self) -> Box<dyn Any> {
         let route = self.inner.current_route();
         println!("current_route {route}");
+        println!("current_route type {}", std::any::type_name::<R>());
         Box::new(route)
     }
 

@@ -141,7 +141,6 @@ pub trait Routable: std::fmt::Display + std::str::FromStr + Clone + 'static {
         let self_segments = self_str.split('/');
         let other_segments = other_str.split('/');
         for (self_seg, other_seg) in self_segments.zip(other_segments) {
-            dbg!(self_seg, other_seg);
             if self_seg != other_seg {
                 return false;
             }
