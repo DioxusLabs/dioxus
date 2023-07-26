@@ -19,6 +19,8 @@ pub struct ExternalNavigationFailure(String);
 
 /// A function the router will call after every routing update.
 pub(crate) type RoutingCallback<R> = Arc<dyn Fn(LinkContext<R>) -> Option<NavigationTarget<R>>>;
+pub(crate) type AnyRoutingCallback =
+    Arc<dyn Fn(RouterContext) -> Option<NavigationTarget<Box<dyn Any>>>>;
 
 struct MutableRouterState {
     /// The current prefix.
@@ -36,7 +38,7 @@ pub struct RouterContext {
 
     subscribers: Arc<RwLock<HashSet<ScopeId>>>,
     subscriber_update: Arc<dyn Fn(ScopeId)>,
-    routing_callback: Option<Arc<dyn Fn(RouterContext) -> Option<NavigationTarget<Box<dyn Any>>>>>,
+    routing_callback: Option<AnyRoutingCallback>,
 
     failure_external_navigation: fn(Scope) -> Element,
 
@@ -250,7 +252,7 @@ impl RouterContext {
             IntoRoutable::Route(route) => self.any_route_to_string(&**route),
         };
         let parsed_route: NavigationTarget<Box<dyn Any>> = match self.route_from_str(&href) {
-            Ok(route) => NavigationTarget::Internal(route.into()),
+            Ok(route) => NavigationTarget::Internal(route),
             Err(err) => NavigationTarget::External(err),
         };
         parsed_route

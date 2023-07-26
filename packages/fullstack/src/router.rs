@@ -49,11 +49,7 @@ where
     }
 }
 
-fn default_external_navigation_handler<R>() -> fn(Scope) -> Element
-where
-    R: dioxus_router::prelude::Routable,
-    <R as std::str::FromStr>::Err: std::fmt::Display,
-{
+fn default_external_navigation_handler() -> fn(Scope) -> Element {
     dioxus_router::prelude::FailureExternalNavigation
 }
 
@@ -65,7 +61,7 @@ where
     <R as std::str::FromStr>::Err: std::fmt::Display,
 {
     #[serde(skip)]
-    #[serde(default = "default_external_navigation_handler::<R>")]
+    #[serde(default = "default_external_navigation_handler")]
     failure_external_navigation: fn(Scope) -> Element,
     scroll_restoration: bool,
     #[serde(skip)]

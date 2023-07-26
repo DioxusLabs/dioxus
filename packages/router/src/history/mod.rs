@@ -279,7 +279,6 @@ pub trait HistoryProvider<R: Routable> {
 }
 
 pub(crate) trait AnyHistoryProvider {
-    #[must_use]
     fn parse_route(&self, route: &str) -> Result<Box<dyn Any>, String>;
 
     #[must_use]

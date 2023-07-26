@@ -198,7 +198,7 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
         IntoRoutable::Route(route) => router.any_route_to_string(&**route),
     };
     let parsed_route: NavigationTarget<Box<dyn Any>> = match router.route_from_str(&href) {
-        Ok(route) => NavigationTarget::Internal(route.into()),
+        Ok(route) => NavigationTarget::Internal(route),
         Err(err) => NavigationTarget::External(err),
     };
     let ac = active_class
