@@ -2,9 +2,9 @@ use crate::prelude::{ExternalNavigationFailure, IntoRoutable, RouterContext};
 
 /// A view into the navigation state of a router.
 #[derive(Clone)]
-pub struct GenericNavigator(pub(crate) RouterContext);
+pub struct Navigator(pub(crate) RouterContext);
 
-impl GenericNavigator {
+impl Navigator {
     /// Check whether there is a previous page to navigate back to.
     #[must_use]
     pub fn can_go_back(&self) -> bool {
