@@ -381,7 +381,6 @@ impl From<DebianSettings> for tauri_bundler::DebianSettings {
         tauri_bundler::DebianSettings {
             depends: val.depends,
             files: val.files,
-            desktop_template: None,
         }
     }
 }
@@ -516,14 +515,12 @@ pub struct NsisSettings {
 impl From<NsisSettings> for tauri_bundler::NsisSettings {
     fn from(val: NsisSettings) -> Self {
         tauri_bundler::NsisSettings {
-            template: val.template,
             license: val.license,
             header_image: val.header_image,
             sidebar_image: val.sidebar_image,
             installer_icon: val.installer_icon,
             install_mode: val.install_mode.into(),
             languages: val.languages,
-            custom_language_files: val.custom_language_files,
             display_language_selector: val.display_language_selector,
         }
     }
