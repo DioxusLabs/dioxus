@@ -217,13 +217,12 @@ fn create_random_dynamic_attr(cx: &ScopeState) -> Attribute {
         // Listener(RefCell<Option<ListenerCb<'a>>>),
         _ => unreachable!(),
     };
-    Attribute {
-        name: Box::leak(format!("attr{}", rand::random::<usize>()).into_boxed_str()),
+    Attribute::new(
+        Box::leak(format!("attr{}", rand::random::<usize>()).into_boxed_str()),
         value,
-        namespace: random_ns(),
-        mounted_element: Default::default(),
-        volatile: rand::random(),
-    }
+        random_ns(),
+        rand::random(),
+    )
 }
 
 static mut TEMPLATE_COUNT: usize = 0;
