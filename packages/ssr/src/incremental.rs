@@ -190,10 +190,7 @@ impl IncrementalRenderer {
     }
 
     fn find_file(&self, route: &str) -> Option<ValidCachedPath> {
-        let mut file_path = self.static_dir.clone();
-        for segment in route.split('/') {
-            file_path.push(segment);
-        }
+        let mut file_path = (self.map_path)(route);
         if let Some(deadline) = self.invalidate_after {
             // find the first file that matches the route and is a html file
             file_path.push("index");
