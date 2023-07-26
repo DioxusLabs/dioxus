@@ -16,12 +16,6 @@ struct AppProps {
 }
 
 fn app(cx: Scope<AppProps>) -> Element {
-    render! {
-        Child {}
-    }
-}
-
-fn Child(cx: Scope) -> Element {
     let state =
         use_server_future(cx, (), |()| async move { get_server_data().await.unwrap() })?.value();
 
