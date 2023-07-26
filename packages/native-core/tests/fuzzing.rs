@@ -262,12 +262,9 @@ fn create_random_element(cx: Scope<DepthProps>) -> Element {
                     let dynamic_nodes: Vec<_> = dynamic_node_types
                         .iter()
                         .map(|ty| match ty {
-                            DynamicNodeType::Text => DynamicNode::Text(VText {
-                                value: Box::leak(
-                                    format!("{}", rand::random::<usize>()).into_boxed_str(),
-                                ),
-                                id: Default::default(),
-                            }),
+                            DynamicNodeType::Text => DynamicNode::Text(VText::new(Box::leak(
+                                format!("{}", rand::random::<usize>()).into_boxed_str(),
+                            ))),
                             DynamicNodeType::Other => {
                                 create_random_dynamic_node(cx, cx.props.depth + 1)
                             }
