@@ -358,8 +358,6 @@ where
 
     fn current_route(&self) -> Box<dyn Any> {
         let route = self.inner.current_route();
-        println!("current_route {route}");
-        println!("current_route type {}", std::any::type_name::<R>());
         Box::new(route)
     }
 
