@@ -7,7 +7,9 @@ use std::{
 use dioxus::prelude::*;
 
 use crate::{
-    navigation::NavigationTarget, prelude::AnyHistoryProvider, routable::Routable,
+    navigation::NavigationTarget,
+    prelude::{AnyHistoryProvider, IntoRoutable},
+    routable::Routable,
     router_cfg::RouterConfig,
 };
 
@@ -203,6 +205,21 @@ impl RouterContext {
         self.change_route()
     }
 
+    pub(crate) fn replace_any(
+        &self,
+        target: NavigationTarget<Box<dyn Any>>,
+    ) -> Option<ExternalNavigationFailure> {
+        match target {
+            NavigationTarget::Internal(p) => {
+                let mut state = self.state_mut();
+                state.history.replace(p)
+            }
+            NavigationTarget::External(e) => return self.external(e),
+        }
+
+        self.change_route()
+    }
+
     /// The route that is currently active.
     pub fn current<R: Routable>(&self) -> R {
         *self
@@ -222,6 +239,21 @@ impl RouterContext {
 
     pub(crate) fn any_route_to_string(&self, route: &dyn Any) -> String {
         (self.any_route_to_string)(route)
+    }
+
+    pub(crate) fn resolve_into_routable(
+        &self,
+        into_routable: &IntoRoutable,
+    ) -> NavigationTarget<Box<dyn Any>> {
+        let href = match into_routable {
+            IntoRoutable::FromStr(url) => url.to_string(),
+            IntoRoutable::Route(route) => self.any_route_to_string(&**route),
+        };
+        let parsed_route: NavigationTarget<Box<dyn Any>> = match self.route_from_str(&href) {
+            Ok(route) => NavigationTarget::Internal(route.into()),
+            Err(err) => NavigationTarget::External(err),
+        };
+        parsed_route
     }
 
     /// The prefix that is currently active.

@@ -219,15 +219,7 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
     let do_default = onclick.is_none() || !onclick_only;
     let action = move |event| {
         if do_default && is_router_nav {
-            let href = match to {
-                IntoRoutable::FromStr(url) => url.to_string(),
-                IntoRoutable::Route(route) => router.any_route_to_string(&**route),
-            };
-            let parsed_route: NavigationTarget<Box<dyn Any>> = match router.route_from_str(&href) {
-                Ok(route) => NavigationTarget::Internal(route.into()),
-                Err(err) => NavigationTarget::External(err),
-            };
-            router.push_any(parsed_route);
+            router.push_any(router.resolve_into_routable(to));
         }
 
         if let Some(handler) = onclick {

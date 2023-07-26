@@ -1,4 +1,4 @@
-use crate::prelude::{ExternalNavigationFailure, NavigationTarget, Routable, RouterContext};
+use crate::prelude::{ExternalNavigationFailure, IntoRoutable, RouterContext};
 
 /// A view into the navigation state of a router.
 #[derive(Clone)]
@@ -34,20 +34,18 @@ impl GenericNavigator {
     /// Push a new location.
     ///
     /// The previous location will be available to go back to.
-    pub fn push<R: Routable>(
-        &self,
-        target: impl Into<NavigationTarget<R>>,
-    ) -> Option<ExternalNavigationFailure> {
-        self.0.push(target)
+    pub fn push(&self, target: impl Into<IntoRoutable>) -> Option<ExternalNavigationFailure> {
+        let target = target.into();
+        let as_any_navigation_target = self.0.resolve_into_routable(&target);
+        self.0.push_any(as_any_navigation_target)
     }
 
     /// Replace the current location.
     ///
     /// The previous location will **not** be available to go back to.
-    pub fn replace<R: Routable>(
-        &self,
-        target: impl Into<NavigationTarget<R>>,
-    ) -> Option<ExternalNavigationFailure> {
-        self.0.replace(target)
+    pub fn replace(&self, target: impl Into<IntoRoutable>) -> Option<ExternalNavigationFailure> {
+        let target = target.into();
+        let as_any_navigation_target = self.0.resolve_into_routable(&target);
+        self.0.replace_any(as_any_navigation_target)
     }
 }

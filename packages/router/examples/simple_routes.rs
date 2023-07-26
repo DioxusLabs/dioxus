@@ -90,7 +90,7 @@ fn Route3(cx: Scope, dynamic: String) -> Element {
             "hello world link"
         }
         button {
-            onclick: move |_| { navigator.push(NavigationTarget::<Route>::External("https://www.google.com".to_string())); },
+            onclick: move |_| { navigator.push("https://www.google.com"); },
             "google link"
         }
         p { "Site Map" }
