@@ -109,8 +109,10 @@ impl FileEngine for WebFileEngine {
     }
 }
 
+/// Helper trait for WebFileEngine
 #[async_trait::async_trait(?Send)]
-trait WebFileEngineExt {
+pub trait WebFileEngineExt {
+    /// returns web_sys::File
     async fn get_web_file(&self, file: &str) -> Option<web_sys::File>;
 }
 
