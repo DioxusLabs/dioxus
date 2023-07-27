@@ -38,7 +38,7 @@ web = ["gloo", "web-sys", "wasm-bindgen", "gloo-utils", "js-sys"]
 [dev-dependencies]
 dioxus = { path = "../dioxus" }
 dioxus-ssr = { path = "../ssr" }
-criterion = { verison = "0.5", features = ["async_tokio", "html_reports"] }
+criterion = { version = "0.5", features = ["async_tokio", "html_reports"] }
 
 [[example]]
 name = "static_generation"

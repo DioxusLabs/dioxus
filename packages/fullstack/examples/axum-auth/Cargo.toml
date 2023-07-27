@@ -44,10 +44,3 @@ optional = true
 default = []
 ssr = ["axum", "tokio", "dioxus-fullstack/axum", "tower-http", "simple_logger", "async-trait", "sqlx", "axum_session", "axum_session_auth", "http", "tower"]
 web = ["dioxus-web"]
-
-[profile.release]
-lto = true
-panic = "abort"
-opt-level = 'z'
-strip = true
-codegen-units = 1

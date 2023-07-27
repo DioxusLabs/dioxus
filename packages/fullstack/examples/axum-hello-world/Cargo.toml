@@ -24,10 +24,3 @@ reqwest = "0.11.18"
 default = []
 ssr = ["axum", "tokio", "dioxus-fullstack/axum"]
 web = ["dioxus-web"]
-
-[profile.release]
-lto = true
-panic = "abort"
-opt-level = 'z'
-strip = true
-codegen-units = 1
