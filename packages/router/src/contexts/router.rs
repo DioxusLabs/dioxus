@@ -19,7 +19,8 @@ use crate::{
 pub struct ExternalNavigationFailure(String);
 
 /// A function the router will call after every routing update.
-pub(crate) type RoutingCallback<R> = Arc<dyn Fn(LinkContext<R>) -> Option<NavigationTarget<R>>>;
+pub(crate) type RoutingCallback<R> =
+    Arc<dyn Fn(GenericRouterContext<R>) -> Option<NavigationTarget<R>>>;
 pub(crate) type AnyRoutingCallback =
     Arc<dyn Fn(RouterContext) -> Option<NavigationTarget<Rc<dyn Any>>>>;
 
@@ -71,7 +72,7 @@ impl RouterContext {
 
             routing_callback: cfg.on_update.map(|update| {
                 Arc::new(move |ctx| {
-                    let ctx = LinkContext {
+                    let ctx = GenericRouterContext {
                         inner: ctx,
                         _marker: std::marker::PhantomData,
                     };
@@ -172,11 +173,8 @@ impl RouterContext {
     /// Push a new location.
     ///
     /// The previous location will be available to go back to.
-    pub fn push<R: Routable>(
-        &self,
-        target: impl Into<NavigationTarget<R>>,
-    ) -> Option<ExternalNavigationFailure> {
-        let target = target.into();
+    pub fn push(&self, target: impl Into<IntoRoutable>) -> Option<ExternalNavigationFailure> {
+        let target = self.resolve_into_routable(target.into());
         match target {
             NavigationTarget::Internal(p) => {
                 let mut state = self.state_mut();
@@ -191,11 +189,8 @@ impl RouterContext {
     /// Replace the current location.
     ///
     /// The previous location will **not** be available to go back to.
-    pub fn replace<R: Routable>(
-        &self,
-        target: impl Into<NavigationTarget<R>>,
-    ) -> Option<ExternalNavigationFailure> {
-        let target = target.into();
+    pub fn replace(&self, target: impl Into<IntoRoutable>) -> Option<ExternalNavigationFailure> {
+        let target = self.resolve_into_routable(target.into());
 
         {
             let mut state = self.state_mut();
@@ -203,21 +198,6 @@ impl RouterContext {
                 NavigationTarget::Internal(p) => state.history.replace(Rc::new(p)),
                 NavigationTarget::External(e) => return self.external(e),
             }
-        }
-
-        self.change_route()
-    }
-
-    pub(crate) fn replace_any(
-        &self,
-        target: NavigationTarget<Rc<dyn Any>>,
-    ) -> Option<ExternalNavigationFailure> {
-        match target {
-            NavigationTarget::Internal(p) => {
-                let mut state = self.state_mut();
-                state.history.replace(p)
-            }
-            NavigationTarget::External(e) => return self.external(e),
         }
 
         self.change_route()
@@ -335,12 +315,12 @@ impl RouterContext {
     }
 }
 
-pub struct LinkContext<R> {
+pub struct GenericRouterContext<R> {
     inner: RouterContext,
     _marker: std::marker::PhantomData<R>,
 }
 
-impl<R> LinkContext<R>
+impl<R> GenericRouterContext<R>
 where
     R: Routable,
 {
@@ -377,7 +357,7 @@ where
         &self,
         target: impl Into<NavigationTarget<R>>,
     ) -> Option<ExternalNavigationFailure> {
-        self.inner.push(target)
+        self.inner.push(target.into())
     }
 
     /// Replace the current location.
@@ -387,7 +367,7 @@ where
         &self,
         target: impl Into<NavigationTarget<R>>,
     ) -> Option<ExternalNavigationFailure> {
-        self.inner.replace(target)
+        self.inner.replace(target.into())
     }
 
     /// The route that is currently active.
