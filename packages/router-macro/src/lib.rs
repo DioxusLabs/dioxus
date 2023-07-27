@@ -43,8 +43,8 @@ mod segment;
 /// #[rustfmt::skip]
 /// #[derive(Clone, Debug, PartialEq, Routable)]
 /// enum Route {
-///     // Define routes with the route macro. If the name of the component is not the same as the variant, you can specify it as the second parameter and the props type as the third
-///     #[route("/", IndexComponent, ComponentProps)]
+///     // Define routes with the route macro. If the name of the component is not the same as the variant, you can specify it as the second parameter
+///     #[route("/", IndexComponent)]
 ///     Index {},
 ///     // Nests with parameters have types taken from child routes
 ///     // Everything inside the nest has the added parameter `user_id: usize`
@@ -52,7 +52,7 @@ mod segment;
 ///         // All children of layouts will be rendered inside the Outlet in the layout component
 ///         // Creates a Layout UserFrame that has the parameter `user_id: usize`
 ///         #[layout(UserFrame)]
-///             // If there is a component with the name Route1 and props with the name Route1Props, you do not need to pass in the component and type
+///             // If there is a component with the name Route1, you do not need to pass in the component name
 ///             #[route("/:dynamic?:query")]
 ///             Route1 {
 ///                 // The type is taken from the first instance of the dynamic parameter
@@ -78,12 +78,11 @@ mod segment;
 /// }
 /// ```
 ///
-/// # `#[route("path", component, props)]`
+/// # `#[route("path", component)]`
 ///
 /// The `#[route]` attribute is used to define a route. It takes up to 3 parameters:
 /// - `path`: The path to the enum variant (relative to the parent nest)
 /// - (optional) `component`: The component to render when the route is matched. If not specified, the name of the variant is used
-/// - (optional) `props`: The props type for the component. If not specified, the name of the variant with `Props` appended is used
 ///
 /// Routes are the most basic attribute. They allow you to define a route and the component to render when the route is matched. The component must take all dynamic parameters of the route and all parent nests.
 /// The next variant will be tied to the component. If you link to that variant, the component will be rendered.
@@ -91,9 +90,9 @@ mod segment;
 /// ```rust, skip
 /// #[derive(Clone, Debug, PartialEq, Routable)]
 /// enum Route {
-///     // Define routes that renders the IndexComponent that takes the IndexProps
+///     // Define routes that renders the IndexComponent
 ///     // The Index component will be rendered when the route is matched (e.g. when the user navigates to /)
-///     #[route("/", Index, IndexProps)]
+///     #[route("/", Index)]
 ///     Index {},
 /// }
 /// ```
@@ -109,7 +108,7 @@ mod segment;
 /// enum Route {
 ///     // Redirects the /:id route to the Index route
 ///     #[redirect("/:id", |_: usize| Route::Index {})]
-///     #[route("/", Index, IndexProps)]
+///     #[route("/", Index)]
 ///     Index {},
 /// }
 /// ```
@@ -131,7 +130,7 @@ mod segment;
 ///         // This is at /blog/:id
 ///         #[redirect("/:id", |_: usize| Route::Index {})]
 ///         // This is at /blog
-///         #[route("/", Index, IndexProps)]
+///         #[route("/", Index)]
 ///         Index {},
 /// }
 /// ```
@@ -147,7 +146,7 @@ mod segment;
 ///         // This is at /blog/:id
 ///         #[redirect("/:id", |_: usize| Route::Index {})]
 ///         // This is at /blog
-///         #[route("/", Index, IndexProps)]
+///         #[route("/", Index)]
 ///         Index {},
 ///     // Ends the nest
 ///     #[end_nest]
@@ -161,7 +160,6 @@ mod segment;
 ///
 /// The `#[layout]` attribute is used to define a layout. It takes 2 parameters:
 /// - `component`: The component to render when the route is matched. If not specified, the name of the variant is used
-/// - (optional) `props`: The props type for the component. If not specified, the name of the variant with `Props` appended is used
 ///
 /// The layout component allows you to wrap all children of the layout in a component. The child routes are rendered in the Outlet of the layout component. The layout component must take all dynamic parameters of the nests it is nested in.
 ///
@@ -171,7 +169,7 @@ mod segment;
 ///     #[layout(BlogFrame)]
 ///         #[redirect("/:id", |_: usize| Route::Index {})]
 ///         // Index will be rendered in the Outlet of the BlogFrame component
-///         #[route("/", Index, IndexProps)]
+///         #[route("/", Index)]
 ///         Index {},
 /// }
 /// ```
@@ -186,7 +184,7 @@ mod segment;
 ///     #[layout(BlogFrame)]
 ///         #[redirect("/:id", |_: usize| Route::Index {})]
 ///         // Index will be rendered in the Outlet of the BlogFrame component
-///         #[route("/", Index, IndexProps)]
+///         #[route("/", Index)]
 ///         Index {},
 ///     // Ends the layout
 ///     #[end_layout]
