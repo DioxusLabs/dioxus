@@ -1,3 +1,5 @@
+use std::any::Any;
+
 use dioxus_html::FileEngine;
 use futures_channel::oneshot;
 use js_sys::Uint8Array;
@@ -99,5 +101,24 @@ impl FileEngine for WebFileEngine {
         } else {
             None
         }
+    }
+
+    async fn get_native_file(&self, file: &str) -> Option<Box<dyn Any>> {
+        let file = self.find(file)?;
+        Some(Box::new(file))
+    }
+}
+
+#[async_trait::async_trait(?Send)]
+trait WebFileEngineExt {
+    async fn get_web_file(&self, file: &str) -> Option<web_sys::File>;
+}
+
+#[async_trait::async_trait(?Send)]
+impl WebFileEngineExt for std::sync::Arc<dyn FileEngine> {
+    async fn get_web_file(&self, file: &str) -> Option<web_sys::File> {
+        let native_file = self.get_native_file(file).await?;
+        let ret = native_file.downcast::<web_sys::File>().ok()?;
+        Some(*ret)
     }
 }
