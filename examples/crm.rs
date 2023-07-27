@@ -46,7 +46,7 @@ fn App(cx: Scope) -> Element {
 
         h1 { "Dioxus CRM Example" }
 
-        Router {}
+        Router::<Route> {}
     }
 }
 

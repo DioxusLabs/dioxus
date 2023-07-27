@@ -14,7 +14,7 @@ fn main() {
 
 fn root(cx: Scope) -> Element {
     render! {
-        Router {}
+        Router::<Route> {}
     }
 }
 
@@ -27,7 +27,7 @@ fn UserFrame(cx: Scope, user_id: usize) -> Element {
         div {
             background_color: "rgba(0,0,0,50%)",
             "children:"
-            Outlet {}
+            Outlet::<Route> {}
         }
     }
 }
@@ -90,7 +90,7 @@ fn Route3(cx: Scope, dynamic: String) -> Element {
             "hello world link"
         }
         button {
-            onclick: move |_| { navigator.push(NavigationTarget::External("https://www.google.com".to_string())); },
+            onclick: move |_| { navigator.push("https://www.google.com"); },
             "google link"
         }
         p { "Site Map" }

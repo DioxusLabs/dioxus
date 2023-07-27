@@ -26,7 +26,7 @@ Unlike other routers in the Rust ecosystem, our router is built declaratively. T
 ```rust, no_run
 rsx!{
     // All of our routes will be rendered inside this Router component
-    Router {
+    Router::<Route> {
         // if the current location is "/home", render the Home component
         Route { to: "/home", Home {} }
         // if the current location is "/blog", render the Blog component
@@ -43,7 +43,7 @@ We can fix this one of two ways:
 
 ```rust, no_run
 rsx!{
-    Router {
+    Router::<Route> {
         Route { to: "/home", Home {} }
         Route { to: "/blog", Blog {} }
         //  if the current location doesn't match any of the above routes, render the NotFound component
@@ -56,7 +56,7 @@ rsx!{
 
 ```rust, no_run
 rsx!{
-    Router {
+    Router::<Route> {
         Route { to: "/home", Home {} }
         Route { to: "/blog", Blog {} }
         //  if the current location doesn't match any of the above routes, redirect to "/home"

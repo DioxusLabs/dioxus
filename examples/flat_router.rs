@@ -18,7 +18,7 @@ fn main() {
 
 fn app(cx: Scope) -> Element {
     render! {
-        Router {}
+        Router::<Route> {}
     }
 }
 
@@ -40,7 +40,7 @@ enum Route {
 fn Footer(cx: Scope) -> Element {
     render! {
         div {
-            Outlet { }
+            Outlet::<Route> { }
 
             p {
                 "----"

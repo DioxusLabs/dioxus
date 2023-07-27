@@ -1,6 +1,6 @@
 use dioxus::prelude::{ScopeId, ScopeState};
 
-use crate::{contexts::router::GenericRouterContext, prelude::*};
+use crate::prelude::*;
 
 /// A private hook to subscribe to the router.
 ///
@@ -8,13 +8,11 @@ use crate::{contexts::router::GenericRouterContext, prelude::*};
 /// single component, but not recommended. Multiple subscriptions will be discarded.
 ///
 /// # Return values
-/// - [`None`], when the current component isn't a descendant of a [`GenericRouter`] component.
+/// - [`None`], when the current component isn't a descendant of a [`Link`] component.
 /// - Otherwise [`Some`].
-pub(crate) fn use_router_internal<R: Routable>(
-    cx: &ScopeState,
-) -> &Option<GenericRouterContext<R>> {
+pub(crate) fn use_router_internal(cx: &ScopeState) -> &Option<RouterContext> {
     let inner = cx.use_hook(|| {
-        let router = cx.consume_context::<GenericRouterContext<R>>()?;
+        let router = cx.consume_context::<RouterContext>()?;
 
         let id = cx.scope_id();
         router.subscribe(id);
@@ -24,12 +22,12 @@ pub(crate) fn use_router_internal<R: Routable>(
     cx.use_hook(|| inner.as_ref().map(|s| s.router.clone()))
 }
 
-struct Subscription<R: Routable> {
-    router: GenericRouterContext<R>,
+struct Subscription {
+    router: RouterContext,
     id: ScopeId,
 }
 
-impl<R: Routable> Drop for Subscription<R> {
+impl Drop for Subscription {
     fn drop(&mut self) {
         self.router.unsubscribe(self.id);
     }

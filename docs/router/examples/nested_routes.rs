@@ -26,7 +26,7 @@ fn NavBar(cx: Scope) -> Element {
             }
         }
         // The Outlet component will render child routes (In this case just the Home component) inside the Outlet component
-        Outlet {}
+        Outlet::<Route> {}
     }
 }
 // ANCHOR_END: nav
@@ -35,7 +35,7 @@ fn NavBar(cx: Scope) -> Element {
 #[inline_props]
 fn App(cx: Scope) -> Element {
     render! {
-        Router {}
+        Router::<Route> {}
     }
 }
 // ANCHOR_END: app

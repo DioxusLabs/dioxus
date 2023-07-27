@@ -51,7 +51,7 @@ enum Route {
 
 fn App(cx: Scope) -> Element {
     render! {
-        Router { }
+        Router::<Route> { }
     }
 }
 
@@ -70,7 +70,7 @@ fn Index(cx: Scope) -> Element {
 fn Blog(cx: Scope) -> Element {
     render! {
         h1 { "Blog" }
-        Outlet { }
+        Outlet::<Route> { }
     }
 }
 

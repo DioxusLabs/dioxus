@@ -23,7 +23,7 @@ fn app(cx: Scope) -> Element {
             }
         }
         div {
-            Router {}
+            Router::<Route> {}
         }
     ))
 }
@@ -46,7 +46,7 @@ fn Header(cx: Scope) -> Element {
             li { Link { to: Route::Home {}, "home" } }
             li { Link { to: Route::Settings {}, "settings" } }
         }
-        Outlet {}
+        Outlet::<Route> {}
     }
 }
 

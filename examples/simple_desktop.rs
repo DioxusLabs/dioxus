@@ -14,7 +14,7 @@ fn main() {
 
 fn app(cx: Scope) -> Element {
     render! {
-        Router {}
+        Router::<Route> {}
     }
 }
 
@@ -47,7 +47,7 @@ fn NavBar(cx: Scope) -> Element {
             li { Link { to: Route::BlogPost { post: "bill".into() }, "bills' blog" } }
             li { Link { to: Route::BlogPost { post: "james".into() }, "james amazing' blog" } }
         }
-        Outlet {}
+        Outlet::<Route> {}
     }
 }
 

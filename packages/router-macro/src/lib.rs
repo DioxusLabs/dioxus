@@ -211,38 +211,8 @@ pub fn routable(input: TokenStream) -> TokenStream {
     let parse_impl = route_enum.parse_impl();
     let display_impl = route_enum.impl_display();
     let routable_impl = route_enum.routable_impl();
-    let name = &route_enum.name;
-    let vis = &route_enum.vis;
 
     quote! {
-        #vis fn Outlet(cx: dioxus::prelude::Scope) -> dioxus::prelude::Element {
-            dioxus_router::prelude::GenericOutlet::<#name>(cx)
-        }
-
-        #vis fn Router(cx: dioxus::prelude::Scope<dioxus_router::prelude::GenericRouterProps<#name>>) -> dioxus::prelude::Element {
-            dioxus_router::prelude::GenericRouter(cx)
-        }
-
-        #vis fn Link<'a>(cx: dioxus::prelude::Scope<'a, dioxus_router::prelude::GenericLinkProps<'a, #name>>) -> dioxus::prelude::Element<'a> {
-            dioxus_router::prelude::GenericLink(cx)
-        }
-
-        #vis fn GoBackButton<'a>(cx: dioxus::prelude::Scope<'a, dioxus_router::prelude::GenericHistoryButtonProps<'a>>) -> dioxus::prelude::Element<'a> {
-            dioxus_router::prelude::GenericGoBackButton::<#name>(cx)
-        }
-
-        #vis fn GoForwardButton<'a>(cx: dioxus::prelude::Scope<'a, dioxus_router::prelude::GenericHistoryButtonProps<'a>>) -> dioxus::prelude::Element<'a> {
-            dioxus_router::prelude::GenericGoForwardButton::<#name>(cx)
-        }
-
-        #vis fn use_route(cx: &dioxus::prelude::ScopeState) -> Option<#name> {
-            dioxus_router::prelude::use_generic_route(cx)
-        }
-
-        #vis fn use_navigator(cx: &dioxus::prelude::ScopeState) -> &dioxus_router::prelude::GenericNavigator<#name> {
-            dioxus_router::prelude::use_generic_navigator(cx)
-        }
-
         #error_type
 
         #display_impl
@@ -255,7 +225,6 @@ pub fn routable(input: TokenStream) -> TokenStream {
 }
 
 struct RouteEnum {
-    vis: syn::Visibility,
     name: Ident,
     redirects: Vec<Redirect>,
     routes: Vec<Route>,
@@ -267,7 +236,6 @@ struct RouteEnum {
 impl RouteEnum {
     fn parse(data: syn::ItemEnum) -> syn::Result<Self> {
         let name = &data.ident;
-        let vis = &data.vis;
 
         let mut site_map = Vec::new();
         let mut site_map_stack: Vec<Vec<SiteMapSegment>> = Vec::new();
@@ -457,7 +425,6 @@ impl RouteEnum {
         }
 
         let myself = Self {
-            vis: vis.clone(),
             name: name.clone(),
             routes,
             redirects,
