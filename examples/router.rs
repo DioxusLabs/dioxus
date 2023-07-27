@@ -43,7 +43,6 @@ fn App(cx: Scope) -> Element {
     }
 }
 
-#[inline_props]
 fn NavBar(cx: Scope) -> Element {
     render! {
         nav {
@@ -56,14 +55,12 @@ fn NavBar(cx: Scope) -> Element {
     }
 }
 
-#[inline_props]
 fn Home(cx: Scope) -> Element {
     render! {
         h1 { "Welcome to the Dioxus Blog!" }
     }
 }
 
-#[inline_props]
 fn Blog(cx: Scope) -> Element {
     render! {
         h1 { "Blog" }
@@ -71,7 +68,6 @@ fn Blog(cx: Scope) -> Element {
     }
 }
 
-#[inline_props]
 fn BlogList(cx: Scope) -> Element {
     render! {
         h2 { "Choose a post" }

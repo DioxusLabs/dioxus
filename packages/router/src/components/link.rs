@@ -1,5 +1,6 @@
 use std::any::Any;
 use std::fmt::Debug;
+use std::rc::Rc;
 
 use dioxus::prelude::*;
 use log::error;
@@ -9,25 +10,24 @@ use crate::prelude::Routable;
 use crate::utils::use_router_internal::use_router_internal;
 
 /// Something that can be converted into a [`NavigationTarget`].
+#[derive(Clone)]
 pub enum IntoRoutable {
     /// A raw string target.
     FromStr(String),
     /// A internal target.
-    Route(Box<dyn Any>),
+    Route(Rc<dyn Any>),
 }
 
 impl<R: Routable> From<R> for IntoRoutable {
     fn from(value: R) -> Self {
-        IntoRoutable::Route(Box::new(value) as Box<dyn Any>)
+        IntoRoutable::Route(Rc::new(value) as Rc<dyn Any>)
     }
 }
 
 impl<R: Routable> From<NavigationTarget<R>> for IntoRoutable {
     fn from(value: NavigationTarget<R>) -> Self {
         match value {
-            NavigationTarget::Internal(route) => {
-                IntoRoutable::Route(Box::new(route) as Box<dyn Any>)
-            }
+            NavigationTarget::Internal(route) => IntoRoutable::Route(Rc::new(route) as Rc<dyn Any>),
             NavigationTarget::External(url) => IntoRoutable::FromStr(url),
         }
     }
@@ -197,10 +197,7 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
         IntoRoutable::FromStr(url) => url.to_string(),
         IntoRoutable::Route(route) => router.any_route_to_string(&**route),
     };
-    let parsed_route: NavigationTarget<Box<dyn Any>> = match router.route_from_str(&href) {
-        Ok(route) => NavigationTarget::Internal(route),
-        Err(err) => NavigationTarget::External(err),
-    };
+    let parsed_route: NavigationTarget<Rc<dyn Any>> = router.resolve_into_routable(to.clone());
     let ac = active_class
         .and_then(|active_class| (href == current_url).then(|| format!(" {active_class}")))
         .unwrap_or_default();
@@ -219,7 +216,7 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
     let do_default = onclick.is_none() || !onclick_only;
     let action = move |event| {
         if do_default && is_router_nav {
-            router.push_any(router.resolve_into_routable(to));
+            router.push_any(router.resolve_into_routable(to.clone()));
         }
 
         if let Some(handler) = onclick {

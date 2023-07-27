@@ -42,7 +42,7 @@ mod history;
 /// Hooks for interacting with the router in components.
 pub mod hooks {
     mod use_router;
-    pub(crate) use use_router::*;
+    pub use use_router::*;
 
     mod use_route;
     pub use use_route::*;

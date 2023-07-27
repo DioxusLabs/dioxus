@@ -112,7 +112,7 @@ where
     /// Defaults to [`None`].
     pub fn on_update(
         self,
-        callback: impl Fn(LinkContext<R>) -> Option<NavigationTarget<R>> + 'static,
+        callback: impl Fn(GenericRouterContext<R>) -> Option<NavigationTarget<R>> + 'static,
     ) -> Self {
         Self {
             on_update: Some(Arc::new(callback)),
