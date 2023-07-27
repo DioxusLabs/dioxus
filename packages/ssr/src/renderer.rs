@@ -102,7 +102,7 @@ impl Renderer {
                         if self.skip_components {
                             write!(buf, "<{}><{}/>", node.name, node.name)?;
                         } else {
-                            let id = node.scope.get().unwrap();
+                            let id = node.mounted_scope().unwrap();
                             let scope = dom.get_scope(id).unwrap();
                             let node = scope.root_node();
                             match node {

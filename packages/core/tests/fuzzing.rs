@@ -217,23 +217,16 @@ fn create_random_dynamic_attr(cx: &ScopeState) -> Attribute {
         5 => AttributeValue::None,
         6 => {
             let value = cx.listener(|e: Event<String>| println!("{:?}", e));
-            return Attribute {
-                name: "ondata",
-                value,
-                namespace: None,
-                mounted_element: Default::default(),
-                volatile: false,
-            };
+            return Attribute::new("ondata", value, None, false);
         }
         _ => unreachable!(),
     };
-    Attribute {
-        name: Box::leak(format!("attr{}", rand::random::<usize>()).into_boxed_str()),
+    Attribute::new(
+        Box::leak(format!("attr{}", rand::random::<usize>()).into_boxed_str()),
         value,
-        namespace: random_ns(),
-        mounted_element: Default::default(),
-        volatile: rand::random(),
-    }
+        random_ns(),
+        rand::random(),
+    )
 }
 
 static mut TEMPLATE_COUNT: usize = 0;
@@ -288,12 +281,9 @@ fn create_random_element(cx: Scope<DepthProps>) -> Element {
                     let dynamic_nodes: Vec<_> = dynamic_node_types
                         .iter()
                         .map(|ty| match ty {
-                            DynamicNodeType::Text => DynamicNode::Text(VText {
-                                value: Box::leak(
-                                    format!("{}", rand::random::<usize>()).into_boxed_str(),
-                                ),
-                                id: Default::default(),
-                            }),
+                            DynamicNodeType::Text => DynamicNode::Text(VText::new(Box::leak(
+                                format!("{}", rand::random::<usize>()).into_boxed_str(),
+                            ))),
                             DynamicNodeType::Other => {
                                 create_random_dynamic_node(cx, cx.props.depth + 1)
                             }
