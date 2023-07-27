@@ -10,7 +10,7 @@
 //! 1) [`MemoryHistory`] for desktop/mobile/ssr platforms
 //! 2) [`WebHistory`] for web platforms
 
-use std::{any::Any, sync::Arc};
+use std::{any::Any, rc::Rc, sync::Arc};
 
 mod memory;
 pub use memory::*;
@@ -279,13 +279,13 @@ pub trait HistoryProvider<R: Routable> {
 }
 
 pub(crate) trait AnyHistoryProvider {
-    fn parse_route(&self, route: &str) -> Result<Box<dyn Any>, String>;
+    fn parse_route(&self, route: &str) -> Result<Rc<dyn Any>, String>;
 
     #[must_use]
     fn accepts_type_id(&self, type_id: &std::any::TypeId) -> bool;
 
     #[must_use]
-    fn current_route(&self) -> Box<dyn Any>;
+    fn current_route(&self) -> Rc<dyn Any>;
 
     #[must_use]
     fn current_prefix(&self) -> Option<String> {
@@ -306,9 +306,9 @@ pub(crate) trait AnyHistoryProvider {
 
     fn go_forward(&mut self);
 
-    fn push(&mut self, route: Box<dyn Any>);
+    fn push(&mut self, route: Rc<dyn Any>);
 
-    fn replace(&mut self, path: Box<dyn Any>);
+    fn replace(&mut self, path: Rc<dyn Any>);
 
     #[allow(unused_variables)]
     fn external(&mut self, url: String) -> bool {
@@ -345,19 +345,19 @@ where
     <R as std::str::FromStr>::Err: std::fmt::Display,
     H: HistoryProvider<R>,
 {
-    fn parse_route(&self, route: &str) -> Result<Box<dyn Any>, String> {
+    fn parse_route(&self, route: &str) -> Result<Rc<dyn Any>, String> {
         R::from_str(route)
             .map_err(|err| err.to_string())
-            .map(|route| Box::new(route) as Box<dyn Any>)
+            .map(|route| Rc::new(route) as Rc<dyn Any>)
     }
 
     fn accepts_type_id(&self, type_id: &std::any::TypeId) -> bool {
         type_id == &std::any::TypeId::of::<R>()
     }
 
-    fn current_route(&self) -> Box<dyn Any> {
+    fn current_route(&self) -> Rc<dyn Any> {
         let route = self.inner.current_route();
-        Box::new(route)
+        Rc::new(route)
     }
 
     fn current_prefix(&self) -> Option<String> {
@@ -380,12 +380,14 @@ where
         self.inner.go_forward()
     }
 
-    fn push(&mut self, route: Box<dyn Any>) {
-        self.inner.push(*route.downcast().unwrap())
+    fn push(&mut self, route: Rc<dyn Any>) {
+        self.inner
+            .push(route.downcast::<R>().unwrap().as_ref().clone())
     }
 
-    fn replace(&mut self, path: Box<dyn Any>) {
-        self.inner.replace(*path.downcast().unwrap())
+    fn replace(&mut self, route: Rc<dyn Any>) {
+        self.inner
+            .replace(route.downcast::<R>().unwrap().as_ref().clone())
     }
 
     fn external(&mut self, url: String) -> bool {

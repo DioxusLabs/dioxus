@@ -36,7 +36,7 @@ impl Navigator {
     /// The previous location will be available to go back to.
     pub fn push(&self, target: impl Into<IntoRoutable>) -> Option<ExternalNavigationFailure> {
         let target = target.into();
-        let as_any_navigation_target = self.0.resolve_into_routable(&target);
+        let as_any_navigation_target = self.0.resolve_into_routable(target);
         self.0.push_any(as_any_navigation_target)
     }
 
@@ -45,7 +45,7 @@ impl Navigator {
     /// The previous location will **not** be available to go back to.
     pub fn replace(&self, target: impl Into<IntoRoutable>) -> Option<ExternalNavigationFailure> {
         let target = target.into();
-        let as_any_navigation_target = self.0.resolve_into_routable(&target);
+        let as_any_navigation_target = self.0.resolve_into_routable(target);
         self.0.replace_any(as_any_navigation_target)
     }
 }
