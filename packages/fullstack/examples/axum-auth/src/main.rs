@@ -73,7 +73,7 @@ fn main() {
             });
     }
 }
-// 
+//
 fn app(cx: Scope) -> Element {
     let user_name = use_state(cx, || "?".to_string());
     let permissions = use_state(cx, || "?".to_string());
