@@ -17,12 +17,9 @@ pub mod salvo_adapter;
 #[cfg(feature = "warp")]
 pub mod warp_adapter;
 
-use std::sync::{Arc, RwLock};
-
 use http::StatusCode;
-
 use server_fn::{Encoding, Payload};
-use tokio::task::spawn_blocking;
+use std::sync::{Arc, RwLock};
 
 use crate::{
     layer::{BoxedService, Service},
@@ -93,27 +90,22 @@ impl Service for ServerFnHandler {
 
             // Because the future returned by `server_fn_handler` is `Send`, and the future returned by this function must be send, we need to spawn a new runtime
             let (resp_tx, resp_rx) = tokio::sync::oneshot::channel();
-            spawn_blocking({
+            let pool = get_local_pool();
+            pool.spawn_pinned({
                 let function = function.clone();
                 let mut server_context = server_context.clone();
                 server_context.parts = parts;
-                move || {
-                    tokio::runtime::Runtime::new()
-                        .expect("couldn't spawn runtime")
-                        .block_on(async move {
-                            let data = match function.encoding() {
-                                Encoding::Url | Encoding::Cbor => &body,
-                                Encoding::GetJSON | Encoding::GetCBOR => &query,
-                            };
-                            let server_function_future = function.call((), data);
-                            let server_function_future = ProvideServerContext::new(
-                                server_function_future,
-                                server_context.clone(),
-                            );
-                            let resp = server_function_future.await;
+                move || async move {
+                    let data = match function.encoding() {
+                        Encoding::Url | Encoding::Cbor => &body,
+                        Encoding::GetJSON | Encoding::GetCBOR => &query,
+                    };
+                    let server_function_future = function.call((), data);
+                    let server_function_future =
+                        ProvideServerContext::new(server_function_future, server_context.clone());
+                    let resp = server_function_future.await;
 
-                            resp_tx.send(resp).unwrap();
-                        })
+                    resp_tx.send(resp).unwrap();
                 }
             });
             let result = resp_rx.await.unwrap();
@@ -157,4 +149,18 @@ impl Service for ServerFnHandler {
             })
         })
     }
+}
+
+fn get_local_pool() -> tokio_util::task::LocalPoolHandle {
+    use once_cell::sync::OnceCell;
+    static LOCAL_POOL: OnceCell<tokio_util::task::LocalPoolHandle> = OnceCell::new();
+    LOCAL_POOL
+        .get_or_init(|| {
+            tokio_util::task::LocalPoolHandle::new(
+                std::thread::available_parallelism()
+                    .map(Into::into)
+                    .unwrap_or(1),
+            )
+        })
+        .clone()
 }

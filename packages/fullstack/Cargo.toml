@@ -41,6 +41,7 @@ log = { workspace = true }
 once_cell = "1.17.1"
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full"], optional = true }
+tokio-util = { version = "0.7.8", features = ["rt"], optional = true }
 object-pool = "0.5.4"
 anymap = "0.12.1"
 
@@ -68,7 +69,7 @@ hot-reload = ["serde_json", "futures-util"]
 warp = ["dep:warp", "ssr"]
 axum = ["dep:axum", "tower-http", "ssr"]
 salvo = ["dep:salvo", "ssr"]
-ssr = ["server_fn/ssr", "tokio", "dioxus-ssr", "tower", "hyper", "http", "http-body", "dioxus-router/ssr", "tokio-stream"]
+ssr = ["server_fn/ssr", "tokio", "tokio-util", "dioxus-ssr", "tower", "hyper", "http", "http-body", "dioxus-router/ssr", "tokio-stream"]
 default-tls = ["server_fn/default-tls"]
 rustls = ["server_fn/rustls"]
 
