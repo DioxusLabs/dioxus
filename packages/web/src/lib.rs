@@ -55,13 +55,19 @@
 
 pub use crate::cfg::Config;
 use dioxus_core::{Element, Scope, VirtualDom};
-use futures_util::{pin_mut, FutureExt, StreamExt};
+use futures_util::{
+    future::{select, Either},
+    pin_mut, FutureExt, StreamExt,
+};
 
 mod cache;
 mod cfg;
 mod dom;
+#[cfg(feature = "eval")]
 mod eval;
+#[cfg(feature = "file_engine")]
 mod file_engine;
+#[cfg(all(feature = "hot_reload", debug_assertions))]
 mod hot_reload;
 #[cfg(feature = "hydrate")]
 mod rehydrate;
@@ -167,15 +173,19 @@ pub async fn run_with_props<T: 'static>(root: fn(Scope<T>) -> Element, root_prop
 
     let mut dom = VirtualDom::new_with_props(root, root_props);
 
-    // Eval
-    let cx = dom.base_scope();
-    eval::init_eval(cx);
+    #[cfg(feature = "eval")]
+    {
+        // Eval
+        let cx = dom.base_scope();
+        eval::init_eval(cx);
+    }
 
     #[cfg(feature = "panic_hook")]
     if cfg.default_panic_hook {
         console_error_panic_hook::set_once();
     }
 
+    #[cfg(all(feature = "hot_reload", debug_assertions))]
     let mut hotreload_rx = hot_reload::init();
 
     for s in crate::cache::BUILTIN_INTERNED_STRINGS {
@@ -237,12 +247,23 @@ pub async fn run_with_props<T: 'static>(root: fn(Scope<T>) -> Element, root_prop
             let work = dom.wait_for_work().fuse();
             pin_mut!(work);
 
-            futures_util::select! {
-                _ = work => (None, None),
-                new_template = hotreload_rx.next() => {
-                    (None, new_template)
-                }
-                evt = rx.next() => (evt, None)
+            #[cfg(all(feature = "hot_reload", debug_assertions))]
+            // futures_util::select! {
+            //     _ = work => (None, None),
+            //     new_template = hotreload_rx.next() => {
+            //         (None, new_template)
+            //     }
+            //     evt = rx.next() =>
+            // }
+            match select(work, select(hotreload_rx.next(), rx.next())).await {
+                Either::Left((_, _)) => (None, None),
+                Either::Right((Either::Left((new_template, _)), _)) => (None, new_template),
+                Either::Right((Either::Right((evt, _)), _)) => (evt, None),
+            }
+            #[cfg(not(all(feature = "hot_reload", debug_assertions)))]
+            match select(work, rx.next()).await {
+                Either::Left((_, _)) => (None, None),
+                Either::Right((evt, _)) => (evt, None),
             }
         };
 

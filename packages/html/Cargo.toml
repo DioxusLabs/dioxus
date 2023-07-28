@@ -29,31 +29,26 @@ serde_json = { version = "1", optional = true }
 optional = true
 version = "0.3.56"
 features = [
-    "TouchEvent",
-    "MouseEvent",
-    "InputEvent",
-    "ClipboardEvent",
-    "KeyboardEvent",
-    "TouchEvent",
-    "WheelEvent",
-    "AnimationEvent",
-    "TransitionEvent",
-    "PointerEvent",
-    "FocusEvent",
-    "CompositionEvent",
-    "ClipboardEvent",
-    "Element",
-    "DomRect",
-    "ScrollIntoViewOptions",
-    "ScrollLogicalPosition",
-    "ScrollBehavior",
+     "TouchEvent",
+     "MouseEvent",
+     "InputEvent",
+     "ClipboardEvent",
+     "KeyboardEvent",
+     "TouchEvent",
+     "WheelEvent",
+     "AnimationEvent",
+     "TransitionEvent",
+     "PointerEvent",
+     "FocusEvent",
+     "CompositionEvent",
+     "ClipboardEvent",
 ]
 
 [dev-dependencies]
 serde_json = "1"
 
 [features]
-default = ["serialize"]
+default = ["serialize", "mounted"]
 serialize = [
     "serde",
     "serde_repr",
@@ -61,6 +56,14 @@ serialize = [
     "euclid/serde",
     "keyboard-types/serde",
     "dioxus-core/serialize",
+]
+mounted = [
+    "web-sys/Element",
+    "web-sys/DomRect",
+    "web-sys/ScrollIntoViewOptions",
+    "web-sys/ScrollLogicalPosition",
+    "web-sys/ScrollBehavior",
+    "web-sys/HtmlElement",
 ]
 wasm-bind = ["web-sys", "wasm-bindgen"]
 native-bind = ["tokio"]

@@ -10,16 +10,16 @@
 use dioxus_core::{
     BorrowedAttributeValue, ElementId, Mutation, Template, TemplateAttribute, TemplateNode,
 };
-use dioxus_html::{event_bubbles, CompositionData, FileEngine, FormData, MountedData};
+use dioxus_html::{event_bubbles, CompositionData, FormData, MountedData};
 use dioxus_interpreter_js::{get_node, minimal_bindings, save_template, Channel};
 use futures_channel::mpsc;
 use js_sys::Array;
 use rustc_hash::FxHashMap;
-use std::{any::Any, rc::Rc, sync::Arc};
+use std::{any::Any, rc::Rc};
 use wasm_bindgen::{closure::Closure, prelude::wasm_bindgen, JsCast, JsValue};
 use web_sys::{Document, Element, Event};
 
-use crate::{file_engine::WebFileEngine, Config};
+use crate::Config;
 
 pub struct WebsysDom {
     document: Document,
@@ -385,11 +385,15 @@ fn read_input_to_data(target: Element) -> Rc<FormData> {
         }
     }
 
+    #[cfg(not(feature = "file_engine"))]
+    let files = None;
+    #[cfg(feature = "file_engine")]
     let files = target
         .dyn_ref()
         .and_then(|input: &web_sys::HtmlInputElement| {
             input.files().and_then(|files| {
-                WebFileEngine::new(files).map(|f| Arc::new(f) as Arc<dyn FileEngine>)
+                crate::file_engine::WebFileEngine::new(files)
+                    .map(|f| std::sync::Arc::new(f) as std::sync::Arc<dyn dioxus_html::FileEngine>)
             })
         });
 
