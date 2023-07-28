@@ -7,8 +7,12 @@
 
 #![allow(non_snake_case, unused)]
 use dioxus::prelude::*;
-use dioxus_fullstack::{launch, prelude::*};
+use dioxus_fullstack::{
+    launch::{self, LaunchBuilder},
+    prelude::*,
+};
 use serde::{Deserialize, Serialize};
+use wasm_logger::Config;
 
 #[derive(Props, PartialEq, Debug, Default, Serialize, Deserialize, Clone)]
 struct AppProps {
@@ -66,7 +70,5 @@ fn main() {
     #[cfg(feature = "ssr")]
     simple_logger::SimpleLogger::new().init().unwrap();
 
-    launch!(@([127, 0, 0, 1], 8080), app, {
-        serve_cfg: ServeConfigBuilder::new(app, AppProps { count: 0 }),
-    });
+    LaunchBuilder::new_with_props(app, AppProps { count: 0 }).launch()
 }
