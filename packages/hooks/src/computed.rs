@@ -8,25 +8,26 @@ use std::{
 };
 
 /// Create a new tracked state.
-/// Tracked state is state that can drive computed state
+/// Tracked state is state that can drive Selector state
 ///
-/// It state will efficiently update any Computed state that is reading from it, but it is not readable on it's own.
+/// It state will efficiently update any Selector state that is reading from it, but it is not readable on it's own.
 ///
 /// ```rust
 /// use dioxus::prelude::*;
 ///
 /// fn Parent(cx: Scope) -> Element {
 ///    let count = use_tracked_state(cx, || 0);
+///
 ///    render! {
 ///        Child {
-///            less_than_five: count.compute(|count| *count < 5),
+///            count: count.clone(),
 ///        }
 ///    }
 /// }
 ///
 /// #[inline_props]
-/// fn Child(cx: Scope, less_than_five: Computed<bool, usize>) -> Element {
-///    let less_than_five = less_than_five.use_state(cx);
+/// fn Child(cx: Scope, count: Tracked<usize>) -> Element {
+///    let less_than_five = use_selector(cx, count, |count| *count < 5);
 ///
 ///    render! {
 ///        "{less_than_five}"
@@ -40,14 +41,14 @@ pub fn use_tracked_state<T: 'static>(cx: &ScopeState, init: impl FnOnce() -> T) 
     })
 }
 
-/// Tracked state is state that can drive computed state
+/// Tracked state is state that can drive Selector state
 ///
-/// Tracked state will efficiently update any Computed state that is reading from it, but it is not readable on it's own.
+/// Tracked state will efficiently update any Selector state that is reading from it, but it is not readable on it's own.
 #[derive(Clone)]
 pub struct Tracked<I> {
     state: Rc<RefCell<I>>,
     update_any: std::sync::Arc<dyn Fn(ScopeId)>,
-    subscribers: std::rc::Rc<std::cell::RefCell<Slab<Box<dyn FnMut(&I) + 'static>>>>,
+    subscribers: SubscribedCallbacks<I>,
 }
 
 impl<I: PartialEq> PartialEq for Tracked<I> {
@@ -67,16 +68,16 @@ impl<I> Tracked<I> {
         }
     }
 
-    /// Create a new computed state from this tracked state
+    /// Create a new Selector state from this tracked state
     pub fn compute<O: PartialEq + 'static>(
         &self,
         mut compute: impl FnMut(&I) -> O + 'static,
-    ) -> Computed<O, I> {
+    ) -> Selector<O, I> {
         let subscribers = Rc::new(RefCell::new(HashSet::new()));
         let state = Rc::new(RefCell::new(compute(&self.state.borrow())));
         let update_any = self.update_any.clone();
 
-        Computed {
+        Selector {
             value: state.clone(),
             subscribers: subscribers.clone(),
             _tracker: Rc::new(self.track(move |input_state| {
@@ -88,7 +89,7 @@ impl<I> Tracked<I> {
                 if different {
                     let mut state = state.borrow_mut();
                     *state = new;
-                    for id in subscribers.borrow_mut().drain() {
+                    for id in subscribers.borrow().iter().copied() {
                         (update_any)(id);
                     }
                 }
@@ -117,7 +118,7 @@ impl<I> Tracked<I> {
 /// A mutable reference to tracked state
 pub struct TrackedMut<'a, I> {
     state: RefMut<'a, I>,
-    subscribers: std::rc::Rc<std::cell::RefCell<Slab<Box<dyn FnMut(&I) + 'static>>>>,
+    subscribers: SubscribedCallbacks<I>,
 }
 
 impl<'a, I> Deref for TrackedMut<'a, I> {
@@ -143,8 +144,10 @@ impl<'a, I> Drop for TrackedMut<'a, I> {
     }
 }
 
+type SubscribedCallbacks<I> = std::rc::Rc<std::cell::RefCell<Slab<Box<dyn FnMut(&I) + 'static>>>>;
+
 pub(crate) struct Tracker<I> {
-    subscribers: std::rc::Rc<std::cell::RefCell<Slab<Box<dyn FnMut(&I) + 'static>>>>,
+    subscribers: SubscribedCallbacks<I>,
     id: usize,
 }
 
@@ -154,24 +157,33 @@ impl<I> Drop for Tracker<I> {
     }
 }
 
-/// Computed state is state that is derived from tracked state
-///
-/// Whenever the tracked state changes, the computed state will be updated and any components reading from it will be rerun
-#[derive(Clone)]
-pub struct Computed<T, I> {
-    _tracker: Rc<Tracker<I>>,
-    value: Rc<RefCell<T>>,
-    subscribers: std::rc::Rc<std::cell::RefCell<std::collections::HashSet<ScopeId>>>,
+pub fn use_selector<I: 'static, O: Clone + PartialEq + 'static>(
+    cx: &ScopeState,
+    tracked: &Tracked<I>,
+    init: impl FnMut(&I) -> O + 'static,
+) -> O {
+    let selector = cx.use_hook(|| tracked.compute(init));
+    selector.use_state(cx)
 }
 
-impl<T, I> PartialEq for Computed<T, I> {
+/// Selector state is state that is derived from tracked state
+///
+/// Whenever the tracked state changes, the Selector state will be updated and any components reading from it will be rerun
+#[derive(Clone)]
+pub struct Selector<T, I> {
+    _tracker: Rc<Tracker<I>>,
+    value: Rc<RefCell<T>>,
+    subscribers: Rc<RefCell<HashSet<ScopeId>>>,
+}
+
+impl<T, I> PartialEq for Selector<T, I> {
     fn eq(&self, other: &Self) -> bool {
         std::rc::Rc::ptr_eq(&self.value, &other.value)
     }
 }
 
-impl<T: Clone + PartialEq, I> Computed<T, I> {
-    /// Read the computed state and subscribe to updates
+impl<T: Clone + PartialEq, I> Selector<T, I> {
+    /// Read the Selector state and subscribe to updates
     pub fn use_state(&self, cx: &ScopeState) -> T {
         cx.use_hook(|| {
             let id = cx.scope_id();
