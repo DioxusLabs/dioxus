@@ -10,8 +10,8 @@ use dioxus_fullstack::prelude::*;
 async fn main() {
     let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 8080));
 
-    PostServerData::register_explicit();
-    GetServerData::register_explicit();
+    let _ = PostServerData::register_explicit();
+    let _ = GetServerData::register_explicit();
 
     axum::Server::bind(&addr)
         .serve(

@@ -369,7 +369,8 @@ fn apply_request_parts_to_response<B>(
     }
 }
 
-async fn render_handler<P: Clone + serde::Serialize + Send + Sync + 'static>(
+/// SSR renderer handler for Axum
+pub async fn render_handler<P: Clone + serde::Serialize + Send + Sync + 'static>(
     State((cfg, ssr_state)): State<(ServeConfig<P>, SSRState)>,
     request: Request<Body>,
 ) -> impl IntoResponse {

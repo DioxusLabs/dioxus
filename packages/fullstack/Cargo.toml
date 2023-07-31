@@ -34,7 +34,13 @@ dioxus-ssr = { workspace = true, optional = true }
 hyper = { version = "0.14.25", optional = true }
 http = { version = "0.2.9", optional = true }
 
-# Router Intigration
+# Web Integration
+dioxus-web = { workspace = true, features = ["hydrate"], optional = true }
+
+# Desktop Integration
+dioxus-desktop = { workspace = true, optional = true }
+
+# Router Integration
 dioxus-router = { workspace = true, optional = true }
 
 log = { workspace = true }
@@ -66,6 +72,8 @@ web-sys = { version = "0.3.61", features = ["Window", "Document", "Element", "Ht
 default = ["hot-reload", "default-tls"]
 router = ["dioxus-router"]
 hot-reload = ["serde_json", "futures-util"]
+web = ["dioxus-web"]
+desktop = ["dioxus-desktop"]
 warp = ["dep:warp", "ssr"]
 axum = ["dep:axum", "tower-http", "ssr"]
 salvo = ["dep:salvo", "ssr"]

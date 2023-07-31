@@ -39,10 +39,13 @@ pub mod prelude {
     use crate::hooks;
     #[cfg(not(feature = "ssr"))]
     pub use crate::html_storage::deserialize::get_root_props_from_document;
+    pub use crate::launch::LaunchBuilder;
     #[cfg(all(feature = "ssr", feature = "router"))]
     pub use crate::render::pre_cache_static_routes_with_props;
     #[cfg(feature = "ssr")]
     pub use crate::render::SSRState;
+    #[cfg(feature = "router")]
+    pub use crate::router::FullstackRouterConfig;
     #[cfg(feature = "ssr")]
     pub use crate::serve_config::{ServeConfig, ServeConfigBuilder};
     #[cfg(all(feature = "ssr", feature = "axum"))]
@@ -54,7 +57,6 @@ pub mod prelude {
     pub use crate::server_fn::DioxusServerFn;
     #[cfg(feature = "ssr")]
     pub use crate::server_fn::{ServerFnMiddleware, ServerFnTraitObj, ServerFunction};
-    pub use crate::{launch, launch_router};
     pub use dioxus_server_macro::*;
     #[cfg(feature = "ssr")]
     pub use dioxus_ssr::incremental::IncrementalRendererConfig;

@@ -12,12 +12,20 @@ use dioxus_fullstack::prelude::*;
 use dioxus_router::prelude::*;
 
 fn main() {
-    launch_router!(@([127, 0, 0, 1], 8080), Route, {
-        incremental: IncrementalRendererConfig::default().invalidate_after(std::time::Duration::from_secs(120)),
-    });
+    let config = LaunchBuilder::<FullstackRouterConfig<Route>>::router();
+    #[cfg(feature = "ssr")]
+    config
+        .incremental(
+            IncrementalRendererConfig::default()
+                .invalidate_after(std::time::Duration::from_secs(120)),
+        )
+        .launch();
+
+    #[cfg(not(feature = "ssr"))]
+    config.launch();
 }
 
-#[derive(Clone, Routable, Debug, PartialEq)]
+#[derive(Clone, Routable, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 enum Route {
     #[route("/")]
     Home {},
