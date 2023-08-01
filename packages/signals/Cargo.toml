@@ -1,5 +1,6 @@
 [package]
 name = "dioxus-signals"
+authors = ["Jonathan Kelley"]
 version = "0.0.0"
 edition = "2018"
 

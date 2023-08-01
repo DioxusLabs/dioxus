@@ -7,6 +7,7 @@ repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com"
 description = "Build natively rendered apps with Dioxus"
 keywords = ["dom", "ui", "gui", "react"]
+authors = ["Jonathan Kelley", "Evan Almloff"]
 
 [dependencies]
 dioxus-core = { workspace = true, optional = true }

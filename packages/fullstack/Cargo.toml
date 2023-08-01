@@ -1,5 +1,6 @@
 [package]
 name = "dioxus-fullstack"
+authors = ["Jonathan Kelley, Evan Almloff"]
 version = "0.1.0"
 edition = "2021"
 description = "Fullstack Dioxus Utilities"
