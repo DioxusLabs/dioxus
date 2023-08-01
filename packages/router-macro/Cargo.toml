@@ -1,6 +1,6 @@
 [package]
 name = "dioxus-router-macro"
-version = "0.3.0"
+version = { workspace = true }
 authors = ["Evan Almloff"]
 edition = "2021"
 description = "Macro for Dioxus Router"

@@ -1,6 +1,6 @@
 [package]
 name = "dioxus-desktop"
-version = "0.3.0"
+version = { workspace = true }
 authors = ["Jonathan Kelley"]
 edition = "2018"
 description = "WebView renderer for Dioxus"

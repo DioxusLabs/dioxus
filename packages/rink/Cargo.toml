@@ -1,6 +1,6 @@
 [package]
-name = "rink"
-version = "0.2.2"
+name = "plasmo"
+version = { workspace = true }
 authors = ["Jonathan Kelley, Evan Almloff"]
 edition = "2021"
 description = "TUI-based renderer for Dioxus"

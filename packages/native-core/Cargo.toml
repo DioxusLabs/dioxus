@@ -1,6 +1,6 @@
 [package]
 name = "dioxus-native-core"
-version = "0.2.0"
+version = { workspace = true }
 edition = "2021"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"

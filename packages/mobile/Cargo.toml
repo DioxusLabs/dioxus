@@ -1,6 +1,6 @@
 [package]
 name = "dioxus-mobile"
-version = "0.3.0"
+version = { workspace = true }
 authors = ["Jonathan Kelley"]
 edition = "2018"
 description = "Mobile-compatible renderer for Dioxus"

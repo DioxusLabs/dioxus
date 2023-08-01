@@ -1,6 +1,6 @@
 [package]
 name = "dioxus_server_macro"
-version = "0.3.0"
+version = { workspace = true }
 edition = "2021"
 repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com/docs/0.4/guide/en/getting_started/fullstack.html"

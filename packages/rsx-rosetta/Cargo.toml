@@ -1,6 +1,6 @@
 [package]
 name = "rsx-rosetta"
-version = "0.3.0"
+version = { workspace = true }
 edition = "2021"
 authors = ["Jonathan Kelley"]
 description = "Autofomatter for Dioxus RSX"

@@ -1,6 +1,6 @@
 [package]
 name = "dioxus-native-core-macro"
-version = "0.3.0"
+version = { workspace = true }
 edition = "2021"
 description = "Build natively rendered apps with Dioxus"
 license = "MIT OR Apache-2.0"

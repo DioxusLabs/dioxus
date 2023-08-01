@@ -1,13 +1,13 @@
 [package]
 name = "dioxus-fullstack"
 authors = ["Jonathan Kelley, Evan Almloff"]
-version = "0.3.0"
+version = { workspace = true }
 edition = "2021"
 description = "Fullstack Dioxus Utilities"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com"
-keywords = ["dom", "ui", "gui", "react", "ssr", "fullstack"]
+keywords = ["ui", "gui", "react", "ssr", "fullstack"]
 
 [dependencies]
 # server functions

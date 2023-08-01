@@ -1,6 +1,6 @@
 [package]
 name = "dioxus-liveview"
-version = "0.3.1"
+version = { workspace = true }
 edition = "2021"
 repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com/docs/0.3/guide/en/getting_started/liveview.html"

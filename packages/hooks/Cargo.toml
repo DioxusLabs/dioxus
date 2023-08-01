@@ -1,6 +1,6 @@
 [package]
 name = "dioxus-hooks"
-version = "0.3.1"
+version = { workspace = true }
 authors = ["Jonathan Kelley"]
 edition = "2018"
 description = "Basic useful hooks for Dioxus."
@@ -18,8 +18,8 @@ dioxus-core = { workspace = true }
 futures-channel = { workspace = true }
 log = { workspace = true }
 thiserror = { workspace = true }
-debug-cell = { git = "https://github.com/Niedzwiedzw/debug-cell", rev = "3352a1f8aff19f56f5e3b2018200a3338fd43d2e" } # waiting for the merge / official DioxusLabs fork
-slab.workspace = true
+slab = { workspace = true }
+dioxus-debug-cell = "0.1.1"
 
 [dev-dependencies]
 futures-util = { workspace = true, default-features = false }

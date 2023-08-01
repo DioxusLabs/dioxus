@@ -1,6 +1,6 @@
 [package]
 name = "dioxus-ssr"
-version = "0.3.0"
+version = { workspace = true }
 authors = ["Jonathan Kelley"]
 edition = "2018"
 description = "Dioxus render-to-string"

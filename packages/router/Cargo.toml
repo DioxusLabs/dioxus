@@ -1,7 +1,7 @@
 [package]
 name = "dioxus-router"
 authors = ["Jonathan Kelley", "Evan Almloff"]
-version = "0.3.0"
+version = { workspace = true }
 edition = "2018"
 description = "Cross-platform router for Dioxus apps"
 license = "MIT OR Apache-2.0"
@@ -55,7 +55,7 @@ dioxus-desktop = { path = "../desktop" }
 
 [target.'cfg(target_family = "wasm")'.dev-dependencies]
 console_error_panic_hook = "0.1.7"
-dioxus-router = { workspace = true, features = ["web"] }
+dioxus-router = { path = ".", features = ["web"] }
 dioxus-web = { workspace = true }
 gloo = "0.8.0"
 wasm-bindgen-test = "0.3.33"

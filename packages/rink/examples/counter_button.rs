@@ -4,7 +4,7 @@ use dioxus_native_core::{
     real_dom::{NodeImmutable, NodeTypeMut},
     NodeId,
 };
-use rink::{render, Config, Driver, EventData};
+use plasmo::{render, Config, Driver, EventData};
 use std::rc::Rc;
 use std::sync::{Arc, RwLock};
 

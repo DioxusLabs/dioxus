@@ -3,7 +3,7 @@ use dioxus_core::{ScopeId, ScopeState};
 use std::{collections::HashSet, rc::Rc, sync::Arc};
 
 #[cfg(debug_assertions)]
-pub use debug_cell::{
+pub use dioxus_debug_cell::{
     error::{BorrowError, BorrowMutError},
     Ref, RefCell, RefMut,
 };

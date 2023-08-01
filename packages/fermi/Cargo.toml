@@ -1,6 +1,6 @@
 [package]
 name = "fermi"
-version = "0.3.0"
+version = { workspace = true }
 authors = ["Jonathan Kelley"]
 edition = "2018"
 description = "Global state management for Dioxus"

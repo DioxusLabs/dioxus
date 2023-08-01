@@ -1,6 +1,6 @@
 [package]
 name = "dioxus-tui"
-version = "0.2.2"
+version = { workspace = true }
 authors = ["Jonathan Kelley, Evan Almloff"]
 edition = "2021"
 description = "TUI-based renderer for Dioxus"
@@ -16,7 +16,7 @@ dioxus-html = { workspace = true }
 dioxus-native-core = { workspace = true, features = ["dioxus"] }
 dioxus-native-core-macro = { workspace = true }
 dioxus-hot-reload = { workspace = true, optional = true }
-rink = { workspace = true }
+plasmo = { workspace = true }
 
 crossterm = "0.26.0"
 tokio = { workspace = true, features = ["full"] }

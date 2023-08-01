@@ -1,6 +1,6 @@
 [package]
 name = "dioxus-web"
-version = "0.3.2"
+version = { workspace = true }
 authors = ["Jonathan Kelley"]
 edition = "2018"
 description = "Web renderer for Dioxus using websys"
@@ -74,4 +74,4 @@ dioxus-ssr = { workspace = true}
 wasm-logger = "0.2.0"
 gloo-timers = "0.2.3"
 gloo-dialogs = "0.1.1"
-dioxus-web = { workspace = true, features = ["hydrate"] }
+dioxus-web = { path = ".", features = ["hydrate"] }
