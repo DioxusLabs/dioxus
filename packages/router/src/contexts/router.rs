@@ -178,7 +178,7 @@ impl RouterContext {
         match target {
             NavigationTarget::Internal(p) => {
                 let mut state = self.state_mut();
-                state.history.push(Rc::new(p))
+                state.history.push(p)
             }
             NavigationTarget::External(e) => return self.external(e),
         }
@@ -195,7 +195,7 @@ impl RouterContext {
         {
             let mut state = self.state_mut();
             match target {
-                NavigationTarget::Internal(p) => state.history.replace(Rc::new(p)),
+                NavigationTarget::Internal(p) => state.history.replace(p),
                 NavigationTarget::External(e) => return self.external(e),
             }
         }
