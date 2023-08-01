@@ -56,7 +56,7 @@ version = "0.4.0"
 dioxus = { path = "packages/dioxus", version = "0.4.0" }
 dioxus-core = { path = "packages/core", version = "0.4.0" }
 dioxus-core-macro = { path = "packages/core-macro", version = "0.4.0"  }
-dioxus-router = { path = "packages/router", version = "0.4.0"  }
+dioxus-router = { path = "packages/router", version = "0.4.1"  }
 dioxus-router-macro = { path = "packages/router-macro", version = "0.4.0" }
 dioxus-html = { path = "packages/html", version = "0.4.0"  }
 dioxus-hooks = { path = "packages/hooks", version = "0.4.0" }
