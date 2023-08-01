@@ -11,7 +11,7 @@ keywords = ["dom", "ui", "gui", "react", "wasm"]
 
 [dependencies]
 dioxus-core = { workspace = true, features = ["serialize"] }
-dioxus-html = { workspace = true, features = ["wasm-bind"] }
+dioxus-html = { workspace = true, features = ["wasm-bind"], default-features = false }
 dioxus-interpreter-js = { workspace = true, features = [
     "sledgehammer",
     "minimal_bindings",
@@ -23,11 +23,7 @@ wasm-bindgen-futures = "0.4.29"
 log = { workspace = true }
 rustc-hash = { workspace = true }
 console_error_panic_hook = { version = "0.1.7", optional = true }
-once_cell = "1.9.0"
-anyhow = "1.0.53"
-gloo-timers = { version = "0.2.3", features = ["futures"] }
 futures-util = { workspace = true, features = ["std", "async-await", "async-await-macro"] }
-smallstr = "0.2.0"
 futures-channel = { workspace = true }
 serde_json = { version = "1.0" }
 serde = { version = "1.0" }
@@ -38,55 +34,38 @@ async-channel = "1.8.0"
 [dependencies.web-sys]
 version = "0.3.56"
 features = [
-    "Comment",
-    "Attr",
     "Document",
-    "Element",
-    "CssStyleDeclaration",
     "HtmlElement",
     "HtmlInputElement",
     "HtmlSelectElement",
     "HtmlTextAreaElement",
     "HtmlFormElement",
-    "EventTarget",
-    "HtmlCollection",
-    "Node",
-    "NodeList",
     "Text",
     "Window",
-    "Event",
-    "MouseEvent",
-    "InputEvent",
-    "ClipboardEvent",
-    "NamedNodeMap",
-    "KeyboardEvent",
-    "TouchEvent",
-    "WheelEvent",
-    "AnimationEvent",
-    "TransitionEvent",
-    "PointerEvent",
-    "FocusEvent",
-    "CompositionEvent",
-    "ClipboardEvent",
-    "DocumentType",
-    "CharacterData",
-    "SvgElement",
-    "SvgAnimatedString",
-    "HtmlOptionElement",
-    "IdleDeadline",
-    "WebSocket",
-    "Location",
-    "MessageEvent",
-    "console",
-    "FileList",
-    "File",
-    "FileReader"
 ]
 
 [features]
-default = ["panic_hook"]
+default = ["panic_hook", "mounted", "file_engine", "hot_reload", "eval"]
 panic_hook = ["console_error_panic_hook"]
-hydrate = []
+hydrate = [
+    "web-sys/Comment",
+    "web-sys/console",
+]
+mounted = [
+    "web-sys/Element",
+    "dioxus-html/mounted"
+]
+file_engine = [
+    "web-sys/File",
+    "web-sys/FileList",
+    "web-sys/FileReader",
+]
+hot_reload = [
+    "web-sys/MessageEvent",
+    "web-sys/WebSocket",
+    "web-sys/Location",
+]
+eval = []
 
 [dev-dependencies]
 dioxus = { workspace = true }
