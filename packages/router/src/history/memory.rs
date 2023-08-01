@@ -88,6 +88,10 @@ impl<R: Routable> HistoryProvider<R> for MemoryHistory<R> {
     }
 
     fn push(&mut self, new: R) {
+        // don't push the same route twice
+        if self.current.to_string() == new.to_string() {
+            return;
+        }
         let old = std::mem::replace(&mut self.current, new);
         self.history.push(old);
         self.future.clear();
