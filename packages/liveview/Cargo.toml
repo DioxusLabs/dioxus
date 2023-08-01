@@ -6,6 +6,7 @@ repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com/docs/0.3/guide/en/getting_started/liveview.html"
 keywords = ["dom", "ui", "gui", "react", "liveview"]
 description = "Build server-side apps with Dioxus"
+authors = ["Jonathan Kelley", "Evan Almloff"]
 license = "MIT OR Apache-2.0"
 
 [dependencies]

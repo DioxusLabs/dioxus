@@ -27,7 +27,7 @@ members = [
     "packages/signals",
     "packages/hot-reload",
     "packages/fullstack",
-    "packages/fullstack/server-macro",
+    "packages/server-macro",
     "packages/fullstack/examples/axum-hello-world",
     "packages/fullstack/examples/axum-router",
     "packages/fullstack/examples/axum-desktop",
@@ -74,7 +74,7 @@ rsx-rosetta = { path = "packages/rsx-rosetta" }
 dioxus-signals = { path = "packages/signals" }
 dioxus-hot-reload = { path = "packages/hot-reload" }
 dioxus-fullstack = { path = "packages/fullstack" }
-dioxus_server_macro = { path = "packages/fullstack/server-macro" }
+dioxus_server_macro = { path = "packages/server-macro" }
 log = "0.4.19"
 tokio = "1.28"
 slab = "0.4.2"

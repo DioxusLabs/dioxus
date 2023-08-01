@@ -1,0 +1,23 @@
+[package]
+name = "dioxus_server_macro"
+version = "0.3.0"
+edition = "2021"
+repository = "https://github.com/DioxusLabs/dioxus/"
+homepage = "https://dioxuslabs.com/docs/0.4/guide/en/getting_started/fullstack.html"
+keywords = ["dom", "ui", "gui", "react", "liveview"]
+authors = ["Jonathan Kelley", "Evan Almloff"]
+license = "MIT OR Apache-2.0"
+description = "Server function macros for Dioxus"
+
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+proc-macro2 = "^1.0.63"
+quote = "^1.0.26"
+syn = { version = "2", features = ["full"] }
+convert_case = "^0.6.0"
+server_fn_macro = "^0.4.6"
+
+[lib]
+proc-macro = true

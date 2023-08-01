@@ -1,7 +1,7 @@
 [package]
 name = "dioxus-fullstack"
 authors = ["Jonathan Kelley, Evan Almloff"]
-version = "0.1.0"
+version = "0.3.0"
 edition = "2021"
 description = "Fullstack Dioxus Utilities"
 license = "MIT OR Apache-2.0"
@@ -11,8 +11,8 @@ keywords = ["dom", "ui", "gui", "react", "ssr", "fullstack"]
 
 [dependencies]
 # server functions
-server_fn = { git = "https://github.com/leptos-rs/leptos", rev = "6b90e1babd425c9a324181c86e3fd1b942c9b10f", default-features = false }
-dioxus_server_macro = { path = "server-macro" }
+server_fn = { version = "0.4.6", default-features = false }
+dioxus_server_macro = { workspace = true }
 
 # warp
 warp = { version = "0.3.5", features = ["compression-gzip"], optional = true }
