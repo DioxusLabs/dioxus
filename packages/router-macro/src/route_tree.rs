@@ -367,7 +367,7 @@ impl<'a> RouteTreeSegmentData<'a> {
                         let child_name = &child.ident;
 
                         quote! {
-                            let mut trailing = String::new();
+                            let mut trailing = String::from("/");
                             for seg in segments.clone() {
                                 trailing += seg;
                                 trailing += "/";

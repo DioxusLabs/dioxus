@@ -1,6 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use gloo::{console::error, events::EventListener, render::AnimationFrame};
+
 use wasm_bindgen::JsValue;
 use web_sys::{window, History, ScrollRestoration, Window};
 
@@ -265,11 +266,18 @@ where
     }
 
     fn push(&mut self, state: R) {
+        use gloo_utils::format::JsValueSerdeExt;
+        if JsValue::from_serde(&state) != JsValue::from_serde(&self.current_route()) {
+            // don't push the same state twice
+            return;
+        }
+
         let w = window().expect("access to `window`");
         let h = w.history().expect("`window` has access to `history`");
 
         // update the scroll position before pushing the new state
         update_scroll::<R>(&w, &h);
+
         let path = self.full_path(&state);
 
         let state = self.create_state(state);
@@ -336,6 +344,11 @@ where
     }
 
     fn push(&mut self, state: R) {
+        if state.to_string() == self.current_route().to_string() {
+            // don't push the same state twice
+            return;
+        }
+
         let w = window().expect("access to `window`");
         let h = w.history().expect("`window` has access to `history`");
 
