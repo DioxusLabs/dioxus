@@ -485,7 +485,13 @@ impl RouteEnum {
                     let mut segments = route.split('/');
                     // skip the first empty segment
                     if s.starts_with('/') {
-                        segments.next();
+                        let _ = segments.next();
+                    }
+                    else {
+                        // if this route does not start with a slash, it is not a valid route
+                        return Err(dioxus_router::routable::RouteParseError {
+                            attempted_routes: Vec::new(),
+                        });
                     }
                     let mut errors = Vec::new();
 
