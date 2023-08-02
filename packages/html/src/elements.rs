@@ -332,7 +332,7 @@ builder_constructors! {
     meta None {
         charset: String DEFAULT, // FIXME IANA standard names
         content: String DEFAULT,
-        http_equiv: HTTPEquiv DEFAULT,
+        http_equiv: String "http-equiv",
         name: Metadata DEFAULT,
     };
 
