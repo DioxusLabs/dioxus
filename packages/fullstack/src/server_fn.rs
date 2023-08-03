@@ -36,10 +36,10 @@ impl ServerFnTraitObj {
     }
 }
 
-#[cfg(any(feature = "ssr", doc))]
+#[cfg(feature = "ssr")]
 server_fn::inventory::collect!(ServerFnTraitObj);
 
-#[cfg(any(feature = "ssr", doc))]
+#[cfg(feature = "ssr")]
 /// Middleware for a server function
 pub struct ServerFnMiddleware {
     /// The prefix of the server function.
@@ -50,7 +50,7 @@ pub struct ServerFnMiddleware {
     pub middleware: fn() -> Vec<std::sync::Arc<dyn crate::layer::Layer>>,
 }
 
-#[cfg(any(feature = "ssr", doc))]
+#[cfg(feature = "ssr")]
 pub(crate) static MIDDLEWARE: once_cell::sync::Lazy<
     std::collections::HashMap<
         (&'static str, &'static str),
@@ -69,14 +69,14 @@ pub(crate) static MIDDLEWARE: once_cell::sync::Lazy<
     map
 });
 
-#[cfg(any(feature = "ssr", doc))]
+#[cfg(feature = "ssr")]
 server_fn::inventory::collect!(ServerFnMiddleware);
 
 #[cfg(any(feature = "ssr", doc))]
 /// A server function that can be called on serializable arguments and returns a serializable result.
 pub type ServerFunction = server_fn::SerializedFnTraitObj<()>;
 
-#[cfg(any(feature = "ssr", doc))]
+#[cfg(feature = "ssr")]
 #[allow(clippy::type_complexity)]
 static REGISTERED_SERVER_FUNCTIONS: once_cell::sync::Lazy<
     std::sync::Arc<std::sync::RwLock<std::collections::HashMap<&'static str, ServerFnTraitObj>>>,
