@@ -1,4 +1,4 @@
-//! Handles quering data from the renderer
+//! Handles querying data from the renderer
 
 use euclid::Rect;
 
