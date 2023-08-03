@@ -77,8 +77,8 @@ dioxus-native-core-macro = { path = "packages/native-core-macro", version = "0.4
 rsx-rosetta = { path = "packages/rsx-rosetta", version = "0.4.0" }
 dioxus-signals = { path = "packages/signals" }
 dioxus-hot-reload = { path = "packages/hot-reload", version = "0.4.0" }
-dioxus-fullstack = { path = "packages/fullstack", version = "0.4.0"  }
-dioxus_server_macro = { path = "packages/server-macro", version = "0.4.0" }
+dioxus-fullstack = { path = "packages/fullstack", version = "0.4.1"  }
+dioxus_server_macro = { path = "packages/server-macro", version = "0.4.1" }
 log = "0.4.19"
 tokio = "1.28"
 slab = "0.4.2"
