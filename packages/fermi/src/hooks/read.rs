@@ -48,7 +48,7 @@ pub fn use_read_rc<V: 'static>(cx: &ScopeState, f: impl Readable<V>) -> &Rc<V> {
 ///     cx.render(rsx!(
 ///         button{
 ///             onclick: || {
-///                 log::info!("Atom's value is {}", use_read_silent(cx, ATOM))
+///                 log::info!("Atom's value is {}", use_read_silent(cx, &ATOM))
 ///             }
 ///         }
 ///     ))
