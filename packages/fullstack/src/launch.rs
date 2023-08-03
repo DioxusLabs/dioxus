@@ -119,13 +119,13 @@ impl<Props: Clone + serde::Serialize + serde::de::DeserializeOwned + Send + Sync
     }
 
     #[cfg(feature = "web")]
-    fn launch_web(self) {
+    pub fn launch_web(self) {
         let cfg = self.web_cfg.hydrate(true);
         dioxus_web::launch_with_props(self.component, get_root_props_from_document().unwrap(), cfg);
     }
 
     #[cfg(feature = "desktop")]
-    fn launch_desktop(self) {
+    pub fn launch_desktop(self) {
         let cfg = self.desktop_cfg;
         dioxus_desktop::launch_with_props(self.component, self.props, cfg);
     }
@@ -133,7 +133,7 @@ impl<Props: Clone + serde::Serialize + serde::de::DeserializeOwned + Send + Sync
     /// Launch a server with the given configuration
     /// This will use the routing integration of the currently enabled integration feature
     #[cfg(feature = "ssr")]
-    async fn launch_server(self) {
+    pub async fn launch_server(self) {
         let addr = self.addr;
         println!("Listening on {}", addr);
         let cfg = self.server_cfg.build();
