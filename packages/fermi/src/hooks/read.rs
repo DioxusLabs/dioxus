@@ -34,3 +34,26 @@ pub fn use_read_rc<V: 'static>(cx: &ScopeState, f: impl Readable<V>) -> &Rc<V> {
     inner.value = Some(value);
     inner.value.as_ref().unwrap()
 }
+/// Read Atom's value without subscribing current scope to update events.
+///
+/// Use it every time to get updated value.
+///
+/// For COPY types only
+///
+/// Example:
+/// ```ignore
+/// static ATOM: Atom<bool> = Atom(|_| false);
+/// fn App(cx: Scope) {
+///     use_init_atom_root(cx);
+///     cx.render(rsx!(
+///         button{
+///             onclick: || {
+///                 log::info!("Atom's value is {}", use_read_silent(cx, ATOM))
+///             }
+///         }
+///     ))
+/// }
+/// ```
+pub fn use_read_silent<V: 'static+Copy>(cx: &ScopeState, f: impl Readable<V>) -> V {
+    *use_atom_root(cx).read(f)
+}
