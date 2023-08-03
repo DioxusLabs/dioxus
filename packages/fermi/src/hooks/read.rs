@@ -54,6 +54,6 @@ pub fn use_read_rc<V: 'static>(cx: &ScopeState, f: impl Readable<V>) -> &Rc<V> {
 ///     ))
 /// }
 /// ```
-pub fn use_read_silent<V: 'static+Copy>(cx: &ScopeState, f: impl Readable<V>) -> V {
+pub fn use_read_silent<V: 'static + Copy>(cx: &ScopeState, f: impl Readable<V>) -> V {
     *use_atom_root(cx).read(f)
 }
