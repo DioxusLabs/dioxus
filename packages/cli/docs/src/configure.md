@@ -144,7 +144,7 @@ Configeration related to static resources your application uses in development:
 Configeration related to any proxies your application requires durring development. Proxies will forward requests to a new service
 
 ```
-[web.proxy]
+[[web.proxy]]
 # configuration
 ```
 
