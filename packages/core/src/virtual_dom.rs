@@ -9,7 +9,7 @@ use crate::{
     mutations::Mutation,
     nodes::RenderReturn,
     nodes::{Template, TemplateId},
-    runtime::Runtime,
+    runtime::{pop_runtime, push_runtime, Runtime},
     scopes::{ScopeId, ScopeState},
     AttributeValue, Element, Event, Scope,
 };
@@ -274,6 +274,9 @@ impl VirtualDom {
 
         // the root element is always given element ID 0 since it's the container for the entire tree
         dom.elements.insert(ElementRef::none());
+
+        // Set this as the current runtime
+        push_runtime(dom.runtime.clone());
 
         dom
     }
@@ -648,5 +651,7 @@ impl Drop for VirtualDom {
     fn drop(&mut self) {
         // Simply drop this scope which drops all of its children
         self.drop_scope(ScopeId(0), true);
+        // remove the current runtime
+        pop_runtime();
     }
 }

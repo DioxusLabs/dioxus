@@ -49,13 +49,6 @@ pub struct Runtime {
     pub(crate) scope_stack: RefCell<Vec<ScopeId>>,
 }
 
-impl Drop for Runtime {
-    fn drop(&mut self) {
-        // todo: do this better
-        pop_runtime();
-    }
-}
-
 impl Runtime {
     pub(crate) fn new(scheduler: Rc<Scheduler>) -> Rc<Self> {
         let runtime = Rc::new(Self {
@@ -65,7 +58,6 @@ impl Runtime {
 
             scope_stack: Default::default(),
         });
-        push_runtime(runtime.clone());
         runtime
     }
 
