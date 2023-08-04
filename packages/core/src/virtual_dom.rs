@@ -175,7 +175,7 @@ use std::{any::Any, cell::Cell, collections::BTreeSet, future::Future, rc::Rc};
 /// }
 /// ```
 pub struct VirtualDom {
-    pub(crate) scopes: Slab<ScopeState>,
+    pub(crate) scopes: Slab<Box<ScopeState>>,
 
     pub(crate) dirty_scopes: BTreeSet<DirtyScope>,
 
@@ -285,7 +285,7 @@ impl VirtualDom {
     ///
     /// This is useful for inserting or removing contexts from a scope, or rendering out its root node
     pub fn get_scope(&self, id: ScopeId) -> Option<&ScopeState> {
-        self.scopes.get(id.0)
+        self.scopes.get(id.0).map(|s| &**s)
     }
 
     /// Get the single scope at the top of the VirtualDom tree that will always be around

@@ -21,7 +21,7 @@ impl VirtualDom {
         let entry = self.scopes.vacant_entry();
         let id = ScopeId(entry.key());
 
-        let scope = entry.insert(ScopeState {
+        let scope = entry.insert(Box::new(ScopeState {
             runtime: self.runtime.clone(),
             context_id: id,
 
@@ -36,7 +36,7 @@ impl VirtualDom {
 
             borrowed_props: Default::default(),
             attributes_to_drop: Default::default(),
-        });
+        }));
 
         let context =
             ScopeContext::new(name, id, parent_id, height, self.runtime.scheduler.clone());
