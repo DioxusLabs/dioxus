@@ -48,6 +48,16 @@ impl ProxyClient {
 pub fn add_proxy(mut router: Router, proxy: &WebProxyConfig) -> Result<Router> {
     let url: Uri = proxy.backend.parse()?;
     let path = url.path().to_string();
+    let trimmed_path = path.trim_end_matches('/');
+
+    if trimmed_path.is_empty() {
+        return Err(crate::Error::ProxySetupError(format!(
+            "Proxy backend URL must have a non-empty path, e.g. {}/api instead of {}",
+            proxy.backend.trim_end_matches('/'),
+            proxy.backend
+        )));
+    }
+
     let client = ProxyClient::new(url);
 
     // We also match everything after the path using a wildcard matcher.
@@ -56,7 +66,7 @@ pub fn add_proxy(mut router: Router, proxy: &WebProxyConfig) -> Result<Router> {
     router = router.route(
         // Always remove trailing /'s so that the exact route
         // matches.
-        path.trim_end_matches('/'),
+        trimmed_path,
         any(move |req| async move {
             client
                 .send(req)
@@ -68,7 +78,7 @@ pub fn add_proxy(mut router: Router, proxy: &WebProxyConfig) -> Result<Router> {
     // Wildcard match anything else _after_ the backend URL's path.
     // Note that we know `path` ends with a trailing `/` in this branch,
     // so `wildcard` will look like `http://localhost/api/*proxywildcard`.
-    let wildcard = format!("{}/*proxywildcard", path.trim_end_matches('/'));
+    let wildcard = format!("{}/*proxywildcard", trimmed_path);
     router = router.route(
         &wildcard,
         any(move |req| async move {
@@ -167,5 +177,22 @@ mod test {
     #[tokio::test]
     async fn add_proxy_trailing_slash() {
         test_proxy_requests("/api/".to_string()).await;
+    }
+
+    #[test]
+    fn add_proxy_empty_path() {
+        let config = WebProxyConfig {
+            backend: "http://localhost:8000".to_string(),
+        };
+        let router = super::add_proxy(Router::new(), &config);
+        match router.unwrap_err() {
+            crate::Error::ProxySetupError(e) => {
+                assert_eq!(
+                    e,
+                    "Proxy backend URL must have a non-empty path, e.g. http://localhost:8000/api instead of http://localhost:8000"
+                );
+            }
+            e => panic!("Unexpected error type: {}", e),
+        }
     }
 }
