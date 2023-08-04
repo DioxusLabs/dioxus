@@ -8,3 +8,6 @@ edition = "2018"
 
 [dependencies]
 bumpalo = { version = "3.6" }
+
+[dev-dependencies]
+rand = "0.8.5"
