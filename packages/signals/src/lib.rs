@@ -1,70 +1,65 @@
 use std::{
     cell::{Ref, RefMut},
     fmt::Display,
-    marker::PhantomData,
     ops::{Add, Div, Mul, Sub},
+    sync::Arc,
 };
 
+mod copy;
 mod rt;
-
-use dioxus_core::ScopeState;
 pub use rt::*;
 
-pub fn use_init_signal_rt(cx: &ScopeState) {
-    cx.use_hook(|| {
-        let rt = claim_rt(cx.schedule_update_any());
-        cx.provide_context(rt);
-    });
-}
+use dioxus_core::{
+    prelude::{current_scope_id, schedule_update_any},
+    ScopeId, ScopeState,
+};
 
 pub fn use_signal<T: 'static>(cx: &ScopeState, f: impl FnOnce() -> T) -> Signal<T> {
-    cx.use_hook(|| {
-        let rt: &'static SignalRt = match cx.consume_context() {
-            Some(rt) => rt,
-            None => cx.provide_context(claim_rt(cx.schedule_update_any())),
-        };
-
-        let id = rt.init(f());
-        rt.subscribe(id, cx.scope_id());
-
-        struct SignalHook<T> {
-            signal: Signal<T>,
-        }
-
-        impl<T> Drop for SignalHook<T> {
-            fn drop(&mut self) {
-                self.signal.rt.remove(self.signal.id);
-            }
-        }
-
-        SignalHook {
-            signal: Signal {
-                id,
-                rt,
-                t: PhantomData,
-            },
-        }
-    })
-    .signal
+    *cx.use_hook(|| Signal::new(f()))
 }
 
-pub struct Signal<T> {
-    id: usize,
-    rt: &'static SignalRt,
-    t: PhantomData<T>,
+struct SignalData<T> {
+    subscribers: Vec<ScopeId>,
+    update_any: Arc<dyn Fn(ScopeId)>,
+    value: T,
+}
+
+pub struct Signal<T: 'static> {
+    inner: CopyValue<SignalData<T>>,
 }
 
 impl<T: 'static> Signal<T> {
+    pub fn new(value: T) -> Self {
+        Self {
+            inner: CopyValue::new(SignalData {
+                subscribers: Vec::new(),
+                update_any: schedule_update_any().expect("in a virtual dom"),
+                value,
+            }),
+        }
+    }
+
     pub fn read(&self) -> Ref<T> {
-        self.rt.read(self.id)
+        if let Some(current_scope_id) = current_scope_id() {
+            let mut inner = self.inner.write();
+            if !inner.subscribers.contains(&current_scope_id) {
+                inner.subscribers.push(current_scope_id);
+            }
+        }
+        Ref::map(self.inner.read(), |v| &v.value)
     }
 
     pub fn write(&self) -> RefMut<T> {
-        self.rt.write(self.id)
+        let inner = self.inner.write();
+        for &scope_id in &inner.subscribers {
+            (inner.update_any)(scope_id);
+        }
+
+        RefMut::map(inner, |v| &mut v.value)
     }
 
     pub fn set(&mut self, value: T) {
-        self.rt.set(self.id, value);
+        *self.write() = value;
     }
 
     pub fn with<O>(&self, f: impl FnOnce(&T) -> O) -> O {
@@ -72,23 +67,15 @@ impl<T: 'static> Signal<T> {
         f(&*write)
     }
 
-    pub fn update<O>(&self, _f: impl FnOnce(&mut T) -> O) -> O {
+    pub fn update<O>(&self, f: impl FnOnce(&mut T) -> O) -> O {
         let mut write = self.write();
-        _f(&mut *write)
+        f(&mut *write)
     }
 }
 
 impl<T: Clone + 'static> Signal<T> {
     pub fn get(&self) -> T {
-        self.rt.get(self.id)
-    }
-}
-
-impl<T: Clone + 'static> std::ops::Deref for Signal<T> {
-    type Target = dyn Fn() -> T;
-
-    fn deref(&self) -> &Self::Target {
-        self.rt.getter(self.id)
+        self.read().clone()
     }
 }
 
@@ -102,7 +89,7 @@ impl<T> Copy for Signal<T> {}
 
 impl<T: Display + 'static> Display for Signal<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.rt.with::<T, _>(self.id, |v| T::fmt(v, f))
+        self.with(|v| Display::fmt(v, f))
     }
 }
 

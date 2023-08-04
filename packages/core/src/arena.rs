@@ -91,7 +91,7 @@ impl VirtualDom {
     // Note: This will not remove any ids from the arena
     pub(crate) fn drop_scope(&mut self, id: ScopeId, recursive: bool) {
         self.dirty_scopes.remove(&DirtyScope {
-            height: self.scopes[id.0].height,
+            height: self.scopes[id.0].height(),
             id,
         });
 
@@ -110,10 +110,11 @@ impl VirtualDom {
         // Drop all the hooks once the children are dropped
         // this means we'll drop hooks bottom-up
         scope.hooks.get_mut().clear();
+        let context = scope.context();
 
         // Drop all the futures once the hooks are dropped
-        for task_id in scope.spawned_tasks.borrow_mut().drain() {
-            scope.tasks.remove(task_id);
+        for task_id in context.spawned_tasks.borrow_mut().drain() {
+            context.tasks.remove(task_id);
         }
 
         self.scopes.remove(id.0);

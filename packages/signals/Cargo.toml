@@ -9,3 +9,4 @@ edition = "2018"
 [dependencies]
 dioxus-core = { workspace = true }
 slab = { workspace = true }
+bumpalo = { version = "3.6" }

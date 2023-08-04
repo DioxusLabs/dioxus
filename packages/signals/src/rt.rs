@@ -1,121 +1,65 @@
-use std::{any::Any, cell::RefCell, sync::Arc};
+use std::cell::{Ref, RefMut};
 
-use dioxus_core::ScopeId;
-use slab::Slab;
+use std::rc::Rc;
 
-thread_local! {
-    // we cannot drop these since any future might be using them
-    static RUNTIMES: RefCell<Vec<&'static SignalRt>> = RefCell::new(Vec::new());
-}
+use dioxus_core::prelude::{consume_context, provide_root_context};
 
-/// Provide the runtime for signals
-///
-/// This will reuse dead runtimes
-pub fn claim_rt(update_any: Arc<dyn Fn(ScopeId)>) -> &'static SignalRt {
-    RUNTIMES.with(|runtimes| {
-        if let Some(rt) = runtimes.borrow_mut().pop() {
-            return rt;
+use crate::copy::{CopyHandle, Owner, Store};
+
+fn current_store() -> Store {
+    match consume_context() {
+        Some(rt) => rt,
+        None => {
+            let store = Store::default();
+            provide_root_context(store).expect("in a virtual dom")
         }
-
-        Box::leak(Box::new(SignalRt {
-            signals: RefCell::new(Slab::new()),
-            update_any,
-        }))
-    })
+    }
 }
 
-/// Push this runtime into the global runtime list
-pub fn reclam_rt(_rt: &'static SignalRt) {
-    RUNTIMES.with(|runtimes| {
-        runtimes.borrow_mut().push(_rt);
-    });
+fn current_owner() -> Rc<Owner> {
+    match consume_context() {
+        Some(rt) => rt,
+        None => {
+            let owner = Rc::new(current_store().owner());
+            provide_root_context(owner).expect("in a virtual dom")
+        }
+    }
 }
 
-pub struct SignalRt {
-    pub(crate) signals: RefCell<Slab<Inner>>,
-    pub(crate) update_any: Arc<dyn Fn(ScopeId)>,
+impl<T> Copy for CopyValue<T> {}
+
+impl<T> Clone for CopyValue<T> {
+    fn clone(&self) -> Self {
+        *self
+    }
 }
 
-impl SignalRt {
-    pub fn init<T: 'static>(&'static self, val: T) -> usize {
-        self.signals.borrow_mut().insert(Inner {
-            value: Box::new(val),
-            subscribers: Vec::new(),
-            getter: None,
-        })
-    }
+pub struct CopyValue<T: 'static> {
+    pub value: CopyHandle<T>,
+}
 
-    pub fn subscribe(&self, id: usize, subscriber: ScopeId) {
-        self.signals.borrow_mut()[id].subscribers.push(subscriber);
-    }
+impl<T: 'static> CopyValue<T> {
+    pub fn new(value: T) -> Self {
+        let owner = current_owner();
 
-    pub fn get<T: Clone + 'static>(&self, id: usize) -> T {
-        self.signals.borrow()[id]
-            .value
-            .downcast_ref::<T>()
-            .cloned()
-            .unwrap()
-    }
-
-    pub fn set<T: 'static>(&self, id: usize, value: T) {
-        let mut signals = self.signals.borrow_mut();
-        let inner = &mut signals[id];
-        inner.value = Box::new(value);
-
-        for subscriber in inner.subscribers.iter() {
-            (self.update_any)(*subscriber);
+        Self {
+            value: owner.insert(value),
         }
     }
 
-    pub fn remove(&self, id: usize) {
-        self.signals.borrow_mut().remove(id);
+    pub fn try_read(&self) -> Option<Ref<'_, T>> {
+        self.value.try_read()
     }
 
-    pub fn with<T: 'static, O>(&self, id: usize, f: impl FnOnce(&T) -> O) -> O {
-        let signals = self.signals.borrow();
-        let inner = &signals[id];
-        let inner = inner.value.downcast_ref::<T>().unwrap();
-        f(inner)
+    pub fn read(&self) -> Ref<'_, T> {
+        self.value.read()
     }
 
-    pub(crate) fn read<T: 'static>(&self, id: usize) -> std::cell::Ref<T> {
-        let signals = self.signals.borrow();
-        std::cell::Ref::map(signals, |signals| {
-            signals[id].value.downcast_ref::<T>().unwrap()
-        })
+    pub fn try_write(&self) -> Option<RefMut<'_, T>> {
+        self.value.try_write()
     }
 
-    pub(crate) fn write<T: 'static>(&self, id: usize) -> std::cell::RefMut<T> {
-        let signals = self.signals.borrow_mut();
-        std::cell::RefMut::map(signals, |signals| {
-            signals[id].value.downcast_mut::<T>().unwrap()
-        })
+    pub fn write(&self) -> RefMut<'_, T> {
+        self.value.write()
     }
-
-    pub(crate) fn getter<T: 'static + Clone>(&self, id: usize) -> &dyn Fn() -> T {
-        let mut signals = self.signals.borrow_mut();
-        let inner = &mut signals[id];
-        let r = inner.getter.as_mut();
-
-        if r.is_none() {
-            let rt = self;
-            let r = move || rt.get::<T>(id);
-            let getter: Box<dyn Fn() -> T> = Box::new(r);
-            let getter: Box<dyn Fn()> = unsafe { std::mem::transmute(getter) };
-
-            inner.getter = Some(getter);
-        }
-
-        let r = inner.getter.as_ref().unwrap();
-
-        unsafe { std::mem::transmute::<&dyn Fn(), &dyn Fn() -> T>(r) }
-    }
-}
-
-pub(crate) struct Inner {
-    pub value: Box<dyn Any>,
-    pub subscribers: Vec<ScopeId>,
-
-    // todo: this has a soundness hole in it that you might not run into
-    pub getter: Option<Box<dyn Fn()>>,
 }

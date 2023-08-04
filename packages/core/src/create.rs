@@ -66,9 +66,9 @@ impl<'b> VirtualDom {
     ///
     /// This method pushes the ScopeID to the internal scopestack and returns the number of nodes created.
     pub(crate) fn create_scope(&mut self, scope: ScopeId, template: &'b VNode<'b>) -> usize {
-        self.scope_stack.push(scope);
+        self.runtime.scope_stack.borrow_mut().push(scope);
         let out = self.create(template);
-        self.scope_stack.pop();
+        self.runtime.scope_stack.borrow_mut().pop();
         out
     }
 
@@ -522,7 +522,7 @@ impl<'b> VirtualDom {
             .take()
             .map(|props| {
                 let unbounded_props: Box<dyn AnyProps> = unsafe { std::mem::transmute(props) };
-                self.new_scope(unbounded_props, component.name).id
+                self.new_scope(unbounded_props, component.name).context().id
             })
             .unwrap_or_else(|| component.scope.get().unwrap())
     }
