@@ -417,7 +417,7 @@ impl<'src> ScopeState {
     /// fn(Scope<Props>) -> Element;
     /// async fn(Scope<Props<'_>>) -> Element;
     /// ```
-    pub fn component<P: 'static>(
+    pub fn component<P>(
         &'src self,
         component: fn(Scope<'src, P>) -> Element<'src>,
         props: P,
