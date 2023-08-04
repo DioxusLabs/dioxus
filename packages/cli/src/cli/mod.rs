@@ -72,6 +72,7 @@ pub enum Commands {
     #[clap(name = "fmt")]
     Autoformat(autoformat::Autoformat),
 
+    /// Check the Rust files in the project for issues.
     #[clap(name = "check")]
     Check(check::Check),
 

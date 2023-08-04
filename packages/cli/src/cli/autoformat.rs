@@ -6,7 +6,7 @@ use super::*;
 // For reference, the rustfmt main.rs file
 // https://github.com/rust-lang/rustfmt/blob/master/src/bin/main.rs
 
-/// Build the Rust WASM app and all of its assets.
+/// Format some rsx
 #[derive(Clone, Debug, Parser)]
 pub struct Autoformat {
     /// Run in 'check' mode. Exits with 0 if input is formatted correctly. Exits
