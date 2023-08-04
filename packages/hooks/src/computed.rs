@@ -10,7 +10,7 @@ use std::{
 /// Create a new tracked state.
 /// Tracked state is state that can drive Selector state
 ///
-/// It state will efficiently update any Selector state that is reading from it, but it is not readable on it's own.
+/// It will efficiently update any Selector state that is reading from it, but it is not readable on its own.
 ///
 /// ```rust
 /// use dioxus::prelude::*;
