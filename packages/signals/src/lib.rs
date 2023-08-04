@@ -5,7 +5,6 @@ use std::{
     sync::Arc,
 };
 
-mod copy;
 mod rt;
 pub use rt::*;
 

@@ -4,7 +4,7 @@ use std::rc::Rc;
 
 use dioxus_core::prelude::{consume_context, provide_root_context};
 
-use crate::copy::{CopyHandle, Owner, Store};
+use dioxus_copy::{CopyHandle, Owner, Store};
 
 fn current_store() -> Store {
     match consume_context() {

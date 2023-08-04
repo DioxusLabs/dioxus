@@ -1,11 +1,10 @@
 [package]
-name = "dioxus-signals"
-authors = ["Jonathan Kelley"]
+name = "dioxus-copy"
+authors = ["Evan Almloff"]
 version = "0.0.0"
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-dioxus-core = { workspace = true }
-dioxus-copy = { workspace = true }
+bumpalo = { version = "3.6" }
