@@ -115,21 +115,19 @@ impl ScopeContext {
 
         let mut search_parent = self.parent_id;
         with_runtime(|runtime| {
-            let mut result = None;
             while let Some(parent_id) = search_parent {
                 let parent = runtime.get_context(parent_id).unwrap();
                 if let Some(shared) = parent
                     .shared_contexts
                     .borrow()
                     .iter()
-                    .find(|(k, _)| *k == TypeId::of::<T>())
+                    .find_map(|(_, any)| any.downcast_ref::<T>())
                 {
-                    result = shared.1.downcast_ref::<T>().cloned();
-                    break;
+                    return Some(shared.clone());
                 }
                 search_parent = parent.parent_id;
             }
-            result
+            None
         })
         .flatten()
     }

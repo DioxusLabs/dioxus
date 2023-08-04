@@ -65,8 +65,11 @@ impl<'b> VirtualDom {
     /// Create a new template [`VNode`] and write it to the [`Mutations`] buffer.
     ///
     /// This method pushes the ScopeID to the internal scopestack and returns the number of nodes created.
-    pub(crate) fn create_scope(&mut self, _scope: ScopeId, template: &'b VNode<'b>) -> usize {
-        self.create(template)
+    pub(crate) fn create_scope(&mut self, scope: ScopeId, template: &'b VNode<'b>) -> usize {
+        self.runtime.scope_stack.borrow_mut().push(scope);
+        let nodes = self.create(template);
+        self.runtime.scope_stack.borrow_mut().pop();
+        nodes
     }
 
     /// Create this template and write its mutations
