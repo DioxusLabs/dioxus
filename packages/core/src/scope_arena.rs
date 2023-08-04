@@ -46,6 +46,7 @@ impl VirtualDom {
     }
 
     pub(crate) fn run_scope(&mut self, scope_id: ScopeId) -> &RenderReturn {
+        self.runtime.scope_stack.borrow_mut().push(scope_id);
         // Cycle to the next frame and then reset it
         // This breaks any latent references, invalidating every pointer referencing into it.
         // Remove all the outdated listeners
@@ -94,6 +95,10 @@ impl VirtualDom {
         }
 
         // rebind the lifetime now that its stored internally
-        unsafe { allocated.extend_lifetime_ref() }
+        let result = unsafe { allocated.extend_lifetime_ref() };
+
+        self.runtime.scope_stack.borrow_mut().pop();
+
+        result
     }
 }

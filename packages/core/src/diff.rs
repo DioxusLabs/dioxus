@@ -15,7 +15,6 @@ use DynamicNode::*;
 
 impl<'b> VirtualDom {
     pub(super) fn diff_scope(&mut self, scope: ScopeId) {
-        self.runtime.scope_stack.borrow_mut().push(scope);
         let scope_state = &mut self.get_scope(scope).unwrap();
         unsafe {
             // Load the old and new bump arenas
@@ -46,7 +45,6 @@ impl<'b> VirtualDom {
                 (Aborted(l), Ready(r)) => self.replace_placeholder(l, [r]),
             };
         }
-        self.runtime.scope_stack.borrow_mut().pop();
     }
 
     fn diff_ok_to_err(&mut self, l: &'b VNode<'b>, p: &'b VPlaceholder) {

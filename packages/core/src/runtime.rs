@@ -45,7 +45,7 @@ pub struct Runtime {
     pub(crate) scope_contexts: RefCell<Vec<Option<ScopeContext>>>,
     pub(crate) scheduler: Rc<Scheduler>,
 
-    // While diffing we need some sort of way of breaking off a stream of suspended mutations.
+    // We use this to track the current scope
     pub(crate) scope_stack: RefCell<Vec<ScopeId>>,
 }
 
