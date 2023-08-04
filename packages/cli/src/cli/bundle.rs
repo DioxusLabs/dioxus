@@ -6,7 +6,7 @@ use tauri_bundler::{BundleSettings, PackageSettings, SettingsBuilder};
 use super::*;
 use crate::{build_desktop, cfg::ConfigOptsBundle};
 
-/// Build the Rust WASM app and all of its assets.
+/// Bundle the Rust desktop app and all of its assets
 #[derive(Clone, Debug, Parser)]
 #[clap(name = "bundle")]
 pub struct Bundle {

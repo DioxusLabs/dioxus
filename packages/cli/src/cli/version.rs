@@ -1,6 +1,6 @@
 use super::*;
 
-/// Build the Rust WASM app and all of its assets.
+/// Print the version of this extension
 #[derive(Clone, Debug, Parser)]
 #[clap(name = "version")]
 pub struct Version {}
