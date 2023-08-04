@@ -128,7 +128,7 @@ fn fuzz() {
                 println!("{:?}", value);
                 assert!(value.starts_with("hello world"));
             }
-            #[cfg(debug_assertions)]
+            #[cfg(any(debug_assertions, feature = "check_generation"))]
             for key in invalid_keys.iter() {
                 assert!(!key.validate());
             }
@@ -146,7 +146,7 @@ fn fuzz() {
 
 pub struct CopyHandle<T> {
     raw: MemoryLocation,
-    #[cfg(debug_assertions)]
+    #[cfg(any(debug_assertions, feature = "check_generation"))]
     generation: u32,
     _marker: PhantomData<T>,
 }
@@ -154,11 +154,11 @@ pub struct CopyHandle<T> {
 impl<T: 'static> CopyHandle<T> {
     #[inline(always)]
     fn validate(&self) -> bool {
-        #[cfg(debug_assertions)]
+        #[cfg(any(debug_assertions, feature = "check_generation"))]
         {
             self.raw.generation.get() == self.generation
         }
-        #[cfg(not(debug_assertions))]
+        #[cfg(not(any(debug_assertions, feature = "check_generation")))]
         {
             true
         }
@@ -206,7 +206,7 @@ impl<T> Clone for CopyHandle<T> {
 #[derive(Clone, Copy)]
 struct MemoryLocation {
     data: &'static RefCell<Option<Box<dyn std::any::Any>>>,
-    #[cfg(debug_assertions)]
+    #[cfg(any(debug_assertions, feature = "check_generation"))]
     generation: &'static Cell<u32>,
 }
 
@@ -214,7 +214,7 @@ impl MemoryLocation {
     #[allow(unused)]
     fn drop(&self) {
         let old = self.data.borrow_mut().take();
-        #[cfg(debug_assertions)]
+        #[cfg(any(debug_assertions, feature = "check_generation"))]
         if old.is_some() {
             let new_generation = self.generation.get() + 1;
             self.generation.set(new_generation);
@@ -229,7 +229,7 @@ impl MemoryLocation {
         assert!(old.is_none());
         CopyHandle {
             raw: *self,
-            #[cfg(debug_assertions)]
+            #[cfg(any(debug_assertions, feature = "check_generation"))]
             generation: self.generation.get(),
             _marker: PhantomData,
         }
@@ -264,7 +264,7 @@ impl Store {
             let data: &'static RefCell<_> = self.bump.alloc(RefCell::new(None));
             MemoryLocation {
                 data,
-                #[cfg(debug_assertions)]
+                #[cfg(any(debug_assertions, feature = "check_generation"))]
                 generation: self.bump.alloc(Cell::new(0)),
             }
         }

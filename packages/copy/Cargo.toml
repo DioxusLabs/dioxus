@@ -11,3 +11,7 @@ bumpalo = { version = "3.6" }
 
 [dev-dependencies]
 rand = "0.8.5"
+
+[features]
+default = ["check_generation"]
+check_generation = []
