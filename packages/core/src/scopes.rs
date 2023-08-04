@@ -13,7 +13,7 @@ use crate::{
 use bumpalo::{boxed::Box as BumpBox, Bump};
 use std::{
     any::Any,
-    cell::{Cell, RefCell, UnsafeCell},
+    cell::{Cell, Ref, RefCell, UnsafeCell},
     fmt::{Arguments, Debug},
     future::Future,
     rc::Rc,
@@ -84,8 +84,14 @@ pub struct ScopeState {
     pub(crate) props: Option<Box<dyn AnyProps<'static>>>,
 }
 
+impl Drop for ScopeState {
+    fn drop(&mut self) {
+        self.runtime.remove_context(self.context_id);
+    }
+}
+
 impl<'src> ScopeState {
-    pub(crate) fn context(&self) -> &ScopeContext {
+    pub(crate) fn context(&self) -> Ref<'_, ScopeContext> {
         self.runtime.get_context(self.context_id).unwrap()
     }
 
@@ -494,7 +500,9 @@ impl<'src> ScopeState {
 
     /// Mark this component as suspended and then return None
     pub fn suspend(&self) -> Option<Element> {
-        self.context().suspend()
+        let cx = self.context();
+        cx.suspend();
+        None
     }
 
     /// Store a value between renders. The foundational hook for all other hooks.

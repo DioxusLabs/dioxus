@@ -32,12 +32,23 @@ pub struct ScopeContext {
 }
 
 impl ScopeContext {
-    pub fn name(&self) -> &str {
-        self.name
-    }
-
-    pub fn height(&self) -> u32 {
-        self.height
+    pub(crate) fn new(
+        name: &'static str,
+        id: ScopeId,
+        parent_id: Option<ScopeId>,
+        height: u32,
+        tasks: Rc<Scheduler>,
+    ) -> Self {
+        Self {
+            name,
+            id,
+            parent_id,
+            height,
+            suspended: Cell::new(false),
+            shared_contexts: RefCell::new(vec![]),
+            tasks,
+            spawned_tasks: RefCell::new(FxHashSet::default()),
+        }
     }
 
     pub fn parent_id(&self) -> Option<ScopeId> {

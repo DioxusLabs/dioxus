@@ -209,7 +209,7 @@ impl<'b> VirtualDom {
         self.diff_scope(scope_id);
 
         self.dirty_scopes.remove(&DirtyScope {
-            height: self.runtime.scope_contexts[scope_id.0].height,
+            height: self.runtime.get_context(scope_id).unwrap().height,
             id: scope_id,
         });
     }
