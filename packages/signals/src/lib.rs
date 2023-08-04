@@ -1,6 +1,6 @@
 use std::{
     cell::{Ref, RefMut},
-    fmt::Display,
+    fmt::{Debug, Display},
     ops::{Add, Div, Mul, Sub},
     sync::Arc,
 };
@@ -89,6 +89,12 @@ impl<T> Copy for Signal<T> {}
 impl<T: Display + 'static> Display for Signal<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.with(|v| Display::fmt(v, f))
+    }
+}
+
+impl<T: Debug + 'static> Debug for Signal<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.with(|v| Debug::fmt(v, f))
     }
 }
 
