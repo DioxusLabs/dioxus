@@ -70,6 +70,10 @@ impl<T: 'static> Signal<T> {
         }
     }
 
+    pub fn origin_scope(&self) -> ScopeId {
+        self.inner.origin_scope()
+    }
+
     pub fn read(&self) -> Ref<T> {
         let inner = self.inner.read();
         if let Some(current_scope_id) = current_scope_id() {

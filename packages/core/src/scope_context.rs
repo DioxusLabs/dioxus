@@ -268,6 +268,15 @@ pub fn consume_context<T: 'static + Clone>() -> Option<T> {
     with_current_scope(|cx| cx.consume_context::<T>()).flatten()
 }
 
+/// Consume context from the current scope
+pub fn consume_context_from_scope<T: 'static + Clone>(scope_id: ScopeId) -> Option<T> {
+    with_runtime(|rt| {
+        rt.get_context(scope_id)
+            .and_then(|cx| cx.consume_context::<T>())
+    })
+    .flatten()
+}
+
 /// Check if the current scope has a context
 pub fn has_context<T: 'static + Clone>() -> Option<T> {
     with_current_scope(|cx| cx.has_context::<T>()).flatten()
@@ -276,6 +285,11 @@ pub fn has_context<T: 'static + Clone>() -> Option<T> {
 /// Provide context to the current scope
 pub fn provide_context<T: 'static + Clone>(value: T) -> Option<T> {
     with_current_scope(|cx| cx.provide_context(value))
+}
+
+/// Provide context to the the given scope
+pub fn provide_context_to_scope<T: 'static + Clone>(scope_id: ScopeId, value: T) -> Option<T> {
+    with_runtime(|rt| rt.get_context(scope_id).map(|cx| cx.provide_context(value))).flatten()
 }
 
 /// Provide a context to the root scope
