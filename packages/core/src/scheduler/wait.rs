@@ -17,6 +17,9 @@ impl VirtualDom {
 
         let mut cx = Context::from_waker(&task.waker);
 
+        // update the scope stack
+        self.runtime.scope_stack.borrow_mut().push(task.scope);
+
         // If the task completes...
         if task.task.borrow_mut().as_mut().poll(&mut cx).is_ready() {
             // Remove it from the scope so we dont try to double drop it when the scope dropes
@@ -26,5 +29,8 @@ impl VirtualDom {
             // Remove it from the scheduler
             tasks.try_remove(id.0);
         }
+
+        // Remove the scope from the stack
+        self.runtime.scope_stack.borrow_mut().pop();
     }
 }

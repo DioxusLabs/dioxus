@@ -33,12 +33,12 @@ struct ChildProps {
 fn Child(cx: Scope<ChildProps>) -> Element {
     let count = cx.props.count;
 
-    // use_future!(cx, || async move {
-    //     loop {
-    //         tokio::time::sleep(std::time::Duration::from_secs(count.value())).await;
-    //         *count.write() += 1;
-    //     }
-    // });
+    use_future!(cx, || async move {
+        loop {
+            tokio::time::sleep(std::time::Duration::from_secs(count.value())).await;
+            *count.write() += 1;
+        }
+    });
 
     render! {
         div {
