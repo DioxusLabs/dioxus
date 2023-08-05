@@ -193,6 +193,17 @@ impl<T: 'static> CopyHandle<T> {
     pub fn write(&self) -> RefMut<'_, T> {
         self.try_write().unwrap()
     }
+
+    pub fn ptr_eq(&self, other: &Self) -> bool {
+        #[cfg(any(debug_assertions, feature = "check_generation"))]
+        {
+            self.raw.data.as_ptr() == other.raw.data.as_ptr() && self.generation == other.generation
+        }
+        #[cfg(not(any(debug_assertions, feature = "check_generation")))]
+        {
+            self.raw.data.as_ptr() == other.raw.data.as_ptr()
+        }
+    }
 }
 
 impl<T> Copy for CopyHandle<T> {}

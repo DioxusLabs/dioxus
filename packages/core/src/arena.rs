@@ -163,7 +163,7 @@ impl VirtualDom {
             let listener = unsafe { &*listener };
             match &listener.value {
                 AttributeValue::Listener(l) => {
-                    _ = l.take();
+                    _ = l.callback.take();
                 }
                 AttributeValue::Any(a) => {
                     _ = a.take();

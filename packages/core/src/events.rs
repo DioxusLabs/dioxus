@@ -1,7 +1,9 @@
 use std::{
     cell::{Cell, RefCell},
     rc::Rc,
+    
 };
+use crate::ScopeId;
 
 /// A wrapper around some generic data that handles the event's state
 ///
@@ -134,13 +136,15 @@ impl<T: std::fmt::Debug> std::fmt::Debug for Event<T> {
 /// }
 ///
 /// ```
-pub struct EventHandler<'bump, T = ()> {
+pub struct EventHandler<'bump, T:?Sized = ()> {
+    pub(crate) origin: ScopeId,
     pub(super) callback: RefCell<Option<ExternalListenerCallback<'bump, T>>>,
 }
 
 impl<T> Default for EventHandler<'_, T> {
     fn default() -> Self {
         Self {
+            origin: ScopeId(0),
             callback: Default::default(),
         }
     }

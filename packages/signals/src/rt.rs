@@ -26,14 +26,6 @@ fn current_owner() -> Rc<Owner> {
     }
 }
 
-impl<T> Copy for CopyValue<T> {}
-
-impl<T> Clone for CopyValue<T> {
-    fn clone(&self) -> Self {
-        *self
-    }
-}
-
 pub struct CopyValue<T: 'static> {
     pub value: CopyHandle<T>,
 }
@@ -61,5 +53,31 @@ impl<T: 'static> CopyValue<T> {
 
     pub fn write(&self) -> RefMut<'_, T> {
         self.value.write()
+    }
+
+    pub fn set(&mut self, value: T) {
+        *self.write() = value;
+    }
+
+    pub fn with<O>(&self, f: impl FnOnce(&T) -> O) -> O {
+        let write = self.read();
+        f(&*write)
+    }
+
+    pub fn with_mut<O>(&self, f: impl FnOnce(&mut T) -> O) -> O {
+        let mut write = self.write();
+        f(&mut *write)
+    }
+}
+
+impl<T: Clone + 'static> CopyValue<T> {
+    pub fn value(&self) -> T {
+        self.read().clone()
+    }
+}
+
+impl<T: 'static> PartialEq for CopyValue<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.value.ptr_eq(&other.value)
     }
 }

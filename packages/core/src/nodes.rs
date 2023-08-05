@@ -1,4 +1,4 @@
-use crate::{
+use crate::prelude::EventHandler;use crate::{
     any_props::AnyProps, arena::ElementId, Element, Event, LazyNodes, ScopeId, ScopeState,
 };
 use bumpalo::boxed::Box as BumpBox;
@@ -476,7 +476,7 @@ pub enum AttributeValue<'a> {
     Bool(bool),
 
     /// A listener, like "onclick"
-    Listener(RefCell<Option<ListenerCb<'a>>>),
+    Listener(EventHandler<'a, Event<dyn Any>>),
 
     /// An arbitrary value that implements PartialEq and is static
     Any(RefCell<Option<BumpBox<'a, dyn AnyValue>>>),
@@ -484,8 +484,6 @@ pub enum AttributeValue<'a> {
     /// A "none" value, resulting in the removal of an attribute from the dom
     None,
 }
-
-pub type ListenerCb<'a> = BumpBox<'a, dyn FnMut(Event<dyn Any>) + 'a>;
 
 /// Any of the built-in values that the Dioxus VirtualDom supports as dynamic attributes on elements that are borrowed
 ///

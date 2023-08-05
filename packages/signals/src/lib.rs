@@ -1,15 +1,18 @@
 use std::{
-    cell::{Ref, RefMut},
-    fmt::{Debug, Display},
-    ops::{Add, Div, Mul, Sub},
+    cell::{Ref, RefCell, RefMut},
+    rc::Rc,
     sync::Arc,
 };
 
 mod rt;
 pub use rt::*;
+mod effect;
+pub use effect::*;
+#[macro_use]
+mod impls;
 
 use dioxus_core::{
-    prelude::{current_scope_id, schedule_update_any},
+    prelude::{current_scope_id, has_context, provide_context, schedule_update_any},
     ScopeId, ScopeState,
 };
 
@@ -17,8 +20,36 @@ pub fn use_signal<T: 'static>(cx: &ScopeState, f: impl FnOnce() -> T) -> Signal<
     *cx.use_hook(|| Signal::new(f()))
 }
 
+#[derive(Clone)]
+struct Unsubscriber {
+    scope: ScopeId,
+    subscribers: Rc<RefCell<Vec<Rc<RefCell<Vec<ScopeId>>>>>>,
+}
+
+impl Drop for Unsubscriber {
+    fn drop(&mut self) {
+        for subscribers in self.subscribers.borrow().iter() {
+            subscribers.borrow_mut().retain(|s| *s != self.scope);
+        }
+    }
+}
+
+fn current_unsubscriber() -> Unsubscriber {
+    match has_context() {
+        Some(rt) => rt,
+        None => {
+            let owner = Unsubscriber {
+                scope: current_scope_id().expect("in a virtual dom"),
+                subscribers: Default::default(),
+            };
+            provide_context(owner).expect("in a virtual dom")
+        }
+    }
+}
+
 struct SignalData<T> {
-    subscribers: Vec<ScopeId>,
+    subscribers: Rc<RefCell<Vec<ScopeId>>>,
+    effect_subscribers: Rc<RefCell<Vec<Effect>>>,
     update_any: Arc<dyn Fn(ScopeId)>,
     value: T,
 }
@@ -31,7 +62,8 @@ impl<T: 'static> Signal<T> {
     pub fn new(value: T) -> Self {
         Self {
             inner: CopyValue::new(SignalData {
-                subscribers: Vec::new(),
+                subscribers: Default::default(),
+                effect_subscribers: Default::default(),
                 update_any: schedule_update_any().expect("in a virtual dom"),
                 value,
             }),
@@ -39,21 +71,40 @@ impl<T: 'static> Signal<T> {
     }
 
     pub fn read(&self) -> Ref<T> {
+        let inner = self.inner.read();
         if let Some(current_scope_id) = current_scope_id() {
-            let mut inner = self.inner.write();
-            if !inner.subscribers.contains(&current_scope_id) {
-                inner.subscribers.push(current_scope_id);
+            let mut subscribers = inner.subscribers.borrow_mut();
+            if !subscribers.contains(&current_scope_id) {
+                subscribers.push(current_scope_id);
+                drop(subscribers);
+                let unsubscriber = current_unsubscriber();
+                inner.subscribers.borrow_mut().push(unsubscriber.scope);
             }
         }
-        Ref::map(self.inner.read(), |v| &v.value)
+        if let Some(effect) = Effect::current() {
+            let mut effect_subscribers = inner.effect_subscribers.borrow_mut();
+            if !effect_subscribers.contains(&effect) {
+                effect_subscribers.push(effect);
+            }
+        }
+        Ref::map(inner, |v| &v.value)
     }
 
     pub fn write(&self) -> RefMut<T> {
-        let inner = self.inner.write();
-        for &scope_id in &inner.subscribers {
-            (inner.update_any)(scope_id);
+        {
+            let inner = self.inner.read();
+            for &scope_id in &*inner.subscribers.borrow() {
+                (inner.update_any)(scope_id);
+            }
         }
 
+        let subscribers =
+            { std::mem::take(&mut *self.inner.read().effect_subscribers.borrow_mut()) };
+        for effect in subscribers {
+            effect.try_run();
+        }
+
+        let inner = self.inner.write();
         RefMut::map(inner, |v| &mut v.value)
     }
 
@@ -66,58 +117,20 @@ impl<T: 'static> Signal<T> {
         f(&*write)
     }
 
-    pub fn update<O>(&self, f: impl FnOnce(&mut T) -> O) -> O {
+    pub fn with_mut<O>(&self, f: impl FnOnce(&mut T) -> O) -> O {
         let mut write = self.write();
         f(&mut *write)
     }
 }
 
 impl<T: Clone + 'static> Signal<T> {
-    pub fn get(&self) -> T {
+    pub fn value(&self) -> T {
         self.read().clone()
     }
 }
 
-impl<T> std::clone::Clone for Signal<T> {
-    fn clone(&self) -> Self {
-        *self
-    }
-}
-
-impl<T> Copy for Signal<T> {}
-
-impl<T: Display + 'static> Display for Signal<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.with(|v| Display::fmt(v, f))
-    }
-}
-
-impl<T: Debug + 'static> Debug for Signal<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.with(|v| Debug::fmt(v, f))
-    }
-}
-
-impl<T: Add<Output = T> + Copy + 'static> std::ops::AddAssign<T> for Signal<T> {
-    fn add_assign(&mut self, rhs: T) {
-        self.set(self.get() + rhs);
-    }
-}
-
-impl<T: Sub<Output = T> + Copy + 'static> std::ops::SubAssign<T> for Signal<T> {
-    fn sub_assign(&mut self, rhs: T) {
-        self.set(self.get() - rhs);
-    }
-}
-
-impl<T: Mul<Output = T> + Copy + 'static> std::ops::MulAssign<T> for Signal<T> {
-    fn mul_assign(&mut self, rhs: T) {
-        self.set(self.get() * rhs);
-    }
-}
-
-impl<T: Div<Output = T> + Copy + 'static> std::ops::DivAssign<T> for Signal<T> {
-    fn div_assign(&mut self, rhs: T) {
-        self.set(self.get() / rhs);
+impl<T: 'static> PartialEq for Signal<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.inner == other.inner
     }
 }
