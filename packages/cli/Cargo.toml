@@ -97,3 +97,6 @@ plugin = ["mlua"]
 [[bin]]
 path = "src/main.rs"
 name = "dx"
+
+[dev-dependencies]
+tempfile = "3.3"
