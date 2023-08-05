@@ -328,20 +328,26 @@ pub fn extract_zip(file: &Path, target: &Path) -> anyhow::Result<()> {
     }
 
     for i in 0..zip.len() {
-        let mut file = zip.by_index(i)?;
-        if file.is_dir() {
+        let mut zip_entry = zip.by_index(i)?;
+        let Some(enclosed_name) = zip_entry.enclosed_name() else {
+            return Err(anyhow::anyhow!(
+                "Refusing to unpack zip entry with potentially dangerous path: zip={} entry={:?}",
+                file.display(),
+                zip_entry.name()
+            ));
+        };
+        let output_path = target.join(enclosed_name);
+        if zip_entry.is_dir() {
             // dir
-            let target = target.join(Path::new(&file.name().replace('\\', "")));
-            std::fs::create_dir_all(target)?;
+            std::fs::create_dir_all(output_path)?;
         } else {
             // file
-            let file_path = target.join(Path::new(file.name()));
-            let mut target_file = if !file_path.exists() {
-                std::fs::File::create(file_path)?
+            let mut target_file = if !output_path.exists() {
+                std::fs::File::create(output_path)?
             } else {
-                std::fs::File::open(file_path)?
+                std::fs::File::open(output_path)?
             };
-            let _num = std::io::copy(&mut file, &mut target_file)?;
+            let _num = std::io::copy(&mut zip_entry, &mut target_file)?;
         }
     }
 
