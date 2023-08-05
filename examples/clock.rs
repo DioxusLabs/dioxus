@@ -8,6 +8,8 @@ fn main() {
 }
 
 fn app(cx: Scope) -> Element {
+    println!("running app");
+
     let counts = use_signal(cx, || (0..100).map(Signal::new).collect::<Vec<_>>());
 
     cx.use_hook(|| {
@@ -17,8 +19,9 @@ fn app(cx: Scope) -> Element {
     });
 
     render! {
-        for count in counts {
+        for (i, count) in counts.into_iter().enumerate() {
             Child {
+                id: i,
                 count: count,
             }
         }
@@ -27,10 +30,12 @@ fn app(cx: Scope) -> Element {
 
 #[derive(Props, PartialEq)]
 struct ChildProps {
+    id: usize,
     count: Signal<u64>,
 }
 
 fn Child(cx: Scope<ChildProps>) -> Element {
+    println!("running child {}", cx.props.id);
     let count = cx.props.count;
 
     use_future!(cx, || async move {
