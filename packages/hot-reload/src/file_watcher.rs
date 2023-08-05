@@ -248,7 +248,7 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(cfg: Config<Ctx>) {
                                 return shutdown;
                             } else if log {
                                 println!(
-                                    "Rebuild needed... shutting down hot reloading.\nManually rebuild the application to view futher changes."
+                                    "Rebuild needed... shutting down hot reloading.\nManually rebuild the application to view further changes."
                                 );
                             }
                             true
