@@ -38,25 +38,25 @@ macro_rules! impls {
 
         impl<T: Add<Output = T> + Copy + 'static> std::ops::AddAssign<T> for $ty<T> {
             fn add_assign(&mut self, rhs: T) {
-                self.set(self.value() + rhs);
+                self.with_mut(|v| *v = *v + rhs)
             }
         }
 
         impl<T: Sub<Output = T> + Copy + 'static> std::ops::SubAssign<T> for $ty<T> {
             fn sub_assign(&mut self, rhs: T) {
-                self.set(self.value() - rhs);
+                self.with_mut(|v| *v = *v - rhs)
             }
         }
 
         impl<T: Mul<Output = T> + Copy + 'static> std::ops::MulAssign<T> for $ty<T> {
             fn mul_assign(&mut self, rhs: T) {
-                self.set(self.value() * rhs);
+                self.with_mut(|v| *v = *v * rhs)
             }
         }
 
         impl<T: Div<Output = T> + Copy + 'static> std::ops::DivAssign<T> for $ty<T> {
             fn div_assign(&mut self, rhs: T) {
-                self.set(self.value() / rhs);
+                self.with_mut(|v| *v = *v / rhs)
             }
         }
 

@@ -1,5 +1,6 @@
 use std::{
     cell::{Cell, Ref, RefCell, RefMut},
+    fmt::Debug,
     marker::PhantomData,
     rc::Rc,
 };
@@ -149,6 +150,20 @@ pub struct CopyHandle<T> {
     #[cfg(any(debug_assertions, feature = "check_generation"))]
     generation: u32,
     _marker: PhantomData<T>,
+}
+
+impl<T: 'static> Debug for CopyHandle<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        #[cfg(any(debug_assertions, feature = "check_generation"))]
+        f.write_fmt(format_args!(
+            "{:?}@{:?}",
+            self.raw.data.as_ptr(),
+            self.generation
+        ))?;
+        #[cfg(not(any(debug_assertions, feature = "check_generation")))]
+        f.write_fmt(format_args!("{:?}", self.raw.data.as_ptr()))?;
+        Ok(())
+    }
 }
 
 impl<T: 'static> CopyHandle<T> {

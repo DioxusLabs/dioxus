@@ -77,6 +77,11 @@ impl<T: 'static> Signal<T> {
     pub fn read(&self) -> Ref<T> {
         let inner = self.inner.read();
         if let Some(current_scope_id) = current_scope_id() {
+            log::trace!(
+                "{:?} subscribed to {:?}",
+                self.inner.value,
+                current_scope_id
+            );
             let mut subscribers = inner.subscribers.borrow_mut();
             if !subscribers.contains(&current_scope_id) {
                 subscribers.push(current_scope_id);
@@ -98,6 +103,11 @@ impl<T: 'static> Signal<T> {
         {
             let inner = self.inner.read();
             for &scope_id in &*inner.subscribers.borrow() {
+                log::trace!(
+                    "Write on {:?} triggered update on {:?}",
+                    self.inner.value,
+                    scope_id
+                );
                 (inner.update_any)(scope_id);
             }
         }
