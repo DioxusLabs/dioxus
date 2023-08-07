@@ -19,6 +19,9 @@ pub(crate) struct ElementRef {
 
     // The actual template
     pub template: Option<NonNull<VNode<'static>>>,
+
+    // The scope the element belongs to
+    pub scope: ScopeId,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -32,6 +35,7 @@ impl ElementRef {
         Self {
             template: None,
             path: ElementPath::Root(0),
+            scope: ScopeId(0),
         }
     }
 }
@@ -56,11 +60,13 @@ impl VirtualDom {
     fn next_reference(&mut self, template: &VNode, path: ElementPath) -> ElementId {
         let entry = self.elements.vacant_entry();
         let id = entry.key();
+        let scope = self.runtime.current_scope_id().unwrap_or(ScopeId(0));
 
         entry.insert(ElementRef {
             // We know this is non-null because it comes from a reference
             template: Some(unsafe { NonNull::new_unchecked(template as *const _ as *mut _) }),
             path,
+            scope,
         });
         ElementId(id)
     }
@@ -163,7 +169,7 @@ impl VirtualDom {
             let listener = unsafe { &*listener };
             match &listener.value {
                 AttributeValue::Listener(l) => {
-                    _ = l.callback.take();
+                    _ = l.take();
                 }
                 AttributeValue::Any(a) => {
                     _ = a.take();

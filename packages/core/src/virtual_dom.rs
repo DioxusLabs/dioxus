@@ -391,12 +391,12 @@ impl VirtualDom {
                     // We check the bubble state between each call to see if the event has been stopped from bubbling
                     for listener in listeners.drain(..).rev() {
                         if let AttributeValue::Listener(listener) = listener {
-                            let origin = listener.origin;
-                                self.runtime.scope_stack.borrow_mut().push(origin);
-                            if let Some(cb) = listener.callback.borrow_mut().as_deref_mut() {
+                            let origin = el_ref.scope;
+                            self.runtime.scope_stack.borrow_mut().push(origin);
+                            if let Some(cb) = listener.borrow_mut().as_deref_mut() {
                                 cb(uievent.clone());
                             }
-                                self.runtime.scope_stack.borrow_mut().pop();
+                            self.runtime.scope_stack.borrow_mut().pop();
 
                             if !uievent.propagates.get() {
                                 return;
@@ -425,9 +425,9 @@ impl VirtualDom {
                         // Only call the listener if this is the exact target element.
                         if attr.name.trim_start_matches("on") == name && target_path == this_path {
                             if let AttributeValue::Listener(listener) = &attr.value {
-                                let origin = listener.origin;
+                                let origin = el_ref.scope;
                                 self.runtime.scope_stack.borrow_mut().push(origin);
-                                if let Some(cb) = listener.callback.borrow_mut().as_deref_mut() {
+                                if let Some(cb) = listener.borrow_mut().as_deref_mut() {
                                     cb(uievent.clone());
                                 }
                                 self.runtime.scope_stack.borrow_mut().pop();
