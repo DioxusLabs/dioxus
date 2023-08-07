@@ -12,6 +12,37 @@ use dioxus_core::{
 
 use crate::{CopyValue, Effect};
 
+/// Creates a new Signal. Signals are a Copy state management solution with automatic dependency tracking.
+///
+/// ```rust
+/// use dioxus::prelude::*;
+/// use dioxus_signals::*;
+///
+/// fn App(cx: Scope) -> Element {
+///     let mut count = use_signal(cx, || 0);
+///
+///     // Because signals have automatic dependency tracking, if you never read them in a component, that component will not be re-rended when the signal is updated.
+///     // The app component will never be rerendered in this example.
+///     render! { Child { state: count } }
+/// }
+///
+/// #[inline_props]
+/// fn Child(cx: Scope, state: Signal<u32>) -> Element {
+///     let state = *state;
+///
+///     use_future!(cx,  |()| async move {
+///         // Because the signal is a Copy type, we can use it in an async block without cloning it.
+///         *state.write() += 1;
+///     });
+///
+///     render! {
+///         button {
+///             onclick: move |_| *state.write() += 1,
+///             "{state}"
+///         }
+///     }
+/// }
+/// ```
 pub fn use_signal<T: 'static>(cx: &ScopeState, f: impl FnOnce() -> T) -> Signal<T> {
     *cx.use_hook(|| Signal::new(f()))
 }

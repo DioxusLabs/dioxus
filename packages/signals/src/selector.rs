@@ -2,6 +2,23 @@ use dioxus_core::prelude::*;
 
 use crate::{get_effect_stack, signal::SignalData, CopyValue, Effect, ReadOnlySignal, Signal};
 
+/// Creates a new Selector. The selector will be run immediately and whenever any signal it reads changes.
+///
+/// Selectors can be used to efficiently compute derived data from signals.
+///
+/// ```rust
+/// use dioxus::prelude::*;
+/// use dioxus_signals::*;
+///
+/// fn App(cx: Scope) -> Element {
+///     let mut count = use_signal(cx, || 0);
+///     let double = use_selector(cx, move || count * 2);
+///     count += 1;
+///     assert_eq!(double.value(), count * 2);
+///  
+///     render! { "{double}" }
+/// }
+/// ```
 pub fn use_selector<R: PartialEq>(
     cx: &ScopeState,
     f: impl FnMut() -> R + 'static,
@@ -9,6 +26,9 @@ pub fn use_selector<R: PartialEq>(
     *cx.use_hook(|| selector(f))
 }
 
+/// Creates a new Selector. The selector will be run immediately and whenever any signal it reads changes.
+///
+/// Selectors can be used to efficiently compute derived data from signals.
 pub fn selector<R: PartialEq>(mut f: impl FnMut() -> R + 'static) -> ReadOnlySignal<R> {
     let state = Signal::<R> {
         inner: CopyValue::invalid(),

@@ -20,6 +20,13 @@ pub(crate) fn get_effect_stack() -> EffectStack {
     }
 }
 
+/// Create a new effect. The effect will be run immediately and whenever any signal it reads changes.
+/// The signal will be owned by the current component and will be dropped when the component is dropped.
+pub fn use_effect(cx: &ScopeState, callback: impl FnMut() + 'static) {
+    cx.use_hook(|| Effect::new(callback));
+}
+
+/// Effects allow you to run code when a signal changes. Effects are run immediately and whenever any signal it reads changes.
 #[derive(Copy, Clone, PartialEq)]
 pub struct Effect {
     pub(crate) callback: CopyValue<Box<dyn FnMut()>>,
@@ -36,6 +43,9 @@ impl Effect {
         get_effect_stack().effects.read().last().copied()
     }
 
+    /// Create a new effect. The effect will be run immediately and whenever any signal it reads changes.
+    ///
+    /// The signal will be owned by the current component and will be dropped when the component is dropped.
     pub fn new(callback: impl FnMut() + 'static) -> Self {
         let myself = Self {
             callback: CopyValue::new(Box::new(callback)),

@@ -52,9 +52,6 @@ macro_rules! to_owned {
     };
 }
 
-mod computed;
-pub use computed::*;
-
 mod use_on_unmount;
 pub use use_on_unmount::*;
 

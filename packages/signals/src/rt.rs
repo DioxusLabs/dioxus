@@ -40,12 +40,18 @@ fn owner_in_scope(scope: ScopeId) -> Rc<Owner> {
     }
 }
 
+/// CopyValue is a wrapper around a value to make the value mutable and Copy.
+///
+/// It is internally backed by [`generational_box::GenerationalBox`].
 pub struct CopyValue<T: 'static> {
     pub(crate) value: GenerationalBox<T>,
     origin_scope: ScopeId,
 }
 
 impl<T: 'static> CopyValue<T> {
+    /// Create a new CopyValue. The value will be stored in the current component.
+    ///
+    /// Once the component this value is created in is dropped, the value will be dropped.
     pub fn new(value: T) -> Self {
         let owner = current_owner();
 
