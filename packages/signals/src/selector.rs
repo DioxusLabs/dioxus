@@ -9,7 +9,7 @@ pub fn use_selector<R: PartialEq>(
     *cx.use_hook(|| selector(f))
 }
 
-fn selector<R: PartialEq>(mut f: impl FnMut() -> R + 'static) -> ReadOnlySignal<R> {
+pub fn selector<R: PartialEq>(mut f: impl FnMut() -> R + 'static) -> ReadOnlySignal<R> {
     let state = Signal::<R> {
         inner: CopyValue::invalid(),
     };

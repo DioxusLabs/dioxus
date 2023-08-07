@@ -26,7 +26,7 @@ fn memos_rerun() {
             let mut signal = use_signal(cx, || 0);
             let memo = cx.use_hook(move || {
                 to_owned![counter];
-                memo(move || {
+                selector(move || {
                     counter.borrow_mut().effect += 1;
                     println!("Signal: {:?}", signal);
                     signal.value()
@@ -102,7 +102,7 @@ fn memos_prevents_component_rerun() {
 
         let memo = cx.use_hook(move || {
             to_owned![counter];
-            memo(move || {
+            selector(move || {
                 counter.borrow_mut().effect += 1;
                 println!("Signal: {:?}", signal);
                 signal.value()
