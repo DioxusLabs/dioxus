@@ -1,4 +1,4 @@
-use crate::{TaskId, VirtualDom};
+use crate::{runtime::RuntimeGuard, TaskId, VirtualDom};
 use std::task::Context;
 
 impl VirtualDom {
@@ -7,6 +7,7 @@ impl VirtualDom {
     /// This is precise, meaning we won't poll every task, just tasks that have woken up as notified to use by the
     /// queue
     pub(crate) fn handle_task_wakeup(&mut self, id: TaskId) {
+        let _runtime = RuntimeGuard::new(self.runtime.clone());
         let mut tasks = self.runtime.scheduler.tasks.borrow_mut();
 
         let task = match tasks.get(id.0) {

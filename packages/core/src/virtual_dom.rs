@@ -9,7 +9,7 @@ use crate::{
     mutations::Mutation,
     nodes::RenderReturn,
     nodes::{Template, TemplateId},
-    runtime::{pop_runtime, push_runtime, Runtime},
+    runtime::{Runtime, RuntimeGuard},
     scopes::{ScopeId, ScopeState},
     AttributeValue, Element, Event, Scope,
 };
@@ -275,9 +275,6 @@ impl VirtualDom {
         // the root element is always given element ID 0 since it's the container for the entire tree
         dom.elements.insert(ElementRef::none());
 
-        // Set this as the current runtime
-        push_runtime(dom.runtime.clone());
-
         dom
     }
 
@@ -329,6 +326,8 @@ impl VirtualDom {
         element: ElementId,
         bubbles: bool,
     ) {
+        let _runtime = RuntimeGuard::new(self.runtime.clone());
+
         /*
         ------------------------
         The algorithm works by walking through the list of dynamic attributes, checking their paths, and breaking when
@@ -543,6 +542,7 @@ impl VirtualDom {
     /// apply_edits(edits);
     /// ```
     pub fn rebuild(&mut self) -> Mutations {
+        let _runtime = RuntimeGuard::new(self.runtime.clone());
         match unsafe { self.run_scope(ScopeId(0)).extend_lifetime_ref() } {
             // Rebuilding implies we append the created elements to the root
             RenderReturn::Ready(node) => {
@@ -621,9 +621,12 @@ impl VirtualDom {
                     continue;
                 }
 
-                // Run the scope and get the mutations
-                self.run_scope(dirty.id);
-                self.diff_scope(dirty.id);
+                {
+                    let _runtime = RuntimeGuard::new(self.runtime.clone());
+                    // Run the scope and get the mutations
+                    self.run_scope(dirty.id);
+                    self.diff_scope(dirty.id);
+                }
             }
 
             // If there's more work, then just continue, plenty of work to do
@@ -657,7 +660,5 @@ impl Drop for VirtualDom {
     fn drop(&mut self) {
         // Simply drop this scope which drops all of its children
         self.drop_scope(ScopeId(0), true);
-        // remove the current runtime
-        pop_runtime();
     }
 }

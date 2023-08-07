@@ -89,3 +89,18 @@ impl Runtime {
         .ok()
     }
 }
+
+pub struct RuntimeGuard(Rc<Runtime>);
+
+impl RuntimeGuard {
+    pub fn new(runtime: Rc<Runtime>) -> Self {
+        push_runtime(runtime.clone());
+        Self(runtime)
+    }
+}
+
+impl Drop for RuntimeGuard {
+    fn drop(&mut self) {
+        pop_runtime();
+    }
+}
