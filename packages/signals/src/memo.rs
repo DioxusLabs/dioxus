@@ -1,12 +1,15 @@
 use dioxus_core::prelude::*;
 
-use crate::{get_effect_stack, CopyValue, Effect, Signal, SignalData};
+use crate::{get_effect_stack, signal::SignalData, CopyValue, Effect, ReadOnlySignal, Signal};
 
-pub fn use_memo<R: PartialEq>(cx: &ScopeState, f: impl FnMut() -> R + 'static) -> Signal<R> {
-    *cx.use_hook(|| memo(f))
+pub fn use_selector<R: PartialEq>(
+    cx: &ScopeState,
+    f: impl FnMut() -> R + 'static,
+) -> ReadOnlySignal<R> {
+    *cx.use_hook(|| selector(f))
 }
 
-pub fn memo<R: PartialEq>(mut f: impl FnMut() -> R + 'static) -> Signal<R> {
+fn selector<R: PartialEq>(mut f: impl FnMut() -> R + 'static) -> ReadOnlySignal<R> {
     let state = Signal::<R> {
         inner: CopyValue::invalid(),
     };
@@ -38,5 +41,5 @@ pub fn memo<R: PartialEq>(mut f: impl FnMut() -> R + 'static) -> Signal<R> {
         }
     }));
 
-    state
+    ReadOnlySignal::new(state)
 }

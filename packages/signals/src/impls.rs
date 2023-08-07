@@ -1,5 +1,5 @@
 use crate::rt::CopyValue;
-use crate::{Signal, Write};
+use crate::signal::{ReadOnlySignal, Signal, Write};
 
 use std::cell::{Ref, RefMut};
 
@@ -8,11 +8,11 @@ use std::{
     ops::{Add, Div, Mul, Sub},
 };
 
-macro_rules! impls {
+macro_rules! read_impls {
     ($ty:ident) => {
         impl<T: Default + 'static> Default for $ty<T> {
             fn default() -> Self {
-                Self::new(T::default())
+                Self::new(Default::default())
             }
         }
 
@@ -36,6 +36,29 @@ macro_rules! impls {
             }
         }
 
+        impl<T: 'static> $ty<Vec<T>> {
+            pub fn get(&self, index: usize) -> Option<Ref<'_, T>> {
+                Ref::filter_map(self.read(), |v| v.get(index)).ok()
+            }
+        }
+
+        impl<T: 'static> $ty<Option<T>> {
+            pub fn unwrap(&self) -> T
+            where
+                T: Clone,
+            {
+                self.with(|v| v.clone()).unwrap()
+            }
+
+            pub fn as_ref(&self) -> Option<Ref<'_, T>> {
+                Ref::filter_map(self.read(), |v| v.as_ref()).ok()
+            }
+        }
+    };
+}
+
+macro_rules! write_impls {
+    ($ty:ident) => {
         impl<T: Add<Output = T> + Copy + 'static> std::ops::AddAssign<T> for $ty<T> {
             fn add_assign(&mut self, rhs: T) {
                 self.with_mut(|v| *v = *v + rhs)
@@ -100,10 +123,6 @@ macro_rules! impls {
             pub fn split_off(&self, at: usize) -> Vec<T> {
                 self.with_mut(|v| v.split_off(at))
             }
-
-            pub fn get(&self, index: usize) -> Option<Ref<'_, T>> {
-                Ref::filter_map(self.read(), |v| v.get(index)).ok()
-            }
         }
 
         impl<T: 'static> $ty<Option<T>> {
@@ -113,17 +132,6 @@ macro_rules! impls {
 
             pub fn replace(&self, value: T) -> Option<T> {
                 self.with_mut(|v| v.replace(value))
-            }
-
-            pub fn unwrap(&self) -> T
-            where
-                T: Clone,
-            {
-                self.with(|v| v.clone()).unwrap()
-            }
-
-            pub fn as_ref(&self) -> Option<Ref<'_, T>> {
-                Ref::filter_map(self.read(), |v| v.as_ref()).ok()
             }
 
             pub fn get_or_insert(&self, default: T) -> Ref<'_, T> {
@@ -144,8 +152,11 @@ macro_rules! impls {
     };
 }
 
-impls!(CopyValue);
-impls!(Signal);
+read_impls!(CopyValue);
+write_impls!(CopyValue);
+read_impls!(Signal);
+write_impls!(Signal);
+read_impls!(ReadOnlySignal);
 
 pub struct CopyValueIterator<T: 'static> {
     index: usize,
