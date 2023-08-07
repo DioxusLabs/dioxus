@@ -236,10 +236,9 @@ pub fn build(config: &CrateConfig, quiet: bool) -> Result<BuildResult> {
         }
     }
 
-    let t_end = std::time::Instant::now();
     Ok(BuildResult {
         warnings: warning_messages,
-        elapsed_time: (t_end - t_start).as_millis(),
+        elapsed_time: t_start.elapsed().as_millis(),
     })
 }
 
@@ -360,7 +359,7 @@ pub fn build_desktop(config: &CrateConfig, _is_serve: bool) -> Result<BuildResul
 
     Ok(BuildResult {
         warnings: warning_messages,
-        elapsed_time: (t_start - std::time::Instant::now()).as_millis(),
+        elapsed_time: t_start.elapsed().as_millis(),
     })
 }
 
