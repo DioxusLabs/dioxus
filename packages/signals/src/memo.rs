@@ -30,8 +30,8 @@ pub fn memo<R: PartialEq>(mut f: impl FnMut() -> R + 'static) -> Signal<R> {
     effect.callback.value.set(Box::new(move || {
         let value = f();
         let changed = {
-            let state = state.read();
-            value != *state
+            let old = state.inner.read();
+            value != old.value
         };
         if changed {
             state.set(value)

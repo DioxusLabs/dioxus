@@ -1,5 +1,5 @@
 use crate::rt::CopyValue;
-use crate::Signal;
+use crate::{Signal, Write};
 
 use std::cell::{Ref, RefMut};
 
@@ -104,10 +104,6 @@ macro_rules! impls {
             pub fn get(&self, index: usize) -> Option<Ref<'_, T>> {
                 Ref::filter_map(self.read(), |v| v.get(index)).ok()
             }
-
-            pub fn get_mut(&self, index: usize) -> Option<RefMut<'_, T>> {
-                RefMut::filter_map(self.write(), |v| v.get_mut(index)).ok()
-            }
         }
 
         impl<T: 'static> $ty<Option<T>> {
@@ -128,10 +124,6 @@ macro_rules! impls {
 
             pub fn as_ref(&self) -> Option<Ref<'_, T>> {
                 Ref::filter_map(self.read(), |v| v.as_ref()).ok()
-            }
-
-            pub fn as_mut(&self) -> Option<RefMut<'_, T>> {
-                RefMut::filter_map(self.write(), |v| v.as_mut()).ok()
             }
 
             pub fn get_or_insert(&self, default: T) -> Ref<'_, T> {
@@ -183,6 +175,18 @@ impl<T: Clone + 'static> IntoIterator for CopyValue<Vec<T>> {
     }
 }
 
+impl<T: 'static> CopyValue<Vec<T>> {
+    pub fn get_mut(&self, index: usize) -> Option<RefMut<'_, T>> {
+        RefMut::filter_map(self.write(), |v| v.get_mut(index)).ok()
+    }
+}
+
+impl<T: 'static> CopyValue<Option<T>> {
+    pub fn as_mut(&self) -> Option<RefMut<'_, T>> {
+        RefMut::filter_map(self.write(), |v| v.as_mut()).ok()
+    }
+}
+
 pub struct CopySignalIterator<T: 'static> {
     index: usize,
     value: Signal<Vec<T>>,
@@ -208,5 +212,17 @@ impl<T: Clone + 'static> IntoIterator for Signal<Vec<T>> {
             index: 0,
             value: self,
         }
+    }
+}
+
+impl<T: 'static> Signal<Vec<T>> {
+    pub fn get_mut(&self, index: usize) -> Option<Write<'_, T, Vec<T>>> {
+        Write::filter_map(self.write(), |v| v.get_mut(index))
+    }
+}
+
+impl<T: 'static> Signal<Option<T>> {
+    pub fn as_mut(&self) -> Option<Write<'_, T, Option<T>>> {
+        Write::filter_map(self.write(), |v| v.as_mut())
     }
 }

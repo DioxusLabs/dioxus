@@ -1,5 +1,6 @@
 use std::{
     cell::{Ref, RefCell, RefMut},
+    ops::{Deref, DerefMut},
     rc::Rc,
     sync::Arc,
 };
@@ -52,7 +53,7 @@ struct SignalData<T> {
     subscribers: Rc<RefCell<Vec<ScopeId>>>,
     effect_subscribers: Rc<RefCell<Vec<Effect>>>,
     update_any: Arc<dyn Fn(ScopeId)>,
-    value: T,
+    pub(crate) value: T,
 }
 
 pub struct Signal<T: 'static> {
@@ -77,7 +78,12 @@ impl<T: 'static> Signal<T> {
 
     pub fn read(&self) -> Ref<T> {
         let inner = self.inner.read();
-        if let Some(current_scope_id) = current_scope_id() {
+        if let Some(effect) = Effect::current() {
+            let mut effect_subscribers = inner.effect_subscribers.borrow_mut();
+            if !effect_subscribers.contains(&effect) {
+                effect_subscribers.push(effect);
+            }
+        } else if let Some(current_scope_id) = current_scope_id() {
             log::trace!(
                 "{:?} subscribed to {:?}",
                 self.inner.value,
@@ -91,16 +97,19 @@ impl<T: 'static> Signal<T> {
                 inner.subscribers.borrow_mut().push(unsubscriber.scope);
             }
         }
-        if let Some(effect) = Effect::current() {
-            let mut effect_subscribers = inner.effect_subscribers.borrow_mut();
-            if !effect_subscribers.contains(&effect) {
-                effect_subscribers.push(effect);
-            }
-        }
         Ref::map(inner, |v| &v.value)
     }
 
-    pub fn write(&self) -> RefMut<T> {
+    pub fn write(&self) -> Write<'_, T> {
+        let inner = self.inner.write();
+        let borrow = RefMut::map(inner, |v| &mut v.value);
+        Write {
+            write: borrow,
+            signal: SignalSubscriberDrop { signal: *self },
+        }
+    }
+
+    fn update_subscribers(&self) {
         {
             let inner = self.inner.read();
             for &scope_id in &*inner.subscribers.borrow() {
@@ -113,8 +122,11 @@ impl<T: 'static> Signal<T> {
             }
         }
 
-        let subscribers =
-            { std::mem::take(&mut *self.inner.read().effect_subscribers.borrow_mut()) };
+        let subscribers = {
+            let self_read = self.inner.read();
+            let mut effects = self_read.effect_subscribers.borrow_mut();
+            std::mem::take(&mut *effects)
+        };
         for effect in subscribers {
             log::trace!(
                 "Write on {:?} triggered effect {:?}",
@@ -123,9 +135,6 @@ impl<T: 'static> Signal<T> {
             );
             effect.try_run();
         }
-
-        let inner = self.inner.write();
-        RefMut::map(inner, |v| &mut v.value)
     }
 
     pub fn set(&self, value: T) {
@@ -152,5 +161,56 @@ impl<T: Clone + 'static> Signal<T> {
 impl<T: 'static> PartialEq for Signal<T> {
     fn eq(&self, other: &Self) -> bool {
         self.inner == other.inner
+    }
+}
+
+struct SignalSubscriberDrop<T: 'static> {
+    signal: Signal<T>,
+}
+
+impl<T: 'static> Drop for SignalSubscriberDrop<T> {
+    fn drop(&mut self) {
+        self.signal.update_subscribers();
+    }
+}
+
+pub struct Write<'a, T: 'static, I: 'static = T> {
+    write: RefMut<'a, T>,
+    signal: SignalSubscriberDrop<I>,
+}
+
+impl<'a, T: 'static, I: 'static> Write<'a, T, I> {
+    pub fn map<O>(myself: Self, f: impl FnOnce(&mut T) -> &mut O) -> Write<'a, O, I> {
+        let Self { write, signal } = myself;
+        Write {
+            write: RefMut::map(write, f),
+            signal,
+        }
+    }
+
+    pub fn filter_map<O>(
+        myself: Self,
+        f: impl FnOnce(&mut T) -> Option<&mut O>,
+    ) -> Option<Write<'a, O, I>> {
+        let Self { write, signal } = myself;
+        let write = RefMut::filter_map(write, f).ok();
+        write.map(|write| Write {
+            write,
+            signal: signal,
+        })
+    }
+}
+
+impl<'a, T: 'static> Deref for Write<'a, T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &*self.write
+    }
+}
+
+impl<T> DerefMut for Write<'_, T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut *self.write
     }
 }
