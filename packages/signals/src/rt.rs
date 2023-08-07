@@ -64,6 +64,15 @@ impl<T: 'static> CopyValue<T> {
         }
     }
 
+    pub(crate) fn invalid() -> Self {
+        let owner = current_owner();
+
+        Self {
+            value: owner.invalid(),
+            origin_scope: current_scope_id().expect("in a virtual dom"),
+        }
+    }
+
     pub fn origin_scope(&self) -> ScopeId {
         self.origin_scope
     }

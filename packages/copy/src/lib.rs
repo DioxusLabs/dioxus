@@ -209,6 +209,12 @@ impl<T: 'static> CopyHandle<T> {
         self.try_write().unwrap()
     }
 
+    pub fn set(&self, value: T) {
+        self.validate().then(|| {
+            *self.raw.data.borrow_mut() = Some(Box::new(value));
+        });
+    }
+
     pub fn ptr_eq(&self, other: &Self) -> bool {
         #[cfg(any(debug_assertions, feature = "check_generation"))]
         {
@@ -315,6 +321,17 @@ impl Owner {
         let key = location.replace(value);
         self.owned.borrow_mut().push(location);
         key
+    }
+
+    /// Creates an invalid handle. This is useful for creating a handle that will be filled in later. If you use this before the value is filled in, you will get may get a panic or an out of date value.
+    pub fn invalid<T: 'static>(&self) -> CopyHandle<T> {
+        let location = self.store.claim();
+        CopyHandle {
+            raw: location,
+            #[cfg(any(debug_assertions, feature = "check_generation"))]
+            generation: location.generation.get(),
+            _marker: PhantomData,
+        }
     }
 }
 

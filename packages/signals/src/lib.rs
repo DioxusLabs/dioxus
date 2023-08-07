@@ -8,8 +8,9 @@ mod rt;
 pub use rt::*;
 mod effect;
 pub use effect::*;
-#[macro_use]
 mod impls;
+mod memo;
+pub use memo::*;
 
 use dioxus_core::{
     prelude::{current_scope_id, has_context, provide_context, schedule_update_any},
@@ -55,7 +56,7 @@ struct SignalData<T> {
 }
 
 pub struct Signal<T: 'static> {
-    inner: CopyValue<SignalData<T>>,
+    pub(crate) inner: CopyValue<SignalData<T>>,
 }
 
 impl<T: 'static> Signal<T> {
@@ -115,6 +116,11 @@ impl<T: 'static> Signal<T> {
         let subscribers =
             { std::mem::take(&mut *self.inner.read().effect_subscribers.borrow_mut()) };
         for effect in subscribers {
+            log::trace!(
+                "Write on {:?} triggered effect {:?}",
+                self.inner.value,
+                effect
+            );
             effect.try_run();
         }
 
@@ -122,7 +128,7 @@ impl<T: 'static> Signal<T> {
         RefMut::map(inner, |v| &mut v.value)
     }
 
-    pub fn set(&mut self, value: T) {
+    pub fn set(&self, value: T) {
         *self.write() = value;
     }
 

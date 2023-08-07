@@ -1,3 +1,6 @@
+use core::{self, fmt::Debug};
+use std::fmt::{self, Formatter};
+
 use dioxus_core::prelude::*;
 
 use crate::CopyValue;
@@ -19,7 +22,13 @@ pub(crate) fn get_effect_stack() -> EffectStack {
 
 #[derive(Copy, Clone, PartialEq)]
 pub struct Effect {
-    callback: CopyValue<Box<dyn FnMut()>>,
+    pub(crate) callback: CopyValue<Box<dyn FnMut()>>,
+}
+
+impl Debug for Effect {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.write_fmt(format_args!("{:?}", self.callback.value))
+    }
 }
 
 impl Effect {
