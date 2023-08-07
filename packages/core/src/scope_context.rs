@@ -309,3 +309,27 @@ pub fn suspend() -> Option<Element<'static>> {
 pub fn throw(error: impl Debug + 'static) -> Option<()> {
     with_current_scope(|cx| cx.throw(error)).flatten()
 }
+
+/// Pushes the future onto the poll queue to be polled after the component renders.
+pub fn push_future(fut: impl Future<Output = ()> + 'static) -> Option<TaskId> {
+    with_current_scope(|cx| cx.push_future(fut))
+}
+
+/// Spawns the future but does not return the [`TaskId`]
+pub fn spawn(fut: impl Future<Output = ()> + 'static) {
+    with_current_scope(|cx| cx.spawn(fut));
+}
+
+/// Spawn a future that Dioxus won't clean up when this component is unmounted
+///
+/// This is good for tasks that need to be run after the component has been dropped.
+pub fn spawn_forever(fut: impl Future<Output = ()> + 'static) -> Option<TaskId> {
+    with_current_scope(|cx| cx.spawn_forever(fut))
+}
+
+/// Informs the scheduler that this task is no longer needed and should be removed.
+///
+/// This drops the task immediately.
+pub fn remove_future(id: TaskId) {
+    with_current_scope(|cx| cx.remove_future(id));
+}
