@@ -1,5 +1,5 @@
 [package]
-name = "dioxus-copy"
+name = "generational-box"
 authors = ["Evan Almloff"]
 version = "0.0.0"
 edition = "2018"

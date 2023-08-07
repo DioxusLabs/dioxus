@@ -106,8 +106,8 @@ fn panics() {
 fn fuzz() {
     fn maybe_owner_scope(
         store: &Store,
-        valid_keys: &mut Vec<CopyHandle<String>>,
-        invalid_keys: &mut Vec<CopyHandle<String>>,
+        valid_keys: &mut Vec<GenerationalBox<String>>,
+        invalid_keys: &mut Vec<GenerationalBox<String>>,
         path: &mut Vec<u8>,
     ) {
         let branch_cutoff = 5;
@@ -145,14 +145,14 @@ fn fuzz() {
     }
 }
 
-pub struct CopyHandle<T> {
+pub struct GenerationalBox<T> {
     raw: MemoryLocation,
     #[cfg(any(debug_assertions, feature = "check_generation"))]
     generation: u32,
     _marker: PhantomData<T>,
 }
 
-impl<T: 'static> Debug for CopyHandle<T> {
+impl<T: 'static> Debug for GenerationalBox<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         #[cfg(any(debug_assertions, feature = "check_generation"))]
         f.write_fmt(format_args!(
@@ -166,7 +166,7 @@ impl<T: 'static> Debug for CopyHandle<T> {
     }
 }
 
-impl<T: 'static> CopyHandle<T> {
+impl<T: 'static> GenerationalBox<T> {
     #[inline(always)]
     fn validate(&self) -> bool {
         #[cfg(any(debug_assertions, feature = "check_generation"))]
@@ -227,9 +227,9 @@ impl<T: 'static> CopyHandle<T> {
     }
 }
 
-impl<T> Copy for CopyHandle<T> {}
+impl<T> Copy for GenerationalBox<T> {}
 
-impl<T> Clone for CopyHandle<T> {
+impl<T> Clone for GenerationalBox<T> {
     fn clone(&self) -> Self {
         *self
     }
@@ -253,13 +253,13 @@ impl MemoryLocation {
         }
     }
 
-    fn replace<T: 'static>(&mut self, value: T) -> CopyHandle<T> {
+    fn replace<T: 'static>(&mut self, value: T) -> GenerationalBox<T> {
         let mut inner_mut = self.data.borrow_mut();
 
         let raw = Box::new(value);
         let old = inner_mut.replace(raw);
         assert!(old.is_none());
-        CopyHandle {
+        GenerationalBox {
             raw: *self,
             #[cfg(any(debug_assertions, feature = "check_generation"))]
             generation: self.generation.get(),
@@ -316,7 +316,7 @@ pub struct Owner {
 }
 
 impl Owner {
-    pub fn insert<T: 'static>(&self, value: T) -> CopyHandle<T> {
+    pub fn insert<T: 'static>(&self, value: T) -> GenerationalBox<T> {
         let mut location = self.store.claim();
         let key = location.replace(value);
         self.owned.borrow_mut().push(location);
@@ -324,9 +324,9 @@ impl Owner {
     }
 
     /// Creates an invalid handle. This is useful for creating a handle that will be filled in later. If you use this before the value is filled in, you will get may get a panic or an out of date value.
-    pub fn invalid<T: 'static>(&self) -> CopyHandle<T> {
+    pub fn invalid<T: 'static>(&self) -> GenerationalBox<T> {
         let location = self.store.claim();
-        CopyHandle {
+        GenerationalBox {
             raw: location,
             #[cfg(any(debug_assertions, feature = "check_generation"))]
             generation: location.generation.get(),

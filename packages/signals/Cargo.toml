@@ -8,7 +8,7 @@ edition = "2018"
 
 [dependencies]
 dioxus-core = { workspace = true }
-dioxus-copy = { workspace = true }
+generational-box = { workspace = true }
 log.workspace = true
 simple_logger = "4.2.0"
 

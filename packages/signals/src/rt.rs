@@ -8,7 +8,7 @@ use dioxus_core::prelude::{
 };
 use dioxus_core::ScopeId;
 
-use dioxus_copy::{CopyHandle, Owner, Store};
+use generational_box::{GenerationalBox, Owner, Store};
 
 fn current_store() -> Store {
     match consume_context() {
@@ -41,7 +41,7 @@ fn owner_in_scope(scope: ScopeId) -> Rc<Owner> {
 }
 
 pub struct CopyValue<T: 'static> {
-    pub(crate) value: CopyHandle<T>,
+    pub(crate) value: GenerationalBox<T>,
     origin_scope: ScopeId,
 }
 
