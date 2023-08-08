@@ -78,7 +78,7 @@ pub fn selector<R: PartialEq>(mut f: impl FnMut() -> R + 'static) -> ReadOnlySig
     };
 
     {
-        get_effect_stack().effects.write().push(effect);
+        get_effect_stack().effects.borrow_mut().push(effect);
     }
     state.inner.value.set(SignalData {
         subscribers: Default::default(),
@@ -87,7 +87,7 @@ pub fn selector<R: PartialEq>(mut f: impl FnMut() -> R + 'static) -> ReadOnlySig
         value: f(),
     });
     {
-        get_effect_stack().effects.write().pop();
+        // get_effect_stack().effects.borrow_mut().pop();
     }
 
     effect.callback.value.set(Box::new(move || {

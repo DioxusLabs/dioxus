@@ -3,8 +3,8 @@ use std::cell::{Ref, RefMut};
 use std::rc::Rc;
 
 use dioxus_core::prelude::{
-    consume_context, consume_context_from_scope, current_scope_id, provide_context_to_scope,
-    provide_root_context,
+    consume_context, consume_context_from_scope, current_scope_id, provide_context,
+    provide_context_to_scope, provide_root_context,
 };
 use dioxus_core::ScopeId;
 
@@ -25,7 +25,7 @@ fn current_owner() -> Rc<Owner> {
         Some(rt) => rt,
         None => {
             let owner = Rc::new(current_store().owner());
-            provide_root_context(owner).expect("in a virtual dom")
+            provide_context(owner).expect("in a virtual dom")
         }
     }
 }

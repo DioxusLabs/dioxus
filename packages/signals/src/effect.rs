@@ -1,16 +1,16 @@
 use core::{self, fmt::Debug};
+use std::cell::RefCell;
 use std::fmt::{self, Formatter};
-use std::marker::PhantomData;
-
+use std::rc::Rc;
+//
 use dioxus_core::prelude::*;
 
-use crate::dependency::Dep;
+use crate::use_signal;
 use crate::{dependency::Dependency, CopyValue};
-use crate::{use_signal, Signal};
 
-#[derive(Default, Clone, Copy)]
+#[derive(Default, Clone)]
 pub(crate) struct EffectStack {
-    pub(crate) effects: CopyValue<Vec<Effect>>,
+    pub(crate) effects: Rc<RefCell<Vec<Effect>>>,
 }
 
 pub(crate) fn get_effect_stack() -> EffectStack {
@@ -65,7 +65,7 @@ impl Debug for Effect {
 
 impl Effect {
     pub(crate) fn current() -> Option<Self> {
-        get_effect_stack().effects.read().last().copied()
+        get_effect_stack().effects.borrow().last().copied()
     }
 
     /// Create a new effect. The effect will be run immediately and whenever any signal it reads changes.
@@ -85,11 +85,11 @@ impl Effect {
     pub fn try_run(&self) {
         if let Some(mut callback) = self.callback.try_write() {
             {
-                get_effect_stack().effects.write().push(*self);
+                get_effect_stack().effects.borrow_mut().push(*self);
             }
             callback();
             {
-                get_effect_stack().effects.write().pop();
+                get_effect_stack().effects.borrow_mut().pop();
             }
         }
     }

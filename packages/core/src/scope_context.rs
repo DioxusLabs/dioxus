@@ -5,7 +5,7 @@ use crate::{
 };
 use rustc_hash::FxHashSet;
 use std::{
-    any::{Any, TypeId},
+    any::Any,
     cell::{Cell, RefCell},
     fmt::Debug,
     future::Future,
@@ -25,7 +25,7 @@ pub struct ScopeContext {
     pub(crate) height: u32,
     pub(crate) suspended: Cell<bool>,
 
-    pub(crate) shared_contexts: RefCell<Vec<(TypeId, Box<dyn Any>)>>,
+    pub(crate) shared_contexts: RefCell<Vec<Box<dyn Any>>>,
 
     pub(crate) tasks: Rc<Scheduler>,
     pub(crate) spawned_tasks: RefCell<FxHashSet<TaskId>>,
@@ -99,9 +99,7 @@ impl ScopeContext {
         self.shared_contexts
             .borrow()
             .iter()
-            .find(|(k, _)| *k == TypeId::of::<T>())
-            .map(|(_, v)| v)?
-            .downcast_ref::<T>()
+            .find_map(|any| any.downcast_ref::<T>())
             .cloned()
     }
 
@@ -121,7 +119,7 @@ impl ScopeContext {
                     .shared_contexts
                     .borrow()
                     .iter()
-                    .find_map(|(_, any)| any.downcast_ref::<T>())
+                    .find_map(|any| any.downcast_ref::<T>())
                 {
                     return Some(shared.clone());
                 }
@@ -159,14 +157,14 @@ impl ScopeContext {
         // If the context exists, swap it out for the new value
         for ctx in contexts.iter_mut() {
             // Swap the ptr directly
-            if let Some(ctx) = ctx.1.downcast_mut::<T>() {
+            if let Some(ctx) = ctx.downcast_mut::<T>() {
                 std::mem::swap(ctx, &mut value.clone());
                 return value;
             }
         }
 
         // Else, just push it
-        contexts.push((TypeId::of::<T>(), Box::new(value.clone())));
+        contexts.push(Box::new(value.clone()));
 
         value
     }
