@@ -35,7 +35,6 @@ fn app(cx: Scope) -> Element {
         h1 { "Login" }
         form {
             onsubmit: onsubmit,
-            prevent_default: "onsubmit", // Prevent the default behavior of <form> to post
             input { r#type: "text", id: "username", name: "username" }
             label { "Username" }
             br {}
