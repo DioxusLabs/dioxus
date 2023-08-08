@@ -91,7 +91,7 @@ impl Renderer {
                             write_value(buf, &attr.value)?;
                         }
                     } else {
-                        write_attribute(buf, &attr)?;
+                        write_attribute(buf, attr)?;
                     }
                 }
                 Segment::Node(idx) => match &template.dynamic_nodes[*idx] {

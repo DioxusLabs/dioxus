@@ -88,7 +88,7 @@ impl StringCache {
                                 inner_html = Some(value);
                             } else if let Some("style") = namespace {
                                 styles.push((name, value));
-                            } else if BOOL_ATTRS.contains(&name) {
+                            } else if BOOL_ATTRS.contains(name) {
                                 if str_truthy(value) {
                                     write!(chain, " {name}=\"{value}\"",)?;
                                 }
