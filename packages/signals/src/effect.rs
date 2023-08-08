@@ -1,9 +1,12 @@
 use core::{self, fmt::Debug};
 use std::fmt::{self, Formatter};
+use std::marker::PhantomData;
 
 use dioxus_core::prelude::*;
 
-use crate::CopyValue;
+use crate::dependency::Dep;
+use crate::{dependency::Dependency, CopyValue};
+use crate::{use_signal, Signal};
 
 #[derive(Default, Clone, Copy)]
 pub(crate) struct EffectStack {
@@ -24,6 +27,28 @@ pub(crate) fn get_effect_stack() -> EffectStack {
 /// The signal will be owned by the current component and will be dropped when the component is dropped.
 pub fn use_effect(cx: &ScopeState, callback: impl FnMut() + 'static) {
     cx.use_hook(|| Effect::new(callback));
+}
+
+/// Create a new effect. The effect will be run immediately and whenever any signal it reads changes.
+/// The signal will be owned by the current component and will be dropped when the component is dropped.
+pub fn use_effect_with_dependencies<D: Dependency>(
+    cx: &ScopeState,
+    dependencies: D,
+    mut callback: impl FnMut(D::Out) + 'static,
+) where
+    D::Out: 'static,
+{
+    let dependencies_signal = use_signal(cx, || dependencies.out());
+    cx.use_hook(|| {
+        Effect::new(move || {
+            let deref = &*dependencies_signal.read();
+            callback(deref.clone());
+        });
+    });
+    let changed = { dependencies.changed(&*dependencies_signal.read()) };
+    if changed {
+        dependencies_signal.set(dependencies.out());
+    }
 }
 
 /// Effects allow you to run code when a signal changes. Effects are run immediately and whenever any signal it reads changes.
