@@ -1,3 +1,6 @@
+#![doc = include_str!("../README.md")]
+#![warn(missing_docs)]
+
 mod rt;
 pub use rt::*;
 mod effect;

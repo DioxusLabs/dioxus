@@ -1,3 +1,6 @@
+#![doc = include_str!("../README.md")]
+#![warn(missing_docs)]
+
 use std::{
     cell::{Cell, Ref, RefCell, RefMut},
     fmt::Debug,
@@ -180,6 +183,7 @@ impl<T: 'static> GenerationalBox<T> {
         }
     }
 
+    /// Try to read the value. Returns None if the value is no longer valid.
     pub fn try_read(&self) -> Option<Ref<'_, T>> {
         self.validate()
             .then(|| {
@@ -191,10 +195,12 @@ impl<T: 'static> GenerationalBox<T> {
             .flatten()
     }
 
+    /// Read the value. Panics if the value is no longer valid.
     pub fn read(&self) -> Ref<'_, T> {
         self.try_read().unwrap()
     }
 
+    /// Try to write the value. Returns None if the value is no longer valid.
     pub fn try_write(&self) -> Option<RefMut<'_, T>> {
         self.validate()
             .then(|| {
@@ -206,16 +212,19 @@ impl<T: 'static> GenerationalBox<T> {
             .flatten()
     }
 
+    /// Write the value. Panics if the value is no longer valid.
     pub fn write(&self) -> RefMut<'_, T> {
         self.try_write().unwrap()
     }
 
+    /// Set the value. Panics if the value is no longer valid.
     pub fn set(&self, value: T) {
         self.validate().then(|| {
             *self.raw.data.borrow_mut() = Some(Box::new(value));
         });
     }
 
+    /// Returns true if the pointer is equal to the other pointer.
     pub fn ptr_eq(&self, other: &Self) -> bool {
         #[cfg(any(debug_assertions, feature = "check_generation"))]
         {
@@ -304,6 +313,7 @@ impl Store {
         }
     }
 
+    /// Create a new owner. The owner will be responsible for dropping all of the generational boxes that it creates.
     pub fn owner(&self) -> Owner {
         Owner {
             store: self.clone(),
@@ -319,6 +329,7 @@ pub struct Owner {
 }
 
 impl Owner {
+    /// Insert a value into the store. The value will be dropped when the owner is dropped.
     pub fn insert<T: 'static>(&self, value: T) -> GenerationalBox<T> {
         let mut location = self.store.claim();
         let key = location.replace(value);
