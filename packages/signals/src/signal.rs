@@ -81,11 +81,43 @@ pub(crate) struct SignalData<T> {
     pub(crate) value: T,
 }
 
+/// Creates a new Signal. Signals are a Copy state management solution with automatic dependency tracking.
+///
+/// ```rust
+/// use dioxus::prelude::*;
+/// use dioxus_signals::*;
+///
+/// fn App(cx: Scope) -> Element {
+///     let mut count = use_signal(cx, || 0);
+///
+///     // Because signals have automatic dependency tracking, if you never read them in a component, that component will not be re-rended when the signal is updated.
+///     // The app component will never be rerendered in this example.
+///     render! { Child { state: count } }
+/// }
+///
+/// #[inline_props]
+/// fn Child(cx: Scope, state: Signal<u32>) -> Element {
+///     let state = *state;
+///
+///     use_future!(cx,  |()| async move {
+///         // Because the signal is a Copy type, we can use it in an async block without cloning it.
+///         *state.write() += 1;
+///     });
+///
+///     render! {
+///         button {
+///             onclick: move |_| *state.write() += 1,
+///             "{state}"
+///         }
+///     }
+/// }
+/// ```
 pub struct Signal<T: 'static> {
     pub(crate) inner: CopyValue<SignalData<T>>,
 }
 
 impl<T: 'static> Signal<T> {
+    /// Creates a new Signal. Signals are a Copy state management solution with automatic dependency tracking.
     pub fn new(value: T) -> Self {
         Self {
             inner: CopyValue::new(SignalData {
@@ -97,10 +129,13 @@ impl<T: 'static> Signal<T> {
         }
     }
 
+    /// Get the scope the signal was created in.
     pub fn origin_scope(&self) -> ScopeId {
         self.inner.origin_scope()
     }
 
+    /// Get the current value of the signal. This will subscribe the current scope to the signal.
+    /// If the signal has been dropped, this will panic.
     pub fn read(&self) -> Ref<T> {
         let inner = self.inner.read();
         if let Some(effect) = Effect::current() {
@@ -128,6 +163,8 @@ impl<T: 'static> Signal<T> {
         Ref::map(inner, |v| &v.value)
     }
 
+    /// Get a mutable reference to the signal's value.
+    /// If the signal has been dropped, this will panic.
     pub fn write(&self) -> Write<'_, T> {
         let inner = self.inner.write();
         let borrow = RefMut::map(inner, |v| &mut v.value);
@@ -165,15 +202,20 @@ impl<T: 'static> Signal<T> {
         }
     }
 
+    /// Set the value of the signal. This will trigger an update on all subscribers.
     pub fn set(&self, value: T) {
         *self.write() = value;
     }
 
+    /// Run a closure with a reference to the signal's value.
+    /// If the signal has been dropped, this will panic.
     pub fn with<O>(&self, f: impl FnOnce(&T) -> O) -> O {
         let write = self.read();
         f(&*write)
     }
 
+    /// Run a closure with a mutable reference to the signal's value.
+    /// If the signal has been dropped, this will panic.
     pub fn with_mut<O>(&self, f: impl FnOnce(&mut T) -> O) -> O {
         let mut write = self.write();
         f(&mut *write)
@@ -181,6 +223,8 @@ impl<T: 'static> Signal<T> {
 }
 
 impl<T: Clone + 'static> Signal<T> {
+    /// Get the current value of the signal. This will subscribe the current scope to the signal.
+    /// If the signal has been dropped, this will panic.
     pub fn value(&self) -> T {
         self.read().clone()
     }
@@ -202,12 +246,14 @@ impl<T: 'static> Drop for SignalSubscriberDrop<T> {
     }
 }
 
+/// A mutable reference to a signal's value.
 pub struct Write<'a, T: 'static, I: 'static = T> {
     write: RefMut<'a, T>,
     signal: SignalSubscriberDrop<I>,
 }
 
 impl<'a, T: 'static, I: 'static> Write<'a, T, I> {
+    /// Map the mutable reference to the signal's value to a new type.
     pub fn map<O>(myself: Self, f: impl FnOnce(&mut T) -> &mut O) -> Write<'a, O, I> {
         let Self { write, signal } = myself;
         Write {
@@ -216,6 +262,7 @@ impl<'a, T: 'static, I: 'static> Write<'a, T, I> {
         }
     }
 
+    /// Try to map the mutable reference to the signal's value to a new type
     pub fn filter_map<O>(
         myself: Self,
         f: impl FnOnce(&mut T) -> Option<&mut O>,
@@ -243,29 +290,35 @@ impl<T> DerefMut for Write<'_, T> {
     }
 }
 
+/// A signal that can only be read from.
 pub struct ReadOnlySignal<T: 'static> {
     inner: Signal<T>,
 }
 
 impl<T: 'static> ReadOnlySignal<T> {
+    /// Create a new read-only signal.
     pub fn new(signal: Signal<T>) -> Self {
         Self { inner: signal }
     }
 
+    /// Get the scope that the signal was created in.
     pub fn origin_scope(&self) -> ScopeId {
         self.inner.origin_scope()
     }
 
+    /// Get the current value of the signal. This will subscribe the current scope to the signal.
     pub fn read(&self) -> Ref<T> {
         self.inner.read()
     }
 
+    /// Run a closure with a reference to the signal's value.
     pub fn with<O>(&self, f: impl FnOnce(&T) -> O) -> O {
         self.inner.with(f)
     }
 }
 
 impl<T: Clone + 'static> ReadOnlySignal<T> {
+    /// Get the current value of the signal. This will subscribe the current scope to the signal.
     pub fn value(&self) -> T {
         self.read().clone()
     }

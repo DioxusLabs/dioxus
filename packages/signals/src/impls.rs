@@ -37,6 +37,7 @@ macro_rules! read_impls {
         }
 
         impl<T: 'static> $ty<Vec<T>> {
+            /// Read a value from the inner vector.
             pub fn get(&self, index: usize) -> Option<Ref<'_, T>> {
                 Ref::filter_map(self.read(), |v| v.get(index)).ok()
             }
@@ -236,12 +237,14 @@ impl<T: Clone + 'static> IntoIterator for CopyValue<Vec<T>> {
 }
 
 impl<T: 'static> CopyValue<Vec<T>> {
+    /// Write to an element in the inner vector.
     pub fn get_mut(&self, index: usize) -> Option<RefMut<'_, T>> {
         RefMut::filter_map(self.write(), |v| v.get_mut(index)).ok()
     }
 }
 
 impl<T: 'static> CopyValue<Option<T>> {
+    /// Deref the inner value mutably.
     pub fn as_mut(&self) -> Option<RefMut<'_, T>> {
         RefMut::filter_map(self.write(), |v| v.as_mut()).ok()
     }

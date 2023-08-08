@@ -61,6 +61,7 @@ impl<T: 'static> CopyValue<T> {
         }
     }
 
+    /// Create a new CopyValue. The value will be stored in the given scope. When the specified scope is dropped, the value will be dropped.
     pub fn new_in_scope(value: T, scope: ScopeId) -> Self {
         let owner = owner_in_scope(scope);
 
@@ -79,35 +80,43 @@ impl<T: 'static> CopyValue<T> {
         }
     }
 
+    /// Get the scope this value was created in.
     pub fn origin_scope(&self) -> ScopeId {
         self.origin_scope
     }
 
+    /// Try to read the value. If the value has been dropped, this will return None.
     pub fn try_read(&self) -> Option<Ref<'_, T>> {
         self.value.try_read()
     }
 
+    /// Read the value. If the value has been dropped, this will panic.
     pub fn read(&self) -> Ref<'_, T> {
         self.value.read()
     }
 
+    /// Try to write the value. If the value has been dropped, this will return None.
     pub fn try_write(&self) -> Option<RefMut<'_, T>> {
         self.value.try_write()
     }
 
+    /// Write the value. If the value has been dropped, this will panic.
     pub fn write(&self) -> RefMut<'_, T> {
         self.value.write()
     }
 
+    /// Set the value. If the value has been dropped, this will panic.
     pub fn set(&mut self, value: T) {
         *self.write() = value;
     }
 
+    /// Run a function with a reference to the value. If the value has been dropped, this will panic.
     pub fn with<O>(&self, f: impl FnOnce(&T) -> O) -> O {
         let write = self.read();
         f(&*write)
     }
 
+    /// Run a function with a mutable reference to the value. If the value has been dropped, this will panic.
     pub fn with_mut<O>(&self, f: impl FnOnce(&mut T) -> O) -> O {
         let mut write = self.write();
         f(&mut *write)
@@ -115,6 +124,7 @@ impl<T: 'static> CopyValue<T> {
 }
 
 impl<T: Clone + 'static> CopyValue<T> {
+    /// Get the value. If the value has been dropped, this will panic.
     pub fn value(&self) -> T {
         self.read().clone()
     }
