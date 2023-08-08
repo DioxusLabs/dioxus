@@ -19,11 +19,7 @@ impl Clean {
             return custom_error!("Cargo clean failed.");
         }
 
-        let out_dir = crate_config
-            .dioxus_config
-            .application
-            .out_dir
-            .unwrap_or_else(|| PathBuf::from("dist"));
+        let out_dir = crate_config.dioxus_config.application.out_dir;
         if crate_config.crate_dir.join(&out_dir).is_dir() {
             remove_dir_all(crate_config.crate_dir.join(&out_dir))?;
         }

@@ -86,33 +86,33 @@ fn acquire_dioxus_toml(dir: &Path) -> Option<PathBuf> {
 
 impl Default for DioxusConfig {
     fn default() -> Self {
-        let name = "name";
+        let name = default_name();
         Self {
             application: ApplicationConfig {
-                name: name.into(),
-                default_platform: Platform::Web,
-                out_dir: Some(PathBuf::from("dist")),
-                asset_dir: Some(PathBuf::from("public")),
+                name: name.clone(),
+                default_platform: default_platform(),
+                out_dir: out_dir_default(),
+                asset_dir: asset_dir_default(),
 
-                tools: None,
+                tools: Default::default(),
 
                 sub_package: None,
             },
             web: WebConfig {
                 app: WebAppConfig {
-                    title: Some("dioxus | ⛺".into()),
+                    title: default_title(),
                     base_path: None,
                 },
-                proxy: Some(vec![]),
+                proxy: vec![],
                 watcher: WebWatcherConfig {
-                    watch_path: Some(vec![PathBuf::from("src")]),
-                    reload_html: Some(false),
-                    index_on_404: Some(true),
+                    watch_path: watch_path_default(),
+                    reload_html: false,
+                    index_on_404: true,
                 },
                 resource: WebResourceConfig {
                     dev: WebDevResourceConfig {
-                        style: Some(vec![]),
-                        script: Some(vec![]),
+                        style: vec![],
+                        script: vec![],
                     },
                     style: Some(vec![]),
                     script: Some(vec![]),
@@ -136,20 +136,44 @@ impl Default for DioxusConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApplicationConfig {
+    #[serde(default = "default_name")]
     pub name: String,
+    #[serde(default = "default_platform")]
     pub default_platform: Platform,
-    pub out_dir: Option<PathBuf>,
-    pub asset_dir: Option<PathBuf>,
+    #[serde(default = "out_dir_default")]
+    pub out_dir: PathBuf,
+    #[serde(default = "asset_dir_default")]
+    pub asset_dir: PathBuf,
 
-    pub tools: Option<HashMap<String, toml::Value>>,
+    #[serde(default)]
+    pub tools: HashMap<String, toml::Value>,
 
+    #[serde(default)]
     pub sub_package: Option<String>,
+}
+
+fn default_name() -> String {
+    "name".into()
+}
+
+fn default_platform() -> Platform {
+    Platform::Web
+}
+
+fn asset_dir_default() -> PathBuf {
+    PathBuf::from("public")
+}
+
+fn out_dir_default() -> PathBuf {
+    PathBuf::from("dist")
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WebConfig {
+    #[serde(default)]
     pub app: WebAppConfig,
-    pub proxy: Option<Vec<WebProxyConfig>>,
+    #[serde(default)]
+    pub proxy: Vec<WebProxyConfig>,
     pub watcher: WebWatcherConfig,
     pub resource: WebResourceConfig,
     #[serde(default)]
@@ -158,8 +182,22 @@ pub struct WebConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WebAppConfig {
-    pub title: Option<String>,
+    #[serde(default = "default_title")]
+    pub title: String,
     pub base_path: Option<String>,
+}
+
+impl Default for WebAppConfig {
+    fn default() -> Self {
+        Self {
+            title: default_title(),
+            base_path: None,
+        }
+    }
+}
+
+fn default_title() -> String {
+    "dioxus | ⛺".into()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -169,9 +207,16 @@ pub struct WebProxyConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WebWatcherConfig {
-    pub watch_path: Option<Vec<PathBuf>>,
-    pub reload_html: Option<bool>,
-    pub index_on_404: Option<bool>,
+    #[serde(default = "watch_path_default")]
+    pub watch_path: Vec<PathBuf>,
+    #[serde(default)]
+    pub reload_html: bool,
+    #[serde(default = "true_bool")]
+    pub index_on_404: bool,
+}
+
+fn watch_path_default() -> Vec<PathBuf> {
+    vec![PathBuf::from("src")]
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -183,8 +228,10 @@ pub struct WebResourceConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WebDevResourceConfig {
-    pub style: Option<Vec<PathBuf>>,
-    pub script: Option<Vec<PathBuf>>,
+    #[serde(default)]
+    pub style: Vec<PathBuf>,
+    #[serde(default)]
+    pub script: Vec<PathBuf>,
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
@@ -238,17 +285,11 @@ impl CrateConfig {
         let workspace_dir = meta.workspace_root;
         let target_dir = meta.target_directory;
 
-        let out_dir = match dioxus_config.application.out_dir {
-            Some(ref v) => crate_dir.join(v),
-            None => crate_dir.join("dist"),
-        };
+        let out_dir = crate_dir.join(&dioxus_config.application.out_dir);
 
         let cargo_def = &crate_dir.join("Cargo.toml");
 
-        let asset_dir = match dioxus_config.application.asset_dir {
-            Some(ref v) => crate_dir.join(v),
-            None => crate_dir.join("public"),
-        };
+        let asset_dir = crate_dir.join(&dioxus_config.application.asset_dir);
 
         let manifest = cargo_toml::Manifest::from_path(cargo_def).unwrap();
 
@@ -576,4 +617,8 @@ impl Default for WebviewInstallMode {
     fn default() -> Self {
         Self::OfflineInstaller { silent: false }
     }
+}
+
+fn true_bool() -> bool {
+    true
 }

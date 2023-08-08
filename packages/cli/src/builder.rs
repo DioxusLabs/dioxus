@@ -130,7 +130,7 @@ pub fn build(config: &CrateConfig, quiet: bool) -> Result<BuildResult> {
     }
 
     // check binaryen:wasm-opt tool
-    let dioxus_tools = dioxus_config.application.tools.clone().unwrap_or_default();
+    let dioxus_tools = dioxus_config.application.tools.clone();
     if dioxus_tools.contains_key("binaryen") {
         let info = dioxus_tools.get("binaryen").unwrap();
         let binaryen = crate::tools::Tool::Binaryen;
@@ -346,13 +346,7 @@ pub fn build_desktop(config: &CrateConfig, _is_serve: bool) -> Result<BuildResul
 
     log::info!(
         "🚩 Build completed: [./{}]",
-        config
-            .dioxus_config
-            .application
-            .out_dir
-            .clone()
-            .unwrap_or_else(|| PathBuf::from("dist"))
-            .display()
+        config.dioxus_config.application.out_dir.clone().display()
     );
 
     println!("build desktop done");
@@ -446,8 +440,8 @@ pub fn gen_page(config: &DioxusConfig, serve: bool) -> String {
     let mut script_list = resouces.script.unwrap_or_default();
 
     if serve {
-        let mut dev_style = resouces.dev.style.clone().unwrap_or_default();
-        let mut dev_script = resouces.dev.script.unwrap_or_default();
+        let mut dev_style = resouces.dev.style.clone();
+        let mut dev_script = resouces.dev.script;
         style_list.append(&mut dev_style);
         script_list.append(&mut dev_script);
     }
@@ -459,13 +453,7 @@ pub fn gen_page(config: &DioxusConfig, serve: bool) -> String {
             &style.to_str().unwrap(),
         ))
     }
-    if config
-        .application
-        .tools
-        .clone()
-        .unwrap_or_default()
-        .contains_key("tailwindcss")
-    {
+    if config.application.tools.clone().contains_key("tailwindcss") {
         style_str.push_str("<link rel=\"stylesheet\" href=\"tailwind.css\">\n");
     }
 
@@ -516,12 +504,7 @@ pub fn gen_page(config: &DioxusConfig, serve: bool) -> String {
         );
     }
 
-    let title = config
-        .web
-        .app
-        .title
-        .clone()
-        .unwrap_or_else(|| "dioxus | ⛺".into());
+    let title = config.web.app.title.clone();
 
     replace_or_insert_before("{app_title}", &title, "</title", &mut html);
 
@@ -548,7 +531,7 @@ fn build_assets(config: &CrateConfig) -> Result<Vec<PathBuf>> {
     let mut result = vec![];
 
     let dioxus_config = &config.dioxus_config;
-    let dioxus_tools = dioxus_config.application.tools.clone().unwrap_or_default();
+    let dioxus_tools = dioxus_config.application.tools.clone();
 
     // check sass tool state
     let sass = Tool::Sass;

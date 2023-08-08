@@ -58,14 +58,9 @@ impl Serve {
     pub fn regen_dev_page(crate_config: &CrateConfig) -> Result<()> {
         let serve_html = gen_page(&crate_config.dioxus_config, true);
 
-        let dist_path = crate_config.crate_dir.join(
-            crate_config
-                .dioxus_config
-                .application
-                .out_dir
-                .clone()
-                .unwrap_or_else(|| PathBuf::from("dist")),
-        );
+        let dist_path = crate_config
+            .crate_dir
+            .join(crate_config.dioxus_config.application.out_dir.clone());
         if !dist_path.is_dir() {
             create_dir_all(&dist_path)?;
         }
