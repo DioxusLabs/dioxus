@@ -15,6 +15,7 @@ Commands:
   serve      Build, watch & serve the Rust WASM app and all of its assets
   create     Init a new project for Dioxus
   clean      Clean output artifacts
+  bundle     Bundle the Rust desktop app and all of its assets
   version    Print the version of this extension
   fmt        Format some rsx
   check      Check the Rust files in the project for issues

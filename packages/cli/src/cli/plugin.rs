@@ -2,7 +2,7 @@
 
 use super::*;
 
-/// Build the Rust WASM app and all of its assets.
+/// Manage plugins for dioxus cli
 #[derive(Clone, Debug, Deserialize, Subcommand)]
 #[clap(name = "plugin")]
 pub enum Plugin {
