@@ -21,7 +21,6 @@ fn static_boolean_attributs() {
 #[test]
 fn dynamic_boolean_attributs() {
     fn app(cx: Scope) -> Element {
-        let inner_html = "<div>1234</div>";
         render! {
             div { hidden: false }
             div { hidden: true }

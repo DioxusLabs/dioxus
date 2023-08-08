@@ -162,9 +162,9 @@ pub trait Routable: std::fmt::Display + std::str::FromStr + Clone + 'static {
     ///
     /// #[derive(Routable, Clone, PartialEq, Debug)]
     /// enum Route {
-    ///     #[route("/")]
+    ///     #[route("/home")]
     ///     Home {},
-    ///     #[route("/about")]
+    ///     #[route("/home/about")]
     ///     About {},
     /// }
     ///

@@ -1,6 +1,7 @@
 use super::cache::Segment;
 use crate::cache::StringCache;
 
+use dioxus_core::Attribute;
 use dioxus_core::{prelude::*, AttributeValue, DynamicNode, RenderReturn};
 use std::collections::HashMap;
 use std::fmt::Write;
@@ -90,8 +91,7 @@ impl Renderer {
                             write_value(buf, &attr.value)?;
                         }
                     } else {
-                        write!(buf, " {}=", attr.name)?;
-                        write_value(buf, &attr.value)?;
+                        write_attribute(buf, &attr)?;
                     }
                 }
                 Segment::Node(idx) => match &template.dynamic_nodes[*idx] {
@@ -279,6 +279,17 @@ pub(crate) fn truthy(value: &AttributeValue) -> bool {
         AttributeValue::Int(value) => *value != 0,
         AttributeValue::Float(value) => *value != 0.0,
         _ => false,
+    }
+}
+
+pub(crate) fn write_attribute(buf: &mut impl Write, attr: &Attribute) -> std::fmt::Result {
+    let name = &attr.name;
+    match attr.value {
+        AttributeValue::Text(value) => write!(buf, " {name}=\"{value}\""),
+        AttributeValue::Bool(value) => write!(buf, " {name}={value}"),
+        AttributeValue::Int(value) => write!(buf, " {name}={value}"),
+        AttributeValue::Float(value) => write!(buf, " {name}={value}"),
+        _ => Ok(()),
     }
 }
 
