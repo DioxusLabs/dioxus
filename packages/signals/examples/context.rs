@@ -1,7 +1,7 @@
 #![allow(non_snake_case)]
 
 use dioxus::prelude::*;
-use dioxus_signals::{use_signal, Effect, Signal};
+use dioxus_signals::Signal;
 
 fn main() {
     dioxus_desktop::launch(app);
