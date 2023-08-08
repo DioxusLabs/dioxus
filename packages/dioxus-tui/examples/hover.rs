@@ -13,7 +13,7 @@ fn app(cx: Scope) -> Element {
         let mut result = String::new();
         result += "#";
         for c in c.iter() {
-            write!(string, "{c:02X?}").unwrap();
+            write!(result, "{c:02X?}").unwrap();
         }
         result
     }
