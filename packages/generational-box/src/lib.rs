@@ -258,6 +258,7 @@ impl MemoryLocation {
         let old = self.data.borrow_mut().take();
         #[cfg(any(debug_assertions, feature = "check_generation"))]
         if old.is_some() {
+            drop(old);
             let new_generation = self.generation.get() + 1;
             self.generation.set(new_generation);
         }

@@ -14,3 +14,4 @@ simple_logger = "4.2.0"
 
 [dev-dependencies]
 dioxus = { workspace = true }
+dioxus-desktop = { workspace = true }

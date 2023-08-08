@@ -180,14 +180,10 @@ impl ScopeContext {
     /// when a context already exists will swap the context out for the new one, which may not be what you want.
     pub fn provide_root_context<T: 'static + Clone>(&self, context: T) -> T {
         with_runtime(|runtime| {
-            // Walk upwards until there is no more parent - and tada we have the root
-            let mut parent = runtime.get_context(self.scope_id()).unwrap();
-            while let Some(next_parent) = parent.parent_id {
-                parent = runtime.get_context(next_parent).unwrap();
-            }
-            debug_assert_eq!(parent.scope_id(), ScopeId(0));
-
-            parent.provide_context(context)
+            runtime
+                .get_context(ScopeId(0))
+                .unwrap()
+                .provide_context(context)
         })
         .expect("Runtime to exist")
     }
