@@ -135,7 +135,7 @@ impl<T: std::fmt::Debug> std::fmt::Debug for Event<T> {
 /// }
 ///
 /// ```
-pub struct EventHandler<'bump, T: ?Sized = ()> {
+pub struct EventHandler<'bump, T = ()> {
     pub(crate) origin: ScopeId,
     pub(super) callback: RefCell<Option<ExternalListenerCallback<'bump, T>>>,
 }

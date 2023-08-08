@@ -16,7 +16,7 @@ use std::{
 /// A component's state separate from its props.
 ///
 /// This struct exists to provide a common interface for all scopes without relying on generics.
-pub struct ScopeContext {
+pub(crate) struct ScopeContext {
     pub(crate) name: &'static str,
 
     pub(crate) id: ScopeId,

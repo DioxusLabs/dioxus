@@ -41,7 +41,7 @@ where
     .flatten()
 }
 
-pub struct Runtime {
+pub(crate) struct Runtime {
     pub(crate) scope_contexts: RefCell<Vec<Option<ScopeContext>>>,
     pub(crate) scheduler: Rc<Scheduler>,
 
@@ -93,10 +93,10 @@ impl Runtime {
     }
 }
 
-pub struct RuntimeGuard(Rc<Runtime>);
+pub(crate) struct RuntimeGuard(Rc<Runtime>);
 
 impl RuntimeGuard {
-    pub fn new(runtime: Rc<Runtime>) -> Self {
+    pub(crate) fn new(runtime: Rc<Runtime>) -> Self {
         push_runtime(runtime.clone());
         Self(runtime)
     }

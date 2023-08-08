@@ -195,7 +195,7 @@ impl<'src> ScopeState {
     ///
     /// assert_eq!(base.parent(), None);
     /// ```
-    pub fn parent_id(&self) -> Option<ScopeId> {
+    pub fn parent(&self) -> Option<ScopeId> {
         // safety: the pointer to our parent is *always* valid thanks to the bump arena
         self.context().parent_id()
     }
