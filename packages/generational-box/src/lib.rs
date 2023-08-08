@@ -145,6 +145,7 @@ fn fuzz() {
     }
 }
 
+/// The core Copy state type. The generational box will be dropped when the [Owner] is dropped.
 pub struct GenerationalBox<T> {
     raw: MemoryLocation,
     #[cfg(any(debug_assertions, feature = "check_generation"))]
@@ -268,6 +269,7 @@ impl MemoryLocation {
     }
 }
 
+/// Handles recycling generational boxes that have been dropped. Your application should have one store or one store per thread.
 #[derive(Clone)]
 pub struct Store {
     bump: &'static Bump,
@@ -310,6 +312,7 @@ impl Store {
     }
 }
 
+/// Owner: Handles dropping generational boxes. The owner acts like a runtime lifetime guard. Any states that you create with an owner will be dropped when that owner is dropped.
 pub struct Owner {
     store: Store,
     owned: Rc<RefCell<Vec<MemoryLocation>>>,
