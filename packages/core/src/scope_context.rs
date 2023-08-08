@@ -263,6 +263,12 @@ pub fn current_scope_id() -> Option<ScopeId> {
     with_runtime(|rt| rt.current_scope_id()).flatten()
 }
 
+#[doc(hidden)]
+/// Check if the virtual dom is currently inside of the body of a component
+pub fn vdom_is_rendering() -> bool {
+    with_runtime(|rt| rt.rendering.get()).unwrap_or_default()
+}
+
 /// Consume context from the current scope
 pub fn consume_context<T: 'static + Clone>() -> Option<T> {
     with_current_scope(|cx| cx.consume_context::<T>()).flatten()

@@ -1,4 +1,4 @@
-use std::cell::{Ref, RefCell};
+use std::cell::{Cell, Ref, RefCell};
 
 use crate::{innerlude::Scheduler, scope_context::ScopeContext, scopes::ScopeId};
 use std::rc::Rc;
@@ -47,6 +47,7 @@ pub struct Runtime {
 
     // We use this to track the current scope
     pub(crate) scope_stack: RefCell<Vec<ScopeId>>,
+    pub(crate) rendering: Cell<bool>,
 }
 
 impl Runtime {
@@ -57,6 +58,8 @@ impl Runtime {
             scope_contexts: Default::default(),
 
             scope_stack: Default::default(),
+
+            rendering: Cell::new(true),
         });
         runtime
     }

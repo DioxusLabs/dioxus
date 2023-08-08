@@ -20,6 +20,7 @@ impl VirtualDom {
 
         // update the scope stack
         self.runtime.scope_stack.borrow_mut().push(task.scope);
+        self.runtime.rendering.set(false);
 
         // If the task completes...
         if task.task.borrow_mut().as_mut().poll(&mut cx).is_ready() {
@@ -33,5 +34,6 @@ impl VirtualDom {
 
         // Remove the scope from the stack
         self.runtime.scope_stack.borrow_mut().pop();
+        self.runtime.rendering.set(true);
     }
 }

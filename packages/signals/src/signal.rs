@@ -109,17 +109,20 @@ impl<T: 'static> Signal<T> {
                 effect_subscribers.push(effect);
             }
         } else if let Some(current_scope_id) = current_scope_id() {
-            log::trace!(
-                "{:?} subscribed to {:?}",
-                self.inner.value,
-                current_scope_id
-            );
-            let mut subscribers = inner.subscribers.borrow_mut();
-            if !subscribers.contains(&current_scope_id) {
-                subscribers.push(current_scope_id);
-                drop(subscribers);
-                let unsubscriber = current_unsubscriber();
-                inner.subscribers.borrow_mut().push(unsubscriber.scope);
+            // only subscribe if the vdom is rendering
+            if dioxus_core::vdom_is_rendering() {
+                log::trace!(
+                    "{:?} subscribed to {:?}",
+                    self.inner.value,
+                    current_scope_id
+                );
+                let mut subscribers = inner.subscribers.borrow_mut();
+                if !subscribers.contains(&current_scope_id) {
+                    subscribers.push(current_scope_id);
+                    drop(subscribers);
+                    let unsubscriber = current_unsubscriber();
+                    inner.subscribers.borrow_mut().push(unsubscriber.scope);
+                }
             }
         }
         Ref::map(inner, |v| &v.value)

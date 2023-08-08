@@ -392,10 +392,12 @@ impl VirtualDom {
                         if let AttributeValue::Listener(listener) = listener {
                             let origin = el_ref.scope;
                             self.runtime.scope_stack.borrow_mut().push(origin);
+                            self.runtime.rendering.set(false);
                             if let Some(cb) = listener.borrow_mut().as_deref_mut() {
                                 cb(uievent.clone());
                             }
                             self.runtime.scope_stack.borrow_mut().pop();
+                            self.runtime.rendering.set(true);
 
                             if !uievent.propagates.get() {
                                 return;
@@ -426,10 +428,12 @@ impl VirtualDom {
                             if let AttributeValue::Listener(listener) = &attr.value {
                                 let origin = el_ref.scope;
                                 self.runtime.scope_stack.borrow_mut().push(origin);
+                                self.runtime.rendering.set(false);
                                 if let Some(cb) = listener.borrow_mut().as_deref_mut() {
                                     cb(uievent.clone());
                                 }
                                 self.runtime.scope_stack.borrow_mut().pop();
+                                self.runtime.rendering.set(true);
 
                                 break;
                             }
