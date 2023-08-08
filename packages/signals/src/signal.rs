@@ -50,8 +50,10 @@ pub fn use_signal<T: 'static>(cx: &ScopeState, f: impl FnOnce() -> T) -> Signal<
 #[derive(Clone)]
 struct Unsubscriber {
     scope: ScopeId,
-    subscribers: Rc<RefCell<Vec<Rc<RefCell<Vec<ScopeId>>>>>>,
+    subscribers: UnsubscriberArray,
 }
+
+type UnsubscriberArray = Rc<RefCell<Vec<Rc<RefCell<Vec<ScopeId>>>>>>;
 
 impl Drop for Unsubscriber {
     fn drop(&mut self) {
@@ -269,10 +271,7 @@ impl<'a, T: 'static, I: 'static> Write<'a, T, I> {
     ) -> Option<Write<'a, O, I>> {
         let Self { write, signal } = myself;
         let write = RefMut::filter_map(write, f).ok();
-        write.map(|write| Write {
-            write,
-            signal: signal,
-        })
+        write.map(|write| Write { write, signal })
     }
 }
 
@@ -280,13 +279,13 @@ impl<'a, T: 'static> Deref for Write<'a, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        &*self.write
+        &self.write
     }
 }
 
 impl<T> DerefMut for Write<'_, T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut *self.write
+        &mut self.write
     }
 }
 

@@ -24,7 +24,7 @@ where
 {
     RUNTIMES.with(|stack| {
         let stack = stack.borrow();
-        stack.last().map(|r| f(&**r))
+        stack.last().map(|r| f(r))
     })
 }
 
@@ -36,7 +36,7 @@ where
     with_runtime(|runtime| {
         runtime
             .current_scope_id()
-            .and_then(|scope| runtime.get_context(scope).map(|sc| f(&*sc)))
+            .and_then(|scope| runtime.get_context(scope).map(|sc| f(&sc)))
     })
     .flatten()
 }
@@ -52,7 +52,7 @@ pub(crate) struct Runtime {
 
 impl Runtime {
     pub(crate) fn new(scheduler: Rc<Scheduler>) -> Rc<Self> {
-        let runtime = Rc::new(Self {
+        Rc::new(Self {
             scheduler,
 
             scope_contexts: Default::default(),
@@ -60,8 +60,7 @@ impl Runtime {
             scope_stack: Default::default(),
 
             rendering: Cell::new(true),
-        });
-        runtime
+        })
     }
 
     /// Create a scope context. This slab is synchronized with the scope slab.
