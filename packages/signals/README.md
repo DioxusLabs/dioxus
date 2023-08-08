@@ -1,6 +1,6 @@
 # Dioxus Signals
 
-Dioxus Signals is an ergonomic Copy runtime for data with local subscriptions in Dioxus.
+Dioxus Signals is an ergonomic Copy runtime for data with local subscriptions.
 
 ## Copy Data
 
@@ -86,5 +86,37 @@ fn Child(cx: Scope) -> Element {
         "{signal}"
     }
 }
+```
 
+## Computed Data
+
+In addition to local subscriptions in components, `dioxus-signals` provides a way to derive data with local subscriptions.
+
+The use_selector hook will only rerun when any signals inside of the hook change:
+
+```rust
+use dioxus::prelude::*;
+use dioxus_signals::*;
+
+fn app(cx: Scope) -> Element {
+    let signal = use_signal(cx, || 0);
+    let doubled = use_selector(cx, || signal * 2);
+
+    render! {
+        button {
+            onclick: move |_| *signal.write() += 1,
+            "Increase"
+        }
+        Child {
+            signal: signal
+        }
+    }
+}
+
+#[inline_props]
+fn Child(cx: Scope, signal: ReadOnlySignal<usize>) -> Element {
+    render! {
+        "{signal}"
+    }
+}
 ```

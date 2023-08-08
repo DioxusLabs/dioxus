@@ -245,7 +245,7 @@ impl ScopeContext {
 
 /// Schedule an update for any component given its [`ScopeId`].
 ///
-/// A component's [`ScopeId`] can be obtained from `use_hook` or the [`ScopeState::scope_id`] method.
+/// A component's [`ScopeId`] can be obtained from `use_hook` or the [`crate::scopes::ScopeState::scope_id`] method.
 ///
 /// This method should be used when you want to schedule an update for a component
 pub fn schedule_update_any() -> Option<Arc<dyn Fn(ScopeId) + Send + Sync>> {
