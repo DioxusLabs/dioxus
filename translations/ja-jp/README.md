@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./notes/header.svg">
+  <img src="../../notes/header.svg">
 </p>
 
 <div align="center">
@@ -161,7 +161,7 @@ Dioxus は素晴らしいが、なぜ私には使えないのか？
 
 ## コントリビュート
 
-- 私たちの[issue tracker](https://github.com/dioxuslabs/dioxus/issues)で問題を報告してください。
+- 私たちの [issue tracker](https://github.com/dioxuslabs/dioxus/issues) で問題を報告してください。
 - ディスコードに参加して質問してください！
 
 <a href="https://github.com/dioxuslabs/dioxus/graphs/contributors">
