@@ -74,6 +74,7 @@ pub fn fc_to_builder<'a, T: Properties + 'a>(_: fn(Scope<'a, T>) -> Element<'a>)
     T::builder()
 }
 
+#[cfg(not(miri))]
 #[test]
 fn unsafe_props_fail() {
     let t = trybuild::TestCases::new();
