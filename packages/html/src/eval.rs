@@ -42,7 +42,7 @@ pub fn use_eval(cx: &ScopeState) -> &EvalCreator {
         Rc::new(move |script: &str| {
             eval_provider
                 .new_evaluator(script.to_string())
-                .map(|evaluator| UseEval::new(evaluator))
+                .map(UseEval::new)
         }) as Rc<dyn Fn(&str) -> Result<UseEval, EvalError>>
     })
 }

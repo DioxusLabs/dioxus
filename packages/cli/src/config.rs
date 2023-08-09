@@ -126,7 +126,7 @@ impl Default for DioxusConfig {
             },
             bundle: BundleConfig {
                 identifier: Some(format!("io.github.{name}")),
-                publisher: Some(name.into()),
+                publisher: Some(name),
                 ..Default::default()
             },
             plugin: toml::Value::Table(toml::map::Map::new()),
