@@ -1,0 +1,20 @@
+error[E0521]: borrowed data escapes outside of function
+  --> compile_tests/props_safety.rs:8:5
+   |
+5  |   fn app(cx: Scope) -> Element {
+   |          --
+   |          |
+   |          `cx` is a reference that is only valid in the function body
+   |          has type `&'1 Scoped<'1>`
+...
+8  | /     render! {
+9  | |         unsafe_child_component {
+10 | |             borrowed: count
+11 | |         }
+12 | |     }
+   | |     ^
+   | |     |
+   | |_____`cx` escapes the function body here
+   |       argument requires that `'1` must outlive `'static`
+   |
+   = note: this error originates in the macro `render` (in Nightly builds, run with -Z macro-backtrace for more info)

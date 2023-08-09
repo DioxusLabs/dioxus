@@ -73,3 +73,9 @@ impl EmptyBuilder {
 pub fn fc_to_builder<'a, T: Properties + 'a>(_: fn(Scope<'a, T>) -> Element<'a>) -> T::Builder {
     T::builder()
 }
+
+#[test]
+fn unsafe_props_fail() {
+    let t = trybuild::TestCases::new();
+    t.compile_fail("compile_tests/props_safety.rs");
+}
