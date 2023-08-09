@@ -481,19 +481,20 @@ impl<'src> ScopeState {
     /// fn(Scope<Props>) -> Element;
     /// async fn(Scope<Props<'_>>) -> Element;
     /// ```
-    pub fn component<P>(
+    pub fn component<'child, P>(
         &'src self,
-        component: fn(Scope<'src, P>) -> Element<'src>,
+        component: fn(Scope<'child, P>) -> Element<'child>,
         props: P,
         fn_name: &'static str,
     ) -> DynamicNode<'src>
     where
-        P: Properties + 'src,
+        P: Properties + 'child,
+        'src: 'child,
     {
         let vcomp = VProps::new(component, P::memoize, props);
 
         // cast off the lifetime of the render return
-        let as_dyn: Box<dyn AnyProps<'src> + '_> = Box::new(vcomp);
+        let as_dyn: Box<dyn AnyProps<'child> + '_> = Box::new(vcomp);
         let extended: Box<dyn AnyProps<'src> + 'src> = unsafe { std::mem::transmute(as_dyn) };
 
         DynamicNode::Component(VComponent {
