@@ -43,6 +43,8 @@
     <a href="https://dioxuslabs.com/guide/pt-br"> Guia </a>
     <span> | </span>
     <a href="https://github.com/DioxusLabs/dioxus/blob/master/notes/README/ZH_CN.md"> 中文 </a>
+    <span> | </span>
+    <a href="https://github.com/DioxusLabs/dioxus/blob/master/translations/ja-jp/README.md"> 日本語 </a>
   </h3>
 </div>
 
