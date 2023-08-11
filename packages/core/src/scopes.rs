@@ -2,17 +2,18 @@ use crate::{
     any_props::AnyProps,
     any_props::VProps,
     bump_frame::BumpFrame,
+    innerlude::ErrorBoundary,
     innerlude::{DynamicNode, EventHandler, VComponent, VText},
-    innerlude::{ErrorBoundary, Scheduler, SchedulerMsg},
     lazynodes::LazyNodes,
     nodes::{IntoAttributeValue, IntoDynNode, RenderReturn},
+    runtime::Runtime,
+    scope_context::ScopeContext,
     AnyValue, Attribute, AttributeValue, Element, Event, Properties, TaskId,
 };
 use bumpalo::{boxed::Box as BumpBox, Bump};
-use rustc_hash::FxHashSet;
 use std::{
-    any::{Any, TypeId},
-    cell::{Cell, RefCell, UnsafeCell},
+    any::Any,
+    cell::{Cell, Ref, RefCell, UnsafeCell},
     fmt::{Arguments, Debug},
     future::Future,
     rc::Rc,
@@ -66,25 +67,16 @@ pub struct ScopeId(pub usize);
 ///
 /// This struct exists to provide a common interface for all scopes without relying on generics.
 pub struct ScopeState {
+    pub(crate) runtime: Rc<Runtime>,
+    pub(crate) context_id: ScopeId,
+
     pub(crate) render_cnt: Cell<usize>,
-    pub(crate) name: &'static str,
 
     pub(crate) node_arena_1: BumpFrame,
     pub(crate) node_arena_2: BumpFrame,
 
-    pub(crate) parent: Option<*const ScopeState>,
-    pub(crate) id: ScopeId,
-
-    pub(crate) height: u32,
-    pub(crate) suspended: Cell<bool>,
-
     pub(crate) hooks: RefCell<Vec<Box<UnsafeCell<dyn Any>>>>,
     pub(crate) hook_idx: Cell<usize>,
-
-    pub(crate) shared_contexts: RefCell<Vec<(TypeId, Box<dyn Any>)>>,
-
-    pub(crate) tasks: Rc<Scheduler>,
-    pub(crate) spawned_tasks: RefCell<FxHashSet<TaskId>>,
 
     pub(crate) borrowed_props: RefCell<Vec<*const VComponent<'static>>>,
     pub(crate) attributes_to_drop: RefCell<Vec<*const Attribute<'static>>>,
@@ -92,7 +84,17 @@ pub struct ScopeState {
     pub(crate) props: Option<Box<dyn AnyProps<'static>>>,
 }
 
+impl Drop for ScopeState {
+    fn drop(&mut self) {
+        self.runtime.remove_context(self.context_id);
+    }
+}
+
 impl<'src> ScopeState {
+    pub(crate) fn context(&self) -> Ref<'_, ScopeContext> {
+        self.runtime.get_context(self.context_id).unwrap()
+    }
+
     pub(crate) fn current_frame(&self) -> &BumpFrame {
         match self.render_cnt.get() % 2 {
             0 => &self.node_arena_1,
@@ -111,7 +113,7 @@ impl<'src> ScopeState {
 
     /// Get the name of this component
     pub fn name(&self) -> &str {
-        self.name
+        self.context().name
     }
 
     /// Get the current render since the inception of this component
@@ -174,7 +176,7 @@ impl<'src> ScopeState {
     /// assert_eq!(base.height(), 0);
     /// ```
     pub fn height(&self) -> u32 {
-        self.height
+        self.context().height
     }
 
     /// Get the Parent of this [`Scope`] within this Dioxus [`crate::VirtualDom`].
@@ -195,7 +197,7 @@ impl<'src> ScopeState {
     /// ```
     pub fn parent(&self) -> Option<ScopeId> {
         // safety: the pointer to our parent is *always* valid thanks to the bump arena
-        self.parent.map(|p| unsafe { &*p }.id)
+        self.context().parent_id()
     }
 
     /// Get the ID of this Scope within this Dioxus [`crate::VirtualDom`].
@@ -212,15 +214,14 @@ impl<'src> ScopeState {
     /// assert_eq!(base.scope_id(), 0);
     /// ```
     pub fn scope_id(&self) -> ScopeId {
-        self.id
+        self.context().scope_id()
     }
 
     /// Create a subscription that schedules a future render for the reference component
     ///
     /// ## Notice: you should prefer using [`Self::schedule_update_any`] and [`Self::scope_id`]
     pub fn schedule_update(&self) -> Arc<dyn Fn() + Send + Sync + 'static> {
-        let (chan, id) = (self.tasks.sender.clone(), self.scope_id());
-        Arc::new(move || drop(chan.unbounded_send(SchedulerMsg::Immediate(id))))
+        self.context().schedule_update()
     }
 
     /// Schedule an update for any component given its [`ScopeId`].
@@ -229,61 +230,31 @@ impl<'src> ScopeState {
     ///
     /// This method should be used when you want to schedule an update for a component
     pub fn schedule_update_any(&self) -> Arc<dyn Fn(ScopeId) + Send + Sync> {
-        let chan = self.tasks.sender.clone();
-        Arc::new(move |id| {
-            chan.unbounded_send(SchedulerMsg::Immediate(id)).unwrap();
-        })
+        self.context().schedule_update_any()
     }
 
     /// Mark this scope as dirty, and schedule a render for it.
     pub fn needs_update(&self) {
-        self.needs_update_any(self.scope_id());
+        self.context().needs_update()
     }
 
     /// Get the [`ScopeId`] of a mounted component.
     ///
     /// `ScopeId` is not unique for the lifetime of the [`crate::VirtualDom`] - a [`ScopeId`] will be reused if a component is unmounted.
     pub fn needs_update_any(&self, id: ScopeId) {
-        self.tasks
-            .sender
-            .unbounded_send(SchedulerMsg::Immediate(id))
-            .expect("Scheduler to exist if scope exists");
+        self.context().needs_update_any(id)
     }
 
     /// Return any context of type T if it exists on this scope
     pub fn has_context<T: 'static + Clone>(&self) -> Option<T> {
-        self.shared_contexts
-            .borrow()
-            .iter()
-            .find(|(k, _)| *k == TypeId::of::<T>())
-            .map(|(_, v)| v)?
-            .downcast_ref::<T>()
-            .cloned()
+        self.context().has_context()
     }
 
     /// Try to retrieve a shared state with type `T` from any parent scope.
     ///
     /// Clones the state if it exists.
     pub fn consume_context<T: 'static + Clone>(&self) -> Option<T> {
-        if let Some(this_ctx) = self.has_context() {
-            return Some(this_ctx);
-        }
-
-        let mut search_parent = self.parent;
-        while let Some(parent_ptr) = search_parent {
-            // safety: all parent pointers are valid thanks to the bump arena
-            let parent = unsafe { &*parent_ptr };
-            if let Some(shared) = parent
-                .shared_contexts
-                .borrow()
-                .iter()
-                .find(|(k, _)| *k == TypeId::of::<T>())
-            {
-                return shared.1.downcast_ref::<T>().cloned();
-            }
-            search_parent = parent.parent;
-        }
-        None
+        self.context().consume_context()
     }
 
     /// Expose state to children further down the [`crate::VirtualDom`] Tree. Requires `Clone` on the context to allow getting values down the tree.
@@ -308,21 +279,7 @@ impl<'src> ScopeState {
     /// }
     /// ```
     pub fn provide_context<T: 'static + Clone>(&self, value: T) -> T {
-        let mut contexts = self.shared_contexts.borrow_mut();
-
-        // If the context exists, swap it out for the new value
-        for ctx in contexts.iter_mut() {
-            // Swap the ptr directly
-            if let Some(ctx) = ctx.1.downcast_mut::<T>() {
-                std::mem::swap(ctx, &mut value.clone());
-                return value;
-            }
-        }
-
-        // Else, just push it
-        contexts.push((TypeId::of::<T>(), Box::new(value.clone())));
-
-        value
+        self.context().provide_context(value)
     }
 
     /// Provide a context to the root and then consume it
@@ -333,52 +290,31 @@ impl<'src> ScopeState {
     /// Note that you should be checking if the context existed before trying to provide a new one. Providing a context
     /// when a context already exists will swap the context out for the new one, which may not be what you want.
     pub fn provide_root_context<T: 'static + Clone>(&self, context: T) -> T {
-        let mut parent = self;
-
-        // Walk upwards until there is no more parent - and tada we have the root
-        while let Some(next_parent) = parent.parent {
-            parent = unsafe { &*next_parent };
-            debug_assert_eq!(parent.scope_id(), ScopeId(0));
-        }
-
-        parent.provide_context(context)
+        self.context().provide_root_context(context)
     }
 
     /// Pushes the future onto the poll queue to be polled after the component renders.
     pub fn push_future(&self, fut: impl Future<Output = ()> + 'static) -> TaskId {
-        let id = self.tasks.spawn(self.id, fut);
-        self.spawned_tasks.borrow_mut().insert(id);
-        id
+        self.context().push_future(fut)
     }
 
     /// Spawns the future but does not return the [`TaskId`]
     pub fn spawn(&self, fut: impl Future<Output = ()> + 'static) {
-        self.push_future(fut);
+        self.context().spawn(fut);
     }
 
     /// Spawn a future that Dioxus won't clean up when this component is unmounted
     ///
     /// This is good for tasks that need to be run after the component has been dropped.
     pub fn spawn_forever(&self, fut: impl Future<Output = ()> + 'static) -> TaskId {
-        // The root scope will never be unmounted so we can just add the task at the top of the app
-        let id = self.tasks.spawn(ScopeId(0), fut);
-
-        // wake up the scheduler if it is sleeping
-        self.tasks
-            .sender
-            .unbounded_send(SchedulerMsg::TaskNotified(id))
-            .expect("Scheduler should exist");
-
-        self.spawned_tasks.borrow_mut().insert(id);
-
-        id
+        self.context().spawn_forever(fut)
     }
 
     /// Informs the scheduler that this task is no longer needed and should be removed.
     ///
     /// This drops the task immediately.
     pub fn remove_future(&self, id: TaskId) {
-        self.tasks.remove(id);
+        self.context().remove_future(id);
     }
 
     /// Take a lazy [`crate::VNode`] structure and actually build it with the context of the efficient [`bumpalo::Bump`] allocator.
@@ -511,7 +447,10 @@ impl<'src> ScopeState {
         let handler: &mut dyn FnMut(T) = self.bump().alloc(f);
         let caller = unsafe { BumpBox::from_raw(handler as *mut dyn FnMut(T)) };
         let callback = RefCell::new(Some(caller));
-        EventHandler { callback }
+        EventHandler {
+            callback,
+            origin: self.context().id,
+        }
     }
 
     /// Create a new [`AttributeValue`] with the listener variant from a callback
@@ -565,7 +504,8 @@ impl<'src> ScopeState {
 
     /// Mark this component as suspended and then return None
     pub fn suspend(&self) -> Option<Element> {
-        self.suspended.set(true);
+        let cx = self.context();
+        cx.suspend();
         None
     }
 

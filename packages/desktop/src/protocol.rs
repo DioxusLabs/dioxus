@@ -158,8 +158,13 @@ fn get_mime_from_path(trimmed: &Path) -> Result<&'static str> {
     }
 
     let res = match infer::get_from_path(trimmed)?.map(|f| f.mime_type()) {
-        Some(t) if t == "text/plain" => get_mime_by_ext(trimmed),
-        Some(f) => f,
+        Some(f) => {
+            if f == "text/plain" {
+                get_mime_by_ext(trimmed)
+            } else {
+                f
+            }
+        }
         None => get_mime_by_ext(trimmed),
     };
 

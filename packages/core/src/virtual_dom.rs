@@ -9,6 +9,7 @@ use crate::{
     mutations::Mutation,
     nodes::RenderReturn,
     nodes::{Template, TemplateId},
+    runtime::{Runtime, RuntimeGuard},
     scopes::{ScopeId, ScopeState},
     AttributeValue, Element, Event, Scope,
 };
@@ -174,24 +175,24 @@ use std::{any::Any, cell::Cell, collections::BTreeSet, future::Future, rc::Rc};
 /// }
 /// ```
 pub struct VirtualDom {
+    pub(crate) scopes: Slab<Box<ScopeState>>,
+
+    pub(crate) dirty_scopes: BTreeSet<DirtyScope>,
+
     // Maps a template path to a map of byteindexes to templates
     pub(crate) templates: FxHashMap<TemplateId, FxHashMap<usize, Template<'static>>>,
-    pub(crate) scopes: Slab<Box<ScopeState>>,
-    pub(crate) dirty_scopes: BTreeSet<DirtyScope>,
-    pub(crate) scheduler: Rc<Scheduler>,
 
     // Every element is actually a dual reference - one to the template and the other to the dynamic node in that template
     pub(crate) elements: Slab<ElementRef>,
 
-    // While diffing we need some sort of way of breaking off a stream of suspended mutations.
-    pub(crate) scope_stack: Vec<ScopeId>,
+    pub(crate) mutations: Mutations<'static>,
+
+    pub(crate) runtime: Rc<Runtime>,
 
     // Currently suspended scopes
     pub(crate) suspended_scopes: FxHashSet<ScopeId>,
 
     pub(crate) rx: futures_channel::mpsc::UnboundedReceiver<SchedulerMsg>,
-
-    pub(crate) mutations: Mutations<'static>,
 }
 
 impl VirtualDom {
@@ -251,16 +252,16 @@ impl VirtualDom {
     /// ```
     pub fn new_with_props<P: 'static>(root: fn(Scope<P>) -> Element, root_props: P) -> Self {
         let (tx, rx) = futures_channel::mpsc::unbounded();
+        let scheduler = Scheduler::new(tx);
         let mut dom = Self {
             rx,
-            scheduler: Scheduler::new(tx),
-            templates: Default::default(),
+            runtime: Runtime::new(scheduler),
             scopes: Default::default(),
+            dirty_scopes: Default::default(),
+            templates: Default::default(),
             elements: Default::default(),
-            scope_stack: Vec::new(),
-            dirty_scopes: BTreeSet::new(),
-            suspended_scopes: FxHashSet::default(),
             mutations: Mutations::default(),
+            suspended_scopes: Default::default(),
         };
 
         let root = dom.new_scope(
@@ -281,7 +282,7 @@ impl VirtualDom {
     ///
     /// This is useful for inserting or removing contexts from a scope, or rendering out its root node
     pub fn get_scope(&self, id: ScopeId) -> Option<&ScopeState> {
-        self.scopes.get(id.0).map(|f| f.as_ref())
+        self.scopes.get(id.0).map(|s| &**s)
     }
 
     /// Get the single scope at the top of the VirtualDom tree that will always be around
@@ -301,10 +302,10 @@ impl VirtualDom {
 
     /// Manually mark a scope as requiring a re-render
     ///
-    /// Whenever the VirtualDom "works", it will re-render this scope
+    /// Whenever the Runtime "works", it will re-render this scope
     pub fn mark_dirty(&mut self, id: ScopeId) {
         if let Some(scope) = self.get_scope(id) {
-            let height = scope.height;
+            let height = scope.height();
             self.dirty_scopes.insert(DirtyScope { height, id });
         }
     }
@@ -325,6 +326,8 @@ impl VirtualDom {
         element: ElementId,
         bubbles: bool,
     ) {
+        let _runtime = RuntimeGuard::new(self.runtime.clone());
+
         /*
         ------------------------
         The algorithm works by walking through the list of dynamic attributes, checking their paths, and breaking when
@@ -387,9 +390,14 @@ impl VirtualDom {
                     // We check the bubble state between each call to see if the event has been stopped from bubbling
                     for listener in listeners.drain(..).rev() {
                         if let AttributeValue::Listener(listener) = listener {
+                            let origin = el_ref.scope;
+                            self.runtime.scope_stack.borrow_mut().push(origin);
+                            self.runtime.rendering.set(false);
                             if let Some(cb) = listener.borrow_mut().as_deref_mut() {
                                 cb(uievent.clone());
                             }
+                            self.runtime.scope_stack.borrow_mut().pop();
+                            self.runtime.rendering.set(true);
 
                             if !uievent.propagates.get() {
                                 return;
@@ -418,9 +426,14 @@ impl VirtualDom {
                         // Only call the listener if this is the exact target element.
                         if attr.name.trim_start_matches("on") == name && target_path == this_path {
                             if let AttributeValue::Listener(listener) = &attr.value {
+                                let origin = el_ref.scope;
+                                self.runtime.scope_stack.borrow_mut().push(origin);
+                                self.runtime.rendering.set(false);
                                 if let Some(cb) = listener.borrow_mut().as_deref_mut() {
                                     cb(uievent.clone());
                                 }
+                                self.runtime.scope_stack.borrow_mut().pop();
+                                self.runtime.rendering.set(true);
 
                                 break;
                             }
@@ -501,10 +514,11 @@ impl VirtualDom {
                 if sync.template.get().name.rsplit_once(':').unwrap().0
                     == template.name.rsplit_once(':').unwrap().0
                 {
-                    let height = scope.height;
+                    let context = scope.context();
+                    let height = context.height;
                     self.dirty_scopes.insert(DirtyScope {
                         height,
-                        id: scope.id,
+                        id: context.id,
                     });
                 }
             }
@@ -532,6 +546,7 @@ impl VirtualDom {
     /// apply_edits(edits);
     /// ```
     pub fn rebuild(&mut self) -> Mutations {
+        let _runtime = RuntimeGuard::new(self.runtime.clone());
         match unsafe { self.run_scope(ScopeId(0)).extend_lifetime_ref() } {
             // Rebuilding implies we append the created elements to the root
             RenderReturn::Ready(node) => {
@@ -610,9 +625,12 @@ impl VirtualDom {
                     continue;
                 }
 
-                // Run the scope and get the mutations
-                self.run_scope(dirty.id);
-                self.diff_scope(dirty.id);
+                {
+                    let _runtime = RuntimeGuard::new(self.runtime.clone());
+                    // Run the scope and get the mutations
+                    self.run_scope(dirty.id);
+                    self.diff_scope(dirty.id);
+                }
             }
 
             // If there's more work, then just continue, plenty of work to do
