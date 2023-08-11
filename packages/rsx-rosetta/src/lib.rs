@@ -73,6 +73,7 @@ pub fn rsx_node_from_html(node: &Node) -> Option<BodyNode> {
                 attributes,
                 key: None,
                 brace: Default::default(),
+                extra_attributes: None,
             }))
         }
 

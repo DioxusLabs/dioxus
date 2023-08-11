@@ -21,6 +21,7 @@ pub struct Element {
     pub attributes: Vec<ElementAttrNamed>,
     pub children: Vec<BodyNode>,
     pub brace: syn::token::Brace,
+    pub extra_attributes: Option<Expr>,
 }
 
 impl Parse for Element {
@@ -35,6 +36,7 @@ impl Parse for Element {
         let mut children: Vec<BodyNode> = vec![];
         let mut key = None;
         let mut _el_ref = None;
+        let mut extra_attributes = None;
 
         // parse fields with commas
         // break when we don't get this pattern anymore
@@ -42,6 +44,11 @@ impl Parse for Element {
         // "def": 456,
         // abc: 123,
         loop {
+            if content.peek(Token![...]) {
+                content.parse::<Token![...]>()?;
+                extra_attributes = Some(content.parse::<Expr>()?);
+            }
+
             // Parse the raw literal fields
             if content.peek(LitStr) && content.peek2(Token![:]) && !content.peek3(Token![:]) {
                 let name = content.parse::<LitStr>()?;
@@ -160,6 +167,7 @@ impl Parse for Element {
             attributes,
             children,
             brace,
+            extra_attributes
         })
     }
 }

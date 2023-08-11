@@ -49,6 +49,7 @@ impl Writer<'_> {
             attributes,
             children,
             brace,
+            extra_attributes,
         } = el;
 
         /*

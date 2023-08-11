@@ -1,5 +1,10 @@
 #![allow(non_upper_case_globals)]
 
+use dioxus_core::HasAttributesBox;
+use dioxus_core::AttributeBox;
+use dioxus_core::prelude::IntoAttributeValue;
+use dioxus_html_internal_macro::impl_extension_attributes;
+
 use crate::AttributeDiscription;
 
 #[cfg(feature = "hot-reload-context")]
@@ -62,6 +67,8 @@ macro_rules! trait_methods {
             )*
             None
         }
+
+        impl_extension_attributes![GLOBAL $trait { $($name,)* }];
     };
 
     // Rename the incoming ident and apply a custom namespace
