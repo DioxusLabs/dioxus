@@ -118,6 +118,20 @@ pub struct Signal<T: 'static> {
     pub(crate) inner: CopyValue<SignalData<T>>,
 }
 
+#[cfg(feature = "serde")]
+impl<T: serde::Serialize + 'static> serde::Serialize for Signal<T> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.read().serialize(serializer)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de, T: serde::Deserialize<'de> + 'static> serde::Deserialize<'de> for Signal<T> {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Ok(Self::new(T::deserialize(deserializer)?))
+    }
+}
+
 impl<T: 'static> Signal<T> {
     /// Creates a new Signal. Signals are a Copy state management solution with automatic dependency tracking.
     pub fn new(value: T) -> Self {

@@ -11,8 +11,13 @@ dioxus-core = { workspace = true }
 generational-box = { workspace = true }
 log.workspace = true
 simple_logger = "4.2.0"
+serde = { version = "1", features = ["derive"], optional = true }
 
 [dev-dependencies]
 dioxus = { workspace = true }
 dioxus-desktop = { workspace = true }
 tokio = { version = "1", features = ["full"] }
+
+[features]
+default = []
+serialize = ["serde"]

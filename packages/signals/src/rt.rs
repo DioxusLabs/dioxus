@@ -48,6 +48,28 @@ pub struct CopyValue<T: 'static> {
     origin_scope: ScopeId,
 }
 
+#[cfg(feature = "serde")]
+impl<T: 'static> serde::Serialize for CopyValue<T>
+where
+    T: serde::Serialize,
+{
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.value.read().serialize(serializer)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de, T: 'static> serde::Deserialize<'de> for CopyValue<T>
+where
+    T: serde::Deserialize<'de>,
+{
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let value = T::deserialize(deserializer)?;
+
+        Ok(Self::new(value))
+    }
+}
+
 impl<T: 'static> CopyValue<T> {
     /// Create a new CopyValue. The value will be stored in the current component.
     ///
