@@ -112,7 +112,7 @@ impl Service for ServerFnHandler {
             let mut res = http::Response::builder();
 
             // Set the headers from the server context
-            let parts = server_context.parts.read().unwrap();
+            let parts = server_context.response_parts().unwrap();
             *res.headers_mut().expect("empty headers should be valid") = parts.headers.clone();
 
             let serialized = result?;
