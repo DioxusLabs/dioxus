@@ -64,3 +64,5 @@ Então, você pode usá-lo como qualquer outro manipulador:
 > Nota: assim como qualquer outro atributo, você pode nomear os manipuladores como quiser! Embora eles devam começar com `on`, para que o prop seja automaticamente transformado em um `EventHandler` no local da chamada.
 >
 > Você também pode colocar dados personalizados no evento, em vez de, por exemplo, `MouseData`
+
+> Nota para desenvolvedores web: em Javascript o comportamento padrão é o de **submeter o formulário**, porém no Dioxus o comportamento padrão é de **não submeter o formulário**. Consequentemente, especificar `prevent_default: "onsubmit"` fará com que o formulário seja submetido.
