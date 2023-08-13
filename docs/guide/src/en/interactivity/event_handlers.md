@@ -51,7 +51,7 @@ Any event handlers will still be called.
 
 > Normally, in React or JavaScript, you'd call "preventDefault" on the event in the callback. Dioxus does _not_ currently support this behavior. Note: this means you cannot conditionally prevent default behavior based on the data in the event.
 
-> Note for web developers: on Javascript the default behavior is to **submit the form**, while on Dioxus the default behavior is **to not submit the form**. Consequently, specifying `prevent_default: "onsubmit"` will cause the form to be submitted.
+> Note about forms: if an event handler is attached to the `onsubmit` event of a form, default behavior is to **not submit it**, meaning having `prevent_default: "onsubmit"` will submit it in this case.
 
 ## Handler Props
 

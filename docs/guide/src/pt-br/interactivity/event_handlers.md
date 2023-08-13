@@ -65,4 +65,4 @@ Então, você pode usá-lo como qualquer outro manipulador:
 >
 > Você também pode colocar dados personalizados no evento, em vez de, por exemplo, `MouseData`
 
-> Nota para desenvolvedores web: em Javascript o comportamento padrão é o de **submeter o formulário**, porém no Dioxus o comportamento padrão é de **não submeter o formulário**. Consequentemente, especificar `prevent_default: "onsubmit"` fará com que o formulário seja submetido.
+> Nota sobre formulários: se um manipulador de evento está anexado ao evento `onsubmit` em um formulário, o comportamento padrão é de **não submetê-lo**. Portanto, especificar `prevent_default: "onsubmit"` irá submetê-lo.
