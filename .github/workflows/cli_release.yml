@@ -41,7 +41,7 @@ jobs:
       - name: Setup cache
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: cli
+          workspaces: packages/cli -> ../../target
       - name: Build CLI
         uses: actions-rs/cargo@v1
         with:
