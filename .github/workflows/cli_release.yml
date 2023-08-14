@@ -92,5 +92,5 @@ jobs:
         run: |
           for file in dx-*/dx-*; do
             echo "Uploading $file"
-            gh release upload ${{ github.event.release.tag_name }} "$file" "${file}.sha256"
+            gh release upload ${{ github.event.release.tag_name }} "$file"
           done
