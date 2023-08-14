@@ -20,7 +20,7 @@ fn app(cx: Scope) -> Element {
         button { onclick: move |_| count += 1, "Up high!" }
         button { onclick: move |_| count -= 1, "Down low!" }
 
-        if count() > 5 {
+        if count.value() > 5 {
             rsx!{ h2 { "High five!" } }
         }
     })

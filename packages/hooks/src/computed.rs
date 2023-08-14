@@ -1,3 +1,5 @@
+//! Tracked and computed state in Dioxus
+
 use dioxus_core::{ScopeId, ScopeState};
 use slab::Slab;
 use std::{

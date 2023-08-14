@@ -288,10 +288,7 @@ impl DynamicMapping {
         let idx = self.last_attribute_idx;
         self.last_attribute_idx += 1;
 
-        self.attribute_to_idx
-            .entry(attr)
-            .or_insert_with(Vec::new)
-            .push(idx);
+        self.attribute_to_idx.entry(attr).or_default().push(idx);
 
         idx
     }
@@ -300,10 +297,7 @@ impl DynamicMapping {
         let idx = self.last_element_idx;
         self.last_element_idx += 1;
 
-        self.node_to_idx
-            .entry(node)
-            .or_insert_with(Vec::new)
-            .push(idx);
+        self.node_to_idx.entry(node).or_default().push(idx);
 
         idx
     }
