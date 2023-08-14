@@ -100,3 +100,9 @@ name = "dx"
 
 [dev-dependencies]
 tempfile = "3.3"
+
+[package.metadata.binstall]
+pkg-url = "{ repo }/releases/download/v{ version }/dx-{ target }{ archive-suffix }"
+
+[package.metadata.binstall.overrides.x86_64-pc-windows-msvc]
+pkg-fmt = "zip"
