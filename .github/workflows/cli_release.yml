@@ -39,8 +39,6 @@ jobs:
           target: ${{ matrix.platform.target }}
           override: true
           default: true
-      - name: enter cli source directory
-        run: cd source ./source/packages/cli
       - name: build cli
         working-directory: ${{ env.WORKING_DIR }}
         run: cargo build --release --target ${{ matrix.platform.target }}
