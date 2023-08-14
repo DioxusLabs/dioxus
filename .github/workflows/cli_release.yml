@@ -34,7 +34,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: list workspace
-        if: ${{ matrix.platform.os != 'windows-latest' }}
+        if: matrix.platform.os != 'windows-latest'
         run: ls -la
         working-directory: ${{ github.workspace }}
       - name: install stable
