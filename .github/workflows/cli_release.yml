@@ -9,7 +9,7 @@ jobs:
   matrix_build:
     runs-on: ${{ matrix.platform.os }}
     env:
-      WORKING_DIR: ${{github.}}/source/packages/cli
+      WORKING_DIR: ${{github.workspace}}/source/packages/cli
     strategy:
       matrix:
         platform:
