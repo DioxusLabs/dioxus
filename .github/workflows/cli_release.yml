@@ -9,7 +9,7 @@ jobs:
   matrix_build:
     runs-on: ${{ matrix.platform.os }}
     env:
-      WORKING_DIR: ${{github.workspace}}/source/packages/cli
+      WORKING_DIR: ${{github.}}/source/packages/cli
     strategy:
       matrix:
         platform:
@@ -33,6 +33,10 @@ jobs:
             }
     steps:
       - uses: actions/checkout@v3
+      - name: list workspace
+        if: ${{ matrix.platform.os != 'windows-latest' }}
+        run: ls -la
+        working-directory: ${{ github.workspace }}
       - name: install stable
         uses: actions-rs/toolchain@v1
         with:
