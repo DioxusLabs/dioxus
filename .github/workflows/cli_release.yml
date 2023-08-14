@@ -49,7 +49,6 @@ jobs:
         run: cargo build --release --target ${{ matrix.platform.target }}
       - name: Archive Windows artifact
         if: matrix.platform.os == 'windows-latest'
-        working-directory: ${{ env.WORKING_DIR }}
         run: |
           cd target/${{ matrix.platform.target }}/release
           strip dx.exe
@@ -57,7 +56,6 @@ jobs:
           cd -
       - name: Archive -Nix artifact
         if: matrix.platform.os != 'windows-latest'
-        working-directory: ${{ env.WORKING_DIR }}
         run: |
           cd target/${{ matrix.platform.target }}/release
           strip dx
@@ -67,4 +65,4 @@ jobs:
         uses: actions/upload-artifact@v2
         with:
           name: ${{ matrix.platform.name }}
-          path: ${{env.WORKING_DIR}}/${{ matrix.platform.name }}
+          path: ${{ matrix.platform.name }}
