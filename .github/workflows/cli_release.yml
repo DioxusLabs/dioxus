@@ -32,6 +32,9 @@ jobs:
               name: dx-x86_64-unknown-linux-gnu.tar.gz,
             }
     steps:
+      - name: echo workspace
+        if: matrix.platform.os != 'windows-latest'
+        run: echo ${{github.workspace}}
       - name: install stable
         uses: actions-rs/toolchain@v1
         with:
