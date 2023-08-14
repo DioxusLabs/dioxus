@@ -1,5 +1,6 @@
 name: Build CLI for Release
 
+# Will run automatically on every new release, can also be run manually for testing
 on:
   release:
     types: [published]
@@ -38,17 +39,21 @@ jobs:
           target: ${{ matrix.platform.target }}
           override: true
           default: true
+
+      # Setup the Github Actions Cache for the CLI package
       - name: Setup cache
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: packages/cli -> ../../target
+
+      # Build the CLI package for the target platform
       - name: Build CLI
         uses: actions-rs/cargo@v1
         with:
           command: build
           args: --release --target ${{ matrix.platform.target }} --package dioxus-cli
 
-      # Archive the artifacts to either a zip or tar.gz file
+      # Archive the artifacts to either a zip or tar.gz file for processing by the next job
       - name: Archive Windows artifact
         if: matrix.platform.os == 'windows-latest'
         run: |
@@ -78,14 +83,19 @@ jobs:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
-
       - name: Download artifacts
         uses: actions/download-artifact@v2
 
+      # Generate SHA256 checksums for the artifacts
       - name: Write checksums
-        run: for file in dx-*/dx-*; do openssl dgst -sha256 -r "$file" | awk '{print $1}' > "${file}.sha256"; done
+        run: |
+          for file in dx-*/dx-*; do 
+            echo "Writing checksum for $file"
+            openssl dgst -sha256 -r "$file" | awk '{print $1}' > "${file}.sha256"; 
+          done
 
-      - name: Upload artifacts and checksums
+      # If the workflow is triggered by a new release, upload the artifacts to the release
+      - name: Upload artifacts and checksums to release
         if: github.event_name == 'release'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
