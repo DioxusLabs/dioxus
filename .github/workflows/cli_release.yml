@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  matrix_build:
+  build:
     runs-on: ${{ matrix.platform.os }}
     env:
       WORKING_DIR: ${{github.workspace}}/packages/cli
@@ -33,10 +33,6 @@ jobs:
             }
     steps:
       - uses: actions/checkout@v3
-      - name: list workspace
-        if: matrix.platform.os != 'windows-latest'
-        run: ls -la
-        working-directory: ${{ github.workspace }}
       - name: install stable
         uses: actions-rs/toolchain@v1
         with:
@@ -66,3 +62,28 @@ jobs:
         with:
           name: ${{ matrix.platform.name }}
           path: ${{ matrix.platform.name }}
+  publish:
+    runs-on: ubuntu-latest
+    needs: build
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v2
+
+      - name: Write checksums
+        run: for file in dx-*; do openssl dgst -sha256 -r "$file" | awk '{print $1}' > "${file}.sha256"; done
+
+      - name: Upload artifacts and checksums
+        if: github.event_name == 'release'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for file in dx-*; do
+            echo "Uploading $file"
+            gh release upload ${{ github.event.release.tag_name }} "$file" "${file}.sha256"
+          done
