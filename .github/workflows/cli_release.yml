@@ -8,8 +8,6 @@ on:
 jobs:
   build:
     runs-on: ${{ matrix.platform.os }}
-    env:
-      WORKING_DIR: ${{github.workspace}}/packages/cli
     strategy:
       matrix:
         platform:
@@ -33,7 +31,7 @@ jobs:
             }
     steps:
       - uses: actions/checkout@v3
-      - name: install stable
+      - name: Install stable
         uses: actions-rs/toolchain@v1
         with:
           toolchain: ${{ matrix.platform.toolchain }}
@@ -43,10 +41,14 @@ jobs:
       - name: Setup cache
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: cli -> ../target
-      - name: build cli
-        working-directory: ${{ env.WORKING_DIR }}
-        run: cargo build --release --target ${{ matrix.platform.target }}
+          workspaces: cli
+      - name: Build CLI
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --release --target ${{ matrix.platform.target }} --package dioxus-cli
+
+      # Archive the artifacts to either a zip or tar.gz file
       - name: Archive Windows artifact
         if: matrix.platform.os == 'windows-latest'
         run: |
@@ -54,18 +56,19 @@ jobs:
           strip dx.exe
           7z a ../../../${{ matrix.platform.name }} dx.exe
           cd -
-      - name: Archive -Nix artifact
+      - name: Archive *nix artifact
         if: matrix.platform.os != 'windows-latest'
         run: |
           cd target/${{ matrix.platform.target }}/release
           strip dx
           tar czvf ../../../${{ matrix.platform.name }} dx
           cd -
-      - name: upload artifact
+      - name: Upload artifact
         uses: actions/upload-artifact@v2
         with:
           name: ${{ matrix.platform.name }}
           path: ${{ matrix.platform.name }}
+
   publish:
     runs-on: ubuntu-latest
     needs: build
