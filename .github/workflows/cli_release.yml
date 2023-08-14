@@ -40,6 +40,10 @@ jobs:
           target: ${{ matrix.platform.target }}
           override: true
           default: true
+      - name: Setup cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: cli -> ../target
       - name: build cli
         working-directory: ${{ env.WORKING_DIR }}
         run: cargo build --release --target ${{ matrix.platform.target }}
