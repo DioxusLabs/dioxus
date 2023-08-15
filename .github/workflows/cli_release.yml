@@ -16,19 +16,21 @@ jobs:
               target: x86_64-pc-windows-msvc,
               os: windows-latest,
               toolchain: "1.70.0",
-              name: dx-x86_64-pc-windows-msvc.zip,
             }
           - {
               target: x86_64-apple-darwin,
               os: macos-latest,
               toolchain: "1.70.0",
-              name: dx-x86_64-apple-darwin.tar.gz,
+            }
+          - {
+              target: x86_64-apple-aarch64,
+              os: macos-latest,
+              toolchain: "1.70.0",
             }
           - {
               target: x86_64-unknown-linux-gnu,
               os: ubuntu-latest,
               toolchain: "1.70.0",
-              name: dx-x86_64-unknown-linux-gnu.tar.gz,
             }
     steps:
       - uses: actions/checkout@v3
@@ -46,61 +48,12 @@ jobs:
         with:
           workspaces: packages/cli -> ../../target
 
-      # Build the CLI package for the target platform
-      - name: Build CLI
-        uses: actions-rs/cargo@v1
+      - name: Build and upload binary
+        uses: taiki-e/upload-rust-binary-action@v1
         with:
-          command: build
-          args: --release --target ${{ matrix.platform.target }} --package dioxus-cli
-
-      # Archive the artifacts to either a zip or tar.gz file for processing by the next job
-      - name: Archive Windows artifact
-        if: matrix.platform.os == 'windows-latest'
-        run: |
-          cd target/${{ matrix.platform.target }}/release
-          strip dx.exe
-          7z a ../../../${{ matrix.platform.name }} dx.exe
-          cd -
-      - name: Archive *nix artifact
-        if: matrix.platform.os != 'windows-latest'
-        run: |
-          cd target/${{ matrix.platform.target }}/release
-          strip dx
-          tar czvf ../../../${{ matrix.platform.name }} dx
-          cd -
-      - name: Upload artifact
-        uses: actions/upload-artifact@v2
-        with:
-          name: ${{ matrix.platform.name }}
-          path: ${{ matrix.platform.name }}
-
-  publish:
-    runs-on: ubuntu-latest
-    needs: build
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-      - name: Download artifacts
-        uses: actions/download-artifact@v2
-
-      # Generate SHA256 checksums for the artifacts
-      - name: Write checksums
-        run: |
-          for file in dx-*/dx-*; do 
-            echo "Writing checksum for $file"
-            openssl dgst -sha256 -r "$file" | awk '{print $1}' > "${file}.sha256"; 
-          done
-
-      # If the workflow is triggered by a new release, upload the artifacts to the release
-      - name: Upload artifacts and checksums to release
-        if: github.event_name == 'release'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          for file in dx-*/dx-*; do
-            echo "Uploading $file"
-            gh release upload ${{ github.event.release.tag_name }} "$file"
-          done
+          token: ${{ secrets.GITHUB_TOKEN }}
+          target: ${{ matrix.platform.target }}
+          bin: dx
+          archive: dx-${{ matrix.platform.target }}
+          checksum: sha256
+          manifest_path: packages/cli/Cargo.toml
