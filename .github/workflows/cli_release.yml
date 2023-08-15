@@ -6,7 +6,7 @@ on:
     types: [published]
 
 jobs:
-  build:
+  build-and-upload:
     permissions:
       contents: write
     runs-on: ${{ matrix.platform.os }}
@@ -44,6 +44,7 @@ jobs:
         with:
           workspaces: packages/cli -> ../../target
 
+      # This neat action can build and upload the binary in one go!
       - name: Build and upload binary
         uses: taiki-e/upload-rust-binary-action@v1
         with:
