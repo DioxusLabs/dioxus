@@ -87,8 +87,12 @@ impl<'b> VirtualDom {
             }
         }
 
-        // Intialize the root nodes slice
-        *node.root_ids.borrow_mut() = vec![ElementId(0); node.template.get().roots.len()];
+        // Initialize the root nodes slice
+        {
+            let mut nodes_mut = node.root_ids.borrow_mut();
+            let len = node.template.get().roots.len();
+            nodes_mut.resize(len, ElementId::default());
+        };
 
         // The best renderers will have templates prehydrated and registered
         // Just in case, let's create the template using instructions anyways
