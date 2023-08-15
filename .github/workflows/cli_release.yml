@@ -24,11 +24,6 @@ jobs:
               toolchain: "1.70.0",
             }
           - {
-              target: aarch64-apple-darwin,
-              os: macos-latest,
-              toolchain: "1.70.0",
-            }
-          - {
               target: x86_64-unknown-linux-gnu,
               os: ubuntu-latest,
               toolchain: "1.70.0",
