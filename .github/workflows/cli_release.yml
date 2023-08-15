@@ -23,7 +23,7 @@ jobs:
               toolchain: "1.70.0",
             }
           - {
-              target: x86_64-apple-aarch64,
+              target: aarch64-apple-darwin,
               os: macos-latest,
               toolchain: "1.70.0",
             }
