@@ -1,6 +1,6 @@
 name: Build CLI for Release
 
-# Will run automatically on every new release, can also be run manually for testing
+# Will run automatically on every new release
 on:
   release:
     types: [published]
