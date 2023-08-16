@@ -2,8 +2,8 @@ use crate::{
     config::{CrateConfig, ExecutableType},
     error::{Error, Result},
     tools::Tool,
-    DioxusConfig,
 };
+use assets_cli_support::AssetManifestExt;
 use cargo_metadata::{diagnostic::Diagnostic, Message};
 use indicatif::{ProgressBar, ProgressStyle};
 use serde::Serialize;
@@ -239,6 +239,8 @@ pub fn build(config: &CrateConfig, quiet: bool) -> Result<BuildResult> {
         }
     }
 
+    process_assets(config)?;
+
     Ok(BuildResult {
         warnings: warning_messages,
         elapsed_time: t_start.elapsed().as_millis(),
@@ -428,7 +430,7 @@ fn prettier_build(cmd: subprocess::Exec) -> anyhow::Result<Vec<Diagnostic>> {
     Ok(warning_messages)
 }
 
-pub fn gen_page(config: &DioxusConfig, serve: bool) -> String {
+pub fn gen_page(config: &CrateConfig, serve: bool) -> String {
     let crate_root = crate::cargo::crate_root().unwrap();
     let custom_html_file = crate_root.join("index.html");
     let mut html = if custom_html_file.is_file() {
@@ -443,7 +445,7 @@ pub fn gen_page(config: &DioxusConfig, serve: bool) -> String {
         String::from(include_str!("./assets/index.html"))
     };
 
-    let resouces = config.web.resource.clone();
+    let resouces = config.dioxus_config.web.resource.clone();
 
     let mut style_list = resouces.style.unwrap_or_default();
     let mut script_list = resouces.script.unwrap_or_default();
@@ -462,7 +464,7 @@ pub fn gen_page(config: &DioxusConfig, serve: bool) -> String {
             &style.to_str().unwrap(),
         ))
     }
-    if config
+    if config.dioxus_config
         .application
         .tools
         .clone()
@@ -470,6 +472,26 @@ pub fn gen_page(config: &DioxusConfig, serve: bool) -> String {
         .contains_key("tailwindcss")
     {
         style_str.push_str("<link rel=\"stylesheet\" href=\"tailwind.css\">\n");
+    }
+    let manifest = config.asset_manifest();
+    for package in manifest.packages() {
+        for asset in package.assets(){
+            if let assets_cli_support::AssetType::File(file) = asset {
+                match file.options(){
+                    assets_cli_support::FileOptions::Css(_) => {
+                        let asset_path = file.served_location();
+                        style_str.push_str(&format!("<link rel=\"stylesheet\" href=\"{asset_path}\">\n"))
+                    }
+                    assets_cli_support::FileOptions::Image(image_options) => {
+                        if image_options.preload(){
+                            let asset_path = file.served_location();
+                            style_str.push_str(&format!("<link rel=\"preload\" as=\"image\" href=\"{asset_path}\">\n"))
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
     }
 
     replace_or_insert_before("{style_include}", &style_str, "</head", &mut html);
@@ -491,11 +513,11 @@ pub fn gen_page(config: &DioxusConfig, serve: bool) -> String {
         );
     }
 
-    let base_path = match &config.web.app.base_path {
+    let base_path = match &config.dioxus_config.web.app.base_path {
         Some(path) => path,
         None => ".",
     };
-    let app_name = &config.application.name;
+    let app_name = &config.dioxus_config.application.name;
     // Check if a script already exists
     if html.contains("{app_name}") && html.contains("{base_path}") {
         html = html.replace("{app_name}", app_name);
@@ -520,7 +542,7 @@ pub fn gen_page(config: &DioxusConfig, serve: bool) -> String {
     }
 
     let title = config
-        .web
+    .dioxus_config.web
         .app
         .title
         .clone()
@@ -687,7 +709,31 @@ fn build_assets(config: &CrateConfig) -> Result<Vec<PathBuf>> {
     }
     // SASS END
 
+    // Set up the collect asset config
+    let config = assets_cli_support::Config::default().with_assets_serve_location("/");
+    config.save();
+
     Ok(result)
+}
+
+/// Process any assets collected from the binary
+fn process_assets(config: &CrateConfig) -> anyhow::Result<()> {
+    let manifest = config.asset_manifest();
+
+    let static_asset_output_dir = PathBuf::from(
+        config
+            .dioxus_config
+            .web
+            .app
+            .base_path
+            .clone()
+            .unwrap_or_default(),
+    );
+    let static_asset_output_dir = config.out_dir.join(static_asset_output_dir);
+
+    manifest.copy_static_assets_to(&static_asset_output_dir)?;
+
+    Ok(())
 }
 
 // use binary_install::{Cache, Download};

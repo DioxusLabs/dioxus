@@ -1,4 +1,5 @@
-use crate::{cfg::Platform, error::Result};
+use assets_cli_support::AssetManifest;use crate::{cfg::Platform, error::Result};
+use assets_cli_support::AssetManifestExt;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
@@ -295,6 +296,13 @@ impl CrateConfig {
             features,
             verbose,
         })
+    }
+
+    pub fn asset_manifest(&self) -> AssetManifest {
+        AssetManifest::load_from_path(
+            self.crate_dir.join("cargo.toml"),
+            self.workspace_dir.join("cargo.lock"),
+        )
     }
 
     pub fn as_example(&mut self, example_name: String) -> &mut Self {

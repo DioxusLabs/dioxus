@@ -49,7 +49,7 @@ impl Build {
             }
         }
 
-        let temp = gen_page(&crate_config.dioxus_config, false);
+        let temp = gen_page(&crate_config, false);
 
         let mut file = std::fs::File::create(
             crate_config

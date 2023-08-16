@@ -56,7 +56,7 @@ impl Serve {
     }
 
     pub fn regen_dev_page(crate_config: &CrateConfig) -> Result<()> {
-        let serve_html = gen_page(&crate_config.dioxus_config, true);
+        let serve_html = gen_page(&crate_config, true);
 
         let dist_path = crate_config.crate_dir.join(
             crate_config
