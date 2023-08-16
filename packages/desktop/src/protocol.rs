@@ -51,10 +51,12 @@ fn module_loader(root_name: &str) -> String {
     )
 }
 
+#[allow(unused_variables)]
 pub(super) fn desktop_handler(
     request: &Request<Vec<u8>>,
     custom_head: Option<String>,
     custom_index: Option<String>,
+    assets_head: Option<String>,
     root_name: &str,
 ) -> Result<Response<Cow<'static, [u8]>>> {
     // If the request is for the root, we'll serve the index.html file.
@@ -70,9 +72,24 @@ pub(super) fn desktop_handler(
                 // Otherwise, we'll serve the default index.html and apply a custom head if that's specified.
                 let mut template = include_str!("./index.html").to_string();
 
-                if let Some(custom_head) = custom_head {
-                    template = template.replace("<!-- CUSTOM HEAD -->", &custom_head);
+                #[allow(unused_mut)]
+                let mut head = custom_head.unwrap_or_default();
+                #[cfg(debug_assertions)]
+                {
+                    use assets_cli_support::AssetManifestExt;
+                    let manifest = assets_cli_support::AssetManifest::load();
+                    head += &manifest.head();
                 }
+                #[cfg(not(debug_assertions))]
+                {
+                    if let Some(assets_head) = assets_head {
+                        head += &assets_head;
+                    } else {
+                        log::warn!("No assets head found. You can compile assets with the dioxus-cli in release mode");
+                    }
+                }
+
+                template = template.replace("<!-- CUSTOM HEAD -->", &head);
 
                 template
                     .replace("<!-- MODULE LOADER -->", &module_loader(root_name))

@@ -464,7 +464,8 @@ pub fn gen_page(config: &CrateConfig, serve: bool) -> String {
             &style.to_str().unwrap(),
         ))
     }
-    if config.dioxus_config
+    if config
+        .dioxus_config
         .application
         .tools
         .clone()
@@ -474,25 +475,7 @@ pub fn gen_page(config: &CrateConfig, serve: bool) -> String {
         style_str.push_str("<link rel=\"stylesheet\" href=\"tailwind.css\">\n");
     }
     let manifest = config.asset_manifest();
-    for package in manifest.packages() {
-        for asset in package.assets(){
-            if let assets_cli_support::AssetType::File(file) = asset {
-                match file.options(){
-                    assets_cli_support::FileOptions::Css(_) => {
-                        let asset_path = file.served_location();
-                        style_str.push_str(&format!("<link rel=\"stylesheet\" href=\"{asset_path}\">\n"))
-                    }
-                    assets_cli_support::FileOptions::Image(image_options) => {
-                        if image_options.preload(){
-                            let asset_path = file.served_location();
-                            style_str.push_str(&format!("<link rel=\"preload\" as=\"image\" href=\"{asset_path}\">\n"))
-                        }
-                    }
-                    _ => {}
-                }
-            }
-        }
-    }
+    style_str.push_str(&manifest.head());
 
     replace_or_insert_before("{style_include}", &style_str, "</head", &mut html);
 
@@ -542,7 +525,8 @@ pub fn gen_page(config: &CrateConfig, serve: bool) -> String {
     }
 
     let title = config
-    .dioxus_config.web
+        .dioxus_config
+        .web
         .app
         .title
         .clone()
@@ -710,8 +694,9 @@ fn build_assets(config: &CrateConfig) -> Result<Vec<PathBuf>> {
     // SASS END
 
     // Set up the collect asset config
-    let config = assets_cli_support::Config::default().with_assets_serve_location("/");
-    config.save();
+    assets_cli_support::Config::default()
+        .with_assets_serve_location("/")
+        .save();
 
     Ok(result)
 }
@@ -732,6 +717,9 @@ fn process_assets(config: &CrateConfig) -> anyhow::Result<()> {
     let static_asset_output_dir = config.out_dir.join(static_asset_output_dir);
 
     manifest.copy_static_assets_to(&static_asset_output_dir)?;
+
+    // Reset the config
+    assets_cli_support::Config::default().save();
 
     Ok(())
 }

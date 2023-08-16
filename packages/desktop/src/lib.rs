@@ -4,6 +4,7 @@
 #![deny(missing_docs)]
 
 mod cfg;
+mod collect_assets;
 mod desktop_context;
 mod element;
 mod escape;
@@ -135,6 +136,9 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
             ));
         }
     });
+
+    // Copy over any assets we find
+    crate::collect_assets::copy_assets();
 
     // We start the tokio runtime *on this thread*
     // Any future we poll later will use this runtime to spawn tasks and for IO

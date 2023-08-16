@@ -38,6 +38,7 @@ futures-util = { workspace = true }
 urlencoding = "2.1.2"
 async-trait = "0.1.68"
 
+assets-cli-support = { git = "https://github.com/DioxusLabs/collect-assets", features = ["webp", "html"] }
 
 [target.'cfg(any(target_os = "windows",target_os = "macos",target_os = "linux",target_os = "dragonfly", target_os = "freebsd", target_os = "netbsd", target_os = "openbsd"))'.dependencies]
 rfd = "0.11.3"

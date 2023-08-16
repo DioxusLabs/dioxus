@@ -18,6 +18,16 @@ pub fn build(
     let custom_head = cfg.custom_head.clone();
     let index_file = cfg.custom_index.clone();
     let root_name = cfg.root_name.clone();
+    let assets_head = {
+        #[cfg(debug_assertions)]
+        {
+            None
+        }
+        #[cfg(not(debug_assertions))]
+        {
+            std::fs::read_to_string("public/assets_head.html").ok()
+        }
+    };
 
     // We assume that if the icon is None in cfg, then the user just didnt set it
     if cfg.window.window.window_icon.is_none() {
@@ -45,7 +55,13 @@ pub fn build(
             }
         })
         .with_custom_protocol(String::from("dioxus"), move |r| {
-            protocol::desktop_handler(r, custom_head.clone(), index_file.clone(), &root_name)
+            protocol::desktop_handler(
+                r,
+                custom_head.clone(),
+                index_file.clone(),
+                assets_head.clone(),
+                &root_name,
+            )
         })
         .with_file_drop_handler(move |window, evet| {
             file_handler

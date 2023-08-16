@@ -1,4 +1,5 @@
-use assets_cli_support::AssetManifest;use crate::{cfg::Platform, error::Result};
+use crate::{cfg::Platform, error::Result};
+use assets_cli_support::AssetManifest;
 use assets_cli_support::AssetManifestExt;
 use serde::{Deserialize, Serialize};
 use std::{
