@@ -40,6 +40,8 @@ pub fn build(config: &CrateConfig, quiet: bool) -> Result<BuildResult> {
         ..
     } = config;
 
+    let _gaurd = AssetConfigDropGaurd::new();
+
     // start to build the assets
     let ignore_files = build_assets(config)?;
 
@@ -431,6 +433,8 @@ fn prettier_build(cmd: subprocess::Exec) -> anyhow::Result<Vec<Diagnostic>> {
 }
 
 pub fn gen_page(config: &CrateConfig, serve: bool) -> String {
+    let _gaurd = AssetConfigDropGaurd::new();
+
     let crate_root = crate::cargo::crate_root().unwrap();
     let custom_html_file = crate_root.join("index.html");
     let mut html = if custom_html_file.is_file() {
@@ -693,11 +697,6 @@ fn build_assets(config: &CrateConfig) -> Result<Vec<PathBuf>> {
     }
     // SASS END
 
-    // Set up the collect asset config
-    assets_cli_support::Config::default()
-        .with_assets_serve_location("/")
-        .save();
-
     Ok(result)
 }
 
@@ -717,9 +716,6 @@ fn process_assets(config: &CrateConfig) -> anyhow::Result<()> {
     let static_asset_output_dir = config.out_dir.join(static_asset_output_dir);
 
     manifest.copy_static_assets_to(&static_asset_output_dir)?;
-
-    // Reset the config
-    assets_cli_support::Config::default().save();
 
     Ok(())
 }
@@ -755,3 +751,22 @@ fn process_assets(config: &CrateConfig) -> anyhow::Result<()> {
 //         install_permitted,
 //     )?)
 // }
+
+struct AssetConfigDropGaurd;
+
+impl AssetConfigDropGaurd {
+    pub fn new() -> Self {
+        // Set up the collect asset config
+        assets_cli_support::Config::default()
+            .with_assets_serve_location("/")
+            .save();
+        Self {}
+    }
+}
+
+impl Drop for AssetConfigDropGaurd {
+    fn drop(&mut self) {
+        // Reset the config
+        assets_cli_support::Config::default().save();
+    }
+}
