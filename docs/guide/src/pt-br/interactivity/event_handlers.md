@@ -64,3 +64,5 @@ Então, você pode usá-lo como qualquer outro manipulador:
 > Nota: assim como qualquer outro atributo, você pode nomear os manipuladores como quiser! Embora eles devam começar com `on`, para que o prop seja automaticamente transformado em um `EventHandler` no local da chamada.
 >
 > Você também pode colocar dados personalizados no evento, em vez de, por exemplo, `MouseData`
+
+> Nota sobre formulários: se um manipulador de evento está anexado ao evento `onsubmit` em um formulário, o comportamento padrão é de **não submetê-lo**. Portanto, especificar `prevent_default: "onsubmit"` irá submetê-lo.
