@@ -1,4 +1,5 @@
 use crate::{
+    cfg::ConfigOptsServe,
     server::{
         output::{print_console_info, PrettierOptions},
         setup_file_watcher, setup_file_watcher_hot_reload,
@@ -19,7 +20,16 @@ use tokio::sync::broadcast::{self};
 #[cfg(feature = "plugin")]
 use plugin::PluginManager;
 
-pub async fn startup(config: CrateConfig) -> Result<()> {
+use super::Platform;
+
+pub async fn startup(config: CrateConfig, serve: &ConfigOptsServe) -> Result<()> {
+    startup_with_platform::<DesktopPlatform>(config, serve).await
+}
+
+pub(crate) async fn startup_with_platform<P: Platform + Send + 'static>(
+    config: CrateConfig,
+    serve: &ConfigOptsServe,
+) -> Result<()> {
     // ctrl-c shutdown checker
     let _crate_config = config.clone();
     let _ = ctrlc::set_handler(move || {
@@ -29,17 +39,19 @@ pub async fn startup(config: CrateConfig) -> Result<()> {
     });
 
     match config.hot_reload {
-        true => serve_hot_reload(config).await?,
-        false => serve_default(config).await?,
+        true => serve_hot_reload::<P>(config, serve).await?,
+        false => serve_default::<P>(config, serve).await?,
     }
 
     Ok(())
 }
 
 /// Start the server without hot reload
-pub async fn serve_default(config: CrateConfig) -> Result<()> {
-    let (child, first_build_result) = start_desktop(&config)?;
-    let currently_running_child: RwLock<Child> = RwLock::new(child);
+async fn serve_default<P: Platform + Send + 'static>(
+    config: CrateConfig,
+    serve: &ConfigOptsServe,
+) -> Result<()> {
+    let platform = RwLock::new(P::start(&config, serve)?);
 
     log::info!("🚀 Starting development server...");
 
@@ -49,48 +61,28 @@ pub async fn serve_default(config: CrateConfig) -> Result<()> {
         {
             let config = config.clone();
 
-            move || {
-                let mut current_child = currently_running_child.write().unwrap();
-                current_child.kill()?;
-                let (child, result) = start_desktop(&config)?;
-                *current_child = child;
-                Ok(result)
-            }
+            move || platform.write().unwrap().rebuild(&config)
         },
         &config,
         None,
     )
     .await?;
 
-    // Print serve info
-    print_console_info(
-        &config,
-        PrettierOptions {
-            changed: vec![],
-            warnings: first_build_result.warnings,
-            elapsed_time: first_build_result.elapsed_time,
-        },
-        None,
-    );
-
     std::future::pending::<()>().await;
 
     Ok(())
 }
 
-/// Start the server without hot reload
-
 /// Start dx serve with hot reload
-pub async fn serve_hot_reload(config: CrateConfig) -> Result<()> {
-    let (_, first_build_result) = start_desktop(&config)?;
-
-    println!("🚀 Starting development server...");
+async fn serve_hot_reload<P: Platform + Send + 'static>(
+    config: CrateConfig,
+    serve: &ConfigOptsServe,
+) -> Result<()> {
+    let platform = RwLock::new(P::start(&config, serve)?);
 
     // Setup hot reload
     let FileMapBuildResult { map, errors } =
         FileMap::<HtmlCtx>::create(config.crate_dir.clone()).unwrap();
-
-    println!("🚀 Starting development server...");
 
     for err in errors {
         log::error!("{}", err);
@@ -119,23 +111,12 @@ pub async fn serve_hot_reload(config: CrateConfig) -> Result<()> {
                 for channel in &mut *channels.lock().unwrap() {
                     send_msg(HotReloadMsg::Shutdown, channel);
                 }
-                Ok(start_desktop(&config)?.1)
+                Ok(platform.write().unwrap().rebuild(&config)?)
             }
         },
         None,
     )
     .await?;
-
-    // Print serve info
-    print_console_info(
-        &config,
-        PrettierOptions {
-            changed: vec![],
-            warnings: first_build_result.warnings,
-            elapsed_time: first_build_result.elapsed_time,
-        },
-        None,
-    );
 
     clear_paths();
 
@@ -228,7 +209,7 @@ fn send_msg(msg: HotReloadMsg, channel: &mut impl std::io::Write) -> bool {
     }
 }
 
-pub fn start_desktop(config: &CrateConfig) -> Result<(Child, BuildResult)> {
+fn start_desktop(config: &CrateConfig) -> Result<(Child, BuildResult)> {
     // Run the desktop application
     let result = crate::builder::build_desktop(config, true)?;
 
@@ -244,5 +225,39 @@ pub fn start_desktop(config: &CrateConfig) -> Result<(Child, BuildResult)> {
 
             Ok((child, result))
         }
+    }
+}
+
+pub(crate) struct DesktopPlatform {
+    currently_running_child: Child,
+}
+
+impl Platform for DesktopPlatform {
+    fn start(config: &CrateConfig, _serve: &ConfigOptsServe) -> Result<Self> {
+        let (child, first_build_result) = start_desktop(&config)?;
+
+        log::info!("🚀 Starting development server...");
+
+        // Print serve info
+        print_console_info(
+            &config,
+            PrettierOptions {
+                changed: vec![],
+                warnings: first_build_result.warnings,
+                elapsed_time: first_build_result.elapsed_time,
+            },
+            None,
+        );
+
+        Ok(Self {
+            currently_running_child: child,
+        })
+    }
+
+    fn rebuild(&mut self, config: &CrateConfig) -> Result<BuildResult> {
+        self.currently_running_child.kill()?;
+        let (child, result) = start_desktop(&config)?;
+        self.currently_running_child = child;
+        Ok(result)
     }
 }

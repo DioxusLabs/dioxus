@@ -47,6 +47,32 @@ impl Build {
             Platform::Desktop => {
                 crate::builder::build_desktop(&crate_config, false)?;
             }
+            Platform::Fullstack => {
+                {
+                    let mut web_config = crate_config.clone();
+                    let web_feature = self.build.client_feature;
+                    let features = &mut web_config.features;
+                    match features {
+                        Some(features) => {
+                            features.push(web_feature);
+                        }
+                        None => web_config.features = Some(vec![web_feature]),
+                    };
+                    crate::builder::build(&crate_config, false)?;
+                }
+                {
+                    let mut desktop_config = crate_config.clone();
+                    let desktop_feature = self.build.server_feature;
+                    let features = &mut desktop_config.features;
+                    match features {
+                        Some(features) => {
+                            features.push(desktop_feature);
+                        }
+                        None => desktop_config.features = Some(vec![desktop_feature]),
+                    };
+                    crate::builder::build_desktop(&desktop_config, false)?;
+                }
+            }
         }
 
         let temp = gen_page(&crate_config.dioxus_config, false);

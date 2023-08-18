@@ -12,6 +12,7 @@ pub struct Serve {
 impl Serve {
     pub async fn serve(self, bin: Option<PathBuf>) -> Result<()> {
         let mut crate_config = crate::CrateConfig::new(bin)?;
+        let serve_cfg = self.serve.clone();
 
         // change the relase state.
         crate_config.with_hot_reload(self.serve.hot_reload);
@@ -49,7 +50,10 @@ impl Serve {
                     .await?;
             }
             cfg::Platform::Desktop => {
-                server::desktop::startup(crate_config.clone()).await?;
+                server::desktop::startup(crate_config.clone(), &serve_cfg).await?;
+            }
+            cfg::Platform::Fullstack => {
+                server::fullstack::startup(crate_config.clone(), &serve_cfg).await?;
             }
         }
         Ok(())

@@ -67,7 +67,7 @@ pub async fn startup(port: u16, config: CrateConfig, start_browser: bool) -> Res
 }
 
 /// Start the server without hot reload
-pub async fn serve_default(
+async fn serve_default(
     ip: String,
     port: u16,
     config: CrateConfig,
@@ -128,7 +128,7 @@ pub async fn serve_default(
 }
 
 /// Start dx serve with hot reload
-pub async fn serve_hot_reload(
+async fn serve_hot_reload(
     ip: String,
     port: u16,
     config: CrateConfig,
