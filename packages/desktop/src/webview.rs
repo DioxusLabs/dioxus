@@ -25,10 +25,12 @@ pub fn build(
         }
         #[cfg(not(debug_assertions))]
         {
-            match std::fs::read_to_string("./dist/__assets_head.html") {
+            let head = crate::protocol::get_asset_root_or_default();
+            let head = head.join("dist/__assets_head.html");
+            match std::fs::read_to_string(&head) {
                 Ok(s) => Some(s),
                 Err(err) => {
-                    log::error!("Failed to read ./dist/__assets_head.html: {}", err);
+                    log::error!("Failed to read {head:?}: {err}");
                     None
                 }
             }

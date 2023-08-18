@@ -114,9 +114,7 @@ pub(super) fn desktop_handler(
     let path = PathBuf::from(&*decoded);
 
     // If the path is relative, we'll try to serve it from the assets directory.
-    let mut asset = get_asset_root()
-        .unwrap_or_else(|| Path::new(".").to_path_buf())
-        .join(&path);
+    let mut asset = get_asset_root_or_default().join(&path);
 
     if !asset.exists() {
         asset = PathBuf::from("/").join(path);
@@ -133,6 +131,11 @@ pub(super) fn desktop_handler(
         .status(StatusCode::NOT_FOUND)
         .body(Cow::from(String::from("Not Found").into_bytes()))
         .map_err(From::from)
+}
+
+#[allow(unreachable_code)]
+pub(crate) fn get_asset_root_or_default() -> PathBuf {
+    get_asset_root().unwrap_or_else(|| Path::new(".").to_path_buf())
 }
 
 #[allow(unreachable_code)]
