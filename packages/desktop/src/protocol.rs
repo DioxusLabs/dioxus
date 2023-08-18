@@ -127,6 +127,12 @@ pub(super) fn desktop_handler(
             .map_err(From::from);
     }
 
+    log::error!(
+        "Failed to find {} (as path {})",
+        request.uri().path(),
+        asset.display()
+    );
+
     Response::builder()
         .status(StatusCode::NOT_FOUND)
         .body(Cow::from(String::from("Not Found").into_bytes()))
