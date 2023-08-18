@@ -87,8 +87,8 @@ pub(super) fn desktop_handler(
                     )
                 ))]
                 {
-                    use assets_cli_support::AssetManifestExt;
-                    let manifest = assets_cli_support::AssetManifest::load();
+                    use manganis_cli_support::AssetManifestExt;
+                    let manifest = manganis_cli_support::AssetManifest::load();
                     head += &manifest.head();
                 }
                 #[cfg(not(all(

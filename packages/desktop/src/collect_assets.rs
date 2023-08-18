@@ -12,9 +12,9 @@ pub fn copy_assets() {
         )
     ))]
     {
-        use assets_cli_support::AssetManifest;
-        use assets_cli_support::AssetManifestExt;
-        use assets_cli_support::Config;
+        use manganis_cli_support::AssetManifest;
+        use manganis_cli_support::AssetManifestExt;
+        use manganis_cli_support::Config;
         use std::path::PathBuf;
         let config = Config::current();
         let asset_location = config.assets_serve_location();

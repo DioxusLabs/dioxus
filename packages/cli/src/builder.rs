@@ -3,9 +3,9 @@ use crate::{
     error::{Error, Result},
     tools::Tool,
 };
-use assets_cli_support::AssetManifestExt;
 use cargo_metadata::{diagnostic::Diagnostic, Message};
 use indicatif::{ProgressBar, ProgressStyle};
+use manganis_cli_support::AssetManifestExt;
 use serde::Serialize;
 use std::{
     fs::{copy, create_dir_all, File},
@@ -769,7 +769,7 @@ pub(crate) struct WebAssetConfigDropGuard;
 impl WebAssetConfigDropGuard {
     pub fn new() -> Self {
         // Set up the collect asset config
-        assets_cli_support::Config::default()
+        manganis_cli_support::Config::default()
             .with_assets_serve_location("/")
             .save();
         Self {}
@@ -779,6 +779,6 @@ impl WebAssetConfigDropGuard {
 impl Drop for WebAssetConfigDropGuard {
     fn drop(&mut self) {
         // Reset the config
-        assets_cli_support::Config::default().save();
+        manganis_cli_support::Config::default().save();
     }
 }

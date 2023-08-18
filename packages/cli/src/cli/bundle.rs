@@ -130,7 +130,7 @@ impl Bundle {
 
         // Add all assets from collect assets to the bundle
         {
-            let config = assets_cli_support::Config::current();
+            let config = manganis_cli_support::Config::current();
             let location = config.assets_serve_location().to_string();
             let location = format!("./{}", location);
             println!("Adding assets from {} to bundle", location);
