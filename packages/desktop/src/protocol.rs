@@ -158,7 +158,7 @@ fn get_asset_root() -> Option<PathBuf> {
 
     */
 
-    if std::env::var_os("CARGO").is_some() {
+    if std::env::var_os("CARGO").is_some() || std::env::var_os("DIOXUS_ACTIVE").is_some() {
         return None;
     }
 

@@ -240,7 +240,10 @@ pub fn start_desktop(config: &CrateConfig) -> Result<(Child, BuildResult)> {
             if cfg!(windows) {
                 file.set_extension("exe");
             }
-            let child = Command::new(file.to_str().unwrap()).spawn()?;
+            let active = "DIOXUS_ACTIVE";
+            let child = Command::new(file.to_str().unwrap())
+                .env(active, "true")
+                .spawn()?;
 
             Ok((child, result))
         }
