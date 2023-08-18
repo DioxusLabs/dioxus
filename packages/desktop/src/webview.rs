@@ -25,7 +25,13 @@ pub fn build(
         }
         #[cfg(not(debug_assertions))]
         {
-            std::fs::read_to_string("dist/__assets_head.html").ok()
+            match std::fs::read_to_string("./dist/__assets_head.html") {
+                Ok(s) => Some(s),
+                Err(err) => {
+                    log::error!("Failed to read ./dist/__assets_head.html: {}", err);
+                    None
+                }
+            }
         }
     };
 
