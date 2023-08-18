@@ -354,7 +354,7 @@ pub fn build_desktop(config: &CrateConfig, _is_serve: bool) -> Result<BuildResul
     // Collect assets
     process_assets(config)?;
     // Create the __assets_head.html file for bundling
-    create_assets_head(&config)?;
+    create_assets_head(config)?;
 
     log::info!(
         "🚩 Build completed: [./{}]",
@@ -727,7 +727,7 @@ fn process_assets(config: &CrateConfig) -> anyhow::Result<()> {
     );
     let static_asset_output_dir = config.out_dir.join(static_asset_output_dir);
 
-    manifest.copy_static_assets_to(&static_asset_output_dir)?;
+    manifest.copy_static_assets_to(static_asset_output_dir)?;
 
     Ok(())
 }
