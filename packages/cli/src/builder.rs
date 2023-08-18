@@ -252,8 +252,6 @@ pub fn build(config: &CrateConfig, quiet: bool) -> Result<BuildResult> {
 pub fn build_desktop(config: &CrateConfig, _is_serve: bool) -> Result<BuildResult> {
     log::info!("🚅 Running build [Desktop] command...");
 
-    let _gaurd = AssetConfigDropGaurd::new();
-
     let t_start = std::time::Instant::now();
     let ignore_files = build_assets(config)?;
 
@@ -353,6 +351,8 @@ pub fn build_desktop(config: &CrateConfig, _is_serve: bool) -> Result<BuildResul
         }
     }
 
+    // Collect assets
+    process_assets(config)?;
     // Create the __assets_head.html file for bundling
     create_assets_head(&config)?;
 

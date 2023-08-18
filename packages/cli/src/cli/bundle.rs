@@ -128,6 +128,19 @@ impl Bundle {
             }
         }
 
+        // Add all assets from collect assets to the bundle
+        {
+            let config = assets_cli_support::Config::current();
+            let location = config.assets_serve_location().to_string();
+            let location = format!("./{}", location);
+            println!("Adding assets from {} to bundle", location);
+            if let Some(resources) = &mut bundle_settings.resources {
+                resources.push(location);
+            } else {
+                bundle_settings.resources = Some(vec![location]);
+            }
+        }
+
         let mut settings = SettingsBuilder::new()
             .project_out_directory(crate_config.out_dir)
             .package_settings(PackageSettings {
