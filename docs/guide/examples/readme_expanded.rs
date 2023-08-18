@@ -89,7 +89,8 @@ fn app(cx: Scope) -> Element {
                     key: None,
                     // The static template this node will use. The template is stored in a Cell so it can be replaced with a new template when hot rsx reloading is enabled
                     template: std::cell::Cell::new(TEMPLATE),
-                    root_ids: Default::default(),
+                    root_ids: dioxus::core::exports::bumpalo::collections::Vec::new_in(__cx.bump())
+                        .into(),
                     dynamic_nodes: __cx.bump().alloc([
                         // The dynamic count text node (dynamic node id 0)
                         __cx.text_node(format_args!("High-Five counter: {0}", count)),

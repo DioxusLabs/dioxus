@@ -282,6 +282,20 @@ impl<T> UseSharedState<T> {
             ),
         }
     }
+
+    /// Take a reference to the inner value temporarily and produce a new value
+    #[cfg_attr(debug_assertions, track_caller)]
+    #[cfg_attr(debug_assertions, inline(never))]
+    pub fn with<O>(&self, immutable_callback: impl FnOnce(&T) -> O) -> O {
+        immutable_callback(&*self.read())
+    }
+
+    /// Take a mutable reference to the inner value temporarily and produce a new value
+    #[cfg_attr(debug_assertions, track_caller)]
+    #[cfg_attr(debug_assertions, inline(never))]
+    pub fn with_mut<O>(&self, mutable_callback: impl FnOnce(&mut T) -> O) -> O {
+        mutable_callback(&mut *self.write())
+    }
 }
 
 impl<T> Clone for UseSharedState<T> {

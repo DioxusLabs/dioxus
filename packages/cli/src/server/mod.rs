@@ -1,4 +1,4 @@
-use crate::{BuildResult, CrateConfig, Result};
+use crate::{cfg::ConfigOptsServe, BuildResult, CrateConfig, Result};
 
 use cargo_metadata::diagnostic::Diagnostic;
 use dioxus_core::Template;
@@ -14,6 +14,7 @@ use tokio::sync::broadcast::Sender;
 mod output;
 use output::*;
 pub mod desktop;
+pub mod fullstack;
 pub mod web;
 
 /// Sets up a file watcher
@@ -179,4 +180,11 @@ async fn setup_file_watcher_hot_reload<F: Fn() -> Result<BuildResult> + Send + '
     }
 
     Ok(watcher)
+}
+
+pub(crate) trait Platform {
+    fn start(config: &CrateConfig, serve: &ConfigOptsServe) -> Result<Self>
+    where
+        Self: Sized;
+    fn rebuild(&mut self, config: &CrateConfig) -> Result<BuildResult>;
 }

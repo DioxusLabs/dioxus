@@ -5,7 +5,7 @@ use crate::{
         output::{print_console_info, PrettierOptions, WebServerInfo},
         setup_file_watcher, setup_file_watcher_hot_reload,
     },
-    BuildResult, CrateConfig, Result,
+    BuildResult, CrateConfig, Result, WebHttpsConfig,
 };
 use axum::{
     body::{Full, HttpBody},
@@ -67,7 +67,7 @@ pub async fn startup(port: u16, config: CrateConfig, start_browser: bool) -> Res
 }
 
 /// Start the server without hot reload
-pub async fn serve_default(
+async fn serve_default(
     ip: String,
     port: u16,
     config: CrateConfig,
@@ -128,7 +128,7 @@ pub async fn serve_default(
 }
 
 /// Start dx serve with hot reload
-pub async fn serve_hot_reload(
+async fn serve_hot_reload(
     ip: String,
     port: u16,
     config: CrateConfig,
@@ -218,72 +218,73 @@ async fn get_rustls(config: &CrateConfig) -> Result<Option<RustlsConfig>> {
         return Ok(None);
     }
 
-    let (cert_path, key_path) = match web_config.mkcert {
+    let (cert_path, key_path) = if let Some(true) = web_config.mkcert {
         // mkcert, use it
-        Some(true) => {
-            // Get paths to store certs, otherwise use ssl/item.pem
-            let key_path = web_config
-                .key_path
-                .clone()
-                .unwrap_or(DEFAULT_KEY_PATH.to_string());
-
-            let cert_path = web_config
-                .cert_path
-                .clone()
-                .unwrap_or(DEFAULT_CERT_PATH.to_string());
-
-            // Create ssl directory if using defaults
-            if key_path == DEFAULT_KEY_PATH && cert_path == DEFAULT_CERT_PATH {
-                _ = fs::create_dir("ssl");
-            }
-
-            let cmd = Command::new("mkcert")
-                .args([
-                    "-install",
-                    "-key-file",
-                    &key_path,
-                    "-cert-file",
-                    &cert_path,
-                    "localhost",
-                    "::1",
-                    "127.0.0.1",
-                ])
-                .spawn();
-
-            match cmd {
-                Err(e) => {
-                    match e.kind() {
-                        io::ErrorKind::NotFound => log::error!("mkcert is not installed. See https://github.com/FiloSottile/mkcert#installation for installation instructions."),
-                        e => log::error!("an error occured while generating mkcert certificates: {}", e.to_string()),
-                    };
-                    return Err("failed to generate mkcert certificates".into());
-                }
-                Ok(mut cmd) => {
-                    cmd.wait()?;
-                }
-            }
-
-            (cert_path, key_path)
-        }
-        // not mkcert
-        Some(false) => {
-            // get paths to cert & key
-            if let (Some(key), Some(cert)) =
-                (web_config.key_path.clone(), web_config.cert_path.clone())
-            {
-                (cert, key)
-            } else {
-                // missing cert or key
-                return Err("https is enabled but cert or key path is missing".into());
-            }
-        }
-        // other
-        _ => return Ok(None),
+        get_rustls_with_mkcert(web_config)?
+    } else {
+        // if mkcert not specified or false, don't use it
+        get_rustls_without_mkcert(web_config)?
     };
 
     Ok(Some(
         RustlsConfig::from_pem_file(cert_path, key_path).await?,
     ))
+}
+
+fn get_rustls_with_mkcert(web_config: &WebHttpsConfig) -> Result<(String, String)> {
+    // Get paths to store certs, otherwise use ssl/item.pem
+    let key_path = web_config
+        .key_path
+        .clone()
+        .unwrap_or(DEFAULT_KEY_PATH.to_string());
+
+    let cert_path = web_config
+        .cert_path
+        .clone()
+        .unwrap_or(DEFAULT_CERT_PATH.to_string());
+
+    // Create ssl directory if using defaults
+    if key_path == DEFAULT_KEY_PATH && cert_path == DEFAULT_CERT_PATH {
+        _ = fs::create_dir("ssl");
+    }
+
+    let cmd = Command::new("mkcert")
+        .args([
+            "-install",
+            "-key-file",
+            &key_path,
+            "-cert-file",
+            &cert_path,
+            "localhost",
+            "::1",
+            "127.0.0.1",
+        ])
+        .spawn();
+
+    match cmd {
+        Err(e) => {
+            match e.kind() {
+                io::ErrorKind::NotFound => log::error!("mkcert is not installed. See https://github.com/FiloSottile/mkcert#installation for installation instructions."),
+                e => log::error!("an error occured while generating mkcert certificates: {}", e.to_string()),
+            };
+            return Err("failed to generate mkcert certificates".into());
+        }
+        Ok(mut cmd) => {
+            cmd.wait()?;
+        }
+    }
+
+    Ok((cert_path, key_path))
+}
+
+fn get_rustls_without_mkcert(web_config: &WebHttpsConfig) -> Result<(String, String)> {
+    // get paths to cert & key
+    if let (Some(key), Some(cert)) = (web_config.key_path.clone(), web_config.cert_path.clone()) {
+        Ok((cert, key))
+    } else {
+        // missing cert or key
+        Err("https is enabled but cert or key path is missing".into())
+    }
 }
 
 /// Sets up and returns a router
