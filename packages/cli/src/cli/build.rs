@@ -1,6 +1,6 @@
-use crate::cfg::Platform;
 #[cfg(feature = "plugin")]
 use crate::plugin::PluginManager;
+use crate::{cfg::Platform, WebAssetConfigDropGuard};
 
 use super::*;
 
@@ -48,6 +48,8 @@ impl Build {
                 crate::builder::build_desktop(&crate_config, false)?;
             }
             Platform::Fullstack => {
+                // Fullstack mode must be built with web configs on the desktop (server) binary as well as the web binary
+                let _config = WebAssetConfigDropGuard::new();
                 {
                     let mut web_config = crate_config.clone();
                     let web_feature = self.build.client_feature;

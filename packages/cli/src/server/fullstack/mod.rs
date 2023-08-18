@@ -1,6 +1,6 @@
 use crate::{
     cfg::{ConfigOptsBuild, ConfigOptsServe},
-    CrateConfig, Result,
+    CrateConfig, Result, WebAssetConfigDropGuard,
 };
 
 use super::{desktop, Platform};
@@ -12,6 +12,7 @@ pub async fn startup(config: CrateConfig, serve: &ConfigOptsServe) -> Result<()>
 struct FullstackPlatform {
     serve: ConfigOptsServe,
     desktop: desktop::DesktopPlatform,
+    _config: WebAssetConfigDropGuard,
 }
 
 impl Platform for FullstackPlatform {
@@ -32,11 +33,13 @@ impl Platform for FullstackPlatform {
             }
             None => desktop_config.features = Some(vec![desktop_feature]),
         };
+        let config = WebAssetConfigDropGuard::new();
         let desktop = desktop::DesktopPlatform::start(&desktop_config, serve)?;
 
         Ok(Self {
             desktop,
             serve: serve.clone(),
+            _config: config,
         })
     }
 
