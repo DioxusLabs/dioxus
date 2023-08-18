@@ -111,7 +111,7 @@ async fn serve_hot_reload<P: Platform + Send + 'static>(
                 for channel in &mut *channels.lock().unwrap() {
                     send_msg(HotReloadMsg::Shutdown, channel);
                 }
-                Ok(platform.write().unwrap().rebuild(&config)?)
+                platform.write().unwrap().rebuild(&config)
             }
         },
         None,
@@ -234,13 +234,13 @@ pub(crate) struct DesktopPlatform {
 
 impl Platform for DesktopPlatform {
     fn start(config: &CrateConfig, _serve: &ConfigOptsServe) -> Result<Self> {
-        let (child, first_build_result) = start_desktop(&config)?;
+        let (child, first_build_result) = start_desktop(config)?;
 
         log::info!("🚀 Starting development server...");
 
         // Print serve info
         print_console_info(
-            &config,
+            config,
             PrettierOptions {
                 changed: vec![],
                 warnings: first_build_result.warnings,
@@ -256,7 +256,7 @@ impl Platform for DesktopPlatform {
 
     fn rebuild(&mut self, config: &CrateConfig) -> Result<BuildResult> {
         self.currently_running_child.kill()?;
-        let (child, result) = start_desktop(&config)?;
+        let (child, result) = start_desktop(config)?;
         self.currently_running_child = child;
         Ok(result)
     }
