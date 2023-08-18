@@ -9,7 +9,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use serde::Serialize;
 use std::{
     fs::{copy, create_dir_all, File},
-    io::Read,
+    io::{Read, Write},
     panic,
     path::PathBuf,
     time::Duration,
@@ -353,6 +353,9 @@ pub fn build_desktop(config: &CrateConfig, _is_serve: bool) -> Result<BuildResul
         }
     }
 
+    // Create the __assets_head.html file for bundling
+    create_assets_head(&config)?;
+
     log::info!(
         "🚩 Build completed: [./{}]",
         config
@@ -370,6 +373,13 @@ pub fn build_desktop(config: &CrateConfig, _is_serve: bool) -> Result<BuildResul
         warnings: warning_messages,
         elapsed_time: t_start.elapsed().as_millis(),
     })
+}
+
+fn create_assets_head(config: &CrateConfig) -> Result<()> {
+    let manifest = config.asset_manifest();
+    let mut file = File::create(config.out_dir.join("__assets_head.html"))?;
+    file.write_all(manifest.head().as_bytes())?;
+    Ok(())
 }
 
 fn prettier_build(cmd: subprocess::Exec) -> anyhow::Result<Vec<Diagnostic>> {

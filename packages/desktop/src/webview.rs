@@ -25,7 +25,7 @@ pub fn build(
         }
         #[cfg(not(debug_assertions))]
         {
-            std::fs::read_to_string("public/assets_head.html").ok()
+            std::fs::read_to_string("dist/__assets_head.html").ok()
         }
     };
 
