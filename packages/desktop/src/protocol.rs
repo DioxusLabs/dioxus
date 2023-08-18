@@ -74,13 +74,35 @@ pub(super) fn desktop_handler(
 
                 #[allow(unused_mut)]
                 let mut head = custom_head.unwrap_or_default();
-                #[cfg(debug_assertions)]
+                #[cfg(all(
+                    debug_assertions,
+                    any(
+                        target_os = "windows",
+                        target_os = "macos",
+                        target_os = "linux",
+                        target_os = "dragonfly",
+                        target_os = "freebsd",
+                        target_os = "netbsd",
+                        target_os = "openbsd"
+                    )
+                ))]
                 {
                     use assets_cli_support::AssetManifestExt;
                     let manifest = assets_cli_support::AssetManifest::load();
                     head += &manifest.head();
                 }
-                #[cfg(not(debug_assertions))]
+                #[cfg(not(all(
+                    debug_assertions,
+                    any(
+                        target_os = "windows",
+                        target_os = "macos",
+                        target_os = "linux",
+                        target_os = "dragonfly",
+                        target_os = "freebsd",
+                        target_os = "netbsd",
+                        target_os = "openbsd"
+                    )
+                )))]
                 {
                     if let Some(assets_head) = assets_head {
                         head += &assets_head;

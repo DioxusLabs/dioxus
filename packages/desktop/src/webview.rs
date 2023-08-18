@@ -19,11 +19,33 @@ pub fn build(
     let index_file = cfg.custom_index.clone();
     let root_name = cfg.root_name.clone();
     let assets_head = {
-        #[cfg(debug_assertions)]
+        #[cfg(all(
+            debug_assertions,
+            any(
+                target_os = "windows",
+                target_os = "macos",
+                target_os = "linux",
+                target_os = "dragonfly",
+                target_os = "freebsd",
+                target_os = "netbsd",
+                target_os = "openbsd"
+            )
+        ))]
         {
             None
         }
-        #[cfg(not(debug_assertions))]
+        #[cfg(not(all(
+            debug_assertions,
+            any(
+                target_os = "windows",
+                target_os = "macos",
+                target_os = "linux",
+                target_os = "dragonfly",
+                target_os = "freebsd",
+                target_os = "netbsd",
+                target_os = "openbsd"
+            )
+        )))]
         {
             let head = crate::protocol::get_asset_root_or_default();
             let head = head.join("dist/__assets_head.html");

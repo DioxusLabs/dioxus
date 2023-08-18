@@ -1,5 +1,16 @@
 pub fn copy_assets() {
-    #[cfg(debug_assertions)]
+    #[cfg(all(
+        debug_assertions,
+        any(
+            target_os = "windows",
+            target_os = "macos",
+            target_os = "linux",
+            target_os = "dragonfly",
+            target_os = "freebsd",
+            target_os = "netbsd",
+            target_os = "openbsd"
+        )
+    ))]
     {
         use assets_cli_support::AssetManifest;
         use assets_cli_support::AssetManifestExt;
@@ -22,7 +33,18 @@ pub fn copy_assets() {
             println!("Copied assets to {}", asset_location.display());
         }
     }
-    #[cfg(not(debug_assertions))]
+    #[cfg(not(all(
+        debug_assertions,
+        any(
+            target_os = "windows",
+            target_os = "macos",
+            target_os = "linux",
+            target_os = "dragonfly",
+            target_os = "freebsd",
+            target_os = "netbsd",
+            target_os = "openbsd"
+        )
+    )))]
     {
         println!(
             "Skipping assets in release mode. You compile assets with the dioxus-cli in release mode"
