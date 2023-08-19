@@ -1,3 +1,4 @@
+use std::any::Any;
 use std::path::PathBuf;
 
 use crate::FileEngine;
@@ -39,5 +40,10 @@ impl FileEngine for NativeFileEngine {
         file.read_to_string(&mut contents).await.ok()?;
 
         Some(contents)
+    }
+
+    async fn get_native_file(&self, file: &str) -> Option<Box<dyn Any>> {
+        let file = File::open(file).await.ok()?;
+        Some(Box::new(file))
     }
 }

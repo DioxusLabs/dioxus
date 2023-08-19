@@ -231,6 +231,7 @@ impl<'a> ToTokens for TemplateRenderer<'a> {
 
         // Render and release the mutable borrow on context
         let roots = quote! { #( #root_printer ),* };
+        let root_count = self.roots.len();
         let node_printer = &context.dynamic_nodes;
         let dyn_attr_printer = &context.dynamic_attributes;
         let node_paths = context.node_paths.iter().map(|it| quote!(&[#(#it),*]));
@@ -247,7 +248,7 @@ impl<'a> ToTokens for TemplateRenderer<'a> {
                 parent: None,
                 key: #key_tokens,
                 template: std::cell::Cell::new(TEMPLATE),
-                root_ids: Default::default(),
+                root_ids: dioxus::core::exports::bumpalo::collections::Vec::with_capacity_in(#root_count, __cx.bump()).into(),
                 dynamic_nodes: __cx.bump().alloc([ #( #node_printer ),* ]),
                 dynamic_attrs: __cx.bump().alloc([ #( #dyn_attr_printer ),* ]),
             }
