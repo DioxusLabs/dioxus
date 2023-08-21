@@ -47,7 +47,12 @@ struct WsReloadState {
     update: broadcast::Sender<()>,
 }
 
-pub async fn startup(port: u16, config: CrateConfig, start_browser: bool, skip_assets: bool) -> Result<()> {
+pub async fn startup(
+    port: u16,
+    config: CrateConfig,
+    start_browser: bool,
+    skip_assets: bool,
+) -> Result<()> {
     // ctrl-c shutdown checker
     let _crate_config = config.clone();
     let _ = ctrlc::set_handler(move || {
@@ -72,7 +77,7 @@ async fn serve_default(
     port: u16,
     config: CrateConfig,
     start_browser: bool,
-    skip_assets: bool
+    skip_assets: bool,
 ) -> Result<()> {
     let first_build_result = crate::builder::build(&config, false, skip_assets)?;
 
@@ -134,7 +139,7 @@ async fn serve_hot_reload(
     port: u16,
     config: CrateConfig,
     start_browser: bool,
-    skip_assets: bool
+    skip_assets: bool,
 ) -> Result<()> {
     let first_build_result = crate::builder::build(&config, false, skip_assets)?;
 

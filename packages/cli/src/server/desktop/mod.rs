@@ -237,7 +237,7 @@ pub(crate) struct DesktopPlatform {
 }
 
 impl Platform for DesktopPlatform {
-    fn start(config: &CrateConfig,serve: &ConfigOptsServe) -> Result<Self> {
+    fn start(config: &CrateConfig, serve: &ConfigOptsServe) -> Result<Self> {
         let (child, first_build_result) = start_desktop(config, serve.skip_assets)?;
 
         log::info!("🚀 Starting development server...");

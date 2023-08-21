@@ -46,8 +46,13 @@ impl Serve {
                 Serve::regen_dev_page(&crate_config, self.serve.skip_assets)?;
 
                 // start the develop server
-                server::web::startup(self.serve.port, crate_config.clone(), self.serve.open, self.serve.skip_assets)
-                    .await?;
+                server::web::startup(
+                    self.serve.port,
+                    crate_config.clone(),
+                    self.serve.open,
+                    self.serve.skip_assets,
+                )
+                .await?;
             }
             cfg::Platform::Desktop => {
                 server::desktop::startup(crate_config.clone(), &serve_cfg).await?;

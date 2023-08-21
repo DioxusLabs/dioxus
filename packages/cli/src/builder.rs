@@ -241,7 +241,7 @@ pub fn build(config: &CrateConfig, quiet: bool, skip_assets: bool) -> Result<Bui
         }
     }
 
-    if !skip_assets{
+    if !skip_assets {
         process_assets(config)?;
     }
 
@@ -251,7 +251,11 @@ pub fn build(config: &CrateConfig, quiet: bool, skip_assets: bool) -> Result<Bui
     })
 }
 
-pub fn build_desktop(config: &CrateConfig, _is_serve: bool, skip_assets: bool) -> Result<BuildResult> {
+pub fn build_desktop(
+    config: &CrateConfig,
+    _is_serve: bool,
+    skip_assets: bool,
+) -> Result<BuildResult> {
     log::info!("🚅 Running build [Desktop] command...");
 
     let t_start = std::time::Instant::now();
@@ -353,7 +357,7 @@ pub fn build_desktop(config: &CrateConfig, _is_serve: bool, skip_assets: bool) -
         }
     }
 
-    if !skip_assets{
+    if !skip_assets {
         // Collect assets
         process_assets(config)?;
         // Create the __assets_head.html file for bundling
@@ -494,7 +498,7 @@ pub fn gen_page(config: &CrateConfig, serve: bool, skip_assets: bool) -> String 
     {
         style_str.push_str("<link rel=\"stylesheet\" href=\"tailwind.css\">\n");
     }
-    if !skip_assets{
+    if !skip_assets {
         let manifest = config.asset_manifest();
         style_str.push_str(&manifest.head());
     }
