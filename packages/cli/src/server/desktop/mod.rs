@@ -209,9 +209,9 @@ fn send_msg(msg: HotReloadMsg, channel: &mut impl std::io::Write) -> bool {
     }
 }
 
-fn start_desktop(config: &CrateConfig) -> Result<(Child, BuildResult)> {
+fn start_desktop(config: &CrateConfig, skip_assets: bool) -> Result<(Child, BuildResult)> {
     // Run the desktop application
-    let result = crate::builder::build_desktop(config, true)?;
+    let result = crate::builder::build_desktop(config, true, skip_assets)?;
 
     match &config.executable {
         crate::ExecutableType::Binary(name)
@@ -233,11 +233,12 @@ fn start_desktop(config: &CrateConfig) -> Result<(Child, BuildResult)> {
 
 pub(crate) struct DesktopPlatform {
     currently_running_child: Child,
+    skip_assets: bool,
 }
 
 impl Platform for DesktopPlatform {
-    fn start(config: &CrateConfig, _serve: &ConfigOptsServe) -> Result<Self> {
-        let (child, first_build_result) = start_desktop(config)?;
+    fn start(config: &CrateConfig,serve: &ConfigOptsServe) -> Result<Self> {
+        let (child, first_build_result) = start_desktop(config, serve.skip_assets)?;
 
         log::info!("🚀 Starting development server...");
 
@@ -254,12 +255,13 @@ impl Platform for DesktopPlatform {
 
         Ok(Self {
             currently_running_child: child,
+            skip_assets: serve.skip_assets,
         })
     }
 
     fn rebuild(&mut self, config: &CrateConfig) -> Result<BuildResult> {
         self.currently_running_child.kill()?;
-        let (child, result) = start_desktop(config)?;
+        let (child, result) = start_desktop(config, self.skip_assets)?;
         self.currently_running_child = child;
         Ok(result)
     }

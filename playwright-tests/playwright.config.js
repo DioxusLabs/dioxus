@@ -74,7 +74,7 @@ module.exports = defineConfig({
   webServer: [
     {
       command:
-        "cargo run --package dioxus-playwright-liveview-test --bin dioxus-playwright-liveview-test",
+        "cargo run --package dioxus-playwright-liveview-test --bin dioxus-playwright-liveview-test --skip-assets",
       port: 3030,
       timeout: 10 * 60 * 1000,
       reuseExistingServer: !process.env.CI,
@@ -82,7 +82,7 @@ module.exports = defineConfig({
     },
     {
       cwd: path.join(process.cwd(), "web"),
-      command: "cargo run --package dioxus-cli -- serve",
+      command: "cargo run --package dioxus-cli --release -- serve --skip-assets",
       port: 8080,
       timeout: 10 * 60 * 1000,
       reuseExistingServer: !process.env.CI,
@@ -90,7 +90,7 @@ module.exports = defineConfig({
     },
     {
       cwd: path.join(process.cwd(), 'fullstack'),
-      command: 'cargo run --package dioxus-cli -- build --features web --release\ncargo run --release --features ssr',
+      command: 'cargo run --package dioxus-cli --release -- build --features web --release --skip-assets\ncargo run --release --features ssr',
       port: 3333,
       timeout: 10 * 60 * 1000,
       reuseExistingServer: !process.env.CI,

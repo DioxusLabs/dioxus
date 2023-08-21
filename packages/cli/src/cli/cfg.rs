@@ -32,6 +32,11 @@ pub struct ConfigOptsBuild {
     #[clap(long, value_enum)]
     pub platform: Option<Platform>,
 
+    /// Skip collecting assets from dependencies [default: false]
+    #[clap(long)]
+    #[serde(default)]
+    pub skip_assets: bool,
+
     /// Space separated list of features to activate
     #[clap(long)]
     pub features: Option<Vec<String>>,
@@ -57,6 +62,7 @@ impl From<ConfigOptsServe> for ConfigOptsBuild {
             features: serve.features,
             client_feature: serve.client_feature,
             server_feature: serve.server_feature,
+            skip_assets: serve.skip_assets,
         }
     }
 }
@@ -113,6 +119,11 @@ pub struct ConfigOptsServe {
     /// Space separated list of features to activate
     #[clap(long)]
     pub features: Option<Vec<String>>,
+
+    /// Skip collecting assets from dependencies [default: false]
+    #[clap(long)]
+    #[serde(default)]
+    pub skip_assets: bool,
 
     /// The feature to use for the client in a fullstack app [default: "web"]
     #[clap(long, default_value_t = { "web".to_string() })]

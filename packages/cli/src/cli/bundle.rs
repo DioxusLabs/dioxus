@@ -77,7 +77,7 @@ impl Bundle {
         }
 
         // build the desktop app
-        build_desktop(&crate_config, false)?;
+        build_desktop(&crate_config, false, false)?;
 
         // copy the binary to the out dir
         let package = crate_config.manifest.package.unwrap();

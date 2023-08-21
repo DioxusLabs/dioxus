@@ -47,7 +47,7 @@ struct WsReloadState {
     update: broadcast::Sender<()>,
 }
 
-pub async fn startup(port: u16, config: CrateConfig, start_browser: bool) -> Result<()> {
+pub async fn startup(port: u16, config: CrateConfig, start_browser: bool, skip_assets: bool) -> Result<()> {
     // ctrl-c shutdown checker
     let _crate_config = config.clone();
     let _ = ctrlc::set_handler(move || {
@@ -59,8 +59,8 @@ pub async fn startup(port: u16, config: CrateConfig, start_browser: bool) -> Res
     let ip = get_ip().unwrap_or(String::from("0.0.0.0"));
 
     match config.hot_reload {
-        true => serve_hot_reload(ip, port, config, start_browser).await?,
-        false => serve_default(ip, port, config, start_browser).await?,
+        true => serve_hot_reload(ip, port, config, start_browser, skip_assets).await?,
+        false => serve_default(ip, port, config, start_browser, skip_assets).await?,
     }
 
     Ok(())
@@ -72,8 +72,9 @@ async fn serve_default(
     port: u16,
     config: CrateConfig,
     start_browser: bool,
+    skip_assets: bool
 ) -> Result<()> {
-    let first_build_result = crate::builder::build(&config, false)?;
+    let first_build_result = crate::builder::build(&config, false, skip_assets)?;
 
     log::info!("🚀 Starting development server...");
 
@@ -86,7 +87,7 @@ async fn serve_default(
         {
             let config = config.clone();
             let reload_tx = reload_tx.clone();
-            move || build(&config, &reload_tx)
+            move || build(&config, &reload_tx, skip_assets)
         },
         &config,
         Some(WebServerInfo {
@@ -133,8 +134,9 @@ async fn serve_hot_reload(
     port: u16,
     config: CrateConfig,
     start_browser: bool,
+    skip_assets: bool
 ) -> Result<()> {
-    let first_build_result = crate::builder::build(&config, false)?;
+    let first_build_result = crate::builder::build(&config, false, skip_assets)?;
 
     log::info!("🚀 Starting development server...");
 
@@ -172,7 +174,7 @@ async fn serve_hot_reload(
         {
             let config = config.clone();
             let reload_tx = reload_tx.clone();
-            move || build(&config, &reload_tx)
+            move || build(&config, &reload_tx, skip_assets)
         },
         Some(WebServerInfo {
             ip: ip.clone(),
@@ -473,8 +475,8 @@ async fn ws_handler(
     })
 }
 
-fn build(config: &CrateConfig, reload_tx: &Sender<()>) -> Result<BuildResult> {
-    let result = builder::build(config, true)?;
+fn build(config: &CrateConfig, reload_tx: &Sender<()>, skip_assets: bool) -> Result<BuildResult> {
+    let result = builder::build(config, true, skip_assets)?;
     // change the websocket reload state to true;
     // the page will auto-reload.
     if config
@@ -484,7 +486,7 @@ fn build(config: &CrateConfig, reload_tx: &Sender<()>) -> Result<BuildResult> {
         .reload_html
         .unwrap_or(false)
     {
-        let _ = Serve::regen_dev_page(config);
+        let _ = Serve::regen_dev_page(config, skip_assets);
     }
     let _ = reload_tx.send(());
     Ok(result)

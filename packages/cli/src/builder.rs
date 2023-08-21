@@ -22,7 +22,7 @@ pub struct BuildResult {
     pub elapsed_time: u128,
 }
 
-pub fn build(config: &CrateConfig, quiet: bool) -> Result<BuildResult> {
+pub fn build(config: &CrateConfig, quiet: bool, skip_assets: bool) -> Result<BuildResult> {
     // [1] Build the project with cargo, generating a wasm32-unknown-unknown target (is there a more specific, better target to leverage?)
     // [2] Generate the appropriate build folders
     // [3] Wasm-bindgen the .wasm fiile, and move it into the {builddir}/modules/xxxx/xxxx_bg.wasm
@@ -241,7 +241,9 @@ pub fn build(config: &CrateConfig, quiet: bool) -> Result<BuildResult> {
         }
     }
 
-    process_assets(config)?;
+    if !skip_assets{
+        process_assets(config)?;
+    }
 
     Ok(BuildResult {
         warnings: warning_messages,
@@ -249,7 +251,7 @@ pub fn build(config: &CrateConfig, quiet: bool) -> Result<BuildResult> {
     })
 }
 
-pub fn build_desktop(config: &CrateConfig, _is_serve: bool) -> Result<BuildResult> {
+pub fn build_desktop(config: &CrateConfig, _is_serve: bool, skip_assets: bool) -> Result<BuildResult> {
     log::info!("🚅 Running build [Desktop] command...");
 
     let t_start = std::time::Instant::now();
@@ -351,10 +353,12 @@ pub fn build_desktop(config: &CrateConfig, _is_serve: bool) -> Result<BuildResul
         }
     }
 
-    // Collect assets
-    process_assets(config)?;
-    // Create the __assets_head.html file for bundling
-    create_assets_head(config)?;
+    if !skip_assets{
+        // Collect assets
+        process_assets(config)?;
+        // Create the __assets_head.html file for bundling
+        create_assets_head(config)?;
+    }
 
     log::info!(
         "🚩 Build completed: [./{}]",
@@ -444,7 +448,7 @@ fn prettier_build(cmd: subprocess::Exec) -> anyhow::Result<Vec<Diagnostic>> {
     Ok(warning_messages)
 }
 
-pub fn gen_page(config: &CrateConfig, serve: bool) -> String {
+pub fn gen_page(config: &CrateConfig, serve: bool, skip_assets: bool) -> String {
     let _gaurd = WebAssetConfigDropGuard::new();
 
     let crate_root = crate::cargo::crate_root().unwrap();
@@ -461,14 +465,14 @@ pub fn gen_page(config: &CrateConfig, serve: bool) -> String {
         String::from(include_str!("./assets/index.html"))
     };
 
-    let resouces = config.dioxus_config.web.resource.clone();
+    let resources = config.dioxus_config.web.resource.clone();
 
-    let mut style_list = resouces.style.unwrap_or_default();
-    let mut script_list = resouces.script.unwrap_or_default();
+    let mut style_list = resources.style.unwrap_or_default();
+    let mut script_list = resources.script.unwrap_or_default();
 
     if serve {
-        let mut dev_style = resouces.dev.style.clone().unwrap_or_default();
-        let mut dev_script = resouces.dev.script.unwrap_or_default();
+        let mut dev_style = resources.dev.style.clone().unwrap_or_default();
+        let mut dev_script = resources.dev.script.unwrap_or_default();
         style_list.append(&mut dev_style);
         script_list.append(&mut dev_script);
     }
@@ -490,8 +494,10 @@ pub fn gen_page(config: &CrateConfig, serve: bool) -> String {
     {
         style_str.push_str("<link rel=\"stylesheet\" href=\"tailwind.css\">\n");
     }
-    let manifest = config.asset_manifest();
-    style_str.push_str(&manifest.head());
+    if !skip_assets{
+        let manifest = config.asset_manifest();
+        style_str.push_str(&manifest.head());
+    }
 
     replace_or_insert_before("{style_include}", &style_str, "</head", &mut html);
 

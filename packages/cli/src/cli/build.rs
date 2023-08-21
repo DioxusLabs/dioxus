@@ -42,10 +42,10 @@ impl Build {
 
         match platform {
             Platform::Web => {
-                crate::builder::build(&crate_config, false)?;
+                crate::builder::build(&crate_config, false, self.build.skip_assets)?;
             }
             Platform::Desktop => {
-                crate::builder::build_desktop(&crate_config, false)?;
+                crate::builder::build_desktop(&crate_config, false, self.build.skip_assets)?;
             }
             Platform::Fullstack => {
                 // Fullstack mode must be built with web configs on the desktop (server) binary as well as the web binary
@@ -60,7 +60,7 @@ impl Build {
                         }
                         None => web_config.features = Some(vec![web_feature]),
                     };
-                    crate::builder::build(&crate_config, false)?;
+                    crate::builder::build(&crate_config, false, self.build.skip_assets)?;
                 }
                 {
                     let mut desktop_config = crate_config.clone();
@@ -72,12 +72,12 @@ impl Build {
                         }
                         None => desktop_config.features = Some(vec![desktop_feature]),
                     };
-                    crate::builder::build_desktop(&desktop_config, false)?;
+                    crate::builder::build_desktop(&desktop_config, false, self.build.skip_assets)?;
                 }
             }
         }
 
-        let temp = gen_page(&crate_config, false);
+        let temp = gen_page(&crate_config, false, self.build.skip_assets);
 
         let mut file = std::fs::File::create(
             crate_config

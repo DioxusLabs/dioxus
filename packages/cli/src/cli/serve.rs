@@ -43,10 +43,10 @@ impl Serve {
         match platform {
             cfg::Platform::Web => {
                 // generate dev-index page
-                Serve::regen_dev_page(&crate_config)?;
+                Serve::regen_dev_page(&crate_config, self.serve.skip_assets)?;
 
                 // start the develop server
-                server::web::startup(self.serve.port, crate_config.clone(), self.serve.open)
+                server::web::startup(self.serve.port, crate_config.clone(), self.serve.open, self.serve.skip_assets)
                     .await?;
             }
             cfg::Platform::Desktop => {
@@ -59,8 +59,8 @@ impl Serve {
         Ok(())
     }
 
-    pub fn regen_dev_page(crate_config: &CrateConfig) -> Result<()> {
-        let serve_html = gen_page(crate_config, true);
+    pub fn regen_dev_page(crate_config: &CrateConfig, skip_assets: bool) -> Result<()> {
+        let serve_html = gen_page(crate_config, true, skip_assets);
 
         let dist_path = crate_config.crate_dir.join(
             crate_config
