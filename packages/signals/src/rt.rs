@@ -2,13 +2,12 @@ use std::cell::{Ref, RefMut};
 
 use std::rc::Rc;
 
-use dioxus_core::prelude::{
-    consume_context, consume_context_from_scope, current_scope_id, provide_context,
-    provide_context_to_scope, provide_root_context,
-};
+use dioxus_core::prelude::*;
 use dioxus_core::ScopeId;
 
 use generational_box::{GenerationalBox, Owner, Store};
+
+use crate::Effect;
 
 fn current_store() -> Store {
     match consume_context() {
@@ -21,12 +20,20 @@ fn current_store() -> Store {
 }
 
 fn current_owner() -> Rc<Owner> {
-    match consume_context() {
-        Some(rt) => rt,
-        None => {
-            let owner = Rc::new(current_store().owner());
-            provide_context(owner).expect("in a virtual dom")
+    match Effect::current() {
+        // If we are inside of an effect, we should use the owner of the effect as the owner of the value.
+        Some(effect) => {
+            let scope_id = effect.source;
+            owner_in_scope(scope_id)
         }
+        // Otherwise either get an owner from the current scope or create a new one.
+        None => match has_context() {
+            Some(rt) => rt,
+            None => {
+                let owner = Rc::new(current_store().owner());
+                provide_context(owner).expect("in a virtual dom")
+            }
+        },
     }
 }
 
