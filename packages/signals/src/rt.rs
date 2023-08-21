@@ -1,14 +1,15 @@
-use std::cell::{Ref, RefMut};
-
+use std::panic::Location;
 use std::rc::Rc;
 
 use dioxus_core::prelude::{
-    consume_context, consume_context_from_scope, current_scope_id, provide_context,
+    consume_context, consume_context_from_scope, current_scope_id, has_context, provide_context,
     provide_context_to_scope, provide_root_context,
 };
 use dioxus_core::ScopeId;
 
-use generational_box::{GenerationalBox, Owner, Store};
+use generational_box::{
+    BorrowError, BorrowMutError, GenerationalBox, GenerationalRef, GenerationalRefMut, Owner, Store,
+};
 
 fn current_store() -> Store {
     match consume_context() {
@@ -21,7 +22,7 @@ fn current_store() -> Store {
 }
 
 fn current_owner() -> Rc<Owner> {
-    match consume_context() {
+    match has_context() {
         Some(rt) => rt,
         None => {
             let owner = Rc::new(current_store().owner());
@@ -74,11 +75,21 @@ impl<T: 'static> CopyValue<T> {
     /// Create a new CopyValue. The value will be stored in the current component.
     ///
     /// Once the component this value is created in is dropped, the value will be dropped.
+    #[track_caller]
     pub fn new(value: T) -> Self {
         let owner = current_owner();
 
         Self {
             value: owner.insert(value),
+            origin_scope: current_scope_id().expect("in a virtual dom"),
+        }
+    }
+
+    pub(crate) fn new_with_caller(value: T, caller: &'static Location<'static>) -> Self {
+        let owner = current_owner();
+
+        Self {
+            value: owner.insert_with_caller(value, caller),
             origin_scope: current_scope_id().expect("in a virtual dom"),
         }
     }
@@ -108,22 +119,26 @@ impl<T: 'static> CopyValue<T> {
     }
 
     /// Try to read the value. If the value has been dropped, this will return None.
-    pub fn try_read(&self) -> Option<Ref<'_, T>> {
+    #[track_caller]
+    pub fn try_read(&self) -> Result<GenerationalRef<'_, T>, BorrowError> {
         self.value.try_read()
     }
 
     /// Read the value. If the value has been dropped, this will panic.
-    pub fn read(&self) -> Ref<'_, T> {
+    #[track_caller]
+    pub fn read(&self) -> GenerationalRef<'_, T> {
         self.value.read()
     }
 
     /// Try to write the value. If the value has been dropped, this will return None.
-    pub fn try_write(&self) -> Option<RefMut<'_, T>> {
+    #[track_caller]
+    pub fn try_write(&self) -> Result<GenerationalRefMut<'_, T>, BorrowMutError> {
         self.value.try_write()
     }
 
     /// Write the value. If the value has been dropped, this will panic.
-    pub fn write(&self) -> RefMut<'_, T> {
+    #[track_caller]
+    pub fn write(&self) -> GenerationalRefMut<'_, T> {
         self.value.write()
     }
 

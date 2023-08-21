@@ -1,6 +1,7 @@
 use std::{
-    cell::{Ref, RefCell, RefMut},
+    cell::RefCell,
     ops::{Deref, DerefMut},
+    panic::Location,
     rc::Rc,
     sync::Arc,
 };
@@ -9,6 +10,7 @@ use dioxus_core::{
     prelude::{current_scope_id, has_context, provide_context, schedule_update_any},
     ScopeId, ScopeState,
 };
+use generational_box::{GenerationalRef, GenerationalRefMut};
 
 use crate::{CopyValue, Effect};
 
@@ -43,8 +45,18 @@ use crate::{CopyValue, Effect};
 ///     }
 /// }
 /// ```
+#[track_caller]
 pub fn use_signal<T: 'static>(cx: &ScopeState, f: impl FnOnce() -> T) -> Signal<T> {
-    *cx.use_hook(|| Signal::new(f()))
+    #[cfg(debug_assertions)]
+    let caller = Location::caller();
+
+    *cx.use_hook(|| {
+        Signal::new_with_caller(
+            f(),
+            #[cfg(debug_assertions)]
+            caller,
+        )
+    })
 }
 
 #[derive(Clone)]
@@ -134,6 +146,7 @@ impl<'de, T: serde::Deserialize<'de> + 'static> serde::Deserialize<'de> for Sign
 
 impl<T: 'static> Signal<T> {
     /// Creates a new Signal. Signals are a Copy state management solution with automatic dependency tracking.
+    #[track_caller]
     pub fn new(value: T) -> Self {
         Self {
             inner: CopyValue::new(SignalData {
@@ -145,6 +158,25 @@ impl<T: 'static> Signal<T> {
         }
     }
 
+    /// Creates a new Signal. Signals are a Copy state management solution with automatic dependency tracking.
+    fn new_with_caller(
+        value: T,
+        #[cfg(debug_assertions)] caller: &'static Location<'static>,
+    ) -> Self {
+        Self {
+            inner: CopyValue::new_with_caller(
+                SignalData {
+                    subscribers: Default::default(),
+                    effect_subscribers: Default::default(),
+                    update_any: schedule_update_any().expect("in a virtual dom"),
+                    value,
+                },
+                #[cfg(debug_assertions)]
+                caller,
+            ),
+        }
+    }
+
     /// Get the scope the signal was created in.
     pub fn origin_scope(&self) -> ScopeId {
         self.inner.origin_scope()
@@ -152,7 +184,8 @@ impl<T: 'static> Signal<T> {
 
     /// Get the current value of the signal. This will subscribe the current scope to the signal.
     /// If the signal has been dropped, this will panic.
-    pub fn read(&self) -> Ref<T> {
+    #[track_caller]
+    pub fn read(&self) -> GenerationalRef<T> {
         let inner = self.inner.read();
         if let Some(effect) = Effect::current() {
             let mut effect_subscribers = inner.effect_subscribers.borrow_mut();
@@ -176,14 +209,15 @@ impl<T: 'static> Signal<T> {
                 }
             }
         }
-        Ref::map(inner, |v| &v.value)
+        GenerationalRef::map(inner, |v| &v.value)
     }
 
     /// Get a mutable reference to the signal's value.
     /// If the signal has been dropped, this will panic.
+    #[track_caller]
     pub fn write(&self) -> Write<'_, T> {
         let inner = self.inner.write();
-        let borrow = RefMut::map(inner, |v| &mut v.value);
+        let borrow = GenerationalRefMut::map(inner, |v| &mut v.value);
         Write {
             write: borrow,
             signal: SignalSubscriberDrop { signal: *self },
@@ -219,12 +253,14 @@ impl<T: 'static> Signal<T> {
     }
 
     /// Set the value of the signal. This will trigger an update on all subscribers.
+    #[track_caller]
     pub fn set(&self, value: T) {
         *self.write() = value;
     }
 
     /// Run a closure with a reference to the signal's value.
     /// If the signal has been dropped, this will panic.
+    #[track_caller]
     pub fn with<O>(&self, f: impl FnOnce(&T) -> O) -> O {
         let write = self.read();
         f(&*write)
@@ -232,6 +268,7 @@ impl<T: 'static> Signal<T> {
 
     /// Run a closure with a mutable reference to the signal's value.
     /// If the signal has been dropped, this will panic.
+    #[track_caller]
     pub fn with_mut<O>(&self, f: impl FnOnce(&mut T) -> O) -> O {
         let mut write = self.write();
         f(&mut *write)
@@ -241,6 +278,7 @@ impl<T: 'static> Signal<T> {
 impl<T: Clone + 'static> Signal<T> {
     /// Get the current value of the signal. This will subscribe the current scope to the signal.
     /// If the signal has been dropped, this will panic.
+    #[track_caller]
     pub fn value(&self) -> T {
         self.read().clone()
     }
@@ -264,7 +302,7 @@ impl<T: 'static> Drop for SignalSubscriberDrop<T> {
 
 /// A mutable reference to a signal's value.
 pub struct Write<'a, T: 'static, I: 'static = T> {
-    write: RefMut<'a, T>,
+    write: GenerationalRefMut<'a, T>,
     signal: SignalSubscriberDrop<I>,
 }
 
@@ -273,7 +311,7 @@ impl<'a, T: 'static, I: 'static> Write<'a, T, I> {
     pub fn map<O>(myself: Self, f: impl FnOnce(&mut T) -> &mut O) -> Write<'a, O, I> {
         let Self { write, signal } = myself;
         Write {
-            write: RefMut::map(write, f),
+            write: GenerationalRefMut::map(write, f),
             signal,
         }
     }
@@ -284,7 +322,7 @@ impl<'a, T: 'static, I: 'static> Write<'a, T, I> {
         f: impl FnOnce(&mut T) -> Option<&mut O>,
     ) -> Option<Write<'a, O, I>> {
         let Self { write, signal } = myself;
-        let write = RefMut::filter_map(write, f).ok();
+        let write = GenerationalRefMut::filter_map(write, f);
         write.map(|write| Write { write, signal })
     }
 }
@@ -320,11 +358,13 @@ impl<T: 'static> ReadOnlySignal<T> {
     }
 
     /// Get the current value of the signal. This will subscribe the current scope to the signal.
-    pub fn read(&self) -> Ref<T> {
+    #[track_caller]
+    pub fn read(&self) -> GenerationalRef<T> {
         self.inner.read()
     }
 
     /// Run a closure with a reference to the signal's value.
+    #[track_caller]
     pub fn with<O>(&self, f: impl FnOnce(&T) -> O) -> O {
         self.inner.with(f)
     }
