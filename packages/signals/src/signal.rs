@@ -145,6 +145,21 @@ impl<T: 'static> Signal<T> {
         }
     }
 
+    /// Create a new signal with a custom owner scope. The signal will be dropped when the owner scope is dropped instead of the current scope.
+    pub fn new_in_scope(value: T, owner: ScopeId) -> Self {
+        Self {
+            inner: CopyValue::new_in_scope(
+                SignalData {
+                    subscribers: Default::default(),
+                    effect_subscribers: Default::default(),
+                    update_any: schedule_update_any().expect("in a virtual dom"),
+                    value,
+                },
+                owner,
+            ),
+        }
+    }
+
     /// Get the scope the signal was created in.
     pub fn origin_scope(&self) -> ScopeId {
         self.inner.origin_scope()
