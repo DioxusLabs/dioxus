@@ -1,7 +1,6 @@
 use std::{
     cell::RefCell,
     ops::{Deref, DerefMut},
-    panic::Location,
     rc::Rc,
     sync::Arc,
 };
@@ -48,7 +47,7 @@ use crate::{CopyValue, Effect};
 #[track_caller]
 pub fn use_signal<T: 'static>(cx: &ScopeState, f: impl FnOnce() -> T) -> Signal<T> {
     #[cfg(debug_assertions)]
-    let caller = Location::caller();
+    let caller = std::panic::Location::caller();
 
     *cx.use_hook(|| {
         Signal::new_with_caller(
@@ -161,7 +160,7 @@ impl<T: 'static> Signal<T> {
     /// Creates a new Signal. Signals are a Copy state management solution with automatic dependency tracking.
     fn new_with_caller(
         value: T,
-        #[cfg(debug_assertions)] caller: &'static Location<'static>,
+        #[cfg(debug_assertions)] caller: &'static std::panic::Location<'static>,
     ) -> Self {
         Self {
             inner: CopyValue::new_with_caller(

@@ -8,7 +8,6 @@ use std::{
     fmt::{Debug, Display},
     marker::PhantomData,
     ops::{Deref, DerefMut},
-    panic::Location,
     rc::Rc,
 };
 
@@ -157,7 +156,7 @@ pub struct GenerationalBox<T> {
     raw: MemoryLocation,
     #[cfg(any(debug_assertions, feature = "check_generation"))]
     generation: u32,
-    #[cfg(any(debug_assertions, feature = "check_generation"))]
+    #[cfg(any(debug_assertions, feature = "debug_ownership"))]
     created_at: &'static std::panic::Location<'static>,
     _marker: PhantomData<T>,
 }
@@ -288,9 +287,8 @@ impl MemoryLocation {
     fn replace_with_caller<T: 'static>(
         &mut self,
         value: T,
-        #[cfg(any(debug_assertions, feature = "check_generation"))] caller: &'static Location<
-            'static,
-        >,
+        #[cfg(any(debug_assertions, feature = "debug_ownership"))]
+        caller: &'static std::panic::Location<'static>,
     ) -> GenerationalBox<T> {
         let mut inner_mut = self.0.data.borrow_mut();
 
@@ -301,7 +299,7 @@ impl MemoryLocation {
             raw: *self,
             #[cfg(any(debug_assertions, feature = "check_generation"))]
             generation: self.0.generation.get(),
-            #[cfg(any(debug_assertions, feature = "check_generation"))]
+            #[cfg(any(debug_assertions, feature = "debug_ownership"))]
             created_at: caller,
             _marker: PhantomData,
         }
@@ -310,7 +308,7 @@ impl MemoryLocation {
     #[track_caller]
     fn try_borrow<T: Any>(
         &self,
-        #[cfg(any(debug_assertions, feature = "debug_borrows"))]
+        #[cfg(any(debug_assertions, feature = "debug_ownership"))]
         created_at: &'static std::panic::Location<'static>,
     ) -> Result<GenerationalRef<'_, T>, BorrowError> {
         #[cfg(any(debug_assertions, feature = "debug_borrows"))]
@@ -329,7 +327,7 @@ impl MemoryLocation {
                     },
                 }),
                 Err(_) => Err(BorrowError::Dropped(ValueDroppedError {
-                    #[cfg(any(debug_assertions, feature = "debug_borrows"))]
+                    #[cfg(any(debug_assertions, feature = "debug_ownership"))]
                     created_at,
                 })),
             },
@@ -343,7 +341,7 @@ impl MemoryLocation {
     #[track_caller]
     fn try_borrow_mut<T: Any>(
         &self,
-        #[cfg(any(debug_assertions, feature = "debug_borrows"))]
+        #[cfg(any(debug_assertions, feature = "debug_ownership"))]
         created_at: &'static std::panic::Location<'static>,
     ) -> Result<GenerationalRefMut<'_, T>, BorrowMutError> {
         #[cfg(any(debug_assertions, feature = "debug_borrows"))]
@@ -363,7 +361,7 @@ impl MemoryLocation {
                         },
                     }),
                     Err(_) => Err(BorrowMutError::Dropped(ValueDroppedError {
-                        #[cfg(any(debug_assertions, feature = "debug_borrows"))]
+                        #[cfg(any(debug_assertions, feature = "debug_ownership"))]
                         created_at,
                     })),
                 }
@@ -422,14 +420,14 @@ impl Error for BorrowMutError {}
 /// An error that can occur when trying to use a value that has been dropped.
 #[derive(Debug, Copy, Clone)]
 pub struct ValueDroppedError {
-    #[cfg(any(debug_assertions, feature = "debug_borrows"))]
+    #[cfg(any(debug_assertions, feature = "debug_ownership"))]
     created_at: &'static std::panic::Location<'static>,
 }
 
 impl Display for ValueDroppedError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("Failed to borrow because the value was dropped.")?;
-        #[cfg(any(debug_assertions, feature = "debug_borrows"))]
+        #[cfg(any(debug_assertions, feature = "debug_ownership"))]
         f.write_fmt(format_args!("created_at: {}", self.created_at))?;
         Ok(())
     }
@@ -686,7 +684,7 @@ impl Owner {
     pub fn insert_with_caller<T: 'static>(
         &self,
         value: T,
-        #[cfg(any(debug_assertions, feature = "debug_borrows"))]
+        #[cfg(any(debug_assertions, feature = "debug_ownership"))]
         caller: &'static std::panic::Location<'static>,
     ) -> GenerationalBox<T> {
         let mut location = self.store.claim();
@@ -706,7 +704,7 @@ impl Owner {
             raw: location,
             #[cfg(any(debug_assertions, feature = "check_generation"))]
             generation: location.0.generation.get(),
-            #[cfg(any(debug_assertions, feature = "check_generation"))]
+            #[cfg(any(debug_assertions, feature = "debug_ownership"))]
             created_at: std::panic::Location::caller(),
             _marker: PhantomData,
         }
