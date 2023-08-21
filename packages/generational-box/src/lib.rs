@@ -32,12 +32,12 @@ fn reused() {
     let first_ptr;
     {
         let owner = store.owner();
-        first_ptr = owner.insert(1).raw.data.as_ptr();
+        first_ptr = owner.insert(1).raw.0.data.as_ptr();
         drop(owner);
     }
     {
         let owner = store.owner();
-        let second_ptr = owner.insert(1234).raw.data.as_ptr();
+        let second_ptr = owner.insert(1234).raw.0.data.as_ptr();
         assert_eq!(first_ptr, second_ptr);
         drop(owner);
     }
@@ -56,7 +56,10 @@ fn leaking_is_ok() {
         // don't drop the owner
         std::mem::forget(owner);
     }
-    assert_eq!(key.try_read().as_deref(), Some(&"hello world".to_string()));
+    assert_eq!(
+        key.try_read().as_deref().unwrap(),
+        &"hello world".to_string()
+    );
 }
 
 #[test]
@@ -71,7 +74,7 @@ fn drops() {
         key = owner.insert(data);
         // drop the owner
     }
-    assert!(key.try_read().is_none());
+    assert!(key.try_read().is_err());
 }
 
 #[test]
@@ -132,7 +135,7 @@ fn fuzz() {
             println!("{:?}", path);
             for key in valid_keys.iter() {
                 let value = key.read();
-                println!("{:?}", value);
+                println!("{:?}", &*value);
                 assert!(value.starts_with("hello world"));
             }
             #[cfg(any(debug_assertions, feature = "check_generation"))]

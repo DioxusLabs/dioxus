@@ -11,6 +11,8 @@ Three main types manage state in Generational Box:
 Example:
 
 ```rust
+use generational_box::Store;
+
 // Create a store for this thread
 let store = Store::default();
 
