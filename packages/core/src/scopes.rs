@@ -424,7 +424,9 @@ impl<'src> ScopeState {
         fn_name: &'static str,
     ) -> DynamicNode<'src>
     where
-        P: Properties + 'child,
+        // The properties must be valid until the next bump frame
+        P: Properties + 'src,
+        // The current bump allocator frame must outlive the child's borrowed props
         'src: 'child,
     {
         let vcomp = VProps::new(component, P::memoize, props);
