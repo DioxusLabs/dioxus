@@ -74,7 +74,7 @@ module.exports = defineConfig({
   webServer: [
     {
       command:
-        "cargo run --package dioxus-playwright-liveview-test --bin dioxus-playwright-liveview-test --skip-assets",
+        "cargo run --package dioxus-playwright-liveview-test --bin dioxus-playwright-liveview-test",
       port: 3030,
       timeout: 10 * 60 * 1000,
       reuseExistingServer: !process.env.CI,
