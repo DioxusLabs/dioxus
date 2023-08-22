@@ -1,6 +1,7 @@
 use self::error::{UseSharedStateError, UseSharedStateResult};
+use crate::UseFutureDep;
 use dioxus_core::{ScopeId, ScopeState};
-use std::{collections::HashSet, rc::Rc, sync::Arc};
+use std::{any::Any, collections::HashSet, rc::Rc, sync::Arc};
 
 #[cfg(debug_assertions)]
 pub use dioxus_debug_cell::{
@@ -81,10 +82,12 @@ pub(crate) struct ProvidedStateInner<T> {
     value: T,
     notify_any: Arc<dyn Fn(ScopeId)>,
     consumers: HashSet<ScopeId>,
+    gen: usize,
 }
 
 impl<T> ProvidedStateInner<T> {
     pub(crate) fn notify_consumers(&mut self) {
+        self.gen += 1;
         for consumer in self.consumers.iter() {
             (self.notify_any)(*consumer);
         }
@@ -306,11 +309,26 @@ impl<T> Clone for UseSharedState<T> {
     }
 }
 
-impl<T: PartialEq> PartialEq for UseSharedState<T> {
-    fn eq(&self, other: &Self) -> bool {
-        let first = self.inner.borrow();
-        let second = other.inner.borrow();
-        first.value == second.value
+impl<T> UseFutureDep for &UseSharedState<T> {
+    type Out = UseSharedState<T>;
+    fn out(&self) -> Self::Out {
+        (*self).clone()
+    }
+    fn apply(self, state: &mut Vec<Box<dyn Any>>) -> bool {
+        let gen = self.inner.borrow().gen;
+        match state.get_mut(0).and_then(|f| f.downcast_mut::<usize>()) {
+            Some(val) => {
+                if *val != gen {
+                    *val = gen;
+                    return true;
+                }
+            }
+            None => {
+                state.push(Box::new(gen));
+                return true;
+            }
+        }
+        false
     }
 }
 
@@ -360,6 +378,7 @@ pub fn use_shared_state_provider<T: 'static>(cx: &ScopeState, f: impl FnOnce() -
             value: f(),
             notify_any: cx.schedule_update_any(),
             consumers: HashSet::new(),
+            gen: 0,
         }));
 
         cx.provide_context(state);
