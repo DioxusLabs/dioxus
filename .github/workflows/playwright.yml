@@ -16,7 +16,7 @@ jobs:
   test:
     if: github.event.pull_request.draft == false
     timeout-minutes: 60
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     steps:
       # Do our best to cache the toolchain and node install steps
       - uses: actions/checkout@v3
