@@ -19,6 +19,9 @@ pub(crate) struct ElementRef {
 
     // The actual template
     pub template: Option<NonNull<VNode<'static>>>,
+
+    // The scope the element belongs to
+    pub scope: ScopeId,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -32,6 +35,7 @@ impl ElementRef {
         Self {
             template: None,
             path: ElementPath::Root(0),
+            scope: ScopeId(0),
         }
     }
 }
@@ -56,11 +60,13 @@ impl VirtualDom {
     fn next_reference(&mut self, template: &VNode, path: ElementPath) -> ElementId {
         let entry = self.elements.vacant_entry();
         let id = entry.key();
+        let scope = self.runtime.current_scope_id().unwrap_or(ScopeId(0));
 
         entry.insert(ElementRef {
             // We know this is non-null because it comes from a reference
             template: Some(unsafe { NonNull::new_unchecked(template as *const _ as *mut _) }),
             path,
+            scope,
         });
         ElementId(id)
     }
@@ -91,7 +97,7 @@ impl VirtualDom {
     // Note: This will not remove any ids from the arena
     pub(crate) fn drop_scope(&mut self, id: ScopeId, recursive: bool) {
         self.dirty_scopes.remove(&DirtyScope {
-            height: self.scopes[id.0].height,
+            height: self.scopes[id.0].height(),
             id,
         });
 
@@ -110,10 +116,13 @@ impl VirtualDom {
         // Drop all the hooks once the children are dropped
         // this means we'll drop hooks bottom-up
         scope.hooks.get_mut().clear();
+        {
+            let context = scope.context();
 
-        // Drop all the futures once the hooks are dropped
-        for task_id in scope.spawned_tasks.borrow_mut().drain() {
-            scope.tasks.remove(task_id);
+            // Drop all the futures once the hooks are dropped
+            for task_id in context.spawned_tasks.borrow_mut().drain() {
+                context.tasks.remove(task_id);
+            }
         }
 
         self.scopes.remove(id.0);

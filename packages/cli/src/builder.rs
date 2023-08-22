@@ -93,18 +93,21 @@ pub fn build(config: &CrateConfig, quiet: bool) -> Result<BuildResult> {
     // [2] Establish the output directory structure
     let bindgen_outdir = out_dir.join("assets").join("dioxus");
 
-    let release_type = match config.release {
-        true => "release",
-        false => "debug",
+    let build_profile = if config.custom_profile.is_some() {
+        config.custom_profile.as_ref().unwrap()
+    } else if config.release {
+        "release"
+    } else {
+        "debug"
     };
 
     let input_path = match executable {
         ExecutableType::Binary(name) | ExecutableType::Lib(name) => target_dir
-            .join(format!("wasm32-unknown-unknown/{}", release_type))
+            .join(format!("wasm32-unknown-unknown/{}", build_profile))
             .join(format!("{}.wasm", name)),
 
         ExecutableType::Example(name) => target_dir
-            .join(format!("wasm32-unknown-unknown/{}/examples", release_type))
+            .join(format!("wasm32-unknown-unknown/{}/examples", build_profile))
             .join(format!("{}.wasm", name)),
     };
 
