@@ -27,7 +27,7 @@ jobs:
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: stable
-          targets: wasm32-unknown-unknown
+          targets: x86_64-linux-gnu,wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
       - name: Install dependencies
         run: npm ci
