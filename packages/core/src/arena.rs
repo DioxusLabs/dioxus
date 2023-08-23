@@ -1,5 +1,3 @@
-use std::ptr::NonNull;
-
 use crate::{
     innerlude::DirtyScope, nodes::RenderReturn, nodes::VNode, virtual_dom::VirtualDom,
     AttributeValue, DynamicNode, ScopeId,
@@ -21,13 +19,13 @@ pub struct ElementId(pub usize);
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct BubbleId(pub usize);
 
-#[derive(Debug, Clone)]
-pub struct ElementRef {
+#[derive(Debug, Clone, Copy)]
+pub struct ElementRef<'a> {
     // the pathway of the real element inside the template
     pub(crate) path: ElementPath,
 
     // The actual template
-    pub(crate) template: NonNull<VNode<'static>>,
+    pub(crate) template: &'a VNode<'a>,
 
     // The scope the element belongs to
     pub(crate) scope: ScopeId,
@@ -35,7 +33,7 @@ pub struct ElementRef {
 
 #[derive(Clone, Copy, Debug)]
 pub struct ElementPath {
-    path: &'static [u8],
+    pub(crate) path: &'static [u8],
 }
 
 impl VirtualDom {
@@ -43,22 +41,11 @@ impl VirtualDom {
         ElementId(self.elements.insert(None))
     }
 
-    pub(crate) fn next_element_ref(&mut self, template: &VNode, path: &'static [u8]) -> BubbleId {
-        self.next_reference(template, ElementPath { path })
-    }
-
-    fn next_reference(&mut self, template: &VNode, path: ElementPath) -> BubbleId {
-        let entry = self.element_refs.vacant_entry();
-        let id = entry.key();
-        let scope = self.runtime.current_scope_id().unwrap_or(ScopeId(0));
-
-        entry.insert(ElementRef {
-            // We know this is non-null because it comes from a reference
-            template: unsafe { NonNull::new_unchecked(template as *const _ as *mut _) },
-            path,
-            scope,
-        });
-        BubbleId(id)
+    pub(crate) fn next_element_ref(&mut self, element_ref: ElementRef) -> BubbleId {
+        BubbleId(
+            self.element_refs
+                .insert(unsafe { std::mem::transmute(element_ref) }),
+        )
     }
 
     pub(crate) fn reclaim(&mut self, el: ElementId) {
@@ -77,15 +64,13 @@ impl VirtualDom {
         self.elements.try_remove(el.0).map(|_| ())
     }
 
-    pub(crate) fn set_template(&mut self, el: ElementId, node: &VNode, path: &'static [u8]) {
+    pub(crate) fn set_template(&mut self, el: ElementId, element_ref: ElementRef) {
         match self.elements[el.0] {
             Some(bubble_id) => {
-                self.element_refs[bubble_id.0].path = ElementPath { path };
-                self.element_refs[bubble_id.0].template =
-                    unsafe { NonNull::new_unchecked(node as *const _ as *mut _) };
+                self.element_refs[bubble_id.0] = unsafe { std::mem::transmute(element_ref) };
             }
             None => {
-                self.elements[el.0] = Some(self.next_reference(node, ElementPath { path }));
+                self.elements[el.0] = Some(self.next_element_ref(element_ref));
             }
         }
     }

@@ -1,6 +1,7 @@
 use crate::any_props::AnyProps;
-use crate::diff::BoundaryRef;
-use crate::innerlude::{BorrowedAttributeValue, VComponent, VPlaceholder, VText};
+use crate::innerlude::{
+    BorrowedAttributeValue, ElementPath, ElementRef, VComponent, VPlaceholder, VText,
+};
 use crate::mutations::Mutation;
 use crate::mutations::Mutation::*;
 use crate::nodes::VNode;
@@ -182,7 +183,14 @@ impl<'b> VirtualDom {
         use DynamicNode::*;
         match &template.dynamic_nodes[idx] {
             node @ Component { .. } | node @ Fragment(_) => {
-                self.create_dynamic_node(template, idx, node, idx)
+                let template_ref = ElementRef {
+                    path: ElementPath {
+                        path: &template.template.get().node_paths[idx],
+                    },
+                    template: &template,
+                    scope: self.runtime.current_scope_id().unwrap_or(ScopeId(0)),
+                };
+                self.create_dynamic_node(template_ref, node)
             }
             Placeholder(VPlaceholder { id }) => {
                 let id = self.set_slot(id);
@@ -266,7 +274,14 @@ impl<'b> VirtualDom {
             .map(|sorted_index| dynamic_nodes[sorted_index].0);
 
         for idx in reversed_iter {
-            let m = self.create_dynamic_node(template, idx, &template.dynamic_nodes[idx], idx);
+            let boundary_ref = ElementRef {
+                path: ElementPath {
+                    path: &template.template.get().node_paths[idx],
+                },
+                template,
+                scope: self.runtime.current_scope_id().unwrap_or(ScopeId(0)),
+            };
+            let m = self.create_dynamic_node(boundary_ref, &template.dynamic_nodes[idx]);
             if m > 0 {
                 // The path is one shorter because the top node is the root
                 let path = &template.template.get().node_paths[idx][1..];
@@ -315,7 +330,12 @@ impl<'b> VirtualDom {
         match &attribute.value {
             AttributeValue::Listener(_) => {
                 let path = &template.template.get().attr_paths[idx];
-                self.set_template(id, template, path);
+                let element_ref = ElementRef {
+                    path: ElementPath { path },
+                    template,
+                    scope: self.runtime.current_scope_id().unwrap_or(ScopeId(0)),
+                };
+                self.set_template(id, element_ref);
                 self.mutations.push(NewEventListener {
                     // all listeners start with "on"
                     name: &unbounded_name[2..],
@@ -446,19 +466,19 @@ impl<'b> VirtualDom {
 
     pub(crate) fn create_dynamic_node(
         &mut self,
-        parent: BoundaryRef<'b>,
+        parent: ElementRef<'b>,
         node: &'b DynamicNode<'b>,
     ) -> usize {
         use DynamicNode::*;
         match node {
             Text(text) => self.create_dynamic_text(parent, text),
             Placeholder(place) => self.create_placeholder(place, parent),
-            Component(component) => self.create_component_node(parent, component),
+            Component(component) => self.create_component_node(Some(parent), component),
             Fragment(frag) => frag.iter().map(|child| self.create(child)).sum(),
         }
     }
 
-    fn create_dynamic_text(&mut self, parent: BoundaryRef<'b>, text: &'b VText<'b>) -> usize {
+    fn create_dynamic_text(&mut self, parent: ElementRef<'b>, text: &'b VText<'b>) -> usize {
         // Allocate a dynamic element reference for this text node
         let new_id = self.next_element();
 
@@ -471,7 +491,7 @@ impl<'b> VirtualDom {
         // Add the mutation to the list
         self.mutations.push(HydrateText {
             id: new_id,
-            path: &parent.parent.template.get().node_paths[parent.dyn_node_idx][1..],
+            path: &parent.path.path[1..],
             value,
         });
 
@@ -482,7 +502,7 @@ impl<'b> VirtualDom {
     pub(crate) fn create_placeholder(
         &mut self,
         placeholder: &VPlaceholder,
-        parent: BoundaryRef<'b>,
+        parent: ElementRef<'b>,
     ) -> usize {
         // Allocate a dynamic element reference for this text node
         let id = self.next_element();
@@ -492,7 +512,7 @@ impl<'b> VirtualDom {
 
         // Assign the ID to the existing node in the template
         self.mutations.push(AssignId {
-            path: &parent.parent.template.get().node_paths[parent.dyn_node_idx][1..],
+            path: &parent.path.path[1..],
             id,
         });
 
@@ -502,7 +522,7 @@ impl<'b> VirtualDom {
 
     pub(super) fn create_component_node(
         &mut self,
-        parent: BoundaryRef<'b>,
+        parent: Option<ElementRef<'b>>,
         component: &'b VComponent<'b>,
     ) -> usize {
         use RenderReturn::*;

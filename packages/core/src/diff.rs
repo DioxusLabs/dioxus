@@ -1,7 +1,10 @@
 use crate::{
     any_props::AnyProps,
     arena::ElementId,
-    innerlude::{BorrowedAttributeValue, DirtyScope, VComponent, VPlaceholder, VText},
+    innerlude::{
+        BorrowedAttributeValue, DirtyScope, ElementPath, ElementRef, VComponent, VPlaceholder,
+        VText,
+    },
     mutations::Mutation,
     nodes::RenderReturn,
     nodes::{DynamicNode, VNode},
@@ -81,7 +84,10 @@ impl<'b> VirtualDom {
                 if let Some(&template) = map.get(&byte_index) {
                     right_template.template.set(template);
                     if template != left_template.template.get() {
-                        return self.replace(left_template, [right_template], todo!());
+                        let parent = left_template.parent.take().map(|parent_id| unsafe {
+                            std::mem::transmute(self.element_refs[parent_id.0])
+                        });
+                        return self.replace(left_template, [right_template], parent);
                     }
                 }
             }
@@ -99,7 +105,7 @@ impl<'b> VirtualDom {
 
         // If the templates are different by name, we need to replace the entire template
         if templates_are_different(left_template, right_template) {
-            return self.light_diff_templates(left_template, right_template, todo!());
+            return self.light_diff_templates(left_template, right_template);
         }
 
         // If the templates are the same, we can diff the attributes and children
@@ -129,9 +135,12 @@ impl<'b> VirtualDom {
             .zip(right_template.dynamic_nodes.iter())
             .enumerate()
             .for_each(|(dyn_node_idx, (left_node, right_node))| {
-                let current_ref = BoundaryRef {
-                    parent: right_template,
-                    dyn_node_idx,
+                let current_ref = ElementRef {
+                    template: right_template.into(),
+                    path: ElementPath {
+                        path: left_template.template.get().node_paths[dyn_node_idx],
+                    },
+                    scope: self.runtime.scope_stack.borrow().last().copied().unwrap(),
                 };
                 self.diff_dynamic_node(left_node, right_node, current_ref);
             });
@@ -150,13 +159,13 @@ impl<'b> VirtualDom {
         &mut self,
         left_node: &'b DynamicNode<'b>,
         right_node: &'b DynamicNode<'b>,
-        parent: BoundaryRef<'b>,
+        parent: ElementRef<'b>,
     ) {
         match (left_node, right_node) {
             (Text(left), Text(right)) => self.diff_vtext(left, right),
             (Fragment(left), Fragment(right)) => self.diff_non_empty_fragment(left, right, parent),
             (Placeholder(left), Placeholder(right)) => right.id.set(left.id.get()),
-            (Component(left), Component(right)) => self.diff_vcomponent(left, right, parent),
+            (Component(left), Component(right)) => self.diff_vcomponent(left, right, Some(parent)),
             (Placeholder(left), Fragment(right)) => self.replace_placeholder(left, *right, parent),
             (Fragment(left), Placeholder(right)) => self.node_to_placeholder(left, right),
             _ => todo!("This is an usual custom case for dynamic nodes. We don't know how to handle it yet."),
@@ -179,7 +188,7 @@ impl<'b> VirtualDom {
         &mut self,
         left: &'b VComponent<'b>,
         right: &'b VComponent<'b>,
-        parent: BoundaryRef<'b>,
+        parent: Option<ElementRef<'b>>,
     ) {
         if std::ptr::eq(left, right) {
             return;
@@ -224,7 +233,7 @@ impl<'b> VirtualDom {
         &mut self,
         right: &'b VComponent<'b>,
         left: &'b VComponent<'b>,
-        parent: BoundaryRef<'b>,
+        parent: Option<ElementRef<'b>>,
     ) {
         let m = self.create_component_node(parent, right);
 
@@ -280,17 +289,16 @@ impl<'b> VirtualDom {
     ///     Component { ..props }
     /// }
     /// ```
-    fn light_diff_templates(
-        &mut self,
-        left: &'b VNode<'b>,
-        right: &'b VNode<'b>,
-        parent: BoundaryRef<'b>,
-    ) {
+    fn light_diff_templates(&mut self, left: &'b VNode<'b>, right: &'b VNode<'b>) {
+        let parent = left
+            .parent
+            .take()
+            .map(|parent_id| unsafe { std::mem::transmute(self.element_refs[parent_id.0]) });
         match matching_components(left, right) {
             None => self.replace(left, [right], parent),
             Some(components) => components
                 .into_iter()
-                .for_each(|(idx, l, r)| self.diff_vcomponent(l, r, parent)),
+                .for_each(|(l, r)| self.diff_vcomponent(l, r, parent)),
         }
     }
 
@@ -312,7 +320,7 @@ impl<'b> VirtualDom {
         &mut self,
         old: &'b [VNode<'b>],
         new: &'b [VNode<'b>],
-        parent: BoundaryRef<'b>,
+        parent: ElementRef<'b>,
     ) {
         let new_is_keyed = new[0].key.is_some();
         let old_is_keyed = old[0].key.is_some();
@@ -344,7 +352,7 @@ impl<'b> VirtualDom {
         &mut self,
         old: &'b [VNode<'b>],
         new: &'b [VNode<'b>],
-        parent: BoundaryRef<'b>,
+        parent: ElementRef<'b>,
     ) {
         use std::cmp::Ordering;
 
@@ -385,7 +393,7 @@ impl<'b> VirtualDom {
         &mut self,
         old: &'b [VNode<'b>],
         new: &'b [VNode<'b>],
-        parent: BoundaryRef<'b>,
+        parent: ElementRef<'b>,
     ) {
         if cfg!(debug_assertions) {
             let mut keys = rustc_hash::FxHashSet::default();
@@ -464,7 +472,7 @@ impl<'b> VirtualDom {
         &mut self,
         old: &'b [VNode<'b>],
         new: &'b [VNode<'b>],
-        parent: BoundaryRef<'b>,
+        parent: ElementRef<'b>,
     ) -> Option<(usize, usize)> {
         let mut left_offset = 0;
 
@@ -523,7 +531,7 @@ impl<'b> VirtualDom {
         &mut self,
         old: &'b [VNode<'b>],
         new: &'b [VNode<'b>],
-        parent: BoundaryRef<'b>,
+        parent: ElementRef<'b>,
     ) {
         /*
         1. Map the old keys into a numerical ordering based on indices.
@@ -581,7 +589,7 @@ impl<'b> VirtualDom {
         if shared_keys.is_empty() {
             if old.get(0).is_some() {
                 self.remove_nodes(&old[1..]);
-                self.replace(&old[0], new, parent);
+                self.replace(&old[0], new, Some(parent));
             } else {
                 // I think this is wrong - why are we appending?
                 // only valid of the if there are no trailing elements
@@ -762,7 +770,7 @@ impl<'b> VirtualDom {
     fn create_children(
         &mut self,
         nodes: impl IntoIterator<Item = &'b VNode<'b>>,
-        parent: BoundaryRef<'b>,
+        parent: Option<ElementRef<'b>>,
     ) -> usize {
         nodes.into_iter().fold(0, |acc, child| {
             self.assign_boundary_ref(parent, child);
@@ -774,9 +782,9 @@ impl<'b> VirtualDom {
         &mut self,
         new: &'b [VNode<'b>],
         before: &'b VNode<'b>,
-        parent: BoundaryRef<'b>,
+        parent: ElementRef<'b>,
     ) {
-        let m = self.create_children(new, parent);
+        let m = self.create_children(new, Some(parent));
         let id = self.find_first_element(before);
         self.mutations.push(Mutation::InsertBefore { id, m })
     }
@@ -785,9 +793,9 @@ impl<'b> VirtualDom {
         &mut self,
         new: &'b [VNode<'b>],
         after: &'b VNode<'b>,
-        parent: BoundaryRef<'b>,
+        parent: ElementRef<'b>,
     ) {
-        let m = self.create_children(new, parent);
+        let m = self.create_children(new, Some(parent));
         let id = self.find_last_element(after);
         self.mutations.push(Mutation::InsertAfter { id, m })
     }
@@ -797,9 +805,9 @@ impl<'b> VirtualDom {
         &mut self,
         l: &'b VPlaceholder,
         r: impl IntoIterator<Item = &'b VNode<'b>>,
-        parent: BoundaryRef<'b>,
+        parent: ElementRef<'b>,
     ) {
-        let m = self.create_children(r, parent);
+        let m = self.create_children(r, Some(parent));
         let id = l.id.get().unwrap();
         self.mutations.push(Mutation::ReplaceWith { id, m });
         self.reclaim(id);
@@ -809,7 +817,7 @@ impl<'b> VirtualDom {
         &mut self,
         left: &'b VNode<'b>,
         right: impl IntoIterator<Item = &'b VNode<'b>>,
-        parent: BoundaryRef<'b>,
+        parent: Option<ElementRef<'b>>,
     ) {
         let m = self.create_children(right, parent);
 
@@ -1031,13 +1039,15 @@ impl<'b> VirtualDom {
         }
     }
 
-    pub(crate) fn assign_boundary_ref(&mut self, parent: BoundaryRef, child: &VNode<'_>) {
-        // assign the parent
-        let path = parent.parent.template.get().node_paths[parent.dyn_node_idx];
-
-        child
-            .parent
-            .set(Some(self.next_element_ref(parent.parent, path)));
+    pub(crate) fn assign_boundary_ref(
+        &mut self,
+        parent: Option<ElementRef<'b>>,
+        child: &'b VNode<'b>,
+    ) {
+        if let Some(parent) = parent {
+            // assign the parent of the child
+            child.parent.set(Some(self.next_element_ref(parent)));
+        }
     }
 }
 
@@ -1060,7 +1070,7 @@ fn templates_are_different(left_template: &VNode, right_template: &VNode) -> boo
 fn matching_components<'a>(
     left: &'a VNode<'a>,
     right: &'a VNode<'a>,
-) -> Option<Vec<(usize, &'a VComponent<'a>, &'a VComponent<'a>)>> {
+) -> Option<Vec<(&'a VComponent<'a>, &'a VComponent<'a>)>> {
     let left_template = left.template.get();
     let right_template = right.template.get();
     if left_template.roots.len() != right_template.roots.len() {
@@ -1072,8 +1082,7 @@ fn matching_components<'a>(
         .roots
         .iter()
         .zip(right_template.roots.iter())
-        .enumerate()
-        .map(|(idx, (l, r))| {
+        .map(|(l, r)| {
             let (l, r) = match (l, r) {
                 (TemplateNode::Dynamic { id: l }, TemplateNode::Dynamic { id: r }) => (l, r),
                 _ => return None,
@@ -1084,7 +1093,7 @@ fn matching_components<'a>(
                 _ => return None,
             };
 
-            Some((idx, l, r))
+            Some((l, r))
         })
         .collect()
 }
@@ -1115,10 +1124,4 @@ fn is_dyn_node_only_child(node: &VNode, idx: usize) -> bool {
         TemplateNode::Element { children, .. } => children.len() == 1,
         _ => false,
     }
-}
-
-// A parent that can be used for bubbling
-pub(crate) struct BoundaryRef<'b> {
-    pub parent: &'b VNode<'b>,
-    pub dyn_node_idx: usize,
 }

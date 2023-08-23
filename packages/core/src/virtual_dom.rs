@@ -183,7 +183,7 @@ pub struct VirtualDom {
     pub(crate) templates: FxHashMap<TemplateId, FxHashMap<usize, Template<'static>>>,
 
     // Every element is actually a dual reference - one to the template and the other to the dynamic node in that template
-    pub(crate) element_refs: Slab<ElementRef>,
+    pub(crate) element_refs: Slab<ElementRef<'static>>,
 
     // The element ids that are used in the renderer
     pub(crate) elements: Slab<Option<BubbleId>>,
@@ -353,13 +353,11 @@ impl VirtualDom {
         | | |       <-- no, broke early
         |           <-- no, broke early
         */
-        println!("calling {:?}", element);
         let element = match self.elements.get(element.0) {
             Some(Some(el)) => el,
             _ => return,
         };
         let mut parent_path = self.element_refs.get(element.0).cloned();
-        println!("parent path {:?}", parent_path);
         let mut listeners = vec![];
 
         // We will clone this later. The data itself is wrapped in RC to be used in callbacks if required
@@ -374,7 +372,6 @@ impl VirtualDom {
             while let Some(el_ref) = parent_path {
                 // safety: we maintain references of all vnodes in the element slab
                 let template = el_ref.template;
-                let template = unsafe { template.as_ref() };
                 let node_template = template.template.get();
                 let target_path = el_ref.path;
 
@@ -425,7 +422,6 @@ impl VirtualDom {
             if let Some(el_ref) = parent_path {
                 // safety: we maintain references of all vnodes in the element slab
                 let template = el_ref.template;
-                let template = unsafe { template.as_ref() };
                 let node_template = template.template.get();
                 let target_path = el_ref.path;
 

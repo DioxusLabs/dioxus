@@ -271,10 +271,9 @@ fn create_random_element(cx: Scope<DepthProps>) -> Element {
                 )
                 .into_boxed_str(),
             ));
-            // println!("{template:#?}");
             let node = VNode {
                 key: None,
-                parent: None,
+                parent: Default::default(),
                 template: Cell::new(template),
                 root_ids: bumpalo::collections::Vec::new_in(cx.bump()).into(),
                 dynamic_nodes: {
