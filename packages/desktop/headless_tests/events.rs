@@ -1,6 +1,7 @@
 use dioxus::html::geometry::euclid::Vector3D;
 use dioxus::prelude::*;
 use dioxus_desktop::DesktopContext;
+use dioxus_html::PointInteraction;
 
 pub(crate) fn check_app_exits(app: Component) {
     use dioxus_desktop::tao::window::WindowBuilder;

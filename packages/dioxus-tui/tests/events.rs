@@ -1,6 +1,7 @@
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent};
 use dioxus::prelude::*;
 use dioxus_html::input_data::keyboard_types::Code;
+use dioxus_html::PointInteraction;
 use dioxus_tui::TuiContext;
 use std::future::Future;
 use std::pin::Pin;
@@ -63,7 +64,7 @@ fn key_down() {
                 onkeydown: move |evt| {
                     assert_eq!(evt.data.code(), Code::KeyA);
                     tui_ctx.quit();
-                },
+                }
             }
         })
     }
@@ -95,9 +96,11 @@ fn mouse_down() {
                 width: "100%",
                 height: "100%",
                 onmousedown: move |evt| {
-                    assert!(evt.data.held_buttons().contains(dioxus_html::input_data::MouseButton::Primary));
+                    assert!(
+                        evt.data.held_buttons().contains(dioxus_html::input_data::MouseButton::Primary)
+                    );
                     tui_ctx.quit();
-                },
+                }
             }
         })
     }
@@ -131,13 +134,9 @@ fn mouse_up() {
             modifiers: KeyModifiers::NONE,
         }));
         cx.render(rsx! {
-            div {
-                width: "100%",
-                height: "100%",
-                onmouseup: move |_| {
+            div { width: "100%", height: "100%", onmouseup: move |_| {
                     tui_ctx.quit();
-                },
-            }
+                } }
         })
     }
 }
@@ -170,13 +169,9 @@ fn mouse_enter() {
             modifiers: KeyModifiers::NONE,
         }));
         cx.render(rsx! {
-            div {
-                width: "50%",
-                height: "50%",
-                onmouseenter: move |_| {
+            div { width: "50%", height: "50%", onmouseenter: move |_| {
                     tui_ctx.quit();
-                },
-            }
+                } }
         })
     }
 }
@@ -209,13 +204,9 @@ fn mouse_exit() {
             modifiers: KeyModifiers::NONE,
         }));
         cx.render(rsx! {
-            div {
-                width: "50%",
-                height: "50%",
-                onmouseenter: move |_| {
+            div { width: "50%", height: "50%", onmouseenter: move |_| {
                     tui_ctx.quit();
-                },
-            }
+                } }
         })
     }
 }
@@ -248,13 +239,9 @@ fn mouse_move() {
             modifiers: KeyModifiers::NONE,
         }));
         cx.render(rsx! {
-            div {
-                width: "100%",
-                height: "100%",
-                onmousemove: move |_|{
+            div { width: "100%", height: "100%", onmousemove: move |_| {
                     tui_ctx.quit();
-                },
-            }
+                } }
         })
     }
 }
@@ -293,7 +280,7 @@ fn wheel() {
                 onwheel: move |evt| {
                     assert!(evt.data.delta().strip_units().y > 0.0);
                     tui_ctx.quit();
-                },
+                }
             }
         })
     }
@@ -327,13 +314,9 @@ fn click() {
             modifiers: KeyModifiers::NONE,
         }));
         cx.render(rsx! {
-            div {
-                width: "100%",
-                height: "100%",
-                onclick: move |_|{
+            div { width: "100%", height: "100%", onclick: move |_| {
                     tui_ctx.quit();
-                },
-            }
+                } }
         })
     }
 }
@@ -366,13 +349,9 @@ fn context_menu() {
             modifiers: KeyModifiers::NONE,
         }));
         cx.render(rsx! {
-            div {
-                width: "100%",
-                height: "100%",
-                oncontextmenu: move |_|{
+            div { width: "100%", height: "100%", oncontextmenu: move |_| {
                     tui_ctx.quit();
-                },
-            }
+                } }
         })
     }
 }

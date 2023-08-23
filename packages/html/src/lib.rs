@@ -36,6 +36,7 @@ pub use transit::*;
 pub use elements::*;
 pub use events::*;
 pub use global_attributes::*;
+pub use point_interaction::PointInteraction;
 pub use render_template::*;
 
 mod eval;
