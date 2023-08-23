@@ -13,6 +13,7 @@ use dioxus_html::geometry::{
 use dioxus_html::input_data::keyboard_types::{Code, Key, Location, Modifiers};
 use dioxus_html::input_data::MouseButtonSet as DioxusMouseButtons;
 use dioxus_html::input_data::{MouseButton as DioxusMouseButton, MouseButtonSet};
+use dioxus_html::point_interaction::{PointData, PointInteraction};
 use dioxus_html::{event_bubbles, FocusData, KeyboardData, MouseData, WheelData};
 use std::any::Any;
 use std::collections::HashMap;
@@ -133,12 +134,12 @@ impl InnerInputState {
                     _ => {}
                 }
 
-                let new_mouse_data = MouseData::new(
-                    m.coordinates(),
+                let new_mouse_data = MouseData::new(PointData::new(
                     m.trigger_button(),
                     held_buttons,
+                    m.coordinates(),
                     m.modifiers(),
-                );
+                ));
 
                 self.mouse = Some(new_mouse_data.clone());
                 *m = new_mouse_data;
@@ -291,12 +292,12 @@ impl InnerInputState {
                 mouse_data.page_coordinates(),
             );
 
-            MouseData::new(
-                coordinates,
+            MouseData::new(PointData::new(
                 mouse_data.trigger_button(),
                 mouse_data.held_buttons(),
+                coordinates,
                 mouse_data.modifiers(),
-            )
+            ))
         }
 
         if let Some(mouse_data) = &self.mouse {
@@ -715,12 +716,12 @@ fn get_event(evt: TermEvent) -> Option<(&'static str, EventData)> {
                 }
 
                 // held mouse buttons get set later by maintaining state, as crossterm does not provide them
-                EventData::Mouse(MouseData::new(
-                    coordinates,
+                EventData::Mouse(MouseData::new(PointData::new(
                     button,
-                    DioxusMouseButtons::empty(),
+                    MouseButtonSet::empty(),
+                    coordinates,
                     modifiers,
-                ))
+                )))
             };
 
             let get_wheel_data = |up| {

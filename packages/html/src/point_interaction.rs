@@ -1,3 +1,5 @@
+use std::fmt::{Debug, Formatter};
+
 use keyboard_types::Modifiers;
 
 use crate::{
@@ -69,8 +71,8 @@ pub struct PointData {
 impl PointData {
     pub fn new(
         trigger_button: Option<MouseButton>,
-        coordinates: Coordinates,
         held_buttons: MouseButtonSet,
+        coordinates: Coordinates,
         modifiers: Modifiers,
     ) -> Self {
         let alt_key = modifiers.contains(Modifiers::ALT);
@@ -100,6 +102,23 @@ impl PointData {
             page_x,
             page_y,
         }
+    }
+}
+
+impl Debug for PointData {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PointInteraction")
+            .field("coordinates", &self.coordinates())
+            .field("modifiers", &self.modifiers())
+            .field("held_buttons", &self.held_buttons())
+            .field("trigger_button", &self.trigger_button())
+            .finish()
+    }
+}
+
+impl PointInteraction for PointData {
+    fn get_point_data(&self) -> PointData {
+        *self
     }
 }
 
@@ -160,7 +179,7 @@ pub trait PointInteraction {
         decode_mouse_button_set(self.get_point_data().buttons)
     }
 
-    fn trigger_button(&self) -> MouseButton {
-        MouseButton::from_web_code(self.get_point_data().button)
+    fn trigger_button(&self) -> Option<MouseButton> {
+        Some(MouseButton::from_web_code(self.get_point_data().button))
     }
 }

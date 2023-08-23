@@ -22,7 +22,7 @@ mod global_attributes;
 pub mod input_data;
 #[cfg(feature = "native-bind")]
 pub mod native_bind;
-mod point_interaction;
+pub mod point_interaction;
 mod render_template;
 #[cfg(feature = "wasm-bind")]
 mod web_sys_bind;

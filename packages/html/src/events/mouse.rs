@@ -1,12 +1,11 @@
 use crate::point_interaction::{PointData, PointInteraction};
 use dioxus_core::Event;
-use std::fmt::{Debug, Formatter};
 
 pub type MouseEvent = Event<MouseData>;
 
 /// A synthetic event that wraps a web-style [`MouseEvent`](https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent)
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 /// Data associated with a mouse event
 pub struct MouseData {
     /// Common data for all pointer/mouse events
@@ -87,16 +86,5 @@ impl MouseData {
 impl PointInteraction for MouseData {
     fn get_point_data(&self) -> PointData {
         self.point_data
-    }
-}
-
-impl Debug for MouseData {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("MouseData")
-            .field("coordinates", &self.coordinates())
-            .field("modifiers", &self.modifiers())
-            .field("held_buttons", &self.held_buttons())
-            .field("trigger_button", &self.trigger_button())
-            .finish()
     }
 }
