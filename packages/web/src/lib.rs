@@ -54,6 +54,7 @@
 //     - Do DOM work in the next requestAnimationFrame callback
 
 pub use crate::cfg::Config;
+pub use crate::file_engine::WebFileEngineExt;
 use dioxus_core::{Element, Scope, VirtualDom};
 use futures_util::{
     future::{select, Either},
