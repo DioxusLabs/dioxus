@@ -11,8 +11,9 @@ use dioxus_html::geometry::{
     ClientPoint, Coordinates, ElementPoint, PagePoint, ScreenPoint, WheelDelta,
 };
 use dioxus_html::input_data::keyboard_types::{Code, Key, Location, Modifiers};
-use dioxus_html::input_data::MouseButtonSet as DioxusMouseButtons;
-use dioxus_html::input_data::{MouseButton as DioxusMouseButton, MouseButtonSet};
+use dioxus_html::input_data::{
+    MouseButton as DioxusMouseButton, MouseButtonSet as DioxusMouseButtons,
+};
 use dioxus_html::point_interaction::{PointData, PointInteraction};
 use dioxus_html::{event_bubbles, FocusData, KeyboardData, MouseData, WheelData};
 use std::any::Any;
@@ -115,7 +116,7 @@ impl InnerInputState {
             EventData::Mouse(ref mut m) => {
                 let mut held_buttons = match &self.mouse {
                     Some(previous_data) => previous_data.held_buttons(),
-                    None => MouseButtonSet::empty(),
+                    None => DioxusMouseButtons::empty(),
                 };
 
                 match evt.0 {
@@ -306,7 +307,7 @@ impl InnerInputState {
 
             // a mouse button is pressed if a button was not down and is now down
             let previous_buttons = previous_mouse
-                .map_or(MouseButtonSet::empty(), |previous_data| {
+                .map_or(DioxusMouseButtons::empty(), |previous_data| {
                     previous_data.held_buttons()
                 });
             let was_pressed = !(mouse_data.held_buttons() - previous_buttons).is_empty();
@@ -718,7 +719,7 @@ fn get_event(evt: TermEvent) -> Option<(&'static str, EventData)> {
                 // held mouse buttons get set later by maintaining state, as crossterm does not provide them
                 EventData::Mouse(MouseData::new(PointData::new(
                     button,
-                    MouseButtonSet::empty(),
+                    DioxusMouseButtons::empty(),
                     coordinates,
                     modifiers,
                 )))
