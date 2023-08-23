@@ -8,9 +8,10 @@ use keyboard_types::Location;
 /// A mouse button type (such as Primary/Secondary)
 // note: EnumSetType also derives Copy and Clone for some reason
 #[allow(clippy::unused_unit)]
-#[derive(EnumSetType, Debug)]
+#[derive(EnumSetType, Debug, Default)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 pub enum MouseButton {
+    #[default]
     /// Primary button (typically the left button)
     Primary,
     /// Secondary button (typically the right button)

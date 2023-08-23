@@ -2,8 +2,8 @@ use crate::events::{
     AnimationData, CompositionData, KeyboardData, MouseData, PointerData, TouchData,
     TransitionData, WheelData,
 };
-use crate::geometry::{ClientPoint, Coordinates, ElementPoint, PagePoint, ScreenPoint};
 use crate::input_data::{decode_key_location, decode_mouse_button_set, MouseButton};
+use crate::point_interaction::PointData;
 use crate::{DragData, MountedData};
 use keyboard_types::{Code, Key, Modifiers};
 use std::convert::TryInto;
@@ -105,17 +105,19 @@ impl From<&MouseEvent> for MouseData {
             modifiers.insert(Modifiers::SHIFT);
         }
 
-        MouseData::new(
-            Coordinates::new(
-                ScreenPoint::new(e.screen_x().into(), e.screen_y().into()),
-                ClientPoint::new(e.client_x().into(), e.client_y().into()),
-                ElementPoint::new(e.offset_x().into(), e.offset_y().into()),
-                PagePoint::new(e.page_x().into(), e.page_y().into()),
-            ),
-            Some(MouseButton::from_web_code(e.button())),
-            decode_mouse_button_set(e.buttons()),
+        MouseData::new(PointData {
+            trigger_button: MouseButton::from_web_code(e.button()),
+            client_x: e.client_x(),
+            client_y: e.client_y(),
+            screen_x: e.screen_x(),
+            screen_y: e.screen_y(),
+            element_x: e.offset_x(),
+            element_y: e.offset_y(),
+            page_x: e.page_x(),
+            page_y: e.page_y(),
+            held_buttons: decode_mouse_button_set(e.buttons()),
             modifiers,
-        )
+        })
     }
 }
 

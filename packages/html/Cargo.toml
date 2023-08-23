@@ -16,7 +16,7 @@ serde = { version = "1", features = ["derive"], optional = true }
 serde_repr = { version = "0.1", optional = true }
 wasm-bindgen = { workspace = true, optional = true }
 euclid = "0.22.7"
-enumset = "1.0.11"
+enumset = { version = "1.0.11", features = ["serde"] }
 keyboard-types = "0.7"
 async-trait = "0.1.58"
 serde-value = "0.7.0"
