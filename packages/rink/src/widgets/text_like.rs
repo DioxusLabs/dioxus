@@ -1,9 +1,7 @@
 use std::{collections::HashMap, io::stdout};
 
 use crossterm::{cursor::MoveTo, execute};
-use dioxus_html::{
-    input_data::keyboard_types::Key, point_interaction::PointInteraction, KeyboardData, MouseData,
-};
+use dioxus_html::{input_data::keyboard_types::Key, KeyboardData, MouseData, PointInteraction};
 use dioxus_native_core::{
     custom_element::CustomElement,
     node::OwnedAttributeDiscription,
