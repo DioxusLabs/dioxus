@@ -2,7 +2,7 @@ use crate::events::{
     AnimationData, CompositionData, KeyboardData, MouseData, PointerData, TouchData,
     TransitionData, WheelData,
 };
-use crate::input_data::{decode_key_location, decode_mouse_button_set, MouseButton};
+use crate::input_data::decode_key_location;
 use crate::point_interaction::PointData;
 use crate::{DragData, MountedData};
 use keyboard_types::{Code, Key, Modifiers};
@@ -90,33 +90,21 @@ impl From<&KeyboardEvent> for KeyboardData {
 
 impl From<&MouseEvent> for MouseData {
     fn from(e: &MouseEvent) -> Self {
-        let mut modifiers = Modifiers::empty();
-
-        if e.alt_key() {
-            modifiers.insert(Modifiers::ALT);
-        }
-        if e.ctrl_key() {
-            modifiers.insert(Modifiers::CONTROL);
-        }
-        if e.meta_key() {
-            modifiers.insert(Modifiers::META);
-        }
-        if e.shift_key() {
-            modifiers.insert(Modifiers::SHIFT);
-        }
-
-        MouseData::new(PointData {
-            trigger_button: MouseButton::from_web_code(e.button()),
+        Self::new(PointData {
+            button: e.button(),
+            buttons: e.buttons(),
+            meta_key: e.meta_key(),
+            alt_key: e.alt_key(),
+            ctrl_key: e.ctrl_key(),
+            shift_key: e.shift_key(),
             client_x: e.client_x(),
             client_y: e.client_y(),
             screen_x: e.screen_x(),
             screen_y: e.screen_y(),
-            element_x: e.offset_x(),
-            element_y: e.offset_y(),
+            offset_x: e.offset_x(),
+            offset_y: e.offset_y(),
             page_x: e.page_x(),
             page_y: e.page_y(),
-            held_buttons: decode_mouse_button_set(e.buttons()),
-            modifiers,
         })
     }
 }
@@ -142,31 +130,34 @@ impl From<&TouchEvent> for TouchData {
 
 impl From<&PointerEvent> for PointerData {
     fn from(e: &PointerEvent) -> Self {
-        Self {
-            alt_key: e.alt_key(),
-            button: e.button(),
-            buttons: e.buttons(),
-            client_x: e.client_x(),
-            client_y: e.client_y(),
-            ctrl_key: e.ctrl_key(),
-            meta_key: e.meta_key(),
-            page_x: e.page_x(),
-            page_y: e.page_y(),
-            screen_x: e.screen_x(),
-            screen_y: e.screen_y(),
-            shift_key: e.shift_key(),
-            pointer_id: e.pointer_id(),
-            width: e.width(),
-            height: e.height(),
-            pressure: e.pressure(),
-            tangential_pressure: e.tangential_pressure(),
-            tilt_x: e.tilt_x(),
-            tilt_y: e.tilt_y(),
-            twist: e.twist(),
-            pointer_type: e.pointer_type(),
-            is_primary: e.is_primary(),
-            // get_modifier_state: evt.get_modifier_state(),
-        }
+        Self::new(
+            PointData {
+                button: e.button(),
+                buttons: e.buttons(),
+                meta_key: e.meta_key(),
+                alt_key: e.alt_key(),
+                ctrl_key: e.ctrl_key(),
+                shift_key: e.shift_key(),
+                client_x: e.client_x(),
+                client_y: e.client_y(),
+                screen_x: e.screen_x(),
+                screen_y: e.screen_y(),
+                offset_x: e.offset_x(),
+                offset_y: e.offset_y(),
+                page_x: e.page_x(),
+                page_y: e.page_y(),
+            },
+            e.pointer_id(),
+            e.width(),
+            e.height(),
+            e.pressure(),
+            e.tangential_pressure(),
+            e.tilt_x(),
+            e.tilt_y(),
+            e.twist(),
+            e.pointer_type(),
+            e.is_primary(),
+        )
     }
 }
 

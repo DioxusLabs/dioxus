@@ -9,6 +9,8 @@ pub type MouseEvent = Event<MouseData>;
 #[derive(Clone, Default, PartialEq, Eq)]
 /// Data associated with a mouse event
 pub struct MouseData {
+    /// Common data for all pointer/mouse events
+    #[cfg_attr(feature = "serialize", serde(flatten))]
     point_data: PointData,
 }
 

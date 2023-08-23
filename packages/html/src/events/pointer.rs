@@ -1,22 +1,16 @@
+use std::fmt::{Debug, Formatter};
+
 use dioxus_core::Event;
+
+use crate::point_interaction::{PointData, PointInteraction};
 
 pub type PointerEvent = Event<PointerData>;
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct PointerData {
-    // Mouse only
-    pub alt_key: bool,
-    pub button: i16,
-    pub buttons: u16,
-    pub client_x: i32,
-    pub client_y: i32,
-    pub ctrl_key: bool,
-    pub meta_key: bool,
-    pub page_x: i32,
-    pub page_y: i32,
-    pub screen_x: i32,
-    pub screen_y: i32,
-    pub shift_key: bool,
+    /// Common data for all pointer/mouse events
+    #[cfg_attr(feature = "serialize", serde(flatten))]
+    point_data: PointData,
     pub pointer_id: i32,
     pub width: i32,
     pub height: i32,
@@ -27,7 +21,6 @@ pub struct PointerData {
     pub twist: i32,
     pub pointer_type: String,
     pub is_primary: bool,
-    // pub get_modifier_state: bool,
 }
 
 impl_event![
@@ -62,3 +55,60 @@ impl_event![
     /// pointerout
     onpointerout
 ];
+
+impl PointInteraction for PointerData {
+    fn get_point_data(&self) -> PointData {
+        self.point_data
+    }
+}
+
+impl PointerData {
+    pub fn new(
+        point_data: PointData,
+        pointer_id: i32,
+        width: i32,
+        height: i32,
+        pressure: f32,
+        tangential_pressure: f32,
+        tilt_x: i32,
+        tilt_y: i32,
+        twist: i32,
+        pointer_type: String,
+        is_primary: bool,
+    ) -> Self {
+        Self {
+            point_data,
+            pointer_id,
+            width,
+            height,
+            pressure,
+            tangential_pressure,
+            tilt_x,
+            tilt_y,
+            twist,
+            pointer_type,
+            is_primary,
+        }
+    }
+}
+
+impl Debug for PointerData {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PointerData")
+            .field("coordinates", &self.coordinates())
+            .field("modifiers", &self.modifiers())
+            .field("held_buttons", &self.held_buttons())
+            .field("trigger_button", &self.trigger_button())
+            .field("pointer_id", &self.pointer_id)
+            .field("width", &self.width)
+            .field("height", &self.height)
+            .field("pressure", &self.pressure)
+            .field("tangential_pressure", &self.tangential_pressure)
+            .field("tilt_x", &self.tilt_x)
+            .field("tilt_y", &self.tilt_y)
+            .field("twist", &self.twist)
+            .field("pointer_type", &self.pointer_type)
+            .field("is_primary", &self.is_primary)
+            .finish()
+    }
+}
