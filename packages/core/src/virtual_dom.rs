@@ -5,7 +5,7 @@
 use crate::{
     any_props::VProps,
     arena::{ElementId, ElementRef},
-    innerlude::{DirtyScope, ErrorBoundary, Mutations, Scheduler, SchedulerMsg},
+    innerlude::{BubbleId, DirtyScope, ErrorBoundary, Mutations, Scheduler, SchedulerMsg},
     mutations::Mutation,
     nodes::RenderReturn,
     nodes::{Template, TemplateId},
@@ -183,7 +183,10 @@ pub struct VirtualDom {
     pub(crate) templates: FxHashMap<TemplateId, FxHashMap<usize, Template<'static>>>,
 
     // Every element is actually a dual reference - one to the template and the other to the dynamic node in that template
-    pub(crate) elements: Slab<ElementRef>,
+    pub(crate) element_refs: Slab<ElementRef>,
+
+    // The element ids that are used in the renderer
+    pub(crate) elements: Slab<Option<BubbleId>>,
 
     pub(crate) mutations: Mutations<'static>,
 
@@ -260,6 +263,7 @@ impl VirtualDom {
             dirty_scopes: Default::default(),
             templates: Default::default(),
             elements: Default::default(),
+            element_refs: Default::default(),
             mutations: Mutations::default(),
             suspended_scopes: Default::default(),
         };
@@ -273,7 +277,7 @@ impl VirtualDom {
         root.provide_context(Rc::new(ErrorBoundary::new(ScopeId(0))));
 
         // the root element is always given element ID 0 since it's the container for the entire tree
-        dom.elements.insert(ElementRef::none());
+        dom.elements.insert(None);
 
         dom
     }
@@ -349,7 +353,13 @@ impl VirtualDom {
         | | |       <-- no, broke early
         |           <-- no, broke early
         */
-        let mut parent_path = self.elements.get(element.0);
+        println!("calling {:?}", element);
+        let element = match self.elements.get(element.0) {
+            Some(Some(el)) => el,
+            _ => return,
+        };
+        let mut parent_path = self.element_refs.get(element.0).cloned();
+        println!("parent path {:?}", parent_path);
         let mut listeners = vec![];
 
         // We will clone this later. The data itself is wrapped in RC to be used in callbacks if required
@@ -363,33 +373,69 @@ impl VirtualDom {
             // Loop through each dynamic attribute (in a depth first order) in this template before moving up to the template's parent.
             while let Some(el_ref) = parent_path {
                 // safety: we maintain references of all vnodes in the element slab
-                if let Some(template) = el_ref.template {
-                    let template = unsafe { template.as_ref() };
-                    let node_template = template.template.get();
-                    let target_path = el_ref.path;
+                let template = el_ref.template;
+                let template = unsafe { template.as_ref() };
+                let node_template = template.template.get();
+                let target_path = el_ref.path;
 
-                    for (idx, attr) in template.dynamic_attrs.iter().enumerate() {
-                        let this_path = node_template.attr_paths[idx];
+                for (idx, attr) in template.dynamic_attrs.iter().enumerate() {
+                    let this_path = node_template.attr_paths[idx];
 
-                        // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
-                        if attr.name.trim_start_matches("on") == name
-                            && target_path.is_decendant(&this_path)
-                        {
-                            listeners.push(&attr.value);
+                    // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
+                    if attr.name.trim_start_matches("on") == name
+                        && target_path.is_decendant(&this_path)
+                    {
+                        listeners.push(&attr.value);
 
-                            // Break if this is the exact target element.
-                            // This means we won't call two listeners with the same name on the same element. This should be
-                            // documented, or be rejected from the rsx! macro outright
-                            if target_path == this_path {
-                                break;
-                            }
+                        // Break if this is the exact target element.
+                        // This means we won't call two listeners with the same name on the same element. This should be
+                        // documented, or be rejected from the rsx! macro outright
+                        if target_path == this_path {
+                            break;
                         }
                     }
+                }
 
-                    // Now that we've accumulated all the parent attributes for the target element, call them in reverse order
-                    // We check the bubble state between each call to see if the event has been stopped from bubbling
-                    for listener in listeners.drain(..).rev() {
-                        if let AttributeValue::Listener(listener) = listener {
+                // Now that we've accumulated all the parent attributes for the target element, call them in reverse order
+                // We check the bubble state between each call to see if the event has been stopped from bubbling
+                for listener in listeners.drain(..).rev() {
+                    if let AttributeValue::Listener(listener) = listener {
+                        let origin = el_ref.scope;
+                        self.runtime.scope_stack.borrow_mut().push(origin);
+                        self.runtime.rendering.set(false);
+                        if let Some(cb) = listener.borrow_mut().as_deref_mut() {
+                            cb(uievent.clone());
+                        }
+                        self.runtime.scope_stack.borrow_mut().pop();
+                        self.runtime.rendering.set(true);
+
+                        if !uievent.propagates.get() {
+                            return;
+                        }
+                    }
+                }
+
+                parent_path = template
+                    .parent
+                    .get()
+                    .and_then(|id| self.element_refs.get(id.0).cloned());
+            }
+        } else {
+            // Otherwise, we just call the listener on the target element
+            if let Some(el_ref) = parent_path {
+                // safety: we maintain references of all vnodes in the element slab
+                let template = el_ref.template;
+                let template = unsafe { template.as_ref() };
+                let node_template = template.template.get();
+                let target_path = el_ref.path;
+
+                for (idx, attr) in template.dynamic_attrs.iter().enumerate() {
+                    let this_path = node_template.attr_paths[idx];
+
+                    // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
+                    // Only call the listener if this is the exact target element.
+                    if attr.name.trim_start_matches("on") == name && target_path == this_path {
+                        if let AttributeValue::Listener(listener) = &attr.value {
                             let origin = el_ref.scope;
                             self.runtime.scope_stack.borrow_mut().push(origin);
                             self.runtime.rendering.set(false);
@@ -399,44 +445,7 @@ impl VirtualDom {
                             self.runtime.scope_stack.borrow_mut().pop();
                             self.runtime.rendering.set(true);
 
-                            if !uievent.propagates.get() {
-                                return;
-                            }
-                        }
-                    }
-
-                    parent_path = template.parent.and_then(|id| self.elements.get(id.0));
-                } else {
-                    break;
-                }
-            }
-        } else {
-            // Otherwise, we just call the listener on the target element
-            if let Some(el_ref) = parent_path {
-                // safety: we maintain references of all vnodes in the element slab
-                if let Some(template) = el_ref.template {
-                    let template = unsafe { template.as_ref() };
-                    let node_template = template.template.get();
-                    let target_path = el_ref.path;
-
-                    for (idx, attr) in template.dynamic_attrs.iter().enumerate() {
-                        let this_path = node_template.attr_paths[idx];
-
-                        // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
-                        // Only call the listener if this is the exact target element.
-                        if attr.name.trim_start_matches("on") == name && target_path == this_path {
-                            if let AttributeValue::Listener(listener) = &attr.value {
-                                let origin = el_ref.scope;
-                                self.runtime.scope_stack.borrow_mut().push(origin);
-                                self.runtime.rendering.set(false);
-                                if let Some(cb) = listener.borrow_mut().as_deref_mut() {
-                                    cb(uievent.clone());
-                                }
-                                self.runtime.scope_stack.borrow_mut().pop();
-                                self.runtime.rendering.set(true);
-
-                                break;
-                            }
+                            break;
                         }
                     }
                 }
@@ -559,7 +568,7 @@ impl VirtualDom {
             // If an error occurs, we should try to render the default error component and context where the error occured
             RenderReturn::Aborted(placeholder) => {
                 log::info!("Ran into suspended or aborted scope during rebuild");
-                let id = self.next_null();
+                let id = self.next_element();
                 placeholder.id.set(Some(id));
                 self.mutations.push(Mutation::CreatePlaceholder { id });
             }

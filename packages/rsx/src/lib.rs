@@ -245,7 +245,7 @@ impl<'a> ToTokens for TemplateRenderer<'a> {
                 attr_paths: &[ #(#attr_paths),* ],
             };
             ::dioxus::core::VNode {
-                parent: None,
+                parent: Default::default(),
                 key: #key_tokens,
                 template: std::cell::Cell::new(TEMPLATE),
                 root_ids: dioxus::core::exports::bumpalo::collections::Vec::with_capacity_in(#root_count, __cx.bump()).into(),

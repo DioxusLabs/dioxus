@@ -1,3 +1,4 @@
+use crate::innerlude::BubbleId;
 use crate::{
     any_props::AnyProps, arena::ElementId, Element, Event, LazyNodes, ScopeId, ScopeState,
 };
@@ -47,7 +48,7 @@ pub struct VNode<'a> {
     pub key: Option<&'a str>,
 
     /// When rendered, this template will be linked to its parent manually
-    pub parent: Option<ElementId>,
+    pub parent: Cell<Option<BubbleId>>,
 
     /// The static nodes and static descriptor of the template
     pub template: Cell<Template<'static>>,
@@ -68,7 +69,7 @@ impl<'a> VNode<'a> {
     pub fn empty(cx: &'a ScopeState) -> Element<'a> {
         Some(VNode {
             key: None,
-            parent: None,
+            parent: Default::default(),
             root_ids: RefCell::new(bumpalo::collections::Vec::new_in(cx.bump())),
             dynamic_nodes: &[],
             dynamic_attrs: &[],
@@ -722,7 +723,7 @@ impl<'b> IntoDynNode<'b> for Arguments<'_> {
 impl<'a> IntoDynNode<'a> for &'a VNode<'a> {
     fn into_vnode(self, _cx: &'a ScopeState) -> DynamicNode<'a> {
         DynamicNode::Fragment(_cx.bump().alloc([VNode {
-            parent: self.parent,
+            parent: self.parent.clone(),
             template: self.template.clone(),
             root_ids: self.root_ids.clone(),
             key: self.key,

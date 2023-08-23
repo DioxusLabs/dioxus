@@ -30,7 +30,7 @@ pub fn Fragment<'a>(cx: Scope<'a, FragmentProps<'a>>) -> Element {
     let children = cx.props.0.as_ref()?;
     Some(VNode {
         key: children.key,
-        parent: children.parent,
+        parent: children.parent.clone(),
         template: children.template.clone(),
         root_ids: children.root_ids.clone(),
         dynamic_nodes: children.dynamic_nodes,
