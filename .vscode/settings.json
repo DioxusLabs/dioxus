@@ -3,8 +3,5 @@
   "[toml]": {
     "editor.formatOnSave": false
   },
-  "[rust]": {
-    "editor.defaultFormatter": "rust-lang.rust-analyzer"
-  },
   "rust-analyzer.checkOnSave.allTargets": false,
 }

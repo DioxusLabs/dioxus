@@ -1,7 +1,0 @@
-{
-    "recommendations": [
-        "dioxuslabs.dioxus",
-        "rust-lang.rust-analyzer",
-        "tamasfe.even-better-toml"
-    ]
-}
