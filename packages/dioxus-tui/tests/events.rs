@@ -133,7 +133,6 @@ fn mouse_up() {
             modifiers: KeyModifiers::NONE,
         }));
         cx.render(rsx! {
-            #[dxfmt::skip]
             div {
                 width: "100%",
                 height: "100%",
@@ -173,7 +172,6 @@ fn mouse_enter() {
             modifiers: KeyModifiers::NONE,
         }));
         cx.render(rsx! {
-            #[dxfmt::skip]
             div {
                 width: "50%",
                 height: "50%",
@@ -213,7 +211,6 @@ fn mouse_exit() {
             modifiers: KeyModifiers::NONE,
         }));
         cx.render(rsx! {
-            #[dxfmt::skip]
             div {
                 width: "50%",
                 height: "50%",
@@ -253,7 +250,6 @@ fn mouse_move() {
             modifiers: KeyModifiers::NONE,
         }));
         cx.render(rsx! {
-            #[dxfmt::skip]
             div {
                 width: "100%",
                 height: "100%",
@@ -333,7 +329,6 @@ fn click() {
             modifiers: KeyModifiers::NONE,
         }));
         cx.render(rsx! {
-            #[dxfmt::skip]
             div {
                 width: "100%",
                 height: "100%",
@@ -373,7 +368,6 @@ fn context_menu() {
             modifiers: KeyModifiers::NONE,
         }));
         cx.render(rsx! {
-            #[dxfmt::skip]
             div {
                 width: "100%",
                 height: "100%",
