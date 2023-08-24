@@ -134,12 +134,13 @@ fn mouse_up() {
             modifiers: KeyModifiers::NONE,
         }));
         cx.render(rsx! {
-            div { 
-                width: "100%", 
-                height: "100%", 
+            #[dxfmt::skip]
+            div {
+                width: "100%",
+                height: "100%",
                 onmouseup: move |_| {
                     tui_ctx.quit();
-                } 
+                }
             }
         })
     }
@@ -173,12 +174,13 @@ fn mouse_enter() {
             modifiers: KeyModifiers::NONE,
         }));
         cx.render(rsx! {
-            div { 
-                width: "50%", 
-                height: "50%", 
+            #[dxfmt::skip]
+            div {
+                width: "50%",
+                height: "50%",
                 onmouseenter: move |_| {
                     tui_ctx.quit();
-                } 
+                }
             }
         })
     }
@@ -212,12 +214,13 @@ fn mouse_exit() {
             modifiers: KeyModifiers::NONE,
         }));
         cx.render(rsx! {
-            div { 
-                width: "50%", 
-                height: "50%", 
+            #[dxfmt::skip]
+            div {
+                width: "50%",
+                height: "50%",
                 onmouseenter: move |_| {
                     tui_ctx.quit();
-                } 
+                }
             }
         })
     }
@@ -251,12 +254,13 @@ fn mouse_move() {
             modifiers: KeyModifiers::NONE,
         }));
         cx.render(rsx! {
-            div { 
-                width: "100%", 
-                height: "100%", 
+            #[dxfmt::skip]
+            div {
+                width: "100%",
+                height: "100%",
                 onmousemove: move |_| {
                     tui_ctx.quit();
-                } 
+                }
             }
         })
     }
@@ -330,12 +334,13 @@ fn click() {
             modifiers: KeyModifiers::NONE,
         }));
         cx.render(rsx! {
-            div { 
-                width: "100%", 
-                height: "100%", 
+            #[dxfmt::skip]
+            div {
+                width: "100%",
+                height: "100%",
                 onclick: move |_| {
                     tui_ctx.quit();
-                } 
+                }
             }
         })
     }
@@ -369,12 +374,13 @@ fn context_menu() {
             modifiers: KeyModifiers::NONE,
         }));
         cx.render(rsx! {
-            div { 
-                width: "100%", 
-                height: "100%", 
+            #[dxfmt::skip]
+            div {
+                width: "100%",
+                height: "100%",
                 oncontextmenu: move |_| {
                     tui_ctx.quit();
-                } 
+                }
             }
         })
     }

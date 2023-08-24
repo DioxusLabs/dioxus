@@ -1,7 +1,10 @@
 {
-  "editor.formatOnSave": true,
+  "editor.formatOnSave": false,
   "[toml]": {
     "editor.formatOnSave": false
+  },
+  "[rust]": {
+    "editor.defaultFormatter": "DioxusLabs.dioxus"
   },
   "rust-analyzer.checkOnSave.allTargets": false,
 }
