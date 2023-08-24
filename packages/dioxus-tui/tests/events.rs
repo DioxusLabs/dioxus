@@ -1,7 +1,6 @@
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent};
 use dioxus::prelude::*;
 use dioxus_html::input_data::keyboard_types::Code;
-use dioxus_html::PointInteraction;
 use dioxus_tui::TuiContext;
 use std::future::Future;
 use std::pin::Pin;

@@ -1,6 +1,5 @@
 use dioxus::{events::MouseData, prelude::*};
 use dioxus_core::Event;
-use dioxus_html::PointInteraction;
 use std::convert::TryInto;
 use std::fmt::Write;
 use std::rc::Rc;

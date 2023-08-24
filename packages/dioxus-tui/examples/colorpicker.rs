@@ -1,6 +1,5 @@
 use dioxus::core::RenderReturn;
 use dioxus::prelude::*;
-use dioxus_html::PointInteraction;
 use dioxus_tui::DioxusElementToNodeId;
 use dioxus_tui::Query;
 use dioxus_tui::Size;
