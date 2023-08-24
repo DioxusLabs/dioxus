@@ -39,16 +39,24 @@
 //     pub use state::*;
 // }
 
-use std::{any::Any, cell::Ref, collections::HashMap, rc::Rc};
+use std::{
+    any::Any,
+    cell::{Ref, RefCell},
+    collections::HashMap,
+    rc::Rc,
+};
 
 use dioxus_signals::Signal;
 
+#[derive(Default)]
 pub struct AtomRoot {
-    pub atoms: HashMap<*const (), Box<dyn Any>>,
+    pub atoms: RefCell<HashMap<*const (), Box<dyn Any>>>,
 }
 
 pub fn consume_root_context() -> Rc<AtomRoot> {
-    dioxus_core::prelude::consume_context().unwrap()
+    dioxus_core::prelude::consume_context().unwrap_or_else(|| {
+        dioxus_core::prelude::provide_root_context(Rc::new(AtomRoot::default())).unwrap()
+    })
 }
 
 pub struct Atom<T>(pub fn(AtomBuilder) -> T);
@@ -79,9 +87,15 @@ impl<T: 'static> Atom<T> {
     pub fn value(&self) -> Signal<T> {
         let id = self as &Atom<T> as *const Atom<T> as *const _;
         let root = consume_root_context();
-        let slot = root.atoms.get(&id).unwrap().as_ref();
-        let atom: &Signal<T> = slot.downcast_ref().unwrap();
-        atom.clone()
+
+        let mut atoms = root.atoms.borrow_mut();
+
+        let slot = atoms.entry(id).or_insert_with(|| {
+            let slot = Signal::new((self.0)(AtomBuilder));
+            Box::new(slot)
+        });
+
+        slot.as_ref().downcast_ref::<Signal<T>>().unwrap().clone()
     }
 
     pub fn set(&self, value: T) {
