@@ -52,10 +52,10 @@ fn app(cx: Scope) -> Element {
     };
 
     cx.render(rsx! {
-        #[dxfmt::skip]
-        div { 
-            width: "100%", 
-            height: "100%", 
+        div {
+            width: "100%",
+            height: "100%",
+
             flex_direction: "column",
 
             div {
