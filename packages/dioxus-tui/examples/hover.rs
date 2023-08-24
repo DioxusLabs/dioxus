@@ -55,9 +55,7 @@ fn app(cx: Scope) -> Element {
         div {
             width: "100%",
             height: "100%",
-
             flex_direction: "column",
-
             div {
                 width: "100%",
                 height: "50%",
