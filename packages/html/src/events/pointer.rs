@@ -7,22 +7,6 @@ use crate::point_interaction::{PointData, PointInteraction};
 /// A synthetic event that wraps a web-style [`PointerEvent`](https://developer.mozilla.org/en-US/docs/Web/API/PointerEvent)
 pub type PointerEvent = Event<PointerData>;
 
-/// Data associated with a pointer event, aside from the data shared with mouse events
-#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Debug, Clone, PartialEq)]
-pub struct PointerEventData {
-    pub pointer_id: i32,
-    pub width: i32,
-    pub height: i32,
-    pub pressure: f32,
-    pub tangential_pressure: f32,
-    pub tilt_x: i32,
-    pub tilt_y: i32,
-    pub twist: i32,
-    pub pointer_type: String,
-    pub is_primary: bool,
-}
-
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, PartialEq)]
 pub struct PointerData {
@@ -105,20 +89,33 @@ impl_event![
 ];
 
 impl PointerData {
-    pub fn new(point_data: PointData, pointer_event_data: PointerEventData) -> Self {
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        point_data: PointData,
+        pointer_id: i32,
+        width: i32,
+        height: i32,
+        pressure: f32,
+        tangential_pressure: f32,
+        tilt_x: i32,
+        tilt_y: i32,
+        twist: i32,
+        pointer_type: String,
+        is_primary: bool,
+    ) -> Self {
         #[allow(deprecated)]
         Self {
             point_data,
-            pointer_id: pointer_event_data.pointer_id,
-            width: pointer_event_data.width,
-            height: pointer_event_data.height,
-            pressure: pointer_event_data.pressure,
-            tangential_pressure: pointer_event_data.tangential_pressure,
-            tilt_x: pointer_event_data.tilt_x,
-            tilt_y: pointer_event_data.tilt_y,
-            twist: pointer_event_data.twist,
-            pointer_type: pointer_event_data.pointer_type,
-            is_primary: pointer_event_data.is_primary,
+            pointer_id,
+            width,
+            height,
+            pressure,
+            tangential_pressure,
+            tilt_x,
+            tilt_y,
+            twist,
+            pointer_type,
+            is_primary,
         }
     }
 

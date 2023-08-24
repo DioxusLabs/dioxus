@@ -36,7 +36,6 @@ pub use transit::*;
 pub use elements::*;
 pub use events::*;
 pub use global_attributes::*;
-pub use point_interaction::PointInteraction;
 pub use render_template::*;
 
 mod eval;
@@ -44,4 +43,5 @@ mod eval;
 pub mod prelude {
     pub use crate::eval::*;
     pub use crate::events::*;
+    pub use crate::point_interaction::PointInteraction;
 }

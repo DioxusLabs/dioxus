@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use dioxus_html::{input_data::keyboard_types::Key, KeyboardData, MouseData, PointInteraction};
+use dioxus_html::{input_data::keyboard_types::Key, KeyboardData, MouseData, prelude::PointInteraction};
 use dioxus_native_core::{
     custom_element::CustomElement,
     node::{OwnedAttributeDiscription, OwnedAttributeValue},

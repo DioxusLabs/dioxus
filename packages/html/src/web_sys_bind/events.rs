@@ -4,7 +4,7 @@ use crate::events::{
 };
 use crate::input_data::decode_key_location;
 use crate::point_interaction::PointData;
-use crate::{DragData, MountedData, PointerEventData};
+use crate::{DragData, MountedData};
 use keyboard_types::{Code, Key, Modifiers};
 use std::convert::TryInto;
 use std::str::FromStr;
@@ -147,18 +147,16 @@ impl From<&PointerEvent> for PointerData {
                 page_x: e.page_x(),
                 page_y: e.page_y(),
             },
-            PointerEventData {
-                pointer_id: e.pointer_id(),
-                width: e.width(),
-                height: e.height(),
-                pressure: e.pressure(),
-                tangential_pressure: e.tangential_pressure(),
-                tilt_x: e.tilt_x(),
-                tilt_y: e.tilt_y(),
-                twist: e.twist(),
-                pointer_type: e.pointer_type(),
-                is_primary: e.is_primary(),
-            },
+            e.pointer_id(),
+            e.width(),
+            e.height(),
+            e.pressure(),
+            e.tangential_pressure(),
+            e.tilt_x(),
+            e.tilt_y(),
+            e.twist(),
+            e.pointer_type(),
+            e.is_primary(),
         )
     }
 }

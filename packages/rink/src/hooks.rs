@@ -15,7 +15,7 @@ use dioxus_html::input_data::{
     MouseButton as DioxusMouseButton, MouseButtonSet as DioxusMouseButtons,
 };
 use dioxus_html::point_interaction::PointData;
-use dioxus_html::{event_bubbles, FocusData, KeyboardData, MouseData, PointInteraction, WheelData};
+use dioxus_html::{event_bubbles, FocusData, KeyboardData, MouseData, prelude::PointInteraction, WheelData};
 use std::any::Any;
 use std::collections::HashMap;
 use std::{
