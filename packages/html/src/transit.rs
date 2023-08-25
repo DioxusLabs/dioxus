@@ -4,7 +4,7 @@ use crate::events::*;
 use dioxus_core::ElementId;
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Debug, PartialEq)]
 pub struct HtmlEvent {
     pub element: ElementId,
     pub name: String,
@@ -136,7 +136,7 @@ impl HtmlEvent {
     }
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+#[derive(Deserialize, Serialize, Debug, PartialEq)]
 #[serde(untagged)]
 #[non_exhaustive]
 pub enum EventData {

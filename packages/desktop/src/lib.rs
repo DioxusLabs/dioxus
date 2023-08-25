@@ -27,8 +27,8 @@ pub use desktop_context::{
 };
 use desktop_context::{EventData, UserWindowEvent, WebviewQueue, WindowEventHandlers};
 use dioxus_core::*;
-use dioxus_html::MountedData;
-use dioxus_html::{native_bind::NativeFileEngine, FormData, HtmlEvent};
+use dioxus_html::{native_bind::NativeFileEngine, HtmlEvent};
+use dioxus_html::{FileEngine, HasFormData, MountedData};
 use element::DesktopElement;
 use eval::init_eval;
 use futures_util::{pin_mut, FutureExt};
@@ -340,14 +340,26 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
                     if let Ok(file_diolog) =
                         serde_json::from_value::<file_upload::FileDialogRequest>(msg.params())
                     {
+                        struct DesktopFileUploadForm {
+                            files: Arc<NativeFileEngine>,
+                        }
+
+                        impl HasFormData for DesktopFileUploadForm {
+                            fn files(&self) -> Option<Arc<dyn FileEngine>> {
+                                Some(self.files.clone())
+                            }
+
+                            fn as_any(&self) -> &dyn std::any::Any {
+                                self
+                            }
+                        }
+
                         let id = ElementId(file_diolog.target);
                         let event_name = &file_diolog.event;
                         let event_bubbles = file_diolog.bubbles;
                         let files = file_upload::get_file_event(&file_diolog);
-                        let data = Rc::new(FormData {
-                            value: Default::default(),
-                            values: Default::default(),
-                            files: Some(Arc::new(NativeFileEngine::new(files))),
+                        let data = Rc::new(DesktopFileUploadForm {
+                            files: Arc::new(NativeFileEngine::new(files)),
                         });
 
                         let view = webviews.get_mut(&event.1).unwrap();

@@ -44,4 +44,5 @@ pub mod prelude {
     pub use crate::eval::*;
     pub use crate::events::*;
     pub use crate::point_interaction::PointInteraction;
+    pub use keyboard_types::{self, Code, Key, Modifiers};
 }

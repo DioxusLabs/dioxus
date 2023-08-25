@@ -151,8 +151,6 @@ pub fn event_bubbles(evt: &str) -> bool {
     }
 }
 
-use std::future::Future;
-
 #[doc(hidden)]
 pub trait EventReturn<P>: Sized {
     fn spawn(self, _cx: &dioxus_core::ScopeState) {}
@@ -164,7 +162,7 @@ pub struct AsyncMarker;
 
 impl<T> EventReturn<AsyncMarker> for T
 where
-    T: Future<Output = ()> + 'static,
+    T: std::future::Future<Output = ()> + 'static,
 {
     #[inline]
     fn spawn(self, cx: &dioxus_core::ScopeState) {

@@ -41,7 +41,6 @@ features = [
      "PointerEvent",
      "FocusEvent",
      "CompositionEvent",
-     "ClipboardEvent",
 ]
 
 [dev-dependencies]
@@ -51,11 +50,13 @@ serde_json = "1"
 default = ["serialize", "mounted"]
 serialize = [
     "serde",
+    "serde/rc",
     "serde_repr",
     "serde_json",
     "euclid/serde",
     "keyboard-types/serde",
     "dioxus-core/serialize",
+    "enumset/serde",
 ]
 mounted = [
     "web-sys/Element",

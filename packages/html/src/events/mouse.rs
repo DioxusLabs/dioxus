@@ -1,16 +1,47 @@
-use crate::point_interaction::{PointData, PointInteraction};
+use crate::geometry::{ClientPoint, Coordinates, ElementPoint, PagePoint, ScreenPoint};
+use crate::input_data::{MouseButton, MouseButtonSet};
+use crate::point_interaction::PointInteraction;
 use dioxus_core::Event;
+use keyboard_types::Modifiers;
 
 pub type MouseEvent = Event<MouseData>;
 
 /// A synthetic event that wraps a web-style [`MouseEvent`](https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent)
-#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
 /// Data associated with a mouse event
 pub struct MouseData {
-    /// Common data for all pointer/mouse events
-    #[cfg_attr(feature = "serialize", serde(flatten))]
-    point_data: PointData,
+    inner: Box<dyn HasMouseData>,
+}
+
+impl<E: HasMouseData> From<E> for MouseData {
+    fn from(e: E) -> Self {
+        Self { inner: Box::new(e) }
+    }
+}
+
+impl std::fmt::Debug for MouseData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MouseData")
+            .field("coordinates", &self.coordinates())
+            .field("modifiers", &self.modifiers())
+            .field("held_buttons", &self.held_buttons())
+            .field("trigger_button", &self.trigger_button())
+            .finish()
+    }
+}
+
+impl<E: HasMouseData> PartialEq<E> for MouseData {
+    fn eq(&self, other: &E) -> bool {
+        self.coordinates() == other.coordinates()
+            && self.modifiers() == other.modifiers()
+            && self.held_buttons() == other.held_buttons()
+            && self.trigger_button() == other.trigger_button()
+    }
+}
+
+/// A trait for any object that has the data for a mouse event
+pub trait HasMouseData: PointInteraction {
+    /// return self as Any
+    fn as_any(&self) -> &dyn std::any::Any;
 }
 
 impl_event! {
@@ -75,16 +106,91 @@ impl_event! {
 }
 
 impl MouseData {
-    /// Construct MouseData with the specified properties
-    ///
-    /// Note: the current implementation truncates coordinates. In the future, when we change the internal representation, it may also support a fractional part.
-    pub fn new(point_data: PointData) -> Self {
-        Self { point_data }
+    /// Downcast this event to a concrete event type
+    pub fn downcast<T: 'static>(&self) -> Option<&T> {
+        self.inner.as_any().downcast_ref::<T>()
     }
 }
 
 impl PointInteraction for MouseData {
-    fn get_point_data(&self) -> PointData {
-        self.point_data
+    /// The event's coordinates relative to the application's viewport (as opposed to the coordinate within the page).
+    ///
+    /// For example, clicking in the top left corner of the viewport will always result in a mouse event with client coordinates (0., 0.), regardless of whether the page is scrolled horizontally.
+    fn client_coordinates(&self) -> ClientPoint {
+        self.inner.client_coordinates()
+    }
+
+    /// The event's coordinates relative to the padding edge of the target element
+    ///
+    /// For example, clicking in the top left corner of an element will result in element coordinates (0., 0.)
+    fn element_coordinates(&self) -> ElementPoint {
+        self.inner.element_coordinates()
+    }
+
+    /// The event's coordinates relative to the entire document. This includes any portion of the document not currently visible.
+    ///
+    /// For example, if the page is scrolled 200 pixels to the right and 300 pixels down, clicking in the top left corner of the viewport would result in page coordinates (200., 300.)
+    fn page_coordinates(&self) -> PagePoint {
+        self.inner.page_coordinates()
+    }
+
+    /// The event's coordinates relative to the entire screen. This takes into account the window's offset.
+    fn screen_coordinates(&self) -> ScreenPoint {
+        self.inner.screen_coordinates()
+    }
+
+    fn coordinates(&self) -> Coordinates {
+        self.inner.coordinates()
+    }
+
+    /// The set of modifier keys which were pressed when the event occurred
+    fn modifiers(&self) -> Modifiers {
+        self.inner.modifiers()
+    }
+
+    /// The set of mouse buttons which were held when the event occurred.
+    fn held_buttons(&self) -> MouseButtonSet {
+        self.inner.held_buttons()
+    }
+
+    /// The mouse button that triggered the event
+    ///
+    // todo the following is kind of bad; should we just return None when the trigger_button is unreliable (and frankly irrelevant)? i guess we would need the event_type here
+    /// This is only guaranteed to indicate which button was pressed during events caused by pressing or releasing a button. As such, it is not reliable for events such as mouseenter, mouseleave, mouseover, mouseout, or mousemove. For example, a value of MouseButton::Primary may also indicate that no button was pressed.
+    fn trigger_button(&self) -> Option<MouseButton> {
+        self.inner.trigger_button()
+    }
+}
+
+impl PartialEq for MouseData {
+    fn eq(&self, other: &Self) -> bool {
+        self.coordinates() == other.coordinates()
+            && self.modifiers() == other.modifiers()
+            && self.held_buttons() == other.held_buttons()
+            && self.trigger_button() == other.trigger_button()
+    }
+}
+
+#[cfg(feature = "serialize")]
+impl HasMouseData for crate::point_interaction::SerializedPointInteraction {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+}
+
+#[cfg(feature = "serialize")]
+impl serde::Serialize for MouseData {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        crate::point_interaction::SerializedPointInteraction::from(self).serialize(serializer)
+    }
+}
+
+#[cfg(feature = "serialize")]
+impl<'de> serde::Deserialize<'de> for MouseData {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let data = crate::point_interaction::SerializedPointInteraction::deserialize(deserializer)?;
+        Ok(Self {
+            inner: Box::new(data),
+        })
     }
 }

@@ -10,12 +10,12 @@
 use dioxus_core::{
     BorrowedAttributeValue, ElementId, Mutation, Template, TemplateAttribute, TemplateNode,
 };
-use dioxus_html::{event_bubbles, CompositionData, FormData, MountedData};
+use dioxus_html::{event_bubbles, FileEngine, HasFormData, HasImageData, MountedData};
 use dioxus_interpreter_js::{get_node, minimal_bindings, save_template, Channel};
 use futures_channel::mpsc;
 use js_sys::Array;
 use rustc_hash::FxHashMap;
-use std::{any::Any, rc::Rc};
+use std::{any::Any, collections::HashMap, rc::Rc};
 use wasm_bindgen::{closure::Closure, prelude::wasm_bindgen, JsCast, JsValue};
 use web_sys::{Document, Element, Event};
 
@@ -269,30 +269,29 @@ pub fn virtual_event_from_websys_event(event: web_sys::Event, target: Element) -
     use dioxus_html::events::*;
 
     match event.type_().as_str() {
-        "copy" | "cut" | "paste" => Rc::new(ClipboardData {}),
+        "copy" | "cut" | "paste" => Rc::new(ClipboardData::from(event)),
         "compositionend" | "compositionstart" | "compositionupdate" => {
-            make_composition_event(&event)
+            Rc::new(CompositionData::from(event))
         }
         "keydown" | "keypress" | "keyup" => Rc::new(KeyboardData::from(event)),
-        "focus" | "blur" | "focusout" | "focusin" => Rc::new(FocusData {}),
+        "focus" | "blur" | "focusout" | "focusin" => Rc::new(FocusData::from(event)),
 
-        "change" | "input" | "invalid" | "reset" | "submit" => read_input_to_data(target),
+        "change" | "input" | "invalid" | "reset" | "submit" => {
+            Rc::new(WebFormData::new(target, event))
+        }
 
         "click" | "contextmenu" | "dblclick" | "doubleclick" | "mousedown" | "mouseenter"
         | "mouseleave" | "mousemove" | "mouseout" | "mouseover" | "mouseup" => {
             Rc::new(MouseData::from(event))
         }
         "drag" | "dragend" | "dragenter" | "dragexit" | "dragleave" | "dragover" | "dragstart"
-        | "drop" => {
-            let mouse = MouseData::from(event);
-            Rc::new(DragData { mouse })
-        }
+        | "drop" => Rc::new(DragData::from(event)),
 
         "pointerdown" | "pointermove" | "pointerup" | "pointercancel" | "gotpointercapture"
         | "lostpointercapture" | "pointerenter" | "pointerleave" | "pointerover" | "pointerout" => {
             Rc::new(PointerData::from(event))
         }
-        "select" => Rc::new(SelectionData {}),
+        "select" => Rc::new(SelectionData::from(event)),
         "touchcancel" | "touchend" | "touchmove" | "touchstart" => Rc::new(TouchData::from(event)),
 
         "scroll" => Rc::new(()),
@@ -304,20 +303,13 @@ pub fn virtual_event_from_websys_event(event: web_sys::Event, target: Element) -
         "abort" | "canplay" | "canplaythrough" | "durationchange" | "emptied" | "encrypted"
         | "ended" | "loadeddata" | "loadedmetadata" | "loadstart" | "pause" | "play"
         | "playing" | "progress" | "ratechange" | "seeked" | "seeking" | "stalled" | "suspend"
-        | "timeupdate" | "volumechange" | "waiting" => Rc::new(MediaData {}),
-        "error" => Rc::new(ImageData { load_error: true }),
-        "load" => Rc::new(ImageData { load_error: false }),
-        "toggle" => Rc::new(ToggleData {}),
+        | "timeupdate" | "volumechange" | "waiting" => Rc::new(MediaData::from(event)),
+        "error" => Rc::new(WebImageEvent::new(event, true)),
+        "load" => Rc::new(WebImageEvent::new(event, false)),
+        "toggle" => Rc::new(ToggleData::from(event)),
 
         _ => Rc::new(()),
     }
-}
-
-fn make_composition_event(event: &Event) -> Rc<CompositionData> {
-    let evt: &web_sys::CompositionEvent = event.dyn_ref().unwrap();
-    Rc::new(CompositionData {
-        data: evt.data().unwrap_or_default(),
-    })
 }
 
 pub(crate) fn load_document() -> Document {
@@ -327,11 +319,42 @@ pub(crate) fn load_document() -> Document {
         .expect("should have access to the Document")
 }
 
-fn read_input_to_data(target: Element) -> Rc<FormData> {
-    // todo: these handlers might get really slow if the input box gets large and allocation pressure is heavy
-    // don't have a good solution with the serialized event problem
+struct WebImageEvent {
+    raw: Event,
+    error: bool,
+}
 
-    let value: String = target
+impl WebImageEvent {
+    fn new(raw: Event, error: bool) -> Self {
+        Self { raw, error }
+    }
+}
+
+impl HasImageData for WebImageEvent {
+    fn load_error(&self) -> bool {
+        self.error
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        &self.raw
+    }
+}
+
+struct WebFormData {
+    element: Element,
+    raw: Event,
+}
+
+impl WebFormData {
+    fn new(element: Element, raw: Event) -> Self {
+        Self { element, raw }
+    }
+}
+
+impl HasFormData for WebFormData {
+    fn value(&self) -> String {
+        let target = &self.element;
+        target
         .dyn_ref()
         .map(|input: &web_sys::HtmlInputElement| {
             // todo: special case more input types
@@ -364,44 +387,53 @@ fn read_input_to_data(target: Element) -> Rc<FormData> {
                 .unwrap()
                 .text_content()
         })
-        .expect("only an InputElement or TextAreaElement or an element with contenteditable=true can have an oninput event listener");
+        .expect("only an InputElement or TextAreaElement or an element with contenteditable=true can have an oninput event listener")
+    }
 
-    let mut values = std::collections::HashMap::new();
+    fn values(&self) -> HashMap<String, Vec<String>> {
+        let mut values = std::collections::HashMap::new();
 
-    // try to fill in form values
-    if let Some(form) = target.dyn_ref::<web_sys::HtmlFormElement>() {
-        let form_data = get_form_data(form);
-        for value in form_data.entries().into_iter().flatten() {
-            if let Ok(array) = value.dyn_into::<Array>() {
-                if let Some(name) = array.get(0).as_string() {
-                    if let Ok(item_values) = array.get(1).dyn_into::<Array>() {
-                        let item_values =
-                            item_values.iter().filter_map(|v| v.as_string()).collect();
+        // try to fill in form values
+        if let Some(form) = self.element.dyn_ref::<web_sys::HtmlFormElement>() {
+            let form_data = get_form_data(form);
+            for value in form_data.entries().into_iter().flatten() {
+                if let Ok(array) = value.dyn_into::<Array>() {
+                    if let Some(name) = array.get(0).as_string() {
+                        if let Ok(item_values) = array.get(1).dyn_into::<Array>() {
+                            let item_values =
+                                item_values.iter().filter_map(|v| v.as_string()).collect();
 
-                        values.insert(name, item_values);
+                            values.insert(name, item_values);
+                        }
                     }
                 }
             }
         }
+
+        values
     }
 
-    #[cfg(not(feature = "file_engine"))]
-    let files = None;
-    #[cfg(feature = "file_engine")]
-    let files = target
-        .dyn_ref()
-        .and_then(|input: &web_sys::HtmlInputElement| {
-            input.files().and_then(|files| {
-                crate::file_engine::WebFileEngine::new(files)
-                    .map(|f| std::sync::Arc::new(f) as std::sync::Arc<dyn dioxus_html::FileEngine>)
-            })
-        });
+    fn files(&self) -> Option<std::sync::Arc<dyn FileEngine>> {
+        #[cfg(not(feature = "file_engine"))]
+        let files = None;
+        #[cfg(feature = "file_engine")]
+        let files = self
+            .element
+            .dyn_ref()
+            .and_then(|input: &web_sys::HtmlInputElement| {
+                input.files().and_then(|files| {
+                    crate::file_engine::WebFileEngine::new(files).map(|f| {
+                        std::sync::Arc::new(f) as std::sync::Arc<dyn dioxus_html::FileEngine>
+                    })
+                })
+            });
 
-    Rc::new(FormData {
-        value,
-        values,
-        files,
-    })
+        files
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        &self.raw
+    }
 }
 
 // web-sys does not expose the keys api for form data, so we need to manually bind to it
