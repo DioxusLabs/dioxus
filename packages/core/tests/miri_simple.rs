@@ -11,7 +11,7 @@ fn app_drops() {
     let mut dom = VirtualDom::new(app);
 
     _ = dom.rebuild();
-    dom.mark_dirty(ScopeId(0));
+    dom.mark_dirty(ScopeId::ROOT);
     _ = dom.render_immediate();
 }
 
@@ -31,7 +31,7 @@ fn hooks_drop() {
     let mut dom = VirtualDom::new(app);
 
     _ = dom.rebuild();
-    dom.mark_dirty(ScopeId(0));
+    dom.mark_dirty(ScopeId::ROOT);
     _ = dom.render_immediate();
 }
 
@@ -58,7 +58,7 @@ fn contexts_drop() {
     let mut dom = VirtualDom::new(app);
 
     _ = dom.rebuild();
-    dom.mark_dirty(ScopeId(0));
+    dom.mark_dirty(ScopeId::ROOT);
     _ = dom.render_immediate();
 }
 
@@ -77,7 +77,7 @@ fn tasks_drop() {
     let mut dom = VirtualDom::new(app);
 
     _ = dom.rebuild();
-    dom.mark_dirty(ScopeId(0));
+    dom.mark_dirty(ScopeId::ROOT);
     _ = dom.render_immediate();
 }
 
@@ -91,7 +91,7 @@ fn root_props_drop() {
     );
 
     _ = dom.rebuild();
-    dom.mark_dirty(ScopeId(0));
+    dom.mark_dirty(ScopeId::ROOT);
     _ = dom.render_immediate();
 }
 
@@ -121,7 +121,7 @@ fn diffing_drops_old() {
 
     let mut dom = VirtualDom::new(app);
     _ = dom.rebuild();
-    dom.mark_dirty(ScopeId(0));
+    dom.mark_dirty(ScopeId::ROOT);
 
     _ = dom.render_immediate();
 }

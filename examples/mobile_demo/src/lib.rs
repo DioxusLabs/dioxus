@@ -72,7 +72,7 @@ fn app(cx: Scope) -> Element {
                     onclick: move|_| {
                         println!("Clicked!");
                         items.push(items.len());
-                        cx.needs_update_any(ScopeId(0));
+                        cx.needs_update_any(ScopeId::ROOT);
                         println!("Requested update");
                     },
                     "Add item"

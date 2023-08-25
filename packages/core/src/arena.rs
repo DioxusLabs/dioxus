@@ -35,7 +35,7 @@ impl ElementRef {
         Self {
             template: None,
             path: ElementPath::Root(0),
-            scope: ScopeId(0),
+            scope: ScopeId::ROOT,
         }
     }
 }
@@ -60,7 +60,7 @@ impl VirtualDom {
     fn next_reference(&mut self, template: &VNode, path: ElementPath) -> ElementId {
         let entry = self.elements.vacant_entry();
         let id = entry.key();
-        let scope = self.runtime.current_scope_id().unwrap_or(ScopeId(0));
+        let scope = self.runtime.current_scope_id().unwrap_or(ScopeId::ROOT);
 
         entry.insert(ElementRef {
             // We know this is non-null because it comes from a reference
