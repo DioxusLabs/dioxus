@@ -173,6 +173,7 @@ impl WebsysDom {
     pub fn apply_edits(&mut self, mut edits: Vec<Mutation>) {
         use Mutation::*;
         let i = &mut self.interpreter;
+        #[cfg(feature = "mounted")]
         // we need to apply the mount events last, so we collect them here
         let mut to_mount = Vec::new();
         for edit in &edits {
@@ -228,6 +229,7 @@ impl WebsysDom {
                     match *name {
                         // mounted events are fired immediately after the element is mounted.
                         "mounted" => {
+                            #[cfg(feature = "mounted")]
                             to_mount.push(*id);
                         }
                         _ => {
@@ -248,6 +250,7 @@ impl WebsysDom {
         edits.clear();
         i.flush();
 
+        #[cfg(feature = "mounted")]
         for id in to_mount {
             let node = get_node(id.0 as u32);
             if let Some(element) = node.dyn_ref::<Element>() {
@@ -326,7 +329,12 @@ impl HtmlEventConverter for WebEventConverter {
     }
 
     fn convert_mounted_data(&self, event: &dioxus_html::PlatformEventData) -> MountedData {
-        MountedData::from(downcast_event(event).element.clone())
+        #[cfg(feature = "mounted")]
+        {MountedData::from(downcast_event(event).element.clone())}
+        #[cfg(not(feature = "mounted"))]
+        {
+            panic!("mounted events are not supported without the mounted feature on the dioxus-web crate enabled")
+        }
     }
 
     fn convert_mouse_data(&self, event: &dioxus_html::PlatformEventData) -> dioxus_html::MouseData {

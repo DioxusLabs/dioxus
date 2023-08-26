@@ -47,7 +47,7 @@ features = [
 serde_json = "1"
 
 [features]
-default = ["serialize", "mounted"]
+default = ["serialize", "mounted", "eval"]
 serialize = [
     "serde",
     "serde/rc",
@@ -65,6 +65,10 @@ mounted = [
     "web-sys/ScrollLogicalPosition",
     "web-sys/ScrollBehavior",
     "web-sys/HtmlElement",
+]
+eval = [
+    "serde",
+    "serde_json"
 ]
 wasm-bind = ["web-sys", "wasm-bindgen"]
 native-bind = ["tokio"]

@@ -38,9 +38,11 @@ pub use events::*;
 pub use global_attributes::*;
 pub use render_template::*;
 
+#[cfg(feature = "eval")]
 pub mod eval;
 
 pub mod prelude {
+    #[cfg(feature = "eval")]
     pub use crate::eval::*;
     pub use crate::events::*;
     pub use crate::point_interaction::PointInteraction;
