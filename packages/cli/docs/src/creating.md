@@ -10,7 +10,7 @@ dx create hello-dioxus
 ```
 
 > It will clone this [template](https://github.com/DioxusLabs/dioxus-template).
-> This default template is use for `web` platform application.
+> This default template is used for `web` platform application.
 >
 > You can choose to create your project from a different template by passing the `template` argument:
 > ```
