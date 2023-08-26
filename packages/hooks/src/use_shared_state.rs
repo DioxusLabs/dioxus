@@ -197,7 +197,8 @@ pub struct UseSharedState<T> {
 
 impl<T> UseSharedState<T> {
     fn new(inner: Rc<RefCell<ProvidedStateInner<T>>>) -> Self {
-        Self { inner, gen: 0 }
+        let gen = inner.borrow().gen;
+        Self { inner, gen }
     }
 
     /// Notify all consumers of the state that it has changed. (This is called automatically when you call "write")
