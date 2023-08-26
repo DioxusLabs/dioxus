@@ -1,7 +1,6 @@
 use self::error::{UseSharedStateError, UseSharedStateResult};
-use crate::UseFutureDep;
 use dioxus_core::{ScopeId, ScopeState};
-use std::{any::Any, collections::HashSet, rc::Rc, sync::Arc};
+use std::{collections::HashSet, rc::Rc, sync::Arc};
 
 #[cfg(debug_assertions)]
 pub use dioxus_debug_cell::{
@@ -160,7 +159,7 @@ impl<T> ProvidedStateInner<T> {
 ///
 /// Right now, there is not a distinction between read-only and write-only, so every consumer will be notified.
 pub fn use_shared_state<T: 'static>(cx: &ScopeState) -> Option<&UseSharedState<T>> {
-    let state: &Option<UseSharedStateOwner<T>> = &*cx.use_hook(move || {
+    let state_owner: &mut Option<UseSharedStateOwner<T>> = &mut *cx.use_hook(move || {
         let scope_id = cx.scope_id();
         let root = cx.consume_context::<ProvidedState<T>>()?;
 
@@ -170,7 +169,10 @@ pub fn use_shared_state<T: 'static>(cx: &ScopeState) -> Option<&UseSharedState<T
         let owner = UseSharedStateOwner { state, scope_id };
         Some(owner)
     });
-    state.as_ref().map(|s| &s.state)
+    state_owner.as_mut().map(|s| {
+        s.state.gen = s.state.inner.borrow().gen;
+        &s.state
+    })
 }
 
 /// This wrapper detects when the hook is dropped and will unsubscribe when the component is unmounted
@@ -190,11 +192,12 @@ impl<T> Drop for UseSharedStateOwner<T> {
 /// State that is shared between components through the context system
 pub struct UseSharedState<T> {
     pub(crate) inner: Rc<RefCell<ProvidedStateInner<T>>>,
+    gen: usize,
 }
 
 impl<T> UseSharedState<T> {
     fn new(inner: Rc<RefCell<ProvidedStateInner<T>>>) -> Self {
-        Self { inner }
+        Self { inner, gen: 0 }
     }
 
     /// Notify all consumers of the state that it has changed. (This is called automatically when you call "write")
@@ -305,30 +308,14 @@ impl<T> Clone for UseSharedState<T> {
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
+            gen: self.gen,
         }
     }
 }
 
-impl<T> UseFutureDep for &UseSharedState<T> {
-    type Out = UseSharedState<T>;
-    fn out(&self) -> Self::Out {
-        (*self).clone()
-    }
-    fn apply(self, state: &mut Vec<Box<dyn Any>>) -> bool {
-        let gen = self.inner.borrow().gen;
-        match state.get_mut(0).and_then(|f| f.downcast_mut::<usize>()) {
-            Some(val) => {
-                if *val != gen {
-                    *val = gen;
-                    return true;
-                }
-            }
-            None => {
-                state.push(Box::new(gen));
-                return true;
-            }
-        }
-        false
+impl<T: PartialEq> PartialEq for UseSharedState<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.gen == other.gen
     }
 }
 
