@@ -18,7 +18,8 @@ pub(crate) fn get_effect_stack() -> EffectStack {
         Some(rt) => rt,
         None => {
             let store = EffectStack::default();
-            provide_root_context(store).expect("in a virtual dom")
+            provide_root_context(store.clone());
+            store
         }
     }
 }
