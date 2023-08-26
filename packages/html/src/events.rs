@@ -1,3 +1,6 @@
+use std::any::Any;
+use std::sync::RwLock;
+
 macro_rules! impl_event {
     (
         $data:ty;
@@ -12,8 +15,8 @@ macro_rules! impl_event {
             pub fn $name<'a, E: crate::EventReturn<T>, T>(_cx: &'a ::dioxus_core::ScopeState, mut _f: impl FnMut(::dioxus_core::Event<$data>) -> E + 'a) -> ::dioxus_core::Attribute<'a> {
                 ::dioxus_core::Attribute::new(
                     stringify!($name),
-                    _cx.listener(move |e: ::dioxus_core::Event<$data>| {
-                        _f(e).spawn(_cx);
+                    _cx.listener(move |e: ::dioxus_core::Event<crate::PlatformEventData>| {
+                        _f(e.map(|e|e.into())).spawn(_cx);
                     }),
                     None,
                     false,
@@ -21,6 +24,172 @@ macro_rules! impl_event {
             }
         )*
     };
+}
+
+static EVENT_CONVERTER: RwLock<Option<Box<dyn HtmlEventConverter>>> = RwLock::new(None);
+
+pub fn set_event_converter(converter: Box<dyn HtmlEventConverter>) {
+    *EVENT_CONVERTER.write().unwrap() = Some(converter);
+}
+
+pub(crate) fn with_event_converter<F, R>(f: F) -> R
+where
+    F: FnOnce(&dyn HtmlEventConverter) -> R,
+{
+    let converter = EVENT_CONVERTER.read().unwrap();
+    f(converter.as_ref().unwrap().as_ref())
+}
+
+/// A platform specific event.
+pub struct PlatformEventData {
+    event: Box<dyn Any>,
+}
+
+impl PlatformEventData {
+    pub fn new(event: Box<dyn Any>) -> Self {
+        Self { event }
+    }
+
+    pub fn downcast<T: 'static>(&self) -> Option<&T> {
+        self.event.downcast_ref::<T>()
+    }
+
+    pub fn downcast_mut<T: 'static>(&mut self) -> Option<&mut T> {
+        self.event.downcast_mut::<T>()
+    }
+
+    pub fn into_inner<T: 'static>(self) -> Option<T> {
+        self.event.downcast::<T>().ok().map(|e| *e)
+    }
+}
+
+pub trait HtmlEventConverter: Send + Sync {
+    fn convert_animation_data(&self, event: &PlatformEventData) -> AnimationData;
+    fn convert_clipboard_data(&self, event: &PlatformEventData) -> ClipboardData;
+    fn convert_composition_data(&self, event: &PlatformEventData) -> CompositionData;
+    fn convert_drag_data(&self, event: &PlatformEventData) -> DragData;
+    fn convert_focus_data(&self, event: &PlatformEventData) -> FocusData;
+    fn convert_form_data(&self, event: &PlatformEventData) -> FormData;
+    fn convert_image_data(&self, event: &PlatformEventData) -> ImageData;
+    fn convert_keyboard_data(&self, event: &PlatformEventData) -> KeyboardData;
+    fn convert_media_data(&self, event: &PlatformEventData) -> MediaData;
+    fn convert_mounted_data(&self, event: &PlatformEventData) -> MountedData;
+    fn convert_mouse_data(&self, event: &PlatformEventData) -> MouseData;
+    fn convert_pointer_data(&self, event: &PlatformEventData) -> PointerData;
+    fn convert_scroll_data(&self, event: &PlatformEventData) -> ScrollData;
+    fn convert_selection_data(&self, event: &PlatformEventData) -> SelectionData;
+    fn convert_toggle_data(&self, event: &PlatformEventData) -> ToggleData;
+    fn convert_touch_data(&self, event: &PlatformEventData) -> TouchData;
+    fn convert_transition_data(&self, event: &PlatformEventData) -> TransitionData;
+    fn convert_wheel_data(&self, event: &PlatformEventData) -> WheelData;
+}
+
+impl Into<AnimationData> for &PlatformEventData {
+    fn into(self) -> AnimationData {
+        with_event_converter(|c| c.convert_animation_data(self))
+    }
+}
+
+impl Into<ClipboardData> for &PlatformEventData {
+    fn into(self) -> ClipboardData {
+        with_event_converter(|c| c.convert_clipboard_data(self))
+    }
+}
+
+impl Into<CompositionData> for &PlatformEventData {
+    fn into(self) -> CompositionData {
+        with_event_converter(|c| c.convert_composition_data(self))
+    }
+}
+
+impl Into<DragData> for &PlatformEventData {
+    fn into(self) -> DragData {
+        with_event_converter(|c| c.convert_drag_data(self))
+    }
+}
+
+impl Into<FocusData> for &PlatformEventData {
+    fn into(self) -> FocusData {
+        with_event_converter(|c| c.convert_focus_data(self))
+    }
+}
+
+impl Into<FormData> for &PlatformEventData {
+    fn into(self) -> FormData {
+        with_event_converter(|c| c.convert_form_data(self))
+    }
+}
+
+impl Into<ImageData> for &PlatformEventData {
+    fn into(self) -> ImageData {
+        with_event_converter(|c| c.convert_image_data(self))
+    }
+}
+
+impl Into<KeyboardData> for &PlatformEventData {
+    fn into(self) -> KeyboardData {
+        with_event_converter(|c| c.convert_keyboard_data(self))
+    }
+}
+
+impl Into<MediaData> for &PlatformEventData {
+    fn into(self) -> MediaData {
+        with_event_converter(|c| c.convert_media_data(self))
+    }
+}
+
+impl Into<MountedData> for &PlatformEventData {
+    fn into(self) -> MountedData {
+        with_event_converter(|c| c.convert_mounted_data(self))
+    }
+}
+
+impl Into<MouseData> for &PlatformEventData {
+    fn into(self) -> MouseData {
+        with_event_converter(|c| c.convert_mouse_data(self))
+    }
+}
+
+impl Into<PointerData> for &PlatformEventData {
+    fn into(self) -> PointerData {
+        with_event_converter(|c| c.convert_pointer_data(self))
+    }
+}
+
+impl Into<ScrollData> for &PlatformEventData {
+    fn into(self) -> ScrollData {
+        with_event_converter(|c| c.convert_scroll_data(self))
+    }
+}
+
+impl Into<SelectionData> for &PlatformEventData {
+    fn into(self) -> SelectionData {
+        with_event_converter(|c| c.convert_selection_data(self))
+    }
+}
+
+impl Into<ToggleData> for &PlatformEventData {
+    fn into(self) -> ToggleData {
+        with_event_converter(|c| c.convert_toggle_data(self))
+    }
+}
+
+impl Into<TouchData> for &PlatformEventData {
+    fn into(self) -> TouchData {
+        with_event_converter(|c| c.convert_touch_data(self))
+    }
+}
+
+impl Into<TransitionData> for &PlatformEventData {
+    fn into(self) -> TransitionData {
+        with_event_converter(|c| c.convert_transition_data(self))
+    }
+}
+
+impl Into<WheelData> for &PlatformEventData {
+    fn into(self) -> WheelData {
+        with_event_converter(|c| c.convert_wheel_data(self))
+    }
 }
 
 mod animation;

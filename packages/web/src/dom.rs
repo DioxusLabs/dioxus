@@ -1,7 +1,6 @@
 //! Implementation of a renderer for Dioxus on the web.
 //!
-//! Oustanding todos:
-//! - Removing event listeners (delegation)
+//! Outstanding todos:
 //! - Passive event listeners
 //! - no-op event listener patch for safari
 //! - tests to ensure dyn_into works for various event types.
@@ -10,7 +9,10 @@
 use dioxus_core::{
     BorrowedAttributeValue, ElementId, Mutation, Template, TemplateAttribute, TemplateNode,
 };
-use dioxus_html::{event_bubbles, FileEngine, HasFormData, HasImageData, MountedData};
+use dioxus_html::{
+    event_bubbles, FileEngine, FormData, HasFormData, HasImageData, HtmlEventConverter, ImageData,
+    MountedData, ScrollData,
+};
 use dioxus_interpreter_js::{get_node, minimal_bindings, save_template, Channel};
 use futures_channel::mpsc;
 use js_sys::Array;
@@ -263,53 +265,130 @@ impl WebsysDom {
     }
 }
 
+struct WebEventConverter;
+
+fn downcast_event(event: &dioxus_html::PlatformEventData) -> &GenericWebSysEvent {
+    event
+        .downcast::<GenericWebSysEvent>()
+        .expect("event should be a GenericWebSysEvent")
+}
+
+impl HtmlEventConverter for WebEventConverter {
+    fn convert_animation_data(
+        &self,
+        event: &dioxus_html::PlatformEventData,
+    ) -> dioxus_html::AnimationData {
+        downcast_event(event).raw.clone().into()
+    }
+
+    fn convert_clipboard_data(
+        &self,
+        event: &dioxus_html::PlatformEventData,
+    ) -> dioxus_html::ClipboardData {
+        downcast_event(event).raw.clone().into()
+    }
+
+    fn convert_composition_data(
+        &self,
+        event: &dioxus_html::PlatformEventData,
+    ) -> dioxus_html::CompositionData {
+        downcast_event(event).raw.clone().into()
+    }
+
+    fn convert_drag_data(&self, event: &dioxus_html::PlatformEventData) -> dioxus_html::DragData {
+        downcast_event(event).raw.clone().into()
+    }
+
+    fn convert_focus_data(&self, event: &dioxus_html::PlatformEventData) -> dioxus_html::FocusData {
+        downcast_event(event).raw.clone().into()
+    }
+
+    fn convert_form_data(&self, event: &dioxus_html::PlatformEventData) -> dioxus_html::FormData {
+        let event = downcast_event(event);
+        FormData::new(WebFormData::new(event.element.clone(), event.raw.clone()))
+    }
+
+    fn convert_image_data(&self, event: &dioxus_html::PlatformEventData) -> dioxus_html::ImageData {
+        let event = downcast_event(event);
+        let error = event.raw.type_() == "error";
+        ImageData::new(WebImageEvent::new(event.raw.clone(), error))
+    }
+
+    fn convert_keyboard_data(
+        &self,
+        event: &dioxus_html::PlatformEventData,
+    ) -> dioxus_html::KeyboardData {
+        downcast_event(event).raw.clone().into()
+    }
+
+    fn convert_media_data(&self, event: &dioxus_html::PlatformEventData) -> dioxus_html::MediaData {
+        downcast_event(event).raw.clone().into()
+    }
+
+    fn convert_mounted_data(&self, event: &dioxus_html::PlatformEventData) -> MountedData {
+        MountedData::from(downcast_event(event).element.clone())
+    }
+
+    fn convert_mouse_data(&self, event: &dioxus_html::PlatformEventData) -> dioxus_html::MouseData {
+        downcast_event(event).raw.clone().into()
+    }
+
+    fn convert_pointer_data(
+        &self,
+        event: &dioxus_html::PlatformEventData,
+    ) -> dioxus_html::PointerData {
+        downcast_event(event).raw.clone().into()
+    }
+
+    fn convert_scroll_data(
+        &self,
+        event: &dioxus_html::PlatformEventData,
+    ) -> dioxus_html::ScrollData {
+        ScrollData::from(downcast_event(event).raw.clone())
+    }
+
+    fn convert_selection_data(
+        &self,
+        event: &dioxus_html::PlatformEventData,
+    ) -> dioxus_html::SelectionData {
+        downcast_event(event).raw.clone().into()
+    }
+
+    fn convert_toggle_data(
+        &self,
+        event: &dioxus_html::PlatformEventData,
+    ) -> dioxus_html::ToggleData {
+        downcast_event(event).raw.clone().into()
+    }
+
+    fn convert_touch_data(&self, event: &dioxus_html::PlatformEventData) -> dioxus_html::TouchData {
+        downcast_event(event).raw.clone().into()
+    }
+
+    fn convert_transition_data(
+        &self,
+        event: &dioxus_html::PlatformEventData,
+    ) -> dioxus_html::TransitionData {
+        downcast_event(event).raw.clone().into()
+    }
+
+    fn convert_wheel_data(&self, event: &dioxus_html::PlatformEventData) -> dioxus_html::WheelData {
+        downcast_event(event).raw.clone().into()
+    }
+}
+
+struct GenericWebSysEvent {
+    raw: Event,
+    element: Element,
+}
+
 // todo: some of these events are being casted to the wrong event type.
 // We need tests that simulate clicks/etc and make sure every event type works.
 pub fn virtual_event_from_websys_event(event: web_sys::Event, target: Element) -> Rc<dyn Any> {
-    use dioxus_html::events::*;
-
-    match event.type_().as_str() {
-        "copy" | "cut" | "paste" => Rc::new(ClipboardData::from(event)),
-        "compositionend" | "compositionstart" | "compositionupdate" => {
-            Rc::new(CompositionData::from(event))
-        }
-        "keydown" | "keypress" | "keyup" => Rc::new(KeyboardData::from(event)),
-        "focus" | "blur" | "focusout" | "focusin" => Rc::new(FocusData::from(event)),
-
-        "change" | "input" | "invalid" | "reset" | "submit" => {
-            Rc::new(WebFormData::new(target, event))
-        }
-
-        "click" | "contextmenu" | "dblclick" | "doubleclick" | "mousedown" | "mouseenter"
-        | "mouseleave" | "mousemove" | "mouseout" | "mouseover" | "mouseup" => {
-            Rc::new(MouseData::from(event))
-        }
-        "drag" | "dragend" | "dragenter" | "dragexit" | "dragleave" | "dragover" | "dragstart"
-        | "drop" => Rc::new(DragData::from(event)),
-
-        "pointerdown" | "pointermove" | "pointerup" | "pointercancel" | "gotpointercapture"
-        | "lostpointercapture" | "pointerenter" | "pointerleave" | "pointerover" | "pointerout" => {
-            Rc::new(PointerData::from(event))
-        }
-        "select" => Rc::new(SelectionData::from(event)),
-        "touchcancel" | "touchend" | "touchmove" | "touchstart" => Rc::new(TouchData::from(event)),
-
-        "scroll" => Rc::new(()),
-        "wheel" => Rc::new(WheelData::from(event)),
-        "animationstart" | "animationend" | "animationiteration" => {
-            Rc::new(AnimationData::from(event))
-        }
-        "transitionend" => Rc::new(TransitionData::from(event)),
-        "abort" | "canplay" | "canplaythrough" | "durationchange" | "emptied" | "encrypted"
-        | "ended" | "loadeddata" | "loadedmetadata" | "loadstart" | "pause" | "play"
-        | "playing" | "progress" | "ratechange" | "seeked" | "seeking" | "stalled" | "suspend"
-        | "timeupdate" | "volumechange" | "waiting" => Rc::new(MediaData::from(event)),
-        "error" => Rc::new(WebImageEvent::new(event, true)),
-        "load" => Rc::new(WebImageEvent::new(event, false)),
-        "toggle" => Rc::new(ToggleData::from(event)),
-
-        _ => Rc::new(()),
-    }
+    Rc::new(GenericWebSysEvent {
+        raw: event,
+        element: target,
+    })
 }
 
 pub(crate) fn load_document() -> Document {
@@ -336,7 +415,7 @@ impl HasImageData for WebImageEvent {
     }
 
     fn as_any(&self) -> &dyn Any {
-        &self.raw
+        &self.raw as &dyn Any
     }
 }
 
@@ -432,7 +511,7 @@ impl HasFormData for WebFormData {
     }
 
     fn as_any(&self) -> &dyn Any {
-        &self.raw
+        &self.raw as &dyn Any
     }
 }
 

@@ -386,6 +386,12 @@ impl std::fmt::Display for FocusError {
 
 impl std::error::Error for FocusError {}
 
+impl HasScrollData for Event {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+}
+
 impl HasClipboardData for Event {
     fn as_any(&self) -> &dyn std::any::Any {
         self

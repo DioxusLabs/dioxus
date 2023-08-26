@@ -26,6 +26,11 @@ impl PartialEq for ImageData {
 }
 
 impl ImageData {
+    /// Create a new ImageData
+    pub fn new(e: impl HasImageData) -> Self {
+        Self { inner: Box::new(e) }
+    }
+
     /// If the renderer encountered an error while loading the image
     pub fn load_error(&self) -> bool {
         self.inner.load_error()
