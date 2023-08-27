@@ -314,7 +314,7 @@ impl<T> Clone for UseSharedState<T> {
     }
 }
 
-impl<T: PartialEq> PartialEq for UseSharedState<T> {
+impl<T> PartialEq for UseSharedState<T> {
     fn eq(&self, other: &Self) -> bool {
         self.gen == other.gen
     }
