@@ -69,6 +69,8 @@ mod cfg;
 mod dom;
 #[cfg(feature = "eval")]
 mod eval;
+mod event;
+pub use event::*;
 #[cfg(feature = "file_engine")]
 mod file_engine;
 #[cfg(all(feature = "hot_reload", debug_assertions))]
