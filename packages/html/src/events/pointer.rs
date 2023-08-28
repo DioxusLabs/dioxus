@@ -29,6 +29,10 @@ impl std::fmt::Debug for PointerData {
             .field("twist", &self.twist())
             .field("pointer_type", &self.pointer_type())
             .field("is_primary", &self.is_primary())
+            .field("coordinates", &self.coordinates())
+            .field("modifiers", &self.modifiers())
+            .field("held_buttons", &self.held_buttons())
+            .field("trigger_button", &self.trigger_button())
             .finish()
     }
 }
@@ -45,6 +49,10 @@ impl PartialEq for PointerData {
             && self.twist() == other.twist()
             && self.pointer_type() == other.pointer_type()
             && self.is_primary() == other.is_primary()
+            && self.coordinates() == other.coordinates()
+            && self.modifiers() == other.modifiers()
+            && self.held_buttons() == other.held_buttons()
+            && self.trigger_button() == other.trigger_button()
     }
 }
 
@@ -201,7 +209,7 @@ impl PointInteraction for PointerData {
 
 #[cfg(feature = "serialize")]
 #[derive(serde::Serialize, serde::Deserialize)]
-struct SerializedPointData {
+struct SerializedPointerData {
     /// Common data for all pointer/mouse events
     #[serde(flatten)]
     point_data: crate::point_interaction::SerializedPointInteraction,
@@ -238,7 +246,7 @@ struct SerializedPointData {
 }
 
 #[cfg(feature = "serialize")]
-impl HasPointerData for SerializedPointData {
+impl HasPointerData for SerializedPointerData {
     fn pointer_id(&self) -> i32 {
         self.pointer_id
     }
@@ -285,7 +293,7 @@ impl HasPointerData for SerializedPointData {
 }
 
 #[cfg(feature = "serialize")]
-impl PointInteraction for SerializedPointData {
+impl PointInteraction for SerializedPointerData {
     fn client_coordinates(&self) -> ClientPoint {
         self.point_data.client_coordinates()
     }
@@ -316,7 +324,7 @@ impl PointInteraction for SerializedPointData {
 }
 
 #[cfg(feature = "serialize")]
-impl From<&PointerData> for SerializedPointData {
+impl From<&PointerData> for SerializedPointerData {
     fn from(data: &PointerData) -> Self {
         Self {
             point_data: data.into(),
@@ -337,14 +345,14 @@ impl From<&PointerData> for SerializedPointData {
 #[cfg(feature = "serialize")]
 impl serde::Serialize for PointerData {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        SerializedPointData::from(self).serialize(serializer)
+        SerializedPointerData::from(self).serialize(serializer)
     }
 }
 
 #[cfg(feature = "serialize")]
 impl<'de> serde::Deserialize<'de> for PointerData {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let data = SerializedPointData::deserialize(deserializer)?;
+        let data = SerializedPointerData::deserialize(deserializer)?;
         Ok(Self {
             inner: Box::new(data),
         })
