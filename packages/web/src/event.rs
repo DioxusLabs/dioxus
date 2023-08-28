@@ -10,6 +10,7 @@ use web_sys::{Document, Element, Event};
 
 pub(crate) struct WebEventConverter;
 
+#[inline(always)]
 fn downcast_event(event: &dioxus_html::PlatformEventData) -> &GenericWebSysEvent {
     event
         .downcast::<GenericWebSysEvent>()
@@ -17,6 +18,7 @@ fn downcast_event(event: &dioxus_html::PlatformEventData) -> &GenericWebSysEvent
 }
 
 impl HtmlEventConverter for WebEventConverter {
+    #[inline(always)]
     fn convert_animation_data(
         &self,
         event: &dioxus_html::PlatformEventData,
@@ -24,6 +26,7 @@ impl HtmlEventConverter for WebEventConverter {
         downcast_event(event).raw.clone().into()
     }
 
+    #[inline(always)]
     fn convert_clipboard_data(
         &self,
         event: &dioxus_html::PlatformEventData,
@@ -31,6 +34,7 @@ impl HtmlEventConverter for WebEventConverter {
         downcast_event(event).raw.clone().into()
     }
 
+    #[inline(always)]
     fn convert_composition_data(
         &self,
         event: &dioxus_html::PlatformEventData,
@@ -38,25 +42,30 @@ impl HtmlEventConverter for WebEventConverter {
         downcast_event(event).raw.clone().into()
     }
 
+    #[inline(always)]
     fn convert_drag_data(&self, event: &dioxus_html::PlatformEventData) -> dioxus_html::DragData {
         downcast_event(event).raw.clone().into()
     }
 
+    #[inline(always)]
     fn convert_focus_data(&self, event: &dioxus_html::PlatformEventData) -> dioxus_html::FocusData {
         downcast_event(event).raw.clone().into()
     }
 
+    #[inline(always)]
     fn convert_form_data(&self, event: &dioxus_html::PlatformEventData) -> dioxus_html::FormData {
         let event = downcast_event(event);
         FormData::new(WebFormData::new(event.element.clone(), event.raw.clone()))
     }
 
+    #[inline(always)]
     fn convert_image_data(&self, event: &dioxus_html::PlatformEventData) -> dioxus_html::ImageData {
         let event = downcast_event(event);
         let error = event.raw.type_() == "error";
         ImageData::new(WebImageEvent::new(event.raw.clone(), error))
     }
 
+    #[inline(always)]
     fn convert_keyboard_data(
         &self,
         event: &dioxus_html::PlatformEventData,
@@ -64,11 +73,13 @@ impl HtmlEventConverter for WebEventConverter {
         downcast_event(event).raw.clone().into()
     }
 
+    #[inline(always)]
     fn convert_media_data(&self, event: &dioxus_html::PlatformEventData) -> dioxus_html::MediaData {
         downcast_event(event).raw.clone().into()
     }
 
     #[allow(unused_variables)]
+    #[inline(always)]
     fn convert_mounted_data(&self, event: &dioxus_html::PlatformEventData) -> MountedData {
         #[cfg(feature = "mounted")]
         {
@@ -80,10 +91,12 @@ impl HtmlEventConverter for WebEventConverter {
         }
     }
 
+    #[inline(always)]
     fn convert_mouse_data(&self, event: &dioxus_html::PlatformEventData) -> dioxus_html::MouseData {
         downcast_event(event).raw.clone().into()
     }
 
+    #[inline(always)]
     fn convert_pointer_data(
         &self,
         event: &dioxus_html::PlatformEventData,
@@ -91,6 +104,7 @@ impl HtmlEventConverter for WebEventConverter {
         downcast_event(event).raw.clone().into()
     }
 
+    #[inline(always)]
     fn convert_scroll_data(
         &self,
         event: &dioxus_html::PlatformEventData,
@@ -98,6 +112,7 @@ impl HtmlEventConverter for WebEventConverter {
         ScrollData::from(downcast_event(event).raw.clone())
     }
 
+    #[inline(always)]
     fn convert_selection_data(
         &self,
         event: &dioxus_html::PlatformEventData,
@@ -105,6 +120,7 @@ impl HtmlEventConverter for WebEventConverter {
         downcast_event(event).raw.clone().into()
     }
 
+    #[inline(always)]
     fn convert_toggle_data(
         &self,
         event: &dioxus_html::PlatformEventData,
@@ -112,10 +128,12 @@ impl HtmlEventConverter for WebEventConverter {
         downcast_event(event).raw.clone().into()
     }
 
+    #[inline(always)]
     fn convert_touch_data(&self, event: &dioxus_html::PlatformEventData) -> dioxus_html::TouchData {
         downcast_event(event).raw.clone().into()
     }
 
+    #[inline(always)]
     fn convert_transition_data(
         &self,
         event: &dioxus_html::PlatformEventData,
@@ -123,6 +141,7 @@ impl HtmlEventConverter for WebEventConverter {
         downcast_event(event).raw.clone().into()
     }
 
+    #[inline(always)]
     fn convert_wheel_data(&self, event: &dioxus_html::PlatformEventData) -> dioxus_html::WheelData {
         downcast_event(event).raw.clone().into()
     }
