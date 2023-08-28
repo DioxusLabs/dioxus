@@ -2,7 +2,8 @@ use std::{collections::HashMap, io::stdout};
 
 use crossterm::{cursor::MoveTo, execute};
 use dioxus_html::{
-    input_data::keyboard_types::Key, prelude::PointInteraction, KeyboardData, MouseData,
+    input_data::keyboard_types::Key, prelude::PointInteraction, HasKeyboardData,
+    SerializedKeyboardData, SerializedMouseData,
 };
 use dioxus_native_core::{
     custom_element::CustomElement,
@@ -186,7 +187,7 @@ impl<C: TextLikeController> TextLike<C> {
         }
     }
 
-    fn handle_keydown(&mut self, mut root: NodeMut, data: &KeyboardData) {
+    fn handle_keydown(&mut self, mut root: NodeMut, data: &SerializedKeyboardData) {
         let key = data.key();
         let modifiers = data.modifiers();
         let code = data.code();
@@ -230,7 +231,7 @@ impl<C: TextLikeController> TextLike<C> {
         }
     }
 
-    fn handle_mousemove(&mut self, mut root: NodeMut, data: &MouseData) {
+    fn handle_mousemove(&mut self, mut root: NodeMut, data: &SerializedMouseData) {
         if self.dragging {
             let id = root.id();
             let offset = data.element_coordinates();
@@ -247,7 +248,7 @@ impl<C: TextLikeController> TextLike<C> {
         }
     }
 
-    fn handle_mousedown(&mut self, mut root: NodeMut, data: &MouseData) {
+    fn handle_mousedown(&mut self, mut root: NodeMut, data: &SerializedMouseData) {
         let offset = data.element_coordinates();
         let mut new = Pos::new(offset.x as usize, offset.y as usize);
 

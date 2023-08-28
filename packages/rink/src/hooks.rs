@@ -2,22 +2,21 @@ use crossterm::event::{
     Event as TermEvent, KeyCode as TermKeyCode, KeyModifiers, ModifierKeyCode, MouseButton,
     MouseEventKind,
 };
+use dioxus_html::{
+    HasFormData, HasKeyboardData, HasWheelData, SerializedFocusData, SerializedKeyboardData,
+    SerializedMouseData, SerializedWheelData,
+};
 use dioxus_native_core::prelude::*;
 use dioxus_native_core::real_dom::NodeImmutable;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use dioxus_html::geometry::euclid::{Point2D, Rect, Size2D};
-use dioxus_html::geometry::{
-    ClientPoint, Coordinates, ElementPoint, PagePoint, ScreenPoint, WheelDelta,
-};
+use dioxus_html::geometry::{ClientPoint, ElementPoint, PagePoint, ScreenPoint, WheelDelta};
 use dioxus_html::input_data::keyboard_types::{Code, Key, Location, Modifiers};
 use dioxus_html::input_data::{
     MouseButton as DioxusMouseButton, MouseButtonSet as DioxusMouseButtons,
 };
-use dioxus_html::point_interaction::PointData;
-use dioxus_html::{
-    event_bubbles, prelude::PointInteraction, FocusData, KeyboardData, MouseData, WheelData,
-};
+use dioxus_html::{event_bubbles, prelude::PointInteraction};
 use std::any::Any;
 use std::collections::HashMap;
 use std::{
@@ -42,10 +41,10 @@ pub struct Event {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum EventData {
-    Mouse(MouseData),
-    Keyboard(KeyboardData),
-    Focus(FocusData),
-    Wheel(WheelData),
+    Mouse(SerializedMouseData),
+    Keyboard(SerializedKeyboardData),
+    Focus(SerializedFocusData),
+    Wheel(SerializedWheelData),
     Form(FormData),
 }
 
@@ -70,13 +69,23 @@ pub struct FormData {
     pub files: Option<Files>,
 }
 
+impl HasFormData for FormData {
+    fn value(&self) -> String {
+        self.value.clone()
+    }
+
+    fn values(&self) -> HashMap<String, Vec<String>> {
+        self.values.clone()
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+}
+
 impl FormData {
     fn into_html(self) -> dioxus_html::FormData {
-        dioxus_html::FormData {
-            value: self.value,
-            values: self.values,
-            files: None,
-        }
+        dioxus_html::FormData::new(self)
     }
 }
 
@@ -93,9 +102,9 @@ type EventCore = (&'static str, EventData);
 const MAX_REPEAT_TIME: Duration = Duration::from_millis(100);
 
 pub struct InnerInputState {
-    mouse: Option<MouseData>,
-    wheel: Option<WheelData>,
-    last_key_pressed: Option<(KeyboardData, Instant)>,
+    mouse: Option<SerializedMouseData>,
+    wheel: Option<SerializedWheelData>,
+    last_key_pressed: Option<(SerializedKeyboardData, Instant)>,
     pub(crate) focus_state: FocusState,
     // subscribers: Vec<Rc<dyn Fn() + 'static>>,
 }
@@ -137,12 +146,16 @@ impl InnerInputState {
                     _ => {}
                 }
 
-                let new_mouse_data = MouseData::new(PointData::new(
-                    m.trigger_button(),
-                    held_buttons,
-                    m.coordinates(),
+                let coordinates = m.coordinates();
+                let new_mouse_data = SerializedMouseData::new(
+                    m.client_coordinates(),
+                    coordinates.element(),
+                    m.page_coordinates(),
+                    m.screen_coordinates(),
                     m.modifiers(),
-                ));
+                    held_buttons,
+                    m.trigger_button(),
+                );
 
                 self.mouse = Some(new_mouse_data.clone());
                 *m = new_mouse_data;
@@ -159,7 +172,13 @@ impl InnerInputState {
                     .is_some();
 
                 if is_repeating {
-                    *k = KeyboardData::new(k.key(), k.code(), k.location(), true, k.modifiers());
+                    *k = SerializedKeyboardData::new(
+                        is_repeating,
+                        k.code(),
+                        k.key(),
+                        k.location(),
+                        k.modifiers(),
+                    );
                 }
 
                 self.last_key_pressed = Some((k.clone(), Instant::now()));
@@ -203,13 +222,13 @@ impl InnerInputState {
                 resolved_events.push(Event {
                     name: "focus",
                     id,
-                    data: EventData::Focus(FocusData {}),
+                    data: EventData::Focus(SerializedFocusData::default()),
                     bubbles: event_bubbles("focus"),
                 });
                 resolved_events.push(Event {
                     name: "focusin",
                     id,
-                    data: EventData::Focus(FocusData {}),
+                    data: EventData::Focus(SerializedFocusData::default()),
                     bubbles: event_bubbles("focusin"),
                 });
             }
@@ -217,7 +236,7 @@ impl InnerInputState {
                 resolved_events.push(Event {
                     name: "focusout",
                     id,
-                    data: EventData::Focus(FocusData {}),
+                    data: EventData::Focus(SerializedFocusData::default()),
                     bubbles: event_bubbles("focusout"),
                 });
             }
@@ -230,7 +249,7 @@ impl InnerInputState {
 
     fn resolve_mouse_events(
         &mut self,
-        previous_mouse: Option<MouseData>,
+        previous_mouse: Option<SerializedMouseData>,
         resolved_events: &mut Vec<Event>,
         layout: &Taffy,
         dom: &mut RealDom,
@@ -277,7 +296,10 @@ impl InnerInputState {
             }
         }
 
-        fn prepare_mouse_data(mouse_data: &MouseData, layout: &Layout) -> MouseData {
+        fn prepare_mouse_data(
+            mouse_data: &SerializedMouseData,
+            layout: &Layout,
+        ) -> SerializedMouseData {
             let Point { x, y } = layout.location;
             let node_origin = ClientPoint::new(
                 layout_to_screen_space(x).into(),
@@ -288,19 +310,15 @@ impl InnerInputState {
                 .to_point()
                 .cast_unit();
 
-            let coordinates = Coordinates::new(
-                mouse_data.screen_coordinates(),
+            SerializedMouseData::new(
                 mouse_data.client_coordinates(),
                 new_client_coordinates,
                 mouse_data.page_coordinates(),
-            );
-
-            MouseData::new(PointData::new(
-                mouse_data.trigger_button(),
-                mouse_data.held_buttons(),
-                coordinates,
+                mouse_data.screen_coordinates(),
                 mouse_data.modifiers(),
-            ))
+                mouse_data.held_buttons(),
+                mouse_data.trigger_button(),
+            )
         }
 
         if let Some(mouse_data) = &self.mouse {
@@ -693,17 +711,6 @@ fn get_event(evt: TermEvent) -> Option<(&'static str, EventData)> {
 
                 // from https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent
 
-                // The `page` and `screen` coordinates are inconsistent with the MDN definition, as they are relative to the viewport (client), not the target element/page/screen, respectively.
-                // todo?
-                // But then, MDN defines them in terms of pixels, yet crossterm provides only row/column, and it might not be possible to get pixels. So we can't get 100% consistency anyway.
-                let coordinates = Coordinates::new(
-                    ScreenPoint::new(x, y),
-                    ClientPoint::new(x, y),
-                    // offset x/y are set when the origin of the event is assigned to an element
-                    ElementPoint::new(0., 0.),
-                    PagePoint::new(x, y),
-                );
-
                 let mut modifiers = Modifiers::empty();
                 if shift {
                     modifiers.insert(Modifiers::SHIFT);
@@ -719,17 +726,24 @@ fn get_event(evt: TermEvent) -> Option<(&'static str, EventData)> {
                 }
 
                 // held mouse buttons get set later by maintaining state, as crossterm does not provide them
-                EventData::Mouse(MouseData::new(PointData::new(
-                    button,
-                    DioxusMouseButtons::empty(),
-                    coordinates,
+                EventData::Mouse(SerializedMouseData::new(
+                    // The `page` and `screen` coordinates are inconsistent with the MDN definition, as they are relative to the viewport (client), not the target element/page/screen, respectively.
+                    // todo?
+                    // But then, MDN defines them in terms of pixels, yet crossterm provides only row/column, and it might not be possible to get pixels. So we can't get 100% consistency anyway.
+                    ClientPoint::new(x, y),
+                    // offset x/y are set when the origin of the event is assigned to an element
+                    ElementPoint::new(0., 0.),
+                    PagePoint::new(x, y),
+                    ScreenPoint::new(x, y),
                     modifiers,
-                )))
+                    DioxusMouseButtons::empty(),
+                    button,
+                ))
             };
 
             let get_wheel_data = |up| {
                 let y = if up { -1.0 } else { 1.0 };
-                EventData::Wheel(WheelData::new(WheelDelta::lines(0., y, 0.)))
+                EventData::Wheel(SerializedWheelData::new(WheelDelta::lines(0., y, 0.)))
             };
 
             match m.kind {
@@ -754,11 +768,11 @@ fn translate_key_event(event: crossterm::event::KeyEvent) -> Option<EventData> {
     let code = guess_code_from_crossterm_key_code(event.code)?;
     let modifiers = modifiers_from_crossterm_modifiers(event.modifiers);
 
-    Some(EventData::Keyboard(KeyboardData::new(
-        key,
-        code,
-        Location::Standard,
+    Some(EventData::Keyboard(SerializedKeyboardData::new(
         false,
+        code,
+        key,
+        Location::Standard,
         modifiers,
     )))
 }

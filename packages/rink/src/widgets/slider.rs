@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 
 use dioxus_html::{
-    input_data::keyboard_types::Key, prelude::PointInteraction, KeyboardData, MouseData,
+    input_data::keyboard_types::Key, prelude::PointInteraction, HasKeyboardData,
+    SerializedKeyboardData, SerializedMouseData,
 };
 use dioxus_native_core::{
     custom_element::CustomElement,
@@ -211,7 +212,7 @@ impl Slider {
         }
     }
 
-    fn handle_keydown(&mut self, mut root: NodeMut, data: &KeyboardData) {
+    fn handle_keydown(&mut self, mut root: NodeMut, data: &SerializedKeyboardData) {
         let key = data.key();
 
         let step = self.step();
@@ -233,7 +234,7 @@ impl Slider {
         self.write_value(rdom, id);
     }
 
-    fn handle_mousemove(&mut self, mut root: NodeMut, data: &MouseData) {
+    fn handle_mousemove(&mut self, mut root: NodeMut, data: &SerializedMouseData) {
         if !data.held_buttons().is_empty() {
             let id = root.id();
             let rdom = root.real_dom_mut();
