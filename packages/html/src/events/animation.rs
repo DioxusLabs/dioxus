@@ -50,7 +50,7 @@ impl PartialEq for AnimationData {
 
 #[cfg(feature = "serialize")]
 /// A serialized version of AnimationData
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Clone)]
 pub struct SerializedAnimationData {
     animation_name: String,
     pseudo_element: String,

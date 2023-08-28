@@ -60,7 +60,7 @@ impl TouchData {
 
 #[cfg(feature = "serialize")]
 /// A serialized version of TouchData
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Clone)]
 pub struct SerializedTouchData {
     alt_key: bool,
     ctrl_key: bool,

@@ -1,6 +1,5 @@
 use dioxus_core::Event;
 use keyboard_types::{Code, Key, Location, Modifiers};
-use std::convert::TryInto;
 use std::fmt::Debug;
 
 #[cfg(feature = "serialize")]
@@ -80,7 +79,7 @@ impl KeyboardData {
 
 #[cfg(feature = "serialize")]
 /// A serialized version of KeyboardData
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Clone)]
 pub struct SerializedKeyboardData {
     auto_repeating: bool,
     #[serde(deserialize_with = "resilient_deserialize_code")]
@@ -88,6 +87,26 @@ pub struct SerializedKeyboardData {
     key: Key,
     location: Location,
     modifiers: Modifiers,
+}
+
+#[cfg(feature = "serialize")]
+impl SerializedKeyboardData {
+    /// Create a new SerializedKeyboardData
+    pub fn new(
+        auto_repeating: bool,
+        code: Code,
+        key: Key,
+        location: Location,
+        modifiers: Modifiers,
+    ) -> Self {
+        Self {
+            auto_repeating,
+            code,
+            key,
+            location,
+            modifiers,
+        }
+    }
 }
 
 #[cfg(feature = "serialize")]
@@ -186,6 +205,8 @@ impl<'de> serde::Deserialize<'de> for KeyCode {
     where
         D: serde::Deserializer<'de>,
     {
+        use std::convert::TryInto;
+
         // We could be deserializing a unicode character, so we need to use u64 even if the output only takes u8
         let value = u64::deserialize(deserializer)?;
 

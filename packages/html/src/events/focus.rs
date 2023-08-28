@@ -33,7 +33,7 @@ impl FocusData {
 
 #[cfg(feature = "serialize")]
 /// A serialized version of FocusData
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Clone, Default)]
 pub struct SerializedFocusData {}
 
 #[cfg(feature = "serialize")]

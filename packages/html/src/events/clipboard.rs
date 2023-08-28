@@ -38,7 +38,7 @@ impl ClipboardData {
 
 #[cfg(feature = "serialize")]
 /// A serialized version of ClipboardData
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Clone)]
 pub struct SerializedClipboardData {}
 
 #[cfg(feature = "serialize")]

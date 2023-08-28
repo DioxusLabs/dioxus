@@ -33,7 +33,7 @@ impl PartialEq for ScrollData {
 
 #[cfg(feature = "serialize")]
 /// A serialized version of ScrollData
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Clone)]
 pub struct SerializedScrollData {}
 
 #[cfg(feature = "serialize")]

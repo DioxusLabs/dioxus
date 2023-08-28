@@ -106,6 +106,13 @@ impl_event! {
 }
 
 impl MouseData {
+    /// Create a new instance of MouseData
+    pub fn new(inner: impl HasMouseData + 'static) -> Self {
+        Self {
+            inner: Box::new(inner),
+        }
+    }
+
     /// Downcast this event to a concrete event type
     pub fn downcast<T: 'static>(&self) -> Option<&T> {
         self.inner.as_any().downcast_ref::<T>()
@@ -172,23 +179,98 @@ impl PartialEq for MouseData {
 }
 
 #[cfg(feature = "serialize")]
-impl HasMouseData for crate::point_interaction::SerializedPointInteraction {
+/// A serialized version of [`MouseData`]
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Clone, Default)]
+pub struct SerializedMouseData {
+    /// Common data for all pointer/mouse events
+    #[serde(flatten)]
+    point_data: crate::point_interaction::SerializedPointInteraction,
+}
+
+#[cfg(feature = "serialize")]
+impl SerializedMouseData {
+    /// Create a new instance of SerializedMouseData
+    pub fn new(
+        client_coordinates: ClientPoint,
+        element_coordinates: ElementPoint,
+        page_coordinates: PagePoint,
+        screen_coordinates: ScreenPoint,
+        modifiers: Modifiers,
+        held_buttons: MouseButtonSet,
+        trigger_button: Option<MouseButton>,
+    ) -> Self {
+        Self {
+            point_data: crate::point_interaction::SerializedPointInteraction::new(
+                client_coordinates,
+                element_coordinates,
+                page_coordinates,
+                screen_coordinates,
+                modifiers,
+                held_buttons,
+                trigger_button,
+            ),
+        }
+    }
+}
+
+#[cfg(feature = "serialize")]
+impl From<&MouseData> for SerializedMouseData {
+    fn from(e: &MouseData) -> Self {
+        Self {
+            point_data: crate::point_interaction::SerializedPointInteraction::from(e),
+        }
+    }
+}
+
+#[cfg(feature = "serialize")]
+impl HasMouseData for SerializedMouseData {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
 }
 
 #[cfg(feature = "serialize")]
+impl PointInteraction for SerializedMouseData {
+    fn client_coordinates(&self) -> ClientPoint {
+        self.point_data.client_coordinates()
+    }
+
+    fn element_coordinates(&self) -> ElementPoint {
+        self.point_data.element_coordinates()
+    }
+
+    fn page_coordinates(&self) -> PagePoint {
+        self.point_data.page_coordinates()
+    }
+
+    fn screen_coordinates(&self) -> ScreenPoint {
+        self.point_data.screen_coordinates()
+    }
+
+    fn modifiers(&self) -> Modifiers {
+        self.point_data.modifiers()
+    }
+
+    fn held_buttons(&self) -> MouseButtonSet {
+        self.point_data.held_buttons()
+    }
+
+    fn trigger_button(&self) -> Option<MouseButton> {
+        self.point_data.trigger_button()
+    }
+}
+
+#[cfg(feature = "serialize")]
 impl serde::Serialize for MouseData {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        crate::point_interaction::SerializedPointInteraction::from(self).serialize(serializer)
+        SerializedMouseData::from(self).serialize(serializer)
     }
 }
 
 #[cfg(feature = "serialize")]
 impl<'de> serde::Deserialize<'de> for MouseData {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let data = crate::point_interaction::SerializedPointInteraction::deserialize(deserializer)?;
+        let data = SerializedMouseData::deserialize(deserializer)?;
         Ok(Self {
             inner: Box::new(data),
         })

@@ -78,7 +78,7 @@ pub trait HasFormData: std::any::Any {
 
 #[cfg(feature = "serialize")]
 /// A serialized form data object
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Clone)]
 pub struct SerializedFormData {
     value: String,
     values: HashMap<String, Vec<String>>,
@@ -172,7 +172,7 @@ impl<'de> serde::Deserialize<'de> for FormData {
 
 #[cfg(feature = "serialize")]
 /// A file engine that serializes files to bytes
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Clone)]
 pub struct SerializedFileEngine {
     files: HashMap<String, Vec<u8>>,
 }

@@ -39,7 +39,7 @@ impl TransitionData {
 
 #[cfg(feature = "serialize")]
 /// A serialized version of TransitionData
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Clone)]
 pub struct SerializedTransitionData {
     property_name: String,
     pseudo_element: String,

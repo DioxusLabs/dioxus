@@ -43,7 +43,7 @@ impl ImageData {
 
 #[cfg(feature = "serialize")]
 /// A serialized version of ImageData
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Clone)]
 pub struct SerializedImageData {
     load_error: bool,
 }

@@ -99,7 +99,7 @@ impl DragData {
 
 #[cfg(feature = "serialize")]
 /// A serialized version of DragData
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Clone)]
 pub struct SerializedDragData {
     mouse: crate::point_interaction::SerializedPointInteraction,
 }
