@@ -11,7 +11,7 @@ keywords = ["dom", "ui", "gui", "react"]
 
 [dependencies]
 dioxus-core = { workspace = true, features = ["serialize"] }
-dioxus-html = { workspace = true, features = ["serialize", "native-bind"] }
+dioxus-html = { workspace = true, features = ["serialize", "native-bind", "mounted", "eval"] }
 dioxus-interpreter-js = { workspace = true }
 dioxus-hot-reload = { workspace = true, optional = true }
 
