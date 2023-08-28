@@ -31,8 +31,9 @@ impl MediaData {
 }
 
 #[cfg(feature = "serialize")]
+/// A serialized version of MediaData
 #[derive(serde::Serialize, serde::Deserialize)]
-struct SerializedMediaData {}
+pub struct SerializedMediaData {}
 
 #[cfg(feature = "serialize")]
 impl From<&MediaData> for SerializedMediaData {

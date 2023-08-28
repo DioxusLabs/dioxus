@@ -43,8 +43,9 @@ impl WheelData {
 }
 
 #[cfg(feature = "serialize")]
+/// A serialized version of WheelData
 #[derive(serde::Serialize, serde::Deserialize)]
-struct SerializedWheelData {
+pub struct SerializedWheelData {
     delta: WheelDelta,
 }
 

@@ -208,8 +208,9 @@ impl PointInteraction for PointerData {
 }
 
 #[cfg(feature = "serialize")]
+/// A serialized version of PointerData
 #[derive(serde::Serialize, serde::Deserialize)]
-struct SerializedPointerData {
+pub struct SerializedPointerData {
     /// Common data for all pointer/mouse events
     #[serde(flatten)]
     point_data: crate::point_interaction::SerializedPointInteraction,

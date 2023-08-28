@@ -32,8 +32,9 @@ impl FocusData {
 }
 
 #[cfg(feature = "serialize")]
+/// A serialized version of FocusData
 #[derive(serde::Serialize, serde::Deserialize)]
-struct SerializedFocusData {}
+pub struct SerializedFocusData {}
 
 #[cfg(feature = "serialize")]
 impl From<&FocusData> for SerializedFocusData {

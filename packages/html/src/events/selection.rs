@@ -32,8 +32,9 @@ impl PartialEq for SelectionData {
 }
 
 #[cfg(feature = "serialize")]
+/// A serialized version of SelectionData
 #[derive(serde::Serialize, serde::Deserialize)]
-struct SerializedSelectionData {}
+pub struct SerializedSelectionData {}
 
 #[cfg(feature = "serialize")]
 impl From<&SelectionData> for SerializedSelectionData {

@@ -79,8 +79,9 @@ impl KeyboardData {
 }
 
 #[cfg(feature = "serialize")]
+/// A serialized version of KeyboardData
 #[derive(serde::Serialize, serde::Deserialize)]
-struct SerializedKeyboardData {
+pub struct SerializedKeyboardData {
     auto_repeating: bool,
     #[serde(deserialize_with = "resilient_deserialize_code")]
     code: Code,

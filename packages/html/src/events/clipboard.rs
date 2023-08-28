@@ -37,8 +37,9 @@ impl ClipboardData {
 }
 
 #[cfg(feature = "serialize")]
+/// A serialized version of ClipboardData
 #[derive(serde::Serialize, serde::Deserialize)]
-struct SerializedClipboardData {}
+pub struct SerializedClipboardData {}
 
 #[cfg(feature = "serialize")]
 impl From<&ClipboardData> for SerializedClipboardData {

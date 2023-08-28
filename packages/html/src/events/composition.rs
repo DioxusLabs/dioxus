@@ -37,8 +37,9 @@ impl CompositionData {
 }
 
 #[cfg(feature = "serialize")]
+/// A serialized version of CompositionData
 #[derive(serde::Serialize, serde::Deserialize)]
-struct SerializedCompositionData {
+pub struct SerializedCompositionData {
     data: String,
 }
 

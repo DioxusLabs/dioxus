@@ -32,8 +32,9 @@ impl ToggleData {
 }
 
 #[cfg(feature = "serialize")]
+/// A serialized version of ToggleData
 #[derive(serde::Serialize, serde::Deserialize)]
-struct SerializedToggleData {}
+pub struct SerializedToggleData {}
 
 #[cfg(feature = "serialize")]
 impl From<&ToggleData> for SerializedToggleData {
