@@ -1,6 +1,6 @@
 use crate::geometry::{ClientPoint, Coordinates, ElementPoint, PagePoint, ScreenPoint};
 use crate::input_data::{MouseButton, MouseButtonSet};
-use crate::prelude::PointInteraction;
+
 use dioxus_core::Event;
 use keyboard_types::Modifiers;
 
@@ -132,7 +132,7 @@ impl HasMouseData for SerializedDragData {
 }
 
 #[cfg(feature = "serialize")]
-impl PointInteraction for SerializedDragData {
+impl crate::prelude::PointInteraction for SerializedDragData {
     fn client_coordinates(&self) -> ClientPoint {
         self.mouse.client_coordinates()
     }

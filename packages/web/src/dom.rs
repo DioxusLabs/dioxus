@@ -330,7 +330,9 @@ impl HtmlEventConverter for WebEventConverter {
 
     fn convert_mounted_data(&self, event: &dioxus_html::PlatformEventData) -> MountedData {
         #[cfg(feature = "mounted")]
-        {MountedData::from(downcast_event(event).element.clone())}
+        {
+            MountedData::from(downcast_event(event).element.clone())
+        }
         #[cfg(not(feature = "mounted"))]
         {
             panic!("mounted events are not supported without the mounted feature on the dioxus-web crate enabled")
