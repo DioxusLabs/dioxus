@@ -28,9 +28,10 @@ pub use desktop_context::{
 use desktop_context::{EventData, UserWindowEvent, WebviewQueue, WindowEventHandlers};
 use dioxus_core::*;
 use dioxus_html::{native_bind::NativeFileEngine, HtmlEvent};
-use dioxus_html::{FileEngine, HasFormData, MountedData};
+use dioxus_html::{FileEngine, HasFormData, MountedData, PlatformEventData};
 use element::DesktopElement;
 use eval::init_eval;
+use events::SerializedHtmlEventConverter;
 use futures_util::{pin_mut, FutureExt};
 use shortcut::ShortcutRegistry;
 pub use shortcut::{use_global_shortcut, ShortcutHandle, ShortcutId, ShortcutRegistryError};
@@ -135,6 +136,9 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
             ));
         }
     });
+
+    // Set the event converter
+    dioxus_html::set_event_converter(Box::new(SerializedHtmlEventConverter));
 
     // We start the tokio runtime *on this thread*
     // Any future we poll later will use this runtime to spawn tasks and for IO
@@ -292,7 +296,7 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
                         let element =
                             DesktopElement::new(element, view.desktop_context.clone(), query);
 
-                        Rc::new(MountedData::new(element))
+                        Rc::new(PlatformEventData::new(Box::new(MountedData::new(element))))
                     } else {
                         data.into_any()
                     };
@@ -358,9 +362,10 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
                         let event_name = &file_diolog.event;
                         let event_bubbles = file_diolog.bubbles;
                         let files = file_upload::get_file_event(&file_diolog);
-                        let data = Rc::new(DesktopFileUploadForm {
-                            files: Arc::new(NativeFileEngine::new(files)),
-                        });
+                        let data =
+                            Rc::new(PlatformEventData::new(Box::new(DesktopFileUploadForm {
+                                files: Arc::new(NativeFileEngine::new(files)),
+                            })));
 
                         let view = webviews.get_mut(&event.1).unwrap();
 

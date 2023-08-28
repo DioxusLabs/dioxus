@@ -46,30 +46,42 @@ impl WheelData {
 /// A serialized version of WheelData
 #[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Clone)]
 pub struct SerializedWheelData {
-    delta: WheelDelta,
+    pub delta_mode: u32,
+    pub delta_x: f64,
+    pub delta_y: f64,
+    pub delta_z: f64,
 }
 
 #[cfg(feature = "serialize")]
 impl SerializedWheelData {
     /// Create a new SerializedWheelData
     pub fn new(delta: WheelDelta) -> Self {
-        Self { delta }
+        let delta_mode = match delta {
+            WheelDelta::Pixels(_) => 0,
+            WheelDelta::Lines(_) => 1,
+            WheelDelta::Pages(_) => 2,
+        };
+        let delta_raw = delta.strip_units();
+        Self {
+            delta_mode,
+            delta_x: delta_raw.x,
+            delta_y: delta_raw.y,
+            delta_z: delta_raw.z,
+        }
     }
 }
 
 #[cfg(feature = "serialize")]
 impl From<&WheelData> for SerializedWheelData {
     fn from(data: &WheelData) -> Self {
-        Self {
-            delta: data.inner.delta(),
-        }
+        Self::new(data.delta())
     }
 }
 
 #[cfg(feature = "serialize")]
 impl HasWheelData for SerializedWheelData {
     fn delta(&self) -> WheelDelta {
-        self.delta
+        WheelDelta::from_web_attributes(self.delta_mode, self.delta_x, self.delta_y, self.delta_z)
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

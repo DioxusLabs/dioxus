@@ -191,23 +191,17 @@ pub struct SerializedMouseData {
 impl SerializedMouseData {
     /// Create a new instance of SerializedMouseData
     pub fn new(
-        client_coordinates: ClientPoint,
-        element_coordinates: ElementPoint,
-        page_coordinates: PagePoint,
-        screen_coordinates: ScreenPoint,
-        modifiers: Modifiers,
-        held_buttons: MouseButtonSet,
         trigger_button: Option<MouseButton>,
+        held_buttons: MouseButtonSet,
+        coordinates: Coordinates,
+        modifiers: Modifiers,
     ) -> Self {
         Self {
             point_data: crate::point_interaction::SerializedPointInteraction::new(
-                client_coordinates,
-                element_coordinates,
-                page_coordinates,
-                screen_coordinates,
-                modifiers,
-                held_buttons,
                 trigger_button,
+                held_buttons,
+                coordinates,
+                modifiers,
             ),
         }
     }

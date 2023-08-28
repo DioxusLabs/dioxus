@@ -11,7 +11,9 @@ use dioxus_native_core::real_dom::NodeImmutable;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use dioxus_html::geometry::euclid::{Point2D, Rect, Size2D};
-use dioxus_html::geometry::{ClientPoint, ElementPoint, PagePoint, ScreenPoint, WheelDelta};
+use dioxus_html::geometry::{
+    ClientPoint, Coordinates, ElementPoint, PagePoint, ScreenPoint, WheelDelta,
+};
 use dioxus_html::input_data::keyboard_types::{Code, Key, Location, Modifiers};
 use dioxus_html::input_data::{
     MouseButton as DioxusMouseButton, MouseButtonSet as DioxusMouseButtons,
@@ -148,13 +150,15 @@ impl InnerInputState {
 
                 let coordinates = m.coordinates();
                 let new_mouse_data = SerializedMouseData::new(
-                    m.client_coordinates(),
-                    coordinates.element(),
-                    m.page_coordinates(),
-                    m.screen_coordinates(),
-                    m.modifiers(),
-                    held_buttons,
                     m.trigger_button(),
+                    held_buttons,
+                    Coordinates::new(
+                        m.screen_coordinates(),
+                        m.client_coordinates(),
+                        coordinates.element(),
+                        m.page_coordinates(),
+                    ),
+                    m.modifiers(),
                 );
 
                 self.mouse = Some(new_mouse_data.clone());
@@ -311,13 +315,15 @@ impl InnerInputState {
                 .cast_unit();
 
             SerializedMouseData::new(
-                mouse_data.client_coordinates(),
-                new_client_coordinates,
-                mouse_data.page_coordinates(),
-                mouse_data.screen_coordinates(),
-                mouse_data.modifiers(),
-                mouse_data.held_buttons(),
                 mouse_data.trigger_button(),
+                mouse_data.held_buttons(),
+                Coordinates::new(
+                    mouse_data.screen_coordinates(),
+                    mouse_data.client_coordinates(),
+                    new_client_coordinates,
+                    mouse_data.page_coordinates(),
+                ),
+                mouse_data.modifiers(),
             )
         }
 
@@ -727,17 +733,19 @@ fn get_event(evt: TermEvent) -> Option<(&'static str, EventData)> {
 
                 // held mouse buttons get set later by maintaining state, as crossterm does not provide them
                 EventData::Mouse(SerializedMouseData::new(
-                    // The `page` and `screen` coordinates are inconsistent with the MDN definition, as they are relative to the viewport (client), not the target element/page/screen, respectively.
-                    // todo?
-                    // But then, MDN defines them in terms of pixels, yet crossterm provides only row/column, and it might not be possible to get pixels. So we can't get 100% consistency anyway.
-                    ClientPoint::new(x, y),
-                    // offset x/y are set when the origin of the event is assigned to an element
-                    ElementPoint::new(0., 0.),
-                    PagePoint::new(x, y),
-                    ScreenPoint::new(x, y),
-                    modifiers,
-                    DioxusMouseButtons::empty(),
                     button,
+                    DioxusMouseButtons::empty(),
+                    Coordinates::new(
+                        // The `page` and `screen` coordinates are inconsistent with the MDN definition, as they are relative to the viewport (client), not the target element/page/screen, respectively.
+                        // todo?
+                        // But then, MDN defines them in terms of pixels, yet crossterm provides only row/column, and it might not be possible to get pixels. So we can't get 100% consistency anyway.
+                        ScreenPoint::new(x, y),
+                        ClientPoint::new(x, y),
+                        // offset x/y are set when the origin of the event is assigned to an element
+                        ElementPoint::new(0., 0.),
+                        PagePoint::new(x, y),
+                    ),
+                    modifiers,
                 ))
             };
 

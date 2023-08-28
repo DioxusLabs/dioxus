@@ -3,6 +3,7 @@ use dioxus_html::{geometry::euclid::Rect, MountedResult, RenderedElementBacking}
 
 use crate::{desktop_context::DesktopContext, query::QueryEngine};
 
+#[derive(Clone)]
 /// A mounted element passed to onmounted events
 pub struct DesktopElement {
     id: ElementId,

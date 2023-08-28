@@ -11,13 +11,13 @@ use dioxus_core::{
 };
 use dioxus_html::{
     event_bubbles, FileEngine, FormData, HasFormData, HasImageData, HtmlEventConverter, ImageData,
-    MountedData, ScrollData,
+    MountedData, PlatformEventData, ScrollData,
 };
 use dioxus_interpreter_js::{get_node, minimal_bindings, save_template, Channel};
 use futures_channel::mpsc;
 use js_sys::Array;
 use rustc_hash::FxHashMap;
-use std::{any::Any, collections::HashMap, rc::Rc};
+use std::{any::Any, collections::HashMap};
 use wasm_bindgen::{closure::Closure, prelude::wasm_bindgen, JsCast, JsValue};
 use web_sys::{Document, Element, Event};
 
@@ -37,7 +37,7 @@ pub struct UiEvent {
     pub name: String,
     pub bubbles: bool,
     pub element: ElementId,
-    pub data: Rc<dyn Any>,
+    pub data: PlatformEventData,
 }
 
 impl WebsysDom {
@@ -96,6 +96,7 @@ impl WebsysDom {
             root.clone().unchecked_into(),
             handler.as_ref().unchecked_ref(),
         );
+        dioxus_html::set_event_converter(Box::new(WebEventConverter));
         handler.forget();
         Self {
             document,
@@ -256,7 +257,7 @@ impl WebsysDom {
             if let Some(element) = node.dyn_ref::<Element>() {
                 log::info!("mounted event fired: {}", id.0);
                 let data: MountedData = element.into();
-                let data = Rc::new(data);
+                let data = PlatformEventData::new(Box::new(data));
                 let _ = self.event_channel.unbounded_send(UiEvent {
                     name: "mounted".to_string(),
                     bubbles: false,
@@ -394,11 +395,14 @@ struct GenericWebSysEvent {
 
 // todo: some of these events are being casted to the wrong event type.
 // We need tests that simulate clicks/etc and make sure every event type works.
-pub fn virtual_event_from_websys_event(event: web_sys::Event, target: Element) -> Rc<dyn Any> {
-    Rc::new(GenericWebSysEvent {
+pub fn virtual_event_from_websys_event(
+    event: web_sys::Event,
+    target: Element,
+) -> PlatformEventData {
+    PlatformEventData::new(Box::new(GenericWebSysEvent {
         raw: event,
         element: target,
-    })
+    }))
 }
 
 pub(crate) fn load_document() -> Document {

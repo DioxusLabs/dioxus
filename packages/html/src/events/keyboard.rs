@@ -81,30 +81,46 @@ impl KeyboardData {
 /// A serialized version of KeyboardData
 #[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Clone)]
 pub struct SerializedKeyboardData {
-    auto_repeating: bool,
+    char_code: u32,
+    key: String,
+    key_code: KeyCode,
     #[serde(deserialize_with = "resilient_deserialize_code")]
     code: Code,
-    key: Key,
-    location: Location,
-    modifiers: Modifiers,
+    alt_key: bool,
+    ctrl_key: bool,
+    meta_key: bool,
+    shift_key: bool,
+    location: usize,
+    repeat: bool,
+    which: usize,
 }
 
 #[cfg(feature = "serialize")]
 impl SerializedKeyboardData {
     /// Create a new SerializedKeyboardData
     pub fn new(
-        auto_repeating: bool,
-        code: Code,
         key: Key,
+        code: Code,
         location: Location,
+        is_auto_repeating: bool,
         modifiers: Modifiers,
     ) -> Self {
         Self {
-            auto_repeating,
+            char_code: key.legacy_charcode(),
+            key: key.to_string(),
+            key_code: KeyCode::from_raw_code(
+                std::convert::TryInto::try_into(key.legacy_keycode())
+                    .expect("could not convert keycode to u8"),
+            ),
             code,
-            key,
-            location,
-            modifiers,
+            alt_key: modifiers.contains(Modifiers::ALT),
+            ctrl_key: modifiers.contains(Modifiers::CONTROL),
+            meta_key: modifiers.contains(Modifiers::META),
+            shift_key: modifiers.contains(Modifiers::SHIFT),
+            location: crate::input_data::encode_key_location(location),
+            repeat: is_auto_repeating,
+            which: std::convert::TryInto::try_into(key.legacy_charcode())
+                .expect("could not convert charcode to usize"),
         }
     }
 }
@@ -112,20 +128,20 @@ impl SerializedKeyboardData {
 #[cfg(feature = "serialize")]
 impl From<&KeyboardData> for SerializedKeyboardData {
     fn from(data: &KeyboardData) -> Self {
-        Self {
-            auto_repeating: data.is_auto_repeating(),
-            code: data.code(),
-            key: data.key(),
-            location: data.location(),
-            modifiers: data.modifiers(),
-        }
+        Self::new(
+            data.key(),
+            data.code(),
+            data.location(),
+            data.is_auto_repeating(),
+            data.modifiers(),
+        )
     }
 }
 
 #[cfg(feature = "serialize")]
 impl HasKeyboardData for SerializedKeyboardData {
     fn key(&self) -> Key {
-        self.key.clone()
+        std::str::FromStr::from_str(&self.key).unwrap_or(Key::Unidentified)
     }
 
     fn code(&self) -> Code {
@@ -133,15 +149,30 @@ impl HasKeyboardData for SerializedKeyboardData {
     }
 
     fn modifiers(&self) -> Modifiers {
-        self.modifiers
+        let mut modifiers = Modifiers::empty();
+
+        if self.alt_key {
+            modifiers.insert(Modifiers::ALT);
+        }
+        if self.ctrl_key {
+            modifiers.insert(Modifiers::CONTROL);
+        }
+        if self.meta_key {
+            modifiers.insert(Modifiers::META);
+        }
+        if self.shift_key {
+            modifiers.insert(Modifiers::SHIFT);
+        }
+
+        modifiers
     }
 
     fn location(&self) -> Location {
-        self.location
+        crate::input_data::decode_key_location(self.location)
     }
 
     fn is_auto_repeating(&self) -> bool {
-        self.auto_repeating
+        self.repeat
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

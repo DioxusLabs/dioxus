@@ -1,5 +1,6 @@
 use crate::geometry::{ClientPoint, Coordinates, ElementPoint, PagePoint, ScreenPoint};
 use crate::input_data::{MouseButton, MouseButtonSet};
+use crate::prelude::PointInteraction;
 
 use dioxus_core::Event;
 use keyboard_types::Modifiers;
@@ -43,57 +44,44 @@ impl PartialEq for DragData {
 }
 
 impl DragData {
-    /// The event's coordinates relative to the application's viewport (as opposed to the coordinate within the page).
-    ///
-    /// For example, clicking in the top left corner of the viewport will always result in a mouse event with client coordinates (0., 0.), regardless of whether the page is scrolled horizontally.
-    pub fn client_coordinates(&self) -> ClientPoint {
-        self.inner.client_coordinates()
-    }
-
-    /// The event's coordinates relative to the padding edge of the target element
-    ///
-    /// For example, clicking in the top left corner of an element will result in element coordinates (0., 0.)
-    pub fn element_coordinates(&self) -> ElementPoint {
-        self.inner.element_coordinates()
-    }
-
-    /// The event's coordinates relative to the entire document. This includes any portion of the document not currently visible.
-    ///
-    /// For example, if the page is scrolled 200 pixels to the right and 300 pixels down, clicking in the top left corner of the viewport would result in page coordinates (200., 300.)
-    pub fn page_coordinates(&self) -> PagePoint {
-        self.inner.page_coordinates()
-    }
-
-    /// The event's coordinates relative to the entire screen. This takes into account the window's offset.
-    pub fn screen_coordinates(&self) -> ScreenPoint {
-        self.inner.screen_coordinates()
-    }
-
-    pub fn coordinates(&self) -> Coordinates {
-        self.inner.coordinates()
-    }
-
-    /// The set of modifier keys which were pressed when the event occurred
-    pub fn modifiers(&self) -> Modifiers {
-        self.inner.modifiers()
-    }
-
-    /// The set of mouse buttons which were held when the event occurred.
-    pub fn held_buttons(&self) -> MouseButtonSet {
-        self.inner.held_buttons()
-    }
-
-    /// The mouse button that triggered the event
-    ///
-    // todo the following is kind of bad; should we just return None when the trigger_button is unreliable (and frankly irrelevant)? i guess we would need the event_type here
-    /// This is only guaranteed to indicate which button was pressed during events caused by pressing or releasing a button. As such, it is not reliable for events such as mouseenter, mouseleave, mouseover, mouseout, or mousemove. For example, a value of MouseButton::Primary may also indicate that no button was pressed.
-    pub fn trigger_button(&self) -> Option<MouseButton> {
-        self.inner.trigger_button()
-    }
-
     /// Downcast this event data to a specific type
     pub fn downcast<T: 'static>(&self) -> Option<&T> {
         self.inner.as_any().downcast_ref::<T>()
+    }
+}
+
+impl PointInteraction for DragData {
+    fn client_coordinates(&self) -> ClientPoint {
+        self.inner.client_coordinates()
+    }
+
+    fn element_coordinates(&self) -> ElementPoint {
+        self.inner.element_coordinates()
+    }
+
+    fn page_coordinates(&self) -> PagePoint {
+        self.inner.page_coordinates()
+    }
+
+    fn screen_coordinates(&self) -> ScreenPoint {
+        self.inner.screen_coordinates()
+    }
+
+    fn coordinates(&self) -> Coordinates {
+        self.inner.coordinates()
+    }
+
+    fn modifiers(&self) -> Modifiers {
+        self.inner.modifiers()
+    }
+
+    fn held_buttons(&self) -> MouseButtonSet {
+        self.inner.held_buttons()
+    }
+
+    // todo the following is kind of bad; should we just return None when the trigger_button is unreliable (and frankly irrelevant)? i guess we would need the event_type here
+    fn trigger_button(&self) -> Option<MouseButton> {
+        self.inner.trigger_button()
     }
 }
 
@@ -108,15 +96,7 @@ pub struct SerializedDragData {
 impl From<&DragData> for SerializedDragData {
     fn from(data: &DragData) -> Self {
         Self {
-            mouse: crate::point_interaction::SerializedPointInteraction {
-                client_coordinates: data.client_coordinates(),
-                element_coordinates: data.element_coordinates(),
-                page_coordinates: data.page_coordinates(),
-                screen_coordinates: data.screen_coordinates(),
-                modifiers: data.modifiers(),
-                held_buttons: data.held_buttons(),
-                trigger_button: data.trigger_button(),
-            },
+            mouse: crate::point_interaction::SerializedPointInteraction::from(data),
         }
     }
 }
