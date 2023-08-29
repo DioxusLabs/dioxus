@@ -274,7 +274,7 @@ impl VirtualDom {
         );
 
         // Unlike react, we provide a default error boundary that just renders the error as a string
-        root.provide_context(Rc::new(ErrorBoundary::new(ScopeId(0))));
+        root.provide_context(Rc::new(ErrorBoundary::new(ScopeId::ROOT)));
 
         // the root element is always given element ID 0 since it's the container for the entire tree
         dom.elements.insert(None);
@@ -293,7 +293,7 @@ impl VirtualDom {
     ///
     /// This scope has a ScopeId of 0 and is the root of the tree
     pub fn base_scope(&self) -> &ScopeState {
-        self.get_scope(ScopeId(0)).unwrap()
+        self.get_scope(ScopeId::ROOT).unwrap()
     }
 
     /// Build the virtualdom with a global context inserted into the base scope
@@ -552,10 +552,10 @@ impl VirtualDom {
     /// ```
     pub fn rebuild(&mut self) -> Mutations {
         let _runtime = RuntimeGuard::new(self.runtime.clone());
-        match unsafe { self.run_scope(ScopeId(0)).extend_lifetime_ref() } {
+        match unsafe { self.run_scope(ScopeId::ROOT).extend_lifetime_ref() } {
             // Rebuilding implies we append the created elements to the root
             RenderReturn::Ready(node) => {
-                let m = self.create_scope(ScopeId(0), node);
+                let m = self.create_scope(ScopeId::ROOT, node);
                 self.mutations.edits.push(Mutation::AppendChildren {
                     id: ElementId(0),
                     m,
@@ -668,6 +668,6 @@ impl VirtualDom {
 impl Drop for VirtualDom {
     fn drop(&mut self) {
         // Simply drop this scope which drops all of its children
-        self.drop_scope(ScopeId(0), true);
+        self.drop_scope(ScopeId::ROOT, true);
     }
 }
