@@ -110,7 +110,7 @@ Static resource configuration.
 
 2. **script** - JavaScript files to include in your application.
     ```toml
-    style = [
+    script = [
         # Include from asset_dir.
         "./public/index.js",
         # Or from an online CDN.
@@ -173,7 +173,7 @@ reload_html = true
 # Which files or dirs will be monitored
 watch_path = ["src", "public"]
 
-# Include `assets` in web platform
+# Include style or script assets
 [web.resource]
 
 # CSS style file
