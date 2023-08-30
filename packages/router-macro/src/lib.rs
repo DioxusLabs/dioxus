@@ -482,7 +482,8 @@ impl RouteEnum {
                     let route = s;
                     let (route, _hash) = route.split_once('#').unwrap_or((route, ""));
                     let (route, query) = route.split_once('?').unwrap_or((route, ""));
-                    let mut segments = route.split('/');
+                    let query = dioxus_router::exports::urlencoding::decode(query).unwrap_or(query.into());
+                    let mut segments = route.split('/').map(|s| dioxus_router::exports::urlencoding::decode(s).unwrap_or(s.into()));
                     // skip the first empty segment
                     if s.starts_with('/') {
                         let _ = segments.next();
