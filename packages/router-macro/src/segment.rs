@@ -102,12 +102,12 @@ impl RouteSegment {
                 quote! {
                     {
                         let parsed = {
-                            let mut segments = segments.clone();
-                            let mut segments: Vec<&str> = Vec::new();
-                            for segment in segments {
-                                segments.push(&*segment);
+                            let remaining_segments: Vec<_> = segments.collect();
+                            let mut new_segments: Vec<&str> = Vec::new();
+                            for segment in &remaining_segments {
+                                new_segments.push(&*segment);
                             }
-                            <#ty as dioxus_router::routable::FromRouteSegments>::from_route_segments(&segments).map_err(|err| #error_enum_name::#error_enum_varient(#inner_parse_enum::#error_name(err)))
+                            <#ty as dioxus_router::routable::FromRouteSegments>::from_route_segments(&new_segments).map_err(|err| #error_enum_name::#error_enum_varient(#inner_parse_enum::#error_name(err)))
                         };
                         match parsed {
                             Ok(#name) => {
