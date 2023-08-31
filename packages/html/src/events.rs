@@ -63,24 +63,43 @@ impl PlatformEventData {
     }
 }
 
+/// A converter between a platform specific event and a general event. All code in a renderer that has a large binary size should be placed in this trait. Each of these functions should be snipped in high levels of optimization.
 pub trait HtmlEventConverter: Send + Sync {
+    /// Convert a general event to an animation data event
     fn convert_animation_data(&self, event: &PlatformEventData) -> AnimationData;
+    /// Convert a general event to a clipboard data event
     fn convert_clipboard_data(&self, event: &PlatformEventData) -> ClipboardData;
+    /// Convert a general event to a composition data event
     fn convert_composition_data(&self, event: &PlatformEventData) -> CompositionData;
+    /// Convert a general event to a drag data event
     fn convert_drag_data(&self, event: &PlatformEventData) -> DragData;
+    /// Convert a general event to a focus data event
     fn convert_focus_data(&self, event: &PlatformEventData) -> FocusData;
+    /// Convert a general event to a form data event
     fn convert_form_data(&self, event: &PlatformEventData) -> FormData;
+    /// Convert a general event to an image data event
     fn convert_image_data(&self, event: &PlatformEventData) -> ImageData;
+    /// Convert a general event to a keyboard data event
     fn convert_keyboard_data(&self, event: &PlatformEventData) -> KeyboardData;
+    /// Convert a general event to a media data event
     fn convert_media_data(&self, event: &PlatformEventData) -> MediaData;
+    /// Convert a general event to a mounted data event
     fn convert_mounted_data(&self, event: &PlatformEventData) -> MountedData;
+    /// Convert a general event to a mouse data event
     fn convert_mouse_data(&self, event: &PlatformEventData) -> MouseData;
+    /// Convert a general event to a pointer data event
     fn convert_pointer_data(&self, event: &PlatformEventData) -> PointerData;
+    /// Convert a general event to a scroll data event
     fn convert_scroll_data(&self, event: &PlatformEventData) -> ScrollData;
+    /// Convert a general event to a selection data event
     fn convert_selection_data(&self, event: &PlatformEventData) -> SelectionData;
+    /// Convert a general event to a toggle data event
     fn convert_toggle_data(&self, event: &PlatformEventData) -> ToggleData;
+    /// Convert a general event to a touch data event
     fn convert_touch_data(&self, event: &PlatformEventData) -> TouchData;
+    /// Convert a general event to a transition data event
     fn convert_transition_data(&self, event: &PlatformEventData) -> TransitionData;
+    /// Convert a general event to a wheel data event
     fn convert_wheel_data(&self, event: &PlatformEventData) -> WheelData;
 }
 
