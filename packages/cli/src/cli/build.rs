@@ -42,7 +42,7 @@ impl Build {
 
         match platform {
             Platform::Web => {
-                crate::builder::build(&crate_config, false)?;
+                crate::builder::build(&crate_config)?;
             }
             Platform::Desktop => {
                 crate::builder::build_desktop(&crate_config, false)?;

@@ -73,7 +73,7 @@ pub async fn serve_default(
     config: CrateConfig,
     start_browser: bool,
 ) -> Result<()> {
-    let first_build_result = crate::builder::build(&config, false)?;
+    let first_build_result = crate::builder::build(&config)?;
 
     log::info!("🚀 Starting development server...");
 
@@ -134,7 +134,7 @@ pub async fn serve_hot_reload(
     config: CrateConfig,
     start_browser: bool,
 ) -> Result<()> {
-    let first_build_result = crate::builder::build(&config, false)?;
+    let first_build_result = crate::builder::build(&config)?;
 
     log::info!("🚀 Starting development server...");
 
@@ -474,7 +474,7 @@ async fn ws_handler(
 }
 
 fn build(config: &CrateConfig, reload_tx: &Sender<()>) -> Result<BuildResult> {
-    let result = builder::build(config, true)?;
+    let result = builder::build(config)?;
     // change the websocket reload state to true;
     // the page will auto-reload.
     if config
