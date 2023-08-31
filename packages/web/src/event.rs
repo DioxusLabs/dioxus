@@ -162,7 +162,7 @@ impl WebEventExt<web_sys::AnimationEvent> for dioxus_html::AnimationData {
 
 impl WebEventExt<web_sys::Event> for dioxus_html::ClipboardData {
     fn web_event(&self) -> &web_sys::Event {
-        &self
+        self
             .downcast::<web_sys::Event>()
             .expect("event should be a web_sys::Event")
     }

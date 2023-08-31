@@ -105,111 +105,111 @@ pub trait HtmlEventConverter: Send + Sync {
     fn convert_wheel_data(&self, event: &PlatformEventData) -> WheelData;
 }
 
-impl Into<AnimationData> for &PlatformEventData {
-    fn into(self) -> AnimationData {
-        with_event_converter(|c| c.convert_animation_data(self))
+impl From<&PlatformEventData> for AnimationData {
+    fn from(val: &PlatformEventData) -> Self {
+        with_event_converter(|c| c.convert_animation_data(val))
     }
 }
 
-impl Into<ClipboardData> for &PlatformEventData {
-    fn into(self) -> ClipboardData {
-        with_event_converter(|c| c.convert_clipboard_data(self))
+impl From<&PlatformEventData> for ClipboardData {
+    fn from(val: &PlatformEventData) -> Self {
+        with_event_converter(|c| c.convert_clipboard_data(val))
     }
 }
 
-impl Into<CompositionData> for &PlatformEventData {
-    fn into(self) -> CompositionData {
-        with_event_converter(|c| c.convert_composition_data(self))
+impl From<&PlatformEventData> for CompositionData {
+    fn from(val: &PlatformEventData) -> Self {
+        with_event_converter(|c| c.convert_composition_data(val))
     }
 }
 
-impl Into<DragData> for &PlatformEventData {
-    fn into(self) -> DragData {
-        with_event_converter(|c| c.convert_drag_data(self))
+impl From<&PlatformEventData> for DragData {
+    fn from(val: &PlatformEventData) -> Self {
+        with_event_converter(|c| c.convert_drag_data(val))
     }
 }
 
-impl Into<FocusData> for &PlatformEventData {
-    fn into(self) -> FocusData {
-        with_event_converter(|c| c.convert_focus_data(self))
+impl From<&PlatformEventData> for FocusData {
+    fn from(val: &PlatformEventData) -> Self {
+        with_event_converter(|c| c.convert_focus_data(val))
     }
 }
 
-impl Into<FormData> for &PlatformEventData {
-    fn into(self) -> FormData {
-        with_event_converter(|c| c.convert_form_data(self))
+impl From<&PlatformEventData> for FormData {
+    fn from(val: &PlatformEventData) -> Self {
+        with_event_converter(|c| c.convert_form_data(val))
     }
 }
 
-impl Into<ImageData> for &PlatformEventData {
-    fn into(self) -> ImageData {
-        with_event_converter(|c| c.convert_image_data(self))
+impl From<&PlatformEventData> for ImageData {
+    fn from(val: &PlatformEventData) -> Self {
+        with_event_converter(|c| c.convert_image_data(val))
     }
 }
 
-impl Into<KeyboardData> for &PlatformEventData {
-    fn into(self) -> KeyboardData {
-        with_event_converter(|c| c.convert_keyboard_data(self))
+impl From<&PlatformEventData> for KeyboardData {
+    fn from(val: &PlatformEventData) -> Self {
+        with_event_converter(|c| c.convert_keyboard_data(val))
     }
 }
 
-impl Into<MediaData> for &PlatformEventData {
-    fn into(self) -> MediaData {
-        with_event_converter(|c| c.convert_media_data(self))
+impl From<&PlatformEventData> for MediaData {
+    fn from(val: &PlatformEventData) -> Self {
+        with_event_converter(|c| c.convert_media_data(val))
     }
 }
 
-impl Into<MountedData> for &PlatformEventData {
-    fn into(self) -> MountedData {
-        with_event_converter(|c| c.convert_mounted_data(self))
+impl From<&PlatformEventData> for MountedData {
+    fn from(val: &PlatformEventData) -> Self {
+        with_event_converter(|c| c.convert_mounted_data(val))
     }
 }
 
-impl Into<MouseData> for &PlatformEventData {
-    fn into(self) -> MouseData {
-        with_event_converter(|c| c.convert_mouse_data(self))
+impl From<&PlatformEventData> for MouseData {
+    fn from(val: &PlatformEventData) -> Self {
+        with_event_converter(|c| c.convert_mouse_data(val))
     }
 }
 
-impl Into<PointerData> for &PlatformEventData {
-    fn into(self) -> PointerData {
-        with_event_converter(|c| c.convert_pointer_data(self))
+impl From<&PlatformEventData> for PointerData {
+    fn from(val: &PlatformEventData) -> Self {
+        with_event_converter(|c| c.convert_pointer_data(val))
     }
 }
 
-impl Into<ScrollData> for &PlatformEventData {
-    fn into(self) -> ScrollData {
-        with_event_converter(|c| c.convert_scroll_data(self))
+impl From<&PlatformEventData> for ScrollData {
+    fn from(val: &PlatformEventData) -> Self {
+        with_event_converter(|c| c.convert_scroll_data(val))
     }
 }
 
-impl Into<SelectionData> for &PlatformEventData {
-    fn into(self) -> SelectionData {
-        with_event_converter(|c| c.convert_selection_data(self))
+impl From<&PlatformEventData> for SelectionData {
+    fn from(val: &PlatformEventData) -> Self {
+        with_event_converter(|c| c.convert_selection_data(val))
     }
 }
 
-impl Into<ToggleData> for &PlatformEventData {
-    fn into(self) -> ToggleData {
-        with_event_converter(|c| c.convert_toggle_data(self))
+impl From<&PlatformEventData> for ToggleData {
+    fn from(val: &PlatformEventData) -> Self {
+        with_event_converter(|c| c.convert_toggle_data(val))
     }
 }
 
-impl Into<TouchData> for &PlatformEventData {
-    fn into(self) -> TouchData {
-        with_event_converter(|c| c.convert_touch_data(self))
+impl From<&PlatformEventData> for TouchData {
+    fn from(val: &PlatformEventData) -> Self {
+        with_event_converter(|c| c.convert_touch_data(val))
     }
 }
 
-impl Into<TransitionData> for &PlatformEventData {
-    fn into(self) -> TransitionData {
-        with_event_converter(|c| c.convert_transition_data(self))
+impl From<&PlatformEventData> for TransitionData {
+    fn from(val: &PlatformEventData) -> Self {
+        with_event_converter(|c| c.convert_transition_data(val))
     }
 }
 
-impl Into<WheelData> for &PlatformEventData {
-    fn into(self) -> WheelData {
-        with_event_converter(|c| c.convert_wheel_data(self))
+impl From<&PlatformEventData> for WheelData {
+    fn from(val: &PlatformEventData) -> Self {
+        with_event_converter(|c| c.convert_wheel_data(val))
     }
 }
 
