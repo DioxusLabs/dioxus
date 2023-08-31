@@ -118,6 +118,10 @@ impl VirtualDom {
     }
 
     fn drop_scope_inner(&mut self, node: &VNode) {
+        if let Some(id) = node.parent.get() {
+            self.element_refs.remove(id.0);
+        }
+
         node.dynamic_nodes.iter().for_each(|node| match node {
             DynamicNode::Component(c) => {
                 if let Some(f) = c.scope.get() {
@@ -128,7 +132,11 @@ impl VirtualDom {
             DynamicNode::Fragment(nodes) => {
                 nodes.iter().for_each(|node| self.drop_scope_inner(node))
             }
-            DynamicNode::Placeholder(_) => {}
+            DynamicNode::Placeholder(placeholder) => {
+                if let Some(id) = placeholder.parent.get() {
+                    self.element_refs.remove(id.0);
+                }
+            }
             DynamicNode::Text(_) => {}
         });
     }
