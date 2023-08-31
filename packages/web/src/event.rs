@@ -162,8 +162,7 @@ impl WebEventExt<web_sys::AnimationEvent> for dioxus_html::AnimationData {
 
 impl WebEventExt<web_sys::Event> for dioxus_html::ClipboardData {
     fn web_event(&self) -> &web_sys::Event {
-        self
-            .downcast::<web_sys::Event>()
+        self.downcast::<web_sys::Event>()
             .expect("event should be a web_sys::Event")
     }
 }
@@ -407,6 +406,7 @@ impl HasFormData for WebFormData {
             .dyn_ref()
             .and_then(|input: &web_sys::HtmlInputElement| {
                 input.files().and_then(|files| {
+                    #[allow(clippy::arc_with_non_send_sync)]
                     crate::file_engine::WebFileEngine::new(files).map(|f| {
                         std::sync::Arc::new(f) as std::sync::Arc<dyn dioxus_html::FileEngine>
                     })
