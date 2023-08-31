@@ -82,8 +82,8 @@ impl RenderedElementBacking for TuiElement {
         })
     }
 
-    fn get_raw_element(&self) -> dioxus_html::MountedResult<&dyn std::any::Any> {
-        Ok(self)
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }
 

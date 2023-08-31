@@ -177,10 +177,10 @@ impl InnerInputState {
 
                 if is_repeating {
                     *k = SerializedKeyboardData::new(
-                        is_repeating,
-                        k.code(),
                         k.key(),
+                        k.code(),
                         k.location(),
+                        is_repeating,
                         k.modifiers(),
                     );
                 }
@@ -777,10 +777,10 @@ fn translate_key_event(event: crossterm::event::KeyEvent) -> Option<EventData> {
     let modifiers = modifiers_from_crossterm_modifiers(event.modifiers);
 
     Some(EventData::Keyboard(SerializedKeyboardData::new(
-        false,
-        code,
         key,
+        code,
         Location::Standard,
+        false,
         modifiers,
     )))
 }
