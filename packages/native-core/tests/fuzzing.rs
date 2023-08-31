@@ -255,7 +255,7 @@ fn create_random_element(cx: Scope<DepthProps>) -> Element {
             println!("{template:#?}");
             let node = VNode {
                 key: None,
-                parent: None,
+                parent: Default::default(),
                 template: Cell::new(template),
                 root_ids: dioxus::core::exports::bumpalo::collections::Vec::new_in(cx.bump())
                     .into(),

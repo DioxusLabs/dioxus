@@ -42,11 +42,18 @@ impl<'b> VirtualDom {
                 (Ready(l), Aborted(p)) => self.diff_ok_to_err(l, p),
 
                 // Just move over the placeholder
-                (Aborted(l), Aborted(r)) => r.id.set(l.id.get()),
+                (Aborted(l), Aborted(r)) => {
+                    r.id.set(l.id.get());
+                    r.parent.set(l.parent.get())
+                }
 
                 // Placeholder becomes something
                 // We should also clear the error now
-                (Aborted(l), Ready(r)) => self.replace_placeholder(l, [r], todo!()),
+                (Aborted(l), Ready(r)) => self.replace_placeholder(
+                    l,
+                    [r],
+                    self.element_refs[l.parent.get().expect("root should not be none").0],
+                ),
             };
         }
         self.runtime.scope_stack.borrow_mut().pop();
@@ -55,6 +62,7 @@ impl<'b> VirtualDom {
     fn diff_ok_to_err(&mut self, l: &'b VNode<'b>, p: &'b VPlaceholder) {
         let id = self.next_element();
         p.id.set(Some(id));
+        p.parent.set(l.parent.get());
         self.mutations.push(Mutation::CreatePlaceholder { id });
 
         let pre_edits = self.mutations.edits.len();
@@ -164,10 +172,13 @@ impl<'b> VirtualDom {
         match (left_node, right_node) {
             (Text(left), Text(right)) => self.diff_vtext(left, right),
             (Fragment(left), Fragment(right)) => self.diff_non_empty_fragment(left, right, parent),
-            (Placeholder(left), Placeholder(right)) => right.id.set(left.id.get()),
+            (Placeholder(left), Placeholder(right)) => {
+                right.id.set(left.id.get());
+                right.parent.set(left.parent.get())
+            },
             (Component(left), Component(right)) => self.diff_vcomponent(left, right, Some(parent)),
             (Placeholder(left), Fragment(right)) => self.replace_placeholder(left, *right, parent),
-            (Fragment(left), Placeholder(right)) => self.node_to_placeholder(left, right),
+            (Fragment(left), Placeholder(right)) => self.node_to_placeholder(left, right, parent),
             _ => todo!("This is an usual custom case for dynamic nodes. We don't know how to handle it yet."),
         };
     }
@@ -838,11 +849,17 @@ impl<'b> VirtualDom {
         };
     }
 
-    fn node_to_placeholder(&mut self, l: &'b [VNode<'b>], r: &'b VPlaceholder) {
+    fn node_to_placeholder(
+        &mut self,
+        l: &'b [VNode<'b>],
+        r: &'b VPlaceholder,
+        parent: ElementRef<'b>,
+    ) {
         // Create the placeholder first, ensuring we get a dedicated ID for the placeholder
         let placeholder = self.next_element();
 
         r.id.set(Some(placeholder));
+        r.parent.set(Some(self.next_element_ref(parent)));
 
         self.mutations
             .push(Mutation::CreatePlaceholder { id: placeholder });

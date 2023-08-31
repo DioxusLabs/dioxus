@@ -85,7 +85,7 @@ fn app(cx: Scope) -> Element {
                 };
                 // The VNode is a reference to the template with the dynamic parts of the rsx
                 ::dioxus::core::VNode {
-                    parent: None,
+                    parent: Default::default(),
                     key: None,
                     // The static template this node will use. The template is stored in a Cell so it can be replaced with a new template when hot rsx reloading is enabled
                     template: std::cell::Cell::new(TEMPLATE),

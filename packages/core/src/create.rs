@@ -192,7 +192,15 @@ impl<'b> VirtualDom {
                 };
                 self.create_dynamic_node(template_ref, node)
             }
-            Placeholder(VPlaceholder { id }) => {
+            Placeholder(VPlaceholder { id, parent }) => {
+                let template_ref = ElementRef {
+                    path: ElementPath {
+                        path: &template.template.get().node_paths[idx],
+                    },
+                    template: &template,
+                    scope: self.runtime.current_scope_id().unwrap_or(ScopeId(0)),
+                };
+                parent.set(Some(self.next_element_ref(template_ref)));
                 let id = self.set_slot(id);
                 self.mutations.push(CreatePlaceholder { id });
                 1
@@ -510,6 +518,9 @@ impl<'b> VirtualDom {
         // Make sure the text node is assigned to the correct element
         placeholder.id.set(Some(id));
 
+        // Assign the placeholder's parent
+        placeholder.parent.set(Some(self.next_element_ref(parent)));
+
         // Assign the ID to the existing node in the template
         self.mutations.push(AssignId {
             path: &parent.path.path[1..],
@@ -538,7 +549,7 @@ impl<'b> VirtualDom {
                 self.assign_boundary_ref(parent, t);
                 self.create_scope(scope, t)
             }
-            Aborted(t) => self.mount_aborted(t),
+            Aborted(t) => self.mount_aborted(t, parent),
         }
     }
 
@@ -554,10 +565,18 @@ impl<'b> VirtualDom {
             .unwrap_or_else(|| component.scope.get().unwrap())
     }
 
-    fn mount_aborted(&mut self, placeholder: &VPlaceholder) -> usize {
+    fn mount_aborted(
+        &mut self,
+        placeholder: &VPlaceholder,
+        parent: Option<ElementRef<'b>>,
+    ) -> usize {
         let id = self.next_element();
         self.mutations.push(Mutation::CreatePlaceholder { id });
         placeholder.id.set(Some(id));
+        placeholder
+            .parent
+            .set(parent.map(|parent| self.next_element_ref(parent)));
+
         1
     }
 

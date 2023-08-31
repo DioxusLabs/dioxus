@@ -373,6 +373,8 @@ impl<'a> VText<'a> {
 pub struct VPlaceholder {
     /// The ID of this node in the real DOM
     pub(crate) id: Cell<Option<ElementId>>,
+    /// The parent of this node
+    pub(crate) parent: Cell<Option<BubbleId>>,
 }
 
 impl VPlaceholder {
