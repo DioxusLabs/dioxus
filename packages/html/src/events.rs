@@ -28,10 +28,12 @@ macro_rules! impl_event {
 
 static EVENT_CONVERTER: RwLock<Option<Box<dyn HtmlEventConverter>>> = RwLock::new(None);
 
+#[inline]
 pub fn set_event_converter(converter: Box<dyn HtmlEventConverter>) {
     *EVENT_CONVERTER.write().unwrap() = Some(converter);
 }
 
+#[inline]
 pub(crate) fn with_event_converter<F, R>(f: F) -> R
 where
     F: FnOnce(&dyn HtmlEventConverter) -> R,
