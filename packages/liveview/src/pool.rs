@@ -1,11 +1,12 @@
 use crate::{
     element::LiveviewElement,
     eval::init_eval,
+    events::SerializedHtmlEventConverter,
     query::{QueryEngine, QueryResult},
     LiveViewError,
 };
 use dioxus_core::{prelude::*, Mutations};
-use dioxus_html::{EventData, HtmlEvent, MountedData};
+use dioxus_html::{EventData, HtmlEvent, MountedData, PlatformEventData};
 use futures_util::{pin_mut, SinkExt, StreamExt};
 use serde::Serialize;
 use std::{rc::Rc, time::Duration};
@@ -24,6 +25,9 @@ impl Default for LiveViewPool {
 
 impl LiveViewPool {
     pub fn new() -> Self {
+        // Set the event converter
+        dioxus_html::set_event_converter(Box::new(SerializedHtmlEventConverter));
+
         LiveViewPool {
             pool: LocalPoolHandle::new(16),
         }
@@ -171,12 +175,11 @@ pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), Li
                                         let element = LiveviewElement::new(evt.element, query_engine.clone());
                                         vdom.handle_event(
                                             &evt.name,
-                                            Rc::new(MountedData::new(element)),
+                                            Rc::new(PlatformEventData::new(Box::new(MountedData::new(element)))),
                                             evt.element,
                                             evt.bubbles,
                                         );
-                                    }
-                                    else{
+                                    } else {
                                         vdom.handle_event(
                                             &evt.name,
                                             evt.data.into_any(),

@@ -4,6 +4,7 @@ use dioxus_html::{geometry::euclid::Rect, MountedResult, RenderedElementBacking}
 use crate::query::QueryEngine;
 
 /// A mounted element passed to onmounted events
+#[derive(Clone)]
 pub struct LiveviewElement {
     id: ElementId,
     query: QueryEngine,
