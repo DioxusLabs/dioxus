@@ -77,6 +77,10 @@ impl VirtualDom {
 
     pub(crate) fn update_template(&mut self, el: ElementId, node: &VNode) {
         let bubble_id = self.elements[el.0].unwrap();
+        self.update_template_bubble(bubble_id, node)
+    }
+
+    pub(crate) fn update_template_bubble(&mut self, bubble_id: BubbleId, node: &VNode) {
         let node: *const VNode = node as *const _;
         self.element_refs[bubble_id.0].template = unsafe { std::mem::transmute(node) };
     }
@@ -128,6 +132,9 @@ impl VirtualDom {
                     self.drop_scope(f, true);
                 }
                 c.props.take();
+                if let Some(bubble_id) = c.bubble_id.get() {
+                    self.element_refs.remove(bubble_id.0);
+                }
             }
             DynamicNode::Fragment(nodes) => {
                 nodes.iter().for_each(|node| self.drop_scope_inner(node))

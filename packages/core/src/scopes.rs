@@ -455,7 +455,8 @@ impl<'src> ScopeState {
             render_fn: component as *const (),
             static_props: P::IS_STATIC,
             props: RefCell::new(Some(extended)),
-            scope: Cell::new(None),
+            bubble_id: Default::default(),
+            scope: Default::default(),
         })
     }
 

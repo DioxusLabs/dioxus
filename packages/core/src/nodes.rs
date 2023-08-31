@@ -318,9 +318,12 @@ pub struct VComponent<'a> {
     /// The assigned Scope for this component
     pub(crate) scope: Cell<Option<ScopeId>>,
 
+    /// The bubble id assigned to the child that we need to update and drop when diffing happens
+    pub(crate) bubble_id: Cell<Option<BubbleId>>,
+
     /// The function pointer of the component, known at compile time
     ///
-    /// It is possible that components get folded at comppile time, so these shouldn't be really used as a key
+    /// It is possible that components get folded at compile time, so these shouldn't be really used as a key
     pub(crate) render_fn: *const (),
 
     pub(crate) props: RefCell<Option<Box<dyn AnyProps<'a> + 'a>>>,

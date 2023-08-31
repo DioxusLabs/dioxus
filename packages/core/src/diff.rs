@@ -214,6 +214,10 @@ impl<'b> VirtualDom {
         let scope_id = left.scope.get().unwrap();
 
         right.scope.set(Some(scope_id));
+        if let Some(bubble_id) = left.bubble_id.get() {
+            right.bubble_id.set(Some(bubble_id));
+            self.update_template_bubble(bubble_id, parent.unwrap().template);
+        }
 
         // copy out the box for both
         let old = self.scopes[scope_id.0].props.as_ref();
