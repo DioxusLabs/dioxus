@@ -56,7 +56,6 @@ serialize = [
     "euclid/serde",
     "keyboard-types/serde",
     "dioxus-core/serialize",
-    "enumset/serde",
 ]
 mounted = [
     "web-sys/Element",
