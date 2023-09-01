@@ -9,7 +9,14 @@ fn miri_rollover() {
     _ = dom.rebuild();
 
     for _ in 0..3 {
-        dom.handle_event("click", Rc::new(MouseData::default()), ElementId(2), true);
+        dom.handle_event(
+            "click",
+            Rc::new(PlatformEventData::new(Box::new(MouseData::new(
+                SerializedMouseData::default(),
+            )))),
+            ElementId(2),
+            true,
+        );
         dom.process_events();
         _ = dom.render_immediate();
     }

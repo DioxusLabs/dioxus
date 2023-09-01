@@ -40,7 +40,7 @@ cx.render(rsx!(
         },
         input {
             value: "{comment_field}",
-            oninput: |event| comment_field.set(event.value.clone()),
+            oninput: |event| comment_field.set(event.value()),
         }
         input {
             r#type: "submit",
@@ -71,7 +71,7 @@ cx.render(rsx!(
         },
         input {
             value: "{comment_field}",
-            oninput: |event| comment_field.set(event.value.clone()),
+            oninput: |event| comment_field.set(event.value()),
         }
         input {
             r#type: "submit",

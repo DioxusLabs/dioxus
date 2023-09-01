@@ -73,7 +73,7 @@ fn compose(cx: Scope<ComposeProps>) -> Element {
 
             input {
                 oninput: move |e| {
-                    user_input.set(e.value.clone());
+                    user_input.set(e.value());
                 },
                 value: "{user_input}"
             }

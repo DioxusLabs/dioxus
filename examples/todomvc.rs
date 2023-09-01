@@ -66,7 +66,7 @@ pub fn app(cx: Scope<()>) -> Element {
                     value: "{draft}",
                     autofocus: "true",
                     oninput: move |evt| {
-                        draft.set(evt.value.clone());
+                        draft.set(evt.value());
                     },
                     onkeydown: move |evt| {
                         if evt.key() == Key::Enter && !draft.is_empty() {
@@ -176,7 +176,7 @@ pub fn TodoEntry<'a>(cx: Scope<'a, TodoEntryProps<'a>>) -> Element {
                     id: "cbg-{todo.id}",
                     checked: "{todo.checked}",
                     oninput: move |evt| {
-                        cx.props.todos.make_mut()[&cx.props.id].checked = evt.value.parse().unwrap();
+                        cx.props.todos.make_mut()[&cx.props.id].checked = evt.value().parse().unwrap();
                     }
                 }
                 label {
@@ -195,7 +195,7 @@ pub fn TodoEntry<'a>(cx: Scope<'a, TodoEntryProps<'a>>) -> Element {
                 input {
                     class: "edit",
                     value: "{todo.contents}",
-                    oninput: move |evt| cx.props.todos.make_mut()[&cx.props.id].contents = evt.value.clone(),
+                    oninput: move |evt| cx.props.todos.make_mut()[&cx.props.id].contents = evt.value(),
                     autofocus: "true",
                     onfocusout: move |_| is_editing.set(false),
                     onkeydown: move |evt| {

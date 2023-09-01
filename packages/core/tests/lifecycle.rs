@@ -56,7 +56,14 @@ fn events_generate() {
     let mut dom = VirtualDom::new(app);
     _ = dom.rebuild();
 
-    dom.handle_event("click", Rc::new(MouseData::default()), ElementId(1), true);
+    dom.handle_event(
+        "click",
+        Rc::new(PlatformEventData::new(Box::new(MouseData::new(
+            SerializedMouseData::default(),
+        )))),
+        ElementId(1),
+        true,
+    );
 
     dom.mark_dirty(ScopeId(0));
     let edits = dom.render_immediate();

@@ -62,7 +62,7 @@ pub fn DarkModeToggle(cx: Scope) -> Element {
         input {
             r#type: "checkbox",
             oninput: move |event| {
-                let is_enabled = event.value == "true";
+                let is_enabled = event.value() == "true";
                 dark_mode.write().0 = is_enabled;
             },
         },
@@ -97,7 +97,7 @@ fn MemeEditor(cx: Scope) -> Element {
             },
             CaptionEditor {
                 caption: caption,
-                on_input: move |event: FormEvent| {caption.set(event.value.clone());},
+                on_input: move |event: FormEvent| {caption.set(event.value().clone());},
             },
         }
     })

@@ -119,7 +119,7 @@ fn ClientAdd(cx: Scope) -> Element {
                         placeholder: "First Name…",
                         required: "",
                         value: "{first_name}",
-                        oninput: move |e| first_name.set(e.value.clone())
+                        oninput: move |e| first_name.set(e.value())
                     }
                 }
 
@@ -135,7 +135,7 @@ fn ClientAdd(cx: Scope) -> Element {
                         placeholder: "Last Name…",
                         required: "",
                         value: "{last_name}",
-                        oninput: move |e| last_name.set(e.value.clone())
+                        oninput: move |e| last_name.set(e.value())
                     }
                 }
 
@@ -149,7 +149,7 @@ fn ClientAdd(cx: Scope) -> Element {
                         id: "description",
                         placeholder: "Description…",
                         value: "{description}",
-                        oninput: move |e| description.set(e.value.clone())
+                        oninput: move |e| description.set(e.value())
                     }
                 }
 

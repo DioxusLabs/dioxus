@@ -28,7 +28,7 @@ fn MemeEditor(cx: Scope) -> Element {
             },
             CaptionEditor {
                 caption: caption,
-                on_input: move |event: FormEvent| {caption.set(event.value.clone());},
+                on_input: move |event: FormEvent| {caption.set(event.value());},
             },
         }
     })

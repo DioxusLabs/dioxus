@@ -80,7 +80,7 @@ fn Route3(cx: Scope, dynamic: String) -> Element {
     render! {
         input {
             oninput: move |evt| {
-                *current_route_str.write() = evt.value.clone();
+                *current_route_str.write() = evt.value();
             },
             value: "{current_route_str.read()}"
         }
