@@ -381,6 +381,7 @@ impl From<DebianSettings> for tauri_bundler::DebianSettings {
         tauri_bundler::DebianSettings {
             depends: val.depends,
             files: val.files,
+            desktop_template: None,
         }
     }
 }
@@ -522,6 +523,8 @@ impl From<NsisSettings> for tauri_bundler::NsisSettings {
             install_mode: val.install_mode.into(),
             languages: val.languages,
             display_language_selector: val.display_language_selector,
+            custom_language_files: None,
+            template: None,
         }
     }
 }
