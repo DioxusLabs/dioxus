@@ -17,7 +17,15 @@ struct MacroCollector<'a, 'b> {
 
 impl<'a, 'b> Visit<'b> for MacroCollector<'a, 'b> {
     fn visit_macro(&mut self, i: &'b Macro) {
-        self.macros.push(i);
+        if let Some("rsx" | "render") = i
+            .path
+            .segments
+            .last()
+            .map(|i| i.ident.to_string())
+            .as_deref()
+        {
+            self.macros.push(i)
+        }
     }
 }
 
