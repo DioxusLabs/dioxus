@@ -4,7 +4,16 @@ use super::*;
 use wry::application::accelerator::Accelerator;
 use wry::application::event_loop::EventLoopWindowTarget;
 
-pub struct GlobalShortcut();
+pub struct HotKey();
+
+impl FromStr for HotKey {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(HotKey())
+    }
+}
+
 pub struct ShortcutManager();
 
 impl ShortcutManager {
@@ -53,3 +62,13 @@ impl fmt::Display for ShortcutManagerError {
         }
     }
 }
+
+struct HotkeyError;
+
+struct GlobalHotKeyEvent {
+    id: u32,
+}
+
+pub(crate) type Code = dioxus::prelude::Code;
+
+struct GlobalHotKeyManager {}

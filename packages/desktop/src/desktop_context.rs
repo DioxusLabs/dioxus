@@ -5,9 +5,7 @@ use std::rc::Weak;
 use crate::create_new_window;
 use crate::events::IpcMessage;
 use crate::query::QueryEngine;
-use crate::shortcut::ShortcutId;
-use crate::shortcut::ShortcutRegistry;
-use crate::shortcut::ShortcutRegistryError;
+use crate::shortcut::{ShortcutId, ShortcutRegistry, ShortcutRegistryError};
 use crate::Config;
 use crate::WebviewHandler;
 use dioxus_core::ScopeState;
@@ -15,7 +13,6 @@ use dioxus_core::VirtualDom;
 #[cfg(all(feature = "hot-reload", debug_assertions))]
 use dioxus_hot_reload::HotReloadMsg;
 use slab::Slab;
-use wry::application::accelerator::Accelerator;
 use wry::application::event::Event;
 use wry::application::event_loop::EventLoopProxy;
 use wry::application::event_loop::EventLoopWindowTarget;
@@ -233,11 +230,11 @@ impl DesktopService {
     /// Linux: Only works on x11. See [this issue](https://github.com/tauri-apps/tao/issues/331) for more information.
     pub fn create_shortcut(
         &self,
-        accelerator: Accelerator,
+        hotkey: global_hotkey::hotkey::HotKey,
         callback: impl FnMut() + 'static,
     ) -> Result<ShortcutId, ShortcutRegistryError> {
         self.shortcut_manager
-            .add_shortcut(accelerator, Box::new(callback))
+            .add_shortcut(hotkey, Box::new(callback))
     }
 
     /// Remove a global shortcut
@@ -370,11 +367,7 @@ impl WryWindowEventHandlerInner {
     ) {
         // if this event does not apply to the window this listener cares about, return
         match event {
-            Event::WindowEvent { window_id, .. }
-            | Event::MenuEvent {
-                window_id: Some(window_id),
-                ..
-            } => {
+            Event::WindowEvent { window_id, .. } => {
                 if *window_id != self.window_id {
                     return;
                 }
