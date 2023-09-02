@@ -1,21 +1,18 @@
 # Introduction
 
-📦✨ **Dioxus-Cli** is a tool to help get dioxus projects off the ground.
-
-![dioxus-logo](https://dioxuslabs.com/guide/images/dioxuslogo_full.png)
-
-It includes `dev server`, `hot reload` and some `quick command` to help you use dioxus.
+The 📦✨ **Dioxus CLI** is a tool to help get Dioxus projects off the ground.
 
 ## Features
 
+* Build and pack a Dioxus project
+* `html` to `rsx` conversion tool
+* Hot Reload for `web` platform
+* Create a Dioxus project from `git` repo
+* And more!
+<!-- Checkmarks don't render on the website, so I've just made a normal list. You can uncomment this if the website rendering is fixed.
 - [x] `html` to `rsx` conversion tool
-- [x] hot reload for `web` platform
-- [x] create dioxus project from `git` repo
-- [x] build & pack dioxus project
-- [ ] autoformat dioxus `rsx` code
-
-## Contributors
-
-Contributors to this guide:
-
-- [mrxiaozhuox](https://github.com/mrxiaozhuox)
+- [x] Hot Reload for `web` platform
+- [x] Create a Dioxus project from `git` repo
+- [x] Build & pack Dioxus project
+- [ ] Automatically format Dioxus `rsx` code
+-->

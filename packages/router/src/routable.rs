@@ -22,7 +22,11 @@ impl<E: std::fmt::Display> std::fmt::Display for RouteParseError<E> {
     }
 }
 
-/// Something that can be created from a query string
+/// Something that can be created from a query string.
+///
+/// This trait needs to be implemented if you want to turn a query string into a struct.
+///
+/// A working example can be found in the `examples` folder in the root package under `query_segments_demo`
 pub trait FromQuery {
     /// Create an instance of `Self` from a query string
     fn from_query(query: &str) -> Self;
