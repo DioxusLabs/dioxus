@@ -179,7 +179,7 @@ impl ScopeContext {
     pub fn provide_root_context<T: 'static + Clone>(&self, context: T) -> T {
         with_runtime(|runtime| {
             runtime
-                .get_context(ScopeId(0))
+                .get_context(ScopeId::ROOT)
                 .unwrap()
                 .provide_context(context)
         })
@@ -203,7 +203,7 @@ impl ScopeContext {
     /// This is good for tasks that need to be run after the component has been dropped.
     pub fn spawn_forever(&self, fut: impl Future<Output = ()> + 'static) -> TaskId {
         // The root scope will never be unmounted so we can just add the task at the top of the app
-        let id = self.tasks.spawn(ScopeId(0), fut);
+        let id = self.tasks.spawn(ScopeId::ROOT, fut);
 
         // wake up the scheduler if it is sleeping
         self.tasks

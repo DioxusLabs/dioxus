@@ -354,7 +354,7 @@ fn persist_removes() {
     // "3"
     iter2.next(&rdom).id();
 
-    vdom.mark_dirty(ScopeId(0));
+    vdom.mark_dirty(ScopeId::ROOT);
     let update = vdom.render_immediate();
     println!("{update:#?}");
     dioxus_state.apply_mutations(&mut rdom, update);
@@ -419,7 +419,7 @@ fn persist_instertions_before() {
     // "2"
     iter.next(&rdom).id();
 
-    vdom.mark_dirty(ScopeId(0));
+    vdom.mark_dirty(ScopeId::ROOT);
     let update = vdom.render_immediate();
     dioxus_state.apply_mutations(&mut rdom, update);
 

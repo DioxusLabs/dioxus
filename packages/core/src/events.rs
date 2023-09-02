@@ -164,7 +164,7 @@ pub struct EventHandler<'bump, T = ()> {
 impl<T> Default for EventHandler<'_, T> {
     fn default() -> Self {
         Self {
-            origin: ScopeId(0),
+            origin: ScopeId::ROOT,
             callback: Default::default(),
         }
     }

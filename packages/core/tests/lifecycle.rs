@@ -65,7 +65,7 @@ fn events_generate() {
         true,
     );
 
-    dom.mark_dirty(ScopeId(0));
+    dom.mark_dirty(ScopeId::ROOT);
     let edits = dom.render_immediate();
 
     assert_eq!(
@@ -114,7 +114,7 @@ fn events_generate() {
 //     );
 
 //     assert_eq!(
-//         dom.hard_diff(ScopeId(0)).edits,
+//         dom.hard_diff(ScopeId::ROOT).edits,
 //         [
 //             CreateElement { root: Some(2), tag: "div", children: 0 },
 //             ReplaceWith { root: Some(1), nodes: vec![2] }
@@ -122,7 +122,7 @@ fn events_generate() {
 //     );
 
 //     assert_eq!(
-//         dom.hard_diff(ScopeId(0)).edits,
+//         dom.hard_diff(ScopeId::ROOT).edits,
 //         [
 //             CreateTextNode { root: Some(1), text: "Text2" },
 //             ReplaceWith { root: Some(2), nodes: vec![1] }
@@ -131,7 +131,7 @@ fn events_generate() {
 
 //     // child {}
 //     assert_eq!(
-//         dom.hard_diff(ScopeId(0)).edits,
+//         dom.hard_diff(ScopeId::ROOT).edits,
 //         [
 //             CreateElement { root: Some(2), tag: "h1", children: 0 },
 //             ReplaceWith { root: Some(1), nodes: vec![2] }
@@ -140,7 +140,7 @@ fn events_generate() {
 
 //     // placeholder
 //     assert_eq!(
-//         dom.hard_diff(ScopeId(0)).edits,
+//         dom.hard_diff(ScopeId::ROOT).edits,
 //         [
 //             CreatePlaceholder { root: Some(1) },
 //             ReplaceWith { root: Some(2), nodes: vec![1] }
@@ -148,7 +148,7 @@ fn events_generate() {
 //     );
 
 //     assert_eq!(
-//         dom.hard_diff(ScopeId(0)).edits,
+//         dom.hard_diff(ScopeId::ROOT).edits,
 //         [
 //             CreateTextNode { root: Some(2), text: "text 3" },
 //             ReplaceWith { root: Some(1), nodes: vec![2] }
@@ -156,7 +156,7 @@ fn events_generate() {
 //     );
 
 //     assert_eq!(
-//         dom.hard_diff(ScopeId(0)).edits,
+//         dom.hard_diff(ScopeId::ROOT).edits,
 //         [
 //             CreateTextNode { text: "text 0", root: Some(1) },
 //             CreateTextNode { text: "text 1", root: Some(3) },
@@ -165,7 +165,7 @@ fn events_generate() {
 //     );
 
 //     assert_eq!(
-//         dom.hard_diff(ScopeId(0)).edits,
+//         dom.hard_diff(ScopeId::ROOT).edits,
 //         [
 //             CreateElement { tag: "h1", root: Some(2), children: 0 },
 //             ReplaceWith { root: Some(1), nodes: vec![2] },
