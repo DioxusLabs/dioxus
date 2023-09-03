@@ -11,7 +11,7 @@ use std::{
 /// Create a new tracked state.
 /// Tracked state is state that can drive Selector state
 ///
-/// It will efficiently update any Selector state that is reading from it, but it is not readable on it's own.
+/// It will efficiently update any Selector state that is reading from it, but it is not readable on its own.
 ///
 /// ```rust
 /// use dioxus::prelude::*;
@@ -49,7 +49,7 @@ pub fn use_tracked_state<T: 'static>(cx: &ScopeState, init: impl FnOnce() -> T) 
 pub struct Tracked<I> {
     state: Rc<RefCell<I>>,
     update_any: std::sync::Arc<dyn Fn(ScopeId)>,
-    pub subscribers: SubscribedCallbacks<I>,
+    subscribers: SubscribedCallbacks<I>,
 }
 
 impl<I: PartialEq> PartialEq for Tracked<I> {
