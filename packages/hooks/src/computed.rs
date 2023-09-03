@@ -4,7 +4,6 @@ use dioxus_core::{ScopeId, ScopeState};
 use slab::Slab;
 use std::{
     cell::{RefCell, RefMut},
-    collections::HashSet,
     ops::{Deref, DerefMut},
     rc::Rc,
 };
@@ -12,7 +11,7 @@ use std::{
 /// Create a new tracked state.
 /// Tracked state is state that can drive Selector state
 ///
-/// It will efficiently update any Selector state that is reading from it, but it is not readable on its own.
+/// It will efficiently update any Selector state that is reading from it, but it is not readable on it's own.
 ///
 /// ```rust
 /// use dioxus::prelude::*;
@@ -29,7 +28,7 @@ use std::{
 ///
 /// #[inline_props]
 /// fn Child(cx: Scope, count: Tracked<usize>) -> Element {
-///    let less_than_five = use_selector(cx, count, |count| *count < 5);
+///    let less_than_five = use_selector(cx, &count, |count| *count < 5);
 ///
 ///    render! {
 ///        "{less_than_five}"
@@ -50,7 +49,7 @@ pub fn use_tracked_state<T: 'static>(cx: &ScopeState, init: impl FnOnce() -> T) 
 pub struct Tracked<I> {
     state: Rc<RefCell<I>>,
     update_any: std::sync::Arc<dyn Fn(ScopeId)>,
-    subscribers: SubscribedCallbacks<I>,
+    pub subscribers: SubscribedCallbacks<I>,
 }
 
 impl<I: PartialEq> PartialEq for Tracked<I> {
@@ -74,14 +73,13 @@ impl<I> Tracked<I> {
     pub fn compute<O: PartialEq + 'static>(
         &self,
         mut compute: impl FnMut(&I) -> O + 'static,
+        scope_id: ScopeId,
     ) -> Selector<O, I> {
-        let subscribers = Rc::new(RefCell::new(HashSet::new()));
         let state = Rc::new(RefCell::new(compute(&self.state.borrow())));
         let update_any = self.update_any.clone();
 
         Selector {
             value: state.clone(),
-            subscribers: subscribers.clone(),
             _tracker: Rc::new(self.track(move |input_state| {
                 let new = compute(input_state);
                 let different = {
@@ -91,9 +89,7 @@ impl<I> Tracked<I> {
                 if different {
                     let mut state = state.borrow_mut();
                     *state = new;
-                    for id in subscribers.borrow().iter().copied() {
-                        (update_any)(id);
-                    }
+                    (update_any)(scope_id);
                 }
             })),
         }
@@ -164,8 +160,8 @@ pub fn use_selector<I: 'static, O: Clone + PartialEq + 'static>(
     tracked: &Tracked<I>,
     init: impl FnMut(&I) -> O + 'static,
 ) -> O {
-    let selector = cx.use_hook(|| tracked.compute(init));
-    selector.use_state(cx)
+    let selector = cx.use_hook(|| tracked.compute(init, cx.scope_id()));
+    selector.value.borrow().clone()
 }
 
 /// Selector state is state that is derived from tracked state
@@ -175,38 +171,10 @@ pub fn use_selector<I: 'static, O: Clone + PartialEq + 'static>(
 pub struct Selector<T, I> {
     _tracker: Rc<Tracker<I>>,
     value: Rc<RefCell<T>>,
-    subscribers: Rc<RefCell<HashSet<ScopeId>>>,
 }
 
 impl<T, I> PartialEq for Selector<T, I> {
     fn eq(&self, other: &Self) -> bool {
         std::rc::Rc::ptr_eq(&self.value, &other.value)
-    }
-}
-
-impl<T: Clone + PartialEq, I> Selector<T, I> {
-    /// Read the Selector state and subscribe to updates
-    pub fn use_state(&self, cx: &ScopeState) -> T {
-        cx.use_hook(|| {
-            let id = cx.scope_id();
-            self.subscribers.borrow_mut().insert(id);
-
-            ComputedRead {
-                scope: cx.scope_id(),
-                subscribers: self.subscribers.clone(),
-            }
-        });
-        self.value.borrow().clone()
-    }
-}
-
-struct ComputedRead {
-    scope: ScopeId,
-    subscribers: std::rc::Rc<std::cell::RefCell<std::collections::HashSet<ScopeId>>>,
-}
-
-impl Drop for ComputedRead {
-    fn drop(&mut self) {
-        self.subscribers.borrow_mut().remove(&self.scope);
     }
 }
