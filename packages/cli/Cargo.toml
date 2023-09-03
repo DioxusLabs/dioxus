@@ -78,7 +78,7 @@ toml_edit = "0.19.11"
 # dioxus-rsx = "0.0.1"
 
 # bundling
-tauri-bundler = { version = "=1.3.*", features = ["native-tls-vendored"] }
+tauri-bundler = { version = "1.3.0", features = ["native-tls-vendored"] }
 tauri-utils = "=1.4.*"
 
 dioxus-autofmt = { workspace = true }
