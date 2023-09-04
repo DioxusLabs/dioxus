@@ -55,7 +55,8 @@ pub fn build(config: &CrateConfig, quiet: bool, skip_assets: bool) -> Result<Bui
         .arg("build")
         .arg("--target")
         .arg("wasm32-unknown-unknown")
-        .arg("--message-format=json");
+        .arg("--message-format=json")
+        .arg("--quiet");
 
     let cmd = if config.release {
         cmd.arg("--release")
@@ -67,8 +68,6 @@ pub fn build(config: &CrateConfig, quiet: bool, skip_assets: bool) -> Result<Bui
     } else {
         cmd
     };
-
-    let cmd = if quiet { cmd.arg("--quiet") } else { cmd };
 
     let cmd = if config.custom_profile.is_some() {
         let custom_profile = config.custom_profile.as_ref().unwrap();
@@ -410,10 +409,9 @@ fn prettier_build(cmd: subprocess::Exec) -> anyhow::Result<Vec<Diagnostic>> {
         }
     }
 
-    StopSpinOnDrop(pb.clone());
-
     let stdout = cmd.detached().stream_stdout()?;
     let reader = std::io::BufReader::new(stdout);
+
     for message in cargo_metadata::Message::parse_stream(reader) {
         match message.unwrap() {
             Message::CompilerMessage(msg) => {
@@ -433,7 +431,7 @@ fn prettier_build(cmd: subprocess::Exec) -> anyhow::Result<Vec<Diagnostic>> {
                 }
             }
             Message::CompilerArtifact(artifact) => {
-                pb.set_message(format!("Compiling {} ", artifact.package_id));
+                pb.set_message(format!("⚙️ Compiling {} ", artifact.package_id));
                 pb.tick();
             }
             Message::BuildScriptExecuted(script) => {

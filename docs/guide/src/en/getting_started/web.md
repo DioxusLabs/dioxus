@@ -25,7 +25,7 @@ The Web is the best-supported target platform for Dioxus.
 To develop your Dioxus app for the web, you'll need a tool to build and serve your assets. We recommend using [dioxus-cli](https://github.com/DioxusLabs/dioxus/tree/master/packages/cli) which includes a build system, Wasm optimization, a dev server, and support hot reloading:
 
 ```shell
-cargo install dioxus-cli
+cargo install dioxus-cli --locked
 ```
 
 Make sure the `wasm32-unknown-unknown` target for rust is installed:
