@@ -366,13 +366,10 @@ impl WryWindowEventHandlerInner {
         target: &EventLoopWindowTarget<UserWindowEvent>,
     ) {
         // if this event does not apply to the window this listener cares about, return
-        match event {
-            Event::WindowEvent { window_id, .. } => {
-                if *window_id != self.window_id {
-                    return;
-                }
+        if let Event::WindowEvent { window_id, .. } = event {
+            if *window_id != self.window_id {
+                return;
             }
-            _ => (),
         }
         (self.handler)(event, target)
     }
