@@ -19,6 +19,7 @@ mod waker;
 mod webview;
 
 use crate::query::QueryResult;
+use crate::shortcut::GlobalHotKeyEvent;
 pub use cfg::{Config, WindowCloseBehaviour};
 pub use desktop_context::DesktopContext;
 pub use desktop_context::{
@@ -31,16 +32,6 @@ use dioxus_html::{native_bind::NativeFileEngine, FormData, HtmlEvent};
 use element::DesktopElement;
 use eval::init_eval;
 use futures_util::{pin_mut, FutureExt};
-#[cfg(any(
-    target_os = "windows",
-    target_os = "macos",
-    target_os = "linux",
-    target_os = "dragonfly",
-    target_os = "freebsd",
-    target_os = "netbsd",
-    target_os = "openbsd"
-))]
-use global_hotkey::GlobalHotKeyEvent;
 use shortcut::ShortcutRegistry;
 pub use shortcut::{use_global_shortcut, ShortcutHandle, ShortcutId, ShortcutRegistryError};
 use std::cell::Cell;

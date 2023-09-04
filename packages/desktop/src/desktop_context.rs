@@ -5,7 +5,7 @@ use std::rc::Weak;
 use crate::create_new_window;
 use crate::events::IpcMessage;
 use crate::query::QueryEngine;
-use crate::shortcut::{ShortcutId, ShortcutRegistry, ShortcutRegistryError};
+use crate::shortcut::{HotKey, ShortcutId, ShortcutRegistry, ShortcutRegistryError};
 use crate::Config;
 use crate::WebviewHandler;
 use dioxus_core::ScopeState;
@@ -230,7 +230,7 @@ impl DesktopService {
     /// Linux: Only works on x11. See [this issue](https://github.com/tauri-apps/tao/issues/331) for more information.
     pub fn create_shortcut(
         &self,
-        hotkey: global_hotkey::hotkey::HotKey,
+        hotkey: HotKey,
         callback: impl FnMut() + 'static,
     ) -> Result<ShortcutId, ShortcutRegistryError> {
         self.shortcut_manager

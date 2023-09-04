@@ -7,7 +7,16 @@ use wry::application::keyboard::ModifiersState;
 
 use crate::{desktop_context::DesktopContext, use_window};
 
-use global_hotkey::{
+#[cfg(any(
+    target_os = "windows",
+    target_os = "macos",
+    target_os = "linux",
+    target_os = "dragonfly",
+    target_os = "freebsd",
+    target_os = "netbsd",
+    target_os = "openbsd"
+))]
+pub use global_hotkey::{
     hotkey::{Code, HotKey},
     Error as HotkeyError, GlobalHotKeyEvent, GlobalHotKeyManager,
 };
@@ -61,7 +70,7 @@ impl ShortcutRegistry {
 
     pub(crate) fn add_shortcut(
         &self,
-        hotkey: global_hotkey::hotkey::HotKey,
+        hotkey: HotKey,
         callback: Box<dyn FnMut()>,
     ) -> Result<ShortcutId, ShortcutRegistryError> {
         let accelerator_id = hotkey.clone().id();
@@ -168,15 +177,6 @@ impl IntoAccelerator for &str {
     }
 }
 
-#[cfg(any(
-    target_os = "windows",
-    target_os = "macos",
-    target_os = "linux",
-    target_os = "dragonfly",
-    target_os = "freebsd",
-    target_os = "netbsd",
-    target_os = "openbsd"
-))]
 /// Get a closure that executes any JavaScript in the WebView context.
 pub fn use_global_shortcut(
     cx: &ScopeState,
