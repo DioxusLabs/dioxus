@@ -25,7 +25,7 @@ pub struct ElementRef<'a> {
     pub(crate) path: ElementPath,
 
     // The actual template
-    pub(crate) template: &'a VNode<'a>,
+    pub(crate) template: *const VNode<'a>,
 
     // The scope the element belongs to
     pub(crate) scope: ScopeId,
@@ -61,7 +61,10 @@ impl VirtualDom {
             );
         }
 
-        self.elements.try_remove(el.0).map(|_| ())
+        self.elements.try_remove(el.0).and_then(|id| match id {
+            Some(id) => self.element_refs.try_remove(id.0).map(|_| ()),
+            None => Some(()),
+        })
     }
 
     pub(crate) fn set_template(&mut self, el: ElementId, element_ref: ElementRef) {
@@ -80,8 +83,7 @@ impl VirtualDom {
         self.update_template_bubble(bubble_id, node)
     }
 
-    pub(crate) fn update_template_bubble(&mut self, bubble_id: BubbleId, node: &VNode) {
-        let node: *const VNode = node as *const _;
+    pub(crate) fn update_template_bubble(&mut self, bubble_id: BubbleId, node: *const VNode) {
         self.element_refs[bubble_id.0].template = unsafe { std::mem::transmute(node) };
     }
 

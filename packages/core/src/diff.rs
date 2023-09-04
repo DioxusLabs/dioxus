@@ -144,7 +144,7 @@ impl<'b> VirtualDom {
             .enumerate()
             .for_each(|(dyn_node_idx, (left_node, right_node))| {
                 let current_ref = ElementRef {
-                    template: right_template.into(),
+                    template: right_template,
                     path: ElementPath {
                         path: left_template.template.get().node_paths[dyn_node_idx],
                     },

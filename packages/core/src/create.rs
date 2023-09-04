@@ -187,7 +187,7 @@ impl<'b> VirtualDom {
                     path: ElementPath {
                         path: &template.template.get().node_paths[idx],
                     },
-                    template: &template,
+                    template: template,
                     scope: self.runtime.current_scope_id().unwrap_or(ScopeId(0)),
                 };
                 self.create_dynamic_node(template_ref, node)
@@ -197,7 +197,7 @@ impl<'b> VirtualDom {
                     path: ElementPath {
                         path: &template.template.get().node_paths[idx],
                     },
-                    template: &template,
+                    template: template,
                     scope: self.runtime.current_scope_id().unwrap_or(ScopeId(0)),
                 };
                 parent.set(Some(self.next_element_ref(template_ref)));
