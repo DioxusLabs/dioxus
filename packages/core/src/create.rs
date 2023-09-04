@@ -547,6 +547,7 @@ impl<'b> VirtualDom {
             // Create the component's root element
             Ready(t) => {
                 self.assign_boundary_ref(parent, t);
+                component.bubble_id.set(t.parent.get());
                 self.create_scope(scope, t)
             }
             Aborted(t) => self.mount_aborted(t, parent),

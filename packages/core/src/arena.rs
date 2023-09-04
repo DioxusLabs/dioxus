@@ -78,7 +78,7 @@ impl VirtualDom {
         }
     }
 
-    pub(crate) fn update_template(&mut self, el: ElementId, node: &VNode) {
+    pub(crate) fn update_template(&mut self, el: ElementId, node: *const VNode) {
         let bubble_id = self.elements[el.0].unwrap();
         self.update_template_bubble(bubble_id, node)
     }
@@ -135,7 +135,7 @@ impl VirtualDom {
                 }
                 c.props.take();
                 if let Some(bubble_id) = c.bubble_id.get() {
-                    self.element_refs.remove(bubble_id.0);
+                    self.element_refs.try_remove(bubble_id.0);
                 }
             }
             DynamicNode::Fragment(nodes) => {

@@ -174,7 +174,9 @@ impl<'b> VirtualDom {
             (Fragment(left), Fragment(right)) => self.diff_non_empty_fragment(left, right, parent),
             (Placeholder(left), Placeholder(right)) => {
                 right.id.set(left.id.get());
-                right.parent.set(left.parent.get())
+                right.parent.set(left.parent.get());
+                // Update the template
+                self.update_template(left.id.get().unwrap(), parent.template);
             },
             (Component(left), Component(right)) => self.diff_vcomponent(left, right, Some(parent)),
             (Placeholder(left), Fragment(right)) => self.replace_placeholder(left, *right, parent),
@@ -214,10 +216,7 @@ impl<'b> VirtualDom {
         let scope_id = left.scope.get().unwrap();
 
         right.scope.set(Some(scope_id));
-        if let Some(bubble_id) = left.bubble_id.get() {
-            right.bubble_id.set(Some(bubble_id));
-            self.update_template_bubble(bubble_id, parent.unwrap().template);
-        }
+        right.bubble_id.set(left.bubble_id.get());
 
         // copy out the box for both
         let old = self.scopes[scope_id.0].props.as_ref();
@@ -236,6 +235,16 @@ impl<'b> VirtualDom {
 
         // Now run the component and diff it
         self.run_scope(scope_id);
+        if let Some(bubble_id) = right.bubble_id.get() {
+            if let RenderReturn::Ready(new_node) = unsafe {
+                self.scopes[scope_id.0]
+                    .current_frame()
+                    .try_load_node()
+                    .expect("Call rebuild before diffing")
+            } {
+                self.update_template_bubble(bubble_id, new_node);
+            }
+        }
         self.diff_scope(scope_id);
 
         self.dirty_scopes.remove(&DirtyScope {
