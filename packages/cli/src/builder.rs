@@ -22,7 +22,7 @@ pub struct BuildResult {
     pub elapsed_time: u128,
 }
 
-pub fn build(config: &CrateConfig, quiet: bool, skip_assets: bool) -> Result<BuildResult> {
+pub fn build(config: &CrateConfig, _: bool, skip_assets: bool) -> Result<BuildResult> {
     // [1] Build the project with cargo, generating a wasm32-unknown-unknown target (is there a more specific, better target to leverage?)
     // [2] Generate the appropriate build folders
     // [3] Wasm-bindgen the .wasm fiile, and move it into the {builddir}/modules/xxxx/xxxx_bg.wasm
