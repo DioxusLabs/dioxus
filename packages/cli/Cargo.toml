@@ -1,6 +1,6 @@
 [package]
 name = "dioxus-cli"
-version = { workspace = true }
+version = "0.4.1"
 authors = ["Jonathan Kelley"]
 edition = "2021"
 description = "CLI tool for developing, testing, and publishing Dioxus apps"
@@ -78,7 +78,7 @@ toml_edit = "0.19.11"
 
 # bundling
 tauri-bundler = { version = "=1.3.0", features = ["native-tls-vendored"] }
-tauri-utils = "1.3"
+tauri-utils = "=1.4.*"
 
 dioxus-autofmt = { workspace = true }
 dioxus-check = { workspace = true }
