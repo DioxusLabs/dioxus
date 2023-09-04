@@ -54,8 +54,8 @@ where
     type Err = <T as FromStr>::Err;
 
     fn from_route_segment(route: &str) -> Result<Self, Self::Err> {
-        match urlencoding::decode(&route) {
-            Ok(segment) => T::from_str(&*segment),
+        match urlencoding::decode(route) {
+            Ok(segment) => T::from_str(&segment),
             Err(err) => {
                 log::error!("Failed to decode url encoding: {}", err);
                 T::from_str(route)
@@ -67,7 +67,7 @@ where
 #[test]
 fn full_circle() {
     let route = "testing 1234 hello world";
-    assert_eq!(String::from_route_segment(&route).unwrap(), route);
+    assert_eq!(String::from_route_segment(route).unwrap(), route);
 }
 
 /// Something that can be converted to route segments
