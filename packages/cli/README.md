@@ -11,7 +11,7 @@ It handles all building, bundling, development and publishing to simplify develo
 ### Install the stable version (recommended)
 
 ```
-cargo install dioxus-cli
+cargo install dioxus-cli --locked
 ```
 
 ### Install the latest development build through git
@@ -28,6 +28,7 @@ This will download the CLI from the master branch,
 and install it in Cargo's global binary directory (`~/.cargo/bin/` by default).
 
 ### Install from local folder
+
 ```
 cargo install --path . --debug
 ```
@@ -52,6 +53,7 @@ You can use the `Dioxus.toml` file for further configuration.
 Some fields are mandatory, but the CLI tool will tell you which ones are missing.
 You can create a `Dioxus.toml` with all fields already set using `dx config init project-name`,
 or you can use this bare-bones template (only mandatory fields) to get started:
+
 ```toml
 [application]
 name = "project-name"

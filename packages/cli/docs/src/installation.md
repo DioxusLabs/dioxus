@@ -16,7 +16,7 @@ and install it in Cargo's global binary directory (`~/.cargo/bin/` by default).
 The published version of the Dioxus CLI is updated less often, but is more stable than the git version.
 
 ```
-cargo install dioxus-cli
+cargo install dioxus-cli --locked
 ```
 
 Run `dx --help` for a list of all the available commands.
