@@ -25,7 +25,7 @@ pub struct ElementRef<'a> {
     pub(crate) path: ElementPath,
 
     // The actual template
-    pub(crate) template: *const VNode<'a>,
+    pub(crate) template: Option<*const VNode<'a>>,
 
     // The scope the element belongs to
     pub(crate) scope: ScopeId,
@@ -42,10 +42,20 @@ impl VirtualDom {
     }
 
     pub(crate) fn next_element_ref(&mut self, element_ref: ElementRef) -> BubbleId {
-        BubbleId(
+        let new_id = BubbleId(
             self.element_refs
                 .insert(unsafe { std::mem::transmute(element_ref) }),
-        )
+        );
+
+        // Set this id to be dropped when the scope is rerun
+        if let Some(scope) = self.runtime.current_scope_id() {
+            self.scopes[scope.0]
+                .element_refs_to_drop
+                .borrow_mut()
+                .push(new_id);
+        }
+
+        new_id
     }
 
     pub(crate) fn reclaim(&mut self, el: ElementId) {
@@ -84,7 +94,7 @@ impl VirtualDom {
     }
 
     pub(crate) fn update_template_bubble(&mut self, bubble_id: BubbleId, node: *const VNode) {
-        self.element_refs[bubble_id.0].template = unsafe { std::mem::transmute(node) };
+        self.element_refs[bubble_id.0].template = Some(unsafe { std::mem::transmute(node) });
     }
 
     // Drop a scope and all its children
@@ -124,10 +134,6 @@ impl VirtualDom {
     }
 
     fn drop_scope_inner(&mut self, node: &VNode) {
-        if let Some(id) = node.parent.get() {
-            self.element_refs.remove(id.0);
-        }
-
         node.dynamic_nodes.iter().for_each(|node| match node {
             DynamicNode::Component(c) => {
                 if let Some(f) = c.scope.get() {
@@ -141,24 +147,30 @@ impl VirtualDom {
             DynamicNode::Fragment(nodes) => {
                 nodes.iter().for_each(|node| self.drop_scope_inner(node))
             }
-            DynamicNode::Placeholder(placeholder) => {
-                if let Some(id) = placeholder.parent.get() {
-                    self.element_refs.remove(id.0);
-                }
-            }
+            DynamicNode::Placeholder(_) => {}
             DynamicNode::Text(_) => {}
         });
     }
 
     /// Descend through the tree, removing any borrowed props and listeners
-    pub(crate) fn ensure_drop_safety(&self, scope_id: ScopeId) {
+    pub(crate) fn ensure_drop_safety(&mut self, scope_id: ScopeId) {
         let scope = &self.scopes[scope_id.0];
+
+        {
+            // Drop all element refs that could be invalidated when the component was rerun
+            let mut element_refs = self.scopes[scope_id.0].element_refs_to_drop.borrow_mut();
+            let element_refs_slab = &mut self.element_refs;
+            for element_ref in element_refs.drain(..) {
+                println!("Dropping element ref {:?}", element_ref);
+                element_refs_slab[element_ref.0].template = None;
+            }
+        }
 
         // make sure we drop all borrowed props manually to guarantee that their drop implementation is called before we
         // run the hooks (which hold an &mut Reference)
         // recursively call ensure_drop_safety on all children
-        let mut props = scope.borrowed_props.borrow_mut();
-        props.drain(..).for_each(|comp| {
+        let props = { scope.borrowed_props.borrow_mut().clone() };
+        for comp in props {
             let comp = unsafe { &*comp };
             match comp.scope.get() {
                 Some(child) if child != scope_id => self.ensure_drop_safety(child),
@@ -167,10 +179,10 @@ impl VirtualDom {
             if let Ok(mut props) = comp.props.try_borrow_mut() {
                 *props = None;
             }
-        });
+        }
 
         // Now that all the references are gone, we can safely drop our own references in our listeners.
-        let mut listeners = scope.attributes_to_drop.borrow_mut();
+        let mut listeners = self.scopes[scope_id.0].attributes_to_drop.borrow_mut();
         listeners.drain(..).for_each(|listener| {
             let listener = unsafe { &*listener };
             match &listener.value {

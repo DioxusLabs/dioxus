@@ -187,7 +187,7 @@ impl<'b> VirtualDom {
                     path: ElementPath {
                         path: &template.template.get().node_paths[idx],
                     },
-                    template: template,
+                    template: Some(template),
                     scope: self.runtime.current_scope_id().unwrap_or(ScopeId(0)),
                 };
                 self.create_dynamic_node(template_ref, node)
@@ -197,7 +197,7 @@ impl<'b> VirtualDom {
                     path: ElementPath {
                         path: &template.template.get().node_paths[idx],
                     },
-                    template: template,
+                    template: Some(template),
                     scope: self.runtime.current_scope_id().unwrap_or(ScopeId(0)),
                 };
                 parent.set(Some(self.next_element_ref(template_ref)));
@@ -286,7 +286,7 @@ impl<'b> VirtualDom {
                 path: ElementPath {
                     path: &template.template.get().node_paths[idx],
                 },
-                template,
+                template: Some(template),
                 scope: self.runtime.current_scope_id().unwrap_or(ScopeId(0)),
             };
             let m = self.create_dynamic_node(boundary_ref, &template.dynamic_nodes[idx]);
@@ -340,7 +340,7 @@ impl<'b> VirtualDom {
                 let path = &template.template.get().attr_paths[idx];
                 let element_ref = ElementRef {
                     path: ElementPath { path },
-                    template,
+                    template: Some(template),
                     scope: self.runtime.current_scope_id().unwrap_or(ScopeId(0)),
                 };
                 self.set_template(id, element_ref);
@@ -546,9 +546,10 @@ impl<'b> VirtualDom {
         match unsafe { self.run_scope(scope).extend_lifetime_ref() } {
             // Create the component's root element
             Ready(t) => {
+                let created = self.create_scope(scope, t);
                 self.assign_boundary_ref(parent, t);
                 component.bubble_id.set(t.parent.get());
-                self.create_scope(scope, t)
+                created
             }
             Aborted(t) => self.mount_aborted(t, parent),
         }

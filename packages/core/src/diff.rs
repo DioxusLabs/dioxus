@@ -144,7 +144,7 @@ impl<'b> VirtualDom {
             .enumerate()
             .for_each(|(dyn_node_idx, (left_node, right_node))| {
                 let current_ref = ElementRef {
-                    template: right_template,
+                    template: Some(right_template),
                     path: ElementPath {
                         path: left_template.template.get().node_paths[dyn_node_idx],
                     },
@@ -176,7 +176,7 @@ impl<'b> VirtualDom {
                 right.id.set(left.id.get());
                 right.parent.set(left.parent.get());
                 // Update the template
-                self.update_template(left.id.get().unwrap(), parent.template);
+                self.update_template(left.id.get().unwrap(), parent.template.unwrap());
             },
             (Component(left), Component(right)) => self.diff_vcomponent(left, right, Some(parent)),
             (Placeholder(left), Fragment(right)) => self.replace_placeholder(left, *right, parent),
@@ -227,6 +227,16 @@ impl<'b> VirtualDom {
         // The target scopestate still has the reference to the old props, so there's no need to update anything
         // This also implicitly drops the new props since they're not used
         if left.static_props && unsafe { old.as_ref().unwrap().memoize(new.as_ref()) } {
+            if let Some(bubble_id) = right.bubble_id.get() {
+                if let RenderReturn::Ready(new_node) = unsafe {
+                    self.scopes[scope_id.0]
+                        .current_frame()
+                        .try_load_node()
+                        .expect("Call rebuild before diffing")
+                } {
+                    self.update_template_bubble(bubble_id, new_node);
+                }
+            }
             return;
         }
 

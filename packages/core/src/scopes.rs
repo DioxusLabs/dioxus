@@ -2,7 +2,7 @@ use crate::{
     any_props::AnyProps,
     any_props::VProps,
     bump_frame::BumpFrame,
-    innerlude::ErrorBoundary,
+    innerlude::{BubbleId, ErrorBoundary},
     innerlude::{DynamicNode, EventHandler, VComponent, VText},
     lazynodes::LazyNodes,
     nodes::{IntoAttributeValue, IntoDynNode, RenderReturn},
@@ -95,6 +95,7 @@ pub struct ScopeState {
 
     pub(crate) borrowed_props: RefCell<Vec<*const VComponent<'static>>>,
     pub(crate) attributes_to_drop: RefCell<Vec<*const Attribute<'static>>>,
+    pub(crate) element_refs_to_drop: RefCell<Vec<BubbleId>>,
 
     pub(crate) props: Option<Box<dyn AnyProps<'static>>>,
 }

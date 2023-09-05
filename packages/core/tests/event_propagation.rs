@@ -16,7 +16,7 @@ fn events_propagate() {
     // break reference....
     for _ in 0..5 {
         dom.mark_dirty(ScopeId(0));
-        _ = dom.rebuild();
+        _ = dom.render_immediate();
     }
 
     // Lower click is registered
@@ -26,7 +26,7 @@ fn events_propagate() {
     // break reference....
     for _ in 0..5 {
         dom.mark_dirty(ScopeId(0));
-        _ = dom.rebuild();
+        _ = dom.render_immediate();
     }
 
     // Stop propagation occurs
