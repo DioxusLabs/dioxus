@@ -50,8 +50,8 @@ jobs:
           sed -i 's/\/{ tagName }\//\/${{ github.event.release.tag_name }}\//g' packages/cli/Cargo.toml
 
           # Commit and push the changes to the tag
-          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com" # This is a dummy email, copied from https://github.com/stefanzweifel/git-auto-commit-action
-          git config --local user.name "github-actions[bot]"
+          # git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com" # This is a dummy email, copied from https://github.com/stefanzweifel/git-auto-commit-action
+          # git config --local user.name "github-actions[bot]"
           git add packages/cli/Cargo.toml
           git commit -m "Update pkg-url to ${{ github.event.release.tag_name }}"
           git tag -fa ${{ github.event.release.tag_name }} -m "Update pkg-url to ${{ github.event.release.tag_name }}"
