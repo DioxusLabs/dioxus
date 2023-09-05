@@ -46,12 +46,14 @@ jobs:
       - name: Replace pkg-url in Cargo.toml and push changes to tag # Only run on Linux
         if: ${{matrix.platform.target == 'x86_64-unknown-linux-gnu'}}
         run: |
-          sed -i 's/{ tagName }/${{ github.event.release.tag_name }}/g' packages/cli/Cargo.toml
-          author="$(git log -1 --pretty=format:'%an <%ae>')"
+          # Replace the tag for the cargo-binstall record with the current release tag
+          sed -i 's/\/{ tagName }\//${{ github.event.release.tag_name }}/g' packages/cli/Cargo.toml
+
+          # Commit and push the changes to the tag
           git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git add packages/cli/Cargo.toml
-          git commit -m "Update pkg-url to ${{ github.event.release.tag_name }}" --author "$author"
+          git commit -m "Update pkg-url to ${{ github.event.release.tag_name }}"
           git tag -fa ${{ github.event.release.tag_name }} -m "Update pkg-url to ${{ github.event.release.tag_name }}"
           git push origin --tags --force
 
