@@ -46,8 +46,15 @@ jobs:
       - name: Replace pkg-url in Cargo.toml
         run: |
           sed -i 's/{ tagName }/${{ github.event.release.tag_name }}/g' packages/cli/Cargo.toml
-      - name: Commit and push changes to tag
-        uses: stefanzweifel/git-auto-commit-action@v4
+      - name: Commit and push changes to tag # Only run on Linux
+        if: ${{matrix.platform.target == 'x86_64-unknown-linux-gnu'}}
+        run: |
+          author="$(git log -1 --pretty=format:'%an <%ae>')"
+          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add packages/cli/Cargo.toml
+          git commit -m "Update pkg-url to ${{ github.event.release.tag_name }}" --author $author
+          git push -f origin ${{ github.ref }}
 
       # This neat action can build and upload the binary in one go!
       - name: Build and upload binary
