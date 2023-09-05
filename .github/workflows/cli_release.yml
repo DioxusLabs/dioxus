@@ -47,7 +47,7 @@ jobs:
         if: ${{matrix.platform.target == 'x86_64-unknown-linux-gnu'}}
         run: |
           # Replace the tag for the cargo-binstall record with the current release tag
-          sed -i 's/\/{ tagName }\//${{ github.event.release.tag_name }}/g' packages/cli/Cargo.toml
+          sed -i 's/\/{ tagName }\//\/${{ github.event.release.tag_name }}\//g' packages/cli/Cargo.toml
 
           # Commit and push the changes to the tag
           git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com" # This is a dummy email, copied from https://github.com/stefanzweifel/git-auto-commit-action
