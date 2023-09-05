@@ -42,6 +42,13 @@ jobs:
         with:
           workspaces: packages/cli -> ../../target
 
+      # Replace the tag for the cargo-binstall record with the current release tag
+      - name: Replace pkg-url in Cargo.toml
+        run: |
+          sed -i 's/{ tagName }/${{ github.event.release.tag_name }}/g' packages/cli/Cargo.toml
+      - name: Commit and push changes to tag
+        uses: stefanzweifel/git-auto-commit-action@v4
+
       # This neat action can build and upload the binary in one go!
       - name: Build and upload binary
         uses: taiki-e/upload-rust-binary-action@v1
