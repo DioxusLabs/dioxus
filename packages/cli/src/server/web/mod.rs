@@ -73,7 +73,7 @@ pub async fn serve_default(
     config: CrateConfig,
     start_browser: bool,
 ) -> Result<()> {
-    let first_build_result = crate::builder::build(&config, false)?;
+    let first_build_result = crate::builder::build(&config, true)?;
 
     log::info!("🚀 Starting development server...");
 
@@ -134,7 +134,7 @@ pub async fn serve_hot_reload(
     config: CrateConfig,
     start_browser: bool,
 ) -> Result<()> {
-    let first_build_result = crate::builder::build(&config, false)?;
+    let first_build_result = crate::builder::build(&config, true)?;
 
     log::info!("🚀 Starting development server...");
 

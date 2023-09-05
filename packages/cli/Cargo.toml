@@ -1,6 +1,6 @@
 [package]
 name = "dioxus-cli"
-version = { workspace = true }
+version = "0.4.1"
 authors = ["Jonathan Kelley"]
 edition = "2021"
 description = "CLI tool for developing, testing, and publishing Dioxus apps"
@@ -36,7 +36,7 @@ chrono = "0.4.19"
 anyhow = "1.0.53"
 hyper = "0.14.17"
 hyper-rustls = "0.23.2"
-indicatif = "0.17.0-rc.11"
+indicatif = "0.17.5"
 subprocess = "0.2.9"
 
 axum = { version = "0.5.1", features = ["ws", "headers"] }
@@ -75,11 +75,10 @@ gitignore = "1.0.7"
 open = "4.1.0"
 cargo-generate = "0.18"
 toml_edit = "0.19.11"
-# dioxus-rsx = "0.0.1"
 
 # bundling
-tauri-bundler = { version = "1.2", features = ["native-tls-vendored"] }
-tauri-utils = "1.3"
+tauri-bundler = { version = "=1.3.0", features = ["native-tls-vendored"] }
+tauri-utils = "=1.4.*"
 
 dioxus-autofmt = { workspace = true }
 dioxus-check = { workspace = true }

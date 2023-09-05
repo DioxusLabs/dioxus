@@ -392,6 +392,7 @@ fn read_input_to_data(target: Element) -> Rc<FormData> {
         .dyn_ref()
         .and_then(|input: &web_sys::HtmlInputElement| {
             input.files().and_then(|files| {
+                #[allow(clippy::arc_with_non_send_sync)]
                 crate::file_engine::WebFileEngine::new(files)
                     .map(|f| std::sync::Arc::new(f) as std::sync::Arc<dyn dioxus_html::FileEngine>)
             })
