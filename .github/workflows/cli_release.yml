@@ -66,6 +66,7 @@ jobs:
       - name: Build and upload binary
         uses: taiki-e/upload-rust-binary-action@v1
         with:
+          ref: refs/tags/${{ github.event.release.tag_name }}
           token: ${{ secrets.GITHUB_TOKEN }}
           target: ${{ matrix.platform.target }}
           bin: dx
