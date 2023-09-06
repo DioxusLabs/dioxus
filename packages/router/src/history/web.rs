@@ -139,7 +139,7 @@ impl<R: Routable> WebHistory<R> {
         );
 
         let current_route = myself.current_route();
-        log::trace!("initial route: {:?}", current_route);
+        tracing::trace!("initial route: {:?}", current_route);
         let current_url = current_route.to_string();
         let state = myself.create_state(current_route);
         let _ = replace_state_with_url(&myself.history, &state, Some(&current_url));

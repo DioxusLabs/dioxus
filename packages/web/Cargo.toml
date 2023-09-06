@@ -20,6 +20,7 @@ dioxus-interpreter-js = { workspace = true, features = [
 js-sys = "0.3.56"
 wasm-bindgen = { workspace = true, features = ["enable-interning"] }
 wasm-bindgen-futures = "0.4.29"
+tracing = { workspace = true }
 log = { workspace = true }
 rustc-hash = { workspace = true }
 console_error_panic_hook = { version = "0.1.7", optional = true }

@@ -36,7 +36,7 @@ impl HTMLDataCursor {
     pub fn take<T: DeserializeOwned>(&self) -> Option<T> {
         let current = self.index.load(std::sync::atomic::Ordering::SeqCst);
         if current >= self.data.len() {
-            log::error!(
+            tracing::error!(
                 "Tried to take more data than was available, len: {}, index: {}",
                 self.data.len(),
                 current
@@ -48,7 +48,7 @@ impl HTMLDataCursor {
         match postcard::from_bytes(cursor) {
             Ok(x) => Some(x),
             Err(e) => {
-                log::error!("Error deserializing data: {:?}", e);
+                tracing::error!("Error deserializing data: {:?}", e);
                 None
             }
         }

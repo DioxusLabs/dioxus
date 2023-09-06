@@ -57,7 +57,7 @@ where
         match urlencoding::decode(route) {
             Ok(segment) => T::from_str(&segment),
             Err(err) => {
-                log::error!("Failed to decode url encoding: {}", err);
+                tracing::error!("Failed to decode url encoding: {}", err);
                 T::from_str(route)
             }
         }
@@ -87,7 +87,7 @@ where
             match urlencoding::decode(&segment) {
                 Ok(segment) => write!(f, "{}", segment)?,
                 Err(err) => {
-                    log::error!("Failed to decode url encoding: {}", err);
+                    tracing::error!("Failed to decode url encoding: {}", err);
                     write!(f, "{}", segment)?
                 }
             }

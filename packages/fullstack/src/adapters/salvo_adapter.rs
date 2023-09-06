@@ -423,7 +423,7 @@ impl<P: Clone + serde::Serialize + Send + Sync + 'static> Handler for SSRHandler
                 freshness.write(res.headers_mut());
             }
             Err(err) => {
-                log::error!("Error rendering SSR: {}", err);
+                tracing::error!("Error rendering SSR: {}", err);
                 res.write_body("Error rendering SSR").unwrap();
             }
         };

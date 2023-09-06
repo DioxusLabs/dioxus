@@ -46,7 +46,7 @@ impl WebEvaluator {
                 Ok(data) => _ = channel_sender.send_blocking(data),
                 Err(e) => {
                     // Can't really do much here.
-                    log::error!("failed to serialize JsValue to serde_json::Value (eval communication) - {}", e);
+                    tracing::error!("failed to serialize JsValue to serde_json::Value (eval communication) - {}", e);
                 }
             }
         });

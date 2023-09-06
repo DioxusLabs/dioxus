@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use std::rc::Rc;
 
 use dioxus::prelude::*;
-use log::error;
+use tracing::error;
 
 use crate::navigation::NavigationTarget;
 use crate::prelude::Routable;

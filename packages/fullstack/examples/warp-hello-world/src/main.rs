@@ -60,7 +60,7 @@ async fn get_server_data() -> Result<String, ServerFnError> {
 
 fn main() {
     #[cfg(feature = "web")]
-    wasm_logger::init(wasm_logger::Config::new(log::Level::Trace));
+    wasm_logger::init(wasm_logger::Config::new(tracing::Level::Trace));
     #[cfg(feature = "ssr")]
     simple_logger::SimpleLogger::new().init().unwrap();
 
