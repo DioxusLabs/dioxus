@@ -337,8 +337,8 @@ impl HtmlEventConverter for SerializedHtmlEventConverter {
             .into()
     }
 
-    fn convert_mounted_data(&self, event: &PlatformEventData) -> MountedData {
-        event.downcast::<()>().cloned().unwrap().into()
+    fn convert_mounted_data(&self, _: &PlatformEventData) -> MountedData {
+        MountedData::from(())
     }
 
     fn convert_mouse_data(&self, event: &PlatformEventData) -> MouseData {

@@ -577,8 +577,7 @@ impl<'b> VirtualDom {
         }
 
         // 4. Compute the LIS of this list
-        let mut lis_sequence = Vec::default();
-        lis_sequence.reserve(new_index_to_old_index.len());
+        let mut lis_sequence = Vec::with_capacity(new_index_to_old_index.len());
 
         let mut predecessors = vec![0; new_index_to_old_index.len()];
         let mut starts = vec![0; new_index_to_old_index.len()];

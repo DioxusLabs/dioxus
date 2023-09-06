@@ -60,9 +60,7 @@ fn events_generate() {
 
     dom.handle_event(
         "click",
-        Rc::new(PlatformEventData::new(Box::new(
-            SerializedMouseData::default(),
-        ))),
+        Rc::new(PlatformEventData::new(Box::<SerializedMouseData>::default())),
         ElementId(1),
         true,
     );
