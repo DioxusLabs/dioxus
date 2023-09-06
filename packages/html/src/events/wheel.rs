@@ -30,6 +30,13 @@ impl PartialEq for WheelData {
 }
 
 impl WheelData {
+    /// Create a new WheelData
+    pub fn new(inner: impl HasWheelData + 'static) -> Self {
+        Self {
+            inner: Box::new(inner),
+        }
+    }
+
     /// The amount of wheel movement
     #[allow(deprecated)]
     pub fn delta(&self) -> WheelDelta {

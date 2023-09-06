@@ -7,18 +7,29 @@ pub struct AnimationData {
 }
 
 impl AnimationData {
+    /// Create a new AnimationData
+    pub fn new(inner: impl HasAnimationData + 'static) -> Self {
+        Self {
+            inner: Box::new(inner),
+        }
+    }
+
+    /// The name of the animation
     pub fn animation_name(&self) -> String {
         self.inner.animation_name()
     }
 
+    /// The name of the pseudo-element the animation runs on
     pub fn pseudo_element(&self) -> String {
         self.inner.pseudo_element()
     }
 
+    /// The amount of time the animation has been running
     pub fn elapsed_time(&self) -> f32 {
         self.inner.elapsed_time()
     }
 
+    /// Downcast this event to a concrete event type
     pub fn downcast<T: 'static>(&self) -> Option<&T> {
         self.inner.as_ref().as_any().downcast_ref::<T>()
     }

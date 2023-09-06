@@ -7,6 +7,13 @@ pub struct SelectionData {
 }
 
 impl SelectionData {
+    /// Create a new SelectionData
+    pub fn new(inner: impl HasSelectionData + 'static) -> Self {
+        Self {
+            inner: Box::new(inner),
+        }
+    }
+
     /// Downcast this event to a concrete event type
     pub fn downcast<T: 'static>(&self) -> Option<&T> {
         self.inner.as_any().downcast_ref::<T>()

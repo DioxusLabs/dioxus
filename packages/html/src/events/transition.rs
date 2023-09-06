@@ -31,6 +31,13 @@ impl PartialEq for TransitionData {
 }
 
 impl TransitionData {
+    /// Create a new TransitionData
+    pub fn new(inner: impl HasTransitionData + 'static) -> Self {
+        Self {
+            inner: Box::new(inner),
+        }
+    }
+
     /// Downcast this event to a concrete event type
     pub fn downcast<T: 'static>(&self) -> Option<&T> {
         self.inner.as_any().downcast_ref::<T>()

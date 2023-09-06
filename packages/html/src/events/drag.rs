@@ -44,6 +44,13 @@ impl PartialEq for DragData {
 }
 
 impl DragData {
+    /// Create a new DragData
+    pub fn new(inner: impl HasDragData + 'static) -> Self {
+        Self {
+            inner: Box::new(inner),
+        }
+    }
+
     /// Downcast this event data to a specific type
     pub fn downcast<T: 'static>(&self) -> Option<&T> {
         self.inner.as_any().downcast_ref::<T>()

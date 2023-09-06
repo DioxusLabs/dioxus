@@ -14,9 +14,7 @@ fn miri_rollover() {
     for _ in 0..3 {
         dom.handle_event(
             "click",
-            Rc::new(PlatformEventData::new(Box::new(
-                SerializedMouseData::default(),
-            ))),
+            Rc::new(PlatformEventData::new(Box::<SerializedMouseData>::default())),
             ElementId(2),
             true,
         );

@@ -57,18 +57,18 @@ impl EventData {
             EventData::Keyboard(k) => Rc::new(k),
             EventData::Focus(f) => Rc::new(f),
             EventData::Wheel(w) => Rc::new(w),
-            EventData::Form(f) => Rc::new(f.into_html()),
+            EventData::Form(f) => Rc::new(f),
         }
     }
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct FormData {
-    pub value: String,
+    pub(crate) value: String,
 
-    pub values: HashMap<String, Vec<String>>,
+    pub(crate) values: HashMap<String, Vec<String>>,
 
-    pub files: Option<Files>,
+    pub(crate) files: Option<Files>,
 }
 
 impl HasFormData for FormData {
@@ -82,12 +82,6 @@ impl HasFormData for FormData {
 
     fn as_any(&self) -> &dyn std::any::Any {
         self
-    }
-}
-
-impl FormData {
-    fn into_html(self) -> dioxus_html::FormData {
-        dioxus_html::FormData::new(self)
     }
 }
 

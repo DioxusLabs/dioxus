@@ -25,6 +25,13 @@ impl PartialEq for ToggleData {
 }
 
 impl ToggleData {
+    /// Create a new ToggleData
+    pub fn new(inner: impl HasToggleData + 'static) -> Self {
+        Self {
+            inner: Box::new(inner),
+        }
+    }
+
     /// Downcast this event to a concrete event type
     pub fn downcast<T: 'static>(&self) -> Option<&T> {
         self.inner.as_any().downcast_ref::<T>()

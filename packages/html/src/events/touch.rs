@@ -32,6 +32,13 @@ impl PartialEq for TouchData {
 }
 
 impl TouchData {
+    /// Create a new TouchData
+    pub fn new(inner: impl HasTouchData + 'static) -> Self {
+        Self {
+            inner: Box::new(inner),
+        }
+    }
+
     /// Returns true if the "ALT" key was down when the touch event was fired.
     pub fn alt_key(&self) -> bool {
         self.inner.alt_key()

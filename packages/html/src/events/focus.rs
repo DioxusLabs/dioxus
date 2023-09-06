@@ -25,6 +25,13 @@ impl PartialEq for FocusData {
 }
 
 impl FocusData {
+    /// Create a new FocusData
+    pub fn new(inner: impl HasFocusData + 'static) -> Self {
+        Self {
+            inner: Box::new(inner),
+        }
+    }
+
     /// Downcast this event data to a specific type
     pub fn downcast<T: 'static>(&self) -> Option<&T> {
         self.inner.as_any().downcast_ref::<T>()

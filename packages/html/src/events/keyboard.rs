@@ -46,6 +46,13 @@ impl PartialEq for KeyboardData {
 }
 
 impl KeyboardData {
+    /// Create a new KeyboardData
+    pub fn new(inner: impl HasKeyboardData + 'static) -> Self {
+        Self {
+            inner: Box::new(inner),
+        }
+    }
+
     /// The value of the key pressed by the user, taking into consideration the state of modifier keys such as Shift as well as the keyboard locale and layout.
     pub fn key(&self) -> Key {
         self.inner.key()
