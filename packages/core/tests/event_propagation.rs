@@ -42,7 +42,11 @@ fn app(cx: Scope) -> Element {
                 *CLICKS.lock().unwrap() += 1;
             },
 
-            problematic_child {}
+            vec![
+                render! {
+                    problematic_child {}
+                }
+            ].into_iter()
         }
     }
 }

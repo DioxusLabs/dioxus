@@ -162,7 +162,9 @@ impl VirtualDom {
             let element_refs_slab = &mut self.element_refs;
             for element_ref in element_refs.drain(..) {
                 println!("Dropping element ref {:?}", element_ref);
-                element_refs_slab[element_ref.0].template = None;
+                if let Some(element_ref) = element_refs_slab.get_mut(element_ref.0) {
+                    element_ref.template = None;
+                }
             }
         }
 
