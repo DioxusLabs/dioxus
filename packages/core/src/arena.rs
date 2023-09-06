@@ -2,6 +2,7 @@ use crate::{
     innerlude::DirtyScope, nodes::RenderReturn, nodes::VNode, virtual_dom::VirtualDom,
     AttributeValue, DynamicNode, ScopeId,
 };
+use std::ptr::NonNull;
 
 /// An Element's unique identifier.
 ///
@@ -13,8 +14,8 @@ pub struct ElementId(pub usize);
 
 /// An Element that can be bubbled to's unique identifier.
 ///
-/// `ElementId` is a `usize` that is unique across the entire VirtualDOM - but not unique across time. If a component is
-/// unmounted, then the `ElementId` will be reused for a new component.
+/// `BubbleId` is a `usize` that is unique across the entire VirtualDOM - but not unique across time. If a component is
+/// unmounted, then the `BubbleId` will be reused for a new component.
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct BubbleId(pub usize);
@@ -25,7 +26,7 @@ pub struct ElementRef<'a> {
     pub(crate) path: ElementPath,
 
     // The actual template
-    pub(crate) template: Option<*const VNode<'a>>,
+    pub(crate) template: Option<NonNull<VNode<'a>>>,
 
     // The scope the element belongs to
     pub(crate) scope: ScopeId,
@@ -182,9 +183,11 @@ impl VirtualDom {
                 *props = None;
             }
         }
+        let scope = &self.scopes[scope_id.0];
+        scope.borrowed_props.borrow_mut().clear();
 
         // Now that all the references are gone, we can safely drop our own references in our listeners.
-        let mut listeners = self.scopes[scope_id.0].attributes_to_drop.borrow_mut();
+        let mut listeners = scope.attributes_to_drop.borrow_mut();
         listeners.drain(..).for_each(|listener| {
             let listener = unsafe { &*listener };
             match &listener.value {

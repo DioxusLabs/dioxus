@@ -144,7 +144,7 @@ impl<'b> VirtualDom {
             .enumerate()
             .for_each(|(dyn_node_idx, (left_node, right_node))| {
                 let current_ref = ElementRef {
-                    template: Some(right_template),
+                    template: Some(right_template.into()),
                     path: ElementPath {
                         path: left_template.template.get().node_paths[dyn_node_idx],
                     },
@@ -176,7 +176,7 @@ impl<'b> VirtualDom {
                 right.id.set(left.id.get());
                 right.parent.set(left.parent.get());
                 // Update the template
-                self.update_template(left.id.get().unwrap(), parent.template.unwrap());
+                self.update_template(left.id.get().unwrap(), parent.template.unwrap().as_ptr());
             },
             (Component(left), Component(right)) => self.diff_vcomponent(left, right, Some(parent)),
             (Placeholder(left), Fragment(right)) => self.replace_placeholder(left, *right, parent),

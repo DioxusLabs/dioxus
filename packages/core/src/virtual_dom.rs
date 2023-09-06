@@ -371,8 +371,12 @@ impl VirtualDom {
             // Loop through each dynamic attribute (in a depth first order) in this template before moving up to the template's parent.
             while let Some(el_ref) = parent_path {
                 // safety: we maintain references of all vnodes in the element slab
-                let template =
-                    unsafe { &*el_ref.template.expect("template reference should be valid") };
+                let template = unsafe {
+                    el_ref
+                        .template
+                        .expect("template reference should be valid")
+                        .as_ref()
+                };
                 let node_template = template.template.get();
                 let target_path = el_ref.path;
 
@@ -422,7 +426,7 @@ impl VirtualDom {
             // Otherwise, we just call the listener on the target element
             if let Some(el_ref) = parent_path {
                 // safety: we maintain references of all vnodes in the element slab
-                let template = unsafe { &*el_ref.template.unwrap() };
+                let template = unsafe { el_ref.template.unwrap().as_ref() };
                 let node_template = template.template.get();
                 let target_path = el_ref.path;
 
