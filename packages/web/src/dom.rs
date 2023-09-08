@@ -253,8 +253,7 @@ impl WebsysDom {
             let node = dioxus_interpreter_js::get_node(id.0 as u32);
             if let Some(element) = node.dyn_ref::<Element>() {
                 log::info!("mounted event fired: {}", id.0);
-                let data: dioxus_html::MountedData = element.into();
-                let data = PlatformEventData::new(Box::new(data));
+                let data = PlatformEventData::new(Box::new(element.clone()));
                 let _ = self.event_channel.unbounded_send(UiEvent {
                     name: "mounted".to_string(),
                     bubbles: false,

@@ -83,7 +83,11 @@ impl HtmlEventConverter for WebEventConverter {
     fn convert_mounted_data(&self, event: &dioxus_html::PlatformEventData) -> MountedData {
         #[cfg(feature = "mounted")]
         {
-            MountedData::from(downcast_event(event).element.clone())
+            MountedData::from(
+                event
+                    .downcast::<web_sys::Element>()
+                    .expect("event should be a web_sys::Element"),
+            )
         }
         #[cfg(not(feature = "mounted"))]
         {
@@ -216,10 +220,10 @@ impl WebEventExt<web_sys::Event> for dioxus_html::MediaData {
     }
 }
 
-impl WebEventExt<MountedData> for MountedData {
-    fn web_event(&self) -> &MountedData {
-        self.downcast::<MountedData>()
-            .expect("event should be a WebMountedEvent")
+impl WebEventExt<web_sys::Element> for MountedData {
+    fn web_event(&self) -> &web_sys::Element {
+        self.downcast::<web_sys::Element>()
+            .expect("event should be a web_sys::Element")
     }
 }
 
