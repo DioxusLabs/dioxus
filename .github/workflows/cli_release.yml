@@ -59,7 +59,7 @@ jobs:
           git config --local user.name "github-actions[bot]"
           git add packages/cli/Cargo.toml
           git commit -m "Update pkg-url to ${{ github.event.release.tag_name }}"
-          git tag -fa ${{ github.event.release.tag_name }} -m "release_body"
+          git tag -f ${{ github.event.release.tag_name }}
           git push origin --tags --force
 
       # This neat action can build and upload the binary in one go!
