@@ -658,6 +658,11 @@ impl VirtualDom {
     fn finalize(&mut self) -> Mutations {
         std::mem::take(&mut self.mutations)
     }
+
+    /// Get the current runtime
+    pub fn runtime(&self) -> Rc<Runtime> {
+        self.runtime.clone()
+    }
 }
 
 impl Drop for VirtualDom {
