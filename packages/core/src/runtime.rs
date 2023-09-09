@@ -125,16 +125,7 @@ impl Runtime {
     /// This is useful for inserting or removing contexts from a scope, or rendering out its root node
     pub(crate) fn get_context(&self, id: ScopeId) -> Option<Ref<'_, ScopeContext>> {
         Ref::filter_map(self.scope_contexts.borrow(), |contexts| {
-            match contexts.get(id.0) {
-                Some(context) => context.as_ref(),
-                _ => {
-                    tracing::error!(
-                        "Attempted to get context for scope that doesn't exist (id: {})",
-                        id.0
-                    );
-                    None
-                }
-            }
+            contexts.get(id.0).and_then(|f| f.as_ref())
         })
         .ok()
     }
