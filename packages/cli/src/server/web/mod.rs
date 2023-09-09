@@ -3,7 +3,7 @@ use crate::{
     serve::Serve,
     server::{
         output::{print_console_info, PrettierOptions, WebServerInfo},
-        setup_file_watcher, setup_file_watcher_hot_reload,
+        setup_file_watcher, HotReloadState,
     },
     BuildResult, CrateConfig, Result, WebHttpsConfig,
 };
@@ -58,20 +58,39 @@ pub async fn startup(port: u16, config: CrateConfig, start_browser: bool) -> Res
 
     let ip = get_ip().unwrap_or(String::from("0.0.0.0"));
 
-    match config.hot_reload {
-        true => serve_hot_reload(ip, port, config, start_browser).await?,
-        false => serve_default(ip, port, config, start_browser).await?,
-    }
+    let hot_reload_state = match config.hot_reload {
+        true => {
+            let FileMapBuildResult { map, errors } =
+                FileMap::<HtmlCtx>::create(config.crate_dir.clone()).unwrap();
+
+            for err in errors {
+                log::error!("{}", err);
+            }
+
+            let file_map = Arc::new(Mutex::new(map));
+
+            let hot_reload_tx = broadcast::channel(100).0;
+
+            Some(HotReloadState {
+                messages: hot_reload_tx.clone(),
+                file_map: file_map.clone(),
+            })
+        }
+        false => None,
+    };
+
+    serve(ip, port, config, start_browser, hot_reload_state).await?;
 
     Ok(())
 }
 
 /// Start the server without hot reload
-pub async fn serve_default(
+pub async fn serve(
     ip: String,
     port: u16,
     config: CrateConfig,
     start_browser: bool,
+    hot_reload_state: Option<HotReloadState>,
 ) -> Result<()> {
     let first_build_result = crate::builder::build(&config, true)?;
 
@@ -93,6 +112,7 @@ pub async fn serve_default(
             ip: ip.clone(),
             port,
         }),
+        hot_reload_state.clone(),
     )
     .await?;
 
@@ -119,88 +139,7 @@ pub async fn serve_default(
     );
 
     // Router
-    let router = setup_router(config, ws_reload_state, None).await?;
-
-    // Start server
-    start_server(port, router, start_browser, rustls_config).await?;
-
-    Ok(())
-}
-
-/// Start dx serve with hot reload
-pub async fn serve_hot_reload(
-    ip: String,
-    port: u16,
-    config: CrateConfig,
-    start_browser: bool,
-) -> Result<()> {
-    let first_build_result = crate::builder::build(&config, true)?;
-
-    log::info!("🚀 Starting development server...");
-
-    // Setup hot reload
-    let (reload_tx, _) = broadcast::channel(100);
-    let FileMapBuildResult { map, errors } =
-        FileMap::<HtmlCtx>::create(config.crate_dir.clone()).unwrap();
-
-    for err in errors {
-        log::error!("{}", err);
-    }
-
-    let file_map = Arc::new(Mutex::new(map));
-
-    let hot_reload_tx = broadcast::channel(100).0;
-
-    // States
-    let hot_reload_state = Arc::new(HotReloadState {
-        messages: hot_reload_tx.clone(),
-        file_map: file_map.clone(),
-        watcher_config: config.clone(),
-    });
-
-    let ws_reload_state = Arc::new(WsReloadState {
-        update: reload_tx.clone(),
-    });
-
-    // Setup file watcher
-    // We got to own watcher so that it exists for the duration of serve
-    // Otherwise hot reload won't work.
-    let _watcher = setup_file_watcher_hot_reload(
-        &config,
-        hot_reload_tx,
-        file_map,
-        {
-            let config = config.clone();
-            let reload_tx = reload_tx.clone();
-            move || build(&config, &reload_tx)
-        },
-        Some(WebServerInfo {
-            ip: ip.clone(),
-            port,
-        }),
-    )
-    .await?;
-
-    // HTTPS
-    // Before console info so it can stop if mkcert isn't installed or fails
-    let rustls_config = get_rustls(&config).await?;
-
-    // Print serve info
-    print_console_info(
-        &config,
-        PrettierOptions {
-            changed: vec![],
-            warnings: first_build_result.warnings,
-            elapsed_time: first_build_result.elapsed_time,
-        },
-        Some(WebServerInfo {
-            ip: ip.clone(),
-            port,
-        }),
-    );
-
-    // Router
-    let router = setup_router(config, ws_reload_state, Some(hot_reload_state)).await?;
+    let router = setup_router(config, ws_reload_state, hot_reload_state).await?;
 
     // Start server
     start_server(port, router, start_browser, rustls_config).await?;
@@ -291,7 +230,7 @@ fn get_rustls_without_mkcert(web_config: &WebHttpsConfig) -> Result<(String, Str
 async fn setup_router(
     config: CrateConfig,
     ws_reload: Arc<WsReloadState>,
-    hot_reload: Option<Arc<HotReloadState>>,
+    hot_reload: Option<HotReloadState>,
 ) -> Result<Router> {
     // Setup cors
     let cors = CorsLayer::new()
