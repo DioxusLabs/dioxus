@@ -118,7 +118,7 @@ impl ScopeContext {
         }
 
         let mut search_parent = self.parent_id;
-        match with_runtime(|runtime: &crate::innerlude::Runtime| {
+        match with_runtime(|runtime: &crate::runtime::Runtime| {
             while let Some(parent_id) = search_parent {
                 let parent = runtime.get_context(parent_id).unwrap();
                 tracing::trace!(
