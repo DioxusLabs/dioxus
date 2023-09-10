@@ -14,22 +14,24 @@ pub fn in_runtime<R>(runtime: Rc<Runtime>, f: impl FnOnce() -> R) -> R {
 }
 
 /// Override the current runtime. This must be used to override the current runtime when importing components from a dynamic library that has it's own runtime.
-/// 
+///
 /// ```rust
 /// use dioxus::prelude::*;
-/// 
+///
 /// fn main() {
 ///     let virtual_dom = VirtualDom::new(app);
 /// }
-/// 
+///
 /// fn app(cx: Scope) -> Element {
 ///     render!{ Component { runtime: Runtime::current().unwrap() } }
 /// }
-/// 
+///
 /// // In a dynamic library
 /// #[inline_props]
-/// fn Component(cx: Scope, runtime: Rc<Runtime>) -> Element {
+/// fn Component(cx: Scope, runtime: std::rc::Rc<Runtime>) -> Element {
 ///     cx.use_hook(|| override_runtime(runtime.clone()));
+///
+///     render! { div {} }
 /// }
 /// ```
 pub fn override_runtime(runtime: Rc<Runtime>) {
