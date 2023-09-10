@@ -25,6 +25,7 @@ members = [
     "packages/native-core",
     "packages/native-core-macro",
     "packages/rsx-rosetta",
+    "packages/generational-box",
     "packages/signals",
     "packages/hot-reload",
     "packages/fullstack",
@@ -41,6 +42,7 @@ members = [
     # Full project examples
     "examples/tailwind",
     "examples/PWA-example",
+    "examples/query_segments_demo",
     # Playwright tests
     "playwright-tests/liveview",
     "playwright-tests/web",
@@ -49,12 +51,12 @@ members = [
 exclude = ["examples/mobile_demo"]
 
 [workspace.package]
-version = "0.4.1"
+version = "0.4.2"
 
 # dependencies that are shared across packages
 [workspace.dependencies]
 dioxus = { path = "packages/dioxus", version = "0.4.0" }
-dioxus-core = { path = "packages/core", version = "0.4.0" }
+dioxus-core = { path = "packages/core", version = "0.4.2" }
 dioxus-core-macro = { path = "packages/core-macro", version = "0.4.0"  }
 dioxus-router = { path = "packages/router", version = "0.4.1"  }
 dioxus-router-macro = { path = "packages/router-macro", version = "0.4.1" }
@@ -76,6 +78,7 @@ dioxus-native-core = { path = "packages/native-core", version = "0.4.0" }
 dioxus-native-core-macro = { path = "packages/native-core-macro", version = "0.4.0" }
 rsx-rosetta = { path = "packages/rsx-rosetta", version = "0.4.0" }
 dioxus-signals = { path = "packages/signals" }
+generational-box = { path = "packages/generational-box" }
 dioxus-hot-reload = { path = "packages/hot-reload", version = "0.4.0" }
 dioxus-fullstack = { path = "packages/fullstack", version = "0.4.1"  }
 dioxus_server_macro = { path = "packages/server-macro", version = "0.4.1" }

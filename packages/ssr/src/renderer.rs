@@ -40,7 +40,7 @@ impl Renderer {
     }
 
     pub fn render_to(&mut self, buf: &mut impl Write, dom: &VirtualDom) -> std::fmt::Result {
-        self.render_scope(buf, dom, ScopeId(0))
+        self.render_scope(buf, dom, ScopeId::ROOT)
     }
 
     pub fn render_scope(

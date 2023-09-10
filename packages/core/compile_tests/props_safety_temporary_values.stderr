@@ -1,0 +1,12 @@
+error[E0515]: cannot return value referencing local variable `count`
+  --> compile_tests/props_safety_temporary_values.rs:8:5
+   |
+8  | /     render! {
+9  | |         unsafe_child_component {
+10 | |             borrowed: &count
+   | |                       ------ `count` is borrowed here
+11 | |         }
+12 | |     }
+   | |_____^ returns a value referencing data owned by the current function
+   |
+   = note: this error originates in the macro `render` (in Nightly builds, run with -Z macro-backtrace for more info)

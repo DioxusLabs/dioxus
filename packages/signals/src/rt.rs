@@ -1,121 +1,159 @@
-use std::{any::Any, cell::RefCell, sync::Arc};
+use std::cell::{Ref, RefMut};
 
+use std::rc::Rc;
+
+use dioxus_core::prelude::{
+    consume_context, consume_context_from_scope, current_scope_id, provide_context,
+    provide_context_to_scope, provide_root_context,
+};
 use dioxus_core::ScopeId;
-use slab::Slab;
 
-thread_local! {
-    // we cannot drop these since any future might be using them
-    static RUNTIMES: RefCell<Vec<&'static SignalRt>> = RefCell::new(Vec::new());
+use generational_box::{GenerationalBox, Owner, Store};
+
+fn current_store() -> Store {
+    match consume_context() {
+        Some(rt) => rt,
+        None => {
+            let store = Store::default();
+            provide_root_context(store).expect("in a virtual dom")
+        }
+    }
 }
 
-/// Provide the runtime for signals
+fn current_owner() -> Rc<Owner> {
+    match consume_context() {
+        Some(rt) => rt,
+        None => {
+            let owner = Rc::new(current_store().owner());
+            provide_context(owner).expect("in a virtual dom")
+        }
+    }
+}
+
+fn owner_in_scope(scope: ScopeId) -> Rc<Owner> {
+    match consume_context_from_scope(scope) {
+        Some(rt) => rt,
+        None => {
+            let owner = Rc::new(current_store().owner());
+            provide_context_to_scope(scope, owner).expect("in a virtual dom")
+        }
+    }
+}
+
+/// CopyValue is a wrapper around a value to make the value mutable and Copy.
 ///
-/// This will reuse dead runtimes
-pub fn claim_rt(update_any: Arc<dyn Fn(ScopeId)>) -> &'static SignalRt {
-    RUNTIMES.with(|runtimes| {
-        if let Some(rt) = runtimes.borrow_mut().pop() {
-            return rt;
-        }
-
-        Box::leak(Box::new(SignalRt {
-            signals: RefCell::new(Slab::new()),
-            update_any,
-        }))
-    })
+/// It is internally backed by [`generational_box::GenerationalBox`].
+pub struct CopyValue<T: 'static> {
+    pub(crate) value: GenerationalBox<T>,
+    origin_scope: ScopeId,
 }
 
-/// Push this runtime into the global runtime list
-pub fn reclam_rt(_rt: &'static SignalRt) {
-    RUNTIMES.with(|runtimes| {
-        runtimes.borrow_mut().push(_rt);
-    });
+#[cfg(feature = "serde")]
+impl<T: 'static> serde::Serialize for CopyValue<T>
+where
+    T: serde::Serialize,
+{
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.value.read().serialize(serializer)
+    }
 }
 
-pub struct SignalRt {
-    pub(crate) signals: RefCell<Slab<Inner>>,
-    pub(crate) update_any: Arc<dyn Fn(ScopeId)>,
+#[cfg(feature = "serde")]
+impl<'de, T: 'static> serde::Deserialize<'de> for CopyValue<T>
+where
+    T: serde::Deserialize<'de>,
+{
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let value = T::deserialize(deserializer)?;
+
+        Ok(Self::new(value))
+    }
 }
 
-impl SignalRt {
-    pub fn init<T: 'static>(&'static self, val: T) -> usize {
-        self.signals.borrow_mut().insert(Inner {
-            value: Box::new(val),
-            subscribers: Vec::new(),
-            getter: None,
-        })
-    }
+impl<T: 'static> CopyValue<T> {
+    /// Create a new CopyValue. The value will be stored in the current component.
+    ///
+    /// Once the component this value is created in is dropped, the value will be dropped.
+    pub fn new(value: T) -> Self {
+        let owner = current_owner();
 
-    pub fn subscribe(&self, id: usize, subscriber: ScopeId) {
-        self.signals.borrow_mut()[id].subscribers.push(subscriber);
-    }
-
-    pub fn get<T: Clone + 'static>(&self, id: usize) -> T {
-        self.signals.borrow()[id]
-            .value
-            .downcast_ref::<T>()
-            .cloned()
-            .unwrap()
-    }
-
-    pub fn set<T: 'static>(&self, id: usize, value: T) {
-        let mut signals = self.signals.borrow_mut();
-        let inner = &mut signals[id];
-        inner.value = Box::new(value);
-
-        for subscriber in inner.subscribers.iter() {
-            (self.update_any)(*subscriber);
+        Self {
+            value: owner.insert(value),
+            origin_scope: current_scope_id().expect("in a virtual dom"),
         }
     }
 
-    pub fn remove(&self, id: usize) {
-        self.signals.borrow_mut().remove(id);
-    }
+    /// Create a new CopyValue. The value will be stored in the given scope. When the specified scope is dropped, the value will be dropped.
+    pub fn new_in_scope(value: T, scope: ScopeId) -> Self {
+        let owner = owner_in_scope(scope);
 
-    pub fn with<T: 'static, O>(&self, id: usize, f: impl FnOnce(&T) -> O) -> O {
-        let signals = self.signals.borrow();
-        let inner = &signals[id];
-        let inner = inner.value.downcast_ref::<T>().unwrap();
-        f(inner)
-    }
-
-    pub(crate) fn read<T: 'static>(&self, id: usize) -> std::cell::Ref<T> {
-        let signals = self.signals.borrow();
-        std::cell::Ref::map(signals, |signals| {
-            signals[id].value.downcast_ref::<T>().unwrap()
-        })
-    }
-
-    pub(crate) fn write<T: 'static>(&self, id: usize) -> std::cell::RefMut<T> {
-        let signals = self.signals.borrow_mut();
-        std::cell::RefMut::map(signals, |signals| {
-            signals[id].value.downcast_mut::<T>().unwrap()
-        })
-    }
-
-    pub(crate) fn getter<T: 'static + Clone>(&self, id: usize) -> &dyn Fn() -> T {
-        let mut signals = self.signals.borrow_mut();
-        let inner = &mut signals[id];
-        let r = inner.getter.as_mut();
-
-        if r.is_none() {
-            let rt = self;
-            let r = move || rt.get::<T>(id);
-            let getter: Box<dyn Fn() -> T> = Box::new(r);
-            let getter: Box<dyn Fn()> = unsafe { std::mem::transmute(getter) };
-
-            inner.getter = Some(getter);
+        Self {
+            value: owner.insert(value),
+            origin_scope: scope,
         }
+    }
 
-        let r = inner.getter.as_ref().unwrap();
+    pub(crate) fn invalid() -> Self {
+        let owner = current_owner();
 
-        unsafe { std::mem::transmute::<&dyn Fn(), &dyn Fn() -> T>(r) }
+        Self {
+            value: owner.invalid(),
+            origin_scope: current_scope_id().expect("in a virtual dom"),
+        }
+    }
+
+    /// Get the scope this value was created in.
+    pub fn origin_scope(&self) -> ScopeId {
+        self.origin_scope
+    }
+
+    /// Try to read the value. If the value has been dropped, this will return None.
+    pub fn try_read(&self) -> Option<Ref<'_, T>> {
+        self.value.try_read()
+    }
+
+    /// Read the value. If the value has been dropped, this will panic.
+    pub fn read(&self) -> Ref<'_, T> {
+        self.value.read()
+    }
+
+    /// Try to write the value. If the value has been dropped, this will return None.
+    pub fn try_write(&self) -> Option<RefMut<'_, T>> {
+        self.value.try_write()
+    }
+
+    /// Write the value. If the value has been dropped, this will panic.
+    pub fn write(&self) -> RefMut<'_, T> {
+        self.value.write()
+    }
+
+    /// Set the value. If the value has been dropped, this will panic.
+    pub fn set(&mut self, value: T) {
+        *self.write() = value;
+    }
+
+    /// Run a function with a reference to the value. If the value has been dropped, this will panic.
+    pub fn with<O>(&self, f: impl FnOnce(&T) -> O) -> O {
+        let write = self.read();
+        f(&*write)
+    }
+
+    /// Run a function with a mutable reference to the value. If the value has been dropped, this will panic.
+    pub fn with_mut<O>(&self, f: impl FnOnce(&mut T) -> O) -> O {
+        let mut write = self.write();
+        f(&mut *write)
     }
 }
 
-pub(crate) struct Inner {
-    pub value: Box<dyn Any>,
-    pub subscribers: Vec<ScopeId>,
+impl<T: Clone + 'static> CopyValue<T> {
+    /// Get the value. If the value has been dropped, this will panic.
+    pub fn value(&self) -> T {
+        self.read().clone()
+    }
+}
 
-    // todo: this has a soundness hole in it that you might not run into
-    pub getter: Option<Box<dyn Fn()>>,
+impl<T: 'static> PartialEq for CopyValue<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.value.ptr_eq(&other.value)
+    }
 }

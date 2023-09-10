@@ -30,6 +30,8 @@ async fn main() {
             .join("\n")
     );
 
+    // This function is available if you enable the ssr feature
+    // on the dioxus_router crate.
     pre_cache_static_routes::<Route, _>(
         &mut renderer,
         &DefaultRenderer {

@@ -75,7 +75,7 @@ fn component_swap() {
         );
     }
 
-    dom.mark_dirty(ScopeId(0));
+    dom.mark_dirty(ScopeId::ROOT);
     assert_eq!(
         dom.render_immediate().santize().edits,
         [
@@ -84,7 +84,7 @@ fn component_swap() {
         ]
     );
 
-    dom.mark_dirty(ScopeId(0));
+    dom.mark_dirty(ScopeId::ROOT);
     assert_eq!(
         dom.render_immediate().santize().edits,
         [
@@ -93,7 +93,7 @@ fn component_swap() {
         ]
     );
 
-    dom.mark_dirty(ScopeId(0));
+    dom.mark_dirty(ScopeId::ROOT);
     assert_eq!(
         dom.render_immediate().santize().edits,
         [

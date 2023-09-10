@@ -1,10 +1,13 @@
 # Path Functions
 
-> you can use path functions to operate valid path string
+You can use path functions to perform operations on valid path strings.
 
-### join(path: string, extra: string) -> string
+### `join(path: string, extra: string) -> string`
 
-This function can help you extend a path, you can extend any path, dirname or filename.
+<!-- TODO: Add specifics.
+From the example given, it seems like it just creates a subdirectory path.
+What would it do when "extending" file paths? -->
+Extend a path; you can extend both directory and file paths.
 
 ```lua
 local current_path = "~/hello/dioxus"
@@ -12,9 +15,9 @@ local new_path = plugin.path.join(current_path, "world")
 -- new_path = "~/hello/dioxus/world"
 ```
 
-### parent(path: string) -> string
+### `parent(path: string) -> string`
 
-This function will return `path` parent-path string, back to the parent.
+Return the parent path of the specified path. The parent path is always a directory.
 
 ```lua
 local current_path = "~/hello/dioxus"
@@ -22,14 +25,14 @@ local new_path = plugin.path.parent(current_path)
 -- new_path = "~/hello/"
 ```
 
-### exists(path: string) -> boolean
+### `exists(path: string) -> boolean`
 
-This function can check some path (dir & file) is exists.
+Check if the specified path exists, as either a file or a directory.
 
-### is_file(path: string) -> boolean
+### `is_file(path: string) -> boolean`
 
-This function can check some path is a exist file.
+Check if the specified path is a file.
 
-### is_dir(path: string) -> boolean
+### `is_dir(path: string) -> boolean`
 
-This function can check some path is a exist dir.
+Check if the specified path is a directory.
