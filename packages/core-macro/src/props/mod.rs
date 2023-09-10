@@ -194,8 +194,9 @@ mod field_info {
 
                 // children field is automatically defaulted to None
                 if name == "children" {
-                    builder_attr.default =
-                        Some(syn::parse(quote!(::core::default::Default::default()).into()).unwrap());
+                    builder_attr.default = Some(
+                        syn::parse(quote!(::core::default::Default::default()).into()).unwrap(),
+                    );
                 }
 
                 // auto detect optional
@@ -204,8 +205,9 @@ mod field_info {
                         && type_from_inside_option(&field.ty, true).is_some();
                 if !builder_attr.strip_option && strip_option_auto {
                     builder_attr.strip_option = true;
-                    builder_attr.default =
-                        Some(syn::parse(quote!(::core::default::Default::default()).into()).unwrap());
+                    builder_attr.default = Some(
+                        syn::parse(quote!(::core::default::Default::default()).into()).unwrap(),
+                    );
                 }
 
                 Ok(FieldInfo {
@@ -345,14 +347,18 @@ mod field_info {
                         .ok_or_else(|| Error::new_spanned(&path, "Expected identifier"))?;
                     match name.as_str() {
                         "default" => {
-                            self.default =
-                                Some(syn::parse(quote!(::core::default::Default::default()).into()).unwrap());
+                            self.default = Some(
+                                syn::parse(quote!(::core::default::Default::default()).into())
+                                    .unwrap(),
+                            );
                             Ok(())
                         }
 
                         "optional" => {
-                            self.default =
-                                Some(syn::parse(quote!(::core::default::Default::default()).into()).unwrap());
+                            self.default = Some(
+                                syn::parse(quote!(::core::default::Default::default()).into())
+                                    .unwrap(),
+                            );
                             self.strip_option = true;
                             Ok(())
                         }

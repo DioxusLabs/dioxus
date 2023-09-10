@@ -1,9 +1,9 @@
 use crate::component_body::{ComponentBody, DeserializerArgs, DeserializerOutput};
+use crate::component_body_deserializers::inline_props::InlinePropsDeserializerArgs;
 use constcat::concat;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, ToTokens, TokenStreamExt};
 use syn::*;
-use crate::component_body_deserializers::inline_props::InlinePropsDeserializerArgs;
 
 pub(crate) const COMPONENT_ARG_CASE_CHECK_ERROR: &str = concat!(
     "This component does not use snake_case. \
@@ -103,7 +103,9 @@ impl ComponentDeserializerArgs {
         }
     }
 
-    fn deserialize_with_props(component_body: &ComponentBody) -> Result<ComponentDeserializerOutput> {
+    fn deserialize_with_props(
+        component_body: &ComponentBody,
+    ) -> Result<ComponentDeserializerOutput> {
         let ComponentBody {
             item_fn,
             cx_pat_type,

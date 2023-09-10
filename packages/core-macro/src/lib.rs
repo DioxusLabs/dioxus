@@ -11,9 +11,9 @@ mod props;
 
 // mod rsx;
 use crate::component_body::ComponentBody;
-use crate::component_body_deserializers::component::{ComponentDeserializerArgs};
-use dioxus_rsx as rsx;
+use crate::component_body_deserializers::component::ComponentDeserializerArgs;
 use crate::component_body_deserializers::inline_props::InlinePropsDeserializerArgs;
+use dioxus_rsx as rsx;
 
 #[proc_macro]
 pub fn format_args_f(input: TokenStream) -> TokenStream {

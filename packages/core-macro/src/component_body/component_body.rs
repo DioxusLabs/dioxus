@@ -1,8 +1,8 @@
+use crate::component_body::{is_type_eq, DeserializerArgs, DeserializerOutput, TypeHelper};
 use dioxus_core::{Element, Scope};
 use syn::parse::{Parse, ParseStream};
 use syn::spanned::Spanned;
 use syn::*;
-use crate::component_body::{DeserializerArgs, DeserializerOutput, is_type_eq, TypeHelper};
 
 /// General struct for parsing a component body.
 /// However, because it's ambiguous, it does not implement [`ToTokens`](quote::to_tokens::ToTokens).
@@ -32,9 +32,9 @@ impl ComponentBody {
     // Let's also make sure there's not a warning.
     #[allow(unused_qualifications)]
     pub fn deserialize<TOutput, TArgs>(&self, args: TArgs) -> syn::Result<TOutput>
-        where
-            TOutput: DeserializerOutput,
-            TArgs: DeserializerArgs<TOutput>,
+    where
+        TOutput: DeserializerOutput,
+        TArgs: DeserializerArgs<TOutput>,
     {
         args.to_output(self)
     }

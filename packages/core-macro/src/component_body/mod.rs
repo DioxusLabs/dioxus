@@ -171,8 +171,8 @@ pub trait DeserializerOutput: ToTokens {}
 /// Because "args" makes more sense to the caller of [`ComponentBody::deserialize`], which
 /// takes an [`DeserializerArgs`] argument. However, you can think of "DeserializerArgs" as the deserializer.
 pub trait DeserializerArgs<TOutput>: Clone
-    where
-        TOutput: DeserializerOutput,
+where
+    TOutput: DeserializerOutput,
 {
     // There's a lot of Results out there... let's make sure that this is a syn::Result.
     // Let's also make sure there's not a warning.
