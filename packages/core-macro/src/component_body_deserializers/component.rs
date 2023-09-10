@@ -50,15 +50,15 @@ impl DeserializerArgs<ComponentDeserializerOutput> for ComponentDeserializerArgs
     fn to_output(&self, component_body: &ComponentBody) -> Result<ComponentDeserializerOutput> {
         let Signature { ident, .. } = &component_body.item_fn.sig;
 
-        if self.case_check && !is_snake_case(&*ident.to_string()) {
+        if self.case_check && !is_snake_case(&ident.to_string()) {
             return Err(Error::new(ident.span(), COMPONENT_ARG_CASE_CHECK_ERROR));
         }
 
-        return if component_body.has_extra_args {
+        if component_body.has_extra_args {
             Self::deserialize_with_props(component_body)
         } else {
             Ok(Self::deserialize_no_props(component_body))
-        };
+        }
     }
 }
 
@@ -73,7 +73,7 @@ impl ComponentDeserializerArgs {
         let Signature { ident, .. } = sig;
         let cx_pat = &cx_pat_type.pat;
 
-        let pascal_name = &*snake_to_pascal(&*ident.to_string());
+        let pascal_name = &*snake_to_pascal(&ident.to_string());
         let comp_ident = Ident::new(pascal_name, ident.span());
         let hidden_comp_ident = Ident::new(&format!("__{ident}"), ident.span());
 
@@ -115,7 +115,7 @@ impl ComponentDeserializerArgs {
         let Signature { ident, .. } = sig;
         let cx_pat = &cx_pat_type.pat;
 
-        let pascal_name = &*snake_to_pascal(&*ident.to_string());
+        let pascal_name = &*snake_to_pascal(&ident.to_string());
         let comp_ident = Ident::new(pascal_name, ident.span());
         let hidden_comp_ident = Ident::new(&format!("__{ident}"), ident.span());
 
@@ -133,7 +133,7 @@ impl ComponentDeserializerArgs {
                     e.span(),
                     format!(
                         "This is probably a bug in our code, please report it! Error: {}",
-                        e.to_string()
+                        e
                     ),
                 ))
             }

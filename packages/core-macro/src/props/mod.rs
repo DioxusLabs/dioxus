@@ -637,7 +637,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                     #vis fn builder() -> #builder_name #generics_with_empty {
                         #builder_name {
                             fields: #empties_tuple,
-                            _phantom: ::core::Default::default(),
+                            _phantom: ::core::default::Default::default(),
                         }
                     }
                 }
@@ -654,7 +654,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                     fn clone(&self) -> Self {
                         Self {
                             fields: self.fields.clone(),
-                            _phantom: ::core::Default::default(),
+                            _phantom: ::core::default::Default::default(),
                         }
                     }
                 }

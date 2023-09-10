@@ -88,7 +88,7 @@ pub fn inline_props(_args: TokenStream, s: TokenStream) -> TokenStream {
     }
 }
 
-pub(crate) const COMPONENT_ARG_CASE_CHECK_OFF: &'static str = "no_case_check";
+pub(crate) const COMPONENT_ARG_CASE_CHECK_OFF: &str = "no_case_check";
 
 /// Streamlines component creation.
 /// This is the recommended way of creating components,
