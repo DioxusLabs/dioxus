@@ -4,9 +4,11 @@ use quote::{quote, ToTokens, TokenStreamExt};
 use syn::token::Comma;
 use syn::{punctuated::Punctuated, *};
 
+/// The args and deserializing implementation for the [`crate::inline_props`] macro.
 #[derive(Clone)]
 pub struct InlinePropsDeserializerArgs;
 
+/// The output fields and [`ToTokens`] implementation for the [`crate::inline_props`] macro.
 #[derive(Clone)]
 pub struct InlinePropsDeserializerOutput {
     pub comp_fn: ItemFn,
