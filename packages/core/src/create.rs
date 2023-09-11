@@ -188,7 +188,7 @@ impl<'b> VirtualDom {
             node @ Component { .. } | node @ Fragment(_) => {
                 let template_ref = ElementRef {
                     path: ElementPath {
-                        path: &template.template.get().node_paths[idx],
+                        path: template.template.get().node_paths[idx],
                     },
                     template: template.stable_id().unwrap(),
                     scope: self.runtime.current_scope_id().unwrap_or(ScopeId(0)),
@@ -198,7 +198,7 @@ impl<'b> VirtualDom {
             Placeholder(VPlaceholder { id, parent }) => {
                 let template_ref = ElementRef {
                     path: ElementPath {
-                        path: &template.template.get().node_paths[idx],
+                        path: template.template.get().node_paths[idx],
                     },
                     template: template.stable_id().unwrap(),
                     scope: self.runtime.current_scope_id().unwrap_or(ScopeId(0)),
@@ -287,7 +287,7 @@ impl<'b> VirtualDom {
         for idx in reversed_iter {
             let boundary_ref = ElementRef {
                 path: ElementPath {
-                    path: &template.template.get().node_paths[idx],
+                    path: template.template.get().node_paths[idx],
                 },
                 template: template.stable_id().unwrap(),
                 scope: self.runtime.current_scope_id().unwrap_or(ScopeId(0)),
