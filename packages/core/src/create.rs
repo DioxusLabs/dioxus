@@ -485,7 +485,7 @@ impl<'b> VirtualDom {
             Text(text) => self.create_dynamic_text(parent, text),
             Placeholder(place) => self.create_placeholder(place, parent),
             Component(component) => self.create_component_node(Some(parent), component),
-            Fragment(frag) => frag.iter().map(|child| self.create(child)).sum(),
+            Fragment(frag) => self.create_children(*frag, Some(parent)),
         }
     }
 

@@ -776,15 +776,18 @@ impl<'b> VirtualDom {
             .sum()
     }
 
-    fn create_children(
+    pub(crate) fn create_children(
         &mut self,
         nodes: impl IntoIterator<Item = &'b VNode<'b>>,
         parent: Option<ElementRef>,
     ) -> usize {
-        nodes.into_iter().fold(0, |acc, child| {
-            self.assign_boundary_ref(parent, child);
-            acc + self.create(child)
-        })
+        nodes
+            .into_iter()
+            .map(|child| {
+                self.assign_boundary_ref(parent, child);
+                self.create(child)
+            })
+            .sum()
     }
 
     fn create_and_insert_before(

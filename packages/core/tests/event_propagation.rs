@@ -55,6 +55,7 @@ fn problematic_child(cx: Scope) -> Element {
     render! {
         button {
             onclick: move |evt| {
+                println!("bottom clicked");
                 let mut clicks = CLICKS.lock().unwrap();
 
                 if *clicks == 3 {
