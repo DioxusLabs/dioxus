@@ -357,7 +357,6 @@ impl VirtualDom {
             Some(Some(el)) => el,
             _ => return,
         };
-        println!("handle_event: {:?}", element);
         let mut parent_node = self
             .element_refs
             .get(parent_path.template.0)
@@ -379,11 +378,9 @@ impl VirtualDom {
                 let template = unsafe { el_ref.unwrap().as_ref() };
                 let node_template = template.template.get();
                 let target_path = path.path;
-                println!("handle_event: {:?} ({:?})", target_path, template);
 
                 for (idx, attr) in template.dynamic_attrs.iter().enumerate() {
                     let this_path = node_template.attr_paths[idx];
-                    println!("checking: {:?} ({:?})", this_path, attr);
 
                     // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
                     if attr.name.trim_start_matches("on") == name
@@ -403,7 +400,6 @@ impl VirtualDom {
                 // Now that we've accumulated all the parent attributes for the target element, call them in reverse order
                 // We check the bubble state between each call to see if the event has been stopped from bubbling
                 for listener in listeners.drain(..).rev() {
-                    println!("handle_event: {:?}", listener);
                     if let AttributeValue::Listener(listener) = listener {
                         let origin = path.scope;
                         self.runtime.scope_stack.borrow_mut().push(origin);
@@ -421,7 +417,6 @@ impl VirtualDom {
                 }
 
                 parent_node = template.parent.get().and_then(|element_ref| {
-                    println!("handle_event: {:?}", element_ref);
                     self.element_refs
                         .get(element_ref.template.0)
                         .cloned()
@@ -607,15 +602,12 @@ impl VirtualDom {
     /// The mutations will be thrown out, so it's best to use this method for things like SSR that have async content
     pub async fn wait_for_suspense(&mut self) {
         loop {
-            // println!("waiting for suspense {:?}", self.suspended_scopes);
             if self.suspended_scopes.is_empty() {
                 return;
             }
 
-            // println!("waiting for suspense");
             self.wait_for_work().await;
 
-            // println!("Rendered immediately");
             _ = self.render_immediate();
         }
     }

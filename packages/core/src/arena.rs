@@ -48,8 +48,6 @@ impl VirtualDom {
             std::mem::transmute::<NonNull<VNode>, _>(vnode.into())
         })));
 
-        println!("next_element_ref: {:?}", new_id);
-
         // Set this id to be dropped when the scope is rerun
         if let Some(scope) = self.runtime.current_scope_id() {
             self.scopes[scope.0]
@@ -143,7 +141,6 @@ impl VirtualDom {
             let mut element_refs = self.scopes[scope_id.0].element_refs_to_drop.borrow_mut();
             let element_refs_slab = &mut self.element_refs;
             for element_ref in element_refs.drain(..) {
-                println!("ensure_drop_safety: {:?}", element_ref);
                 if let Some(element_ref) = element_refs_slab.get_mut(element_ref.0) {
                     *element_ref = None;
                 }
