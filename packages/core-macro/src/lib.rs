@@ -95,16 +95,13 @@ pub(crate) const COMPONENT_ARG_CASE_CHECK_OFF: &str = "no_case_check";
 /// though you might want lower-level control with more advanced uses.
 ///
 /// # Arguments
-/// * `no_case_check` - Turns off `snake_case` checking and doesn't convert names to `PascalCase`.
-/// If you're following coding conventions, you should not need to use this.
-/// However, it is necessary,
-/// because the macro actually *errors* when faced with a non `snake_case` name,
-/// since it's impossible for procedural macros to give warnings.
+/// * `no_case_check` - Doesn't enforce `PascalCase` on your component names.
 ///
 /// # Features
 /// This attribute:
-/// * Renames your `snake_case` function to use `PascalCase`,
-/// without generating any warnings.
+/// * Enforces that your component uses `PascalCase`.
+/// No warnings are generated for the `PascalCase`
+/// function name, but everything else will still raise a warning if it's incorrectly `PascalCase`.
 /// Does not disable warnings anywhere else, so if you, for example,
 /// accidentally don't use `snake_case`
 /// for a variable name in the function, the compiler will still warn you.
@@ -125,7 +122,7 @@ pub(crate) const COMPONENT_ARG_CASE_CHECK_OFF: &str = "no_case_check";
 /// * Without props:
 /// ```rust,ignore
 /// #[component]
-/// fn greet_bob(cx: Scope) -> Element {
+/// fn GreetBob(cx: Scope) -> Element {
 ///     render! { "hello, bob" }
 /// }
 ///
@@ -133,20 +130,20 @@ pub(crate) const COMPONENT_ARG_CASE_CHECK_OFF: &str = "no_case_check";
 ///
 /// #[allow(non_snake_case)]
 /// fn GreetBob(cx: Scope) -> Element {
-///     // There's no function call overhead since __greet_bob has the #[inline(always)] attribute,
+///     #[warn(non_snake_case)]
+///     #[inline(always)]
+///     fn __dx_inner_comp(cx: Scope) -> Element {
+///         render! { "hello, bob" }
+///     }
+///     // There's no function call overhead since __dx_inner_comp has the #[inline(always)] attribute,
 ///     // so don't worry about performance.
-///     __greet_bob(cx)
-/// }
-///
-/// #[inline(always)]
-/// fn __greet_bob(cx: Scope) -> Element {
-///     render! { "hello, bob" }
+///     __dx_inner_comp(cx)
 /// }
 /// ```
-/// * With props and the `no_case_check` argument:
+/// * With props:
 /// ```rust,ignore
 /// #[component(no_case_check)]
-/// fn GREET_PERSON(cx: Scope, person: String) -> Element {
+/// fn GreetPerson(cx: Scope, person: String) -> Element {
 ///     render! { "hello, {person}" }
 /// }
 ///
@@ -154,21 +151,22 @@ pub(crate) const COMPONENT_ARG_CASE_CHECK_OFF: &str = "no_case_check";
 ///
 /// #[derive(Props, PartialEq)]
 /// #[allow(non_camel_case_types)]
-/// struct GREET_PERSONProps {
+/// struct GreetPersonProps {
 ///     person: String,
 /// }
 ///
 /// #[allow(non_snake_case)]
-/// fn GREET_PERSON<'a>(cx: Scope<'a, GREET_PERSONProps>) -> Element {
-///     __greet_person(cx)
-/// }
-///
-/// #[inline(always)]
-/// fn __GREET_PERSON<'a>(cx: Scope<'a, GREET_PERSONProps>) -> Element {
-///     let GREET_PERSONProps { person } = &cx.props;
-///     {
-///         render! { "hello, {person}" }
+/// fn GreetPerson<'a>(cx: Scope<'a, GreetPersonProps>) -> Element {
+///     #[warn(non_snake_case)]
+///     #[inline(always)]
+///     fn __dx_inner_comp<'a>(cx: Scope<'a, GreetPersonProps>e) -> Element {
+///         let GreetPersonProps { person } = &cx.props;
+///         {
+///             render! { "hello, {person}" }
+///         }
 ///     }
+///
+///     __dx_inner_comp(cx)
 /// }
 /// ```
 // TODO: Maybe add an option to input a custom component name through the args.
