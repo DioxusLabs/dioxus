@@ -1,3 +1,5 @@
+#![allow(clippy::type_complexity)]
+
 use std::any::Any;
 use std::fmt::Debug;
 use std::rc::Rc;
@@ -52,7 +54,6 @@ impl From<&str> for IntoRoutable {
 }
 
 /// The properties for a [`Link`].
-#[allow(clippy::type_complexity)]
 #[derive(Props)]
 pub struct LinkProps<'a> {
     /// A class to apply to the generate HTML anchor tag if the `target` route is active.
