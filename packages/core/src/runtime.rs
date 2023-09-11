@@ -27,9 +27,19 @@ pub fn in_runtime<R>(runtime: Rc<Runtime>, f: impl FnOnce() -> R) -> R {
 /// }
 ///
 /// // In a dynamic library
-/// #[inline_props]
-/// fn Component(cx: Scope, runtime: std::rc::Rc<Runtime>) -> Element {
-///     cx.use_hook(|| override_runtime(runtime.clone()));
+/// #[derive(Props)]
+/// struct ComponentProps {
+///    runtime: std::rc::Rc<Runtime>,
+/// }
+///
+/// impl PartialEq for ComponentProps {
+///     fn eq(&self, _other: &Self) -> bool {
+///         true
+///     }
+/// }
+///
+/// fn Component(cx: Scope<ComponentProps>) -> Element {
+///     cx.use_hook(|| override_runtime(cx.props.runtime.clone()));
 ///
 ///     render! { div {} }
 /// }
