@@ -329,7 +329,7 @@ impl Display for SegmentType {
             SegmentType::Static(s) => write!(f, "/{}", s),
             SegmentType::Child => Ok(()),
             SegmentType::Dynamic(s) => write!(f, "/:{}", s),
-            SegmentType::CatchAll(s) => write!(f, "/:...{}", s),
+            SegmentType::CatchAll(s) => write!(f, "/:..{}", s),
         }
     }
 }
