@@ -893,6 +893,16 @@ impl<'b> VirtualDom {
         // Clean up the roots, assuming we need to generate mutations for these
         // This is done last in order to preserve Node ID reclaim order (reclaim in reverse order of claim)
         self.reclaim_roots(node, gen_muts);
+
+        // Clean up the vnode id
+        self.reclaim_vnode_id(node);
+    }
+
+    fn reclaim_vnode_id(&mut self, node: &'b VNode<'b>) {
+        // Clean up the vnode id
+        if let Some(id) = node.stable_id() {
+            self.element_refs.remove(id.0);
+        }
     }
 
     fn reclaim_roots(&mut self, node: &VNode, gen_muts: bool) {

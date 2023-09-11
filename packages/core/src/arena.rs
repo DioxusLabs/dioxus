@@ -89,6 +89,15 @@ impl VirtualDom {
             id,
         });
 
+        // Remove all VNode ids from the scope
+        for id in self.scopes[id.0]
+            .element_refs_to_drop
+            .borrow_mut()
+            .drain(..)
+        {
+            self.element_refs.try_remove(id.0);
+        }
+
         self.ensure_drop_safety(id);
 
         if recursive {
