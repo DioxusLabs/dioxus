@@ -121,6 +121,7 @@ impl InlinePropsDeserializerArgs {
             asyncness,
             ..
         } = sig;
+        let Generics { where_clause, .. } = generics;
 
         let cx_pat = &cx_pat_type.pat;
         let struct_ident = Ident::new(&format!("{fn_ident}Props"), fn_ident.span());
@@ -172,6 +173,7 @@ impl InlinePropsDeserializerArgs {
         parse_quote! {
             #(#fn_attrs)*
             #asyncness #vis fn #fn_ident #fn_generics (#cx_pat: Scope<#scope_lifetime #struct_ident #generics_no_bounds>) #fn_output
+            #where_clause
             {
                 let #struct_ident { #(#struct_field_names),* } = &#cx_pat.props;
                 #fn_block
