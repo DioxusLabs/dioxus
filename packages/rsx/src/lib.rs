@@ -244,14 +244,13 @@ impl<'a> ToTokens for TemplateRenderer<'a> {
                 node_paths: &[ #(#node_paths),* ],
                 attr_paths: &[ #(#attr_paths),* ],
             };
-            ::dioxus::core::VNode {
-                parent: Default::default(),
-                key: #key_tokens,
-                template: std::cell::Cell::new(TEMPLATE),
-                root_ids: dioxus::core::exports::bumpalo::collections::Vec::with_capacity_in(#root_count, __cx.bump()).into(),
-                dynamic_nodes: __cx.bump().alloc([ #( #node_printer ),* ]),
-                dynamic_attrs: __cx.bump().alloc([ #( #dyn_attr_printer ),* ]),
-            }
+            ::dioxus::core::VNode::new(
+                #key_tokens,
+                TEMPLATE,
+                dioxus::core::exports::bumpalo::collections::Vec::with_capacity_in(#root_count, __cx.bump()),
+                __cx.bump().alloc([ #( #node_printer ),* ]),
+                __cx.bump().alloc([ #( #dyn_attr_printer ),* ]),
+            )
         });
     }
 }

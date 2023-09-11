@@ -96,6 +96,9 @@ impl<'b> VirtualDom {
             nodes_mut.resize(len, ElementId::default());
         };
 
+        // Set this node id
+        node.stable_id.set(Some(self.next_vnode_ref(node)));
+
         // The best renderers will have templates prehydrated and registered
         // Just in case, let's create the template using instructions anyways
         self.register_template(node.template.get());
@@ -187,7 +190,7 @@ impl<'b> VirtualDom {
                     path: ElementPath {
                         path: &template.template.get().node_paths[idx],
                     },
-                    template: Some(template.into()),
+                    template: template.stable_id().unwrap(),
                     scope: self.runtime.current_scope_id().unwrap_or(ScopeId(0)),
                 };
                 self.create_dynamic_node(template_ref, node)
@@ -197,10 +200,10 @@ impl<'b> VirtualDom {
                     path: ElementPath {
                         path: &template.template.get().node_paths[idx],
                     },
-                    template: Some(template.into()),
+                    template: template.stable_id().unwrap(),
                     scope: self.runtime.current_scope_id().unwrap_or(ScopeId(0)),
                 };
-                parent.set(Some(self.next_element_ref(template_ref)));
+                parent.set(Some(template_ref));
                 let id = self.set_slot(id);
                 self.mutations.push(CreatePlaceholder { id });
                 1
@@ -286,7 +289,7 @@ impl<'b> VirtualDom {
                 path: ElementPath {
                     path: &template.template.get().node_paths[idx],
                 },
-                template: Some(template.into()),
+                template: template.stable_id().unwrap(),
                 scope: self.runtime.current_scope_id().unwrap_or(ScopeId(0)),
             };
             let m = self.create_dynamic_node(boundary_ref, &template.dynamic_nodes[idx]);
@@ -340,10 +343,10 @@ impl<'b> VirtualDom {
                 let path = &template.template.get().attr_paths[idx];
                 let element_ref = ElementRef {
                     path: ElementPath { path },
-                    template: Some(template.into()),
+                    template: template.stable_id().unwrap(),
                     scope: self.runtime.current_scope_id().unwrap_or(ScopeId(0)),
                 };
-                self.set_template(id, element_ref);
+                self.elements[id.0] = Some(element_ref);
                 self.mutations.push(NewEventListener {
                     // all listeners start with "on"
                     name: &unbounded_name[2..],
@@ -474,7 +477,7 @@ impl<'b> VirtualDom {
 
     pub(crate) fn create_dynamic_node(
         &mut self,
-        parent: ElementRef<'b>,
+        parent: ElementRef,
         node: &'b DynamicNode<'b>,
     ) -> usize {
         use DynamicNode::*;
@@ -486,7 +489,7 @@ impl<'b> VirtualDom {
         }
     }
 
-    fn create_dynamic_text(&mut self, parent: ElementRef<'b>, text: &'b VText<'b>) -> usize {
+    fn create_dynamic_text(&mut self, parent: ElementRef, text: &'b VText<'b>) -> usize {
         // Allocate a dynamic element reference for this text node
         let new_id = self.next_element();
 
@@ -510,7 +513,7 @@ impl<'b> VirtualDom {
     pub(crate) fn create_placeholder(
         &mut self,
         placeholder: &VPlaceholder,
-        parent: ElementRef<'b>,
+        parent: ElementRef,
     ) -> usize {
         // Allocate a dynamic element reference for this text node
         let id = self.next_element();
@@ -519,7 +522,7 @@ impl<'b> VirtualDom {
         placeholder.id.set(Some(id));
 
         // Assign the placeholder's parent
-        placeholder.parent.set(Some(self.next_element_ref(parent)));
+        placeholder.parent.set(Some(parent));
 
         // Assign the ID to the existing node in the template
         self.mutations.push(AssignId {
@@ -533,7 +536,7 @@ impl<'b> VirtualDom {
 
     pub(super) fn create_component_node(
         &mut self,
-        parent: Option<ElementRef<'b>>,
+        parent: Option<ElementRef>,
         component: &'b VComponent<'b>,
     ) -> usize {
         use RenderReturn::*;
@@ -546,10 +549,8 @@ impl<'b> VirtualDom {
         match unsafe { self.run_scope(scope).extend_lifetime_ref() } {
             // Create the component's root element
             Ready(t) => {
-                let created = self.create_scope(scope, t);
                 self.assign_boundary_ref(parent, t);
-                component.bubble_id.set(t.parent.get());
-                created
+                self.create_scope(scope, t)
             }
             Aborted(t) => self.mount_aborted(t, parent),
         }
@@ -567,17 +568,11 @@ impl<'b> VirtualDom {
             .unwrap_or_else(|| component.scope.get().unwrap())
     }
 
-    fn mount_aborted(
-        &mut self,
-        placeholder: &VPlaceholder,
-        parent: Option<ElementRef<'b>>,
-    ) -> usize {
+    fn mount_aborted(&mut self, placeholder: &VPlaceholder, parent: Option<ElementRef>) -> usize {
         let id = self.next_element();
         self.mutations.push(Mutation::CreatePlaceholder { id });
         placeholder.id.set(Some(id));
-        placeholder
-            .parent
-            .set(parent.map(|parent| self.next_element_ref(parent)));
+        placeholder.parent.set(parent);
 
         1
     }

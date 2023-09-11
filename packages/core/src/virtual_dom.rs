@@ -4,19 +4,19 @@
 
 use crate::{
     any_props::VProps,
-    arena::{ElementId, ElementRef},
-    innerlude::{BubbleId, DirtyScope, ErrorBoundary, Mutations, Scheduler, SchedulerMsg},
+    arena::ElementId,
+    innerlude::{DirtyScope, ElementRef, ErrorBoundary, Mutations, Scheduler, SchedulerMsg},
     mutations::Mutation,
     nodes::RenderReturn,
     nodes::{Template, TemplateId},
     runtime::{Runtime, RuntimeGuard},
     scopes::{ScopeId, ScopeState},
-    AttributeValue, Element, Event, Scope,
+    AttributeValue, Element, Event, Scope, VNode,
 };
 use futures_util::{pin_mut, StreamExt};
 use rustc_hash::{FxHashMap, FxHashSet};
 use slab::Slab;
-use std::{any::Any, cell::Cell, collections::BTreeSet, future::Future, rc::Rc};
+use std::{any::Any, cell::Cell, collections::BTreeSet, future::Future, ptr::NonNull, rc::Rc};
 
 /// A virtual node system that progresses user events and diffs UI trees.
 ///
@@ -183,10 +183,10 @@ pub struct VirtualDom {
     pub(crate) templates: FxHashMap<TemplateId, FxHashMap<usize, Template<'static>>>,
 
     // Every element is actually a dual reference - one to the template and the other to the dynamic node in that template
-    pub(crate) element_refs: Slab<ElementRef<'static>>,
+    pub(crate) element_refs: Slab<Option<NonNull<VNode<'static>>>>,
 
     // The element ids that are used in the renderer
-    pub(crate) elements: Slab<Option<BubbleId>>,
+    pub(crate) elements: Slab<Option<ElementRef>>,
 
     pub(crate) mutations: Mutations<'static>,
 
@@ -353,11 +353,16 @@ impl VirtualDom {
         | | |       <-- no, broke early
         |           <-- no, broke early
         */
-        let element = match self.elements.get(element.0) {
+        let parent_path = match self.elements.get(element.0) {
             Some(Some(el)) => el,
             _ => return,
         };
-        let mut parent_path = self.element_refs.get(element.0).cloned();
+        println!("handle_event: {:?}", element);
+        let mut parent_node = self
+            .element_refs
+            .get(parent_path.template.0)
+            .cloned()
+            .map(|el| (*parent_path, el));
         let mut listeners = vec![];
 
         // We will clone this later. The data itself is wrapped in RC to be used in callbacks if required
@@ -369,16 +374,11 @@ impl VirtualDom {
         // If the event bubbles, we traverse through the tree until we find the target element.
         if bubbles {
             // Loop through each dynamic attribute (in a depth first order) in this template before moving up to the template's parent.
-            while let Some(el_ref) = parent_path {
+            while let Some((path, el_ref)) = parent_node {
                 // safety: we maintain references of all vnodes in the element slab
-                let template = unsafe {
-                    el_ref
-                        .template
-                        .expect("template reference should be valid")
-                        .as_ref()
-                };
+                let template = unsafe { el_ref.unwrap().as_ref() };
                 let node_template = template.template.get();
-                let target_path = el_ref.path;
+                let target_path = path.path;
 
                 for (idx, attr) in template.dynamic_attrs.iter().enumerate() {
                     let this_path = node_template.attr_paths[idx];
@@ -402,7 +402,7 @@ impl VirtualDom {
                 // We check the bubble state between each call to see if the event has been stopped from bubbling
                 for listener in listeners.drain(..).rev() {
                     if let AttributeValue::Listener(listener) = listener {
-                        let origin = el_ref.scope;
+                        let origin = path.scope;
                         self.runtime.scope_stack.borrow_mut().push(origin);
                         self.runtime.rendering.set(false);
                         if let Some(cb) = listener.borrow_mut().as_deref_mut() {
@@ -417,18 +417,21 @@ impl VirtualDom {
                     }
                 }
 
-                parent_path = template
-                    .parent
-                    .get()
-                    .and_then(|id| self.element_refs.get(id.0).cloned());
+                parent_node = template.parent.get().and_then(|element_ref| {
+                    println!("handle_event: {:?}", element_ref);
+                    self.element_refs
+                        .get(element_ref.template.0)
+                        .cloned()
+                        .map(|el| (element_ref, el))
+                });
             }
         } else {
             // Otherwise, we just call the listener on the target element
-            if let Some(el_ref) = parent_path {
+            if let Some((path, el_ref)) = parent_node {
                 // safety: we maintain references of all vnodes in the element slab
-                let template = unsafe { el_ref.template.unwrap().as_ref() };
+                let template = unsafe { el_ref.unwrap().as_ref() };
                 let node_template = template.template.get();
-                let target_path = el_ref.path;
+                let target_path = path.path;
 
                 for (idx, attr) in template.dynamic_attrs.iter().enumerate() {
                     let this_path = node_template.attr_paths[idx];
@@ -437,7 +440,7 @@ impl VirtualDom {
                     // Only call the listener if this is the exact target element.
                     if attr.name.trim_start_matches("on") == name && target_path == this_path {
                         if let AttributeValue::Listener(listener) = &attr.value {
-                            let origin = el_ref.scope;
+                            let origin = path.scope;
                             self.runtime.scope_stack.borrow_mut().push(origin);
                             self.runtime.rendering.set(false);
                             if let Some(cb) = listener.borrow_mut().as_deref_mut() {

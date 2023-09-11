@@ -10,7 +10,7 @@ use crate::{
     nodes::{DynamicNode, VNode},
     scopes::ScopeId,
     virtual_dom::VirtualDom,
-    Attribute, AttributeValue, TemplateNode,
+    Attribute, TemplateNode,
 };
 
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -52,7 +52,7 @@ impl<'b> VirtualDom {
                 (Aborted(l), Ready(r)) => self.replace_placeholder(
                     l,
                     [r],
-                    self.element_refs[l.parent.get().expect("root should not be none").0],
+                    l.parent.get().expect("root node should not be none"),
                 ),
             };
         }
@@ -92,9 +92,7 @@ impl<'b> VirtualDom {
                 if let Some(&template) = map.get(&byte_index) {
                     right_template.template.set(template);
                     if template != left_template.template.get() {
-                        let parent = left_template.parent.take().map(|parent_id| unsafe {
-                            std::mem::transmute(self.element_refs[parent_id.0])
-                        });
+                        let parent = left_template.parent.take();
                         return self.replace(left_template, [right_template], parent);
                     }
                 }
@@ -104,6 +102,12 @@ impl<'b> VirtualDom {
         // Copy over the parent
         {
             right_template.parent.set(left_template.parent.get());
+        }
+
+        // Update the bubble id pointer
+        right_template.stable_id.set(left_template.stable_id.get());
+        if let Some(bubble_id) = right_template.stable_id.get() {
+            self.set_template(bubble_id, right_template);
         }
 
         // If the templates are the same, we don't need to do anything, nor do we want to
@@ -128,10 +132,7 @@ impl<'b> VirtualDom {
                 right_attr.mounted_element.set(mounted_element);
 
                 // If the attributes are different (or volatile), we need to update them
-                if let AttributeValue::Listener(_) = left_attr.value {
-                    // Nodes with Listeners always need their pointers updated
-                    self.update_template(mounted_element, right_template);
-                } else if left_attr.value != right_attr.value || left_attr.volatile {
+                if left_attr.value != right_attr.value || left_attr.volatile {
                     self.update_attribute(right_attr, left_attr);
                 }
             });
@@ -144,7 +145,7 @@ impl<'b> VirtualDom {
             .enumerate()
             .for_each(|(dyn_node_idx, (left_node, right_node))| {
                 let current_ref = ElementRef {
-                    template: Some(right_template.into()),
+                    template: right_template.stable_id().unwrap(),
                     path: ElementPath {
                         path: left_template.template.get().node_paths[dyn_node_idx],
                     },
@@ -167,7 +168,7 @@ impl<'b> VirtualDom {
         &mut self,
         left_node: &'b DynamicNode<'b>,
         right_node: &'b DynamicNode<'b>,
-        parent: ElementRef<'b>,
+        parent: ElementRef,
     ) {
         match (left_node, right_node) {
             (Text(left), Text(right)) => self.diff_vtext(left, right),
@@ -175,8 +176,6 @@ impl<'b> VirtualDom {
             (Placeholder(left), Placeholder(right)) => {
                 right.id.set(left.id.get());
                 right.parent.set(left.parent.get());
-                // Update the template
-                self.update_template(left.id.get().unwrap(), parent.template.unwrap().as_ptr());
             },
             (Component(left), Component(right)) => self.diff_vcomponent(left, right, Some(parent)),
             (Placeholder(left), Fragment(right)) => self.replace_placeholder(left, *right, parent),
@@ -201,7 +200,7 @@ impl<'b> VirtualDom {
         &mut self,
         left: &'b VComponent<'b>,
         right: &'b VComponent<'b>,
-        parent: Option<ElementRef<'b>>,
+        parent: Option<ElementRef>,
     ) {
         if std::ptr::eq(left, right) {
             return;
@@ -216,7 +215,6 @@ impl<'b> VirtualDom {
         let scope_id = left.scope.get().unwrap();
 
         right.scope.set(Some(scope_id));
-        right.bubble_id.set(left.bubble_id.get());
 
         // copy out the box for both
         let old = self.scopes[scope_id.0].props.as_ref();
@@ -227,16 +225,6 @@ impl<'b> VirtualDom {
         // The target scopestate still has the reference to the old props, so there's no need to update anything
         // This also implicitly drops the new props since they're not used
         if left.static_props && unsafe { old.as_ref().unwrap().memoize(new.as_ref()) } {
-            if let Some(bubble_id) = right.bubble_id.get() {
-                if let RenderReturn::Ready(new_node) = unsafe {
-                    self.scopes[scope_id.0]
-                        .current_frame()
-                        .try_load_node()
-                        .expect("Call rebuild before diffing")
-                } {
-                    self.update_template_bubble(bubble_id, new_node);
-                }
-            }
             return;
         }
 
@@ -245,16 +233,6 @@ impl<'b> VirtualDom {
 
         // Now run the component and diff it
         self.run_scope(scope_id);
-        if let Some(bubble_id) = right.bubble_id.get() {
-            if let RenderReturn::Ready(new_node) = unsafe {
-                self.scopes[scope_id.0]
-                    .current_frame()
-                    .try_load_node()
-                    .expect("Call rebuild before diffing")
-            } {
-                self.update_template_bubble(bubble_id, new_node);
-            }
-        }
         self.diff_scope(scope_id);
 
         self.dirty_scopes.remove(&DirtyScope {
@@ -267,7 +245,7 @@ impl<'b> VirtualDom {
         &mut self,
         right: &'b VComponent<'b>,
         left: &'b VComponent<'b>,
-        parent: Option<ElementRef<'b>>,
+        parent: Option<ElementRef>,
     ) {
         let m = self.create_component_node(parent, right);
 
@@ -324,10 +302,7 @@ impl<'b> VirtualDom {
     /// }
     /// ```
     fn light_diff_templates(&mut self, left: &'b VNode<'b>, right: &'b VNode<'b>) {
-        let parent = left
-            .parent
-            .take()
-            .map(|parent_id| unsafe { std::mem::transmute(self.element_refs[parent_id.0]) });
+        let parent = left.parent.take();
         match matching_components(left, right) {
             None => self.replace(left, [right], parent),
             Some(components) => components
@@ -354,7 +329,7 @@ impl<'b> VirtualDom {
         &mut self,
         old: &'b [VNode<'b>],
         new: &'b [VNode<'b>],
-        parent: ElementRef<'b>,
+        parent: ElementRef,
     ) {
         let new_is_keyed = new[0].key.is_some();
         let old_is_keyed = old[0].key.is_some();
@@ -386,7 +361,7 @@ impl<'b> VirtualDom {
         &mut self,
         old: &'b [VNode<'b>],
         new: &'b [VNode<'b>],
-        parent: ElementRef<'b>,
+        parent: ElementRef,
     ) {
         use std::cmp::Ordering;
 
@@ -427,7 +402,7 @@ impl<'b> VirtualDom {
         &mut self,
         old: &'b [VNode<'b>],
         new: &'b [VNode<'b>],
-        parent: ElementRef<'b>,
+        parent: ElementRef,
     ) {
         if cfg!(debug_assertions) {
             let mut keys = rustc_hash::FxHashSet::default();
@@ -506,7 +481,7 @@ impl<'b> VirtualDom {
         &mut self,
         old: &'b [VNode<'b>],
         new: &'b [VNode<'b>],
-        parent: ElementRef<'b>,
+        parent: ElementRef,
     ) -> Option<(usize, usize)> {
         let mut left_offset = 0;
 
@@ -565,7 +540,7 @@ impl<'b> VirtualDom {
         &mut self,
         old: &'b [VNode<'b>],
         new: &'b [VNode<'b>],
-        parent: ElementRef<'b>,
+        parent: ElementRef,
     ) {
         /*
         1. Map the old keys into a numerical ordering based on indices.
@@ -804,7 +779,7 @@ impl<'b> VirtualDom {
     fn create_children(
         &mut self,
         nodes: impl IntoIterator<Item = &'b VNode<'b>>,
-        parent: Option<ElementRef<'b>>,
+        parent: Option<ElementRef>,
     ) -> usize {
         nodes.into_iter().fold(0, |acc, child| {
             self.assign_boundary_ref(parent, child);
@@ -816,7 +791,7 @@ impl<'b> VirtualDom {
         &mut self,
         new: &'b [VNode<'b>],
         before: &'b VNode<'b>,
-        parent: ElementRef<'b>,
+        parent: ElementRef,
     ) {
         let m = self.create_children(new, Some(parent));
         let id = self.find_first_element(before);
@@ -827,7 +802,7 @@ impl<'b> VirtualDom {
         &mut self,
         new: &'b [VNode<'b>],
         after: &'b VNode<'b>,
-        parent: ElementRef<'b>,
+        parent: ElementRef,
     ) {
         let m = self.create_children(new, Some(parent));
         let id = self.find_last_element(after);
@@ -839,7 +814,7 @@ impl<'b> VirtualDom {
         &mut self,
         l: &'b VPlaceholder,
         r: impl IntoIterator<Item = &'b VNode<'b>>,
-        parent: ElementRef<'b>,
+        parent: ElementRef,
     ) {
         let m = self.create_children(r, Some(parent));
         let id = l.id.get().unwrap();
@@ -851,7 +826,7 @@ impl<'b> VirtualDom {
         &mut self,
         left: &'b VNode<'b>,
         right: impl IntoIterator<Item = &'b VNode<'b>>,
-        parent: Option<ElementRef<'b>>,
+        parent: Option<ElementRef>,
     ) {
         let m = self.create_children(right, parent);
 
@@ -872,17 +847,12 @@ impl<'b> VirtualDom {
         };
     }
 
-    fn node_to_placeholder(
-        &mut self,
-        l: &'b [VNode<'b>],
-        r: &'b VPlaceholder,
-        parent: ElementRef<'b>,
-    ) {
+    fn node_to_placeholder(&mut self, l: &'b [VNode<'b>], r: &'b VPlaceholder, parent: ElementRef) {
         // Create the placeholder first, ensuring we get a dedicated ID for the placeholder
         let placeholder = self.next_element();
 
         r.id.set(Some(placeholder));
-        r.parent.set(Some(self.next_element_ref(parent)));
+        r.parent.set(Some(parent));
 
         self.mutations
             .push(Mutation::CreatePlaceholder { id: placeholder });
@@ -1079,14 +1049,10 @@ impl<'b> VirtualDom {
         }
     }
 
-    pub(crate) fn assign_boundary_ref(
-        &mut self,
-        parent: Option<ElementRef<'b>>,
-        child: &'b VNode<'b>,
-    ) {
+    pub(crate) fn assign_boundary_ref(&mut self, parent: Option<ElementRef>, child: &'b VNode<'b>) {
         if let Some(parent) = parent {
             // assign the parent of the child
-            child.parent.set(Some(self.next_element_ref(parent)));
+            child.parent.set(Some(parent));
         }
     }
 }

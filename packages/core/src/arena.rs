@@ -1,8 +1,9 @@
+use std::ptr::NonNull;
+
 use crate::{
     innerlude::DirtyScope, nodes::RenderReturn, nodes::VNode, virtual_dom::VirtualDom,
     AttributeValue, DynamicNode, ScopeId,
 };
-use std::ptr::NonNull;
 
 /// An Element's unique identifier.
 ///
@@ -18,15 +19,15 @@ pub struct ElementId(pub usize);
 /// unmounted, then the `BubbleId` will be reused for a new component.
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
-pub struct BubbleId(pub usize);
+pub struct VNodeId(pub usize);
 
 #[derive(Debug, Clone, Copy)]
-pub struct ElementRef<'a> {
+pub struct ElementRef {
     // the pathway of the real element inside the template
     pub(crate) path: ElementPath,
 
     // The actual template
-    pub(crate) template: Option<NonNull<VNode<'a>>>,
+    pub(crate) template: VNodeId,
 
     // The scope the element belongs to
     pub(crate) scope: ScopeId,
@@ -42,11 +43,12 @@ impl VirtualDom {
         ElementId(self.elements.insert(None))
     }
 
-    pub(crate) fn next_element_ref(&mut self, element_ref: ElementRef) -> BubbleId {
-        let new_id = BubbleId(
-            self.element_refs
-                .insert(unsafe { std::mem::transmute(element_ref) }),
-        );
+    pub(crate) fn next_vnode_ref(&mut self, vnode: &VNode) -> VNodeId {
+        let new_id = VNodeId(self.element_refs.insert(Some(unsafe {
+            std::mem::transmute::<NonNull<VNode>, _>(vnode.into())
+        })));
+
+        println!("next_element_ref: {:?}", new_id);
 
         // Set this id to be dropped when the scope is rerun
         if let Some(scope) = self.runtime.current_scope_id() {
@@ -72,30 +74,12 @@ impl VirtualDom {
             );
         }
 
-        self.elements.try_remove(el.0).and_then(|id| match id {
-            Some(id) => self.element_refs.try_remove(id.0).map(|_| ()),
-            None => Some(()),
-        })
+        self.elements.try_remove(el.0).map(|_| ())
     }
 
-    pub(crate) fn set_template(&mut self, el: ElementId, element_ref: ElementRef) {
-        match self.elements[el.0] {
-            Some(bubble_id) => {
-                self.element_refs[bubble_id.0] = unsafe { std::mem::transmute(element_ref) };
-            }
-            None => {
-                self.elements[el.0] = Some(self.next_element_ref(element_ref));
-            }
-        }
-    }
-
-    pub(crate) fn update_template(&mut self, el: ElementId, node: *const VNode) {
-        let bubble_id = self.elements[el.0].unwrap();
-        self.update_template_bubble(bubble_id, node)
-    }
-
-    pub(crate) fn update_template_bubble(&mut self, bubble_id: BubbleId, node: *const VNode) {
-        self.element_refs[bubble_id.0].template = Some(unsafe { std::mem::transmute(node) });
+    pub(crate) fn set_template(&mut self, id: VNodeId, vnode: &VNode) {
+        self.element_refs[id.0] =
+            Some(unsafe { std::mem::transmute::<NonNull<VNode>, _>(vnode.into()) });
     }
 
     // Drop a scope and all its children
@@ -141,9 +125,6 @@ impl VirtualDom {
                     self.drop_scope(f, true);
                 }
                 c.props.take();
-                if let Some(bubble_id) = c.bubble_id.get() {
-                    self.element_refs.try_remove(bubble_id.0);
-                }
             }
             DynamicNode::Fragment(nodes) => {
                 nodes.iter().for_each(|node| self.drop_scope_inner(node))
@@ -162,9 +143,9 @@ impl VirtualDom {
             let mut element_refs = self.scopes[scope_id.0].element_refs_to_drop.borrow_mut();
             let element_refs_slab = &mut self.element_refs;
             for element_ref in element_refs.drain(..) {
-                println!("Dropping element ref {:?}", element_ref);
+                println!("ensure_drop_safety: {:?}", element_ref);
                 if let Some(element_ref) = element_refs_slab.get_mut(element_ref.0) {
-                    element_ref.template = None;
+                    *element_ref = None;
                 }
             }
         }
