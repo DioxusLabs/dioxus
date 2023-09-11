@@ -69,7 +69,7 @@ jobs:
         if: runner.os == 'Linux'
         run: echo "MIRIFLAGS=-Zmiri-tag-gc=1" >> $GITHUB_ENV
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Install Rust ${{ env.rust_nightly }}
         uses: dtolnay/rust-toolchain@master
         with:
