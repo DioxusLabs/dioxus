@@ -22,7 +22,11 @@ impl<E: std::fmt::Display> std::fmt::Display for RouteParseError<E> {
     }
 }
 
-/// Something that can be created from a query string
+/// Something that can be created from a query string.
+///
+/// This trait needs to be implemented if you want to turn a query string into a struct.
+///
+/// A working example can be found in the `examples` folder in the root package under `query_segments_demo`
 pub trait FromQuery {
     /// Create an instance of `Self` from a query string
     fn from_query(query: &str) -> Self;
@@ -30,7 +34,7 @@ pub trait FromQuery {
 
 impl<T: for<'a> From<&'a str>> FromQuery for T {
     fn from_query(query: &str) -> Self {
-        T::from(query)
+        T::from(&*urlencoding::decode(query).expect("Failed to decode url encoding"))
     }
 }
 
@@ -50,8 +54,20 @@ where
     type Err = <T as FromStr>::Err;
 
     fn from_route_segment(route: &str) -> Result<Self, Self::Err> {
-        T::from_str(route)
+        match urlencoding::decode(route) {
+            Ok(segment) => T::from_str(&segment),
+            Err(err) => {
+                log::error!("Failed to decode url encoding: {}", err);
+                T::from_str(route)
+            }
+        }
     }
+}
+
+#[test]
+fn full_circle() {
+    let route = "testing 1234 hello world";
+    assert_eq!(String::from_route_segment(route).unwrap(), route);
 }
 
 /// Something that can be converted to route segments
@@ -67,10 +83,31 @@ where
     fn display_route_segements(self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for segment in self {
             write!(f, "/")?;
-            write!(f, "{}", segment)?;
+            let segment = segment.to_string();
+            match urlencoding::decode(&segment) {
+                Ok(segment) => write!(f, "{}", segment)?,
+                Err(err) => {
+                    log::error!("Failed to decode url encoding: {}", err);
+                    write!(f, "{}", segment)?
+                }
+            }
         }
         Ok(())
     }
+}
+
+#[test]
+fn to_route_segments() {
+    struct DisplaysRoute;
+
+    impl std::fmt::Display for DisplaysRoute {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            let segments = vec!["hello", "world"];
+            segments.display_route_segements(f)
+        }
+    }
+
+    assert_eq!(DisplaysRoute.to_string(), "/hello/world");
 }
 
 /// Something that can be created from route segments

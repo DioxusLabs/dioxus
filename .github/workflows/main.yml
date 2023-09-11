@@ -41,7 +41,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: sudo apt-get update
       - run: sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - run: cargo check --all --examples --tests
 
   test:
@@ -56,7 +56,7 @@ jobs:
       - uses: davidB/rust-cargo-make@v1
       - uses: browser-actions/setup-firefox@latest
       - uses: jetli/wasm-pack-action@v0.4.0
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - run: cargo make tests
 
   fmt:
@@ -67,7 +67,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: rustup component add rustfmt
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - run: cargo fmt --all -- --check
 
   clippy:
@@ -80,7 +80,7 @@ jobs:
       - run: sudo apt-get update
       - run: sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev
       - run: rustup component add clippy
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - run: cargo clippy --workspace --examples --tests -- -D warnings
 
   matrix_test:
@@ -124,7 +124,7 @@ jobs:
             }
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: install stable
         uses: dtolnay/rust-toolchain@master
@@ -154,7 +154,7 @@ jobs:
   #     options: --security-opt seccomp=unconfined
   #   steps:
   #     - name: Checkout repository
-  #       uses: actions/checkout@v3
+  #       uses: actions/checkout@v4
   #     - name: Generate code coverage
   #       run: |
   #         apt-get update &&\

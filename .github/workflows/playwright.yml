@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       # Do our best to cache the toolchain and node install steps
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: actions/setup-node@v3
         with:
           node-version: 16
