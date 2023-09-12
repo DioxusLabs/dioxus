@@ -23,7 +23,7 @@ jobs:
       - name: Setup mdBook
         run: |
           cargo install mdbook --git https://github.com/Demonthos/mdBook.git --branch master
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Build
         run: cd docs &&
