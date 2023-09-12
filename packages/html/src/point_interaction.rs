@@ -7,6 +7,18 @@ use crate::{
 
 /// A interaction that contains data about the location of the event.
 pub trait InteractionLocation {
+    /// Gets the coordinates of the event relative to the browser viewport.
+    fn client_coordinates(&self) -> ClientPoint;
+
+    /// Gets the coordinates of the event relative to the screen.
+    fn screen_coordinates(&self) -> ScreenPoint;
+
+    /// Gets the coordinates of the event relative to the page.
+    fn page_coordinates(&self) -> PagePoint;
+}
+
+/// A interaction that contains data about the location of the event.
+pub trait InteractionElementOffset: InteractionLocation {
     /// Gets the coordinates of the event.
     fn coordinates(&self) -> Coordinates {
         Coordinates::new(
@@ -17,21 +29,12 @@ pub trait InteractionLocation {
         )
     }
 
-    /// Gets the coordinates of the event relative to the browser viewport.
-    fn client_coordinates(&self) -> ClientPoint;
-
-    /// Gets the coordinates of the event relative to the screen.
-    fn screen_coordinates(&self) -> ScreenPoint;
-
     /// Gets the coordinates of the event relative to the target element.
     fn element_coordinates(&self) -> ElementPoint;
-
-    /// Gets the coordinates of the event relative to the page.
-    fn page_coordinates(&self) -> PagePoint;
 }
 
 /// A interaction that contains data about the pointer button(s) that triggered the event.
-pub trait PointerInteraction: InteractionLocation + ModifiersInteraction {
+pub trait PointerInteraction: InteractionElementOffset + ModifiersInteraction {
     /// Gets the button that triggered the event.
     fn trigger_button(&self) -> Option<MouseButton>;
 
@@ -198,11 +201,14 @@ impl InteractionLocation for SerializedPointInteraction {
         ScreenPoint::new(self.screen_x.into(), self.screen_y.into())
     }
 
-    fn element_coordinates(&self) -> ElementPoint {
-        ElementPoint::new(self.offset_x.into(), self.offset_y.into())
-    }
-
     fn page_coordinates(&self) -> PagePoint {
         PagePoint::new(self.page_x.into(), self.page_y.into())
+    }
+}
+
+#[cfg(feature = "serialize")]
+impl InteractionElementOffset for SerializedPointInteraction {
+    fn element_coordinates(&self) -> ElementPoint {
+        ElementPoint::new(self.offset_x.into(), self.offset_y.into())
     }
 }

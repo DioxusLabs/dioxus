@@ -1,6 +1,6 @@
 use crate::events::HasKeyboardData;
 use crate::events::{
-    AnimationData, CompositionData, HasTouchData, KeyboardData, MouseData, PointerData, TouchData,
+    AnimationData, CompositionData, KeyboardData, MouseData, PointerData, TouchData,
     TransitionData, WheelData,
 };
 use crate::geometry::{ClientPoint, ElementPoint, PagePoint, ScreenPoint};
@@ -10,8 +10,8 @@ use keyboard_types::{Code, Key, Modifiers};
 use std::str::FromStr;
 use wasm_bindgen::{JsCast, JsValue};
 use web_sys::{
-    AnimationEvent, CompositionEvent, Event, KeyboardEvent, MouseEvent, PointerEvent, TouchEvent,
-    TransitionEvent, WheelEvent,
+    AnimationEvent, CompositionEvent, Event, KeyboardEvent, MouseEvent, PointerEvent, Touch,
+    TouchEvent, TransitionEvent, WheelEvent,
 };
 
 macro_rules! uncheck_convert {
@@ -69,6 +69,20 @@ impl HasKeyboardData for KeyboardEvent {
         Code::from_str(self.code().as_str()).unwrap_or(Code::Unidentified)
     }
 
+    fn location(&self) -> keyboard_types::Location {
+        decode_key_location(self.location() as usize)
+    }
+
+    fn is_auto_repeating(&self) -> bool {
+        self.repeat()
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+}
+
+impl ModifiersInteraction for KeyboardEvent {
     fn modifiers(&self) -> Modifiers {
         let mut modifiers = Modifiers::empty();
 
@@ -87,18 +101,6 @@ impl HasKeyboardData for KeyboardEvent {
 
         modifiers
     }
-
-    fn location(&self) -> keyboard_types::Location {
-        decode_key_location(self.location() as usize)
-    }
-
-    fn is_auto_repeating(&self) -> bool {
-        self.repeat()
-    }
-
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
 }
 
 impl HasDragData for MouseEvent {}
@@ -108,16 +110,18 @@ impl InteractionLocation for MouseEvent {
         ClientPoint::new(self.client_x().into(), self.client_y().into())
     }
 
-    fn element_coordinates(&self) -> ElementPoint {
-        ElementPoint::new(self.offset_x().into(), self.offset_y().into())
-    }
-
     fn page_coordinates(&self) -> PagePoint {
         PagePoint::new(self.page_x().into(), self.page_y().into())
     }
 
     fn screen_coordinates(&self) -> ScreenPoint {
         ScreenPoint::new(self.screen_x().into(), self.screen_y().into())
+    }
+}
+
+impl InteractionElementOffset for MouseEvent {
+    fn element_coordinates(&self) -> ElementPoint {
+        ElementPoint::new(self.offset_x().into(), self.offset_y().into())
     }
 }
 
@@ -158,25 +162,76 @@ impl HasMouseData for MouseEvent {
     }
 }
 
-impl HasTouchData for TouchEvent {
-    fn alt_key(&self) -> bool {
-        self.alt_key()
-    }
+impl ModifiersInteraction for TouchEvent {
+    fn modifiers(&self) -> Modifiers {
+        let mut modifiers = Modifiers::empty();
 
-    fn ctrl_key(&self) -> bool {
-        self.ctrl_key()
-    }
+        if self.alt_key() {
+            modifiers.insert(Modifiers::ALT);
+        }
+        if self.ctrl_key() {
+            modifiers.insert(Modifiers::CONTROL);
+        }
+        if self.meta_key() {
+            modifiers.insert(Modifiers::META);
+        }
+        if self.shift_key() {
+            modifiers.insert(Modifiers::SHIFT);
+        }
 
-    fn meta_key(&self) -> bool {
-        self.meta_key()
+        modifiers
     }
+}
 
-    fn shift_key(&self) -> bool {
-        self.shift_key()
+impl crate::events::HasTouchData for TouchEvent {
+    fn touches(&self) -> Vec<TouchPoint> {
+        let touches = TouchEvent::touches(self);
+        let mut result = Vec::with_capacity(touches.length() as usize);
+        for i in 0..touches.length() {
+            let touch = touches.get(i).unwrap();
+            result.push(TouchPoint::new(touch));
+        }
+        result
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
         self
+    }
+}
+
+impl HasTouchPointData for Touch {
+    fn identifier(&self) -> i32 {
+        self.identifier()
+    }
+
+    fn radius(&self) -> ScreenPoint {
+        ScreenPoint::new(self.radius_x().into(), self.radius_y().into())
+    }
+
+    fn rotation(&self) -> f64 {
+        self.rotation_angle() as f64
+    }
+
+    fn force(&self) -> f64 {
+        self.force() as f64
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+}
+
+impl InteractionLocation for Touch {
+    fn client_coordinates(&self) -> ClientPoint {
+        ClientPoint::new(self.client_x().into(), self.client_y().into())
+    }
+
+    fn screen_coordinates(&self) -> ScreenPoint {
+        ScreenPoint::new(self.screen_x().into(), self.screen_y().into())
+    }
+
+    fn page_coordinates(&self) -> PagePoint {
+        PagePoint::new(self.page_x().into(), self.page_y().into())
     }
 }
 
@@ -235,12 +290,14 @@ impl InteractionLocation for PointerEvent {
         ScreenPoint::new(self.screen_x().into(), self.screen_y().into())
     }
 
-    fn element_coordinates(&self) -> ElementPoint {
-        ElementPoint::new(self.offset_x().into(), self.offset_y().into())
-    }
-
     fn page_coordinates(&self) -> PagePoint {
         PagePoint::new(self.page_x().into(), self.page_y().into())
+    }
+}
+
+impl InteractionElementOffset for PointerEvent {
+    fn element_coordinates(&self) -> ElementPoint {
+        ElementPoint::new(self.offset_x().into(), self.offset_y().into())
     }
 }
 

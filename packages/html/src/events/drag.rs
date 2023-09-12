@@ -62,16 +62,18 @@ impl InteractionLocation for DragData {
         self.inner.client_coordinates()
     }
 
-    fn element_coordinates(&self) -> ElementPoint {
-        self.inner.element_coordinates()
-    }
-
     fn page_coordinates(&self) -> PagePoint {
         self.inner.page_coordinates()
     }
 
     fn screen_coordinates(&self) -> ScreenPoint {
         self.inner.screen_coordinates()
+    }
+}
+
+impl InteractionElementOffset for DragData {
+    fn element_coordinates(&self) -> ElementPoint {
+        self.inner.element_coordinates()
     }
 
     fn coordinates(&self) -> Coordinates {
@@ -128,16 +130,19 @@ impl InteractionLocation for SerializedDragData {
         self.mouse.client_coordinates()
     }
 
-    fn element_coordinates(&self) -> ElementPoint {
-        self.mouse.element_coordinates()
-    }
-
     fn page_coordinates(&self) -> PagePoint {
         self.mouse.page_coordinates()
     }
 
     fn screen_coordinates(&self) -> ScreenPoint {
         self.mouse.screen_coordinates()
+    }
+}
+
+#[cfg(feature = "serialize")]
+impl InteractionElementOffset for SerializedDragData {
+    fn element_coordinates(&self) -> ElementPoint {
+        self.mouse.element_coordinates()
     }
 
     fn coordinates(&self) -> Coordinates {

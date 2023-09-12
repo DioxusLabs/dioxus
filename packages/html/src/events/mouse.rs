@@ -120,30 +120,22 @@ impl MouseData {
 }
 
 impl InteractionLocation for MouseData {
-    /// The event's coordinates relative to the application's viewport (as opposed to the coordinate within the page).
-    ///
-    /// For example, clicking in the top left corner of the viewport will always result in a mouse event with client coordinates (0., 0.), regardless of whether the page is scrolled horizontally.
     fn client_coordinates(&self) -> ClientPoint {
         self.inner.client_coordinates()
     }
 
-    /// The event's coordinates relative to the padding edge of the target element
-    ///
-    /// For example, clicking in the top left corner of an element will result in element coordinates (0., 0.)
-    fn element_coordinates(&self) -> ElementPoint {
-        self.inner.element_coordinates()
-    }
-
-    /// The event's coordinates relative to the entire document. This includes any portion of the document not currently visible.
-    ///
-    /// For example, if the page is scrolled 200 pixels to the right and 300 pixels down, clicking in the top left corner of the viewport would result in page coordinates (200., 300.)
     fn page_coordinates(&self) -> PagePoint {
         self.inner.page_coordinates()
     }
 
-    /// The event's coordinates relative to the entire screen. This takes into account the window's offset.
     fn screen_coordinates(&self) -> ScreenPoint {
         self.inner.screen_coordinates()
+    }
+}
+
+impl InteractionElementOffset for MouseData {
+    fn element_coordinates(&self) -> ElementPoint {
+        self.inner.element_coordinates()
     }
 
     fn coordinates(&self) -> Coordinates {
@@ -233,16 +225,19 @@ impl InteractionLocation for SerializedMouseData {
         self.point_data.client_coordinates()
     }
 
-    fn element_coordinates(&self) -> ElementPoint {
-        self.point_data.element_coordinates()
-    }
-
     fn page_coordinates(&self) -> PagePoint {
         self.point_data.page_coordinates()
     }
 
     fn screen_coordinates(&self) -> ScreenPoint {
         self.point_data.screen_coordinates()
+    }
+}
+
+#[cfg(feature = "serialize")]
+impl InteractionElementOffset for SerializedMouseData {
+    fn element_coordinates(&self) -> ElementPoint {
+        self.point_data.element_coordinates()
     }
 }
 

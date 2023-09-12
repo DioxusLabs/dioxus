@@ -29,12 +29,13 @@ serde_json = { version = "1", optional = true }
 optional = true
 version = "0.3.56"
 features = [
+    "Touch",
+    "TouchList",
     "TouchEvent",
     "MouseEvent",
     "InputEvent",
     "ClipboardEvent",
     "KeyboardEvent",
-    "TouchEvent",
     "WheelEvent",
     "AnimationEvent",
     "TransitionEvent",

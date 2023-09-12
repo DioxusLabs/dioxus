@@ -198,12 +198,14 @@ impl InteractionLocation for PointerData {
         self.inner.screen_coordinates()
     }
 
-    fn element_coordinates(&self) -> ElementPoint {
-        self.inner.element_coordinates()
-    }
-
     fn page_coordinates(&self) -> PagePoint {
         self.inner.page_coordinates()
+    }
+}
+
+impl InteractionElementOffset for PointerData {
+    fn element_coordinates(&self) -> ElementPoint {
+        self.inner.element_coordinates()
     }
 }
 
@@ -319,12 +321,15 @@ impl InteractionLocation for SerializedPointerData {
         self.point_data.screen_coordinates()
     }
 
-    fn element_coordinates(&self) -> ElementPoint {
-        self.point_data.element_coordinates()
-    }
-
     fn page_coordinates(&self) -> PagePoint {
         self.point_data.page_coordinates()
+    }
+}
+
+#[cfg(feature = "serialize")]
+impl InteractionElementOffset for SerializedPointerData {
+    fn element_coordinates(&self) -> ElementPoint {
+        self.point_data.element_coordinates()
     }
 }
 
