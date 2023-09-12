@@ -179,7 +179,7 @@ fn create_random_dynamic_node(cx: &ScopeState, depth: usize) -> DynamicNode {
                     node_paths: &[&[0]],
                     attr_paths: &[],
                 },
-                bumpalo::collections::Vec::new_in(cx.bump()).into(),
+                bumpalo::collections::Vec::new_in(cx.bump()),
                 cx.bump().alloc([cx.component(
                     create_random_element,
                     DepthProps { depth, root: false },
@@ -275,7 +275,7 @@ fn create_random_element(cx: Scope<DepthProps>) -> Element {
             let node = VNode::new(
                 None,
                 template,
-                bumpalo::collections::Vec::new_in(cx.bump()).into(),
+                bumpalo::collections::Vec::new_in(cx.bump()),
                 {
                     let dynamic_nodes: Vec<_> = dynamic_node_types
                         .iter()
