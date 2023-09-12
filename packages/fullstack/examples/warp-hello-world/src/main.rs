@@ -63,6 +63,6 @@ fn main() {
     tracing_wasm::set_as_global_default();
     #[cfg(feature = "ssr")]
     tracing_subscriber::fmt::init();
-    
+
     LaunchBuilder::new_with_props(app, AppProps { count: 0 }).launch()
 }
