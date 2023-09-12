@@ -19,6 +19,9 @@ impl std::fmt::Debug for TouchData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("TouchData")
             .field("modifiers", &self.modifiers())
+            .field("touches", &self.touches())
+            .field("touches_changed", &self.touches_changed())
+            .field("target_touches", &self.target_touches())
             .finish()
     }
 }
@@ -42,6 +45,16 @@ impl TouchData {
         self.inner.touches()
     }
 
+    /// Get the touches that have changed since the last event
+    pub fn touches_changed(&self) -> Vec<TouchPoint> {
+        self.inner.touches_changed()
+    }
+
+    /// Get the touches that started and stayed on the element that triggered this event
+    pub fn target_touches(&self) -> Vec<TouchPoint> {
+        self.inner.target_touches()
+    }
+
     /// Downcast this event to a concrete event type
     pub fn downcast<T: 'static>(&self) -> Option<&T> {
         self.inner.as_any().downcast_ref::<T>()
@@ -63,6 +76,8 @@ pub struct SerializedTouchData {
     meta_key: bool,
     shift_key: bool,
     touches: Vec<SerializedTouchPoint>,
+    changed_touches: Vec<SerializedTouchPoint>,
+    target_touches: Vec<SerializedTouchPoint>,
 }
 
 #[cfg(feature = "serialize")]
@@ -75,6 +90,8 @@ impl From<&TouchData> for SerializedTouchData {
             meta_key: modifiers.contains(Modifiers::META),
             shift_key: modifiers.contains(Modifiers::SHIFT),
             touches: data.touches().iter().map(|t| t.into()).collect(),
+            changed_touches: data.touches_changed().iter().map(|t| t.into()).collect(),
+            target_touches: data.target_touches().iter().map(|t| t.into()).collect(),
         }
     }
 }
@@ -102,7 +119,23 @@ impl ModifiersInteraction for SerializedTouchData {
 #[cfg(feature = "serialize")]
 impl HasTouchData for SerializedTouchData {
     fn touches(&self) -> Vec<TouchPoint> {
-        Vec::new()
+        self.touches.clone().into_iter().map(Into::into).collect()
+    }
+
+    fn touches_changed(&self) -> Vec<TouchPoint> {
+        self.changed_touches
+            .clone()
+            .into_iter()
+            .map(Into::into)
+            .collect()
+    }
+
+    fn target_touches(&self) -> Vec<TouchPoint> {
+        self.target_touches
+            .clone()
+            .into_iter()
+            .map(Into::into)
+            .collect()
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
@@ -128,8 +161,14 @@ impl<'de> serde::Deserialize<'de> for TouchData {
 }
 
 pub trait HasTouchData: ModifiersInteraction + std::any::Any {
-    /// Get the pointers that are currently down
+    /// Get the touches that are currently down
     fn touches(&self) -> Vec<TouchPoint>;
+
+    /// Get the touches that have changed since the last event
+    fn touches_changed(&self) -> Vec<TouchPoint>;
+
+    /// Get the touches that started and stayed on the element that triggered this event
+    fn target_touches(&self) -> Vec<TouchPoint>;
 
     /// return self as Any
     fn as_any(&self) -> &dyn std::any::Any;
@@ -176,6 +215,20 @@ impl TouchPoint {
     /// Downcast this event to a concrete event type
     pub fn downcast<T: 'static>(&self) -> Option<&T> {
         self.inner.as_any().downcast_ref::<T>()
+    }
+}
+
+impl std::fmt::Debug for TouchPoint {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TouchPoint")
+            .field("client_coordinates", &self.client_coordinates())
+            .field("page_coordinates", &self.page_coordinates())
+            .field("screen_coordinates", &self.screen_coordinates())
+            .field("identifier", &self.identifier())
+            .field("force", &self.force())
+            .field("radius", &self.radius())
+            .field("rotation", &self.rotation())
+            .finish()
     }
 }
 
@@ -248,6 +301,52 @@ impl From<&TouchPoint> for SerializedTouchPoint {
             radius_y: point.radius().y,
             rotation_angle: point.rotation(),
         }
+    }
+}
+
+#[cfg(feature = "serialize")]
+impl HasTouchPointData for SerializedTouchPoint {
+    /// A unique identifier for this touch point that will be the same for the duration of the touch
+    fn identifier(&self) -> i32 {
+        self.identifier
+    }
+
+    /// the pressure of the touch
+    fn force(&self) -> f64 {
+        self.force
+    }
+
+    /// the radius of the touch
+    fn radius(&self) -> ScreenPoint {
+        ScreenPoint::new(self.radius_x, self.radius_y)
+    }
+
+    /// the rotation of the touch in degrees between 0 and 90
+    fn rotation(&self) -> f64 {
+        self.rotation_angle
+    }
+
+    /// return self as Any
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+}
+
+#[cfg(feature = "serialize")]
+impl InteractionLocation for SerializedTouchPoint {
+    /// Gets the coordinates of the event relative to the browser viewport.
+    fn client_coordinates(&self) -> ClientPoint {
+        ClientPoint::new(self.client_x, self.client_y)
+    }
+
+    /// Gets the coordinates of the event relative to the screen.
+    fn screen_coordinates(&self) -> ScreenPoint {
+        ScreenPoint::new(self.screen_x, self.screen_y)
+    }
+
+    /// Gets the coordinates of the event relative to the page.
+    fn page_coordinates(&self) -> PagePoint {
+        PagePoint::new(self.page_x, self.page_y)
     }
 }
 

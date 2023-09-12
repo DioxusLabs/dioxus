@@ -194,6 +194,26 @@ impl crate::events::HasTouchData for TouchEvent {
         result
     }
 
+    fn touches_changed(&self) -> Vec<TouchPoint> {
+        let touches = self.changed_touches();
+        let mut result = Vec::with_capacity(touches.length() as usize);
+        for i in 0..touches.length() {
+            let touch = touches.get(i).unwrap();
+            result.push(TouchPoint::new(touch));
+        }
+        result
+    }
+
+    fn target_touches(&self) -> Vec<TouchPoint> {
+        let touches = self.target_touches();
+        let mut result = Vec::with_capacity(touches.length() as usize);
+        for i in 0..touches.length() {
+            let touch = touches.get(i).unwrap();
+            result.push(TouchPoint::new(touch));
+        }
+        result
+    }
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
