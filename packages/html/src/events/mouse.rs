@@ -1,6 +1,6 @@
 use crate::geometry::{ClientPoint, Coordinates, ElementPoint, PagePoint, ScreenPoint};
 use crate::input_data::{MouseButton, MouseButtonSet};
-use crate::point_interaction::PointInteraction;
+use crate::prelude::*;
 use dioxus_core::Event;
 use keyboard_types::Modifiers;
 
@@ -12,7 +12,7 @@ pub struct MouseData {
     inner: Box<dyn HasMouseData>,
 }
 
-impl<E: HasMouseData> From<E> for MouseData {
+impl<E: HasMouseData + 'static> From<E> for MouseData {
     fn from(e: E) -> Self {
         Self { inner: Box::new(e) }
     }
@@ -39,7 +39,7 @@ impl<E: HasMouseData> PartialEq<E> for MouseData {
 }
 
 /// A trait for any object that has the data for a mouse event
-pub trait HasMouseData: PointInteraction {
+pub trait HasMouseData: PointerInteraction {
     /// return self as Any
     fn as_any(&self) -> &dyn std::any::Any;
 }
@@ -119,7 +119,7 @@ impl MouseData {
     }
 }
 
-impl PointInteraction for MouseData {
+impl InteractionLocation for MouseData {
     /// The event's coordinates relative to the application's viewport (as opposed to the coordinate within the page).
     ///
     /// For example, clicking in the top left corner of the viewport will always result in a mouse event with client coordinates (0., 0.), regardless of whether the page is scrolled horizontally.
@@ -149,12 +149,16 @@ impl PointInteraction for MouseData {
     fn coordinates(&self) -> Coordinates {
         self.inner.coordinates()
     }
+}
 
+impl ModifiersInteraction for MouseData {
     /// The set of modifier keys which were pressed when the event occurred
     fn modifiers(&self) -> Modifiers {
         self.inner.modifiers()
     }
+}
 
+impl PointerInteraction for MouseData {
     /// The set of mouse buttons which were held when the event occurred.
     fn held_buttons(&self) -> MouseButtonSet {
         self.inner.held_buttons()
@@ -224,7 +228,7 @@ impl HasMouseData for SerializedMouseData {
 }
 
 #[cfg(feature = "serialize")]
-impl PointInteraction for SerializedMouseData {
+impl InteractionLocation for SerializedMouseData {
     fn client_coordinates(&self) -> ClientPoint {
         self.point_data.client_coordinates()
     }
@@ -240,11 +244,17 @@ impl PointInteraction for SerializedMouseData {
     fn screen_coordinates(&self) -> ScreenPoint {
         self.point_data.screen_coordinates()
     }
+}
 
+#[cfg(feature = "serialize")]
+impl ModifiersInteraction for SerializedMouseData {
     fn modifiers(&self) -> Modifiers {
         self.point_data.modifiers()
     }
+}
 
+#[cfg(feature = "serialize")]
+impl PointerInteraction for SerializedMouseData {
     fn held_buttons(&self) -> MouseButtonSet {
         self.point_data.held_buttons()
     }

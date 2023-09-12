@@ -1,6 +1,6 @@
 use crate::geometry::{ClientPoint, Coordinates, ElementPoint, PagePoint, ScreenPoint};
 use crate::input_data::{MouseButton, MouseButtonSet};
-use crate::prelude::PointInteraction;
+use crate::prelude::*;
 
 use dioxus_core::Event;
 use keyboard_types::Modifiers;
@@ -17,7 +17,7 @@ pub struct DragData {
     inner: Box<dyn HasDragData>,
 }
 
-impl<E: HasDragData> From<E> for DragData {
+impl<E: HasDragData + 'static> From<E> for DragData {
     fn from(e: E) -> Self {
         Self { inner: Box::new(e) }
     }
@@ -57,7 +57,7 @@ impl DragData {
     }
 }
 
-impl PointInteraction for DragData {
+impl InteractionLocation for DragData {
     fn client_coordinates(&self) -> ClientPoint {
         self.inner.client_coordinates()
     }
@@ -77,11 +77,15 @@ impl PointInteraction for DragData {
     fn coordinates(&self) -> Coordinates {
         self.inner.coordinates()
     }
+}
 
+impl ModifiersInteraction for DragData {
     fn modifiers(&self) -> Modifiers {
         self.inner.modifiers()
     }
+}
 
+impl PointerInteraction for DragData {
     fn held_buttons(&self) -> MouseButtonSet {
         self.inner.held_buttons()
     }
@@ -119,7 +123,7 @@ impl HasMouseData for SerializedDragData {
 }
 
 #[cfg(feature = "serialize")]
-impl crate::prelude::PointInteraction for SerializedDragData {
+impl InteractionLocation for SerializedDragData {
     fn client_coordinates(&self) -> ClientPoint {
         self.mouse.client_coordinates()
     }
@@ -139,11 +143,17 @@ impl crate::prelude::PointInteraction for SerializedDragData {
     fn coordinates(&self) -> Coordinates {
         self.mouse.coordinates()
     }
+}
 
+#[cfg(feature = "serialize")]
+impl ModifiersInteraction for SerializedDragData {
     fn modifiers(&self) -> Modifiers {
         self.mouse.modifiers()
     }
+}
 
+#[cfg(feature = "serialize")]
+impl PointerInteraction for SerializedDragData {
     fn held_buttons(&self) -> MouseButtonSet {
         self.mouse.held_buttons()
     }

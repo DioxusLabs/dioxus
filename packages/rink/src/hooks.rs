@@ -18,7 +18,7 @@ use dioxus_html::input_data::keyboard_types::{Code, Key, Location, Modifiers};
 use dioxus_html::input_data::{
     MouseButton as DioxusMouseButton, MouseButtonSet as DioxusMouseButtons,
 };
-use dioxus_html::{event_bubbles, prelude::PointInteraction};
+use dioxus_html::{event_bubbles, prelude::*};
 use std::any::Any;
 use std::collections::HashMap;
 use std::{

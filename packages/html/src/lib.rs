@@ -45,6 +45,6 @@ pub mod prelude {
     #[cfg(feature = "eval")]
     pub use crate::eval::*;
     pub use crate::events::*;
-    pub use crate::point_interaction::PointInteraction;
+    pub use crate::point_interaction::*;
     pub use keyboard_types::{self, Code, Key, Location, Modifiers};
 }

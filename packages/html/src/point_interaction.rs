@@ -5,8 +5,9 @@ use crate::{
     input_data::{MouseButton, MouseButtonSet},
 };
 
-pub trait PointInteraction: std::any::Any {
-    /// Gets the coordinates of the pointer event.
+/// A interaction that contains data about the location of the event.
+pub trait InteractionLocation {
+    /// Gets the coordinates of the event.
     fn coordinates(&self) -> Coordinates {
         Coordinates::new(
             self.screen_coordinates(),
@@ -16,26 +17,32 @@ pub trait PointInteraction: std::any::Any {
         )
     }
 
-    /// Gets the coordinates of the pointer event relative to the browser viewport.
+    /// Gets the coordinates of the event relative to the browser viewport.
     fn client_coordinates(&self) -> ClientPoint;
 
-    /// Gets the coordinates of the pointer event relative to the screen.
+    /// Gets the coordinates of the event relative to the screen.
     fn screen_coordinates(&self) -> ScreenPoint;
 
-    /// Gets the coordinates of the pointer event relative to the target element.
+    /// Gets the coordinates of the event relative to the target element.
     fn element_coordinates(&self) -> ElementPoint;
 
-    /// Gets the coordinates of the pointer event relative to the page.
+    /// Gets the coordinates of the event relative to the page.
     fn page_coordinates(&self) -> PagePoint;
+}
 
-    /// Gets the modifiers of the pointer event.
-    fn modifiers(&self) -> Modifiers;
+/// A interaction that contains data about the pointer button(s) that triggered the event.
+pub trait PointerInteraction: InteractionLocation + ModifiersInteraction {
+    /// Gets the button that triggered the event.
+    fn trigger_button(&self) -> Option<MouseButton>;
 
     /// Gets the buttons that are currently held down.
     fn held_buttons(&self) -> MouseButtonSet;
+}
 
-    /// Gets the button that triggered the event.
-    fn trigger_button(&self) -> Option<MouseButton>;
+/// A interaction that contains data about the current state of the keyboard modifiers.
+pub trait ModifiersInteraction {
+    /// Gets the modifiers of the pointer event.
+    fn modifiers(&self) -> Modifiers;
 }
 
 #[cfg(feature = "serialize")]
@@ -138,7 +145,7 @@ impl SerializedPointInteraction {
 }
 
 #[cfg(feature = "serialize")]
-impl<E: PointInteraction> From<&E> for SerializedPointInteraction {
+impl<E: PointerInteraction> From<&E> for SerializedPointInteraction {
     fn from(data: &E) -> Self {
         let trigger_button = data.trigger_button();
         let held_buttons = data.held_buttons();
@@ -149,23 +156,18 @@ impl<E: PointInteraction> From<&E> for SerializedPointInteraction {
 }
 
 #[cfg(feature = "serialize")]
-impl PointInteraction for SerializedPointInteraction {
-    fn client_coordinates(&self) -> ClientPoint {
-        ClientPoint::new(self.client_x.into(), self.client_y.into())
+impl PointerInteraction for SerializedPointInteraction {
+    fn held_buttons(&self) -> MouseButtonSet {
+        crate::input_data::decode_mouse_button_set(self.buttons)
     }
 
-    fn screen_coordinates(&self) -> ScreenPoint {
-        ScreenPoint::new(self.screen_x.into(), self.screen_y.into())
+    fn trigger_button(&self) -> Option<MouseButton> {
+        Some(MouseButton::from_web_code(self.button))
     }
+}
 
-    fn element_coordinates(&self) -> ElementPoint {
-        ElementPoint::new(self.offset_x.into(), self.offset_y.into())
-    }
-
-    fn page_coordinates(&self) -> PagePoint {
-        PagePoint::new(self.page_x.into(), self.page_y.into())
-    }
-
+#[cfg(feature = "serialize")]
+impl ModifiersInteraction for SerializedPointInteraction {
     fn modifiers(&self) -> Modifiers {
         let mut modifiers = Modifiers::empty();
 
@@ -184,12 +186,23 @@ impl PointInteraction for SerializedPointInteraction {
 
         modifiers
     }
+}
 
-    fn held_buttons(&self) -> MouseButtonSet {
-        crate::input_data::decode_mouse_button_set(self.buttons)
+#[cfg(feature = "serialize")]
+impl InteractionLocation for SerializedPointInteraction {
+    fn client_coordinates(&self) -> ClientPoint {
+        ClientPoint::new(self.client_x.into(), self.client_y.into())
     }
 
-    fn trigger_button(&self) -> Option<MouseButton> {
-        Some(MouseButton::from_web_code(self.button))
+    fn screen_coordinates(&self) -> ScreenPoint {
+        ScreenPoint::new(self.screen_x.into(), self.screen_y.into())
+    }
+
+    fn element_coordinates(&self) -> ElementPoint {
+        ElementPoint::new(self.offset_x.into(), self.offset_y.into())
+    }
+
+    fn page_coordinates(&self) -> PagePoint {
+        PagePoint::new(self.page_x.into(), self.page_y.into())
     }
 }

@@ -1,7 +1,7 @@
 use dioxus_core::Event;
 use keyboard_types::Modifiers;
 
-use crate::{geometry::*, input_data::*, point_interaction::PointInteraction};
+use crate::{geometry::*, input_data::*, prelude::*};
 
 /// A synthetic event that wraps a web-style [`PointerEvent`](https://developer.mozilla.org/en-US/docs/Web/API/PointerEvent)
 pub type PointerEvent = Event<PointerData>;
@@ -22,7 +22,7 @@ impl PointerData {
     }
 }
 
-impl<E: HasPointerData> From<E> for PointerData {
+impl<E: HasPointerData + 'static> From<E> for PointerData {
     fn from(e: E) -> Self {
         Self { inner: Box::new(e) }
     }
@@ -69,7 +69,7 @@ impl PartialEq for PointerData {
 }
 
 /// A trait for any object that has the data for a pointer event
-pub trait HasPointerData: PointInteraction {
+pub trait HasPointerData: PointerInteraction {
     /// Gets the unique identifier of the pointer causing the event.
     fn pointer_id(&self) -> i32;
 
@@ -189,7 +189,7 @@ impl PointerData {
     }
 }
 
-impl PointInteraction for PointerData {
+impl InteractionLocation for PointerData {
     fn client_coordinates(&self) -> ClientPoint {
         self.inner.client_coordinates()
     }
@@ -205,11 +205,15 @@ impl PointInteraction for PointerData {
     fn page_coordinates(&self) -> PagePoint {
         self.inner.page_coordinates()
     }
+}
 
+impl ModifiersInteraction for PointerData {
     fn modifiers(&self) -> Modifiers {
         self.inner.modifiers()
     }
+}
 
+impl PointerInteraction for PointerData {
     fn held_buttons(&self) -> MouseButtonSet {
         self.inner.held_buttons()
     }
@@ -306,7 +310,7 @@ impl HasPointerData for SerializedPointerData {
 }
 
 #[cfg(feature = "serialize")]
-impl PointInteraction for SerializedPointerData {
+impl InteractionLocation for SerializedPointerData {
     fn client_coordinates(&self) -> ClientPoint {
         self.point_data.client_coordinates()
     }
@@ -322,11 +326,17 @@ impl PointInteraction for SerializedPointerData {
     fn page_coordinates(&self) -> PagePoint {
         self.point_data.page_coordinates()
     }
+}
 
+#[cfg(feature = "serialize")]
+impl ModifiersInteraction for SerializedPointerData {
     fn modifiers(&self) -> Modifiers {
         self.point_data.modifiers()
     }
+}
 
+#[cfg(feature = "serialize")]
+impl PointerInteraction for SerializedPointerData {
     fn held_buttons(&self) -> MouseButtonSet {
         self.point_data.held_buttons()
     }

@@ -103,7 +103,7 @@ impl HasKeyboardData for KeyboardEvent {
 
 impl HasDragData for MouseEvent {}
 
-impl PointInteraction for MouseEvent {
+impl InteractionLocation for MouseEvent {
     fn client_coordinates(&self) -> ClientPoint {
         ClientPoint::new(self.client_x().into(), self.client_y().into())
     }
@@ -119,7 +119,9 @@ impl PointInteraction for MouseEvent {
     fn screen_coordinates(&self) -> ScreenPoint {
         ScreenPoint::new(self.screen_x().into(), self.screen_y().into())
     }
+}
 
+impl ModifiersInteraction for MouseEvent {
     fn modifiers(&self) -> Modifiers {
         let mut modifiers = Modifiers::empty();
 
@@ -138,7 +140,9 @@ impl PointInteraction for MouseEvent {
 
         modifiers
     }
+}
 
+impl PointerInteraction for MouseEvent {
     fn held_buttons(&self) -> crate::input_data::MouseButtonSet {
         decode_mouse_button_set(self.buttons())
     }
@@ -222,7 +226,7 @@ impl HasPointerData for PointerEvent {
     }
 }
 
-impl PointInteraction for PointerEvent {
+impl InteractionLocation for PointerEvent {
     fn client_coordinates(&self) -> ClientPoint {
         ClientPoint::new(self.client_x().into(), self.client_y().into())
     }
@@ -238,7 +242,9 @@ impl PointInteraction for PointerEvent {
     fn page_coordinates(&self) -> PagePoint {
         PagePoint::new(self.page_x().into(), self.page_y().into())
     }
+}
 
+impl ModifiersInteraction for PointerEvent {
     fn modifiers(&self) -> Modifiers {
         let mut modifiers = Modifiers::empty();
 
@@ -257,7 +263,9 @@ impl PointInteraction for PointerEvent {
 
         modifiers
     }
+}
 
+impl PointerInteraction for PointerEvent {
     fn held_buttons(&self) -> crate::input_data::MouseButtonSet {
         decode_mouse_button_set(self.buttons())
     }
