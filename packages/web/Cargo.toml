@@ -75,3 +75,4 @@ wasm-logger = "0.2.0"
 gloo-timers = "0.2.3"
 gloo-dialogs = "0.1.1"
 dioxus-web = { path = ".", features = ["hydrate"] }
+tracing-wasm = "0.2.1"
