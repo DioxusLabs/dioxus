@@ -210,7 +210,7 @@ pub fn routable(input: TokenStream) -> TokenStream {
     let display_impl = route_enum.impl_display();
     let routable_impl = route_enum.routable_impl();
 
-    quote! {
+    (quote! {
         #error_type
 
         #display_impl
@@ -218,7 +218,7 @@ pub fn routable(input: TokenStream) -> TokenStream {
         #routable_impl
 
         #parse_impl
-    }
+    })
     .into()
 }
 
