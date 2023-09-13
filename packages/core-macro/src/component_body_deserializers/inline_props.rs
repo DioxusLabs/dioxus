@@ -51,7 +51,21 @@ impl InlinePropsDeserializerArgs {
 
         // Skip first arg since that's the context
         let struct_fields = inputs.iter().skip(1).map(move |f| {
-            quote! { #vis #f }
+            match f {
+                FnArg::Receiver(_) => unreachable!(), // Unreachable because of ComponentBody parsing
+                FnArg::Typed(pt) => {
+                    let arg_pat = &pt.pat; // Pattern (identifier)
+                    let arg_colon = &pt.colon_token;
+                    let arg_ty = &pt.ty; // Type
+                    let arg_attrs = &pt.attrs; // Attributes
+                    
+                    quote! {
+                        #(#arg_attrs)
+                        *
+                        #vis #arg_pat #arg_colon #arg_ty
+                    }
+                }
+            }
         });
 
         let struct_ident = Ident::new(&format!("{fn_ident}Props"), fn_ident.span());
