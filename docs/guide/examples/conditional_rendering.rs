@@ -1,5 +1,6 @@
 #![allow(unused)]
 #![allow(non_snake_case)]
+
 use dioxus::prelude::*;
 
 fn main() {
@@ -16,7 +17,7 @@ pub fn App(cx: Scope) -> Element {
     }))
 }
 
-#[inline_props]
+#[component]
 #[rustfmt::skip]
 fn LogIn<'a>(
     cx: Scope<'a>,
