@@ -47,13 +47,13 @@ where
         if first_run {
             match crate::html_storage::deserialize::take_server_data() {
                 Some(data) => {
-                    log::trace!("Loaded {data:?} from server");
+                    tracing::trace!("Loaded {data:?} from server");
                     *state.value.borrow_mut() = Some(Box::new(data));
                     state.needs_regen.set(false);
                     return Some(state);
                 }
                 None => {
-                    log::trace!("Failed to load from server... running future");
+                    tracing::trace!("Failed to load from server... running future");
                 }
             };
         }
@@ -82,7 +82,7 @@ where
                 data = fut.await;
                 if first_run {
                     if let Err(err) = crate::prelude::server_context().push_html_data(&data) {
-                        log::error!("Failed to push HTML data: {}", err);
+                        tracing::error!("Failed to push HTML data: {}", err);
                     };
                 }
             }
@@ -99,7 +99,7 @@ where
     if first_run {
         #[cfg(feature = "ssr")]
         {
-            log::trace!("Suspending first run of use_server_future");
+            tracing::trace!("Suspending first run of use_server_future");
             cx.suspend();
         }
         None

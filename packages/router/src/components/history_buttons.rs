@@ -1,5 +1,5 @@
 use dioxus::prelude::*;
-use log::error;
+use tracing::error;
 
 use crate::utils::use_router_internal::use_router_internal;
 

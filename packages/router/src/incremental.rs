@@ -59,8 +59,8 @@ where
                     .await?;
                 }
                 Err(e) => {
-                    log::info!("@ route: {}", full_path);
-                    log::error!("Error pre-caching static route: {}", e);
+                    tracing::info!("@ route: {}", full_path);
+                    tracing::error!("Error pre-caching static route: {}", e);
                 }
             }
         }
