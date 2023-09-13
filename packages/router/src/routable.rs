@@ -3,7 +3,7 @@
 #![allow(non_snake_case)]
 use dioxus::prelude::*;
 
-use std::iter::{Filter, FilterMap, FlatMap};
+use std::iter::{FilterMap, FlatMap};
 use std::slice::Iter;
 use std::{fmt::Display, str::FromStr};
 
@@ -140,6 +140,17 @@ type SiteMapFlattened<'a> = FlatMap<
     fn(&SiteMapSegment) -> Vec<Vec<SegmentType>>,
 >;
 
+fn routes_to_str<T>(routes_maybe: &Option<Vec<&str>>) -> Option<T>
+where
+    T: Routable,
+{
+    if let Some(routes) = routes_maybe {
+        T::from_str(&(String::from('/') + &routes.join("/"))).ok()
+    } else {
+        None
+    }
+}
+
 /// Something that can be:
 /// 1. Converted from a route.
 /// 2. Converted to a route.
@@ -251,7 +262,7 @@ pub trait Routable: FromStr + Display + Clone + 'static {
     /// Gets a list of all routes, regardless of type.
     fn all_routes() -> Vec<Self> {
         Self::filter_map_routes(|route| {
-            let route_if_static = &route
+            let route_maybe = &route
                 .iter()
                 .map(|segment| match segment {
                     SegmentType::Static(s) => Some(*s),
@@ -261,11 +272,7 @@ pub trait Routable: FromStr + Display + Clone + 'static {
                 })
                 .collect::<Option<Vec<_>>>();
 
-            if let Some(route) = route_if_static {
-                Self::from_str(&(String::from('/') + &route.join("/"))).ok()
-            } else {
-                None
-            }
+            routes_to_str(route_maybe)
         })
         .collect()
     }
@@ -282,11 +289,7 @@ pub trait Routable: FromStr + Display + Clone + 'static {
                 })
                 .collect::<Option<Vec<_>>>();
 
-            if let Some(route) = route_if_static {
-                Self::from_str(&(String::from('/') + &route.join("/"))).ok()
-            } else {
-                None
-            }
+            routes_to_str(route_if_static)
         })
         .collect()
     }
@@ -303,11 +306,7 @@ pub trait Routable: FromStr + Display + Clone + 'static {
                 })
                 .collect::<Option<Vec<_>>>();
 
-            if let Some(route) = route_if_dynamic {
-                Self::from_str(&(String::from('/') + &route.join("/"))).ok()
-            } else {
-                None
-            }
+            routes_to_str(route_if_dynamic)
         })
         .collect()
     }
@@ -327,11 +326,7 @@ pub trait Routable: FromStr + Display + Clone + 'static {
                     })
                     .collect::<Option<Vec<_>>>();
 
-                if let Some(route) = route_if_static {
-                    Self::from_str(&(String::from('/') + &route.join("/"))).ok()
-                } else {
-                    None
-                }
+                routes_to_str(route_if_static)
             })
             .collect()
     }
