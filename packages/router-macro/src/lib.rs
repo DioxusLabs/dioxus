@@ -678,9 +678,9 @@ impl ToTokens for SegmentType {
 impl<'a> From<&'a RouteSegment> for SegmentType {
     fn from(value: &'a RouteSegment) -> Self {
         match value {
-            segment::RouteSegment::Static(s) => SegmentType::Static(s.to_string()),
-            segment::RouteSegment::Dynamic(s, _) => SegmentType::Dynamic(s.to_string()),
-            segment::RouteSegment::CatchAll(s, _) => SegmentType::CatchAll(s.to_string()),
+            RouteSegment::Static(s) => SegmentType::Static(s.to_string()),
+            RouteSegment::Dynamic(s, _) => SegmentType::Dynamic(s.to_string()),
+            RouteSegment::CatchAll(s, _) => SegmentType::CatchAll(s.to_string()),
         }
     }
 }

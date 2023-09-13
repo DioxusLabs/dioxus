@@ -3,16 +3,18 @@
 #![allow(non_snake_case)]
 use dioxus::prelude::*;
 
+use std::iter::{Filter, FilterMap, FlatMap};
+use std::slice::Iter;
 use std::{fmt::Display, str::FromStr};
 
 /// An error that occurs when parsing a route.
 #[derive(Debug, PartialEq)]
-pub struct RouteParseError<E: std::fmt::Display> {
+pub struct RouteParseError<E: Display> {
     /// The attempted routes that failed to match.
     pub attempted_routes: Vec<E>,
 }
 
-impl<E: std::fmt::Display> std::fmt::Display for RouteParseError<E> {
+impl<E: Display> Display for RouteParseError<E> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Route did not match:\nAttempted Matches:\n")?;
         for (i, route) in self.attempted_routes.iter().enumerate() {
@@ -49,7 +51,7 @@ pub trait FromRouteSegment: Sized {
 
 impl<T: FromStr> FromRouteSegment for T
 where
-    <T as FromStr>::Err: std::fmt::Display,
+    <T as FromStr>::Err: Display,
 {
     type Err = <T as FromStr>::Err;
 
@@ -76,7 +78,7 @@ pub trait ToRouteSegments {
     fn display_route_segments(self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result;
 }
 
-impl<I, T: std::fmt::Display> ToRouteSegments for I
+impl<I, T: Display> ToRouteSegments for I
 where
     I: IntoIterator<Item = T>,
 {
@@ -100,7 +102,7 @@ where
 fn to_route_segments() {
     struct DisplaysRoute;
 
-    impl std::fmt::Display for DisplaysRoute {
+    impl Display for DisplaysRoute {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             let segments = vec!["hello", "world"];
             segments.display_route_segments(f)
@@ -130,13 +132,21 @@ impl<I: std::iter::FromIterator<String>> FromRouteSegments for I {
     }
 }
 
+/// A flattened version of [`Routable::SITE_MAP`].
+/// This essentially represents a `Vec<Vec<SegmentType>>`, which you can collect it into.
+type SiteMapFlattened<'a> = FlatMap<
+    Iter<'a, SiteMapSegment>,
+    Vec<Vec<SegmentType>>,
+    fn(&SiteMapSegment) -> Vec<Vec<SegmentType>>,
+>;
+
 /// Something that can be:
 /// 1. Converted from a route.
 /// 2. Converted to a route.
 /// 3. Rendered as a component.
 ///
 /// This trait can be derived using the `#[derive(Routable)]` macro.
-pub trait Routable: std::fmt::Display + std::str::FromStr + Clone + 'static {
+pub trait Routable: FromStr + Display + Clone + 'static {
     /// The error that can occur when parsing a route.
     const SITE_MAP: &'static [SiteMapSegment];
 
@@ -225,27 +235,100 @@ pub trait Routable: std::fmt::Display + std::str::FromStr + Clone + 'static {
         Self::from_str(&new_route).ok()
     }
 
+    /// Returns a flattened version of [`Self::SITE_MAP`].
+    fn flatten_site_map<'a>() -> SiteMapFlattened<'a> {
+        Self::SITE_MAP.iter().flat_map(SiteMapSegment::flatten)
+    }
+
+    /// Calls a [`Iterator::filter_map`] on [`SiteMapFlattened`].
+    fn filter_map_routes<'a, B, F>(f: F) -> FilterMap<SiteMapFlattened<'a>, F>
+    where
+        F: FnMut(Vec<SegmentType>) -> Option<B>,
+    {
+        Self::flatten_site_map().filter_map(f)
+    }
+
+    /// Gets a list of all routes, regardless of type.
+    fn all_routes() -> Vec<Self> {
+        Self::filter_map_routes(|route| {
+            let route_if_static = &route
+                .iter()
+                .map(|segment| match segment {
+                    SegmentType::Static(s) => Some(*s),
+                    SegmentType::Dynamic(s) => Some(*s),
+                    SegmentType::CatchAll(s) => Some(*s),
+                    SegmentType::Child => None,
+                })
+                .collect::<Option<Vec<_>>>();
+
+            if let Some(route) = route_if_static {
+                Self::from_str(&(String::from('/') + &route.join("/"))).ok()
+            } else {
+                None
+            }
+        })
+        .collect()
+    }
+
+    /// Gets a list of all catch all routes.
+    /// Example catch all route: `#[route("/catch/:..routes")]`
+    fn catch_all_routes() -> Vec<Self> {
+        Self::filter_map_routes(|route| {
+            let route_if_static = &route
+                .iter()
+                .map(|segment| match segment {
+                    SegmentType::CatchAll(s) => Some(*s),
+                    _ => None,
+                })
+                .collect::<Option<Vec<_>>>();
+
+            if let Some(route) = route_if_static {
+                Self::from_str(&(String::from('/') + &route.join("/"))).ok()
+            } else {
+                None
+            }
+        })
+        .collect()
+    }
+
+    /// Gets a list of all dynamic routes.
+    /// Example dynamic route: `#[route("/dynamic/:id")]`
+    fn dynamic_routes() -> Vec<Self> {
+        Self::filter_map_routes(|route| {
+            let route_if_dynamic = &route
+                .iter()
+                .map(|segment| match segment {
+                    SegmentType::Dynamic(s) => Some(*s),
+                    _ => None,
+                })
+                .collect::<Option<Vec<_>>>();
+
+            if let Some(route) = route_if_dynamic {
+                Self::from_str(&(String::from('/') + &route.join("/"))).ok()
+            } else {
+                None
+            }
+        })
+        .collect()
+    }
+
     /// Gets a list of all the static routes.
+    /// Example static route: `#[route("/static/route")]`
     fn static_routes() -> Vec<Self> {
         Self::SITE_MAP
             .iter()
-            .flat_map(|segment| segment.flatten())
+            .flat_map(SiteMapSegment::flatten)
             .filter_map(|route| {
-                if route
+                let route_if_static = &route
                     .iter()
-                    .all(|segment| matches!(segment, SegmentType::Static(_)))
-                {
-                    Self::from_str(
-                        &route
-                            .iter()
-                            .map(|segment| match segment {
-                                SegmentType::Static(s) => s.to_string(),
-                                _ => unreachable!(),
-                            })
-                            .collect::<Vec<_>>()
-                            .join("/"),
-                    )
-                    .ok()
+                    .map(|segment| match segment {
+                        SegmentType::Static(s) => Some(*s),
+                        _ => None,
+                    })
+                    .collect::<Option<Vec<_>>>();
+
+                if let Some(route) = route_if_static {
+                    Self::from_str(&(String::from('/') + &route.join("/"))).ok()
                 } else {
                     None
                 }
@@ -255,25 +338,25 @@ pub trait Routable: std::fmt::Display + std::str::FromStr + Clone + 'static {
 }
 
 trait RoutableFactory {
-    type Err: std::fmt::Display;
+    type Err: Display;
     type Routable: Routable + FromStr<Err = Self::Err>;
 }
 
 impl<R: Routable + FromStr> RoutableFactory for R
 where
-    <R as FromStr>::Err: std::fmt::Display,
+    <R as FromStr>::Err: Display,
 {
     type Err = <R as FromStr>::Err;
     type Routable = R;
 }
 
-trait RouteRenderable: std::fmt::Display + 'static {
+trait RouteRenderable: Display + 'static {
     fn render<'a>(&self, cx: &'a ScopeState, level: usize) -> Element<'a>;
 }
 
 impl<R: Routable> RouteRenderable for R
 where
-    <R as FromStr>::Err: std::fmt::Display,
+    <R as FromStr>::Err: Display,
 {
     fn render<'a>(&self, cx: &'a ScopeState, level: usize) -> Element<'a> {
         self.render(cx, level)
