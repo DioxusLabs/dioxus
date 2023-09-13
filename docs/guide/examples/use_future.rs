@@ -1,4 +1,4 @@
-#![allow(non_snake_case, unused)]
+#![allow(unused)]
 
 use dioxus::prelude::*;
 
@@ -12,6 +12,7 @@ struct ApiResponse {
     image_url: String,
 }
 
+#[component]
 #[rustfmt::skip]
 fn App(cx: Scope) -> Element {
 // ANCHOR: use_future
@@ -46,7 +47,7 @@ cx.render(match future.value() {
 }
 
 #[rustfmt::skip]
-#[inline_props]
+#[component]
 fn RandomDog(cx: Scope, breed: String) -> Element {
 // ANCHOR: dependency
 let future = use_future(cx, (breed,), |(breed,)| async move {

@@ -57,6 +57,7 @@ If we represented the reactive graph presented above in Dioxus, it would look ve
 
 ```rust, no_run
 // Declare a component that holds our datasources and calculates `g`
+#[component]
 fn RenderGraph(cx: Scope) -> Element {
     let seconds = use_datasource(SECONDS);
     let constant = use_state(cx, || 1);
@@ -68,13 +69,13 @@ fn RenderGraph(cx: Scope) -> Element {
 }
 
 // "calculate" g by rendering `t` and `seconds`
-#[inline_props]
+#[component]
 fn RenderG(cx: Scope, seconds: i32) -> Element {
     cx.render(rsx!{ "There are {seconds} seconds remaining..." })
 }
 
 // calculate and render `t` in its own component
-#[inline_props]
+#[component]
 fn RenderT(cx: Scope, seconds: i32, constant: i32) -> Element {
     let res = seconds + constant;
     cx.render(rsx!{ "{res}" })

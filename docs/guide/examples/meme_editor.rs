@@ -1,6 +1,4 @@
 // ANCHOR: all
-#![allow(non_snake_case)]
-
 use dioxus::prelude::*;
 
 fn main() {
@@ -8,6 +6,7 @@ fn main() {
 }
 
 // ANCHOR: meme_editor
+#[component]
 fn MemeEditor(cx: Scope) -> Element {
     let container_style = r"
         display: flex;
@@ -36,7 +35,7 @@ fn MemeEditor(cx: Scope) -> Element {
 // ANCHOR_END: meme_editor
 
 // ANCHOR: meme_component
-#[inline_props]
+#[component]
 fn Meme<'a>(cx: Scope<'a>, caption: &'a str) -> Element<'a> {
     let container_style = r#"
         position: relative;
@@ -78,7 +77,7 @@ fn Meme<'a>(cx: Scope<'a>, caption: &'a str) -> Element<'a> {
 // ANCHOR_END: meme_component
 
 // ANCHOR: caption_editor
-#[inline_props]
+#[component]
 fn CaptionEditor<'a>(
     cx: Scope<'a>,
     caption: &'a str,

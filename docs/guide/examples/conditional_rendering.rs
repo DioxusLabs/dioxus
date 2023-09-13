@@ -1,5 +1,4 @@
 #![allow(unused)]
-#![allow(non_snake_case)]
 
 use dioxus::prelude::*;
 
@@ -7,6 +6,7 @@ fn main() {
     dioxus_desktop::launch(App);
 }
 
+#[component]
 pub fn App(cx: Scope) -> Element {
     let is_logged_in = use_state(cx, || false);
 
@@ -45,7 +45,7 @@ if *is_logged_in {
     // ANCHOR_END: if_else
 }
 
-#[inline_props]
+#[component]
 #[rustfmt::skip]
 fn LogInImproved<'a>(
     cx: Scope<'a>,
@@ -58,7 +58,7 @@ cx.render(rsx! {
     // We only render the welcome message if we are logged in
     // You can use if statements in the middle of a render block to conditionally render elements
     if *is_logged_in {
-        // Notice the body of this if statment is rsx code, not an expression
+        // Notice the body of this if statement is rsx code, not an expression
         "Welcome!"
     }
     button {
@@ -81,7 +81,7 @@ cx.render(rsx! {
     // ANCHOR_END: if_else_improved
 }
 
-#[inline_props]
+#[component]
 #[rustfmt::skip]
 fn LogInWarning(cx: Scope, is_logged_in: bool) -> Element {
     // ANCHOR: conditional_none

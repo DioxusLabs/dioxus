@@ -1,13 +1,12 @@
-#![allow(non_snake_case)]
-
 use dioxus::prelude::*;
 use dioxus_signals::*;
 
 fn main() {
-    dioxus_desktop::launch(app);
+    dioxus_desktop::launch(App);
 }
 
-fn app(cx: Scope) -> Element {
+#[component]
+fn App(cx: Scope) -> Element {
     let signal = use_signal(cx, || 0);
     let doubled = use_selector(cx, move || signal * 2);
 
@@ -22,7 +21,7 @@ fn app(cx: Scope) -> Element {
     }
 }
 
-#[inline_props]
+#[component]
 fn Child(cx: Scope, signal: ReadOnlySignal<usize>) -> Element {
     render! {
         "{signal}"

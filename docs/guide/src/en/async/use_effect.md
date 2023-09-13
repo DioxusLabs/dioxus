@@ -9,7 +9,7 @@ You can make the callback re-run when some value changes. For example, you might
 ## Example
 
 ```rust, no_run
-#[inline_props]
+#[component]
 fn Profile(cx: Scope, id: usize) -> Element {
     let name = use_state(cx, || None);
 
@@ -35,7 +35,8 @@ fn Profile(cx: Scope, id: usize) -> Element {
     )
 }
 
-fn app(cx: Scope) -> Element {
+#[component]
+fn App(cx: Scope) -> Element {
     render!(Profile { id: 0 })
 }
 ```

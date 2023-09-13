@@ -25,11 +25,11 @@ pub trait DeserializerOutput: ToTokens {}
 /// takes an [`DeserializerArgs`] argument. However, you can think of "DeserializerArgs" as the deserializer.
 pub trait DeserializerArgs<TOutput>: Clone
 where
-    TOutput: DeserializerOutput,
+    TOutput: ToTokens,
 {
     // There's a lot of Results out there... let's make sure that this is a syn::Result.
     // Let's also make sure there's not a warning.
-    /// Creates a [`DeserializerOutput`] from the `self` args and a [`ComponentBody`].
+    /// Creates a [`ToTokens`] struct from the `self` args and a [`ComponentBody`].
     /// The [`ComponentBody::deserialize`] provides a cleaner way of calling this function.
     #[allow(unused_qualifications)]
     fn to_output(&self, component_body: &ComponentBody) -> syn::Result<TOutput>;

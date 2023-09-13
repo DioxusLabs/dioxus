@@ -1,6 +1,4 @@
 // ANCHOR: all
-#![allow(non_snake_case)]
-
 use dioxus::prelude::*;
 
 fn main() {
@@ -11,6 +9,7 @@ fn main() {
 struct DarkMode(bool);
 // ANCHOR_END: DarkMode_struct
 
+#[component]
 #[rustfmt::skip]
 pub fn App(cx: Scope) -> Element {
     // ANCHOR: context_provider
@@ -47,6 +46,7 @@ let dark_mode_context = use_shared_state::<DarkMode>(cx);
 }
 
 // ANCHOR: toggle
+#[component]
 pub fn DarkModeToggle(cx: Scope) -> Element {
     let dark_mode = use_shared_state::<DarkMode>(cx).unwrap();
 
@@ -71,6 +71,7 @@ pub fn DarkModeToggle(cx: Scope) -> Element {
 // ANCHOR_END: toggle
 
 // ANCHOR: meme_editor
+#[component]
 fn MemeEditor(cx: Scope) -> Element {
     let is_dark_mode = use_is_dark_mode(cx);
     let heading_style = if is_dark_mode { "color: white" } else { "" };
@@ -105,7 +106,7 @@ fn MemeEditor(cx: Scope) -> Element {
 // ANCHOR_END: meme_editor
 
 // ANCHOR: meme_component
-#[inline_props]
+#[component]
 fn Meme<'a>(cx: Scope<'a>, caption: &'a str) -> Element<'a> {
     let container_style = r"
         position: relative;
@@ -147,7 +148,7 @@ fn Meme<'a>(cx: Scope<'a>, caption: &'a str) -> Element<'a> {
 // ANCHOR_END: meme_component
 
 // ANCHOR: caption_editor
-#[inline_props]
+#[component]
 fn CaptionEditor<'a>(
     cx: Scope<'a>,
     caption: &'a str,

@@ -1,5 +1,3 @@
-#![allow(non_snake_case)]
-
 use dioxus::prelude::*;
 
 fn main() {
@@ -12,6 +10,7 @@ struct Comment {
     id: usize,
 }
 
+#[component]
 #[rustfmt::skip]
 pub fn App(cx: Scope) -> Element {
     // ANCHOR: render_list
@@ -51,6 +50,7 @@ cx.render(rsx!(
     // ANCHOR_END: render_list
 }
 
+#[component]
 #[rustfmt::skip]
 pub fn AppForLoop(cx: Scope) -> Element {
     // ANCHOR: render_list_for_loop
@@ -88,7 +88,7 @@ cx.render(rsx!(
     // ANCHOR_END: render_list_for_loop
 }
 
-#[inline_props]
+#[component]
 fn CommentComponent(cx: Scope, comment: Comment) -> Element {
     cx.render(rsx!(div {
         "Comment by anon:",
