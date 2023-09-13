@@ -26,7 +26,7 @@ use crate::{CopyValue, Effect};
 ///     render! { Child { state: count } }
 /// }
 ///
-/// #[inline_props]
+/// #[component]
 /// fn Child(cx: Scope, state: Signal<u32>) -> Element {
 ///     let state = *state;
 ///
