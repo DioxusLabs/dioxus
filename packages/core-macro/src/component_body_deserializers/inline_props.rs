@@ -58,7 +58,7 @@ impl InlinePropsDeserializerArgs {
                     let arg_colon = &pt.colon_token;
                     let arg_ty = &pt.ty; // Type
                     let arg_attrs = &pt.attrs; // Attributes
-                    
+
                     quote! {
                         #(#arg_attrs)
                         *
