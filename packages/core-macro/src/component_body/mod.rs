@@ -178,6 +178,8 @@ pub struct ComponentBody {
 }
 
 impl ComponentBody {
+    /// Deserializes the body into the [`TOutput`] with the specific [`TArgs`].
+    /// Even if the args are empty, the [`TArg`] type still determines what [`TOutput`] will be generated.
     pub fn deserialize<TOutput, TArgs>(&self, args: TArgs) -> Result<TOutput>
     where
         TOutput: DeserializerOutput,

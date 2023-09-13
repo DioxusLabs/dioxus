@@ -31,7 +31,6 @@ where
     // Let's also make sure there's not a warning.
     /// Creates a [`DeserializerOutput`] from the `self` args and a [`ComponentBody`].
     /// The [`ComponentBody::deserialize`] provides a cleaner way of calling this function.
-    /// As a result, don't make this public when you implement it.
     #[allow(unused_qualifications)]
     fn to_output(&self, component_body: &ComponentBody) -> syn::Result<TOutput>;
 }
