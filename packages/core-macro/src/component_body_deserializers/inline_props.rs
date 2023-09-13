@@ -1,4 +1,4 @@
-use crate::component_body::{ComponentBody, DeserializerArgs, DeserializerOutput};
+use crate::component_body::{ComponentBody, DeserializerArgs};
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, ToTokens, TokenStreamExt};
 use syn::token::Comma;
@@ -14,8 +14,6 @@ pub struct InlinePropsDeserializerOutput {
     pub comp_fn: ItemFn,
     pub props_struct: ItemStruct,
 }
-
-impl DeserializerOutput for InlinePropsDeserializerOutput {}
 
 impl ToTokens for InlinePropsDeserializerOutput {
     fn to_tokens(&self, tokens: &mut TokenStream2) {

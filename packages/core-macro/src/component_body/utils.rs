@@ -17,6 +17,8 @@ use syn::{parse_quote, Path};
 /// It does not return any [`Item`]s inside the struct or function.
 pub trait DeserializerOutput: ToTokens {}
 
+impl<T: ToTokens> DeserializerOutput for T {}
+
 /// The args passed to a [`ComponentBody`] when deserializing it.
 ///
 /// It's also the struct that does the deserializing.

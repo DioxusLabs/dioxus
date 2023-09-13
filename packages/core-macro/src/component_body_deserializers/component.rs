@@ -1,4 +1,4 @@
-use crate::component_body::{ComponentBody, DeserializerArgs, DeserializerOutput};
+use crate::component_body::{ComponentBody, DeserializerArgs};
 use crate::component_body_deserializers::inline_props::InlinePropsDeserializerArgs;
 use constcat::concat;
 use proc_macro2::TokenStream as TokenStream2;
@@ -52,8 +52,6 @@ pub struct ComponentDeserializerOutput {
     pub comp_fn: ItemFn,
     pub props_struct: Option<ItemStruct>,
 }
-
-impl DeserializerOutput for ComponentDeserializerOutput {}
 
 impl ToTokens for ComponentDeserializerOutput {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
