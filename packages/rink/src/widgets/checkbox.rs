@@ -11,7 +11,7 @@ use dioxus_native_core::{
 };
 use shipyard::UniqueView;
 
-use crate::FormData;
+use crate::hooks::FormData;
 
 use super::{RinkWidget, WidgetContext};
 

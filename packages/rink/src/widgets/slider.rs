@@ -15,7 +15,8 @@ use dioxus_native_core::{
 use shipyard::UniqueView;
 
 use super::{RinkWidget, WidgetContext};
-use crate::{query::get_layout, Event, EventData, FormData, Query};
+use crate::hooks::FormData;
+use crate::{query::get_layout, Event, EventData, Query};
 
 #[derive(Debug)]
 pub(crate) struct Slider {
