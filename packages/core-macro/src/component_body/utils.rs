@@ -1,8 +1,7 @@
 use crate::component_body::ComponentBody;
 use dioxus_core::{Element, Scope};
 use quote::ToTokens;
-use std::cmp::Ordering;
-use syn::{parse_quote, Path, Type};
+use syn::{parse_quote, Path};
 
 /// The output produced by a deserializer.
 ///
@@ -53,55 +52,5 @@ impl<'a> TypeHelper for Scope<'a> {
 impl<'a> TypeHelper for Element<'a> {
     fn get_path() -> Path {
         parse_quote!(::dioxus::core::Element)
-    }
-}
-
-/// Checks if a given generic that implements [`TypeHelper`] is equal to a [`Type`].
-///
-/// Returns `true` for both an imported and fully qualified [`TypeHelper::get_path`],
-/// but not "partially" qualified, such as: `use dioxus::core; core::Scope`.
-///
-/// # Edge cases
-/// These are caused by macro limitations.
-/// It's impossible to tell what module a type is imported from and if that type is an alias.
-/// Examples of some edge cases:
-/// * `is_type_eq<dioxus_core::Scope>(t) == true` where `t == type Scope = u8;` (an alias).
-/// * `is_type_eq<dioxus_core::Scope>(t) == false` where `t == core::Scope` from `use dioxus::core;`
-/// - It's possible to return `true` here, but `core` is too ambiguous,
-/// and as mentioned, it's impossible to know if a `core` belongs to `dioxus` or something else.
-pub fn is_type_eq<T>(input: &Type) -> bool
-where
-    T: TypeHelper,
-{
-    let scope_path = T::get_path();
-    let input_path: Path = parse_quote!(#input);
-    let scope_path_segs = scope_path.segments;
-    let input_path_segs = input_path.segments;
-    let input_seg_len = input_path_segs.len();
-
-    match input_seg_len.cmp(&1) {
-        Ordering::Less => false,
-        Ordering::Equal => {
-            let scope_last_seg = scope_path_segs.last().unwrap();
-            let input_seg = input_path_segs.first().unwrap();
-
-            scope_last_seg.ident == input_seg.ident
-        }
-        Ordering::Greater => {
-            if input_seg_len == scope_path_segs.len() {
-                for i in 0..input_seg_len {
-                    let input_seg = &input_path_segs[i];
-                    let scope_seg = &scope_path_segs[i];
-
-                    if input_seg.ident != scope_seg.ident {
-                        return false;
-                    }
-                }
-
-                true
-            } else {
-                false
-            }
-        }
     }
 }

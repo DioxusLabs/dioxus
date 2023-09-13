@@ -79,6 +79,7 @@ pub fn render(s: TokenStream) -> TokenStream {
 /// }
 /// ```
 #[proc_macro_attribute]
+#[deprecated(note = "Use `#[component]` instead.")]
 pub fn inline_props(_args: TokenStream, s: TokenStream) -> TokenStream {
     let comp_body = parse_macro_input!(s as ComponentBody);
 
@@ -96,6 +97,9 @@ pub(crate) const COMPONENT_ARG_CASE_CHECK_OFF: &str = "no_case_check";
 ///
 /// # Arguments
 /// * `no_case_check` - Doesn't enforce `PascalCase` on your component names.
+/// **This will be removed/deprecated in a future update in favor of a more complete Clippy-backed linting system.**
+/// The reasoning behind this is that Clippy allows more robust and powerful lints, whereas
+/// macros are extremely limited.
 ///
 /// # Features
 /// This attribute:

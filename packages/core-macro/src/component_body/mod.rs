@@ -144,7 +144,7 @@
 //! ```
 
 pub mod utils;
-pub use utils::is_type_eq;
+
 pub use utils::DeserializerArgs;
 pub use utils::DeserializerOutput;
 pub use utils::TypeHelper;
@@ -178,10 +178,7 @@ pub struct ComponentBody {
 }
 
 impl ComponentBody {
-    // There's a lot of Results out there... let's make sure that this is a syn::Result.
-    // Let's also make sure there's not a warning.
-    #[allow(unused_qualifications)]
-    pub fn deserialize<TOutput, TArgs>(&self, args: TArgs) -> syn::Result<TOutput>
+    pub fn deserialize<TOutput, TArgs>(&self, args: TArgs) -> Result<TOutput>
     where
         TOutput: DeserializerOutput,
         TArgs: DeserializerArgs<TOutput>,
@@ -205,13 +202,7 @@ impl Parse for ComponentBody {
                 FnArg::Receiver(_) => {
                     return incorrect_first_arg_err;
                 }
-                FnArg::Typed(f) => {
-                    if is_type_eq::<Scope>(&f.ty) {
-                        (first_arg.to_owned(), f)
-                    } else {
-                        return incorrect_first_arg_err;
-                    }
-                }
+                FnArg::Typed(f) => (first_arg.to_owned(), f),
             }
         } else {
             return Err(Error::new(
@@ -225,21 +216,11 @@ impl Parse for ComponentBody {
 
         let element_type_path = Element::get_path_string();
 
-        match &item_fn.sig.output {
-            ReturnType::Default => {
-                return Err(Error::new(
-                    item_fn.sig.output.span(),
-                    format!("Must return a <{}>", element_type_path),
-                ))
-            }
-            ReturnType::Type(_, return_type) => {
-                if !is_type_eq::<Element>(return_type) {
-                    return Err(Error::new(
-                        item_fn.sig.output.span(),
-                        format!("Must return a <{}>", element_type_path),
-                    ));
-                }
-            }
+        if item_fn.sig.output == ReturnType::Default {
+            return Err(Error::new(
+                item_fn.sig.output.span(),
+                format!("Must return a <{}>", element_type_path),
+            ));
         }
 
         let has_extra_args = item_fn.sig.inputs.len() > 1;
