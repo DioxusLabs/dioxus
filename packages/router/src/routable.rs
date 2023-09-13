@@ -257,72 +257,10 @@ pub trait Routable: FromStr + Display + Clone + 'static {
         Self::SITE_MAP.iter().flat_map(SiteMapSegment::flatten)
     }
 
-    /// Calls a [`Iterator::filter_map`] on [`SiteMapFlattened`].
-    fn filter_map_routes<'a, B, F>(f: F) -> FilterMap<SiteMapFlattened<'a>, F>
-    where
-        F: FnMut(Vec<SegmentType>) -> Option<B>,
-    {
-        Self::flatten_site_map().filter_map(f)
-    }
-
-    /// Gets a list of all routes, regardless of type.
-    fn all_routes() -> Vec<String> {
-        Self::filter_map_routes(|route| {
-            let route_maybe = &route
-                .iter()
-                .map(|segment| match segment {
-                    SegmentType::Static(s) => Some(*s),
-                    SegmentType::Dynamic(s) => Some(*s),
-                    SegmentType::CatchAll(s) => Some(*s),
-                    SegmentType::Child => None,
-                })
-                .collect::<Option<Vec<_>>>();
-
-            seg_strs_to_str(route_maybe)
-        })
-        .collect()
-    }
-
-    /// Gets a list of all catch all route names.
-    /// Example catch all route: `#[route("/catch/:..routes")]`
-    fn catch_all_routes() -> Vec<String> {
-        Self::filter_map_routes(|route| {
-            let route_if_catch_all = &route
-                .iter()
-                .map(|segment| match segment {
-                    SegmentType::CatchAll(s) => Some(*s),
-                    _ => None,
-                })
-                .collect::<Option<Vec<_>>>();
-
-            seg_strs_to_str(route_if_catch_all)
-        })
-        .collect()
-    }
-
-    /// Gets a list of all dynamic route names.
-    /// Example dynamic route: `#[route("/dynamic/:id")]`
-    fn dynamic_routes() -> Vec<String> {
-        Self::filter_map_routes(|route| {
-            let route_if_dynamic = &route
-                .iter()
-                .map(|segment| match segment {
-                    SegmentType::Dynamic(s) => Some(*s),
-                    _ => None,
-                })
-                .collect::<Option<Vec<_>>>();
-
-            seg_strs_to_str(route_if_dynamic)
-        })
-        .collect()
-    }
-
     /// Gets a list of all the static routes.
     /// Example static route: `#[route("/static/route")]`
     fn static_routes() -> Vec<Self> {
-        Self::SITE_MAP
-            .iter()
-            .flat_map(SiteMapSegment::flatten)
+        Self::flatten_site_map()
             .filter_map(|route| {
                 let route_if_static = &route
                     .iter()
