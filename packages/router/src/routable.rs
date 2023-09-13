@@ -3,7 +3,7 @@
 #![allow(non_snake_case)]
 use dioxus::prelude::*;
 
-use std::iter::{FilterMap, FlatMap};
+use std::iter::FlatMap;
 use std::slice::Iter;
 use std::{fmt::Display, str::FromStr};
 
