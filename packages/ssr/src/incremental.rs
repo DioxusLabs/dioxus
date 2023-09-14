@@ -139,13 +139,13 @@ impl IncrementalRenderer {
                 let age = elapsed.as_secs();
                 if let Some(invalidate_after) = self.invalidate_after {
                     if elapsed < invalidate_after {
-                        log::trace!("memory cache hit {:?}", route);
+                        tracing::trace!("memory cache hit {:?}", route);
                         output.write_all(cache_hit).await?;
                         let max_age = invalidate_after.as_secs();
                         return Ok(Some(RenderFreshness::new(age, max_age)));
                     }
                 } else {
-                    log::trace!("memory cache hit {:?}", route);
+                    tracing::trace!("memory cache hit {:?}", route);
                     output.write_all(cache_hit).await?;
                     return Ok(Some(RenderFreshness::new_age(age)));
                 }
@@ -157,7 +157,7 @@ impl IncrementalRenderer {
                 if let Ok(file) = tokio::fs::File::open(file_path.full_path).await {
                     let mut file = BufReader::new(file);
                     tokio::io::copy_buf(&mut file, output).await?;
-                    log::trace!("file cache hit {:?}", route);
+                    tracing::trace!("file cache hit {:?}", route);
                     self.promote_memory_cache(&route);
                     return Ok(Some(freshness));
                 }
@@ -184,7 +184,7 @@ impl IncrementalRenderer {
             let freshness = self
                 .render_and_cache(route, component, props, output, rebuild_with, renderer)
                 .await?;
-            log::trace!("cache miss");
+            tracing::trace!("cache miss");
             Ok(freshness)
         }
     }
@@ -206,7 +206,7 @@ impl IncrementalRenderer {
                         }
                         // if the timestamp is invalid or passed, delete the file
                         if let Err(err) = std::fs::remove_file(entry.path()) {
-                            log::error!("Failed to remove file: {}", err);
+                            tracing::error!("Failed to remove file: {}", err);
                         }
                     }
                 }

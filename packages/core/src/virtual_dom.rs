@@ -306,6 +306,7 @@ impl VirtualDom {
     pub fn mark_dirty(&mut self, id: ScopeId) {
         if let Some(scope) = self.get_scope(id) {
             let height = scope.height();
+            tracing::trace!("Marking scope {:?} ({}) as dirty", id, scope.context().name);
             self.dirty_scopes.insert(DirtyScope { height, id });
         }
     }
@@ -558,7 +559,7 @@ impl VirtualDom {
             }
             // If an error occurs, we should try to render the default error component and context where the error occured
             RenderReturn::Aborted(placeholder) => {
-                log::info!("Ran into suspended or aborted scope during rebuild");
+                tracing::debug!("Ran into suspended or aborted scope during rebuild");
                 let id = self.next_null();
                 placeholder.id.set(Some(id));
                 self.mutations.push(Mutation::CreatePlaceholder { id });

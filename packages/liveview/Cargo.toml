@@ -11,7 +11,7 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 thiserror = { workspace = true }
-log = { workspace = true }
+tracing = { workspace = true }
 slab = { workspace = true }
 futures-util = { workspace = true, default-features = false, features = [
     "sink",

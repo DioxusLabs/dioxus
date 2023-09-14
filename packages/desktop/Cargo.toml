@@ -18,7 +18,7 @@ dioxus-hot-reload = { workspace = true, optional = true }
 serde = "1.0.136"
 serde_json = "1.0.79"
 thiserror = { workspace = true }
-log = { workspace = true }
+tracing = { workspace = true }
 wry = { version = "0.31.0" }
 futures-channel = { workspace = true }
 tokio = { workspace = true, features = [
@@ -57,6 +57,8 @@ default = ["tokio_runtime", "hot-reload"]
 tokio_runtime = ["tokio"]
 fullscreen = ["wry/fullscreen"]
 transparent = ["wry/transparent"]
+devtools = ["wry/devtools"]
+dox = ["wry/dox"]
 hot-reload = ["dioxus-hot-reload"]
 
 [dev-dependencies]

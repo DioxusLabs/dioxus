@@ -118,7 +118,7 @@ impl<T: std::fmt::Debug> std::fmt::Debug for Event<T> {
 ///
 /// ```rust, ignore
 /// rsx!{
-///     MyComponent { onclick: move |evt| log::info!("clicked") }
+///     MyComponent { onclick: move |evt| tracing::debug!("clicked") }
 /// }
 ///
 /// #[derive(Props)]

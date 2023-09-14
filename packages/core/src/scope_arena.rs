@@ -64,6 +64,7 @@ impl VirtualDom {
             let props: &dyn AnyProps = scope.props.as_ref().unwrap().as_ref();
             let props: &dyn AnyProps = std::mem::transmute(props);
 
+            let _span = tracing::trace_span!("render", scope = %scope.context().name);
             props.render(scope).extend_lifetime()
         };
 

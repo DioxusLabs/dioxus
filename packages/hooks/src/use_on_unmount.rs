@@ -1,4 +1,4 @@
-/// Creats a callback that will be run before the component is removed. This can be used to clean up side effects from the component (created with use_effect)
+/// Creates a callback that will be run before the component is removed. This can be used to clean up side effects from the component (created with use_effect)
 ///
 /// Example:
 /// ```rust

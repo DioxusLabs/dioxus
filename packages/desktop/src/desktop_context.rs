@@ -191,7 +191,7 @@ impl DesktopService {
     /// launch print modal
     pub fn print(&self) {
         if let Err(e) = self.webview.print() {
-            log::warn!("Open print modal failed: {e}");
+            tracing::warn!("Open print modal failed: {e}");
         }
     }
 
@@ -206,7 +206,7 @@ impl DesktopService {
         self.webview.open_devtools();
 
         #[cfg(not(debug_assertions))]
-        log::warn!("Devtools are disabled in release builds");
+        tracing::warn!("Devtools are disabled in release builds");
     }
 
     /// Create a wry event handler that listens for wry events.

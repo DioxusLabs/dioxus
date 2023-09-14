@@ -16,7 +16,7 @@ nightly-features = []
 [dependencies]
 dioxus-core = { workspace = true }
 futures-channel = { workspace = true }
-log = { workspace = true }
+tracing = { workspace = true }
 thiserror = { workspace = true }
 slab = { workspace = true }
 dioxus-debug-cell = "0.1.1"
