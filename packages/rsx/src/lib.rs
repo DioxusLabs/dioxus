@@ -457,9 +457,11 @@ impl<'a> DynamicContext<'a> {
                             }
                         };
                         let name = &attr.attr.name;
-                        let name = match el_name {
-                            ElementName::Ident(_) => quote! { #el_name::#name.0 },
-                            ElementName::Custom(_) => {
+                        let name = match (el_name, name) {
+                            (ElementName::Ident(_), ElementAttrName::BuiltIn(_)) => {
+                                quote! { #el_name::#name.0 }
+                            }
+                            _ => {
                                 let as_string = name.to_string();
                                 quote! { #as_string }
                             }
