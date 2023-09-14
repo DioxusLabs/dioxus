@@ -4,12 +4,7 @@ use super::*;
 
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{quote, ToTokens, TokenStreamExt};
-use syn::{
-    parse::{Parse, ParseStream},
-    punctuated::Punctuated,
-    spanned::Spanned,
-    Expr, Ident, LitStr, Result, Token,
-};
+use syn::{Expr, Ident, LitStr};
 
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub struct ElementAttrNamed {
@@ -38,13 +33,17 @@ impl ToTokens for ElementAttrNamed {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         let ElementAttrNamed { el_name, attr } = self;
 
-        let ns = |name| match el_name {
-            ElementName::Ident(i) => quote! { dioxus_elements::#i::#name.1 },
-            ElementName::Custom(_) => quote! { None },
+        let ns = |name: &ElementAttrName| match (el_name, name) {
+            (ElementName::Ident(i), ElementAttrName::BuiltIn(_)) => {
+                quote! { dioxus_elements::#i::#name.1 }
+            }
+            _ => quote! { None },
         };
-        let volitile = |name| match el_name {
-            ElementName::Ident(_) => quote! { #el_name::#name.2 },
-            ElementName::Custom(_) => quote! { false },
+        let volitile = |name: &ElementAttrName| match (el_name, name) {
+            (ElementName::Ident(i), ElementAttrName::BuiltIn(_)) => {
+                quote! { dioxus_elements::#i::#name.2 }
+            }
+            _ => quote! { false },
         };
         let attribute = |name: &ElementAttrName| match name {
             ElementAttrName::BuiltIn(name) => match el_name {
