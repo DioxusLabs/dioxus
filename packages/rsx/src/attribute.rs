@@ -13,14 +13,14 @@ pub struct ElementAttrNamed {
 }
 
 impl ElementAttrNamed {
-    pub(crate) fn try_combine(&self, other: Self) -> Option<Self> {
+    pub(crate) fn try_combine(&self, other: &Self) -> Option<Self> {
         if self.el_name == other.el_name && self.attr.name == other.attr.name {
-            if let Some(separator) = todo!() {
+            if let Some(separator) = self.attr.name.multi_attribute_separator() {
                 return Some(ElementAttrNamed {
                     el_name: self.el_name.clone(),
                     attr: ElementAttr {
                         name: self.attr.name.clone(),
-                        value: self.attr.value.combine(separator, other.attr.value),
+                        value: self.attr.value.combine(separator, &other.attr.value),
                     },
                 });
             }
@@ -109,8 +109,33 @@ pub enum ElementAttrValue {
 }
 
 impl ElementAttrValue {
-    fn combine(&self, separator: &str, other: Self) -> Self {
-        todo!()
+    fn combine(&self, separator: &str, other: &Self) -> Self {
+        match (self, other) {
+            (Self::AttrLiteral(lit1), Self::AttrLiteral(lit2)) => {
+                let fmt = lit1.clone().join(lit2.clone(), separator);
+                Self::AttrLiteral(fmt)
+            }
+            (Self::AttrLiteral(expr1), Self::AttrExpr(expr2)) => {
+                let mut ifmt = expr1.clone();
+                ifmt.push_str(separator);
+                ifmt.push_expr(expr2.clone());
+                Self::AttrLiteral(ifmt)
+            }
+            (Self::AttrExpr(expr1), Self::AttrLiteral(expr2)) => {
+                let mut ifmt = expr2.clone();
+                ifmt.push_str(separator);
+                ifmt.push_expr(expr1.clone());
+                Self::AttrLiteral(ifmt)
+            }
+            (Self::AttrExpr(expr1), Self::AttrExpr(expr2)) => {
+                let mut ifmt = IfmtInput::default();
+                ifmt.push_expr(expr1.clone());
+                ifmt.push_str(separator);
+                ifmt.push_expr(expr2.clone());
+                Self::AttrLiteral(ifmt)
+            }
+            _ => todo!(),
+        }
     }
 }
 
@@ -121,6 +146,17 @@ pub enum ElementAttrName {
 }
 
 impl ElementAttrName {
+    fn multi_attribute_separator(&self) -> Option<&'static str> {
+        match self {
+            ElementAttrName::BuiltIn(i) => match i.to_string().as_str() {
+                "class" => Some(" "),
+                "style" => Some(";"),
+                _ => None,
+            },
+            ElementAttrName::Custom(_) => None,
+        }
+    }
+
     pub fn start(&self) -> Span {
         match self {
             ElementAttrName::BuiltIn(i) => i.span(),

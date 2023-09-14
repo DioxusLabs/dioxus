@@ -1,4 +1,7 @@
-use std::fmt::{Display, Formatter};
+use std::{
+    collections::HashMap,
+    fmt::{Display, Formatter},
+};
 
 use super::*;
 
@@ -134,6 +137,17 @@ impl Parse for Element {
 
         // Deduplicate any attributes that can be combined
         // For example, if there are two `class` attributes, combine them into one
+        let mut combined_attrs: HashMap<ElementAttrName, ElementAttrNamed> = HashMap::new();
+        for attr in attributes {
+            if let Some(old_attr) = combined_attrs.get_mut(&attr.attr.name) {
+                if let Some(combined) = old_attr.try_combine(&attr) {
+                    *old_attr = combined;
+                }
+            } else {
+                combined_attrs.insert(attr.attr.name.clone(), attr);
+            }
+        }
+        let attributes: Vec<_> = combined_attrs.into_iter().map(|(_, v)| v).collect();
 
         while !content.is_empty() {
             if (content.peek(LitStr) && content.peek2(Token![:])) && !content.peek3(Token![:]) {

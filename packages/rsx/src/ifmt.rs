@@ -13,7 +13,7 @@ pub fn format_args_f_impl(input: IfmtInput) -> Result<TokenStream> {
 }
 
 #[allow(dead_code)] // dumb compiler does not see the struct being used...
-#[derive(Debug, PartialEq, Eq, Clone, Hash)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash, Default)]
 pub struct IfmtInput {
     pub source: Option<LitStr>,
     pub segments: Vec<Segment>,
@@ -25,6 +25,25 @@ impl IfmtInput {
             source: None,
             segments: vec![Segment::Literal(input.to_string())],
         }
+    }
+
+    pub fn join(mut self, other: Self, separator: &str) -> Self {
+        if !self.segments.is_empty() {
+            self.segments.push(Segment::Literal(separator.to_string()));
+        }
+        self.segments.extend(other.segments);
+        self
+    }
+
+    pub fn push_expr(&mut self, expr: Expr) {
+        self.segments.push(Segment::Formatted(FormattedSegment {
+            format_args: String::new(),
+            segment: FormattedSegmentType::Expr(Box::new(expr)),
+        }));
+    }
+
+    pub fn push_str(&mut self, s: &str) {
+        self.segments.push(Segment::Literal(s.to_string()));
     }
 
     pub fn is_static(&self) -> bool {
