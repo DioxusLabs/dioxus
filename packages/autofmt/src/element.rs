@@ -215,7 +215,7 @@ impl Writer<'_> {
                 write!(self.out, "{}", name)?;
             }
             ElementAttrName::Custom(name) => {
-                write!(self.out, "\"{}\"", name.to_token_stream())?;
+                write!(self.out, "{}", name.to_token_stream())?;
             }
         }
 
