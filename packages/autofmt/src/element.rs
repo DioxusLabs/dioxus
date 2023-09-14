@@ -209,12 +209,25 @@ impl Writer<'_> {
         Ok(())
     }
 
-    fn write_attribute(&mut self, attr: &ElementAttrNamed) -> Result {
-        match &attr.attr {
-            ElementAttr::AttrText { name, value } => {
-                write!(self.out, "{name}: {value}", value = ifmt_to_string(value))?;
+    fn write_attribute_name(&mut self, attr: &ElementAttrName) -> Result {
+        match attr {
+            ElementAttrName::BuiltIn(name) => {
+                write!(self.out, "{}", name)?;
             }
-            ElementAttr::AttrExpression { name, value } => {
+            ElementAttrName::Custom(name) => {
+                write!(self.out, "\"{}\"", name.to_token_stream())?;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn write_attribute_value(&mut self, value: &ElementAttrValue) -> Result {
+        match value {
+            ElementAttrValue::AttrLiteral(value) => {
+                write!(self.out, "{value}", value = ifmt_to_string(value))?;
+            }
+            ElementAttrValue::AttrExpr(value) => {
                 let out = prettyplease::unparse_expr(value);
                 let mut lines = out.split('\n').peekable();
                 let first = lines.next().unwrap();
@@ -222,9 +235,9 @@ impl Writer<'_> {
                 // a one-liner for whatever reason
                 // Does not need a new line
                 if lines.peek().is_none() {
-                    write!(self.out, "{name}: {first}")?;
+                    write!(self.out, "{first}")?;
                 } else {
-                    writeln!(self.out, "{name}: {first}")?;
+                    writeln!(self.out, "{first}")?;
 
                     while let Some(line) = lines.next() {
                         self.out.indented_tab()?;
@@ -237,22 +250,7 @@ impl Writer<'_> {
                     }
                 }
             }
-
-            ElementAttr::CustomAttrText { name, value } => {
-                write!(
-                    self.out,
-                    "{name}: {value}",
-                    name = name.to_token_stream(),
-                    value = ifmt_to_string(value)
-                )?;
-            }
-
-            ElementAttr::CustomAttrExpression { name, value } => {
-                let out = prettyplease::unparse_expr(value);
-                write!(self.out, "{}: {}", name.to_token_stream(), out)?;
-            }
-
-            ElementAttr::EventTokens { name, tokens } => {
+            ElementAttrValue::EventTokens(tokens) => {
                 let out = self.retrieve_formatted_expr(tokens).to_string();
 
                 let mut lines = out.split('\n').peekable();
@@ -261,9 +259,9 @@ impl Writer<'_> {
                 // a one-liner for whatever reason
                 // Does not need a new line
                 if lines.peek().is_none() {
-                    write!(self.out, "{name}: {first}")?;
+                    write!(self.out, "{first}")?;
                 } else {
-                    writeln!(self.out, "{name}: {first}")?;
+                    writeln!(self.out, "{first}")?;
 
                     while let Some(line) = lines.next() {
                         self.out.indented_tab()?;
@@ -277,6 +275,14 @@ impl Writer<'_> {
                 }
             }
         }
+
+        Ok(())
+    }
+
+    fn write_attribute(&mut self, attr: &ElementAttrNamed) -> Result {
+        self.write_attribute_name(&attr.attr.name)?;
+        write!(self.out, ": ")?;
+        self.write_attribute_value(&attr.attr.value)?;
 
         Ok(())
     }
