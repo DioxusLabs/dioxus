@@ -1,4 +1,4 @@
-<div align="center">
+<div style="text-align: center">
   <h1>🌗🚀 Dioxus</h1>
   <p>
     <strong>A concurrent, functional, virtual DOM for Rust</strong>
@@ -10,7 +10,7 @@
 This overview provides a brief introduction to Dioxus. For a more in-depth guide, make sure to check out:
 
 - [Getting Started](https://dioxuslabs.com/docs/0.3/guide/en/getting_started/index.html)
-- [Book](https://dioxuslabs.com/docs/0.3/guide/en/)
+- [Book (0.3)](https://dioxuslabs.com/docs/0.3/guide/en/)
 - [Examples](https://github.com/DioxusLabs/example-projects)
 
 # Overview and Goals
@@ -28,14 +28,14 @@ Dioxus is heavily inspired by React, supporting many of the same concepts:
 If you know React, then you know Dioxus.
 
 Dioxus is *substantially* more performant than many of the other Rust UI libraries (Yew/Percy) and is *significantly* more performant
-than React - roughly competitive with InfernoJS.
+than React—roughly competitive with InfernoJS.
 
-Remember: Dioxus is a library for declaring interactive user interfaces - it is not a dedicated renderer. Most 1st party renderers for Dioxus currently only support web technologies.
+Remember: Dioxus is a library for declaring interactive user interfaces—it is not a dedicated renderer. Most 1st party renderers for Dioxus currently only support web technologies.
 
 ## Brief Overview
 
 All Dioxus apps are built by composing functions that take in a `Scope` which is generic over some `Properties` and return an `Element`.
-A `Scope` holds relevant state data for the currently-rendered component.
+A `Scope` holds relevant state data for the currently rendered component.
 
 To launch an app, we use the `launch` method for the specific renderer we want to use. In the launch function, we pass the app's `Component`.
 
@@ -43,10 +43,13 @@ To launch an app, we use the `launch` method for the specific renderer we want t
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus_desktop::launch(app);
+    dioxus_desktop::launch(App);
 }
 
-fn app(cx: Scope) -> Element {
+// The #[component] attribute streamlines component creation.
+// It's not required, but highly recommended. For example, UpperCamelCase components will not generate a warning.
+#[component]
+fn App(cx: Scope) -> Element {
     cx.render(rsx!("hello world!"))
 }
 ```
@@ -84,7 +87,6 @@ rsx!(
         (0..10).map(|_| rsx!(span { "hello world" }))
     }
 )
-
 ```
 
 Used within components, the `rsx!` macro must be rendered into an `Element` with
@@ -95,7 +97,8 @@ If we want to omit the boilerplate of `cx.render`, we can simply pass in
 render nodes in match statements.
 
 ```rust, ignore
-fn example(cx: Scope) -> Element {
+#[component[
+fn Example(cx: Scope) -> Element {
 
     // both of these are equivalent
     cx.render(rsx!("hello world"))
@@ -108,7 +111,8 @@ Putting everything together, we can write a simple component that renders a list
 elements:
 
 ```rust, ignore
-fn app(cx: Scope) -> Element {
+#[component]
+fn App(cx: Scope) -> Element {
     let name = "dave";
     cx.render(rsx!(
         h1 { "Hello, {name}!" }
@@ -136,6 +140,7 @@ properties, we can use the `()` type or simply omit the type altogether.
 In Dioxus, all properties are memoized by default!
 
 ```rust, ignore
+#[component]
 fn App(cx: Scope) -> Element {
     cx.render(rsx!(
         Header {
@@ -157,6 +162,7 @@ struct HeaderProps {
     color: String,
 }
 
+#[component]
 fn Header(cx: Scope<HeaderProps>) -> Element {
     cx.render(rsx!(
         div {
@@ -167,11 +173,11 @@ fn Header(cx: Scope<HeaderProps>) -> Element {
 }
 ```
 
-Components may use the `inline_props` macro to completely inline the props
-definition into the function arguments.
+The `#[component]` macro also allows you to derive the props
+struct from function arguments:
 
 ```rust, ignore
-#[inline_props]
+#[component]
 fn Header(cx: Scope, title: String, color: String) -> Element {
     cx.render(rsx!(
         div {
@@ -193,6 +199,7 @@ struct HeaderProps<'a> {
     color: &'a str,
 }
 
+#[component]
 fn Header<'a>(cx: Scope<'a, HeaderProps<'a>>) -> Element {
     cx.render(rsx!(
         div {
@@ -221,6 +228,9 @@ rsx!(
 )
 ```
 
+However, the convention is to use UpperCamelCase. The `#[component]` attribute will enforce this,
+but you can turn it off if you wish.
+
 ## Hooks
 
 While components are reusable forms of UI elements, hooks are reusable forms
@@ -231,7 +241,8 @@ By convention, all hooks are functions that should start with `use_`. We can
 use hooks to define the state and modify it from within listeners.
 
 ```rust, ignore
-fn app(cx: Scope) -> Element {
+#[component]
+fn App(cx: Scope) -> Element {
     let name = use_state(cx, || "world");
 
     render!("hello {name}!")
@@ -239,7 +250,7 @@ fn app(cx: Scope) -> Element {
 ```
 
 Hooks are sensitive to how they are used. To use hooks, you must abide by the
-["rules of hooks" (borrowed from react)](https://reactjs.org/docs/hooks-rules.html):
+["rules of hooks" (borrowed from React)](https://reactjs.org/docs/hooks-rules.html):
 - Functions with "use_" should not be called in callbacks
 - Functions with "use_" should not be called out of order
 - Functions with "use_" should not be called in loops or conditionals
@@ -278,6 +289,7 @@ fn main() {
     dioxus_desktop::launch(App);
 }
 
+#[component]
 fn App(cx: Scope) -> Element {
     let count = use_state(cx, || 0);
 
@@ -318,7 +330,7 @@ Alternatives to Dioxus include:
 - Yew: supports function components and web, but no SSR, borrowed data, or bump allocation. Rather slow at times.
 - Percy: supports function components, web, ssr, but lacks state management
 - Sycamore: supports function components, web, ssr, but is closer to SolidJS than React
-- MoonZoom/Seed: opinionated frameworks based on the Elm model (message, update) - no hooks
+- MoonZoom/Seed: opinionated frameworks based on the Elm model (message, update)—no hooks
 
 We've put a lot of work into making Dioxus ergonomic and *familiar*.
-Our target audience is TypeScript developers looking to switch to Rust for the web - so we need to be comparable to React.
+Our target audience is TypeScript developers looking to switch to Rust for the web—so we need to be comparable to React.

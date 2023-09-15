@@ -177,9 +177,9 @@ pub trait Routable: FromStr + Display + Clone + 'static {
     /// use dioxus_router::prelude::*;
     /// use dioxus::prelude::*;
     ///
-    /// #[inline_props]
+    /// #[component]
     /// fn Home(cx: Scope) -> Element { todo!() }
-    /// #[inline_props]
+    /// #[component]
     /// fn About(cx: Scope) -> Element { todo!() }
     ///
     /// #[derive(Routable, Clone, PartialEq, Debug)]
@@ -219,9 +219,9 @@ pub trait Routable: FromStr + Display + Clone + 'static {
     /// use dioxus_router::prelude::*;
     /// use dioxus::prelude::*;
     ///
-    /// #[inline_props]
+    /// #[component]
     /// fn Home(cx: Scope) -> Element { todo!() }
-    /// #[inline_props]
+    /// #[component]
     /// fn About(cx: Scope) -> Element { todo!() }
     ///
     /// #[derive(Routable, Clone, PartialEq, Debug)]

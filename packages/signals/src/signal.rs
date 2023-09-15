@@ -26,7 +26,7 @@ use crate::{CopyValue, Effect};
 ///     render! { Child { state: count } }
 /// }
 ///
-/// #[inline_props]
+/// #[component]
 /// fn Child(cx: Scope, state: Signal<u32>) -> Element {
 ///     let state = *state;
 ///
@@ -89,6 +89,7 @@ pub(crate) struct SignalData<T> {
 /// use dioxus::prelude::*;
 /// use dioxus_signals::*;
 ///
+/// #[component]
 /// fn App(cx: Scope) -> Element {
 ///     let mut count = use_signal(cx, || 0);
 ///
@@ -97,7 +98,7 @@ pub(crate) struct SignalData<T> {
 ///     render! { Child { state: count } }
 /// }
 ///
-/// #[inline_props]
+/// #[component]
 /// fn Child(cx: Scope, state: Signal<u32>) -> Element {
 ///     let state = *state;
 ///
