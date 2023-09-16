@@ -14,7 +14,7 @@ use crate::{use_state, UseState};
 ///
 /// Whenever the hooks dependencies change, the future will be re-evaluated.
 /// If a future is pending when the dependencies change, the previous future
-/// will be allowed to continue
+/// will be canceled before the new one is started.
 ///
 /// - dependencies: a tuple of references to values that are PartialEq + Clone
 pub fn use_future<T, F, D>(
