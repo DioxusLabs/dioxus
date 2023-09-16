@@ -6,7 +6,7 @@ edition = "2018"
 description = "WebView renderer for Dioxus"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
-homepage = "https://dioxuslabs.com/docs/0.3/guide/en/getting_started/desktop.html"
+homepage = "https://dioxuslabs.com/learn/0.4/getting_started/desktop"
 keywords = ["dom", "ui", "gui", "react"]
 
 [dependencies]
