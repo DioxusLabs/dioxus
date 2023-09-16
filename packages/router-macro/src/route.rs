@@ -277,10 +277,8 @@ impl Route {
                 }
             }
             for segment in &self.segments {
-                if let RouteSegment::Dynamic(other, ..) = segment {
-                    if other == name {
-                        from_route = true
-                    }
+                if segment.name().as_ref() == Some(name) {
+                    from_route = true
                 }
             }
             if let Some(query) = &self.query {
