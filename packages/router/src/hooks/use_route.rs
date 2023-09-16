@@ -35,7 +35,7 @@ use crate::utils::use_router_internal::use_router_internal;
 ///
 /// #[component]
 /// fn Index(cx: Scope) -> Element {
-///     let path = use_route(&cx).unwrap();
+///     let path: Route = use_route(&cx).unwrap();
 ///     render! {
 ///         h2 { "Current Path" }
 ///         p { "{path}" }

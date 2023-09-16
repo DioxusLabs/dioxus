@@ -226,9 +226,9 @@ pub trait Routable: FromStr + Display + Clone + 'static {
     ///
     /// #[derive(Routable, Clone, PartialEq, Debug)]
     /// enum Route {
-    ///     #[route("/")]
+    ///     #[route("/home")]
     ///     Home {},
-    ///     #[route("/about")]
+    ///     #[route("/home/about")]
     ///     About {},
     /// }
     ///

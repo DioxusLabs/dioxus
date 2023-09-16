@@ -88,15 +88,18 @@ pub trait HistoryProvider<R: Routable> {
     /// # use dioxus::prelude::*;   
     /// # #[component]
     /// # fn Index(cx: Scope) -> Element { todo!() }
+    /// # fn Other(cx: Scope) -> Element { todo!() }
     /// #[derive(Clone, Routable, Debug, PartialEq)]
     /// enum Route {
     ///     #[route("/")]
     ///     Index {},
+    ///     #[route("/other")]
+    ///     Other {},
     /// }
     /// let mut history = MemoryHistory::<Route>::default();
     /// assert_eq!(history.can_go_back(), false);
     ///
-    /// history.push(Route::Index {});
+    /// history.push(Route::Other {});
     /// assert_eq!(history.can_go_back(), true);
     /// ```
     #[must_use]

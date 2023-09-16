@@ -1,6 +1,8 @@
 use dioxus_core::prelude::*;
 use std::fmt::Write;
 
+use crate::renderer::{str_truthy, BOOL_ATTRS};
+
 #[derive(Debug)]
 pub struct StringCache {
     pub segments: Vec<Segment>,
@@ -86,6 +88,10 @@ impl StringCache {
                                 inner_html = Some(value);
                             } else if let Some("style") = namespace {
                                 styles.push((name, value));
+                            } else if BOOL_ATTRS.contains(name) {
+                                if str_truthy(value) {
+                                    write!(chain, " {name}=\"{value}\"",)?;
+                                }
                             } else {
                                 write!(chain, " {name}=\"{value}\"")?;
                             }
