@@ -691,7 +691,7 @@ impl<'a> IntoDynNode<'a> for &Element<'a> {
 
 impl<'a, 'b> IntoDynNode<'a> for LazyNodes<'a, 'b> {
     fn into_vnode(self, cx: &'a ScopeState) -> DynamicNode<'a> {
-        DynamicNode::Fragment(cx.bump().alloc([self.call(cx)]))
+        DynamicNode::Fragment(cx.bump().alloc([cx.render(self).unwrap()]))
     }
 }
 
@@ -750,7 +750,7 @@ impl<'a> IntoTemplate<'a> for Element<'a> {
 }
 impl<'a, 'b> IntoTemplate<'a> for LazyNodes<'a, 'b> {
     fn into_template(self, cx: &'a ScopeState) -> VNode<'a> {
-        self.call(cx)
+        cx.render(self).unwrap()
     }
 }
 

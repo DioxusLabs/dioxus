@@ -14,7 +14,7 @@ keywords = ["dom", "ui", "gui", "react", "state-management"]
 [dependencies]
 dioxus-core = { workspace = true }
 im-rc = { version = "15.0.0", features = ["serde"] }
-log = { workspace = true }
+tracing = { workspace = true }
 
 [dev-dependencies]
 closure = "0.3.0"

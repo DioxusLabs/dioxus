@@ -81,10 +81,12 @@ pub(crate) struct ProvidedStateInner<T> {
     value: T,
     notify_any: Arc<dyn Fn(ScopeId)>,
     consumers: HashSet<ScopeId>,
+    gen: usize,
 }
 
 impl<T> ProvidedStateInner<T> {
     pub(crate) fn notify_consumers(&mut self) {
+        self.gen += 1;
         for consumer in self.consumers.iter() {
             (self.notify_any)(*consumer);
         }
@@ -157,7 +159,7 @@ impl<T> ProvidedStateInner<T> {
 ///
 /// Right now, there is not a distinction between read-only and write-only, so every consumer will be notified.
 pub fn use_shared_state<T: 'static>(cx: &ScopeState) -> Option<&UseSharedState<T>> {
-    let state: &Option<UseSharedStateOwner<T>> = &*cx.use_hook(move || {
+    let state_owner: &mut Option<UseSharedStateOwner<T>> = &mut *cx.use_hook(move || {
         let scope_id = cx.scope_id();
         let root = cx.consume_context::<ProvidedState<T>>()?;
 
@@ -167,7 +169,10 @@ pub fn use_shared_state<T: 'static>(cx: &ScopeState) -> Option<&UseSharedState<T
         let owner = UseSharedStateOwner { state, scope_id };
         Some(owner)
     });
-    state.as_ref().map(|s| &s.state)
+    state_owner.as_mut().map(|s| {
+        s.state.gen = s.state.inner.borrow().gen;
+        &s.state
+    })
 }
 
 /// This wrapper detects when the hook is dropped and will unsubscribe when the component is unmounted
@@ -187,11 +192,13 @@ impl<T> Drop for UseSharedStateOwner<T> {
 /// State that is shared between components through the context system
 pub struct UseSharedState<T> {
     pub(crate) inner: Rc<RefCell<ProvidedStateInner<T>>>,
+    gen: usize,
 }
 
 impl<T> UseSharedState<T> {
     fn new(inner: Rc<RefCell<ProvidedStateInner<T>>>) -> Self {
-        Self { inner }
+        let gen = inner.borrow().gen;
+        Self { inner, gen }
     }
 
     /// Notify all consumers of the state that it has changed. (This is called automatically when you call "write")
@@ -302,15 +309,14 @@ impl<T> Clone for UseSharedState<T> {
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
+            gen: self.gen,
         }
     }
 }
 
-impl<T: PartialEq> PartialEq for UseSharedState<T> {
+impl<T> PartialEq for UseSharedState<T> {
     fn eq(&self, other: &Self) -> bool {
-        let first = self.inner.borrow();
-        let second = other.inner.borrow();
-        first.value == second.value
+        self.gen == other.gen
     }
 }
 
@@ -360,6 +366,7 @@ pub fn use_shared_state_provider<T: 'static>(cx: &ScopeState, f: impl FnOnce() -
             value: f(),
             notify_any: cx.schedule_update_any(),
             consumers: HashSet::new(),
+            gen: 0,
         }));
 
         cx.provide_context(state);

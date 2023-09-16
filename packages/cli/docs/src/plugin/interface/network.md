@@ -1,12 +1,13 @@
 # Network Functions
 
-> you can use Network functions to download & read some data from internet
+You can use Network functions to download & read some data from the internet.
 
-### download_file(url: string, path: string) -> boolean
+### `download_file(url: string, path: string) -> boolean`
 
-This function can help you download some file from url, and it will return a *boolean* value to check the download status. (true: success | false: fail)
+Downloads a file from the specified URL,
+and returns a `boolean` that represents the download status (true: success, false: failure).
 
-You need pass a target url and a local path (where you want to save this file)
+You need to pass a target URL and a local path (where you want to save this file).
 
 ```lua
 -- this file will download to plugin temp directory
@@ -19,9 +20,11 @@ if status != true then
 end
 ```
 
-### clone_repo(url: string, path: string) -> boolean
+### `clone_repo(url: string, path: string) -> boolean`
 
-This function can help you use `git clone` command (this system must have been installed git)
+Clone a repository from the given URL into the given path.
+Returns a `boolean` that represents the clone status (true: success, false: failure).
+The system executing this function must have git installed.
 
 ```lua
 local status = plugin.network.clone_repo(

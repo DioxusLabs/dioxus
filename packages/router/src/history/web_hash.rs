@@ -1,8 +1,8 @@
 use std::sync::{Arc, Mutex};
 
 use gloo::{events::EventListener, render::AnimationFrame, utils::window};
-use log::error;
 use serde::{de::DeserializeOwned, Serialize};
+use tracing::error;
 use url::Url;
 use web_sys::{History, ScrollRestoration, Window};
 

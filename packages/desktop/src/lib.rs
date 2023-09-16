@@ -330,7 +330,7 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
                         if temp.contains_key("href") {
                             let open = webbrowser::open(temp["href"].as_str().unwrap());
                             if let Err(e) = open {
-                                log::error!("Open Browser error: {:?}", e);
+                                tracing::error!("Open Browser error: {:?}", e);
                             }
                         }
                     }

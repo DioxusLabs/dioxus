@@ -312,7 +312,8 @@ impl<'a> RouteTreeSegmentData<'a> {
                 quote! {
                     {
                         let mut segments = segments.clone();
-                        if let Some(segment) = segments.next() {
+                        let segment = segments.next();
+                        if let Some(segment) = segment.as_deref() {
                             if #segment == segment {
                                 #(#children)*
                             }
@@ -369,7 +370,7 @@ impl<'a> RouteTreeSegmentData<'a> {
                         quote! {
                             let mut trailing = String::from("/");
                             for seg in segments.clone() {
-                                trailing += seg;
+                                trailing += &*seg;
                                 trailing += "/";
                             }
                             trailing.pop();
@@ -506,7 +507,9 @@ fn return_constructed(
             let remaining_segments = segments.clone();
             let mut segments_clone = segments.clone();
             let next_segment = segments_clone.next();
+            let next_segment = next_segment.as_deref();
             let segment_after_next = segments_clone.next();
+            let segment_after_next = segment_after_next.as_deref();
             match (next_segment, segment_after_next) {
                 // This is the last segment, return the parsed route
                 (None, _) | (Some(""), None) => {
@@ -516,7 +519,7 @@ fn return_constructed(
                 _ => {
                     let mut trailing = String::new();
                     for seg in remaining_segments {
-                        trailing += seg;
+                        trailing += &*seg;
                         trailing += "/";
                     }
                     trailing.pop();

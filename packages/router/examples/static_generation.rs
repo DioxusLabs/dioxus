@@ -1,5 +1,3 @@
-#![allow(non_snake_case)]
-
 use std::time::Duration;
 
 use dioxus::prelude::*;
@@ -30,6 +28,8 @@ async fn main() {
             .join("\n")
     );
 
+    // This function is available if you enable the ssr feature
+    // on the dioxus_router crate.
     pre_cache_static_routes::<Route, _>(
         &mut renderer,
         &DefaultRenderer {
@@ -52,7 +52,7 @@ async fn main() {
     .unwrap();
 }
 
-#[inline_props]
+#[component]
 fn Blog(cx: Scope) -> Element {
     render! {
         div {
@@ -61,7 +61,7 @@ fn Blog(cx: Scope) -> Element {
     }
 }
 
-#[inline_props]
+#[component]
 fn Post(cx: Scope, id: usize) -> Element {
     render! {
         div {
@@ -70,7 +70,7 @@ fn Post(cx: Scope, id: usize) -> Element {
     }
 }
 
-#[inline_props]
+#[component]
 fn PostHome(cx: Scope) -> Element {
     render! {
         div {
@@ -79,7 +79,7 @@ fn PostHome(cx: Scope) -> Element {
     }
 }
 
-#[inline_props]
+#[component]
 fn Home(cx: Scope) -> Element {
     render! {
         div {

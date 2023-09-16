@@ -62,7 +62,7 @@ fn test_memory_leak() {
     _ = dom.rebuild();
 
     for _ in 0..5 {
-        dom.mark_dirty(ScopeId(0));
+        dom.mark_dirty(ScopeId::ROOT);
         _ = dom.render_immediate();
     }
 }
@@ -97,13 +97,13 @@ fn memo_works_properly() {
 
     _ = dom.rebuild();
     // todo!()
-    // dom.hard_diff(ScopeId(0));
-    // dom.hard_diff(ScopeId(0));
-    // dom.hard_diff(ScopeId(0));
-    // dom.hard_diff(ScopeId(0));
-    // dom.hard_diff(ScopeId(0));
-    // dom.hard_diff(ScopeId(0));
-    // dom.hard_diff(ScopeId(0));
+    // dom.hard_diff(ScopeId::ROOT);
+    // dom.hard_diff(ScopeId::ROOT);
+    // dom.hard_diff(ScopeId::ROOT);
+    // dom.hard_diff(ScopeId::ROOT);
+    // dom.hard_diff(ScopeId::ROOT);
+    // dom.hard_diff(ScopeId::ROOT);
+    // dom.hard_diff(ScopeId::ROOT);
 }
 
 #[test]
