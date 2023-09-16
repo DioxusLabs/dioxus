@@ -1,9 +1,11 @@
+#![allow(clippy::type_complexity)]
+
 use std::any::Any;
 use std::fmt::Debug;
 use std::rc::Rc;
 
 use dioxus::prelude::*;
-use log::error;
+use tracing::error;
 
 use crate::navigation::NavigationTarget;
 use crate::prelude::Routable;
@@ -133,13 +135,14 @@ impl Debug for LinkProps<'_> {
 ///     Index {},
 /// }
 ///
+/// #[component]
 /// fn App(cx: Scope) -> Element {
 ///     render! {
 ///         Router::<Route> {}
 ///     }
 /// }
 ///
-/// #[inline_props]
+/// #[component]
 /// fn Index(cx: Scope) -> Element {
 ///     render! {
 ///         render! {

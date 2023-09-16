@@ -1,33 +1,28 @@
 # Dirs Functions
 
-> you can use Dirs functions to get some directory path
+Dirs functions are for getting various directory paths. Not to be confused with `plugin.path`.
 
+### `plugin_dir() -> string`
 
-### plugin_dir() -> string
-
-You can get current plugin **root** directory path
+Get the plugin's root directory path.
 
 ```lua
 local path = plugin.dirs.plugin_dir()
 -- example: ~/Development/DioxusCli/plugin/test-plugin/
 ```
 
-### bin_dir() -> string
+### `bin_dir() -> string`
 
-You can get plugin **bin** direcotry path
-
-Sometime you need install some binary file like `tailwind-cli` & `sass-cli` to help your plugin work, then you should put binary file in this directory.
+Get the plugin's binary directory path. Put binary files like `tailwind-cli` or `sass-cli` in this directory.
 
 ```lua
 local path = plugin.dirs.bin_dir()
 -- example: ~/Development/DioxusCli/plugin/test-plugin/bin/
 ```
 
-### temp_dir() -> string
+### `temp_dir() -> string`
 
-You can get plugin **temp** direcotry path
-
-Just put some temporary file in this directory.
+Get the plugin's temporary directory path. Put any temporary files here.
 
 ```lua
 local path = plugin.dirs.bin_dir()

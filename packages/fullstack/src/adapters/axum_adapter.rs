@@ -389,7 +389,7 @@ pub async fn render_handler<P: Clone + serde::Serialize + Send + Sync + 'static>
             response
         }
         Err(e) => {
-            log::error!("Failed to render page: {}", e);
+            tracing::error!("Failed to render page: {}", e);
             report_err(e).into_response()
         }
     }

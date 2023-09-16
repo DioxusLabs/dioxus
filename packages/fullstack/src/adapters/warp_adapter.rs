@@ -84,7 +84,7 @@ use warp::{
 ///             async move {
 ///                 let req = warp::hyper::Request::from_parts(parts, bytes.into());
 ///                 service.run(req).await.map_err(|err| {
-///                     log::error!("Server function error: {}", err);
+///                     tracing::error!("Server function error: {}", err);
 ///                     warp::reject::reject()
 ///                 })
 ///             }
@@ -142,6 +142,8 @@ pub fn register_server_fns(server_fn_route: &'static str) -> BoxedFilter<(impl R
                 async move {
                     let req = warp::hyper::Request::from_parts(parts, bytes.into());
                     service.run(req).await.map_err(|err| {
+                        tracing::error!("Server function error: {}", err);
+                      
                         struct WarpServerFnError(String);
                         impl std::fmt::Debug for WarpServerFnError {
                             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -150,7 +152,7 @@ pub fn register_server_fns(server_fn_route: &'static str) -> BoxedFilter<(impl R
                         }
 
                         impl warp::reject::Reject for WarpServerFnError {}
-
+                      
                         warp::reject::custom(WarpServerFnError(err.to_string()))
                     })
                 }
@@ -230,7 +232,7 @@ pub fn render_ssr<P: Clone + serde::Serialize + Send + Sync + 'static>(
                         res
                     }
                     Err(err) => {
-                        log::error!("Failed to render ssr: {}", err);
+                        tracing::error!("Failed to render ssr: {}", err);
                         Response::builder()
                             .status(500)
                             .body("Failed to render ssr".into())

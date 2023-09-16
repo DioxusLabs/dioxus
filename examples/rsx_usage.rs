@@ -1,4 +1,3 @@
-#![allow(non_snake_case)]
 //! A tour of the rsx! macro
 //! ------------------------
 //!
@@ -40,7 +39,7 @@
 //! - Allow top-level fragments
 
 fn main() {
-    dioxus_desktop::launch(app);
+    dioxus_desktop::launch(App);
 }
 
 use core::{fmt, str::FromStr};
@@ -49,7 +48,8 @@ use std::fmt::Display;
 use baller::Baller;
 use dioxus::prelude::*;
 
-fn app(cx: Scope) -> Element {
+#[component]
+fn App(cx: Scope) -> Element {
     let formatting = "formatting!";
     let formatting_tuple = ("a", "b");
     let lazy_fmt = format_args!("lazily formatted text");
@@ -217,12 +217,16 @@ fn format_dollars(dollars: u32, cents: u32) -> String {
     format!("${dollars}.{cents:02}")
 }
 
-fn helper<'a>(cx: &'a ScopeState, text: &str) -> Element<'a> {
+fn helper<'a>(cx: &'a ScopeState, text: &'a str) -> Element<'a> {
     cx.render(rsx! {
         p { "{text}" }
     })
 }
 
+// no_case_check disables PascalCase checking if you *really* want a snake_case component.
+// This will likely be deprecated/removed in a future update that will introduce a more polished linting system,
+// something like Clippy.
+#[component(no_case_check)]
 fn lowercase_helper(cx: Scope) -> Element {
     cx.render(rsx! {
         "asd"
@@ -234,12 +238,16 @@ mod baller {
     #[derive(Props, PartialEq, Eq)]
     pub struct BallerProps {}
 
-    #[allow(non_snake_case)]
+    #[component]
     /// This component totally balls
-    pub fn Baller(_: Scope<BallerProps>) -> Element {
+    pub fn Baller(_cx: Scope<BallerProps>) -> Element {
         todo!()
     }
 
+    // no_case_check disables PascalCase checking if you *really* want a snake_case component.
+    // This will likely be deprecated/removed in a future update that will introduce a more polished linting system,
+    // something like Clippy.
+    #[component(no_case_check)]
     pub fn lowercase_component(cx: Scope) -> Element {
         cx.render(rsx! { "look ma, no uppercase" })
     }
@@ -253,7 +261,7 @@ pub struct TallerProps<'a> {
 }
 
 /// Documention for this component is visible within the rsx macro
-#[allow(non_snake_case)]
+#[component]
 pub fn Taller<'a>(cx: Scope<'a, TallerProps<'a>>) -> Element {
     cx.render(rsx! {
         &cx.props.children
@@ -275,15 +283,14 @@ where
     todo!()
 }
 
-#[inline_props]
+#[component]
 fn WithInline<'a>(cx: Scope<'a>, text: &'a str) -> Element {
     cx.render(rsx! {
         p { "{text}" }
     })
 }
 
-// generic component with inline_props too
-#[inline_props]
+#[component]
 fn Label<T>(cx: Scope, text: T) -> Element
 where
     T: Display,

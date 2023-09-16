@@ -1,0 +1,54 @@
+name: Build CLI for Release
+
+# Will run automatically on every new release
+on:
+  release:
+    types: [published]
+
+jobs:
+  build-and-upload:
+    permissions:
+      contents: write
+    runs-on: ${{ matrix.platform.os }}
+    strategy:
+      matrix:
+        platform:
+          - {
+              target: x86_64-pc-windows-msvc,
+              os: windows-latest,
+              toolchain: "1.70.0",
+            }
+          - {
+              target: x86_64-apple-darwin,
+              os: macos-latest,
+              toolchain: "1.70.0",
+            }
+          - {
+              target: x86_64-unknown-linux-gnu,
+              os: ubuntu-latest,
+              toolchain: "1.70.0",
+            }
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install stable
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.platform.toolchain }}
+          targets: ${{ matrix.platform.target }}
+
+      # Setup the Github Actions Cache for the CLI package
+      - name: Setup cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: packages/cli -> ../../target
+
+      # This neat action can build and upload the binary in one go!
+      - name: Build and upload binary
+        uses: taiki-e/upload-rust-binary-action@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          target: ${{ matrix.platform.target }}
+          bin: dx
+          archive: dx-${{ matrix.platform.target }}
+          checksum: sha256
+          manifest_path: packages/cli/Cargo.toml

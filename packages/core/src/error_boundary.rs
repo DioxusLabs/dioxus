@@ -49,17 +49,16 @@ impl ErrorBoundary {
 /// A trait to allow results to be thrown upwards to the nearest Error Boundary
 ///
 /// The canonical way of using this trait is to throw results from hooks, aborting rendering
-/// through question mark synax. The throw method returns an option that evalutes to None
+/// through question mark syntax. The throw method returns an option that evaluates to None
 /// if there is an error, injecting the error to the nearest error boundary.
 ///
-/// If the value is `Ok`, then throw returns the value, not aborting the rendering preocess.
+/// If the value is `Ok`, then throw returns the value, not aborting the rendering process.
 ///
 /// The call stack is saved for this component and provided to the error boundary
 ///
 /// ```rust, ignore
-///
-/// #[inline_props]
-/// fn app(cx: Scope, count: String) -> Element {
+/// #[component]
+/// fn App(cx: Scope, count: String) -> Element {
 ///     let id: i32 = count.parse().throw(cx)?;
 ///
 ///     cx.render(rsx! {
@@ -71,9 +70,9 @@ pub trait Throw<S = ()>: Sized {
     /// The value that will be returned in if the given value is `Ok`.
     type Out;
 
-    /// Returns an option that evalutes to None if there is an error, injecting the error to the nearest error boundary.
+    /// Returns an option that evaluates to None if there is an error, injecting the error to the nearest error boundary.
     ///
-    /// If the value is `Ok`, then throw returns the value, not aborting the rendering preocess.
+    /// If the value is `Ok`, then throw returns the value, not aborting the rendering process.
     ///
     /// The call stack is saved for this component and provided to the error boundary
     ///
@@ -83,9 +82,8 @@ pub trait Throw<S = ()>: Sized {
     ///
     ///
     /// ```rust, ignore
-    ///
-    /// #[inline_props]
-    /// fn app(cx: Scope, count: String) -> Element {
+    /// #[component]
+    /// fn App(cx: Scope, count: String) -> Element {
     ///     let id: i32 = count.parse().throw(cx)?;
     ///
     ///     cx.render(rsx! {
@@ -95,9 +93,9 @@ pub trait Throw<S = ()>: Sized {
     /// ```
     fn throw(self, cx: &ScopeState) -> Option<Self::Out>;
 
-    /// Returns an option that evalutes to None if there is an error, injecting the error to the nearest error boundary.
+    /// Returns an option that evaluates to None if there is an error, injecting the error to the nearest error boundary.
     ///
-    /// If the value is `Ok`, then throw returns the value, not aborting the rendering preocess.
+    /// If the value is `Ok`, then throw returns the value, not aborting the rendering process.
     ///
     /// The call stack is saved for this component and provided to the error boundary
     ///
@@ -107,9 +105,8 @@ pub trait Throw<S = ()>: Sized {
     ///
     ///
     /// ```rust, ignore
-    ///
-    /// #[inline_props]
-    /// fn app(cx: Scope, count: String) -> Element {
+    /// #[component]
+    /// fn App(cx: Scope, count: String) -> Element {
     ///     let id: i32 = count.parse().throw(cx)?;
     ///
     ///     cx.render(rsx! {

@@ -1,4 +1,3 @@
-#![allow(non_snake_case)]
 use dioxus::prelude::*;
 use dioxus_router::prelude::*;
 use std::str::FromStr;
@@ -27,6 +26,7 @@ where
         }
     }
 
+    #[component]
     fn App<R: Routable>(cx: Scope<AppProps<R>>) -> Element
     where
         <R as FromStr>::Err: std::fmt::Display,
@@ -50,12 +50,12 @@ fn href_internal() {
         Test {},
     }
 
-    #[inline_props]
-    fn Test(cx: Scope) -> Element {
+    #[component]
+    fn Test(_cx: Scope) -> Element {
         todo!()
     }
 
-    #[inline_props]
+    #[component]
     fn Root(cx: Scope) -> Element {
         render! {
             Link {
@@ -88,12 +88,12 @@ fn href_external() {
         Test {},
     }
 
-    #[inline_props]
-    fn Test(cx: Scope) -> Element {
+    #[component]
+    fn Test(_cx: Scope) -> Element {
         todo!()
     }
 
-    #[inline_props]
+    #[component]
     fn Root(cx: Scope) -> Element {
         render! {
             Link {
@@ -126,12 +126,12 @@ fn with_class() {
         Test {},
     }
 
-    #[inline_props]
-    fn Test(cx: Scope) -> Element {
+    #[component]
+    fn Test(_cx: Scope) -> Element {
         todo!()
     }
 
-    #[inline_props]
+    #[component]
     fn Root(cx: Scope) -> Element {
         render! {
             Link {
@@ -163,7 +163,7 @@ fn with_active_class_active() {
         Root {},
     }
 
-    #[inline_props]
+    #[component]
     fn Root(cx: Scope) -> Element {
         render! {
             Link {
@@ -198,12 +198,12 @@ fn with_active_class_inactive() {
         Test {},
     }
 
-    #[inline_props]
-    fn Test(cx: Scope) -> Element {
+    #[component]
+    fn Test(_cx: Scope) -> Element {
         todo!()
     }
 
-    #[inline_props]
+    #[component]
     fn Root(cx: Scope) -> Element {
         render! {
             Link {
@@ -238,12 +238,12 @@ fn with_id() {
         Test {},
     }
 
-    #[inline_props]
-    fn Test(cx: Scope) -> Element {
+    #[component]
+    fn Test(_cx: Scope) -> Element {
         todo!()
     }
 
-    #[inline_props]
+    #[component]
     fn Root(cx: Scope) -> Element {
         render! {
             Link {
@@ -277,12 +277,12 @@ fn with_new_tab() {
         Test {},
     }
 
-    #[inline_props]
-    fn Test(cx: Scope) -> Element {
+    #[component]
+    fn Test(_cx: Scope) -> Element {
         todo!()
     }
 
-    #[inline_props]
+    #[component]
     fn Root(cx: Scope) -> Element {
         render! {
             Link {
@@ -314,7 +314,7 @@ fn with_new_tab_external() {
         Root {},
     }
 
-    #[inline_props]
+    #[component]
     fn Root(cx: Scope) -> Element {
         render! {
             Link {
@@ -348,12 +348,12 @@ fn with_rel() {
         Test {},
     }
 
-    #[inline_props]
-    fn Test(cx: Scope) -> Element {
+    #[component]
+    fn Test(_cx: Scope) -> Element {
         todo!()
     }
 
-    #[inline_props]
+    #[component]
     fn Root(cx: Scope) -> Element {
         render! {
             Link {

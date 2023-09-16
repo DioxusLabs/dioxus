@@ -6,10 +6,11 @@
 </div>
 
 ## Resources
+
 This crate is a part of the broader Dioxus ecosystem. For more resources about Dioxus, check out:
 
-- [Getting Started](https://dioxuslabs.com/docs/0.3/guide/en/getting_started/index.html)
-- [Book](https://dioxuslabs.com/docs/0.3/guide/en/)
+- [Getting Started](https://dioxuslabs.com/learn/0.4/getting_started)
+- [Book](https://dioxuslabs.com/learn/0.4/)
 - [Examples](https://github.com/DioxusLabs/example-projects)
 
 ## Overview
@@ -25,7 +26,6 @@ let _ = vdom.rebuild();
 let text = dioxus_ssr::render(&vdom);
 assert_eq!(text, "<div>hello world!</div>")
 ```
-
 
 ## Basic Usage
 
@@ -50,15 +50,11 @@ let _ = vdom.rebuild();
 let content = dioxus_ssr::render(&vdom);
 ```
 
-
-
-
-
 ## Usage in pre-rendering
 
 This crate is particularly useful in pre-generating pages server-side and then selectively loading Dioxus client-side to pick up the reactive elements.
 
-This crate supports hydration out of the box. However, both the client and server must generate the *exact* same VirtualDOMs - the client picks up its VirtualDOM assuming that the pre-rendered page output is the same. To do this, you need to make sure that your VirtualDOM implementation is deterministic! This could involve either serializing our app state and sending it to the client, hydrating only parts of the page, or building tests to ensure what's rendered on the server is the same as the client.
+This crate supports hydration out of the box. However, both the client and server must generate the _exact_ same VirtualDOMs - the client picks up its VirtualDOM assuming that the pre-rendered page output is the same. To do this, you need to make sure that your VirtualDOM implementation is deterministic! This could involve either serializing our app state and sending it to the client, hydrating only parts of the page, or building tests to ensure what's rendered on the server is the same as the client.
 
 With pre-rendering enabled, this crate will generate element nodes with Element IDs pre-associated. During hydration, the Dioxus-WebSys renderer will attach the Virtual nodes to these real nodes after a page query.
 
@@ -106,6 +102,5 @@ let text = render_lazy!(rsx!( div { "hello world" } ));
 ## Usage in static site generation
 
 Dioxus SSR is a powerful tool to generate static sites. Using Dioxus for static site generation _is_ a bit overkill, however. The new documentation generation library, Doxie, is essentially Dioxus SSR on steroids designed for static site generation with client-side hydration.
-
 
 Again, simply render the VirtualDOM to a string using `render` or any of the other render methods.

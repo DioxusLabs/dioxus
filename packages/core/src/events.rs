@@ -1,3 +1,4 @@
+use crate::{runtime::with_runtime, ScopeId};
 use std::{
     cell::{Cell, RefCell},
     rc::Rc,
@@ -117,7 +118,7 @@ impl<T: std::fmt::Debug> std::fmt::Debug for Event<T> {
 ///
 /// ```rust, ignore
 /// rsx!{
-///     MyComponent { onclick: move |evt| log::info!("clicked") }
+///     MyComponent { onclick: move |evt| tracing::debug!("clicked") }
 /// }
 ///
 /// #[derive(Props)]
@@ -135,12 +136,14 @@ impl<T: std::fmt::Debug> std::fmt::Debug for Event<T> {
 ///
 /// ```
 pub struct EventHandler<'bump, T = ()> {
+    pub(crate) origin: ScopeId,
     pub(super) callback: RefCell<Option<ExternalListenerCallback<'bump, T>>>,
 }
 
 impl<T> Default for EventHandler<'_, T> {
     fn default() -> Self {
         Self {
+            origin: ScopeId::ROOT,
             callback: Default::default(),
         }
     }
@@ -154,7 +157,13 @@ impl<T> EventHandler<'_, T> {
     /// This borrows the event using a RefCell. Recursively calling a listener will cause a panic.
     pub fn call(&self, event: T) {
         if let Some(callback) = self.callback.borrow_mut().as_mut() {
+            with_runtime(|rt| {
+                rt.scope_stack.borrow_mut().push(self.origin);
+            });
             callback(event);
+            with_runtime(|rt| {
+                rt.scope_stack.borrow_mut().pop();
+            });
         }
     }
 
