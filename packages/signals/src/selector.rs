@@ -74,6 +74,7 @@ pub fn selector<R: PartialEq>(mut f: impl FnMut() -> R + 'static) -> ReadOnlySig
         inner: CopyValue::invalid(),
     };
     let effect = Effect {
+        source: current_scope_id().expect("in a virtual dom"),
         callback: CopyValue::invalid(),
     };
 
