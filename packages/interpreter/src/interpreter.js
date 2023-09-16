@@ -446,15 +446,24 @@ function handler(event, name, bubbles, config) {
       target.tagName === "FORM" &&
       (event.type === "submit" || event.type === "input")
     ) {
-      if (
-        target.tagName === "FORM" &&
-        (event.type === "submit" || event.type === "input")
-      ) {
-        const formData = new FormData(target);
+      const formData = new FormData(target);
 
-        for (let name of formData.keys()) {
-          let value = formData.getAll(name);
-          contents.values[name] = value;
+      for (let name of formData.keys()) {
+        let value = formData.getAll(name);
+        contents.values[name] = value;
+      }
+    }
+
+    if (
+      target.tagName === "SELECT" &&
+      event.type === "input"
+    ) {
+      const selectData = target.options;
+      contents.values["options"] = [];
+      for (let i = 0; i < selectData.length; i++) {
+        let option = selectData[i];
+        if (option.selected) {
+          contents.values["options"].push(option.value.toString());
         }
       }
     }
