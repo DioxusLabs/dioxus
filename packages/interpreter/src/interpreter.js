@@ -390,7 +390,11 @@ class Interpreter {
 function handler(event, name, bubbles, config) {
   let target = event.target;
   if (target != null) {
-    let preventDefaultRequests = target.getAttribute(`dioxus-prevent-default`);
+    let preventDefaultRequests = null;
+    // Some events can be triggered on text nodes, which don't have attributes
+    if (target instanceof Element) {
+      preventDefaultRequests = target.getAttribute(`dioxus-prevent-default`);
+    }
 
     if (event.type === "click") {
       // todo call prevent default if it's the right type of event
@@ -483,7 +487,10 @@ function handler(event, name, bubbles, config) {
 }
 
 function find_real_id(target) {
-  let realId = target.getAttribute(`data-dioxus-id`);
+  let realId = null;
+  if (target instanceof Element) {
+    realId = target.getAttribute(`data-dioxus-id`);
+  }
   // walk the tree to find the real element
   while (realId == null) {
     // we've reached the root we don't want to send an event
@@ -492,7 +499,9 @@ function find_real_id(target) {
     }
 
     target = target.parentElement;
-    realId = target.getAttribute(`data-dioxus-id`);
+    if (target instanceof Element) {
+      realId = target.getAttribute(`data-dioxus-id`);
+    }
   }
   return realId;
 }
