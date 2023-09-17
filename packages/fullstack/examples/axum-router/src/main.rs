@@ -1,23 +1,29 @@
 //! Run with:
 //!
 //! ```sh
-//! dx build --features web
-//! cargo run --features ssr
+//! dx build --features web --release
+//! cargo run --features ssr --release
 //! ```
-
-#![allow(non_snake_case)]
 
 use dioxus::prelude::*;
 use dioxus_fullstack::prelude::*;
 use dioxus_router::prelude::*;
 
 fn main() {
-    launch_router!(@([127, 0, 0, 1], 8080), Route, {
-        incremental: IncrementalRendererConfig::default().invalidate_after(std::time::Duration::from_secs(120)),
-    });
+    let config = LaunchBuilder::<FullstackRouterConfig<Route>>::router();
+    #[cfg(feature = "ssr")]
+    config
+        .incremental(
+            IncrementalRendererConfig::default()
+                .invalidate_after(std::time::Duration::from_secs(120)),
+        )
+        .launch();
+
+    #[cfg(not(feature = "ssr"))]
+    config.launch();
 }
 
-#[derive(Clone, Routable, Debug, PartialEq)]
+#[derive(Clone, Routable, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 enum Route {
     #[route("/")]
     Home {},
@@ -25,10 +31,10 @@ enum Route {
     Blog { id: i32 },
 }
 
-#[inline_props]
+#[component]
 fn Blog(cx: Scope, id: i32) -> Element {
     render! {
-        Link { target: Route::Home {}, "Go to counter" }
+        Link { to: Route::Home {}, "Go to counter" }
         table {
             tbody {
                 for _ in 0..*id {
@@ -43,14 +49,14 @@ fn Blog(cx: Scope, id: i32) -> Element {
     }
 }
 
-#[inline_props]
+#[component]
 fn Home(cx: Scope) -> Element {
     let mut count = use_state(cx, || 0);
     let text = use_state(cx, || "...".to_string());
 
     cx.render(rsx! {
         Link {
-            target: Route::Blog {
+            to: Route::Blog {
                 id: *count.get()
             },
             "Go to blog"

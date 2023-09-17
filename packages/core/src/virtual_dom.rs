@@ -5,10 +5,11 @@
 use crate::{
     any_props::VProps,
     arena::{ElementId, ElementRef},
-    innerlude::{DirtyScope, ErrorBoundary, Mutations, Scheduler, SchedulerMsg, ScopeSlab},
+    innerlude::{DirtyScope, ErrorBoundary, Mutations, Scheduler, SchedulerMsg},
     mutations::Mutation,
     nodes::RenderReturn,
     nodes::{Template, TemplateId},
+    runtime::{Runtime, RuntimeGuard},
     scopes::{ScopeId, ScopeState},
     AttributeValue, Element, Event, Scope,
 };
@@ -51,6 +52,7 @@ use std::{any::Any, cell::Cell, collections::BTreeSet, future::Future, rc::Rc};
 ///
 /// static ROUTES: &str = "";
 ///
+/// #[component]
 /// fn App(cx: Scope<AppProps>) -> Element {
 ///     cx.render(rsx!(
 ///         NavBar { routes: ROUTES }
@@ -59,18 +61,19 @@ use std::{any::Any, cell::Cell, collections::BTreeSet, future::Future, rc::Rc};
 ///     ))
 /// }
 ///
-/// #[inline_props]
+/// #[component]
 /// fn NavBar(cx: Scope, routes: &'static str) -> Element {
 ///     cx.render(rsx! {
 ///         div { "Routes: {routes}" }
 ///     })
 /// }
 ///
+/// #[component]
 /// fn Footer(cx: Scope) -> Element {
 ///     cx.render(rsx! { div { "Footer" } })
 /// }
 ///
-/// #[inline_props]
+/// #[component]
 /// fn Title<'a>(cx: Scope<'a>, children: Element<'a>) -> Element {
 ///     cx.render(rsx! {
 ///         div { id: "title", children }
@@ -121,13 +124,14 @@ use std::{any::Any, cell::Cell, collections::BTreeSet, future::Future, rc::Rc};
 ///
 /// Putting everything together, you can build an event loop around Dioxus by using the methods outlined above.
 /// ```rust, ignore
-/// fn app(cx: Scope) -> Element {
+/// #[component]
+/// fn App(cx: Scope) -> Element {
 ///     cx.render(rsx! {
 ///         div { "Hello World" }
 ///     })
 /// }
 ///
-/// let dom = VirtualDom::new(app);
+/// let dom = VirtualDom::new(App);
 ///
 /// real_dom.apply(dom.rebuild());
 ///
@@ -174,24 +178,24 @@ use std::{any::Any, cell::Cell, collections::BTreeSet, future::Future, rc::Rc};
 /// }
 /// ```
 pub struct VirtualDom {
+    pub(crate) scopes: Slab<Box<ScopeState>>,
+
+    pub(crate) dirty_scopes: BTreeSet<DirtyScope>,
+
     // Maps a template path to a map of byteindexes to templates
     pub(crate) templates: FxHashMap<TemplateId, FxHashMap<usize, Template<'static>>>,
-    pub(crate) scopes: ScopeSlab,
-    pub(crate) dirty_scopes: BTreeSet<DirtyScope>,
-    pub(crate) scheduler: Rc<Scheduler>,
 
     // Every element is actually a dual reference - one to the template and the other to the dynamic node in that template
     pub(crate) elements: Slab<ElementRef>,
 
-    // While diffing we need some sort of way of breaking off a stream of suspended mutations.
-    pub(crate) scope_stack: Vec<ScopeId>,
+    pub(crate) mutations: Mutations<'static>,
+
+    pub(crate) runtime: Rc<Runtime>,
 
     // Currently suspended scopes
     pub(crate) suspended_scopes: FxHashSet<ScopeId>,
 
     pub(crate) rx: futures_channel::mpsc::UnboundedReceiver<SchedulerMsg>,
-
-    pub(crate) mutations: Mutations<'static>,
 }
 
 impl VirtualDom {
@@ -251,16 +255,16 @@ impl VirtualDom {
     /// ```
     pub fn new_with_props<P: 'static>(root: fn(Scope<P>) -> Element, root_props: P) -> Self {
         let (tx, rx) = futures_channel::mpsc::unbounded();
+        let scheduler = Scheduler::new(tx);
         let mut dom = Self {
             rx,
-            scheduler: Scheduler::new(tx),
-            templates: Default::default(),
+            runtime: Runtime::new(scheduler),
             scopes: Default::default(),
+            dirty_scopes: Default::default(),
+            templates: Default::default(),
             elements: Default::default(),
-            scope_stack: Vec::new(),
-            dirty_scopes: BTreeSet::new(),
-            suspended_scopes: FxHashSet::default(),
             mutations: Mutations::default(),
+            suspended_scopes: Default::default(),
         };
 
         let root = dom.new_scope(
@@ -269,7 +273,7 @@ impl VirtualDom {
         );
 
         // Unlike react, we provide a default error boundary that just renders the error as a string
-        root.provide_context(Rc::new(ErrorBoundary::new(ScopeId(0))));
+        root.provide_context(Rc::new(ErrorBoundary::new(ScopeId::ROOT)));
 
         // the root element is always given element ID 0 since it's the container for the entire tree
         dom.elements.insert(ElementRef::none());
@@ -281,14 +285,14 @@ impl VirtualDom {
     ///
     /// This is useful for inserting or removing contexts from a scope, or rendering out its root node
     pub fn get_scope(&self, id: ScopeId) -> Option<&ScopeState> {
-        self.scopes.get(id)
+        self.scopes.get(id.0).map(|s| &**s)
     }
 
     /// Get the single scope at the top of the VirtualDom tree that will always be around
     ///
     /// This scope has a ScopeId of 0 and is the root of the tree
     pub fn base_scope(&self) -> &ScopeState {
-        self.scopes.get(ScopeId(0)).unwrap()
+        self.get_scope(ScopeId::ROOT).unwrap()
     }
 
     /// Build the virtualdom with a global context inserted into the base scope
@@ -301,10 +305,11 @@ impl VirtualDom {
 
     /// Manually mark a scope as requiring a re-render
     ///
-    /// Whenever the VirtualDom "works", it will re-render this scope
+    /// Whenever the Runtime "works", it will re-render this scope
     pub fn mark_dirty(&mut self, id: ScopeId) {
-        if let Some(scope) = self.scopes.get(id) {
-            let height = scope.height;
+        if let Some(scope) = self.get_scope(id) {
+            let height = scope.height();
+            tracing::trace!("Marking scope {:?} ({}) as dirty", id, scope.context().name);
             self.dirty_scopes.insert(DirtyScope { height, id });
         }
     }
@@ -325,6 +330,8 @@ impl VirtualDom {
         element: ElementId,
         bubbles: bool,
     ) {
+        let _runtime = RuntimeGuard::new(self.runtime.clone());
+
         /*
         ------------------------
         The algorithm works by walking through the list of dynamic attributes, checking their paths, and breaking when
@@ -387,9 +394,14 @@ impl VirtualDom {
                     // We check the bubble state between each call to see if the event has been stopped from bubbling
                     for listener in listeners.drain(..).rev() {
                         if let AttributeValue::Listener(listener) = listener {
+                            let origin = el_ref.scope;
+                            self.runtime.scope_stack.borrow_mut().push(origin);
+                            self.runtime.rendering.set(false);
                             if let Some(cb) = listener.borrow_mut().as_deref_mut() {
                                 cb(uievent.clone());
                             }
+                            self.runtime.scope_stack.borrow_mut().pop();
+                            self.runtime.rendering.set(true);
 
                             if !uievent.propagates.get() {
                                 return;
@@ -418,9 +430,14 @@ impl VirtualDom {
                         // Only call the listener if this is the exact target element.
                         if attr.name.trim_start_matches("on") == name && target_path == this_path {
                             if let AttributeValue::Listener(listener) = &attr.value {
+                                let origin = el_ref.scope;
+                                self.runtime.scope_stack.borrow_mut().push(origin);
+                                self.runtime.rendering.set(false);
                                 if let Some(cb) = listener.borrow_mut().as_deref_mut() {
                                     cb(uievent.clone());
                                 }
+                                self.runtime.scope_stack.borrow_mut().pop();
+                                self.runtime.rendering.set(true);
 
                                 break;
                             }
@@ -496,15 +513,16 @@ impl VirtualDom {
     pub fn replace_template(&mut self, template: Template<'static>) {
         self.register_template_first_byte_index(template);
         // iterating a slab is very inefficient, but this is a rare operation that will only happen during development so it's fine
-        for scope in self.scopes.iter() {
+        for (_, scope) in self.scopes.iter() {
             if let Some(RenderReturn::Ready(sync)) = scope.try_root_node() {
                 if sync.template.get().name.rsplit_once(':').unwrap().0
                     == template.name.rsplit_once(':').unwrap().0
                 {
-                    let height = scope.height;
+                    let context = scope.context();
+                    let height = context.height;
                     self.dirty_scopes.insert(DirtyScope {
                         height,
-                        id: scope.id,
+                        id: context.id,
                     });
                 }
             }
@@ -532,17 +550,23 @@ impl VirtualDom {
     /// apply_edits(edits);
     /// ```
     pub fn rebuild(&mut self) -> Mutations {
-        match unsafe { self.run_scope(ScopeId(0)).extend_lifetime_ref() } {
+        let _runtime = RuntimeGuard::new(self.runtime.clone());
+        match unsafe { self.run_scope(ScopeId::ROOT).extend_lifetime_ref() } {
             // Rebuilding implies we append the created elements to the root
             RenderReturn::Ready(node) => {
-                let m = self.create_scope(ScopeId(0), node);
+                let m = self.create_scope(ScopeId::ROOT, node);
                 self.mutations.edits.push(Mutation::AppendChildren {
                     id: ElementId(0),
                     m,
                 });
             }
             // If an error occurs, we should try to render the default error component and context where the error occured
-            RenderReturn::Aborted(_placeholder) => panic!("Cannot catch errors during rebuild"),
+            RenderReturn::Aborted(placeholder) => {
+                tracing::debug!("Ran into suspended or aborted scope during rebuild");
+                let id = self.next_null();
+                placeholder.id.set(Some(id));
+                self.mutations.push(Mutation::CreatePlaceholder { id });
+            }
         }
 
         self.finalize()
@@ -601,13 +625,16 @@ impl VirtualDom {
                 self.dirty_scopes.remove(&dirty);
 
                 // If the scope doesn't exist for whatever reason, then we should skip it
-                if !self.scopes.contains(dirty.id) {
+                if !self.scopes.contains(dirty.id.0) {
                     continue;
                 }
 
-                // Run the scope and get the mutations
-                self.run_scope(dirty.id);
-                self.diff_scope(dirty.id);
+                {
+                    let _runtime = RuntimeGuard::new(self.runtime.clone());
+                    // Run the scope and get the mutations
+                    self.run_scope(dirty.id);
+                    self.diff_scope(dirty.id);
+                }
             }
 
             // If there's more work, then just continue, plenty of work to do
@@ -635,11 +662,16 @@ impl VirtualDom {
     fn finalize(&mut self) -> Mutations {
         std::mem::take(&mut self.mutations)
     }
+
+    /// Get the current runtime
+    pub fn runtime(&self) -> Rc<Runtime> {
+        self.runtime.clone()
+    }
 }
 
 impl Drop for VirtualDom {
     fn drop(&mut self) {
         // Simply drop this scope which drops all of its children
-        self.drop_scope(ScopeId(0), true);
+        self.drop_scope(ScopeId::ROOT, true);
     }
 }

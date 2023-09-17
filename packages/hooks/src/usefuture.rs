@@ -1,12 +1,8 @@
 #![allow(missing_docs)]
 use dioxus_core::{ScopeState, TaskId};
-use std::{
-    any::Any,
-    cell::{Cell, RefCell},
-    future::{Future, IntoFuture},
-    rc::Rc,
-    sync::Arc,
-};
+use std::{any::Any, cell::Cell, future::Future, rc::Rc, sync::Arc};
+
+use crate::{use_state, UseState};
 
 /// A future that resolves to a value.
 ///
@@ -18,7 +14,7 @@ use std::{
 ///
 /// Whenever the hooks dependencies change, the future will be re-evaluated.
 /// If a future is pending when the dependencies change, the previous future
-/// will be allowed to continue
+/// will be canceled before the new one is started.
 ///
 /// - dependencies: a tuple of references to values that are PartialEq + Clone
 pub fn use_future<T, F, D>(
@@ -31,45 +27,38 @@ where
     F: Future<Output = T> + 'static,
     D: UseFutureDep,
 {
+    let val = use_state(cx, || None);
+
     let state = cx.use_hook(move || UseFuture {
         update: cx.schedule_update(),
         needs_regen: Cell::new(true),
-        values: Default::default(),
-        task: Cell::new(None),
+        state: val.clone(),
+        task: Default::default(),
         dependencies: Vec::new(),
-        waker: Default::default(),
     });
 
-    *state.waker.borrow_mut() = None;
-
     if dependencies.clone().apply(&mut state.dependencies) || state.needs_regen.get() {
-        // We don't need regen anymore
-        state.needs_regen.set(false);
+        // kill the old one, if it exists
+        if let Some(task) = state.task.take() {
+            cx.remove_future(task);
+        }
 
         // Create the new future
         let fut = future(dependencies.out());
-
-        // Clone in our cells
-        let values = state.values.clone();
-        let schedule_update = state.update.clone();
-        let waker = state.waker.clone();
-
-        // Cancel the current future
-        if let Some(current) = state.task.take() {
-            cx.remove_future(current);
-        }
+        let val = val.clone();
+        let task = state.task.clone();
 
         state.task.set(Some(cx.push_future(async move {
-            let res = fut.await;
-            values.borrow_mut().push(Box::leak(Box::new(res)));
-
-            // if there's a waker, we dont re-render the component. Instead we just progress that future
-            match waker.borrow().as_ref() {
-                Some(waker) => waker.wake_by_ref(),
-                None => schedule_update(),
-            }
+            val.set(Some(fut.await));
+            task.take();
         })));
+
+        // Mark that we don't need to regenerate
+        state.needs_regen.set(false);
     }
+
+    // update the current value
+    state.state.current_val = val.current_val.clone();
 
     state
 }
@@ -80,21 +69,12 @@ pub enum FutureState<'a, T> {
     Regenerating(&'a T), // the old value
 }
 
-pub struct UseFuture<T> {
+pub struct UseFuture<T: 'static> {
     update: Arc<dyn Fn()>,
     needs_regen: Cell<bool>,
-    task: Cell<Option<TaskId>>,
+    task: Rc<Cell<Option<TaskId>>>,
     dependencies: Vec<Box<dyn Any>>,
-    waker: Rc<RefCell<Option<std::task::Waker>>>,
-    values: Rc<RefCell<Vec<*mut T>>>,
-}
-
-impl<T> Drop for UseFuture<T> {
-    fn drop(&mut self) {
-        for value in self.values.take().into_iter() {
-            drop(unsafe { Box::from_raw(value) })
-        }
-    }
+    state: UseState<Option<T>>,
 }
 
 pub enum UseFutureState<'a, T> {
@@ -120,30 +100,16 @@ impl<T> UseFuture<T> {
         }
     }
 
-    // clears the value in the future slot without starting the future over
-    pub fn clear(&self) -> Option<T> {
-        todo!()
-        // (self.update)();
-        // self.slot.replace(None)
-    }
-
     // Manually set the value in the future slot without starting the future over
-    pub fn set(&self, _new_value: T) {
-        // self.slot.set(Some(new_value));
-        // self.needs_regen.set(true);
-        // (self.update)();
-        todo!()
+    pub fn set(&self, new_value: T) {
+        self.state.set(Some(new_value));
     }
 
     /// Return any value, even old values if the future has not yet resolved.
     ///
     /// If the future has never completed, the returned value will be `None`.
     pub fn value(&self) -> Option<&T> {
-        self.values
-            .borrow_mut()
-            .last()
-            .cloned()
-            .map(|x| unsafe { &*x })
+        self.state.current_val.as_ref().as_ref()
     }
 
     /// Get the ID of the future in Dioxus' internal scheduler
@@ -165,35 +131,6 @@ impl<T> UseFuture<T> {
 
             // Task, no value - we're still pending
             (Some(_), None) => UseFutureState::Pending,
-        }
-    }
-}
-
-impl<'a, T> IntoFuture for &'a UseFuture<T> {
-    type Output = &'a T;
-    type IntoFuture = UseFutureAwait<'a, T>;
-    fn into_future(self) -> Self::IntoFuture {
-        UseFutureAwait { hook: self }
-    }
-}
-
-pub struct UseFutureAwait<'a, T> {
-    hook: &'a UseFuture<T>,
-}
-
-impl<'a, T> Future for UseFutureAwait<'a, T> {
-    type Output = &'a T;
-
-    fn poll(
-        self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Self::Output> {
-        match self.hook.values.borrow_mut().last().cloned() {
-            Some(value) => std::task::Poll::Ready(unsafe { &*value }),
-            None => {
-                self.hook.waker.replace(Some(cx.waker().clone()));
-                std::task::Poll::Pending
-            }
         }
     }
 }
@@ -342,10 +279,6 @@ mod tests {
                 let a = b + c;
                 let blah = "asd";
             });
-
-            let g2 = a.await;
-
-            let g = fut.await;
 
             todo!()
         }

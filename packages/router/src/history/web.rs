@@ -1,6 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use gloo::{console::error, events::EventListener, render::AnimationFrame};
+
 use wasm_bindgen::JsValue;
 use web_sys::{window, History, ScrollRestoration, Window};
 
@@ -58,8 +59,6 @@ pub struct WebHistory<R: Routable> {
     do_scroll_restoration: bool,
     history: History,
     listener_navigation: Option<EventListener>,
-    #[allow(dead_code)]
-    listener_scroll: Option<EventListener>,
     listener_animation_frame: Arc<Mutex<Option<AnimationFrame>>>,
     prefix: Option<String>,
     window: Window,
@@ -97,27 +96,7 @@ impl<R: Routable> WebHistory<R> {
     where
         <R as std::str::FromStr>::Err: std::fmt::Display,
     {
-        let w = window().expect("access to `window`");
-        let h = w.history().expect("`window` has access to `history`");
-        let document = w.document().expect("`window` has access to `document`");
-
-        let myself = Self::new_inner(
-            prefix,
-            do_scroll_restoration,
-            EventListener::new(&document, "scroll", {
-                let mut last_updated = 0.0;
-                move |evt| {
-                    // the time stamp in milliseconds
-                    let time_stamp = evt.time_stamp();
-                    // throttle the scroll event to 100ms
-                    if (time_stamp - last_updated) < 100.0 {
-                        return;
-                    }
-                    update_scroll::<R>(&w, &h);
-                    last_updated = time_stamp;
-                }
-            }),
-        );
+        let myself = Self::new_inner(prefix, do_scroll_restoration);
 
         let current_route = myself.current_route();
         let current_url = current_route.to_string();
@@ -160,7 +139,7 @@ impl<R: Routable> WebHistory<R> {
         );
 
         let current_route = myself.current_route();
-        log::trace!("initial route: {:?}", current_route);
+        tracing::trace!("initial route: {:?}", current_route);
         let current_url = current_route.to_string();
         let state = myself.create_state(current_route);
         let _ = replace_state_with_url(&myself.history, &state, Some(&current_url));
@@ -168,32 +147,23 @@ impl<R: Routable> WebHistory<R> {
         myself
     }
 
-    fn new_inner(
-        prefix: Option<String>,
-        do_scroll_restoration: bool,
-        event_listener: EventListener,
-    ) -> Self
+    fn new_inner(prefix: Option<String>, do_scroll_restoration: bool) -> Self
     where
         <R as std::str::FromStr>::Err: std::fmt::Display,
     {
         let window = window().expect("access to `window`");
         let history = window.history().expect("`window` has access to `history`");
 
-        let listener_scroll = match do_scroll_restoration {
-            true => {
-                history
-                    .set_scroll_restoration(ScrollRestoration::Manual)
-                    .expect("`history` can set scroll restoration");
-                Some(event_listener)
-            }
-            false => None,
-        };
+        if do_scroll_restoration {
+            history
+                .set_scroll_restoration(ScrollRestoration::Manual)
+                .expect("`history` can set scroll restoration");
+        }
 
         Self {
             do_scroll_restoration,
             history,
             listener_navigation: None,
-            listener_scroll,
             listener_animation_frame: Default::default(),
             prefix,
             window,
@@ -225,14 +195,10 @@ where
     <R as std::str::FromStr>::Err: std::fmt::Display,
 {
     fn route_from_location(&self) -> R {
-        R::from_str(
-            &self
-                .window
-                .location()
-                .pathname()
-                .unwrap_or_else(|_| String::from("/")),
-        )
-        .unwrap_or_else(|err| panic!("{}", err))
+        let location = self.window.location();
+        let path = location.pathname().unwrap_or_else(|_| "/".into())
+            + &location.search().unwrap_or("".into());
+        R::from_str(&path).unwrap_or_else(|err| panic!("{}", err))
     }
 
     fn full_path(&self, state: &R) -> String {
@@ -296,6 +262,18 @@ where
     }
 
     fn push(&mut self, state: R) {
+        use gloo_utils::format::JsValueSerdeExt;
+        if JsValue::from_serde(&state) != JsValue::from_serde(&self.current_route()) {
+            // don't push the same state twice
+            return;
+        }
+
+        let w = window().expect("access to `window`");
+        let h = w.history().expect("`window` has access to `history`");
+
+        // update the scroll position before pushing the new state
+        update_scroll::<R>(&w, &h);
+
         let path = self.full_path(&state);
 
         let state = self.create_state(state);
@@ -362,6 +340,17 @@ where
     }
 
     fn push(&mut self, state: R) {
+        if state.to_string() == self.current_route().to_string() {
+            // don't push the same state twice
+            return;
+        }
+
+        let w = window().expect("access to `window`");
+        let h = w.history().expect("`window` has access to `history`");
+
+        // update the scroll position before pushing the new state
+        update_scroll::<R>(&w, &h);
+
         let path = self.full_path(&state);
 
         let state: [f64; 2] = self.create_state(state);

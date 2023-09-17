@@ -46,15 +46,15 @@ impl Create {
             toml.as_table_mut().fmt();
 
             let as_string = toml.to_string();
-            let new_string = remove_tripple_newlines(&as_string);
+            let new_string = remove_triple_newlines(&as_string);
             let mut file = std::fs::File::create(toml_path)?;
             file.write_all(new_string.as_bytes())?;
         }
 
-        // remove any tripple newlines from the readme
+        // remove any triple newlines from the readme
         let readme_path = path.join("README.md");
         let readme = std::fs::read_to_string(&readme_path)?;
-        let new_readme = remove_tripple_newlines(&readme);
+        let new_readme = remove_triple_newlines(&readme);
         let mut file = std::fs::File::create(readme_path)?;
         file.write_all(new_readme.as_bytes())?;
 
@@ -64,7 +64,7 @@ impl Create {
     }
 }
 
-fn remove_tripple_newlines(string: &str) -> String {
+fn remove_triple_newlines(string: &str) -> String {
     let mut new_string = String::new();
     for char in string.chars() {
         if char == '\n' && new_string.ends_with("\n\n") {

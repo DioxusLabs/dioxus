@@ -1,13 +1,13 @@
 [package]
 name = "dioxus-mobile"
-version = "0.3.0"
+version = { workspace = true }
 authors = ["Jonathan Kelley"]
 edition = "2018"
 description = "Mobile-compatible renderer for Dioxus"
 repository = "https://github.com/DioxusLabs/dioxus/"
-homepage = "https://dioxuslabs.com/docs/0.3/guide/en/getting_started/mobile.html"
+homepage = "https://dioxuslabs.com/learn/0.4/getting_started/mobile"
 keywords = ["dom", "ui", "gui", "react"]
-license = "MIT/Apache-2.0"
+license = "MIT OR Apache-2.0"
 
 [dependencies]
 dioxus-desktop = { workspace = true }

@@ -328,22 +328,79 @@ pub fn extract_zip(file: &Path, target: &Path) -> anyhow::Result<()> {
     }
 
     for i in 0..zip.len() {
-        let mut file = zip.by_index(i)?;
-        if file.is_dir() {
-            // dir
-            let target = target.join(Path::new(&file.name().replace('\\', "")));
-            std::fs::create_dir_all(target)?;
+        let mut zip_entry = zip.by_index(i)?;
+
+        // check for dangerous paths
+        // see https://docs.rs/zip/latest/zip/read/struct.ZipFile.html#warnings
+        let Some(enclosed_name) = zip_entry.enclosed_name() else {
+            return Err(anyhow::anyhow!(
+                "Refusing to unpack zip entry with potentially dangerous path: zip={} entry={:?}",
+                file.display(),
+                zip_entry.name()
+            ));
+        };
+
+        let output_path = target.join(enclosed_name);
+        if zip_entry.is_dir() {
+            std::fs::create_dir_all(output_path)?;
         } else {
-            // file
-            let file_path = target.join(Path::new(file.name()));
-            let mut target_file = if !file_path.exists() {
-                std::fs::File::create(file_path)?
+            // create parent dirs if needed
+            if let Some(parent) = output_path.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+
+            // extract file
+            let mut target_file = if !output_path.exists() {
+                std::fs::File::create(output_path)?
             } else {
-                std::fs::File::open(file_path)?
+                std::fs::File::open(output_path)?
             };
-            let _num = std::io::copy(&mut file, &mut target_file)?;
+            let _num = std::io::copy(&mut zip_entry, &mut target_file)?;
         }
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use std::path::PathBuf;
+    use tempfile::tempdir;
+
+    #[test]
+    fn test_extract_zip() -> anyhow::Result<()> {
+        let path = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap())
+            .join("tests/fixtures/test.zip");
+        let temp_dir = tempdir()?;
+        let temp_path = temp_dir.path();
+
+        extract_zip(path.as_path(), temp_path)?;
+
+        let expected_files = vec!["file1.txt", "file2.txt", "dir/file3.txt"];
+        for file in expected_files {
+            let path = temp_path.join(file);
+            assert!(path.exists(), "File not found: {:?}", path);
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_extract_zip_dangerous_path() -> anyhow::Result<()> {
+        let path = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap())
+            .join("tests/fixtures/dangerous.zip");
+        let temp_dir = tempdir()?;
+        let temp_path = temp_dir.path();
+
+        let result = extract_zip(path.as_path(), temp_path);
+
+        let err = result.unwrap_err();
+        assert!(err
+            .to_string()
+            .contains("Refusing to unpack zip entry with potentially dangerous path: zip="));
+        assert!(err.to_string().contains("entry=\"/etc/passwd\""));
+
+        Ok(())
+    }
 }

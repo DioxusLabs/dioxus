@@ -54,7 +54,7 @@ pub struct VNode<'a> {
 
     /// The IDs for the roots of this template - to be used when moving the template around and removing it from
     /// the actual Dom
-    pub root_ids: RefCell<Vec<ElementId>>,
+    pub root_ids: RefCell<bumpalo::collections::Vec<'a, ElementId>>,
 
     /// The dynamic parts of the template
     pub dynamic_nodes: &'a [DynamicNode<'a>],
@@ -65,11 +65,11 @@ pub struct VNode<'a> {
 
 impl<'a> VNode<'a> {
     /// Create a template with no nodes that will be skipped over during diffing
-    pub fn empty() -> Element<'a> {
+    pub fn empty(cx: &'a ScopeState) -> Element<'a> {
         Some(VNode {
             key: None,
             parent: None,
-            root_ids: Default::default(),
+            root_ids: RefCell::new(bumpalo::collections::Vec::new_in(cx.bump())),
             dynamic_nodes: &[],
             dynamic_attrs: &[],
             template: Cell::new(Template {
@@ -312,17 +312,24 @@ pub struct VComponent<'a> {
     /// Internally, this is used as a guarantee. Externally, this might be incorrect, so don't count on it.
     ///
     /// This flag is assumed by the [`crate::Properties`] trait which is unsafe to implement
-    pub static_props: bool,
+    pub(crate) static_props: bool,
 
     /// The assigned Scope for this component
-    pub scope: Cell<Option<ScopeId>>,
+    pub(crate) scope: Cell<Option<ScopeId>>,
 
     /// The function pointer of the component, known at compile time
     ///
     /// It is possible that components get folded at comppile time, so these shouldn't be really used as a key
-    pub render_fn: *const (),
+    pub(crate) render_fn: *const (),
 
     pub(crate) props: RefCell<Option<Box<dyn AnyProps<'a> + 'a>>>,
+}
+
+impl<'a> VComponent<'a> {
+    /// Get the scope that this component is mounted to
+    pub fn mounted_scope(&self) -> Option<ScopeId> {
+        self.scope.get()
+    }
 }
 
 impl<'a> std::fmt::Debug for VComponent<'a> {
@@ -342,14 +349,36 @@ pub struct VText<'a> {
     pub value: &'a str,
 
     /// The ID of this node in the real DOM
-    pub id: Cell<Option<ElementId>>,
+    pub(crate) id: Cell<Option<ElementId>>,
+}
+
+impl<'a> VText<'a> {
+    /// Create a new VText
+    pub fn new(value: &'a str) -> Self {
+        Self {
+            value,
+            id: Default::default(),
+        }
+    }
+
+    /// Get the mounted ID of this node
+    pub fn mounted_element(&self) -> Option<ElementId> {
+        self.id.get()
+    }
 }
 
 /// A placeholder node, used by suspense and fragments
 #[derive(Debug, Default)]
 pub struct VPlaceholder {
     /// The ID of this node in the real DOM
-    pub id: Cell<Option<ElementId>>,
+    pub(crate) id: Cell<Option<ElementId>>,
+}
+
+impl VPlaceholder {
+    /// Get the mounted ID of this node
+    pub fn mounted_element(&self) -> Option<ElementId> {
+        self.id.get()
+    }
 }
 
 /// An attribute of the TemplateNode, created at compile time
@@ -399,11 +428,34 @@ pub struct Attribute<'a> {
     /// Doesn’t exist in the html spec. Used in Dioxus to denote “style” tags and other attribute groups.
     pub namespace: Option<&'static str>,
 
-    /// The element in the DOM that this attribute belongs to
-    pub mounted_element: Cell<ElementId>,
-
     /// An indication of we should always try and set the attribute. Used in controlled components to ensure changes are propagated
     pub volatile: bool,
+
+    /// The element in the DOM that this attribute belongs to
+    pub(crate) mounted_element: Cell<ElementId>,
+}
+
+impl<'a> Attribute<'a> {
+    /// Create a new attribute
+    pub fn new(
+        name: &'a str,
+        value: AttributeValue<'a>,
+        namespace: Option<&'static str>,
+        volatile: bool,
+    ) -> Self {
+        Self {
+            name,
+            value,
+            namespace,
+            volatile,
+            mounted_element: Cell::new(ElementId::default()),
+        }
+    }
+
+    /// Get the element that this attribute is mounted to
+    pub fn mounted_element(&self) -> ElementId {
+        self.mounted_element.get()
+    }
 }
 
 /// Any of the built-in values that the Dioxus VirtualDom supports as dynamic attributes on elements
@@ -639,14 +691,14 @@ impl<'a> IntoDynNode<'a> for &Element<'a> {
 
 impl<'a, 'b> IntoDynNode<'a> for LazyNodes<'a, 'b> {
     fn into_vnode(self, cx: &'a ScopeState) -> DynamicNode<'a> {
-        DynamicNode::Fragment(cx.bump().alloc([self.call(cx)]))
+        DynamicNode::Fragment(cx.bump().alloc([cx.render(self).unwrap()]))
     }
 }
 
 impl<'a, 'b> IntoDynNode<'b> for &'a str {
     fn into_vnode(self, cx: &'b ScopeState) -> DynamicNode<'b> {
         DynamicNode::Text(VText {
-            value: bumpalo::collections::String::from_str_in(self, cx.bump()).into_bump_str(),
+            value: cx.bump().alloc_str(self),
             id: Default::default(),
         })
     }
@@ -689,16 +741,16 @@ impl<'a> IntoTemplate<'a> for VNode<'a> {
     }
 }
 impl<'a> IntoTemplate<'a> for Element<'a> {
-    fn into_template(self, _cx: &'a ScopeState) -> VNode<'a> {
+    fn into_template(self, cx: &'a ScopeState) -> VNode<'a> {
         match self {
-            Some(val) => val.into_template(_cx),
-            _ => VNode::empty().unwrap(),
+            Some(val) => val.into_template(cx),
+            _ => VNode::empty(cx).unwrap(),
         }
     }
 }
 impl<'a, 'b> IntoTemplate<'a> for LazyNodes<'a, 'b> {
     fn into_template(self, cx: &'a ScopeState) -> VNode<'a> {
-        self.call(cx)
+        cx.render(self).unwrap()
     }
 }
 

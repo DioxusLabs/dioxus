@@ -6,7 +6,7 @@ use super::*;
 // For reference, the rustfmt main.rs file
 // https://github.com/rust-lang/rustfmt/blob/master/src/bin/main.rs
 
-/// Build the Rust WASM app and all of its assets.
+/// Format some rsx
 #[derive(Clone, Debug, Parser)]
 pub struct Autoformat {
     /// Run in 'check' mode. Exits with 0 if input is formatted correctly. Exits
@@ -109,11 +109,17 @@ async fn autoformat_project(check: bool) -> Result<()> {
             })
             .await;
 
-            if res.is_err() {
-                eprintln!("error formatting file: {}", _path.display());
+            match res {
+                Err(err) => {
+                    eprintln!("error formatting file: {}\n{err}", _path.display());
+                    None
+                }
+                Ok(Err(err)) => {
+                    eprintln!("error formatting file: {}\n{err}", _path.display());
+                    None
+                }
+                Ok(Ok(res)) => Some(res),
             }
-
-            res
         })
         .collect::<FuturesUnordered<_>>()
         .collect::<Vec<_>>()
@@ -122,7 +128,7 @@ async fn autoformat_project(check: bool) -> Result<()> {
     let files_formatted: usize = counts
         .into_iter()
         .map(|f| match f {
-            Ok(Ok(res)) => res,
+            Some(res) => res,
             _ => 0,
         })
         .sum();

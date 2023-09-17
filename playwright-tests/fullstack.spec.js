@@ -9,7 +9,7 @@ test('button click', async ({ page }) => {
   await expect(main).toContainText('hello axum! 12345');
 
   // Click the increment button.
-  let button = await page.locator('button.increment-button');
+  let button = page.locator('button.increment-button');
   await button.click();
 
   // Expect the page to contain the updated counter text.
@@ -24,7 +24,7 @@ test('fullstack communication', async ({ page }) => {
   await expect(main).toContainText('Server said: ...');
 
   // Click the increment button.
-  let button = await page.locator('button.server-button');
+  let button = page.locator('button.server-button');
   await button.click();
 
   // Expect the page to contain the updated counter text.

@@ -1,13 +1,13 @@
 [package]
-name = "rink"
-version = "0.2.2"
-authors = ["Jonathan Kelley, @dementhos"]
+name = "plasmo"
+version = { workspace = true }
+authors = ["Jonathan Kelley, Evan Almloff"]
 edition = "2021"
 description = "TUI-based renderer for Dioxus"
 repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com"
 keywords = ["dom", "ui", "gui", "react", "terminal"]
-license = "MIT/Apache-2.0"
+license = "MIT OR Apache-2.0"
 
 [dependencies]
 dioxus-html = { workspace = true }

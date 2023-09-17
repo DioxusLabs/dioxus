@@ -3,7 +3,6 @@ use std::rc::Rc;
 use std::rc::Weak;
 
 use crate::create_new_window;
-use crate::eval::EvalResult;
 use crate::events::IpcMessage;
 use crate::query::QueryEngine;
 use crate::shortcut::ShortcutId;
@@ -195,7 +194,7 @@ impl DesktopService {
     /// launch print modal
     pub fn print(&self) {
         if let Err(e) = self.webview.print() {
-            log::warn!("Open print modal failed: {e}");
+            tracing::warn!("Open print modal failed: {e}");
         }
     }
 
@@ -210,15 +209,7 @@ impl DesktopService {
         self.webview.open_devtools();
 
         #[cfg(not(debug_assertions))]
-        log::warn!("Devtools are disabled in release builds");
-    }
-
-    /// Evaluate a javascript expression
-    pub fn eval(&self, code: &str) -> EvalResult {
-        // the query id lets us keep track of the eval result and send it back to the main thread
-        let query = self.query.new_query(code, &self.webview);
-
-        EvalResult::new(query)
+        tracing::warn!("Devtools are disabled in release builds");
     }
 
     /// Create a wry event handler that listens for wry events.

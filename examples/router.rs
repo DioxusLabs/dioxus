@@ -1,5 +1,3 @@
-#![allow(non_snake_case)]
-
 use dioxus::prelude::*;
 use dioxus_router::prelude::*;
 
@@ -37,54 +35,55 @@ enum Route {
 }
 // ANCHOR_END: router
 
+#[component]
 fn App(cx: Scope) -> Element {
     render! {
-        Router {}
+        Router::<Route> {}
     }
 }
 
-#[inline_props]
+#[component]
 fn NavBar(cx: Scope) -> Element {
     render! {
         nav {
             ul {
-                li { Link { target: Route::Home {}, "Home" } }
-                li { Link { target: Route::BlogList {}, "Blog" } }
+                li { Link { to: Route::Home {}, "Home" } }
+                li { Link { to: Route::BlogList {}, "Blog" } }
             }
         }
-        Outlet {}
+        Outlet::<Route> {}
     }
 }
 
-#[inline_props]
+#[component]
 fn Home(cx: Scope) -> Element {
     render! {
         h1 { "Welcome to the Dioxus Blog!" }
     }
 }
 
-#[inline_props]
+#[component]
 fn Blog(cx: Scope) -> Element {
     render! {
         h1 { "Blog" }
-        Outlet {}
+        Outlet::<Route> {}
     }
 }
 
-#[inline_props]
+#[component]
 fn BlogList(cx: Scope) -> Element {
     render! {
         h2 { "Choose a post" }
         ul {
             li {
                 Link {
-                    target: Route::BlogPost { name: "Blog post 1".into() },
+                    to: Route::BlogPost { name: "Blog post 1".into() },
                     "Read the first blog post"
                 }
             }
             li {
                 Link {
-                    target: Route::BlogPost { name: "Blog post 2".into() },
+                    to: Route::BlogPost { name: "Blog post 2".into() },
                     "Read the second blog post"
                 }
             }
@@ -92,14 +91,14 @@ fn BlogList(cx: Scope) -> Element {
     }
 }
 
-#[inline_props]
+#[component]
 fn BlogPost(cx: Scope, name: String) -> Element {
     render! {
         h2 { "Blog Post: {name}"}
     }
 }
 
-#[inline_props]
+#[component]
 fn PageNotFound(cx: Scope, route: Vec<String>) -> Element {
     render! {
         h1 { "Page not found" }

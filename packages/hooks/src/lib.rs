@@ -1,3 +1,5 @@
+#![cfg_attr(feature = "nightly-features", feature(debug_refcell))]
+
 #[macro_export]
 /// A helper macro for using hooks and properties in async environements.
 ///
@@ -49,6 +51,8 @@ macro_rules! to_owned {
         $(to_owned![$($rest)*])?
     };
 }
+
+pub mod computed;
 
 mod use_on_unmount;
 pub use use_on_unmount::*;

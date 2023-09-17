@@ -1,7 +1,6 @@
 //! Types pertaining to navigation.
 
 use std::{
-    convert::TryFrom,
     fmt::{Debug, Display},
     str::FromStr,
 };
@@ -12,14 +11,14 @@ use crate::routable::Routable;
 
 /// A target for the router to navigate to.
 #[derive(Clone, PartialEq, Eq, Debug)]
-pub enum NavigationTarget<R: Routable> {
+pub enum NavigationTarget<R> {
     /// An internal path that the router can navigate to by itself.
     ///
     /// ```rust
     /// # use dioxus::prelude::*;
     /// # use dioxus_router::prelude::*;
     /// # use dioxus_router::navigation::NavigationTarget;
-    /// # #[inline_props]
+    /// # #[component]
     /// # fn Index(cx: Scope) -> Element {
     /// #     todo!()
     /// # }
@@ -39,7 +38,7 @@ pub enum NavigationTarget<R: Routable> {
     /// # use dioxus::prelude::*;
     /// # use dioxus_router::prelude::*;
     /// # use dioxus_router::navigation::NavigationTarget;
-    /// # #[inline_props]
+    /// # #[component]
     /// # fn Index(cx: Scope) -> Element {
     /// #     todo!()
     /// # }
@@ -55,11 +54,23 @@ pub enum NavigationTarget<R: Routable> {
     External(String),
 }
 
-impl<R: Routable> TryFrom<&str> for NavigationTarget<R> {
-    type Error = NavigationTargetParseError<R>;
+impl<R: Routable> From<&str> for NavigationTarget<R> {
+    fn from(value: &str) -> Self {
+        value
+            .parse()
+            .unwrap_or_else(|_| Self::External(value.to_string()))
+    }
+}
 
-    fn try_from(value: &str) -> Result<Self, Self::Error> {
-        value.parse()
+impl<R: Routable> From<&String> for NavigationTarget<R> {
+    fn from(value: &String) -> Self {
+        value.as_str().into()
+    }
+}
+
+impl<R: Routable> From<String> for NavigationTarget<R> {
+    fn from(value: String) -> Self {
+        value.as_str().into()
     }
 }
 

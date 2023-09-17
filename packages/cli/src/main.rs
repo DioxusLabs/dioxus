@@ -92,6 +92,10 @@ async fn main() -> anyhow::Result<()> {
             .config()
             .map_err(|e| anyhow!("🚫 Configuring new project failed: {}", e)),
 
+        Bundle(opts) => opts
+            .bundle(bin.clone())
+            .map_err(|e| anyhow!("🚫 Bundling project failed: {}", e)),
+
         #[cfg(feature = "plugin")]
         Plugin(opts) => opts
             .plugin()
@@ -102,6 +106,11 @@ async fn main() -> anyhow::Result<()> {
             .autoformat()
             .await
             .map_err(|e| anyhow!("🚫 Error autoformatting RSX: {}", e)),
+
+        Check(opts) => opts
+            .check()
+            .await
+            .map_err(|e| anyhow!("🚫 Error checking RSX: {}", e)),
 
         Version(opt) => {
             let version = opt.version();

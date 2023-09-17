@@ -3,12 +3,13 @@ name = "dioxus-pwa-example"
 version = "0.1.0"
 authors = ["Antonio Curavalea <one.kyonblack@gmail.com>"]
 edition = "2021"
+publish = false
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-dioxus = { path = "../../packages/dioxus", version = "^0.3.0"}
-dioxus-web = { path = "../../packages/web", version = "^0.3.0"}
+dioxus = { path = "../../packages/dioxus", version = "*" }
+dioxus-web = { path = "../../packages/web", version = "*" }
 
 log = "0.4.6"
 

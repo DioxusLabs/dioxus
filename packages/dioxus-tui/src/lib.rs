@@ -12,8 +12,8 @@ use dioxus_native_core::dioxus::{DioxusState, NodeImmutableDioxusExt};
 use dioxus_native_core::prelude::*;
 
 use element::{create_mounted_events, find_mount_events};
-pub use rink::{query::Query, Config, RenderingMode, Size, TuiContext};
-use rink::{render, Driver};
+pub use plasmo::{query::Query, Config, RenderingMode, Size, TuiContext};
+use plasmo::{render, Driver};
 
 pub fn launch(app: Component<()>) {
     launch_cfg(app, Config::default())
@@ -116,7 +116,7 @@ impl Driver for DioxusRenderer {
         rdom: &Arc<RwLock<RealDom>>,
         id: NodeId,
         event: &str,
-        value: Rc<rink::EventData>,
+        value: Rc<plasmo::EventData>,
         bubbles: bool,
     ) {
         let id = { rdom.read().unwrap().get(id).unwrap().mounted_id() };

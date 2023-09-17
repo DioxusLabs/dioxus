@@ -10,7 +10,7 @@
 //! will cause it to fetch a random dog image from the Dog API. Since the data
 //! is not ready immediately, we render some loading text.
 //!
-//! We can achieve the majoirty of suspense functionality by composing "suspenseful"
+//! We can achieve the majority of suspense functionality by composing "suspenseful"
 //! primitives in our own custom components.
 
 use dioxus::prelude::*;

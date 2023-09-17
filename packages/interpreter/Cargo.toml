@@ -1,6 +1,6 @@
 [package]
 name = "dioxus-interpreter-js"
-version = "0.3.3"
+version = { workspace = true }
 edition = "2018"
 authors = ["Jonathan Kelley"]
 description = "JS Intepreter for Dioxus - a concurrent renderer-agnostic Virtual DOM for interactive user experiences"
@@ -15,7 +15,7 @@ wasm-bindgen = { workspace = true, optional = true }
 js-sys = { version = "0.3.56", optional = true }
 web-sys = { version = "0.3.56", optional = true, features = ["Element", "Node"] }
 sledgehammer_bindgen = { version = "0.2.1", optional = true }
-sledgehammer_utils = { version = "0.1.1", optional = true }
+sledgehammer_utils = { version = "0.2", optional = true }
 serde = { version = "1.0", features = ["derive"], optional = true }
 
 [features]

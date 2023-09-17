@@ -9,7 +9,7 @@ publish = false
 [dependencies]
 dioxus-web = { workspace = true, features = ["hydrate"], optional = true }
 dioxus = { workspace = true }
-dioxus-router = { workspace = true}
+dioxus-router = { workspace = true }
 dioxus-fullstack = { workspace = true, features = ["router"] }
 axum = { version = "0.6.12", optional = true }
 tokio = {workspace = true, features = ["full"], optional = true }
@@ -17,5 +17,5 @@ serde = { version = "1.0.159", features = ["derive"] }
 
 [features]
 default = []
-ssr = ["axum", "tokio", "dioxus-fullstack/axum"]
-web = ["dioxus-web", "dioxus-router/web"]
+ssr = ["axum", "dioxus-fullstack/axum"]
+web = ["dioxus-fullstack/web", "dioxus-router/web"]

@@ -3,22 +3,12 @@
 use futures_channel::mpsc::UnboundedReceiver;
 
 use dioxus_core::Template;
-use wasm_bindgen::closure::Closure;
-use wasm_bindgen::JsCast;
-use web_sys::{MessageEvent, WebSocket};
 
-#[cfg(not(debug_assertions))]
-pub(crate) fn init() -> UnboundedReceiver<Template<'static>> {
-    let (tx, rx) = futures_channel::mpsc::unbounded();
-
-    std::mem::forget(tx);
-
-    rx
-}
-
-#[cfg(debug_assertions)]
 pub(crate) fn init() -> UnboundedReceiver<Template<'static>> {
     use std::convert::TryInto;
+    use wasm_bindgen::closure::Closure;
+    use wasm_bindgen::JsCast;
+    use web_sys::{MessageEvent, WebSocket};
 
     use serde::Deserialize;
 

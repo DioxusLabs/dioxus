@@ -1,16 +1,17 @@
 [package]
 name = "dioxus-liveview"
-version = "0.3.1"
+version = { workspace = true }
 edition = "2021"
 repository = "https://github.com/DioxusLabs/dioxus/"
-homepage = "https://dioxuslabs.com/docs/0.3/guide/en/getting_started/liveview.html"
+homepage = "https://dioxuslabs.com/learn/0.4/getting_started/liveview"
 keywords = ["dom", "ui", "gui", "react", "liveview"]
 description = "Build server-side apps with Dioxus"
-license = "MIT/Apache-2.0"
+authors = ["Jonathan Kelley", "Evan Almloff"]
+license = "MIT OR Apache-2.0"
 
 [dependencies]
-thiserror = "1.0.38"
-log = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
 slab = { workspace = true }
 futures-util = { workspace = true, default-features = false, features = [
     "sink",
@@ -35,6 +36,7 @@ axum = { version = "0.6.1", optional = true, features = ["ws"] }
 # salvo
 salvo = { version = "0.44.1", optional = true, features = ["ws"] }
 once_cell = "1.17.1"
+async-trait = "0.1.71"
 
 # actix is ... complicated?
 # actix-files = { version = "0.6.2", optional = true }

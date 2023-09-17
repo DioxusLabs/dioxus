@@ -20,9 +20,9 @@ where
     /// ```rust
     /// # use dioxus_router::prelude::*;
     /// # use dioxus::prelude::*;
-    /// # #[inline_props]
+    /// # #[component]
     /// # fn Index(cx: Scope) -> Element { todo!() }
-    /// # #[inline_props]
+    /// # #[component]
     /// # fn OtherPage(cx: Scope) -> Element { todo!() }
     /// #[derive(Clone, Routable, Debug, PartialEq)]
     /// enum Route {
@@ -88,6 +88,10 @@ impl<R: Routable> HistoryProvider<R> for MemoryHistory<R> {
     }
 
     fn push(&mut self, new: R) {
+        // don't push the same route twice
+        if self.current.to_string() == new.to_string() {
+            return;
+        }
         let old = std::mem::replace(&mut self.current, new);
         self.history.push(old);
         self.future.clear();

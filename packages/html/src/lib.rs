@@ -37,6 +37,9 @@ pub use events::*;
 pub use global_attributes::*;
 pub use render_template::*;
 
+mod eval;
+
 pub mod prelude {
+    pub use crate::eval::*;
     pub use crate::events::*;
 }

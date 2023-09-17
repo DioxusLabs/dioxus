@@ -21,7 +21,6 @@ use crate::segment::RouteSegment;
 struct RouteArgs {
     route: LitStr,
     comp_name: Option<Path>,
-    props_name: Option<Path>,
 }
 
 impl Parse for RouteArgs {
@@ -31,10 +30,6 @@ impl Parse for RouteArgs {
         Ok(RouteArgs {
             route,
             comp_name: {
-                let _ = input.parse::<syn::Token![,]>();
-                input.parse().ok()
-            },
-            props_name: {
                 let _ = input.parse::<syn::Token![,]>();
                 input.parse().ok()
             },
@@ -75,7 +70,7 @@ impl Route {
         let route_attr = variant
             .attrs
             .iter()
-            .find(|attr| attr.path.is_ident("route"));
+            .find(|attr| attr.path().is_ident("route"));
         let route;
         let ty;
         let route_name = variant.ident.clone();
@@ -83,22 +78,8 @@ impl Route {
             Some(attr) => {
                 let args = attr.parse_args::<RouteArgs>()?;
                 let comp_name = args.comp_name.unwrap_or_else(|| parse_quote!(#route_name));
-                let props_name = args.props_name.unwrap_or_else(|| {
-                    let last = format_ident!(
-                        "{}Props",
-                        comp_name.segments.last().unwrap().ident.to_string()
-                    );
-                    let mut segments = comp_name.segments.clone();
-                    segments.pop();
-                    segments.push(last.into());
-                    Path {
-                        leading_colon: None,
-                        segments,
-                    }
-                });
                 ty = RouteType::Leaf {
                     component: comp_name,
-                    props: props_name,
                 };
                 route = args.route.value();
             }
@@ -106,7 +87,7 @@ impl Route {
                 if let Some(route_attr) = variant
                     .attrs
                     .iter()
-                    .find(|attr| attr.path.is_ident("child"))
+                    .find(|attr| attr.path().is_ident("child"))
                 {
                     let args = route_attr.parse_args::<ChildArgs>()?;
                     route = args.route.value();
@@ -116,7 +97,7 @@ impl Route {
                             let child_field = fields.named.iter().find(|f| {
                                 f.attrs
                                     .iter()
-                                    .any(|attr| attr.path.is_ident("child"))
+                                    .any(|attr| attr.path().is_ident("child"))
                                     || *f.ident.as_ref().unwrap() == "child"
                             });
                             match child_field{
@@ -227,7 +208,6 @@ impl Route {
 
     pub fn routable_match(&self, layouts: &[Layout], nests: &[Nest]) -> TokenStream2 {
         let name = &self.route_name;
-        let name_str = name.to_string();
 
         let mut tokens = TokenStream2::new();
 
@@ -261,16 +241,16 @@ impl Route {
                     }
                 }
             }
-            RouteType::Leaf { component, props } => {
+            RouteType::Leaf { component } => {
                 let dynamic_segments = self.dynamic_segments();
                 let dynamic_segments_from_route = self.dynamic_segments();
                 quote! {
                     #[allow(unused)]
                     (#last_index, Self::#name { #(#dynamic_segments,)* }) => {
-                        let comp = #props { #(#dynamic_segments_from_route,)* };
-                        let dynamic = cx.component(#component, comp, #name_str);
                         render! {
-                            dynamic
+                            #component {
+                                #(#dynamic_segments_from_route: #dynamic_segments_from_route,)*
+                            }
                         }
                     }
                 }
@@ -297,10 +277,8 @@ impl Route {
                 }
             }
             for segment in &self.segments {
-                if let RouteSegment::Dynamic(other, ..) = segment {
-                    if other == name {
-                        from_route = true
-                    }
+                if segment.name().as_ref() == Some(name) {
+                    from_route = true
                 }
             }
             if let Some(query) = &self.query {
@@ -364,5 +342,5 @@ impl Route {
 #[derive(Debug)]
 pub(crate) enum RouteType {
     Child(Field),
-    Leaf { component: Path, props: Path },
+    Leaf { component: Path },
 }

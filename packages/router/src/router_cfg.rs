@@ -13,7 +13,7 @@ use crate::prelude::*;
 /// ```rust,no_run
 /// # use dioxus_router::prelude::*;
 /// # use dioxus::prelude::*;
-/// # #[inline_props]
+/// # #[component]
 /// # fn Index(cx: Scope) -> Element {
 /// #     todo!()
 /// # }
@@ -26,7 +26,7 @@ use crate::prelude::*;
 /// ```
 pub struct RouterConfig<R: Routable> {
     pub(crate) failure_external_navigation: fn(Scope) -> Element,
-    pub(crate) history: Option<Box<dyn HistoryProvider<R>>>,
+    pub(crate) history: Option<Box<dyn AnyHistoryProvider>>,
     pub(crate) on_update: Option<RoutingCallback<R>>,
 }
 
@@ -69,7 +69,7 @@ where
 {
     fn default() -> Self {
         Self {
-            failure_external_navigation: FailureExternalNavigation::<R>,
+            failure_external_navigation: FailureExternalNavigation,
             history: None,
             on_update: None,
         }
@@ -81,18 +81,22 @@ impl<R: Routable + Clone> RouterConfig<R>
 where
     <R as std::str::FromStr>::Err: std::fmt::Display,
 {
-    pub(crate) fn take_history(&mut self) -> Box<dyn HistoryProvider<R>> {
+    pub(crate) fn take_history(&mut self) -> Box<dyn AnyHistoryProvider> {
         self.history.take().unwrap_or_else(|| {
             #[cfg(all(target_arch = "wasm32", feature = "web"))]
-            let history = Box::<WebHistory<R>>::default();
+            let history = Box::<AnyHistoryProviderImplWrapper<R, WebHistory<R>>>::default();
             #[cfg(not(all(target_arch = "wasm32", feature = "web")))]
-            let history = Box::<MemoryHistory<R>>::default();
+            let history = Box::<AnyHistoryProviderImplWrapper<R, MemoryHistory<R>>>::default();
             history
         })
     }
 }
 
-impl<R: Routable> RouterConfig<R> {
+impl<R> RouterConfig<R>
+where
+    R: Routable,
+    <R as std::str::FromStr>::Err: std::fmt::Display,
+{
     /// A function to be called whenever the routing is updated.
     ///
     /// The callback is invoked after the routing is updated, but before components and hooks are
@@ -121,7 +125,7 @@ impl<R: Routable> RouterConfig<R> {
     /// Defaults to a default [`MemoryHistory`].
     pub fn history(self, history: impl HistoryProvider<R> + 'static) -> Self {
         Self {
-            history: Some(Box::new(history)),
+            history: Some(Box::new(AnyHistoryProviderImplWrapper::new(history))),
             ..self
         }
     }

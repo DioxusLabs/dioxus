@@ -1,24 +1,23 @@
-#![allow(non_snake_case)]
-
 use dioxus::prelude::*;
 use dioxus_router::prelude::*;
 use std::str::FromStr;
 
 fn main() {
     #[cfg(not(target_arch = "wasm32"))]
-    dioxus_desktop::launch(root);
+    dioxus_desktop::launch(Root);
 
     #[cfg(target_arch = "wasm32")]
     dioxus_web::launch(root);
 }
 
-fn root(cx: Scope) -> Element {
+#[component]
+fn Root(cx: Scope) -> Element {
     render! {
-        Router {}
+        Router::<Route> {}
     }
 }
 
-#[inline_props]
+#[component]
 fn UserFrame(cx: Scope, user_id: usize) -> Element {
     render! {
         pre {
@@ -27,30 +26,30 @@ fn UserFrame(cx: Scope, user_id: usize) -> Element {
         div {
             background_color: "rgba(0,0,0,50%)",
             "children:"
-            Outlet {}
+            Outlet::<Route> {}
         }
     }
 }
 
-#[inline_props]
+#[component]
 fn Route1(cx: Scope, user_id: usize, dynamic: usize, query: String, extra: String) -> Element {
     render! {
         pre {
             "Route1{{\n\tuser_id:{user_id},\n\tdynamic:{dynamic},\n\tquery:{query},\n\textra:{extra}\n}}"
         }
         Link {
-            target: Route::Route1 { user_id: *user_id, dynamic: *dynamic, query: String::new(), extra: extra.clone() + "." },
+            to: Route::Route1 { user_id: *user_id, dynamic: *dynamic, query: String::new(), extra: extra.clone() + "." },
             "Route1 with extra+\".\""
         }
         p { "Footer" }
         Link {
-            target: Route::Route3 { dynamic: String::new() },
+            to: Route::Route3 { dynamic: String::new() },
             "Home"
         }
     }
 }
 
-#[inline_props]
+#[component]
 fn Route2(cx: Scope, user_id: usize) -> Element {
     render! {
         pre {
@@ -59,13 +58,13 @@ fn Route2(cx: Scope, user_id: usize) -> Element {
         (0..*user_id).map(|i| rsx!{ p { "{i}" } }),
         p { "Footer" }
         Link {
-            target: Route::Route3 { dynamic: String::new() },
+            to: Route::Route3 { dynamic: String::new() },
             "Home"
         }
     }
 }
 
-#[inline_props]
+#[component]
 fn Route3(cx: Scope, dynamic: String) -> Element {
     let navigator = use_navigator(cx);
     let current_route = use_route(cx)?;
@@ -86,11 +85,11 @@ fn Route3(cx: Scope, dynamic: String) -> Element {
         }
         "dynamic: {dynamic}"
         Link {
-            target: Route::Route2 { user_id: 8888 },
+            to: Route::Route2 { user_id: 8888 },
             "hello world link"
         }
         button {
-            onclick: move |_| { navigator.push(NavigationTarget::External("https://www.google.com".to_string())); },
+            onclick: move |_| { navigator.push("https://www.google.com"); },
             "google link"
         }
         p { "Site Map" }
@@ -101,7 +100,7 @@ fn Route3(cx: Scope, dynamic: String) -> Element {
                 if route != current_route {
                     render! {
                         Link {
-                            target: route.clone(),
+                            to: route.clone(),
                             "{route}"
                         }
                     }

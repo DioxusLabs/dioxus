@@ -263,8 +263,8 @@ where
                     let res = service.run(req);
                     match res.await {
                         Ok(res) => Ok::<_, std::convert::Infallible>(res.map(|b| b.into())),
-                        Err(_e) => {
-                            let mut res = Response::new(Body::empty());
+                        Err(e) => {
+                            let mut res = Response::new(Body::from(e.to_string()));
                             *res.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
                             Ok(res)
                         }
@@ -369,7 +369,8 @@ fn apply_request_parts_to_response<B>(
     }
 }
 
-async fn render_handler<P: Clone + serde::Serialize + Send + Sync + 'static>(
+/// SSR renderer handler for Axum
+pub async fn render_handler<P: Clone + serde::Serialize + Send + Sync + 'static>(
     State((cfg, ssr_state)): State<(ServeConfig<P>, SSRState)>,
     request: Request<Body>,
 ) -> impl IntoResponse {
@@ -388,7 +389,7 @@ async fn render_handler<P: Clone + serde::Serialize + Send + Sync + 'static>(
             response
         }
         Err(e) => {
-            log::error!("Failed to render page: {}", e);
+            tracing::error!("Failed to render page: {}", e);
             report_err(e).into_response()
         }
     }

@@ -3,13 +3,13 @@ use dioxus::prelude::*;
 
 /// An outlet for the current content.
 ///
-/// Only works as descendant of a [`GenericRouter`] component, otherwise it will be inactive.
+/// Only works as descendant of a [`Link`] component, otherwise it will be inactive.
 ///
-/// The [`GenericOutlet`] is aware of how many [`GenericOutlet`]s it is nested within. It will render the content
+/// The [`Outlet`] is aware of how many [`Outlet`]s it is nested within. It will render the content
 /// of the active route that is __exactly as deep__.
 ///
 /// # Panic
-/// - When the [`GenericOutlet`] is not nested a [`GenericRouter`] component,
+/// - When the [`Outlet`] is not nested a [`Link`] component,
 ///   but only in debug builds.
 ///
 /// # Example
@@ -29,7 +29,7 @@ use dioxus::prelude::*;
 ///     Index {},
 /// }
 ///
-/// #[inline_props]
+/// #[component]
 /// fn Index(cx: Scope) -> Element {
 ///     render! {
 ///         div {
@@ -38,15 +38,15 @@ use dioxus::prelude::*;
 ///     }
 /// }
 ///
-/// #[inline_props]
+/// #[component]
 /// fn Wrapper(cx: Scope) -> Element {
 ///     render! {
 ///         h1 { "App" }
-///         Outlet {} // The content of child routes will be rendered here
+///         Outlet::<Route> {} // The content of child routes will be rendered here
 ///     }
 /// }
 ///
-/// #[inline_props]
+/// #[component]
 /// fn Child(cx: Scope) -> Element {
 ///     render! {
 ///         p {
@@ -55,9 +55,10 @@ use dioxus::prelude::*;
 ///     }
 /// }
 ///
+/// # #[component]
 /// # fn App(cx: Scope) -> Element {
 /// #     render! {
-/// #         Router {
+/// #         Router::<Route> {
 /// #             config: || RouterConfig::default().history(MemoryHistory::with_initial_path(Route::Child {}))
 /// #         }
 /// #     }
@@ -67,6 +68,6 @@ use dioxus::prelude::*;
 /// # let _ = vdom.rebuild();
 /// # assert_eq!(dioxus_ssr::render(&vdom), "<h1>App</h1><p>Child</p>");
 /// ```
-pub fn GenericOutlet<R: Routable + Clone>(cx: Scope) -> Element {
+pub fn Outlet<R: Routable + Clone>(cx: Scope) -> Element {
     OutletContext::<R>::render(cx)
 }

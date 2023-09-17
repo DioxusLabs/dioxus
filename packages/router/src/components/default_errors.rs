@@ -1,10 +1,12 @@
-use crate::{hooks::use_generic_router, routable::Routable};
+#[allow(deprecated)]
+use crate::hooks::use_router;
 use dioxus::prelude::*;
 
 /// The default component to render when an external navigation fails.
 #[allow(non_snake_case)]
-pub fn FailureExternalNavigation<R: Routable + Clone>(cx: Scope) -> Element {
-    let router = use_generic_router::<R>(cx);
+pub fn FailureExternalNavigation(cx: Scope) -> Element {
+    #[allow(deprecated)]
+    let router = use_router(cx);
 
     render! {
         h1 { "External Navigation Failure!" }

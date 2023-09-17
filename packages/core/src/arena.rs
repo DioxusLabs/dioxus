@@ -19,6 +19,9 @@ pub(crate) struct ElementRef {
 
     // The actual template
     pub template: Option<NonNull<VNode<'static>>>,
+
+    // The scope the element belongs to
+    pub scope: ScopeId,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -32,6 +35,7 @@ impl ElementRef {
         Self {
             template: None,
             path: ElementPath::Root(0),
+            scope: ScopeId::ROOT,
         }
     }
 }
@@ -56,11 +60,13 @@ impl VirtualDom {
     fn next_reference(&mut self, template: &VNode, path: ElementPath) -> ElementId {
         let entry = self.elements.vacant_entry();
         let id = entry.key();
+        let scope = self.runtime.current_scope_id().unwrap_or(ScopeId::ROOT);
 
         entry.insert(ElementRef {
             // We know this is non-null because it comes from a reference
             template: Some(unsafe { NonNull::new_unchecked(template as *const _ as *mut _) }),
             path,
+            scope,
         });
         ElementId(id)
     }
@@ -91,32 +97,35 @@ impl VirtualDom {
     // Note: This will not remove any ids from the arena
     pub(crate) fn drop_scope(&mut self, id: ScopeId, recursive: bool) {
         self.dirty_scopes.remove(&DirtyScope {
-            height: self.scopes[id].height,
+            height: self.scopes[id.0].height(),
             id,
         });
 
         self.ensure_drop_safety(id);
 
         if recursive {
-            if let Some(root) = self.scopes[id].try_root_node() {
+            if let Some(root) = self.scopes[id.0].try_root_node() {
                 if let RenderReturn::Ready(node) = unsafe { root.extend_lifetime_ref() } {
                     self.drop_scope_inner(node)
                 }
             }
         }
 
-        let scope = &mut self.scopes[id];
+        let scope = &mut self.scopes[id.0];
 
         // Drop all the hooks once the children are dropped
         // this means we'll drop hooks bottom-up
         scope.hooks.get_mut().clear();
+        {
+            let context = scope.context();
 
-        // Drop all the futures once the hooks are dropped
-        for task_id in scope.spawned_tasks.borrow_mut().drain() {
-            scope.tasks.remove(task_id);
+            // Drop all the futures once the hooks are dropped
+            for task_id in context.spawned_tasks.borrow_mut().drain() {
+                context.tasks.remove(task_id);
+            }
         }
 
-        self.scopes.remove(id);
+        self.scopes.remove(id.0);
     }
 
     fn drop_scope_inner(&mut self, node: &VNode) {
@@ -137,7 +146,7 @@ impl VirtualDom {
 
     /// Descend through the tree, removing any borrowed props and listeners
     pub(crate) fn ensure_drop_safety(&self, scope_id: ScopeId) {
-        let scope = &self.scopes[scope_id];
+        let scope = &self.scopes[scope_id.0];
 
         // make sure we drop all borrowed props manually to guarantee that their drop implementation is called before we
         // run the hooks (which hold an &mut Reference)

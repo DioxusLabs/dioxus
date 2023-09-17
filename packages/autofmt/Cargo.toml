@@ -1,10 +1,10 @@
 [package]
 name = "dioxus-autofmt"
-version = "0.3.0"
+version = { workspace = true }
 edition = "2021"
 authors = ["Jonathan Kelley"]
 description = "Autofomatter for Dioxus RSX"
-license = "MIT/Apache-2.0"
+license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com"
 keywords = ["dom", "ui", "gui", "react"]
@@ -14,11 +14,9 @@ keywords = ["dom", "ui", "gui", "react"]
 dioxus-rsx = { workspace = true }
 proc-macro2 = { version = "1.0.6", features = ["span-locations"] }
 quote = "1.0"
-syn = { version = "1.0.11", features = ["full", "extra-traits"] }
+syn = { version = "2.0", features = ["full", "extra-traits", "visit"] }
 serde = { version = "1.0.136", features = ["derive"] }
-prettyplease = { package = "prettier-please", version = "0.1.16", features = [
-    "verbatim",
-] }
+prettyplease = { workspace = true }
 
 [dev-dependencies]
 pretty_assertions = "1.2.1"

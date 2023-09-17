@@ -7,24 +7,17 @@ publish = false
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-dioxus-web = { workspace = true, features = ["hydrate"], optional = true }
 dioxus = { workspace = true }
 dioxus-fullstack = { workspace = true }
 axum = { version = "0.6.12", optional = true }
-tokio = { workspace = true, features = ["full"], optional = true }
 serde = "1.0.159"
-execute = "0.2.12"
-tower-http = { version = "0.4.1", features = ["auth"] }
 simple_logger = "4.2.0"
+tracing-wasm = "0.2.1"
+tracing.workspace = true
+tracing-subscriber = "0.3.17"
+reqwest = "0.11.18"
 
 [features]
 default = []
-ssr = ["axum", "tokio", "dioxus-fullstack/axum"]
-web = ["dioxus-web"]
-
-[profile.release]
-lto = true
-panic = "abort"
-opt-level = 'z'
-strip = true
-codegen-units = 1
+ssr = ["axum", "dioxus-fullstack/axum"]
+web = ["dioxus-fullstack/web"]

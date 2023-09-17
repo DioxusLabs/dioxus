@@ -10,7 +10,7 @@
 //! 1) [`MemoryHistory`] for desktop/mobile/ssr platforms
 //! 2) [`WebHistory`] for web platforms
 
-use std::sync::Arc;
+use std::{any::Any, rc::Rc, sync::Arc};
 
 mod memory;
 pub use memory::*;
@@ -48,9 +48,9 @@ pub trait HistoryProvider<R: Routable> {
     /// ```rust
     /// # use dioxus_router::prelude::*;
     /// # use dioxus::prelude::*;
-    /// # #[inline_props]
+    /// # #[component]
     /// # fn Index(cx: Scope) -> Element { todo!() }
-    /// # #[inline_props]
+    /// # #[component]
     /// # fn OtherPage(cx: Scope) -> Element { todo!() }
     /// #[derive(Clone, Routable, Debug, PartialEq)]
     /// enum Route {
@@ -86,17 +86,20 @@ pub trait HistoryProvider<R: Routable> {
     /// ```rust
     /// # use dioxus_router::prelude::*;
     /// # use dioxus::prelude::*;   
-    /// # #[inline_props]
+    /// # #[component]
     /// # fn Index(cx: Scope) -> Element { todo!() }
+    /// # fn Other(cx: Scope) -> Element { todo!() }
     /// #[derive(Clone, Routable, Debug, PartialEq)]
     /// enum Route {
     ///     #[route("/")]
     ///     Index {},
+    ///     #[route("/other")]
+    ///     Other {},
     /// }
     /// let mut history = MemoryHistory::<Route>::default();
     /// assert_eq!(history.can_go_back(), false);
     ///
-    /// history.push(Route::Index {});
+    /// history.push(Route::Other {});
     /// assert_eq!(history.can_go_back(), true);
     /// ```
     #[must_use]
@@ -112,9 +115,9 @@ pub trait HistoryProvider<R: Routable> {
     /// ```rust
     /// # use dioxus_router::prelude::*;
     /// # use dioxus::prelude::*;
-    /// # #[inline_props]
+    /// # #[component]
     /// # fn Index(cx: Scope) -> Element { todo!() }
-    /// # #[inline_props]
+    /// # #[component]
     /// # fn OtherPage(cx: Scope) -> Element { todo!() }
     /// #[derive(Clone, Routable, Debug, PartialEq)]
     /// enum Route {
@@ -144,9 +147,9 @@ pub trait HistoryProvider<R: Routable> {
     /// ```rust
     /// # use dioxus_router::prelude::*;
     /// # use dioxus::prelude::*;
-    /// # #[inline_props]
+    /// # #[component]
     /// # fn Index(cx: Scope) -> Element { todo!() }
-    /// # #[inline_props]
+    /// # #[component]
     /// # fn OtherPage(cx: Scope) -> Element { todo!() }
     /// #[derive(Clone, Routable, Debug, PartialEq)]
     /// enum Route {
@@ -177,9 +180,9 @@ pub trait HistoryProvider<R: Routable> {
     /// ```rust
     /// # use dioxus_router::prelude::*;
     /// # use dioxus::prelude::*;
-    /// # #[inline_props]
+    /// # #[component]
     /// # fn Index(cx: Scope) -> Element { todo!() }
-    /// # #[inline_props]
+    /// # #[component]
     /// # fn OtherPage(cx: Scope) -> Element { todo!() }
     /// #[derive(Clone, Routable, Debug, PartialEq)]
     /// enum Route {
@@ -210,9 +213,9 @@ pub trait HistoryProvider<R: Routable> {
     /// ```rust
     /// # use dioxus_router::prelude::*;
     /// # use dioxus::prelude::*;
-    /// # #[inline_props]
+    /// # #[component]
     /// # fn Index(cx: Scope) -> Element { todo!() }
-    /// # #[inline_props]
+    /// # #[component]
     /// # fn OtherPage(cx: Scope) -> Element { todo!() }
     /// #[derive(Clone, Routable, Debug, PartialEq)]
     /// enum Route {
@@ -239,9 +242,9 @@ pub trait HistoryProvider<R: Routable> {
     /// ```rust
     /// # use dioxus_router::prelude::*;
     /// # use dioxus::prelude::*;
-    /// # #[inline_props]
+    /// # #[component]
     /// # fn Index(cx: Scope) -> Element { todo!() }
-    /// # #[inline_props]
+    /// # #[component]
     /// # fn OtherPage(cx: Scope) -> Element { todo!() }
     /// #[derive(Clone, Routable, Debug, PartialEq)]
     /// enum Route {
@@ -276,4 +279,125 @@ pub trait HistoryProvider<R: Routable> {
     /// updates are received, they should call `callback`, which will cause the router to update.
     #[allow(unused_variables)]
     fn updater(&mut self, callback: Arc<dyn Fn() + Send + Sync>) {}
+}
+
+pub(crate) trait AnyHistoryProvider {
+    fn parse_route(&self, route: &str) -> Result<Rc<dyn Any>, String>;
+
+    #[must_use]
+    fn accepts_type_id(&self, type_id: &std::any::TypeId) -> bool;
+
+    #[must_use]
+    fn current_route(&self) -> Rc<dyn Any>;
+
+    #[must_use]
+    fn current_prefix(&self) -> Option<String> {
+        None
+    }
+
+    #[must_use]
+    fn can_go_back(&self) -> bool {
+        true
+    }
+
+    fn go_back(&mut self);
+
+    #[must_use]
+    fn can_go_forward(&self) -> bool {
+        true
+    }
+
+    fn go_forward(&mut self);
+
+    fn push(&mut self, route: Rc<dyn Any>);
+
+    fn replace(&mut self, path: Rc<dyn Any>);
+
+    #[allow(unused_variables)]
+    fn external(&mut self, url: String) -> bool {
+        false
+    }
+
+    #[allow(unused_variables)]
+    fn updater(&mut self, callback: Arc<dyn Fn() + Send + Sync>) {}
+}
+
+pub(crate) struct AnyHistoryProviderImplWrapper<R, H> {
+    inner: H,
+    _marker: std::marker::PhantomData<R>,
+}
+
+impl<R, H> AnyHistoryProviderImplWrapper<R, H> {
+    pub fn new(inner: H) -> Self {
+        Self {
+            inner,
+            _marker: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<R, H: Default> Default for AnyHistoryProviderImplWrapper<R, H> {
+    fn default() -> Self {
+        Self::new(H::default())
+    }
+}
+
+impl<R, H> AnyHistoryProvider for AnyHistoryProviderImplWrapper<R, H>
+where
+    R: Routable,
+    <R as std::str::FromStr>::Err: std::fmt::Display,
+    H: HistoryProvider<R>,
+{
+    fn parse_route(&self, route: &str) -> Result<Rc<dyn Any>, String> {
+        R::from_str(route)
+            .map_err(|err| err.to_string())
+            .map(|route| Rc::new(route) as Rc<dyn Any>)
+    }
+
+    fn accepts_type_id(&self, type_id: &std::any::TypeId) -> bool {
+        type_id == &std::any::TypeId::of::<R>()
+    }
+
+    fn current_route(&self) -> Rc<dyn Any> {
+        let route = self.inner.current_route();
+        Rc::new(route)
+    }
+
+    fn current_prefix(&self) -> Option<String> {
+        self.inner.current_prefix()
+    }
+
+    fn can_go_back(&self) -> bool {
+        self.inner.can_go_back()
+    }
+
+    fn go_back(&mut self) {
+        self.inner.go_back()
+    }
+
+    fn can_go_forward(&self) -> bool {
+        self.inner.can_go_forward()
+    }
+
+    fn go_forward(&mut self) {
+        self.inner.go_forward()
+    }
+
+    fn push(&mut self, route: Rc<dyn Any>) {
+        self.inner
+            .push(route.downcast::<R>().unwrap().as_ref().clone())
+    }
+
+    fn replace(&mut self, route: Rc<dyn Any>) {
+        self.inner
+            .replace(route.downcast::<R>().unwrap().as_ref().clone())
+    }
+
+    fn external(&mut self, url: String) -> bool {
+        self.inner.external(url)
+    }
+
+    fn updater(&mut self, callback: Arc<dyn Fn() + Send + Sync>) {
+        self.inner.updater(callback)
+    }
 }

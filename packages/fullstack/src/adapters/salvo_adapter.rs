@@ -375,8 +375,16 @@ async fn convert_response(response: HyperResponse, res: &mut Response) {
     }
 }
 
-struct SSRHandler<P: Clone> {
+/// A handler that renders a Dioxus application to HTML using server-side rendering.
+pub struct SSRHandler<P: Clone> {
     cfg: ServeConfig<P>,
+}
+
+impl<P: Clone> SSRHandler<P> {
+    /// Creates a new SSR handler with the given configuration.
+    pub fn new(cfg: ServeConfig<P>) -> Self {
+        Self { cfg }
+    }
 }
 
 #[async_trait]
@@ -415,7 +423,7 @@ impl<P: Clone + serde::Serialize + Send + Sync + 'static> Handler for SSRHandler
                 freshness.write(res.headers_mut());
             }
             Err(err) => {
-                log::error!("Error rendering SSR: {}", err);
+                tracing::error!("Error rendering SSR: {}", err);
                 res.write_body("Error rendering SSR").unwrap();
             }
         };

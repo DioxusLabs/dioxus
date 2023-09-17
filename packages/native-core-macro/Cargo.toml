@@ -1,18 +1,19 @@
 [package]
 name = "dioxus-native-core-macro"
-version = "0.3.0"
+version = { workspace = true }
 edition = "2021"
 description = "Build natively rendered apps with Dioxus"
-license = "MIT/Apache-2.0"
+license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com"
 keywords = ["dom", "ui", "gui", "react"]
+authors = ["Jonathan Kelley", "Evan Almloff"]
 
 [lib]
 proc-macro = true
 
 [dependencies]
-syn = { version = "1.0.11", features = ["extra-traits", "full"] }
+syn = { version = "2.0", features = ["extra-traits", "full"] }
 quote = "1.0"
 
 [dev-dependencies]

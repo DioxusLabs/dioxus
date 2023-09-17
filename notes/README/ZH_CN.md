@@ -25,7 +25,7 @@
   </a>
 
   <!--Awesome -->
-  <a href="https://github.com/dioxuslabs/awesome-dioxus">
+  <a href="https://dioxuslabs.com/awesome">
     <img src="https://cdn.rawgit.com/sindresorhus/awesome/d7305f38d29fed78fa85652e3a63e154dd8e8829/media/badge.svg" alt="Awesome Page" />
   </a>
   <!-- Discord -->
@@ -40,11 +40,13 @@
     <span> | </span>
     <a href="https://github.com/DioxusLabs/example-projects"> 代码示例 </a>
     <span> | </span>
-    <a href="https://dioxuslabs.com/guide/en"> 开发指南 </a>
+    <a href="https://dioxuslabs.com/learn/0.4/guide"> 开发指南 </a>
     <span> | </span>
     <a href="https://github.com/DioxusLabs/dioxus/blob/master/README.md"> English </a>
     <span> | </span>
     <a href="https://github.com/DioxusLabs/dioxus/blob/master/translations/pt-br/README.md"> PT-BR </a>
+    <span> | </span>
+    <a href="https://github.com/DioxusLabs/dioxus/blob/master/translations/ja-jp/README.md"> 日本語 </a>
   </h3>
 </div>
 

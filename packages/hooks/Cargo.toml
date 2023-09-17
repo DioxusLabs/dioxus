@@ -1,20 +1,25 @@
 [package]
 name = "dioxus-hooks"
-version = "0.3.1"
+version = { workspace = true }
 authors = ["Jonathan Kelley"]
 edition = "2018"
 description = "Basic useful hooks for Dioxus."
-license = "MIT/Apache-2.0"
+license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com"
 keywords = ["dom", "ui", "gui", "react"]
 
+[features]
+default = []
+nightly-features = []
 
 [dependencies]
 dioxus-core = { workspace = true }
 futures-channel = { workspace = true }
-log = { workspace = true }
-
+tracing = { workspace = true }
+thiserror = { workspace = true }
+slab = { workspace = true }
+dioxus-debug-cell = "0.1.1"
 
 [dev-dependencies]
 futures-util = { workspace = true, default-features = false }

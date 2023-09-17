@@ -1,5 +1,3 @@
-#![allow(non_snake_case)]
-
 use std::time::Duration;
 
 use dioxus::prelude::*;
@@ -9,24 +7,10 @@ use dioxus_ssr::incremental::{DefaultRenderer, IncrementalRendererConfig};
 
 #[tokio::main]
 async fn main() {
-    let mut renderer = IncrementalRendererConfig::new(DefaultRenderer {
-        before_body: r#"<!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width,
-            initial-scale=1.0">
-            <title>Dioxus Application</title>
-        </head>
-        <body>"#
-            .to_string(),
-        after_body: r#"</body>
-        </html>"#
-            .to_string(),
-    })
-    .static_dir("./static")
-    .invalidate_after(Duration::from_secs(10))
-    .build();
+    let mut renderer = IncrementalRendererConfig::new()
+        .static_dir("./static")
+        .invalidate_after(Duration::from_secs(10))
+        .build();
 
     println!(
         "SITE MAP:\n{}",
@@ -44,12 +28,31 @@ async fn main() {
             .join("\n")
     );
 
-    pre_cache_static_routes::<Route, _>(&mut renderer)
-        .await
-        .unwrap();
+    // This function is available if you enable the ssr feature
+    // on the dioxus_router crate.
+    pre_cache_static_routes::<Route, _>(
+        &mut renderer,
+        &DefaultRenderer {
+            before_body: r#"<!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width,
+            initial-scale=1.0">
+            <title>Dioxus Application</title>
+        </head>
+        <body>"#
+                .to_string(),
+            after_body: r#"</body>
+        </html>"#
+                .to_string(),
+        },
+    )
+    .await
+    .unwrap();
 }
 
-#[inline_props]
+#[component]
 fn Blog(cx: Scope) -> Element {
     render! {
         div {
@@ -58,7 +61,7 @@ fn Blog(cx: Scope) -> Element {
     }
 }
 
-#[inline_props]
+#[component]
 fn Post(cx: Scope, id: usize) -> Element {
     render! {
         div {
@@ -67,7 +70,7 @@ fn Post(cx: Scope, id: usize) -> Element {
     }
 }
 
-#[inline_props]
+#[component]
 fn PostHome(cx: Scope) -> Element {
     render! {
         div {
@@ -76,7 +79,7 @@ fn PostHome(cx: Scope) -> Element {
     }
 }
 
-#[inline_props]
+#[component]
 fn Home(cx: Scope) -> Element {
     render! {
         div {

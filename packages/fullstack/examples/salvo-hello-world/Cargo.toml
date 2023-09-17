@@ -14,6 +14,11 @@ tokio = { workspace = true, features = ["full"], optional = true }
 serde = "1.0.159"
 salvo = { version = "0.37.9", optional = true }
 execute = "0.2.12"
+reqwest = "0.11.18"
+simple_logger = "4.2.0"
+tracing-wasm = "0.2.1"
+tracing.workspace = true
+tracing-subscriber = "0.3.17"
 
 [features]
 default = []

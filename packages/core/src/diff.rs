@@ -15,9 +15,8 @@ use DynamicNode::*;
 
 impl<'b> VirtualDom {
     pub(super) fn diff_scope(&mut self, scope: ScopeId) {
-        let scope_state = &mut self.scopes[scope];
-
-        self.scope_stack.push(scope);
+        self.runtime.scope_stack.borrow_mut().push(scope);
+        let scope_state = &mut self.get_scope(scope).unwrap();
         unsafe {
             // Load the old and new bump arenas
             let old = scope_state
@@ -47,7 +46,7 @@ impl<'b> VirtualDom {
                 (Aborted(l), Ready(r)) => self.replace_placeholder(l, [r]),
             };
         }
-        self.scope_stack.pop();
+        self.runtime.scope_stack.borrow_mut().pop();
     }
 
     fn diff_ok_to_err(&mut self, l: &'b VNode<'b>, p: &'b VPlaceholder) {
@@ -129,7 +128,13 @@ impl<'b> VirtualDom {
             });
 
         // Make sure the roots get transferred over while we're here
-        *right_template.root_ids.borrow_mut() = left_template.root_ids.borrow().clone();
+        {
+            let mut right = right_template.root_ids.borrow_mut();
+            right.clear();
+            for &element in left_template.root_ids.borrow().iter() {
+                right.push(element);
+            }
+        }
 
         let root_ids = right_template.root_ids.borrow();
 
@@ -191,7 +196,8 @@ impl<'b> VirtualDom {
         right.scope.set(Some(scope_id));
 
         // copy out the box for both
-        let old = self.scopes[scope_id].props.as_ref();
+        let old_scope = &self.scopes[scope_id.0];
+        let old = old_scope.props.as_ref();
         let new: Box<dyn AnyProps> = right.props.take().unwrap();
         let new: Box<dyn AnyProps> = unsafe { std::mem::transmute(new) };
 
@@ -199,18 +205,23 @@ impl<'b> VirtualDom {
         // The target scopestate still has the reference to the old props, so there's no need to update anything
         // This also implicitly drops the new props since they're not used
         if left.static_props && unsafe { old.as_ref().unwrap().memoize(new.as_ref()) } {
+            tracing::trace!(
+                "Memoized props for component {:#?} ({})",
+                scope_id,
+                old_scope.context().name
+            );
             return;
         }
 
         // First, move over the props from the old to the new, dropping old props in the process
-        self.scopes[scope_id].props = Some(new);
+        self.scopes[scope_id.0].props = Some(new);
 
         // Now run the component and diff it
         self.run_scope(scope_id);
         self.diff_scope(scope_id);
 
         self.dirty_scopes.remove(&DirtyScope {
-            height: self.scopes[scope_id].height,
+            height: self.runtime.get_context(scope_id).unwrap().height,
             id: scope_id,
         });
     }
@@ -572,8 +583,7 @@ impl<'b> VirtualDom {
         }
 
         // 4. Compute the LIS of this list
-        let mut lis_sequence = Vec::default();
-        lis_sequence.reserve(new_index_to_old_index.len());
+        let mut lis_sequence = Vec::with_capacity(new_index_to_old_index.len());
 
         let mut predecessors = vec![0; new_index_to_old_index.len()];
         let mut starts = vec![0; new_index_to_old_index.len()];
@@ -714,7 +724,12 @@ impl<'b> VirtualDom {
 
                     Component(comp) => {
                         let scope = comp.scope.get().unwrap();
-                        match unsafe { self.scopes[scope].root_node().extend_lifetime_ref() } {
+                        match unsafe {
+                            self.get_scope(scope)
+                                .unwrap()
+                                .root_node()
+                                .extend_lifetime_ref()
+                        } {
                             RenderReturn::Ready(node) => self.push_all_real_nodes(node),
                             RenderReturn::Aborted(_node) => todo!(),
                         }
@@ -915,13 +930,18 @@ impl<'b> VirtualDom {
             .expect("VComponents to always have a scope");
 
         // Remove the component from the dom
-        match unsafe { self.scopes[scope].root_node().extend_lifetime_ref() } {
+        match unsafe {
+            self.get_scope(scope)
+                .unwrap()
+                .root_node()
+                .extend_lifetime_ref()
+        } {
             RenderReturn::Ready(t) => self.remove_node(t, gen_muts),
             RenderReturn::Aborted(placeholder) => self.remove_placeholder(placeholder, gen_muts),
         };
 
         // Restore the props back to the vcomponent in case it gets rendered again
-        let props = self.scopes[scope].props.take();
+        let props = self.scopes[scope.0].props.take();
         *comp.props.borrow_mut() = unsafe { std::mem::transmute(props) };
 
         // Now drop all the resouces
@@ -936,7 +956,12 @@ impl<'b> VirtualDom {
             Some(Placeholder(t)) => t.id.get().unwrap(),
             Some(Component(comp)) => {
                 let scope = comp.scope.get().unwrap();
-                match unsafe { self.scopes[scope].root_node().extend_lifetime_ref() } {
+                match unsafe {
+                    self.get_scope(scope)
+                        .unwrap()
+                        .root_node()
+                        .extend_lifetime_ref()
+                } {
                     RenderReturn::Ready(t) => self.find_first_element(t),
                     _ => todo!("cannot handle nonstandard nodes"),
                 }
@@ -952,7 +977,12 @@ impl<'b> VirtualDom {
             Some(Placeholder(t)) => t.id.get().unwrap(),
             Some(Component(comp)) => {
                 let scope = comp.scope.get().unwrap();
-                match unsafe { self.scopes[scope].root_node().extend_lifetime_ref() } {
+                match unsafe {
+                    self.get_scope(scope)
+                        .unwrap()
+                        .root_node()
+                        .extend_lifetime_ref()
+                } {
                     RenderReturn::Ready(t) => self.find_last_element(t),
                     _ => todo!("cannot handle nonstandard nodes"),
                 }

@@ -1,4 +1,6 @@
-//! Exentsions to the incremental renderer to support pre-caching static routes.
+//! Extensions to the incremental renderer to support pre-caching static routes.
+use core::pin::Pin;
+use std::future::Future;
 use std::str::FromStr;
 
 use dioxus::prelude::*;
@@ -47,15 +49,18 @@ where
                         route,
                         &mut tokio::io::sink(),
                         |vdom| {
-                            let _ = vdom.rebuild();
+                            Box::pin(async move {
+                                let _ = vdom.rebuild();
+                                vdom.wait_for_suspense().await;
+                            })
                         },
                         wrapper,
                     )
                     .await?;
                 }
                 Err(e) => {
-                    log::info!("@ route: {}", full_path);
-                    log::error!("Error pre-caching static route: {}", e);
+                    tracing::info!("@ route: {}", full_path);
+                    tracing::error!("Error pre-caching static route: {}", e);
                 }
             }
         }
@@ -65,7 +70,12 @@ where
 }
 
 /// Render a route to a writer.
-pub async fn render_route<R: WrapBody + Send + Sync, Rt, W, F: FnOnce(&mut VirtualDom)>(
+pub async fn render_route<
+    R: WrapBody + Send + Sync,
+    Rt,
+    W,
+    F: FnOnce(&mut VirtualDom) -> Pin<Box<dyn Future<Output = ()> + '_>>,
+>(
     renderer: &mut IncrementalRenderer,
     route: Rt,
     writer: &mut W,
@@ -77,7 +87,7 @@ where
     <Rt as FromStr>::Err: std::fmt::Display,
     W: tokio::io::AsyncWrite + Unpin + Send,
 {
-    #[inline_props]
+    #[component]
     fn RenderPath<R>(cx: Scope, path: R) -> Element
     where
         R: Routable,
@@ -85,7 +95,7 @@ where
     {
         let path = path.clone();
         render! {
-            GenericRouter::<R> {
+            Router::<R> {
                 config: || RouterConfig::default().history(MemoryHistory::with_initial_path(path))
             }
         }

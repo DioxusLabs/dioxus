@@ -1,5 +1,4 @@
 //! Tiny CRM: A port of the Yew CRM example to Dioxus.
-#![allow(non_snake_case)]
 use dioxus::prelude::*;
 use dioxus_router::prelude::*;
 
@@ -27,6 +26,7 @@ pub struct Client {
 
 type ClientContext = Vec<Client>;
 
+#[component]
 fn App(cx: Scope) -> Element {
     use_shared_state_provider::<ClientContext>(cx, Default::default);
 
@@ -46,11 +46,11 @@ fn App(cx: Scope) -> Element {
 
         h1 { "Dioxus CRM Example" }
 
-        Router {}
+        Router::<Route> {}
     }
 }
 
-#[inline_props]
+#[component]
 fn ClientList(cx: Scope) -> Element {
     let clients = use_shared_state::<ClientContext>(cx).unwrap();
 
@@ -58,12 +58,12 @@ fn ClientList(cx: Scope) -> Element {
         h2 { "List of Clients" }
 
         Link {
-            target: Route::ClientAdd {},
+            to: Route::ClientAdd {},
             class: "pure-button pure-button-primary",
             "Add Client"
         }
         Link {
-            target: Route::Settings {},
+            to: Route::Settings {},
             class: "pure-button",
             "Settings"
         }
@@ -80,7 +80,7 @@ fn ClientList(cx: Scope) -> Element {
     })
 }
 
-#[inline_props]
+#[component]
 fn ClientAdd(cx: Scope) -> Element {
     let clients = use_shared_state::<ClientContext>(cx).unwrap();
     let first_name = use_state(cx, String::new);
@@ -161,7 +161,7 @@ fn ClientAdd(cx: Scope) -> Element {
                         "Save"
                     }
                     Link {
-                        target: Route::ClientList {},
+                        to: Route::ClientList {},
                         class: "pure-button pure-button-primary red",
                         "Cancel"
                     }
@@ -173,7 +173,7 @@ fn ClientAdd(cx: Scope) -> Element {
     })
 }
 
-#[inline_props]
+#[component]
 fn Settings(cx: Scope) -> Element {
     let clients = use_shared_state::<ClientContext>(cx).unwrap();
 
@@ -190,7 +190,7 @@ fn Settings(cx: Scope) -> Element {
         }
 
         Link {
-            target: Route::ClientList {},
+            to: Route::ClientList {},
             class: "pure-button",
             "Go back"
         }

@@ -16,7 +16,7 @@ where
 
     let cfg = *cx.props;
     render! {
-        dioxus_router::prelude::GenericRouter::<R> {
+        dioxus_router::prelude::Router::<R> {
             config: move || {
                 RouterConfig::default()
                     .failure_external_navigation(cfg.failure_external_navigation)
@@ -29,7 +29,7 @@ where
                                 .to_string()
                                 .parse()
                                 .unwrap_or_else(|err| {
-                                    log::error!("Failed to parse uri: {}", err);
+                                    tracing::error!("Failed to parse uri: {}", err);
                                     "/"
                                         .parse()
                                         .unwrap_or_else(|err| {
@@ -49,12 +49,8 @@ where
     }
 }
 
-fn default_external_navigation_handler<R>() -> fn(Scope) -> Element
-where
-    R: dioxus_router::prelude::Routable,
-    <R as std::str::FromStr>::Err: std::fmt::Display,
-{
-    dioxus_router::prelude::FailureExternalNavigation::<R>
+fn default_external_navigation_handler() -> fn(Scope) -> Element {
+    dioxus_router::prelude::FailureExternalNavigation
 }
 
 /// The configeration for the router
@@ -65,7 +61,7 @@ where
     <R as std::str::FromStr>::Err: std::fmt::Display,
 {
     #[serde(skip)]
-    #[serde(default = "default_external_navigation_handler::<R>")]
+    #[serde(default = "default_external_navigation_handler")]
     failure_external_navigation: fn(Scope) -> Element,
     scroll_restoration: bool,
     #[serde(skip)]
@@ -78,11 +74,7 @@ where
     <R as std::str::FromStr>::Err: std::fmt::Display,
 {
     fn clone(&self) -> Self {
-        Self {
-            failure_external_navigation: self.failure_external_navigation,
-            scroll_restoration: self.scroll_restoration,
-            phantom: std::marker::PhantomData,
-        }
+        *self
     }
 }
 
@@ -100,7 +92,7 @@ where
 {
     fn default() -> Self {
         Self {
-            failure_external_navigation: dioxus_router::prelude::FailureExternalNavigation::<R>,
+            failure_external_navigation: dioxus_router::prelude::FailureExternalNavigation,
             scroll_restoration: true,
             phantom: std::marker::PhantomData,
         }

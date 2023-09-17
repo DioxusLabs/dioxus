@@ -1,5 +1,6 @@
 use crate::{
     element::LiveviewElement,
+    eval::init_eval,
     query::{QueryEngine, QueryResult},
     LiveViewError,
 };
@@ -119,6 +120,12 @@ pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), Li
         rx
     };
 
+    // Create the a proxy for query engine
+    let (query_tx, mut query_rx) = tokio::sync::mpsc::unbounded_channel();
+    let query_engine = QueryEngine::new(query_tx);
+    vdom.base_scope().provide_context(query_engine.clone());
+    init_eval(vdom.base_scope());
+
     // todo: use an efficient binary packed format for this
     let edits = serde_json::to_string(&ClientUpdate::Edits(vdom.rebuild())).unwrap();
 
@@ -127,10 +134,6 @@ pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), Li
 
     // send the initial render to the client
     ws.send(edits.into_bytes()).await?;
-
-    // Create the a proxy for query engine
-    let (query_tx, mut query_rx) = tokio::sync::mpsc::unbounded_channel();
-    let query_engine = QueryEngine::default();
 
     // desktop uses this wrapper struct thing around the actual event itself
     // this is sorta driven by tao/wry
@@ -165,7 +168,7 @@ pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), Li
                                 IpcMessage::Event(evt) => {
                                     // Intercept the mounted event and insert a custom element type
                                     if let EventData::Mounted = &evt.data {
-                                        let element = LiveviewElement::new(evt.element, query_tx.clone(), query_engine.clone());
+                                        let element = LiveviewElement::new(evt.element, query_engine.clone());
                                         vdom.handle_event(
                                             &evt.name,
                                             Rc::new(MountedData::new(element)),

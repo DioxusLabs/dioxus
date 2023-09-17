@@ -1,13 +1,12 @@
-#![allow(non_snake_case)]
-
 use dioxus::prelude::*;
 use dioxus_router::prelude::*;
 
 fn main() {
-    dioxus_desktop::launch(app);
+    dioxus_desktop::launch(App);
 }
 
-fn app(cx: Scope) -> Element {
+#[component]
+fn App(cx: Scope) -> Element {
     cx.render(rsx! (
         div {
             p {
@@ -23,7 +22,7 @@ fn app(cx: Scope) -> Element {
             }
         }
         div {
-            Router {}
+            Router::<Route> {}
         }
     ))
 }
@@ -38,24 +37,24 @@ enum Route {
         Settings {},
 }
 
-#[inline_props]
+#[component]
 fn Header(cx: Scope) -> Element {
     render! {
         h1 { "Your app here" }
         ul {
-            li { Link { target: Route::Home {}, "home" } }
-            li { Link { target: Route::Settings {}, "settings" } }
+            li { Link { to: Route::Home {}, "home" } }
+            li { Link { to: Route::Settings {}, "settings" } }
         }
-        Outlet {}
+        Outlet::<Route> {}
     }
 }
 
-#[inline_props]
+#[component]
 fn Home(cx: Scope) -> Element {
     render!(h1 { "Home" })
 }
 
-#[inline_props]
+#[component]
 fn Settings(cx: Scope) -> Element {
     render!(h1 { "Settings" })
 }

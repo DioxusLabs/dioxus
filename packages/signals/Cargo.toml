@@ -1,5 +1,6 @@
 [package]
 name = "dioxus-signals"
+authors = ["Jonathan Kelley"]
 version = "0.0.0"
 edition = "2018"
 
@@ -7,4 +8,16 @@ edition = "2018"
 
 [dependencies]
 dioxus-core = { workspace = true }
-slab = { workspace = true }
+generational-box = { workspace = true }
+tracing = { workspace = true }
+simple_logger = "4.2.0"
+serde = { version = "1", features = ["derive"], optional = true }
+
+[dev-dependencies]
+dioxus = { workspace = true }
+dioxus-desktop = { workspace = true }
+tokio = { version = "1", features = ["full"] }
+
+[features]
+default = []
+serialize = ["serde"]

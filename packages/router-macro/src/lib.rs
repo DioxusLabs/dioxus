@@ -43,8 +43,8 @@ mod segment;
 /// #[rustfmt::skip]
 /// #[derive(Clone, Debug, PartialEq, Routable)]
 /// enum Route {
-///     // Define routes with the route macro. If the name of the component is not the same as the variant, you can specify it as the second parameter and the props type as the third
-///     #[route("/", IndexComponent, ComponentProps)]
+///     // Define routes with the route macro. If the name of the component is not the same as the variant, you can specify it as the second parameter
+///     #[route("/", IndexComponent)]
 ///     Index {},
 ///     // Nests with parameters have types taken from child routes
 ///     // Everything inside the nest has the added parameter `user_id: usize`
@@ -52,7 +52,7 @@ mod segment;
 ///         // All children of layouts will be rendered inside the Outlet in the layout component
 ///         // Creates a Layout UserFrame that has the parameter `user_id: usize`
 ///         #[layout(UserFrame)]
-///             // If there is a component with the name Route1 and props with the name Route1Props, you do not need to pass in the component and type
+///             // If there is a component with the name Route1, you do not need to pass in the component name
 ///             #[route("/:dynamic?:query")]
 ///             Route1 {
 ///                 // The type is taken from the first instance of the dynamic parameter
@@ -78,12 +78,11 @@ mod segment;
 /// }
 /// ```
 ///
-/// # `#[route("path", component, props)]`
+/// # `#[route("path", component)]`
 ///
 /// The `#[route]` attribute is used to define a route. It takes up to 3 parameters:
 /// - `path`: The path to the enum variant (relative to the parent nest)
 /// - (optional) `component`: The component to render when the route is matched. If not specified, the name of the variant is used
-/// - (optional) `props`: The props type for the component. If not specified, the name of the variant with `Props` appended is used
 ///
 /// Routes are the most basic attribute. They allow you to define a route and the component to render when the route is matched. The component must take all dynamic parameters of the route and all parent nests.
 /// The next variant will be tied to the component. If you link to that variant, the component will be rendered.
@@ -91,9 +90,9 @@ mod segment;
 /// ```rust, skip
 /// #[derive(Clone, Debug, PartialEq, Routable)]
 /// enum Route {
-///     // Define routes that renders the IndexComponent that takes the IndexProps
+///     // Define routes that renders the IndexComponent
 ///     // The Index component will be rendered when the route is matched (e.g. when the user navigates to /)
-///     #[route("/", Index, IndexProps)]
+///     #[route("/", Index)]
 ///     Index {},
 /// }
 /// ```
@@ -109,7 +108,7 @@ mod segment;
 /// enum Route {
 ///     // Redirects the /:id route to the Index route
 ///     #[redirect("/:id", |_: usize| Route::Index {})]
-///     #[route("/", Index, IndexProps)]
+///     #[route("/", Index)]
 ///     Index {},
 /// }
 /// ```
@@ -131,7 +130,7 @@ mod segment;
 ///         // This is at /blog/:id
 ///         #[redirect("/:id", |_: usize| Route::Index {})]
 ///         // This is at /blog
-///         #[route("/", Index, IndexProps)]
+///         #[route("/", Index)]
 ///         Index {},
 /// }
 /// ```
@@ -147,7 +146,7 @@ mod segment;
 ///         // This is at /blog/:id
 ///         #[redirect("/:id", |_: usize| Route::Index {})]
 ///         // This is at /blog
-///         #[route("/", Index, IndexProps)]
+///         #[route("/", Index)]
 ///         Index {},
 ///     // Ends the nest
 ///     #[end_nest]
@@ -161,7 +160,6 @@ mod segment;
 ///
 /// The `#[layout]` attribute is used to define a layout. It takes 2 parameters:
 /// - `component`: The component to render when the route is matched. If not specified, the name of the variant is used
-/// - (optional) `props`: The props type for the component. If not specified, the name of the variant with `Props` appended is used
 ///
 /// The layout component allows you to wrap all children of the layout in a component. The child routes are rendered in the Outlet of the layout component. The layout component must take all dynamic parameters of the nests it is nested in.
 ///
@@ -171,7 +169,7 @@ mod segment;
 ///     #[layout(BlogFrame)]
 ///         #[redirect("/:id", |_: usize| Route::Index {})]
 ///         // Index will be rendered in the Outlet of the BlogFrame component
-///         #[route("/", Index, IndexProps)]
+///         #[route("/", Index)]
 ///         Index {},
 /// }
 /// ```
@@ -186,7 +184,7 @@ mod segment;
 ///     #[layout(BlogFrame)]
 ///         #[redirect("/:id", |_: usize| Route::Index {})]
 ///         // Index will be rendered in the Outlet of the BlogFrame component
-///         #[route("/", Index, IndexProps)]
+///         #[route("/", Index)]
 ///         Index {},
 ///     // Ends the layout
 ///     #[end_layout]
@@ -211,38 +209,8 @@ pub fn routable(input: TokenStream) -> TokenStream {
     let parse_impl = route_enum.parse_impl();
     let display_impl = route_enum.impl_display();
     let routable_impl = route_enum.routable_impl();
-    let name = &route_enum.name;
-    let vis = &route_enum.vis;
 
-    quote! {
-        #vis fn Outlet(cx: dioxus::prelude::Scope) -> dioxus::prelude::Element {
-            dioxus_router::prelude::GenericOutlet::<#name>(cx)
-        }
-
-        #vis fn Router(cx: dioxus::prelude::Scope<dioxus_router::prelude::GenericRouterProps<#name>>) -> dioxus::prelude::Element {
-            dioxus_router::prelude::GenericRouter(cx)
-        }
-
-        #vis fn Link<'a>(cx: dioxus::prelude::Scope<'a, dioxus_router::prelude::GenericLinkProps<'a, #name>>) -> dioxus::prelude::Element<'a> {
-            dioxus_router::prelude::GenericLink(cx)
-        }
-
-        #vis fn GoBackButton<'a>(cx: dioxus::prelude::Scope<'a, dioxus_router::prelude::GenericHistoryButtonProps<'a>>) -> dioxus::prelude::Element<'a> {
-            dioxus_router::prelude::GenericGoBackButton::<#name>(cx)
-        }
-
-        #vis fn GoForwardButton<'a>(cx: dioxus::prelude::Scope<'a, dioxus_router::prelude::GenericHistoryButtonProps<'a>>) -> dioxus::prelude::Element<'a> {
-            dioxus_router::prelude::GenericGoForwardButton::<#name>(cx)
-        }
-
-        #vis fn use_route(cx: &dioxus::prelude::ScopeState) -> Option<#name> {
-            dioxus_router::prelude::use_generic_route(cx)
-        }
-
-        #vis fn use_navigator(cx: &dioxus::prelude::ScopeState) -> &dioxus_router::prelude::GenericNavigator<#name> {
-            dioxus_router::prelude::use_generic_navigator(cx)
-        }
-
+    (quote! {
         #error_type
 
         #display_impl
@@ -250,12 +218,11 @@ pub fn routable(input: TokenStream) -> TokenStream {
         #routable_impl
 
         #parse_impl
-    }
+    })
     .into()
 }
 
 struct RouteEnum {
-    vis: syn::Visibility,
     name: Ident,
     redirects: Vec<Redirect>,
     routes: Vec<Route>,
@@ -267,7 +234,6 @@ struct RouteEnum {
 impl RouteEnum {
     fn parse(data: syn::ItemEnum) -> syn::Result<Self> {
         let name = &data.ident;
-        let vis = &data.vis;
 
         let mut site_map = Vec::new();
         let mut site_map_stack: Vec<Vec<SiteMapSegment>> = Vec::new();
@@ -286,7 +252,7 @@ impl RouteEnum {
             let mut excluded = Vec::new();
             // Apply the any nesting attributes in order
             for attr in &variant.attrs {
-                if attr.path.is_ident("nest") {
+                if attr.path().is_ident("nest") {
                     let mut children_routes = Vec::new();
                     {
                         // add all of the variants of the enum to the children_routes until we hit an end_nest
@@ -294,9 +260,9 @@ impl RouteEnum {
                         'o: for variant in &data.variants {
                             children_routes.push(variant.fields.clone());
                             for attr in &variant.attrs {
-                                if attr.path.is_ident("nest") {
+                                if attr.path().is_ident("nest") {
                                     level += 1;
-                                } else if attr.path.is_ident("end_nest") {
+                                } else if attr.path().is_ident("end_nest") {
                                     level -= 1;
                                     if level < 0 {
                                         break 'o;
@@ -341,7 +307,7 @@ impl RouteEnum {
 
                     nests.push(nest);
                     nest_stack.push(NestId(nest_index));
-                } else if attr.path.is_ident("end_nest") {
+                } else if attr.path().is_ident("end_nest") {
                     nest_stack.pop();
                     // pop the current nest segment off the stack and add it to the parent or the site map
                     if let Some(segment) = site_map_stack.pop() {
@@ -360,7 +326,7 @@ impl RouteEnum {
 
                         children.push(current);
                     }
-                } else if attr.path.is_ident("layout") {
+                } else if attr.path().is_ident("layout") {
                     let parser = |input: ParseStream| {
                         let bang: Option<Token![!]> = input.parse().ok();
                         let exclude = bang.is_some();
@@ -382,9 +348,9 @@ impl RouteEnum {
                         layouts.push(layout);
                         layout_stack.push(LayoutId(layout_index));
                     }
-                } else if attr.path.is_ident("end_layout") {
+                } else if attr.path().is_ident("end_layout") {
                     layout_stack.pop();
-                } else if attr.path.is_ident("redirect") {
+                } else if attr.path().is_ident("redirect") {
                     let parser = |input: ParseStream| {
                         Redirect::parse(input, nest_stack.clone(), redirects.len())
                     };
@@ -457,7 +423,6 @@ impl RouteEnum {
         }
 
         let myself = Self {
-            vis: vis.clone(),
             name: name.clone(),
             routes,
             redirects,
@@ -517,10 +482,17 @@ impl RouteEnum {
                     let route = s;
                     let (route, _hash) = route.split_once('#').unwrap_or((route, ""));
                     let (route, query) = route.split_once('?').unwrap_or((route, ""));
-                    let mut segments = route.split('/');
+                    let query = dioxus_router::exports::urlencoding::decode(query).unwrap_or(query.into());
+                    let mut segments = route.split('/').map(|s| dioxus_router::exports::urlencoding::decode(s).unwrap_or(s.into()));
                     // skip the first empty segment
                     if s.starts_with('/') {
-                        segments.next();
+                        let _ = segments.next();
+                    }
+                    else {
+                        // if this route does not start with a slash, it is not a valid route
+                        return Err(dioxus_router::routable::RouteParseError {
+                            attempted_routes: Vec::new(),
+                        });
                     }
                     let mut errors = Vec::new();
 
@@ -706,9 +678,9 @@ impl ToTokens for SegmentType {
 impl<'a> From<&'a RouteSegment> for SegmentType {
     fn from(value: &'a RouteSegment) -> Self {
         match value {
-            segment::RouteSegment::Static(s) => SegmentType::Static(s.to_string()),
-            segment::RouteSegment::Dynamic(s, _) => SegmentType::Dynamic(s.to_string()),
-            segment::RouteSegment::CatchAll(s, _) => SegmentType::CatchAll(s.to_string()),
+            RouteSegment::Static(s) => SegmentType::Static(s.to_string()),
+            RouteSegment::Dynamic(s, _) => SegmentType::Dynamic(s.to_string()),
+            RouteSegment::CatchAll(s, _) => SegmentType::CatchAll(s.to_string()),
         }
     }
 }

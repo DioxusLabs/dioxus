@@ -1,63 +1,70 @@
 [package]
 name = "dioxus-html"
-version = "0.3.1"
+version = { workspace = true }
 authors = ["Jonathan Kelley"]
 edition = "2018"
 description = "HTML Element pack for Dioxus - a concurrent renderer-agnostic Virtual DOM for interactive user experiences"
-license = "MIT/Apache-2.0"
+license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com"
 keywords = ["dom", "ui", "gui", "react"]
 
 [dependencies]
 dioxus-core = { workspace = true }
-dioxus-rsx = { workspace = true, optional = true }
+dioxus-rsx = { workspace = true, features = ["hot_reload"], optional = true }
 serde = { version = "1", features = ["derive"], optional = true }
 serde_repr = { version = "0.1", optional = true }
 wasm-bindgen = { workspace = true, optional = true }
 euclid = "0.22.7"
 enumset = "1.0.11"
-keyboard-types = "0.6.2"
+keyboard-types = "0.7"
 async-trait = "0.1.58"
 serde-value = "0.7.0"
 tokio = { workspace = true, features = ["fs", "io-util"], optional = true }
+rfd = { version = "0.11.3", optional = true }
+async-channel = "1.8.0"
+serde_json = { version = "1", optional = true }
 
 [dependencies.web-sys]
 optional = true
 version = "0.3.56"
 features = [
-    "TouchEvent",
-    "MouseEvent",
-    "InputEvent",
-    "ClipboardEvent",
-    "KeyboardEvent",
-    "TouchEvent",
-    "WheelEvent",
-    "AnimationEvent",
-    "TransitionEvent",
-    "PointerEvent",
-    "FocusEvent",
-    "CompositionEvent",
-    "ClipboardEvent",
-    "DragEvent",
-    "Element",
-    "DomRect",
-    "ScrollIntoViewOptions",
-    "ScrollLogicalPosition",
-    "ScrollBehavior",
+     "TouchEvent",
+     "MouseEvent",
+     "InputEvent",
+     "ClipboardEvent",
+     "DragEvent",
+     "KeyboardEvent",
+     "TouchEvent",
+     "WheelEvent",
+     "AnimationEvent",
+     "TransitionEvent",
+     "PointerEvent",
+     "FocusEvent",
+     "CompositionEvent",
+     "ClipboardEvent",
 ]
 
 [dev-dependencies]
 serde_json = "1"
 
 [features]
-default = ["serialize"]
+default = ["serialize", "mounted"]
 serialize = [
     "serde",
     "serde_repr",
+    "serde_json",
     "euclid/serde",
     "keyboard-types/serde",
     "dioxus-core/serialize",
+]
+mounted = [
+    "web-sys/Element",
+    "web-sys/DomRect",
+    "web-sys/ScrollIntoViewOptions",
+    "web-sys/ScrollLogicalPosition",
+    "web-sys/ScrollBehavior",
+    "web-sys/HtmlElement",
 ]
 wasm-bind = ["web-sys", "wasm-bindgen"]
 native-bind = ["tokio"]

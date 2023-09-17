@@ -35,6 +35,9 @@ pub enum Error {
     #[error("Invalid proxy URL: {0}")]
     InvalidProxy(#[from] hyper::http::uri::InvalidUri),
 
+    #[error("Failed to establish proxy: {0}")]
+    ProxySetupError(String),
+
     #[error("Error proxying request: {0}")]
     ProxyRequestError(hyper::Error),
 

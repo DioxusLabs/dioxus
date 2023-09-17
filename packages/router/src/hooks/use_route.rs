@@ -8,11 +8,11 @@ use crate::utils::use_router_internal::use_router_internal;
 /// > The Routable macro will define a version of this hook with an explicit type.
 ///
 /// # Return values
-/// - None, when not called inside a [`GenericRouter`] component.
+/// - None, when not called inside a [`Link`] component.
 /// - Otherwise the current route.
 ///
 /// # Panic
-/// - When the calling component is not nested within a [`GenericRouter`] component durring a debug build.
+/// - When the calling component is not nested within a [`Link`] component during a debug build.
 ///
 /// # Example
 /// ```rust
@@ -25,16 +25,17 @@ use crate::utils::use_router_internal::use_router_internal;
 ///     Index {},
 /// }
 ///
+/// #[component]
 /// fn App(cx: Scope) -> Element {
 ///     render! {
 ///         h1 { "App" }
-///         Router {}
+///         Router::<Route> {}
 ///     }
 /// }
 ///
-/// #[inline_props]
+/// #[component]
 /// fn Index(cx: Scope) -> Element {
-///     let path = use_route(&cx).unwrap();
+///     let path: Route = use_route(&cx).unwrap();
 ///     render! {
 ///         h2 { "Current Path" }
 ///         p { "{path}" }
@@ -45,7 +46,7 @@ use crate::utils::use_router_internal::use_router_internal;
 /// # let _ = vdom.rebuild();
 /// # assert_eq!(dioxus_ssr::render(&vdom), "<h1>App</h1><h2>Current Path</h2><p>/</p>")
 /// ```
-pub fn use_generic_route<R: Routable + Clone>(cx: &ScopeState) -> Option<R> {
+pub fn use_route<R: Routable + Clone>(cx: &ScopeState) -> Option<R> {
     match use_router_internal(cx) {
         Some(r) => Some(r.current()),
         None => {

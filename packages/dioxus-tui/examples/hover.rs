@@ -1,6 +1,7 @@
 use dioxus::{events::MouseData, prelude::*};
 use dioxus_core::Event;
 use std::convert::TryInto;
+use std::fmt::Write;
 use std::rc::Rc;
 
 fn main() {
@@ -9,7 +10,12 @@ fn main() {
 
 fn app(cx: Scope) -> Element {
     fn to_str(c: &[i32; 3]) -> String {
-        "#".to_string() + &c.iter().map(|c| format!("{c:02X?}")).collect::<String>()
+        let mut result = String::new();
+        result += "#";
+        for c in c.iter() {
+            write!(result, "{c:02X?}").unwrap();
+        }
+        result
     }
 
     fn get_brightness(m: &Rc<MouseData>) -> i32 {

@@ -1,41 +1,70 @@
-use std::rc::Rc;
-
-use crate::query::Query;
-use crate::query::QueryError;
-use crate::use_window;
+#![allow(clippy::await_holding_refcell_ref)]
+use async_trait::async_trait;
 use dioxus_core::ScopeState;
-use std::future::Future;
-use std::future::IntoFuture;
-use std::pin::Pin;
+use dioxus_html::prelude::{EvalError, EvalProvider, Evaluator};
+use std::{cell::RefCell, rc::Rc};
 
-/// A future that resolves to the result of a JavaScript evaluation.
-pub struct EvalResult {
-    pub(crate) query: Query<serde_json::Value>,
+use crate::{query::Query, DesktopContext};
+
+/// Provides the DesktopEvalProvider through [`cx.provide_context`].
+pub fn init_eval(cx: &ScopeState) {
+    let desktop_ctx = cx.consume_context::<DesktopContext>().unwrap();
+    let provider: Rc<dyn EvalProvider> = Rc::new(DesktopEvalProvider { desktop_ctx });
+    cx.provide_context(provider);
 }
 
-impl EvalResult {
-    pub(crate) fn new(query: Query<serde_json::Value>) -> Self {
-        Self { query }
+/// Reprents the desktop-target's provider of evaluators.
+pub struct DesktopEvalProvider {
+    desktop_ctx: DesktopContext,
+}
+
+impl EvalProvider for DesktopEvalProvider {
+    fn new_evaluator(&self, js: String) -> Result<Rc<dyn Evaluator>, EvalError> {
+        Ok(Rc::new(DesktopEvaluator::new(self.desktop_ctx.clone(), js)))
     }
 }
 
-impl IntoFuture for EvalResult {
-    type Output = Result<serde_json::Value, QueryError>;
+/// Reprents a desktop-target's JavaScript evaluator.
+pub struct DesktopEvaluator {
+    query: Rc<RefCell<Query<serde_json::Value>>>,
+}
 
-    type IntoFuture = Pin<Box<dyn Future<Output = Result<serde_json::Value, QueryError>>>>;
+impl DesktopEvaluator {
+    /// Creates a new evaluator for desktop-based targets.
+    pub fn new(desktop_ctx: DesktopContext, js: String) -> Self {
+        let ctx = desktop_ctx.clone();
+        let query = desktop_ctx.query.new_query(&js, ctx);
 
-    fn into_future(self) -> Self::IntoFuture {
-        Box::pin(self.query.resolve())
-            as Pin<Box<dyn Future<Output = Result<serde_json::Value, QueryError>>>>
+        Self {
+            query: Rc::new(RefCell::new(query)),
+        }
     }
 }
 
-/// Get a closure that executes any JavaScript in the WebView context.
-pub fn use_eval(cx: &ScopeState) -> &Rc<dyn Fn(String) -> EvalResult> {
-    let desktop = use_window(cx);
-    &*cx.use_hook(|| {
-        let desktop = desktop.clone();
+#[async_trait(?Send)]
+impl Evaluator for DesktopEvaluator {
+    async fn join(&self) -> Result<serde_json::Value, EvalError> {
+        self.query
+            .borrow_mut()
+            .result()
+            .await
+            .map_err(|e| EvalError::Communication(e.to_string()))
+    }
 
-        Rc::new(move |script: String| desktop.eval(&script)) as Rc<dyn Fn(String) -> EvalResult>
-    })
+    /// Sends a message to the evaluated JavaScript.
+    fn send(&self, data: serde_json::Value) -> Result<(), EvalError> {
+        if let Err(e) = self.query.borrow_mut().send(data) {
+            return Err(EvalError::Communication(e.to_string()));
+        }
+        Ok(())
+    }
+
+    /// Gets an UnboundedReceiver to receive messages from the evaluated JavaScript.
+    async fn recv(&self) -> Result<serde_json::Value, EvalError> {
+        self.query
+            .borrow_mut()
+            .recv()
+            .await
+            .map_err(|e| EvalError::Communication(e.to_string()))
+    }
 }

@@ -131,18 +131,18 @@ pub fn render<R: Driver>(
         rdom.raw_world_mut().add_unique(query_engine);
     }
 
-    {
-        renderer.update(&rdom);
-        let mut any_map = SendAnyMap::new();
-        any_map.insert(taffy.clone());
-        let mut rdom = rdom.write().unwrap();
-        let _ = rdom.update_state(any_map);
-    }
-
     tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()?
         .block_on(async {
+            {
+                renderer.update(&rdom);
+                let mut any_map = SendAnyMap::new();
+                any_map.insert(taffy.clone());
+                let mut rdom = rdom.write().unwrap();
+                let _ = rdom.update_state(any_map);
+            }
+
             let mut terminal = (!cfg.headless).then(|| {
                 enable_raw_mode().unwrap();
                 let mut stdout = std::io::stdout();

@@ -1,4 +1,3 @@
-#![allow(non_snake_case)]
 use dioxus::prelude::*;
 use dioxus_router::prelude::*;
 use std::str::FromStr;
@@ -27,13 +26,14 @@ where
         }
     }
 
+    #[component]
     fn App<R: Routable>(cx: Scope<AppProps<R>>) -> Element
     where
         <R as FromStr>::Err: std::fmt::Display,
     {
         render! {
             h1 { "App" }
-            GenericRouter::<R> {
+            Router::<R> {
                 config: || RouterConfig::default().history(MemoryHistory::default())
             }
         }
@@ -50,16 +50,16 @@ fn href_internal() {
         Test {},
     }
 
-    #[inline_props]
-    fn Test(cx: Scope) -> Element {
+    #[component]
+    fn Test(_cx: Scope) -> Element {
         todo!()
     }
 
-    #[inline_props]
+    #[component]
     fn Root(cx: Scope) -> Element {
         render! {
             Link {
-                target: Route::Test {},
+                to: Route::Test {},
                 "Link"
             }
         }
@@ -88,16 +88,16 @@ fn href_external() {
         Test {},
     }
 
-    #[inline_props]
-    fn Test(cx: Scope) -> Element {
+    #[component]
+    fn Test(_cx: Scope) -> Element {
         todo!()
     }
 
-    #[inline_props]
+    #[component]
     fn Root(cx: Scope) -> Element {
         render! {
             Link {
-                target: NavigationTarget::External("https://dioxuslabs.com/".into()),
+                to: "https://dioxuslabs.com/",
                 "Link"
             }
         }
@@ -126,16 +126,16 @@ fn with_class() {
         Test {},
     }
 
-    #[inline_props]
-    fn Test(cx: Scope) -> Element {
+    #[component]
+    fn Test(_cx: Scope) -> Element {
         todo!()
     }
 
-    #[inline_props]
+    #[component]
     fn Root(cx: Scope) -> Element {
         render! {
             Link {
-                target: Route::Test {},
+                to: Route::Test {},
                 class: "test_class",
                 "Link"
             }
@@ -163,11 +163,11 @@ fn with_active_class_active() {
         Root {},
     }
 
-    #[inline_props]
+    #[component]
     fn Root(cx: Scope) -> Element {
         render! {
             Link {
-                target: Route::Root {},
+                to: Route::Root {},
                 active_class: "active_class",
                 class: "test_class",
                 "Link"
@@ -198,16 +198,16 @@ fn with_active_class_inactive() {
         Test {},
     }
 
-    #[inline_props]
-    fn Test(cx: Scope) -> Element {
+    #[component]
+    fn Test(_cx: Scope) -> Element {
         todo!()
     }
 
-    #[inline_props]
+    #[component]
     fn Root(cx: Scope) -> Element {
         render! {
             Link {
-                target: Route::Test {},
+                to: Route::Test {},
                 active_class: "active_class",
                 class: "test_class",
                 "Link"
@@ -238,16 +238,16 @@ fn with_id() {
         Test {},
     }
 
-    #[inline_props]
-    fn Test(cx: Scope) -> Element {
+    #[component]
+    fn Test(_cx: Scope) -> Element {
         todo!()
     }
 
-    #[inline_props]
+    #[component]
     fn Root(cx: Scope) -> Element {
         render! {
             Link {
-                target: Route::Test {},
+                to: Route::Test {},
                 id: "test_id",
                 "Link"
             }
@@ -277,16 +277,16 @@ fn with_new_tab() {
         Test {},
     }
 
-    #[inline_props]
-    fn Test(cx: Scope) -> Element {
+    #[component]
+    fn Test(_cx: Scope) -> Element {
         todo!()
     }
 
-    #[inline_props]
+    #[component]
     fn Root(cx: Scope) -> Element {
         render! {
             Link {
-                target: Route::Test {},
+                to: Route::Test {},
                 new_tab: true,
                 "Link"
             }
@@ -314,11 +314,11 @@ fn with_new_tab_external() {
         Root {},
     }
 
-    #[inline_props]
+    #[component]
     fn Root(cx: Scope) -> Element {
         render! {
             Link {
-                target: NavigationTarget::External("https://dioxuslabs.com/".into()),
+                to: "https://dioxuslabs.com/",
                 new_tab: true,
                 "Link"
             }
@@ -348,16 +348,16 @@ fn with_rel() {
         Test {},
     }
 
-    #[inline_props]
-    fn Test(cx: Scope) -> Element {
+    #[component]
+    fn Test(_cx: Scope) -> Element {
         todo!()
     }
 
-    #[inline_props]
+    #[component]
     fn Root(cx: Scope) -> Element {
         render! {
             Link {
-                target: Route::Test {},
+                to: Route::Test {},
                 rel: "test_rel",
                 "Link"
             }

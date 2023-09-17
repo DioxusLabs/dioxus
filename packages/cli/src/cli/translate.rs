@@ -4,7 +4,7 @@ use dioxus_rsx::{BodyNode, CallBody};
 
 use super::*;
 
-/// Build the Rust WASM app and all of its assets.
+/// Translate some source file into Dioxus code
 #[derive(Clone, Debug, Parser)]
 #[clap(name = "translate")]
 pub struct Translate {

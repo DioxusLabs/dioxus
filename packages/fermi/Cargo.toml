@@ -1,10 +1,10 @@
 [package]
 name = "fermi"
-version = "0.3.0"
+version = { workspace = true }
 authors = ["Jonathan Kelley"]
 edition = "2018"
 description = "Global state management for Dioxus"
-license = "MIT/Apache-2.0"
+license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com"
 keywords = ["dom", "ui", "gui", "react", "state-management"]
@@ -14,7 +14,7 @@ keywords = ["dom", "ui", "gui", "react", "state-management"]
 [dependencies]
 dioxus-core = { workspace = true }
 im-rc = { version = "15.0.0", features = ["serde"] }
-log = { workspace = true }
+tracing = { workspace = true }
 
 [dev-dependencies]
 closure = "0.3.0"

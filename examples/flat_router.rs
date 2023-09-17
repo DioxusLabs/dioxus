@@ -1,5 +1,3 @@
-#![allow(non_snake_case)]
-
 use dioxus::prelude::*;
 use dioxus_desktop::{tao::dpi::LogicalSize, Config, WindowBuilder};
 use dioxus_router::prelude::*;
@@ -13,12 +11,13 @@ fn main() {
             .with_resizable(false),
     );
 
-    dioxus_desktop::launch_cfg(app, cfg)
+    dioxus_desktop::launch_cfg(App, cfg)
 }
 
-fn app(cx: Scope) -> Element {
+#[component]
+fn App(cx: Scope) -> Element {
     render! {
-        Router {}
+        Router::<Route> {}
     }
 }
 
@@ -36,11 +35,11 @@ enum Route {
         Settings {},
 }
 
-#[inline_props]
+#[component]
 fn Footer(cx: Scope) -> Element {
     render! {
         div {
-            Outlet { }
+            Outlet::<Route> { }
 
             p {
                 "----"
@@ -48,32 +47,32 @@ fn Footer(cx: Scope) -> Element {
 
             nav {
                 ul {
-                    li { Link { target: Route::Home {}, "Home" } }
-                    li { Link { target: Route::Games {}, "Games" } }
-                    li { Link { target: Route::Play {}, "Play" } }
-                    li { Link { target: Route::Settings {}, "Settings" } }
+                    li { Link { to: Route::Home {}, "Home" } }
+                    li { Link { to: Route::Games {}, "Games" } }
+                    li { Link { to: Route::Play {}, "Play" } }
+                    li { Link { to: Route::Settings {}, "Settings" } }
                 }
             }
         }
     }
 }
 
-#[inline_props]
+#[component]
 fn Home(cx: Scope) -> Element {
     render!("Home")
 }
 
-#[inline_props]
+#[component]
 fn Games(cx: Scope) -> Element {
     render!("Games")
 }
 
-#[inline_props]
+#[component]
 fn Play(cx: Scope) -> Element {
     render!("Play")
 }
 
-#[inline_props]
+#[component]
 fn Settings(cx: Scope) -> Element {
     render!("Settings")
 }

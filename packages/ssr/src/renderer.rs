@@ -1,5 +1,7 @@
 use super::cache::Segment;
 use crate::cache::StringCache;
+
+use dioxus_core::Attribute;
 use dioxus_core::{prelude::*, AttributeValue, DynamicNode, RenderReturn};
 use std::collections::HashMap;
 use std::fmt::Write;
@@ -40,7 +42,7 @@ impl Renderer {
     }
 
     pub fn render_to(&mut self, buf: &mut impl Write, dom: &VirtualDom) -> std::fmt::Result {
-        self.render_scope(buf, dom, ScopeId(0))
+        self.render_scope(buf, dom, ScopeId::ROOT)
     }
 
     pub fn render_scope(
@@ -83,18 +85,13 @@ impl Renderer {
                         inner_html = Some(attr);
                     } else if attr.namespace == Some("style") {
                         accumulated_dynamic_styles.push(attr);
+                    } else if BOOL_ATTRS.contains(&attr.name) {
+                        if truthy(&attr.value) {
+                            write!(buf, " {}=", attr.name)?;
+                            write_value(buf, &attr.value)?;
+                        }
                     } else {
-                        match attr.value {
-                            AttributeValue::Text(value) => {
-                                write!(buf, " {}=\"{}\"", attr.name, value)?
-                            }
-                            AttributeValue::Bool(value) => write!(buf, " {}={}", attr.name, value)?,
-                            AttributeValue::Int(value) => write!(buf, " {}={}", attr.name, value)?,
-                            AttributeValue::Float(value) => {
-                                write!(buf, " {}={}", attr.name, value)?
-                            }
-                            _ => {}
-                        };
+                        write_attribute(buf, attr)?;
                     }
                 }
                 Segment::Node(idx) => match &template.dynamic_nodes[*idx] {
@@ -102,7 +99,7 @@ impl Renderer {
                         if self.skip_components {
                             write!(buf, "<{}><{}/>", node.name, node.name)?;
                         } else {
-                            let id = node.scope.get().unwrap();
+                            let id = node.mounted_scope().unwrap();
                             let scope = dom.get_scope(id).unwrap();
                             let node = scope.root_node();
                             match node {
@@ -153,17 +150,9 @@ impl Renderer {
                             write!(buf, " style=\"")?;
                         }
                         for attr in &accumulated_dynamic_styles {
-                            match attr.value {
-                                AttributeValue::Text(value) => {
-                                    write!(buf, "{}:{};", attr.name, value)?
-                                }
-                                AttributeValue::Bool(value) => {
-                                    write!(buf, "{}:{};", attr.name, value)?
-                                }
-                                AttributeValue::Float(f) => write!(buf, "{}:{};", attr.name, f)?,
-                                AttributeValue::Int(i) => write!(buf, "{}:{};", attr.name, i)?,
-                                _ => {}
-                            };
+                            write!(buf, "{}:", attr.name)?;
+                            write_value_unquoted(buf, &attr.value)?;
+                            write!(buf, ";")?;
                         }
                         if !*inside_style_tag {
                             write!(buf, "\"")?;
@@ -247,4 +236,82 @@ fn to_string_works() {
     use Segment::*;
 
     assert_eq!(out, "<div class=\"asdasdasd\" class=\"asdasdasd\" id=\"id-123\">Hello world 1 --&gt;123&lt;-- Hello world 2<div>nest 1</div><div></div><div>nest 2</div>&lt;/diiiiiiiiv&gt;<div>finalize 0</div><div>finalize 1</div><div>finalize 2</div><div>finalize 3</div><div>finalize 4</div></div>");
+}
+
+pub(crate) const BOOL_ATTRS: &[&str] = &[
+    "allowfullscreen",
+    "allowpaymentrequest",
+    "async",
+    "autofocus",
+    "autoplay",
+    "checked",
+    "controls",
+    "default",
+    "defer",
+    "disabled",
+    "formnovalidate",
+    "hidden",
+    "ismap",
+    "itemscope",
+    "loop",
+    "multiple",
+    "muted",
+    "nomodule",
+    "novalidate",
+    "open",
+    "playsinline",
+    "readonly",
+    "required",
+    "reversed",
+    "selected",
+    "truespeed",
+    "webkitdirectory",
+];
+
+pub(crate) fn str_truthy(value: &str) -> bool {
+    !value.is_empty() && value != "0" && value.to_lowercase() != "false"
+}
+
+pub(crate) fn truthy(value: &AttributeValue) -> bool {
+    match value {
+        AttributeValue::Text(value) => str_truthy(value),
+        AttributeValue::Bool(value) => *value,
+        AttributeValue::Int(value) => *value != 0,
+        AttributeValue::Float(value) => *value != 0.0,
+        _ => false,
+    }
+}
+
+pub(crate) fn write_attribute(buf: &mut impl Write, attr: &Attribute) -> std::fmt::Result {
+    let name = &attr.name;
+    match attr.value {
+        AttributeValue::Text(value) => write!(buf, " {name}=\"{value}\""),
+        AttributeValue::Bool(value) => write!(buf, " {name}={value}"),
+        AttributeValue::Int(value) => write!(buf, " {name}={value}"),
+        AttributeValue::Float(value) => write!(buf, " {name}={value}"),
+        _ => Ok(()),
+    }
+}
+
+pub(crate) fn write_value(buf: &mut impl Write, value: &AttributeValue) -> std::fmt::Result {
+    match value {
+        AttributeValue::Text(value) => write!(buf, "\"{}\"", value),
+        AttributeValue::Bool(value) => write!(buf, "{}", value),
+        AttributeValue::Int(value) => write!(buf, "{}", value),
+        AttributeValue::Float(value) => write!(buf, "{}", value),
+        _ => Ok(()),
+    }
+}
+
+pub(crate) fn write_value_unquoted(
+    buf: &mut impl Write,
+    value: &AttributeValue,
+) -> std::fmt::Result {
+    match value {
+        AttributeValue::Text(value) => write!(buf, "{}", value),
+        AttributeValue::Bool(value) => write!(buf, "{}", value),
+        AttributeValue::Int(value) => write!(buf, "{}", value),
+        AttributeValue::Float(value) => write!(buf, "{}", value),
+        _ => Ok(()),
+    }
 }

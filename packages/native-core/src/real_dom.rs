@@ -446,7 +446,6 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
             drop(tree);
             children.reverse();
             if let Some(node) = self.get_mut(id) {
-                let node = node;
                 f(node);
                 stack.extend(children.iter());
             }
@@ -691,10 +690,7 @@ pub struct NodeRef<'a, V: FromAnyValue + Send + Sync = ()> {
 
 impl<'a, V: FromAnyValue + Send + Sync> Clone for NodeRef<'a, V> {
     fn clone(&self) -> Self {
-        Self {
-            id: self.id,
-            dom: self.dom,
-        }
+        *self
     }
 }
 

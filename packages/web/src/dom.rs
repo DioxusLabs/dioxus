@@ -7,19 +7,21 @@
 //! - tests to ensure dyn_into works for various event types.
 //! - Partial delegation?>
 
+use crate::file_engine::WebFileEngine;
 use dioxus_core::{
     BorrowedAttributeValue, ElementId, Mutation, Template, TemplateAttribute, TemplateNode,
 };
-use dioxus_html::{event_bubbles, CompositionData, FileEngine, FormData, MountedData};
+use dioxus_html::{event_bubbles, CompositionData, FormData, MountedData};
 use dioxus_interpreter_js::{get_node, minimal_bindings, save_template, Channel};
 use futures_channel::mpsc;
 use js_sys::Array;
 use rustc_hash::FxHashMap;
-use std::{any::Any, rc::Rc, sync::Arc};
+use std::sync::Arc;
+use std::{any::Any, rc::Rc};
 use wasm_bindgen::{closure::Closure, prelude::wasm_bindgen, JsCast, JsValue};
 use web_sys::{Document, Element, Event};
 
-use crate::{file_engine::WebFileEngine, Config};
+use crate::Config;
 
 pub struct WebsysDom {
     document: Document,
@@ -56,17 +58,27 @@ impl WebsysDom {
                 let element = walk_event_for_id(event);
                 let bubbles = dioxus_html::event_bubbles(name.as_str());
                 if let Some((element, target)) = element {
+                    let prevent_event;
                     if let Some(prevent_requests) = target
                         .get_attribute("dioxus-prevent-default")
                         .as_deref()
                         .map(|f| f.split_whitespace())
                     {
-                        if prevent_requests
+                        prevent_event = prevent_requests
                             .map(|f| f.trim_start_matches("on"))
-                            .any(|f| f == name)
-                        {
+                            .any(|f| f == name);
+                    } else {
+                        prevent_event = false;
+                    }
+
+                    // Prevent forms from submitting and redirecting
+                    if name == "submit" {
+                        // On forms the default behavior is not to submit, if prevent default is set then we submit the form
+                        if !prevent_event {
                             event.prevent_default();
                         }
+                    } else if prevent_event {
+                        event.prevent_default();
                     }
 
                     let data = virtual_event_from_websys_event(event.clone(), target);
@@ -239,7 +251,6 @@ impl WebsysDom {
         for id in to_mount {
             let node = get_node(id.0 as u32);
             if let Some(element) = node.dyn_ref::<Element>() {
-                log::info!("mounted event fired: {}", id.0);
                 let data: MountedData = element.into();
                 let data = Rc::new(data);
                 let _ = self.event_channel.unbounded_send(UiEvent {
@@ -384,11 +395,16 @@ fn read_input_to_data(target: Element) -> Rc<FormData> {
         }
     }
 
+    #[cfg(not(feature = "file_engine"))]
+    let files = None;
+    #[cfg(feature = "file_engine")]
     let files = target
         .dyn_ref()
         .and_then(|input: &web_sys::HtmlInputElement| {
             input.files().and_then(|files| {
-                WebFileEngine::new(files).map(|f| Arc::new(f) as Arc<dyn FileEngine>)
+                #[allow(clippy::arc_with_non_send_sync)]
+                crate::file_engine::WebFileEngine::new(files)
+                    .map(|f| std::sync::Arc::new(f) as std::sync::Arc<dyn dioxus_html::FileEngine>)
             })
         });
 

@@ -34,7 +34,7 @@ impl RenderedElementBacking for DesktopElement {
 
         let fut = self
             .query
-            .new_query::<Option<Rect<f64, f64>>>(&script, &self.webview.webview)
+            .new_query::<Option<Rect<f64, f64>>>(&script, self.webview.clone())
             .resolve();
         Box::pin(async move {
             match fut.await {
@@ -61,7 +61,7 @@ impl RenderedElementBacking for DesktopElement {
 
         let fut = self
             .query
-            .new_query::<bool>(&script, &self.webview.webview)
+            .new_query::<bool>(&script, self.webview.clone())
             .resolve();
         Box::pin(async move {
             match fut.await {
@@ -87,7 +87,7 @@ impl RenderedElementBacking for DesktopElement {
 
         let fut = self
             .query
-            .new_query::<bool>(&script, &self.webview.webview)
+            .new_query::<bool>(&script, self.webview.clone())
             .resolve();
 
         Box::pin(async move {

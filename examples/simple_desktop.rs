@@ -9,12 +9,13 @@ fn main() {
         .with_module_level("dioxus", log::LevelFilter::Trace)
         .init()
         .unwrap();
-    dioxus_desktop::launch(app);
+    dioxus_desktop::launch(App);
 }
 
-fn app(cx: Scope) -> Element {
+#[component]
+fn App(cx: Scope) -> Element {
     render! {
-        Router {}
+        Router::<Route> {}
     }
 }
 
@@ -36,46 +37,46 @@ enum Route {
         Oranges {},
 }
 
-#[inline_props]
+#[component]
 fn NavBar(cx: Scope) -> Element {
     render! {
         h1 { "Your app here" }
         ul {
-            li { Link { target: Route::Home {}, "home" } }
-            li { Link { target: Route::BlogList {}, "blog" } }
-            li { Link { target: Route::BlogPost { post: "tim".into() }, "tims' blog" } }
-            li { Link { target: Route::BlogPost { post: "bill".into() }, "bills' blog" } }
-            li { Link { target: Route::BlogPost { post: "james".into() }, "james amazing' blog" } }
+            li { Link { to: Route::Home {}, "home" } }
+            li { Link { to: Route::BlogList {}, "blog" } }
+            li { Link { to: Route::BlogPost { post: "tim".into() }, "tims' blog" } }
+            li { Link { to: Route::BlogPost { post: "bill".into() }, "bills' blog" } }
+            li { Link { to: Route::BlogPost { post: "james".into() }, "james amazing' blog" } }
         }
-        Outlet {}
+        Outlet::<Route> {}
     }
 }
 
-#[inline_props]
+#[component]
 fn Home(cx: Scope) -> Element {
     log::debug!("rendering home {:?}", cx.scope_id());
     render! { h1 { "Home" } }
 }
 
-#[inline_props]
+#[component]
 fn BlogList(cx: Scope) -> Element {
     log::debug!("rendering blog list {:?}", cx.scope_id());
     render! { div { "Blog List" } }
 }
 
-#[inline_props]
+#[component]
 fn BlogPost(cx: Scope, post: String) -> Element {
     log::debug!("rendering blog post {}", post);
 
     render! {
         div {
             h3 { "blog post: {post}"  }
-            Link { target: Route::BlogList {}, "back to blog list" }
+            Link { to: Route::BlogList {}, "back to blog list" }
         }
     }
 }
 
-#[inline_props]
+#[component]
 fn Oranges(cx: Scope) -> Element {
     render!("Oranges are not apples!")
 }

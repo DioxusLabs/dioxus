@@ -31,7 +31,7 @@ impl<R> OutletContext<R> {
     where
         R: Routable + Clone,
     {
-        let router = use_router_internal::<R>(cx)
+        let router = use_router_internal(cx)
             .as_ref()
             .expect("Outlet must be inside of a router");
         let outlet: &OutletContext<R> = use_outlet_context(cx);
@@ -51,6 +51,6 @@ impl<R> OutletContext<R> {
             }
         }
 
-        router.current().render(cx, current_level)
+        router.current::<R>().render(cx, current_level)
     }
 }

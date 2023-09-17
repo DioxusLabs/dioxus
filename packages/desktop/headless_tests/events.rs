@@ -29,21 +29,24 @@ pub fn main() {
 }
 
 fn mock_event(cx: &ScopeState, id: &'static str, value: &'static str) {
-    use_effect(cx, (), |_| {
-        let desktop_context: DesktopContext = cx.consume_context().unwrap();
-        async move {
-            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-            desktop_context.eval(&format!(
-                r#"let element = document.getElementById('{}');
+    let eval_provider = use_eval(cx).clone();
+
+    use_effect(cx, (), move |_| async move {
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        let js = format!(
+            r#"
+                //console.log("ran");
                 // Dispatch a synthetic event
-                const event = {};
+                let event = {};
+                let element = document.getElementById('{}');
                 console.log(element, event);
                 element.dispatchEvent(event);
                 "#,
-                id, value
-            ));
-        }
-    });
+            value, id
+        );
+
+        eval_provider(&js).unwrap();
+    })
 }
 
 #[allow(deprecated)]
@@ -56,149 +59,149 @@ fn app(cx: Scope) -> Element {
         cx,
         "button",
         r#"new MouseEvent("click", {
-    view: window,
-    bubbles: true,
-    cancelable: true,
-    button: 0,
-  })"#,
+        view: window,
+        bubbles: true,
+        cancelable: true,
+        button: 0,
+        })"#,
     );
     // mouse_move_div
     mock_event(
         cx,
         "mouse_move_div",
         r#"new MouseEvent("mousemove", {
-    view: window,
-    bubbles: true,
-    cancelable: true,
-    buttons: 2,
-    })"#,
+        view: window,
+        bubbles: true,
+        cancelable: true,
+        buttons: 2,
+        })"#,
     );
     // mouse_click_div
     mock_event(
         cx,
         "mouse_click_div",
         r#"new MouseEvent("click", {
-    view: window,
-    bubbles: true,
-    cancelable: true,
-    buttons: 2,
-    button: 2,
-    })"#,
+        view: window,
+        bubbles: true,
+        cancelable: true,
+        buttons: 2,
+        button: 2,
+        })"#,
     );
     // mouse_dblclick_div
     mock_event(
         cx,
         "mouse_dblclick_div",
         r#"new MouseEvent("dblclick", {
-    view: window,
-    bubbles: true,
-    cancelable: true,
-    buttons: 1|2,
-    button: 2,
-    })"#,
+        view: window,
+        bubbles: true,
+        cancelable: true,
+        buttons: 1|2,
+        button: 2,
+        })"#,
     );
     // mouse_down_div
     mock_event(
         cx,
         "mouse_down_div",
         r#"new MouseEvent("mousedown", {
-    view: window,
-    bubbles: true,
-    cancelable: true,
-    buttons: 2,
-    button: 2,
-    })"#,
+        view: window,
+        bubbles: true,
+        cancelable: true,
+        buttons: 2,
+        button: 2,
+        })"#,
     );
     // mouse_up_div
     mock_event(
         cx,
         "mouse_up_div",
         r#"new MouseEvent("mouseup", {
-    view: window,
-    bubbles: true,
-    cancelable: true,
-    buttons: 0,
-    button: 0,
-    })"#,
+        view: window,
+        bubbles: true,
+        cancelable: true,
+        buttons: 0,
+        button: 0,
+        })"#,
     );
     // wheel_div
     mock_event(
         cx,
         "wheel_div",
         r#"new WheelEvent("wheel", {
-    view: window,
-    deltaX: 1.0,
-    deltaY: 2.0,
-    deltaZ: 3.0,
-    deltaMode: 0x00,
-    bubbles: true,
-    })"#,
+        view: window,
+        deltaX: 1.0,
+        deltaY: 2.0,
+        deltaZ: 3.0,
+        deltaMode: 0x00,
+        bubbles: true,
+        })"#,
     );
     // key_down_div
     mock_event(
         cx,
         "key_down_div",
         r#"new KeyboardEvent("keydown", {
-    key: "a",
-    code: "KeyA",
-    location: 0,
-    repeat: true,
-    keyCode: 65,
-    charCode: 97,
-    char: "a",
-    charCode: 0,
-    altKey: false,
-    ctrlKey: false,
-    metaKey: false,
-    shiftKey: false,
-    isComposing: false,
-    which: 65,
-    bubbles: true,
-    })"#,
+        key: "a",
+        code: "KeyA",
+        location: 0,
+        repeat: true,
+        keyCode: 65,
+        charCode: 97,
+        char: "a",
+        charCode: 0,
+        altKey: false,
+        ctrlKey: false,
+        metaKey: false,
+        shiftKey: false,
+        isComposing: false,
+        which: 65,
+        bubbles: true,
+        })"#,
     );
     // key_up_div
     mock_event(
         cx,
         "key_up_div",
         r#"new KeyboardEvent("keyup", {
-    key: "a",
-    code: "KeyA",
-    location: 0,
-    repeat: false,
-    keyCode: 65,
-    charCode: 97,
-    char: "a",
-    charCode: 0,
-    altKey: false,
-    ctrlKey: false,
-    metaKey: false,
-    shiftKey: false,
-    isComposing: false,
-    which: 65,
-    bubbles: true,
-    })"#,
+        key: "a",
+        code: "KeyA",
+        location: 0,
+        repeat: false,
+        keyCode: 65,
+        charCode: 97,
+        char: "a",
+        charCode: 0,
+        altKey: false,
+        ctrlKey: false,
+        metaKey: false,
+        shiftKey: false,
+        isComposing: false,
+        which: 65,
+        bubbles: true,
+        })"#,
     );
     // key_press_div
     mock_event(
         cx,
         "key_press_div",
         r#"new KeyboardEvent("keypress", {
-    key: "a",
-    code: "KeyA",
-    location: 0,
-    repeat: false,
-    keyCode: 65,
-    charCode: 97,
-    char: "a",
-    charCode: 0,
-    altKey: false,
-    ctrlKey: false,
-    metaKey: false,
-    shiftKey: false,
-    isComposing: false,
-    which: 65,
-    bubbles: true,
-    })"#,
+        key: "a",
+        code: "KeyA",
+        location: 0,
+        repeat: false,
+        keyCode: 65,
+        charCode: 97,
+        char: "a",
+        charCode: 0,
+        altKey: false,
+        ctrlKey: false,
+        metaKey: false,
+        shiftKey: false,
+        isComposing: false,
+        which: 65,
+        bubbles: true,
+        })"#,
     );
     // focus_in_div
     mock_event(

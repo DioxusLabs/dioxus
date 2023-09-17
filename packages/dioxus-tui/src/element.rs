@@ -11,7 +11,7 @@ use dioxus_html::{
 };
 
 use dioxus_native_core::NodeId;
-use rink::query::{ElementRef, Query};
+use plasmo::query::{ElementRef, Query};
 
 pub(crate) fn find_mount_events(mutations: &Mutations) -> Vec<ElementId> {
     let mut mount_events = Vec::new();

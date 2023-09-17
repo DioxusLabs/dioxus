@@ -3,6 +3,7 @@ use crate::{
     bump_frame::BumpFrame,
     innerlude::DirtyScope,
     nodes::RenderReturn,
+    scope_context::ScopeContext,
     scopes::{ScopeId, ScopeState},
     virtual_dom::VirtualDom,
 };
@@ -13,48 +14,49 @@ impl VirtualDom {
         props: Box<dyn AnyProps<'static>>,
         name: &'static str,
     ) -> &ScopeState {
-        let parent = self.acquire_current_scope_raw();
+        let parent_id = self.runtime.current_scope_id();
+        let height = parent_id
+            .and_then(|parent_id| self.get_scope(parent_id).map(|f| f.context().height + 1))
+            .unwrap_or(0);
         let entry = self.scopes.vacant_entry();
-        let height = unsafe { parent.map(|f| (*f).height + 1).unwrap_or(0) };
-        let id = entry.key();
+        let id = ScopeId(entry.key());
 
-        entry.insert(ScopeState {
-            parent,
-            id,
-            height,
-            name,
+        let scope = entry.insert(Box::new(ScopeState {
+            runtime: self.runtime.clone(),
+            context_id: id,
+
             props: Some(props),
-            tasks: self.scheduler.clone(),
+
             node_arena_1: BumpFrame::new(0),
             node_arena_2: BumpFrame::new(0),
-            spawned_tasks: Default::default(),
-            suspended: Default::default(),
+
             render_cnt: Default::default(),
             hooks: Default::default(),
             hook_idx: Default::default(),
-            shared_contexts: Default::default(),
+
             borrowed_props: Default::default(),
             attributes_to_drop: Default::default(),
-        })
-    }
+        }));
 
-    fn acquire_current_scope_raw(&self) -> Option<*const ScopeState> {
-        let id = self.scope_stack.last().copied()?;
-        let scope = self.scopes.get(id)?;
-        Some(scope)
+        let context =
+            ScopeContext::new(name, id, parent_id, height, self.runtime.scheduler.clone());
+        self.runtime.create_context_at(id, context);
+
+        scope
     }
 
     pub(crate) fn run_scope(&mut self, scope_id: ScopeId) -> &RenderReturn {
+        self.runtime.scope_stack.borrow_mut().push(scope_id);
         // Cycle to the next frame and then reset it
         // This breaks any latent references, invalidating every pointer referencing into it.
         // Remove all the outdated listeners
         self.ensure_drop_safety(scope_id);
 
         let new_nodes = unsafe {
-            self.scopes[scope_id].previous_frame().bump_mut().reset();
+            let scope = &self.scopes[scope_id.0];
+            scope.previous_frame().bump_mut().reset();
 
-            let scope = &self.scopes[scope_id];
-            scope.suspended.set(false);
+            scope.context().suspended.set(false);
 
             scope.hook_idx.set(0);
 
@@ -62,10 +64,11 @@ impl VirtualDom {
             let props: &dyn AnyProps = scope.props.as_ref().unwrap().as_ref();
             let props: &dyn AnyProps = std::mem::transmute(props);
 
+            let _span = tracing::trace_span!("render", scope = %scope.context().name);
             props.render(scope).extend_lifetime()
         };
 
-        let scope = &self.scopes[scope_id];
+        let scope = &self.scopes[scope_id.0];
 
         // We write on top of the previous frame and then make it the current by pushing the generation forward
         let frame = scope.previous_frame();
@@ -77,21 +80,26 @@ impl VirtualDom {
         // And move the render generation forward by one
         scope.render_cnt.set(scope.render_cnt.get() + 1);
 
+        let context = scope.context();
         // remove this scope from dirty scopes
         self.dirty_scopes.remove(&DirtyScope {
-            height: scope.height,
-            id: scope.id,
+            height: context.height,
+            id: context.id,
         });
 
-        if scope.suspended.get() {
+        if context.suspended.get() {
             if matches!(allocated, RenderReturn::Aborted(_)) {
-                self.suspended_scopes.insert(scope.id);
+                self.suspended_scopes.insert(context.id);
             }
         } else if !self.suspended_scopes.is_empty() {
-            _ = self.suspended_scopes.remove(&scope.id);
+            _ = self.suspended_scopes.remove(&context.id);
         }
 
         // rebind the lifetime now that its stored internally
-        unsafe { allocated.extend_lifetime_ref() }
+        let result = unsafe { allocated.extend_lifetime_ref() };
+
+        self.runtime.scope_stack.borrow_mut().pop();
+
+        result
     }
 }

@@ -27,20 +27,20 @@ fn main() {
 }
 
 fn use_inner_html(cx: &ScopeState, id: &'static str) -> Option<String> {
+    let eval_provider = use_eval(cx);
+
     let value: &UseRef<Option<String>> = use_ref(cx, || None);
     use_effect(cx, (), |_| {
-        to_owned![value];
-        let desktop_context: DesktopContext = cx.consume_context().unwrap();
+        to_owned![value, eval_provider];
         async move {
             tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-            let html = desktop_context
-                .eval(&format!(
-                    r#"let element = document.getElementById('{}');
-                return element.innerHTML;"#,
-                    id
-                ))
-                .await;
-            if let Ok(serde_json::Value::String(html)) = html {
+            let html = eval_provider(&format!(
+                r#"let element = document.getElementById('{}');
+                    return element.innerHTML"#,
+                id
+            ))
+            .unwrap();
+            if let Ok(serde_json::Value::String(html)) = html.await {
                 println!("html: {}", html);
                 value.set(Some(html));
             }
@@ -53,13 +53,15 @@ const EXPECTED_HTML: &str = r#"<div id="5" style="width: 100px; height: 100px; c
 
 fn check_html_renders(cx: Scope) -> Element {
     let inner_html = use_inner_html(cx, "main_div");
+
     let desktop_context: DesktopContext = cx.consume_context().unwrap();
 
-    if let Some(raw_html) = inner_html.as_deref() {
-        let fragment = scraper::Html::parse_fragment(raw_html);
-        println!("fragment: {:?}", fragment.html());
+    if let Some(raw_html) = inner_html {
+        println!("{}", raw_html);
+        let fragment = scraper::Html::parse_fragment(&raw_html);
+        println!("fragment: {}", fragment.html());
         let expected = scraper::Html::parse_fragment(EXPECTED_HTML);
-        println!("fragment: {:?}", expected.html());
+        println!("expected: {}", expected.html());
         if fragment == expected {
             println!("html matches");
             desktop_context.close();
