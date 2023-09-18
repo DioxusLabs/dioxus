@@ -132,10 +132,10 @@ impl Bundle {
             .project_out_directory(crate_config.out_dir)
             .package_settings(PackageSettings {
                 product_name: crate_config.dioxus_config.application.name.clone(),
-                version: package.version,
-                description: package.description.unwrap_or_default(),
-                homepage: package.homepage,
-                authors: Some(package.authors),
+                version: package.version().to_string(),
+                description: package.description().unwrap_or_default().to_string(),
+                homepage: Some(package.homepage().unwrap_or_default().to_string()),
+                authors: Some(Vec::from(package.authors())),
                 default_run: Some(crate_config.dioxus_config.application.name.clone()),
             })
             .binaries(binaries)
