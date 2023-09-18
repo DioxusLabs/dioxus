@@ -30,7 +30,7 @@ impl Default for HotReloadState {
                     }
 
                     if let Err(err) = tx.send(Some(template)) {
-                        log::error!("Failed to send hot reload message: {}", err);
+                        tracing::error!("Failed to send hot reload message: {}", err);
                     }
                 }
                 dioxus_hot_reload::HotReloadMsg::Shutdown => {

@@ -3,8 +3,11 @@
 mod cache;
 pub mod config;
 mod fs_cache;
+#[cfg(feature = "incremental")]
 pub mod incremental;
+#[cfg(feature = "incremental")]
 mod incremental_cfg;
+
 pub mod renderer;
 pub mod template;
 

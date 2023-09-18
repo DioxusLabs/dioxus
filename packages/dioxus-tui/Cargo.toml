@@ -5,7 +5,7 @@ authors = ["Jonathan Kelley, Evan Almloff"]
 edition = "2021"
 description = "TUI-based renderer for Dioxus"
 repository = "https://github.com/DioxusLabs/dioxus/"
-homepage = "https://dioxuslabs.com/docs/0.3/guide/en/getting_started/tui.html"
+homepage = "https://dioxuslabs.com/learn/0.4/getting_started/tui"
 keywords = ["dom", "ui", "gui", "react", "terminal"]
 license = "MIT OR Apache-2.0"
 

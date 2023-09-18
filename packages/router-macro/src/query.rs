@@ -14,7 +14,7 @@ impl QuerySegment {
         let ident = &self.ident;
         let ty = &self.ty;
         quote! {
-            let #ident = <#ty as dioxus_router::routable::FromQuery>::from_query(query);
+            let #ident = <#ty as dioxus_router::routable::FromQuery>::from_query(&*query);
         }
     }
 

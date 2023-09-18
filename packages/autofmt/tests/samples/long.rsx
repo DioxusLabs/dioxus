@@ -1,6 +1,6 @@
 use dioxus::prelude::*;
 
-#[inline_props]
+#[component]
 pub fn Explainer<'a>(
     cx: Scope<'a>,
     invert: bool,

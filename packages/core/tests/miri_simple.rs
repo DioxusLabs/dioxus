@@ -2,22 +2,24 @@ use dioxus::prelude::*;
 
 #[test]
 fn app_drops() {
-    fn app(cx: Scope) -> Element {
+    #[component]
+    fn App(cx: Scope) -> Element {
         cx.render(rsx! {
             div {}
         })
     }
 
-    let mut dom = VirtualDom::new(app);
+    let mut dom = VirtualDom::new(App);
 
     _ = dom.rebuild();
-    dom.mark_dirty(ScopeId(0));
+    dom.mark_dirty(ScopeId::ROOT);
     _ = dom.render_immediate();
 }
 
 #[test]
 fn hooks_drop() {
-    fn app(cx: Scope) -> Element {
+    #[component]
+    fn App(cx: Scope) -> Element {
         cx.use_hook(|| String::from("asd"));
         cx.use_hook(|| String::from("asd"));
         cx.use_hook(|| String::from("asd"));
@@ -28,26 +30,28 @@ fn hooks_drop() {
         })
     }
 
-    let mut dom = VirtualDom::new(app);
+    let mut dom = VirtualDom::new(App);
 
     _ = dom.rebuild();
-    dom.mark_dirty(ScopeId(0));
+    dom.mark_dirty(ScopeId::ROOT);
     _ = dom.render_immediate();
 }
 
 #[test]
 fn contexts_drop() {
-    fn app(cx: Scope) -> Element {
+    #[component]
+    fn App(cx: Scope) -> Element {
         cx.provide_context(String::from("asd"));
 
         cx.render(rsx! {
             div {
-                child_comp {}
+                ChildComp {}
             }
         })
     }
 
-    fn child_comp(cx: Scope) -> Element {
+    #[component]
+    fn ChildComp(cx: Scope) -> Element {
         let el = cx.consume_context::<String>().unwrap();
 
         cx.render(rsx! {
@@ -55,16 +59,17 @@ fn contexts_drop() {
         })
     }
 
-    let mut dom = VirtualDom::new(app);
+    let mut dom = VirtualDom::new(App);
 
     _ = dom.rebuild();
-    dom.mark_dirty(ScopeId(0));
+    dom.mark_dirty(ScopeId::ROOT);
     _ = dom.render_immediate();
 }
 
 #[test]
 fn tasks_drop() {
-    fn app(cx: Scope) -> Element {
+    #[component]
+    fn App(cx: Scope) -> Element {
         cx.spawn(async {
             // tokio::time::sleep(std::time::Duration::from_millis(100000)).await;
         });
@@ -74,10 +79,10 @@ fn tasks_drop() {
         })
     }
 
-    let mut dom = VirtualDom::new(app);
+    let mut dom = VirtualDom::new(App);
 
     _ = dom.rebuild();
-    dom.mark_dirty(ScopeId(0));
+    dom.mark_dirty(ScopeId::ROOT);
     _ = dom.render_immediate();
 }
 
@@ -91,37 +96,38 @@ fn root_props_drop() {
     );
 
     _ = dom.rebuild();
-    dom.mark_dirty(ScopeId(0));
+    dom.mark_dirty(ScopeId::ROOT);
     _ = dom.render_immediate();
 }
 
 #[test]
 fn diffing_drops_old() {
-    fn app(cx: Scope) -> Element {
+    #[component]
+    fn App(cx: Scope) -> Element {
         cx.render(rsx! {
             div {
                 match cx.generation() % 2 {
-                    0 => rsx!( child_comp1 { name: "asdasd".to_string() }),
-                    1 => rsx!( child_comp2 { name: "asdasd".to_string() }),
+                    0 => rsx!( ChildComp1 { name: "asdasd".to_string() }),
+                    1 => rsx!( ChildComp2 { name: "asdasd".to_string() }),
                     _ => todo!()
                 }
             }
         })
     }
 
-    #[inline_props]
-    fn child_comp1(cx: Scope, name: String) -> Element {
+    #[component]
+    fn ChildComp1(cx: Scope, name: String) -> Element {
         cx.render(rsx! { "Hello {name}" })
     }
 
-    #[inline_props]
-    fn child_comp2(cx: Scope, name: String) -> Element {
+    #[component]
+    fn ChildComp2(cx: Scope, name: String) -> Element {
         cx.render(rsx! { "Goodbye {name}"  })
     }
 
-    let mut dom = VirtualDom::new(app);
+    let mut dom = VirtualDom::new(App);
     _ = dom.rebuild();
-    dom.mark_dirty(ScopeId(0));
+    dom.mark_dirty(ScopeId::ROOT);
 
     _ = dom.render_immediate();
 }

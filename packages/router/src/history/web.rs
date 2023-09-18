@@ -139,7 +139,7 @@ impl<R: Routable> WebHistory<R> {
         );
 
         let current_route = myself.current_route();
-        log::trace!("initial route: {:?}", current_route);
+        tracing::trace!("initial route: {:?}", current_route);
         let current_url = current_route.to_string();
         let state = myself.create_state(current_route);
         let _ = replace_state_with_url(&myself.history, &state, Some(&current_url));
@@ -195,14 +195,10 @@ where
     <R as std::str::FromStr>::Err: std::fmt::Display,
 {
     fn route_from_location(&self) -> R {
-        R::from_str(
-            &self
-                .window
-                .location()
-                .pathname()
-                .unwrap_or_else(|_| String::from("/")),
-        )
-        .unwrap_or_else(|err| panic!("{}", err))
+        let location = self.window.location();
+        let path = location.pathname().unwrap_or_else(|_| "/".into())
+            + &location.search().unwrap_or("".into());
+        R::from_str(&path).unwrap_or_else(|err| panic!("{}", err))
     }
 
     fn full_path(&self, state: &R) -> String {

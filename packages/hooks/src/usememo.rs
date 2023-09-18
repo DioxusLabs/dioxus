@@ -10,8 +10,9 @@ use crate::UseFutureDep;
 /// ## Examples
 ///
 /// ```rust, no_run
+/// # use dioxus::prelude::*;
 ///
-/// #[inline_props]
+/// #[component]
 /// fn Calculator(cx: Scope, number: usize) -> Element {
 ///     let bigger_number = use_memo(cx, (number,), |(number,)| {
 ///         // This will only be calculated when `number` has changed.
@@ -21,7 +22,9 @@ use crate::UseFutureDep;
 ///         p { "{bigger_number}" }
 ///     )
 /// }
-/// fn app(cx: Scope) -> Element {
+///
+/// #[component]
+/// fn App(cx: Scope) -> Element {
 ///     render!(Calculator { number: 0 })
 /// }
 /// ```

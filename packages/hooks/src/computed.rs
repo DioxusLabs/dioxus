@@ -1,3 +1,5 @@
+//! Tracked and computed state in Dioxus
+
 use dioxus_core::{ScopeId, ScopeState};
 use slab::Slab;
 use std::{
@@ -15,6 +17,7 @@ use std::{
 /// ```rust
 /// use dioxus::prelude::*;
 ///
+/// #[component]
 /// fn Parent(cx: Scope) -> Element {
 ///    let count = use_tracked_state(cx, || 0);
 ///
@@ -25,7 +28,7 @@ use std::{
 ///    }
 /// }
 ///
-/// #[inline_props]
+/// #[component]
 /// fn Child(cx: Scope, count: Tracked<usize>) -> Element {
 ///    let less_than_five = use_selector(cx, count, |count| *count < 5);
 ///
