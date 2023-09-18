@@ -44,7 +44,8 @@ dioxus-desktop = { workspace = true, optional = true }
 # Router Integration
 dioxus-router = { workspace = true, optional = true }
 
-log = { workspace = true }
+tracing = { workspace = true }
+tracing-futures = { workspace = true }
 once_cell = "1.17.1"
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full"], optional = true }

@@ -2,7 +2,7 @@ use dioxus::prelude::*;
 use std::collections::HashMap;
 
 fn main() {
-    dioxus_desktop::launch(|cx| render!(app_root {}));
+    dioxus_desktop::launch(|cx| render!(AppRoot {}));
 }
 
 #[derive(Debug, Clone, PartialEq, serde::Deserialize)]
@@ -10,7 +10,8 @@ struct ListBreeds {
     message: HashMap<String, Vec<String>>,
 }
 
-fn app_root(cx: Scope<'_>) -> Element {
+#[component]
+fn AppRoot(cx: Scope<'_>) -> Element {
     let breed = use_state(cx, || "deerhound".to_string());
 
     let breeds = use_future!(cx, || async move {
@@ -36,7 +37,7 @@ fn app_root(cx: Scope<'_>) -> Element {
                             }
                         }
                     }
-                    div { flex: "50%", breed_pic { breed: breed.to_string() } }
+                    div { flex: "50%", BreedPic { breed: breed.to_string() } }
                 }
             }
         }),
@@ -49,8 +50,8 @@ struct DogApi {
     message: String,
 }
 
-#[inline_props]
-fn breed_pic(cx: Scope, breed: String) -> Element {
+#[component]
+fn BreedPic(cx: Scope, breed: String) -> Element {
     let fut = use_future!(cx, |breed| async move {
         reqwest::get(format!("https://dog.ceo/api/breed/{breed}/images/random"))
             .await

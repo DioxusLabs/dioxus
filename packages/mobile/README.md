@@ -7,28 +7,23 @@
 
 [crates-badge]: https://img.shields.io/crates/v/dioxus-mobile.svg
 [crates-url]: https://crates.io/crates/dioxus-mobile
-
 [mit-badge]: https://img.shields.io/badge/license-MIT-blue.svg
 [mit-url]: https://github.com/dioxuslabs/dioxus/blob/master/LICENSE
-
 [actions-badge]: https://github.com/dioxuslabs/dioxus/actions/workflows/main.yml/badge.svg
 [actions-url]: https://github.com/dioxuslabs/dioxus/actions?query=workflow%3ACI+branch%3Amaster
-
 [discord-badge]: https://img.shields.io/discord/899851952891002890.svg?logo=discord&style=flat-square
 [discord-url]: https://discord.gg/XgGxMSkvUM
 
 [Website](https://dioxuslabs.com) |
-[Guides](https://dioxuslabs.com/docs/0.3/guide/en/) |
+[Guides](https://dioxuslabs.com/learn/0.4/) |
 [API Docs](https://docs.rs/dioxus-mobile/latest/dioxus_mobile) |
 [Chat](https://discord.gg/XgGxMSkvUM)
-
 
 ## Overview
 
 `dioxus-mobile` is a re-export of `dioxus-desktop` with some minor tweaks and documentation changes. As this crate evolves, it will provide some more unique features to mobile, but for now, it's very similar to the desktop crate.
 
 Dioxus Mobile supports both iOS and Android. However, Android support is still quite experimental and requires a lot of configuration. A good area to contribute here would be to improve the CLI tool to include bundling and mobile configuration.
-
 
 ## Getting Set up
 
@@ -39,7 +34,6 @@ We're going to be using `cargo-mobile` to build for mobile. First, install it:
 ```shell
 $ cargo install --git https://github.com/BrainiumLLC/cargo-mobile
 ```
-
 
 And then initialize your app for the right platform. Use the `winit` template for now. Right now, there's no "Dioxus" template in cargo-mobile.
 
@@ -98,9 +92,7 @@ To configure the web view, menubar, and other important desktop-specific feature
 
 ## Future Steps
 
-Make sure to read the [Dioxus Guide](https://dioxuslabs.com/docs/0.3/guide/en) if you already haven't!
-
-
+Make sure to read the [Dioxus Guide](https://dioxuslabs.com/learn/0.4/) if you already haven't!
 
 ## Contributing
 
@@ -108,6 +100,7 @@ Make sure to read the [Dioxus Guide](https://dioxuslabs.com/docs/0.3/guide/en) i
 - Join the discord and ask questions!
 
 ## License
+
 This project is licensed under the [MIT license].
 
 [mit license]: https://github.com/DioxusLabs/dioxus/blob/master/LICENSE-MIT

@@ -25,7 +25,7 @@ impl RouteSegment {
         match self {
             Self::Static(segment) => quote! { write!(f, "/{}", #segment)?; },
             Self::Dynamic(ident, _) => quote! { write!(f, "/{}", #ident)?; },
-            Self::CatchAll(ident, _) => quote! { #ident.display_route_segements(f)?; },
+            Self::CatchAll(ident, _) => quote! { #ident.display_route_segments(f)?; },
         }
     }
 

@@ -14,7 +14,7 @@ anyhow = "1.0.66"
 dioxus = { workspace = true }
 dioxus-router-macro = { workspace = true }
 gloo = { version = "0.8.0", optional = true }
-log = { workspace = true }
+tracing = { workspace = true }
 thiserror = { workspace = true }
 futures-util = { workspace = true }
 urlencoding = "2.1.3"
