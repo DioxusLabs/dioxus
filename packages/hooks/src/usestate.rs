@@ -336,6 +336,50 @@ impl<T> PartialEq<UseState<T>> for UseState<T> {
     }
 }
 
+impl<T: std::cmp::PartialOrd> PartialOrd<T> for UseState<T> {
+    fn ge(&self, other: &T) -> bool {
+        *self.current_val >= *other
+    }
+
+    fn gt(&self, other: &T) -> bool {
+        *self.current_val > *other
+    }
+
+    fn le(&self, other: &T) -> bool {
+        *self.current_val <= *other
+    }
+
+    fn lt(&self, other: &T) -> bool {
+        *self.current_val < *other
+    }
+
+    fn partial_cmp(&self, other: &T) -> Option<std::cmp::Ordering> {
+        (*self.current_val).partial_cmp(other)
+    }
+}
+
+impl<T: std::cmp::PartialOrd> PartialOrd<UseState<T>> for UseState<T> {
+    fn ge(&self, other: &UseState<T>) -> bool {
+        self.current_val >= other.current_val
+    }
+
+    fn gt(&self, other: &UseState<T>) -> bool {
+        self.current_val > other.current_val
+    }
+
+    fn le(&self, other: &UseState<T>) -> bool {
+        self.current_val <= other.current_val
+    }
+
+    fn lt(&self, other: &UseState<T>) -> bool {
+        self.current_val < other.current_val
+    }
+
+    fn partial_cmp(&self, other: &UseState<T>) -> Option<std::cmp::Ordering> {
+        self.current_val.partial_cmp(&other.current_val)
+    }
+}
+
 impl<T: Debug> Debug for UseState<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self.current_val)
