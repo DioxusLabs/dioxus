@@ -58,7 +58,6 @@ transparent = ["wry/transparent"]
 devtools = ["wry/devtools"]
 dox = ["wry/dox"]
 hot-reload = ["dioxus-hot-reload"]
-dox = ["wry/dox"]
 
 [package.metadata.docs.rs]
 default-features = false
