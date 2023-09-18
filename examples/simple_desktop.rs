@@ -9,10 +9,11 @@ fn main() {
         .with_module_level("dioxus", log::LevelFilter::Trace)
         .init()
         .unwrap();
-    dioxus_desktop::launch(app);
+    dioxus_desktop::launch(App);
 }
 
-fn app(cx: Scope) -> Element {
+#[component]
+fn App(cx: Scope) -> Element {
     render! {
         Router::<Route> {}
     }
@@ -36,7 +37,7 @@ enum Route {
         Oranges {},
 }
 
-#[inline_props]
+#[component]
 fn NavBar(cx: Scope) -> Element {
     render! {
         h1 { "Your app here" }
@@ -51,19 +52,19 @@ fn NavBar(cx: Scope) -> Element {
     }
 }
 
-#[inline_props]
+#[component]
 fn Home(cx: Scope) -> Element {
     log::debug!("rendering home {:?}", cx.scope_id());
     render! { h1 { "Home" } }
 }
 
-#[inline_props]
+#[component]
 fn BlogList(cx: Scope) -> Element {
     log::debug!("rendering blog list {:?}", cx.scope_id());
     render! { div { "Blog List" } }
 }
 
-#[inline_props]
+#[component]
 fn BlogPost(cx: Scope, post: String) -> Element {
     log::debug!("rendering blog post {}", post);
 
@@ -75,7 +76,7 @@ fn BlogPost(cx: Scope, post: String) -> Element {
     }
 }
 
-#[inline_props]
+#[component]
 fn Oranges(cx: Scope) -> Element {
     render!("Oranges are not apples!")
 }

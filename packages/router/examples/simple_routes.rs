@@ -1,24 +1,23 @@
-#![allow(non_snake_case)]
-
 use dioxus::prelude::*;
 use dioxus_router::prelude::*;
 use std::str::FromStr;
 
 fn main() {
     #[cfg(not(target_arch = "wasm32"))]
-    dioxus_desktop::launch(root);
+    dioxus_desktop::launch(Root);
 
     #[cfg(target_arch = "wasm32")]
     dioxus_web::launch(root);
 }
 
-fn root(cx: Scope) -> Element {
+#[component]
+fn Root(cx: Scope) -> Element {
     render! {
         Router::<Route> {}
     }
 }
 
-#[inline_props]
+#[component]
 fn UserFrame(cx: Scope, user_id: usize) -> Element {
     render! {
         pre {
@@ -32,7 +31,7 @@ fn UserFrame(cx: Scope, user_id: usize) -> Element {
     }
 }
 
-#[inline_props]
+#[component]
 fn Route1(cx: Scope, user_id: usize, dynamic: usize, query: String, extra: String) -> Element {
     render! {
         pre {
@@ -50,7 +49,7 @@ fn Route1(cx: Scope, user_id: usize, dynamic: usize, query: String, extra: Strin
     }
 }
 
-#[inline_props]
+#[component]
 fn Route2(cx: Scope, user_id: usize) -> Element {
     render! {
         pre {
@@ -65,7 +64,7 @@ fn Route2(cx: Scope, user_id: usize) -> Element {
     }
 }
 
-#[inline_props]
+#[component]
 fn Route3(cx: Scope, dynamic: String) -> Element {
     let navigator = use_navigator(cx);
     let current_route = use_route(cx)?;

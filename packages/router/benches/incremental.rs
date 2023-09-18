@@ -1,4 +1,4 @@
-#![allow(unused, non_snake_case)]
+#![allow(unused)]
 
 use std::time::Duration;
 
@@ -134,7 +134,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
 criterion_group!(benches, criterion_benchmark);
 criterion_main!(benches);
 
-#[inline_props]
+#[component]
 fn Blog(cx: Scope) -> Element {
     render! {
         div {
@@ -143,7 +143,7 @@ fn Blog(cx: Scope) -> Element {
     }
 }
 
-#[inline_props]
+#[component]
 fn Post(cx: Scope, id: usize) -> Element {
     render! {
         for _ in 0..*id {
@@ -154,7 +154,7 @@ fn Post(cx: Scope, id: usize) -> Element {
     }
 }
 
-#[inline_props]
+#[component]
 fn PostHome(cx: Scope) -> Element {
     render! {
         div {
@@ -163,7 +163,7 @@ fn PostHome(cx: Scope) -> Element {
     }
 }
 
-#[inline_props]
+#[component]
 fn Home(cx: Scope) -> Element {
     render! {
         div {
@@ -189,7 +189,7 @@ enum Route {
     Home {},
 }
 
-#[inline_props]
+#[component]
 fn RenderPath(cx: Scope, path: Route) -> Element {
     let path = path.clone();
     render! {

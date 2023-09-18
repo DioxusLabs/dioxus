@@ -210,7 +210,7 @@ pub fn routable(input: TokenStream) -> TokenStream {
     let display_impl = route_enum.impl_display();
     let routable_impl = route_enum.routable_impl();
 
-    quote! {
+    (quote! {
         #error_type
 
         #display_impl
@@ -218,7 +218,7 @@ pub fn routable(input: TokenStream) -> TokenStream {
         #routable_impl
 
         #parse_impl
-    }
+    })
     .into()
 }
 
@@ -678,9 +678,9 @@ impl ToTokens for SegmentType {
 impl<'a> From<&'a RouteSegment> for SegmentType {
     fn from(value: &'a RouteSegment) -> Self {
         match value {
-            segment::RouteSegment::Static(s) => SegmentType::Static(s.to_string()),
-            segment::RouteSegment::Dynamic(s, _) => SegmentType::Dynamic(s.to_string()),
-            segment::RouteSegment::CatchAll(s, _) => SegmentType::CatchAll(s.to_string()),
+            RouteSegment::Static(s) => SegmentType::Static(s.to_string()),
+            RouteSegment::Dynamic(s, _) => SegmentType::Dynamic(s.to_string()),
+            RouteSegment::CatchAll(s, _) => SegmentType::CatchAll(s.to_string()),
         }
     }
 }

@@ -29,7 +29,7 @@ use dioxus::prelude::*;
 ///     Index {},
 /// }
 ///
-/// #[inline_props]
+/// #[component]
 /// fn Index(cx: Scope) -> Element {
 ///     render! {
 ///         div {
@@ -38,7 +38,7 @@ use dioxus::prelude::*;
 ///     }
 /// }
 ///
-/// #[inline_props]
+/// #[component]
 /// fn Wrapper(cx: Scope) -> Element {
 ///     render! {
 ///         h1 { "App" }
@@ -46,7 +46,7 @@ use dioxus::prelude::*;
 ///     }
 /// }
 ///
-/// #[inline_props]
+/// #[component]
 /// fn Child(cx: Scope) -> Element {
 ///     render! {
 ///         p {
@@ -55,6 +55,7 @@ use dioxus::prelude::*;
 ///     }
 /// }
 ///
+/// # #[component]
 /// # fn App(cx: Scope) -> Element {
 /// #     render! {
 /// #         Router::<Route> {

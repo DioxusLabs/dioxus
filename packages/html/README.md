@@ -1,6 +1,5 @@
 # `dioxus-html`: Html (and SVG) Namespace for Dioxus
 
-
 [![Crates.io][crates-badge]][crates-url]
 [![MIT licensed][mit-badge]][mit-url]
 [![Build Status][actions-badge]][actions-url]
@@ -8,21 +7,17 @@
 
 [crates-badge]: https://img.shields.io/crates/v/dioxus-html.svg
 [crates-url]: https://crates.io/crates/dioxus-html
-
 [mit-badge]: https://img.shields.io/badge/license-MIT-blue.svg
 [mit-url]: https://github.com/dioxuslabs/dioxus/blob/master/LICENSE
-
 [actions-badge]: https://github.com/dioxuslabs/dioxus/actions/workflows/main.yml/badge.svg
 [actions-url]: https://github.com/dioxuslabs/dioxus/actions?query=workflow%3ACI+branch%3Amaster
-
 [discord-badge]: https://img.shields.io/discord/899851952891002890.svg?logo=discord&style=flat-square
 [discord-url]: https://discord.gg/XgGxMSkvUM
 
 [Website](https://dioxuslabs.com) |
-[Guides](https://dioxuslabs.com/docs/0.3/guide/en/) |
+[Guides](https://dioxuslabs.com/learn/0.4/) |
 [API Docs](https://docs.rs/dioxus-html/latest/dioxus_html) |
 [Chat](https://discord.gg/XgGxMSkvUM)
-
 
 ## Overview
 
@@ -64,6 +59,7 @@ All elements should be defined as a zero-sized-struct (also known as unit struct
 Attributes would then be implemented as constants on these unit structs.
 
 The HTML namespace is defined mostly with macros. However, the expanded form would look something like this:
+
 ```rust
 struct base;
 impl DioxusElement for base {
@@ -75,8 +71,8 @@ impl base {
     const target: (&'static str, Option<'static str>, bool) = ("target", None, false);
 }
 ```
-Because attributes are defined as methods on the unit struct, they guard the attribute creation behind a compile-time correct interface.
 
+Because attributes are defined as methods on the unit struct, they guard the attribute creation behind a compile-time correct interface.
 
 ## How to extend it:
 
@@ -93,16 +89,13 @@ mod dioxus_elements {
 }
 ```
 
-
-
-
-
 ## Contributing
 
 - Report issues on our [issue tracker](https://github.com/dioxuslabs/dioxus/issues).
 - Join the discord and ask questions!
 
 ## License
+
 This project is licensed under the [MIT license].
 
 [mit license]: https://github.com/DioxusLabs/dioxus/blob/master/LICENSE-MIT

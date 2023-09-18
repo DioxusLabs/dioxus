@@ -1,5 +1,4 @@
 //! Tiny CRM: A port of the Yew CRM example to Dioxus.
-#![allow(non_snake_case)]
 use dioxus::prelude::*;
 use dioxus_router::prelude::*;
 
@@ -27,6 +26,7 @@ pub struct Client {
 
 type ClientContext = Vec<Client>;
 
+#[component]
 fn App(cx: Scope) -> Element {
     use_shared_state_provider::<ClientContext>(cx, Default::default);
 
@@ -50,7 +50,7 @@ fn App(cx: Scope) -> Element {
     }
 }
 
-#[inline_props]
+#[component]
 fn ClientList(cx: Scope) -> Element {
     let clients = use_shared_state::<ClientContext>(cx).unwrap();
 
@@ -80,7 +80,7 @@ fn ClientList(cx: Scope) -> Element {
     })
 }
 
-#[inline_props]
+#[component]
 fn ClientAdd(cx: Scope) -> Element {
     let clients = use_shared_state::<ClientContext>(cx).unwrap();
     let first_name = use_state(cx, String::new);
@@ -173,7 +173,7 @@ fn ClientAdd(cx: Scope) -> Element {
     })
 }
 
-#[inline_props]
+#[component]
 fn Settings(cx: Scope) -> Element {
     let clients = use_shared_state::<ClientContext>(cx).unwrap();
 

@@ -1,5 +1,5 @@
 use dioxus::prelude::*;
-use log::error;
+use tracing::error;
 
 use crate::utils::use_router_internal::use_router_internal;
 
@@ -30,13 +30,14 @@ pub struct HistoryButtonProps<'a> {
 ///     Index {},
 /// }
 ///
+/// #[component]
 /// fn App(cx: Scope) -> Element {
 ///     render! {
 ///         Router::<Route> {}
 ///     }
 /// }
 ///
-/// #[inline_props]
+/// #[component]
 /// fn Index(cx: Scope) -> Element {
 ///     render! {
 ///         GoBackButton {
@@ -52,7 +53,7 @@ pub struct HistoryButtonProps<'a> {
 /// #     r#"<button disabled="true" dioxus-prevent-default="onclick">go back</button>"#
 /// # );
 /// ```
-#[allow(non_snake_case)]
+#[component]
 pub fn GoBackButton<'a>(cx: Scope<'a, HistoryButtonProps<'a>>) -> Element {
     let HistoryButtonProps { children } = cx.props;
 
@@ -101,13 +102,14 @@ pub fn GoBackButton<'a>(cx: Scope<'a, HistoryButtonProps<'a>>) -> Element {
 ///     Index {},
 /// }
 ///
+/// #[component]
 /// fn App(cx: Scope) -> Element {
 ///     render! {
 ///         Router::<Route> {}
 ///     }
 /// }
 ///
-/// #[inline_props]
+/// #[component]
 /// fn Index(cx: Scope) -> Element {
 ///     render! {
 ///         GoForwardButton {
@@ -123,7 +125,7 @@ pub fn GoBackButton<'a>(cx: Scope<'a, HistoryButtonProps<'a>>) -> Element {
 /// #     r#"<button disabled="true" dioxus-prevent-default="onclick">go forward</button>"#
 /// # );
 /// ```
-#[allow(non_snake_case)]
+#[component]
 pub fn GoForwardButton<'a>(cx: Scope<'a, HistoryButtonProps<'a>>) -> Element {
     let HistoryButtonProps { children } = cx.props;
 

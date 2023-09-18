@@ -1,6 +1,5 @@
 # Dioxus Desktop (webview)
 
-
 [![Crates.io][crates-badge]][crates-url]
 [![MIT licensed][mit-badge]][mit-url]
 [![Build Status][actions-badge]][actions-url]
@@ -8,21 +7,17 @@
 
 [crates-badge]: https://img.shields.io/crates/v/dioxus-desktop.svg
 [crates-url]: https://crates.io/crates/dioxus-desktop
-
 [mit-badge]: https://img.shields.io/badge/license-MIT-blue.svg
 [mit-url]: https://github.com/dioxuslabs/dioxus/blob/master/LICENSE
-
 [actions-badge]: https://github.com/dioxuslabs/dioxus/actions/workflows/main.yml/badge.svg
 [actions-url]: https://github.com/dioxuslabs/dioxus/actions?query=workflow%3ACI+branch%3Amaster
-
 [discord-badge]: https://img.shields.io/discord/899851952891002890.svg?logo=discord&style=flat-square
 [discord-url]: https://discord.gg/XgGxMSkvUM
 
 [Website](https://dioxuslabs.com) |
-[Guides](https://dioxuslabs.com/docs/0.3/guide/en/) |
+[Guides](https://dioxuslabs.com/learn/0.4/) |
 [API Docs](https://docs.rs/dioxus-desktop/latest/dioxus_desktop) |
 [Chat](https://discord.gg/XgGxMSkvUM)
-
 
 ## Overview
 
@@ -30,9 +25,7 @@
 
 This requires that webview is installed on the target system. WebView is installed by default on macOS and iOS devices, but might not come preinstalled on Windows or Linux devices. To fix these issues, follow the [instructions in the guide](guide-url).
 
-[guide-url]: https://dioxuslabs.com/docs/0.3/guide/en/getting_started/desktop.html
-
-
+[guide-url]: https://dioxuslabs.com/learn/0.4/getting_started/desktop
 
 ## Features
 
@@ -48,6 +41,7 @@ This requires that webview is installed on the target system. WebView is install
 - Join the discord and ask questions!
 
 ## License
+
 This project is licensed under the [MIT license].
 
 [mit license]: https://github.com/DioxusLabs/dioxus/blob/master/LICENSE-MIT

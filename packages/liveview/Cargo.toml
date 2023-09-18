@@ -3,7 +3,7 @@ name = "dioxus-liveview"
 version = { workspace = true }
 edition = "2021"
 repository = "https://github.com/DioxusLabs/dioxus/"
-homepage = "https://dioxuslabs.com/docs/0.3/guide/en/getting_started/liveview.html"
+homepage = "https://dioxuslabs.com/learn/0.4/getting_started/liveview"
 keywords = ["dom", "ui", "gui", "react", "liveview"]
 description = "Build server-side apps with Dioxus"
 authors = ["Jonathan Kelley", "Evan Almloff"]
@@ -11,7 +11,7 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 thiserror = { workspace = true }
-log = { workspace = true }
+tracing = { workspace = true }
 slab = { workspace = true }
 futures-util = { workspace = true, default-features = false, features = [
     "sink",

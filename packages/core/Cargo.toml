@@ -28,7 +28,7 @@ slab = { workspace = true }
 futures-channel = { workspace = true }
 
 smallbox = "0.8.1"
-log = { workspace = true }
+tracing = { workspace = true }
 
 # Serialize the Edits for use in Webview/Liveview instances
 serde = { version = "1", features = ["derive"], optional = true }

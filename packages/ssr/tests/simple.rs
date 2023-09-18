@@ -2,11 +2,12 @@ use dioxus::prelude::*;
 
 #[test]
 fn simple() {
-    fn app(cx: Scope) -> Element {
+    #[component]
+    fn App(cx: Scope) -> Element {
         render! { div { "hello!" } }
     }
 
-    let mut dom = VirtualDom::new(app);
+    let mut dom = VirtualDom::new(App);
     _ = dom.rebuild();
 
     assert_eq!(dioxus_ssr::render(&dom), "<div>hello!</div>");
@@ -44,8 +45,8 @@ fn dynamic() {
 
 #[test]
 fn components() {
-    #[inline_props]
-    fn my_component(cx: Scope, name: i32) -> Element {
+    #[component]
+    fn MyComponent(cx: Scope, name: i32) -> Element {
         render! {
             div { "component {name}" }
         }
@@ -55,7 +56,7 @@ fn components() {
         dioxus_ssr::render_lazy(rsx! {
             div {
                 (0..5).map(|name| rsx! {
-                    my_component { name: name }
+                    MyComponent { name: name }
                 })
             }
         }),
