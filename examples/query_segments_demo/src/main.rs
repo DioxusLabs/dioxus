@@ -1,4 +1,4 @@
-#![allow(non_snake_case, unused)]
+#![allow(unused)]
 //! Example: Url query segments usage
 //! ------------------------------------
 //!
@@ -56,7 +56,7 @@ impl FromQuery for BlogQuerySegments {
     }
 }
 
-#[inline_props]
+#[component]
 fn BlogPost(cx: Scope, query_params: BlogQuerySegments) -> Element {
     render! {
         div{"This is your blogpost with a query segment:"}
@@ -64,6 +64,7 @@ fn BlogPost(cx: Scope, query_params: BlogQuerySegments) -> Element {
     }
 }
 
+#[component]
 fn App(cx: Scope) -> Element {
     render! { Router::<Route>{} }
 }

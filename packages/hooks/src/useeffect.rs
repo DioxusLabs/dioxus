@@ -14,7 +14,8 @@ use crate::UseFutureDep;
 /// ## Examples
 ///
 /// ```rust, no_run
-/// #[inline_props]
+/// # use dioxus::prelude::*;
+/// #[component]
 /// fn Profile(cx: Scope, id: usize) -> Element {
 ///     let name = use_state(cx, || None);
 ///
@@ -34,7 +35,8 @@ use crate::UseFutureDep;
 ///     )
 /// }
 ///
-/// fn app(cx: Scope) -> Element {
+/// #[component]
+/// fn App(cx: Scope) -> Element {
 ///     render!(Profile { id: 0 })
 /// }
 /// ```

@@ -43,13 +43,13 @@ fn Bapp(cx: Scope) -> Element {
 
 fn main() {
     console_error_panic_hook::set_once();
-    wasm_logger::init(wasm_logger::Config::new(log::Level::Trace));
+    tracing_wasm::set_as_global_default();
 
     let mut dom = VirtualDom::new(app);
     let _ = dom.rebuild();
 
     let pre = dioxus_ssr::pre_render(&dom);
-    log::trace!("{}", pre);
+    tracing::trace!("{}", pre);
 
     // set the inner content of main to the pre-rendered content
     window()

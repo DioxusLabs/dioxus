@@ -107,20 +107,30 @@ impl ScopeContext {
     ///
     /// Clones the state if it exists.
     pub fn consume_context<T: 'static + Clone>(&self) -> Option<T> {
+        tracing::trace!(
+            "looking for context {} ({:?}) in {}",
+            std::any::type_name::<T>(),
+            std::any::TypeId::of::<T>(),
+            self.name
+        );
         if let Some(this_ctx) = self.has_context() {
             return Some(this_ctx);
         }
 
         let mut search_parent = self.parent_id;
-        with_runtime(|runtime| {
+        match with_runtime(|runtime: &crate::runtime::Runtime| {
             while let Some(parent_id) = search_parent {
                 let parent = runtime.get_context(parent_id).unwrap();
-                if let Some(shared) = parent
-                    .shared_contexts
-                    .borrow()
-                    .iter()
-                    .find_map(|any| any.downcast_ref::<T>())
-                {
+                tracing::trace!(
+                    "looking for context {} ({:?}) in {}",
+                    std::any::type_name::<T>(),
+                    std::any::TypeId::of::<T>(),
+                    parent.name
+                );
+                if let Some(shared) = parent.shared_contexts.borrow().iter().find_map(|any| {
+                    tracing::trace!("found context {:?}", any.type_id());
+                    any.downcast_ref::<T>()
+                }) {
                     return Some(shared.clone());
                 }
                 search_parent = parent.parent_id;
@@ -128,6 +138,17 @@ impl ScopeContext {
             None
         })
         .flatten()
+        {
+            Some(ctx) => Some(ctx),
+            None => {
+                tracing::trace!(
+                    "context {} ({:?}) not found",
+                    std::any::type_name::<T>(),
+                    std::any::TypeId::of::<T>()
+                );
+                None
+            }
+        }
     }
 
     /// Expose state to children further down the [`crate::VirtualDom`] Tree. Requires `Clone` on the context to allow getting values down the tree.
@@ -152,6 +173,12 @@ impl ScopeContext {
     /// }
     /// ```
     pub fn provide_context<T: 'static + Clone>(&self, value: T) -> T {
+        tracing::trace!(
+            "providing context {} ({:?}) in {}",
+            std::any::type_name::<T>(),
+            std::any::TypeId::of::<T>(),
+            self.name
+        );
         let mut contexts = self.shared_contexts.borrow_mut();
 
         // If the context exists, swap it out for the new value

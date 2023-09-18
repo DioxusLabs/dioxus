@@ -1,12 +1,12 @@
+use crate::server::Platform;
 use crate::{
     cfg::ConfigOptsServe,
     server::{
         output::{print_console_info, PrettierOptions},
-        setup_file_watcher, setup_file_watcher_hot_reload,
+        setup_file_watcher,
     },
     BuildResult, CrateConfig, Result,
 };
-
 use dioxus_hot_reload::HotReloadMsg;
 use dioxus_html::HtmlCtx;
 use dioxus_rsx::hot_reload::*;
@@ -20,7 +20,7 @@ use tokio::sync::broadcast::{self};
 #[cfg(feature = "plugin")]
 use plugin::PluginManager;
 
-use super::Platform;
+use super::HotReloadState;
 
 pub async fn startup(config: CrateConfig, serve: &ConfigOptsServe) -> Result<()> {
     startup_with_platform::<DesktopPlatform>(config, serve).await
@@ -28,7 +28,7 @@ pub async fn startup(config: CrateConfig, serve: &ConfigOptsServe) -> Result<()>
 
 pub(crate) async fn startup_with_platform<P: Platform + Send + 'static>(
     config: CrateConfig,
-    serve: &ConfigOptsServe,
+    serve_cfg: &ConfigOptsServe,
 ) -> Result<()> {
     // ctrl-c shutdown checker
     let _crate_config = config.clone();
@@ -38,18 +38,39 @@ pub(crate) async fn startup_with_platform<P: Platform + Send + 'static>(
         std::process::exit(0);
     });
 
-    match config.hot_reload {
-        true => serve_hot_reload::<P>(config, serve).await?,
-        false => serve_default::<P>(config, serve).await?,
-    }
+    let hot_reload_state = match config.hot_reload {
+        true => {
+            let FileMapBuildResult { map, errors } =
+                FileMap::<HtmlCtx>::create(config.crate_dir.clone()).unwrap();
+
+            for err in errors {
+                log::error!("{}", err);
+            }
+
+            let file_map = Arc::new(Mutex::new(map));
+
+            let hot_reload_tx = broadcast::channel(100).0;
+
+            clear_paths();
+
+            Some(HotReloadState {
+                messages: hot_reload_tx.clone(),
+                file_map: file_map.clone(),
+            })
+        }
+        false => None,
+    };
+
+    serve::<P>(config, serve_cfg, hot_reload_state).await?;
 
     Ok(())
 }
 
 /// Start the server without hot reload
-async fn serve_default<P: Platform + Send + 'static>(
+async fn serve<P: Platform + Send + 'static>(
     config: CrateConfig,
     serve: &ConfigOptsServe,
+    hot_reload_state: Option<HotReloadState>,
 ) -> Result<()> {
     let platform = RwLock::new(P::start(&config, serve)?);
 
@@ -65,68 +86,34 @@ async fn serve_default<P: Platform + Send + 'static>(
         },
         &config,
         None,
+        hot_reload_state.clone(),
     )
     .await?;
 
-    std::future::pending::<()>().await;
+    match &hot_reload_state {
+        Some(hot_reload_state) => {
+            // The open interprocess sockets
+            start_desktop_hot_reload(hot_reload_state).await?;
+        }
+        None => {
+            std::future::pending::<()>().await;
+        }
+    }
 
     Ok(())
 }
 
-/// Start dx serve with hot reload
-async fn serve_hot_reload<P: Platform + Send + 'static>(
-    config: CrateConfig,
-    serve: &ConfigOptsServe,
-) -> Result<()> {
-    let platform = RwLock::new(P::start(&config, serve)?);
-
-    // Setup hot reload
-    let FileMapBuildResult { map, errors } =
-        FileMap::<HtmlCtx>::create(config.crate_dir.clone()).unwrap();
-
-    for err in errors {
-        log::error!("{}", err);
-    }
-
-    let file_map = Arc::new(Mutex::new(map));
-
-    let (hot_reload_tx, mut hot_reload_rx) = broadcast::channel(100);
-
-    // States
-    // The open interprocess sockets
-    let channels = Arc::new(Mutex::new(Vec::new()));
-
-    // Setup file watcher
-    // We got to own watcher so that it exists for the duration of serve
-    // Otherwise hot reload won't work.
-    let _watcher = setup_file_watcher_hot_reload(
-        &config,
-        hot_reload_tx,
-        file_map.clone(),
-        {
-            let config = config.clone();
-
-            let channels = channels.clone();
-            move || {
-                for channel in &mut *channels.lock().unwrap() {
-                    send_msg(HotReloadMsg::Shutdown, channel);
-                }
-                platform.write().unwrap().rebuild(&config)
-            }
-        },
-        None,
-    )
-    .await?;
-
-    clear_paths();
-
+async fn start_desktop_hot_reload(hot_reload_state: &HotReloadState) -> Result<()> {
     match LocalSocketListener::bind("@dioxusin") {
         Ok(local_socket_stream) => {
             let aborted = Arc::new(Mutex::new(false));
+            // States
+            // The open interprocess sockets
+            let channels = Arc::new(Mutex::new(Vec::new()));
 
             // listen for connections
             std::thread::spawn({
-                let file_map = file_map.clone();
+                let file_map = hot_reload_state.file_map.clone();
                 let channels = channels.clone();
                 let aborted = aborted.clone();
                 let _ = local_socket_stream.set_nonblocking(true);
@@ -160,6 +147,8 @@ async fn serve_hot_reload<P: Platform + Send + 'static>(
                     }
                 }
             });
+
+            let mut hot_reload_rx = hot_reload_state.messages.subscribe();
 
             while let Ok(template) = hot_reload_rx.recv().await {
                 let channels = &mut *channels.lock().unwrap();

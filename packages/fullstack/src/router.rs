@@ -29,7 +29,7 @@ where
                                 .to_string()
                                 .parse()
                                 .unwrap_or_else(|err| {
-                                    log::error!("Failed to parse uri: {}", err);
+                                    tracing::error!("Failed to parse uri: {}", err);
                                     "/"
                                         .parse()
                                         .unwrap_or_else(|err| {

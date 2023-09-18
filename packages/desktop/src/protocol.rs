@@ -149,7 +149,7 @@ pub(super) fn desktop_handler(
             .map_err(From::from);
     }
 
-    log::error!(
+    tracing::error!(
         "Failed to find {} (as path {})",
         request.uri().path(),
         asset.display()

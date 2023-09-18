@@ -249,7 +249,6 @@ impl WebsysDom {
         for id in to_mount {
             let node = get_node(id.0 as u32);
             if let Some(element) = node.dyn_ref::<Element>() {
-                log::info!("mounted event fired: {}", id.0);
                 let data: MountedData = element.into();
                 let data = Rc::new(data);
                 let _ = self.event_channel.unbounded_send(UiEvent {

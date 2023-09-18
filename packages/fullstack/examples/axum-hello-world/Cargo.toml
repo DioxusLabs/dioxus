@@ -12,8 +12,9 @@ dioxus-fullstack = { workspace = true }
 axum = { version = "0.6.12", optional = true }
 serde = "1.0.159"
 simple_logger = "4.2.0"
-wasm-logger = "0.2.0"
-log.workspace = true
+tracing-wasm = "0.2.1"
+tracing.workspace = true
+tracing-subscriber = "0.3.17"
 reqwest = "0.11.18"
 
 [features]
