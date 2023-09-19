@@ -308,7 +308,7 @@ impl DynamicMapping {
     fn add_node(&mut self, node: BodyNode) {
         match node {
             BodyNode::Element(el) => {
-                for attr in el.attributes {
+                for attr in el.merged_attributes {
                     match &attr.attr.value {
                         ElementAttrValue::AttrLiteral(input) if input.is_static() => {}
                         _ => {
@@ -359,7 +359,7 @@ impl<'a> DynamicContext<'a> {
                 let element_name_rust = el.name.to_string();
 
                 let mut static_attrs = Vec::new();
-                for attr in &el.attributes {
+                for attr in &el.merged_attributes {
                     match &attr.attr.value {
                         ElementAttrValue::AttrLiteral(value) if value.is_static() => {
                             let value = value.source.as_ref().unwrap();
@@ -447,44 +447,47 @@ impl<'a> DynamicContext<'a> {
                     ElementName::Ident(i) => quote! { dioxus_elements::#i::#name },
                     ElementName::Custom(_) => quote! { None },
                 };
-                let static_attrs = el.attributes.iter().map(|attr| match &attr.attr.value {
-                    ElementAttrValue::AttrLiteral(value) if value.is_static() => {
-                        let value = value.to_static().unwrap();
-                        let ns = {
-                            match &attr.attr.name {
-                                ElementAttrName::BuiltIn(name) => ns(quote!(#name.1)),
-                                ElementAttrName::Custom(_) => quote!(None),
-                            }
-                        };
-                        let name = &attr.attr.name;
-                        let name = match (el_name, name) {
-                            (ElementName::Ident(_), ElementAttrName::BuiltIn(_)) => {
-                                quote! { #el_name::#name.0 }
-                            }
-                            _ => {
-                                let as_string = name.to_string();
-                                quote! { #as_string }
-                            }
-                        };
-                        quote! {
-                            ::dioxus::core::TemplateAttribute::Static {
-                                name: #name,
-                                namespace: #ns,
-                                value: #value,
+                let static_attrs = el
+                    .merged_attributes
+                    .iter()
+                    .map(|attr| match &attr.attr.value {
+                        ElementAttrValue::AttrLiteral(value) if value.is_static() => {
+                            let value = value.to_static().unwrap();
+                            let ns = {
+                                match &attr.attr.name {
+                                    ElementAttrName::BuiltIn(name) => ns(quote!(#name.1)),
+                                    ElementAttrName::Custom(_) => quote!(None),
+                                }
+                            };
+                            let name = &attr.attr.name;
+                            let name = match (el_name, name) {
+                                (ElementName::Ident(_), ElementAttrName::BuiltIn(_)) => {
+                                    quote! { #el_name::#name.0 }
+                                }
+                                _ => {
+                                    let as_string = name.to_string();
+                                    quote! { #as_string }
+                                }
+                            };
+                            quote! {
+                                ::dioxus::core::TemplateAttribute::Static {
+                                    name: #name,
+                                    namespace: #ns,
+                                    value: #value,
 
-                                // todo: we don't diff these so we never apply the volatile flag
-                                // volatile: dioxus_elements::#el_name::#name.2,
+                                    // todo: we don't diff these so we never apply the volatile flag
+                                    // volatile: dioxus_elements::#el_name::#name.2,
+                                }
                             }
                         }
-                    }
 
-                    _ => {
-                        let ct = self.dynamic_attributes.len();
-                        self.dynamic_attributes.push(attr);
-                        self.attr_paths.push(self.current_path.clone());
-                        quote! { ::dioxus::core::TemplateAttribute::Dynamic { id: #ct } }
-                    }
-                });
+                        _ => {
+                            let ct = self.dynamic_attributes.len();
+                            self.dynamic_attributes.push(attr);
+                            self.attr_paths.push(self.current_path.clone());
+                            quote! { ::dioxus::core::TemplateAttribute::Dynamic { id: #ct } }
+                        }
+                    });
 
                 let attrs = quote! { #(#static_attrs),*};
 

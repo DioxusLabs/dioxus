@@ -1,7 +1,4 @@
-use std::{
-    collections::HashMap,
-    fmt::{Display, Formatter},
-};
+use std::fmt::{Display, Formatter};
 
 use super::*;
 
@@ -22,6 +19,7 @@ pub struct Element {
     pub name: ElementName,
     pub key: Option<IfmtInput>,
     pub attributes: Vec<ElementAttrNamed>,
+    pub merged_attributes: Vec<ElementAttrNamed>,
     pub children: Vec<BodyNode>,
     pub brace: syn::token::Brace,
 }
@@ -122,17 +120,20 @@ impl Parse for Element {
 
         // Deduplicate any attributes that can be combined
         // For example, if there are two `class` attributes, combine them into one
-        let mut combined_attrs: HashMap<ElementAttrName, ElementAttrNamed> = HashMap::new();
-        for attr in attributes {
-            if let Some(old_attr) = combined_attrs.get_mut(&attr.attr.name) {
-                if let Some(combined) = old_attr.try_combine(&attr) {
+        let mut merged_attributes: Vec<ElementAttrNamed> = Vec::new();
+        for attr in &attributes {
+            if let Some(old_attr_index) = merged_attributes
+                .iter()
+                .position(|a| a.attr.name == attr.attr.name)
+            {
+                let old_attr = &mut merged_attributes[old_attr_index];
+                if let Some(combined) = old_attr.try_combine(attr) {
                     *old_attr = combined;
                 }
             } else {
-                combined_attrs.insert(attr.attr.name.clone(), attr);
+                merged_attributes.push(attr.clone());
             }
         }
-        let attributes: Vec<_> = combined_attrs.into_iter().map(|(_, v)| v).collect();
 
         while !content.is_empty() {
             if (content.peek(LitStr) && content.peek2(Token![:])) && !content.peek3(Token![:]) {
@@ -155,6 +156,7 @@ impl Parse for Element {
             key,
             name: el_name,
             attributes,
+            merged_attributes,
             children,
             brace,
         })
@@ -172,12 +174,12 @@ impl ToTokens for Element {
         };
 
         let listeners = self
-            .attributes
+            .merged_attributes
             .iter()
             .filter(|f| matches!(f.attr.value, ElementAttrValue::EventTokens { .. }));
 
         let attr = self
-            .attributes
+            .merged_attributes
             .iter()
             .filter(|f| !matches!(f.attr.value, ElementAttrValue::EventTokens { .. }));
 

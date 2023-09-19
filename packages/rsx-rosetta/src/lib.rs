@@ -79,6 +79,7 @@ pub fn rsx_node_from_html(node: &Node) -> Option<BodyNode> {
                 name: el_name,
                 children,
                 attributes,
+                merged_attributes: Default::default(),
                 key: None,
                 brace: Default::default(),
             }))
