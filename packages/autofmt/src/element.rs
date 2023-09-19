@@ -224,6 +224,15 @@ impl Writer<'_> {
 
     fn write_attribute_value(&mut self, value: &ElementAttrValue) -> Result {
         match value {
+            ElementAttrValue::AttrOptionalExpr { condition, value } => {
+                write!(
+                    self.out,
+                    "if {condition} {{ ",
+                    condition = prettyplease::unparse_expr(condition),
+                )?;
+                self.write_attribute_value(value)?;
+                write!(self.out, " }}")?;
+            }
             ElementAttrValue::AttrLiteral(value) => {
                 write!(self.out, "{value}", value = ifmt_to_string(value))?;
             }

@@ -132,6 +132,39 @@ impl<'a> Writer<'a> {
         Ok(())
     }
 
+    pub(crate) fn attr_value_len(&mut self, value: &ElementAttrValue) -> usize {
+        match value {
+            ElementAttrValue::AttrOptionalExpr { condition, value } => {
+                let condition_len = self.retrieve_formatted_expr(condition).len();
+                let value_len = self.attr_value_len(value);
+
+                condition_len + value_len + 6
+            }
+            ElementAttrValue::AttrLiteral(lit) => ifmt_to_string(lit).len(),
+            ElementAttrValue::AttrExpr(expr) => expr.span().line_length(),
+            ElementAttrValue::EventTokens(tokens) => {
+                let location = Location::new(tokens.span().start());
+
+                let len = if let std::collections::hash_map::Entry::Vacant(e) =
+                    self.cached_formats.entry(location)
+                {
+                    let formatted = prettyplease::unparse_expr(tokens);
+                    let len = if formatted.contains('\n') {
+                        10000
+                    } else {
+                        formatted.len()
+                    };
+                    e.insert(formatted);
+                    len
+                } else {
+                    self.cached_formats[&location].len()
+                };
+
+                len
+            }
+        }
+    }
+
     pub(crate) fn is_short_attrs(&mut self, attributes: &[ElementAttrNamed]) -> usize {
         let mut total = 0;
 
@@ -154,30 +187,7 @@ impl<'a> Writer<'a> {
                 dioxus_rsx::ElementAttrName::Custom(name) => name.value().len() + 2,
             };
 
-            total += match &attr.attr.value {
-                ElementAttrValue::AttrLiteral(lit) => ifmt_to_string(lit).len(),
-                ElementAttrValue::AttrExpr(expr) => expr.span().line_length(),
-                ElementAttrValue::EventTokens(tokens) => {
-                    let location = Location::new(tokens.span().start());
-
-                    let len = if let std::collections::hash_map::Entry::Vacant(e) =
-                        self.cached_formats.entry(location)
-                    {
-                        let formatted = prettyplease::unparse_expr(tokens);
-                        let len = if formatted.contains('\n') {
-                            10000
-                        } else {
-                            formatted.len()
-                        };
-                        e.insert(formatted);
-                        len
-                    } else {
-                        self.cached_formats[&location].len()
-                    };
-
-                    len
-                }
-            };
+            total += self.attr_value_len(&attr.attr.value);
 
             total += 6;
         }

@@ -11,7 +11,7 @@ use syn::{
     parse::{Parse, ParseBuffer, ParseStream},
     punctuated::Punctuated,
     spanned::Spanned,
-    Expr, Ident, LitStr, Result, Token,
+    Ident, LitStr, Result, Token,
 };
 
 // =======================================
@@ -51,13 +51,7 @@ impl Parse for Element {
 
                 content.parse::<Token![:]>()?;
 
-                let value = if content.peek(LitStr) {
-                    let value = content.parse()?;
-                    ElementAttrValue::AttrLiteral(value)
-                } else {
-                    let value = content.parse::<Expr>()?;
-                    ElementAttrValue::AttrExpr(value)
-                };
+                let value = content.parse::<ElementAttrValue>()?;
                 attributes.push(ElementAttrNamed {
                     el_name: el_name.clone(),
                     attr: ElementAttr {
@@ -100,23 +94,14 @@ impl Parse for Element {
                             key = Some(content.parse()?);
                         }
                         _ => {
-                            if content.peek(LitStr) {
-                                attributes.push(ElementAttrNamed {
-                                    el_name: el_name.clone(),
-                                    attr: ElementAttr {
-                                        name: ElementAttrName::BuiltIn(name),
-                                        value: ElementAttrValue::AttrLiteral(content.parse()?),
-                                    },
-                                });
-                            } else {
-                                attributes.push(ElementAttrNamed {
-                                    el_name: el_name.clone(),
-                                    attr: ElementAttr {
-                                        name: ElementAttrName::BuiltIn(name),
-                                        value: ElementAttrValue::AttrExpr(content.parse()?),
-                                    },
-                                });
-                            }
+                            let value = content.parse::<ElementAttrValue>()?;
+                            attributes.push(ElementAttrNamed {
+                                el_name: el_name.clone(),
+                                attr: ElementAttr {
+                                    name: ElementAttrName::BuiltIn(name),
+                                    value,
+                                },
+                            });
                         }
                     }
                 }

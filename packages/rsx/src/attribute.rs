@@ -4,7 +4,7 @@ use super::*;
 
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{quote, ToTokens, TokenStreamExt};
-use syn::{Expr, Ident, LitStr};
+use syn::{parse_quote, Expr, ExprIf, Ident, LitStr};
 
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub struct ElementAttrNamed {
@@ -58,16 +58,15 @@ impl ToTokens for ElementAttrNamed {
 
         let attribute = {
             match &attr.value {
-                ElementAttrValue::AttrLiteral(_) | ElementAttrValue::AttrExpr(_) => {
+                ElementAttrValue::AttrLiteral(_)
+                | ElementAttrValue::AttrExpr(_)
+                | ElementAttrValue::AttrOptionalExpr { .. } => {
                     let name = &self.attr.name;
                     let ns = ns(name);
                     let volitile = volitile(name);
                     let attribute = attribute(name);
-                    let value = match &self.attr.value {
-                        ElementAttrValue::AttrLiteral(lit) => quote! { #lit },
-                        ElementAttrValue::AttrExpr(expr) => quote! { #expr },
-                        _ => unreachable!(),
-                    };
+                    let value = &self.attr.value;
+                    let value = quote! { #value };
                     quote! {
                         __cx.attr(
                             #attribute,
@@ -102,13 +101,62 @@ pub struct ElementAttr {
 pub enum ElementAttrValue {
     /// attribute: "value"
     AttrLiteral(IfmtInput),
+    /// attribute: if bool { "value" }
+    AttrOptionalExpr {
+        condition: Expr,
+        value: Box<ElementAttrValue>,
+    },
     /// attribute: true
     AttrExpr(Expr),
     /// onclick: move |_| {}
     EventTokens(Expr),
 }
 
+impl Parse for ElementAttrValue {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        Ok(if input.peek(Token![if]) {
+            let if_expr = input.parse::<ExprIf>()?;
+            if is_if_chain_terminated(&if_expr) {
+                ElementAttrValue::AttrExpr(Expr::If(if_expr))
+            } else {
+                ElementAttrValue::AttrOptionalExpr {
+                    condition: *if_expr.cond,
+                    value: Box::new(syn::parse2(if_expr.then_branch.into_token_stream())?),
+                }
+            }
+        } else if input.peek(LitStr) {
+            let value = input.parse()?;
+            ElementAttrValue::AttrLiteral(value)
+        } else {
+            let value = input.parse::<Expr>()?;
+            ElementAttrValue::AttrExpr(value)
+        })
+    }
+}
+
+impl ToTokens for ElementAttrValue {
+    fn to_tokens(&self, tokens: &mut TokenStream2) {
+        match self {
+            ElementAttrValue::AttrLiteral(lit) => tokens.append_all(quote! { #lit }),
+            ElementAttrValue::AttrOptionalExpr { condition, value } => {
+                tokens.append_all(quote! { if #condition { Some(#value) } else { None } })
+            }
+            ElementAttrValue::AttrExpr(expr) => tokens.append_all(quote! { #expr }),
+            ElementAttrValue::EventTokens(expr) => tokens.append_all(quote! { #expr }),
+        }
+    }
+}
+
 impl ElementAttrValue {
+    fn to_str_expr(&self) -> Option<TokenStream2> {
+        match self {
+            ElementAttrValue::AttrLiteral(lit) => Some(quote!(#lit.to_string())),
+            ElementAttrValue::AttrOptionalExpr { value, .. } => value.to_str_expr(),
+            ElementAttrValue::AttrExpr(expr) => Some(quote!(#expr.to_string())),
+            _ => None,
+        }
+    }
+
     fn combine(&self, separator: &str, other: &Self) -> Self {
         match (self, other) {
             (Self::AttrLiteral(lit1), Self::AttrLiteral(lit2)) => {
@@ -133,6 +181,62 @@ impl ElementAttrValue {
                 ifmt.push_str(separator);
                 ifmt.push_expr(expr2.clone());
                 Self::AttrLiteral(ifmt)
+            }
+            (
+                Self::AttrOptionalExpr {
+                    condition: condition1,
+                    value: value1,
+                },
+                Self::AttrOptionalExpr {
+                    condition: condition2,
+                    value: value2,
+                },
+            ) => {
+                let first_as_string = value1.to_str_expr();
+                let second_as_string = value2.to_str_expr();
+                Self::AttrExpr(parse_quote! {
+                    {
+                        let mut __combined = String::new();
+                        if #condition1 {
+                            __combined.push_str(&#first_as_string);
+                        }
+                        if #condition2 {
+                            if __combined.len() > 0 {
+                                __combined.push_str(&#separator);
+                            }
+                            __combined.push_str(&#second_as_string);
+                        }
+                        __combined
+                    }
+                })
+            }
+            (Self::AttrOptionalExpr { condition, value }, other) => {
+                let first_as_string = value.to_str_expr();
+                let second_as_string = other.to_str_expr();
+                Self::AttrExpr(parse_quote! {
+                    {
+                        let mut __combined = #second_as_string;
+                        if #condition {
+                            __combined.push_str(&#separator);
+                            __combined.push_str(&#first_as_string);
+                        }
+                        __combined
+                    }
+                })
+            }
+            (other, Self::AttrOptionalExpr { condition, value }) => {
+                let first_as_string = other.to_str_expr();
+                let second_as_string = value.to_str_expr();
+                Self::AttrExpr(parse_quote! {
+                    {
+                        let mut __combined = #first_as_string;
+                        if #condition {
+                            __combined.push_str(&#separator);
+                            __combined.push_str(&#second_as_string);
+                        }
+                        __combined
+                    }
+                })
             }
             _ => todo!(),
         }
