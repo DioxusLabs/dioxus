@@ -47,7 +47,9 @@ impl IfmtInput {
     }
 
     pub fn is_static(&self) -> bool {
-        matches!(self.segments.as_slice(), &[Segment::Literal(_)] | &[])
+        self.segments
+            .iter()
+            .all(|seg| matches!(seg, Segment::Literal(_)))
     }
 }
 
