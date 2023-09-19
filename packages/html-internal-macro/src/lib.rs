@@ -1,11 +1,11 @@
 use proc_macro::TokenStream;
 
 use convert_case::{Case, Casing};
-use quote::{quote, TokenStreamExt, ToTokens};
-use syn::{braced, Ident, parse_macro_input, Token};
+use quote::{quote, ToTokens, TokenStreamExt};
 use syn::__private::TokenStream2;
 use syn::parse::{Parse, ParseStream};
 use syn::punctuated::Punctuated;
+use syn::{braced, parse_macro_input, Ident, Token};
 
 #[proc_macro]
 pub fn impl_extension_attributes(input: TokenStream) -> TokenStream {
@@ -42,11 +42,14 @@ impl ToTokens for ImplExtensionAttributes {
         let camel_name = name.to_string().to_case(Case::UpperCamel);
         let impl_name = Ident::new(format!("{}Impl", &camel_name).as_str(), name.span());
         let extension_name = Ident::new(format!("{}Extension", &camel_name).as_str(), name.span());
-        let marker_name = Ident::new(format!("Extended{}Marker", &camel_name).as_str(), name.span());
+        let marker_name = Ident::new(
+            format!("Extended{}Marker", &camel_name).as_str(),
+            name.span(),
+        );
 
         if !self.is_element {
             tokens.append_all(quote! {
-                trait #impl_name {}
+                struct #impl_name;
                 impl #name for #impl_name {}
             });
         }
@@ -60,12 +63,12 @@ impl ToTokens for ImplExtensionAttributes {
             let d = if self.is_element {
                 quote! { #name::#ident }
             } else {
-                quote! { #impl_name::#ident }
+                quote! { <#impl_name as #name>::#ident }
             };
             quote! {
                 fn #ident(self, value: impl IntoAttributeValue<'a> + 'static) -> Self {
                     let d = #d;
-                    self.push_attribute(AttributeBox::new(d.0, value, d.1, d.2))
+                    self.push_attribute(d.0, d.1, value, d.2)
                 }
             }
         });

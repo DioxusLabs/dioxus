@@ -94,7 +94,7 @@ impl<'a, const A: bool> FragmentBuilder<'a, A> {
 impl<'a> Properties for FragmentProps<'a> {
     type Builder = FragmentBuilder<'a, false>;
     const IS_STATIC: bool = false;
-    fn builder() -> Self::Builder {
+    fn builder(_cx: &ScopeState) -> Self::Builder {
         FragmentBuilder(None)
     }
     unsafe fn memoize(&self, _other: &Self) -> bool {

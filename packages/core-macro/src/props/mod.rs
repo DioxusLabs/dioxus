@@ -661,7 +661,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                 {
                     type Builder = #builder_name #generics_with_empty;
                     const IS_STATIC: bool = #is_static;
-                    fn builder() -> Self::Builder {
+                    fn builder(_cx: &::dioxus_core::prelude::ScopeState) -> Self::Builder {
                         #name::builder()
                     }
                     unsafe fn memoize(&self, other: &Self) -> bool {

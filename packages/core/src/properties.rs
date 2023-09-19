@@ -41,7 +41,7 @@ pub trait Properties: Sized {
     const IS_STATIC: bool;
 
     /// Create a builder for this component.
-    fn builder() -> Self::Builder;
+    fn builder(cx: &ScopeState) -> Self::Builder;
 
     /// Memoization can only happen if the props are valid for the 'static lifetime
     ///
@@ -54,7 +54,7 @@ pub trait Properties: Sized {
 impl Properties for () {
     type Builder = EmptyBuilder;
     const IS_STATIC: bool = true;
-    fn builder() -> Self::Builder {
+    fn builder(_cx: &ScopeState) -> Self::Builder {
         EmptyBuilder {}
     }
     unsafe fn memoize(&self, _other: &Self) -> bool {
@@ -70,8 +70,11 @@ impl EmptyBuilder {
 
 /// This utility function launches the builder method so rsx! and html! macros can use the typed-builder pattern
 /// to initialize a component's props.
-pub fn fc_to_builder<'a, T: Properties + 'a>(_: fn(Scope<'a, T>) -> Element<'a>) -> T::Builder {
-    T::builder()
+pub fn fc_to_builder<'a, T: Properties + 'a>(
+    cx: &ScopeState,
+    _: fn(Scope<'a, T>) -> Element<'a>,
+) -> T::Builder {
+    T::builder(cx)
 }
 
 #[cfg(not(miri))]

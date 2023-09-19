@@ -833,33 +833,12 @@ impl<'a, T: IntoAttributeValue<'a>> IntoAttributeValue<'a> for Option<T> {
     }
 }
 
-pub struct AttributeBox<'a> {
-    /// The name of the attribute.
-    pub name: &'a str,
-
-    /// The value of the attribute
-    pub value: Box<dyn IntoAttributeValue<'a> + 'static>,
-
-    /// The namespace of the attribute.
-    ///
-    /// Doesn’t exist in the html spec. Used in Dioxus to denote “style” tags and other attribute groups.
-    pub namespace: Option<&'static str>,
-
-    /// An indication of we should always try and set the attribute. Used in controlled components to ensure changes are propagated
-    pub volatile: bool,
-}
-
-impl<'a> AttributeBox<'a> {
-    pub fn new(name: &'a str, value: impl IntoAttributeValue<'a> + 'static, namespace: Option<&'static str>, volatile: bool) -> Self {
-        Self {
-            name,
-            value: Box::new(value),
-            namespace,
-            volatile,
-        }
-    }
-}
-
 pub trait HasAttributesBox<'a, T> {
-    fn push_attribute(self, attr: AttributeBox<'a>) -> T;
+    fn push_attribute(
+        self,
+        name: &str,
+        ns: Option<&str>,
+        attr: impl IntoAttributeValue<'a>,
+        volatile: bool,
+    ) -> T;
 }
