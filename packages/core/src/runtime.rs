@@ -7,51 +7,6 @@ thread_local! {
     static RUNTIMES: RefCell<Vec<Rc<Runtime>>> = RefCell::new(vec![]);
 }
 
-/// Run some code within a runtime
-pub fn in_runtime<R>(runtime: Rc<Runtime>, f: impl FnOnce() -> R) -> R {
-    let _guard = RuntimeGuard::new(runtime);
-    f()
-}
-
-/// Override the current runtime. This must be used to override the current runtime when importing components from a dynamic library that has it's own runtime.
-///
-/// ```rust
-/// use dioxus::prelude::*;
-///
-/// fn main() {
-///     let virtual_dom = VirtualDom::new(app);
-/// }
-///
-/// fn app(cx: Scope) -> Element {
-///     render!{ Component { runtime: Runtime::current().unwrap() } }
-/// }
-///
-/// // In a dynamic library
-/// #[derive(Props)]
-/// struct ComponentProps {
-///    runtime: std::rc::Rc<Runtime>,
-/// }
-///
-/// impl PartialEq for ComponentProps {
-///     fn eq(&self, _other: &Self) -> bool {
-///         true
-///     }
-/// }
-///
-/// fn Component(cx: Scope<ComponentProps>) -> Element {
-///     cx.use_hook(|| override_runtime(cx.props.runtime.clone()));
-///
-///     render! { div {} }
-/// }
-/// ```
-pub fn override_runtime(runtime: Rc<Runtime>) {
-    RUNTIMES.with(|stack| {
-        let mut stack = stack.borrow_mut();
-        stack.pop();
-        stack.push(runtime);
-    });
-}
-
 /// Pushes a new scope onto the stack
 pub(crate) fn push_runtime(runtime: Rc<Runtime>) {
     RUNTIMES.with(|stack| stack.borrow_mut().push(runtime));
@@ -143,10 +98,42 @@ impl Runtime {
     }
 }
 
-pub(crate) struct RuntimeGuard(Rc<Runtime>);
+/// A gaurd for a new runtime. This must be used to override the current runtime when importing components from a dynamic library that has it's own runtime.
+///
+/// ```rust
+/// use dioxus::prelude::*;
+///
+/// fn main() {
+///     let virtual_dom = VirtualDom::new(app);
+/// }
+///
+/// fn app(cx: Scope) -> Element {
+///     render!{ Component { runtime: Runtime::current().unwrap() } }
+/// }
+///
+/// // In a dynamic library
+/// #[derive(Props)]
+/// struct ComponentProps {
+///    runtime: std::rc::Rc<Runtime>,
+/// }
+///
+/// impl PartialEq for ComponentProps {
+///     fn eq(&self, _other: &Self) -> bool {
+///         true
+///     }
+/// }
+///
+/// fn Component(cx: Scope<ComponentProps>) -> Element {
+///     cx.use_hook(|| RuntimeGuard::new(cx.props.runtime.clone()));
+///
+///     render! { div {} }
+/// }
+/// ```
+pub struct RuntimeGuard(Rc<Runtime>);
 
 impl RuntimeGuard {
-    pub(crate) fn new(runtime: Rc<Runtime>) -> Self {
+    /// Create a new runtime guard that sets the current Dioxus runtime. The runtime will be reset when the guard is dropped
+    pub fn new(runtime: Rc<Runtime>) -> Self {
         push_runtime(runtime.clone());
         Self(runtime)
     }
