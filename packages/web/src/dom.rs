@@ -7,7 +7,6 @@
 //! - tests to ensure dyn_into works for various event types.
 //! - Partial delegation?>
 
-use crate::file_engine::WebFileEngine;
 use dioxus_core::{
     BorrowedAttributeValue, ElementId, Mutation, Template, TemplateAttribute, TemplateNode,
 };
@@ -288,8 +287,10 @@ pub fn virtual_event_from_websys_event(event: web_sys::Event, target: Element) -
             let mut files = None;
             if let Some(event) = event.dyn_ref::<web_sys::DragEvent>() {
                 if let Some(data) = event.data_transfer() {
+                    #[cfg(feature = "file_engine")]
+                    #[allow(clippy::arc_with_non_send_sync)]
                     if let Some(file_list) = data.files() {
-                        files = WebFileEngine::new(file_list)
+                        files = crate::file_engine::WebFileEngine::new(file_list)
                             .map(|f| Arc::new(f) as Arc<dyn FileEngine>);
                     }
                 }
