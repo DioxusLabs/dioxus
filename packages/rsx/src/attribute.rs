@@ -121,7 +121,12 @@ impl Parse for ElementAttrValue {
             } else {
                 ElementAttrValue::AttrOptionalExpr {
                     condition: *if_expr.cond,
-                    value: Box::new(syn::parse2(if_expr.then_branch.into_token_stream())?),
+                    value: {
+                        let stmts = if_expr.then_branch.stmts;
+                        Box::new(syn::parse2(quote! {
+                            #(#stmts)*
+                        })?)
+                    },
                 }
             }
         } else if input.peek(LitStr) {
