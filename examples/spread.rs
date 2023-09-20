@@ -3,6 +3,7 @@
 //! This example shows how we can render the Dioxus Virtualdom using SSR.
 
 use dioxus::core::{Attribute, HasAttributesBox};
+use dioxus::html::GlobalAttributesExtension;
 use dioxus::html::{AudioExtension, ExtendedAudioMarker, ExtendedGlobalAttributesMarker};
 use dioxus::prelude::*;
 
@@ -11,31 +12,14 @@ fn main() {
     let mut vdom = VirtualDom::new(app);
     let _ = vdom.rebuild();
     println!("{}", dioxus_ssr::render(&vdom));
-
-    // Or we can render rsx! calls themselves
-    println!(
-        "{}",
-        dioxus_ssr::render_lazy(rsx! {
-            div {
-                h1 { "Hello, world!" }
-            }
-        })
-    );
-
-    // We can configure the SSR rendering to add ids for rehydration
-    println!("{}", dioxus_ssr::pre_render(&vdom));
-
-    // We can render to a buf directly too
-    let mut file = String::new();
-    let mut renderer = dioxus_ssr::Renderer::default();
-    renderer.render_to(&mut file, &vdom).unwrap();
-    println!("{file}");
 }
 
 fn app(cx: Scope) -> Element {
     cx.render(rsx!(Foo {
         autoplay: true,
         controls: true,
+        src: "https://www.w3schools.com/tags/horse.ogg",
+        width: "100",
     }))
 }
 
@@ -64,7 +48,7 @@ pub struct FooPropsBuilder<'a, TypedBuilderFields> {
     bump: &'a ::dioxus::core::exports::bumpalo::Bump,
     fields: TypedBuilderFields,
     attributes: Vec<Attribute<'a>>,
-    _phantom: (core::marker::PhantomData<&'a ()>),
+    _phantom: core::marker::PhantomData<&'a ()>,
 }
 //impl<'a, TypedBuilderFields, > Clone for FooPropsBuilder<'a, TypedBuilderFields, > where TypedBuilderFields: Clone { fn clone(&self) -> Self { Self { fields: self.fields.clone(), attributes: self.attributes, _phantom: Default::default() } } }
 impl<'a> dioxus::prelude::Properties<'a> for FooProps<'a> {
@@ -73,7 +57,7 @@ impl<'a> dioxus::prelude::Properties<'a> for FooProps<'a> {
     fn builder(cx: &'a ScopeState) -> Self::Builder {
         FooProps::builder(cx)
     }
-    unsafe fn memoize(&self, other: &Self) -> bool {
+    unsafe fn memoize(&self, _other: &Self) -> bool {
         false
     }
 }
@@ -184,23 +168,21 @@ impl<A> ExtendedAudioMarker for FooPropsBuilder<'_, (A,)> {}
 
 #[allow(non_snake_case)]
 pub fn Foo<'a>(cx: Scope<'a, FooProps<'a>>) -> Element<'a> {
-    let muted = false;
     let attributes = &cx.props.attributes;
     render! {
         // rsx! {
         //     audio {
-        //         muted: muted,
+        //         ...attributes,
         //     }
         // }
         ::dioxus::core::LazyNodes::new(move |__cx: &::dioxus::core::ScopeState| -> ::dioxus::core::VNode   {
             static TEMPLATE: ::dioxus::core::Template = ::dioxus::core::Template { name: concat!(file!(), ":", line!(), ":", column!(), ":", "123" ), roots: &[::dioxus::core::TemplateNode::Element { tag: dioxus_elements::audio::TAG_NAME, namespace: dioxus_elements::audio::NAME_SPACE, attrs: &[::dioxus::core::TemplateAttribute::Dynamic { id: 0usize }], children: &[] }], node_paths: &[], attr_paths: &[&[0u8]] };
-            let mut attrs = vec![__cx.attr(dioxus_elements::audio::muted.0, muted, dioxus_elements::audio::muted.1, dioxus_elements::audio::muted.2)];
-            attrs.push((&**attributes).into());
+            let attrs = vec![(&**attributes).into()];
             ::dioxus::core::VNode {
                 parent: None,
                 key: None,
                 template: std::cell::Cell::new(TEMPLATE),
-                root_ids: Default::default(),
+                root_ids: dioxus::core::exports::bumpalo::collections::Vec::new_in(__cx.bump()).into(),
                 dynamic_nodes: __cx.bump().alloc([]),
                 dynamic_attrs: __cx.bump().alloc(attrs),
             }
