@@ -64,6 +64,21 @@ impl<'a, T> std::ops::Deref for Scoped<'a, T> {
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
 pub struct ScopeId(pub usize);
 
+impl ScopeId {
+    /// The root ScopeId.
+    ///
+    /// This scope will last for the entire duration of your app, making it convenient for long-lived state
+    /// that is created dynamically somewhere down the component tree.
+    ///
+    /// # Example
+    ///
+    /// ```rust, ignore
+    /// use dioxus_signals::*;
+    /// let my_persistent_state = Signal::new_in_scope(ScopeId::ROOT, String::new());
+    /// ```
+    pub const ROOT: ScopeId = ScopeId(0);
+}
+
 /// A component's state separate from its props.
 ///
 /// This struct exists to provide a common interface for all scopes without relying on generics.
@@ -423,7 +438,9 @@ impl<'src> ScopeState {
         fn_name: &'static str,
     ) -> DynamicNode<'src>
     where
-        P: Properties<'child> + 'child,
+        // The properties must be valid until the next bump frame
+        P: Properties<'src> + 'src,
+        // The current bump allocator frame must outlive the child's borrowed props
         'src: 'child,
     {
         let vcomp = VProps::new(component, P::memoize, props);

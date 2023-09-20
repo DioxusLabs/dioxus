@@ -52,6 +52,7 @@ use std::{any::Any, cell::Cell, collections::BTreeSet, future::Future, rc::Rc};
 ///
 /// static ROUTES: &str = "";
 ///
+/// #[component]
 /// fn App(cx: Scope<AppProps>) -> Element {
 ///     cx.render(rsx!(
 ///         NavBar { routes: ROUTES }
@@ -60,18 +61,19 @@ use std::{any::Any, cell::Cell, collections::BTreeSet, future::Future, rc::Rc};
 ///     ))
 /// }
 ///
-/// #[inline_props]
+/// #[component]
 /// fn NavBar(cx: Scope, routes: &'static str) -> Element {
 ///     cx.render(rsx! {
 ///         div { "Routes: {routes}" }
 ///     })
 /// }
 ///
+/// #[component]
 /// fn Footer(cx: Scope) -> Element {
 ///     cx.render(rsx! { div { "Footer" } })
 /// }
 ///
-/// #[inline_props]
+/// #[component]
 /// fn Title<'a>(cx: Scope<'a>, children: Element<'a>) -> Element {
 ///     cx.render(rsx! {
 ///         div { id: "title", children }
@@ -122,13 +124,14 @@ use std::{any::Any, cell::Cell, collections::BTreeSet, future::Future, rc::Rc};
 ///
 /// Putting everything together, you can build an event loop around Dioxus by using the methods outlined above.
 /// ```rust, ignore
-/// fn app(cx: Scope) -> Element {
+/// #[component]
+/// fn App(cx: Scope) -> Element {
 ///     cx.render(rsx! {
 ///         div { "Hello World" }
 ///     })
 /// }
 ///
-/// let dom = VirtualDom::new(app);
+/// let dom = VirtualDom::new(App);
 ///
 /// real_dom.apply(dom.rebuild());
 ///
@@ -270,7 +273,7 @@ impl VirtualDom {
         );
 
         // Unlike react, we provide a default error boundary that just renders the error as a string
-        root.provide_context(Rc::new(ErrorBoundary::new(ScopeId(0))));
+        root.provide_context(Rc::new(ErrorBoundary::new(ScopeId::ROOT)));
 
         // the root element is always given element ID 0 since it's the container for the entire tree
         dom.elements.insert(ElementRef::none());
@@ -289,7 +292,7 @@ impl VirtualDom {
     ///
     /// This scope has a ScopeId of 0 and is the root of the tree
     pub fn base_scope(&self) -> &ScopeState {
-        self.get_scope(ScopeId(0)).unwrap()
+        self.get_scope(ScopeId::ROOT).unwrap()
     }
 
     /// Build the virtualdom with a global context inserted into the base scope
@@ -306,6 +309,7 @@ impl VirtualDom {
     pub fn mark_dirty(&mut self, id: ScopeId) {
         if let Some(scope) = self.get_scope(id) {
             let height = scope.height();
+            tracing::trace!("Marking scope {:?} ({}) as dirty", id, scope.context().name);
             self.dirty_scopes.insert(DirtyScope { height, id });
         }
     }
@@ -602,10 +606,10 @@ impl VirtualDom {
     /// ```
     pub fn rebuild(&mut self) -> Mutations {
         let _runtime = RuntimeGuard::new(self.runtime.clone());
-        match unsafe { self.run_scope(ScopeId(0)).extend_lifetime_ref() } {
+        match unsafe { self.run_scope(ScopeId::ROOT).extend_lifetime_ref() } {
             // Rebuilding implies we append the created elements to the root
             RenderReturn::Ready(node) => {
-                let m = self.create_scope(ScopeId(0), node);
+                let m = self.create_scope(ScopeId::ROOT, node);
                 self.mutations.edits.push(Mutation::AppendChildren {
                     id: ElementId(0),
                     m,
@@ -613,7 +617,7 @@ impl VirtualDom {
             }
             // If an error occurs, we should try to render the default error component and context where the error occured
             RenderReturn::Aborted(placeholder) => {
-                log::info!("Ran into suspended or aborted scope during rebuild");
+                tracing::debug!("Ran into suspended or aborted scope during rebuild");
                 let id = self.next_null();
                 placeholder.id.set(Some(id));
                 self.mutations.push(Mutation::CreatePlaceholder { id });
@@ -713,11 +717,16 @@ impl VirtualDom {
     fn finalize(&mut self) -> Mutations {
         std::mem::take(&mut self.mutations)
     }
+
+    /// Get the current runtime
+    pub fn runtime(&self) -> Rc<Runtime> {
+        self.runtime.clone()
+    }
 }
 
 impl Drop for VirtualDom {
     fn drop(&mut self) {
         // Simply drop this scope which drops all of its children
-        self.drop_scope(ScopeId(0), true);
+        self.drop_scope(ScopeId::ROOT, true);
     }
 }

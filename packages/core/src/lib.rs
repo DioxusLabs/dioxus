@@ -32,6 +32,7 @@ pub(crate) mod innerlude {
     pub use crate::nodes::RenderReturn;
     pub use crate::nodes::*;
     pub use crate::properties::*;
+    pub use crate::runtime::{Runtime, RuntimeGuard};
     pub use crate::scheduler::*;
     pub use crate::scope_context::*;
     pub use crate::scopes::*;
@@ -89,8 +90,8 @@ pub mod prelude {
         provide_context, provide_context_to_scope, provide_root_context, push_future,
         remove_future, schedule_update_any, spawn, spawn_forever, suspend, throw, AnyValue,
         AttributeType, Component, Element, Event, EventHandler, Fragment, IntoAttributeValue,
-        LazyNodes, MountedAttribute, Properties, Scope, ScopeId, ScopeState, Scoped, TaskId,
-        Template, TemplateAttribute, TemplateNode, Throw, VNode, VirtualDom,
+        LazyNodes, MountedAttribute, Properties, Runtime, RuntimeGuard, Scope, ScopeId, ScopeState,
+        Scoped, TaskId, Template, TemplateAttribute, TemplateNode, Throw, VNode, VirtualDom,
     };
 }
 

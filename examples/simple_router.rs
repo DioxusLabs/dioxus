@@ -12,12 +12,12 @@ enum Route {
     Blog { id: String },
 }
 
-#[inline_props]
+#[component]
 fn Homepage(cx: Scope) -> Element {
     render! { h1 { "Welcome home" } }
 }
 
-#[inline_props]
+#[component]
 fn Blog(cx: Scope, id: String) -> Element {
     render! {
         h1 { "How to make: " }
@@ -25,7 +25,7 @@ fn Blog(cx: Scope, id: String) -> Element {
     }
 }
 
-#[inline_props]
+#[component]
 fn Nav(cx: Scope) -> Element {
     render! {
         nav {

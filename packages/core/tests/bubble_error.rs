@@ -24,7 +24,7 @@ fn bubbles_error() {
         let _edits = dom.rebuild().santize();
     }
 
-    dom.mark_dirty(ScopeId(0));
+    dom.mark_dirty(ScopeId::ROOT);
 
     _ = dom.render_immediate();
 }

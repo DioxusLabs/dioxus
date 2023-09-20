@@ -1,4 +1,5 @@
 use std::pin::Pin;
+use tracing_futures::Instrument;
 
 use http::{Request, Response};
 
@@ -45,7 +46,11 @@ where
                 > + Send,
         >,
     > {
-        let fut = self.call(req);
+        let fut = self.call(req).instrument(tracing::trace_span!(
+            "service",
+            "{}",
+            std::any::type_name::<S>()
+        ));
         Box::pin(async move { fut.await.map_err(|err| err.into()) })
     }
 }

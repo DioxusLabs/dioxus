@@ -187,7 +187,7 @@ fn create_random_dynamic_node(cx: &ScopeState, depth: usize) -> DynamicNode {
                 node_paths: &[&[0]],
                 attr_paths: &[],
             }),
-            root_ids: Default::default(),
+            root_ids: dioxus::core::exports::bumpalo::collections::Vec::new_in(cx.bump()).into(),
             dynamic_nodes: cx.bump().alloc([cx.component(
                 create_random_element,
                 DepthProps { depth, root: false },
@@ -257,7 +257,8 @@ fn create_random_element(cx: Scope<DepthProps>) -> Element {
                 key: None,
                 parent: None,
                 template: Cell::new(template),
-                root_ids: Default::default(),
+                root_ids: dioxus::core::exports::bumpalo::collections::Vec::new_in(cx.bump())
+                    .into(),
                 dynamic_nodes: {
                     let dynamic_nodes: Vec<_> = dynamic_node_types
                         .iter()

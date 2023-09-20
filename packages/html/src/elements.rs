@@ -1265,6 +1265,8 @@ builder_constructors! {
         spellcheck: BoolOrDefault DEFAULT,
         wrap: Wrap DEFAULT,
         value: String volatile,
+
+        initial_value: String DEFAULT,
     };
 
 

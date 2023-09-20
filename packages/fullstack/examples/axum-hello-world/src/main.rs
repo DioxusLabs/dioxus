@@ -12,7 +12,6 @@ use dioxus_fullstack::{
     prelude::*,
 };
 use serde::{Deserialize, Serialize};
-use wasm_logger::Config;
 
 #[derive(Props, PartialEq, Debug, Default, Serialize, Deserialize, Clone)]
 struct AppProps {
@@ -66,9 +65,9 @@ async fn get_server_data() -> Result<String, ServerFnError> {
 
 fn main() {
     #[cfg(feature = "web")]
-    wasm_logger::init(wasm_logger::Config::new(log::Level::Trace));
+    tracing_wasm::set_as_global_default();
     #[cfg(feature = "ssr")]
-    simple_logger::SimpleLogger::new().init().unwrap();
+    tracing_subscriber::fmt::init();
 
     LaunchBuilder::new_with_props(app, AppProps { count: 0 }).launch()
 }

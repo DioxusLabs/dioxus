@@ -5,11 +5,12 @@ use dioxus_core::ElementId;
 /// Should push the text node onto the stack and modify it
 #[test]
 fn nested_passthru_creates() {
-    fn app(cx: Scope) -> Element {
+    #[component]
+    fn App(cx: Scope) -> Element {
         cx.render(rsx! {
-            pass_thru {
-                pass_thru {
-                    pass_thru {
+            PassThru {
+                PassThru {
+                    PassThru {
                         div { "hi" }
                     }
                 }
@@ -17,12 +18,12 @@ fn nested_passthru_creates() {
         })
     }
 
-    #[inline_props]
-    fn pass_thru<'a>(cx: Scope<'a>, children: Element<'a>) -> Element {
+    #[component]
+    fn PassThru<'a>(cx: Scope<'a>, children: Element<'a>) -> Element {
         cx.render(rsx!(children))
     }
 
-    let mut dom = VirtualDom::new(app);
+    let mut dom = VirtualDom::new(App);
     let edits = dom.rebuild().santize();
 
     assert_eq!(
@@ -39,13 +40,14 @@ fn nested_passthru_creates() {
 /// Take note on how we don't spit out the template for child_comp since it's entirely dynamic
 #[test]
 fn nested_passthru_creates_add() {
-    fn app(cx: Scope) -> Element {
+    #[component]
+    fn App(cx: Scope) -> Element {
         cx.render(rsx! {
-            child_comp {
+            ChildComp {
                 "1"
-                child_comp {
+                ChildComp {
                     "2"
-                    child_comp {
+                    ChildComp {
                         "3"
                         div {
                             "hi"
@@ -56,12 +58,12 @@ fn nested_passthru_creates_add() {
         })
     }
 
-    #[inline_props]
-    fn child_comp<'a>(cx: Scope, children: Element<'a>) -> Element {
+    #[component]
+    fn ChildComp<'a>(cx: Scope, children: Element<'a>) -> Element {
         cx.render(rsx! { children })
     }
 
-    let mut dom = VirtualDom::new(app);
+    let mut dom = VirtualDom::new(App);
 
     assert_eq!(
         dom.rebuild().santize().edits,
@@ -82,13 +84,14 @@ fn nested_passthru_creates_add() {
 /// note that the template is all dynamic roots - so it doesn't actually get cached as a template
 #[test]
 fn dynamic_node_as_root() {
-    fn app(cx: Scope) -> Element {
+    #[component]
+    fn App(cx: Scope) -> Element {
         let a = 123;
         let b = 456;
         cx.render(rsx! { "{a}" "{b}" })
     }
 
-    let mut dom = VirtualDom::new(app);
+    let mut dom = VirtualDom::new(App);
     let edits = dom.rebuild().santize();
 
     // Since the roots were all dynamic, they should not cause any template muations

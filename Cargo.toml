@@ -38,11 +38,10 @@ members = [
     "packages/fullstack/examples/salvo-hello-world",
     "packages/fullstack/examples/warp-hello-world",
     "packages/fullstack/examples/static-hydrated",
-    "docs/guide",
-    "docs/router",
     # Full project examples
     "examples/tailwind",
     "examples/PWA-example",
+    "examples/query_segments_demo",
     # Playwright tests
     "playwright-tests/liveview",
     "playwright-tests/web",
@@ -51,12 +50,12 @@ members = [
 exclude = ["examples/mobile_demo"]
 
 [workspace.package]
-version = "0.4.1"
+version = "0.4.2"
 
 # dependencies that are shared across packages
 [workspace.dependencies]
 dioxus = { path = "packages/dioxus", version = "0.4.0" }
-dioxus-core = { path = "packages/core", version = "0.4.1" }
+dioxus-core = { path = "packages/core", version = "0.4.2" }
 dioxus-core-macro = { path = "packages/core-macro", version = "0.4.0"  }
 dioxus-router = { path = "packages/router", version = "0.4.1"  }
 dioxus-router-macro = { path = "packages/router-macro", version = "0.4.1" }
@@ -83,7 +82,8 @@ generational-box = { path = "packages/generational-box" }
 dioxus-hot-reload = { path = "packages/hot-reload", version = "0.4.0" }
 dioxus-fullstack = { path = "packages/fullstack", version = "0.4.1"  }
 dioxus_server_macro = { path = "packages/server-macro", version = "0.4.1" }
-log = "0.4.19"
+tracing = "0.1.37"
+tracing-futures = "0.2.5"
 tokio = "1.28"
 slab = "0.4.2"
 futures-channel = "0.3.21"

@@ -50,10 +50,10 @@ impl SsrRendererPool {
                             let prev_context =
                                 SERVER_CONTEXT.with(|ctx| ctx.replace(server_context));
                             // poll the future, which may call server_context()
-                            log::info!("Rebuilding vdom");
+                            tracing::info!("Rebuilding vdom");
                             let _ = vdom.rebuild();
                             vdom.wait_for_suspense().await;
-                            log::info!("Suspense resolved");
+                            tracing::info!("Suspense resolved");
                             // after polling the future, we need to restore the context
                             SERVER_CONTEXT.with(|ctx| ctx.replace(prev_context));
 
@@ -116,10 +116,10 @@ impl SsrRendererPool {
                                             let prev_context = SERVER_CONTEXT
                                                 .with(|ctx| ctx.replace(Box::new(server_context)));
                                             // poll the future, which may call server_context()
-                                            log::info!("Rebuilding vdom");
+                                            tracing::info!("Rebuilding vdom");
                                             let _ = vdom.rebuild();
                                             vdom.wait_for_suspense().await;
-                                            log::info!("Suspense resolved");
+                                            tracing::info!("Suspense resolved");
                                             // after polling the future, we need to restore the context
                                             SERVER_CONTEXT.with(|ctx| ctx.replace(prev_context));
                                         })

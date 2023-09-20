@@ -6,7 +6,7 @@ edition = "2018"
 description = "Web renderer for Dioxus using websys"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
-homepage = "https://dioxuslabs.com/docs/0.3/guide/en/getting_started/web.html"
+homepage = "https://dioxuslabs.com/learn/0.4/getting_started/wasm"
 keywords = ["dom", "ui", "gui", "react", "wasm"]
 
 [dependencies]
@@ -20,7 +20,7 @@ dioxus-interpreter-js = { workspace = true, features = [
 js-sys = "0.3.56"
 wasm-bindgen = { workspace = true, features = ["enable-interning"] }
 wasm-bindgen-futures = "0.4.29"
-log = { workspace = true }
+tracing = { workspace = true }
 rustc-hash = { workspace = true }
 console_error_panic_hook = { version = "0.1.7", optional = true }
 futures-util = { workspace = true, features = ["std", "async-await", "async-await-macro"] }
@@ -75,3 +75,4 @@ wasm-logger = "0.2.0"
 gloo-timers = "0.2.3"
 gloo-dialogs = "0.1.1"
 dioxus-web = { path = ".", features = ["hydrate"] }
+tracing-wasm = "0.2.1"

@@ -27,11 +27,11 @@ fn state_shares() {
         ]
     );
 
-    dom.mark_dirty(ScopeId(0));
+    dom.mark_dirty(ScopeId::ROOT);
     _ = dom.render_immediate();
     assert_eq!(dom.base_scope().consume_context::<i32>().unwrap(), 1);
 
-    dom.mark_dirty(ScopeId(0));
+    dom.mark_dirty(ScopeId::ROOT);
     _ = dom.render_immediate();
     assert_eq!(dom.base_scope().consume_context::<i32>().unwrap(), 2);
 
@@ -41,7 +41,7 @@ fn state_shares() {
         [SetText { value: "Value is 2", id: ElementId(1,) },]
     );
 
-    dom.mark_dirty(ScopeId(0));
+    dom.mark_dirty(ScopeId::ROOT);
     dom.mark_dirty(ScopeId(2));
     let edits = dom.render_immediate();
     assert_eq!(

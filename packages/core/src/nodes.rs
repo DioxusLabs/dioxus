@@ -54,7 +54,7 @@ pub struct VNode<'a> {
 
     /// The IDs for the roots of this template - to be used when moving the template around and removing it from
     /// the actual Dom
-    pub root_ids: RefCell<Vec<ElementId>>,
+    pub root_ids: RefCell<bumpalo::collections::Vec<'a, ElementId>>,
 
     /// The dynamic parts of the template
     pub dynamic_nodes: &'a [DynamicNode<'a>],
@@ -65,11 +65,11 @@ pub struct VNode<'a> {
 
 impl<'a> VNode<'a> {
     /// Create a template with no nodes that will be skipped over during diffing
-    pub fn empty() -> Element<'a> {
+    pub fn empty(cx: &'a ScopeState) -> Element<'a> {
         Some(VNode {
             key: None,
             parent: None,
-            root_ids: Default::default(),
+            root_ids: RefCell::new(bumpalo::collections::Vec::new_in(cx.bump())),
             dynamic_nodes: &[],
             dynamic_attrs: &[],
             template: Cell::new(Template {
@@ -751,14 +751,14 @@ impl<'a> IntoDynNode<'a> for &Element<'a> {
 
 impl<'a, 'b> IntoDynNode<'a> for LazyNodes<'a, 'b> {
     fn into_vnode(self, cx: &'a ScopeState) -> DynamicNode<'a> {
-        DynamicNode::Fragment(cx.bump().alloc([self.call(cx)]))
+        DynamicNode::Fragment(cx.bump().alloc([cx.render(self).unwrap()]))
     }
 }
 
 impl<'a, 'b> IntoDynNode<'b> for &'a str {
     fn into_vnode(self, cx: &'b ScopeState) -> DynamicNode<'b> {
         DynamicNode::Text(VText {
-            value: bumpalo::collections::String::from_str_in(self, cx.bump()).into_bump_str(),
+            value: cx.bump().alloc_str(self),
             id: Default::default(),
         })
     }
@@ -801,16 +801,16 @@ impl<'a> IntoTemplate<'a> for VNode<'a> {
     }
 }
 impl<'a> IntoTemplate<'a> for Element<'a> {
-    fn into_template(self, _cx: &'a ScopeState) -> VNode<'a> {
+    fn into_template(self, cx: &'a ScopeState) -> VNode<'a> {
         match self {
-            Some(val) => val.into_template(_cx),
-            _ => VNode::empty().unwrap(),
+            Some(val) => val.into_template(cx),
+            _ => VNode::empty(cx).unwrap(),
         }
     }
 }
 impl<'a, 'b> IntoTemplate<'a> for LazyNodes<'a, 'b> {
     fn into_template(self, cx: &'a ScopeState) -> VNode<'a> {
-        self.call(cx)
+        cx.render(self).unwrap()
     }
 }
 
