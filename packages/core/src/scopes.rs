@@ -423,7 +423,7 @@ impl<'src> ScopeState {
         fn_name: &'static str,
     ) -> DynamicNode<'src>
     where
-        P: Properties + 'child,
+        P: Properties<'child> + 'child,
         'src: 'child,
     {
         let vcomp = VProps::new(component, P::memoize, props);

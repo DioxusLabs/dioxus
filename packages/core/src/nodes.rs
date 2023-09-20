@@ -896,8 +896,8 @@ impl<'a, T: IntoAttributeValue<'a>> IntoAttributeValue<'a> for Option<T> {
 pub trait HasAttributesBox<'a, T> {
     fn push_attribute(
         self,
-        name: &str,
-        ns: Option<&str>,
+        name: &'a str,
+        ns: Option<&'static str>,
         attr: impl IntoAttributeValue<'a>,
         volatile: bool,
     ) -> T;

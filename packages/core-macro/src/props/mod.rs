@@ -656,12 +656,12 @@ Finally, call `.build()` to create the instance of `{name}`.
                     }
                 }
 
-                impl #impl_generics dioxus::prelude::Properties for #name #ty_generics
+                impl #impl_generics ::dioxus::prelude::Properties<'_> for #name #ty_generics
                 #b_generics_where_extras_predicates
                 {
                     type Builder = #builder_name #generics_with_empty;
                     const IS_STATIC: bool = #is_static;
-                    fn builder(_cx: &::dioxus_core::prelude::ScopeState) -> Self::Builder {
+                    fn builder(_cx: &::dioxus::prelude::ScopeState) -> Self::Builder {
                         #name::builder()
                     }
                     unsafe fn memoize(&self, other: &Self) -> bool {

@@ -91,7 +91,7 @@ impl<'a, const A: bool> FragmentBuilder<'a, A> {
 ///     })
 /// }
 /// ```
-impl<'a> Properties for FragmentProps<'a> {
+impl<'a> Properties<'_> for FragmentProps<'a> {
     type Builder = FragmentBuilder<'a, false>;
     const IS_STATIC: bool = false;
     fn builder(_cx: &ScopeState) -> Self::Builder {
