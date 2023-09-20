@@ -79,23 +79,31 @@ impl Renderer {
             match segment {
                 Segment::Attr(idx) => {
                     let attr = &template.dynamic_attrs[*idx];
-                    if attr.name == "dangerous_inner_html" {
-                        inner_html = Some(attr);
-                    } else if attr.namespace == Some("style") {
-                        accumulated_dynamic_styles.push(attr);
-                    } else {
-                        match attr.value {
-                            AttributeValue::Text(value) => {
-                                write!(buf, " {}=\"{}\"", attr.name, value)?
-                            }
-                            AttributeValue::Bool(value) => write!(buf, " {}={}", attr.name, value)?,
-                            AttributeValue::Int(value) => write!(buf, " {}={}", attr.name, value)?,
-                            AttributeValue::Float(value) => {
-                                write!(buf, " {}={}", attr.name, value)?
-                            }
-                            _ => {}
-                        };
-                    }
+                    attr.attribute_type().try_for_each(|attr| {
+                        if attr.name == "dangerous_inner_html" {
+                            inner_html = Some(attr);
+                        } else if attr.namespace == Some("style") {
+                            accumulated_dynamic_styles.push(attr);
+                        } else {
+                            match attr.value {
+                                AttributeValue::Text(value) => {
+                                    write!(buf, " {}=\"{}\"", attr.name, value)?
+                                }
+                                AttributeValue::Bool(value) => {
+                                    write!(buf, " {}={}", attr.name, value)?
+                                }
+                                AttributeValue::Int(value) => {
+                                    write!(buf, " {}={}", attr.name, value)?
+                                }
+                                AttributeValue::Float(value) => {
+                                    write!(buf, " {}={}", attr.name, value)?
+                                }
+                                _ => {}
+                            };
+                        }
+
+                        Ok(())
+                    })?;
                 }
                 Segment::Node(idx) => match &template.dynamic_nodes[*idx] {
                     DynamicNode::Component(node) => {

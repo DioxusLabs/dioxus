@@ -167,7 +167,7 @@ impl Parse for Element {
             attributes,
             children,
             brace,
-            extra_attributes
+            extra_attributes,
         })
     }
 }
@@ -397,11 +397,3 @@ impl ToTokens for ElementAttrNamed {
         tokens.append_all(attribute);
     }
 }
-
-// ::dioxus::core::Attribute {
-//     name: stringify!(#name),
-//     namespace: None,
-//     volatile: false,
-//     mounted_node: Default::default(),
-//     value: ::dioxus::core::AttributeValue::Text(#value),
-// }

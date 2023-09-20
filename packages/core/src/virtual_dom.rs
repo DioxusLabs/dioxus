@@ -5,13 +5,13 @@
 use crate::{
     any_props::VProps,
     arena::{ElementId, ElementRef},
-    innerlude::{DirtyScope, ErrorBoundary, Mutations, Scheduler, SchedulerMsg},
+    innerlude::{AttributeType, DirtyScope, ErrorBoundary, Mutations, Scheduler, SchedulerMsg},
     mutations::Mutation,
     nodes::RenderReturn,
     nodes::{Template, TemplateId},
     runtime::{Runtime, RuntimeGuard},
     scopes::{ScopeId, ScopeState},
-    AttributeValue, Element, Event, Scope,
+    Attribute, AttributeValue, Element, Event, Scope,
 };
 use futures_util::{pin_mut, StreamExt};
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -371,12 +371,30 @@ impl VirtualDom {
                     for (idx, attr) in template.dynamic_attrs.iter().enumerate() {
                         let this_path = node_template.attr_paths[idx];
 
-                        // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
-                        if attr.name.trim_start_matches("on") == name
-                            && target_path.is_decendant(&this_path)
-                        {
-                            listeners.push(&attr.value);
+                        fn add_listener<'a>(
+                            attribute: &'a Attribute<'a>,
+                            event_name: &str,
+                            listeners: &mut Vec<&'a AttributeValue<'a>>,
+                        ) {
+                            if attribute.name.trim_start_matches("on") == event_name {
+                                listeners.push(&attribute.value);
+                            }
 
+                            listeners.push(&attribute.value);
+                        }
+
+                        // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
+                        if target_path.is_decendant(&this_path) {
+                            match &attr.ty {
+                                AttributeType::Single(attribute) => {
+                                    add_listener(attribute, name, &mut listeners);
+                                }
+                                AttributeType::Many(attributes) => {
+                                    for attribute in *attributes {
+                                        add_listener(attribute, name, &mut listeners);
+                                    }
+                                }
+                            }
                             // Break if this is the exact target element.
                             // This means we won't call two listeners with the same name on the same element. This should be
                             // documented, or be rejected from the rsx! macro outright
@@ -422,20 +440,57 @@ impl VirtualDom {
                     for (idx, attr) in template.dynamic_attrs.iter().enumerate() {
                         let this_path = node_template.attr_paths[idx];
 
-                        // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
-                        // Only call the listener if this is the exact target element.
-                        if attr.name.trim_start_matches("on") == name && target_path == this_path {
-                            if let AttributeValue::Listener(listener) = &attr.value {
-                                let origin = el_ref.scope;
-                                self.runtime.scope_stack.borrow_mut().push(origin);
-                                self.runtime.rendering.set(false);
-                                if let Some(cb) = listener.borrow_mut().as_deref_mut() {
-                                    cb(uievent.clone());
-                                }
-                                self.runtime.scope_stack.borrow_mut().pop();
-                                self.runtime.rendering.set(true);
+                        fn call_listener(
+                            attribute: &Attribute,
+                            event_name: &str,
+                            uievent: &Event<dyn Any>,
+                            runtime: &Runtime,
+                            origin: ScopeId,
+                        ) -> bool {
+                            // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
+                            // Only call the listener if this is the exact target element.
+                            if attribute.name.trim_start_matches("on") == event_name {
+                                if let AttributeValue::Listener(listener) = &attribute.value {
+                                    runtime.scope_stack.borrow_mut().push(origin);
+                                    runtime.rendering.set(false);
+                                    if let Some(cb) = listener.borrow_mut().as_deref_mut() {
+                                        cb(uievent.clone());
+                                    }
+                                    runtime.scope_stack.borrow_mut().pop();
+                                    runtime.rendering.set(true);
 
-                                break;
+                                    return true;
+                                }
+                            }
+                            false
+                        }
+
+                        if target_path == this_path {
+                            match &attr.ty {
+                                AttributeType::Single(attribute) => {
+                                    if call_listener(
+                                        attribute,
+                                        name,
+                                        &uievent,
+                                        &self.runtime,
+                                        el_ref.scope,
+                                    ) {
+                                        return;
+                                    }
+                                }
+                                AttributeType::Many(attributes) => {
+                                    for attribute in *attributes {
+                                        if call_listener(
+                                            attribute,
+                                            name,
+                                            &uievent,
+                                            &self.runtime,
+                                            el_ref.scope,
+                                        ) {
+                                            return;
+                                        }
+                                    }
+                                }
                             }
                         }
                     }

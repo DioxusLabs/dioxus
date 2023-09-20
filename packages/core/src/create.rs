@@ -1,5 +1,7 @@
 use crate::any_props::AnyProps;
-use crate::innerlude::{BorrowedAttributeValue, VComponent, VPlaceholder, VText};
+use crate::innerlude::{
+    AttributeType, BorrowedAttributeValue, MountedAttribute, VComponent, VPlaceholder, VText,
+};
 use crate::mutations::Mutation;
 use crate::mutations::Mutation::*;
 use crate::nodes::VNode;
@@ -283,7 +285,7 @@ impl<'b> VirtualDom {
             let id = self.assign_static_node_as_dynamic(path, root, node, attr_id);
 
             loop {
-                self.write_attribute(&node.dynamic_attrs[attr_id], id);
+                self.write_attribute_type(&node.dynamic_attrs[attr_id], id);
 
                 // Only push the dynamic attributes forward if they match the current path (same element)
                 match attrs.next_if(|(_, p)| *p == path) {
@@ -294,10 +296,20 @@ impl<'b> VirtualDom {
         }
     }
 
-    fn write_attribute(&mut self, attribute: &'b crate::Attribute<'b>, id: ElementId) {
+    fn write_attribute_type(&mut self, attribute: &'b MountedAttribute<'b>, id: ElementId) {
         // Make sure we set the attribute's associated id
         attribute.mounted_element.set(id);
+        match &attribute.ty {
+            AttributeType::Single(attribute) => self.write_attribute(attribute, id),
+            AttributeType::Many(attribute) => {
+                for attribute in *attribute {
+                    self.write_attribute(attribute, id);
+                }
+            }
+        }
+    }
 
+    pub(crate) fn write_attribute(&mut self, attribute: &'b crate::Attribute<'b>, id: ElementId) {
         // Safety: we promise not to re-alias this text later on after committing it to the mutation
         let unbounded_name: &str = unsafe { std::mem::transmute(attribute.name) };
 

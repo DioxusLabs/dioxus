@@ -164,7 +164,7 @@ fn props_spread() {
                 static TEMPLATE: ::dioxus::core::Template = ::dioxus::core::Template { name: concat!(file!(), ":", line!(), ":", column!(), ":", "" ), roots: &[::dioxus::core::TemplateNode::Element { tag: dioxus_elements::audio::TAG_NAME, namespace: dioxus_elements::audio::NAME_SPACE, attrs: &[::dioxus::core::TemplateAttribute::Dynamic { id: 0usize }], children: &[] }], node_paths: &[], attr_paths: &[&[0u8]] };
                 let mut attrs = vec![__cx.attr(dioxus_elements::audio::muted.0, muted, dioxus_elements::audio::muted.1, dioxus_elements::audio::muted.2)];
                 for attr in attributes {
-                    attrs.push(__cx.attr(attr.name, attr.value.into_value(__cx.bump()), attr.namespace, attr.volatile));
+                    attrs.push(attr);
                 }
                 ::dioxus::core::VNode {
                     parent: None,
