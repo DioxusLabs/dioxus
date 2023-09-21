@@ -109,3 +109,46 @@ pub fn interpreter_glue(url: &str) -> String {
     "#
     )
 }
+
+/// This function behaves similarly to [`interpreter_glue`], but interprets the provided URI as a
+/// relative path, automatically prefixing the protocol and host endpoint.
+///
+/// For instance, if you call `interpreter_glue("ws://localhost:1234/ws/liveview")` and the root of
+/// the liveview is being served at `localhost:1234`, you can replace it with
+/// `interpreter_glue_relative_uri("/ws/liveview")`.
+pub fn interpreter_glue_relative_uri(mut relative_uri: &str) -> String {
+    if relative_uri.starts_with("/") {
+        // NOTE: The `relative_uri` is automatically prefixed with `ws[s]://<host>/` during
+        // client-side JavaScript execution, eliminating the need for a leading `/` as in `api/foo`.
+        // However, since it's customary to use a `/` at the API level (e.g., `fetch("/api/foo")`),
+        // we permit its inclusion in the `relative_uri` parameter for consistency.
+        relative_uri = &relative_uri[1..];
+    }
+
+    let js = &*INTERPRETER_JS;
+    let common = &*COMMON_JS;
+    format!(
+        r#"
+<script>
+function __dioxusGetWsUrl() {{
+  let loc = window.location; 
+  let new_uri = "";
+  if (loc.protocol === "https:") {{
+      new_uri = "wss:";
+  }} else {{
+      new_uri = "ws:";
+  }}
+  new_uri += "//" + loc.host;
+  new_uri += "/{relative_uri}";
+  return new_uri;
+}}
+
+var WS_ADDR = __dioxusGetWsUrl();
+{js}
+{common}
+{MAIN_JS}
+main();
+</script>
+    "#
+    )
+}
