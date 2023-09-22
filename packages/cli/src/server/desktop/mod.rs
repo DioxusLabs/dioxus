@@ -81,7 +81,6 @@ async fn serve<P: Platform + Send + 'static>(
     let _watcher = setup_file_watcher(
         {
             let config = config.clone();
-
             move || platform.write().unwrap().rebuild(&config)
         },
         &config,
@@ -90,7 +89,7 @@ async fn serve<P: Platform + Send + 'static>(
     )
     .await?;
 
-    match &hot_reload_state {
+    match hot_reload_state {
         Some(hot_reload_state) => {
             // The open interprocess sockets
             start_desktop_hot_reload(hot_reload_state).await?;
@@ -103,7 +102,7 @@ async fn serve<P: Platform + Send + 'static>(
     Ok(())
 }
 
-async fn start_desktop_hot_reload(hot_reload_state: &HotReloadState) -> Result<()> {
+async fn start_desktop_hot_reload(hot_reload_state: HotReloadState) -> Result<()> {
     match LocalSocketListener::bind("@dioxusin") {
         Ok(local_socket_stream) => {
             let aborted = Arc::new(Mutex::new(false));
