@@ -9,7 +9,11 @@ use dioxus::{
 };
 
 fn main() {
-    dioxus_desktop::launch(app);
+    let mut dom = VirtualDom::new(app);
+    dom.rebuild();
+    let html = dioxus_ssr::render(&dom);
+
+    println!("{}", html);
 }
 
 fn app(cx: Scope) -> Element {
@@ -36,7 +40,8 @@ fn app(cx: Scope) -> Element {
                         bump: __cx.bump(),
                         attributes: Vec::new(),
                     }
-                    .width("hello"),
+                    .width(10)
+                    .height("100px"),
                     "Component",
                 )]),
                 dynamic_attrs: __cx.bump().alloc([]),
@@ -72,5 +77,24 @@ impl<'a> HasAttributesBox<'a, Props<'a>> for Props<'a> {
 impl ExtendedGlobalAttributesMarker for Props<'_> {}
 
 fn Component<'a>(cx: Scope<'a, Props<'a>>) -> Element<'a> {
-    todo!()
+    let attributes = &cx.props.attributes;
+    render! {
+        // rsx! {
+        //     audio {
+        //         ...attributes,
+        //     }
+        // }
+        ::dioxus::core::LazyNodes::new(move |__cx: &::dioxus::core::ScopeState| -> ::dioxus::core::VNode   {
+            static TEMPLATE: ::dioxus::core::Template = ::dioxus::core::Template { name: concat!(file!(), ":", line!(), ":", column!(), ":", "123" ), roots: &[::dioxus::core::TemplateNode::Element { tag: dioxus_elements::audio::TAG_NAME, namespace: dioxus_elements::audio::NAME_SPACE, attrs: &[::dioxus::core::TemplateAttribute::Dynamic { id: 0usize }], children: &[] }], node_paths: &[], attr_paths: &[&[0u8]] };
+            let attrs = vec![(&**attributes).into()];
+            ::dioxus::core::VNode {
+                parent: None,
+                key: None,
+                template: std::cell::Cell::new(TEMPLATE),
+                root_ids: dioxus::core::exports::bumpalo::collections::Vec::new_in(__cx.bump()).into(),
+                dynamic_nodes: __cx.bump().alloc([]),
+                dynamic_attrs: __cx.bump().alloc(attrs),
+            }
+        })
+    }
 }

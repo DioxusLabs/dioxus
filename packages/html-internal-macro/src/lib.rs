@@ -56,7 +56,7 @@ impl ToTokens for ImplExtensionAttributes {
 
         let defs = self.attrs.iter().map(|ident| {
             quote! {
-                fn #ident(self, value: impl IntoAttributeValue<'a> + 'static) -> Self;
+                fn #ident(self, value: impl IntoAttributeValue<'a>) -> Self;
             }
         });
         let impls = self.attrs.iter().map(|ident| {
@@ -66,7 +66,7 @@ impl ToTokens for ImplExtensionAttributes {
                 quote! { <#impl_name as #name>::#ident }
             };
             quote! {
-                fn #ident(self, value: impl IntoAttributeValue<'a> + 'static) -> Self {
+                fn #ident(self, value: impl IntoAttributeValue<'a>) -> Self {
                     let d = #d;
                     self.push_attribute(d.0, d.1, value, d.2)
                 }
