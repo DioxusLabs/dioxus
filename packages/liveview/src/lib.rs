@@ -93,61 +93,53 @@ static MAIN_JS: &str = include_str!("./main.js");
 /// This script that gets injected into your app connects this page to the websocket endpoint
 ///
 /// Once the endpoint is connected, it will send the initial state of the app, and then start
-/// processing user events and returning edits to the liveview instance
-pub fn interpreter_glue(url: &str) -> String {
+/// processing user events and returning edits to the liveview instance.
+///
+/// You can pass a relative path prefixed with "/", or enter a full URL including the protocol
+/// (`ws:` or `wss:`) as an argument.
+///
+/// If you enter a relative path, the web client automatically prefixes the host address in
+/// `window.location` when creating a web socket to LiveView.
+///
+/// ```
+/// // Creates websocket connection to same host as current page
+/// interpreter_glue("/api/liveview");
+///
+/// // Creates websocket connection to specified url
+/// interpreter_glue("ws://localhost:8080/api/liveview");
+/// ```
+pub fn interpreter_glue(url_or_path: &str) -> String {
+    // If the url starts with a `/`, generate glue which reuses current host
+    let get_ws_url = if url_or_path.starts_with("/") {
+        r#"
+  let loc = window.location; 
+  let new_url = "";
+  if (loc.protocol === "https:") {{
+      new_url = "wss:";
+  }} else {{
+      new_url = "ws:";
+  }}
+  new_url += "//" + loc.host + path;
+  return new_url;
+      "#
+    } else {
+        "return path;"
+    };
+
     let js = &*INTERPRETER_JS;
     let common = &*COMMON_JS;
     format!(
         r#"
 <script>
-    var WS_ADDR = "{url}";
+    function __dioxusGetWsUrl(path) {{
+      {get_ws_url}
+    }}
+    
+    var WS_ADDR = __dioxusGetWsUrl("{url_or_path}");
     {js}
     {common}
     {MAIN_JS}
     main();
-</script>
-    "#
-    )
-}
-
-/// This function behaves similarly to [`interpreter_glue`], but interprets the provided URI as a
-/// relative path, automatically prefixing the protocol and host endpoint.
-///
-/// For instance, if you call `interpreter_glue("ws://localhost:1234/ws/liveview")` and the root of
-/// the liveview is being served at `localhost:1234`, you can replace it with
-/// `interpreter_glue_relative_uri("/ws/liveview")`.
-pub fn interpreter_glue_relative_uri(mut relative_uri: &str) -> String {
-    if relative_uri.starts_with("/") {
-        // NOTE: The `relative_uri` is automatically prefixed with `ws[s]://<host>/` during
-        // client-side JavaScript execution, eliminating the need for a leading `/` as in `api/foo`.
-        // However, since it's customary to use a `/` at the API level (e.g., `fetch("/api/foo")`),
-        // we permit its inclusion in the `relative_uri` parameter for consistency.
-        relative_uri = &relative_uri[1..];
-    }
-
-    let js = &*INTERPRETER_JS;
-    let common = &*COMMON_JS;
-    format!(
-        r#"
-<script>
-function __dioxusGetWsUrl() {{
-  let loc = window.location; 
-  let new_uri = "";
-  if (loc.protocol === "https:") {{
-      new_uri = "wss:";
-  }} else {{
-      new_uri = "ws:";
-  }}
-  new_uri += "//" + loc.host;
-  new_uri += "/{relative_uri}";
-  return new_uri;
-}}
-
-var WS_ADDR = __dioxusGetWsUrl();
-{js}
-{common}
-{MAIN_JS}
-main();
 </script>
     "#
     )
