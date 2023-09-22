@@ -110,7 +110,7 @@ static MAIN_JS: &str = include_str!("./main.js");
 /// ```
 pub fn interpreter_glue(url_or_path: &str) -> String {
     // If the url starts with a `/`, generate glue which reuses current host
-    let get_ws_url = if url_or_path.starts_with("/") {
+    let get_ws_url = if url_or_path.starts_with('/') {
         r#"
   let loc = window.location; 
   let new_url = "";
