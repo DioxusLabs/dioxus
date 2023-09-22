@@ -1,4 +1,4 @@
-use dioxus_rsx::{BodyNode, ElementAttrNamed, ElementAttrValue, ForLoop};
+use dioxus_rsx::{AttributeType, BodyNode, ElementAttrValue, ForLoop};
 use proc_macro2::{LineColumn, Span};
 use quote::ToTokens;
 use std::{
@@ -165,12 +165,12 @@ impl<'a> Writer<'a> {
         }
     }
 
-    pub(crate) fn is_short_attrs(&mut self, attributes: &[ElementAttrNamed]) -> usize {
+    pub(crate) fn is_short_attrs(&mut self, attributes: &[AttributeType]) -> usize {
         let mut total = 0;
 
         for attr in attributes {
-            if self.current_span_is_primary(attr.attr.start()) {
-                'line: for line in self.src[..attr.attr.start().start().line - 1].iter().rev() {
+            if self.current_span_is_primary(attr.start()) {
+                'line: for line in self.src[..attr.start().start().line - 1].iter().rev() {
                     match (line.trim().starts_with("//"), line.is_empty()) {
                         (true, _) => return 100000,
                         (_, true) => continue 'line,
@@ -179,15 +179,23 @@ impl<'a> Writer<'a> {
                 }
             }
 
-            total += match &attr.attr.name {
-                dioxus_rsx::ElementAttrName::BuiltIn(name) => {
-                    let name = name.to_string();
-                    name.len()
+            match attr {
+                AttributeType::Named(attr) => {
+                    let name_len = match &attr.attr.name {
+                        dioxus_rsx::ElementAttrName::BuiltIn(name) => {
+                            let name = name.to_string();
+                            name.len()
+                        }
+                        dioxus_rsx::ElementAttrName::Custom(name) => name.value().len() + 2,
+                    };
+                    total += name_len;
+                    total += self.attr_value_len(&attr.attr.value);
                 }
-                dioxus_rsx::ElementAttrName::Custom(name) => name.value().len() + 2,
+                AttributeType::Spread(expr) => {
+                    let expr_len = self.retrieve_formatted_expr(expr).len();
+                    total += expr_len + 3;
+                }
             };
-
-            total += self.attr_value_len(&attr.attr.value);
 
             total += 6;
         }

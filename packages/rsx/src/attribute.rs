@@ -4,7 +4,38 @@ use super::*;
 
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{quote, ToTokens, TokenStreamExt};
-use syn::{parse_quote, Expr, ExprIf, Ident, LitStr};
+use syn::{parse_quote, spanned::Spanned, Expr, ExprIf, Ident, LitStr};
+
+#[derive(PartialEq, Eq, Clone, Debug, Hash)]
+pub enum AttributeType {
+    Named(ElementAttrNamed),
+    Spread(Expr),
+}
+
+impl AttributeType {
+    pub fn start(&self) -> Span {
+        match self {
+            AttributeType::Named(n) => n.attr.start(),
+            AttributeType::Spread(e) => e.span(),
+        }
+    }
+
+    pub(crate) fn try_combine(&self, other: &Self) -> Option<Self> {
+        match (self, other) {
+            (Self::Named(a), Self::Named(b)) => a.try_combine(b).map(Self::Named),
+            _ => None,
+        }
+    }
+}
+
+impl ToTokens for AttributeType {
+    fn to_tokens(&self, tokens: &mut TokenStream2) {
+        match self {
+            AttributeType::Named(n) => tokens.append_all(quote! { #n }),
+            AttributeType::Spread(e) => tokens.append_all(quote! { #e.into() }),
+        }
+    }
+}
 
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub struct ElementAttrNamed {

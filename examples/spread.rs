@@ -73,7 +73,7 @@ impl<'a> HasAttributesBox<'a, Props<'a>> for Props<'a> {
 impl ExtendedGlobalAttributesMarker for Props<'_> {}
 
 fn Component<'a>(cx: Scope<'a, Props<'a>>) -> Element<'a> {
-    let attributes = &cx.props.attributes;
+    let attributes = &*cx.props.attributes;
     render! {
         audio {
             ..attributes,
