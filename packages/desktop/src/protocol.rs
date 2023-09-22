@@ -107,7 +107,7 @@ pub(super) fn desktop_handler(
                     if let Some(assets_head) = assets_head {
                         head += &assets_head;
                     } else {
-                        log::warn!("No assets head found. You can compile assets with the dioxus-cli in release mode");
+                        trace::warn!("No assets head found. You can compile assets with the dioxus-cli in release mode");
                     }
                 }
 
