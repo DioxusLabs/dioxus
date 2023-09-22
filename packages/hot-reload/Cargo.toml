@@ -5,7 +5,7 @@ version = { workspace = true }
 edition = "2021"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
-homepage = "https://dioxuslabs.com/docs/0.3/guide/en/getting_started/hot_reload.html"
+homepage = "https://dioxuslabs.com/learn/0.4/migration/hot_reload"
 description = "Hot reloading utilities for Dioxus"
 keywords = ["dom", "ui", "gui", "react", "hot-reloading"]
 

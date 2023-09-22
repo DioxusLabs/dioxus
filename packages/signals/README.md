@@ -10,7 +10,8 @@ All signals implement Copy, even if the inner value does not implement copy. Thi
 use dioxus::prelude::*;
 use dioxus_signals::*;
 
-fn app(cx: Scope) -> Element {
+#[component]
+fn App(cx: Scope) -> Element {
     let signal = use_signal(cx, || "hello world".to_string());
 
     spawn(async move {
@@ -32,7 +33,8 @@ Signals will only subscribe to components when you read from the signal in that 
 use dioxus::prelude::*;
 use dioxus_signals::*;
 
-fn app(cx: Scope) -> Element {
+#[component]
+fn App(cx: Scope) -> Element {
     // Because signal is never read in this component, this component will not rerun when the signal changes
     let signal = use_signal(cx, || 0);
 
@@ -56,6 +58,7 @@ struct ChildProps {
     signal: Signal<usize>,
 }
 
+#[component]
 fn Child(cx: Scope<ChildProps>) -> Element {
     // This component does read from the signal, so when the signal changes it will rerun
     render! {
@@ -70,15 +73,17 @@ Because subscriptions happen when you read from (not create) the data, you can p
 use dioxus::prelude::*;
 use dioxus_signals::*;
 
-fn app(cx: Scope) -> Element {
+#[component]
+fn App(cx: Scope) -> Element {
     // Because signal is never read in this component, this component will not rerun when the signal changes
     use_context_provider(cx, || Signal::new(0));
-
+    
     render! {
         Child {}
     }
 }
 
+#[component]
 fn Child(cx: Scope) -> Element {
     let signal: Signal<i32> = *use_context(cx).unwrap();
     // This component does read from the signal, so when the signal changes it will rerun
@@ -92,13 +97,14 @@ fn Child(cx: Scope) -> Element {
 
 In addition to local subscriptions in components, `dioxus-signals` provides a way to derive data with local subscriptions.
 
-The use_selector hook will only rerun when any signals inside of the hook change:
+The use_selector hook will only rerun when any signals inside the hook change:
 
 ```rust
 use dioxus::prelude::*;
 use dioxus_signals::*;
 
-fn app(cx: Scope) -> Element {
+#[component]
+fn App(cx: Scope) -> Element {
     let signal = use_signal(cx, || 0);
     let doubled = use_selector(cx, || signal * 2);
 
@@ -113,7 +119,7 @@ fn app(cx: Scope) -> Element {
     }
 }
 
-#[inline_props]
+#[component]
 fn Child(cx: Scope, signal: ReadOnlySignal<usize>) -> Element {
     render! {
         "{signal}"

@@ -9,7 +9,7 @@ edition = "2018"
 [dependencies]
 dioxus-core = { workspace = true }
 generational-box = { workspace = true }
-log.workspace = true
+tracing = { workspace = true }
 simple_logger = "4.2.0"
 serde = { version = "1", features = ["derive"], optional = true }
 

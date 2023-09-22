@@ -123,7 +123,7 @@ impl QueryEngine {
                 }})
             }})();"#
         )) {
-            log::warn!("Query error: {err}");
+            tracing::warn!("Query error: {err}");
         }
 
         Query {

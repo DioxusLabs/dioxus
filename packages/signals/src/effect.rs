@@ -18,7 +18,8 @@ pub(crate) fn get_effect_stack() -> EffectStack {
         Some(rt) => rt,
         None => {
             let store = EffectStack::default();
-            provide_root_context(store).expect("in a virtual dom")
+            provide_root_context(store.clone());
+            store
         }
     }
 }
@@ -54,6 +55,7 @@ pub fn use_effect_with_dependencies<D: Dependency>(
 /// Effects allow you to run code when a signal changes. Effects are run immediately and whenever any signal it reads changes.
 #[derive(Copy, Clone, PartialEq)]
 pub struct Effect {
+    pub(crate) source: ScopeId,
     pub(crate) callback: CopyValue<Box<dyn FnMut()>>,
 }
 
@@ -73,6 +75,7 @@ impl Effect {
     /// The signal will be owned by the current component and will be dropped when the component is dropped.
     pub fn new(callback: impl FnMut() + 'static) -> Self {
         let myself = Self {
+            source: current_scope_id().expect("in a virtual dom"),
             callback: CopyValue::new(Box::new(callback)),
         };
 

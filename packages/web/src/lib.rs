@@ -170,7 +170,7 @@ pub fn launch_with_props<T: 'static>(
 /// }
 /// ```
 pub async fn run_with_props<T: 'static>(root: fn(Scope<T>) -> Element, root_props: T, cfg: Config) {
-    log::info!("Starting up");
+    tracing::info!("Starting up");
 
     let mut dom = VirtualDom::new_with_props(root, root_props);
 
@@ -205,7 +205,7 @@ pub async fn run_with_props<T: 'static>(root: fn(Scope<T>) -> Element, root_prop
 
     let mut websys_dom = dom::WebsysDom::new(cfg, tx);
 
-    log::info!("rebuilding app");
+    tracing::info!("rebuilding app");
 
     if should_hydrate {
         #[cfg(feature = "hydrate")]
@@ -217,7 +217,7 @@ pub async fn run_with_props<T: 'static>(root: fn(Scope<T>) -> Element, root_prop
             websys_dom.load_templates(&templates);
 
             if let Err(err) = websys_dom.rehydrate(&dom) {
-                log::error!(
+                tracing::error!(
                     "Rehydration failed {:?}. Rebuild DOM into element from scratch",
                     &err
                 );
@@ -240,7 +240,7 @@ pub async fn run_with_props<T: 'static>(root: fn(Scope<T>) -> Element, root_prop
     websys_dom.mount();
 
     loop {
-        log::trace!("waiting for work");
+        tracing::trace!("waiting for work");
 
         // if virtualdom has nothing, wait for it to have something before requesting idle time
         // if there is work then this future resolves immediately.

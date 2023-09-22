@@ -27,7 +27,7 @@ use crate::{CopyValue, Effect};
 ///     render! { Child { state: count } }
 /// }
 ///
-/// #[inline_props]
+/// #[component]
 /// fn Child(cx: Scope, state: Signal<u32>) -> Element {
 ///     let state = *state;
 ///
@@ -100,6 +100,7 @@ pub(crate) struct SignalData<T> {
 /// use dioxus::prelude::*;
 /// use dioxus_signals::*;
 ///
+/// #[component]
 /// fn App(cx: Scope) -> Element {
 ///     let mut count = use_signal(cx, || 0);
 ///
@@ -108,7 +109,7 @@ pub(crate) struct SignalData<T> {
 ///     render! { Child { state: count } }
 /// }
 ///
-/// #[inline_props]
+/// #[component]
 /// fn Child(cx: Scope, state: Signal<u32>) -> Element {
 ///     let state = *state;
 ///
@@ -176,6 +177,21 @@ impl<T: 'static> Signal<T> {
         }
     }
 
+    /// Create a new signal with a custom owner scope. The signal will be dropped when the owner scope is dropped instead of the current scope.
+    pub fn new_in_scope(value: T, owner: ScopeId) -> Self {
+        Self {
+            inner: CopyValue::new_in_scope(
+                SignalData {
+                    subscribers: Default::default(),
+                    effect_subscribers: Default::default(),
+                    update_any: schedule_update_any().expect("in a virtual dom"),
+                    value,
+                },
+                owner,
+            ),
+        }
+    }
+
     /// Get the scope the signal was created in.
     pub fn origin_scope(&self) -> ScopeId {
         self.inner.origin_scope()
@@ -194,7 +210,7 @@ impl<T: 'static> Signal<T> {
         } else if let Some(current_scope_id) = current_scope_id() {
             // only subscribe if the vdom is rendering
             if dioxus_core::vdom_is_rendering() {
-                log::trace!(
+                tracing::trace!(
                     "{:?} subscribed to {:?}",
                     self.inner.value,
                     current_scope_id
@@ -227,7 +243,7 @@ impl<T: 'static> Signal<T> {
         {
             let inner = self.inner.read();
             for &scope_id in &*inner.subscribers.borrow() {
-                log::trace!(
+                tracing::trace!(
                     "Write on {:?} triggered update on {:?}",
                     self.inner.value,
                     scope_id
@@ -242,7 +258,7 @@ impl<T: 'static> Signal<T> {
             std::mem::take(&mut *effects)
         };
         for effect in subscribers {
-            log::trace!(
+            tracing::trace!(
                 "Write on {:?} triggered effect {:?}",
                 self.inner.value,
                 effect

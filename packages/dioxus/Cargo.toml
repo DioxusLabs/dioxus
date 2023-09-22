@@ -6,7 +6,7 @@ edition = "2021"
 description = "Portable, performant, and ergonomic framework for building cross-platform user interfaces in Rust"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
-homepage = "https://dioxuslabs.com/docs/0.3/guide/en/index.html"
+homepage = "https://dioxuslabs.com/learn/0.4/"
 keywords = ["dom", "ui", "gui", "react", "wasm"]
 rust-version = "1.65.0"
 
@@ -30,7 +30,7 @@ hot-reload = ["dioxus-hot-reload"]
 
 [dev-dependencies]
 futures-util = { workspace = true }
-log = { workspace = true }
+tracing = { workspace = true }
 rand = { version = "0.8.4", features = ["small_rng"] }
 criterion = "0.3.5"
 thiserror = { workspace = true }

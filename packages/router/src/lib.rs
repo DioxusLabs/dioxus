@@ -82,3 +82,8 @@ pub mod prelude {
 mod utils {
     pub(crate) mod use_router_internal;
 }
+
+#[doc(hidden)]
+pub mod exports {
+    pub use urlencoding;
+}

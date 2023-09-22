@@ -1,5 +1,3 @@
-#![allow(non_snake_case)]
-
 use std::collections::HashMap;
 
 use dioxus::prelude::*;
@@ -27,6 +25,7 @@ impl CoolData {
     }
 }
 
+#[component]
 #[rustfmt::skip]
 pub fn App(cx: Scope) -> Element {
     use_shared_state_provider(cx, || CoolData::new(HashMap::from([
@@ -50,7 +49,7 @@ pub fn App(cx: Scope) -> Element {
     )
 }
 
-#[inline_props]
+#[component]
 fn DataEditor(cx: Scope, id: usize) -> Element {
     let cool_data = use_shared_state::<CoolData>(cx).unwrap().read();
 
@@ -61,7 +60,7 @@ fn DataEditor(cx: Scope, id: usize) -> Element {
     })
 }
 
-#[inline_props]
+#[component]
 fn DataView(cx: Scope, id: usize) -> Element {
     let cool_data = use_shared_state::<CoolData>(cx).unwrap();
 

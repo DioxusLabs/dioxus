@@ -124,7 +124,7 @@ fn memos_prevents_component_rerun() {
     }
 
     let _ = dom.rebuild().santize();
-    dom.mark_dirty(ScopeId(0));
+    dom.mark_dirty(ScopeId::ROOT);
     dom.render_immediate();
 
     {
@@ -133,7 +133,7 @@ fn memos_prevents_component_rerun() {
         assert_eq!(current_counter.effect, 2);
     }
 
-    dom.mark_dirty(ScopeId(0));
+    dom.mark_dirty(ScopeId::ROOT);
     dom.render_immediate();
     dom.render_immediate();
 

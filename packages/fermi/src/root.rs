@@ -66,14 +66,14 @@ impl AtomRoot {
 
         if let Some(slot) = atoms.get_mut(&ptr) {
             slot.value = Rc::new(value);
-            log::trace!("found item with subscribers {:?}", slot.subscribers);
+            tracing::trace!("found item with subscribers {:?}", slot.subscribers);
 
             for scope in &slot.subscribers {
-                log::trace!("updating subcsriber");
+                tracing::trace!("updating subcsriber");
                 (self.update_any)(*scope);
             }
         } else {
-            log::trace!("no atoms found for {:?}", ptr);
+            tracing::trace!("no atoms found for {:?}", ptr);
             atoms.insert(
                 ptr,
                 Slot {
@@ -96,7 +96,7 @@ impl AtomRoot {
     pub fn force_update(&self, ptr: AtomId) {
         if let Some(slot) = self.atoms.borrow_mut().get(&ptr) {
             for scope in slot.subscribers.iter() {
-                log::trace!("updating subcsriber");
+                tracing::trace!("updating subcsriber");
                 (self.update_any)(*scope);
             }
         }

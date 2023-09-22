@@ -1,27 +1,15 @@
-use std::sync::{Arc, Mutex};
-
 use axum::{
     extract::{ws::Message, WebSocketUpgrade},
     response::IntoResponse,
     Extension, TypedHeader,
 };
-use dioxus_core::Template;
-use dioxus_html::HtmlCtx;
-use dioxus_rsx::hot_reload::FileMap;
-use tokio::sync::broadcast;
 
-use crate::CrateConfig;
-
-pub struct HotReloadState {
-    pub messages: broadcast::Sender<Template<'static>>,
-    pub file_map: Arc<Mutex<FileMap<HtmlCtx>>>,
-    pub watcher_config: CrateConfig,
-}
+use crate::server::HotReloadState;
 
 pub async fn hot_reload_handler(
     ws: WebSocketUpgrade,
     _: Option<TypedHeader<headers::UserAgent>>,
-    Extension(state): Extension<Arc<HotReloadState>>,
+    Extension(state): Extension<HotReloadState>,
 ) -> impl IntoResponse {
     ws.on_upgrade(|mut socket| async move {
         log::info!("🔥 Hot Reload WebSocket connected");

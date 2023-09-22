@@ -1,46 +1,46 @@
 # Log Functions
 
-> You can use log function to print some useful log info
+You can use log functions to print various logging information.
 
-### Trace(info: string)
+### `trace(info: string)`
 
-Print trace log info
+Print trace log info.
 
 ```lua
 local log = plugin.log
 log.trace("trace information")
 ```
 
-### Debug(info: string)
+### `debug(info: string)`
 
-Print debug log info
+Print debug log info.
 
 ```lua
 local log = plugin.log
 log.debug("debug information")
 ```
 
-### Info(info: string)
+### `info(info: string)`
 
-Print info log info
+Print info log info.
 
 ```lua
 local log = plugin.log
 log.info("info information")
 ```
 
-### Warn(info: string)
+### `warn(info: string)`
 
-Print warning log info
+Print warning log info.
 
 ```lua
 local log = plugin.log
 log.warn("warn information")
 ```
 
-### Error(info: string)
+### `error(info: string)`
 
-Print error log info
+Print error log info.
 
 ```lua
 local log = plugin.log
