@@ -19,7 +19,7 @@ mod hooks;
 mod hot_reload;
 pub mod launch;
 #[cfg(feature = "ssr")]
-mod layer;
+pub mod layer;
 #[cfg(feature = "ssr")]
 mod render;
 #[cfg(feature = "ssr")]
