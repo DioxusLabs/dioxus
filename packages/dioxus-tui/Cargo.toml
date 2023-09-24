@@ -10,7 +10,6 @@ keywords = ["dom", "ui", "gui", "react", "terminal"]
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-dioxus = { workspace = true }
 dioxus-core = { workspace = true, features = ["serialize"] }
 dioxus-html = { workspace = true }
 dioxus-native-core = { workspace = true, features = ["dioxus"] }
