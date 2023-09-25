@@ -188,6 +188,38 @@ pub trait DioxusRouterExt<S> {
     /// ```
     fn serve_static_assets(self, assets_path: impl Into<std::path::PathBuf>) -> Self;
 
+    /// Registers server functions with the default handler but allows for modifying the [`DioxusServerContext`] with a closure, which you can add shared state across all server functions.
+    ///
+    /// # Example
+    /// ```rust
+    /// use dioxus::prelude::*;
+    /// use dioxus_fullstack::prelude::*;
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 8080));
+    ///     axum::Server::bind(&addr)
+    ///         .serve(
+    ///             axum::Router::new()
+    ///                 // Register server functions routes with the default handler
+    ///                 .register_server_fns_with_context("", |mut context| {
+    ///                     context.insert(42usize).unwrap()
+    ///                     context
+    ///                 }
+    ///                 .into_make_service(),
+    ///         )
+    ///         .await
+    ///         .unwrap();
+    /// }
+    /// ```
+    fn register_server_fns_with_context<M>(
+        self,
+        server_fn_route: &'static str,
+        context_modifier: M,
+    ) -> Self
+    where
+        M: Fn(DioxusServerContext) -> DioxusServerContext + Send + Sync + Clone + Copy + 'static;
+
     /// Serves the Dioxus application. This will serve a complete server side rendered application.
     /// This will serve static assets, server render the application, register server functions, and intigrate with hot reloading.
     ///
@@ -250,6 +282,36 @@ where
             }
         }
         router
+    }
+
+    fn register_server_fns_with_context<M>(
+        self,
+        server_fn_route: &'static str,
+        context_modifier: M,
+    ) -> Self
+    where
+        M: Fn(DioxusServerContext) -> DioxusServerContext + Send + Sync + Clone + Copy + 'static,
+    {
+        self.register_server_fns_with_handler(server_fn_route, |func| {
+            use crate::layer::Service;
+            move |req: Request<Body>| {
+                let server_context = context_modifier(Default::default());
+                let mut service = crate::server_fn_service(server_context, func);
+                async move {
+                    let (req, body) = req.into_parts();
+                    let req = Request::from_parts(req, body);
+                    let res = service.run(req);
+                    match res.await {
+                        Ok(res) => Ok::<_, std::convert::Infallible>(res.map(|b| b.into())),
+                        Err(e) => {
+                            let mut res = Response::new(Body::from(e.to_string()));
+                            *res.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
+                            Ok(res)
+                        }
+                    }
+                }
+            }
+        })
     }
 
     fn register_server_fns(self, server_fn_route: &'static str) -> Self {
