@@ -540,15 +540,35 @@ mod struct_info {
             // Therefore, we will generate code that shortcircuits the "comparison" in memoization
             let are_there_generics = !self.generics.params.is_empty();
 
-            let (impl_generics, ty_generics, where_clause) = self.generics.split_for_impl();
+            let generics = self.generics.clone();
+            let (_, ty_generics, where_clause) = generics.split_for_impl();
+            let impl_generics = self.modify_generics(|g| {
+                // Add a bump lifetime to the generics
+                g.params.insert(
+                    0,
+                    syn::GenericParam::Lifetime(syn::LifetimeParam::new(syn::Lifetime::new(
+                        "'__bump",
+                        proc_macro2::Span::call_site(),
+                    ))),
+                );
+            });
+            let (impl_generics, b_initial_generics, _) = impl_generics.split_for_impl();
             let all_fields_param = syn::GenericParam::Type(
                 syn::Ident::new("TypedBuilderFields", proc_macro2::Span::call_site()).into(),
             );
             let b_generics = self.modify_generics(|g| {
+                // Add a bump lifetime to the generics
+                g.params.insert(
+                    0,
+                    syn::GenericParam::Lifetime(syn::LifetimeParam::new(syn::Lifetime::new(
+                        "'__bump",
+                        proc_macro2::Span::call_site(),
+                    ))),
+                );
                 g.params.insert(0, all_fields_param.clone());
             });
             let empties_tuple = type_tuple(self.included_fields().map(|_| empty_type()));
-            let generics_with_empty = modify_types_generics_hack(&ty_generics, |args| {
+            let generics_with_empty = modify_types_generics_hack(&b_initial_generics, |args| {
                 args.insert(0, syn::GenericArgument::Type(empties_tuple.clone().into()));
             });
             let phantom_generics = self.generics.params.iter().map(|param| match param {
@@ -634,8 +654,9 @@ Finally, call `.build()` to create the instance of `{name}`.
                 impl #impl_generics #name #ty_generics #where_clause {
                     #[doc = #builder_method_doc]
                     #[allow(dead_code)]
-                    #vis fn builder() -> #builder_name #generics_with_empty {
+                    #vis fn builder(_cx: &'__bump ::dioxus::prelude::ScopeState) -> #builder_name #generics_with_empty {
                         #builder_name {
+                            bump: _cx.bump(),
                             fields: #empties_tuple,
                             _phantom: ::core::default::Default::default(),
                         }
@@ -646,6 +667,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                 #builder_type_doc
                 #[allow(dead_code, non_camel_case_types, non_snake_case)]
                 #vis struct #builder_name #b_generics {
+                    bump: &'__bump ::dioxus::core::exports::bumpalo::Bump,
                     fields: #all_fields_param,
                     _phantom: (#( #phantom_generics ),*),
                 }
@@ -653,19 +675,20 @@ Finally, call `.build()` to create the instance of `{name}`.
                 impl #b_generics_impl Clone for #builder_name #b_generics_ty #b_generics_where {
                     fn clone(&self) -> Self {
                         Self {
+                            bump: self.bump,
                             fields: self.fields.clone(),
                             _phantom: ::core::default::Default::default(),
                         }
                     }
                 }
 
-                impl #impl_generics ::dioxus::prelude::Properties<'_> for #name #ty_generics
+                impl #impl_generics ::dioxus::prelude::Properties<'__bump> for #name #ty_generics
                 #b_generics_where_extras_predicates
                 {
                     type Builder = #builder_name #generics_with_empty;
                     const IS_STATIC: bool = #is_static;
-                    fn builder(_cx: &::dioxus::prelude::ScopeState) -> Self::Builder {
-                        #name::builder()
+                    fn builder(_cx: &'__bump ::dioxus::prelude::ScopeState) -> Self::Builder {
+                        #name::builder(_cx)
                     }
                     unsafe fn memoize(&self, other: &Self) -> bool {
                         #can_memoize
@@ -720,11 +743,13 @@ Finally, call `.build()` to create the instance of `{name}`.
                 ty: field_type,
                 ..
             } = field;
-            let mut ty_generics: Vec<syn::GenericArgument> = self
-                .generics
-                .params
-                .iter()
-                .map(|generic_param| match generic_param {
+            // Add the bump lifetime to the generics
+            let mut ty_generics: Vec<syn::GenericArgument> = vec![syn::GenericArgument::Lifetime(
+                syn::Lifetime::new("'__bump", proc_macro2::Span::call_site()),
+            )];
+
+            ty_generics.extend(self.generics.params.iter().map(
+                |generic_param| match generic_param {
                     syn::GenericParam::Type(type_param) => {
                         let ident = type_param.ident.clone();
                         syn::parse(quote!(#ident).into()).unwrap()
@@ -736,11 +761,19 @@ Finally, call `.build()` to create the instance of `{name}`.
                         let ident = const_param.ident.clone();
                         syn::parse(quote!(#ident).into()).unwrap()
                     }
-                })
-                .collect();
+                },
+            ));
             let mut target_generics_tuple = empty_type_tuple();
             let mut ty_generics_tuple = empty_type_tuple();
             let generics = self.modify_generics(|g| {
+                // Add a bump lifetime to the generics
+                g.params.insert(
+                    0,
+                    syn::GenericParam::Lifetime(syn::LifetimeParam::new(syn::Lifetime::new(
+                        "'__bump",
+                        proc_macro2::Span::call_site(),
+                    ))),
+                );
                 let index_after_lifetime_in_generics = g
                     .params
                     .iter()
@@ -826,6 +859,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                         let #field_name = (#arg_expr,);
                         let ( #(#descructuring,)* ) = self.fields;
                         #builder_name {
+                            bump: self.bump,
                             fields: ( #(#reconstructing,)* ),
                             _phantom: self._phantom,
                         }
@@ -858,11 +892,14 @@ Finally, call `.build()` to create the instance of `{name}`.
                 name: ref field_name,
                 ..
             } = field;
-            let mut builder_generics: Vec<syn::GenericArgument> = self
-                .generics
-                .params
-                .iter()
-                .map(|generic_param| match generic_param {
+            // Add a bump lifetime to the generics
+            let mut builder_generics: Vec<syn::GenericArgument> =
+                vec![syn::GenericArgument::Lifetime(syn::Lifetime::new(
+                    "'__bump",
+                    proc_macro2::Span::call_site(),
+                ))];
+            builder_generics.extend(self.generics.params.iter().map(|generic_param| {
+                match generic_param {
                     syn::GenericParam::Type(type_param) => {
                         let ident = &type_param.ident;
                         syn::parse(quote!(#ident).into()).unwrap()
@@ -874,10 +911,18 @@ Finally, call `.build()` to create the instance of `{name}`.
                         let ident = &const_param.ident;
                         syn::parse(quote!(#ident).into()).unwrap()
                     }
-                })
-                .collect();
+                }
+            }));
             let mut builder_generics_tuple = empty_type_tuple();
             let generics = self.modify_generics(|g| {
+                // Add a bump lifetime to the generics
+                g.params.insert(
+                    0,
+                    syn::GenericParam::Lifetime(syn::LifetimeParam::new(syn::Lifetime::new(
+                        "'__bump",
+                        proc_macro2::Span::call_site(),
+                    ))),
+                );
                 let index_after_lifetime_in_generics = g
                     .params
                     .iter()
@@ -962,6 +1007,15 @@ Finally, call `.build()` to create the instance of `{name}`.
             } = *self;
 
             let generics = self.modify_generics(|g| {
+                // Add a bump lifetime to the generics
+                g.params.insert(
+                    0,
+                    syn::GenericParam::Lifetime(syn::LifetimeParam::new(syn::Lifetime::new(
+                        "'__bump",
+                        proc_macro2::Span::call_site(),
+                    ))),
+                );
+
                 let index_after_lifetime_in_generics = g
                     .params
                     .iter()
@@ -1000,6 +1054,15 @@ Finally, call `.build()` to create the instance of `{name}`.
             let (_, ty_generics, where_clause) = self.generics.split_for_impl();
 
             let modified_ty_generics = modify_types_generics_hack(&ty_generics, |args| {
+                // Add a bump lifetime to the generics
+                args.insert(
+                    0,
+                    syn::GenericArgument::Lifetime(syn::Lifetime::new(
+                        "'__bump",
+                        proc_macro2::Span::call_site(),
+                    )),
+                );
+
                 args.insert(
                     0,
                     syn::GenericArgument::Type(
