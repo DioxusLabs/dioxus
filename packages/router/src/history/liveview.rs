@@ -50,8 +50,8 @@ where
         let _: &Coroutine<()> = use_coroutine(cx, |_| {
             to_owned![create_eval];
             async move {
+                let mut eval_rx = eval_rx.lock().await;
                 loop {
-                    let mut eval_rx = eval_rx.lock().await;
                     let eval = eval_rx.recv().await.expect("sender to exist");
                     let _eval = match eval {
                         Eval::GoBack => create_eval(r#"
