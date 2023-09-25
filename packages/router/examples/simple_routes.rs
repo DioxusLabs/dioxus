@@ -45,7 +45,7 @@ async fn main() {
 
 #[cfg(not(feature = "liveview"))]
 fn main() {
-    #[cfg(any(not(feature = "liveview"), target_arch = "wasm32"))]
+    #[cfg(not(target_arch = "wasm32"))]
     dioxus_desktop::launch(Root);
 
     #[cfg(target_arch = "wasm32")]
