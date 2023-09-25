@@ -18,6 +18,7 @@ enum Eval<R: Routable> {
     GoForward,
     Push(R),
     Replace(R),
+    External(String),
 }
 
 impl<R: Routable> Default for LiveviewHistory<R>
@@ -60,10 +61,13 @@ where
                             history.forward();
                         "#),
                         Eval::Push(route) => create_eval(&format!(r#"
-                            history.pushState("{route}")
+                            history.pushState("{route}", "", "{route}");
                         "#)),
                         Eval::Replace(route) => create_eval(&format!(r#"
                             history.replaceState(null, "", "{route}");
+                        "#)),
+                        Eval::External(url) => create_eval(&format!(r#"
+                            location.href = "{url}";
                         "#)),
                     };
                 }
@@ -90,6 +94,11 @@ where
 
     fn replace(&mut self, path: R) {
         let _ = self.eval_tx.send(Eval::Replace(path));
+    }
+
+    fn external(&mut self, url: String) -> bool {
+        let _ = self.eval_tx.send(Eval::External(url));
+        true
     }
 
     fn current_route(&self) -> R {
