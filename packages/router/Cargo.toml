@@ -26,18 +26,22 @@ web-sys = { version = "0.3.60", optional = true, features = [
 ] }
 js-sys = { version = "0.3.63", optional = true }
 gloo-utils = { version = "0.1.6", optional = true }
+dioxus-liveview = { workspace = true, optional = true }
 dioxus-ssr = { workspace = true, optional = true }
 tokio = { workspace = true, features = ["full"], optional = true }
 
 [features]
 default = ["web"]
 ssr = ["dioxus-ssr", "tokio"]
+liveview = ["dioxus-liveview", "tokio"]
 wasm_test = []
 serde = ["dep:serde", "gloo-utils/serde"]
 web = ["gloo", "web-sys", "wasm-bindgen", "gloo-utils", "js-sys"]
 
 [dev-dependencies]
+axum = { version = "0.6.1", features = ["ws"] }
 dioxus = { path = "../dioxus" }
+dioxus-liveview = { workspace = true, features = ["axum"] }
 dioxus-ssr = { path = "../ssr" }
 criterion = { version = "0.5", features = ["async_tokio", "html_reports"] }
 
