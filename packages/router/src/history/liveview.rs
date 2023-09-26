@@ -99,8 +99,12 @@ where
                             let mut state = state.lock().expect("poisoned mutex");
                             state.current_route = route;
                         },
-                        WindowEvent::PopState { location, state } => {
-                            println!("{location:?}");
+                        WindowEvent::PopState { location, state: new_state } => {
+                            let Ok(route) = R::from_str(&location.path) else {
+                                continue;
+                            };
+                            let mut state = state.lock().expect("poisoned mutex");
+                            state.current_route = route;
                         },
                     }
                     // Call the updater callback
