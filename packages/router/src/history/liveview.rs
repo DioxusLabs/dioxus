@@ -1,7 +1,7 @@
 use std::{str::FromStr, sync::Arc};
 use dioxus::prelude::*;
 use dioxus_liveview::{Window, WindowEvent};
-use std::sync::Mutex;
+use std::sync::{Mutex, RwLock};
 use super::HistoryProvider;
 use crate::routable::Routable;
 
@@ -10,6 +10,7 @@ pub struct LiveviewHistory<R: Routable> {
     eval_tx: tokio::sync::mpsc::UnboundedSender<Eval<R>>,
     eval_rx: Arc<Mutex<tokio::sync::mpsc::UnboundedReceiver<Eval<R>>>>,
     state: Arc<Mutex<State<R>>>,
+    updater_callback: Arc<RwLock<Arc<dyn Fn() + Send + Sync>>>,
 }
 
 struct State<R: Routable> {
@@ -42,6 +43,7 @@ where
                 can_go_back: false,
                 can_go_forward: false,
             })),
+            updater_callback: Arc::new(RwLock::new(Arc::new(|| { panic!("NOOOO!!!!") }))),
         }
     }
 }
@@ -53,8 +55,8 @@ where
     /// TODO
     pub fn attach(&self, cx: Scope) {
         let create_eval = use_eval(cx);
-        let eval_rx = self.eval_rx.clone();
         let _: &Coroutine<()> = use_coroutine(cx, |_| {
+            let eval_rx = self.eval_rx.clone();
             to_owned![create_eval];
             async move {
                 let mut eval_rx = eval_rx.lock().expect("poisoned mutex");
@@ -82,10 +84,10 @@ where
         });
 
         let window = cx.consume_context::<Window>().unwrap();
-        let state = self.state.clone();
         let _: &Coroutine<()> = use_coroutine(cx, |_| {
             let mut window_rx = window.subscribe();
-            to_owned![state];
+            let updater = self.updater_callback.clone();
+            let state = self.state.clone();
             async move {
                 loop {
                     let window_event = window_rx.recv().await.expect("sender to exist");
@@ -101,6 +103,8 @@ where
                             println!("{location:?}");
                         },
                     }
+                    // Call the updater callback
+                    (updater.read().unwrap())();
                 }
             }
         });
@@ -145,5 +149,10 @@ where
     fn can_go_forward(&self) -> bool {
         let state = self.state.lock().expect("poisoned mutex");
         state.can_go_forward
+    }
+
+    fn updater(&mut self, callback: Arc<dyn Fn() + Send + Sync>) {
+        let mut updater_callback = self.updater_callback.write().unwrap();
+        *updater_callback = callback;
     }
 }
