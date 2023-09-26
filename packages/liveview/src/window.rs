@@ -12,7 +12,21 @@ pub struct Window {
 #[serde(tag = "type", content = "params")]
 pub enum WindowEvent {
     #[serde(rename = "load")]
-    Load { path: String, },
+    Load {
+        location: Location,
+    },
+    #[serde(rename = "popstate")]
+    PopState {
+        location: Location,
+        state: String,
+    },
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct Location {
+    pub path: String,
+    pub search: String,
+    pub hash: String,
 }
 
 impl Window {

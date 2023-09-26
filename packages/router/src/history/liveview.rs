@@ -90,12 +90,15 @@ where
                 loop {
                     let window_event = window_rx.recv().await.expect("sender to exist");
                     match window_event {
-                        WindowEvent::Load { path } => {
-                            let Ok(route) = R::from_str(&path) else {
+                        WindowEvent::Load { location } => {
+                            let Ok(route) = R::from_str(&location.path) else {
                                 continue;
                             };
                             let mut state = state.lock().expect("poisoned mutex");
                             state.current_route = route;
+                        },
+                        WindowEvent::PopState { location, state } => {
+                            println!("{location:?}");
                         },
                     }
                 }

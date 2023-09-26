@@ -25,9 +25,28 @@ class IPC {
       ws.send(serializeIpcMessage("window_event", {
         type: "load",
         params: {
-          path: document.location.pathname,
+          location: {
+            path: document.location.pathname,
+            search: document.location.search,
+            hash: document.location.hash,
+          },
         },
       }));
+
+      // Send updates to history
+      window.addEventListener("popstate", (event) => {
+        ws.send(serializeIpcMessage("window_event", {
+          type: "popstate",
+          params: {
+            location: {
+              path: document.location.pathname,
+              search: document.location.search,
+              hash: document.location.hash,
+            },
+            state: JSON.stringify(event.state),
+          },
+        }));
+      });
     };
 
     ws.onerror = (err) => {
