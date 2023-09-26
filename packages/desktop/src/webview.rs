@@ -52,7 +52,7 @@ pub fn build(
             match std::fs::read_to_string(&head) {
                 Ok(s) => Some(s),
                 Err(err) => {
-                    trace::error!("Failed to read {head:?}: {err}");
+                    tracing::error!("Failed to read {head:?}: {err}");
                     None
                 }
             }
