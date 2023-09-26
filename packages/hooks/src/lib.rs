@@ -54,8 +54,8 @@ macro_rules! to_owned {
 
 pub mod computed;
 
-mod use_on_unmount;
-pub use use_on_unmount::*;
+mod use_on_destroy;
+pub use use_on_destroy::*;
 
 mod usecontext;
 pub use usecontext::*;
@@ -87,5 +87,5 @@ pub use usememo::*;
 mod userootcontext;
 pub use userootcontext::*;
 
-mod use_on_mount;
-pub use use_on_mount::*;
+mod use_on_create;
+pub use use_on_create::*;

@@ -1,9 +1,11 @@
-/// Creates a callback that will be run before the component is removed. This can be used to clean up side effects from the component (created with use_effect)
+/// Creates a callback that will be run before the component is removed.
+/// This can be used to clean up side effects from the component
+/// (created with [`use_effect`](crate::use_effect)).
 ///
 /// Example:
 /// ```rust
 /// use dioxus::prelude::*;
-
+///
 /// fn app(cx: Scope) -> Element {
 ///     let state = use_state(cx, || true);
 ///     render! {
@@ -25,7 +27,7 @@
 ///         }
 ///     }
 /// }
-
+///
 /// fn child_component(cx: Scope) -> Element {
 ///     let original_scroll_position = use_state(cx, || 0.0);
 ///     use_effect(cx, (), move |_| {
@@ -38,8 +40,8 @@
 ///             original_scroll_position.set(window.scroll_y().unwrap());
 ///         }
 ///     });
-
-///     use_on_unmount(cx, {
+///
+///     use_on_destroy(cx, {
 ///         to_owned![original_scroll_position];
 ///         /// restore scroll to the top of the page
 ///         move || {
@@ -47,7 +49,7 @@
 ///             window.scroll_with_x_and_y(*original_scroll_position.current(), 0.0);
 ///         }
 ///     });
-
+///
 ///     render!{
 ///         div {
 ///             id: "my_element",
@@ -56,7 +58,7 @@
 ///     }
 /// }
 /// ```
-pub fn use_on_unmount<D: FnOnce() + 'static>(cx: &dioxus_core::ScopeState, destroy: D) {
+pub fn use_on_destroy<D: FnOnce() + 'static>(cx: &dioxus_core::ScopeState, destroy: D) {
     cx.use_hook(|| LifeCycle {
         ondestroy: Some(destroy),
     });

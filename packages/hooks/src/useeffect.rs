@@ -9,7 +9,7 @@ use crate::UseFutureDep;
 /// If a future is pending when the dependencies change, the previous future
 /// will be allowed to continue.
 ///
-/// **Note:** If your dependency list is always empty, use [`use_on_mount`](crate::use_on_mount).
+/// **Note:** If your dependency list is always empty, use [`use_on_create`](crate::use_on_create).
 ///
 /// ## Arguments
 ///
