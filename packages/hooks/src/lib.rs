@@ -1,7 +1,7 @@
 #![cfg_attr(feature = "nightly-features", feature(debug_refcell))]
 
 #[macro_export]
-/// A helper macro for using hooks and properties in async environements.
+/// A helper macro for using hooks and properties in async environments.
 ///
 /// # Usage
 ///
@@ -86,3 +86,6 @@ pub use usememo::*;
 
 mod userootcontext;
 pub use userootcontext::*;
+
+mod use_on_mount;
+pub use use_on_mount::*;
