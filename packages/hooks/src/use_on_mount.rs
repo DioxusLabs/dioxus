@@ -1,11 +1,6 @@
-use dioxus_core::{ScopeState, TaskId};
+use dioxus_core::ScopeState;
 use std::cell::Cell;
 use std::future::Future;
-
-struct UseOnMount {
-    needs_regen: bool,
-    task: Cell<Option<TaskId>>,
-}
 
 /// A hook that runs a future when the component is mounted.
 ///
@@ -17,18 +12,16 @@ where
     T: 'static,
     F: Future<Output = T> + 'static,
 {
-    let state = cx.use_hook(move || UseOnMount {
-        needs_regen: true,
-        task: Cell::new(None),
-    });
+    let needs_regen = cx.use_hook(|| Cell::new(true));
 
-    if state.needs_regen {
+    if needs_regen.get() {
         // We don't need regen anymore
-        state.needs_regen = false;
+        needs_regen.set(false);
+
         let fut = future();
 
-        state.task.set(Some(cx.push_future(async move {
+        cx.push_future(async move {
             fut.await;
-        })));
+        });
     }
 }
