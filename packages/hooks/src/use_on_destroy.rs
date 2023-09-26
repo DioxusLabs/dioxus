@@ -1,3 +1,12 @@
+#[deprecated(
+    note = "Use `use_on_destroy` instead, which has the same functionality. \
+This is deprecated because of the introduction of `use_on_create` which is better mirrored by `use_on_destroy`. \
+The reason why `use_on_create` is not `use_on_mount` is because of potential confusion with `dioxus::events::onmounted`."
+)]
+pub fn use_on_unmount<D: FnOnce() + 'static>(cx: &dioxus_core::ScopeState, destroy: D) {
+    use_on_destroy(cx, destroy);
+}
+
 /// Creates a callback that will be run before the component is removed.
 /// This can be used to clean up side effects from the component
 /// (created with [`use_effect`](crate::use_effect)).
