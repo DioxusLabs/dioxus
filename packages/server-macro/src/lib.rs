@@ -8,7 +8,7 @@ use syn::{
     Ident, ItemFn, Token,
 };
 
-/// Declares that a function is a [server function](dioxus_fullstack). This means that
+/// Declares that a function is a [server function](https://dioxuslabs.com/learn/0.4/reference/fullstack/server_functions). This means that
 /// its body will only run on the server, i.e., when the `ssr` feature is enabled.
 ///
 /// If you call a server function from the client (i.e., when the `csr` or `hydrate` features
