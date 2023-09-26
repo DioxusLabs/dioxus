@@ -1,6 +1,7 @@
 use std::{str::FromStr, sync::Arc};
 use dioxus::prelude::*;
-use tokio::sync::Mutex;
+use dioxus_liveview::{Window, WindowEvent};
+use std::sync::Mutex;
 use super::HistoryProvider;
 use crate::routable::Routable;
 
@@ -8,6 +9,10 @@ use crate::routable::Routable;
 pub struct LiveviewHistory<R: Routable> {
     eval_tx: tokio::sync::mpsc::UnboundedSender<Eval<R>>,
     eval_rx: Arc<Mutex<tokio::sync::mpsc::UnboundedReceiver<Eval<R>>>>,
+    state: Arc<Mutex<State<R>>>,
+}
+
+struct State<R: Routable> {
     current_route: R,
     can_go_back: bool,
     can_go_forward: bool,
@@ -30,16 +35,18 @@ where
         Self {
             eval_tx,
             eval_rx: Arc::new(Mutex::new(eval_rx)),
-            current_route: "/".parse().unwrap_or_else(|err| {
-                panic!("index route does not exist:\n{}\n use MemoryHistory::with_initial_path to set a custom path", err)
-            }),
-            can_go_back: false,
-            can_go_forward: false,
+            state: Arc::new(Mutex::new(State {
+                current_route: "/".parse().unwrap_or_else(|err| {
+                    panic!("index route does not exist:\n{}\n use MemoryHistory::with_initial_path to set a custom path", err)
+                }),
+                can_go_back: false,
+                can_go_forward: false,
+            })),
         }
     }
 }
 
-impl<R: Routable> LiveviewHistory<R>
+impl<R: Routable + std::fmt::Debug> LiveviewHistory<R>
 where
     <R as FromStr>::Err: std::fmt::Display,
 {
@@ -50,10 +57,10 @@ where
         let _: &Coroutine<()> = use_coroutine(cx, |_| {
             to_owned![create_eval];
             async move {
-                let mut eval_rx = eval_rx.lock().await;
+                let mut eval_rx = eval_rx.lock().expect("poisoned mutex");
                 loop {
                     let eval = eval_rx.recv().await.expect("sender to exist");
-                    let _eval = match eval {
+                    let _ = match eval {
                         Eval::GoBack => create_eval(r#"
                             history.back();
                         "#),
@@ -61,7 +68,7 @@ where
                             history.forward();
                         "#),
                         Eval::Push(route) => create_eval(&format!(r#"
-                            history.pushState("{route}", "", "{route}");
+                            history.pushState(null, "", "{route}");
                         "#)),
                         Eval::Replace(route) => create_eval(&format!(r#"
                             history.replaceState(null, "", "{route}");
@@ -73,10 +80,31 @@ where
                 }
             }
         });
+
+        let window = cx.consume_context::<Window>().unwrap();
+        let state = self.state.clone();
+        let _: &Coroutine<()> = use_coroutine(cx, |_| {
+            let mut window_rx = window.subscribe();
+            to_owned![state];
+            async move {
+                loop {
+                    let window_event = window_rx.recv().await.expect("sender to exist");
+                    match window_event {
+                        WindowEvent::Load { path } => {
+                            let Ok(route) = R::from_str(&path) else {
+                                continue;
+                            };
+                            let mut state = state.lock().expect("poisoned mutex");
+                            state.current_route = route;
+                        },
+                    }
+                }
+            }
+        });
     }
 }
 
-impl<R: Routable> HistoryProvider<R> for LiveviewHistory<R>
+impl<R: Routable + std::fmt::Debug> HistoryProvider<R> for LiveviewHistory<R>
 where
     <R as FromStr>::Err: std::fmt::Display + std::fmt::Debug,
 {
@@ -102,14 +130,17 @@ where
     }
 
     fn current_route(&self) -> R {
-        self.current_route.clone()
+        let state = self.state.lock().expect("poisoned mutex");
+        state.current_route.clone()
     }
 
     fn can_go_back(&self) -> bool {
-        self.can_go_back
+        let state = self.state.lock().expect("poisoned mutex");
+        state.can_go_back
     }
 
     fn can_go_forward(&self) -> bool {
-        self.can_go_forward
+        let state = self.state.lock().expect("poisoned mutex");
+        state.can_go_forward
     }
 }

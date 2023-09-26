@@ -20,6 +20,14 @@ class IPC {
       // we ping every 30 seconds to keep the websocket alive
       setInterval(ping, 30000);
       ws.send(serializeIpcMessage("initialize"));
+
+      // Send initial path
+      ws.send(serializeIpcMessage("window_event", {
+        type: "load",
+        params: {
+          path: document.location.pathname,
+        },
+      }));
     };
 
     ws.onerror = (err) => {
