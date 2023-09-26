@@ -424,7 +424,10 @@ impl VirtualDom {
                     let target_path = el_ref.path;
 
                     for (idx, attr) in template.dynamic_attrs.iter().enumerate() {
-                        let this_path = node_template.attr_paths[idx];
+                        let this_path = match node_template.attr_paths.get(idx) {
+                            Some(x) => x,
+                            None => continue,
+                        };
 
                         // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
                         // Only call the listener if this is the exact target element.
