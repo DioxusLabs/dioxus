@@ -390,7 +390,7 @@ impl<'a> DynamicContext<'a> {
 
                         _ => {
                             let idx = match mapping {
-                                Some(mapping) => mapping.get_attribute_idx(&attr)?,
+                                Some(mapping) => mapping.get_attribute_idx(attr)?,
                                 None => self.dynamic_attributes.len(),
                             };
                             self.dynamic_attributes.push(attr);

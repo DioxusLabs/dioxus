@@ -554,7 +554,7 @@ mod struct_info {
                     let name = f.name;
                     let mut visitor = VisitFirstLifetime(None);
 
-                    visitor.visit_type(&f.ty);
+                    visitor.visit_type(f.ty);
 
                     visitor.0.ok_or_else(|| {
                         syn::Error::new_spanned(

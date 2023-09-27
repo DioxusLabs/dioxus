@@ -29,7 +29,7 @@ impl Parse for ImplExtensionAttributes {
         let attrs = content.parse_terminated(Ident::parse, Token![,])?;
 
         Ok(ImplExtensionAttributes {
-            is_element: element.to_string() == "ELEMENT",
+            is_element: element == "ELEMENT",
             name,
             attrs,
         })
