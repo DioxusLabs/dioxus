@@ -1,9 +1,4 @@
-use crate::dioxus_elements::ExtendedDivMarker;
-use dioxus::{
-    core::{exports::bumpalo::Bump, Attribute, HasAttributesBox},
-    html::{ExtendedGlobalAttributesMarker, GlobalAttributesExtension},
-    prelude::*,
-};
+use dioxus::prelude::*;
 
 fn main() {
     let mut dom = VirtualDom::new(app);

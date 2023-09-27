@@ -39,7 +39,14 @@ pub use render_template::*;
 
 mod eval;
 
+pub mod extensions {
+    pub use crate::elements::extensions::*;
+    pub use crate::global_attributes::{GlobalAttributesExtension, SvgAttributesExtension};
+}
+
 pub mod prelude {
+    pub use crate::elements::extensions::*;
     pub use crate::eval::*;
     pub use crate::events::*;
+    pub use crate::global_attributes::{GlobalAttributesExtension, SvgAttributesExtension};
 }

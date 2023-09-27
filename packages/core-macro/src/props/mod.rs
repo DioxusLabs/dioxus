@@ -502,7 +502,7 @@ mod struct_info {
     use syn::punctuated::Punctuated;
     use syn::spanned::Spanned;
     use syn::visit::Visit;
-    use syn::{Expr, Ident};
+    use syn::{parse_quote, Expr, Ident};
 
     use super::field_info::{FieldBuilderAttr, FieldInfo};
     use super::util::{
@@ -611,10 +611,17 @@ mod struct_info {
             // Therefore, we will generate code that shortcircuits the "comparison" in memoization
             let are_there_generics = !self.generics.params.is_empty();
 
+            let extend_lifetime = self.extend_lifetime()?;
+
             let generics = self.generics.clone();
             let (_, ty_generics, where_clause) = generics.split_for_impl();
-            let impl_generics = self.generics.clone();
-            let (impl_generics, b_initial_generics, _) = impl_generics.split_for_impl();
+            let impl_generics = self.modify_generics(|g| {
+                if extend_lifetime.is_none() {
+                    g.params.insert(0, parse_quote!('__bump));
+                }
+            });
+            let (impl_generics, _, _) = impl_generics.split_for_impl();
+            let (_, b_initial_generics, _) = self.generics.split_for_impl();
             let all_fields_param = syn::GenericParam::Type(
                 syn::Ident::new("TypedBuilderFields", proc_macro2::Span::call_site()).into(),
             );
@@ -712,9 +719,21 @@ Finally, call `.build()` to create the instance of `{name}`.
                 let name = f.name;
                 quote!(#name: Vec::new())
             });
-            let extend_lifetime = self
-                .extend_lifetime()?
-                .unwrap_or(syn::Lifetime::new("'_", proc_macro2::Span::call_site()));
+            let has_extend_fields = self.extend_fields().next().is_some();
+            let take_bump = if has_extend_fields {
+                quote!(bump: _cx.bump(),)
+            } else {
+                quote!()
+            };
+            let bump_field = if has_extend_fields {
+                quote!(bump: & #extend_lifetime ::dioxus::core::exports::bumpalo::Bump,)
+            } else {
+                quote!()
+            };
+            let extend_lifetime = extend_lifetime.unwrap_or(syn::Lifetime::new(
+                "'__bump",
+                proc_macro2::Span::call_site(),
+            ));
 
             Ok(quote! {
                 impl #impl_generics #name #ty_generics #where_clause {
@@ -723,7 +742,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                     #vis fn builder(_cx: & #extend_lifetime ::dioxus::prelude::ScopeState) -> #builder_name #generics_with_empty {
                         #builder_name {
                             #(#extend_fields_value,)*
-                            bump: _cx.bump(),
+                            #take_bump
                             fields: #empties_tuple,
                             _phantom: ::core::default::Default::default(),
                         }
@@ -735,7 +754,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                 #[allow(dead_code, non_camel_case_types, non_snake_case)]
                 #vis struct #builder_name #b_generics {
                     #(#extend_fields,)*
-                    bump: & #extend_lifetime ::dioxus::core::exports::bumpalo::Bump,
+                    #bump_field
                     fields: #all_fields_param,
                     _phantom: (#( #phantom_generics ),*),
                 }
@@ -862,21 +881,22 @@ Finally, call `.build()` to create the instance of `{name}`.
                 quote!(#name: self.#name)
             });
 
-            let extends_impl = field.builder_attr.extends.iter().map(|path| {
-                let name_str = path_to_single_string(path).unwrap();
-                let camel_name = name_str.to_case(Case::UpperCamel);
-                let marker_name = Ident::new(
-                    format!("Extended{}Marker", &camel_name).as_str(),
-                    path.span(),
-                );
-                quote! {
-                    impl #impl_generics #marker_name for #builder_name < #( #ty_generics ),* > #where_clause {}
-                }
-            });
             let extend_lifetime = self.extend_lifetime()?.ok_or(Error::new_spanned(
                 field_name,
                 "Unable to find lifetime for extended field. Please specify it manually",
             ))?;
+
+            let extends_impl = field.builder_attr.extends.iter().map(|path| {
+                let name_str = path_to_single_string(path).unwrap();
+                let camel_name = name_str.to_case(Case::UpperCamel);
+                let marker_name = Ident::new(
+                    format!("{}Extension", &camel_name).as_str(),
+                    path.span(),
+                );
+                quote! {
+                    impl #impl_generics dioxus_elements::extensions::#marker_name < #extend_lifetime > for #builder_name < #( #ty_generics ),* > #where_clause {}
+                }
+            });
 
             Ok(quote! {
                 impl #impl_generics ::dioxus::prelude::HasAttributesBox<#extend_lifetime> for #builder_name < #( #ty_generics ),* > #where_clause {
@@ -1035,6 +1055,11 @@ Finally, call `.build()` to create the instance of `{name}`.
                 let name = f.name;
                 quote!(#name: self.#name)
             });
+            let forward_bump = if self.extend_fields().next().is_some() {
+                quote!(bump: self.bump,)
+            } else {
+                quote!()
+            };
 
             Ok(quote! {
                 #[allow(dead_code, non_camel_case_types, missing_docs)]
@@ -1045,7 +1070,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                         let ( #(#descructuring,)* ) = self.fields;
                         #builder_name {
                             #(#forward_extended_fields,)*
-                            bump: self.bump,
+                            #forward_bump
                             fields: ( #(#reconstructing,)* ),
                             _phantom: self._phantom,
                         }

@@ -39,13 +39,13 @@ impl Parse for ImplExtensionAttributes {
 impl ToTokens for ImplExtensionAttributes {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         let name = &self.name;
-        let camel_name = name.to_string().to_case(Case::UpperCamel);
+        let name_string = name.to_string();
+        let camel_name = name_string
+            .strip_prefix("r#")
+            .unwrap_or(&name_string)
+            .to_case(Case::UpperCamel);
         let impl_name = Ident::new(format!("{}Impl", &camel_name).as_str(), name.span());
         let extension_name = Ident::new(format!("{}Extension", &camel_name).as_str(), name.span());
-        let marker_name = Ident::new(
-            format!("Extended{}Marker", &camel_name).as_str(),
-            name.span(),
-        );
 
         if !self.is_element {
             tokens.append_all(quote! {
@@ -54,11 +54,6 @@ impl ToTokens for ImplExtensionAttributes {
             });
         }
 
-        let defs = self.attrs.iter().map(|ident| {
-            quote! {
-                fn #ident(self, value: impl IntoAttributeValue<'a>) -> Self;
-            }
-        });
         let impls = self.attrs.iter().map(|ident| {
             let d = if self.is_element {
                 quote! { #name::#ident }
@@ -73,12 +68,7 @@ impl ToTokens for ImplExtensionAttributes {
             }
         });
         tokens.append_all(quote! {
-            pub trait #marker_name {}
-
-            pub trait #extension_name<'a> {
-                #(#defs)*
-            }
-            impl<'a, T> #extension_name<'a> for T where T: HasAttributesBox<'a> + #marker_name {
+            pub trait #extension_name<'a>: HasAttributesBox<'a> + Sized {
                 #(#impls)*
             }
         });

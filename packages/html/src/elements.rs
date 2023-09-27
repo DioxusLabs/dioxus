@@ -111,8 +111,6 @@ macro_rules! impl_element {
         }
 
         impl GlobalAttributes for $name {}
-
-        impl_extension_attributes![ELEMENT $name { $($fil,)* }];
     };
 
     (
@@ -289,6 +287,13 @@ macro_rules! builder_constructors {
                 }
             );
         )*
+
+        pub(crate) mod extensions {
+            use super::*;
+            $(
+                impl_extension_attributes![ELEMENT $name { $($fil,)* }];
+            )*
+        }
     };
 }
 
