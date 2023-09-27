@@ -49,13 +49,23 @@ impl<R: Routable> Timeline<R> {
             let current_index = self.history.len();
             if index > current_index {
                 self.history.push(self.current_route.clone());
-                for _ in index..current_index {
-                    self.history.push(self.future.remove(0));
+                for i in (current_index + 1)..=index {
+                    if let Some(route) = self.future.pop() {
+                        if i == index {
+                            continue;
+                        }
+                        self.history.push(route);
+                    }
                 }
-            } else {
+            } else if index < current_index {
                 self.future.push(self.current_route.clone());
-                for _ in index..current_index {
-                    self.future.push(self.history.remove(0));
+                for i in (index + 1)..=current_index {
+                    if let Some(route) = self.history.pop() {
+                        if i == current_index {
+                            continue;
+                        }
+                        self.future.push(route);
+                    }
                 }
             }
             self.current_route = route;
