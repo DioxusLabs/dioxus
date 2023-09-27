@@ -6,7 +6,6 @@ use std::str::FromStr;
 #[tokio::main]
 async fn main() {
     use axum::{extract::ws::WebSocketUpgrade, response::Html, routing::get, Router};
-    use dioxus::prelude::*;
 
     let listen_address: std::net::SocketAddr = ([127, 0, 0, 1], 3030).into();
     let view = dioxus_liveview::LiveViewPool::new();
@@ -57,7 +56,6 @@ fn main() {
 fn Root(cx: Scope) -> Element {
     let mut history = LiveviewHistory::default();
     history.attach(cx);
-    // history.go_back();
     render! { Router::<Route> {
         config: move || RouterConfig::default().history(history),
     } }
