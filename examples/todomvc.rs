@@ -146,8 +146,8 @@ pub fn app(cx: Scope<()>) -> Element {
         }
         footer { class: "info",
             p { "Double-click to edit a todo" }
-            p { "Created by ", a { href: "http://github.com/jkelleyrtp/", "jkelleyrtp" }}
-            p { "Part of ", a { href: "http://todomvc.com", "TodoMVC" }}
+            p { "Created by ", a { href: "https://github.com/jkelleyrtp/", "jkelleyrtp" }}
+            p { "Part of ", a { href: "https://todomvc.com", "TodoMVC" }}
         }
     })
 }
