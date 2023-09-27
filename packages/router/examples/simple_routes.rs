@@ -54,7 +54,7 @@ fn main() {
 #[cfg(feature = "liveview")]
 #[component]
 fn Root(cx: Scope) -> Element {
-    let mut history = LiveviewHistory::default();
+    let history = LiveviewHistory::default();
     history.attach(cx);
     render! { Router::<Route> {
         config: move || RouterConfig::default().history(history),
@@ -134,6 +134,16 @@ fn Route3(cx: Scope, dynamic: String) -> Element {
         Link {
             to: Route::Route2 { user_id: 8888 },
             "hello world link"
+        }
+        button {
+            disabled: !navigator.can_go_back(),
+            onclick: move |_| { navigator.go_back(); },
+            "go back"
+        }
+        button {
+            disabled: !navigator.can_go_forward(),
+            onclick: move |_| { navigator.go_forward(); },
+            "go forward"
         }
         button {
             onclick: move |_| { navigator.push("https://www.google.com"); },
