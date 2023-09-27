@@ -1,4 +1,5 @@
 #![warn(clippy::pedantic)]
+#![allow(clippy::must_use_candidate)]
 #![warn(clippy::style)]
 #![warn(clippy::nursery)]
 
@@ -24,10 +25,10 @@ pub struct TodoItem {
 }
 
 #[allow(non_snake_case)]
-pub fn App(cx: Scope<()>) -> Element {
+pub fn App(cx: Scope) -> Element {
     let todos = use_state(cx, im_rc::HashMap::<u32, TodoItem>::default);
     let filter = use_state(cx, || FilterState::All);
-    let draft = use_state(cx, || String::new());
+    let draft = use_state(cx, String::new);
     let todo_id = use_state(cx, || 0);
 
     // Filter the todos based on the filter state
@@ -148,6 +149,13 @@ pub fn App(cx: Scope<()>) -> Element {
                 ))
             }
         }
+        Footer {}
+    }
+}
+
+#[allow(non_snake_case)]
+pub fn Footer(cx: Scope) -> Element {
+    render! {
         footer { class: "info",
             p { "Double-click to edit a todo" }
             p {
@@ -177,7 +185,7 @@ pub fn TodoEntry<'a>(cx: Scope<'a, TodoEntryProps<'a>>) -> Element {
     let completed = if todo.checked { "completed" } else { "" };
     let editing = if **is_editing { "editing" } else { "" };
 
-    cx.render(rsx!{
+    render! {
         li { class: "{completed} {editing}",
             div { class: "view",
                 input {
@@ -186,7 +194,9 @@ pub fn TodoEntry<'a>(cx: Scope<'a, TodoEntryProps<'a>>) -> Element {
                     id: "cbg-{todo.id}",
                     checked: "{todo.checked}",
                     oninput: move |evt| {
-                        cx.props.todos.make_mut()[&cx.props.id].checked = evt.value.parse().unwrap();
+                        if let Ok(checked) = evt.value.parse::<bool>() {
+                            cx.props.todos.make_mut()[&cx.props.id].checked = checked;
+                        }
                     }
                 }
                 label {
@@ -203,7 +213,7 @@ pub fn TodoEntry<'a>(cx: Scope<'a, TodoEntryProps<'a>>) -> Element {
                     prevent_default: "onclick"
                 }
             }
-            is_editing.then(|| rsx!{
+            is_editing.then(|| rsx! {
                 input {
                     class: "edit",
                     value: "{todo.contents}",
@@ -219,5 +229,5 @@ pub fn TodoEntry<'a>(cx: Scope<'a, TodoEntryProps<'a>>) -> Element {
                 }
             })
         }
-    })
+    }
 }
