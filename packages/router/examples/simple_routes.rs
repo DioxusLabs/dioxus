@@ -54,10 +54,9 @@ fn main() {
 #[cfg(feature = "liveview")]
 #[component]
 fn Root(cx: Scope) -> Element {
-    let history = LiveviewHistory::default();
-    history.attach(cx);
+    let history = LiveviewHistory::new(cx);
     render! { Router::<Route> {
-        config: move || RouterConfig::default().history(history),
+        config: || RouterConfig::default().history(history),
     } }
 }
 

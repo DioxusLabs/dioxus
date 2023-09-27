@@ -1,4 +1,4 @@
-use std::{str::FromStr, sync::Arc};
+use std::{str::FromStr, rc::Rc, sync::Arc};
 use dioxus::prelude::*;
 use dioxus_liveview::{Window, WindowEvent};
 use std::{fmt::Display, sync::{Mutex, RwLock}};
@@ -8,7 +8,6 @@ use crate::routable::Routable;
 /// A [`HistoryProvider`] that evaluates history through JS.
 pub struct LiveviewHistory<R: Routable> {
     action_tx: tokio::sync::mpsc::UnboundedSender<Action<R>>,
-    action_rx: Arc<Mutex<tokio::sync::mpsc::UnboundedReceiver<Action<R>>>>,
     timeline: Arc<Mutex<Timeline<R>>>,
     updater_callback: Arc<RwLock<Arc<dyn Fn() + Send + Sync>>>,
 }
@@ -119,59 +118,54 @@ impl Display for State {
     }
 }
 
-impl<R: Routable> Default for LiveviewHistory<R>
-where
-    <R as FromStr>::Err: std::fmt::Display,
-{
-    fn default() -> Self {
-        let (action_tx, action_rx) = tokio::sync::mpsc::unbounded_channel();
-        Self {
-            action_tx,
-            action_rx: Arc::new(Mutex::new(action_rx)),
-            timeline: Arc::new(Mutex::new(Timeline {
-                current_route: "/".parse().unwrap_or_else(|err| {
-                    panic!("index route does not exist:\n{}\n use MemoryHistory::with_initial_path to set a custom path", err)
-                }),
-                history: Vec::new(),
-                future: Vec::new(),
-            })),
-            updater_callback: Arc::new(RwLock::new(Arc::new(|| {}))),
-        }
-    }
-}
-
 impl<R: Routable + std::fmt::Debug> LiveviewHistory<R>
 where
     <R as FromStr>::Err: std::fmt::Display,
 {
-    /// Create a [`LiveviewHistory`] starting at `path`.
-    pub fn with_initial_path(path: R) -> Self {
-        let (action_tx, action_rx) = tokio::sync::mpsc::unbounded_channel();
-        Self {
-            action_tx,
-            action_rx: Arc::new(Mutex::new(action_rx)),
-            timeline: Arc::new(Mutex::new(Timeline {
-                current_route: path,
-                history: Vec::new(),
-                future: Vec::new(),
-            })),
-            updater_callback: Arc::new(RwLock::new(Arc::new(|| {}))),
-        }
-    }
-
-    /// Attaches the [`LiveviewHistory`] to a scope, and starts subscribing to Window events.
+    /// Create a [`LiveviewHistory`] in the given scope.
     ///
     /// # Panics
     ///
     /// Panics if not in a Liveview context.
-    pub fn attach(&self, cx: Scope) {
-        let create_eval = use_eval(cx);
+    pub fn new(cx: Scope) -> Self {
+        Self::new_with_initial_path(
+            cx,
+            "/".parse().unwrap_or_else(|err| {
+                panic!("index route does not exist:\n{}\n use LiveviewHistory::new_with_initial_path to set a custom path", err)
+            }),
+        )
+    }
 
-        // Coroutine for listening to server actions
-        let _: &Coroutine<()> = use_coroutine(cx, |_| {
-            let timeline = self.timeline.clone();
-            let action_rx = self.action_rx.clone();
-            to_owned![create_eval];
+    /// Create a [`LiveviewHistory`] in the given scope, starting at `initial_path`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if not in a Liveview context.
+    pub fn new_with_initial_path(cx: Scope, initial_path: R) -> Self {
+        let (action_tx, action_rx) = tokio::sync::mpsc::unbounded_channel::<Action<R>>();
+        let action_rx = Arc::new(Mutex::new(action_rx));
+        let timeline = Arc::new(Mutex::new(Timeline {
+            current_route: initial_path,
+            history: Vec::new(),
+            future: Vec::new(),
+        }));
+        let updater_callback: Arc<RwLock<Arc<dyn Fn() + Send + Sync>>> = Arc::new(RwLock::new(Arc::new(|| {})));
+
+        let eval_provider = cx
+            .consume_context::<Rc<dyn EvalProvider>>()
+            .expect("evaluator not provided");
+
+        let create_eval = Rc::new(move |script: &str| {
+            eval_provider
+                .new_evaluator(script.to_string())
+                .map(UseEval::new)
+        }) as Rc<dyn Fn(&str) -> Result<UseEval, EvalError>>;
+
+        // Listen to server actions
+        cx.push_future({
+            let timeline = timeline.clone();
+            let action_rx = action_rx.clone();
+            let create_eval = create_eval.clone();
             async move {
                 let mut action_rx = action_rx.lock().expect("poisoned mutex");
                 loop {
@@ -215,13 +209,13 @@ where
             }
         });
 
-        // Coroutine for listening to browser actions
+        // Listen to browser actions
         let window = cx.consume_context::<Window>().unwrap();
-        let _: &Coroutine<()> = use_coroutine(cx, |_| {
+        cx.push_future({
             let mut window_rx = window.subscribe();
-            let updater = self.updater_callback.clone();
-            let timeline = self.timeline.clone();
-            to_owned![create_eval];
+            let updater = updater_callback.clone();
+            let timeline = timeline.clone();
+            let create_eval = create_eval.clone();
             async move {
                 loop {
                     let window_event = window_rx.recv().await.expect("sender to exist");
@@ -254,6 +248,12 @@ where
                 }
             }
         });
+        
+        Self {
+            action_tx,
+            timeline,
+            updater_callback,
+        }
     }
 }
 
