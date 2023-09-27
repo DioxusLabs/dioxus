@@ -1,10 +1,12 @@
-#![allow(non_snake_case)]
+#![warn(clippy::pedantic)]
+#![warn(clippy::style)]
+#![warn(clippy::nursery)]
 
 use dioxus::prelude::*;
 use dioxus_elements::input_data::keyboard_types::Key;
 
 fn main() {
-    dioxus_desktop::launch(app);
+    dioxus_desktop::launch(App);
 }
 
 #[derive(PartialEq, Eq, Clone, Copy)]
@@ -21,10 +23,11 @@ pub struct TodoItem {
     pub contents: String,
 }
 
-pub fn app(cx: Scope<()>) -> Element {
+#[allow(non_snake_case)]
+pub fn App(cx: Scope<()>) -> Element {
     let todos = use_state(cx, im_rc::HashMap::<u32, TodoItem>::default);
     let filter = use_state(cx, || FilterState::All);
-    let draft = use_state(cx, || "".to_string());
+    let draft = use_state(cx, || String::new());
     let todo_id = use_state(cx, || 0);
 
     // Filter the todos based on the filter state
@@ -55,11 +58,11 @@ pub fn app(cx: Scope<()>) -> Element {
         }
     };
 
-    cx.render(rsx! {
+    render! {
         section { class: "todoapp",
-            style { include_str!("./assets/todomvc.css") }
+            style { include_str!("./todomvc.css") }
             header { class: "header",
-                h1 {"todos"}
+                h1 { "todos" }
                 input {
                     class: "new-todo",
                     placeholder: "What needs to be done?",
@@ -70,22 +73,23 @@ pub fn app(cx: Scope<()>) -> Element {
                     },
                     onkeydown: move |evt| {
                         if evt.key() == Key::Enter && !draft.is_empty() {
-                            todos.make_mut().insert(
-                                **todo_id,
-                                TodoItem {
-                                    id: **todo_id,
-                                    checked: false,
-                                    contents: draft.to_string(),
-                                },
-                            );
+                            todos
+                                .make_mut()
+                                .insert(
+                                    **todo_id,
+                                    TodoItem {
+                                        id: **todo_id,
+                                        checked: false,
+                                        contents: draft.to_string(),
+                                    },
+                                );
                             *todo_id.make_mut() += 1;
-                            draft.set("".to_string());
+                            draft.set(String::new());
                         }
                     }
                 }
             }
-            section {
-                class: "main",
+            section { class: "main",
                 if !todos.is_empty() {
                     rsx! {
                         input {
@@ -146,10 +150,16 @@ pub fn app(cx: Scope<()>) -> Element {
         }
         footer { class: "info",
             p { "Double-click to edit a todo" }
-            p { "Created by ", a { href: "https://github.com/jkelleyrtp/", "jkelleyrtp" }}
-            p { "Part of ", a { href: "https://todomvc.com", "TodoMVC" }}
+            p {
+                "Created by "
+                a { href: "https://github.com/jkelleyrtp/", "jkelleyrtp" }
+            }
+            p {
+                "Part of "
+                a { href: "https://todomvc.com", "TodoMVC" }
+            }
         }
-    })
+    }
 }
 
 #[derive(Props)]
@@ -158,6 +168,7 @@ pub struct TodoEntryProps<'a> {
     id: u32,
 }
 
+#[allow(non_snake_case)]
 pub fn TodoEntry<'a>(cx: Scope<'a, TodoEntryProps<'a>>) -> Element {
     let is_editing = use_state(cx, || false);
 
@@ -167,8 +178,7 @@ pub fn TodoEntry<'a>(cx: Scope<'a, TodoEntryProps<'a>>) -> Element {
     let editing = if **is_editing { "editing" } else { "" };
 
     cx.render(rsx!{
-        li {
-            class: "{completed} {editing}",
+        li { class: "{completed} {editing}",
             div { class: "view",
                 input {
                     class: "toggle",
@@ -187,8 +197,10 @@ pub fn TodoEntry<'a>(cx: Scope<'a, TodoEntryProps<'a>>) -> Element {
                 }
                 button {
                     class: "destroy",
-                    onclick: move |_| { cx.props.todos.make_mut().remove(&todo.id); },
-                    prevent_default: "onclick",
+                    onclick: move |_| {
+                        cx.props.todos.make_mut().remove(&todo.id);
+                    },
+                    prevent_default: "onclick"
                 }
             }
             is_editing.then(|| rsx!{
