@@ -78,7 +78,7 @@ impl ToTokens for ImplExtensionAttributes {
             pub trait #extension_name<'a> {
                 #(#defs)*
             }
-            impl<'a, T> #extension_name<'a> for T where T: HasAttributesBox<'a, T> + #marker_name {
+            impl<'a, T> #extension_name<'a> for T where T: HasAttributesBox<'a> + #marker_name {
                 #(#impls)*
             }
         });

@@ -899,12 +899,12 @@ impl<'a, T: IntoAttributeValue<'a>> IntoAttributeValue<'a> for Option<T> {
     }
 }
 
-pub trait HasAttributesBox<'a, T> {
+pub trait HasAttributesBox<'a> {
     fn push_attribute(
         self,
         name: &'a str,
         ns: Option<&'static str>,
         attr: impl IntoAttributeValue<'a>,
         volatile: bool,
-    ) -> T;
+    ) -> Self;
 }
