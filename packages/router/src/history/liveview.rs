@@ -55,6 +55,7 @@ where
     /// TODO
     pub fn attach(&self, cx: Scope) {
         let create_eval = use_eval(cx);
+
         let _: &Coroutine<()> = use_coroutine(cx, |_| {
             let eval_rx = self.eval_rx.clone();
             to_owned![create_eval];
@@ -63,21 +64,35 @@ where
                 loop {
                     let eval = eval_rx.recv().await.expect("sender to exist");
                     let _ = match eval {
-                        Eval::GoBack => create_eval(r#"
-                            history.back();
-                        "#),
-                        Eval::GoForward => create_eval(r#"
-                            history.forward();
-                        "#),
-                        Eval::Push(route) => create_eval(&format!(r#"
-                            history.pushState(null, "", "{route}");
-                        "#)),
-                        Eval::Replace(route) => create_eval(&format!(r#"
-                            history.replaceState(null, "", "{route}");
-                        "#)),
-                        Eval::External(url) => create_eval(&format!(r#"
-                            location.href = "{url}";
-                        "#)),
+                        Eval::GoBack => {
+                            create_eval(r#"
+                                // this triggers a PopState event
+                                history.back();
+                            "#)
+                        },
+                        Eval::GoForward => {
+                            create_eval(r#"
+                                // this triggers a PopState event
+                                history.forward();
+                            "#)
+                        },
+                        Eval::Push(state) => {
+                            create_eval(&format!(r#"
+                                // this does not trigger a PopState event
+                                history.pushState(null, "", "{state}");
+                            "#))
+                        },
+                        Eval::Replace(state) => {
+                            create_eval(&format!(r#"
+                                // this does not trigger a PopState event
+                                history.replaceState(null, "", "{state}");
+                            "#))
+                        },
+                        Eval::External(url) => {
+                            create_eval(&format!(r#"
+                                location.href = "{url}";
+                            "#))
+                        },
                     };
                 }
             }
@@ -92,13 +107,7 @@ where
                 loop {
                     let window_event = window_rx.recv().await.expect("sender to exist");
                     match window_event {
-                        WindowEvent::Load { location } => {
-                            let Ok(route) = R::from_str(&location.path) else {
-                                continue;
-                            };
-                            let mut state = state.lock().expect("poisoned mutex");
-                            state.current_route = route;
-                        },
+                        WindowEvent::Load { location, state: new_state } |
                         WindowEvent::PopState { location, state: new_state } => {
                             let Ok(route) = R::from_str(&location.path) else {
                                 continue;

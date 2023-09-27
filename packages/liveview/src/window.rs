@@ -14,6 +14,7 @@ pub enum WindowEvent {
     #[serde(rename = "load")]
     Load {
         location: Location,
+        state: String,
     },
     #[serde(rename = "popstate")]
     PopState {

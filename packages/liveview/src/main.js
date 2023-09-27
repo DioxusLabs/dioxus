@@ -30,6 +30,7 @@ class IPC {
             search: document.location.search,
             hash: document.location.hash,
           },
+          state: JSON.stringify(history.state),
         },
       }));
 
