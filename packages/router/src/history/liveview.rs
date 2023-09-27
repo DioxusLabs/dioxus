@@ -144,7 +144,26 @@ impl<R: Routable + std::fmt::Debug> LiveviewHistory<R>
 where
     <R as FromStr>::Err: std::fmt::Display,
 {
-    /// TODO
+    /// Create a [`LiveviewHistory`] starting at `path`.
+    pub fn with_initial_path(path: R) -> Self {
+        let (action_tx, action_rx) = tokio::sync::mpsc::unbounded_channel();
+        Self {
+            action_tx,
+            action_rx: Arc::new(Mutex::new(action_rx)),
+            timeline: Arc::new(Mutex::new(Timeline {
+                current_route: path,
+                history: Vec::new(),
+                future: Vec::new(),
+            })),
+            updater_callback: Arc::new(RwLock::new(Arc::new(|| {}))),
+        }
+    }
+
+    /// Attaches the [`LiveviewHistory`] to a scope, and starts subscribing to Window events.
+    ///
+    /// # Panics
+    ///
+    /// Panics if not in a Liveview context.
     pub fn attach(&self, cx: Scope) {
         let create_eval = use_eval(cx);
 
