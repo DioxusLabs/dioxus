@@ -12,6 +12,8 @@ fn app(cx: Scope) -> Element {
     render! {
         Component {
             width: "10px",
+            extra_data: "hello{1}",
+            extra_data2: "hello{2}",
             height: "10px",
             left: 1,
         }
@@ -23,6 +25,7 @@ fn Component<'a>(cx: Scope<'a, Props<'a>>) -> Element<'a> {
     render! {
         audio {
             ..attributes,
+            "1: {cx.props.extra_data}\n2: {cx.props.extra_data2}"
         }
     }
 }
@@ -31,4 +34,6 @@ fn Component<'a>(cx: Scope<'a, Props<'a>>) -> Element<'a> {
 struct Props<'a> {
     #[props(extends = GlobalAttributes)]
     attributes: Vec<Attribute<'a>>,
+    extra_data: &'a str,
+    extra_data2: &'a str,
 }
