@@ -21,10 +21,9 @@ fn app(cx: Scope) -> Element {
 }
 
 fn Component<'a>(cx: Scope<'a, Props<'a>>) -> Element<'a> {
-    let attributes = &*cx.props.attributes;
     render! {
         audio {
-            ..attributes,
+            ..cx.props.attributes,
             "1: {cx.props.extra_data}\n2: {cx.props.extra_data2}"
         }
     }

@@ -894,12 +894,14 @@ Finally, call `.build()` to create the instance of `{name}`.
                     path.span(),
                 );
                 quote! {
+                    #[allow(dead_code, non_camel_case_types, missing_docs)]
                     impl #impl_generics dioxus_elements::extensions::#marker_name < #extend_lifetime > for #builder_name < #( #ty_generics ),* > #where_clause {}
                 }
             });
 
             Ok(quote! {
-                impl #impl_generics ::dioxus::prelude::HasAttributesBox<#extend_lifetime> for #builder_name < #( #ty_generics ),* > #where_clause {
+                #[allow(dead_code, non_camel_case_types, missing_docs)]
+                impl #impl_generics ::dioxus::prelude::HasAttributes<#extend_lifetime> for #builder_name < #( #ty_generics ),* > #where_clause {
                     fn push_attribute(
                         mut self,
                         name: &#extend_lifetime str,

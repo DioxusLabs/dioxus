@@ -32,7 +32,7 @@ impl ToTokens for AttributeType {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         match self {
             AttributeType::Named(n) => tokens.append_all(quote! { #n }),
-            AttributeType::Spread(e) => tokens.append_all(quote! { #e.into() }),
+            AttributeType::Spread(e) => tokens.append_all(quote! { (&#e).into() }),
         }
     }
 }

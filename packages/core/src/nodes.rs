@@ -414,6 +414,7 @@ pub enum TemplateAttribute<'a> {
     },
 }
 
+/// An attribute with information about its position in the DOM and the element it was mounted to
 #[derive(Debug)]
 pub struct MountedAttribute<'a> {
     pub(crate) ty: AttributeType<'a>,
@@ -437,6 +438,12 @@ impl<'a> From<&'a [Attribute<'a>]> for MountedAttribute<'a> {
             ty: AttributeType::Many(attr),
             mounted_element: Default::default(),
         }
+    }
+}
+
+impl<'a> From<&'a Vec<Attribute<'a>>> for MountedAttribute<'a> {
+    fn from(attr: &'a Vec<Attribute<'a>>) -> Self {
+        attr.as_slice().into()
     }
 }
 
@@ -487,8 +494,10 @@ impl<'a> Attribute<'a> {
     }
 }
 
+/// The type of an attribute
 #[derive(Debug)]
 pub enum AttributeType<'a> {
+    /// A single attribute
     Single(Attribute<'a>),
     /// Many different attributes sorted by name
     Many(&'a [Attribute<'a>]),
@@ -899,7 +908,9 @@ impl<'a, T: IntoAttributeValue<'a>> IntoAttributeValue<'a> for Option<T> {
     }
 }
 
-pub trait HasAttributesBox<'a> {
+/// A trait for anything that has a dynamic list of attributes
+pub trait HasAttributes<'a> {
+    /// Push an attribute onto the list of attributes
     fn push_attribute(
         self,
         name: &'a str,

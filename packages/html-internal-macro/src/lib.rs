@@ -68,7 +68,7 @@ impl ToTokens for ImplExtensionAttributes {
             }
         });
         tokens.append_all(quote! {
-            pub trait #extension_name<'a>: HasAttributesBox<'a> + Sized {
+            pub trait #extension_name<'a>: HasAttributes<'a> + Sized {
                 #(#impls)*
             }
         });
