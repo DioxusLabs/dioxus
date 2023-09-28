@@ -2,7 +2,7 @@ use std::sync::Arc;
 use serde::Deserialize;
 use tokio::sync::broadcast::Receiver;
 
-/// TODO
+/// Liveview window event engine, for subscribing to window-specific client-side events.
 #[derive(Clone)]
 pub struct Window {
     event_rx: Arc<Receiver<WindowEvent>>,
@@ -15,6 +15,8 @@ pub enum WindowEvent {
     Load {
         location: Location,
         state: String,
+        session: String,
+        depth: usize,
     },
     #[serde(rename = "popstate")]
     PopState {

@@ -21,7 +21,7 @@ class IPC {
       setInterval(ping, 30000);
       ws.send(serializeIpcMessage("initialize"));
 
-      // Send initial path
+      // Send initial path and session data
       ws.send(serializeIpcMessage("window_event", {
         type: "load",
         params: {
@@ -31,6 +31,8 @@ class IPC {
             hash: document.location.hash,
           },
           state: JSON.stringify(history.state),
+          session: JSON.stringify(sessionStorage),
+          depth: history.length,
         },
       }));
 

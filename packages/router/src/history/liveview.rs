@@ -1,25 +1,47 @@
-use std::{str::FromStr, rc::Rc, sync::Arc};
+use std::{str::FromStr, collections::BTreeMap, rc::Rc, sync::Arc};
 use dioxus::prelude::*;
 use dioxus_liveview::{Window, WindowEvent};
-use std::{fmt::Display, sync::{Mutex, RwLock}};
+use std::sync::{Mutex, RwLock};
+use serde::{Serialize, Deserialize};
 use super::HistoryProvider;
 use crate::routable::Routable;
 
 /// A [`HistoryProvider`] that evaluates history through JS.
-pub struct LiveviewHistory<R: Routable> {
+pub struct LiveviewHistory<R: Routable>
+where
+    <R as FromStr>::Err: std::fmt::Display,
+{
     action_tx: tokio::sync::mpsc::UnboundedSender<Action<R>>,
     timeline: Arc<Mutex<Timeline<R>>>,
     updater_callback: Arc<RwLock<Arc<dyn Fn() + Send + Sync>>>,
 }
 
-struct Timeline<R: Routable> {
-    current_route: R,
-    history: Vec<R>,
-    future: Vec<R>,
+struct Timeline<R: Routable>
+where
+    <R as FromStr>::Err: std::fmt::Display,
+{
+    current_index: usize,
+    routes: BTreeMap<usize, R>,
 }
 
+#[derive(Serialize, Deserialize)]
 struct State {
-    index: Option<usize>,
+    index: usize,
+}
+
+#[derive(Serialize, Deserialize)]
+struct Session<R: Routable>
+where
+    <R as FromStr>::Err: std::fmt::Display,
+{
+    #[serde(with = "routes")] 
+    routes: BTreeMap<usize, R>,
+    last_visited: usize,
+}
+
+#[derive(Serialize, Deserialize)]
+struct SessionStorage {
+    liveview: Option<String>,
 }
 
 enum Action<R: Routable> {
@@ -30,45 +52,59 @@ enum Action<R: Routable> {
     External(String),
 }
 
-impl<R: Routable> Timeline<R> {
+impl<R: Routable> Timeline<R>
+where
+    <R as FromStr>::Err: std::fmt::Display,
+{
+    fn new(initial_path: R) -> Self {
+        Self {
+            current_index: 0,
+            routes: BTreeMap::from([
+                (0, initial_path),
+            ]),
+        }
+    }
+
     fn init(
         &mut self,
         route: R,
+        state: Option<State>,
+        session: Option<Session<R>>,
+        depth: usize,
     ) -> State {
-        self.current_route = route;
-        State::from_index(0)
+        if let Some(session) = session {
+            self.routes = session.routes;
+            if state.is_none() {
+                // top of stack
+                let last_visited = session.last_visited;
+                self.routes.retain(|&lhs, _| lhs <= last_visited);
+            }
+        };
+        let state = match state {
+            Some(state) => {
+                self.current_index = state.index;
+                state
+            },
+            None => {
+                let index = depth - 1;
+                self.current_index = index;
+                State {
+                    index,
+                }
+            },
+        };
+        self.routes.insert(state.index, route);
+        state
     }
 
     fn update(
         &mut self,
         route: R,
-        state: State,
+        state: Option<State>,
     ) -> State {
-        if let Some(index) = state.index {
-            // already visited position, shuffle history and future
-            let current_index = self.history.len();
-            if index > current_index {
-                self.history.push(self.current_route.clone());
-                for i in (current_index + 1)..=index {
-                    if let Some(route) = self.future.pop() {
-                        if i == index {
-                            continue;
-                        }
-                        self.history.push(route);
-                    }
-                }
-            } else if index < current_index {
-                self.future.push(self.current_route.clone());
-                for i in (index + 1)..=current_index {
-                    if let Some(route) = self.history.pop() {
-                        if i == current_index {
-                            continue;
-                        }
-                        self.future.push(route);
-                    }
-                }
-            }
-            self.current_route = route;
+        if let Some(state) = state {
+            self.current_index = state.index;
+            self.routes.insert(self.current_index, route);
             state
         } else {
             self.push(route)
@@ -80,50 +116,33 @@ impl<R: Routable> Timeline<R> {
         route: R,
     ) -> State {
         // top of stack
-        let current_route = self.current_route.clone();
-        self.current_route = route;
-        self.history.push(current_route);
-        self.future.clear();
-        State::from_index(self.history.len())
+        let index = self.current_index + 1;
+        self.current_index = index;
+        self.routes.insert(index, route);
+        self.routes.retain(|&rhs, _| index >= rhs);
+        State {
+            index: self.current_index,
+        }
     }
 
     fn replace(
         &mut self,
         route: R,
     ) -> State {
-        self.current_route = route;
-        State::from_index(self.history.len())
-    }
-}
-
-impl State {
-    fn from_index(index: usize) -> Self {
-        Self {
-            index: Some(index),
+        self.routes.insert(self.current_index, route);
+        State {
+            index: self.current_index,
         }
     }
-}
 
-impl From<&str> for State {
-    fn from(value: &str) -> Self {
-        Self {
-            index: match value.parse::<usize>() {
-                Ok(index) => Some(index),
-                Err(_) => None,
-            }
-        }
+    fn current_route(&self) -> &R {
+        &self.routes[&self.current_index]
     }
-}
 
-impl Display for State {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self.index {
-            Some(index) => write!(f, r#"
-                {index}
-            "#),
-            None => write!(f, r#"
-                null
-            "#),
+    fn session(&self) -> Session<R> {
+        Session {
+            routes: self.routes.clone(),
+            last_visited: self.current_index,
         }
     }
 }
@@ -133,6 +152,7 @@ where
     <R as FromStr>::Err: std::fmt::Display,
 {
     /// Create a [`LiveviewHistory`] in the given scope.
+    /// When using a [`LiveviewHistory`] in combination with use_eval, history must be untampered with. 
     ///
     /// # Panics
     ///
@@ -147,6 +167,7 @@ where
     }
 
     /// Create a [`LiveviewHistory`] in the given scope, starting at `initial_path`.
+    /// When using a [`LiveviewHistory`] in combination with use_eval, history must be untampered with. 
     ///
     /// # Panics
     ///
@@ -154,11 +175,7 @@ where
     pub fn new_with_initial_path(cx: Scope, initial_path: R) -> Self {
         let (action_tx, action_rx) = tokio::sync::mpsc::unbounded_channel::<Action<R>>();
         let action_rx = Arc::new(Mutex::new(action_rx));
-        let timeline = Arc::new(Mutex::new(Timeline {
-            current_route: initial_path,
-            history: Vec::new(),
-            future: Vec::new(),
-        }));
+        let timeline = Arc::new(Mutex::new(Timeline::new(initial_path)));
         let updater_callback: Arc<RwLock<Arc<dyn Fn() + Send + Sync>>> = Arc::new(RwLock::new(Arc::new(|| {})));
 
         let eval_provider = cx
@@ -177,7 +194,7 @@ where
             let action_rx = action_rx.clone();
             let create_eval = create_eval.clone();
             async move {
-                let mut action_rx = action_rx.lock().expect("poisoned mutex");
+                let mut action_rx = action_rx.lock().expect("unpoisoned mutex");
                 loop {
                     let eval = action_rx.recv().await.expect("sender to exist");
                     let _ = match eval {
@@ -194,19 +211,25 @@ where
                             "#)
                         },
                         Action::Push(route) => {
-                            let mut timeline = timeline.lock().expect("poisoned mutex");
+                            let mut timeline = timeline.lock().expect("unpoisoned mutex");
                             let state = timeline.push(route.clone());
+                            let state = serde_json::to_string(&state).expect("serializable state");
+                            let session = serde_json::to_string(&timeline.session()).expect("serializable session");
                             create_eval(&format!(r#"
                                 // this does not trigger a PopState event
                                 history.pushState({state}, "", "{route}");
+                                sessionStorage.setItem("liveview", '{session}');
                             "#))
                         },
                         Action::Replace(route) => {
-                            let mut timeline = timeline.lock().expect("poisoned mutex");
+                            let mut timeline = timeline.lock().expect("unpoisoned mutex");
                             let state = timeline.replace(route.clone());
+                            let state = serde_json::to_string(&state).expect("serializable state");
+                            let session = serde_json::to_string(&timeline.session()).expect("serializable session");
                             create_eval(&format!(r#"
                                 // this does not trigger a PopState event
                                 history.replaceState({state}, "", "{route}");
+                                sessionStorage.setItem("liveview", '{session}');
                             "#))
                         },
                         Action::External(url) => {
@@ -230,26 +253,53 @@ where
                 loop {
                     let window_event = window_rx.recv().await.expect("sender to exist");
                     match window_event {
-                        WindowEvent::Load { location, state: _ } => {
+                        WindowEvent::Load { location, state, session, depth } => {
                             let Ok(route) = R::from_str(&location.path) else {
                                 return;
                             };
-                            let mut timeline = timeline.lock().expect("poisoned mutex");
-                            let state = timeline.init(route.clone());
+                            let Ok(state) = serde_json::from_str(&state) else {
+                                return;
+                            };
+                            let session = match serde_json::from_str::<Option::<SessionStorage>>(&session) {
+                                Ok(Some(session_storage)) => match session_storage.liveview {
+                                    Some(storage) => match serde_json::from_str::<Option::<Session<R>>>(&storage) {
+                                        Ok(session) => session,
+                                        Err(_) => None,
+                                    }
+                                    None => None,
+                                },
+                                _ => None,
+                            };
+                            let mut timeline = timeline.lock().expect("unpoisoned mutex");
+                            let state = timeline.init(
+                                route.clone(),
+                                state,
+                                session,
+                                depth,
+                            );
+                            let state = serde_json::to_string(&state).expect("serializable state");
+                            let session = serde_json::to_string(&timeline.session()).expect("serializable session");
                             let _ = create_eval(&format!(r#"
                                 // this does not trigger a PopState event
                                 history.replaceState({state}, "", "{route}");
+                                sessionStorage.setItem("liveview", '{session}');
                             "#));
                         },
                         WindowEvent::PopState { location, state } => {
                             let Ok(route) = R::from_str(&location.path) else {
                                 return;
                             };
-                            let mut timeline = timeline.lock().expect("poisoned mutex");
-                            let state = timeline.update(route.clone(), state.as_str().into());
+                            let Ok(state) = serde_json::from_str(&state) else {
+                                return;
+                            };
+                            let mut timeline = timeline.lock().expect("unpoisoned mutex");
+                            let state = timeline.update(route.clone(), state);
+                            let state = serde_json::to_string(&state).expect("serializable state");
+                            let session = serde_json::to_string(&timeline.session()).expect("serializable session");
                             let _ = create_eval(&format!(r#"
                                 // this does not trigger a PopState event
                                 history.replaceState({state}, "", "{route}");
+                                sessionStorage.setItem("liveview", '{session}');
                             "#));
                         },
                     }
@@ -293,22 +343,90 @@ where
     }
 
     fn current_route(&self) -> R {
-        let timeline = self.timeline.lock().expect("poisoned mutex");
-        timeline.current_route.clone()
+        let timeline = self.timeline.lock().expect("unpoisoned mutex");
+        timeline.current_route().clone()
     }
 
     fn can_go_back(&self) -> bool {
-        let timeline = self.timeline.lock().expect("poisoned mutex");
-        !timeline.history.is_empty()
+        let timeline = self.timeline.lock().expect("unpoisoned mutex");
+        // Check if the one before is contiguous (i.e., not an external page)
+        let visited_indices: Vec<usize> = timeline.routes.keys().cloned().collect();
+        visited_indices.iter().position(|&rhs| timeline.current_index == rhs).map_or(false, |index| {
+            index > 0 && visited_indices[index - 1] == timeline.current_index - 1
+        })
     }
 
     fn can_go_forward(&self) -> bool {
-        let timeline = self.timeline.lock().expect("poisoned mutex");
-        !timeline.future.is_empty()
+        let timeline = self.timeline.lock().expect("unpoisoned mutex");
+        // Check if the one after is contiguous (i.e., not an external page)
+        let visited_indices: Vec<usize> = timeline.routes.keys().cloned().collect();
+        visited_indices.iter().rposition(|&rhs| timeline.current_index == rhs).map_or(false, |index| {
+            index < visited_indices.len() - 1 && visited_indices[index + 1] == timeline.current_index + 1
+        })
     }
 
     fn updater(&mut self, callback: Arc<dyn Fn() + Send + Sync>) {
         let mut updater_callback = self.updater_callback.write().unwrap();
         *updater_callback = callback;
+    }
+}
+
+mod routes {
+    use std::collections::BTreeMap;
+    use core::str::FromStr;
+    use serde::{ser::SerializeMap, Deserializer, Serializer};
+    use serde::de::{MapAccess, Visitor};
+    use crate::prelude::Routable;
+    
+    pub fn serialize<S, R>(routes: &BTreeMap<usize, R>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+        R: Routable,
+    {
+        let mut map = serializer.serialize_map(Some(routes.len()))?;
+        for (index, route) in routes.iter() {
+            map.serialize_entry(&index.to_string(), &route.to_string())?;
+        }
+        map.end()
+    }
+
+    pub fn deserialize<'de, D, R>(deserializer: D) -> Result<BTreeMap<usize, R>, D::Error>
+    where
+        D: Deserializer<'de>,
+        R: Routable,
+        <R as FromStr>::Err: std::fmt::Display,
+    {
+        struct BTreeMapVisitor<R> {
+            marker: std::marker::PhantomData<R>,
+        }
+
+        impl<'de, R> Visitor<'de> for BTreeMapVisitor<R>
+        where
+            R: Routable,
+            <R as FromStr>::Err: std::fmt::Display,
+        {
+            type Value = BTreeMap<usize, R>;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("a map with indices and routable values")
+            }
+
+            fn visit_map<M>(self, mut map: M) -> Result<Self::Value, M::Error>
+            where
+                M: MapAccess<'de>,
+            {
+                let mut routes = BTreeMap::new();
+                while let Some((index, route)) = map.next_entry::<String, String>()? {
+                    let index = index.parse::<usize>().map_err(serde::de::Error::custom)?;
+                    let route = R::from_str(&route).map_err(serde::de::Error::custom)?;
+                    routes.insert(index, route);
+                }
+                Ok(routes)
+            }
+        }
+
+        deserializer.deserialize_map(BTreeMapVisitor {
+            marker: std::marker::PhantomData,
+        })
     }
 }
