@@ -57,32 +57,32 @@ pub mod computed;
 mod use_on_unmount;
 pub use use_on_unmount::*;
 
-mod usecontext;
-pub use usecontext::*;
+mod use_context;
+pub use use_context::*;
 
-mod usestate;
-pub use usestate::{use_state, UseState};
+mod use_state;
+pub use use_state::{use_state, UseState};
 
-mod useref;
-pub use useref::*;
+mod use_ref;
+pub use use_ref::*;
 
 mod use_shared_state;
 pub use use_shared_state::*;
 
-mod usecoroutine;
-pub use usecoroutine::*;
+mod use_coroutine;
+pub use use_coroutine::*;
 
-mod usefuture;
-pub use usefuture::*;
+mod use_future;
+pub use use_future::*;
 
-mod useeffect;
-pub use useeffect::*;
+mod use_effect;
+pub use use_effect::*;
 
-mod usecallback;
-pub use usecallback::*;
+mod use_callback;
+pub use use_callback::*;
 
-mod usememo;
-pub use usememo::*;
+mod use_memo;
+pub use use_memo::*;
 
-mod userootcontext;
-pub use userootcontext::*;
+mod use_root_context;
+pub use use_root_context::*;
