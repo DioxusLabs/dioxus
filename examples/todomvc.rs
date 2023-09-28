@@ -24,6 +24,7 @@ pub struct TodoItem {
     pub contents: String,
 }
 
+#[allow(clippy::too_many_lines)]
 #[allow(non_snake_case)]
 pub fn App(cx: Scope) -> Element {
     let todos = use_state(cx, im_rc::HashMap::<u32, TodoItem>::default);
@@ -61,7 +62,7 @@ pub fn App(cx: Scope) -> Element {
 
     render! {
         section { class: "todoapp",
-            style { include_str!("./todomvc.css") }
+            style { include_str!("./assets/todomvc.css") }
             header { class: "header",
                 h1 { "todos" }
                 input {
