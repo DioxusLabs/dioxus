@@ -147,7 +147,7 @@ where
     }
 }
 
-impl<R: Routable + std::fmt::Debug> LiveviewHistory<R>
+impl<R: Routable> LiveviewHistory<R>
 where
     <R as FromStr>::Err: std::fmt::Display,
 {
@@ -317,9 +317,9 @@ where
     }
 }
 
-impl<R: Routable + std::fmt::Debug> HistoryProvider<R> for LiveviewHistory<R>
+impl<R: Routable> HistoryProvider<R> for LiveviewHistory<R>
 where
-    <R as FromStr>::Err: std::fmt::Display + std::fmt::Debug,
+    <R as FromStr>::Err: std::fmt::Display,
 {
     fn go_back(&mut self) {
         let _ = self.action_tx.send(Action::GoBack);
