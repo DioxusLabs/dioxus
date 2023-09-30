@@ -254,7 +254,7 @@ where
                     let window_event = window_rx.recv().await.expect("sender to exist");
                     match window_event {
                         WindowEvent::Load { location, state, session, depth } => {
-                            let Ok(route) = R::from_str(&location.path) else {
+                            let Ok(route) = R::from_str(&location.to_string()) else {
                                 return;
                             };
                             let Ok(state) = serde_json::from_str(&state) else {
@@ -286,7 +286,7 @@ where
                             "#));
                         },
                         WindowEvent::PopState { location, state } => {
-                            let Ok(route) = R::from_str(&location.path) else {
+                            let Ok(route) = R::from_str(&location.to_string()) else {
                                 return;
                             };
                             let Ok(state) = serde_json::from_str(&state) else {

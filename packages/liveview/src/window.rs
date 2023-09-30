@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{fmt, sync::Arc};
 use serde::Deserialize;
 use tokio::sync::broadcast::Receiver;
 
@@ -30,6 +30,12 @@ pub struct Location {
     pub path: String,
     pub search: String,
     pub hash: String,
+}
+
+impl fmt::Display for Location {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}{}{}", self.path, self.search, self.hash)
+    }
 }
 
 impl Window {
