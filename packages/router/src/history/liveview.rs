@@ -1,10 +1,10 @@
-use std::{str::FromStr, collections::BTreeMap, rc::Rc, sync::Arc};
-use dioxus::prelude::*;
-use dioxus_liveview::{Window, WindowEvent};
-use std::sync::{Mutex, RwLock};
-use serde::{Serialize, Deserialize};
 use super::HistoryProvider;
 use crate::routable::Routable;
+use dioxus::prelude::*;
+use dioxus_liveview::{Window, WindowEvent};
+use serde::{Deserialize, Serialize};
+use std::sync::{Mutex, RwLock};
+use std::{collections::BTreeMap, rc::Rc, str::FromStr, sync::Arc};
 
 /// A [`HistoryProvider`] that evaluates history through JS.
 pub struct LiveviewHistory<R: Routable>
@@ -34,7 +34,7 @@ struct Session<R: Routable>
 where
     <R as FromStr>::Err: std::fmt::Display,
 {
-    #[serde(with = "routes")] 
+    #[serde(with = "routes")]
     routes: BTreeMap<usize, R>,
     last_visited: usize,
 }
@@ -59,9 +59,7 @@ where
     fn new(initial_path: R) -> Self {
         Self {
             current_index: 0,
-            routes: BTreeMap::from([
-                (0, initial_path),
-            ]),
+            routes: BTreeMap::from([(0, initial_path)]),
         }
     }
 
@@ -84,24 +82,18 @@ where
             Some(state) => {
                 self.current_index = state.index;
                 state
-            },
+            }
             None => {
                 let index = depth - 1;
                 self.current_index = index;
-                State {
-                    index,
-                }
-            },
+                State { index }
+            }
         };
         self.routes.insert(state.index, route);
         state
     }
 
-    fn update(
-        &mut self,
-        route: R,
-        state: Option<State>,
-    ) -> State {
+    fn update(&mut self, route: R, state: Option<State>) -> State {
         if let Some(state) = state {
             self.current_index = state.index;
             self.routes.insert(self.current_index, route);
@@ -111,10 +103,7 @@ where
         }
     }
 
-    fn push(
-        &mut self,
-        route: R,
-    ) -> State {
+    fn push(&mut self, route: R) -> State {
         // top of stack
         let index = self.current_index + 1;
         self.current_index = index;
@@ -125,10 +114,7 @@ where
         }
     }
 
-    fn replace(
-        &mut self,
-        route: R,
-    ) -> State {
+    fn replace(&mut self, route: R) -> State {
         self.routes.insert(self.current_index, route);
         State {
             index: self.current_index,
@@ -152,7 +138,7 @@ where
     <R as FromStr>::Err: std::fmt::Display,
 {
     /// Create a [`LiveviewHistory`] in the given scope.
-    /// When using a [`LiveviewHistory`] in combination with use_eval, history must be untampered with. 
+    /// When using a [`LiveviewHistory`] in combination with use_eval, history must be untampered with.
     ///
     /// # Panics
     ///
@@ -167,7 +153,7 @@ where
     }
 
     /// Create a [`LiveviewHistory`] in the given scope, starting at `initial_path`.
-    /// When using a [`LiveviewHistory`] in combination with use_eval, history must be untampered with. 
+    /// When using a [`LiveviewHistory`] in combination with use_eval, history must be untampered with.
     ///
     /// # Panics
     ///
@@ -176,7 +162,8 @@ where
         let (action_tx, action_rx) = tokio::sync::mpsc::unbounded_channel::<Action<R>>();
         let action_rx = Arc::new(Mutex::new(action_rx));
         let timeline = Arc::new(Mutex::new(Timeline::new(initial_path)));
-        let updater_callback: Arc<RwLock<Arc<dyn Fn() + Send + Sync>>> = Arc::new(RwLock::new(Arc::new(|| {})));
+        let updater_callback: Arc<RwLock<Arc<dyn Fn() + Send + Sync>>> =
+            Arc::new(RwLock::new(Arc::new(|| {})));
 
         let eval_provider = cx
             .consume_context::<Rc<dyn EvalProvider>>()
@@ -198,45 +185,51 @@ where
                 loop {
                     let eval = action_rx.recv().await.expect("sender to exist");
                     let _ = match eval {
-                        Action::GoBack => {
-                            create_eval(r#"
+                        Action::GoBack => create_eval(
+                            r#"
                                 // this triggers a PopState event
                                 history.back();
-                            "#)
-                        },
-                        Action::GoForward => {
-                            create_eval(r#"
+                            "#,
+                        ),
+                        Action::GoForward => create_eval(
+                            r#"
                                 // this triggers a PopState event
                                 history.forward();
-                            "#)
-                        },
+                            "#,
+                        ),
                         Action::Push(route) => {
                             let mut timeline = timeline.lock().expect("unpoisoned mutex");
                             let state = timeline.push(route.clone());
                             let state = serde_json::to_string(&state).expect("serializable state");
-                            let session = serde_json::to_string(&timeline.session()).expect("serializable session");
-                            create_eval(&format!(r#"
+                            let session = serde_json::to_string(&timeline.session())
+                                .expect("serializable session");
+                            create_eval(&format!(
+                                r#"
                                 // this does not trigger a PopState event
                                 history.pushState({state}, "", "{route}");
                                 sessionStorage.setItem("liveview", '{session}');
-                            "#))
-                        },
+                            "#
+                            ))
+                        }
                         Action::Replace(route) => {
                             let mut timeline = timeline.lock().expect("unpoisoned mutex");
                             let state = timeline.replace(route.clone());
                             let state = serde_json::to_string(&state).expect("serializable state");
-                            let session = serde_json::to_string(&timeline.session()).expect("serializable session");
-                            create_eval(&format!(r#"
+                            let session = serde_json::to_string(&timeline.session())
+                                .expect("serializable session");
+                            create_eval(&format!(
+                                r#"
                                 // this does not trigger a PopState event
                                 history.replaceState({state}, "", "{route}");
                                 sessionStorage.setItem("liveview", '{session}');
-                            "#))
-                        },
-                        Action::External(url) => {
-                            create_eval(&format!(r#"
+                            "#
+                            ))
+                        }
+                        Action::External(url) => create_eval(&format!(
+                            r#"
                                 location.href = "{url}";
-                            "#))
-                        },
+                            "#
+                        )),
                     };
                 }
             }
@@ -253,38 +246,46 @@ where
                 loop {
                     let window_event = window_rx.recv().await.expect("sender to exist");
                     match window_event {
-                        WindowEvent::Load { location, state, session, depth } => {
+                        WindowEvent::Load {
+                            location,
+                            state,
+                            session,
+                            depth,
+                        } => {
                             let Ok(route) = R::from_str(&location.to_string()) else {
                                 return;
                             };
                             let Ok(state) = serde_json::from_str(&state) else {
                                 return;
                             };
-                            let session = match serde_json::from_str::<Option::<SessionStorage>>(&session) {
-                                Ok(Some(session_storage)) => match session_storage.liveview {
-                                    Some(storage) => match serde_json::from_str::<Option::<Session<R>>>(&storage) {
-                                        Ok(session) => session,
-                                        Err(_) => None,
-                                    }
-                                    None => None,
-                                },
-                                _ => None,
-                            };
+                            let session =
+                                match serde_json::from_str::<Option<SessionStorage>>(&session) {
+                                    Ok(Some(session_storage)) => match session_storage.liveview {
+                                        Some(storage) => {
+                                            match serde_json::from_str::<Option<Session<R>>>(
+                                                &storage,
+                                            ) {
+                                                Ok(session) => session,
+                                                Err(_) => None,
+                                            }
+                                        }
+                                        None => None,
+                                    },
+                                    _ => None,
+                                };
                             let mut timeline = timeline.lock().expect("unpoisoned mutex");
-                            let state = timeline.init(
-                                route.clone(),
-                                state,
-                                session,
-                                depth,
-                            );
+                            let state = timeline.init(route.clone(), state, session, depth);
                             let state = serde_json::to_string(&state).expect("serializable state");
-                            let session = serde_json::to_string(&timeline.session()).expect("serializable session");
-                            let _ = create_eval(&format!(r#"
+                            let session = serde_json::to_string(&timeline.session())
+                                .expect("serializable session");
+                            let _ = create_eval(&format!(
+                                r#"
                                 // this does not trigger a PopState event
                                 history.replaceState({state}, "", "{route}");
                                 sessionStorage.setItem("liveview", '{session}');
-                            "#));
-                        },
+                            "#
+                            ));
+                        }
                         WindowEvent::PopState { location, state } => {
                             let Ok(route) = R::from_str(&location.to_string()) else {
                                 return;
@@ -295,20 +296,23 @@ where
                             let mut timeline = timeline.lock().expect("unpoisoned mutex");
                             let state = timeline.update(route.clone(), state);
                             let state = serde_json::to_string(&state).expect("serializable state");
-                            let session = serde_json::to_string(&timeline.session()).expect("serializable session");
-                            let _ = create_eval(&format!(r#"
+                            let session = serde_json::to_string(&timeline.session())
+                                .expect("serializable session");
+                            let _ = create_eval(&format!(
+                                r#"
                                 // this does not trigger a PopState event
                                 history.replaceState({state}, "", "{route}");
                                 sessionStorage.setItem("liveview", '{session}');
-                            "#));
-                        },
+                            "#
+                            ));
+                        }
                     }
                     // Call the updater callback
                     (updater.read().unwrap())();
                 }
             }
         });
-        
+
         Self {
             action_tx,
             timeline,
@@ -351,18 +355,25 @@ where
         let timeline = self.timeline.lock().expect("unpoisoned mutex");
         // Check if the one before is contiguous (i.e., not an external page)
         let visited_indices: Vec<usize> = timeline.routes.keys().cloned().collect();
-        visited_indices.iter().position(|&rhs| timeline.current_index == rhs).map_or(false, |index| {
-            index > 0 && visited_indices[index - 1] == timeline.current_index - 1
-        })
+        visited_indices
+            .iter()
+            .position(|&rhs| timeline.current_index == rhs)
+            .map_or(false, |index| {
+                index > 0 && visited_indices[index - 1] == timeline.current_index - 1
+            })
     }
 
     fn can_go_forward(&self) -> bool {
         let timeline = self.timeline.lock().expect("unpoisoned mutex");
         // Check if the one after is contiguous (i.e., not an external page)
         let visited_indices: Vec<usize> = timeline.routes.keys().cloned().collect();
-        visited_indices.iter().rposition(|&rhs| timeline.current_index == rhs).map_or(false, |index| {
-            index < visited_indices.len() - 1 && visited_indices[index + 1] == timeline.current_index + 1
-        })
+        visited_indices
+            .iter()
+            .rposition(|&rhs| timeline.current_index == rhs)
+            .map_or(false, |index| {
+                index < visited_indices.len() - 1
+                    && visited_indices[index + 1] == timeline.current_index + 1
+            })
     }
 
     fn updater(&mut self, callback: Arc<dyn Fn() + Send + Sync>) {
@@ -372,12 +383,12 @@ where
 }
 
 mod routes {
-    use std::collections::BTreeMap;
-    use core::str::FromStr;
-    use serde::{ser::SerializeMap, Deserializer, Serializer};
-    use serde::de::{MapAccess, Visitor};
     use crate::prelude::Routable;
-    
+    use core::str::FromStr;
+    use serde::de::{MapAccess, Visitor};
+    use serde::{ser::SerializeMap, Deserializer, Serializer};
+    use std::collections::BTreeMap;
+
     pub fn serialize<S, R>(routes: &BTreeMap<usize, R>, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,

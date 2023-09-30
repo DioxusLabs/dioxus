@@ -2,7 +2,7 @@ use crate::{
     element::LiveviewElement,
     eval::init_eval,
     query::{QueryEngine, QueryResult},
-    LiveViewError, WindowEvent, Window,
+    LiveViewError, Window, WindowEvent,
 };
 use dioxus_core::{prelude::*, Mutations};
 use dioxus_html::{EventData, HtmlEvent, MountedData};
@@ -125,7 +125,7 @@ pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), Li
     let query_engine = QueryEngine::new(query_tx);
     vdom.base_scope().provide_context(query_engine.clone());
     init_eval(vdom.base_scope());
-    
+
     // Create the window event channel
     let (window_tx, window_rx) = tokio::sync::broadcast::channel(16);
     let window = Window::new(window_rx);

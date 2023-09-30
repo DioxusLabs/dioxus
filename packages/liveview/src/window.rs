@@ -1,5 +1,5 @@
-use std::{fmt, sync::Arc};
 use serde::Deserialize;
+use std::{fmt, sync::Arc};
 use tokio::sync::broadcast::Receiver;
 
 /// Liveview window event engine, for subscribing to window-specific client-side events.
@@ -19,10 +19,7 @@ pub enum WindowEvent {
         depth: usize,
     },
     #[serde(rename = "popstate")]
-    PopState {
-        location: Location,
-        state: String,
-    },
+    PopState { location: Location, state: String },
 }
 
 #[derive(Deserialize, Debug, Clone)]
