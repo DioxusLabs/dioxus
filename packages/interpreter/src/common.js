@@ -54,6 +54,9 @@ export function setAttributeInner(node, field, value, ns) {
       case "selected":
         node.selected = truthy(value);
         break;
+      case "initial_selected":
+        node.defaultSelected = truthy(value);
+        break;
       case "dangerous_inner_html":
         node.innerHTML = value;
         break;
