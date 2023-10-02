@@ -1203,6 +1203,7 @@ builder_constructors! {
         value: String DEFAULT,
 
         selected: Bool volatile,
+        initial_selected: Bool DEFAULT,
     };
 
     /// Build a
