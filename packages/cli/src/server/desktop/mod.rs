@@ -149,7 +149,7 @@ async fn start_desktop_hot_reload(hot_reload_state: HotReloadState) -> Result<()
                             }
                             Err(err) => {
                                 if err.kind() != std::io::ErrorKind::WouldBlock {
-                                    println!("Error connecting to hot reloading: {}", err);
+                                    println!("Error connecting to hot reloading: {} (Hot reloading is a feature of the dioxus-cli. If you are not using the CLI, this error can be ignored)", err);
                                 }
                             }
                         }
