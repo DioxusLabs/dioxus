@@ -23,9 +23,12 @@
 
 `dioxus-core-macro` provides a handful of helpful macros used by the `dioxus` crate. These include:
 
-- The `rsx!` macro that underpins templates and node creation
-- The `inline_props` macro transforms function arguments into an auto-derived struct
-- The `format_args_f` macro which allows f-string formatting with support for expressions
+- The `rsx!` macro that underpins templates and node creation.
+- The `component` attribute macro denotes a function as a Dioxus component. Currently, this:
+  - Transforms function arguments into an auto-derived struct.
+  - Ensures that your component name uses PascalCase.
+  - Probably more stuff in the future. This macro allows us to have a way of distinguishing functions and components, which can be quite handy.
+- The `format_args_f` macro which allows f-string formatting with support for expressions.
 
 ## Contributing
 
