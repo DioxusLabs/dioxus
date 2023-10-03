@@ -128,9 +128,9 @@ impl WebsysDom {
                 for attr in *attrs {
                     if let dioxus_core::TemplateAttribute::Dynamic { id } = attr {
                         let attribute = &vnode.dynamic_attrs[*id];
-                        &attribute.attribute_type().for_each(|attribute| {
+                        let id = attribute.mounted_element();
+                        attribute.attribute_type().for_each(|attribute| {
                             let value = &attribute.value;
-                            let id = attribute.mounted_element();
                             mounted_id = Some(id);
                             let name = attribute.name;
                             if let AttributeValue::Listener(_) = value {
