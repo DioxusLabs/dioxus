@@ -1,6 +1,6 @@
+use fermi::UseAtomRef;
 use gloo_storage::{LocalStorage, Storage};
 use serde::{Deserialize, Serialize};
-use std::rc::Rc;
 
 use crate::{
     constants::{DIOXUS_FRONT_AUTH_REQUEST, DIOXUS_FRONT_AUTH_TOKEN},
@@ -13,46 +13,21 @@ pub struct StorageEntry<T> {
     pub value: T,
 }
 
-pub fn use_persistent_set<T: 'static + Serialize + Clone>(
-    write_function: &Rc<dyn Fn(T)>,
-    entry: StorageEntry<T>,
-) {
-    LocalStorage::set(entry.key, entry.value.clone()).unwrap();
-    write_function(entry.value);
+pub trait PersistentWrite<T: Serialize + Clone> {
+    fn use_persistent_set(atom_ref: &UseAtomRef<T>, entry: T);
 }
 
-pub type AuthTokenEntry = StorageEntry<AuthTokenState>;
-
-impl AuthTokenEntry {
-    pub fn new(auth_token_state: AuthTokenState) -> Self {
-        Self {
-            key: DIOXUS_FRONT_AUTH_TOKEN.to_string(),
-            value: auth_token_state,
-        }
-    }
-
-    pub fn none() -> Self {
-        Self {
-            key: DIOXUS_FRONT_AUTH_TOKEN.to_string(),
-            value: AuthTokenState::default(),
-        }
+impl PersistentWrite<AuthTokenState> for AuthTokenState {
+    fn use_persistent_set(atom_ref: &UseAtomRef<AuthTokenState>, entry: AuthTokenState) {
+        atom_ref.write().id_token = entry.clone().id_token;
+        atom_ref.write().refresh_token = entry.clone().refresh_token;
+        LocalStorage::set(DIOXUS_FRONT_AUTH_TOKEN, entry).unwrap();
     }
 }
 
-pub type AuthRequestEntry = StorageEntry<AuthRequestState>;
-
-impl AuthRequestEntry {
-    pub fn new(auth_token_state: AuthRequestState) -> Self {
-        Self {
-            key: DIOXUS_FRONT_AUTH_REQUEST.to_string(),
-            value: auth_token_state,
-        }
-    }
-
-    pub fn none() -> Self {
-        Self {
-            key: DIOXUS_FRONT_AUTH_REQUEST.to_string(),
-            value: AuthRequestState::default(),
-        }
+impl PersistentWrite<AuthRequestState> for AuthRequestState {
+    fn use_persistent_set(atom_ref: &UseAtomRef<AuthRequestState>, entry: AuthRequestState) {
+        atom_ref.write().auth_request = entry.clone().auth_request;
+        LocalStorage::set(DIOXUS_FRONT_AUTH_REQUEST, entry).unwrap();
     }
 }

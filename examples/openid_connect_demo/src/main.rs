@@ -19,13 +19,14 @@ use crate::{
     constants::{DIOXUS_FRONT_AUTH_REQUEST, DIOXUS_FRONT_AUTH_TOKEN},
     oidc::ClientState,
 };
-pub static FERMI_CLIENT: fermi::Atom<ClientState> = Atom(|_| ClientState { oidc_client: None });
-pub static FERMI_AUTH_TOKEN: fermi::Atom<AuthTokenState> = Atom(|_| AuthTokenState {
+pub static FERMI_CLIENT: fermi::AtomRef<ClientState> =
+    AtomRef(|_| ClientState { oidc_client: None });
+pub static FERMI_AUTH_TOKEN: fermi::AtomRef<AuthTokenState> = AtomRef(|_| AuthTokenState {
     id_token: None,
     refresh_token: None,
 });
-pub static FERMI_AUTH_REQUEST: fermi::Atom<AuthRequestState> =
-    Atom(|_| AuthRequestState { auth_request: None });
+pub static FERMI_AUTH_REQUEST: fermi::AtomRef<AuthRequestState> =
+    AtomRef(|_| AuthRequestState { auth_request: None });
 
 fn App(cx: Scope) -> Element {
     use_init_atom_root(cx);
@@ -38,15 +39,15 @@ fn App(cx: Scope) -> Element {
                 id_token: None,
                 refresh_token: None,
             });
-    let fermi_auth_token_write = use_set(cx, &FERMI_AUTH_TOKEN);
-    fermi_auth_token_write(stored_auth_token);
+    let fermi_auth_token = use_atom_ref(cx, &FERMI_AUTH_TOKEN);
+    *fermi_auth_token.write() = stored_auth_token;
 
     let stored_auth_request = LocalStorage::get(DIOXUS_FRONT_AUTH_REQUEST)
         .ok()
         .unwrap_or(AuthRequestState { auth_request: None });
 
-    let fermi_auth_request_write = use_set(cx, &FERMI_AUTH_REQUEST);
-    fermi_auth_request_write(stored_auth_request);
+    let fermi_auth_request = use_atom_ref(cx, &FERMI_AUTH_REQUEST);
+    *fermi_auth_request.write() = stored_auth_request;
     render! { Router::<Route> {} }
 }
 
