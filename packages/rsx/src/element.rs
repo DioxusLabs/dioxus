@@ -5,6 +5,7 @@ use super::*;
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{
+    bracketed,
     parse::{Parse, ParseBuffer, ParseStream},
     punctuated::Punctuated,
     spanned::Spanned,
@@ -77,21 +78,33 @@ impl Parse for Element {
                 let name = content.parse::<Ident>()?;
 
                 let name_str = name.to_string();
-                content.parse::<Token![:]>()?;
 
                 // The span of the content to be parsed,
                 // for example the `hi` part of `class: "hi"`.
                 let span = content.span();
 
                 if name_str.starts_with("on") {
+                    let metadata = if content.peek(Token![:]) {
+                        // if there's a colon, then there's no metadata
+                        None
+                    } else {
+                        let between_brackets;
+                        bracketed!(between_brackets in content);
+                        let separated =
+                            Punctuated::<Expr, Token![,]>::parse_terminated(&between_brackets)?;
+                        Some(separated.into_iter().collect())
+                    };
+                    content.parse::<Token![:]>()?;
                     attributes.push(ElementAttrNamed {
                         el_name: el_name.clone(),
                         attr: ElementAttr::EventTokens {
                             name,
                             tokens: content.parse()?,
+                            metadata,
                         },
                     });
                 } else {
+                    content.parse::<Token![:]>()?;
                     match name_str.as_str() {
                         "key" => {
                             key = Some(content.parse()?);
@@ -282,7 +295,11 @@ pub enum ElementAttr {
     // /// onclick: move |_| {}
     // EventClosure { name: Ident, closure: ExprClosure },
     /// onclick: {}
-    EventTokens { name: Ident, tokens: Expr },
+    EventTokens {
+        name: Ident,
+        tokens: Expr,
+        metadata: Option<Vec<Expr>>,
+    },
 }
 
 impl ElementAttr {
@@ -379,9 +396,19 @@ impl ToTokens for ElementAttrNamed {
                     )
                 }
             }
-            ElementAttr::EventTokens { name, tokens } => {
+            ElementAttr::EventTokens {
+                name,
+                tokens,
+                metadata,
+            } => {
+                let metadata = match metadata {
+                    Some(m) => {
+                        quote! { (#(#m),*) }
+                    }
+                    None => quote! { () },
+                };
                 quote! {
-                    dioxus_elements::events::#name(__cx, #tokens)
+                    dioxus_elements::events::#name(__cx, #tokens, #metadata)
                 }
             }
         };

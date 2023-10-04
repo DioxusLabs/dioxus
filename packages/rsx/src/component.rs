@@ -16,8 +16,10 @@ use super::*;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{
+    bracketed,
     ext::IdentExt,
     parse::{Parse, ParseBuffer, ParseStream},
+    punctuated::Punctuated,
     spanned::Spanned,
     AngleBracketedGenericArguments, Error, Expr, Ident, LitStr, PathArguments, Result, Token,
 };
@@ -209,7 +211,10 @@ pub struct ComponentField {
 pub enum ContentField {
     ManExpr(Expr),
     Formatted(IfmtInput),
-    OnHandlerRaw(Expr),
+    OnHandlerRaw {
+        metadata: Option<Vec<Expr>>,
+        handler: Expr,
+    },
 }
 
 impl ToTokens for ContentField {
@@ -219,8 +224,14 @@ impl ToTokens for ContentField {
             ContentField::Formatted(s) => tokens.append_all(quote! {
                 __cx.raw_text(#s)
             }),
-            ContentField::OnHandlerRaw(e) => tokens.append_all(quote! {
-                __cx.event_handler(#e)
+            ContentField::OnHandlerRaw { metadata, handler } => tokens.append_all({
+                let metadata = match metadata {
+                    Some(m) => quote! { (#(#m),*) },
+                    None => quote! { () },
+                };
+                quote! {
+                    __cx.event_handler(#handler, #metadata)
+                }
             }),
         }
     }
@@ -229,15 +240,31 @@ impl ToTokens for ContentField {
 impl Parse for ComponentField {
     fn parse(input: ParseStream) -> Result<Self> {
         let name = Ident::parse_any(input)?;
-        input.parse::<Token![:]>()?;
 
         let content = {
             if name.to_string().starts_with("on") {
-                ContentField::OnHandlerRaw(input.parse()?)
+                // parse an array index expression
+                let metadata = {
+                    if input.peek(Token![:]) {
+                        // if there's a colon, then there's no metadata
+                        None
+                    } else {
+                        let between_brackets;
+                        bracketed!(between_brackets in input);
+                        let separated =
+                            Punctuated::<Expr, Token![,]>::parse_terminated(&between_brackets)?;
+                        Some(separated.into_iter().collect())
+                    }
+                };
+                input.parse::<Token![:]>()?;
+                let handler = input.parse::<Expr>()?;
+                ContentField::OnHandlerRaw { metadata, handler }
             } else if name == "key" {
+                input.parse::<Token![:]>()?;
                 let content = ContentField::Formatted(input.parse()?);
                 return Ok(Self { name, content });
             } else if input.peek(LitStr) {
+                input.parse::<Token![:]>()?;
                 let forked = input.fork();
                 let t: LitStr = forked.parse()?;
                 // the string literal must either be the end of the input or a followed by a comma
@@ -247,6 +274,7 @@ impl Parse for ComponentField {
                     ContentField::ManExpr(input.parse()?)
                 }
             } else {
+                input.parse::<Token![:]>()?;
                 ContentField::ManExpr(input.parse()?)
             }
         };

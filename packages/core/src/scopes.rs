@@ -460,12 +460,17 @@ impl<'src> ScopeState {
     }
 
     /// Create a new [`EventHandler`] from an [`FnMut`]
-    pub fn event_handler<T>(&'src self, f: impl FnMut(T) + 'src) -> EventHandler<'src, T> {
+    pub fn event_handler<T, M>(
+        &'src self,
+        f: impl FnMut(T) + 'src,
+        metadata: M,
+    ) -> EventHandler<'src, T, M> {
         let handler: &mut dyn FnMut(T) = self.bump().alloc(f);
         let caller = unsafe { BumpBox::from_raw(handler as *mut dyn FnMut(T)) };
         let callback = RefCell::new(Some(caller));
         EventHandler {
             callback,
+            metadata,
             origin: self.context().id,
         }
     }
@@ -473,9 +478,10 @@ impl<'src> ScopeState {
     /// Create a new [`AttributeValue`] with the listener variant from a callback
     ///
     /// The callback must be confined to the lifetime of the ScopeState
-    pub fn listener<T: 'static>(
+    pub fn listener<T: 'static, M: 'static>(
         &'src self,
         mut callback: impl FnMut(Event<T>) + 'src,
+        metadata: M,
     ) -> AttributeValue<'src> {
         // safety: there's no other way to create a dynamicly-dispatched bump box other than alloc + from-raw
         // This is the suggested way to build a bumpbox
@@ -492,7 +498,11 @@ impl<'src> ScopeState {
             }))
         };
 
-        AttributeValue::Listener(RefCell::new(Some(boxed)))
+        AttributeValue::Listener(EventHandler {
+            callback: RefCell::new(Some(boxed)),
+            metadata: Box::new(metadata),
+            origin: self.context().id,
+        })
     }
 
     /// Create a new [`AttributeValue`] with a value that implements [`AnyValue`]

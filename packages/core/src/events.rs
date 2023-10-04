@@ -156,15 +156,23 @@ impl<T: std::fmt::Debug> std::fmt::Debug for Event<T> {
 /// }
 ///
 /// ```
-pub struct EventHandler<'bump, T = ()> {
+pub struct EventHandler<'bump, T: ?Sized = (), M = ()> {
     pub(crate) origin: ScopeId,
+    pub(crate) metadata: M,
     pub(super) callback: RefCell<Option<ExternalListenerCallback<'bump, T>>>,
 }
 
-impl<T> Default for EventHandler<'_, T> {
+impl<T, M> EventHandler<'_, T, M> {
+    pub fn metadata(&self) -> &M {
+        &self.metadata
+    }
+}
+
+impl<T, M: Default> Default for EventHandler<'_, T, M> {
     fn default() -> Self {
         Self {
             origin: ScopeId::ROOT,
+            metadata: Default::default(),
             callback: Default::default(),
         }
     }

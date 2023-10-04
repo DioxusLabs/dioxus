@@ -252,7 +252,11 @@ impl Writer<'_> {
                 write!(self.out, "{}: {}", name.to_token_stream(), out)?;
             }
 
-            ElementAttr::EventTokens { name, tokens } => {
+            ElementAttr::EventTokens {
+                name,
+                tokens,
+                metadata,
+            } => {
                 let out = self.retrieve_formatted_expr(tokens).to_string();
 
                 let mut lines = out.split('\n').peekable();
@@ -260,19 +264,33 @@ impl Writer<'_> {
 
                 // a one-liner for whatever reason
                 // Does not need a new line
-                if lines.peek().is_none() {
-                    write!(self.out, "{name}: {first}")?;
-                } else {
-                    writeln!(self.out, "{name}: {first}")?;
-
-                    while let Some(line) = lines.next() {
-                        self.out.indented_tab()?;
-                        write!(self.out, "{line}")?;
-                        if lines.peek().is_none() {
-                            write!(self.out, "")?;
-                        } else {
-                            writeln!(self.out)?;
+                if lines.peek().is_some() {
+                    writeln!(self.out, "")?;
+                }
+                write!(self.out, "{name}")?;
+                if let Some(metadata) = metadata {
+                    write!(self.out, "[")?;
+                    for expr in metadata {
+                        let out = self.retrieve_formatted_expr(expr).to_string();
+                        let mut lines = out.split('\n').peekable();
+                        let first = lines.next().unwrap();
+                        write!(self.out, "{first}")?;
+                        for line in lines {
+                            self.out.indented_tab()?;
+                            write!(self.out, "{line}")?;
                         }
+                    }
+                    write!(self.out, "]")?;
+                }
+                write!(self.out, ": {first}")?;
+
+                while let Some(line) = lines.next() {
+                    self.out.indented_tab()?;
+                    write!(self.out, "{line}")?;
+                    if lines.peek().is_none() {
+                        write!(self.out, "")?;
+                    } else {
+                        writeln!(self.out)?;
                     }
                 }
             }

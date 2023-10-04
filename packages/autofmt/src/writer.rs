@@ -159,10 +159,14 @@ impl<'a> Writer<'a> {
                 ElementAttr::CustomAttrExpression { name, value } => {
                     name.to_token_stream().to_string().len() + value.span().line_length() + 6
                 }
-                ElementAttr::EventTokens { tokens, name } => {
+                ElementAttr::EventTokens {
+                    tokens,
+                    name,
+                    metadata,
+                } => {
                     let location = Location::new(tokens.span().start());
 
-                    let len = if let std::collections::hash_map::Entry::Vacant(e) =
+                    let mut len = if let std::collections::hash_map::Entry::Vacant(e) =
                         self.cached_formats.entry(location)
                     {
                         let formatted = prettyplease::unparse_expr(tokens);
@@ -176,6 +180,28 @@ impl<'a> Writer<'a> {
                     } else {
                         self.cached_formats[&location].len()
                     };
+
+                    if let Some(metadata) = metadata {
+                        for expr in metadata {
+                            let location = Location::new(expr.span().start());
+
+                            len += if let std::collections::hash_map::Entry::Vacant(e) =
+                                self.cached_formats.entry(location)
+                            {
+                                let formatted = prettyplease::unparse_expr(expr);
+                                let len = if formatted.contains('\n') {
+                                    10000
+                                } else {
+                                    formatted.len()
+                                };
+                                e.insert(formatted);
+                                len
+                            } else {
+                                self.cached_formats[&location].len()
+                            };
+                            len += 2;
+                        }
+                    }
 
                     len + name.span().line_length() + 6
                 }

@@ -182,11 +182,32 @@ impl Writer<'_> {
                         s.source.as_ref().unwrap().to_token_stream()
                     )?;
                 }
-                ContentField::OnHandlerRaw(exp) => {
-                    let out = prettyplease::unparse_expr(exp);
+                ContentField::OnHandlerRaw { handler, metadata } => {
+                    let out = prettyplease::unparse_expr(handler);
                     let mut lines = out.split('\n').peekable();
+                    write!(self.out, "{name}")?;
+                    if let Some(metadata) = metadata {
+                        write!(self.out, "[")?;
+                        for (index, expr) in metadata.iter().enumerate() {
+                            let is_last = index == metadata.len() - 1;
+
+                            let out = prettyplease::unparse_expr(expr);
+                            let mut lines = out.split('\n').peekable();
+                            let first = lines.next().unwrap();
+                            write!(self.out, "{first}")?;
+                            for line in lines {
+                                self.out.new_line()?;
+                                self.out.indented_tab()?;
+                                write!(self.out, "{line}")?;
+                            }
+                            if !is_last {
+                                write!(self.out, ", ")?;
+                            }
+                        }
+                        write!(self.out, "]")?;
+                    }
                     let first = lines.next().unwrap();
-                    write!(self.out, "{name}: {first}")?;
+                    write!(self.out, ": {first}")?;
                     for line in lines {
                         self.out.new_line()?;
                         self.out.indented_tab()?;
@@ -223,7 +244,31 @@ impl Writer<'_> {
             .iter()
             .map(|field| match &field.content {
                 ContentField::Formatted(s) => ifmt_to_string(s).len() ,
-                ContentField::OnHandlerRaw(exp) | ContentField::ManExpr(exp) => {
+                ContentField::OnHandlerRaw { handler, metadata} => {
+                    let formatted = prettyplease::unparse_expr(handler);
+                    let mut len= if formatted.contains('\n') {
+                        10000
+                    } else {
+                        formatted.len()
+                    };
+                    self.cached_formats.insert(Location::new(handler.span().start()) , formatted);
+
+                    if let Some(metadata) = metadata{
+                        for expr in metadata {
+                            let formatted = prettyplease::unparse_expr(expr);
+                            len += if formatted.contains('\n') {
+                                10000
+                            } else {
+                                formatted.len()
+                            };
+                            self.cached_formats.insert(Location::new(expr.span().start()) , formatted);
+                            len += 2;
+                        }
+                    }
+
+                    len
+                },
+                ContentField::ManExpr(exp) => {
                     let formatted = prettyplease::unparse_expr(exp);
                     let len = if formatted.contains('\n') {
                         10000

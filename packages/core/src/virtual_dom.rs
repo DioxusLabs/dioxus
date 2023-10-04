@@ -397,7 +397,7 @@ impl VirtualDom {
                             let origin = el_ref.scope;
                             self.runtime.scope_stack.borrow_mut().push(origin);
                             self.runtime.rendering.set(false);
-                            if let Some(cb) = listener.borrow_mut().as_deref_mut() {
+                            if let Some(cb) = listener.callback.borrow_mut().as_deref_mut() {
                                 cb(uievent.clone());
                             }
                             self.runtime.scope_stack.borrow_mut().pop();
@@ -433,7 +433,7 @@ impl VirtualDom {
                                 let origin = el_ref.scope;
                                 self.runtime.scope_stack.borrow_mut().push(origin);
                                 self.runtime.rendering.set(false);
-                                if let Some(cb) = listener.borrow_mut().as_deref_mut() {
+                                if let Some(cb) = listener.callback.borrow_mut().as_deref_mut() {
                                     cb(uievent.clone());
                                 }
                                 self.runtime.scope_stack.borrow_mut().pop();

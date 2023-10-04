@@ -12,12 +12,15 @@ macro_rules! impl_event {
         $(
             $( #[$attr] )*
             #[inline]
-            pub fn $name<'a, E: crate::EventReturn<T>, T>(_cx: &'a ::dioxus_core::ScopeState, mut _f: impl FnMut(::dioxus_core::Event<$data>) -> E + 'a) -> ::dioxus_core::Attribute<'a> {
+            pub fn $name<'a, E: crate::EventReturn<T>, T>(_cx: &'a ::dioxus_core::ScopeState, mut _f: impl FnMut(::dioxus_core::Event<$data>) -> E + 'a, _metadata: ()) -> ::dioxus_core::Attribute<'a> {
                 ::dioxus_core::Attribute::new(
                     stringify!($name),
-                    _cx.listener(move |e: ::dioxus_core::Event<crate::PlatformEventData>| {
-                        _f(e.map(|e|e.into())).spawn(_cx);
-                    }),
+                    _cx.listener(
+                        move |e: ::dioxus_core::Event<crate::PlatformEventData>| {
+                            _f(e.map(|e|e.into())).spawn(_cx);
+                        },
+                        _metadata
+                    ),
                     None,
                     false,
                 )

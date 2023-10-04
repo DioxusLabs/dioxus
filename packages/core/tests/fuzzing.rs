@@ -216,7 +216,7 @@ fn create_random_dynamic_attr(cx: &ScopeState) -> Attribute {
         4 => cx.any_value(rand::random::<usize>()),
         5 => AttributeValue::None,
         6 => {
-            let value = cx.listener(|e: Event<String>| println!("{:?}", e));
+            let value = cx.listener(|e: Event<String>| println!("{:?}", e), ());
             return Attribute::new("ondata", value, None, false);
         }
         _ => unreachable!(),
