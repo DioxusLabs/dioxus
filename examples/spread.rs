@@ -20,6 +20,7 @@ fn app(cx: Scope) -> Element {
     }
 }
 
+#[component]
 fn Component<'a>(cx: Scope<'a, Props<'a>>) -> Element<'a> {
     render! {
         audio {
