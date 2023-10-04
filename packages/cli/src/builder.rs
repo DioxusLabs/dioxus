@@ -442,14 +442,14 @@ pub fn gen_page(config: &DioxusConfig, serve: bool) -> String {
         String::from(include_str!("./assets/index.html"))
     };
 
-    let resouces = config.web.resource.clone();
+    let resources = config.web.resource.clone();
 
-    let mut style_list = resouces.style.unwrap_or_default();
-    let mut script_list = resouces.script.unwrap_or_default();
+    let mut style_list = resources.style.unwrap_or_default();
+    let mut script_list = resources.script.unwrap_or_default();
 
     if serve {
-        let mut dev_style = resouces.dev.style.clone().unwrap_or_default();
-        let mut dev_script = resouces.dev.script.unwrap_or_default();
+        let mut dev_style = resources.dev.style.clone().unwrap_or_default();
+        let mut dev_script = resources.dev.script.unwrap_or_default();
         style_list.append(&mut dev_style);
         script_list.append(&mut dev_script);
     }
