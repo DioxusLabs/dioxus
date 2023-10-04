@@ -34,8 +34,8 @@ pub fn Login(cx: Scope, query_string: String) -> Element {
                         div{"Error while attempting to log in"}
                         Link{
                             to: home_url, "Go back home", onclick: move |_|{
-                                AuthTokenState::use_persistent_set(fermi_auth_token, AuthTokenState{id_token: None, refresh_token: None});
-                                AuthRequestState::use_persistent_set(fermi_auth_request, AuthRequestState{auth_request: None});
+                                AuthTokenState::use_persistent_set(fermi_auth_token, AuthTokenState::default());
+                                AuthRequestState::use_persistent_set(fermi_auth_request, AuthRequestState::default());
                             }
                         }
                     }

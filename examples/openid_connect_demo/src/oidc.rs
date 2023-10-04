@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::env::DIOXUS_FRONT_CLIENT_ID;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct ClientState {
     pub oidc_client: Option<CoreClient>,
 }
