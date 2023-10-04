@@ -375,30 +375,14 @@ impl VirtualDom {
                     for (idx, attr) in template.dynamic_attrs.iter().enumerate() {
                         let this_path = node_template.attr_paths[idx];
 
-                        fn add_listener<'a>(
-                            attribute: &'a Attribute<'a>,
-                            event_name: &str,
-                            listeners: &mut Vec<&'a AttributeValue<'a>>,
-                        ) {
-                            if attribute.name.trim_start_matches("on") == event_name {
-                                listeners.push(&attribute.value);
-                            }
-
-                            listeners.push(&attribute.value);
-                        }
-
                         // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
                         if target_path.is_decendant(&this_path) {
-                            match &attr.ty {
-                                AttributeType::Single(attribute) => {
-                                    add_listener(attribute, name, &mut listeners);
+                            attr.ty.for_each(|attribute| {
+                                if attribute.name.trim_start_matches("on") == name {
+                                    listeners.push(&attribute.value);
                                 }
-                                AttributeType::Many(attributes) => {
-                                    for attribute in *attributes {
-                                        add_listener(attribute, name, &mut listeners);
-                                    }
-                                }
-                            }
+                            });
+
                             // Break if this is the exact target element.
                             // This means we won't call two listeners with the same name on the same element. This should be
                             // documented, or be rejected from the rsx! macro outright
