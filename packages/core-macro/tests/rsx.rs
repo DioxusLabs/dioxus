@@ -1,5 +1,3 @@
-use dioxus::prelude::*;
-
 #[test]
 fn rsx() {
     let t = trybuild::TestCases::new();

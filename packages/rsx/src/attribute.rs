@@ -37,11 +37,25 @@ impl ToTokens for AttributeType {
     }
 }
 
-#[derive(PartialEq, Eq, Clone, Debug, Hash)]
+#[derive(Clone, Debug)]
 pub struct ElementAttrNamed {
     pub el_name: ElementName,
     pub attr: ElementAttr,
 }
+
+impl Hash for ElementAttrNamed {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.attr.name.hash(state);
+    }
+}
+
+impl PartialEq for ElementAttrNamed {
+    fn eq(&self, other: &Self) -> bool {
+        self.attr == other.attr
+    }
+}
+
+impl Eq for ElementAttrNamed {}
 
 impl ElementAttrNamed {
     pub(crate) fn try_combine(&self, other: &Self) -> Option<Self> {
