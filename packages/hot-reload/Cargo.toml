@@ -27,4 +27,4 @@ ignore = { version = "0.4.19", optional = true }
 default = ["web"]
 web = ["dep:dioxus-html"]
 custom_file_watcher = ["ignore", "chrono", "notify", "execute", "once_cell", "ignore"]
-file_watcher = ["web", "custom_file_watcher", "dioxus-html/hot-reload-context"]
+file_watcher = ["custom_file_watcher", "dioxus-html/hot-reload-context"]
