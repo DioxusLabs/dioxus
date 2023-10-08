@@ -36,7 +36,7 @@ fn suspended_child(cx: Scope) -> Element {
         cx.spawn(async move {
             val += 1;
         });
-        return cx.suspend()?;
+        cx.suspend()?;
     }
 
     render!("child")
