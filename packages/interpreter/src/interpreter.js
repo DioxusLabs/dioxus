@@ -1,387 +1,8 @@
 import { setAttributeInner } from "./common.js";
 
-class ListenerMap {
-  constructor(root) {
-    // bubbling events can listen at the root element
-    this.global = {};
-    // non bubbling events listen at the element the listener was created at
-    this.local = {};
-    this.root = root;
-  }
-
-  create(event_name, element, handler, bubbles) {
-    if (bubbles) {
-      if (this.global[event_name] === undefined) {
-        this.global[event_name] = {};
-        this.global[event_name].active = 1;
-        this.global[event_name].callback = handler;
-        this.root.addEventListener(event_name, handler);
-      } else {
-        this.global[event_name].active++;
-      }
-    } else {
-      const id = element.getAttribute("data-dioxus-id");
-      if (!this.local[id]) {
-        this.local[id] = {};
-      }
-      this.local[id][event_name] = handler;
-      element.addEventListener(event_name, handler);
-    }
-  }
-
-  remove(element, event_name, bubbles) {
-    if (bubbles) {
-      this.global[event_name].active--;
-      if (this.global[event_name].active === 0) {
-        this.root.removeEventListener(
-          event_name,
-          this.global[event_name].callback
-        );
-        delete this.global[event_name];
-      }
-    } else {
-      const id = element.getAttribute("data-dioxus-id");
-      delete this.local[id][event_name];
-      if (this.local[id].length === 0) {
-        delete this.local[id];
-      }
-      element.removeEventListener(event_name, handler);
-    }
-  }
-
-  removeAllNonBubbling(element) {
-    const id = element.getAttribute("data-dioxus-id");
-    delete this.local[id];
-  }
-}
-
 class InterpreterConfig {
   constructor(intercept_link_redirects) {
     this.intercept_link_redirects = intercept_link_redirects;
-  }
-}
-
-class Interpreter {
-  constructor(root, config) {
-    this.config = config;
-    this.root = root;
-    this.listeners = new ListenerMap(root);
-    this.nodes = [root];
-    this.stack = [root];
-    this.handlers = {};
-    this.templates = {};
-    this.lastNodeWasText = false;
-  }
-  top() {
-    return this.stack[this.stack.length - 1];
-  }
-  pop() {
-    return this.stack.pop();
-  }
-  MountToRoot() {
-    this.AppendChildren(this.stack.length - 1);
-  }
-  SetNode(id, node) {
-    this.nodes[id] = node;
-  }
-  PushRoot(root) {
-    const node = this.nodes[root];
-    this.stack.push(node);
-  }
-  PopRoot() {
-    this.stack.pop();
-  }
-  AppendChildren(many) {
-    // let root = this.nodes[id];
-    let root = this.stack[this.stack.length - 1 - many];
-    let to_add = this.stack.splice(this.stack.length - many);
-    for (let i = 0; i < many; i++) {
-      root.appendChild(to_add[i]);
-    }
-  }
-  ReplaceWith(root_id, m) {
-    let root = this.nodes[root_id];
-    let els = this.stack.splice(this.stack.length - m);
-    if (is_element_node(root.nodeType)) {
-      this.listeners.removeAllNonBubbling(root);
-    }
-    root.replaceWith(...els);
-  }
-  InsertAfter(root, n) {
-    let old = this.nodes[root];
-    let new_nodes = this.stack.splice(this.stack.length - n);
-    old.after(...new_nodes);
-  }
-  InsertBefore(root, n) {
-    let old = this.nodes[root];
-    let new_nodes = this.stack.splice(this.stack.length - n);
-    old.before(...new_nodes);
-  }
-  Remove(root) {
-    let node = this.nodes[root];
-    if (node !== undefined) {
-      if (is_element_node(node)) {
-        this.listeners.removeAllNonBubbling(node);
-      }
-      node.remove();
-    }
-  }
-  CreateTextNode(text, root) {
-    const node = document.createTextNode(text);
-    this.nodes[root] = node;
-    this.stack.push(node);
-  }
-  CreatePlaceholder(root) {
-    let el = document.createElement("pre");
-    el.hidden = true;
-    this.stack.push(el);
-    this.nodes[root] = el;
-  }
-  NewEventListener(event_name, root, bubbles, handler) {
-    const element = this.nodes[root];
-    element.setAttribute("data-dioxus-id", `${root}`);
-    this.listeners.create(event_name, element, handler, bubbles);
-  }
-  RemoveEventListener(root, event_name, bubbles) {
-    const element = this.nodes[root];
-    element.removeAttribute(`data-dioxus-id`);
-    this.listeners.remove(element, event_name, bubbles);
-  }
-  SetText(root, text) {
-    this.nodes[root].textContent = text;
-  }
-  SetAttribute(id, field, value, ns) {
-    if (value === null) {
-      this.RemoveAttribute(id, field, ns);
-    } else {
-      const node = this.nodes[id];
-      setAttributeInner(node, field, value, ns);
-    }
-  }
-  RemoveAttribute(root, field, ns) {
-    const node = this.nodes[root];
-    if (!ns) {
-      switch (field) {
-        case "value":
-          node.value = "";
-          break;
-        case "checked":
-          node.checked = false;
-          break;
-        case "selected":
-          node.selected = false;
-          break;
-        case "dangerous_inner_html":
-          node.innerHTML = "";
-          break;
-        default:
-          node.removeAttribute(field);
-          break;
-      }
-    } else if (ns == "style") {
-      node.style.removeProperty(name);
-    } else {
-      node.removeAttributeNS(ns, field);
-    }
-  }
-
-  GetClientRect(id) {
-    const node = this.nodes[id];
-    if (!node) {
-      return;
-    }
-    const rect = node.getBoundingClientRect();
-    return {
-      type: "GetClientRect",
-      origin: [rect.x, rect.y],
-      size: [rect.width, rect.height],
-    };
-  }
-
-  ScrollTo(id, behavior) {
-    const node = this.nodes[id];
-    if (!node) {
-      return false;
-    }
-    node.scrollIntoView({
-      behavior: behavior,
-    });
-    return true;
-  }
-
-  /// Set the focus on the element
-  SetFocus(id, focus) {
-    const node = this.nodes[id];
-    if (!node) {
-      return false;
-    }
-    if (focus) {
-      node.focus();
-    } else {
-      node.blur();
-    }
-    return true;
-  }
-
-  handleEdits(edits) {
-    for (let template of edits.templates) {
-      this.SaveTemplate(template);
-    }
-
-    for (let edit of edits.edits) {
-      this.handleEdit(edit);
-    }
-
-    /*POST_HANDLE_EDITS*/
-  }
-
-  SaveTemplate(template) {
-    let roots = [];
-    for (let root of template.roots) {
-      roots.push(this.MakeTemplateNode(root));
-    }
-    this.templates[template.name] = roots;
-  }
-
-  MakeTemplateNode(node) {
-    switch (node.type) {
-      case "Text":
-        return document.createTextNode(node.text);
-      case "Dynamic":
-        let dyn = document.createElement("pre");
-        dyn.hidden = true;
-        return dyn;
-      case "DynamicText":
-        return document.createTextNode("placeholder");
-      case "Element":
-        let el;
-
-        if (node.namespace != null) {
-          el = document.createElementNS(node.namespace, node.tag);
-        } else {
-          el = document.createElement(node.tag);
-        }
-
-        for (let attr of node.attrs) {
-          if (attr.type == "Static") {
-            setAttributeInner(el, attr.name, attr.value, attr.namespace);
-          }
-        }
-
-        for (let child of node.children) {
-          el.appendChild(this.MakeTemplateNode(child));
-        }
-
-        return el;
-    }
-  }
-  AssignId(path, id) {
-    this.nodes[id] = this.LoadChild(path);
-  }
-  LoadChild(path) {
-    // iterate through each number and get that child
-    let node = this.stack[this.stack.length - 1];
-
-    for (let i = 0; i < path.length; i++) {
-      node = node.childNodes[path[i]];
-    }
-
-    return node;
-  }
-  HydrateText(path, value, id) {
-    let node = this.LoadChild(path);
-
-    if (node.nodeType == Node.TEXT_NODE) {
-      node.textContent = value;
-    } else {
-      // replace with a textnode
-      let text = document.createTextNode(value);
-      node.replaceWith(text);
-      node = text;
-    }
-
-    this.nodes[id] = node;
-  }
-  ReplacePlaceholder(path, m) {
-    let els = this.stack.splice(this.stack.length - m);
-    let node = this.LoadChild(path);
-    node.replaceWith(...els);
-  }
-  LoadTemplate(name, index, id) {
-    let node = this.templates[name][index].cloneNode(true);
-    this.nodes[id] = node;
-    this.stack.push(node);
-  }
-  handleEdit(edit) {
-    switch (edit.type) {
-      case "AppendChildren":
-        this.AppendChildren(edit.m);
-        break;
-      case "AssignId":
-        this.AssignId(edit.path, edit.id);
-        break;
-      case "CreatePlaceholder":
-        this.CreatePlaceholder(edit.id);
-        break;
-      case "CreateTextNode":
-        this.CreateTextNode(edit.value, edit.id);
-        break;
-      case "HydrateText":
-        this.HydrateText(edit.path, edit.value, edit.id);
-        break;
-      case "LoadTemplate":
-        this.LoadTemplate(edit.name, edit.index, edit.id);
-        break;
-      case "PushRoot":
-        this.PushRoot(edit.id);
-        break;
-      case "ReplaceWith":
-        this.ReplaceWith(edit.id, edit.m);
-        break;
-      case "ReplacePlaceholder":
-        this.ReplacePlaceholder(edit.path, edit.m);
-        break;
-      case "InsertAfter":
-        this.InsertAfter(edit.id, edit.m);
-        break;
-      case "InsertBefore":
-        this.InsertBefore(edit.id, edit.m);
-        break;
-      case "Remove":
-        this.Remove(edit.id);
-        break;
-      case "SetText":
-        this.SetText(edit.id, edit.value);
-        break;
-      case "SetAttribute":
-        this.SetAttribute(edit.id, edit.name, edit.value, edit.ns);
-        break;
-      case "RemoveAttribute":
-        this.RemoveAttribute(edit.id, edit.name, edit.ns);
-        break;
-      case "RemoveEventListener":
-        this.RemoveEventListener(edit.id, edit.name);
-        break;
-      case "NewEventListener":
-        let bubbles = event_bubbles(edit.name);
-
-        // if this is a mounted listener, we send the event immediately
-        if (edit.name === "mounted") {
-          window.ipc.postMessage(
-            serializeIpcMessage("user_event", {
-              name: edit.name,
-              element: edit.id,
-              data: null,
-              bubbles,
-            })
-          );
-        } else {
-          this.NewEventListener(edit.name, edit.id, bubbles, (event) => {
-            handler(event, edit.name, bubbles, this.config);
-          });
-        }
-        break;
-    }
   }
 }
 
@@ -444,7 +65,44 @@ function handler(event, name, bubbles, config) {
 
     let contents = serialize_event(event);
 
-    /*POST_EVENT_SERIALIZATION*/
+    // TODO: this should be liveview only
+    if (
+      target.tagName === "INPUT" &&
+      (event.type === "change" || event.type === "input")
+    ) {
+      const type = target.getAttribute("type");
+      if (type === "file") {
+        async function read_files() {
+          const files = target.files;
+          const file_contents = {};
+
+          for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+
+            file_contents[file.name] = Array.from(
+              new Uint8Array(await file.arrayBuffer())
+            );
+          }
+          let file_engine = {
+            files: file_contents,
+          };
+          contents.files = file_engine;
+
+          if (realId === null) {
+            return;
+          }
+          const message = serializeIpcMessage("user_event", {
+            name: name,
+            element: parseInt(realId),
+            data: contents,
+            bubbles,
+          });
+          window.ipc.postMessage(message);
+        }
+        read_files();
+        return;
+      }
+    }
 
     if (
       target.tagName === "FORM" &&
@@ -504,6 +162,239 @@ function find_real_id(target) {
     }
   }
   return realId;
+}
+
+class ListenerMap {
+  constructor(root) {
+    // bubbling events can listen at the root element
+    this.global = {};
+    // non bubbling events listen at the element the listener was created at
+    this.local = {};
+    this.root = null;
+  }
+
+  create(event_name, element, bubbles, handler) {
+    if (bubbles) {
+      if (this.global[event_name] === undefined) {
+        this.global[event_name] = {};
+        this.global[event_name].active = 1;
+        this.root.addEventListener(event_name, handler);
+      } else {
+        this.global[event_name].active++;
+      }
+    }
+    else {
+      const id = element.getAttribute("data-dioxus-id");
+      if (!this.local[id]) {
+        this.local[id] = {};
+      }
+      element.addEventListener(event_name, handler);
+    }
+  }
+
+  remove(element, event_name, bubbles) {
+    if (bubbles) {
+      this.global[event_name].active--;
+      if (this.global[event_name].active === 0) {
+        this.root.removeEventListener(event_name, this.global[event_name].callback);
+        delete this.global[event_name];
+      }
+    }
+    else {
+      const id = element.getAttribute("data-dioxus-id");
+      delete this.local[id][event_name];
+      if (this.local[id].length === 0) {
+        delete this.local[id];
+      }
+      element.removeEventListener(event_name, this.global[event_name].callback);
+    }
+  }
+
+  removeAllNonBubbling(element) {
+    const id = element.getAttribute("data-dioxus-id");
+    delete this.local[id];
+  }
+}
+function SetAttributeInner(node, field, value, ns) {
+  const name = field;
+  if (ns === "style") {
+    // ????? why do we need to do this
+    if (node.style === undefined) {
+      node.style = {};
+    }
+    node.style[name] = value;
+  } else if (ns !== null && ns !== undefined && ns !== "") {
+    node.setAttributeNS(ns, name, value);
+  } else {
+    switch (name) {
+      case "value":
+        if (value !== node.value) {
+          node.value = value;
+        }
+        break;
+      case "initial_value":
+        node.defaultValue = value;
+        break;
+      case "checked":
+        node.checked = truthy(value);
+        break;
+      case "selected":
+        node.selected = truthy(value);
+        break;
+      case "dangerous_inner_html":
+        node.innerHTML = value;
+        break;
+      default:
+        // https://github.com/facebook/react/blob/8b88ac2592c5f555f315f9440cbb665dd1e7457a/packages/react-dom/src/shared/DOMProperty.js#L352-L364
+        if (!truthy(value) && bool_attrs.hasOwnProperty(name)) {
+          node.removeAttribute(name);
+        } else {
+          node.setAttribute(name, value);
+        }
+    }
+  }
+}
+function LoadChild(array) {
+  // iterate through each number and get that child
+  node = stack[stack.length - 1];
+
+  for (let i = 0; i < array.length; i++) {
+    end = array[i];
+    for (node = node.firstChild; end > 0; end--) {
+      node = node.nextSibling;
+    }
+  }
+  return node;
+}
+const listeners = new ListenerMap();
+let nodes = [];
+let stack = [];
+let root;
+const templates = {};
+let node, els, end, k;
+function initialize(root) {
+  nodes = [root];
+  stack = [root];
+  listeners.root = root;
+}
+function AppendChildren(id, many) {
+  root = nodes[id];
+  els = stack.splice(stack.length - many);
+  for (k = 0; k < many; k++) {
+    root.appendChild(els[k]);
+  }
+}
+const bool_attrs = {
+  allowfullscreen: true,
+  allowpaymentrequest: true,
+  async: true,
+  autofocus: true,
+  autoplay: true,
+  checked: true,
+  controls: true,
+  default: true,
+  defer: true,
+  disabled: true,
+  formnovalidate: true,
+  hidden: true,
+  ismap: true,
+  itemscope: true,
+  loop: true,
+  multiple: true,
+  muted: true,
+  nomodule: true,
+  novalidate: true,
+  open: true,
+  playsinline: true,
+  readonly: true,
+  required: true,
+  reversed: true,
+  selected: true,
+  truespeed: true,
+  webkitdirectory: true,
+};
+function truthy(val) {
+  return val === "true" || val === true;
+}
+
+
+function getClientRect(id) {
+  const node = nodes[id];
+  if (!node) {
+    return;
+  }
+  const rect = node.getBoundingClientRect();
+  return {
+    type: "GetClientRect",
+    origin: [rect.x, rect.y],
+    size: [rect.width, rect.height],
+  };
+}
+
+function scrollTo(id, behavior) {
+  const node = nodes[id];
+  if (!node) {
+    return false;
+  }
+  node.scrollIntoView({
+    behavior: behavior,
+  });
+  return true;
+}
+
+/// Set the focus on the element
+function setFocus(id, focus) {
+  const node = nodes[id];
+  if (!node) {
+    return false;
+  }
+  if (focus) {
+    node.focus();
+  } else {
+    node.blur();
+  }
+  return true;
+}
+
+function saveTemplate(template) {
+  let roots = [];
+  for (let root of template.roots) {
+    roots.push(this.MakeTemplateNode(root));
+  }
+  this.templates[template.name] = roots;
+}
+
+function makeTemplateNode(node) {
+  switch (node.type) {
+    case "Text":
+      return document.createTextNode(node.text);
+    case "Dynamic":
+      let dyn = document.createElement("pre");
+      dyn.hidden = true;
+      return dyn;
+    case "DynamicText":
+      return document.createTextNode("placeholder");
+    case "Element":
+      let el;
+
+      if (node.namespace != null) {
+        el = document.createElementNS(node.namespace, node.tag);
+      } else {
+        el = document.createElement(node.tag);
+      }
+
+      for (let attr of node.attrs) {
+        if (attr.type == "Static") {
+          setAttributeInner(el, attr.name, attr.value, attr.namespace);
+        }
+      }
+
+      for (let child of node.children) {
+        el.appendChild(this.MakeTemplateNode(child));
+      }
+
+      return el;
+  }
 }
 
 function get_mouse_data(event) {

@@ -7,10 +7,9 @@ function main() {
 
 class IPC {
   constructor(root) {
-    // connect to the websocket
-    window.interpreter = new Interpreter(root, new InterpreterConfig(false));
-
-    let ws = new WebSocket(WS_ADDR);
+    initialize(root);
+    const ws = new WebSocket(WS_ADDR);
+    ws.binaryType = "arraybuffer";
 
     function ping() {
       ws.send("__ping__");
@@ -27,17 +26,23 @@ class IPC {
     };
 
     ws.onmessage = (message) => {
-      // Ignore pongs
-      if (message.data != "__pong__") {
-        const event = JSON.parse(message.data);
-        switch (event.type) {
-          case "edits":
-            let edits = event.data;
-            window.interpreter.handleEdits(edits);
-            break;
-          case "query":
-            Function("Eval", `"use strict";${event.data};`)();
-            break;
+      if (message.data instanceof ArrayBuffer) {
+        // binary frame
+        run_from_bytes(message.data);
+      } else {
+        // text frame
+        // Ignore pongs
+        if (message.data != "__pong__") {
+          const event = JSON.parse(message.data);
+          switch (event.type) {
+            case "edits":
+              let edits = event.data;
+              window.interpreter.handleEdits(edits);
+              break;
+            case "query":
+              Function("Eval", `"use strict";${event.data};`)();
+              break;
+          }
         }
       }
     };
@@ -49,3 +54,5 @@ class IPC {
     this.ws.send(msg);
   }
 }
+
+main();

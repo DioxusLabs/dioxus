@@ -14,6 +14,7 @@ use dioxus_core::ScopeState;
 use dioxus_core::VirtualDom;
 #[cfg(all(feature = "hot-reload", debug_assertions))]
 use dioxus_hot_reload::HotReloadMsg;
+use dioxus_interpreter_js::Channel;
 use slab::Slab;
 use wry::application::accelerator::Accelerator;
 use wry::application::event::Event;
@@ -33,6 +34,18 @@ pub fn use_window(cx: &ScopeState) -> &DesktopContext {
     cx.use_hook(|| cx.consume_context::<DesktopContext>())
         .as_ref()
         .unwrap()
+}
+
+struct EditQueue {
+    queue: Vec<Vec<u8>>,
+}
+
+impl EditQueue {
+    fn push(&mut self, channel: &mut Channel) {
+        let iter = channel.export_memory();
+        self.queue.push(iter.collect());
+        channel.reset();
+    }
 }
 
 pub(crate) type WebviewQueue = Rc<RefCell<Vec<WebviewHandler>>>;
@@ -67,6 +80,10 @@ pub struct DesktopService {
 
     pub(crate) shortcut_manager: ShortcutRegistry,
 
+    pub(crate) event_queue: Rc<RefCell<Vec<Vec<u8>>>>,
+
+    pub(crate) channel: Channel,
+
     #[cfg(target_os = "ios")]
     pub(crate) views: Rc<RefCell<Vec<*mut objc::runtime::Object>>>,
 }
@@ -100,6 +117,8 @@ impl DesktopService {
             pending_windows: webviews,
             event_handlers,
             shortcut_manager,
+            event_queue: Rc::new(RefCell::new(Vec::new())),
+            channel: Channel::new(),
             #[cfg(target_os = "ios")]
             views: Default::default(),
         }
