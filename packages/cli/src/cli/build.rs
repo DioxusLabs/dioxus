@@ -1,5 +1,7 @@
 #[cfg(feature = "plugin")]
 use crate::plugin::PluginManager;
+use crate::server::fullstack::FullstackServerEnvGuard;
+use crate::server::fullstack::FullstackWebEnvGuard;
 use crate::{cfg::Platform, WebAssetConfigDropGuard};
 
 use super::*;
@@ -60,6 +62,7 @@ impl Build {
                         }
                         None => web_config.features = Some(vec![web_feature]),
                     };
+                    let _gaurd = FullstackWebEnvGuard::new(self.build.debug);
                     crate::builder::build(&crate_config, false, self.build.skip_assets)?;
                 }
                 {
@@ -72,6 +75,7 @@ impl Build {
                         }
                         None => desktop_config.features = Some(vec![desktop_feature]),
                     };
+                    let _gaurd = FullstackServerEnvGuard::new(self.build.debug);
                     crate::builder::build_desktop(&desktop_config, false, self.build.skip_assets)?;
                 }
             }

@@ -15,6 +15,11 @@ pub struct ConfigOptsBuild {
     #[serde(default)]
     pub release: bool,
 
+    /// Build with all debug info [default: false]
+    #[clap(long)]
+    #[serde(default)]
+    pub debug: bool,
+
     // Use verbose output [default: false]
     #[clap(long)]
     #[serde(default)]
@@ -63,6 +68,7 @@ impl From<ConfigOptsServe> for ConfigOptsBuild {
             client_feature: serve.client_feature,
             server_feature: serve.server_feature,
             skip_assets: serve.skip_assets,
+            debug: serve.debug,
         }
     }
 }
@@ -91,6 +97,11 @@ pub struct ConfigOptsServe {
     #[clap(long)]
     #[serde(default)]
     pub release: bool,
+
+    /// Build with all debug info [default: false]
+    #[clap(long)]
+    #[serde(default)]
+    pub debug: bool,
 
     // Use verbose output [default: false]
     #[clap(long)]
