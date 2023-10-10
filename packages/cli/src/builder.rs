@@ -719,7 +719,6 @@ fn build_assets(config: &CrateConfig) -> Result<Vec<PathBuf>> {
 
     Ok(result)
 }
-
 /// Process any assets collected from the binary
 fn process_assets(config: &CrateConfig) -> anyhow::Result<()> {
     let manifest = config.asset_manifest();
@@ -739,38 +738,6 @@ fn process_assets(config: &CrateConfig) -> anyhow::Result<()> {
 
     Ok(())
 }
-
-// use binary_install::{Cache, Download};
-
-// /// Attempts to find `wasm-opt` in `PATH` locally, or failing that downloads a
-// /// precompiled binary.
-// ///
-// /// Returns `Some` if a binary was found or it was successfully downloaded.
-// /// Returns `None` if a binary wasn't found in `PATH` and this platform doesn't
-// /// have precompiled binaries. Returns an error if we failed to download the
-// /// binary.
-// pub fn find_wasm_opt(
-//     cache: &Cache,
-//     install_permitted: bool,
-// ) -> Result<install::Status, failure::Error> {
-//     // First attempt to look up in PATH. If found assume it works.
-//     if let Ok(path) = which::which("wasm-opt") {
-//         PBAR.info(&format!("found wasm-opt at {:?}", path));
-
-//         match path.as_path().parent() {
-//             Some(path) => return Ok(install::Status::Found(Download::at(path))),
-//             None => {}
-//         }
-//     }
-
-//     let version = "version_78";
-//     Ok(install::download_prebuilt(
-//         &install::Tool::WasmOpt,
-//         cache,
-//         version,
-//         install_permitted,
-//     )?)
-// }
 
 pub(crate) struct WebAssetConfigDropGuard;
 
