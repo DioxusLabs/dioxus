@@ -106,7 +106,7 @@ use dioxus_signals::*;
 #[component]
 fn App(cx: Scope) -> Element {
     let signal = use_signal(cx, || 0);
-    let doubled = use_selector(cx, || signal * 2);
+    let doubled = use_selector(cx, move || signal * 2);
 
     render! {
         button {
@@ -114,7 +114,7 @@ fn App(cx: Scope) -> Element {
             "Increase"
         }
         Child {
-            signal: signal
+            signal: doubled
         }
     }
 }
