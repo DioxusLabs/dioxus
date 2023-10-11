@@ -1,3 +1,4 @@
+use crate::SignalMap;
 use std::{
     cell::{Ref, RefCell, RefMut},
     ops::{Deref, DerefMut},
@@ -251,6 +252,11 @@ impl<T: 'static> Signal<T> {
     pub fn with_mut<O>(&self, f: impl FnOnce(&mut T) -> O) -> O {
         let mut write = self.write();
         f(&mut *write)
+    }
+
+    /// Map the signal to a new type.
+    pub fn map<O>(self, f: fn(&T) -> &O) -> SignalMap<T, O> {
+        SignalMap::new(self, f)
     }
 }
 
