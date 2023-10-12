@@ -31,4 +31,4 @@ let store = Store::default();
 
 ## How it works
 
-Internally 
+Internally

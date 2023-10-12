@@ -467,6 +467,7 @@ pub fn gen_page(config: &CrateConfig, serve: bool, skip_assets: bool) -> String 
         String::from(include_str!("./assets/index.html"))
     };
 
+
     let resources = config.dioxus_config.web.resource.clone();
 
     let mut style_list = resources.style.unwrap_or_default();
@@ -719,6 +720,7 @@ fn build_assets(config: &CrateConfig) -> Result<Vec<PathBuf>> {
 
     Ok(result)
 }
+
 /// Process any assets collected from the binary
 fn process_assets(config: &CrateConfig) -> anyhow::Result<()> {
     let manifest = config.asset_manifest();
