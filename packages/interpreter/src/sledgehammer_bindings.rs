@@ -288,7 +288,7 @@ mod js {
 #[cfg(not(feature = "web"))]
 #[bindgen]
 mod js {
-    const JS_FILE: &str = "./src/interpreter.js";
+    const JS_FILE: &str = "./packages/interpreter/src/interpreter.js";
 
     fn mount_to_root() {
         "{AppendChildren(root, stack.length-1);}"
@@ -329,10 +329,10 @@ mod js {
     fn create_text_node(text: &str, id: u32) {
         "{node = document.createTextNode($text$); nodes[$id$] = node; stack.push(node);}"
     }
-    fn create_element(element: &str<u8, el>) {
+    fn create_element(element: &'static str<u8, el>) {
         "{stack.push(document.createElement($element$))}"
     }
-    fn create_element_ns(element: &str<u8, el>, ns: &str<u8, namespace>) {
+    fn create_element_ns(element: &'static str<u8, el>, ns: &'static str<u8, namespace>) {
         "{stack.push(document.createElementNS($ns$, $element$))}"
     }
     fn create_placeholder(id: u32) {
@@ -343,6 +343,7 @@ mod js {
     }
     fn new_event_listener(event_name: &str<u8, evt>, id: u32, bubbles: u8) {
         r#"
+        bubbles = bubbles == 1;
         node = nodes[id];
         if(node.listening){
             node.listening += 1;
@@ -352,10 +353,10 @@ mod js {
         node.setAttribute('data-dioxus-id', `\${id}`);
 
         // if this is a mounted listener, we send the event immediately
-        if (edit.name === "mounted") {
+        if (event_name === "mounted") {
             window.ipc.postMessage(
                 serializeIpcMessage("user_event", {
-                    name: edit.name,
+                    name: event_name,
                     element: edit.id,
                     data: null,
                     bubbles,

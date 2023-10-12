@@ -1,3 +1,5 @@
+const config = new InterpreterConfig(false);
+
 function main() {
   let root = window.document.getElementById("main");
   if (root != null) {

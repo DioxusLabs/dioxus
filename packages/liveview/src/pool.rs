@@ -248,7 +248,7 @@ pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), Li
 }
 
 fn add_template(
-    template: &Template,
+    template: &Template<'static>,
     channel: &mut Channel,
     templates: &mut FxHashMap<String, u16>,
     max_template_count: &mut u16,
@@ -262,7 +262,7 @@ fn add_template(
     *max_template_count += 1
 }
 
-fn create_template_node(channel: &mut Channel, v: &TemplateNode) {
+fn create_template_node(channel: &mut Channel, v: &'static TemplateNode<'static>) {
     use TemplateNode::*;
     match v {
         Element {
