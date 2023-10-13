@@ -14,7 +14,6 @@ use dioxus_core::ScopeState;
 use dioxus_core::VirtualDom;
 #[cfg(all(feature = "hot-reload", debug_assertions))]
 use dioxus_hot_reload::HotReloadMsg;
-use dioxus_interpreter_js::Channel;
 use slab::Slab;
 use wry::application::accelerator::Accelerator;
 use wry::application::event::Event;

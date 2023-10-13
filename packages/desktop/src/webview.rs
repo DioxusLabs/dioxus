@@ -44,8 +44,14 @@ pub fn build(
                 _ = proxy.send_event(UserWindowEvent(EventData::Ipc(message), window.id()));
             }
         })
-        .with_custom_protocol(String::from("dioxus"), move |r| {
-            protocol::desktop_handler(r, custom_head.clone(), index_file.clone(), &root_name)
+        .with_asynchronous_custom_protocol("dioxus".into(), move |r, responder| {
+            protocol::desktop_handler(
+                r,
+                responder,
+                custom_head.clone(),
+                index_file.clone(),
+                &root_name,
+            )
         })
         .with_file_drop_handler(move |window, evet| {
             file_handler

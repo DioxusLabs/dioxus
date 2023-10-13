@@ -12,7 +12,7 @@ keywords = ["dom", "ui", "gui", "react"]
 [dependencies]
 dioxus-core = { workspace = true, features = ["serialize"] }
 dioxus-html = { workspace = true, features = ["serialize", "native-bind"] }
-dioxus-interpreter-js = { workspace = true }
+dioxus-interpreter-js = { workspace = true, features = ["sledgehammer"]}
 dioxus-hot-reload = { workspace = true, optional = true }
 
 serde = "1.0.136"

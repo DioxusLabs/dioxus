@@ -53,10 +53,11 @@ fn module_loader(root_name: &str) -> String {
 
 pub(super) fn desktop_handler(
     request: &Request<Vec<u8>>,
+    responder: wry::http::response::Responder,
     custom_head: Option<String>,
     custom_index: Option<String>,
     root_name: &str,
-) -> Result<Response<Cow<'static, [u8]>>> {
+) {
     // If the request is for the root, we'll serve the index.html file.
     if request.uri().path() == "/" {
         // If a custom index is provided, just defer to that, expecting the user to know what they're doing.
