@@ -18,7 +18,7 @@ dioxus-hot-reload = { workspace = true, optional = true }
 serde = "1.0.136"
 serde_json = "1.0.79"
 thiserror = { workspace = true }
-wry = { version = "0.28.0", default-features = false, features = ["protocol", "file-drop"] }
+wry = { version = "0.31.0", default-features = false, features = ["protocol", "file-drop"] }
 tracing = { workspace = true }
 futures-channel = { workspace = true }
 tokio = { workspace = true, features = [
@@ -37,10 +37,12 @@ slab = { workspace = true }
 futures-util = { workspace = true }
 urlencoding = "2.1.2"
 async-trait = "0.1.68"
+crossbeam-channel = "0.5.8"
 
 
 [target.'cfg(any(target_os = "windows",target_os = "macos",target_os = "linux",target_os = "dragonfly", target_os = "freebsd", target_os = "netbsd", target_os = "openbsd"))'.dependencies]
 rfd = "0.11.3"
+global-hotkey = { git = "https://github.com/tauri-apps/global-hotkey" }
 
 [target.'cfg(target_os = "ios")'.dependencies]
 objc = "0.2.7"

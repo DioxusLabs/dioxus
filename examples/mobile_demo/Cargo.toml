@@ -35,7 +35,7 @@ frameworks = ["WebKit"]
 [dependencies]
 anyhow = "1.0.56"
 log = "0.4.11"
-wry = "0.28.0"
+wry = "0.31.0"
 dioxus = { path = "../../packages/dioxus" }
 dioxus-desktop = { path = "../../packages/desktop", features = [
     "tokio_runtime",
