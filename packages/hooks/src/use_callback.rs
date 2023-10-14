@@ -24,6 +24,8 @@ macro_rules! use_callback {
         )
     };
 }
+
+#[must_use]
 pub fn use_callback<T, R, F>(cx: &ScopeState, make: impl FnOnce() -> R) -> impl FnMut(T) + '_
 where
     R: FnMut(T) -> F + 'static,

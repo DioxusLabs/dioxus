@@ -30,6 +30,7 @@ use std::{
 ///     ))
 /// }
 /// ```
+#[must_use]
 pub fn use_atom_state<T: 'static>(cx: &ScopeState, f: impl Writable<T>) -> &AtomState<T> {
     let root = crate::use_atom_root(cx);
 

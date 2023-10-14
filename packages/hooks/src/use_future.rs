@@ -17,6 +17,7 @@ use crate::{use_state, UseState};
 /// will be canceled before the new one is started.
 ///
 /// - dependencies: a tuple of references to values that are PartialEq + Clone
+#[must_use = "Consider using `cx.spawn` to run a future without reading its value"]
 pub fn use_future<T, F, D>(
     cx: &ScopeState,
     dependencies: D,
