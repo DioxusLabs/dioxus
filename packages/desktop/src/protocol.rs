@@ -5,8 +5,11 @@ use std::{
 };
 use wry::{
     http::{status::StatusCode, Request, Response},
+    webview::RequestAsyncResponder,
     Result,
 };
+
+use crate::desktop_context::EditQueue;
 
 fn module_loader(root_name: &str) -> String {
     let js = INTERPRETER_JS.replace(
@@ -53,10 +56,11 @@ fn module_loader(root_name: &str) -> String {
 
 pub(super) fn desktop_handler(
     request: &Request<Vec<u8>>,
-    responder: wry::http::response::Responder,
+    responder: RequestAsyncResponder,
     custom_head: Option<String>,
     custom_index: Option<String>,
     root_name: &str,
+    edit_queue: &EditQueue,
 ) {
     // If the request is for the root, we'll serve the index.html file.
     if request.uri().path() == "/" {
@@ -81,15 +85,30 @@ pub(super) fn desktop_handler(
             }
         };
 
-        return Response::builder()
+        match Response::builder()
             .header("Content-Type", "text/html")
             .body(Cow::from(body))
-            .map_err(From::from);
+        {
+            Ok(response) => {
+                responder.respond(response);
+                return;
+            }
+            Err(err) => tracing::error!("error building response: {}", err),
+        }
     } else if request.uri().path() == "/common.js" {
-        return Response::builder()
+        match Response::builder()
             .header("Content-Type", "text/javascript")
             .body(Cow::from(COMMON_JS.as_bytes()))
-            .map_err(From::from);
+        {
+            Ok(response) => {
+                responder.respond(response);
+                return;
+            }
+            Err(err) => tracing::error!("error building response: {}", err),
+        }
+    } else if request.uri().path() == "/edits" {
+        edit_queue.handle_request(responder);
+        return;
     }
 
     // Else, try to serve a file from the filesystem.
@@ -107,16 +126,42 @@ pub(super) fn desktop_handler(
     }
 
     if asset.exists() {
-        return Response::builder()
-            .header("Content-Type", get_mime_from_path(&asset)?)
-            .body(Cow::from(std::fs::read(asset)?))
-            .map_err(From::from);
+        let content_type = match get_mime_from_path(&asset) {
+            Ok(content_type) => content_type,
+            Err(err) => {
+                tracing::error!("error getting mime type: {}", err);
+                return;
+            }
+        };
+        let asset = match std::fs::read(asset) {
+            Ok(asset) => asset,
+            Err(err) => {
+                tracing::error!("error reading asset: {}", err);
+                return;
+            }
+        };
+        match Response::builder()
+            .header("Content-Type", content_type)
+            .body(Cow::from(asset))
+        {
+            Ok(response) => {
+                responder.respond(response);
+                return;
+            }
+            Err(err) => tracing::error!("error building response: {}", err),
+        }
     }
 
-    Response::builder()
+    match Response::builder()
         .status(StatusCode::NOT_FOUND)
         .body(Cow::from(String::from("Not Found").into_bytes()))
-        .map_err(From::from)
+    {
+        Ok(response) => {
+            responder.respond(response);
+            return;
+        }
+        Err(err) => tracing::error!("error building response: {}", err),
+    }
 }
 
 #[allow(unreachable_code)]

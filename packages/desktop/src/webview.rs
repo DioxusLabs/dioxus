@@ -1,6 +1,8 @@
-use crate::desktop_context::EventData;
+use crate::desktop_context::{EditQueue, EventData};
 use crate::protocol;
 use crate::{desktop_context::UserWindowEvent, Config};
+use std::sync::Arc;
+use std::sync::Mutex;
 use tao::event_loop::{EventLoopProxy, EventLoopWindowTarget};
 pub use wry;
 pub use wry::application as tao;
@@ -11,7 +13,7 @@ pub fn build(
     cfg: &mut Config,
     event_loop: &EventLoopWindowTarget<UserWindowEvent>,
     proxy: EventLoopProxy<UserWindowEvent>,
-) -> (WebView, WebContext) {
+) -> (WebView, WebContext, EditQueue) {
     let builder = cfg.window.clone();
     let window = builder.build(event_loop).unwrap();
     let file_handler = cfg.file_drop_handler.take();
@@ -32,6 +34,7 @@ pub fn build(
     }
 
     let mut web_context = WebContext::new(cfg.data_dir.clone());
+    let edit_queue = EditQueue::default();
 
     let mut webview = WebViewBuilder::new(window)
         .unwrap()
@@ -44,14 +47,18 @@ pub fn build(
                 _ = proxy.send_event(UserWindowEvent(EventData::Ipc(message), window.id()));
             }
         })
-        .with_asynchronous_custom_protocol("dioxus".into(), move |r, responder| {
-            protocol::desktop_handler(
-                r,
-                responder,
-                custom_head.clone(),
-                index_file.clone(),
-                &root_name,
-            )
+        .with_asynchronous_custom_protocol("dioxus".into(), {
+            let edit_queue = edit_queue.clone();
+            move |r, responder| {
+                protocol::desktop_handler(
+                    &r,
+                    responder,
+                    custom_head.clone(),
+                    index_file.clone(),
+                    &root_name,
+                    &edit_queue,
+                )
+            }
         })
         .with_file_drop_handler(move |window, evet| {
             file_handler
@@ -100,5 +107,5 @@ pub fn build(
         webview = webview.with_devtools(true);
     }
 
-    (webview.build().unwrap(), web_context)
+    (webview.build().unwrap(), web_context, edit_queue)
 }
