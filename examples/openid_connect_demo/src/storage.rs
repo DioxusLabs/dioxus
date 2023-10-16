@@ -14,20 +14,25 @@ pub struct StorageEntry<T> {
 }
 
 pub trait PersistentWrite<T: Serialize + Clone> {
-    fn use_persistent_set(atom_ref: &UseAtomRef<T>, entry: T);
+    fn persistent_set(atom_ref: &UseAtomRef<Option<T>>, entry: Option<T>);
 }
 
 impl PersistentWrite<AuthTokenState> for AuthTokenState {
-    fn use_persistent_set(atom_ref: &UseAtomRef<AuthTokenState>, entry: AuthTokenState) {
-        atom_ref.write().id_token = entry.clone().id_token;
-        atom_ref.write().refresh_token = entry.clone().refresh_token;
+    fn persistent_set(
+        atom_ref: &UseAtomRef<Option<AuthTokenState>>,
+        entry: Option<AuthTokenState>,
+    ) {
+        *atom_ref.write() = entry.clone();
         LocalStorage::set(DIOXUS_FRONT_AUTH_TOKEN, entry).unwrap();
     }
 }
 
 impl PersistentWrite<AuthRequestState> for AuthRequestState {
-    fn use_persistent_set(atom_ref: &UseAtomRef<AuthRequestState>, entry: AuthRequestState) {
-        atom_ref.write().auth_request = entry.clone().auth_request;
+    fn persistent_set(
+        atom_ref: &UseAtomRef<Option<AuthRequestState>>,
+        entry: Option<AuthRequestState>,
+    ) {
+        *atom_ref.write() = entry.clone();
         LocalStorage::set(DIOXUS_FRONT_AUTH_REQUEST, entry).unwrap();
     }
 }

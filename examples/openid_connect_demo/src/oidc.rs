@@ -15,6 +15,7 @@ pub struct ClientState {
     pub oidc_client: Option<CoreClient>,
 }
 
+/// State that holds the nonce and authorization url and the nonce generated to log in an user
 #[derive(Clone, Deserialize, Serialize, Default)]
 pub struct AuthRequestState {
     pub auth_request: Option<AuthRequest>,
@@ -26,9 +27,12 @@ pub struct AuthRequest {
     pub authorize_url: String,
 }
 
-#[derive(Deserialize, Serialize, Default, Clone)]
+/// State the tokens returned once the user is authenticated
+#[derive(Debug, Deserialize, Serialize, Default, Clone)]
 pub struct AuthTokenState {
+    /// Token used to identify the user
     pub id_token: Option<CoreIdToken>,
+    /// Token used to refresh the tokens if they expire
     pub refresh_token: Option<RefreshToken>,
 }
 
@@ -59,24 +63,30 @@ pub fn authorize_url(client: CoreClient) -> AuthRequest {
     }
 }
 
-pub async fn init_provider_metadata() -> ProviderMetadataWithLogout {
+pub async fn init_provider_metadata() -> Result<
+    ProviderMetadataWithLogout,
+    openidconnect::DiscoveryError<openidconnect::reqwest::Error<reqwest::Error>>,
+> {
     let issuer_url = crate::env::DIOXUS_FRONT_ISSUER_URL;
     ProviderMetadataWithLogout::discover_async(
         IssuerUrl::new(issuer_url.to_string()).unwrap(),
         async_http_client,
     )
     .await
-    .unwrap()
 }
 
-pub async fn init_oidc_client() -> CoreClient {
+pub async fn init_oidc_client(
+) -> Result<CoreClient, openidconnect::DiscoveryError<openidconnect::reqwest::Error<reqwest::Error>>>
+{
     let client_id = ClientId::new(crate::env::DIOXUS_FRONT_CLIENT_ID.to_string());
-    let provider_metadata = init_provider_metadata().await;
+    let provider_metadata = init_provider_metadata().await?;
     let client_secret = None;
     let redirect_url = RedirectUrl::new(format!("{}/login", crate::env::DIOXUS_FRONT_URL)).unwrap();
 
-    CoreClient::from_provider_metadata(provider_metadata, client_id, client_secret)
-        .set_redirect_uri(redirect_url)
+    Ok(
+        CoreClient::from_provider_metadata(provider_metadata, client_id, client_secret)
+            .set_redirect_uri(redirect_url),
+    )
 }
 
 ///TODO: Add pkce_pacifier
@@ -106,16 +116,18 @@ pub async fn exchange_refresh_token(
         .await
 }
 
-pub async fn log_out_url(id_token_hint: CoreIdToken) -> Url {
-    let provider_metadata = init_provider_metadata().await;
+pub async fn log_out_url(
+    id_token_hint: CoreIdToken,
+) -> Result<Url, openidconnect::DiscoveryError<openidconnect::reqwest::Error<reqwest::Error>>> {
+    let provider_metadata = init_provider_metadata().await?;
     let end_session_url = provider_metadata
         .additional_metadata()
         .clone()
         .end_session_endpoint
         .unwrap();
     let logout_request: LogoutRequest = LogoutRequest::from(end_session_url);
-    logout_request
+    Ok(logout_request
         .set_client_id(ClientId::new(DIOXUS_FRONT_CLIENT_ID.to_string()))
         .set_id_token_hint(&id_token_hint)
-        .http_get_url()
+        .http_get_url())
 }

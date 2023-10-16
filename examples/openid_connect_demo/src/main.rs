@@ -20,10 +20,10 @@ use crate::{
     oidc::ClientState,
 };
 pub static FERMI_CLIENT: fermi::AtomRef<ClientState> = AtomRef(|_| ClientState::default());
-pub static FERMI_AUTH_TOKEN: fermi::AtomRef<AuthTokenState> =
-    AtomRef(|_| AuthTokenState::default());
-pub static FERMI_AUTH_REQUEST: fermi::AtomRef<AuthRequestState> =
-    AtomRef(|_| AuthRequestState::default());
+
+// An option is required to prevent the component from being constantly refreshed
+pub static FERMI_AUTH_TOKEN: fermi::AtomRef<Option<AuthTokenState>> = AtomRef(|_| None);
+pub static FERMI_AUTH_REQUEST: fermi::AtomRef<Option<AuthRequestState>> = AtomRef(|_| None);
 
 fn App(cx: Scope) -> Element {
     use_init_atom_root(cx);
@@ -33,14 +33,17 @@ fn App(cx: Scope) -> Element {
         .ok()
         .unwrap_or(AuthTokenState::default());
     let fermi_auth_token = use_atom_ref(cx, &FERMI_AUTH_TOKEN);
-    *fermi_auth_token.write() = stored_auth_token;
+    if fermi_auth_token.read().is_none() {
+        *fermi_auth_token.write() = Some(stored_auth_token);
+    }
 
     let stored_auth_request = LocalStorage::get(DIOXUS_FRONT_AUTH_REQUEST)
         .ok()
         .unwrap_or(AuthRequestState::default());
-
     let fermi_auth_request = use_atom_ref(cx, &FERMI_AUTH_REQUEST);
-    *fermi_auth_request.write() = stored_auth_request;
+    if fermi_auth_request.read().is_none() {
+        *fermi_auth_request.write() = Some(stored_auth_request);
+    }
     render! { Router::<Route> {} }
 }
 
