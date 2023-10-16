@@ -143,7 +143,7 @@ where
     /// # Panics
     ///
     /// Panics if not in a Liveview context.
-    pub fn new(cx: Scope) -> Self {
+    pub fn new(cx: &ScopeState) -> Self {
         Self::new_with_initial_path(
             cx,
             "/".parse().unwrap_or_else(|err| {
@@ -158,7 +158,7 @@ where
     /// # Panics
     ///
     /// Panics if not in a Liveview context.
-    pub fn new_with_initial_path(cx: Scope, initial_path: R) -> Self {
+    pub fn new_with_initial_path(cx: &ScopeState, initial_path: R) -> Self {
         let (action_tx, action_rx) = tokio::sync::mpsc::unbounded_channel::<Action<R>>();
         let action_rx = Arc::new(Mutex::new(action_rx));
         let timeline = Arc::new(Mutex::new(Timeline::new(initial_path)));
