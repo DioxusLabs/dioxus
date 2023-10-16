@@ -1,3 +1,4 @@
+#[cfg(any(feature = "axum", feature = "warp", feature = "salvo"))]
 pub fn copy_assets() {
     #[cfg(all(
         debug_assertions,
