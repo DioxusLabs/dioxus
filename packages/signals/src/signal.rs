@@ -305,7 +305,7 @@ impl<'a, T: 'static, I: 'static> Write<'a, T, I> {
     }
 }
 
-impl<'a, T: 'static> Deref for Write<'a, T> {
+impl<'a, T: 'static, I: 'static> Deref for Write<'a, T, I> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -313,7 +313,7 @@ impl<'a, T: 'static> Deref for Write<'a, T> {
     }
 }
 
-impl<T> DerefMut for Write<'_, T> {
+impl<T, I> DerefMut for Write<'_, T, I> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.write
     }
