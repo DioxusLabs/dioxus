@@ -1,6 +1,6 @@
 # OpenID Connect example to show how to authenticate an user
 
-The environment variables must be set in order for this example to work.
+The environment variables in  `.cargo/config.toml` must be set in order for this example to work.
 
 Once they are set, you can run `dx serve`
 

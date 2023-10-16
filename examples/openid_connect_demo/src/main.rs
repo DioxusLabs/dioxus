@@ -4,7 +4,6 @@ use fermi::*;
 use gloo_storage::{LocalStorage, Storage};
 use log::LevelFilter;
 pub(crate) mod constants;
-mod env;
 pub(crate) mod model;
 pub(crate) mod oidc;
 pub(crate) mod router;
@@ -24,6 +23,10 @@ pub static FERMI_CLIENT: fermi::AtomRef<ClientState> = AtomRef(|_| ClientState::
 // An option is required to prevent the component from being constantly refreshed
 pub static FERMI_AUTH_TOKEN: fermi::AtomRef<Option<AuthTokenState>> = AtomRef(|_| None);
 pub static FERMI_AUTH_REQUEST: fermi::AtomRef<Option<AuthRequestState>> = AtomRef(|_| None);
+
+pub static DIOXUS_FRONT_ISSUER_URL: &str = env!("DIOXUS_FRONT_ISSUER_URL");
+pub static DIOXUS_FRONT_CLIENT_ID: &str = env!("DIOXUS_FRONT_CLIENT_ID");
+pub static DIOXUS_FRONT_URL: &str = env!("DIOXUS_FRONT_URL");
 
 fn App(cx: Scope) -> Element {
     use_init_atom_root(cx);

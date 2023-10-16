@@ -8,7 +8,7 @@ use openidconnect::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::env::DIOXUS_FRONT_CLIENT_ID;
+use crate::DIOXUS_FRONT_CLIENT_ID;
 
 #[derive(Clone, Debug, Default)]
 pub struct ClientState {
@@ -67,7 +67,7 @@ pub async fn init_provider_metadata() -> Result<
     ProviderMetadataWithLogout,
     openidconnect::DiscoveryError<openidconnect::reqwest::Error<reqwest::Error>>,
 > {
-    let issuer_url = crate::env::DIOXUS_FRONT_ISSUER_URL;
+    let issuer_url = crate::DIOXUS_FRONT_ISSUER_URL;
     ProviderMetadataWithLogout::discover_async(
         IssuerUrl::new(issuer_url.to_string()).unwrap(),
         async_http_client,
@@ -78,10 +78,10 @@ pub async fn init_provider_metadata() -> Result<
 pub async fn init_oidc_client(
 ) -> Result<CoreClient, openidconnect::DiscoveryError<openidconnect::reqwest::Error<reqwest::Error>>>
 {
-    let client_id = ClientId::new(crate::env::DIOXUS_FRONT_CLIENT_ID.to_string());
+    let client_id = ClientId::new(crate::DIOXUS_FRONT_CLIENT_ID.to_string());
     let provider_metadata = init_provider_metadata().await?;
     let client_secret = None;
-    let redirect_url = RedirectUrl::new(format!("{}/login", crate::env::DIOXUS_FRONT_URL)).unwrap();
+    let redirect_url = RedirectUrl::new(format!("{}/login", crate::DIOXUS_FRONT_URL)).unwrap();
 
     Ok(
         CoreClient::from_provider_metadata(provider_metadata, client_id, client_secret)

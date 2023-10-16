@@ -1,9 +1,8 @@
 use crate::{
-    env::DIOXUS_FRONT_URL,
     oidc::{token_response, AuthRequestState, AuthTokenState},
     router::Route,
     storage::PersistentWrite,
-    FERMI_AUTH_REQUEST, FERMI_AUTH_TOKEN, FERMI_CLIENT,
+    DIOXUS_FRONT_URL, FERMI_AUTH_REQUEST, FERMI_AUTH_TOKEN, FERMI_CLIENT,
 };
 use dioxus::prelude::*;
 use dioxus_router::prelude::{Link, NavigationTarget};
