@@ -298,8 +298,7 @@ impl<T> Deref for Signal<T> {
         );
 
         // Cast the closure to a trait object.
-        let reference_to_trait_object = reference_to_closure as &Self::Target;
-        reference_to_trait_object
+        reference_to_closure as &Self::Target
     }
 }
 
@@ -423,7 +422,6 @@ impl<T> Deref for ReadOnlySignal<T> {
         );
 
         // Cast the closure to a trait object.
-        let reference_to_trait_object = reference_to_closure as &Self::Target;
-        reference_to_trait_object
+        reference_to_closure as &Self::Target
     }
 }
