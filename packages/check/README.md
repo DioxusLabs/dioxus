@@ -6,7 +6,7 @@
 [![Discord chat][discord-badge]][discord-url]
 
 [crates-badge]: https://img.shields.io/crates/v/dioxus-autofmt.svg
-[crates-url]: https://crates.io/crates/dioxus-autofmt
+[crates-url]: https://crates.io/crates/dioxus-check
 [mit-badge]: https://img.shields.io/badge/license-MIT-blue.svg
 [mit-url]: https://github.com/dioxuslabs/dioxus/blob/master/LICENSE
 [actions-badge]: https://github.com/dioxuslabs/dioxus/actions/workflows/main.yml/badge.svg
@@ -16,7 +16,7 @@
 
 [Website](https://dioxuslabs.com) |
 [Guides](https://dioxuslabs.com/learn/0.4/) |
-[API Docs](https://docs.rs/dioxus-autofmt/latest/dioxus_autofmt) |
+[API Docs](https://docs.rs/dioxus-check) |
 [Chat](https://discord.gg/XgGxMSkvUM)
 
 ## Overview

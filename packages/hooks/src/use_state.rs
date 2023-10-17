@@ -30,6 +30,7 @@ use std::{
 ///     ))
 /// }
 /// ```
+#[must_use]
 pub fn use_state<T: 'static>(
     cx: &ScopeState,
     initial_state_fn: impl FnOnce() -> T,

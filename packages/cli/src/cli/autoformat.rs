@@ -46,18 +46,28 @@ impl Autoformat {
 
         // Format single file
         if let Some(file) = self.file {
-            let file_content = fs::read_to_string(&file);
+            let file_content = if file == "-" {
+                let mut contents = String::new();
+                std::io::stdin().read_to_string(&mut contents)?;
+                Ok(contents)
+            } else {
+                fs::read_to_string(&file)
+            };
 
             match file_content {
                 Ok(s) => {
                     let edits = dioxus_autofmt::fmt_file(&s);
                     let out = dioxus_autofmt::apply_formats(&s, edits);
-                    match fs::write(&file, out) {
-                        Ok(_) => {
-                            println!("formatted {}", file);
-                        }
-                        Err(e) => {
-                            eprintln!("failed to write formatted content to file: {}", e);
+                    if file == "-" {
+                        print!("{}", out);
+                    } else {
+                        match fs::write(&file, out) {
+                            Ok(_) => {
+                                println!("formatted {}", file);
+                            }
+                            Err(e) => {
+                                eprintln!("failed to write formatted content to file: {}", e);
+                            }
                         }
                     }
                 }

@@ -129,7 +129,7 @@ pub fn print_console_info(
         log::warn!(
             "{}",
             format!(
-                "There were {} warning messages during the build.",
+                "There were {} warning messages during the build. Run `cargo check` to see them.",
                 options.warnings.len() - 1
             )
             .yellow()
