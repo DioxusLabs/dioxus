@@ -264,6 +264,13 @@ impl<T: Clone + 'static> Signal<T> {
     }
 }
 
+impl Signal<bool> {
+    /// Invert the boolean value of the signal. This will trigger an update on all subscribers.
+    pub fn toggle(&self) {
+        self.set(!self.value());
+    }
+}
+
 impl<T: 'static> PartialEq for Signal<T> {
     fn eq(&self, other: &Self) -> bool {
         self.inner == other.inner
