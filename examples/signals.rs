@@ -27,6 +27,7 @@ fn app(cx: Scope) -> Element {
         button { onclick: move |_| count -= 1, "Down low!" }
         button { onclick: move |_| running.toggle(), "Toggle counter" }
         button { onclick: move |_| saved_values.push(count.value().to_string()), "Save this value" }
+        button { onclick: move |_| saved_values.write().clear(), "Clear saved values" }
 
         // We can do boolean operations on the current signal value
         if count.value() > 5 {
@@ -40,7 +41,7 @@ fn app(cx: Scope) -> Element {
 
         // We can also use the signal value as a slice
         if let &[ref first, ..,  ref last] = saved_values.read().as_slice() {
-            rsx! { li { "single element: {first}, {last}" } }
+            rsx! { li { "First and last: {first}, {last}" } }
         } else {
             rsx! { "No saved values" }
         }
