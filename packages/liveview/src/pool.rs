@@ -2,7 +2,7 @@ use crate::{
     element::LiveviewElement,
     eval::init_eval,
     query::{QueryEngine, QueryResult},
-    LiveViewError, Window, WindowEvent,
+    LiveViewError,
 };
 use dioxus_core::{prelude::*, Mutations};
 use dioxus_html::{EventData, HtmlEvent, MountedData};
@@ -126,11 +126,6 @@ pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), Li
     vdom.base_scope().provide_context(query_engine.clone());
     init_eval(vdom.base_scope());
 
-    // Create the window event channel
-    let (window_tx, window_rx) = tokio::sync::broadcast::channel(16);
-    let window = Window::new(window_rx);
-    vdom.base_scope().provide_context(window.clone());
-
     // todo: use an efficient binary packed format for this
     let edits = serde_json::to_string(&ClientUpdate::Edits(vdom.rebuild())).unwrap();
 
@@ -146,9 +141,7 @@ pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), Li
     #[serde(tag = "method", content = "params")]
     enum IpcMessage {
         #[serde(rename = "user_event")]
-        HtmlEvent(HtmlEvent),
-        #[serde(rename = "window_event")]
-        WindowEvent(WindowEvent),
+        Event(HtmlEvent),
         #[serde(rename = "query")]
         Query(QueryResult),
     }
@@ -172,7 +165,7 @@ pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), Li
                     Some(Ok(evt)) => {
                         if let Ok(message) = serde_json::from_str::<IpcMessage>(&String::from_utf8_lossy(evt)) {
                             match message {
-                                IpcMessage::HtmlEvent(evt) => {
+                                IpcMessage::Event(evt) => {
                                     // Intercept the mounted event and insert a custom element type
                                     if let EventData::Mounted = &evt.data {
                                         let element = LiveviewElement::new(evt.element, query_engine.clone());
@@ -194,9 +187,6 @@ pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), Li
                                 }
                                 IpcMessage::Query(result) => {
                                     query_engine.send(result);
-                                },
-                                IpcMessage::WindowEvent(path) => {
-                                    let _ = window_tx.send(path);
                                 },
                             }
                         }

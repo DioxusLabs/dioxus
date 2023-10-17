@@ -1,7 +1,6 @@
 use super::HistoryProvider;
 use crate::routable::Routable;
 use dioxus::prelude::*;
-use dioxus_liveview::{Window, WindowEvent};
 use serde::{Deserialize, Serialize};
 use std::sync::{Mutex, RwLock};
 use std::{collections::BTreeMap, rc::Rc, str::FromStr, sync::Arc};
@@ -24,12 +23,12 @@ where
     routes: BTreeMap<usize, R>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 struct State {
     index: usize,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 struct Session<R: Routable>
 where
     <R as FromStr>::Err: std::fmt::Display,
@@ -236,77 +235,76 @@ where
         });
 
         // Listen to browser actions
-        let window = cx.consume_context::<Window>().unwrap();
         cx.push_future({
-            let mut window_rx = window.subscribe();
             let updater = updater_callback.clone();
             let timeline = timeline.clone();
             let create_eval = create_eval.clone();
             async move {
+                let popstate_eval = {
+                    let init_eval = create_eval(
+                        r#"
+                        return [
+                          document.location.pathname + "?" + document.location.search + "\#" + document.location.hash,
+                          history.state,
+                          JSON.parse(sessionStorage.getItem("liveview")),
+                          history.length,
+                        ];
+                    "#,
+                    ).expect("failed to load state").await.expect("serializable state");
+                    let (route, state, session, depth) = serde_json::from_value::<(
+                        String,
+                        Option<State>,
+                        Option<Session<R>>,
+                        usize,
+                    )>(init_eval).expect("serializable state");
+                    let Ok(route) = R::from_str(&route.to_string()) else {
+                        return;
+                    };
+                    let mut timeline = timeline.lock().expect("unpoisoned mutex");
+                    let state = timeline.init(route.clone(), state, session, depth);
+                    let state = serde_json::to_string(&state).expect("serializable state");
+                    let session = serde_json::to_string(&timeline.session())
+                        .expect("serializable session");
+
+                    // Call the updater callback
+                    (updater.read().unwrap())();
+
+                    create_eval(&format!(r#"
+                        // this does not trigger a PopState event
+                        history.replaceState({state}, "", "{route}");
+                        sessionStorage.setItem("liveview", '{session}');
+
+                        window.addEventListener("popstate", (event) => {{
+                          dioxus.send([
+                            document.location.pathname + "?" + document.location.search + "\#" + document.location.hash,
+                            event.state,
+                          ]);
+                        }});
+                    "#)).expect("failed to initialize popstate")
+                };
+
                 loop {
-                    let window_event = window_rx.recv().await.expect("sender to exist");
-                    match window_event {
-                        WindowEvent::Load {
-                            location,
-                            state,
-                            session,
-                            depth,
-                        } => {
-                            let Ok(route) = R::from_str(&location.to_string()) else {
-                                return;
-                            };
-                            let Ok(state) = serde_json::from_str(&state) else {
-                                return;
-                            };
-                            let session =
-                                match serde_json::from_str::<Option<SessionStorage>>(&session) {
-                                    Ok(Some(session_storage)) => match session_storage.liveview {
-                                        Some(storage) => {
-                                            match serde_json::from_str::<Option<Session<R>>>(
-                                                &storage,
-                                            ) {
-                                                Ok(session) => session,
-                                                Err(_) => None,
-                                            }
-                                        }
-                                        None => None,
-                                    },
-                                    _ => None,
-                                };
-                            let mut timeline = timeline.lock().expect("unpoisoned mutex");
-                            let state = timeline.init(route.clone(), state, session, depth);
-                            let state = serde_json::to_string(&state).expect("serializable state");
-                            let session = serde_json::to_string(&timeline.session())
-                                .expect("serializable session");
-                            let _ = create_eval(&format!(
-                                r#"
-                                // this does not trigger a PopState event
-                                history.replaceState({state}, "", "{route}");
-                                sessionStorage.setItem("liveview", '{session}');
-                            "#
-                            ));
-                        }
-                        WindowEvent::PopState { location, state } => {
-                            let Ok(route) = R::from_str(&location.to_string()) else {
-                                return;
-                            };
-                            let Ok(state) = serde_json::from_str(&state) else {
-                                return;
-                            };
-                            let mut timeline = timeline.lock().expect("unpoisoned mutex");
-                            let state = timeline.update(route.clone(), state);
-                            let state = serde_json::to_string(&state).expect("serializable state");
-                            let session = serde_json::to_string(&timeline.session())
-                                .expect("serializable session");
-                            let _ = create_eval(&format!(
-                                r#"
-                                // this does not trigger a PopState event
-                                history.replaceState({state}, "", "{route}");
-                                sessionStorage.setItem("liveview", '{session}');
-                            "#
-                            ));
-                        }
-                    }
+                    let event = match popstate_eval.recv().await {
+                        Ok(event) => event,
+                        Err(_) => continue,
+                    };
+                    let (route, state) = serde_json::from_value::<(String, Option<State>)>(event).expect("serializable state");
+                    let Ok(route) = R::from_str(&route.to_string()) else {
+                        return;
+                    };
+                    let mut timeline = timeline.lock().expect("unpoisoned mutex");
+                    let state = timeline.update(route.clone(), state);
+                    let state = serde_json::to_string(&state).expect("serializable state");
+                    let session = serde_json::to_string(&timeline.session())
+                        .expect("serializable session");
+
+                    let _ = create_eval(&format!(
+                        r#"
+                        // this does not trigger a PopState event
+                        history.replaceState({state}, "", "{route}");
+                        sessionStorage.setItem("liveview", '{session}');
+                    "#));
+
                     // Call the updater callback
                     (updater.read().unwrap())();
                 }

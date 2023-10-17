@@ -21,10 +21,8 @@ pub use adapters::*;
 mod element;
 pub mod pool;
 mod query;
-mod window;
 use futures_util::{SinkExt, StreamExt};
 pub use pool::*;
-pub use window::*;
 mod eval;
 
 pub trait WebsocketTx: SinkExt<String, Error = LiveViewError> {}
