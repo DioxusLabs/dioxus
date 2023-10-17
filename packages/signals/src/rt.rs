@@ -1,5 +1,7 @@
 use std::cell::{Ref, RefMut};
 
+use std::mem::MaybeUninit;
+use std::ops::Deref;
 use std::rc::Rc;
 
 use dioxus_core::prelude::*;
@@ -120,17 +122,17 @@ impl<T: 'static> CopyValue<T> {
     }
 
     /// Read the value. If the value has been dropped, this will panic.
-    pub fn read(&self) -> Ref<'_, T> {
+    pub fn read(&self) -> Ref<'static, T> {
         self.value.read()
     }
 
     /// Try to write the value. If the value has been dropped, this will return None.
-    pub fn try_write(&self) -> Option<RefMut<'_, T>> {
+    pub fn try_write(&self) -> Option<RefMut<'static, T>> {
         self.value.try_write()
     }
 
     /// Write the value. If the value has been dropped, this will panic.
-    pub fn write(&self) -> RefMut<'_, T> {
+    pub fn write(&self) -> RefMut<'static, T> {
         self.value.write()
     }
 
@@ -162,5 +164,38 @@ impl<T: Clone + 'static> CopyValue<T> {
 impl<T: 'static> PartialEq for CopyValue<T> {
     fn eq(&self, other: &Self) -> bool {
         self.value.ptr_eq(&other.value)
+    }
+}
+
+impl<T> Deref for CopyValue<T> {
+    type Target = dyn Fn() -> Ref<'static, T>;
+
+    fn deref(&self) -> &Self::Target {
+        // https://github.com/dtolnay/case-studies/tree/master/callable-types
+
+        // First we create a closure that captures something with the Same in memory layout as Self (MaybeUninit<Self>).
+        let uninit_callable = MaybeUninit::<Self>::uninit();
+        // Then move that value into the closure. We assume that the closure now has a in memory layout of Self.
+        let uninit_closure = move || Self::read(unsafe { &*uninit_callable.as_ptr() });
+
+        // Check that the size of the closure is the same as the size of Self in case the compiler changed the layout of the closure.
+        let size_of_closure = std::mem::size_of_val(&uninit_closure);
+        assert_eq!(size_of_closure, std::mem::size_of::<Self>());
+
+        // Then cast the lifetime of the closure to the lifetime of &self.
+        fn cast_lifetime<'a, T>(_a: &T, b: &'a T) -> &'a T {
+            b
+        }
+        let reference_to_closure = cast_lifetime(
+            {
+                // The real closure that we will never use.
+                &uninit_closure
+            },
+            // We transmute self into a reference to the closure. This is safe because we know that the closure has the same memory layout as Self so &Closure == &Self.
+            unsafe { std::mem::transmute(self) },
+        );
+
+        // Cast the closure to a trait object.
+        reference_to_closure as &Self::Target
     }
 }

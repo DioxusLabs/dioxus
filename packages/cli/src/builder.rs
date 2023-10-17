@@ -312,7 +312,7 @@ pub fn build_desktop(config: &CrateConfig, _is_serve: bool) -> Result<BuildResul
     if !config.out_dir.is_dir() {
         create_dir_all(&config.out_dir)?;
     }
-    copy(res_path, &config.out_dir.join(target_file))?;
+    copy(res_path, config.out_dir.join(target_file))?;
 
     // this code will copy all public file to the output dir
     if config.asset_dir.is_dir() {
