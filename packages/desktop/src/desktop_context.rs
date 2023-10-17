@@ -59,7 +59,6 @@ impl Debug for EditQueue {
 
 impl EditQueue {
     pub fn handle_request(&self, responder: wry::webview::RequestAsyncResponder) {
-        println!("handling request {self:?}");
         let mut queue = self.queue.lock().unwrap();
         if let Some(bytes) = queue.pop() {
             responder.respond(wry::http::Response::new(bytes));
@@ -69,10 +68,8 @@ impl EditQueue {
     }
 
     pub fn add_edits(&self, edits: Vec<u8>) {
-        println!("adding edits {self:?}");
         let mut responder = self.responder.lock().unwrap();
         if let Some(responder) = responder.take() {
-            println!("responding with {edits:?}");
             responder.respond(wry::http::Response::new(edits));
         } else {
             self.queue.lock().unwrap().push(edits);
