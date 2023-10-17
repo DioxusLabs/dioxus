@@ -1,8 +1,6 @@
 use crate::desktop_context::{EditQueue, EventData};
 use crate::protocol;
 use crate::{desktop_context::UserWindowEvent, Config};
-use std::sync::Arc;
-use std::sync::Mutex;
 use tao::event_loop::{EventLoopProxy, EventLoopWindowTarget};
 pub use wry;
 pub use wry::application as tao;

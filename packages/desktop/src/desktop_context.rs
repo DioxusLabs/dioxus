@@ -1,9 +1,3 @@
-use std::cell::RefCell;
-use std::rc::Rc;
-use std::rc::Weak;
-use std::sync::Arc;
-use std::sync::Mutex;
-
 use crate::create_new_window;
 use crate::events::IpcMessage;
 use crate::query::QueryEngine;
@@ -17,6 +11,14 @@ use dioxus_hot_reload::HotReloadMsg;
 use dioxus_interpreter_js::Channel;
 use rustc_hash::FxHashMap;
 use slab::Slab;
+use std::cell::RefCell;
+use std::fmt::Debug;
+use std::fmt::Formatter;
+use std::rc::Rc;
+use std::rc::Weak;
+use std::sync::atomic::AtomicU16;
+use std::sync::Arc;
+use std::sync::Mutex;
 use wry::application::event::Event;
 use wry::application::event_loop::EventLoopProxy;
 use wry::application::event_loop::EventLoopWindowTarget;
@@ -44,8 +46,20 @@ pub(crate) struct EditQueue {
     responder: Arc<Mutex<Option<wry::webview::RequestAsyncResponder>>>,
 }
 
+impl Debug for EditQueue {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("EditQueue")
+            .field("queue", &self.queue)
+            .field("responder", {
+                &self.responder.lock().unwrap().as_ref().map(|_| ())
+            })
+            .finish()
+    }
+}
+
 impl EditQueue {
     pub fn handle_request(&self, responder: wry::webview::RequestAsyncResponder) {
+        println!("handling request {self:?}");
         let mut queue = self.queue.lock().unwrap();
         if let Some(bytes) = queue.pop() {
             responder.respond(wry::http::Response::new(bytes));
@@ -54,16 +68,15 @@ impl EditQueue {
         }
     }
 
-    pub fn add_edits(&self, channel: &mut Channel) {
-        let iter = channel.export_memory();
-        let bytes = iter.collect();
+    pub fn add_edits(&self, edits: Vec<u8>) {
+        println!("adding edits {self:?}");
         let mut responder = self.responder.lock().unwrap();
         if let Some(responder) = responder.take() {
-            responder.respond(wry::http::Response::new(bytes));
+            println!("responding with {edits:?}");
+            responder.respond(wry::http::Response::new(edits));
         } else {
-            self.queue.lock().unwrap().push(bytes);
+            self.queue.lock().unwrap().push(edits);
         }
-        channel.reset();
     }
 }
 
@@ -100,10 +113,10 @@ pub struct DesktopService {
     pub(crate) shortcut_manager: ShortcutRegistry,
 
     pub(crate) edit_queue: EditQueue,
-    pub(crate) templates: FxHashMap<String, u16>,
-    pub(crate) max_template_count: u16,
+    pub(crate) templates: RefCell<FxHashMap<String, u16>>,
+    pub(crate) max_template_count: AtomicU16,
 
-    pub(crate) channel: Channel,
+    pub(crate) channel: RefCell<Channel>,
 
     #[cfg(target_os = "ios")]
     pub(crate) views: Rc<RefCell<Vec<*mut objc::runtime::Object>>>,
@@ -141,8 +154,8 @@ impl DesktopService {
             shortcut_manager,
             edit_queue,
             templates: Default::default(),
-            max_template_count: 0,
-            channel: Channel::default(),
+            max_template_count: Default::default(),
+            channel: Default::default(),
             #[cfg(target_os = "ios")]
             views: Default::default(),
         }

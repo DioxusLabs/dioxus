@@ -38,6 +38,7 @@ use shortcut::ShortcutRegistry;
 pub use shortcut::{use_global_shortcut, ShortcutHandle, ShortcutId, ShortcutRegistryError};
 use std::cell::Cell;
 use std::rc::Rc;
+use std::sync::atomic::AtomicU16;
 use std::task::Waker;
 use std::{collections::HashMap, sync::Arc};
 pub use tao::dpi::{LogicalSize, PhysicalSize};
@@ -449,16 +450,15 @@ fn poll_vdom(view: &mut WebviewHandler) {
 
 /// Send a list of mutations to the webview
 fn send_edits(edits: Mutations, desktop_context: &DesktopContext) {
-    if edits.edits.len() > 0 || edits.templates.len() > 0 {
-        apply_edits(
-            edits,
-            &mut desktop_context.channel,
-            &mut desktop_context.templates,
-            &mut desktop_context.max_template_count,
-        );
-        desktop_context
-            .edit_queue
-            .add_edits(&mut desktop_context.channel)
+    let mut channel = desktop_context.channel.borrow_mut();
+    let mut templates = desktop_context.templates.borrow_mut();
+    if let Some(bytes) = apply_edits(
+        edits,
+        &mut channel,
+        &mut templates,
+        &desktop_context.max_template_count,
+    ) {
+        desktop_context.edit_queue.add_edits(bytes)
     }
 }
 
@@ -466,7 +466,7 @@ fn apply_edits(
     mutations: Mutations,
     channel: &mut Channel,
     templates: &mut FxHashMap<String, u16>,
-    max_template_count: &mut u16,
+    max_template_count: &AtomicU16,
 ) -> Option<Vec<u8>> {
     use dioxus_core::Mutation::*;
     if mutations.templates.is_empty() && mutations.edits.is_empty() {
@@ -538,15 +538,16 @@ fn add_template(
     template: &Template<'static>,
     channel: &mut Channel,
     templates: &mut FxHashMap<String, u16>,
-    max_template_count: &mut u16,
+    max_template_count: &AtomicU16,
 ) {
-    for (idx, root) in template.roots.iter().enumerate() {
+    let current_max_template_count = max_template_count.load(std::sync::atomic::Ordering::Relaxed);
+    for root in template.roots.iter() {
         create_template_node(channel, root);
-        templates.insert(template.name.to_owned(), *max_template_count);
+        templates.insert(template.name.to_owned(), current_max_template_count);
     }
-    channel.add_templates(*max_template_count, template.roots.len() as u16);
+    channel.add_templates(current_max_template_count, template.roots.len() as u16);
 
-    *max_template_count += 1
+    max_template_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 }
 
 fn create_template_node(channel: &mut Channel, v: &'static TemplateNode<'static>) {

@@ -1,6 +1,6 @@
-use dioxus_interpreter_js::COMMON_JS;
 use dioxus_interpreter_js::SLEDGEHAMMER_JS;
 use minify_js::*;
+use std::io::Write;
 
 fn main() {
     let serialize_file_uploads = r#"if (
@@ -53,11 +53,11 @@ fn main() {
     let main_js = std::fs::read_to_string("src/main.js").unwrap();
 
     let js = format!("{interpreter}\n{main_js}");
-    // std::fs::write("src/minified.js", &js).unwrap();
 
     let session = Session::new();
     let mut out = Vec::new();
     minify(&session, TopLevelMode::Module, js.as_bytes(), &mut out).unwrap();
     let minified = String::from_utf8(out).unwrap();
-    std::fs::write("src/minified.js", minified).unwrap();
+    let mut file = std::fs::File::create("src/minified.js").unwrap();
+    file.write_all(minified.as_bytes()).unwrap();
 }

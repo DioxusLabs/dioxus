@@ -1,4 +1,3 @@
-use dioxus_interpreter_js::{COMMON_JS, INTERPRETER_JS};
 use std::{
     borrow::Cow,
     path::{Path, PathBuf},
@@ -11,43 +10,34 @@ use wry::{
 
 use crate::desktop_context::EditQueue;
 
+static MINIFIED: &str = include_str!("./minified.js");
+
 fn module_loader(root_name: &str) -> String {
-    let js = INTERPRETER_JS.replace(
-        "/*POST_HANDLE_EDITS*/",
-        r#"// Prevent file inputs from opening the file dialog on click
-    let inputs = document.querySelectorAll("input");
-    for (let input of inputs) {
-      if (!input.getAttribute("data-dioxus-file-listener")) {
-        // prevent file inputs from opening the file dialog on click
-        const type = input.getAttribute("type");
-        if (type === "file") {
-          input.setAttribute("data-dioxus-file-listener", true);
-          input.addEventListener("click", (event) => {
-            let target = event.target;
-            let target_id = find_real_id(target);
-            if (target_id !== null) {
-              const send = (event_name) => {
-                const message = serializeIpcMessage("file_diolog", { accept: target.getAttribute("accept"), directory: target.getAttribute("webkitdirectory") === "true", multiple: target.hasAttribute("multiple"), target: parseInt(target_id), bubbles: event_bubbles(event_name), event: event_name });
-                window.ipc.postMessage(message);
-              };
-              send("change&input");
-            }
-            event.preventDefault();
-          });
-        }
-      }
-    }"#,
-    );
     format!(
         r#"
 <script type="module">
-    {js}
+    {MINIFIED}
 
-    let rootname = "{root_name}";
-    let root = window.document.getElementById(rootname);
-    if (root != null) {{
-        window.interpreter = new Interpreter(root, new InterpreterConfig(true));
-        window.ipc.postMessage(serializeIpcMessage("initialize"));
+    function wait_for_request() {{
+        fetch(new Request("dioxus://index.html/edits"))
+            .then(response => {{
+                response.arrayBuffer()
+                    .then(bytes => {{
+                        run_from_bytes(bytes);
+                        wait_for_request();
+                    }});
+            }})
+    }}
+
+    // Wait for the page to load
+    window.onload = function() {{
+        let rootname = "{root_name}";
+        let root_element = window.document.getElementById(rootname);
+        if (root_element != null) {{
+            initialize(root_element);
+            window.ipc.postMessage(serializeIpcMessage("initialize"));
+        }}
+        wait_for_request();
     }}
 </script>
 "#
@@ -87,6 +77,7 @@ pub(super) fn desktop_handler(
 
         match Response::builder()
             .header("Content-Type", "text/html")
+            .header("Access-Control-Allow-Origin", "*")
             .body(Cow::from(body))
         {
             Ok(response) => {
@@ -95,18 +86,7 @@ pub(super) fn desktop_handler(
             }
             Err(err) => tracing::error!("error building response: {}", err),
         }
-    } else if request.uri().path() == "/common.js" {
-        match Response::builder()
-            .header("Content-Type", "text/javascript")
-            .body(Cow::from(COMMON_JS.as_bytes()))
-        {
-            Ok(response) => {
-                responder.respond(response);
-                return;
-            }
-            Err(err) => tracing::error!("error building response: {}", err),
-        }
-    } else if request.uri().path() == "/edits" {
+    } else if request.uri().path().trim_matches('/') == "edits" {
         edit_queue.handle_request(responder);
         return;
     }
