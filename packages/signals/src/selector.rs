@@ -21,6 +21,7 @@ use crate::{get_effect_stack, signal::SignalData, CopyValue, Effect, ReadOnlySig
 ///     render! { "{double}" }
 /// }
 /// ```
+#[must_use = "Consider using `use_effect` to rerun a callback when dependencies change"]
 pub fn use_selector<R: PartialEq>(
     cx: &ScopeState,
     f: impl FnMut() -> R + 'static,
@@ -44,6 +45,7 @@ pub fn use_selector<R: PartialEq>(
 ///     render! { "{double}" }
 /// }
 /// ```
+#[must_use = "Consider using `use_effect` to rerun a callback when dependencies change"]
 pub fn use_selector_with_dependencies<R: PartialEq, D: Dependency>(
     cx: &ScopeState,
     dependencies: D,
@@ -74,6 +76,7 @@ pub fn selector<R: PartialEq>(mut f: impl FnMut() -> R + 'static) -> ReadOnlySig
         inner: CopyValue::invalid(),
     };
     let effect = Effect {
+        source: current_scope_id().expect("in a virtual dom"),
         callback: CopyValue::invalid(),
     };
 

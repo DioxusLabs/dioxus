@@ -1,4 +1,4 @@
-//! Exentsions to the incremental renderer to support pre-caching static routes.
+//! Extensions to the incremental renderer to support pre-caching static routes.
 use core::pin::Pin;
 use std::future::Future;
 use std::str::FromStr;
@@ -59,8 +59,8 @@ where
                     .await?;
                 }
                 Err(e) => {
-                    log::info!("@ route: {}", full_path);
-                    log::error!("Error pre-caching static route: {}", e);
+                    tracing::info!("@ route: {}", full_path);
+                    tracing::error!("Error pre-caching static route: {}", e);
                 }
             }
         }
@@ -87,7 +87,7 @@ where
     <Rt as FromStr>::Err: std::fmt::Display,
     W: tokio::io::AsyncWrite + Unpin + Send,
 {
-    #[inline_props]
+    #[component]
     fn RenderPath<R>(cx: Scope, path: R) -> Element
     where
         R: Routable,

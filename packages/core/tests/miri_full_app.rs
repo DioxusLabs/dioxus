@@ -4,7 +4,7 @@ use std::rc::Rc;
 
 #[test]
 fn miri_rollover() {
-    let mut dom = VirtualDom::new(app);
+    let mut dom = VirtualDom::new(App);
 
     _ = dom.rebuild();
 
@@ -15,7 +15,8 @@ fn miri_rollover() {
     }
 }
 
-fn app(cx: Scope) -> Element {
+#[component]
+fn App(cx: Scope) -> Element {
     let mut idx = use_state(cx, || 0);
     let onhover = |_| println!("go!");
 
@@ -31,15 +32,15 @@ fn app(cx: Scope) -> Element {
             button { onclick: move |_| idx -= 1, "-" }
             ul {
                 (0..**idx).map(|i| rsx! {
-                    child_example { i: i, onhover: onhover }
+                    ChildExample { i: i, onhover: onhover }
                 })
             }
         }
     })
 }
 
-#[inline_props]
-fn child_example<'a>(cx: Scope<'a>, i: i32, onhover: EventHandler<'a, MouseEvent>) -> Element {
+#[component]
+fn ChildExample<'a>(cx: Scope<'a>, i: i32, onhover: EventHandler<'a, MouseEvent>) -> Element {
     cx.render(rsx! {
         li {
             onmouseover: move |e| onhover.call(e),

@@ -3,16 +3,18 @@
 #![allow(non_snake_case)]
 use dioxus::prelude::*;
 
+use std::iter::FlatMap;
+use std::slice::Iter;
 use std::{fmt::Display, str::FromStr};
 
-/// An error that occurs when parsing a route
+/// An error that occurs when parsing a route.
 #[derive(Debug, PartialEq)]
-pub struct RouteParseError<E: std::fmt::Display> {
-    /// The attempted routes that failed to match
+pub struct RouteParseError<E: Display> {
+    /// The attempted routes that failed to match.
     pub attempted_routes: Vec<E>,
 }
 
-impl<E: std::fmt::Display> std::fmt::Display for RouteParseError<E> {
+impl<E: Display> Display for RouteParseError<E> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Route did not match:\nAttempted Matches:\n")?;
         for (i, route) in self.attempted_routes.iter().enumerate() {
@@ -22,63 +24,100 @@ impl<E: std::fmt::Display> std::fmt::Display for RouteParseError<E> {
     }
 }
 
-/// Something that can be created from a query string
+/// Something that can be created from a query string.
+///
+/// This trait needs to be implemented if you want to turn a query string into a struct.
+///
+/// A working example can be found in the `examples` folder in the root package under `query_segments_demo`.
 pub trait FromQuery {
-    /// Create an instance of `Self` from a query string
+    /// Create an instance of `Self` from a query string.
     fn from_query(query: &str) -> Self;
 }
 
 impl<T: for<'a> From<&'a str>> FromQuery for T {
     fn from_query(query: &str) -> Self {
-        T::from(query)
+        T::from(&*urlencoding::decode(query).expect("Failed to decode url encoding"))
     }
 }
 
-/// Something that can be created from a route segment
+/// Something that can be created from a route segment.
 pub trait FromRouteSegment: Sized {
-    /// The error that can occur when parsing a route segment
+    /// The error that can occur when parsing a route segment.
     type Err;
 
-    /// Create an instance of `Self` from a route segment
+    /// Create an instance of `Self` from a route segment.
     fn from_route_segment(route: &str) -> Result<Self, Self::Err>;
 }
 
 impl<T: FromStr> FromRouteSegment for T
 where
-    <T as FromStr>::Err: std::fmt::Display,
+    <T as FromStr>::Err: Display,
 {
     type Err = <T as FromStr>::Err;
 
     fn from_route_segment(route: &str) -> Result<Self, Self::Err> {
-        T::from_str(route)
+        match urlencoding::decode(route) {
+            Ok(segment) => T::from_str(&segment),
+            Err(err) => {
+                tracing::error!("Failed to decode url encoding: {}", err);
+                T::from_str(route)
+            }
+        }
     }
 }
 
-/// Something that can be converted to route segments
-pub trait ToRouteSegments {
-    /// Display the route segments
-    fn display_route_segements(self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result;
+#[test]
+fn full_circle() {
+    let route = "testing 1234 hello world";
+    assert_eq!(String::from_route_segment(route).unwrap(), route);
 }
 
-impl<I, T: std::fmt::Display> ToRouteSegments for I
+/// Something that can be converted to route segments.
+pub trait ToRouteSegments {
+    /// Display the route segments.
+    fn display_route_segments(self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result;
+}
+
+impl<I, T: Display> ToRouteSegments for I
 where
     I: IntoIterator<Item = T>,
 {
-    fn display_route_segements(self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn display_route_segments(self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for segment in self {
             write!(f, "/")?;
-            write!(f, "{}", segment)?;
+            let segment = segment.to_string();
+            match urlencoding::decode(&segment) {
+                Ok(segment) => write!(f, "{}", segment)?,
+                Err(err) => {
+                    tracing::error!("Failed to decode url encoding: {}", err);
+                    write!(f, "{}", segment)?
+                }
+            }
         }
         Ok(())
     }
 }
 
-/// Something that can be created from route segments
+#[test]
+fn to_route_segments() {
+    struct DisplaysRoute;
+
+    impl Display for DisplaysRoute {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            let segments = vec!["hello", "world"];
+            segments.display_route_segments(f)
+        }
+    }
+
+    assert_eq!(DisplaysRoute.to_string(), "/hello/world");
+}
+
+/// Something that can be created from route segments.
 pub trait FromRouteSegments: Sized {
-    /// The error that can occur when parsing route segments
+    /// The error that can occur when parsing route segments.
     type Err;
 
-    /// Create an instance of `Self` from route segments
+    /// Create an instance of `Self` from route segments.
     fn from_route_segments(segments: &[&str]) -> Result<Self, Self::Err>;
 }
 
@@ -93,29 +132,54 @@ impl<I: std::iter::FromIterator<String>> FromRouteSegments for I {
     }
 }
 
+/// A flattened version of [`Routable::SITE_MAP`].
+/// This essentially represents a `Vec<Vec<SegmentType>>`, which you can collect it into.
+type SiteMapFlattened<'a> = FlatMap<
+    Iter<'a, SiteMapSegment>,
+    Vec<Vec<SegmentType>>,
+    fn(&SiteMapSegment) -> Vec<Vec<SegmentType>>,
+>;
+
+fn seg_strs_to_route<T>(segs_maybe: &Option<Vec<&str>>) -> Option<T>
+where
+    T: Routable,
+{
+    if let Some(str) = seg_strs_to_str(segs_maybe) {
+        T::from_str(&str).ok()
+    } else {
+        None
+    }
+}
+
+fn seg_strs_to_str(segs_maybe: &Option<Vec<&str>>) -> Option<String> {
+    segs_maybe
+        .as_ref()
+        .map(|segs| String::from('/') + &segs.join("/"))
+}
+
 /// Something that can be:
-/// 1. Converted from a route
-/// 2. Converted to a route
-/// 3. Rendered as a component
+/// 1. Converted from a route.
+/// 2. Converted to a route.
+/// 3. Rendered as a component.
 ///
-/// This trait can be derived using the `#[derive(Routable)]` macro
-pub trait Routable: std::fmt::Display + std::str::FromStr + Clone + 'static {
-    /// The error that can occur when parsing a route
+/// This trait can be derived using the `#[derive(Routable)]` macro.
+pub trait Routable: FromStr + Display + Clone + 'static {
+    /// The error that can occur when parsing a route.
     const SITE_MAP: &'static [SiteMapSegment];
 
     /// Render the route at the given level
     fn render<'a>(&self, cx: &'a ScopeState, level: usize) -> Element<'a>;
 
-    /// Checks if this route is a child of the given route
+    /// Checks if this route is a child of the given route.
     ///
     /// # Example
     /// ```rust
     /// use dioxus_router::prelude::*;
     /// use dioxus::prelude::*;
     ///
-    /// #[inline_props]
+    /// #[component]
     /// fn Home(cx: Scope) -> Element { todo!() }
-    /// #[inline_props]
+    /// #[component]
     /// fn About(cx: Scope) -> Element { todo!() }
     ///
     /// #[derive(Routable, Clone, PartialEq, Debug)]
@@ -148,23 +212,23 @@ pub trait Routable: std::fmt::Display + std::str::FromStr + Clone + 'static {
         true
     }
 
-    /// Get the parent route of this route
+    /// Get the parent route of this route.
     ///
     /// # Example
     /// ```rust
     /// use dioxus_router::prelude::*;
     /// use dioxus::prelude::*;
     ///
-    /// #[inline_props]
+    /// #[component]
     /// fn Home(cx: Scope) -> Element { todo!() }
-    /// #[inline_props]
+    /// #[component]
     /// fn About(cx: Scope) -> Element { todo!() }
     ///
     /// #[derive(Routable, Clone, PartialEq, Debug)]
     /// enum Route {
-    ///     #[route("/")]
+    ///     #[route("/home")]
     ///     Home {},
-    ///     #[route("/about")]
+    ///     #[route("/home/about")]
     ///     About {},
     /// }
     ///
@@ -188,72 +252,67 @@ pub trait Routable: std::fmt::Display + std::str::FromStr + Clone + 'static {
         Self::from_str(&new_route).ok()
     }
 
-    /// Gets a list of all static routes
+    /// Returns a flattened version of [`Self::SITE_MAP`].
+    fn flatten_site_map<'a>() -> SiteMapFlattened<'a> {
+        Self::SITE_MAP.iter().flat_map(SiteMapSegment::flatten)
+    }
+
+    /// Gets a list of all the static routes.
+    /// Example static route: `#[route("/static/route")]`
     fn static_routes() -> Vec<Self> {
-        Self::SITE_MAP
-            .iter()
-            .flat_map(|segment| segment.flatten())
+        Self::flatten_site_map()
             .filter_map(|route| {
-                if route
+                let route_if_static = &route
                     .iter()
-                    .all(|segment| matches!(segment, SegmentType::Static(_)))
-                {
-                    Self::from_str(
-                        &route
-                            .iter()
-                            .map(|segment| match segment {
-                                SegmentType::Static(s) => s.to_string(),
-                                _ => unreachable!(),
-                            })
-                            .collect::<Vec<_>>()
-                            .join("/"),
-                    )
-                    .ok()
-                } else {
-                    None
-                }
+                    .map(|segment| match segment {
+                        SegmentType::Static(s) => Some(*s),
+                        _ => None,
+                    })
+                    .collect::<Option<Vec<_>>>();
+
+                seg_strs_to_route(route_if_static)
             })
             .collect()
     }
 }
 
 trait RoutableFactory {
-    type Err: std::fmt::Display;
+    type Err: Display;
     type Routable: Routable + FromStr<Err = Self::Err>;
 }
 
 impl<R: Routable + FromStr> RoutableFactory for R
 where
-    <R as FromStr>::Err: std::fmt::Display,
+    <R as FromStr>::Err: Display,
 {
     type Err = <R as FromStr>::Err;
     type Routable = R;
 }
 
-trait RouteRenderable: std::fmt::Display + 'static {
+trait RouteRenderable: Display + 'static {
     fn render<'a>(&self, cx: &'a ScopeState, level: usize) -> Element<'a>;
 }
 
 impl<R: Routable> RouteRenderable for R
 where
-    <R as FromStr>::Err: std::fmt::Display,
+    <R as FromStr>::Err: Display,
 {
     fn render<'a>(&self, cx: &'a ScopeState, level: usize) -> Element<'a> {
         self.render(cx, level)
     }
 }
 
-/// A type erased map of the site structurens
+/// A type erased map of the site structure.
 #[derive(Debug, Clone, PartialEq)]
 pub struct SiteMapSegment {
-    /// The type of the route segment
+    /// The type of the route segment.
     pub segment_type: SegmentType,
-    /// The children of the route segment
+    /// The children of the route segment.
     pub children: &'static [SiteMapSegment],
 }
 
 impl SiteMapSegment {
-    /// Take a map of the site structure and flatten it into a vector of routes
+    /// Take a map of the site structure and flatten it into a vector of routes.
     pub fn flatten(&self) -> Vec<Vec<SegmentType>> {
         let mut routes = Vec::new();
         self.flatten_inner(&mut routes, Vec::new());
@@ -273,16 +332,16 @@ impl SiteMapSegment {
     }
 }
 
-/// The type of a route segment
+/// The type of a route segment.
 #[derive(Debug, Clone, PartialEq)]
 pub enum SegmentType {
-    /// A static route segment
+    /// A static route segment.
     Static(&'static str),
-    /// A dynamic route segment
+    /// A dynamic route segment.
     Dynamic(&'static str),
-    /// A catch all route segment
+    /// A catch all route segment.
     CatchAll(&'static str),
-    /// A child router
+    /// A child router.
     Child,
 }
 
@@ -292,7 +351,7 @@ impl Display for SegmentType {
             SegmentType::Static(s) => write!(f, "/{}", s),
             SegmentType::Child => Ok(()),
             SegmentType::Dynamic(s) => write!(f, "/:{}", s),
-            SegmentType::CatchAll(s) => write!(f, "/:...{}", s),
+            SegmentType::CatchAll(s) => write!(f, "/:..{}", s),
         }
     }
 }

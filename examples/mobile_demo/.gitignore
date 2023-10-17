@@ -2,7 +2,7 @@
 target/
 **/*.rs.bk
 
-# tauri-mobile
+# cargo-mobile2
 .cargo/
 /gen
 

@@ -23,7 +23,7 @@ pub fn server_cached<O: 'static + Serialize + DeserializeOwned>(server_fn: impl 
         let data = server_fn();
         let sc = crate::prelude::server_context();
         if let Err(err) = sc.push_html_data(&data) {
-            log::error!("Failed to push HTML data: {}", err);
+            tracing::error!("Failed to push HTML data: {}", err);
         }
         data
     }
