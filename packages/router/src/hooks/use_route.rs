@@ -46,6 +46,7 @@ use crate::utils::use_router_internal::use_router_internal;
 /// # let _ = vdom.rebuild();
 /// # assert_eq!(dioxus_ssr::render(&vdom), "<h1>App</h1><h2>Current Path</h2><p>/</p>")
 /// ```
+#[must_use]
 pub fn use_route<R: Routable + Clone>(cx: &ScopeState) -> Option<R> {
     match use_router_internal(cx) {
         Some(r) => Some(r.current()),

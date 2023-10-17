@@ -44,6 +44,7 @@ use crate::{CopyValue, Effect};
 ///     }
 /// }
 /// ```
+#[must_use]
 pub fn use_signal<T: 'static>(cx: &ScopeState, f: impl FnOnce() -> T) -> Signal<T> {
     *cx.use_hook(|| Signal::new(f()))
 }
