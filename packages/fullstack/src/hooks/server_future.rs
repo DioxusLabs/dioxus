@@ -22,6 +22,7 @@ use std::sync::Arc;
 /// will be allowed to continue
 ///
 /// - dependencies: a tuple of references to values that are PartialEq + Clone
+#[must_use = "Consider using `cx.spawn` to run a future without reading its value"]
 pub fn use_server_future<T, F, D>(
     cx: &ScopeState,
     dependencies: D,
