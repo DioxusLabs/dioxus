@@ -1,3 +1,4 @@
+use crate::CopyValue;
 use crate::Signal;
 use dioxus_core::ScopeId;
 use std::cell::Ref;
@@ -5,26 +6,28 @@ use std::fmt::Debug;
 use std::fmt::Display;
 
 /// A read only signal that has been mapped to a new type.
-pub struct SignalMap<U: ?Sized> {
-    mapping: Box<dyn Fn() -> Ref<'static, U>>,
+pub struct SignalMap<U: 'static + ?Sized> {
+    origin_scope: ScopeId,
+    mapping: CopyValue<Box<dyn Fn() -> Ref<'static, U>>>,
 }
 
-impl<T: 'static, U: ?Sized> SignalMap<T, U> {
+impl<U: ?Sized> SignalMap<U> {
     /// Create a new mapped signal.
-    pub fn new(signal: Signal<T>, mapping: fn(&T) -> &U) -> Self {
+    pub fn new<T: 'static>(signal: Signal<T>, mapping: fn(&T) -> &U) -> Self {
         Self {
-            mapping: Box::new(move || Ref::map(signal.read(), |v| (mapping)(v))),
+            origin_scope: signal.origin_scope(),
+            mapping: CopyValue::new(Box::new(move || Ref::map(signal.read(), |v| (mapping)(v)))),
         }
     }
 
     /// Get the scope that the signal was created in.
     pub fn origin_scope(&self) -> ScopeId {
-        self.inner.origin_scope()
+        self.origin_scope
     }
 
     /// Get the current value of the signal. This will subscribe the current scope to the signal.
-    pub fn read(&self) -> Ref<U> {
-        (self.mapping)()
+    pub fn read(&self) -> Ref<'static, U> {
+        (self.mapping.read())()
     }
 
     /// Run a closure with a reference to the signal's value.
@@ -42,7 +45,7 @@ impl<U: ?Sized + Clone> SignalMap<U> {
 
 impl<U: ?Sized> PartialEq for SignalMap<U> {
     fn eq(&self, other: &Self) -> bool {
-        self.inner == other.inner
+        self.mapping == other.mapping
     }
 }
 
@@ -77,7 +80,7 @@ impl<U: Clone + 'static> SignalMap<Option<U>> {
     /// Unwraps the inner value and clones it.
     pub fn unwrap(&self) -> U
     where
-        T: Clone,
+        U: Clone,
     {
         self.with(|v| v.clone()).unwrap()
     }
