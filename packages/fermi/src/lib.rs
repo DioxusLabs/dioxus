@@ -43,8 +43,9 @@
 
 use std::{
     any::Any,
-    cell::{Ref, RefCell},
+    cell::{Ref, RefCell, RefMut},
     collections::HashMap,
+    fmt::Display,
     rc::Rc,
 };
 
@@ -100,6 +101,16 @@ impl<T: 'static> Atom<T> {
         slot.as_ref().downcast_ref::<Signal<T>>().unwrap().clone()
     }
 
+    pub fn read(&'static self) -> Ref<'static, T> {
+        let sig = self.value();
+        sig.read()
+    }
+
+    pub fn write(&'static self) -> dioxus_signals::Write<'static, T> {
+        let sig = self.value();
+        sig.write()
+    }
+
     pub fn set(&self, value: T) {
         let sig = self.value();
         sig.set(value);
@@ -118,5 +129,44 @@ impl<T: 'static> Atom<T> {
 impl<T: 'static + Clone> Atom<T> {
     pub fn get(&self) -> T {
         self.value().read().clone()
+    }
+}
+
+impl<T: 'static> std::ops::Deref for Atom<T> {
+    type Target = dyn Fn() -> Ref<'static, T>;
+
+    fn deref(&self) -> &Self::Target {
+        // https://github.com/dtolnay/case-studies/tree/master/callable-types
+
+        // First we create a closure that captures something with the Same in memory layout as Self (MaybeUninit<Self>).
+        let uninit_callable = std::mem::MaybeUninit::<Self>::uninit();
+        // Then move that value into the closure. We assume that the closure now has a in memory layout of Self.
+        let uninit_closure = move || Self::read(unsafe { &*uninit_callable.as_ptr() });
+
+        // Check that the size of the closure is the same as the size of Self in case the compiler changed the layout of the closure.
+        let size_of_closure = std::mem::size_of_val(&uninit_closure);
+        assert_eq!(size_of_closure, std::mem::size_of::<Self>());
+
+        // Then cast the lifetime of the closure to the lifetime of &self.
+        fn cast_lifetime<'a, T>(_a: &T, b: &'a T) -> &'a T {
+            b
+        }
+        let reference_to_closure = cast_lifetime(
+            {
+                // The real closure that we will never use.
+                &uninit_closure
+            },
+            // We transmute self into a reference to the closure. This is safe because we know that the closure has the same memory layout as Self so &Closure == &Self.
+            unsafe { std::mem::transmute(self) },
+        );
+
+        // Cast the closure to a trait object.
+        reference_to_closure as &Self::Target
+    }
+}
+
+impl<T: Display + 'static> Display for Atom<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.value().with(|v| write!(f, "{}", v))
     }
 }

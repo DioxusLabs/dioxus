@@ -170,7 +170,7 @@ impl<T: 'static> Signal<T> {
 
     /// Get the current value of the signal. This will subscribe the current scope to the signal.
     /// If the signal has been dropped, this will panic.
-    pub fn read(&self) -> Ref<T> {
+    pub fn read(&self) -> Ref<'static, T> {
         let inner = self.inner.read();
         if let Some(effect) = Effect::current() {
             let mut effect_subscribers = inner.effect_subscribers.borrow_mut();
@@ -199,7 +199,7 @@ impl<T: 'static> Signal<T> {
 
     /// Get a mutable reference to the signal's value.
     /// If the signal has been dropped, this will panic.
-    pub fn write(&self) -> Write<'_, T> {
+    pub fn write(&self) -> Write<'static, T> {
         let inner = self.inner.write();
         let borrow = RefMut::map(inner, |v| &mut v.value);
         Write {
