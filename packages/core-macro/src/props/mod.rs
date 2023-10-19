@@ -467,7 +467,7 @@ fn type_from_inside_option(ty: &syn::Type, check_option_name: bool) -> Option<&s
 
 mod struct_info {
     use proc_macro2::TokenStream;
-    use quote::quote;
+    use quote::{quote, quote_spanned};
     use syn::parse::Error;
     use syn::punctuated::Punctuated;
     use syn::Expr;
@@ -701,6 +701,14 @@ Finally, call `.build()` to create the instance of `{name}`.
         }
 
         pub fn field_impl(&self, field: &FieldInfo) -> Result<TokenStream, Error> {
+            let FieldInfo {
+                name: field_name,
+                ty: field_type,
+                ..
+            } = field;
+            if field_name.to_string() == "key" {
+                return Err(Error::new_spanned(field_name, "Naming a prop `key` is not allowed because the name can conflict with the built in key attribute. See https://dioxuslabs.com/learn/0.4/reference/dynamic_rendering#rendering-lists for more information about keys"));
+            }
             let StructInfo {
                 ref builder_name, ..
             } = *self;
@@ -715,11 +723,6 @@ Finally, call `.build()` to create the instance of `{name}`.
             });
             let reconstructing = self.included_fields().map(|f| f.name);
 
-            let FieldInfo {
-                name: field_name,
-                ty: field_type,
-                ..
-            } = field;
             let mut ty_generics: Vec<syn::GenericArgument> = self
                 .generics
                 .params
