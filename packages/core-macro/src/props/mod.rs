@@ -467,7 +467,7 @@ fn type_from_inside_option(ty: &syn::Type, check_option_name: bool) -> Option<&s
 
 mod struct_info {
     use proc_macro2::TokenStream;
-    use quote::{quote, quote_spanned};
+    use quote::quote;
     use syn::parse::Error;
     use syn::punctuated::Punctuated;
     use syn::Expr;
@@ -706,7 +706,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                 ty: field_type,
                 ..
             } = field;
-            if field_name.to_string() == "key" {
+            if *field_name == "key" {
                 return Err(Error::new_spanned(field_name, "Naming a prop `key` is not allowed because the name can conflict with the built in key attribute. See https://dioxuslabs.com/learn/0.4/reference/dynamic_rendering#rendering-lists for more information about keys"));
             }
             let StructInfo {
