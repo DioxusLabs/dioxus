@@ -28,7 +28,6 @@ class IPC {
     };
 
     ws.onmessage = (message) => {
-      console.log(message.data);
       const u8view = new Uint8Array(message.data);
       const binaryFrame = u8view[0] == 1;
       const messageData = message.data.slice(1)
