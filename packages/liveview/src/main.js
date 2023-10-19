@@ -28,19 +28,26 @@ class IPC {
     };
 
     ws.onmessage = (message) => {
-      if (message.data instanceof ArrayBuffer) {
+      console.log(message.data);
+      const u8view = new Uint8Array(message.data);
+      const binaryFrame = u8view[0] == 1;
+      const messageData = message.data.slice(1)
+      // The first byte tells the shim if this is a binary of text frame
+      if (binaryFrame) {
         // binary frame
-        run_from_bytes(message.data);
-      } else {
+        run_from_bytes(messageData);
+      }
+      else {
         // text frame
+
+        let decoder = new TextDecoder("utf-8");
+
+        // Using decode method to get string output 
+        let str = decoder.decode(messageData);
         // Ignore pongs
-        if (message.data != "__pong__") {
-          const event = JSON.parse(message.data);
+        if (str != "__pong__") {
+          const event = JSON.parse(str);
           switch (event.type) {
-            case "edits":
-              let edits = event.data;
-              window.interpreter.handleEdits(edits);
-              break;
             case "query":
               Function("Eval", `"use strict";${event.data};`)();
               break;

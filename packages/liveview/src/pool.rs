@@ -6,7 +6,7 @@ use crate::{
 };
 use dioxus_core::{prelude::*, BorrowedAttributeValue, Mutations};
 use dioxus_html::{event_bubbles, EventData, HtmlEvent, MountedData};
-use dioxus_interpreter_js::Channel;
+use dioxus_interpreter_js::binary_protocol::Channel;
 use futures_util::{pin_mut, SinkExt, StreamExt};
 use rustc_hash::FxHashMap;
 use serde::Serialize;
@@ -173,7 +173,7 @@ pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), Li
                 match evt.as_ref().map(|o| o.as_deref()) {
                     // respond with a pong every ping to keep the websocket alive
                     Some(Ok(b"__ping__")) => {
-                        // ws.send(b"__pong__".to_vec()).await?;
+                        ws.send(text_frame("__pong__")).await?;
                     }
                     Some(Ok(evt)) => {
                         if let Ok(message) = serde_json::from_str::<IpcMessage>(&String::from_utf8_lossy(evt)) {
@@ -212,7 +212,7 @@ pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), Li
 
             // handle any new queries
             Some(query) = query_rx.recv() => {
-                // ws.send(serde_json::to_string(&ClientUpdate::Query(query)).unwrap().into_bytes()).await?;
+                ws.send(text_frame(&serde_json::to_string(&ClientUpdate::Query(query)).unwrap())).await?;
             }
 
             Some(msg) = hot_reload_wait => {
@@ -247,13 +247,19 @@ pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), Li
     }
 }
 
+fn text_frame(text: &str) -> Vec<u8> {
+    let mut bytes = vec![0];
+    bytes.extend(text.as_bytes());
+    bytes
+}
+
 fn add_template(
     template: &Template<'static>,
     channel: &mut Channel,
     templates: &mut FxHashMap<String, u16>,
     max_template_count: &mut u16,
 ) {
-    for (idx, root) in template.roots.iter().enumerate() {
+    for root in template.roots.iter() {
         create_template_node(channel, root);
         templates.insert(template.name.to_owned(), *max_template_count);
     }
@@ -368,16 +374,16 @@ fn apply_edits(
         }
     }
 
-    let bytes: Vec<_> = channel.export_memory().collect();
+    // Add an extra one at the beginning to tell the shim this is a binary frame
+    let mut bytes = vec![1];
+    bytes.extend(channel.export_memory());
     channel.reset();
     Some(bytes)
 }
 
 #[derive(Serialize)]
 #[serde(tag = "type", content = "data")]
-enum ClientUpdate<'a> {
-    #[serde(rename = "edits")]
-    Edits(Mutations<'a>),
+enum ClientUpdate {
     #[serde(rename = "query")]
     Query(String),
 }

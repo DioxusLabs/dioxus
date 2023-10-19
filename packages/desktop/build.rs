@@ -1,4 +1,4 @@
-use dioxus_interpreter_js::SLEDGEHAMMER_JS;
+use dioxus_interpreter_js::binary_protocol::SLEDGEHAMMER_JS;
 
 use std::io::Write;
 

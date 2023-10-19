@@ -29,7 +29,7 @@ impl RenderedElementBacking for LiveviewElement {
             >,
         >,
     > {
-        let script = format!("return window.interpreter.GetClientRect({});", self.id.0);
+        let script = format!("return getClientRect({});", self.id.0);
 
         let fut = self
             .query
@@ -53,7 +53,7 @@ impl RenderedElementBacking for LiveviewElement {
         behavior: dioxus_html::ScrollBehavior,
     ) -> std::pin::Pin<Box<dyn futures_util::Future<Output = dioxus_html::MountedResult<()>>>> {
         let script = format!(
-            "return window.interpreter.ScrollTo({}, {});",
+            "return scrollTo({}, {});",
             self.id.0,
             serde_json::to_string(&behavior).expect("Failed to serialize ScrollBehavior")
         );
@@ -76,10 +76,7 @@ impl RenderedElementBacking for LiveviewElement {
         &self,
         focus: bool,
     ) -> std::pin::Pin<Box<dyn futures_util::Future<Output = dioxus_html::MountedResult<()>>>> {
-        let script = format!(
-            "return window.interpreter.SetFocus({}, {});",
-            self.id.0, focus
-        );
+        let script = format!("return setFocus({}, {});", self.id.0, focus);
 
         let fut = self.query.new_query::<bool>(&script).resolve();
 

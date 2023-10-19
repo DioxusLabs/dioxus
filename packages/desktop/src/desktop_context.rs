@@ -8,7 +8,7 @@ use dioxus_core::ScopeState;
 use dioxus_core::VirtualDom;
 #[cfg(all(feature = "hot-reload", debug_assertions))]
 use dioxus_hot_reload::HotReloadMsg;
-use dioxus_interpreter_js::Channel;
+use dioxus_interpreter_js::binary_protocol::Channel;
 use rustc_hash::FxHashMap;
 use slab::Slab;
 use std::cell::RefCell;

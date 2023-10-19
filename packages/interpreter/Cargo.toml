@@ -14,7 +14,7 @@ keywords = ["dom", "ui", "gui", "react", "wasm"]
 wasm-bindgen = { workspace = true, optional = true }
 js-sys = { version = "0.3.56", optional = true }
 web-sys = { version = "0.3.56", optional = true, features = ["Element", "Node"] }
-sledgehammer_bindgen = { path = "/Users/evanalmloff/Desktop/Github/sledgehammer_bindgen", default-features = false, optional = true }
+sledgehammer_bindgen = { git = "https://github.com/ealmloff/sledgehammer_bindgen", default-features = false, optional = true }
 sledgehammer_utils = { version = "0.2", optional = true }
 serde = { version = "1.0", features = ["derive"], optional = true }
 
@@ -23,4 +23,5 @@ default = []
 serialize = ["serde"]
 sledgehammer = ["sledgehammer_bindgen", "sledgehammer_utils"]
 web = ["sledgehammer", "wasm-bindgen", "js-sys", "web-sys", "sledgehammer_bindgen/web"]
+binary-protocol = ["sledgehammer"]
 minimal_bindings = []
