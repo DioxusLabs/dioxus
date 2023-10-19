@@ -24,8 +24,6 @@ pub struct TodoItem {
 pub fn app(cx: Scope<()>) -> Element {
     let todos = use_state(cx, im_rc::HashMap::<u32, TodoItem>::default);
     let filter = use_state(cx, || FilterState::All);
-    let draft = use_state(cx, || "".to_string());
-    let todo_id = use_state(cx, || 0);
 
     // Filter the todos based on the filter state
     let mut filtered_todos = todos
@@ -47,42 +45,11 @@ pub fn app(cx: Scope<()>) -> Element {
 
     let show_clear_completed = todos.values().any(|todo| todo.checked);
 
-    let selected = |state| {
-        if *filter == state {
-            "selected"
-        } else {
-            "false"
-        }
-    };
-
     cx.render(rsx! {
         section { class: "todoapp",
             style { include_str!("./assets/todomvc.css") }
-            header { class: "header",
-                h1 {"todos"}
-                input {
-                    class: "new-todo",
-                    placeholder: "What needs to be done?",
-                    value: "{draft}",
-                    autofocus: "true",
-                    oninput: move |evt| {
-                        draft.set(evt.value.clone());
-                    },
-                    onkeydown: move |evt| {
-                        if evt.key() == Key::Enter && !draft.is_empty() {
-                            todos.make_mut().insert(
-                                **todo_id,
-                                TodoItem {
-                                    id: **todo_id,
-                                    checked: false,
-                                    contents: draft.to_string(),
-                                },
-                            );
-                            *todo_id.make_mut() += 1;
-                            draft.set("".to_string());
-                        }
-                    }
-                }
+            TodoHeader {
+                todos: todos,
             }
             section {
                 class: "main",
@@ -111,44 +78,56 @@ pub fn app(cx: Scope<()>) -> Element {
                     }))
                 }
                 (!todos.is_empty()).then(|| rsx!(
-                    footer { class: "footer",
-                        span { class: "todo-count",
-                            strong {"{active_todo_count} "}
-                            span {"{active_todo_text} left"}
-                        }
-                        ul { class: "filters",
-                            for (state, state_text, url) in [
-                                (FilterState::All, "All", "#/"),
-                                (FilterState::Active, "Active", "#/active"),
-                                (FilterState::Completed, "Completed", "#/completed"),
-                            ] {
-                                li {
-                                    a {
-                                        href: url,
-                                        class: selected(state),
-                                        onclick: move |_| filter.set(state),
-                                        prevent_default: "onclick",
-                                        state_text
-                                    }
-                                }
-                            }
-                        }
-                        show_clear_completed.then(|| rsx!(
-                            button {
-                                class: "clear-completed",
-                                onclick: move |_| todos.make_mut().retain(|_, todo| !todo.checked),
-                                "Clear completed"
-                            }
-                        ))
+                    ListFooter {
+                        active_todo_count: active_todo_count,
+                        active_todo_text: active_todo_text,
+                        show_clear_completed: show_clear_completed,
+                        todos: todos,
+                        filter: filter,
                     }
                 ))
             }
         }
-        footer { class: "info",
-            p { "Double-click to edit a todo" }
-            p { "Created by ", a { href: "http://github.com/jkelleyrtp/", "jkelleyrtp" }}
-            p { "Part of ", a { href: "http://todomvc.com", "TodoMVC" }}
+        PageFooter {}
+    })
+}
+
+#[derive(Props)]
+pub struct TodoHeaderProps<'a> {
+    todos: &'a UseState<im_rc::HashMap<u32, TodoItem>>,
+}
+
+pub fn TodoHeader<'a>(cx: Scope<'a, TodoHeaderProps<'a>>) -> Element {
+    let draft = use_state(cx, || "".to_string());
+    let todo_id = use_state(cx, || 0);
+
+    cx.render(rsx! {
+        header { class: "header",
+        h1 {"todos"}
+        input {
+            class: "new-todo",
+            placeholder: "What needs to be done?",
+            value: "{draft}",
+            autofocus: "true",
+            oninput: move |evt| {
+                draft.set(evt.value.clone());
+            },
+            onkeydown: move |evt| {
+                if evt.key() == Key::Enter && !draft.is_empty() {
+                    cx.props.todos.make_mut().insert(
+                        **todo_id,
+                        TodoItem {
+                            id: **todo_id,
+                            checked: false,
+                            contents: draft.to_string(),
+                        },
+                    );
+                    *todo_id.make_mut() += 1;
+                    draft.set("".to_string());
+                }
+            }
         }
+    }
     })
 }
 
@@ -206,6 +185,73 @@ pub fn TodoEntry<'a>(cx: Scope<'a, TodoEntryProps<'a>>) -> Element {
                     },
                 }
             })
+        }
+    })
+}
+
+#[derive(Props)]
+pub struct ListFooterProps<'a> {
+    todos: &'a UseState<im_rc::HashMap<u32, TodoItem>>,
+    active_todo_count: usize,
+    active_todo_text: &'a str,
+    show_clear_completed: bool,
+    filter: &'a UseState<FilterState>,
+}
+
+pub fn ListFooter<'a>(cx: Scope<'a, ListFooterProps<'a>>) -> Element {
+    let active_todo_count = cx.props.active_todo_count;
+    let active_todo_text = cx.props.active_todo_text;
+
+    let selected = |state| {
+        if *cx.props.filter == state {
+            "selected"
+        } else {
+            "false"
+        }
+    };
+
+    cx.render(rsx! {
+        footer { class: "footer",
+            span { class: "todo-count",
+                strong {"{active_todo_count} "}
+                span {"{active_todo_text} left"}
+            }
+            ul { class: "filters",
+                for (state, state_text, url) in [
+                    (FilterState::All, "All", "#/"),
+                    (FilterState::Active, "Active", "#/active"),
+                    (FilterState::Completed, "Completed", "#/completed"),
+                ] {
+                    li {
+                        a {
+                            href: url,
+                            class: selected(state),
+                            onclick: move |_| cx.props.filter.set(state),
+                            prevent_default: "onclick",
+                            state_text
+                        }
+                    }
+                }
+            }
+            if cx.props.show_clear_completed {
+                cx.render(rsx! {
+                    button {
+                        class: "clear-completed",
+                        onclick: move |_| cx.props.todos.make_mut().retain(|_, todo| !todo.checked),
+                        "Clear completed"
+                    }
+                })
+            }
+        }
+    })
+}
+
+pub fn PageFooter(cx: Scope) -> Element {
+    cx.render(rsx! {
+        footer { class: "info",
+            p { "Double-click to edit a todo" }
+            p { "Created by ", a { href: "http://github.com/jkelleyrtp/", "jkelleyrtp" }}
+            p { "Part of ", a { href: "http://todomvc.com", "TodoMVC" }}
         }
     })
 }
