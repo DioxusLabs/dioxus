@@ -3,13 +3,18 @@ use std::{any::Any, cell::Cell, future::Future};
 
 use crate::UseFutureDep;
 
-/// A hook that provides a future that executes after the hooks have been applied
+/// A hook that provides a future that executes after the hooks have been applied.
 ///
 /// Whenever the hooks dependencies change, the future will be re-evaluated.
 /// If a future is pending when the dependencies change, the previous future
-/// will be allowed to continue
+/// will be allowed to continue.
 ///
-/// - dependencies: a tuple of references to values that are `PartialEq` + `Clone`
+/// **Note:** If your dependency list is always empty, use [`use_on_create`](crate::use_on_create).
+///
+/// ## Arguments
+///
+/// - `dependencies`: a tuple of references to values that are `PartialEq` + `Clone`.
+/// - `future`: a closure that takes the `dependencies` as arguments and returns a `'static` future.
 ///
 /// ## Examples
 ///
