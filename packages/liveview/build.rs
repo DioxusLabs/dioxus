@@ -28,7 +28,7 @@ fn main() {
                 if (realId === null) {
                   return;
                 }
-                const message = serializeIpcMessage("user_event", {
+                const message = window.interpreter.serializeIpcMessage("user_event", {
                   name: name,
                   element: parseInt(realId),
                   data: contents,
@@ -56,9 +56,9 @@ fn main() {
     let js = format!("{interpreter}\n{main_js}");
 
     let session = Session::new();
-    // let mut out = Vec::new();
-    // minify(&session, TopLevelMode::Module, js.as_bytes(), &mut out).unwrap();
-    // let minified = String::from_utf8(out).unwrap();
+    let mut out = Vec::new();
+    minify(&session, TopLevelMode::Module, js.as_bytes(), &mut out).unwrap();
+    let minified = String::from_utf8(out).unwrap();
     let mut file = std::fs::File::create("src/minified.js").unwrap();
-    file.write_all(js.as_bytes()).unwrap();
+    file.write_all(minified.as_bytes()).unwrap();
 }

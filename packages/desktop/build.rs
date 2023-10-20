@@ -16,7 +16,7 @@ fn main() {
             let target_id = find_real_id(target);
             if (target_id !== null) {
               const send = (event_name) => {
-                const message = serializeIpcMessage("file_diolog", { accept: target.getAttribute("accept"), directory: target.getAttribute("webkitdirectory") === "true", multiple: target.hasAttribute("multiple"), target: parseInt(target_id), bubbles: event_bubbles(event_name), event: event_name });
+                const message = window.interpreter.serializeIpcMessage("file_diolog", { accept: target.getAttribute("accept"), directory: target.getAttribute("webkitdirectory") === "true", multiple: target.hasAttribute("multiple"), target: parseInt(target_id), bubbles: event_bubbles(event_name), event: event_name });
                 window.ipc.postMessage(message);
               };
               send("change&input");
@@ -26,9 +26,21 @@ fn main() {
         }
       }
     }"#;
+    let polling_request = r#"// Poll for requests
+    window.interpreter.wait_for_request = () => {
+      fetch(new Request("dioxus://index.html/edits"))
+          .then(response => {
+              response.arrayBuffer()
+                  .then(bytes => {
+                      run_from_bytes(bytes);
+                      window.interpreter.wait_for_request();
+                  });
+          })
+    }"#;
     let mut interpreter = SLEDGEHAMMER_JS
         .replace("/*POST_HANDLE_EDITS*/", prevent_file_upload)
-        .replace("export", "");
+        .replace("export", "")
+        + polling_request;
     while let Some(import_start) = interpreter.find("import") {
         let import_end = interpreter[import_start..]
             .find(|c| c == ';' || c == '\n')
@@ -38,15 +50,12 @@ fn main() {
     }
 
     let js = format!("{interpreter}\nconst config = new InterpreterConfig(false);");
-    let mut file = std::fs::File::create("src/minified.js").unwrap();
-    file.write_all(js.as_bytes()).unwrap();
 
-    // TODO: Enable minification on desktop
-    // use minify_js::*;
-    // let session = Session::new();
-    // let mut out = Vec::new();
-    // minify(&session, TopLevelMode::Module, js.as_bytes(), &mut out).unwrap();
-    // let minified = String::from_utf8(out).unwrap();
-    // let mut file = std::fs::File::create("src/minified.js").unwrap();
-    // file.write_all(minified.as_bytes()).unwrap();
+    use minify_js::*;
+    let session = Session::new();
+    let mut out = Vec::new();
+    minify(&session, TopLevelMode::Module, js.as_bytes(), &mut out).unwrap();
+    let minified = String::from_utf8(out).unwrap();
+    let mut file = std::fs::File::create("src/minified.js").unwrap();
+    file.write_all(minified.as_bytes()).unwrap();
 }

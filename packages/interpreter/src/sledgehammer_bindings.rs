@@ -363,7 +363,7 @@ pub mod binary_protocol {
             // if this is a mounted listener, we send the event immediately
             if (event_name === "mounted") {
                 window.ipc.postMessage(
-                    serializeIpcMessage("user_event", {
+                    window.interpreter.serializeIpcMessage("user_event", {
                         name: event_name,
                         element: id,
                         data: null,

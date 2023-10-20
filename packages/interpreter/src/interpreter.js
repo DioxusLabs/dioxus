@@ -35,7 +35,7 @@ function handler(event, name, bubbles, config) {
             const href = a_element.getAttribute("href");
             if (href !== "" && href !== null && href !== undefined) {
               window.ipc.postMessage(
-                serializeIpcMessage("browser_open", { href })
+                window.interpreter.serializeIpcMessage("browser_open", { href })
               );
             }
           }
@@ -89,7 +89,7 @@ function handler(event, name, bubbles, config) {
           if (realId === null) {
             return;
           }
-          const message = serializeIpcMessage("user_event", {
+          const message = window.interpreter.serializeIpcMessage("user_event", {
             name: name,
             element: parseInt(realId),
             data: contents,
@@ -132,7 +132,7 @@ function handler(event, name, bubbles, config) {
       return;
     }
     window.ipc.postMessage(
-      serializeIpcMessage("user_event", {
+      window.interpreter.serializeIpcMessage("user_event", {
         name: name,
         element: parseInt(realId),
         data: contents,
@@ -231,11 +231,7 @@ let stack = [];
 let root;
 const templates = {};
 let node, els, end, k;
-function initialize(root) {
-  nodes = [root];
-  stack = [root];
-  listeners.root = root;
-}
+
 function AppendChildren(id, many) {
   root = nodes[id];
   els = stack.splice(stack.length - many);
@@ -245,6 +241,12 @@ function AppendChildren(id, many) {
 }
 
 window.interpreter = {}
+
+window.interpreter.initialize = function (root) {
+  nodes = [root];
+  stack = [root];
+  listeners.root = root;
+}
 
 window.interpreter.getClientRect = function (id) {
   const node = nodes[id];
@@ -560,7 +562,7 @@ function serialize_event(event) {
     }
   }
 }
-function serializeIpcMessage(method, params = {}) {
+window.interpreter.serializeIpcMessage = function (method, params = {}) {
   return JSON.stringify({ method, params });
 }
 

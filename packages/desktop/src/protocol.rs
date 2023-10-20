@@ -17,27 +17,15 @@ fn module_loader(root_name: &str) -> String {
         r#"
 <script type="module">
     {MINIFIED}
-
-    function wait_for_request() {{
-        fetch(new Request("dioxus://index.html/edits"))
-            .then(response => {{
-                response.arrayBuffer()
-                    .then(bytes => {{
-                        run_from_bytes(bytes);
-                        wait_for_request();
-                    }});
-            }})
-    }}
-
     // Wait for the page to load
     window.onload = function() {{
         let rootname = "{root_name}";
         let root_element = window.document.getElementById(rootname);
         if (root_element != null) {{
-            initialize(root_element);
-            window.ipc.postMessage(serializeIpcMessage("initialize"));
+            window.interpreter.initialize(root_element);
+            window.ipc.postMessage(window.interpreter.serializeIpcMessage("initialize"));
         }}
-        wait_for_request();
+        window.interpreter.wait_for_request();
     }}
 </script>
 "#

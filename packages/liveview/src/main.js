@@ -9,7 +9,7 @@ function main() {
 
 class IPC {
   constructor(root) {
-    initialize(root);
+    window.interpreter.initialize(root);
     const ws = new WebSocket(WS_ADDR);
     ws.binaryType = "arraybuffer";
 
@@ -20,7 +20,7 @@ class IPC {
     ws.onopen = () => {
       // we ping every 30 seconds to keep the websocket alive
       setInterval(ping, 30000);
-      ws.send(serializeIpcMessage("initialize"));
+      ws.send(window.interpreter.serializeIpcMessage("initialize"));
     };
 
     ws.onerror = (err) => {
