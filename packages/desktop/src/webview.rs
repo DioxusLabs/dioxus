@@ -7,7 +7,7 @@ pub use wry::application as tao;
 use wry::application::window::Window;
 use wry::webview::{WebContext, WebView, WebViewBuilder};
 
-pub fn build(
+pub(crate) fn build(
     cfg: &mut Config,
     event_loop: &EventLoopWindowTarget<UserWindowEvent>,
     proxy: EventLoopProxy<UserWindowEvent>,

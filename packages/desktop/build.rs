@@ -2,6 +2,17 @@ use dioxus_interpreter_js::binary_protocol::SLEDGEHAMMER_JS;
 
 use std::io::Write;
 
+const EDITS_PATH: &str = {
+    #[cfg(any(target_os = "android", target_os = "windows"))]
+    {
+        "http://dioxus.index.html/edits"
+    }
+    #[cfg(not(any(target_os = "android", target_os = "windows")))]
+    {
+        "dioxus://index.html/edits"
+    }
+};
+
 fn main() {
     let prevent_file_upload = r#"// Prevent file inputs from opening the file dialog on click
     let inputs = document.querySelectorAll("input");
@@ -26,21 +37,23 @@ fn main() {
         }
       }
     }"#;
-    let polling_request = r#"// Poll for requests
-    window.interpreter.wait_for_request = () => {
-      fetch(new Request("dioxus://index.html/edits"))
-          .then(response => {
+    let polling_request = format!(
+        r#"// Poll for requests
+    window.interpreter.wait_for_request = () => {{
+      fetch(new Request("{EDITS_PATH}"))
+          .then(response => {{
               response.arrayBuffer()
-                  .then(bytes => {
+                  .then(bytes => {{
                       run_from_bytes(bytes);
                       window.interpreter.wait_for_request();
-                  });
-          })
-    }"#;
+                  }});
+          }})
+    }}"#
+    );
     let mut interpreter = SLEDGEHAMMER_JS
         .replace("/*POST_HANDLE_EDITS*/", prevent_file_upload)
         .replace("export", "")
-        + polling_request;
+        + &polling_request;
     while let Some(import_start) = interpreter.find("import") {
         let import_end = interpreter[import_start..]
             .find(|c| c == ';' || c == '\n')
