@@ -1,3 +1,7 @@
+#![doc = include_str!("../README.md")]
+#![doc(html_logo_url = "https://avatars.githubusercontent.com/u/79236386")]
+#![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
+
 pub static INTERPRETER_JS: &str = include_str!("./interpreter.js");
 pub static COMMON_JS: &str = include_str!("./common.js");
 

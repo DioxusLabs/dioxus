@@ -48,6 +48,7 @@ use crate::prelude::{Navigator, RouterContext};
 /// # let mut vdom = VirtualDom::new(App);
 /// # let _ = vdom.rebuild();
 /// ```
+#[must_use]
 pub fn use_navigator(cx: &ScopeState) -> &Navigator {
     &*cx.use_hook(|| {
         let router = cx
