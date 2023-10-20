@@ -40,8 +40,9 @@ fn main() {
               return;
             }
           }"#;
-    let mut interpreter =
-        SLEDGEHAMMER_JS.replace("/*POST_EVENT_SERIALIZATION*/", serialize_file_uploads);
+    let mut interpreter = SLEDGEHAMMER_JS
+        .replace("/*POST_EVENT_SERIALIZATION*/", serialize_file_uploads)
+        .replace("export", "");
     while let Some(import_start) = interpreter.find("import") {
         let import_end = interpreter[import_start..]
             .find(|c| c == ';' || c == '\n')

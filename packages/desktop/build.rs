@@ -26,7 +26,9 @@ fn main() {
         }
       }
     }"#;
-    let mut interpreter = SLEDGEHAMMER_JS.replace("/*POST_HANDLE_EDITS*/", prevent_file_upload);
+    let mut interpreter = SLEDGEHAMMER_JS
+        .replace("/*POST_HANDLE_EDITS*/", prevent_file_upload)
+        .replace("export", "");
     while let Some(import_start) = interpreter.find("import") {
         let import_end = interpreter[import_start..]
             .find(|c| c == ';' || c == '\n')
