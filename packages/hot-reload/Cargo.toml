@@ -12,7 +12,7 @@ keywords = ["dom", "ui", "gui", "react", "hot-reloading"]
 [dependencies]
 dioxus-rsx = { workspace = true }
 dioxus-core = { workspace = true, features = ["serialize"] }
-dioxus-html = { workspace = true }
+dioxus-html = { workspace = true, optional = true }
 
 interprocess-docfix = { version = "1.2.2" }
 notify = { version = "5.0.0", optional = true }
@@ -24,5 +24,6 @@ once_cell = { version = "1.17.0", optional = true }
 ignore = { version = "0.4.19", optional = true }
 
 [features]
-default = []
-file_watcher = ["ignore", "chrono", "notify", "execute", "once_cell", "ignore", "dioxus-html/hot-reload-context"]
+default = ["dioxus-html"]
+custom_file_watcher = ["ignore", "chrono", "notify", "execute", "once_cell", "ignore"]
+file_watcher = ["custom_file_watcher", "dioxus-html/hot-reload-context"]
