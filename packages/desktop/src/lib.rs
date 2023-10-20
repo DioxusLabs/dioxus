@@ -29,7 +29,7 @@ use desktop_context::{EventData, UserWindowEvent, WebviewQueue, WindowEventHandl
 use dioxus_core::*;
 use dioxus_html::{event_bubbles, MountedData};
 use dioxus_html::{native_bind::NativeFileEngine, FormData, HtmlEvent};
-use dioxus_interpreter_js::Channel;
+use dioxus_interpreter_js::binary_protocol::Channel;
 use element::DesktopElement;
 use eval::init_eval;
 use futures_util::{pin_mut, FutureExt};

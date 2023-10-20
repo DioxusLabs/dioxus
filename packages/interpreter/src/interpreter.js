@@ -1,5 +1,3 @@
-import { setAttributeInner } from "./common.js";
-
 class InterpreterConfig {
   constructor(intercept_link_redirects) {
     this.intercept_link_redirects = intercept_link_redirects;
@@ -215,45 +213,6 @@ class ListenerMap {
     delete this.local[id];
   }
 }
-function SetAttributeInner(node, field, value, ns) {
-  const name = field;
-  if (ns === "style") {
-    // ????? why do we need to do this
-    if (node.style === undefined) {
-      node.style = {};
-    }
-    node.style[name] = value;
-  } else if (ns !== null && ns !== undefined && ns !== "") {
-    node.setAttributeNS(ns, name, value);
-  } else {
-    switch (name) {
-      case "value":
-        if (value !== node.value) {
-          node.value = value;
-        }
-        break;
-      case "initial_value":
-        node.defaultValue = value;
-        break;
-      case "checked":
-        node.checked = truthy(value);
-        break;
-      case "selected":
-        node.selected = truthy(value);
-        break;
-      case "dangerous_inner_html":
-        node.innerHTML = value;
-        break;
-      default:
-        // https://github.com/facebook/react/blob/8b88ac2592c5f555f315f9440cbb665dd1e7457a/packages/react-dom/src/shared/DOMProperty.js#L352-L364
-        if (!truthy(value) && bool_attrs.hasOwnProperty(name)) {
-          node.removeAttribute(name);
-        } else {
-          node.setAttribute(name, value);
-        }
-    }
-  }
-}
 function LoadChild(array) {
   // iterate through each number and get that child
   node = stack[stack.length - 1];
@@ -284,41 +243,10 @@ function AppendChildren(id, many) {
     root.appendChild(els[k]);
   }
 }
-const bool_attrs = {
-  allowfullscreen: true,
-  allowpaymentrequest: true,
-  async: true,
-  autofocus: true,
-  autoplay: true,
-  checked: true,
-  controls: true,
-  default: true,
-  defer: true,
-  disabled: true,
-  formnovalidate: true,
-  hidden: true,
-  ismap: true,
-  itemscope: true,
-  loop: true,
-  multiple: true,
-  muted: true,
-  nomodule: true,
-  novalidate: true,
-  open: true,
-  playsinline: true,
-  readonly: true,
-  required: true,
-  reversed: true,
-  selected: true,
-  truespeed: true,
-  webkitdirectory: true,
-};
-function truthy(val) {
-  return val === "true" || val === true;
-}
 
+window.interpreter = {}
 
-function getClientRect(id) {
+window.interpreter.getClientRect = function (id) {
   const node = nodes[id];
   if (!node) {
     return;
@@ -331,7 +259,7 @@ function getClientRect(id) {
   };
 }
 
-function scrollTo(id, behavior) {
+window.interpreter.scrollTo = function (id, behavior) {
   const node = nodes[id];
   if (!node) {
     return false;
@@ -343,7 +271,7 @@ function scrollTo(id, behavior) {
 }
 
 /// Set the focus on the element
-function setFocus(id, focus) {
+window.interpreter.setFocus = function (id, focus) {
   const node = nodes[id];
   if (!node) {
     return false;
@@ -354,47 +282,6 @@ function setFocus(id, focus) {
     node.blur();
   }
   return true;
-}
-
-function saveTemplate(template) {
-  let roots = [];
-  for (let root of template.roots) {
-    roots.push(this.MakeTemplateNode(root));
-  }
-  this.templates[template.name] = roots;
-}
-
-function makeTemplateNode(node) {
-  switch (node.type) {
-    case "Text":
-      return document.createTextNode(node.text);
-    case "Dynamic":
-      let dyn = document.createElement("pre");
-      dyn.hidden = true;
-      return dyn;
-    case "DynamicText":
-      return document.createTextNode("placeholder");
-    case "Element":
-      let el;
-
-      if (node.namespace != null) {
-        el = document.createElementNS(node.namespace, node.tag);
-      } else {
-        el = document.createElement(node.tag);
-      }
-
-      for (let attr of node.attrs) {
-        if (attr.type == "Static") {
-          setAttributeInner(el, attr.name, attr.value, attr.namespace);
-        }
-      }
-
-      for (let child of node.children) {
-        el.appendChild(this.MakeTemplateNode(child));
-      }
-
-      return el;
-  }
 }
 
 function get_mouse_data(event) {

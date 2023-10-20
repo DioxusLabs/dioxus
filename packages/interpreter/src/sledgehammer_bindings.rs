@@ -296,6 +296,7 @@ pub mod binary_protocol {
     #[bindgen]
     mod protocol_js {
         const JS_FILE: &str = "./packages/interpreter/src/interpreter.js";
+        const JS_FILE: &str = "./packages/interpreter/src/common.js";
 
         fn mount_to_root() {
             "{AppendChildren(root, stack.length-1);}"
@@ -382,10 +383,10 @@ pub mod binary_protocol {
             "{nodes[$id$].textContent = $text$;}"
         }
         fn set_attribute(id: u32, field: &str<u8, attr>, value: &str, ns: &str<u8, ns_cache>) {
-            "{node = nodes[$id$]; SetAttributeInner(node, $field$, $value$, $ns$);}"
+            "{node = nodes[$id$]; setAttributeInner(node, $field$, $value$, $ns$);}"
         }
         fn set_top_attribute(field: &str<u8, attr>, value: &str, ns: &str<u8, ns_cache>) {
-            "{SetAttributeInner(stack[stack.length-1], $field$, $value$, $ns$);}"
+            "{setAttributeInner(stack[stack.length-1], $field$, $value$, $ns$);}"
         }
         fn remove_attribute(id: u32, field: &str<u8, attr>, ns: &str<u8, ns_cache>) {
             r#"{
