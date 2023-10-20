@@ -484,7 +484,7 @@ fn apply_edits(
             HydrateText { path, value, id } => channel.hydrate_text(path, value, id.0 as u32),
             LoadTemplate { name, index, id } => {
                 if let Some(tmpl_id) = templates.get(name) {
-                    channel.load_template(*tmpl_id as u16, index as u16, id.0 as u32)
+                    channel.load_template(*tmpl_id, index as u16, id.0 as u32)
                 }
             }
             ReplaceWith { id, m } => channel.replace_with(id.0 as u32, m as u16),

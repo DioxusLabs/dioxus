@@ -126,7 +126,6 @@ pub(super) fn desktop_handler(
     {
         Ok(response) => {
             responder.respond(response);
-            return;
         }
         Err(err) => tracing::error!("error building response: {}", err),
     }
@@ -167,7 +166,7 @@ fn get_asset_root() -> Option<PathBuf> {
 
 /// Get the mime type from a path-like string
 fn get_mime_from_path(trimmed: &Path) -> Result<&'static str> {
-    if trimmed.ends_with(".svg") {
+    if trimmed.extension().is_some_and(|ext| ext == "svg") {
         return Ok("image/svg+xml");
     }
 
