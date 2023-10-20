@@ -8,11 +8,11 @@ use openidconnect::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::DIOXUS_FRONT_CLIENT_ID;
+use crate::{props::client::ClientProps, DIOXUS_FRONT_CLIENT_ID};
 
 #[derive(Clone, Debug, Default)]
 pub struct ClientState {
-    pub oidc_client: Option<CoreClient>,
+    pub oidc_client: Option<ClientProps>,
 }
 
 /// State that holds the nonce and authorization url and the nonce generated to log in an user
@@ -63,41 +63,35 @@ pub fn authorize_url(client: CoreClient) -> AuthRequest {
     }
 }
 
-pub async fn init_provider_metadata() -> Result<
-    ProviderMetadataWithLogout,
-    openidconnect::DiscoveryError<openidconnect::reqwest::Error<reqwest::Error>>,
-> {
-    let issuer_url = crate::DIOXUS_FRONT_ISSUER_URL;
-    ProviderMetadataWithLogout::discover_async(
-        IssuerUrl::new(issuer_url.to_string()).unwrap(),
-        async_http_client,
-    )
-    .await
+pub async fn init_provider_metadata() -> Result<ProviderMetadataWithLogout, crate::errors::Error> {
+    let issuer_url = IssuerUrl::new(crate::DIOXUS_FRONT_ISSUER_URL.to_string())?;
+    Ok(ProviderMetadataWithLogout::discover_async(issuer_url, async_http_client).await?)
 }
 
-pub async fn init_oidc_client(
-) -> Result<CoreClient, openidconnect::DiscoveryError<openidconnect::reqwest::Error<reqwest::Error>>>
-{
+pub async fn init_oidc_client() -> Result<(ClientId, CoreClient), crate::errors::Error> {
     let client_id = ClientId::new(crate::DIOXUS_FRONT_CLIENT_ID.to_string());
     let provider_metadata = init_provider_metadata().await?;
     let client_secret = None;
-    let redirect_url = RedirectUrl::new(format!("{}/login", crate::DIOXUS_FRONT_URL)).unwrap();
+    let redirect_url = RedirectUrl::new(format!("{}/login", crate::DIOXUS_FRONT_URL))?;
 
-    Ok(
+    Ok((
+        client_id.clone(),
         CoreClient::from_provider_metadata(provider_metadata, client_id, client_secret)
             .set_redirect_uri(redirect_url),
-    )
+    ))
 }
 
 ///TODO: Add pkce_pacifier
-pub async fn token_response(oidc_client: CoreClient, code: String) -> CoreTokenResponse {
+pub async fn token_response(
+    oidc_client: CoreClient,
+    code: String,
+) -> Result<CoreTokenResponse, crate::errors::Error> {
     // let (pkce_challenge, pkce_verifier) = PkceCodeChallenge::new_random_sha256();
-    oidc_client
+    Ok(oidc_client
         .exchange_code(AuthorizationCode::new(code.clone()))
         // .set_pkce_verifier(pkce_verifier)
         .request_async(async_http_client)
-        .await
-        .unwrap()
+        .await?)
 }
 
 pub async fn exchange_refresh_token(
@@ -116,9 +110,7 @@ pub async fn exchange_refresh_token(
         .await
 }
 
-pub async fn log_out_url(
-    id_token_hint: CoreIdToken,
-) -> Result<Url, openidconnect::DiscoveryError<openidconnect::reqwest::Error<reqwest::Error>>> {
+pub async fn log_out_url(id_token_hint: CoreIdToken) -> Result<Url, crate::errors::Error> {
     let provider_metadata = init_provider_metadata().await?;
     let end_session_url = provider_metadata
         .additional_metadata()

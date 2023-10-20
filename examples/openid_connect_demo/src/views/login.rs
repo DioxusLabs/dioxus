@@ -18,25 +18,28 @@ pub fn Login(cx: Scope, query_string: String) -> Element {
     let client = fermi_client.read().oidc_client.clone();
     let auth_token_read = fermi_auth_token.read().clone();
     cx.render(match (client, auth_token_read) {
-        (Some(client), Some(auth_token_read)) => {
+        (Some(client_props), Some(auth_token_read)) => {
             match (auth_token_read.id_token, auth_token_read.refresh_token) {
                 (Some(_id_token), Some(_refresh_token)) => {
                     rsx! {
-                        div{"Sign in successful"}
-                        Link{
-                            to: home_url,"Go back home"
-                        }
+                        div { "Sign in successful" }
+                        Link { to: home_url, "Go back home" }
                     }
                 }
                 // If the refresh token is set but not the id_token, there was an error, we just go back home and reset their value
                 (None, Some(_)) | (Some(_), None) => {
                     rsx! {
-                        div{"Error while attempting to log in"}
-                        Link{
-                            to: home_url, "Go back home", onclick: move |_|{
+                        div { "Error while attempting to log in" }
+                        Link {
+                            to: home_url,
+                            onclick: move |_| {
                                 AuthTokenState::persistent_set(fermi_auth_token, Some(AuthTokenState::default()));
-                                AuthRequestState::persistent_set(fermi_auth_request, Some(AuthRequestState::default()));
-                            }
+                                AuthRequestState::persistent_set(
+                                    fermi_auth_request,
+                                    Some(AuthRequestState::default()),
+                                );
+                            },
+                            "Go back home"
                         }
                     }
                 }
@@ -50,17 +53,24 @@ pub fn Login(cx: Scope, query_string: String) -> Element {
                             cx.spawn({
                                 let fermi_auth_token = fermi_auth_token.to_owned();
                                 async move {
-                                    let token_response = token_response(client, auth_code).await;
-                                    let id_token = token_response.id_token().unwrap();
-                                    AuthTokenState::persistent_set(&fermi_auth_token, Some(AuthTokenState {
-                                        id_token: Some(id_token.clone()),
-                                        refresh_token: token_response.refresh_token().cloned()
-                                }));
+                                    let token_response_result = token_response(client_props.client, auth_code).await;
+                                    match token_response_result{
+                                        Ok(token_response) => {
+                                            let id_token = token_response.id_token().unwrap();
+                                            AuthTokenState::persistent_set(&fermi_auth_token, Some(AuthTokenState {
+                                                id_token: Some(id_token.clone()),
+                                                refresh_token: token_response.refresh_token().cloned()
+                                            }));
+                                        }
+                                        Err(error) => {
+                                            log::warn!{"{error}"};
+                                        }
+                                    }
                                 }
                             })
                         };
                         token_response_spawn();
-                        rsx!{div{}}
+                        rsx!{ div {} }
                     }
                     None => {
                         rsx! { div { "No code provided" } }
