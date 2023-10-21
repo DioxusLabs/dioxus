@@ -113,6 +113,81 @@ impl InlinePropsDeserializerArgs {
         }
     }
 
+    fn get_props_docs(fn_ident: &Ident, inputs: Vec<&FnArg>) -> Vec<Attribute> {
+        if inputs.len() <= 1 {
+            return Vec::new();
+        }
+
+        let arg_docs = inputs
+            .iter()
+            .filter_map(|f| match f {
+                FnArg::Receiver(_) => unreachable!(), // ComponentBody prohibits receiver parameters.
+                FnArg::Typed(pt) => {
+                    let arg_doc = pt
+                        .attrs
+                        .iter()
+                        .filter_map(|attr| {
+                            // TODO: Error reporting
+                            // The doc attribute is always `NameValue`
+                            let Meta::NameValue(meta_name_value) = &attr.meta else {
+                                return None;
+                            };
+
+                            // Check if the path of the attribute is "doc"
+                            if meta_name_value.path != parse_quote!(doc) {
+                                return None;
+                            };
+
+                            let Expr::Lit(doc_lit) = &meta_name_value.value else {
+                                return None;
+                            };
+
+                            let Lit::Str(doc_lit_str) = &doc_lit.lit else {
+                                return None;
+                            };
+
+                            Some(doc_lit_str.value())
+                        })
+                        .fold(String::new(), |mut doc, next_doc_line| {
+                            doc.push('\n');
+                            doc.push_str(&next_doc_line);
+                            doc
+                        });
+
+                    Some((
+                        pt.pat.to_token_stream().to_string(),
+                        pt.ty.to_token_stream().to_string(),
+                        arg_doc,
+                    ))
+                }
+            })
+            .collect::<Vec<_>>();
+
+        let mut props_docs = Vec::with_capacity(5);
+        let props_def_link = fn_ident.to_string() + "Props";
+        let header =
+            format!("# Props\n*For details, see the [props struct definition]({props_def_link}).*");
+
+        props_docs.push(parse_quote! {
+            #[doc = #header]
+        });
+
+        for (arg_name, arg_type, input_arg_doc) in arg_docs {
+            let input_arg_doc =
+                keep_up_to_two_consecutive_chars(input_arg_doc.trim_matches('\n'), '\n')
+                    .replace('\n', "<br>");
+            let arg_doc = format!(
+                "- [`{arg_name}`]({props_def_link}::{arg_name}) : `{arg_type}`<br>{input_arg_doc}"
+            );
+
+            props_docs.push(parse_quote! {
+                #[doc = #arg_doc]
+            });
+        }
+
+        props_docs
+    }
+
     fn get_function(component_body: &ComponentBody) -> ItemFn {
         let ComponentBody {
             item_fn,
@@ -141,7 +216,7 @@ impl InlinePropsDeserializerArgs {
         // Skip first arg since that's the context
         let struct_field_names = inputs.iter().skip(1).filter_map(|f| match f {
             FnArg::Receiver(_) => unreachable!(), // ComponentBody prohibits receiver parameters.
-            FnArg::Typed(t) => Some(&t.pat),
+            FnArg::Typed(pt) => Some(&pt.pat),
         });
 
         let first_lifetime = if let Some(GenericParam::Lifetime(lt)) = generics.params.first() {
@@ -182,8 +257,13 @@ impl InlinePropsDeserializerArgs {
             generics
         };
 
+        let props_docs = Self::get_props_docs(fn_ident, inputs.iter().skip(1).collect());
+
+        //panic!("{}", quote!(#(#props_docs)*));
+
         parse_quote! {
             #(#fn_attrs)*
+            #(#props_docs)*
             #asyncness #vis fn #fn_ident #fn_generics (#cx_pat: Scope<#scope_lifetime #struct_ident #generics_no_bounds>) #fn_output
             #where_clause
             {
@@ -192,4 +272,28 @@ impl InlinePropsDeserializerArgs {
             }
         }
     }
+}
+
+fn keep_up_to_two_consecutive_chars(input: &str, target_char: char) -> String {
+    let mut output = String::new();
+    let mut prev_char: Option<char> = None;
+    let mut consecutive_count = 0;
+
+    for c in input.chars() {
+        match prev_char {
+            Some(prev) if c == target_char && prev == target_char => {
+                if consecutive_count < 2 {
+                    output.push(c);
+                    consecutive_count += 1;
+                }
+            }
+            _ => {
+                output.push(c);
+                prev_char = Some(c);
+                consecutive_count = 1;
+            }
+        }
+    }
+
+    output
 }
