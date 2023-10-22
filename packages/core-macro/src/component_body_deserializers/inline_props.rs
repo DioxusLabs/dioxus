@@ -3,6 +3,7 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, ToTokens, TokenStreamExt};
 use syn::token::Comma;
 use syn::{punctuated::Punctuated, *};
+use syn::parse::{Parse, ParseStream};
 
 /// The args and deserializing implementation for the [`crate::inline_props`] macro.
 #[derive(Clone)]
@@ -153,9 +154,22 @@ fn get_props_docs(fn_ident: &Ident, inputs: Vec<&FnArg>) -> Vec<Attribute> {
                     });
 
                 Some((
-                    pt.pat.to_token_stream().to_string(),
-                    pt.ty.to_token_stream().to_string(),
-                    pt.attrs.iter().filter(|a| !is_attr_doc(a)),
+                    &pt.pat,
+                    &pt.ty,
+                    pt.attrs
+                        .iter()
+                        .find_map(|attr| {
+                            if &attr.path() != &&parse_quote!(deprecated) {
+                                return None;
+                            }
+
+                            let res = crate::utils::DeprecatedAttribute::from_meta(&attr.meta);
+
+                            match res {
+                                Err(e) => panic!("{}", e.to_string()),
+                                Ok(v) => Some(v),
+                            }
+                        }),
                     arg_doc,
                 ))
             }
@@ -171,40 +185,31 @@ fn get_props_docs(fn_ident: &Ident, inputs: Vec<&FnArg>) -> Vec<Attribute> {
         #[doc = #header]
     });
 
-    for (arg_name, arg_type, attrs, input_arg_doc) in arg_docs {
+    for (arg_name, arg_type, deprecation, input_arg_doc) in arg_docs {
+        let arg_name = arg_name.into_token_stream().to_string();
+        let arg_type = crate::utils::format_type_string(arg_type);
+
         let input_arg_doc =
-            keep_up_to_two_consecutive_chars(input_arg_doc.trim_matches('\n'), '\n')
+            keep_up_to_two_consecutive_chars(input_arg_doc.trim(), '\n')
                 .replace('\n', "<br>");
         let prop_def_link = format!("{props_def_link}::{arg_name}");
-        let mut attribute_list = String::new();
-        let mut is_deprecated = false;
+        let mut arg_doc = format!("- [`{arg_name}`]({prop_def_link}) : `{arg_type}`");
 
-        for attr in attrs {
-            if attr.path() == &parse_quote!(deprecated) {
-                is_deprecated = true;
-                continue;
+        if let Some(deprecation) = deprecation {
+            arg_doc.push_str("<br>👎 Deprecated");
+
+            if let Some(since) = deprecation.since {
+                arg_doc.push_str(&format!(" since {since}"));
             }
 
-            attribute_list.push('`');
-            attribute_list.push_str(&quote!(#attr).into_token_stream().to_string());
-            attribute_list.push_str("`, ");
+            if let Some(note) = deprecation.note.map(|s| s.replace('\n', "\n\t")) {
+                arg_doc.push_str(&format!(": {note}"));
+            }
         }
 
-        let mut arg_doc = format!("- [`{arg_name}`]({prop_def_link})");
-
-        if is_deprecated {
-            arg_doc.push_str(" 👎 Deprecated");
+        if !input_arg_doc.is_empty() {
+            arg_doc.push_str(&format!("<hr>{input_arg_doc}"));
         }
-
-        arg_doc.push_str(&format!("<br>Type: `{arg_type}`"));
-
-        if !attribute_list.is_empty() {
-            // Truncate the last `, `
-            attribute_list.truncate(attribute_list.len() - 2);
-            arg_doc.push_str(&format!("<br>Attributes: {attribute_list}"));
-        }
-
-        arg_doc.push_str(&format!("<hr>{input_arg_doc}"));
 
         props_docs.push(parse_quote! {
             #[doc = #arg_doc]
