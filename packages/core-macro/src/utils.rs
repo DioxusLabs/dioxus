@@ -1,7 +1,7 @@
 use quote::ToTokens;
-use syn::{Type, Expr, Lit, Meta, parse_quote, Token};
 use syn::parse::{Parse, ParseStream};
 use syn::spanned::Spanned;
+use syn::{parse_quote, Expr, Lit, Meta, Token, Type};
 
 const FORMATTED_TYPE_START: &str = "static TY_AFTER_HERE:";
 const FORMATTED_TYPE_END: &str = "= todo!();";
@@ -31,7 +31,9 @@ pub fn format_type_string(ty: &Type) -> String {
 
     // This should always be valid syntax.
     // Not Rust code, but syntax, which is the only thing that `syn` cares about.
-    let Ok(file_unformatted) = syn::parse_file(&format!("{FORMATTED_TYPE_START}{ty_unformatted}{FORMATTED_TYPE_END}")) else {
+    let Ok(file_unformatted) = syn::parse_file(&format!(
+        "{FORMATTED_TYPE_START}{ty_unformatted}{FORMATTED_TYPE_END}"
+    )) else {
         return ty_unformatted.to_string();
     };
 
@@ -57,22 +59,28 @@ pub struct DeprecatedAttribute {
 impl DeprecatedAttribute {
     /// Returns `None` if the given attribute was not a valid form of the `#[deprecated]` attribute.
     pub fn from_meta(meta: &Meta) -> syn::Result<Self> {
-        if &meta.path() != &&parse_quote!(deprecated) {
-            return Err(syn::Error::new(meta.span(), "attribute path is not `deprecated`"));
+        if meta.path() != &parse_quote!(deprecated) {
+            return Err(syn::Error::new(
+                meta.span(),
+                "attribute path is not `deprecated`",
+            ));
         }
 
         match &meta {
             Meta::Path(_) => Ok(Self::default()),
             Meta::NameValue(name_value) => {
                 let Expr::Lit(expr_lit) = &name_value.value else {
-                    return Err(syn::Error::new(name_value.span(), "literal in `deprecated` value must be a string"));;
+                    return Err(syn::Error::new(
+                        name_value.span(),
+                        "literal in `deprecated` value must be a string",
+                    ));
                 };
 
                 Ok(Self {
                     since: None,
                     note: lit_to_string(expr_lit.lit.clone()).map(|s| s.trim().to_string()),
                 })
-            },
+            }
             Meta::List(list) => {
                 let parsed = list.parse_args::<DeprecatedAttributeArgsParser>()?;
 
@@ -116,9 +124,6 @@ impl Parse for DeprecatedAttributeArgsParser {
             note = lit_to_string(input.parse()?);
         }
 
-        Ok(Self {
-            since,
-            note,
-        })
+        Ok(Self { since, note })
     }
 }
