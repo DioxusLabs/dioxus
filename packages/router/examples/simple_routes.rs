@@ -66,7 +66,6 @@ fn Route2(cx: Scope, user_id: usize) -> Element {
 
 #[component]
 fn Route3(cx: Scope, dynamic: String) -> Element {
-    let navigator = use_navigator(cx);
     let current_route = use_route(cx)?;
     let current_route_str = use_ref(cx, String::new);
     let parsed = Route::from_str(&current_route_str.read());
@@ -78,9 +77,7 @@ fn Route3(cx: Scope, dynamic: String) -> Element {
 
     render! {
         input {
-            oninput: move |evt| {
-                *current_route_str.write() = evt.value.clone();
-            },
+            oninput: move |evt| *current_route_str.write() = evt.value.clone(),
             value: "{current_route_str.read()}"
         }
         "dynamic: {dynamic}"
@@ -89,7 +86,7 @@ fn Route3(cx: Scope, dynamic: String) -> Element {
             "hello world link"
         }
         button {
-            onclick: move |_| { navigator.push("https://www.google.com"); },
+            onclick: move |_| { dioxus_router::router().push("https://www.google.com"); },
             "google link"
         }
         p { "Site Map" }
