@@ -11,7 +11,7 @@ use dioxus_core::{
     ScopeId, ScopeState,
 };
 
-use crate::{CopyValue, Effect};
+use crate::{get_effect_stack, CopyValue, Effect, EffectStack};
 
 /// Creates a new Signal. Signals are a Copy state management solution with automatic dependency tracking.
 ///
@@ -82,6 +82,7 @@ pub(crate) struct SignalData<T> {
     pub(crate) subscribers: Rc<RefCell<Vec<ScopeId>>>,
     pub(crate) effect_subscribers: Rc<RefCell<Vec<Effect>>>,
     pub(crate) update_any: Arc<dyn Fn(ScopeId)>,
+    pub(crate) effect_stack: EffectStack,
     pub(crate) value: T,
 }
 
@@ -144,6 +145,7 @@ impl<T: 'static> Signal<T> {
                 effect_subscribers: Default::default(),
                 update_any: schedule_update_any().expect("in a virtual dom"),
                 value,
+                effect_stack: get_effect_stack(),
             }),
         }
     }
@@ -157,6 +159,7 @@ impl<T: 'static> Signal<T> {
                     effect_subscribers: Default::default(),
                     update_any: schedule_update_any().expect("in a virtual dom"),
                     value,
+                    effect_stack: get_effect_stack(),
                 },
                 owner,
             ),
@@ -172,7 +175,7 @@ impl<T: 'static> Signal<T> {
     /// If the signal has been dropped, this will panic.
     pub fn read(&self) -> Ref<T> {
         let inner = self.inner.read();
-        if let Some(effect) = Effect::current() {
+        if let Some(effect) = inner.effect_stack.current() {
             let mut effect_subscribers = inner.effect_subscribers.borrow_mut();
             if !effect_subscribers.contains(&effect) {
                 effect_subscribers.push(effect);
