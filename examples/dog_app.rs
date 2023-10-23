@@ -41,7 +41,7 @@ fn AppRoot(cx: Scope<'_>) -> Element {
                 }
             }
         }),
-        Err(_e) => cx.render(rsx! { div { "Error fetching breeds" } }),
+        Err(_e) => render! { div { "Error fetching breeds" } },
     }
 }
 
@@ -63,13 +63,7 @@ fn BreedPic(cx: Scope, breed: String) -> Element {
     match fut.value()? {
         Ok(resp) => render! {
             div {
-                button {
-                    onclick: move |_| {
-                        println!("clicked");
-                        fut.restart()
-                    },
-                    "Click to fetch another doggo"
-                }
+                button { onclick: move |_| fut.restart(), "Click to fetch another doggo" }
                 img {
                     src: "{resp.message}",
                     max_width: "500px",

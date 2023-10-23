@@ -378,7 +378,7 @@ impl<T: 'static> ReadOnlySignal<T> {
     }
 
     /// Get the current value of the signal. This will subscribe the current scope to the signal.
-    pub fn read(&self) -> Ref<T> {
+    pub fn read(&self) -> Ref<'static, T> {
         self.inner.read()
     }
 

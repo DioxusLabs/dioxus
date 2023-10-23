@@ -23,7 +23,7 @@ use crate::query::QueryResult;
 pub use cfg::{Config, WindowCloseBehaviour};
 pub use desktop_context::DesktopContext;
 pub use desktop_context::{
-    use_window, use_wry_event_handler, DesktopService, WryEventHandler, WryEventHandlerId,
+    use_window, use_wry_event_handler, window, DesktopService, WryEventHandler, WryEventHandlerId,
 };
 use desktop_context::{EventData, UserWindowEvent, WebviewQueue, WindowEventHandlers};
 use dioxus_core::*;

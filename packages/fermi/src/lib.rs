@@ -43,7 +43,7 @@
 
 use std::{
     any::Any,
-    cell::{Ref, RefCell, RefMut},
+    cell::{Ref, RefCell},
     collections::HashMap,
     fmt::Display,
     rc::Rc,
@@ -62,6 +62,19 @@ pub fn consume_root_context() -> Rc<AtomRoot> {
     })
 }
 
+/// A signal that can be read from and written to from anywhere in the app.
+///
+/// # Example
+///
+/// ```
+/// use dioxus::prelude::*;
+///
+/// static NAME: Atom<String> = Atom(|_| "world".to_string());
+///
+/// fn app(cx: Scope) -> Element {
+///     render! { "{NAME}" }
+/// }
+/// ```
 pub struct Atom<T>(pub fn(AtomBuilder) -> T);
 impl<T> Clone for Atom<T> {
     fn clone(&self) -> Self {
@@ -106,22 +119,27 @@ impl<T: 'static> Atom<T> {
         sig.read()
     }
 
+    pub fn cloned(&'static self) -> T
+    where
+        T: Clone,
+    {
+        self.value().value()
+    }
+
     pub fn write(&'static self) -> dioxus_signals::Write<'static, T> {
-        let sig = self.value();
-        sig.write()
+        self.value().write()
     }
 
     pub fn set(&self, value: T) {
-        let sig = self.value();
-        sig.set(value);
+        self.value().set(value);
     }
 
     pub fn with<O>(&self, f: impl FnOnce(&T) -> O) -> O {
-        let sig = self.value();
-        sig.with(f)
+        self.value().with(f)
     }
 
-    pub fn select<V>(&self, f: impl FnMut(&T) -> V + 'static) -> V {
+    /// Create a selection of this atom by caching the returned value
+    pub fn select<V: Clone + PartialEq>(&self, f: impl FnMut(&T) -> V + 'static) -> Signal<V> {
         todo!()
     }
 }
@@ -169,4 +187,20 @@ impl<T: Display + 'static> Display for Atom<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.value().with(|v| write!(f, "{}", v))
     }
+}
+
+pub struct Selector<T>(pub fn(SelectorBuilder) -> T);
+impl<T> Clone for Selector<T> {
+    fn clone(&self) -> Self {
+        Self(self.0)
+    }
+}
+impl<T> Copy for Selector<T> {}
+pub struct SelectorBuilder;
+
+#[test]
+fn it_works() {
+    static NAME: Atom<String> = Atom(|_| "world".to_string());
+
+    let r = NAME();
 }

@@ -35,6 +35,11 @@ pub fn use_window(cx: &ScopeState) -> &DesktopContext {
         .unwrap()
 }
 
+/// Get a handle to the current window
+pub fn window() -> DesktopContext {
+    dioxus_core::prelude::consume_context().unwrap()
+}
+
 pub(crate) type WebviewQueue = Rc<RefCell<Vec<WebviewHandler>>>;
 
 /// An imperative interface to the current window.
