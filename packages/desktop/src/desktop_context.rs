@@ -38,6 +38,7 @@ pub fn window() -> DesktopContext {
 }
 
 /// Get an imperative handle to the current window
+#[deprecated = "Prefer the using the `window` function directly for cleaner code"]
 pub fn use_window(cx: &ScopeState) -> &DesktopContext {
     cx.use_hook(|| cx.consume_context::<DesktopContext>())
         .as_ref()
