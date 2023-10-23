@@ -153,7 +153,7 @@ fn get_asset_root() -> Option<PathBuf> {
 
 /// Get the mime type from a path-like string
 fn get_mime_from_path(trimmed: &Path) -> Result<&'static str> {
-    if trimmed.extension().is_some_and(|ext| ext == ".svg") {
+    if trimmed.ends_with(".svg") {
         return Ok("image/svg+xml");
     }
 
