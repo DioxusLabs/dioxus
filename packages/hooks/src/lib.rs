@@ -91,3 +91,9 @@ mod use_on_create;
 pub use use_on_create::*;
 mod use_root_context;
 pub use use_root_context::*;
+
+mod use_lock;
+pub use use_lock::*;
+
+mod use_async_lock;
+pub use use_async_lock::*;
