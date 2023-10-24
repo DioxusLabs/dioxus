@@ -355,7 +355,7 @@ pub mod binary_protocol {
         fn add_placeholder() {
             "{node = document.createElement('pre'); node.hidden = true; stack.push(node);}"
         }
-        fn new_event_listener(event_name: &str<u8, evt>, id: u32, bubbles: u8) {
+        fn new_event_listener(event: &str<u8, evt>, id: u32, bubbles: u8) {
             r#"
             bubbles = bubbles == 1;
             node = nodes[id];
@@ -365,6 +365,7 @@ pub mod binary_protocol {
                 node.listening = 1;
             }
             node.setAttribute('data-dioxus-id', `\${id}`);
+            const event_name = $event$;
     
             // if this is a mounted listener, we send the event immediately
             if (event_name === "mounted") {

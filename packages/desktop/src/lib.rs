@@ -276,7 +276,10 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
 
                     let evt = match serde_json::from_value::<HtmlEvent>(params) {
                         Ok(value) => value,
-                        Err(_) => return,
+                        Err(err) => {
+                            tracing::error!("Error parsing user_event: {:?}", err);
+                            return;
+                        }
                     };
 
                     let HtmlEvent {
