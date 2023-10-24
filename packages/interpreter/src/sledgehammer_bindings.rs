@@ -11,6 +11,7 @@ pub const SLEDGEHAMMER_JS: &str = GENERATED_JS;
 #[cfg(feature = "web")]
 #[bindgen(module)]
 mod js {
+    const JS_FILE: &str = "./packages/interpreter/src/common.js";
     const JS: &str = r#"
     class ListenerMap {
         constructor(root) {
@@ -62,51 +63,6 @@ mod js {
         removeAllNonBubbling(element) {
             const id = element.getAttribute("data-dioxus-id");
             delete this.local[id];
-        }
-    }
-    function SetAttributeInner(node, field, value, ns) {
-        const name = field;
-        if (ns === "style") {
-            // ????? why do we need to do this
-            if (node.style === undefined) {
-                node.style = {};
-            }
-            node.style[name] = value;
-        } else if (ns !== null && ns !== undefined && ns !== "") {
-            node.setAttributeNS(ns, name, value);
-        } else {
-            switch (name) {
-                case "value":
-                    if (value !== node.value) {
-                        node.value = value;
-                    }
-                    break;
-                case "initial_value":
-                    node.defaultValue = value;
-                    break;
-                case "checked":
-                    node.checked = truthy(value);
-                    break;
-                case "initial_checked":
-                    node.defaultChecked = truthy(value);
-                    break;
-                case "selected":
-                    node.selected = truthy(value);
-                    break;
-                case "initial_selected":
-                    node.defaultSelected = truthy(value);
-                    break;
-                case "dangerous_inner_html":
-                    node.innerHTML = value;
-                    break;
-                default:
-                    // https://github.com/facebook/react/blob/8b88ac2592c5f555f315f9440cbb665dd1e7457a/packages/react-dom/src/shared/DOMProperty.js#L352-L364
-                    if (!truthy(value) && bool_attrs.hasOwnProperty(name)) {
-                        node.removeAttribute(name);
-                    } else {
-                        node.setAttribute(name, value);
-                    }
-            }
         }
     }
     function LoadChild(ptr, len) {

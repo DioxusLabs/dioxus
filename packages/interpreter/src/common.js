@@ -36,7 +36,7 @@ export function setAttributeInner(node, field, value, ns) {
       node.style = {};
     }
     node.style[name] = value;
-  } else if (ns != null && ns != undefined) {
+  } else if (!!ns) {
     node.setAttributeNS(ns, name, value);
   } else {
     switch (name) {
