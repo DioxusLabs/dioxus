@@ -167,11 +167,8 @@ impl VirtualDom {
         let mut listeners = scope.attributes_to_drop_before_render.borrow_mut();
         listeners.drain(..).for_each(|listener| {
             let listener = unsafe { &*listener };
-            match &listener.value {
-                AttributeValue::Listener(l) => {
-                    _ = l.take();
-                }
-                _ => (),
+            if let AttributeValue::Listener(l) = &listener.value {
+                _ = l.take();
             }
         });
     }

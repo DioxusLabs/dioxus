@@ -45,11 +45,8 @@ impl BumpFrame {
         let mut attributes = self.attributes_to_drop_before_reset.borrow_mut();
         attributes.drain(..).for_each(|attribute| {
             let attribute = unsafe { &*attribute };
-            match &attribute.value {
-                AttributeValue::Any(l) => {
-                    _ = l.take();
-                }
-                _ => (),
+            if let AttributeValue::Any(l) = &attribute.value {
+                _ = l.take();
             }
         });
         unsafe {
