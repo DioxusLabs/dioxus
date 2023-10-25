@@ -54,6 +54,8 @@ impl From<&str> for IntoRoutable {
         IntoRoutable::FromStr(value.to_string())
     }
 }
+
+/// Newtype to make is easier to work with rust-url type that other crates commonly use.
 pub struct Url(RustUrl);
 
 impl From<Url> for IntoRoutable {
