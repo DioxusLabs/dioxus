@@ -105,38 +105,6 @@ mod js {
             root.appendChild(els[k]);
         }
     }
-    const bool_attrs = {
-        allowfullscreen: true,
-        allowpaymentrequest: true,
-        async: true,
-        autofocus: true,
-        autoplay: true,
-        checked: true,
-        controls: true,
-        default: true,
-        defer: true,
-        disabled: true,
-        formnovalidate: true,
-        hidden: true,
-        ismap: true,
-        itemscope: true,
-        loop: true,
-        multiple: true,
-        muted: true,
-        nomodule: true,
-        novalidate: true,
-        open: true,
-        playsinline: true,
-        readonly: true,
-        required: true,
-        reversed: true,
-        selected: true,
-        truespeed: true,
-        webkitdirectory: true,
-      };
-      function truthy(val) {
-        return val === "true" || val === true;
-      }
     "#;
 
     extern "C" {
@@ -196,7 +164,7 @@ mod js {
         "{nodes[$id$].textContent = $text$;}"
     }
     fn set_attribute(id: u32, field: &str<u8, attr>, value: &str, ns: &str<u8, ns_cache>) {
-        "{node = nodes[$id$]; SetAttributeInner(node, $field$, $value$, $ns$);}"
+        "{node = nodes[$id$]; setAttributeInner(node, $field$, $value$, $ns$);}"
     }
     fn remove_attribute(id: u32, field: &str<u8, attr>, ns: &str<u8, ns_cache>) {
         r#"{
