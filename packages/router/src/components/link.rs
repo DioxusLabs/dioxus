@@ -11,7 +11,7 @@ use crate::navigation::NavigationTarget;
 use crate::prelude::Routable;
 use crate::utils::use_router_internal::use_router_internal;
 
-use url::Url as RustUrl;
+use url::Url;
 
 /// Something that can be converted into a [`NavigationTarget`].
 #[derive(Clone)]
@@ -55,18 +55,15 @@ impl From<&str> for IntoRoutable {
     }
 }
 
-/// Newtype to make is easier to work with rust-url type that other crates commonly use.
-pub struct Url(RustUrl);
-
 impl From<Url> for IntoRoutable {
     fn from(url: Url) -> Self {
-        IntoRoutable::FromStr(url.0.to_string())
+        IntoRoutable::FromStr(url.to_string())
     }
 }
 
 impl From<&Url> for IntoRoutable {
     fn from(url: &Url) -> Self {
-        IntoRoutable::FromStr(url.0.to_string())
+        IntoRoutable::FromStr(url.to_string())
     }
 }
 
