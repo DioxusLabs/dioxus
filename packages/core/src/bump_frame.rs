@@ -1,10 +1,14 @@
 use crate::nodes::RenderReturn;
+use crate::{Attribute, AttributeValue, VComponent};
 use bumpalo::Bump;
+use std::cell::RefCell;
 use std::cell::{Cell, UnsafeCell};
 
 pub(crate) struct BumpFrame {
     pub bump: UnsafeCell<Bump>,
     pub node: Cell<*const RenderReturn<'static>>,
+    pub(crate) attributes_to_drop_before_reset: RefCell<Vec<*const Attribute<'static>>>,
+    pub(crate) props_to_drop_before_reset: RefCell<Vec<*const VComponent<'static>>>,
 }
 
 impl BumpFrame {
@@ -13,6 +17,8 @@ impl BumpFrame {
         Self {
             bump: UnsafeCell::new(bump),
             node: Cell::new(std::ptr::null()),
+            attributes_to_drop_before_reset: Default::default(),
+            props_to_drop_before_reset: Default::default(),
         }
     }
 
@@ -31,8 +37,34 @@ impl BumpFrame {
         unsafe { &*self.bump.get() }
     }
 
-    #[allow(clippy::mut_from_ref)]
-    pub(crate) unsafe fn bump_mut(&self) -> &mut Bump {
-        unsafe { &mut *self.bump.get() }
+    pub(crate) fn add_attribute_to_drop(&self, attribute: *const Attribute<'static>) {
+        self.attributes_to_drop_before_reset
+            .borrow_mut()
+            .push(attribute);
+    }
+
+    pub(crate) unsafe fn reset(&self) {
+        let mut attributes = self.attributes_to_drop_before_reset.borrow_mut();
+        attributes.drain(..).for_each(|attribute| {
+            let attribute = unsafe { &*attribute };
+            if let AttributeValue::Any(l) = &attribute.value {
+                _ = l.take();
+            }
+        });
+        let mut props = self.props_to_drop_before_reset.borrow_mut();
+        props.drain(..).for_each(|prop| {
+            let prop = unsafe { &*prop };
+            _ = prop.props.borrow_mut().take();
+        });
+        unsafe {
+            let bump = &mut *self.bump.get();
+            bump.reset();
+        }
+    }
+}
+
+impl Drop for BumpFrame {
+    fn drop(&mut self) {
+        unsafe { self.reset() }
     }
 }
