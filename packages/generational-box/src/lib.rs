@@ -12,7 +12,7 @@ use std::{
     sync::{atomic::AtomicU32, Arc},
 };
 
-use bumpalo::Bump;
+mod testing;
 
 /// # Example
 ///
