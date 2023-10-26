@@ -19,6 +19,7 @@ syn = { version = "2.0", features = ["full", "extra-traits"] }
 dioxus-rsx = { workspace = true }
 dioxus-core = { workspace = true }
 constcat = "0.3.0"
+prettyplease = "0.2.15"
 
 # testing
 [dev-dependencies]

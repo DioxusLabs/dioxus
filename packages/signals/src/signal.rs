@@ -1,5 +1,6 @@
 use std::{
     cell::{Ref, RefCell, RefMut},
+    mem::MaybeUninit,
     ops::{Deref, DerefMut},
     rc::Rc,
     sync::Arc,
@@ -10,7 +11,7 @@ use dioxus_core::{
     ScopeId, ScopeState,
 };
 
-use crate::{CopyValue, Effect};
+use crate::{get_effect_stack, CopyValue, Effect, EffectStack};
 
 /// Creates a new Signal. Signals are a Copy state management solution with automatic dependency tracking.
 ///
@@ -43,6 +44,7 @@ use crate::{CopyValue, Effect};
 ///     }
 /// }
 /// ```
+#[must_use]
 pub fn use_signal<T: 'static>(cx: &ScopeState, f: impl FnOnce() -> T) -> Signal<T> {
     *cx.use_hook(|| Signal::new(f()))
 }
@@ -80,6 +82,7 @@ pub(crate) struct SignalData<T> {
     pub(crate) subscribers: Rc<RefCell<Vec<ScopeId>>>,
     pub(crate) effect_subscribers: Rc<RefCell<Vec<Effect>>>,
     pub(crate) update_any: Arc<dyn Fn(ScopeId)>,
+    pub(crate) effect_stack: EffectStack,
     pub(crate) value: T,
 }
 
@@ -142,6 +145,7 @@ impl<T: 'static> Signal<T> {
                 effect_subscribers: Default::default(),
                 update_any: schedule_update_any().expect("in a virtual dom"),
                 value,
+                effect_stack: get_effect_stack(),
             }),
         }
     }
@@ -155,6 +159,7 @@ impl<T: 'static> Signal<T> {
                     effect_subscribers: Default::default(),
                     update_any: schedule_update_any().expect("in a virtual dom"),
                     value,
+                    effect_stack: get_effect_stack(),
                 },
                 owner,
             ),
@@ -170,7 +175,7 @@ impl<T: 'static> Signal<T> {
     /// If the signal has been dropped, this will panic.
     pub fn read(&self) -> Ref<T> {
         let inner = self.inner.read();
-        if let Some(effect) = Effect::current() {
+        if let Some(effect) = inner.effect_stack.current() {
             let mut effect_subscribers = inner.effect_subscribers.borrow_mut();
             if !effect_subscribers.contains(&effect) {
                 effect_subscribers.push(effect);
@@ -262,9 +267,49 @@ impl<T: Clone + 'static> Signal<T> {
     }
 }
 
+impl Signal<bool> {
+    /// Invert the boolean value of the signal. This will trigger an update on all subscribers.
+    pub fn toggle(&self) {
+        self.set(!self.value());
+    }
+}
+
 impl<T: 'static> PartialEq for Signal<T> {
     fn eq(&self, other: &Self) -> bool {
         self.inner == other.inner
+    }
+}
+
+impl<T> Deref for Signal<T> {
+    type Target = dyn Fn() -> Ref<'static, T>;
+
+    fn deref(&self) -> &Self::Target {
+        // https://github.com/dtolnay/case-studies/tree/master/callable-types
+
+        // First we create a closure that captures something with the Same in memory layout as Self (MaybeUninit<Self>).
+        let uninit_callable = MaybeUninit::<Self>::uninit();
+        // Then move that value into the closure. We assume that the closure now has a in memory layout of Self.
+        let uninit_closure = move || Self::read(unsafe { &*uninit_callable.as_ptr() });
+
+        // Check that the size of the closure is the same as the size of Self in case the compiler changed the layout of the closure.
+        let size_of_closure = std::mem::size_of_val(&uninit_closure);
+        assert_eq!(size_of_closure, std::mem::size_of::<Self>());
+
+        // Then cast the lifetime of the closure to the lifetime of &self.
+        fn cast_lifetime<'a, T>(_a: &T, b: &'a T) -> &'a T {
+            b
+        }
+        let reference_to_closure = cast_lifetime(
+            {
+                // The real closure that we will never use.
+                &uninit_closure
+            },
+            // We transmute self into a reference to the closure. This is safe because we know that the closure has the same memory layout as Self so &Closure == &Self.
+            unsafe { std::mem::transmute(self) },
+        );
+
+        // Cast the closure to a trait object.
+        reference_to_closure as &Self::Target
     }
 }
 
@@ -305,7 +350,7 @@ impl<'a, T: 'static, I: 'static> Write<'a, T, I> {
     }
 }
 
-impl<'a, T: 'static> Deref for Write<'a, T> {
+impl<'a, T: 'static, I: 'static> Deref for Write<'a, T, I> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -313,7 +358,7 @@ impl<'a, T: 'static> Deref for Write<'a, T> {
     }
 }
 
-impl<T> DerefMut for Write<'_, T> {
+impl<T, I> DerefMut for Write<'_, T, I> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.write
     }
@@ -356,5 +401,38 @@ impl<T: Clone + 'static> ReadOnlySignal<T> {
 impl<T: 'static> PartialEq for ReadOnlySignal<T> {
     fn eq(&self, other: &Self) -> bool {
         self.inner == other.inner
+    }
+}
+
+impl<T> Deref for ReadOnlySignal<T> {
+    type Target = dyn Fn() -> Ref<'static, T>;
+
+    fn deref(&self) -> &Self::Target {
+        // https://github.com/dtolnay/case-studies/tree/master/callable-types
+
+        // First we create a closure that captures something with the Same in memory layout as Self (MaybeUninit<Self>).
+        let uninit_callable = MaybeUninit::<Self>::uninit();
+        // Then move that value into the closure. We assume that the closure now has a in memory layout of Self.
+        let uninit_closure = move || Self::read(unsafe { &*uninit_callable.as_ptr() });
+
+        // Check that the size of the closure is the same as the size of Self in case the compiler changed the layout of the closure.
+        let size_of_closure = std::mem::size_of_val(&uninit_closure);
+        assert_eq!(size_of_closure, std::mem::size_of::<Self>());
+
+        // Then cast the lifetime of the closure to the lifetime of &self.
+        fn cast_lifetime<'a, T>(_a: &T, b: &'a T) -> &'a T {
+            b
+        }
+        let reference_to_closure = cast_lifetime(
+            {
+                // The real closure that we will never use.
+                &uninit_closure
+            },
+            // We transmute self into a reference to the closure. This is safe because we know that the closure has the same memory layout as Self so &Closure == &Self.
+            unsafe { std::mem::transmute(self) },
+        );
+
+        // Cast the closure to a trait object.
+        reference_to_closure as &Self::Target
     }
 }
