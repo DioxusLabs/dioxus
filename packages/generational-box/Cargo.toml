@@ -8,10 +8,16 @@ edition = "2018"
 
 [dependencies]
 bumpalo = { version = "3.6" }
+parking_lot = "0.12.1"
 
 [dev-dependencies]
 rand = "0.8.5"
+criterion = "0.3"
 
 [features]
 default = ["check_generation"]
 check_generation = []
+
+[[bench]]
+name = "lock"
+harness = false

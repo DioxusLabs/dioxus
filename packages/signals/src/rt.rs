@@ -1,5 +1,3 @@
-use std::cell::{Ref, RefMut};
-
 use std::mem::MaybeUninit;
 use std::ops::Deref;
 use std::rc::Rc;
@@ -8,8 +6,11 @@ use dioxus_core::prelude::*;
 use dioxus_core::ScopeId;
 
 use generational_box::{GenerationalBox, Owner, Store};
+use parking_lot::{MappedRwLockReadGuard, MappedRwLockWriteGuard};
 
 use crate::Effect;
+
+static STORE: once_cell::sync::Lazy<Store> = once_cell::sync::Lazy::new(Store::default);
 
 fn current_store() -> Store {
     match consume_context() {
@@ -117,22 +118,22 @@ impl<T: 'static> CopyValue<T> {
     }
 
     /// Try to read the value. If the value has been dropped, this will return None.
-    pub fn try_read(&self) -> Option<Ref<'_, T>> {
+    pub fn try_read(&self) -> Option<MappedRwLockReadGuard<'static, T>> {
         self.value.try_read()
     }
 
     /// Read the value. If the value has been dropped, this will panic.
-    pub fn read(&self) -> Ref<'static, T> {
+    pub fn read(&self) -> MappedRwLockReadGuard<'static, T> {
         self.value.read()
     }
 
     /// Try to write the value. If the value has been dropped, this will return None.
-    pub fn try_write(&self) -> Option<RefMut<'static, T>> {
+    pub fn try_write(&self) -> Option<MappedRwLockWriteGuard<'static, T>> {
         self.value.try_write()
     }
 
     /// Write the value. If the value has been dropped, this will panic.
-    pub fn write(&self) -> RefMut<'static, T> {
+    pub fn write(&self) -> MappedRwLockWriteGuard<'static, T> {
         self.value.write()
     }
 
@@ -168,7 +169,7 @@ impl<T: 'static> PartialEq for CopyValue<T> {
 }
 
 impl<T> Deref for CopyValue<T> {
-    type Target = dyn Fn() -> Ref<'static, T>;
+    type Target = dyn Fn() -> MappedRwLockReadGuard<'static, T>;
 
     fn deref(&self) -> &Self::Target {
         // https://github.com/dtolnay/case-studies/tree/master/callable-types

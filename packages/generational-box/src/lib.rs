@@ -1,11 +1,15 @@
 #![doc = include_str!("../README.md")]
 #![warn(missing_docs)]
 
+use parking_lot::{
+    MappedRwLockReadGuard, MappedRwLockWriteGuard, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard,
+};
 use std::{
-    cell::{Cell, Ref, RefCell, RefMut},
+    cell::RefCell,
     fmt::Debug,
     marker::PhantomData,
     rc::Rc,
+    sync::{atomic::AtomicU32, Arc},
 };
 
 use bumpalo::Bump;
@@ -29,12 +33,12 @@ fn reused() {
     let first_ptr;
     {
         let owner = store.owner();
-        first_ptr = owner.insert(1).raw.data.as_ptr();
+        first_ptr = owner.insert(1).raw.data.data_ptr();
         drop(owner);
     }
     {
         let owner = store.owner();
-        let second_ptr = owner.insert(1234).raw.data.as_ptr();
+        let second_ptr = owner.insert(1234).raw.data.data_ptr();
         assert_eq!(first_ptr, second_ptr);
         drop(owner);
     }
@@ -161,7 +165,7 @@ impl<T: 'static> Debug for GenerationalBox<T> {
         #[cfg(any(debug_assertions, feature = "check_generation"))]
         f.write_fmt(format_args!(
             "{:?}@{:?}",
-            self.raw.data.as_ptr(),
+            self.raw.data.data_ptr(),
             self.generation
         ))?;
         #[cfg(not(any(debug_assertions, feature = "check_generation")))]
@@ -175,7 +179,10 @@ impl<T: 'static> GenerationalBox<T> {
     fn validate(&self) -> bool {
         #[cfg(any(debug_assertions, feature = "check_generation"))]
         {
-            self.raw.generation.get() == self.generation
+            self.raw
+                .generation
+                .load(std::sync::atomic::Ordering::Relaxed)
+                == self.generation
         }
         #[cfg(not(any(debug_assertions, feature = "check_generation")))]
         {
@@ -184,10 +191,10 @@ impl<T: 'static> GenerationalBox<T> {
     }
 
     /// Try to read the value. Returns None if the value is no longer valid.
-    pub fn try_read(&self) -> Option<Ref<'static, T>> {
+    pub fn try_read(&self) -> Option<MappedRwLockReadGuard<'static, T>> {
         self.validate()
             .then(|| {
-                Ref::filter_map(self.raw.data.borrow(), |any| {
+                RwLockReadGuard::try_map(self.raw.data.read(), |any| {
                     any.as_ref()?.downcast_ref::<T>()
                 })
                 .ok()
@@ -196,15 +203,15 @@ impl<T: 'static> GenerationalBox<T> {
     }
 
     /// Read the value. Panics if the value is no longer valid.
-    pub fn read(&self) -> Ref<'static, T> {
+    pub fn read(&self) -> MappedRwLockReadGuard<'static, T> {
         self.try_read().unwrap()
     }
 
     /// Try to write the value. Returns None if the value is no longer valid.
-    pub fn try_write(&self) -> Option<RefMut<'static, T>> {
+    pub fn try_write(&self) -> Option<MappedRwLockWriteGuard<'static, T>> {
         self.validate()
             .then(|| {
-                RefMut::filter_map(self.raw.data.borrow_mut(), |any| {
+                RwLockWriteGuard::try_map(self.raw.data.write(), |any| {
                     any.as_mut()?.downcast_mut::<T>()
                 })
                 .ok()
@@ -213,14 +220,14 @@ impl<T: 'static> GenerationalBox<T> {
     }
 
     /// Write the value. Panics if the value is no longer valid.
-    pub fn write(&self) -> RefMut<'static, T> {
+    pub fn write(&self) -> MappedRwLockWriteGuard<'static, T> {
         self.try_write().unwrap()
     }
 
     /// Set the value. Panics if the value is no longer valid.
     pub fn set(&self, value: T) {
         self.validate().then(|| {
-            *self.raw.data.borrow_mut() = Some(Box::new(value));
+            *self.raw.data.write() = Some(Box::new(value));
         });
     }
 
@@ -228,7 +235,8 @@ impl<T: 'static> GenerationalBox<T> {
     pub fn ptr_eq(&self, other: &Self) -> bool {
         #[cfg(any(debug_assertions, feature = "check_generation"))]
         {
-            self.raw.data.as_ptr() == other.raw.data.as_ptr() && self.generation == other.generation
+            self.raw.data.data_ptr() == other.raw.data.data_ptr()
+                && self.generation == other.generation
         }
         #[cfg(not(any(debug_assertions, feature = "check_generation")))]
         {
@@ -247,25 +255,26 @@ impl<T> Clone for GenerationalBox<T> {
 
 #[derive(Clone, Copy)]
 struct MemoryLocation {
-    data: &'static RefCell<Option<Box<dyn std::any::Any>>>,
+    data: &'static RwLock<Option<Box<dyn std::any::Any>>>,
     #[cfg(any(debug_assertions, feature = "check_generation"))]
-    generation: &'static Cell<u32>,
+    generation: &'static AtomicU32,
 }
 
 impl MemoryLocation {
     #[allow(unused)]
     fn drop(&self) {
-        let old = self.data.borrow_mut().take();
+        let old = self.data.write().take();
         #[cfg(any(debug_assertions, feature = "check_generation"))]
         if old.is_some() {
             drop(old);
-            let new_generation = self.generation.get() + 1;
-            self.generation.set(new_generation);
+            let new_generation = self.generation.load(std::sync::atomic::Ordering::Relaxed) + 1;
+            self.generation
+                .store(new_generation, std::sync::atomic::Ordering::Relaxed);
         }
     }
 
     fn replace<T: 'static>(&mut self, value: T) -> GenerationalBox<T> {
-        let mut inner_mut = self.data.borrow_mut();
+        let mut inner_mut = self.data.write();
 
         let raw = Box::new(value);
         let old = inner_mut.replace(raw);
@@ -273,7 +282,7 @@ impl MemoryLocation {
         GenerationalBox {
             raw: *self,
             #[cfg(any(debug_assertions, feature = "check_generation"))]
-            generation: self.generation.get(),
+            generation: self.generation.load(std::sync::atomic::Ordering::Relaxed),
             _marker: PhantomData,
         }
     }
@@ -282,14 +291,12 @@ impl MemoryLocation {
 /// Handles recycling generational boxes that have been dropped. Your application should have one store or one store per thread.
 #[derive(Clone)]
 pub struct Store {
-    bump: &'static Bump,
-    recycled: Rc<RefCell<Vec<MemoryLocation>>>,
+    recycled: Arc<Mutex<Vec<MemoryLocation>>>,
 }
 
 impl Default for Store {
     fn default() -> Self {
         Self {
-            bump: Box::leak(Box::new(Bump::new())),
             recycled: Default::default(),
         }
     }
@@ -298,18 +305,18 @@ impl Default for Store {
 impl Store {
     fn recycle(&self, location: MemoryLocation) {
         location.drop();
-        self.recycled.borrow_mut().push(location);
+        self.recycled.lock().push(location);
     }
 
     fn claim(&self) -> MemoryLocation {
-        if let Some(location) = self.recycled.borrow_mut().pop() {
+        if let Some(location) = self.recycled.lock().pop() {
             location
         } else {
-            let data: &'static RefCell<_> = self.bump.alloc(RefCell::new(None));
+            let data: &'static RwLock<_> = Box::leak(Box::new(RwLock::new(None)));
             MemoryLocation {
                 data,
                 #[cfg(any(debug_assertions, feature = "check_generation"))]
-                generation: self.bump.alloc(Cell::new(0)),
+                generation: Box::leak(Box::new(Default::default())),
             }
         }
     }
@@ -344,7 +351,9 @@ impl Owner {
         GenerationalBox {
             raw: location,
             #[cfg(any(debug_assertions, feature = "check_generation"))]
-            generation: location.generation.get(),
+            generation: location
+                .generation
+                .load(std::sync::atomic::Ordering::Relaxed),
             _marker: PhantomData,
         }
     }

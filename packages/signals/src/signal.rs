@@ -1,5 +1,5 @@
 use std::{
-    cell::{Ref, RefCell, RefMut},
+    cell::RefCell,
     mem::MaybeUninit,
     ops::{Deref, DerefMut},
     rc::Rc,
@@ -10,6 +10,7 @@ use dioxus_core::{
     prelude::{current_scope_id, has_context, provide_context, schedule_update_any},
     ScopeId, ScopeState,
 };
+use parking_lot::{MappedRwLockReadGuard, MappedRwLockWriteGuard};
 
 use crate::{get_effect_stack, CopyValue, Effect, EffectStack};
 
@@ -173,7 +174,7 @@ impl<T: 'static> Signal<T> {
 
     /// Get the current value of the signal. This will subscribe the current scope to the signal.
     /// If the signal has been dropped, this will panic.
-    pub fn read(&self) -> Ref<T> {
+    pub fn read(&self) -> MappedRwLockReadGuard<'static, T> {
         let inner = self.inner.read();
         if let Some(effect) = inner.effect_stack.current() {
             let mut effect_subscribers = inner.effect_subscribers.borrow_mut();
@@ -197,14 +198,14 @@ impl<T: 'static> Signal<T> {
                 }
             }
         }
-        Ref::map(inner, |v| &v.value)
+        MappedRwLockReadGuard::map(inner, |v| &v.value)
     }
 
     /// Get a mutable reference to the signal's value.
     /// If the signal has been dropped, this will panic.
-    pub fn write(&self) -> Write<'_, T> {
+    pub fn write(&self) -> Write<T> {
         let inner = self.inner.write();
-        let borrow = RefMut::map(inner, |v| &mut v.value);
+        let borrow = MappedRwLockWriteGuard::map(inner, |v| &mut v.value);
         Write {
             write: borrow,
             signal: SignalSubscriberDrop { signal: *self },
@@ -281,7 +282,7 @@ impl<T: 'static> PartialEq for Signal<T> {
 }
 
 impl<T> Deref for Signal<T> {
-    type Target = dyn Fn() -> Ref<'static, T>;
+    type Target = dyn Fn() -> MappedRwLockReadGuard<'static, T>;
 
     fn deref(&self) -> &Self::Target {
         // https://github.com/dtolnay/case-studies/tree/master/callable-types
@@ -324,17 +325,17 @@ impl<T: 'static> Drop for SignalSubscriberDrop<T> {
 }
 
 /// A mutable reference to a signal's value.
-pub struct Write<'a, T: 'static, I: 'static = T> {
-    write: RefMut<'a, T>,
+pub struct Write<T: 'static, I: 'static = T> {
+    write: MappedRwLockWriteGuard<'static, T>,
     signal: SignalSubscriberDrop<I>,
 }
 
-impl<'a, T: 'static, I: 'static> Write<'a, T, I> {
+impl<T: 'static, I: 'static> Write<T, I> {
     /// Map the mutable reference to the signal's value to a new type.
-    pub fn map<O>(myself: Self, f: impl FnOnce(&mut T) -> &mut O) -> Write<'a, O, I> {
+    pub fn map<O>(myself: Self, f: impl FnOnce(&mut T) -> &mut O) -> Write<O, I> {
         let Self { write, signal } = myself;
         Write {
-            write: RefMut::map(write, f),
+            write: MappedRwLockWriteGuard::map(write, f),
             signal,
         }
     }
@@ -343,14 +344,14 @@ impl<'a, T: 'static, I: 'static> Write<'a, T, I> {
     pub fn filter_map<O>(
         myself: Self,
         f: impl FnOnce(&mut T) -> Option<&mut O>,
-    ) -> Option<Write<'a, O, I>> {
+    ) -> Option<Write<O, I>> {
         let Self { write, signal } = myself;
-        let write = RefMut::filter_map(write, f).ok();
+        let write = MappedRwLockWriteGuard::try_map(write, f).ok();
         write.map(|write| Write { write, signal })
     }
 }
 
-impl<'a, T: 'static, I: 'static> Deref for Write<'a, T, I> {
+impl<T: 'static, I: 'static> Deref for Write<T, I> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -358,7 +359,7 @@ impl<'a, T: 'static, I: 'static> Deref for Write<'a, T, I> {
     }
 }
 
-impl<T, I> DerefMut for Write<'_, T, I> {
+impl<T, I> DerefMut for Write<T, I> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.write
     }
@@ -381,7 +382,7 @@ impl<T: 'static> ReadOnlySignal<T> {
     }
 
     /// Get the current value of the signal. This will subscribe the current scope to the signal.
-    pub fn read(&self) -> Ref<T> {
+    pub fn read(&self) -> MappedRwLockReadGuard<'static, T> {
         self.inner.read()
     }
 
@@ -405,7 +406,7 @@ impl<T: 'static> PartialEq for ReadOnlySignal<T> {
 }
 
 impl<T> Deref for ReadOnlySignal<T> {
-    type Target = dyn Fn() -> Ref<'static, T>;
+    type Target = dyn Fn() -> MappedRwLockReadGuard<'static, T>;
 
     fn deref(&self) -> &Self::Target {
         // https://github.com/dtolnay/case-studies/tree/master/callable-types
