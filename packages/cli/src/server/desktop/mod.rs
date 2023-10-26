@@ -13,6 +13,8 @@ use interprocess_docfix::local_socket::LocalSocketListener;
 use std::{
     process::{Child, Command},
     sync::{Arc, Mutex, RwLock},
+    thread,
+    time::Duration
 };
 use tokio::sync::broadcast::{self};
 
@@ -148,14 +150,25 @@ async fn start_desktop_hot_reload(hot_reload_state: HotReloadState) -> Result<()
                                 println!("Connected to hot reloading 🚀");
                             }
                             Err(err) => {
-                                if err.kind() != std::io::ErrorKind::WouldBlock {
-                                    println!("Error connecting to hot reloading: {} (Hot reloading is a feature of the dioxus-cli. If you are not using the CLI, this error can be ignored)", err);
+                                match err.kind() {
+                                    std::io::ErrorKind::WouldBlock => {
+                                    }
+                                    _ => {
+                                        //std::io::ErrorKind::Uncategorized
+                                        if let Some(raw_os_err) = err.raw_os_error() {
+                                            if raw_os_err != 536 /*ERROR_PIPE_LISTENING*/{
+                                                println!("Error connecting to hot reloading: {} (Hot reloading is a feature of the dioxus-cli. If you are not using '--hot-reload', this error can be ignored)", err);
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
                         if *aborted.lock().unwrap() {
                             break;
                         }
+                        
+                        thread::sleep(Duration::from_millis(1));
                     }
                 }
             });
