@@ -1,7 +1,8 @@
+use crate::{desktop_context::DesktopContext, query::QueryEngine};
 use dioxus_core::ElementId;
 use dioxus_html::{geometry::euclid::Rect, MountedResult, RenderedElementBacking};
-
-use crate::{desktop_context::DesktopContext, query::QueryEngine};
+use serde::de::DeserializeOwned;
+use std::borrow::Cow;
 
 /// A mounted element passed to onmounted events
 pub struct DesktopElement {
@@ -13,6 +14,29 @@ pub struct DesktopElement {
 impl DesktopElement {
     pub(crate) fn new(id: ElementId, webview: DesktopContext, query: QueryEngine) -> Self {
         Self { id, webview, query }
+    }
+
+    /// Evaluate JavaScript with the current node.
+    ///
+    /// This sets `window.currentNode` to the currently mounted HTML node.
+    pub fn eval<T: DeserializeOwned + 'static>(
+        &self,
+        js: impl Into<Cow<'static, str>>,
+    ) -> std::pin::Pin<Box<dyn futures_util::Future<Output = dioxus_html::MountedResult<T>>>> {
+        let script = format!(
+            "return window.interpreter.Eval({}, {});",
+            self.id.0,
+            js.into()
+        );
+
+        let fut = self
+            .query
+            .new_query::<T>(&script, self.webview.clone())
+            .resolve();
+        Box::pin(async move {
+            fut.await
+                .map_err(|error| dioxus_html::MountedError::OperationFailed(Box::new(error)))
+        })
     }
 }
 

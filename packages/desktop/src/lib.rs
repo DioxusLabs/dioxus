@@ -29,7 +29,7 @@ use desktop_context::{EventData, UserWindowEvent, WebviewQueue, WindowEventHandl
 use dioxus_core::*;
 use dioxus_html::MountedData;
 use dioxus_html::{native_bind::NativeFileEngine, FormData, HtmlEvent};
-use element::DesktopElement;
+pub use element::DesktopElement;
 use eval::init_eval;
 use futures_util::{pin_mut, FutureExt};
 use shortcut::ShortcutRegistry;

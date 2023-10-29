@@ -198,6 +198,22 @@ class Interpreter {
     };
   }
 
+  Eval(id, js) {
+    const node = this.nodes[id];
+    if (!node) {
+      return;
+    }
+
+    window.currentNode = node;
+    const output = eval(js);
+    window.currentNode = null;
+
+    return {
+      type: "Eval",
+      output,
+    };
+  }
+
   ScrollTo(id, behavior) {
     const node = this.nodes[id];
     if (!node) {
@@ -404,7 +420,8 @@ function handler(event, name, bubbles, config) {
           event.preventDefault();
 
           let elementShouldPreventDefault =
-            preventDefaultRequests && preventDefaultRequests.includes(`onclick`);
+            preventDefaultRequests &&
+            preventDefaultRequests.includes(`onclick`);
           let aElementShouldPreventDefault = a_element.getAttribute(
             `dioxus-prevent-default`
           );
@@ -458,10 +475,7 @@ function handler(event, name, bubbles, config) {
       }
     }
 
-    if (
-      target.tagName === "SELECT" &&
-      event.type === "input"
-    ) {
+    if (target.tagName === "SELECT" && event.type === "input") {
       const selectData = target.options;
       contents.values["options"] = [];
       for (let i = 0; i < selectData.length; i++) {
