@@ -158,6 +158,7 @@ impl<T> ProvidedStateInner<T> {
 /// Any time a component calls `write`, every consumer of the state will be notified - excluding the provider.
 ///
 /// Right now, there is not a distinction between read-only and write-only, so every consumer will be notified.
+#[must_use]
 pub fn use_shared_state<T: 'static>(cx: &ScopeState) -> Option<&UseSharedState<T>> {
     let state_owner: &mut Option<UseSharedStateOwner<T>> = &mut *cx.use_hook(move || {
         let scope_id = cx.scope_id();

@@ -41,6 +41,7 @@ members = [
     "examples/tailwind",
     "examples/PWA-example",
     "examples/query_segments_demo",
+    "examples/openid_connect_demo",
     # Playwright tests
     "playwright-tests/liveview",
     "playwright-tests/web",

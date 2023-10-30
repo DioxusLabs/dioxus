@@ -4,7 +4,7 @@
 </div>
 
 The **dioxus-cli** (inspired by wasm-pack and webpack) is a tool for getting Dioxus projects up and running.
-It handles all building, bundling, development and publishing to simplify development.
+It handles building, bundling, development and publishing to simplify development.
 
 ## Installation
 

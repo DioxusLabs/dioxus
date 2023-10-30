@@ -184,7 +184,7 @@ impl<T: 'static> GenerationalBox<T> {
     }
 
     /// Try to read the value. Returns None if the value is no longer valid.
-    pub fn try_read(&self) -> Option<Ref<'_, T>> {
+    pub fn try_read(&self) -> Option<Ref<'static, T>> {
         self.validate()
             .then(|| {
                 Ref::filter_map(self.raw.data.borrow(), |any| {
@@ -196,12 +196,12 @@ impl<T: 'static> GenerationalBox<T> {
     }
 
     /// Read the value. Panics if the value is no longer valid.
-    pub fn read(&self) -> Ref<'_, T> {
+    pub fn read(&self) -> Ref<'static, T> {
         self.try_read().unwrap()
     }
 
     /// Try to write the value. Returns None if the value is no longer valid.
-    pub fn try_write(&self) -> Option<RefMut<'_, T>> {
+    pub fn try_write(&self) -> Option<RefMut<'static, T>> {
         self.validate()
             .then(|| {
                 RefMut::filter_map(self.raw.data.borrow_mut(), |any| {
@@ -213,7 +213,7 @@ impl<T: 'static> GenerationalBox<T> {
     }
 
     /// Write the value. Panics if the value is no longer valid.
-    pub fn write(&self) -> RefMut<'_, T> {
+    pub fn write(&self) -> RefMut<'static, T> {
         self.try_write().unwrap()
     }
 

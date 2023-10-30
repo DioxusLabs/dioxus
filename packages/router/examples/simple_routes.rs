@@ -2,6 +2,47 @@ use dioxus::prelude::*;
 use dioxus_router::prelude::*;
 use std::str::FromStr;
 
+#[cfg(feature = "liveview")]
+#[tokio::main]
+async fn main() {
+    use axum::{extract::ws::WebSocketUpgrade, response::Html, routing::get, Router};
+
+    let listen_address: std::net::SocketAddr = ([127, 0, 0, 1], 3030).into();
+    let view = dioxus_liveview::LiveViewPool::new();
+    let app = Router::new()
+        .fallback(get(move || async move {
+            Html(format!(
+                r#"
+                    <!DOCTYPE html>
+                    <html>
+                        <head></head>
+                        <body><div id="main"></div></body>
+                        {glue}
+                    </html>
+                "#,
+                glue = dioxus_liveview::interpreter_glue(&format!("ws://{listen_address}/ws"))
+            ))
+        }))
+        .route(
+            "/ws",
+            get(move |ws: WebSocketUpgrade| async move {
+                ws.on_upgrade(move |socket| async move {
+                    _ = view
+                        .launch(dioxus_liveview::axum_socket(socket), Root)
+                        .await;
+                })
+            }),
+        );
+
+    println!("Listening on http://{listen_address}");
+
+    axum::Server::bind(&listen_address.to_string().parse().unwrap())
+        .serve(app.into_make_service())
+        .await
+        .unwrap();
+}
+
+#[cfg(not(feature = "liveview"))]
 fn main() {
     #[cfg(not(target_arch = "wasm32"))]
     dioxus_desktop::launch(Root);
@@ -10,21 +51,26 @@ fn main() {
     dioxus_web::launch(root);
 }
 
+#[cfg(feature = "liveview")]
 #[component]
 fn Root(cx: Scope) -> Element {
-    render! {
-        Router::<Route> {}
-    }
+    let history = LiveviewHistory::new(cx);
+    render! { Router::<Route> {
+        config: || RouterConfig::default().history(history),
+    } }
+}
+
+#[cfg(not(feature = "liveview"))]
+#[component]
+fn Root(cx: Scope) -> Element {
+    render! { Router::<Route> {} }
 }
 
 #[component]
 fn UserFrame(cx: Scope, user_id: usize) -> Element {
     render! {
-        pre {
-            "UserFrame{{\n\tuser_id:{user_id}\n}}"
-        }
-        div {
-            background_color: "rgba(0,0,0,50%)",
+        pre { "UserFrame{{\n\tuser_id:{user_id}\n}}" }
+        div { background_color: "rgba(0,0,0,50%)",
             "children:"
             Outlet::<Route> {}
         }
@@ -87,6 +133,16 @@ fn Route3(cx: Scope, dynamic: String) -> Element {
         Link {
             to: Route::Route2 { user_id: 8888 },
             "hello world link"
+        }
+        button {
+            disabled: !navigator.can_go_back(),
+            onclick: move |_| { navigator.go_back(); },
+            "go back"
+        }
+        button {
+            disabled: !navigator.can_go_forward(),
+            onclick: move |_| { navigator.go_forward(); },
+            "go forward"
         }
         button {
             onclick: move |_| { navigator.push("https://www.google.com"); },
