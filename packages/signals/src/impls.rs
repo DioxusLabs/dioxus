@@ -1,5 +1,7 @@
 use crate::rt::CopyValue;
 use crate::signal::{ReadOnlySignal, Signal, Write};
+use crate::SignalData;
+use generational_box::{MappableMut, Storage};
 use parking_lot::{MappedRwLockReadGuard, MappedRwLockWriteGuard};
 
 use std::{
@@ -203,19 +205,19 @@ macro_rules! write_impls {
     };
 }
 
-read_impls!(CopyValue);
-write_impls!(CopyValue);
-read_impls!(Signal);
-write_impls!(Signal);
-read_impls!(ReadOnlySignal);
+// read_impls!(CopyValue);
+// write_impls!(CopyValue);
+// read_impls!(Signal);
+// write_impls!(Signal);
+// read_impls!(ReadOnlySignal);
 
 /// An iterator over the values of a `CopyValue<Vec<T>>`.
-pub struct CopyValueIterator<T: 'static> {
+pub struct CopyValueIterator<T: 'static, S: Storage<T>> {
     index: usize,
-    value: CopyValue<Vec<T>>,
+    value: CopyValue<Vec<T>, S>,
 }
 
-impl<T: Clone> Iterator for CopyValueIterator<T> {
+impl<T: Clone, S: Storage<T>> Iterator for CopyValueIterator<T, S> {
     type Item = T;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -225,8 +227,8 @@ impl<T: Clone> Iterator for CopyValueIterator<T> {
     }
 }
 
-impl<T: Clone + 'static> IntoIterator for CopyValue<Vec<T>> {
-    type IntoIter = CopyValueIterator<T>;
+impl<T: Clone + 'static, S: Storage<T>> IntoIterator for CopyValue<Vec<T>, S> {
+    type IntoIter = CopyValueIterator<T, S>;
 
     type Item = T;
 
@@ -238,27 +240,33 @@ impl<T: Clone + 'static> IntoIterator for CopyValue<Vec<T>> {
     }
 }
 
-impl<T: 'static> CopyValue<Vec<T>> {
+impl<T: 'static, S: Storage<Vec<T>>> CopyValue<Vec<T>, S>
+where
+    <S as Storage<Vec<T>>>::Mut: MappableMut<Vec<T>, T>,
+{
     /// Write to an element in the inner vector.
-    pub fn get_mut(&self, index: usize) -> Option<MappedRwLockWriteGuard<'static, T>> {
+    pub fn get_mut(&self, index: usize) -> Option<<S::Mut as MappableMut<Vec<T>, T>>::Mapped> {
         MappedRwLockWriteGuard::try_map(self.write(), |v| v.get_mut(index)).ok()
     }
 }
 
-impl<T: 'static> CopyValue<Option<T>> {
+impl<T: 'static, S: Storage<Option<T>>> CopyValue<Option<T>, S>
+where
+    <S as Storage<Option<T>>>::Mut: MappableMut<Option<T>, T>,
+{
     /// Deref the inner value mutably.
-    pub fn as_mut(&self) -> Option<MappedRwLockWriteGuard<'static, T>> {
-        MappedRwLockWriteGuard::try_map(self.write(), |v| v.as_mut()).ok()
+    pub fn as_mut(&self) -> Option<<S::Mut as MappableMut<Option<T>, T>>::Mapped> {
+        S::Mut::map(self.try_write(), |v| v.as_mut()).ok()
     }
 }
 
 /// An iterator over items in a `Signal<Vec<T>>`.
-pub struct SignalIterator<T: 'static> {
+pub struct SignalIterator<T: 'static, S: Storage<T>> {
     index: usize,
-    value: Signal<Vec<T>>,
+    value: Signal<Vec<T>, S>,
 }
 
-impl<T: Clone> Iterator for SignalIterator<T> {
+impl<T: Clone, S: Storage<T>> Iterator for SignalIterator<T, S> {
     type Item = T;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -268,8 +276,8 @@ impl<T: Clone> Iterator for SignalIterator<T> {
     }
 }
 
-impl<T: Clone + 'static> IntoIterator for Signal<Vec<T>> {
-    type IntoIter = SignalIterator<T>;
+impl<T: Clone + 'static, S: Storage<T>> IntoIterator for Signal<Vec<T>, S> {
+    type IntoIter = SignalIterator<T, S>;
 
     type Item = T;
 
@@ -281,16 +289,22 @@ impl<T: Clone + 'static> IntoIterator for Signal<Vec<T>> {
     }
 }
 
-impl<T: 'static> Signal<Vec<T>> {
+impl<T: 'static, S: Storage<SignalData<Vec<T>>>> Signal<Vec<T>, S>
+where
+    S::Mut: MappableMut<Vec<T>, T>,
+{
     /// Returns a reference to an element or `None` if out of bounds.
-    pub fn get_mut(&self, index: usize) -> Option<Write<T, Vec<T>>> {
-        Write::filter_map(self.write(), |v| v.get_mut(index))
+    pub fn get_mut(
+        &self,
+        index: usize,
+    ) -> Option<Write<T, <S::Mut as MappableMut<Vec<T>, T>>::Mapped, S, Vec<T>>> {
+        S::Mut::map(self.write(), |v| v.get_mut(index))
     }
 }
 
-impl<T: 'static> Signal<Option<T>> {
+impl<T: 'static, S: Storage<SignalData<Option<T>>>> Signal<Option<T>, S> {
     /// Returns a reference to an element or `None` if out of bounds.
-    pub fn as_mut(&self) -> Option<Write<T, Option<T>>> {
+    pub fn as_mut(&self) -> Option<Write<SignalData<Option<T>>, S::Mut, S, Option<T>>> {
         Write::filter_map(self.write(), |v| v.as_mut())
     }
 }

@@ -5,22 +5,11 @@ use std::rc::Rc;
 use dioxus_core::prelude::*;
 use dioxus_core::ScopeId;
 
-use generational_box::{GenerationalBox, Owner, Store};
-use parking_lot::{MappedRwLockReadGuard, MappedRwLockWriteGuard};
+use generational_box::AnyStorage;
+use generational_box::Storage;
+use generational_box::{GenerationalBox, Owner};
 
 use crate::Effect;
-
-static STORE: once_cell::sync::Lazy<Store> = once_cell::sync::Lazy::new(Store::default);
-
-fn current_store() -> Store {
-    match consume_context() {
-        Some(rt) => rt,
-        None => {
-            let store = Store::default();
-            provide_root_context(store).expect("in a virtual dom")
-        }
-    }
-}
 
 fn current_owner() -> Rc<Owner> {
     match Effect::current() {
@@ -50,12 +39,20 @@ fn owner_in_scope(scope: ScopeId) -> Rc<Owner> {
     }
 }
 
+#[derive(Debug)]
 /// CopyValue is a wrapper around a value to make the value mutable and Copy.
 ///
 /// It is internally backed by [`generational_box::GenerationalBox`].
-pub struct CopyValue<T: 'static> {
-    pub(crate) value: GenerationalBox<T>,
+pub struct CopyValue<T: 'static, S: AnyStorage> {
+    pub(crate) value: GenerationalBox<T, S>,
     origin_scope: ScopeId,
+}
+
+impl<T: 'static, S: AnyStorage + Copy> Copy for CopyValue<T, S> {}
+impl<T: 'static, S: AnyStorage + Clone> Clone for CopyValue<T, S> {
+    fn clone(&self) -> Self {
+        *self
+    }
 }
 
 #[cfg(feature = "serde")]
@@ -80,7 +77,7 @@ where
     }
 }
 
-impl<T: 'static> CopyValue<T> {
+impl<T: 'static, S: Storage<T>> CopyValue<T, S> {
     /// Create a new CopyValue. The value will be stored in the current component.
     ///
     /// Once the component this value is created in is dropped, the value will be dropped.
@@ -118,22 +115,22 @@ impl<T: 'static> CopyValue<T> {
     }
 
     /// Try to read the value. If the value has been dropped, this will return None.
-    pub fn try_read(&self) -> Option<MappedRwLockReadGuard<'static, T>> {
+    pub fn try_read(&self) -> Option<S::Ref> {
         self.value.try_read()
     }
 
     /// Read the value. If the value has been dropped, this will panic.
-    pub fn read(&self) -> MappedRwLockReadGuard<'static, T> {
+    pub fn read(&self) -> S::Ref {
         self.value.read()
     }
 
     /// Try to write the value. If the value has been dropped, this will return None.
-    pub fn try_write(&self) -> Option<MappedRwLockWriteGuard<'static, T>> {
+    pub fn try_write(&self) -> Option<S::Mut> {
         self.value.try_write()
     }
 
     /// Write the value. If the value has been dropped, this will panic.
-    pub fn write(&self) -> MappedRwLockWriteGuard<'static, T> {
+    pub fn write(&self) -> S::Mut {
         self.value.write()
     }
 
@@ -155,21 +152,21 @@ impl<T: 'static> CopyValue<T> {
     }
 }
 
-impl<T: Clone + 'static> CopyValue<T> {
+impl<T: Clone + 'static, S: Storage<T>> CopyValue<T, S> {
     /// Get the value. If the value has been dropped, this will panic.
     pub fn value(&self) -> T {
         self.read().clone()
     }
 }
 
-impl<T: 'static> PartialEq for CopyValue<T> {
+impl<T: 'static, S: Storage<T>> PartialEq for CopyValue<T, S> {
     fn eq(&self, other: &Self) -> bool {
         self.value.ptr_eq(&other.value)
     }
 }
 
-impl<T> Deref for CopyValue<T> {
-    type Target = dyn Fn() -> MappedRwLockReadGuard<'static, T>;
+impl<T, S: Storage<T>> Deref for CopyValue<T, S> {
+    type Target = dyn Fn() -> S::Ref;
 
     fn deref(&self) -> &Self::Target {
         // https://github.com/dtolnay/case-studies/tree/master/callable-types

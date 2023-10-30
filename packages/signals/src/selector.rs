@@ -1,4 +1,5 @@
 use dioxus_core::prelude::*;
+use generational_box::Storage;
 
 use crate::dependency::Dependency;
 use crate::use_signal;
@@ -22,10 +23,10 @@ use crate::{get_effect_stack, signal::SignalData, CopyValue, Effect, ReadOnlySig
 /// }
 /// ```
 #[must_use = "Consider using `use_effect` to rerun a callback when dependencies change"]
-pub fn use_selector<R: PartialEq>(
+pub fn use_selector<R: PartialEq, S: Storage<SignalData<R>>>(
     cx: &ScopeState,
     f: impl FnMut() -> R + 'static,
-) -> ReadOnlySignal<R> {
+) -> ReadOnlySignal<R, S> {
     *cx.use_hook(|| selector(f))
 }
 
@@ -46,11 +47,11 @@ pub fn use_selector<R: PartialEq>(
 /// }
 /// ```
 #[must_use = "Consider using `use_effect` to rerun a callback when dependencies change"]
-pub fn use_selector_with_dependencies<R: PartialEq, D: Dependency>(
+pub fn use_selector_with_dependencies<R: PartialEq, D: Dependency, S: Storage<SignalData<R>>>(
     cx: &ScopeState,
     dependencies: D,
     mut f: impl FnMut(D::Out) -> R + 'static,
-) -> ReadOnlySignal<R>
+) -> ReadOnlySignal<R, S>
 where
     D::Out: 'static,
 {
@@ -71,7 +72,9 @@ where
 /// Creates a new Selector. The selector will be run immediately and whenever any signal it reads changes.
 ///
 /// Selectors can be used to efficiently compute derived data from signals.
-pub fn selector<R: PartialEq>(mut f: impl FnMut() -> R + 'static) -> ReadOnlySignal<R> {
+pub fn selector<R: PartialEq, S: Storage<SignalData<R>>>(
+    mut f: impl FnMut() -> R + 'static,
+) -> ReadOnlySignal<R, S> {
     let state = Signal::<R> {
         inner: CopyValue::invalid(),
     };

@@ -2,13 +2,14 @@ use core::{self, fmt::Debug};
 use std::fmt::{self, Formatter};
 //
 use dioxus_core::prelude::*;
+use generational_box::SyncStorage;
 
 use crate::use_signal;
 use crate::{dependency::Dependency, CopyValue};
 
 #[derive(Copy, Clone, PartialEq)]
 pub(crate) struct EffectStack {
-    pub(crate) effects: CopyValue<Vec<Effect>>,
+    pub(crate) effects: CopyValue<Vec<Effect>, SyncStorage>,
 }
 
 impl Default for EffectStack {
@@ -68,7 +69,7 @@ pub fn use_effect_with_dependencies<D: Dependency>(
 #[derive(Copy, Clone, PartialEq)]
 pub struct Effect {
     pub(crate) source: ScopeId,
-    pub(crate) callback: CopyValue<Box<dyn FnMut()>>,
+    pub(crate) callback: CopyValue<Box<dyn FnMut()>, SyncStorage>,
     pub(crate) effect_stack: EffectStack,
 }
 
