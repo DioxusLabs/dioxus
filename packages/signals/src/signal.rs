@@ -200,6 +200,13 @@ impl<T: 'static> Signal<T> {
         Ref::map(inner, |v| &v.value)
     }
 
+    /// Get the current value of the signal. **Unlike read, this will not subscribe the current scope to the signal which can cause parts of your UI to not update.**
+    /// If the signal has been dropped, this will panic.
+    pub fn read_untracked(&self) -> Ref<T> {
+        let inner = self.inner.read();
+        Ref::map(inner, |v| &v.value)
+    }
+
     /// Get a mutable reference to the signal's value.
     /// If the signal has been dropped, this will panic.
     pub fn write(&self) -> Write<'_, T> {
@@ -383,6 +390,12 @@ impl<T: 'static> ReadOnlySignal<T> {
     /// Get the current value of the signal. This will subscribe the current scope to the signal.
     pub fn read(&self) -> Ref<T> {
         self.inner.read()
+    }
+
+    /// Get the current value of the signal. **Unlike read, this will not subscribe the current scope to the signal which can cause parts of your UI to not update.**
+    /// If the signal has been dropped, this will panic.
+    pub fn read_untracked(&self) -> Ref<T> {
+        self.inner.read_untracked()
     }
 
     /// Run a closure with a reference to the signal's value.
