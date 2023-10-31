@@ -21,6 +21,7 @@ use crate::{get_effect_stack, signal::SignalData, CopyValue, Effect, ReadOnlySig
 ///     render! { "{double}" }
 /// }
 /// ```
+#[must_use = "Consider using `use_effect` to rerun a callback when dependencies change"]
 pub fn use_selector<R: PartialEq>(
     cx: &ScopeState,
     f: impl FnMut() -> R + 'static,
@@ -44,6 +45,7 @@ pub fn use_selector<R: PartialEq>(
 ///     render! { "{double}" }
 /// }
 /// ```
+#[must_use = "Consider using `use_effect` to rerun a callback when dependencies change"]
 pub fn use_selector_with_dependencies<R: PartialEq, D: Dependency>(
     cx: &ScopeState,
     dependencies: D,
@@ -76,19 +78,21 @@ pub fn selector<R: PartialEq>(mut f: impl FnMut() -> R + 'static) -> ReadOnlySig
     let effect = Effect {
         source: current_scope_id().expect("in a virtual dom"),
         callback: CopyValue::invalid(),
+        effect_stack: get_effect_stack(),
     };
 
     {
-        get_effect_stack().effects.borrow_mut().push(effect);
+        get_effect_stack().effects.write().push(effect);
     }
     state.inner.value.set(SignalData {
         subscribers: Default::default(),
         effect_subscribers: Default::default(),
         update_any: schedule_update_any().expect("in a virtual dom"),
         value: f(),
+        effect_stack: get_effect_stack(),
     });
     {
-        get_effect_stack().effects.borrow_mut().pop();
+        get_effect_stack().effects.write().pop();
     }
 
     effect.callback.value.set(Box::new(move || {

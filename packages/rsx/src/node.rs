@@ -125,7 +125,10 @@ impl ToTokens for BodyNode {
                 __cx.text_node(#txt)
             }),
             BodyNode::RawExpr(exp) => tokens.append_all(quote! {
-                 __cx.make_node(#exp)
+                {
+                    let ___nodes = (#exp).into_vnode(__cx);
+                    ___nodes
+                }
             }),
             BodyNode::ForLoop(exp) => {
                 let ForLoop {
@@ -137,16 +140,23 @@ impl ToTokens for BodyNode {
                     location: None,
                 };
 
+                // Signals expose an issue with temporary lifetimes
+                // We need to directly render out the nodes first to collapse their lifetime to <'a>
+                // And then we can return them into the dyn loop
                 tokens.append_all(quote! {
-                     __cx.make_node(
-                        (#expr).into_iter().map(|#pat| { #renderer })
-                     )
+                    {
+                        let ___nodes =(#expr).into_iter().map(|#pat| { #renderer }).into_vnode(__cx);
+                        ___nodes
+                    }
                 })
             }
             BodyNode::IfChain(chain) => {
                 if is_if_chain_terminated(chain) {
                     tokens.append_all(quote! {
-                         __cx.make_node(#chain)
+                        {
+                            let ___nodes = (#chain).into_vnode(__cx);
+                            ___nodes
+                        }
                     });
                 } else {
                     let ExprIf {
@@ -200,7 +210,10 @@ impl ToTokens for BodyNode {
                     });
 
                     tokens.append_all(quote! {
-                        __cx.make_node(#body)
+                        {
+                            let ___nodes = (#body).into_vnode(__cx);
+                            ___nodes
+                        }
                     });
                 }
             }

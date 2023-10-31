@@ -1,4 +1,6 @@
 #![doc = include_str!("../README.md")]
+#![doc(html_logo_url = "https://avatars.githubusercontent.com/u/79236386")]
+#![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![warn(missing_docs)]
 
 mod any_props;
@@ -90,9 +92,9 @@ pub mod prelude {
         provide_context, provide_context_to_scope, provide_root_context, push_future,
         remove_future, schedule_update_any, spawn, spawn_forever, suspend, throw, AnyValue,
         Attribute, AttributeType, Component, Element, Event, EventHandler, Fragment, HasAttributes,
-        IntoAttributeValue, LazyNodes, MountedAttribute, Properties, Runtime, RuntimeGuard, Scope,
-        ScopeId, ScopeState, Scoped, TaskId, Template, TemplateAttribute, TemplateNode, Throw,
-        VNode, VirtualDom,
+        IntoAttributeValue, IntoDynNode, LazyNodes, MountedAttribute, Properties, Runtime,
+        RuntimeGuard, Scope, ScopeId, ScopeState, Scoped, TaskId, Template, TemplateAttribute,
+        TemplateNode, Throw, VNode, VirtualDom,
     };
 }
 

@@ -35,7 +35,7 @@ impl Display for BlogQuerySegments {
     }
 }
 
-/// The query segment is anything that implements https://docs.rs/dioxus-router/latest/dioxus_router/routable/trait.FromQuery.html. You can implement that trait for a struct if you want to parse multiple query parameters.
+/// The query segment is anything that implements <https://docs.rs/dioxus-router/latest/dioxus_router/routable/trait.FromQuery.html>. You can implement that trait for a struct if you want to parse multiple query parameters.
 impl FromQuery for BlogQuerySegments {
     fn from_query(query: &str) -> Self {
         let mut name = None;

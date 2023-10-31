@@ -20,6 +20,7 @@ dioxus-rsx = { workspace = true }
 dioxus-core = { workspace = true }
 constcat = "0.3.0"
 convert_case = "^0.6.0"
+prettyplease = "0.2.15"
 
 # testing
 [dev-dependencies]
