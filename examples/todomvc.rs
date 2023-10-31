@@ -110,7 +110,7 @@ pub fn TodoHeader<'a>(cx: Scope<'a, TodoHeaderProps<'a>>) -> Element {
             value: "{draft}",
             autofocus: "true",
             oninput: move |evt| {
-                draft.set(evt.value.clone());
+                draft.set(evt.value().clone());
             },
             onkeydown: move |evt| {
                 if evt.key() == Key::Enter && !draft.is_empty() {
