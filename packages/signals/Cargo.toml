@@ -12,6 +12,7 @@ generational-box = { workspace = true }
 tracing = { workspace = true }
 simple_logger = "4.2.0"
 serde = { version = "1", features = ["derive"], optional = true }
+rustc-hash.workspace = true
 
 [dev-dependencies]
 dioxus = { workspace = true }

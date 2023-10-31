@@ -369,6 +369,12 @@ pub struct ReadOnlySignal<T: 'static> {
     inner: Signal<T>,
 }
 
+impl<T: 'static> From<Signal<T>> for ReadOnlySignal<T> {
+    fn from(inner: Signal<T>) -> Self {
+        Self { inner }
+    }
+}
+
 impl<T: 'static> ReadOnlySignal<T> {
     /// Create a new read-only signal.
     pub fn new(signal: Signal<T>) -> Self {
