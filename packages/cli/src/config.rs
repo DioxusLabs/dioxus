@@ -105,7 +105,7 @@ impl Default for DioxusConfig {
                 },
                 proxy: Some(vec![]),
                 watcher: WebWatcherConfig {
-                    watch_path: Some(vec![PathBuf::from("src")]),
+                    watch_path: Some(vec![PathBuf::from("src"), PathBuf::from("examples")]),
                     reload_html: Some(false),
                     index_on_404: Some(true),
                 },

@@ -193,7 +193,7 @@ impl<T: 'static> GenerationalBox<T> {
 
     /// Try to read the value. Returns None if the value is no longer valid.
     #[track_caller]
-    pub fn try_read(&self) -> Result<GenerationalRef<'_, T>, BorrowError> {
+    pub fn try_read(&self) -> Result<GenerationalRef<T>, BorrowError> {
         if !self.validate() {
             return Err(BorrowError::Dropped(ValueDroppedError {
                 #[cfg(any(debug_assertions, feature = "debug_borrows"))]
@@ -208,13 +208,13 @@ impl<T: 'static> GenerationalBox<T> {
 
     /// Read the value. Panics if the value is no longer valid.
     #[track_caller]
-    pub fn read(&self) -> GenerationalRef<'_, T> {
+    pub fn read(&self) -> GenerationalRef<T> {
         self.try_read().unwrap()
     }
 
     /// Try to write the value. Returns None if the value is no longer valid.
     #[track_caller]
-    pub fn try_write(&self) -> Result<GenerationalRefMut<'_, T>, BorrowMutError> {
+    pub fn try_write(&self) -> Result<GenerationalRefMut<T>, BorrowMutError> {
         if !self.validate() {
             return Err(BorrowMutError::Dropped(ValueDroppedError {
                 #[cfg(any(debug_assertions, feature = "debug_borrows"))]
@@ -229,7 +229,7 @@ impl<T: 'static> GenerationalBox<T> {
 
     /// Write the value. Panics if the value is no longer valid.
     #[track_caller]
-    pub fn write(&self) -> GenerationalRefMut<'_, T> {
+    pub fn write(&self) -> GenerationalRefMut<T> {
         self.try_write().unwrap()
     }
 
@@ -313,7 +313,7 @@ impl MemoryLocation {
         &self,
         #[cfg(any(debug_assertions, feature = "debug_ownership"))]
         created_at: &'static std::panic::Location<'static>,
-    ) -> Result<GenerationalRef<'_, T>, BorrowError> {
+    ) -> Result<GenerationalRef<T>, BorrowError> {
         #[cfg(any(debug_assertions, feature = "debug_borrows"))]
         self.0
             .borrowed_at
@@ -346,7 +346,7 @@ impl MemoryLocation {
         &self,
         #[cfg(any(debug_assertions, feature = "debug_ownership"))]
         created_at: &'static std::panic::Location<'static>,
-    ) -> Result<GenerationalRefMut<'_, T>, BorrowMutError> {
+    ) -> Result<GenerationalRefMut<T>, BorrowMutError> {
         #[cfg(any(debug_assertions, feature = "debug_borrows"))]
         {
             self.0
@@ -479,15 +479,15 @@ impl Display for AlreadyBorrowedError {
 impl std::error::Error for AlreadyBorrowedError {}
 
 /// A reference to a value in a generational box.
-pub struct GenerationalRef<'a, T: 'static> {
-    inner: Ref<'a, T>,
+pub struct GenerationalRef<T: 'static> {
+    inner: Ref<'static, T>,
     #[cfg(any(debug_assertions, feature = "debug_borrows"))]
     borrow: GenerationalRefBorrowInfo,
 }
 
-impl<'a, T: 'static> GenerationalRef<'a, T> {
+impl<'a, T: 'static> GenerationalRef<T> {
     /// Map one ref type to another.
-    pub fn map<U, F>(orig: GenerationalRef<'a, T>, f: F) -> GenerationalRef<'a, U>
+    pub fn map<U, F>(orig: GenerationalRef<T>, f: F) -> GenerationalRef<U>
     where
         F: FnOnce(&T) -> &U,
     {
@@ -502,7 +502,7 @@ impl<'a, T: 'static> GenerationalRef<'a, T> {
     }
 
     /// Filter one ref type to another.
-    pub fn filter_map<U, F>(orig: GenerationalRef<'a, T>, f: F) -> Option<GenerationalRef<'a, U>>
+    pub fn filter_map<U, F>(orig: GenerationalRef<T>, f: F) -> Option<GenerationalRef<U>>
     where
         F: FnOnce(&T) -> Option<&U>,
     {
@@ -522,7 +522,7 @@ impl<'a, T: 'static> GenerationalRef<'a, T> {
     }
 }
 
-impl<'a, T: 'static> Deref for GenerationalRef<'a, T> {
+impl<'a, T: 'static> Deref for GenerationalRef<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -547,15 +547,15 @@ impl Drop for GenerationalRefBorrowInfo {
 }
 
 /// A mutable reference to a value in a generational box.
-pub struct GenerationalRefMut<'a, T: 'static> {
-    inner: RefMut<'a, T>,
+pub struct GenerationalRefMut<T: 'static> {
+    inner: RefMut<'static, T>,
     #[cfg(any(debug_assertions, feature = "debug_borrows"))]
     borrow: GenerationalRefMutBorrowInfo,
 }
 
-impl<'a, T: 'static> GenerationalRefMut<'a, T> {
+impl<T: 'static> GenerationalRefMut<T> {
     /// Map one ref type to another.
-    pub fn map<U, F>(orig: GenerationalRefMut<'a, T>, f: F) -> GenerationalRefMut<'a, U>
+    pub fn map<U, F>(orig: GenerationalRefMut<T>, f: F) -> GenerationalRefMut<U>
     where
         F: FnOnce(&mut T) -> &mut U,
     {
@@ -567,10 +567,7 @@ impl<'a, T: 'static> GenerationalRefMut<'a, T> {
     }
 
     /// Filter one ref type to another.
-    pub fn filter_map<U, F>(
-        orig: GenerationalRefMut<'a, T>,
-        f: F,
-    ) -> Option<GenerationalRefMut<'a, U>>
+    pub fn filter_map<U, F>(orig: GenerationalRefMut<T>, f: F) -> Option<GenerationalRefMut<U>>
     where
         F: FnOnce(&mut T) -> Option<&mut U>,
     {
@@ -589,7 +586,7 @@ impl<'a, T: 'static> GenerationalRefMut<'a, T> {
     }
 }
 
-impl<'a, T: 'static> Deref for GenerationalRefMut<'a, T> {
+impl<'a, T: 'static> Deref for GenerationalRefMut<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -597,7 +594,7 @@ impl<'a, T: 'static> Deref for GenerationalRefMut<'a, T> {
     }
 }
 
-impl<'a, T: 'static> DerefMut for GenerationalRefMut<'a, T> {
+impl<'a, T: 'static> DerefMut for GenerationalRefMut<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.inner.deref_mut()
     }

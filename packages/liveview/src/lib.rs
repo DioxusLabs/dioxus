@@ -1,3 +1,7 @@
+#![doc = include_str!("../README.md")]
+#![doc(html_logo_url = "https://avatars.githubusercontent.com/u/79236386")]
+#![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
+
 pub mod adapters {
     #[cfg(feature = "warp")]
     pub mod warp_adapter;
@@ -93,14 +97,49 @@ static MAIN_JS: &str = include_str!("./main.js");
 /// This script that gets injected into your app connects this page to the websocket endpoint
 ///
 /// Once the endpoint is connected, it will send the initial state of the app, and then start
-/// processing user events and returning edits to the liveview instance
-pub fn interpreter_glue(url: &str) -> String {
+/// processing user events and returning edits to the liveview instance.
+///
+/// You can pass a relative path prefixed with "/", or enter a full URL including the protocol
+/// (`ws:` or `wss:`) as an argument.
+///
+/// If you enter a relative path, the web client automatically prefixes the host address in
+/// `window.location` when creating a web socket to LiveView.
+///
+/// ```
+/// // Creates websocket connection to same host as current page
+/// interpreter_glue("/api/liveview");
+///
+/// // Creates websocket connection to specified url
+/// interpreter_glue("ws://localhost:8080/api/liveview");
+/// ```
+pub fn interpreter_glue(url_or_path: &str) -> String {
+    // If the url starts with a `/`, generate glue which reuses current host
+    let get_ws_url = if url_or_path.starts_with('/') {
+        r#"
+  let loc = window.location; 
+  let new_url = "";
+  if (loc.protocol === "https:") {{
+      new_url = "wss:";
+  }} else {{
+      new_url = "ws:";
+  }}
+  new_url += "//" + loc.host + path;
+  return new_url;
+      "#
+    } else {
+        "return path;"
+    };
+
     let js = &*INTERPRETER_JS;
     let common = &*COMMON_JS;
     format!(
         r#"
 <script>
-    var WS_ADDR = "{url}";
+    function __dioxusGetWsUrl(path) {{
+      {get_ws_url}
+    }}
+    
+    var WS_ADDR = __dioxusGetWsUrl("{url_or_path}");
     {js}
     {common}
     {MAIN_JS}

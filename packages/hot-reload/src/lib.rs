@@ -6,9 +6,9 @@ pub use dioxus_html::HtmlCtx;
 use interprocess_docfix::local_socket::LocalSocketStream;
 use serde::{Deserialize, Serialize};
 
-#[cfg(feature = "file_watcher")]
+#[cfg(feature = "custom_file_watcher")]
 mod file_watcher;
-#[cfg(feature = "file_watcher")]
+#[cfg(feature = "custom_file_watcher")]
 pub use file_watcher::*;
 
 /// A message the hot reloading server sends to the client

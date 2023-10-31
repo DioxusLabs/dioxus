@@ -38,7 +38,7 @@ macro_rules! read_impls {
 
         impl<T: 'static> $ty<Vec<T>> {
             /// Read a value from the inner vector.
-            pub fn get(&self, index: usize) -> Option<GenerationalRef<'_, T>> {
+            pub fn get(&self, index: usize) -> Option<GenerationalRef<T>> {
                 GenerationalRef::filter_map(self.read(), |v| v.get(index))
             }
         }
@@ -53,7 +53,7 @@ macro_rules! read_impls {
             }
 
             /// Attempts to read the inner value of the Option.
-            pub fn as_ref(&self) -> Option<GenerationalRef<'_, T>> {
+            pub fn as_ref(&self) -> Option<GenerationalRef<T>> {
                 GenerationalRef::filter_map(self.read(), |v| v.as_ref())
             }
         }
@@ -182,15 +182,12 @@ macro_rules! write_impls {
             }
 
             /// Gets the value out of the Option, or inserts the given value if the Option is empty.
-            pub fn get_or_insert(&self, default: T) -> GenerationalRef<'_, T> {
+            pub fn get_or_insert(&self, default: T) -> GenerationalRef<T> {
                 self.get_or_insert_with(|| default)
             }
 
             /// Gets the value out of the Option, or inserts the value returned by the given function if the Option is empty.
-            pub fn get_or_insert_with(
-                &self,
-                default: impl FnOnce() -> T,
-            ) -> GenerationalRef<'_, T> {
+            pub fn get_or_insert_with(&self, default: impl FnOnce() -> T) -> GenerationalRef<T> {
                 let borrow = self.read();
                 if borrow.is_none() {
                     drop(borrow);
@@ -241,14 +238,14 @@ impl<T: Clone + 'static> IntoIterator for CopyValue<Vec<T>> {
 
 impl<T: 'static> CopyValue<Vec<T>> {
     /// Write to an element in the inner vector.
-    pub fn get_mut(&self, index: usize) -> Option<GenerationalRefMut<'_, T>> {
+    pub fn get_mut(&self, index: usize) -> Option<GenerationalRefMut<T>> {
         GenerationalRefMut::filter_map(self.write(), |v| v.get_mut(index))
     }
 }
 
 impl<T: 'static> CopyValue<Option<T>> {
     /// Deref the inner value mutably.
-    pub fn as_mut(&self) -> Option<GenerationalRefMut<'_, T>> {
+    pub fn as_mut(&self) -> Option<GenerationalRefMut<T>> {
         GenerationalRefMut::filter_map(self.write(), |v| v.as_mut())
     }
 }
@@ -284,14 +281,14 @@ impl<T: Clone + 'static> IntoIterator for Signal<Vec<T>> {
 
 impl<T: 'static> Signal<Vec<T>> {
     /// Returns a reference to an element or `None` if out of bounds.
-    pub fn get_mut(&self, index: usize) -> Option<Write<'_, T, Vec<T>>> {
+    pub fn get_mut(&self, index: usize) -> Option<Write<T, Vec<T>>> {
         Write::filter_map(self.write(), |v| v.get_mut(index))
     }
 }
 
 impl<T: 'static> Signal<Option<T>> {
     /// Returns a reference to an element or `None` if out of bounds.
-    pub fn as_mut(&self) -> Option<Write<'_, T, Option<T>>> {
+    pub fn as_mut(&self) -> Option<Write<T, Option<T>>> {
         Write::filter_map(self.write(), |v| v.as_mut())
     }
 }
