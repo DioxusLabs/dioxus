@@ -1,12 +1,13 @@
 name: github pages
 
 on:
-  push:
-    paths:
-      - docs/**
-      - .github/workflows/docs.yml
-    branches:
-      - master
+  workflow_dispatch:
+  # push:
+  #   paths:
+  #     - docs/**
+  #     - .github/workflows/docs.yml
+  #   branches:
+  #     - master
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}

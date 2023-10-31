@@ -1,4 +1,4 @@
-#![allow(non_snake_case, unused)]
+#![allow(unused)]
 //! Example: Url query segments usage
 //! ------------------------------------
 //!
@@ -35,7 +35,7 @@ impl Display for BlogQuerySegments {
     }
 }
 
-/// The query segment is anything that implements https://docs.rs/dioxus-router/latest/dioxus_router/routable/trait.FromQuery.html. You can implement that trait for a struct if you want to parse multiple query parameters.
+/// The query segment is anything that implements <https://docs.rs/dioxus-router/latest/dioxus_router/routable/trait.FromQuery.html>. You can implement that trait for a struct if you want to parse multiple query parameters.
 impl FromQuery for BlogQuerySegments {
     fn from_query(query: &str) -> Self {
         let mut name = None;
@@ -56,7 +56,7 @@ impl FromQuery for BlogQuerySegments {
     }
 }
 
-#[inline_props]
+#[component]
 fn BlogPost(cx: Scope, query_params: BlogQuerySegments) -> Element {
     render! {
         div{"This is your blogpost with a query segment:"}
@@ -64,6 +64,7 @@ fn BlogPost(cx: Scope, query_params: BlogQuerySegments) -> Element {
     }
 }
 
+#[component]
 fn App(cx: Scope) -> Element {
     render! { Router::<Route>{} }
 }

@@ -13,7 +13,7 @@ use crate::prelude::*;
 /// ```rust,no_run
 /// # use dioxus_router::prelude::*;
 /// # use dioxus::prelude::*;
-/// # #[inline_props]
+/// # #[component]
 /// # fn Index(cx: Scope) -> Element {
 /// #     todo!()
 /// # }

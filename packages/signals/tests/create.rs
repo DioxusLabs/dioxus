@@ -30,6 +30,30 @@ fn create_signals_global() {
 }
 
 #[test]
+fn deref_signal() {
+    let mut dom = VirtualDom::new(|cx| {
+        render! {
+            for _ in 0..10 {
+                Child {}
+            }
+        }
+    });
+
+    fn Child(cx: Scope) -> Element {
+        let signal = Signal::new("hello world".to_string());
+
+        // You can call signals like functions to get a Ref of their value.
+        assert_eq!(&*signal(), "hello world");
+
+        render! {
+            "hello world"
+        }
+    }
+
+    let _edits = dom.rebuild().santize();
+}
+
+#[test]
 fn drop_signals() {
     let mut dom = VirtualDom::new(|cx| {
         let generation = cx.generation();

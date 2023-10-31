@@ -1,3 +1,5 @@
+#![allow(clippy::type_complexity)]
+
 use std::any::Any;
 use std::fmt::Debug;
 use std::rc::Rc;
@@ -8,6 +10,8 @@ use tracing::error;
 use crate::navigation::NavigationTarget;
 use crate::prelude::Routable;
 use crate::utils::use_router_internal::use_router_internal;
+
+use url::Url;
 
 /// Something that can be converted into a [`NavigationTarget`].
 #[derive(Clone)]
@@ -48,6 +52,18 @@ impl From<&String> for IntoRoutable {
 impl From<&str> for IntoRoutable {
     fn from(value: &str) -> Self {
         IntoRoutable::FromStr(value.to_string())
+    }
+}
+
+impl From<Url> for IntoRoutable {
+    fn from(url: Url) -> Self {
+        IntoRoutable::FromStr(url.to_string())
+    }
+}
+
+impl From<&Url> for IntoRoutable {
+    fn from(url: &Url) -> Self {
+        IntoRoutable::FromStr(url.to_string())
     }
 }
 
@@ -133,13 +149,14 @@ impl Debug for LinkProps<'_> {
 ///     Index {},
 /// }
 ///
+/// #[component]
 /// fn App(cx: Scope) -> Element {
 ///     render! {
 ///         Router::<Route> {}
 ///     }
 /// }
 ///
-/// #[inline_props]
+/// #[component]
 /// fn Index(cx: Scope) -> Element {
 ///     render! {
 ///         render! {

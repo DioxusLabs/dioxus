@@ -52,6 +52,7 @@ use std::{any::Any, cell::Cell, collections::BTreeSet, future::Future, rc::Rc};
 ///
 /// static ROUTES: &str = "";
 ///
+/// #[component]
 /// fn App(cx: Scope<AppProps>) -> Element {
 ///     cx.render(rsx!(
 ///         NavBar { routes: ROUTES }
@@ -60,18 +61,19 @@ use std::{any::Any, cell::Cell, collections::BTreeSet, future::Future, rc::Rc};
 ///     ))
 /// }
 ///
-/// #[inline_props]
+/// #[component]
 /// fn NavBar(cx: Scope, routes: &'static str) -> Element {
 ///     cx.render(rsx! {
 ///         div { "Routes: {routes}" }
 ///     })
 /// }
 ///
+/// #[component]
 /// fn Footer(cx: Scope) -> Element {
 ///     cx.render(rsx! { div { "Footer" } })
 /// }
 ///
-/// #[inline_props]
+/// #[component]
 /// fn Title<'a>(cx: Scope<'a>, children: Element<'a>) -> Element {
 ///     cx.render(rsx! {
 ///         div { id: "title", children }
@@ -122,13 +124,14 @@ use std::{any::Any, cell::Cell, collections::BTreeSet, future::Future, rc::Rc};
 ///
 /// Putting everything together, you can build an event loop around Dioxus by using the methods outlined above.
 /// ```rust, ignore
-/// fn app(cx: Scope) -> Element {
+/// #[component]
+/// fn App(cx: Scope) -> Element {
 ///     cx.render(rsx! {
 ///         div { "Hello World" }
 ///     })
 /// }
 ///
-/// let dom = VirtualDom::new(app);
+/// let dom = VirtualDom::new(App);
 ///
 /// real_dom.apply(dom.rebuild());
 ///
@@ -658,6 +661,11 @@ impl VirtualDom {
     /// Swap the current mutations with a new
     fn finalize(&mut self) -> Mutations {
         std::mem::take(&mut self.mutations)
+    }
+
+    /// Get the current runtime
+    pub fn runtime(&self) -> Rc<Runtime> {
+        self.runtime.clone()
     }
 }
 

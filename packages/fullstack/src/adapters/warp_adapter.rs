@@ -143,7 +143,17 @@ pub fn register_server_fns(server_fn_route: &'static str) -> BoxedFilter<(impl R
                     let req = warp::hyper::Request::from_parts(parts, bytes.into());
                     service.run(req).await.map_err(|err| {
                         tracing::error!("Server function error: {}", err);
-                        warp::reject::reject()
+
+                        struct WarpServerFnError(String);
+                        impl std::fmt::Debug for WarpServerFnError {
+                            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                                write!(f, "{}", self.0)
+                            }
+                        }
+
+                        impl warp::reject::Reject for WarpServerFnError {}
+
+                        warp::reject::custom(WarpServerFnError(err.to_string()))
                     })
                 }
             })

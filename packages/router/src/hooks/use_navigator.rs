@@ -17,13 +17,14 @@ use crate::prelude::{Navigator, RouterContext};
 ///     Dynamic { id: usize },
 /// }
 ///
+/// #[component]
 /// fn App(cx: Scope) -> Element {
 ///     render! {
 ///         Router::<Route> {}
 ///     }
 /// }
 ///
-/// #[inline_props]
+/// #[component]
 /// fn Index(cx: Scope) -> Element {
 ///     let navigator = use_navigator(&cx);
 ///
@@ -35,7 +36,7 @@ use crate::prelude::{Navigator, RouterContext};
 ///     }
 /// }
 ///
-/// #[inline_props]
+/// #[component]
 /// fn Dynamic(cx: Scope, id: usize) -> Element {
 ///     render! {
 ///         p {
@@ -47,6 +48,7 @@ use crate::prelude::{Navigator, RouterContext};
 /// # let mut vdom = VirtualDom::new(App);
 /// # let _ = vdom.rebuild();
 /// ```
+#[must_use]
 pub fn use_navigator(cx: &ScopeState) -> &Navigator {
     &*cx.use_hook(|| {
         let router = cx

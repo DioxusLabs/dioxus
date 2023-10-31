@@ -2,9 +2,9 @@
 //!
 //! However, it has been adopted to fit the Dioxus Props builder pattern.
 //!
-//! For dioxus, we make a few changes:
-//! - [ ] automatically implement Into<Option> on the setters (IE the strip setter option)
-//! - [ ] automatically implement a default of none for optional fields (those explicitly wrapped with Option<T>)
+//! For Dioxus, we make a few changes:
+//! - [ ] Automatically implement Into<Option> on the setters (IE the strip setter option)
+//! - [ ] Automatically implement a default of none for optional fields (those explicitly wrapped with Option<T>)
 
 use proc_macro2::TokenStream;
 
@@ -194,8 +194,9 @@ mod field_info {
 
                 // children field is automatically defaulted to None
                 if name == "children" {
-                    builder_attr.default =
-                        Some(syn::parse(quote!(Default::default()).into()).unwrap());
+                    builder_attr.default = Some(
+                        syn::parse(quote!(::core::default::Default::default()).into()).unwrap(),
+                    );
                 }
 
                 // auto detect optional
@@ -204,8 +205,9 @@ mod field_info {
                         && type_from_inside_option(&field.ty, true).is_some();
                 if !builder_attr.strip_option && strip_option_auto {
                     builder_attr.strip_option = true;
-                    builder_attr.default =
-                        Some(syn::parse(quote!(Default::default()).into()).unwrap());
+                    builder_attr.default = Some(
+                        syn::parse(quote!(::core::default::Default::default()).into()).unwrap(),
+                    );
                 }
 
                 Ok(FieldInfo {
@@ -213,7 +215,7 @@ mod field_info {
                     name,
                     generic_ident: syn::Ident::new(
                         &format!("__{}", strip_raw_ident_prefix(name.to_string())),
-                        proc_macro2::Span::call_site(),
+                        name.span(),
                     ),
                     ty: &field.ty,
                     builder_attr,
@@ -345,14 +347,18 @@ mod field_info {
                         .ok_or_else(|| Error::new_spanned(&path, "Expected identifier"))?;
                     match name.as_str() {
                         "default" => {
-                            self.default =
-                                Some(syn::parse(quote!(Default::default()).into()).unwrap());
+                            self.default = Some(
+                                syn::parse(quote!(::core::default::Default::default()).into())
+                                    .unwrap(),
+                            );
                             Ok(())
                         }
 
                         "optional" => {
-                            self.default =
-                                Some(syn::parse(quote!(Default::default()).into()).unwrap());
+                            self.default = Some(
+                                syn::parse(quote!(::core::default::Default::default()).into())
+                                    .unwrap(),
+                            );
                             self.strip_option = true;
                             Ok(())
                         }
@@ -505,15 +511,12 @@ mod struct_info {
                     .map(|(i, f)| FieldInfo::new(i, f, builder_attr.field_defaults.clone()))
                     .collect::<Result<_, _>>()?,
                 builder_attr,
-                builder_name: syn::Ident::new(&builder_name, proc_macro2::Span::call_site()),
+                builder_name: syn::Ident::new(&builder_name, ast.ident.span()),
                 conversion_helper_trait_name: syn::Ident::new(
                     &format!("{builder_name}_Optional"),
-                    proc_macro2::Span::call_site(),
+                    ast.ident.span(),
                 ),
-                core: syn::Ident::new(
-                    &format!("{builder_name}_core"),
-                    proc_macro2::Span::call_site(),
-                ),
+                core: syn::Ident::new(&format!("{builder_name}_core"), ast.ident.span()),
             })
         }
 
@@ -551,11 +554,11 @@ mod struct_info {
             let phantom_generics = self.generics.params.iter().map(|param| match param {
                 syn::GenericParam::Lifetime(lifetime) => {
                     let lifetime = &lifetime.lifetime;
-                    quote!(core::marker::PhantomData<&#lifetime ()>)
+                    quote!(::core::marker::PhantomData<&#lifetime ()>)
                 }
                 syn::GenericParam::Type(ty) => {
                     let ty = &ty.ident;
-                    quote!(core::marker::PhantomData<#ty>)
+                    quote!(::core::marker::PhantomData<#ty>)
                 }
                 syn::GenericParam::Const(_cnst) => {
                     quote!()
@@ -634,7 +637,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                     #vis fn builder() -> #builder_name #generics_with_empty {
                         #builder_name {
                             fields: #empties_tuple,
-                            _phantom: core::default::Default::default(),
+                            _phantom: ::core::default::Default::default(),
                         }
                     }
                 }
@@ -651,12 +654,12 @@ Finally, call `.build()` to create the instance of `{name}`.
                     fn clone(&self) -> Self {
                         Self {
                             fields: self.fields.clone(),
-                            _phantom: Default::default(),
+                            _phantom: ::core::default::Default::default(),
                         }
                     }
                 }
 
-                impl #impl_generics dioxus::prelude::Properties for #name #ty_generics
+                impl #impl_generics ::dioxus::prelude::Properties for #name #ty_generics
                 #b_generics_where_extras_predicates
                 {
                     type Builder = #builder_name #generics_with_empty;
@@ -698,6 +701,14 @@ Finally, call `.build()` to create the instance of `{name}`.
         }
 
         pub fn field_impl(&self, field: &FieldInfo) -> Result<TokenStream, Error> {
+            let FieldInfo {
+                name: field_name,
+                ty: field_type,
+                ..
+            } = field;
+            if *field_name == "key" {
+                return Err(Error::new_spanned(field_name, "Naming a prop `key` is not allowed because the name can conflict with the built in key attribute. See https://dioxuslabs.com/learn/0.4/reference/dynamic_rendering#rendering-lists for more information about keys"));
+            }
             let StructInfo {
                 ref builder_name, ..
             } = *self;
@@ -712,11 +723,6 @@ Finally, call `.build()` to create the instance of `{name}`.
             });
             let reconstructing = self.included_fields().map(|f| f.name);
 
-            let FieldInfo {
-                name: field_name,
-                ty: field_type,
-                ..
-            } = field;
             let mut ty_generics: Vec<syn::GenericArgument> = self
                 .generics
                 .params
@@ -793,7 +799,7 @@ Finally, call `.build()` to create the instance of `{name}`.
             };
             let (arg_type, arg_expr) = if field.builder_attr.auto_into {
                 (
-                    quote!(impl core::convert::Into<#arg_type>),
+                    quote!(impl ::core::convert::Into<#arg_type>),
                     quote!(#field_name.into()),
                 )
             } else {
@@ -811,7 +817,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                     builder_name,
                     strip_raw_ident_prefix(field_name.to_string())
                 ),
-                proc_macro2::Span::call_site(),
+                builder_name.span(),
             );
             let repeated_fields_error_message = format!("Repeated field {field_name}");
 
@@ -930,7 +936,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                     builder_name,
                     strip_raw_ident_prefix(field_name.to_string())
                 ),
-                proc_macro2::Span::call_site(),
+                builder_name.span(),
             );
             let early_build_error_message = format!("Missing required field {field_name}");
 
