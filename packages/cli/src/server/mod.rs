@@ -32,7 +32,7 @@ async fn setup_file_watcher<F: Fn() -> Result<BuildResult> + Send + 'static>(
         .watcher
         .watch_path
         .clone()
-        .unwrap_or_else(|| vec![PathBuf::from("src")]);
+        .unwrap_or_else(|| vec![PathBuf::from("src"), PathBuf::from("examples")]);
 
     let watcher_config = config.clone();
     let mut watcher = notify::recommended_watcher(move |info: notify::Result<notify::Event>| {
@@ -121,12 +121,12 @@ async fn setup_file_watcher<F: Fn() -> Result<BuildResult> + Send + 'static>(
     .unwrap();
 
     for sub_path in allow_watch_path {
-        watcher
-            .watch(
-                &config.crate_dir.join(sub_path),
-                notify::RecursiveMode::Recursive,
-            )
-            .unwrap();
+        if let Err(err) = watcher.watch(
+            &config.crate_dir.join(sub_path),
+            notify::RecursiveMode::Recursive,
+        ) {
+            log::error!("Failed to watch path: {}", err);
+        }
     }
     Ok(watcher)
 }
