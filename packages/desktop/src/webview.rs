@@ -5,6 +5,7 @@ use tao::event_loop::{EventLoopProxy, EventLoopWindowTarget};
 pub use wry;
 pub use wry::application as tao;
 use wry::application::window::Window;
+use wry::http::Response;
 use wry::webview::{WebContext, WebView, WebViewBuilder};
 
 pub fn build(
@@ -44,9 +45,24 @@ pub fn build(
                 _ = proxy.send_event(UserWindowEvent(EventData::Ipc(message), window.id()));
             }
         })
-        .with_custom_protocol(String::from("dioxus"), move |r| {
-            protocol::desktop_handler(r, custom_head.clone(), index_file.clone(), &root_name)
-        })
+        .with_custom_protocol(
+            String::from("dioxus"),
+            move |r| match protocol::desktop_handler(
+                &r,
+                custom_head.clone(),
+                index_file.clone(),
+                &root_name,
+            ) {
+                Ok(response) => response,
+                Err(err) => {
+                    tracing::error!("Error: {}", err);
+                    Response::builder()
+                        .status(500)
+                        .body(err.to_string().into_bytes().into())
+                        .unwrap()
+                }
+            },
+        )
         .with_file_drop_handler(move |window, evet| {
             file_handler
                 .as_ref()
@@ -71,7 +87,16 @@ pub fn build(
     // .with_web_context(&mut web_context);
 
     for (name, handler) in cfg.protocols.drain(..) {
-        webview = webview.with_custom_protocol(name, handler)
+        webview = webview.with_custom_protocol(name, move |r| match handler(&r) {
+            Ok(response) => response,
+            Err(err) => {
+                tracing::error!("Error: {}", err);
+                Response::builder()
+                    .status(500)
+                    .body(err.to_string().into_bytes().into())
+                    .unwrap()
+            }
+        })
     }
 
     if cfg.disable_context_menu {

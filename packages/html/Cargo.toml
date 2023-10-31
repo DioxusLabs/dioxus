@@ -21,7 +21,7 @@ keyboard-types = "0.7"
 async-trait = "0.1.58"
 serde-value = "0.7.0"
 tokio = { workspace = true, features = ["fs", "io-util"], optional = true }
-rfd = { version = "0.11.3", optional = true }
+rfd = { version = "0.12", optional = true }
 async-channel = "1.8.0"
 serde_json = { version = "1", optional = true }
 
