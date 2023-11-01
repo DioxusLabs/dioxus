@@ -90,7 +90,7 @@ function fmtDocument(document: vscode.TextDocument) {
 		if (!editor) return; // Need an editor to apply text edits.
 
 		const contents = editor.document.getText();
-		const formatted = dioxus.format_file(contents);
+		const formatted = dioxus.format_file(contents, !editor.options.insertSpaces, editor.options.tabSize);
 
 		// Replace the entire text document
 		// Yes, this is a bit heavy handed, but the dioxus side doesn't know the line/col scheme that vscode is using

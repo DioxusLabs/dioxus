@@ -1,10 +1,12 @@
+use dioxus_autofmt::{IndentType, IndentOptions};
+
 macro_rules! twoway {
-    ($val:literal => $name:ident) => {
+    ($val:literal => $name:ident ($indent:expr)) => {
         #[test]
         fn $name() {
             let src_right = include_str!(concat!("./wrong/", $val, ".rsx"));
             let src_wrong = include_str!(concat!("./wrong/", $val, ".wrong.rsx"));
-            let formatted = dioxus_autofmt::fmt_file(src_wrong);
+            let formatted = dioxus_autofmt::fmt_file(src_wrong, $indent);
             let out = dioxus_autofmt::apply_formats(src_wrong, formatted);
 
             // normalize line endings
@@ -16,8 +18,11 @@ macro_rules! twoway {
     };
 }
 
-twoway!("comments" => comments);
+twoway!("comments-4sp" => comments_4sp (IndentOptions::new(IndentType::Spaces, 4)));
+twoway!("comments-tab" => comments_tab (IndentOptions::new(IndentType::Tabs, 4)));
 
-twoway!("multi" => multi);
+twoway!("multi-4sp" => multi_4sp (IndentOptions::new(IndentType::Spaces, 4)));
+twoway!("multi-tab" => multi_tab (IndentOptions::new(IndentType::Tabs, 4)));
 
-twoway!("multiexpr" => multiexpr);
+twoway!("multiexpr-4sp" => multiexpr_4sp (IndentOptions::new(IndentType::Spaces, 4)));
+twoway!("multiexpr-tab" => multiexpr_tab (IndentOptions::new(IndentType::Tabs, 4)));
