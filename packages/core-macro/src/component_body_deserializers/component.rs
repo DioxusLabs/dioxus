@@ -31,6 +31,7 @@ fn get_out_comp_fn(orig_comp_fn: &ItemFn, cx_pat: &Pat) -> ItemFn {
         block: parse_quote! {
             {
                 #[warn(non_snake_case)]
+                #[allow(clippy::inline_always)]
                 #[inline(always)]
                 #inner_comp_fn
                 #inner_comp_ident (#cx_pat)
