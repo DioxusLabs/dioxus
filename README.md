@@ -55,7 +55,8 @@
 Dioxus is a portable, performant, and ergonomic framework for building cross-platform user interfaces in Rust.
 
 ```rust
-fn app(cx: Scope) -> Element {
+#[component]
+fn App(cx: Scope) -> Element {
     let mut count = use_state(cx, || 0);
 
     cx.render(rsx! {
@@ -155,7 +156,7 @@ Dioxus is also a very extensible platform.
 So... Dioxus is great, but why won't it work for me?
 - It's not fully mature yet. APIs are still shifting, things might break (though we try to avoid it)
 - You need to run in a no-std environment.
-- You don't like the React-hooks model of building UIs
+- You don't like the React-hooks model of building UIs.
 
 
 ## Contributing
