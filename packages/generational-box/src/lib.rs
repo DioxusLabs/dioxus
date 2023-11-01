@@ -485,7 +485,7 @@ pub struct GenerationalRef<T: 'static> {
     borrow: GenerationalRefBorrowInfo,
 }
 
-impl<'a, T: 'static> GenerationalRef<T> {
+impl<T: 'static> GenerationalRef<T> {
     /// Map one ref type to another.
     pub fn map<U, F>(orig: GenerationalRef<T>, f: F) -> GenerationalRef<U>
     where
@@ -522,7 +522,7 @@ impl<'a, T: 'static> GenerationalRef<T> {
     }
 }
 
-impl<'a, T: 'static> Deref for GenerationalRef<T> {
+impl<T: 'static> Deref for GenerationalRef<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -586,7 +586,7 @@ impl<T: 'static> GenerationalRefMut<T> {
     }
 }
 
-impl<'a, T: 'static> Deref for GenerationalRefMut<T> {
+impl<T: 'static> Deref for GenerationalRefMut<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -594,7 +594,7 @@ impl<'a, T: 'static> Deref for GenerationalRefMut<T> {
     }
 }
 
-impl<'a, T: 'static> DerefMut for GenerationalRefMut<T> {
+impl<T: 'static> DerefMut for GenerationalRefMut<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.inner.deref_mut()
     }
