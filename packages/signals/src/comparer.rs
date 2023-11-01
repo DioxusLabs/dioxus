@@ -22,7 +22,7 @@ impl<R: Eq + Hash> Comparer<R> {
                 drop(subscribers);
                 let mut subscribers = self.subscribers.write();
                 let signal = Signal::new(false);
-                subscribers.insert(value, signal.clone());
+                subscribers.insert(value, signal);
                 signal.into()
             }
         }
@@ -31,9 +31,7 @@ impl<R: Eq + Hash> Comparer<R> {
 
 impl<R> Clone for Comparer<R> {
     fn clone(&self) -> Self {
-        Self {
-            subscribers: self.subscribers.clone(),
-        }
+        *self
     }
 }
 
