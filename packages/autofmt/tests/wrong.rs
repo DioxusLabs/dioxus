@@ -1,4 +1,4 @@
-use dioxus_autofmt::{IndentType, IndentOptions};
+use dioxus_autofmt::{IndentOptions, IndentType};
 
 macro_rules! twoway {
     ($val:literal => $name:ident ($indent:expr)) => {
