@@ -195,7 +195,7 @@ impl<'a> ToTokens for TemplateRenderer<'a> {
     fn to_tokens(&self, out_tokens: &mut TokenStream2) {
         let mut context = DynamicContext::default();
 
-        let key = match self.roots.get(0) {
+        let key = match self.roots.first() {
             Some(BodyNode::Element(el)) if self.roots.len() == 1 => el.key.clone(),
             Some(BodyNode::Component(comp)) if self.roots.len() == 1 => comp.key().cloned(),
             _ => None,

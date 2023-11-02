@@ -936,9 +936,7 @@ Finally, call `.build()` to create the instance of `{name}`.
 
         pub fn field_impl(&self, field: &FieldInfo) -> Result<TokenStream, Error> {
             let FieldInfo {
-                name: field_name,
-                ty: field_type,
-                ..
+                name: field_name, ..
             } = field;
             if *field_name == "key" {
                 return Err(Error::new_spanned(field_name, "Naming a prop `key` is not allowed because the name can conflict with the built in key attribute. See https://dioxuslabs.com/learn/0.4/reference/dynamic_rendering#rendering-lists for more information about keys"));
