@@ -3,7 +3,7 @@ use crate::signal::{ReadOnlySignal, Signal, Write};
 use crate::SignalData;
 use generational_box::Mappable;
 use generational_box::{MappableMut, Storage};
-use parking_lot::{MappedRwLockReadGuard, MappedRwLockWriteGuard};
+use std::ops::Deref;
 
 use std::{
     fmt::{Debug, Display},
@@ -11,60 +11,38 @@ use std::{
 };
 
 macro_rules! read_impls {
-    ($ty:ident) => {
-        impl<T: Default + 'static, S: Storage<T>> Default for $ty<T, S> {
+    ($ty:ident, $bound:path) => {
+        impl<T: Default + 'static, S: $bound> Default for $ty<T, S> {
             fn default() -> Self {
                 Self::new(Default::default())
             }
         }
 
-        impl<T, S: Storage<T>> std::clone::Clone for $ty<T, S> {
+        impl<T, S: $bound> std::clone::Clone for $ty<T, S> {
             fn clone(&self) -> Self {
                 *self
             }
         }
 
-        impl<T, S: Storage<T> + Copy> Copy for $ty<T, S> {}
+        impl<T, S: $bound + Copy> Copy for $ty<T, S> {}
 
-        impl<T: Display + 'static, S: Storage<T>> Display for $ty<T, S> {
+        impl<T: Display + 'static, S: $bound> Display for $ty<T, S> {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 self.with(|v| Display::fmt(v, f))
             }
         }
 
-        impl<T: Debug + 'static, S: Storage<T>> Debug for $ty<T, S> {
+        impl<T: Debug + 'static, S: $bound> Debug for $ty<T, S> {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 self.with(|v| Debug::fmt(v, f))
-            }
-        }
-
-        impl<T: 'static, S: Storage<T>> $ty<Vec<T>, S> {
-            /// Read a value from the inner vector.
-            pub fn get(&self, index: usize) -> Option<MappedRwLockReadGuard<'static, T>> {
-                MappedRwLockReadGuard::try_map(self.read(), |v| v.get(index)).ok()
-            }
-        }
-
-        impl<T: 'static, S: Storage<T>> $ty<Option<T>, S> {
-            /// Unwraps the inner value and clones it.
-            pub fn unwrap(&self) -> T
-            where
-                T: Clone,
-            {
-                self.with(|v| v.clone()).unwrap()
-            }
-
-            /// Attemps to read the inner value of the Option.
-            pub fn as_ref(&self) -> Option<MappedRwLockReadGuard<'static, T>> {
-                MappedRwLockReadGuard::try_map(self.read(), |v| v.as_ref()).ok()
             }
         }
     };
 }
 
 macro_rules! write_impls {
-    ($ty:ident) => {
-        impl<T: Add<Output = T> + Copy + 'static, S: Storage<T>> std::ops::Add<T> for $ty<T, S> {
+    ($ty:ident, $bound:path, $vec_bound:path) => {
+        impl<T: Add<Output = T> + Copy + 'static, S: $bound> std::ops::Add<T> for $ty<T, S> {
             type Output = T;
 
             fn add(self, rhs: T) -> Self::Output {
@@ -72,23 +50,19 @@ macro_rules! write_impls {
             }
         }
 
-        impl<T: Add<Output = T> + Copy + 'static, S: Storage<T>> std::ops::AddAssign<T>
-            for $ty<T, S>
-        {
+        impl<T: Add<Output = T> + Copy + 'static, S: $bound> std::ops::AddAssign<T> for $ty<T, S> {
             fn add_assign(&mut self, rhs: T) {
                 self.with_mut(|v| *v = *v + rhs)
             }
         }
 
-        impl<T: Sub<Output = T> + Copy + 'static, S: Storage<T>> std::ops::SubAssign<T>
-            for $ty<T, S>
-        {
+        impl<T: Sub<Output = T> + Copy + 'static, S: $bound> std::ops::SubAssign<T> for $ty<T, S> {
             fn sub_assign(&mut self, rhs: T) {
                 self.with_mut(|v| *v = *v - rhs)
             }
         }
 
-        impl<T: Sub<Output = T> + Copy + 'static, S: Storage<T>> std::ops::Sub<T> for $ty<T, S> {
+        impl<T: Sub<Output = T> + Copy + 'static, S: $bound> std::ops::Sub<T> for $ty<T, S> {
             type Output = T;
 
             fn sub(self, rhs: T) -> Self::Output {
@@ -96,15 +70,13 @@ macro_rules! write_impls {
             }
         }
 
-        impl<T: Mul<Output = T> + Copy + 'static, S: Storage<T>> std::ops::MulAssign<T>
-            for $ty<T, S>
-        {
+        impl<T: Mul<Output = T> + Copy + 'static, S: $bound> std::ops::MulAssign<T> for $ty<T, S> {
             fn mul_assign(&mut self, rhs: T) {
                 self.with_mut(|v| *v = *v * rhs)
             }
         }
 
-        impl<T: Mul<Output = T> + Copy + 'static, S: Storage<T>> std::ops::Mul<T> for $ty<T, S> {
+        impl<T: Mul<Output = T> + Copy + 'static, S: $bound> std::ops::Mul<T> for $ty<T, S> {
             type Output = T;
 
             fn mul(self, rhs: T) -> Self::Output {
@@ -112,15 +84,13 @@ macro_rules! write_impls {
             }
         }
 
-        impl<T: Div<Output = T> + Copy + 'static, S: Storage<T>> std::ops::DivAssign<T>
-            for $ty<T, S>
-        {
+        impl<T: Div<Output = T> + Copy + 'static, S: $bound> std::ops::DivAssign<T> for $ty<T, S> {
             fn div_assign(&mut self, rhs: T) {
                 self.with_mut(|v| *v = *v / rhs)
             }
         }
 
-        impl<T: Div<Output = T> + Copy + 'static, S: Storage<T>> std::ops::Div<T> for $ty<T, S> {
+        impl<T: Div<Output = T> + Copy + 'static, S: $bound> std::ops::Div<T> for $ty<T, S> {
             type Output = T;
 
             fn div(self, rhs: T) -> Self::Output {
@@ -128,7 +98,7 @@ macro_rules! write_impls {
             }
         }
 
-        impl<T: 'static, S: Storage<T>> $ty<Vec<T>, S> {
+        impl<T: 'static, S: $vec_bound> $ty<Vec<T>, S> {
             /// Pushes a new value to the end of the vector.
             pub fn push(&self, value: T) {
                 self.with_mut(|v| v.push(value))
@@ -179,54 +149,154 @@ macro_rules! write_impls {
                 self.with_mut(|v| v.split_off(at))
             }
         }
-
-        impl<T: 'static, S: Storage<T>> $ty<Option<T>, S> {
-            /// Takes the value out of the Option.
-            pub fn take(&self) -> Option<T> {
-                self.with_mut(|v| v.take())
-            }
-
-            /// Replace the value in the Option.
-            pub fn replace(&self, value: T) -> Option<T> {
-                self.with_mut(|v| v.replace(value))
-            }
-
-            /// Gets the value out of the Option, or inserts the given value if the Option is empty.
-            pub fn get_or_insert(&self, default: T) -> S::Ref {
-                self.get_or_insert_with(|| default)
-            }
-
-            /// Gets the value out of the Option, or inserts the value returned by the given function if the Option is empty.
-            pub fn get_or_insert_with(
-                &self,
-                default: impl FnOnce() -> T,
-            ) -> <S::Ref as Mappable<T>>::Mapped<T> {
-                let borrow = self.read();
-                if borrow.is_none() {
-                    drop(borrow);
-                    self.with_mut(|v| *v = Some(default()));
-                    S::Ref::map(self.read(), |v| v.as_ref().unwrap())
-                } else {
-                    S::Ref::map(borrow, |v| v.as_ref().unwrap())
-                }
-            }
-        }
     };
 }
 
-read_impls!(CopyValue);
-write_impls!(CopyValue);
-read_impls!(Signal);
-write_impls!(Signal);
-read_impls!(ReadOnlySignal);
+read_impls!(CopyValue, Storage<T>);
+
+impl<T: 'static, S: Storage<Vec<T>>> CopyValue<Vec<T>, S> {
+    /// Read a value from the inner vector.
+    pub fn get(&self, index: usize) -> Option<<S::Ref as Mappable<Vec<T>>>::Mapped<T>> {
+        S::Ref::try_map(self.read(), move |v| v.get(index))
+    }
+}
+
+impl<T: 'static, S: Storage<Option<T>>> CopyValue<Option<T>, S> {
+    /// Unwraps the inner value and clones it.
+    pub fn unwrap(&self) -> T
+    where
+        T: Clone,
+    {
+        self.with(|v| v.clone()).unwrap()
+    }
+
+    /// Attempts to read the inner value of the Option.
+    pub fn as_ref(&self) -> Option<<S::Ref as Mappable<Option<T>>>::Mapped<T>> {
+        S::Ref::try_map(self.read(), |v| v.as_ref())
+    }
+}
+
+write_impls!(CopyValue, Storage<T>, Storage<Vec<T>>);
+
+impl<T: 'static, S: Storage<Option<T>>> CopyValue<Option<T>, S> {
+    /// Takes the value out of the Option.
+    pub fn take(&self) -> Option<T> {
+        self.with_mut(|v| v.take())
+    }
+
+    /// Replace the value in the Option.
+    pub fn replace(&self, value: T) -> Option<T> {
+        self.with_mut(|v| v.replace(value))
+    }
+
+    /// Gets the value out of the Option, or inserts the given value if the Option is empty.
+    pub fn get_or_insert(&self, default: T) -> <S::Ref as Mappable<Option<T>>>::Mapped<T> {
+        self.get_or_insert_with(|| default)
+    }
+
+    /// Gets the value out of the Option, or inserts the value returned by the given function if the Option is empty.
+    pub fn get_or_insert_with(
+        &self,
+        default: impl FnOnce() -> T,
+    ) -> <S::Ref as Mappable<Option<T>>>::Mapped<T> {
+        let borrow = self.read();
+        if borrow.is_none() {
+            drop(borrow);
+            self.with_mut(|v| *v = Some(default()));
+            S::Ref::map(self.read(), |v| v.as_ref().unwrap())
+        } else {
+            S::Ref::map(borrow, |v| v.as_ref().unwrap())
+        }
+    }
+}
+
+read_impls!(Signal, Storage<SignalData<T>>);
+
+impl<T: 'static, S: Storage<SignalData<Vec<T>>>> Signal<Vec<T>, S> {
+    /// Read a value from the inner vector.
+    pub fn get(
+        &self,
+        index: usize,
+    ) -> Option<
+        <<<S as Storage<SignalData<Vec<T>>>>::Ref as Mappable<SignalData<Vec<T>>>>::Mapped<Vec<T>> as Mappable<
+            Vec<T>,
+        >>::Mapped<T>,
+    >{
+        <<S as Storage<SignalData<Vec<T>>>>::Ref as Mappable<SignalData<Vec<T>>>>::Mapped::<Vec<T>>::try_map(self.read(), move |v| v.get(index))
+    }
+}
+
+impl<T: 'static, S: Storage<SignalData<Option<T>>>> Signal<Option<T>, S> {
+    /// Unwraps the inner value and clones it.
+    pub fn unwrap(&self) -> T
+    where
+        T: Clone,
+    {
+        self.with(|v| v.clone()).unwrap()
+    }
+
+    /// Attempts to read the inner value of the Option.
+    pub fn as_ref(
+        &self,
+    ) -> Option<
+        <<<S as Storage<SignalData<Option<T>>>>::Ref as Mappable<SignalData<Option<T>>>>::Mapped<
+            Option<T>,
+        > as Mappable<Option<T>>>::Mapped<T>,
+    > {
+        <<S as Storage<SignalData<Option<T>>>>::Ref as Mappable<SignalData<Option<T>>>>::Mapped::<
+            Option<T>,
+        >::try_map(self.read(), |v| v.as_ref())
+    }
+}
+
+write_impls!(Signal, Storage<SignalData<T>>, Storage<SignalData<Vec<T>>>);
+
+impl<T: 'static, S: Storage<SignalData<Option<T>>>> Signal<Option<T>, S> {
+    /// Takes the value out of the Option.
+    pub fn take(&self) -> Option<T> {
+        self.with_mut(|v| v.take())
+    }
+
+    /// Replace the value in the Option.
+    pub fn replace(&self, value: T) -> Option<T> {
+        self.with_mut(|v| v.replace(value))
+    }
+
+    /// Gets the value out of the Option, or inserts the given value if the Option is empty.
+    pub fn get_or_insert(&self, default: T) -> <<S::Ref as Mappable<SignalData<Option<T>>>>::Mapped<Option<T>> as Mappable<Option<T>>>::Mapped<T>{
+        self.get_or_insert_with(|| default)
+    }
+
+    /// Gets the value out of the Option, or inserts the value returned by the given function if the Option is empty.
+    pub fn get_or_insert_with(
+        &self,
+        default: impl FnOnce() -> T,
+    ) -><<S::Ref as Mappable<SignalData<Option<T>>>>::Mapped<Option<T>> as Mappable<Option<T>>>::Mapped<T>{
+        let borrow = self.read();
+        if borrow.is_none() {
+            drop(borrow);
+            self.with_mut(|v| *v = Some(default()));
+            <S::Ref as Mappable<SignalData<Option<T>>>>::Mapped::<Option<T>>::map(
+                self.read(),
+                |v| v.as_ref().unwrap(),
+            )
+        } else {
+            <S::Ref as Mappable<SignalData<Option<T>>>>::Mapped::<Option<T>>::map(borrow, |v| {
+                v.as_ref().unwrap()
+            })
+        }
+    }
+}
+
+read_impls!(ReadOnlySignal, Storage<SignalData<T>>);
 
 /// An iterator over the values of a `CopyValue<Vec<T>>`.
-pub struct CopyValueIterator<T: 'static, S: Storage<T>> {
+pub struct CopyValueIterator<T: 'static, S: Storage<Vec<T>>> {
     index: usize,
     value: CopyValue<Vec<T>, S>,
 }
 
-impl<T: Clone, S: Storage<T>> Iterator for CopyValueIterator<T, S> {
+impl<T: Clone, S: Storage<Vec<T>>> Iterator for CopyValueIterator<T, S> {
     type Item = T;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -236,7 +306,7 @@ impl<T: Clone, S: Storage<T>> Iterator for CopyValueIterator<T, S> {
     }
 }
 
-impl<T: Clone + 'static, S: Storage<T>> IntoIterator for CopyValue<Vec<T>, S> {
+impl<T: Clone + 'static, S: Storage<Vec<T>>> IntoIterator for CopyValue<Vec<T>, S> {
     type IntoIter = CopyValueIterator<T, S>;
 
     type Item = T;
@@ -266,12 +336,12 @@ impl<T: 'static, S: Storage<Option<T>>> CopyValue<Option<T>, S> {
 }
 
 /// An iterator over items in a `Signal<Vec<T>>`.
-pub struct SignalIterator<T: 'static, S: Storage<T>> {
+pub struct SignalIterator<T: 'static, S: Storage<SignalData<Vec<T>>>> {
     index: usize,
     value: Signal<Vec<T>, S>,
 }
 
-impl<T: Clone, S: Storage<T>> Iterator for SignalIterator<T, S> {
+impl<T: Clone, S: Storage<SignalData<Vec<T>>>> Iterator for SignalIterator<T, S> {
     type Item = T;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -281,7 +351,7 @@ impl<T: Clone, S: Storage<T>> Iterator for SignalIterator<T, S> {
     }
 }
 
-impl<T: Clone + 'static, S: Storage<T>> IntoIterator for Signal<Vec<T>, S> {
+impl<T: Clone + 'static, S: Storage<SignalData<Vec<T>>>> IntoIterator for Signal<Vec<T>, S> {
     type IntoIter = SignalIterator<T, S>;
 
     type Item = T;

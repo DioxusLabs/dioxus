@@ -41,11 +41,10 @@ fn owner_in_scope<S: Storage<T>, T>(scope: ScopeId) -> Rc<Owner<S>> {
     // }
 }
 
-#[derive(Debug)]
 /// CopyValue is a wrapper around a value to make the value mutable and Copy.
 ///
 /// It is internally backed by [`generational_box::GenerationalBox`].
-pub struct CopyValue<T: 'static, S: AnyStorage> {
+pub struct CopyValue<T: 'static, S: Storage<T>> {
     pub(crate) value: GenerationalBox<T, S>,
     origin_scope: ScopeId,
 }

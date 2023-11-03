@@ -90,7 +90,7 @@ pub fn use_signal<T: 'static>(cx: &ScopeState, f: impl FnOnce() -> T) -> Signal<
 pub fn use_signal_sync<T: Send + Sync + 'static>(
     cx: &ScopeState,
     f: impl FnOnce() -> T,
-) -> Signal<T, SyncStorage> {
+) -> Signal<T, UnsyncStorage> {
     // *cx.use_hook(|| Signal::new(f()))
     todo!()
 }
@@ -130,7 +130,8 @@ pub(crate) struct SignalSubscribers {
     pub(crate) effect_subscribers: Vec<Effect>,
 }
 
-pub(crate) struct SignalData<T> {
+/// The data stored for tracking in a signal.
+pub struct SignalData<T> {
     pub(crate) subscribers: Arc<RwLock<SignalSubscribers>>,
     pub(crate) update_any: Arc<dyn Fn(ScopeId) + Sync + Send>,
     pub(crate) effect_stack: EffectStack,
@@ -341,7 +342,7 @@ impl<T: 'static, S: Storage<SignalData<T>>> PartialEq for Signal<T, S> {
     }
 }
 
-impl<T, S: Storage<SignalData<T>>> Deref for Signal<T, S> {
+impl<T, S: Storage<SignalData<T>> + 'static> Deref for Signal<T, S> {
     type Target =
         dyn Fn() -> <<S as Storage<SignalData<T>>>::Ref as Mappable<SignalData<T>>>::Mapped<T>;
 
@@ -481,7 +482,7 @@ impl<T: 'static, S: Storage<SignalData<T>>> PartialEq for ReadOnlySignal<T, S> {
     }
 }
 
-impl<T, S: Storage<SignalData<T>>> Deref for ReadOnlySignal<T, S> {
+impl<T, S: Storage<SignalData<T>> + 'static> Deref for ReadOnlySignal<T, S> {
     type Target =
         dyn Fn() -> <<S as Storage<SignalData<T>>>::Ref as Mappable<SignalData<T>>>::Mapped<T>;
 

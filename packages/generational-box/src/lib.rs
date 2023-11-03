@@ -250,19 +250,25 @@ impl Default for SyncStorage {
 pub trait Mappable<T>: Deref<Target = T> {
     type Mapped<U: 'static>: Mappable<U> + Deref<Target = U>;
 
-    fn map<U: 'static>(_self: Self, f: fn(&T) -> &U) -> Self::Mapped<U>;
+    fn map<U: 'static>(_self: Self, f: impl FnOnce(&T) -> &U) -> Self::Mapped<U>;
 
-    fn try_map<U: 'static>(_self: Self, f: fn(&T) -> Option<&U>) -> Option<Self::Mapped<U>>;
+    fn try_map<U: 'static>(
+        _self: Self,
+        f: impl FnOnce(&T) -> Option<&U>,
+    ) -> Option<Self::Mapped<U>>;
 }
 
 impl<T> Mappable<T> for Ref<'static, T> {
     type Mapped<U: 'static> = Ref<'static, U>;
 
-    fn map<U: 'static>(_self: Self, f: fn(&T) -> &U) -> Self::Mapped<U> {
+    fn map<U: 'static>(_self: Self, f: impl FnOnce(&T) -> &U) -> Self::Mapped<U> {
         Ref::map(_self, f)
     }
 
-    fn try_map<U: 'static>(_self: Self, f: fn(&T) -> Option<&U>) -> Option<Self::Mapped<U>> {
+    fn try_map<U: 'static>(
+        _self: Self,
+        f: impl FnOnce(&T) -> Option<&U>,
+    ) -> Option<Self::Mapped<U>> {
         Ref::try_map(_self, f)
     }
 }
@@ -270,11 +276,14 @@ impl<T> Mappable<T> for Ref<'static, T> {
 impl<T> Mappable<T> for MappedRwLockReadGuard<'static, T> {
     type Mapped<U: 'static> = MappedRwLockReadGuard<'static, U>;
 
-    fn map<U: 'static>(_self: Self, f: fn(&T) -> &U) -> Self::Mapped<U> {
+    fn map<U: 'static>(_self: Self, f: impl FnOnce(&T) -> &U) -> Self::Mapped<U> {
         MappedRwLockReadGuard::map(_self, f)
     }
 
-    fn try_map<U: 'static>(_self: Self, f: fn(&T) -> Option<&U>) -> Option<Self::Mapped<U>> {
+    fn try_map<U: 'static>(
+        _self: Self,
+        f: impl FnOnce(&T) -> Option<&U>,
+    ) -> Option<Self::Mapped<U>> {
         MappedRwLockReadGuard::try_map(_self, f).ok()
     }
 }
@@ -320,7 +329,7 @@ impl<T> MappableMut<T> for MappedRwLockWriteGuard<'static, T> {
     }
 }
 
-pub trait Storage<Data>: Copy + AnyStorage {
+pub trait Storage<Data>: Copy + AnyStorage + 'static {
     type Ref: Mappable<Data> + Deref<Target = Data>;
     type Mut: MappableMut<Data> + DerefMut<Target = Data>;
 
