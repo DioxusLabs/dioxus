@@ -75,7 +75,7 @@ where
 pub fn selector<R: PartialEq, S: Storage<SignalData<R>>>(
     mut f: impl FnMut() -> R + 'static,
 ) -> ReadOnlySignal<R, S> {
-    let state = Signal::<R> {
+    let state = Signal::<R, S> {
         inner: CopyValue::invalid(),
     };
     let effect = Effect {
@@ -89,7 +89,6 @@ pub fn selector<R: PartialEq, S: Storage<SignalData<R>>>(
     }
     state.inner.value.set(SignalData {
         subscribers: Default::default(),
-        effect_subscribers: Default::default(),
         update_any: schedule_update_any().expect("in a virtual dom"),
         value: f(),
         effect_stack: get_effect_stack(),

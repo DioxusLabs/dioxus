@@ -247,53 +247,82 @@ impl Default for SyncStorage {
     }
 }
 
-pub trait Mappable<T, U>: Deref<Target = T> {
-    type Mapped: Deref<Target = U>;
+pub trait Mappable<T>: Deref<Target = T> {
+    type Mapped<U: 'static>: Mappable<U> + Deref<Target = U>;
 
-    fn map(_self: Self, f: fn(&T) -> &U) -> Self::Mapped;
+    fn map<U: 'static>(_self: Self, f: fn(&T) -> &U) -> Self::Mapped<U>;
+
+    fn try_map<U: 'static>(_self: Self, f: fn(&T) -> Option<&U>) -> Option<Self::Mapped<U>>;
 }
 
-impl<T, U: 'static> Mappable<T, U> for Ref<'static, T> {
-    type Mapped = Ref<'static, U>;
+impl<T> Mappable<T> for Ref<'static, T> {
+    type Mapped<U: 'static> = Ref<'static, U>;
 
-    fn map(_self: Self, f: fn(&T) -> &U) -> Self::Mapped {
+    fn map<U: 'static>(_self: Self, f: fn(&T) -> &U) -> Self::Mapped<U> {
         Ref::map(_self, f)
     }
+
+    fn try_map<U: 'static>(_self: Self, f: fn(&T) -> Option<&U>) -> Option<Self::Mapped<U>> {
+        Ref::try_map(_self, f)
+    }
 }
 
-impl<T, U: 'static> Mappable<T, U> for MappedRwLockReadGuard<'static, T> {
-    type Mapped = MappedRwLockReadGuard<'static, U>;
+impl<T> Mappable<T> for MappedRwLockReadGuard<'static, T> {
+    type Mapped<U: 'static> = MappedRwLockReadGuard<'static, U>;
 
-    fn map(_self: Self, f: fn(&T) -> &U) -> Self::Mapped {
+    fn map<U: 'static>(_self: Self, f: fn(&T) -> &U) -> Self::Mapped<U> {
         MappedRwLockReadGuard::map(_self, f)
     }
-}
 
-pub trait MappableMut<T, U>: DerefMut<Target = T> {
-    type Mapped: DerefMut<Target = U>;
-
-    fn map(_self: Self, f: fn(&mut T) -> &mut U) -> Self::Mapped;
-}
-
-impl<T, U: 'static> MappableMut<T, U> for RefMut<'static, T> {
-    type Mapped = RefMut<'static, U>;
-
-    fn map(_self: Self, f: fn(&mut T) -> &mut U) -> Self::Mapped {
-        RefMut::map(_self, f)
+    fn try_map<U: 'static>(_self: Self, f: fn(&T) -> Option<&U>) -> Option<Self::Mapped<U>> {
+        MappedRwLockReadGuard::try_map(_self, f).ok()
     }
 }
 
-impl<T, U: 'static> MappableMut<T, U> for MappedRwLockWriteGuard<'static, T> {
-    type Mapped = MappedRwLockWriteGuard<'static, U>;
+pub trait MappableMut<T>: DerefMut<Target = T> {
+    type Mapped<U: 'static>: MappableMut<U> + DerefMut<Target = U>;
 
-    fn map(_self: Self, f: fn(&mut T) -> &mut U) -> Self::Mapped {
+    fn map<U: 'static>(_self: Self, f: impl FnOnce(&mut T) -> &mut U) -> Self::Mapped<U>;
+
+    fn try_map<U: 'static>(
+        _self: Self,
+        f: impl FnOnce(&mut T) -> Option<&mut U>,
+    ) -> Option<Self::Mapped<U>>;
+}
+
+impl<T> MappableMut<T> for RefMut<'static, T> {
+    type Mapped<U: 'static> = RefMut<'static, U>;
+
+    fn map<U: 'static>(_self: Self, f: impl FnOnce(&mut T) -> &mut U) -> Self::Mapped<U> {
+        RefMut::map(_self, f)
+    }
+
+    fn try_map<U: 'static>(
+        _self: Self,
+        f: impl FnOnce(&mut T) -> Option<&mut U>,
+    ) -> Option<Self::Mapped<U>> {
+        RefMut::try_map(_self, f)
+    }
+}
+
+impl<T> MappableMut<T> for MappedRwLockWriteGuard<'static, T> {
+    type Mapped<U: 'static> = MappedRwLockWriteGuard<'static, U>;
+
+    fn map<U: 'static>(_self: Self, f: impl FnOnce(&mut T) -> &mut U) -> Self::Mapped<U> {
         MappedRwLockWriteGuard::map(_self, f)
+    }
+
+    fn try_map<U: 'static>(
+        _self: Self,
+        f: impl FnOnce(&mut T) -> Option<&mut U>,
+    ) -> Option<Self::Mapped<U>> {
+        MappedRwLockWriteGuard::try_map(_self, f).ok()
     }
 }
 
 pub trait Storage<Data>: Copy + AnyStorage {
-    type Ref: Deref<Target = Data>;
-    type Mut: DerefMut<Target = Data>;
+    type Ref: Mappable<Data> + Deref<Target = Data>;
+    type Mut: MappableMut<Data> + DerefMut<Target = Data>;
 
     fn try_read(&self) -> Option<Self::Ref>;
     fn read(&self) -> Self::Ref {

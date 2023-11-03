@@ -11,32 +11,34 @@ use generational_box::{GenerationalBox, Owner};
 
 use crate::Effect;
 
-fn current_owner() -> Rc<Owner> {
-    match Effect::current() {
-        // If we are inside of an effect, we should use the owner of the effect as the owner of the value.
-        Some(effect) => {
-            let scope_id = effect.source;
-            owner_in_scope(scope_id)
-        }
-        // Otherwise either get an owner from the current scope or create a new one.
-        None => match has_context() {
-            Some(rt) => rt,
-            None => {
-                let owner = Rc::new(current_store().owner());
-                provide_context(owner).expect("in a virtual dom")
-            }
-        },
-    }
+fn current_owner<S: Storage<T>, T>() -> Rc<Owner<S>> {
+    todo!()
+    // match Effect::current() {
+    //     // If we are inside of an effect, we should use the owner of the effect as the owner of the value.
+    //     Some(effect) => {
+    //         let scope_id = effect.source;
+    //         owner_in_scope(scope_id)
+    //     }
+    //     // Otherwise either get an owner from the current scope or create a new one.
+    //     None => match has_context() {
+    //         Some(rt) => rt,
+    //         None => {
+    //             let owner = Rc::new(current_store().owner());
+    //             provide_context(owner).expect("in a virtual dom")
+    //         }
+    //     },
+    // }
 }
 
-fn owner_in_scope(scope: ScopeId) -> Rc<Owner> {
-    match consume_context_from_scope(scope) {
-        Some(rt) => rt,
-        None => {
-            let owner = Rc::new(current_store().owner());
-            provide_context_to_scope(scope, owner).expect("in a virtual dom")
-        }
-    }
+fn owner_in_scope<S: Storage<T>, T>(scope: ScopeId) -> Rc<Owner<S>> {
+    todo!()
+    // match consume_context_from_scope(scope) {
+    //     Some(rt) => rt,
+    //     None => {
+    //         let owner = Rc::new(current_store().owner());
+    //         provide_context_to_scope(scope, owner).expect("in a virtual dom")
+    //     }
+    // }
 }
 
 #[derive(Debug)]
@@ -46,13 +48,6 @@ fn owner_in_scope(scope: ScopeId) -> Rc<Owner> {
 pub struct CopyValue<T: 'static, S: AnyStorage> {
     pub(crate) value: GenerationalBox<T, S>,
     origin_scope: ScopeId,
-}
-
-impl<T: 'static, S: AnyStorage + Copy> Copy for CopyValue<T, S> {}
-impl<T: 'static, S: AnyStorage + Clone> Clone for CopyValue<T, S> {
-    fn clone(&self) -> Self {
-        *self
-    }
 }
 
 #[cfg(feature = "serde")]
