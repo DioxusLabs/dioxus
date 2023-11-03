@@ -301,8 +301,8 @@ impl CrateConfig {
 
     pub fn asset_manifest(&self) -> AssetManifest {
         AssetManifest::load_from_path(
-            self.crate_dir.join("cargo.toml"),
-            self.workspace_dir.join("cargo.lock"),
+            self.crate_dir.join("Cargo.toml"),
+            self.workspace_dir.join("Cargo.lock"),
         )
     }
 
