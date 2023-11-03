@@ -525,6 +525,7 @@ impl From<NsisSettings> for tauri_bundler::NsisSettings {
             display_language_selector: val.display_language_selector,
             custom_language_files: None,
             template: None,
+            compression: None,
         }
     }
 }
