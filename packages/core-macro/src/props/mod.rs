@@ -551,18 +551,16 @@ mod struct_info {
             let generics_with_empty = modify_types_generics_hack(&ty_generics, |args| {
                 args.insert(0, syn::GenericArgument::Type(empties_tuple.clone().into()));
             });
-            let phantom_generics = self.generics.params.iter().map(|param| match param {
+            let phantom_generics = self.generics.params.iter().filter_map(|param| match param {
                 syn::GenericParam::Lifetime(lifetime) => {
                     let lifetime = &lifetime.lifetime;
-                    quote!(::core::marker::PhantomData<&#lifetime ()>)
+                    Some(quote!(::core::marker::PhantomData<&#lifetime ()>))
                 }
                 syn::GenericParam::Type(ty) => {
                     let ty = &ty.ident;
-                    quote!(::core::marker::PhantomData<#ty>)
+                    Some(quote!(::core::marker::PhantomData<#ty>))
                 }
-                syn::GenericParam::Const(_cnst) => {
-                    quote!()
-                }
+                syn::GenericParam::Const(_cnst) => None,
             });
             let builder_method_doc = match self.builder_attr.builder_method_doc {
                 Some(ref doc) => quote!(#doc),
