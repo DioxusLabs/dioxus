@@ -74,6 +74,29 @@ impl FormData {
             files: None,
         }
     }
+
+    // ***** function to parse the 'values' to make it ready to use*******
+    // e.g - self.values = { username: ["rust"], password: ["dioxus"]}
+    // what we need it to be: { username: "rust", password: "dioxus"}
+    pub fn get_parsed_values(&self) -> Option<HashMap<String, String>> {
+        if (self.values.is_empty()) {
+            return None;
+        }
+
+        let raw_values = self.values.clone();
+
+        let mut parsed_values: HashMap<String, String> = HashMap::new();
+
+        for (fieldname, values) in raw_values.into_iter() {
+            // convert array of string value to string
+            // eg - ["rust", "javascript"] => "rust, javascript"
+            let prepared_value = values.join(", ");
+
+            parsed_values.insert(fieldname, prepared_value);
+        }
+
+        Some(parsed_values)
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
