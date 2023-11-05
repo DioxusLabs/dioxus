@@ -1,8 +1,15 @@
 use std::{any::Any, collections::HashMap, fmt::Debug};
 
 use dioxus_core::Event;
+use serde::{Deserialize, Serialize};
 
 pub type FormEvent = Event<FormData>;
+
+#[derive(Serialize, Deserialize)]
+enum ValueType {
+    Text(String),
+    VecText(Vec<String>),
+}
 
 /* DOMEvent:  Send + SyncTarget relatedTarget */
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
@@ -21,6 +28,52 @@ pub struct FormData {
         )
     )]
     pub files: Option<std::sync::Arc<dyn FileEngine>>,
+}
+
+impl FormData {
+    // ***** function to parse the 'values' to make it ready to use*******
+    // e.g - self.values = { username: ["rust"], password: ["dioxus"]}
+    // what we need it to be: { username: "rust", password: "dioxus"}
+    fn get_parsed_values(&self) -> Option<HashMap<String, ValueType>> {
+        if self.values.is_empty() {
+            return None;
+        }
+
+        let raw_values = self.values.clone();
+
+        let mut parsed_values: HashMap<String, ValueType> = HashMap::new();
+
+        for (fieldname, values) in raw_values.into_iter() {
+            /*
+            case 1 - multiple values, example { driving_types: ["manual", "automatic"] }
+                In this case we want to return the values as it is, NO point in making
+                driving_types: "manual, automatic"
+
+            case 2 - single value, example { favourite_language: ["rust"] }
+                In this case we would want to deserialize the value as follows
+                favourite_language: "rust"
+            */
+            if values.len() > 1 {
+                // handling multiple values - case 1
+                parsed_values.insert(fieldname, ValueType::VecText(values.clone()));
+            } else {
+                // handle single value - case 2
+                let prepared_value = values.into_iter().next()?;
+                parsed_values.insert(fieldname, ValueType::Text(prepared_value));
+            }
+        }
+
+        Some(parsed_values)
+    }
+
+    pub fn parse_json<T>(&self) -> Result<T, serde_json::Error>
+    where
+        T: serde::de::DeserializeOwned,
+    {
+        let formatted = self.get_parsed_values();
+        let as_string = serde_json::to_string(&formatted)?;
+        serde_json::from_str(&as_string)
+    }
 }
 
 #[cfg(feature = "serialize")]
@@ -60,8 +113,6 @@ fn deserialize_file_engine<'de, D>(
 where
     D: serde::Deserializer<'de>,
 {
-    use serde::Deserialize;
-
     let Ok(file_engine) = SerializedFileEngine::deserialize(deserializer) else {
         return Ok(None);
     };
