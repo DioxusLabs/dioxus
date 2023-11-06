@@ -14,7 +14,7 @@ macro_rules! read_impls {
     ($ty:ident, $bound:path) => {
         impl<T: Default + 'static, S: $bound> Default for $ty<T, S> {
             fn default() -> Self {
-                Self::new(Default::default())
+                Self::new_maybe_sync(Default::default())
             }
         }
 

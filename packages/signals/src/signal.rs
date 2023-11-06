@@ -170,7 +170,7 @@ pub struct SignalData<T> {
 ///     }
 /// }
 /// ```
-pub struct Signal<T: 'static, S: Storage<SignalData<T>>> {
+pub struct Signal<T: 'static, S: Storage<SignalData<T>> = UnsyncStorage> {
     pub(crate) inner: CopyValue<SignalData<T>, S>,
 }
 
@@ -188,11 +188,23 @@ impl<'de, T: serde::Deserialize<'de> + 'static> serde::Deserialize<'de> for Sign
     }
 }
 
-impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
+impl<T: 'static> Signal<T> {
     /// Creates a new Signal. Signals are a Copy state management solution with automatic dependency tracking.
     pub fn new(value: T) -> Self {
+        Self::new_maybe_sync(value)
+    }
+
+    /// Create a new signal with a custom owner scope. The signal will be dropped when the owner scope is dropped instead of the current scope.
+    pub fn new_in_scope(value: T, owner: ScopeId) -> Self {
+        Self::new_maybe_sync_in_scope(value, owner)
+    }
+}
+
+impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
+    /// Creates a new Signal. Signals are a Copy state management solution with automatic dependency tracking.
+    pub fn new_maybe_sync(value: T) -> Self {
         Self {
-            inner: CopyValue::new(SignalData {
+            inner: CopyValue::<SignalData<T>, S>::new_maybe_sync(SignalData {
                 subscribers: Default::default(),
                 update_any: schedule_update_any().expect("in a virtual dom"),
                 value,
@@ -202,9 +214,9 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
     }
 
     /// Create a new signal with a custom owner scope. The signal will be dropped when the owner scope is dropped instead of the current scope.
-    pub fn new_in_scope(value: T, owner: ScopeId) -> Self {
+    pub fn new_maybe_sync_in_scope(value: T, owner: ScopeId) -> Self {
         Self {
-            inner: CopyValue::new_in_scope(
+            inner: CopyValue::<SignalData<T>, S>::new_maybe_sync_in_scope(
                 SignalData {
                     subscribers: Default::default(),
                     update_any: schedule_update_any().expect("in a virtual dom"),
@@ -228,10 +240,11 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
     ) -> <<S as Storage<SignalData<T>>>::Ref as Mappable<SignalData<T>>>::Mapped<T> {
         let inner = self.inner.read();
         if let Some(effect) = inner.effect_stack.current() {
-            let mut subscribers = inner.subscribers.write();
-            let mut effect_subscribers = &mut subscribers.effect_subscribers;
-            if !effect_subscribers.contains(&effect) {
-                effect_subscribers.push(effect);
+            let subscribers = inner.subscribers.read();
+            if !subscribers.effect_subscribers.contains(&effect) {
+                drop(subscribers);
+                let mut subscribers = inner.subscribers.write();
+                subscribers.effect_subscribers.push(effect);
             }
         } else if let Some(current_scope_id) = current_scope_id() {
             // only subscribe if the vdom is rendering
@@ -241,17 +254,13 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
                     self.inner.value,
                     current_scope_id
                 );
-                let mut subscribers = inner.subscribers.write();
-                let subscribers = &mut subscribers.subscribers;
-                if !subscribers.contains(&current_scope_id) {
-                    subscribers.push(current_scope_id);
+                let subscribers = inner.subscribers.read();
+                if !subscribers.subscribers.contains(&current_scope_id) {
                     drop(subscribers);
+                    let mut subscribers = inner.subscribers.write();
+                    subscribers.subscribers.push(current_scope_id);
                     let unsubscriber = current_unsubscriber();
-                    inner
-                        .subscribers
-                        .write()
-                        .subscribers
-                        .push(unsubscriber.scope);
+                    subscribers.subscribers.push(unsubscriber.scope);
                 }
             }
         }
@@ -441,13 +450,20 @@ impl<T, B: MappableMut<T>, S: Storage<SignalData<I>>, I> DerefMut for Write<T, B
 }
 
 /// A signal that can only be read from.
-pub struct ReadOnlySignal<T: 'static, S: Storage<SignalData<T>>> {
+pub struct ReadOnlySignal<T: 'static, S: Storage<SignalData<T>> = UnsyncStorage> {
     inner: Signal<T, S>,
 }
 
-impl<T: 'static, S: Storage<SignalData<T>>> ReadOnlySignal<T, S> {
+impl<T: 'static> ReadOnlySignal<T> {
     /// Create a new read-only signal.
-    pub fn new(signal: Signal<T, S>) -> Self {
+    pub fn new(signal: Signal<T>) -> Self {
+        Self::new_maybe_sync(signal)
+    }
+}
+
+impl<T: 'static, S: Storage<SignalData<T>>> ReadOnlySignal<T, S> {
+    /// Create a new read-only signal that is maybe sync.
+    pub fn new_maybe_sync(signal: Signal<T, S>) -> Self {
         Self { inner: signal }
     }
 

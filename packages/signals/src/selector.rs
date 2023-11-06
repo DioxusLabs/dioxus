@@ -5,7 +5,7 @@ use crate::dependency::Dependency;
 use crate::use_signal;
 use crate::{get_effect_stack, signal::SignalData, CopyValue, Effect, ReadOnlySignal, Signal};
 
-/// Creates a new Selector. The selector will be run immediately and whenever any signal it reads changes.
+/// Creates a new unsync Selector. The selector will be run immediately and whenever any signal it reads changes.
 ///
 /// Selectors can be used to efficiently compute derived data from signals.
 ///
@@ -23,14 +23,41 @@ use crate::{get_effect_stack, signal::SignalData, CopyValue, Effect, ReadOnlySig
 /// }
 /// ```
 #[must_use = "Consider using `use_effect` to rerun a callback when dependencies change"]
-pub fn use_selector<R: PartialEq, S: Storage<SignalData<R>>>(
+pub fn use_selector<R: PartialEq>(
+    cx: &ScopeState,
+    f: impl FnMut() -> R + 'static,
+) -> ReadOnlySignal<R> {
+    use_maybe_sync_selector(cx, f)
+}
+
+
+/// Creates a new Selector that may be sync. The selector will be run immediately and whenever any signal it reads changes.
+///
+/// Selectors can be used to efficiently compute derived data from signals.
+///
+/// ```rust
+/// use dioxus::prelude::*;
+/// use dioxus_signals::*;
+///
+/// fn App(cx: Scope) -> Element {
+///     let mut count = use_signal(cx, || 0);
+///     let double = use_selector(cx, move || count * 2);
+///     count += 1;
+///     assert_eq!(double.value(), count * 2);
+///  
+///     render! { "{double}" }
+/// }
+/// ```
+#[must_use = "Consider using `use_effect` to rerun a callback when dependencies change"]
+pub fn use_maybe_sync_selector<R: PartialEq, S: Storage<SignalData<R>>>(
     cx: &ScopeState,
     f: impl FnMut() -> R + 'static,
 ) -> ReadOnlySignal<R, S> {
-    *cx.use_hook(|| selector(f))
+    *cx.use_hook(|| maybe_sync_selector(f))
 }
 
-/// Creates a new Selector with some local dependencies. The selector will be run immediately and whenever any signal it reads or any dependencies it tracks changes
+
+/// Creates a new unsync Selector with some local dependencies. The selector will be run immediately and whenever any signal it reads or any dependencies it tracks changes
 ///
 /// Selectors can be used to efficiently compute derived data from signals.
 ///
@@ -47,7 +74,35 @@ pub fn use_selector<R: PartialEq, S: Storage<SignalData<R>>>(
 /// }
 /// ```
 #[must_use = "Consider using `use_effect` to rerun a callback when dependencies change"]
-pub fn use_selector_with_dependencies<R: PartialEq, D: Dependency, S: Storage<SignalData<R>>>(
+pub fn use_selector_with_dependencies<R: PartialEq, D: Dependency, >(
+    cx: &ScopeState,
+    dependencies: D,
+    mut f: impl FnMut(D::Out) -> R + 'static,
+) -> ReadOnlySignal<R>
+where
+    D::Out: 'static,
+{   
+    use_maybe_sync_selector_with_dependencies(cx, dependencies, f)
+}
+
+/// Creates a new Selector that may be sync with some local dependencies. The selector will be run immediately and whenever any signal it reads or any dependencies it tracks changes
+///
+/// Selectors can be used to efficiently compute derived data from signals.
+///
+/// ```rust
+/// use dioxus::prelude::*;
+/// use dioxus_signals::*;
+///
+/// fn App(cx: Scope) -> Element {
+///     let mut local_state = use_state(cx, || 0);
+///     let double = use_selector_with_dependencies(cx, (local_state.get(),), move |(local_state,)| local_state * 2);
+///     local_state.set(1);
+///  
+///     render! { "{double}" }
+/// }
+/// ```
+#[must_use = "Consider using `use_effect` to rerun a callback when dependencies change"]
+pub fn use_maybe_sync_selector_with_dependencies<R: PartialEq, D: Dependency, S: Storage<SignalData<R>>>(
     cx: &ScopeState,
     dependencies: D,
     mut f: impl FnMut(D::Out) -> R + 'static,
@@ -57,7 +112,7 @@ where
 {
     let dependencies_signal = use_signal(cx, || dependencies.out());
     let selector = *cx.use_hook(|| {
-        selector(move || {
+        maybe_sync_selector(move || {
             let deref = &*dependencies_signal.read();
             f(deref.clone())
         })
@@ -69,10 +124,19 @@ where
     selector
 }
 
-/// Creates a new Selector. The selector will be run immediately and whenever any signal it reads changes.
+/// Creates a new unsync Selector. The selector will be run immediately and whenever any signal it reads changes.
 ///
 /// Selectors can be used to efficiently compute derived data from signals.
-pub fn selector<R: PartialEq, S: Storage<SignalData<R>>>(
+pub fn selector<R: PartialEq>(
+    mut f: impl FnMut() -> R + 'static,
+) -> ReadOnlySignal<R> {
+    maybe_sync_selector(f)
+}
+
+/// Creates a new Selector that may be Sync + Send. The selector will be run immediately and whenever any signal it reads changes.
+///
+/// Selectors can be used to efficiently compute derived data from signals.
+pub fn maybe_sync_selector<R: PartialEq, S: Storage<SignalData<R>>>(
     mut f: impl FnMut() -> R + 'static,
 ) -> ReadOnlySignal<R, S> {
     let state = Signal::<R, S> {
@@ -108,5 +172,5 @@ pub fn selector<R: PartialEq, S: Storage<SignalData<R>>>(
         }
     }));
 
-    ReadOnlySignal::new(state)
+    ReadOnlySignal::new_maybe_sync(state)
 }

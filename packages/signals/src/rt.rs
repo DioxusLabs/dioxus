@@ -1,3 +1,4 @@
+use generational_box::UnsyncStorage;
 use std::mem::MaybeUninit;
 use std::ops::Deref;
 use std::rc::Rc;
@@ -44,7 +45,7 @@ fn owner_in_scope<S: Storage<T>, T>(scope: ScopeId) -> Rc<Owner<S>> {
 /// CopyValue is a wrapper around a value to make the value mutable and Copy.
 ///
 /// It is internally backed by [`generational_box::GenerationalBox`].
-pub struct CopyValue<T: 'static, S: Storage<T>> {
+pub struct CopyValue<T: 'static, S: Storage<T> = UnsyncStorage> {
     pub(crate) value: GenerationalBox<T, S>,
     origin_scope: ScopeId,
 }
@@ -71,11 +72,25 @@ where
     }
 }
 
-impl<T: 'static, S: Storage<T>> CopyValue<T, S> {
+impl<T: 'static> CopyValue<T> {
     /// Create a new CopyValue. The value will be stored in the current component.
     ///
     /// Once the component this value is created in is dropped, the value will be dropped.
     pub fn new(value: T) -> Self {
+        Self::new_maybe_sync(value)
+    }
+
+    /// Create a new CopyValue. The value will be stored in the given scope. When the specified scope is dropped, the value will be dropped.
+    pub fn new_in_scope(value: T, scope: ScopeId) -> Self {
+        Self::new_maybe_sync_in_scope(value, scope)
+    }
+}
+
+impl<T: 'static, S: Storage<T>> CopyValue<T, S> {
+    /// Create a new CopyValue. The value will be stored in the current component.
+    ///
+    /// Once the component this value is created in is dropped, the value will be dropped.
+    pub fn new_maybe_sync(value: T) -> Self {
         let owner = current_owner();
 
         Self {
@@ -85,7 +100,7 @@ impl<T: 'static, S: Storage<T>> CopyValue<T, S> {
     }
 
     /// Create a new CopyValue. The value will be stored in the given scope. When the specified scope is dropped, the value will be dropped.
-    pub fn new_in_scope(value: T, scope: ScopeId) -> Self {
+    pub fn new_maybe_sync_in_scope(value: T, scope: ScopeId) -> Self {
         let owner = owner_in_scope(scope);
 
         Self {
