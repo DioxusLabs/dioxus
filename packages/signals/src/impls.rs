@@ -36,6 +36,12 @@ macro_rules! read_impls {
                 self.with(|v| Debug::fmt(v, f))
             }
         }
+
+        impl<T: PartialEq + 'static, S: $bound> PartialEq<T> for $ty<T, S> {
+            fn eq(&self, other: &T) -> bool {
+                self.with(|v| *v == *other)
+            }
+        }
     };
 }
 

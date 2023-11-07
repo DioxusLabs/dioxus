@@ -11,7 +11,9 @@ use dioxus_core::{
     prelude::{current_scope_id, has_context, provide_context, schedule_update_any},
     ScopeId, ScopeState,
 };
-use generational_box::{GenerationalBoxId, Mappable, MappableMut, Storage, UnsyncStorage};
+use generational_box::{
+    GenerationalBoxId, Mappable, MappableMut, Storage, SyncStorage, UnsyncStorage,
+};
 use parking_lot::RwLock;
 
 use crate::{get_effect_ref, CopyValue, EffectStackRef, EFFECT_STACK};
@@ -59,7 +61,7 @@ pub fn use_signal<T: 'static>(cx: &ScopeState, f: impl FnOnce() -> T) -> Signal<
 /// use dioxus_signals::*;
 ///
 /// fn App(cx: Scope) -> Element {
-///     let mut count = use_signal(cx, || 0);
+///     let mut count = use_signal_sync(cx, || 0);
 ///
 ///     // Because signals have automatic dependency tracking, if you never read them in a component, that component will not be re-rended when the signal is updated.
 ///     // The app component will never be rerendered in this example.
@@ -67,7 +69,7 @@ pub fn use_signal<T: 'static>(cx: &ScopeState, f: impl FnOnce() -> T) -> Signal<
 /// }
 ///
 /// #[component]
-/// fn Child(cx: Scope, state: Signal<u32>) -> Element {
+/// fn Child(cx: Scope, state: Signal<u32, SyncStorage>) -> Element {
 ///     let state = *state;
 ///
 ///     use_future!(cx,  |()| async move {
@@ -90,8 +92,8 @@ pub fn use_signal<T: 'static>(cx: &ScopeState, f: impl FnOnce() -> T) -> Signal<
 pub fn use_signal_sync<T: Send + Sync + 'static>(
     cx: &ScopeState,
     f: impl FnOnce() -> T,
-) -> Signal<T, UnsyncStorage> {
-    *cx.use_hook(|| Signal::new(f()))
+) -> Signal<T, SyncStorage> {
+    *cx.use_hook(|| Signal::new_maybe_sync(f()))
 }
 
 #[derive(Clone)]
