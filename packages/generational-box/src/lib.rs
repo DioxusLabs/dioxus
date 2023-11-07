@@ -150,6 +150,10 @@ pub struct GenerationalBoxId {
     generation: u32,
 }
 
+// Safety: GenerationalBoxId is Send and Sync because there is no way to access the pointer.
+unsafe impl Send for GenerationalBoxId {}
+unsafe impl Sync for GenerationalBoxId {}
+
 impl Debug for GenerationalBoxId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         #[cfg(any(debug_assertions, feature = "check_generation"))]
