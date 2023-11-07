@@ -2,8 +2,8 @@ use dioxus_core::prelude::*;
 use generational_box::Storage;
 
 use crate::dependency::Dependency;
-use crate::use_signal;
-use crate::{get_effect_stack, signal::SignalData, CopyValue, Effect, ReadOnlySignal, Signal};
+use crate::{get_effect_ref, signal::SignalData, CopyValue, Effect, ReadOnlySignal, Signal};
+use crate::{use_signal, EffectInner, EFFECT_STACK};
 
 /// Creates a new unsync Selector. The selector will be run immediately and whenever any signal it reads changes.
 ///
@@ -30,7 +30,6 @@ pub fn use_selector<R: PartialEq>(
     use_maybe_sync_selector(cx, f)
 }
 
-
 /// Creates a new Selector that may be sync. The selector will be run immediately and whenever any signal it reads changes.
 ///
 /// Selectors can be used to efficiently compute derived data from signals.
@@ -56,7 +55,6 @@ pub fn use_maybe_sync_selector<R: PartialEq, S: Storage<SignalData<R>>>(
     *cx.use_hook(|| maybe_sync_selector(f))
 }
 
-
 /// Creates a new unsync Selector with some local dependencies. The selector will be run immediately and whenever any signal it reads or any dependencies it tracks changes
 ///
 /// Selectors can be used to efficiently compute derived data from signals.
@@ -74,14 +72,14 @@ pub fn use_maybe_sync_selector<R: PartialEq, S: Storage<SignalData<R>>>(
 /// }
 /// ```
 #[must_use = "Consider using `use_effect` to rerun a callback when dependencies change"]
-pub fn use_selector_with_dependencies<R: PartialEq, D: Dependency, >(
+pub fn use_selector_with_dependencies<R: PartialEq, D: Dependency>(
     cx: &ScopeState,
     dependencies: D,
-    mut f: impl FnMut(D::Out) -> R + 'static,
+    f: impl FnMut(D::Out) -> R + 'static,
 ) -> ReadOnlySignal<R>
 where
     D::Out: 'static,
-{   
+{
     use_maybe_sync_selector_with_dependencies(cx, dependencies, f)
 }
 
@@ -102,7 +100,11 @@ where
 /// }
 /// ```
 #[must_use = "Consider using `use_effect` to rerun a callback when dependencies change"]
-pub fn use_maybe_sync_selector_with_dependencies<R: PartialEq, D: Dependency, S: Storage<SignalData<R>>>(
+pub fn use_maybe_sync_selector_with_dependencies<
+    R: PartialEq,
+    D: Dependency,
+    S: Storage<SignalData<R>>,
+>(
     cx: &ScopeState,
     dependencies: D,
     mut f: impl FnMut(D::Out) -> R + 'static,
@@ -127,9 +129,7 @@ where
 /// Creates a new unsync Selector. The selector will be run immediately and whenever any signal it reads changes.
 ///
 /// Selectors can be used to efficiently compute derived data from signals.
-pub fn selector<R: PartialEq>(
-    mut f: impl FnMut() -> R + 'static,
-) -> ReadOnlySignal<R> {
+pub fn selector<R: PartialEq>(f: impl FnMut() -> R + 'static) -> ReadOnlySignal<R> {
     maybe_sync_selector(f)
 }
 
@@ -144,33 +144,36 @@ pub fn maybe_sync_selector<R: PartialEq, S: Storage<SignalData<R>>>(
     };
     let effect = Effect {
         source: current_scope_id().expect("in a virtual dom"),
-        callback: CopyValue::invalid(),
-        effect_stack: get_effect_stack(),
+        inner: CopyValue::invalid(),
     };
 
     {
-        get_effect_stack().effects.write().push(effect);
+        EFFECT_STACK.with(|stack| stack.effects.write().push(effect));
     }
     state.inner.value.set(SignalData {
         subscribers: Default::default(),
         update_any: schedule_update_any().expect("in a virtual dom"),
         value: f(),
-        effect_stack: get_effect_stack(),
+        effect_ref: get_effect_ref(),
     });
     {
-        get_effect_stack().effects.write().pop();
+        EFFECT_STACK.with(|stack| stack.effects.write().pop());
     }
 
-    effect.callback.value.set(Box::new(move || {
-        let value = f();
-        let changed = {
-            let old = state.inner.read();
-            value != old.value
-        };
-        if changed {
-            state.set(value)
-        }
-    }));
+    let invalid_id = state.inner.value.id();
+    effect.inner.value.set(EffectInner {
+        callback: Box::new(move || {
+            let value = f();
+            let changed = {
+                let old = state.inner.read();
+                value != old.value
+            };
+            if changed {
+                state.set(value)
+            }
+        }),
+        id: invalid_id,
+    });
 
     ReadOnlySignal::new_maybe_sync(state)
 }

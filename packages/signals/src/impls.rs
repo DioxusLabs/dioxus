@@ -3,7 +3,6 @@ use crate::signal::{ReadOnlySignal, Signal, Write};
 use crate::SignalData;
 use generational_box::Mappable;
 use generational_box::{MappableMut, Storage};
-use std::ops::Deref;
 
 use std::{
     fmt::{Debug, Display},

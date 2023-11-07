@@ -142,6 +142,24 @@ fn fuzz() {
     }
 }
 
+/// The type erased id of a generational box.
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct GenerationalBoxId {
+    data_ptr: *const (),
+    #[cfg(any(debug_assertions, feature = "check_generation"))]
+    generation: u32,
+}
+
+impl Debug for GenerationalBoxId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        #[cfg(any(debug_assertions, feature = "check_generation"))]
+        f.write_fmt(format_args!("{:?}@{:?}", self.data_ptr, self.generation))?;
+        #[cfg(not(any(debug_assertions, feature = "check_generation")))]
+        f.write_fmt(format_args!("{:?}", self.data_ptr))?;
+        Ok(())
+    }
+}
+
 /// The core Copy state type. The generational box will be dropped when the [Owner] is dropped.
 pub struct GenerationalBox<T, S = UnsyncStorage> {
     raw: MemoryLocation<S>,
@@ -177,6 +195,15 @@ impl<T: 'static, S: Storage<T>> GenerationalBox<T, S> {
         #[cfg(not(any(debug_assertions, feature = "check_generation")))]
         {
             true
+        }
+    }
+
+    /// Get the id of the generational box.
+    pub fn id(&self) -> GenerationalBoxId {
+        GenerationalBoxId {
+            data_ptr: self.raw.data.data_ptr(),
+            #[cfg(any(debug_assertions, feature = "check_generation"))]
+            generation: self.generation,
         }
     }
 

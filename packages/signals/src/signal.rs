@@ -11,10 +11,10 @@ use dioxus_core::{
     prelude::{current_scope_id, has_context, provide_context, schedule_update_any},
     ScopeId, ScopeState,
 };
-use generational_box::{AnyStorage, Mappable, MappableMut, Storage, SyncStorage, UnsyncStorage};
+use generational_box::{GenerationalBoxId, Mappable, MappableMut, Storage, UnsyncStorage};
 use parking_lot::RwLock;
 
-use crate::{get_effect_stack, CopyValue, Effect, EffectStack};
+use crate::{get_effect_ref, CopyValue, EffectStackRef, EFFECT_STACK};
 
 /// Creates a new Signal. Signals are a Copy state management solution with automatic dependency tracking.
 ///
@@ -91,8 +91,7 @@ pub fn use_signal_sync<T: Send + Sync + 'static>(
     cx: &ScopeState,
     f: impl FnOnce() -> T,
 ) -> Signal<T, UnsyncStorage> {
-    // *cx.use_hook(|| Signal::new(f()))
-    todo!()
+    *cx.use_hook(|| Signal::new(f()))
 }
 
 #[derive(Clone)]
@@ -127,14 +126,14 @@ fn current_unsubscriber() -> Unsubscriber {
 #[derive(Default)]
 pub(crate) struct SignalSubscribers {
     pub(crate) subscribers: Vec<ScopeId>,
-    pub(crate) effect_subscribers: Vec<Effect>,
+    pub(crate) effect_subscribers: Vec<GenerationalBoxId>,
 }
 
 /// The data stored for tracking in a signal.
 pub struct SignalData<T> {
     pub(crate) subscribers: Arc<RwLock<SignalSubscribers>>,
     pub(crate) update_any: Arc<dyn Fn(ScopeId) + Sync + Send>,
-    pub(crate) effect_stack: EffectStack,
+    pub(crate) effect_ref: EffectStackRef,
     pub(crate) value: T,
 }
 
@@ -208,7 +207,7 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
                 subscribers: Default::default(),
                 update_any: schedule_update_any().expect("in a virtual dom"),
                 value,
-                effect_stack: get_effect_stack(),
+                effect_ref: get_effect_ref(),
             }),
         }
     }
@@ -221,7 +220,7 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
                     subscribers: Default::default(),
                     update_any: schedule_update_any().expect("in a virtual dom"),
                     value,
-                    effect_stack: get_effect_stack(),
+                    effect_ref: get_effect_ref(),
                 },
                 owner,
             ),
@@ -239,12 +238,12 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
         &self,
     ) -> <<S as Storage<SignalData<T>>>::Ref as Mappable<SignalData<T>>>::Mapped<T> {
         let inner = self.inner.read();
-        if let Some(effect) = inner.effect_stack.current() {
+        if let Some(effect) = EFFECT_STACK.with(|stack| stack.current()) {
             let subscribers = inner.subscribers.read();
-            if !subscribers.effect_subscribers.contains(&effect) {
+            if !subscribers.effect_subscribers.contains(&effect.inner.id()) {
                 drop(subscribers);
                 let mut subscribers = inner.subscribers.write();
-                subscribers.effect_subscribers.push(effect);
+                subscribers.effect_subscribers.push(effect.inner.id());
             }
         } else if let Some(current_scope_id) = current_scope_id() {
             // only subscribe if the vdom is rendering
@@ -295,18 +294,19 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
             }
         }
 
+        let self_read = &self.inner.read();
         let subscribers = {
-            let self_read = self.inner.read();
-            let mut effects = &mut self_read.subscribers.write().effect_subscribers;
+            let effects = &mut self_read.subscribers.write().effect_subscribers;
             std::mem::take(&mut *effects)
         };
+        let effect_ref = &self_read.effect_ref;
         for effect in subscribers {
             tracing::trace!(
                 "Write on {:?} triggered effect {:?}",
                 self.inner.value,
                 effect
             );
-            effect.try_run();
+            effect_ref.rerun_effect(effect);
         }
     }
 
@@ -327,6 +327,11 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
     pub fn with_mut<O>(&self, f: impl FnOnce(&mut T) -> O) -> O {
         let mut write = self.write();
         f(&mut *write)
+    }
+
+    /// Get the generational id of the signal.
+    pub fn id(&self) -> generational_box::GenerationalBoxId {
+        self.inner.id()
     }
 }
 

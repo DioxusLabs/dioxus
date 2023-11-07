@@ -1,3 +1,4 @@
+use generational_box::GenerationalBoxId;
 use generational_box::UnsyncStorage;
 use std::mem::MaybeUninit;
 use std::ops::Deref;
@@ -6,40 +7,37 @@ use std::rc::Rc;
 use dioxus_core::prelude::*;
 use dioxus_core::ScopeId;
 
-use generational_box::AnyStorage;
 use generational_box::Storage;
 use generational_box::{GenerationalBox, Owner};
 
 use crate::Effect;
 
 fn current_owner<S: Storage<T>, T>() -> Rc<Owner<S>> {
-    todo!()
-    // match Effect::current() {
-    //     // If we are inside of an effect, we should use the owner of the effect as the owner of the value.
-    //     Some(effect) => {
-    //         let scope_id = effect.source;
-    //         owner_in_scope(scope_id)
-    //     }
-    //     // Otherwise either get an owner from the current scope or create a new one.
-    //     None => match has_context() {
-    //         Some(rt) => rt,
-    //         None => {
-    //             let owner = Rc::new(current_store().owner());
-    //             provide_context(owner).expect("in a virtual dom")
-    //         }
-    //     },
-    // }
+    match Effect::current() {
+        // If we are inside of an effect, we should use the owner of the effect as the owner of the value.
+        Some(effect) => {
+            let scope_id = effect.source;
+            owner_in_scope(scope_id)
+        }
+        // Otherwise either get an owner from the current scope or create a new one.
+        None => match has_context() {
+            Some(rt) => rt,
+            None => {
+                let owner = Rc::new(S::owner());
+                provide_context(owner).expect("in a virtual dom")
+            }
+        },
+    }
 }
 
 fn owner_in_scope<S: Storage<T>, T>(scope: ScopeId) -> Rc<Owner<S>> {
-    todo!()
-    // match consume_context_from_scope(scope) {
-    //     Some(rt) => rt,
-    //     None => {
-    //         let owner = Rc::new(current_store().owner());
-    //         provide_context_to_scope(scope, owner).expect("in a virtual dom")
-    //     }
-    // }
+    match consume_context_from_scope(scope) {
+        Some(rt) => rt,
+        None => {
+            let owner = Rc::new(S::owner());
+            provide_context_to_scope(scope, owner).expect("in a virtual dom")
+        }
+    }
 }
 
 /// CopyValue is a wrapper around a value to make the value mutable and Copy.
@@ -144,7 +142,7 @@ impl<T: 'static, S: Storage<T>> CopyValue<T, S> {
     }
 
     /// Set the value. If the value has been dropped, this will panic.
-    pub fn set(&mut self, value: T) {
+    pub fn set(&self, value: T) {
         *self.write() = value;
     }
 
@@ -158,6 +156,11 @@ impl<T: 'static, S: Storage<T>> CopyValue<T, S> {
     pub fn with_mut<O>(&self, f: impl FnOnce(&mut T) -> O) -> O {
         let mut write = self.write();
         f(&mut *write)
+    }
+
+    /// Get the generational id of the value.
+    pub fn id(&self) -> GenerationalBoxId {
+        self.value.id()
     }
 }
 
