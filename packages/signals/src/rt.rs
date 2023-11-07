@@ -143,7 +143,7 @@ impl<T: 'static, S: Storage<T>> CopyValue<T, S> {
 
     /// Set the value. If the value has been dropped, this will panic.
     pub fn set(&self, value: T) {
-        *self.write() = value;
+        self.value.set(value);
     }
 
     /// Run a function with a reference to the value. If the value has been dropped, this will panic.
