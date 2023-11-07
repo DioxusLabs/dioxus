@@ -51,12 +51,15 @@ pub(crate) fn get_effect_ref() -> EffectStackRef {
         Some(rt) => rt,
         None => {
             let (sender, mut receiver) = futures_channel::mpsc::unbounded();
-            spawn(async move {
+            spawn_forever(async move {
                 while let Some(id) = receiver.next().await {
                     EFFECT_STACK.with(|stack| {
                         let effect_mapping = stack.effect_mapping.read();
                         if let Some(effect) = effect_mapping.get(&id) {
+                            tracing::trace!("Rerunning effect: {:?}", id);
                             effect.try_run();
+                        } else {
+                            tracing::trace!("Effect not found: {:?}", id);
                         }
                     });
                 }
@@ -125,6 +128,7 @@ impl EffectInner {
 impl Drop for EffectInner {
     fn drop(&mut self) {
         EFFECT_STACK.with(|stack| {
+            tracing::trace!("Dropping effect: {:?}", self.id);
             stack.effect_mapping.write().remove(&self.id);
         });
     }
@@ -156,6 +160,7 @@ impl Effect {
                 .write()
                 .insert(myself.inner.id(), myself);
         });
+        tracing::trace!("Created effect: {:?}", myself);
 
         myself.try_run();
 
@@ -164,6 +169,7 @@ impl Effect {
 
     /// Run the effect callback immediately. Returns `true` if the effect was run. Returns `false` is the effect is dead.
     pub fn try_run(&self) {
+        tracing::trace!("Running effect: {:?}", self);
         if let Some(mut inner) = self.inner.try_write() {
             {
                 EFFECT_STACK.with(|stack| {
@@ -177,5 +183,10 @@ impl Effect {
                 });
             }
         }
+    }
+
+    /// Get the id of this effect.
+    pub fn id(&self) -> GenerationalBoxId {
+        self.inner.id()
     }
 }

@@ -160,7 +160,8 @@ pub fn maybe_sync_selector<R: PartialEq, S: Storage<SignalData<R>>>(
         EFFECT_STACK.with(|stack| stack.effects.write().pop());
     }
 
-    let invalid_id = state.inner.value.id();
+    let invalid_id = effect.id();
+    tracing::trace!("Creating effect: {:?}", invalid_id);
     effect.inner.value.set(EffectInner {
         callback: Box::new(move || {
             let value = f();
@@ -174,6 +175,9 @@ pub fn maybe_sync_selector<R: PartialEq, S: Storage<SignalData<R>>>(
         }),
         id: invalid_id,
     });
+    {
+        EFFECT_STACK.with(|stack| stack.effect_mapping.write().insert(invalid_id, effect));
+    }
 
     ReadOnlySignal::new_maybe_sync(state)
 }

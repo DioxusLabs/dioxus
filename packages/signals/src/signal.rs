@@ -201,6 +201,7 @@ impl<T: 'static> Signal<T> {
 
 impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
     /// Creates a new Signal. Signals are a Copy state management solution with automatic dependency tracking.
+    #[tracing::instrument(skip(value))]
     pub fn new_maybe_sync(value: T) -> Self {
         Self {
             inner: CopyValue::<SignalData<T>, S>::new_maybe_sync(SignalData {
@@ -213,6 +214,7 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
     }
 
     /// Create a new signal with a custom owner scope. The signal will be dropped when the owner scope is dropped instead of the current scope.
+    #[tracing::instrument(skip(value))]
     pub fn new_maybe_sync_in_scope(value: T, owner: ScopeId) -> Self {
         Self {
             inner: CopyValue::<SignalData<T>, S>::new_maybe_sync_in_scope(
