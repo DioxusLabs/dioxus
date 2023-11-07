@@ -259,6 +259,7 @@ impl<T, S: Copy> Clone for GenerationalBox<T, S> {
     }
 }
 
+/// A unsync storage. This is the default storage type.
 #[derive(Clone, Copy)]
 pub struct UnsyncStorage(&'static RefCell<Option<Box<dyn std::any::Any>>>);
 
@@ -268,6 +269,7 @@ impl Default for UnsyncStorage {
     }
 }
 
+/// A thread safe storage. This is slower than the unsync storage, but allows you to share the value between threads.
 #[derive(Clone, Copy)]
 pub struct SyncStorage(&'static RwLock<Option<Box<dyn std::any::Any + Send + Sync>>>);
 
@@ -277,11 +279,15 @@ impl Default for SyncStorage {
     }
 }
 
+/// A trait for types that can be mapped.
 pub trait Mappable<T>: Deref<Target = T> {
+    /// The type after the mapping.
     type Mapped<U: 'static>: Mappable<U> + Deref<Target = U>;
 
+    /// Map the value.
     fn map<U: 'static>(_self: Self, f: impl FnOnce(&T) -> &U) -> Self::Mapped<U>;
 
+    /// Try to map the value.
     fn try_map<U: 'static>(
         _self: Self,
         f: impl FnOnce(&T) -> Option<&U>,
@@ -318,11 +324,15 @@ impl<T> Mappable<T> for MappedRwLockReadGuard<'static, T> {
     }
 }
 
+/// A trait for types that can be mapped mutably.
 pub trait MappableMut<T>: DerefMut<Target = T> {
+    /// The type after the mapping.
     type Mapped<U: 'static>: MappableMut<U> + DerefMut<Target = U>;
 
+    /// Map the value.
     fn map<U: 'static>(_self: Self, f: impl FnOnce(&mut T) -> &mut U) -> Self::Mapped<U>;
 
+    /// Try to map the value.
     fn try_map<U: 'static>(
         _self: Self,
         f: impl FnOnce(&mut T) -> Option<&mut U>,
@@ -340,7 +350,7 @@ impl<T> MappableMut<T> for RefMut<'static, T> {
         _self: Self,
         f: impl FnOnce(&mut T) -> Option<&mut U>,
     ) -> Option<Self::Mapped<U>> {
-        RefMut::try_map(_self, f)
+        RefMut::filter_map(_self, f).ok()
     }
 }
 
@@ -359,49 +369,45 @@ impl<T> MappableMut<T> for MappedRwLockWriteGuard<'static, T> {
     }
 }
 
+/// A trait for a storage backing type. (RefCell, RwLock, etc.)
 pub trait Storage<Data>: Copy + AnyStorage + 'static {
+    /// The reference this storage type returns.
     type Ref: Mappable<Data> + Deref<Target = Data>;
+    /// The mutable reference this storage type returns.
     type Mut: MappableMut<Data> + DerefMut<Target = Data>;
 
+    /// Try to read the value. Returns None if the value is no longer valid.
     fn try_read(&self) -> Option<Self::Ref>;
+    /// Read the value. Panics if the value is no longer valid.
     fn read(&self) -> Self::Ref {
         self.try_read()
             .expect("generational box has been invalidated or the type has changed")
     }
+    /// Try to write the value. Returns None if the value is no longer valid.
     fn try_write(&self) -> Option<Self::Mut>;
+    /// Write the value. Panics if the value is no longer valid.
     fn write(&self) -> Self::Mut {
         self.try_write()
             .expect("generational box has been invalidated or the type has changed")
     }
 
+    /// Set the value. Panics if the value is no longer valid.
     fn set(&self, value: Data);
 }
 
+/// A trait for any storage backing type.
 pub trait AnyStorage: Default {
+    /// Get the data pointer. No guarantees are made about the data pointer. It should only be used for debugging.
     fn data_ptr(&self) -> *const ();
 
+    /// Take the value out of the storage. This will return true if the value was taken.
     fn take(&self) -> bool;
 
+    /// Recycle a memory location. This will drop the memory location and return it to the runtime.
     fn recycle(location: &MemoryLocation<Self>);
-    // {
-    //     location.drop();
-    //     self.recycled.lock().push(location);
-    // }
 
+    /// Claim a new memory location. This will either create a new memory location or recycle an old one.
     fn claim() -> MemoryLocation<Self>;
-    // where
-    //     S: Default,
-    // {
-    //     if let Some(location) = self.recycled.lock().pop() {
-    //         location
-    //     } else {
-    //         MemoryLocation {
-    //             data: Default::default(),
-    //             #[cfg(any(debug_assertions, feature = "check_generation"))]
-    //             generation: Box::leak(Box::new(Default::default())),
-    //         }
-    //     }
-    // }
 
     /// Create a new owner. The owner will be responsible for dropping all of the generational boxes that it creates.
     fn owner() -> Owner<Self> {
@@ -450,7 +456,7 @@ impl AnyStorage for UnsyncStorage {
                 MemoryLocation {
                     data: UnsyncStorage(Box::leak(Box::new(RefCell::new(None)))),
                     #[cfg(any(debug_assertions, feature = "check_generation"))]
-                    generation: Box::leak(Box::new(Default::default())),
+                    generation: Box::leak(Box::default()),
                 }
             }
         })
@@ -498,7 +504,7 @@ impl AnyStorage for SyncStorage {
         MemoryLocation {
             data: SyncStorage(Box::leak(Box::new(RwLock::new(None)))),
             #[cfg(any(debug_assertions, feature = "check_generation"))]
-            generation: Box::leak(Box::new(Default::default())),
+            generation: Box::leak(Box::default()),
         }
     }
 
@@ -508,8 +514,9 @@ impl AnyStorage for SyncStorage {
     }
 }
 
+/// A memory location. This is the core type that is used to store values.
 #[derive(Clone, Copy)]
-struct MemoryLocation<S = UnsyncStorage> {
+pub struct MemoryLocation<S = UnsyncStorage> {
     data: S,
     #[cfg(any(debug_assertions, feature = "check_generation"))]
     generation: &'static AtomicU32,
