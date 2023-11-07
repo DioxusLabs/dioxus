@@ -91,11 +91,12 @@ pub struct LinkProps<'a> {
     #[props(default)]
     /// Whether the default behavior should be executed if an `onclick` handler is provided.
     ///
-    /// 1. When `onclick` is [`None`] (default if not specified), `onclick_only` has no effect.
-    /// 2. If `onclick_only` is [`false`] (default if not specified), the provided `onclick` handler
-    ///    will be executed after the links regular functionality.
-    /// 3. If `onclick_only` is [`true`], only the provided `onclick` handler will be executed.
-    pub onclick_only: bool,
+    /// 1. When `onclick` is [`None`] (default if not specified),
+    /// `provided_onclick_only` has no effect.
+    /// 2. If `provided_onclick_only` is [`false`] (default if not specified),
+    /// the provided `onclick` handler will be executed after the links regular functionality.
+    /// 3. If `provided_onclick_only` is [`true`], only the provided `onclick` handler will be executed.
+    pub provided_onclick_only: bool,
     /// The rel attribute for the generated HTML anchor tag.
     ///
     /// For external `target`s, this defaults to `noopener noreferrer`.
@@ -114,7 +115,7 @@ impl Debug for LinkProps<'_> {
             .field("id", &self.id)
             .field("new_tab", &self.new_tab)
             .field("onclick", &self.onclick.as_ref().map(|_| "onclick is set"))
-            .field("onclick_only", &self.onclick_only)
+            .field("provided_onclick_only", &self.provided_onclick_only)
             .field("rel", &self.rel)
             .finish()
     }
@@ -190,7 +191,7 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
         id,
         new_tab,
         onclick,
-        onclick_only,
+        provided_onclick_only,
         rel,
         to,
         ..
@@ -230,7 +231,7 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
         .or_else(|| is_external.then_some("noopener noreferrer"))
         .unwrap_or_default();
 
-    let do_default = onclick.is_none() || !onclick_only;
+    let do_default = onclick.is_none() || !provided_onclick_only;
     let action = move |event| {
         if do_default && is_router_nav {
             router.push_any(router.resolve_into_routable(to.clone()));
