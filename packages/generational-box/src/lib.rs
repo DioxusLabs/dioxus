@@ -9,7 +9,6 @@ use std::{
     fmt::Debug,
     marker::PhantomData,
     ops::{Deref, DerefMut},
-    rc::Rc,
     sync::{atomic::AtomicU32, Arc, OnceLock},
 };
 
@@ -300,7 +299,7 @@ impl<T> Mappable<T> for Ref<'static, T> {
         _self: Self,
         f: impl FnOnce(&T) -> Option<&U>,
     ) -> Option<Self::Mapped<U>> {
-        Ref::try_map(_self, f)
+        Ref::filter_map(_self, f).ok()
     }
 }
 
