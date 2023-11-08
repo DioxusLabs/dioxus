@@ -129,7 +129,10 @@ impl<'a> Iterator for Iter<'a> {
                         return Some(root);
                     }
                 }
-                _ => return Some(root),
+                _ => {
+                    self.root_idx += 1;
+                    return Some(root);
+                }
             }
         }
 
