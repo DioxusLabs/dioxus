@@ -92,6 +92,49 @@ impl<'a> VNode<'a> {
             }
         }
     }
+
+    /// Create an iterator over the vnode's template nodes.
+    pub fn iter(&'a self) -> Iter {
+        Iter {
+            vnode: self,
+            child_idx: None,
+            root_idx: 0,
+        }
+    }
+}
+
+/// Iterator over a vnode's template nodes.
+pub struct Iter<'a> {
+    vnode: &'a VNode<'a>,
+    child_idx: Option<usize>,
+    root_idx: usize,
+}
+
+impl<'a> Iterator for Iter<'a> {
+    type Item = &'a TemplateNode<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while let Some(root) = self.vnode.template.get().roots.get(self.root_idx) {
+            match root {
+                TemplateNode::Element { children, .. } => {
+                    if let Some(ref mut child_idx) = self.child_idx {
+                        if let Some(child) = children.get(*child_idx) {
+                            *child_idx += 1;
+                            return Some(child);
+                        } else {
+                            self.root_idx += 1;
+                        }
+                    } else {
+                        self.child_idx = Some(0);
+                        return Some(root);
+                    }
+                }
+                _ => return Some(root),
+            }
+        }
+
+        None
+    }
 }
 
 /// A static layout of a UI tree that describes a set of dynamic and static nodes.
