@@ -62,14 +62,21 @@ impl FormData {
                 In this case we would want to deserialize the value as follows
                 favourite_language: "rust"
             */
-            if values.len() > 1 {
-                // handling multiple values - case 1
-                parsed_values.insert(fieldname, ValueType::VecText(values.clone()));
-            } else {
-                // handle single value - case 2
-                let prepared_value = values.into_iter().next().unwrap();
-                parsed_values.insert(fieldname, ValueType::Text(prepared_value));
-            }
+            parsed_values.insert(
+                fieldname,
+                if values.len() > 1 {
+                    // handling multiple values - case 1
+                    ValueType::VecText(values)
+                } else {
+                    // handle single value - case 2
+                    ValueType::Text(
+                        values
+                            .into_iter()
+                            .next()
+                            .ok_or_else(|| serde_json::Error::custom("Values array is empty"))?,
+                    )
+                },
+            );
         }
 
         // convert HashMap to JSON string
