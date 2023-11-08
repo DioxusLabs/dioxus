@@ -1,11 +1,12 @@
 use std::{any::Any, collections::HashMap, fmt::Debug};
 
 use dioxus_core::Event;
-use serde::{Deserialize, Serialize};
+use serde::{de::Error, Deserialize, Serialize};
 
 pub type FormEvent = Event<FormData>;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(untagged)] // this will serialize Text(String) -> String and VecText(Vec<String>) to Vec<String>
 enum ValueType {
     Text(String),
     VecText(Vec<String>),
@@ -30,13 +31,21 @@ pub struct FormData {
     pub files: Option<std::sync::Arc<dyn FileEngine>>,
 }
 
+fn convert_hashmap_to_json<K, V>(hashmap: &HashMap<K, V>) -> serde_json::Result<String>
+where
+    K: Serialize + std::hash::Hash + Eq,
+    V: Serialize,
+{
+    serde_json::to_string(hashmap)
+}
+
 impl FormData {
     // ***** function to parse the 'values' to make it ready to use*******
     // e.g - self.values = { username: ["rust"], password: ["dioxus"]}
     // what we need it to be: { username: "rust", password: "dioxus"}
-    fn get_parsed_values(&self) -> Option<HashMap<String, ValueType>> {
+    fn get_parsed_values(&self) -> Result<String, serde_json::Error> {
         if self.values.is_empty() {
-            return None;
+            return Err(serde_json::Error::custom("Values is empty"));
         }
 
         let raw_values = self.values.clone();
@@ -58,21 +67,24 @@ impl FormData {
                 parsed_values.insert(fieldname, ValueType::VecText(values.clone()));
             } else {
                 // handle single value - case 2
-                let prepared_value = values.into_iter().next()?;
+                let prepared_value = values.into_iter().next().unwrap();
                 parsed_values.insert(fieldname, ValueType::Text(prepared_value));
             }
         }
 
-        Some(parsed_values)
+        // convert HashMap to JSON string
+        convert_hashmap_to_json(&parsed_values)
     }
 
     pub fn parse_json<T>(&self) -> Result<T, serde_json::Error>
     where
         T: serde::de::DeserializeOwned,
     {
-        let formatted = self.get_parsed_values();
-        let as_string = serde_json::to_string(&formatted)?;
-        serde_json::from_str(&as_string)
+        let parsed_json = self
+            .get_parsed_values()
+            .expect("Failed to parse values to JSON");
+
+        serde_json::from_str(&parsed_json)
     }
 }
 
