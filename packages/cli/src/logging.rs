@@ -28,7 +28,7 @@ pub fn set_up_logging() {
                 message = message,
             ));
         })
-        .level(log::LevelFilter::Info)
+        .level(log::LevelFilter::Trace)
         .chain(std::io::stdout())
         .apply()
         .unwrap();
