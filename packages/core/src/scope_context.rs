@@ -1,5 +1,5 @@
 use crate::{
-    innerlude::{ErrorBoundary, Scheduler, SchedulerMsg},
+    innerlude::{Scheduler, SchedulerMsg},
     runtime::{with_current_scope, with_runtime},
     Element, ScopeId, TaskId,
 };
@@ -7,7 +7,6 @@ use rustc_hash::FxHashSet;
 use std::{
     any::Any,
     cell::{Cell, RefCell},
-    fmt::Debug,
     future::Future,
     rc::Rc,
     sync::Arc,
@@ -250,19 +249,6 @@ impl ScopeContext {
         self.tasks.remove(id);
     }
 
-    /// Inject an error into the nearest error boundary and quit rendering
-    ///
-    /// The error doesn't need to implement Error or any specific traits since the boundary
-    /// itself will downcast the error into a trait object.
-    pub fn throw(&self, error: impl Debug + 'static) -> Option<()> {
-        if let Some(cx) = self.consume_context::<Rc<ErrorBoundary>>() {
-            cx.insert_error(self.scope_id(), Box::new(error));
-        }
-
-        // Always return none during a throw
-        None
-    }
-
     /// Mark this component as suspended and then return None
     pub fn suspend(&self) -> Option<Element> {
         self.suspended.set(true);
@@ -330,11 +316,6 @@ pub fn suspend() -> Option<Element<'static>> {
         cx.suspend();
     });
     None
-}
-
-/// Throw an error into the nearest error boundary
-pub fn throw(error: impl Debug + 'static) -> Option<()> {
-    with_current_scope(|cx| cx.throw(error)).flatten()
 }
 
 /// Pushes the future onto the poll queue to be polled after the component renders.

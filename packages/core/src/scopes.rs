@@ -2,7 +2,6 @@ use crate::{
     any_props::AnyProps,
     any_props::VProps,
     bump_frame::BumpFrame,
-    innerlude::ErrorBoundary,
     innerlude::{DynamicNode, EventHandler, VComponent, VText},
     lazynodes::LazyNodes,
     nodes::{IntoAttributeValue, IntoDynNode, RenderReturn},
@@ -504,19 +503,6 @@ impl<'src> ScopeState {
         let boxed: BumpBox<'src, dyn AnyValue> =
             unsafe { BumpBox::from_raw(self.bump().alloc(value)) };
         AttributeValue::Any(RefCell::new(Some(boxed)))
-    }
-
-    /// Inject an error into the nearest error boundary and quit rendering
-    ///
-    /// The error doesn't need to implement Error or any specific traits since the boundary
-    /// itself will downcast the error into a trait object.
-    pub fn throw(&self, error: impl Debug + 'static) -> Option<()> {
-        if let Some(cx) = self.consume_context::<Rc<ErrorBoundary>>() {
-            cx.insert_error(self.scope_id(), Box::new(error));
-        }
-
-        // Always return none during a throw
-        None
     }
 
     /// Mark this component as suspended and then return None
