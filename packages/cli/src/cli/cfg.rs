@@ -1,5 +1,4 @@
-use clap::ValueEnum;
-use serde::Serialize;
+use dioxus_cli_config::Platform;
 
 use super::*;
 
@@ -89,16 +88,6 @@ pub struct ConfigOptsServe {
     /// Space separated list of features to activate
     #[clap(long)]
     pub features: Option<Vec<String>>,
-}
-
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Serialize, Deserialize, Debug)]
-pub enum Platform {
-    #[clap(name = "web")]
-    #[serde(rename = "web")]
-    Web,
-    #[clap(name = "desktop")]
-    #[serde(rename = "desktop")]
-    Desktop,
 }
 
 /// Config options for the bundling system.

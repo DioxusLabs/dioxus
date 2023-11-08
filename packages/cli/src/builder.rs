@@ -5,6 +5,7 @@ use crate::{
     DioxusConfig,
 };
 use cargo_metadata::{diagnostic::Diagnostic, Message};
+use dioxus_cli_config::crate_root;
 use indicatif::{ProgressBar, ProgressStyle};
 use serde::Serialize;
 use std::{
@@ -429,7 +430,7 @@ fn prettier_build(cmd: subprocess::Exec) -> anyhow::Result<Vec<Diagnostic>> {
 }
 
 pub fn gen_page(config: &DioxusConfig, serve: bool) -> String {
-    let crate_root = crate::cargo::crate_root().unwrap();
+    let crate_root = crate_root().unwrap();
     let custom_html_file = crate_root.join("index.html");
     let mut html = if custom_html_file.is_file() {
         let mut buf = String::new();

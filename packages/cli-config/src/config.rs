@@ -1,10 +1,22 @@
-use crate::error::Result;
-use dioxus_cli_config::{crate_root, Metadata, Platform};
+use clap::ValueEnum;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
+    fmt::{Display, Formatter},
     path::{Path, PathBuf},
 };
+
+use crate::CargoError;
+
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Serialize, Deserialize, Debug)]
+pub enum Platform {
+    #[clap(name = "web")]
+    #[serde(rename = "web")]
+    Web,
+    #[clap(name = "desktop")]
+    #[serde(rename = "desktop")]
+    Desktop,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DioxusConfig {
@@ -23,9 +35,24 @@ fn default_plugin() -> toml::Value {
     toml::Value::Boolean(true)
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LoadDioxusConfigError {
+    location: String,
+    error: String,
+}
+
+impl std::fmt::Display for LoadDioxusConfigError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} {}", self.location, self.error)
+    }
+}
+
+impl std::error::Error for LoadDioxusConfigError {}
+
 impl DioxusConfig {
-    pub fn load(bin: Option<PathBuf>) -> crate::error::Result<Option<DioxusConfig>> {
-        let crate_dir = crate_root();
+    /// Load the dioxus config from a path
+    pub fn load(bin: Option<PathBuf>) -> Result<Option<DioxusConfig>, CrateConfigError> {
+        let crate_dir = crate::cargo::crate_root();
 
         let crate_dir = match crate_dir {
             Ok(dir) => {
@@ -50,7 +77,10 @@ impl DioxusConfig {
                     .strip_prefix(crate_dir)
                     .unwrap_or(dioxus_conf_file)
                     .display();
-                crate::Error::Unique(format!("{error_location} {err}"))
+                CrateConfigError::LoadDioxusConfig(LoadDioxusConfigError {
+                    location: error_location.to_string(),
+                    error: err.to_string(),
+                })
             })
             .map(Some);
         match cfg {
@@ -214,6 +244,51 @@ pub struct CrateConfig {
     pub features: Option<Vec<String>>,
 }
 
+#[derive(Debug)]
+pub enum CrateConfigError {
+    Cargo(CargoError),
+    Io(std::io::Error),
+    Toml(toml::de::Error),
+    LoadDioxusConfig(LoadDioxusConfigError),
+}
+
+impl From<CargoError> for CrateConfigError {
+    fn from(err: CargoError) -> Self {
+        Self::Cargo(err)
+    }
+}
+
+impl From<std::io::Error> for CrateConfigError {
+    fn from(err: std::io::Error) -> Self {
+        Self::Io(err)
+    }
+}
+
+impl From<toml::de::Error> for CrateConfigError {
+    fn from(err: toml::de::Error) -> Self {
+        Self::Toml(err)
+    }
+}
+
+impl From<LoadDioxusConfigError> for CrateConfigError {
+    fn from(err: LoadDioxusConfigError) -> Self {
+        Self::LoadDioxusConfig(err)
+    }
+}
+
+impl Display for CrateConfigError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Cargo(err) => write!(f, "{}", err),
+            Self::Io(err) => write!(f, "{}", err),
+            Self::Toml(err) => write!(f, "{}", err),
+            Self::LoadDioxusConfig(err) => write!(f, "{}", err),
+        }
+    }
+}
+
+impl std::error::Error for CrateConfigError {}
+
 #[derive(Debug, Clone)]
 pub enum ExecutableType {
     Binary(String),
@@ -222,10 +297,10 @@ pub enum ExecutableType {
 }
 
 impl CrateConfig {
-    pub fn new(bin: Option<PathBuf>) -> Result<Self> {
+    pub fn new(bin: Option<PathBuf>) -> Result<Self, CrateConfigError> {
         let dioxus_config = DioxusConfig::load(bin.clone())?.unwrap_or_default();
 
-        let crate_root = crate_root()?;
+        let crate_root = crate::cargo::crate_root()?;
 
         let crate_dir = if let Some(package) = &dioxus_config.application.sub_package {
             crate_root.join(package)
@@ -235,7 +310,7 @@ impl CrateConfig {
             crate_root
         };
 
-        let meta = Metadata::get()?;
+        let meta = crate::cargo::Metadata::get()?;
         let workspace_dir = meta.workspace_root;
         let target_dir = meta.target_directory;
 

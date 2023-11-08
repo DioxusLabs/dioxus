@@ -1,6 +1,7 @@
 use crate::server::Diagnostic;
 use crate::CrateConfig;
 use colored::Colorize;
+use dioxus_cli_config::crate_root;
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -40,7 +41,7 @@ pub fn print_console_info(
         profile = config.custom_profile.as_ref().unwrap().to_string();
     }
     let hot_reload = if config.hot_reload { "RSX" } else { "Normal" };
-    let crate_root = crate::cargo::crate_root().unwrap();
+    let crate_root = crate_root().unwrap();
     let custom_html_file = if crate_root.join("index.html").is_file() {
         "Custom [index.html]"
     } else {

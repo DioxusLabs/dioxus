@@ -1,9 +1,9 @@
 [package]
-name = "dioxus-cli"
+name = "dioxus-cli-config"
 version = "0.4.1"
 authors = ["Jonathan Kelley"]
 edition = "2021"
-description = "CLI tool for developing, testing, and publishing Dioxus apps"
+description = "Configuration for the Dioxus CLI"
 repository = "https://github.com/DioxusLabs/dioxus/"
 license = "MIT OR Apache-2.0"
 keywords = ["react", "gui", "cli", "dioxus", "wasm"]
@@ -14,7 +14,6 @@ clap = { version = "4.2", features = ["derive"] }
 thiserror = { workspace = true }
 wasm-bindgen-cli-support = "0.2"
 colored = "2.0.0"
-dioxus-cli-config = { workspace = true }
 
 # features
 log = "0.4.14"
