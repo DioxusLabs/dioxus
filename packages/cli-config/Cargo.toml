@@ -88,10 +88,6 @@ interprocess-docfix = { version = "1.2.2" }
 default = []
 plugin = ["mlua"]
 
-[[bin]]
-path = "src/main.rs"
-name = "dx"
-
 [dev-dependencies]
 tempfile = "3.3"
 

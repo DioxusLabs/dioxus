@@ -81,8 +81,6 @@ impl From<dioxus_cli_config::CargoError> for Error {
     }
 }
 
-
-
 #[macro_export]
 macro_rules! custom_error {
     ($msg:literal $(,)?) => {
