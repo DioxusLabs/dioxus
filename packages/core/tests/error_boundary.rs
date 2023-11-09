@@ -24,9 +24,9 @@ fn NoneChild(_cx: Scope) -> Element {
 }
 
 fn ThrowChild(cx: Scope) -> Element {
-    cx.throw(std::io::Error::new(std::io::ErrorKind::AddrInUse, "asd"))?;
+    Err(std::io::Error::new(std::io::ErrorKind::AddrInUse, "asd")).throw()?;
 
-    let _g: i32 = "123123".parse().throw(cx)?;
+    let _g: i32 = "123123".parse().throw()?;
 
     cx.render(rsx! {
         div {}
