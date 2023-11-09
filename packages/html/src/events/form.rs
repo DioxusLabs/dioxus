@@ -47,7 +47,7 @@ impl FormData {
     // what we need it to be: { username: "rust", password: "dioxus"}
     fn get_parsed_values(&self) -> Result<String, serde_json::Error> {
         if self.values.is_empty() {
-            return Err(serde_json::Error::custom("Values is empty"));
+            return Err(serde_json::Error::custom("Values array is empty"));
         }
 
         let raw_values = self.values.clone();
