@@ -401,7 +401,7 @@ impl<'src> ScopeState {
 
     /// Convert any item that implements [`IntoDynNode`] into a [`DynamicNode`] using the internal [`Bump`] allocator
     pub fn make_node<'c, I>(&'src self, into: impl IntoDynNode<'src, I> + 'c) -> DynamicNode {
-        into.into_vnode(self)
+        into.into_dyn_node(self)
     }
 
     /// Create a new [`Attribute`] from a name, value, namespace, and volatile bool
