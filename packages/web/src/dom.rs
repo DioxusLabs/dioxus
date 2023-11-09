@@ -15,7 +15,7 @@ use dioxus_interpreter_js::{get_node, minimal_bindings, save_template, Channel};
 use futures_channel::mpsc;
 use js_sys::Array;
 use rustc_hash::FxHashMap;
-use std::{any::Any, rc::Rc};
+use std::{any::Any, collections::HashMap, rc::Rc};
 use wasm_bindgen::{closure::Closure, prelude::wasm_bindgen, JsCast, JsValue};
 use web_sys::{Document, Element, Event};
 
@@ -365,6 +365,21 @@ fn read_input_to_data(target: Element) -> Rc<FormData> {
         })
         .expect("only an InputElement or TextAreaElement or an element with contenteditable=true can have an oninput event listener");
 
+    let mut value_types = HashMap::new();
+
+    // to get the input_type for the corresponding input
+    for input_el in target.dyn_ref::<web_sys::HtmlFormElement>().into_iter() {
+        for index in 0..input_el.length() {
+            if let Some(element) = input_el.get_with_index(index as u32) {
+                if let Some(input) = element.dyn_into::<web_sys::HtmlInputElement>().ok() {
+                    let name = input.name();
+                    let input_type = input.type_();
+                    value_types.insert(name, input_type);
+                }
+            }
+        }
+    }
+
     let mut values = std::collections::HashMap::new();
 
     // try to fill in form values
@@ -400,6 +415,7 @@ fn read_input_to_data(target: Element) -> Rc<FormData> {
     Rc::new(FormData {
         value,
         values,
+        value_types,
         files,
     })
 }

@@ -171,6 +171,7 @@ impl<C: TextLikeController> TextLike<C> {
             let data: FormData = FormData {
                 value: self.text.clone(),
                 values: HashMap::new(),
+                value_types: HashMap::new(),
                 files: None,
             };
             let ctx: UniqueView<WidgetContext> = world.borrow().expect("expected widget context");

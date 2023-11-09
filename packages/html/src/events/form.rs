@@ -20,6 +20,8 @@ pub struct FormData {
 
     pub values: HashMap<String, Vec<String>>,
 
+    pub value_types: HashMap<String, String>,
+
     #[cfg_attr(
         feature = "serialize",
         serde(
@@ -53,6 +55,17 @@ impl FormData {
         let mut parsed_values: HashMap<String, ValueType> = HashMap::new();
 
         for (fieldname, values) in raw_values.into_iter() {
+            // check if the fieldname can hold multiple values based on its types
+            let field_type = self
+                .value_types
+                .get(&fieldname)
+                .expect("Provided invalid field");
+
+            let is_multi_valued_input = match field_type.as_str() {
+                "select" | "checkbox" => true,
+                _ => false,
+            };
+
             /*
             case 1 - multiple values, example { driving_types: ["manual", "automatic"] }
                 In this case we want to return the values as it is, NO point in making
@@ -64,7 +77,7 @@ impl FormData {
             */
             parsed_values.insert(
                 fieldname,
-                if values.len() > 1 {
+                if is_multi_valued_input {
                     // handling multiple values - case 1
                     ValueType::VecText(values)
                 } else {
