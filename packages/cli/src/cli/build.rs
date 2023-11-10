@@ -54,14 +54,7 @@ impl Build {
         let mut file = std::fs::File::create(
             crate_config
                 .crate_dir
-                .join(
-                    crate_config
-                        .dioxus_config
-                        .application
-                        .out_dir
-                        .clone()
-                        .unwrap_or_else(|| PathBuf::from("dist")),
-                )
+                .join(crate_config.dioxus_config.application.out_dir.clone())
                 .join("index.html"),
         )?;
         file.write_all(temp.as_bytes())?;

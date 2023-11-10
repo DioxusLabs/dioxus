@@ -262,12 +262,7 @@ async fn setup_router(
         .override_response_header(HeaderName::from_static("cross-origin-opener-policy"), coop)
         .and_then(
             move |response: Response<ServeFileSystemResponseBody>| async move {
-                let response = if file_service_config
-                    .dioxus_config
-                    .web
-                    .watcher
-                    .index_on_404
-                    .unwrap_or(false)
+                let response = if file_service_config.dioxus_config.web.watcher.index_on_404
                     && response.status() == StatusCode::NOT_FOUND
                 {
                     let body = Full::from(
@@ -299,7 +294,7 @@ async fn setup_router(
     let mut router = Router::new().route("/_dioxus/ws", get(ws_handler));
 
     // Setup proxy
-    for proxy_config in config.dioxus_config.web.proxy.unwrap_or_default() {
+    for proxy_config in config.dioxus_config.web.proxy {
         router = proxy::add_proxy(router, &proxy_config)?;
     }
 
@@ -416,13 +411,7 @@ fn build(config: &CrateConfig, reload_tx: &Sender<()>) -> Result<BuildResult> {
     let result = builder::build(config, true)?;
     // change the websocket reload state to true;
     // the page will auto-reload.
-    if config
-        .dioxus_config
-        .web
-        .watcher
-        .reload_html
-        .unwrap_or(false)
-    {
+    if config.dioxus_config.web.watcher.reload_html {
         let _ = Serve::regen_dev_page(config);
     }
     let _ = reload_tx.send(());
