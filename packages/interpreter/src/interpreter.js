@@ -453,8 +453,18 @@ function handler(event, name, bubbles, config) {
       const formData = new FormData(target);
 
       for (let name of formData.keys()) {
-        let value = formData.getAll(name);
-        contents.values[name] = value;
+        const fieldType = form.elements[name].type;
+
+        switch (fieldType) {
+            case "select-multiple":
+                contents.values[name] = formData.getAll(name);
+                break;
+
+            // add cases for fieldTypes that can hold multiple values here
+            default:
+                contents.values[name] = formData.get(name);
+                break;
+        }
       }
     }
 
