@@ -129,7 +129,6 @@ impl CheckBox {
                 .then(|| self.value.to_string())
                 .unwrap_or_default(),
             values: HashMap::new(),
-            value_types: HashMap::new(),
             files: None,
         };
         {
