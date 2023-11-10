@@ -61,9 +61,7 @@ impl EventData {
 pub struct FormData {
     pub value: String,
 
-    pub values: HashMap<String, Vec<String>>,
-
-    pub value_types: HashMap<String, String>,
+    pub values: HashMap<String, ValueType>,
 
     pub files: Option<Files>,
 }
@@ -73,7 +71,6 @@ impl FormData {
         dioxus_html::FormData {
             value: self.value,
             values: self.values,
-            value_types: self.value_types,
             files: None,
         }
     }

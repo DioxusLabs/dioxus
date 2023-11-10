@@ -1,13 +1,13 @@
 use std::{any::Any, collections::HashMap, fmt::Debug};
 
 use dioxus_core::Event;
-use serde::{de::Error, Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 
 pub type FormEvent = Event<FormData>;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(untagged)] // this will serialize Text(String) -> String and VecText(Vec<String>) to Vec<String>
-enum ValueType {
+pub enum ValueType {
     Text(String),
     VecText(Vec<String>),
 }
@@ -18,9 +18,7 @@ enum ValueType {
 pub struct FormData {
     pub value: String,
 
-    pub values: HashMap<String, Vec<String>>,
-
-    pub value_types: HashMap<String, String>,
+    pub values: HashMap<String, ValueType>,
 
     #[cfg_attr(
         feature = "serialize",
@@ -42,67 +40,12 @@ where
 }
 
 impl FormData {
-    // ***** function to parse the 'values' to make it ready to use*******
-    // e.g - self.values = { username: ["rust"], password: ["dioxus"]}
-    // what we need it to be: { username: "rust", password: "dioxus"}
-    fn get_parsed_values(&self) -> Result<String, serde_json::Error> {
-        if self.values.is_empty() {
-            return Err(serde_json::Error::custom("Values array is empty"));
-        }
-
-        let raw_values = self.values.clone();
-
-        let mut parsed_values: HashMap<String, ValueType> = HashMap::new();
-
-        for (fieldname, values) in raw_values.into_iter() {
-            // check if the fieldname can hold multiple values based on its types
-            let field_type = self
-                .value_types
-                .get(&fieldname)
-                .expect("Provided invalid field");
-
-            let is_multi_valued_input = match field_type.as_str() {
-                "select" | "checkbox" => true,
-                _ => false,
-            };
-
-            /*
-            case 1 - multiple values, example { driving_types: ["manual", "automatic"] }
-                In this case we want to return the values as it is, NO point in making
-                driving_types: "manual, automatic"
-
-            case 2 - single value, example { favourite_language: ["rust"] }
-                In this case we would want to deserialize the value as follows
-                favourite_language: "rust"
-            */
-            parsed_values.insert(
-                fieldname,
-                if is_multi_valued_input {
-                    // handling multiple values - case 1
-                    ValueType::VecText(values)
-                } else {
-                    // handle single value - case 2
-                    ValueType::Text(
-                        values
-                            .into_iter()
-                            .next()
-                            .ok_or_else(|| serde_json::Error::custom("Values array is empty"))?,
-                    )
-                },
-            );
-        }
-
-        // convert HashMap to JSON string
-        convert_hashmap_to_json(&parsed_values)
-    }
-
     pub fn parse_json<T>(&self) -> Result<T, serde_json::Error>
     where
         T: serde::de::DeserializeOwned,
     {
-        let parsed_json = self
-            .get_parsed_values()
-            .expect("Failed to parse values to JSON");
+        let parsed_json =
+            convert_hashmap_to_json(&self.values.clone()).expect("Failed to parse values to JSON");
 
         serde_json::from_str(&parsed_json)
     }

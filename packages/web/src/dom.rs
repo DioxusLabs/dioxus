@@ -10,7 +10,7 @@
 use dioxus_core::{
     BorrowedAttributeValue, ElementId, Mutation, Template, TemplateAttribute, TemplateNode,
 };
-use dioxus_html::{event_bubbles, CompositionData, FormData, MountedData};
+use dioxus_html::{event_bubbles, CompositionData, FormData, MountedData, ValueType};
 use dioxus_interpreter_js::{get_node, minimal_bindings, save_template, Channel};
 use futures_channel::mpsc;
 use js_sys::Array;
@@ -365,22 +365,7 @@ fn read_input_to_data(target: Element) -> Rc<FormData> {
         })
         .expect("only an InputElement or TextAreaElement or an element with contenteditable=true can have an oninput event listener");
 
-    let mut value_types = HashMap::new();
-
-    // to get the input_type for the corresponding input
-    for input_el in target.dyn_ref::<web_sys::HtmlFormElement>().into_iter() {
-        for index in 0..input_el.length() {
-            if let Some(element) = input_el.get_with_index(index as u32) {
-                if let Some(input) = element.dyn_into::<web_sys::HtmlInputElement>().ok() {
-                    let name = input.name();
-                    let input_type = input.type_();
-                    value_types.insert(name, input_type);
-                }
-            }
-        }
-    }
-
-    let mut values = std::collections::HashMap::new();
+    let mut values = HashMap::new();
 
     // try to fill in form values
     if let Some(form) = target.dyn_ref::<web_sys::HtmlFormElement>() {
@@ -389,10 +374,12 @@ fn read_input_to_data(target: Element) -> Rc<FormData> {
             if let Ok(array) = value.dyn_into::<Array>() {
                 if let Some(name) = array.get(0).as_string() {
                     if let Ok(item_values) = array.get(1).dyn_into::<Array>() {
-                        let item_values =
+                        let item_values: Vec<String> =
                             item_values.iter().filter_map(|v| v.as_string()).collect();
 
-                        values.insert(name, item_values);
+                        values.insert(name, ValueType::VecText(item_values));
+                    } else if let Ok(item_value) = array.get(1).dyn_into::<JsValue>() {
+                        values.insert(name, ValueType::Text(item_value.as_string().unwrap()));
                     }
                 }
             }
@@ -415,7 +402,6 @@ fn read_input_to_data(target: Element) -> Rc<FormData> {
     Rc::new(FormData {
         value,
         values,
-        value_types,
         files,
     })
 }
@@ -424,10 +410,22 @@ fn read_input_to_data(target: Element) -> Rc<FormData> {
 #[wasm_bindgen(inline_js = r#"
     export function get_form_data(form) {
         let values = new Map();
+
         const formData = new FormData(form);
 
         for (let name of formData.keys()) {
-            values.set(name, formData.getAll(name));
+            const fieldType = form.elements[name].type;
+
+            switch (fieldType) {
+                case "select-multiple":
+                    values.set(name, formData.getAll(name));
+                    break;
+
+                // add cases for fieldTypes that can hold multiple values here
+                default:
+                    values.set(name, formData.get(name));
+                    break;
+            }
         }
 
         return values;

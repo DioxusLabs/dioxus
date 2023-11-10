@@ -198,7 +198,6 @@ impl Slider {
             let data = FormData {
                 value: self.value.to_string(),
                 values: HashMap::new(),
-                value_types: HashMap::new(),
                 files: None,
             };
             ctx.send(Event {
