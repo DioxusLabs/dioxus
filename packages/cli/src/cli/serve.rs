@@ -1,3 +1,5 @@
+use dioxus_cli_config::Platform;
+
 use super::*;
 use std::{fs::create_dir_all, io::Write, path::PathBuf};
 
@@ -40,7 +42,7 @@ impl Serve {
             .unwrap_or(crate_config.dioxus_config.application.default_platform);
 
         match platform {
-            cfg::Platform::Web => {
+            Platform::Web => {
                 // generate dev-index page
                 Serve::regen_dev_page(&crate_config)?;
 
@@ -48,7 +50,7 @@ impl Serve {
                 server::web::startup(self.serve.port, crate_config.clone(), self.serve.open)
                     .await?;
             }
-            cfg::Platform::Desktop => {
+            Platform::Desktop => {
                 server::desktop::startup(crate_config.clone()).await?;
             }
         }

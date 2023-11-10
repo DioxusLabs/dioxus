@@ -1,0 +1,74 @@
+[application]
+
+# dioxus project name
+name = "{{project-name}}"
+
+# default platfrom
+# you can also use `dx serve/build --platform XXX` to use other platform
+# value: web | desktop
+default_platform = "{{default-platform}}"
+
+# Web `build` & `serve` dist path
+out_dir = "dist"
+
+# resource (static) file folder
+asset_dir = "public"
+
+[web.app]
+
+# HTML title tag content
+title = "Dioxus | An elegant GUI library for Rust"
+
+[web.watcher]
+
+index_on_404 = true
+
+watch_path = ["src", "examples"]
+
+# include `assets` in web platform
+[web.resource]
+
+# CSS style file
+style = []
+
+# Javascript code file
+script = []
+
+[web.resource.dev]
+
+# Javascript code file
+# serve: [dev-server] only
+script = []
+
+[application.plugins]
+
+available = true
+
+required = []
+
+[bundler]
+# Bundle identifier
+identifier = "io.github.{{project-name}}"
+
+# Bundle publisher
+publisher = "{{project-name}}"
+
+# Bundle icon
+icon = ["icons/icon.png"]
+
+# Bundle resources
+resources = ["public/*"]
+
+# Bundle copyright
+copyright = ""
+
+# Bundle category
+category = "Utility"
+
+# Bundle short description
+short_description = "An amazing dioxus application."
+
+# Bundle long description
+long_description = """
+An amazing dioxus application.
+"""

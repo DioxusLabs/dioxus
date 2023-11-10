@@ -1,6 +1,6 @@
-use crate::cfg::Platform;
 #[cfg(feature = "plugin")]
 use crate::plugin::PluginManager;
+use dioxus_cli_config::Platform;
 
 use super::*;
 

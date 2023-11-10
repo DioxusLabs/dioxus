@@ -1,3 +1,5 @@
+use dioxus_cli_config::crate_root;
+
 use super::*;
 
 /// Dioxus config file controls
@@ -26,7 +28,7 @@ pub enum Config {
 
 impl Config {
     pub fn config(self) -> Result<()> {
-        let crate_root = crate::cargo::crate_root()?;
+        let crate_root = crate_root()?;
         match self {
             Config::Init {
                 name,
