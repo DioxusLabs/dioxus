@@ -1,3 +1,7 @@
+// TODO: Create README, uncomment this: #![doc = include_str!("../README.md")]
+#![doc(html_logo_url = "https://avatars.githubusercontent.com/u/79236386")]
+#![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
+
 use convert_case::{Case, Converter};
 use proc_macro::TokenStream;
 use proc_macro2::Literal;
@@ -8,7 +12,7 @@ use syn::{
     Ident, ItemFn, Token,
 };
 
-/// Declares that a function is a [server function](dioxus_fullstack). This means that
+/// Declares that a function is a [server function](https://dioxuslabs.com/learn/0.4/reference/fullstack/server_functions). This means that
 /// its body will only run on the server, i.e., when the `ssr` feature is enabled.
 ///
 /// If you call a server function from the client (i.e., when the `csr` or `hydrate` features
@@ -105,7 +109,7 @@ pub fn server(args: proc_macro::TokenStream, s: TokenStream) -> TokenStream {
         let upper_cammel_case_name = Converter::new()
             .from_case(Case::Snake)
             .to_case(Case::UpperCamel)
-            .convert(&sig.ident.to_string());
+            .convert(sig.ident.to_string());
         args.struct_name = Some(Ident::new(&upper_cammel_case_name, sig.ident.span()));
     }
     let struct_name = args.struct_name.as_ref().unwrap();

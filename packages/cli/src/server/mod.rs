@@ -112,12 +112,12 @@ async fn setup_file_watcher<F: Fn() -> Result<BuildResult> + Send + 'static>(
     .unwrap();
 
     for sub_path in allow_watch_path {
-        watcher
-            .watch(
-                &config.crate_dir.join(sub_path),
-                notify::RecursiveMode::Recursive,
-            )
-            .unwrap();
+        if let Err(err) = watcher.watch(
+            &config.crate_dir.join(sub_path),
+            notify::RecursiveMode::Recursive,
+        ) {
+            log::error!("Failed to watch path: {}", err);
+        }
     }
     Ok(watcher)
 }

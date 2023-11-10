@@ -254,6 +254,7 @@ pub fn build_desktop(config: &CrateConfig, _is_serve: bool) -> Result<BuildResul
     let mut cmd = subprocess::Exec::cmd("cargo")
         .cwd(&config.crate_dir)
         .arg("build")
+        .arg("--quiet")
         .arg("--message-format=json");
 
     if config.release {
@@ -312,7 +313,7 @@ pub fn build_desktop(config: &CrateConfig, _is_serve: bool) -> Result<BuildResul
     if !config.out_dir.is_dir() {
         create_dir_all(&config.out_dir)?;
     }
-    copy(res_path, &config.out_dir.join(target_file))?;
+    copy(res_path, config.out_dir.join(target_file))?;
 
     // this code will copy all public file to the output dir
     if config.asset_dir.is_dir() {
@@ -436,14 +437,14 @@ pub fn gen_page(config: &DioxusConfig, serve: bool) -> String {
         String::from(include_str!("./assets/index.html"))
     };
 
-    let resouces = config.web.resource.clone();
+    let resources = config.web.resource.clone();
 
-    let mut style_list = resouces.style.unwrap_or_default();
-    let mut script_list = resouces.script.unwrap_or_default();
+    let mut style_list = resources.style.unwrap_or_default();
+    let mut script_list = resources.script.unwrap_or_default();
 
     if serve {
         let mut dev_style = resouces.dev.style.clone();
-        let mut dev_script = resouces.dev.script;
+        let mut dev_script = resouces.dev.script.clone();
         style_list.append(&mut dev_style);
         script_list.append(&mut dev_script);
     }
@@ -671,35 +672,3 @@ fn build_assets(config: &CrateConfig) -> Result<Vec<PathBuf>> {
 
     Ok(result)
 }
-
-// use binary_install::{Cache, Download};
-
-// /// Attempts to find `wasm-opt` in `PATH` locally, or failing that downloads a
-// /// precompiled binary.
-// ///
-// /// Returns `Some` if a binary was found or it was successfully downloaded.
-// /// Returns `None` if a binary wasn't found in `PATH` and this platform doesn't
-// /// have precompiled binaries. Returns an error if we failed to download the
-// /// binary.
-// pub fn find_wasm_opt(
-//     cache: &Cache,
-//     install_permitted: bool,
-// ) -> Result<install::Status, failure::Error> {
-//     // First attempt to look up in PATH. If found assume it works.
-//     if let Ok(path) = which::which("wasm-opt") {
-//         PBAR.info(&format!("found wasm-opt at {:?}", path));
-
-//         match path.as_path().parent() {
-//             Some(path) => return Ok(install::Status::Found(Download::at(path))),
-//             None => {}
-//         }
-//     }
-
-//     let version = "version_78";
-//     Ok(install::download_prebuilt(
-//         &install::Tool::WasmOpt,
-//         cache,
-//         version,
-//         install_permitted,
-//     )?)
-// }

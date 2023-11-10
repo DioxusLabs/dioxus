@@ -124,27 +124,34 @@ async fn start_desktop_hot_reload(hot_reload_state: HotReloadState) -> Result<()
                 let _ = local_socket_stream.set_nonblocking(true);
                 move || {
                     loop {
-                        if let Ok(mut connection) = local_socket_stream.accept() {
-                            // send any templates than have changed before the socket connected
-                            let templates: Vec<_> = {
-                                file_map
-                                    .lock()
-                                    .unwrap()
-                                    .map
-                                    .values()
-                                    .filter_map(|(_, template_slot)| *template_slot)
-                                    .collect()
-                            };
-                            for template in templates {
-                                if !send_msg(
-                                    HotReloadMsg::UpdateTemplate(template),
-                                    &mut connection,
-                                ) {
-                                    continue;
+                        match local_socket_stream.accept() {
+                            Ok(mut connection) => {
+                                // send any templates than have changed before the socket connected
+                                let templates: Vec<_> = {
+                                    file_map
+                                        .lock()
+                                        .unwrap()
+                                        .map
+                                        .values()
+                                        .filter_map(|(_, template_slot)| *template_slot)
+                                        .collect()
+                                };
+                                for template in templates {
+                                    if !send_msg(
+                                        HotReloadMsg::UpdateTemplate(template),
+                                        &mut connection,
+                                    ) {
+                                        continue;
+                                    }
+                                }
+                                channels.lock().unwrap().push(connection);
+                                println!("Connected to hot reloading 🚀");
+                            }
+                            Err(err) => {
+                                if err.kind() != std::io::ErrorKind::WouldBlock {
+                                    println!("Error connecting to hot reloading: {} (Hot reloading is a feature of the dioxus-cli. If you are not using the CLI, this error can be ignored)", err);
                                 }
                             }
-                            channels.lock().unwrap().push(connection);
-                            println!("Connected to hot reloading 🚀");
                         }
                         if *aborted.lock().unwrap() {
                             break;

@@ -80,8 +80,14 @@ mod js {
                 case "checked":
                     node.checked = truthy(value);
                     break;
+                case "initial_checked":
+                    node.defaultChecked = truthy(value);
+                    break;
                 case "selected":
                     node.selected = truthy(value);
+                    break;
+                case "initial_selected":
+                    node.defaultSelected = truthy(value);
                     break;
                 case "dangerous_inner_html":
                     node.innerHTML = value;

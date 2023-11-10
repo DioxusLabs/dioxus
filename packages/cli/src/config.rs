@@ -216,7 +216,7 @@ pub struct WebWatcherConfig {
 }
 
 fn watch_path_default() -> Vec<PathBuf> {
-    vec![PathBuf::from("src")]
+    vec![PathBuf::from("src"), PathBuf::from("examples")]
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
