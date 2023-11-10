@@ -161,6 +161,7 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
     // iOS panics if we create a window before the event loop is started
     let props = Rc::new(Cell::new(Some(props)));
     let cfg = Rc::new(Cell::new(Some(cfg)));
+    let mut is_visible_before_start = true;
 
     event_loop.run(move |window_event, event_loop, control_flow| {
         *control_flow = ControlFlow::Wait;
@@ -209,6 +210,8 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
 
                 // Create a dom
                 let dom = VirtualDom::new_with_props(root, props);
+
+                is_visible_before_start = cfg.window.window.visible;
 
                 let handler = create_new_window(
                     cfg,
@@ -323,6 +326,10 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
                 EventData::Ipc(msg) if msg.method() == "initialize" => {
                     let view = webviews.get_mut(&event.1).unwrap();
                     send_edits(view.dom.rebuild(), &view.desktop_context.webview);
+                    view.desktop_context
+                        .webview
+                        .window()
+                        .set_visible(is_visible_before_start);
                 }
 
                 EventData::Ipc(msg) if msg.method() == "browser_open" => {
