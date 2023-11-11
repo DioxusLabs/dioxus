@@ -31,4 +31,4 @@ let store = Store::default();
 
 ## How it works
 
-Internally 
+Internally, `generational-box` creates an arena of generational RefCell's that are recyled when the owner is dropped. You can think of the cells as something like `&'static RefCell<Box<dyn Any>>` with a generational check to make recyling a cell easier to debug. Then GenerationalBox's are `Copy` because the `&'static` pointer is `Copy`

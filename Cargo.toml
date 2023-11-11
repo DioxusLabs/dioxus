@@ -41,6 +41,7 @@ members = [
     "examples/tailwind",
     "examples/PWA-example",
     "examples/query_segments_demo",
+    "examples/openid_connect_demo",
     # Playwright tests
     "playwright-tests/liveview",
     "playwright-tests/web",
@@ -87,7 +88,7 @@ slab = "0.4.2"
 futures-channel = "0.3.21"
 futures-util = { version = "0.3", default-features = false }
 rustc-hash = "1.1.0"
-wasm-bindgen = "0.2.87"
+wasm-bindgen = "0.2.88"
 html_parser = "0.7.0"
 thiserror = "1.0.40"
 prettyplease = { package = "prettier-please", version = "0.2", features = [

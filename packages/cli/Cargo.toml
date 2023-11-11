@@ -26,12 +26,9 @@ cargo_toml = "0.16.0"
 futures = "0.3.21"
 notify = { version = "5.0.0-pre.16", features = ["serde"] }
 html_parser  = { workspace = true }
-binary-install = "0.0.2"
-convert_case = "0.5.0"
 cargo_metadata = "0.15.0"
-tokio = { version = "1.16.1", features = ["full"] }
+tokio = { version = "1.16.1", features = ["fs", "sync", "rt", "macros"] }
 atty = "0.2.14"
-regex = "1.5.4"
 chrono = "0.4.19"
 anyhow = "1.0.53"
 hyper = "0.14.17"
@@ -59,7 +56,6 @@ tar = "0.4.38"
 zip = "0.6.2"
 tower = "0.4.12"
 syn = { version = "2.0", features = ["full", "extra-traits"] }
-proc-macro2 = { version = "1.0", features = ["span-locations"] }
 lazy_static = "1.4.0"
 
 # plugin packages
@@ -71,7 +67,6 @@ mlua = { version = "0.8.1", features = [
     "macros",
 ], optional = true }
 ctrlc = "3.2.3"
-gitignore = "1.0.7"
 open = "4.1.0"
 cargo-generate = "0.18"
 toml_edit = "0.19.11"

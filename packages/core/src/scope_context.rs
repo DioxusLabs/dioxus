@@ -128,7 +128,7 @@ impl ScopeContext {
                     parent.name
                 );
                 if let Some(shared) = parent.shared_contexts.borrow().iter().find_map(|any| {
-                    tracing::trace!("found context {:?}", any.type_id());
+                    tracing::trace!("found context {:?}", (**any).type_id());
                     any.downcast_ref::<T>()
                 }) {
                     return Some(shared.clone());

@@ -1,3 +1,7 @@
+#![doc = include_str!("../README.md")]
+#![doc(html_logo_url = "https://avatars.githubusercontent.com/u/79236386")]
+#![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
+
 use proc_macro::TokenStream;
 use quote::ToTokens;
 use rsx::RenderCallBody;
@@ -8,6 +12,7 @@ use syn::{parse_macro_input, Path, Token};
 mod component_body;
 mod component_body_deserializers;
 mod props;
+mod utils;
 
 // mod rsx;
 use crate::component_body::ComponentBody;

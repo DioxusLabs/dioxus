@@ -1,7 +1,10 @@
+#![doc = include_str!("../README.md")]
+#![doc(html_logo_url = "https://avatars.githubusercontent.com/u/79236386")]
+#![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![cfg_attr(feature = "nightly-features", feature(debug_refcell))]
 
 #[macro_export]
-/// A helper macro for using hooks and properties in async environements.
+/// A helper macro for using hooks and properties in async environments.
 ///
 /// # Usage
 ///
@@ -54,8 +57,8 @@ macro_rules! to_owned {
 
 pub mod computed;
 
-mod use_on_unmount;
-pub use use_on_unmount::*;
+mod use_on_destroy;
+pub use use_on_destroy::*;
 
 mod use_context;
 pub use use_context::*;
@@ -84,5 +87,7 @@ pub use use_callback::*;
 mod use_memo;
 pub use use_memo::*;
 
+mod use_on_create;
+pub use use_on_create::*;
 mod use_root_context;
 pub use use_root_context::*;

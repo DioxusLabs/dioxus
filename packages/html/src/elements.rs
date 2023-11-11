@@ -1107,6 +1107,7 @@ builder_constructors! {
         formnovalidate: Bool DEFAULT,
         formtarget: Target DEFAULT,
         height: isize DEFAULT,
+        initial_checked: Bool DEFAULT,
         list: Id DEFAULT,
         max: String DEFAULT,
         maxlength: usize DEFAULT,
@@ -1203,6 +1204,7 @@ builder_constructors! {
         value: String DEFAULT,
 
         selected: Bool volatile,
+        initial_selected: Bool DEFAULT,
     };
 
     /// Build a

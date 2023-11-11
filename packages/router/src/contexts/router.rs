@@ -232,7 +232,7 @@ impl RouterContext {
             IntoRoutable::FromStr(url) => {
                 let parsed_route: NavigationTarget<Rc<dyn Any>> = match self.route_from_str(&url) {
                     Ok(route) => NavigationTarget::Internal(route),
-                    Err(err) => NavigationTarget::External(err),
+                    Err(_) => NavigationTarget::External(url),
                 };
                 parsed_route
             }

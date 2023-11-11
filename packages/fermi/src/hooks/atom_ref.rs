@@ -13,6 +13,7 @@ use std::{
 ///
 ///
 ///
+#[must_use]
 pub fn use_atom_ref<'a, T: 'static>(
     cx: &'a ScopeState,
     atom: &'static AtomRef<T>,
