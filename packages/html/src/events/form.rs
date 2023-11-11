@@ -45,7 +45,7 @@ impl FormData {
         T: serde::de::DeserializeOwned,
     {
         let parsed_json =
-            convert_hashmap_to_json(&self.values.clone()).expect("Failed to parse values to JSON");
+            convert_hashmap_to_json(&self.values).expect("Failed to parse values to JSON");
 
         serde_json::from_str(&parsed_json)
     }
