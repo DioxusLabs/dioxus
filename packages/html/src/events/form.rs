@@ -40,7 +40,7 @@ where
 }
 
 impl FormData {
-    pub fn parse_json<T>(&self) -> Result<T, serde_json::Error>
+    pub fn parsed_values<T>(&self) -> Result<T, serde_json::Error>
     where
         T: serde::de::DeserializeOwned,
     {
