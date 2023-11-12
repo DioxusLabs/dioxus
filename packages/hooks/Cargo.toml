@@ -14,7 +14,7 @@ default = []
 nightly-features = []
 
 [dependencies]
-dioxus-core = { workspace = true }
+dioxus-core = { workspace = true, version = "0.4.2" }
 futures-channel = { workspace = true }
 tracing = { workspace = true }
 thiserror = { workspace = true }
@@ -23,6 +23,6 @@ dioxus-debug-cell = "0.1.1"
 
 [dev-dependencies]
 futures-util = { workspace = true, default-features = false }
-dioxus-core = { workspace = true }
-dioxus = { workspace = true }
+dioxus-core = { workspace = true, version = "0.4.2" }
+dioxus = { workspace = true, version = "0.4.2" }
 web-sys = { version = "0.3.64", features = ["Document", "Window", "Element"] }

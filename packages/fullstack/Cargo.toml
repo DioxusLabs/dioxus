@@ -12,7 +12,7 @@ keywords = ["ui", "gui", "react", "ssr", "fullstack"]
 [dependencies]
 # server functions
 server_fn = { version = "0.5.2", default-features = false }
-dioxus_server_macro = { workspace = true }
+dioxus_server_macro = { workspace = true, version = "0.4.2" }
 
 # warp
 warp = { version = "0.3.5", features = ["compression-gzip"], optional = true }
@@ -30,19 +30,19 @@ salvo = { version = "0.46.0", optional = true, features = ["serve-static", "webs
 serde = "1.0.159"
 
 # Dioxus + SSR
-dioxus = { workspace = true }
-dioxus-ssr = { workspace = true, optional = true }
+dioxus = { workspace = true, version = "0.4.2" }
+dioxus-ssr = { workspace = true, version = "0.4.2", optional = true }
 hyper = { version = "0.14.25", optional = true }
 http = { version = "0.2.9", optional = true }
 
 # Web Integration
-dioxus-web = { workspace = true, features = ["hydrate"], optional = true }
+dioxus-web = { workspace = true, version = "0.4.2", features = ["hydrate"], optional = true }
 
 # Desktop Integration
-dioxus-desktop = { workspace = true, optional = true }
+dioxus-desktop = { workspace = true, version = "0.4.2", optional = true }
 
 # Router Integration
-dioxus-router = { workspace = true, optional = true }
+dioxus-router = { workspace = true, version = "0.4.2", optional = true }
 
 tracing = { workspace = true }
 tracing-futures = { workspace = true }
@@ -65,7 +65,7 @@ bytes = "1.4.0"
 tower-layer = "0.3.2"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-dioxus-hot-reload = { workspace = true }
+dioxus-hot-reload = { workspace = true, version = "0.4.2" }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 web-sys = { version = "0.3.61", features = ["Window", "Document", "Element", "HtmlDocument", "Storage", "console"] }

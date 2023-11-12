@@ -12,7 +12,7 @@ keywords = ["dom", "ui", "gui", "react", "state-management"]
 
 
 [dependencies]
-dioxus-core = { workspace = true }
+dioxus-core = { workspace = true, version = "0.4.2" }
 im-rc = { version = "15.0.0", features = ["serde"] }
 tracing = { workspace = true }
 

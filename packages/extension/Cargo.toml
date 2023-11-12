@@ -8,8 +8,8 @@ publish = false
 
 [dependencies]
 wasm-bindgen.workspace = true
-dioxus-autofmt.workspace = true
-rsx-rosetta.workspace = true
+dioxus-autofmt = { workspace = true, version = "0.4.2" }
+rsx-rosetta = {workspace = true, version = "0.4.2" }
 html_parser.workspace = true
 
 

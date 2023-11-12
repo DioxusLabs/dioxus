@@ -20,5 +20,5 @@ quote = "1.0"
 smallvec = "1.6"
 rustc-hash = { workspace = true }
 anymap = "0.12.1"
-dioxus = { workspace = true }
-dioxus-native-core = { workspace = true }
+dioxus = { workspace = true, version = "0.4.2" }
+dioxus-native-core = { workspace = true, version = "0.4.2" }

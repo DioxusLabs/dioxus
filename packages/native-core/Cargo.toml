@@ -10,7 +10,7 @@ keywords = ["dom", "ui", "gui", "react"]
 authors = ["Jonathan Kelley", "Evan Almloff"]
 
 [dependencies]
-dioxus-core = { workspace = true, optional = true }
+dioxus-core = { workspace = true, version = "0.4.2", optional = true }
 
 keyboard-types = "0.7"
 smallvec = "1.6"
@@ -27,10 +27,10 @@ shipyard = { version = "0.6.2", features = ["proc", "std"], default-features = f
 
 [dev-dependencies]
 rand = "0.8.5"
-dioxus = { workspace = true }
+dioxus = { workspace = true, version = "0.4.2" }
 tokio = { workspace = true, features = ["full"] }
-dioxus-native-core = { workspace = true, features = ["dioxus"] }
-dioxus-native-core-macro = { workspace = true }
+dioxus-native-core = { workspace = true, version = "0.4.2", features = ["dioxus"] }
+dioxus-native-core-macro = { workspace = true, version = "0.4.2" }
 
 [features]
 default = []

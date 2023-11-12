@@ -22,10 +22,10 @@ tokio-stream = { version = "0.1.11", features = ["net"] }
 tokio-util = { version = "0.7.4", features = ["rt"] }
 serde = { version = "1.0.151", features = ["derive"] }
 serde_json = "1.0.91"
-dioxus-html = { workspace = true, features = ["serialize"] }
-dioxus-core = { workspace = true, features = ["serialize"] }
-dioxus-interpreter-js = { workspace = true }
-dioxus-hot-reload = { workspace = true, optional = true }
+dioxus-html = { workspace = true, version = "0.4.2", features = ["serialize"] }
+dioxus-core = { workspace = true, version = "0.4.2", features = ["serialize"] }
+dioxus-interpreter-js = { workspace = true, version = "0.4.2" }
+dioxus-hot-reload = { workspace = true, version = "0.4.2", optional = true }
 
 # warp
 warp = { version = "0.3.3", optional = true }
@@ -46,7 +46,7 @@ async-trait = "0.1.71"
 [dev-dependencies]
 pretty_env_logger = { version = "0.5.0" }
 tokio = { workspace = true, features = ["full"] }
-dioxus = { workspace = true }
+dioxus = { workspace = true, version = "0.4.2" }
 warp = "0.3.3"
 axum = { version = "0.6.1", features = ["ws"] }
 salvo = { version = "0.44.1", features = ["affix", "ws"] }

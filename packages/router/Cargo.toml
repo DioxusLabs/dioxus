@@ -11,8 +11,8 @@ keywords = ["dom", "ui", "gui", "react", "wasm"]
 
 [dependencies]
 anyhow = "1.0.66"
-dioxus = { workspace = true }
-dioxus-router-macro = { workspace = true }
+dioxus = { workspace = true, version = "0.4.2" }
+dioxus-router-macro = { workspace = true, version = "0.4.2" }
 gloo = { version = "0.8.0", optional = true }
 tracing = { workspace = true }
 thiserror = { workspace = true }
@@ -27,8 +27,8 @@ web-sys = { version = "0.3.60", optional = true, features = [
 ] }
 js-sys = { version = "0.3.63", optional = true }
 gloo-utils = { version = "0.1.6", optional = true }
-dioxus-liveview = { workspace = true, optional = true }
-dioxus-ssr = { workspace = true, optional = true }
+dioxus-liveview = { workspace = true, version = "0.4.2", optional = true }
+dioxus-ssr = { workspace = true, version = "0.4.2", optional = true }
 tokio = { workspace = true, features = ["full"], optional = true }
 
 [features]
@@ -41,9 +41,9 @@ web = ["gloo", "web-sys", "wasm-bindgen", "gloo-utils", "js-sys"]
 
 [dev-dependencies]
 axum = { version = "0.6.1", features = ["ws"] }
-dioxus = { path = "../dioxus" }
-dioxus-liveview = { workspace = true, features = ["axum"] }
-dioxus-ssr = { path = "../ssr" }
+dioxus = { workspace = true, version = "0.4.2" }
+dioxus-liveview = { workspace = true, version = "0.4.2", features = ["axum"] }
+dioxus-ssr = { workspace = true, version = "0.4.2" }
 criterion = { version = "0.5", features = ["async_tokio", "html_reports"] }
 
 [[example]]
@@ -56,12 +56,12 @@ required-features = ["ssr"]
 harness = false
 
 [target.'cfg(not(target_family = "wasm"))'.dev-dependencies]
-dioxus-desktop = { path = "../desktop" }
+dioxus-desktop = { workspace = true, version = "0.4.2" }
 
 [target.'cfg(target_family = "wasm")'.dev-dependencies]
 console_error_panic_hook = "0.1.7"
-dioxus-router = { path = ".", features = ["web"] }
-dioxus-web = { workspace = true }
+dioxus-router = { path = ".", version = "0.4.2", features = ["web"] }
+dioxus-web = { workspace = true, version = "0.4.2"}
 gloo = "0.8.0"
 wasm-bindgen-test = "0.3.33"
 wasm-logger = "0.2.0"

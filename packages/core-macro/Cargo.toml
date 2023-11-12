@@ -16,14 +16,14 @@ proc-macro = true
 proc-macro2 = { version = "1.0" }
 quote = "1.0"
 syn = { version = "2.0", features = ["full", "extra-traits"] }
-dioxus-rsx = { workspace = true }
-dioxus-core = { workspace = true }
+dioxus-rsx = { workspace = true, version = "0.4.2" }
+dioxus-core = { workspace = true, version = "0.4.2" }
 constcat = "0.3.0"
 prettyplease = "0.2.15"
 
 # testing
 [dev-dependencies]
-dioxus = { workspace = true }
+dioxus = { workspace = true, version = "0.4.2" }
 rustversion = "1.0"
 trybuild = "1.0"
 

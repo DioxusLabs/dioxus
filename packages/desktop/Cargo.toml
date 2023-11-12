@@ -10,10 +10,10 @@ homepage = "https://dioxuslabs.com/learn/0.4/getting_started/desktop"
 keywords = ["dom", "ui", "gui", "react"]
 
 [dependencies]
-dioxus-core = { workspace = true, features = ["serialize"] }
-dioxus-html = { workspace = true, features = ["serialize", "native-bind"] }
-dioxus-interpreter-js = { workspace = true }
-dioxus-hot-reload = { workspace = true, optional = true }
+dioxus-core = { workspace = true, version = "0.4.2", features = ["serialize"] }
+dioxus-html = { workspace = true, version = "0.4.2", features = ["serialize", "native-bind"] }
+dioxus-interpreter-js = { workspace = true, version = "0.4.2" }
+dioxus-hot-reload = { workspace = true, version = "0.4.2", optional = true }
 
 serde = "1.0.136"
 serde_json = "1.0.79"
@@ -65,9 +65,9 @@ default-features = false
 features = [ "dox", "tokio_runtime", "hot-reload" ]
 
 [dev-dependencies]
-dioxus-core-macro = { workspace = true }
-dioxus-hooks = { workspace = true }
-dioxus = { workspace = true }
+dioxus-core-macro = { workspace = true, version = "0.4.2" }
+dioxus-hooks = { workspace = true, version = "0.4.2" }
+dioxus = { workspace = true, version = "0.4.2" }
 exitcode = "1.1.2"
 scraper = "0.16.0"
 

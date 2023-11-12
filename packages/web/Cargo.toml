@@ -10,9 +10,9 @@ homepage = "https://dioxuslabs.com/learn/0.4/getting_started/wasm"
 keywords = ["dom", "ui", "gui", "react", "wasm"]
 
 [dependencies]
-dioxus-core = { workspace = true, features = ["serialize"] }
-dioxus-html = { workspace = true, features = ["wasm-bind"] }
-dioxus-interpreter-js = { workspace = true, features = [
+dioxus-core = { workspace = true, version = "0.4.2", features = ["serialize"] }
+dioxus-html = { workspace = true, version = "0.4.2", features = ["wasm-bind"] }
+dioxus-interpreter-js = { workspace = true, version = "0.4.2", features = [
     "sledgehammer",
     "minimal_bindings",
 ] }
@@ -68,11 +68,11 @@ hot_reload = [
 eval = []
 
 [dev-dependencies]
-dioxus = { workspace = true }
+dioxus = { workspace = true, version = "0.4.2" }
 wasm-bindgen-test = "0.3.29"
-dioxus-ssr = { workspace = true}
+dioxus-ssr = { workspace = true, version = "0.4.2" }
 wasm-logger = "0.2.0"
 gloo-timers = "0.2.3"
 gloo-dialogs = "0.1.1"
-dioxus-web = { path = ".", features = ["hydrate"] }
+dioxus-web = { path = ".", version = "0.4.2", features = ["hydrate"] }
 tracing-wasm = "0.2.1"
