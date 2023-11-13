@@ -453,7 +453,7 @@ function handler(event, name, bubbles, config) {
       const formData = new FormData(target);
 
       for (let name of formData.keys()) {
-        const fieldType = form.elements[name].type;
+        const fieldType = target.elements[name].type;
 
         switch (fieldType) {
             case "select-multiple":
