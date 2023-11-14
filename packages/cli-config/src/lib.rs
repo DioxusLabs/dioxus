@@ -46,8 +46,13 @@ impl std::error::Error for DioxusCLINotUsed {}
 pub static CURRENT_CONFIG: once_cell::sync::Lazy<
     Result<crate::config::CrateConfig, DioxusCLINotUsed>,
 > = once_cell::sync::Lazy::new(|| {
-    std::env::var(crate::__private::CONFIG_ENV)
-        .ok()
+    CURRENT_CONFIG_JSON
         .and_then(|config| serde_json::from_str(&config).ok())
-        .ok_or(DioxusCLINotUsed)
+        .ok_or_else(|| {
+            tracing::error!("A library is trying to access the crate's configuration, but the dioxus CLI was not used to build the application.");
+            DioxusCLINotUsed
+    })
 });
+
+/// The current crate's configuration.
+pub const CURRENT_CONFIG_JSON: Option<&str> = std::option_env!("DIOXUS_CONFIG");

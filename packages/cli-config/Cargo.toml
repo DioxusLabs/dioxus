@@ -19,6 +19,7 @@ cargo_toml = "0.16.0"
 tauri-bundler = { version = "=1.3.0", features = ["native-tls-vendored"], optional = true  }
 tauri-utils = { version = "=1.4.*", optional = true }
 once_cell = "1.18.0"
+tracing.workspace = true
 
 [features]
 default = []

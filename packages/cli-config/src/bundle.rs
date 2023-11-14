@@ -231,6 +231,7 @@ pub enum WebviewInstallMode {
     FixedRuntime { path: PathBuf },
 }
 
+#[cfg(feature = "cli")]
 impl WebviewInstallMode {
     fn into(self) -> tauri_utils::config::WebviewInstallMode {
         match self {

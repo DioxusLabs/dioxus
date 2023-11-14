@@ -1,3 +1,4 @@
+use dioxus_cli_config::DioxusConfig;
 use std::path::PathBuf;
 
 use anyhow::anyhow;

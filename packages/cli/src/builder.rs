@@ -47,6 +47,7 @@ pub fn build(config: &CrateConfig, quiet: bool) -> Result<BuildResult> {
     let ignore_files = build_assets(config)?;
 
     let t_start = std::time::Instant::now();
+    let _guard = dioxus_cli_config::__private::save_config(config);
 
     // [1] Build the .wasm module
     log::info!("🚅 Running build command...");
@@ -89,8 +90,6 @@ pub fn build(config: &CrateConfig, quiet: bool) -> Result<BuildResult> {
         ExecutableType::Lib(name) => cmd.arg("--lib").arg(name),
         ExecutableType::Example(name) => cmd.arg("--example").arg(name),
     };
-
-    let _ = dioxus_cli_config::__private::save_config(config);
 
     let warning_messages = prettier_build(cmd)?;
 
@@ -254,6 +253,7 @@ pub fn build_desktop(config: &CrateConfig, _is_serve: bool) -> Result<BuildResul
 
     let t_start = std::time::Instant::now();
     let ignore_files = build_assets(config)?;
+    let _guard = dioxus_cli_config::__private::save_config(config);
 
     let mut cmd = subprocess::Exec::cmd("cargo")
         .cwd(&config.crate_dir)
@@ -283,8 +283,6 @@ pub fn build_desktop(config: &CrateConfig, _is_serve: bool) -> Result<BuildResul
         ExecutableType::Lib(name) => cmd.arg("--lib").arg(name),
         ExecutableType::Example(name) => cmd.arg("--example").arg(name),
     };
-
-    let _ = dioxus_cli_config::__private::save_config(config);
 
     let warning_messages = prettier_build(cmd)?;
 
