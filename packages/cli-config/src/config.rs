@@ -1,12 +1,13 @@
+use crate::BundleConfig;
+use crate::CargoError;
+use crate::{crate_root, Metadata};
 use clap::ValueEnum;
+use core::fmt::{Display, Formatter};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
-    fmt::{Display, Formatter},
     path::{Path, PathBuf},
 };
-
-use crate::CargoError;
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Serialize, Deserialize, Debug)]
 pub enum Platform {
@@ -48,6 +49,51 @@ impl std::fmt::Display for LoadDioxusConfigError {
 }
 
 impl std::error::Error for LoadDioxusConfigError {}
+
+#[derive(Debug)]
+pub enum CrateConfigError {
+    Cargo(CargoError),
+    Io(std::io::Error),
+    Toml(toml::de::Error),
+    LoadDioxusConfig(LoadDioxusConfigError),
+}
+
+impl From<CargoError> for CrateConfigError {
+    fn from(err: CargoError) -> Self {
+        Self::Cargo(err)
+    }
+}
+
+impl From<std::io::Error> for CrateConfigError {
+    fn from(err: std::io::Error) -> Self {
+        Self::Io(err)
+    }
+}
+
+impl From<toml::de::Error> for CrateConfigError {
+    fn from(err: toml::de::Error) -> Self {
+        Self::Toml(err)
+    }
+}
+
+impl From<LoadDioxusConfigError> for CrateConfigError {
+    fn from(err: LoadDioxusConfigError) -> Self {
+        Self::LoadDioxusConfig(err)
+    }
+}
+
+impl Display for CrateConfigError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Cargo(err) => write!(f, "{}", err),
+            Self::Io(err) => write!(f, "{}", err),
+            Self::Toml(err) => write!(f, "{}", err),
+            Self::LoadDioxusConfig(err) => write!(f, "{}", err),
+        }
+    }
+}
+
+impl std::error::Error for CrateConfigError {}
 
 impl DioxusConfig {
     /// Load the dioxus config from a path
@@ -117,33 +163,33 @@ fn acquire_dioxus_toml(dir: &Path) -> Option<PathBuf> {
 
 impl Default for DioxusConfig {
     fn default() -> Self {
-        let name = "name";
+        let name = default_name();
         Self {
             application: ApplicationConfig {
-                name: name.into(),
-                default_platform: Platform::Web,
-                out_dir: Some(PathBuf::from("dist")),
-                asset_dir: Some(PathBuf::from("public")),
+                name: name.clone(),
+                default_platform: default_platform(),
+                out_dir: out_dir_default(),
+                asset_dir: asset_dir_default(),
 
-                tools: None,
+                tools: Default::default(),
 
                 sub_package: None,
             },
             web: WebConfig {
                 app: WebAppConfig {
-                    title: Some("dioxus | ⛺".into()),
+                    title: default_title(),
                     base_path: None,
                 },
-                proxy: Some(vec![]),
+                proxy: vec![],
                 watcher: WebWatcherConfig {
-                    watch_path: Some(vec![PathBuf::from("src"), PathBuf::from("examples")]),
-                    reload_html: Some(false),
-                    index_on_404: Some(true),
+                    watch_path: watch_path_default(),
+                    reload_html: false,
+                    index_on_404: true,
                 },
                 resource: WebResourceConfig {
                     dev: WebDevResourceConfig {
-                        style: Some(vec![]),
-                        script: Some(vec![]),
+                        style: vec![],
+                        script: vec![],
                     },
                     style: Some(vec![]),
                     script: Some(vec![]),
@@ -157,7 +203,7 @@ impl Default for DioxusConfig {
             },
             bundle: BundleConfig {
                 identifier: Some(format!("io.github.{name}")),
-                publisher: Some(name.into()),
+                publisher: Some(name),
                 ..Default::default()
             },
             plugin: toml::Value::Table(toml::map::Map::new()),
@@ -167,20 +213,44 @@ impl Default for DioxusConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApplicationConfig {
+    #[serde(default = "default_name")]
     pub name: String,
+    #[serde(default = "default_platform")]
     pub default_platform: Platform,
-    pub out_dir: Option<PathBuf>,
-    pub asset_dir: Option<PathBuf>,
+    #[serde(default = "out_dir_default")]
+    pub out_dir: PathBuf,
+    #[serde(default = "asset_dir_default")]
+    pub asset_dir: PathBuf,
 
-    pub tools: Option<HashMap<String, toml::Value>>,
+    #[serde(default)]
+    pub tools: HashMap<String, toml::Value>,
 
+    #[serde(default)]
     pub sub_package: Option<String>,
+}
+
+fn default_name() -> String {
+    "name".into()
+}
+
+fn default_platform() -> Platform {
+    Platform::Web
+}
+
+fn asset_dir_default() -> PathBuf {
+    PathBuf::from("public")
+}
+
+fn out_dir_default() -> PathBuf {
+    PathBuf::from("dist")
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WebConfig {
+    #[serde(default)]
     pub app: WebAppConfig,
-    pub proxy: Option<Vec<WebProxyConfig>>,
+    #[serde(default)]
+    pub proxy: Vec<WebProxyConfig>,
     pub watcher: WebWatcherConfig,
     pub resource: WebResourceConfig,
     #[serde(default)]
@@ -189,8 +259,22 @@ pub struct WebConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WebAppConfig {
-    pub title: Option<String>,
+    #[serde(default = "default_title")]
+    pub title: String,
     pub base_path: Option<String>,
+}
+
+impl Default for WebAppConfig {
+    fn default() -> Self {
+        Self {
+            title: default_title(),
+            base_path: None,
+        }
+    }
+}
+
+fn default_title() -> String {
+    "dioxus | ⛺".into()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -200,9 +284,16 @@ pub struct WebProxyConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WebWatcherConfig {
-    pub watch_path: Option<Vec<PathBuf>>,
-    pub reload_html: Option<bool>,
-    pub index_on_404: Option<bool>,
+    #[serde(default = "watch_path_default")]
+    pub watch_path: Vec<PathBuf>,
+    #[serde(default)]
+    pub reload_html: bool,
+    #[serde(default = "true_bool")]
+    pub index_on_404: bool,
+}
+
+fn watch_path_default() -> Vec<PathBuf> {
+    vec![PathBuf::from("src"), PathBuf::from("examples")]
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -214,8 +305,10 @@ pub struct WebResourceConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WebDevResourceConfig {
-    pub style: Option<Vec<PathBuf>>,
-    pub script: Option<Vec<PathBuf>>,
+    #[serde(default)]
+    pub style: Vec<PathBuf>,
+    #[serde(default)]
+    pub script: Vec<PathBuf>,
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
@@ -226,7 +319,7 @@ pub struct WebHttpsConfig {
     pub cert_path: Option<String>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CrateConfig {
     pub out_dir: PathBuf,
     pub crate_dir: PathBuf,
@@ -244,52 +337,7 @@ pub struct CrateConfig {
     pub features: Option<Vec<String>>,
 }
 
-#[derive(Debug)]
-pub enum CrateConfigError {
-    Cargo(CargoError),
-    Io(std::io::Error),
-    Toml(toml::de::Error),
-    LoadDioxusConfig(LoadDioxusConfigError),
-}
-
-impl From<CargoError> for CrateConfigError {
-    fn from(err: CargoError) -> Self {
-        Self::Cargo(err)
-    }
-}
-
-impl From<std::io::Error> for CrateConfigError {
-    fn from(err: std::io::Error) -> Self {
-        Self::Io(err)
-    }
-}
-
-impl From<toml::de::Error> for CrateConfigError {
-    fn from(err: toml::de::Error) -> Self {
-        Self::Toml(err)
-    }
-}
-
-impl From<LoadDioxusConfigError> for CrateConfigError {
-    fn from(err: LoadDioxusConfigError) -> Self {
-        Self::LoadDioxusConfig(err)
-    }
-}
-
-impl Display for CrateConfigError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Cargo(err) => write!(f, "{}", err),
-            Self::Io(err) => write!(f, "{}", err),
-            Self::Toml(err) => write!(f, "{}", err),
-            Self::LoadDioxusConfig(err) => write!(f, "{}", err),
-        }
-    }
-}
-
-impl std::error::Error for CrateConfigError {}
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ExecutableType {
     Binary(String),
     Lib(String),
@@ -300,7 +348,7 @@ impl CrateConfig {
     pub fn new(bin: Option<PathBuf>) -> Result<Self, CrateConfigError> {
         let dioxus_config = DioxusConfig::load(bin.clone())?.unwrap_or_default();
 
-        let crate_root = crate::cargo::crate_root()?;
+        let crate_root = crate_root()?;
 
         let crate_dir = if let Some(package) = &dioxus_config.application.sub_package {
             crate_root.join(package)
@@ -310,21 +358,15 @@ impl CrateConfig {
             crate_root
         };
 
-        let meta = crate::cargo::Metadata::get()?;
+        let meta = Metadata::get()?;
         let workspace_dir = meta.workspace_root;
         let target_dir = meta.target_directory;
 
-        let out_dir = match dioxus_config.application.out_dir {
-            Some(ref v) => crate_dir.join(v),
-            None => crate_dir.join("dist"),
-        };
+        let out_dir = crate_dir.join(&dioxus_config.application.out_dir);
 
         let cargo_def = &crate_dir.join("Cargo.toml");
 
-        let asset_dir = match dioxus_config.application.asset_dir {
-            Some(ref v) => crate_dir.join(v),
-            None => crate_dir.join("public"),
-        };
+        let asset_dir = crate_dir.join(&dioxus_config.application.asset_dir);
 
         let manifest = cargo_toml::Manifest::from_path(cargo_def).unwrap();
 
@@ -409,250 +451,6 @@ impl CrateConfig {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct BundleConfig {
-    pub identifier: Option<String>,
-    pub publisher: Option<String>,
-    pub icon: Option<Vec<String>>,
-    pub resources: Option<Vec<String>>,
-    pub copyright: Option<String>,
-    pub category: Option<String>,
-    pub short_description: Option<String>,
-    pub long_description: Option<String>,
-    pub external_bin: Option<Vec<String>>,
-    pub deb: Option<DebianSettings>,
-    pub macos: Option<MacOsSettings>,
-    pub windows: Option<WindowsSettings>,
-}
-
-impl From<BundleConfig> for tauri_bundler::BundleSettings {
-    fn from(val: BundleConfig) -> Self {
-        tauri_bundler::BundleSettings {
-            identifier: val.identifier,
-            publisher: val.publisher,
-            icon: val.icon,
-            resources: val.resources,
-            copyright: val.copyright,
-            category: val.category.and_then(|c| c.parse().ok()),
-            short_description: val.short_description,
-            long_description: val.long_description,
-            external_bin: val.external_bin,
-            deb: val.deb.map(Into::into).unwrap_or_default(),
-            macos: val.macos.map(Into::into).unwrap_or_default(),
-            windows: val.windows.map(Into::into).unwrap_or_default(),
-            ..Default::default()
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct DebianSettings {
-    pub depends: Option<Vec<String>>,
-    pub files: HashMap<PathBuf, PathBuf>,
-    pub nsis: Option<NsisSettings>,
-}
-
-impl From<DebianSettings> for tauri_bundler::DebianSettings {
-    fn from(val: DebianSettings) -> Self {
-        tauri_bundler::DebianSettings {
-            depends: val.depends,
-            files: val.files,
-            desktop_template: None,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct WixSettings {
-    pub language: Vec<(String, Option<PathBuf>)>,
-    pub template: Option<PathBuf>,
-    pub fragment_paths: Vec<PathBuf>,
-    pub component_group_refs: Vec<String>,
-    pub component_refs: Vec<String>,
-    pub feature_group_refs: Vec<String>,
-    pub feature_refs: Vec<String>,
-    pub merge_refs: Vec<String>,
-    pub skip_webview_install: bool,
-    pub license: Option<PathBuf>,
-    pub enable_elevated_update_task: bool,
-    pub banner_path: Option<PathBuf>,
-    pub dialog_image_path: Option<PathBuf>,
-    pub fips_compliant: bool,
-}
-
-impl From<WixSettings> for tauri_bundler::WixSettings {
-    fn from(val: WixSettings) -> Self {
-        tauri_bundler::WixSettings {
-            language: tauri_bundler::bundle::WixLanguage({
-                let mut languages: Vec<_> = val
-                    .language
-                    .iter()
-                    .map(|l| {
-                        (
-                            l.0.clone(),
-                            tauri_bundler::bundle::WixLanguageConfig {
-                                locale_path: l.1.clone(),
-                            },
-                        )
-                    })
-                    .collect();
-                if languages.is_empty() {
-                    languages.push(("en-US".into(), Default::default()));
-                }
-                languages
-            }),
-            template: val.template,
-            fragment_paths: val.fragment_paths,
-            component_group_refs: val.component_group_refs,
-            component_refs: val.component_refs,
-            feature_group_refs: val.feature_group_refs,
-            feature_refs: val.feature_refs,
-            merge_refs: val.merge_refs,
-            skip_webview_install: val.skip_webview_install,
-            license: val.license,
-            enable_elevated_update_task: val.enable_elevated_update_task,
-            banner_path: val.banner_path,
-            dialog_image_path: val.dialog_image_path,
-            fips_compliant: val.fips_compliant,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct MacOsSettings {
-    pub frameworks: Option<Vec<String>>,
-    pub minimum_system_version: Option<String>,
-    pub license: Option<String>,
-    pub exception_domain: Option<String>,
-    pub signing_identity: Option<String>,
-    pub provider_short_name: Option<String>,
-    pub entitlements: Option<String>,
-    pub info_plist_path: Option<PathBuf>,
-}
-
-impl From<MacOsSettings> for tauri_bundler::MacOsSettings {
-    fn from(val: MacOsSettings) -> Self {
-        tauri_bundler::MacOsSettings {
-            frameworks: val.frameworks,
-            minimum_system_version: val.minimum_system_version,
-            license: val.license,
-            exception_domain: val.exception_domain,
-            signing_identity: val.signing_identity,
-            provider_short_name: val.provider_short_name,
-            entitlements: val.entitlements,
-            info_plist_path: val.info_plist_path,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WindowsSettings {
-    pub digest_algorithm: Option<String>,
-    pub certificate_thumbprint: Option<String>,
-    pub timestamp_url: Option<String>,
-    pub tsp: bool,
-    pub wix: Option<WixSettings>,
-    pub icon_path: Option<PathBuf>,
-    pub webview_install_mode: WebviewInstallMode,
-    pub webview_fixed_runtime_path: Option<PathBuf>,
-    pub allow_downgrades: bool,
-    pub nsis: Option<NsisSettings>,
-}
-
-impl From<WindowsSettings> for tauri_bundler::WindowsSettings {
-    fn from(val: WindowsSettings) -> Self {
-        tauri_bundler::WindowsSettings {
-            digest_algorithm: val.digest_algorithm,
-            certificate_thumbprint: val.certificate_thumbprint,
-            timestamp_url: val.timestamp_url,
-            tsp: val.tsp,
-            wix: val.wix.map(Into::into),
-            icon_path: val.icon_path.unwrap_or("icons/icon.ico".into()),
-            webview_install_mode: val.webview_install_mode.into(),
-            webview_fixed_runtime_path: val.webview_fixed_runtime_path,
-            allow_downgrades: val.allow_downgrades,
-            nsis: val.nsis.map(Into::into),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct NsisSettings {
-    pub template: Option<PathBuf>,
-    pub license: Option<PathBuf>,
-    pub header_image: Option<PathBuf>,
-    pub sidebar_image: Option<PathBuf>,
-    pub installer_icon: Option<PathBuf>,
-    pub install_mode: NSISInstallerMode,
-    pub languages: Option<Vec<String>>,
-    pub custom_language_files: Option<HashMap<String, PathBuf>>,
-    pub display_language_selector: bool,
-}
-
-impl From<NsisSettings> for tauri_bundler::NsisSettings {
-    fn from(val: NsisSettings) -> Self {
-        tauri_bundler::NsisSettings {
-            license: val.license,
-            header_image: val.header_image,
-            sidebar_image: val.sidebar_image,
-            installer_icon: val.installer_icon,
-            install_mode: val.install_mode.into(),
-            languages: val.languages,
-            display_language_selector: val.display_language_selector,
-            custom_language_files: None,
-            template: None,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum NSISInstallerMode {
-    CurrentUser,
-    PerMachine,
-    Both,
-}
-
-impl From<NSISInstallerMode> for tauri_utils::config::NSISInstallerMode {
-    fn from(val: NSISInstallerMode) -> Self {
-        match val {
-            NSISInstallerMode::CurrentUser => tauri_utils::config::NSISInstallerMode::CurrentUser,
-            NSISInstallerMode::PerMachine => tauri_utils::config::NSISInstallerMode::PerMachine,
-            NSISInstallerMode::Both => tauri_utils::config::NSISInstallerMode::Both,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum WebviewInstallMode {
-    Skip,
-    DownloadBootstrapper { silent: bool },
-    EmbedBootstrapper { silent: bool },
-    OfflineInstaller { silent: bool },
-    FixedRuntime { path: PathBuf },
-}
-
-impl WebviewInstallMode {
-    fn into(self) -> tauri_utils::config::WebviewInstallMode {
-        match self {
-            Self::Skip => tauri_utils::config::WebviewInstallMode::Skip,
-            Self::DownloadBootstrapper { silent } => {
-                tauri_utils::config::WebviewInstallMode::DownloadBootstrapper { silent }
-            }
-            Self::EmbedBootstrapper { silent } => {
-                tauri_utils::config::WebviewInstallMode::EmbedBootstrapper { silent }
-            }
-            Self::OfflineInstaller { silent } => {
-                tauri_utils::config::WebviewInstallMode::OfflineInstaller { silent }
-            }
-            Self::FixedRuntime { path } => {
-                tauri_utils::config::WebviewInstallMode::FixedRuntime { path }
-            }
-        }
-    }
-}
-
-impl Default for WebviewInstallMode {
-    fn default() -> Self {
-        Self::OfflineInstaller { silent: false }
-    }
+fn true_bool() -> bool {
+    true
 }

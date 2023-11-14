@@ -14,7 +14,7 @@ pub struct Build {
 
 impl Build {
     pub fn build(self, bin: Option<PathBuf>) -> Result<()> {
-        let mut crate_config = crate::CrateConfig::new(bin)?;
+        let mut crate_config = dioxus_cli_config::CrateConfig::new(bin)?;
 
         // change the release state.
         crate_config.with_release(self.build.release);

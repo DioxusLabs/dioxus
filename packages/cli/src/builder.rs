@@ -1,11 +1,12 @@
 use crate::{
-    config::{CrateConfig, ExecutableType},
     error::{Error, Result},
     tools::Tool,
-    DioxusConfig,
 };
 use cargo_metadata::{diagnostic::Diagnostic, Message};
 use dioxus_cli_config::crate_root;
+use dioxus_cli_config::CrateConfig;
+use dioxus_cli_config::DioxusConfig;
+use dioxus_cli_config::ExecutableType;
 use indicatif::{ProgressBar, ProgressStyle};
 use serde::Serialize;
 use std::{
@@ -88,6 +89,8 @@ pub fn build(config: &CrateConfig, quiet: bool) -> Result<BuildResult> {
         ExecutableType::Lib(name) => cmd.arg("--lib").arg(name),
         ExecutableType::Example(name) => cmd.arg("--example").arg(name),
     };
+
+    let _ = dioxus_cli_config::__private::save_config(config);
 
     let warning_messages = prettier_build(cmd)?;
 
@@ -276,10 +279,12 @@ pub fn build_desktop(config: &CrateConfig, _is_serve: bool) -> Result<BuildResul
     }
 
     let cmd = match &config.executable {
-        crate::ExecutableType::Binary(name) => cmd.arg("--bin").arg(name),
-        crate::ExecutableType::Lib(name) => cmd.arg("--lib").arg(name),
-        crate::ExecutableType::Example(name) => cmd.arg("--example").arg(name),
+        ExecutableType::Binary(name) => cmd.arg("--bin").arg(name),
+        ExecutableType::Lib(name) => cmd.arg("--lib").arg(name),
+        ExecutableType::Example(name) => cmd.arg("--example").arg(name),
     };
+
+    let _ = dioxus_cli_config::__private::save_config(config);
 
     let warning_messages = prettier_build(cmd)?;
 
@@ -290,11 +295,11 @@ pub fn build_desktop(config: &CrateConfig, _is_serve: bool) -> Result<BuildResul
 
     let file_name: String;
     let mut res_path = match &config.executable {
-        crate::ExecutableType::Binary(name) | crate::ExecutableType::Lib(name) => {
+        ExecutableType::Binary(name) | ExecutableType::Lib(name) => {
             file_name = name.clone();
             config.target_dir.join(release_type).join(name)
         }
-        crate::ExecutableType::Example(name) => {
+        ExecutableType::Example(name) => {
             file_name = name.clone();
             config
                 .target_dir
@@ -444,8 +449,8 @@ pub fn gen_page(config: &DioxusConfig, serve: bool) -> String {
     let mut script_list = resources.script.unwrap_or_default();
 
     if serve {
-        let mut dev_style = resouces.dev.style.clone();
-        let mut dev_script = resouces.dev.script.clone();
+        let mut dev_style = resources.dev.style.clone();
+        let mut dev_script = resources.dev.script.clone();
         style_list.append(&mut dev_style);
         script_list.append(&mut dev_script);
     }

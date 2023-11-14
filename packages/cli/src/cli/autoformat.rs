@@ -88,7 +88,7 @@ impl Autoformat {
 ///
 /// Doesn't do mod-descending, so it will still try to format unreachable files. TODO.
 async fn autoformat_project(check: bool) -> Result<()> {
-    let crate_config = crate::CrateConfig::new(None)?;
+    let crate_config = dioxus_cli_config::CrateConfig::new(None)?;
 
     let mut files_to_format = vec![];
     collect_rs_files(&crate_config.crate_dir, &mut files_to_format);

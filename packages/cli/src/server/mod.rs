@@ -1,4 +1,5 @@
-use crate::{BuildResult, CrateConfig, Result};
+use crate::{BuildResult, Result};
+use dioxus_cli_config::CrateConfig;
 
 use cargo_metadata::diagnostic::Diagnostic;
 use dioxus_core::Template;

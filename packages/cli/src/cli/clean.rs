@@ -7,7 +7,7 @@ pub struct Clean {}
 
 impl Clean {
     pub fn clean(self, bin: Option<PathBuf>) -> Result<()> {
-        let crate_config = crate::CrateConfig::new(bin)?;
+        let crate_config = dioxus_cli_config::CrateConfig::new(bin)?;
 
         let output = Command::new("cargo")
             .arg("clean")

@@ -9,90 +9,17 @@ license = "MIT OR Apache-2.0"
 keywords = ["react", "gui", "cli", "dioxus", "wasm"]
 
 [dependencies]
-# cli core
 clap = { version = "4.2", features = ["derive"] }
-thiserror = { workspace = true }
-wasm-bindgen-cli-support = "0.2"
-colored = "2.0.0"
-
-# features
-log = "0.4.14"
-fern = { version = "0.6.0", features = ["colored"] }
 serde = { version = "1.0.136", features = ["derive"] }
 serde_json = "1.0.79"
 toml = "0.5.8"
-fs_extra = "1.2.0"
 cargo_toml = "0.16.0"
-futures = "0.3.21"
-notify = { version = "5.0.0-pre.16", features = ["serde"] }
-html_parser  = { workspace = true }
-cargo_metadata = "0.15.0"
-tokio = { version = "1.16.1", features = ["fs", "sync", "rt", "macros"] }
-atty = "0.2.14"
-chrono = "0.4.19"
-anyhow = "1.0.53"
-hyper = "0.14.17"
-hyper-rustls = "0.23.2"
-indicatif = "0.17.5"
-subprocess = "0.2.9"
-
-axum = { version = "0.5.1", features = ["ws", "headers"] }
-axum-server = { version = "0.5.1", features = ["tls-rustls"] }
-tower-http = { version = "0.2.2", features = ["full"] }
-headers = "0.3.7"
-
-walkdir = "2"
-
-# tools download
-dirs = "4.0.0"
-reqwest = { version = "0.11", features = [
-    "rustls-tls",
-    "stream",
-    "trust-dns",
-    "blocking",
-] }
-flate2 = "1.0.22"
-tar = "0.4.38"
-zip = "0.6.2"
-tower = "0.4.12"
-syn = { version = "2.0", features = ["full", "extra-traits"] }
-lazy_static = "1.4.0"
-
-# plugin packages
-mlua = { version = "0.8.1", features = [
-    "lua54",
-    "vendored",
-    "async",
-    "send",
-    "macros",
-], optional = true }
-ctrlc = "3.2.3"
-open = "4.1.0"
-cargo-generate = "0.18"
-toml_edit = "0.19.11"
 
 # bundling
-tauri-bundler = { version = "=1.3.0", features = ["native-tls-vendored"] }
-tauri-utils = "=1.4.*"
-
-dioxus-autofmt = { workspace = true }
-dioxus-check = { workspace = true }
-rsx-rosetta = { workspace = true }
-dioxus-rsx = { workspace = true }
-dioxus-html = { workspace = true, features = ["hot-reload-context"] }
-dioxus-core = { workspace = true, features = ["serialize"] }
-dioxus-hot-reload = { workspace = true }
-interprocess-docfix = { version = "1.2.2" }
+tauri-bundler = { version = "=1.3.0", features = ["native-tls-vendored"], optional = true  }
+tauri-utils = { version = "=1.4.*", optional = true }
+once_cell = "1.18.0"
 
 [features]
 default = []
-plugin = ["mlua"]
-
-[dev-dependencies]
-tempfile = "3.3"
-
-[package.metadata.binstall]
-pkg-url = "{ repo }/releases/download/v{ version }/dx-{ target }{ archive-suffix }"
-
-[package.metadata.binstall.overrides.x86_64-pc-windows-msvc]
-pkg-fmt = "zip"
+cli = ["tauri-bundler", "tauri-utils"]

@@ -50,7 +50,10 @@ impl Config {
                 log::info!("🚩 Init config file completed.");
             }
             Config::FormatPrint {} => {
-                println!("{:#?}", crate::CrateConfig::new(None)?.dioxus_config);
+                println!(
+                    "{:#?}",
+                    dioxus_cli_config::CrateConfig::new(None)?.dioxus_config
+                );
             }
             Config::CustomHtml {} => {
                 let html_path = crate_root.join("index.html");

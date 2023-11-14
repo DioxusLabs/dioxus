@@ -13,7 +13,7 @@ pub struct Serve {
 
 impl Serve {
     pub async fn serve(self, bin: Option<PathBuf>) -> Result<()> {
-        let mut crate_config = crate::CrateConfig::new(bin)?;
+        let mut crate_config = dioxus_cli_config::CrateConfig::new(bin)?;
 
         // change the relase state.
         crate_config.with_hot_reload(self.serve.hot_reload);

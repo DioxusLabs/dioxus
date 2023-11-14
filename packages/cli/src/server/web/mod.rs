@@ -5,7 +5,7 @@ use crate::{
         output::{print_console_info, PrettierOptions, WebServerInfo},
         setup_file_watcher, HotReloadState,
     },
-    BuildResult, CrateConfig, Result, WebHttpsConfig,
+    BuildResult, Result,
 };
 use axum::{
     body::{Full, HttpBody},
@@ -19,6 +19,8 @@ use axum::{
     Router,
 };
 use axum_server::tls_rustls::RustlsConfig;
+use dioxus_cli_config::CrateConfig;
+use dioxus_cli_config::WebHttpsConfig;
 
 use dioxus_html::HtmlCtx;
 use dioxus_rsx::hot_reload::*;

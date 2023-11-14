@@ -1,7 +1,7 @@
 use crate::server::Diagnostic;
-use crate::CrateConfig;
 use colored::Colorize;
 use dioxus_cli_config::crate_root;
+use dioxus_cli_config::CrateConfig;
 use std::path::PathBuf;
 use std::process::Command;
 

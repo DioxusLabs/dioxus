@@ -3,8 +3,10 @@ use crate::{
         output::{print_console_info, PrettierOptions},
         setup_file_watcher,
     },
-    BuildResult, CrateConfig, Result,
+    BuildResult, Result,
 };
+use dioxus_cli_config::CrateConfig;
+use dioxus_cli_config::ExecutableType;
 
 use dioxus_hot_reload::HotReloadMsg;
 use dioxus_html::HtmlCtx;
@@ -215,9 +217,9 @@ pub fn start_desktop(config: &CrateConfig) -> Result<(Child, BuildResult)> {
     let result = crate::builder::build_desktop(config, true)?;
 
     match &config.executable {
-        crate::ExecutableType::Binary(name)
-        | crate::ExecutableType::Lib(name)
-        | crate::ExecutableType::Example(name) => {
+        ExecutableType::Binary(name)
+        | ExecutableType::Lib(name)
+        | ExecutableType::Example(name) => {
             let mut file = config.out_dir.join(name);
             if cfg!(windows) {
                 file.set_extension("exe");

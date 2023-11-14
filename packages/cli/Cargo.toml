@@ -14,7 +14,7 @@ clap = { version = "4.2", features = ["derive"] }
 thiserror = { workspace = true }
 wasm-bindgen-cli-support = "0.2"
 colored = "2.0.0"
-dioxus-cli-config = { workspace = true }
+dioxus-cli-config = { workspace = true, features = ["cli"] }
 
 # features
 log = "0.4.14"
