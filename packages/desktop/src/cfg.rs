@@ -49,7 +49,12 @@ impl Config {
     /// Initializes a new `WindowBuilder` with default values.
     #[inline]
     pub fn new() -> Self {
-        let window = WindowBuilder::new().with_title("Dioxus app");
+        let window = WindowBuilder::new().with_title(
+            dioxus_cli_config::CURRENT_CONFIG
+                .as_ref()
+                .map(|c| c.dioxus_config.application.name.clone())
+                .unwrap_or("Dioxus App".to_string()),
+        );
 
         Self {
             // event_handler: None,
