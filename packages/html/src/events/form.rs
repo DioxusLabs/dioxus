@@ -5,9 +5,10 @@ use serde::{Deserialize, Serialize};
 
 pub type FormEvent = Event<FormData>;
 
+/// A form value that may either be a list of values or a single value
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(untagged)] // this will serialize Text(String) -> String and VecText(Vec<String>) to Vec<String>
-pub enum ValueType {
+pub enum FormValue {
     Text(String),
     VecText(Vec<String>),
 }
@@ -18,7 +19,7 @@ pub enum ValueType {
 pub struct FormData {
     pub value: String,
 
-    pub values: HashMap<String, ValueType>,
+    pub values: HashMap<String, FormValue>,
 
     #[cfg_attr(
         feature = "serialize",
@@ -40,6 +41,7 @@ where
 }
 
 impl FormData {
+    /// Parse the values into a struct with one field per value
     pub fn parsed_values<T>(&self) -> Result<T, serde_json::Error>
     where
         T: serde::de::DeserializeOwned,
