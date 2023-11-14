@@ -10,7 +10,7 @@
 use dioxus_core::{
     BorrowedAttributeValue, ElementId, Mutation, Template, TemplateAttribute, TemplateNode,
 };
-use dioxus_html::{event_bubbles, CompositionData, FormData, MountedData, ValueType};
+use dioxus_html::{event_bubbles, CompositionData, FormData, MountedData, FormValue};
 use dioxus_interpreter_js::{get_node, minimal_bindings, save_template, Channel};
 use futures_channel::mpsc;
 use js_sys::Array;
@@ -377,9 +377,9 @@ fn read_input_to_data(target: Element) -> Rc<FormData> {
                         let item_values: Vec<String> =
                             item_values.iter().filter_map(|v| v.as_string()).collect();
 
-                        values.insert(name, ValueType::VecText(item_values));
+                        values.insert(name, FormValue::VecText(item_values));
                     } else if let Ok(item_value) = array.get(1).dyn_into::<JsValue>() {
-                        values.insert(name, ValueType::Text(item_value.as_string().unwrap()));
+                        values.insert(name, FormValue::Text(item_value.as_string().unwrap()));
                     }
                 }
             }

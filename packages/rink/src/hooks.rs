@@ -13,7 +13,7 @@ use dioxus_html::geometry::{
 use dioxus_html::input_data::keyboard_types::{Code, Key, Location, Modifiers};
 use dioxus_html::input_data::MouseButtonSet as DioxusMouseButtons;
 use dioxus_html::input_data::{MouseButton as DioxusMouseButton, MouseButtonSet};
-use dioxus_html::{event_bubbles, FocusData, KeyboardData, MouseData, ValueType, WheelData};
+use dioxus_html::{event_bubbles, FocusData, KeyboardData, MouseData, FormValue, WheelData};
 use std::any::Any;
 use std::collections::HashMap;
 use std::{
@@ -61,7 +61,7 @@ impl EventData {
 pub struct FormData {
     pub value: String,
 
-    pub values: HashMap<String, ValueType>,
+    pub values: HashMap<String, FormValue>,
 
     pub files: Option<Files>,
 }
