@@ -10,30 +10,31 @@ use dioxus_cli::plugin::PluginManager;
 use Commands::*;
 
 fn get_bin(bin: Option<String>) -> Result<Option<PathBuf>> {
-    const ERR_MESSAGE: &str = "The `--bin` flag has to be ran in a Cargo workspace.";
+    const ERR_MSG_NOT_A_WORKSPACE: &str = "The `--bin` flag has to be ran in a Cargo workspace.";
+    const ERR_MSG_BAD_WORKSPACE_MEMBER: &str = "Could not read workspace member's manifest.";
 
     if let Some(ref bin) = bin {
         let manifest = cargo_toml::Manifest::from_path("./Cargo.toml")
-            .map_err(|_| Error::CargoError(ERR_MESSAGE.to_string()))?;
+            .map_err(|_| Error::CargoError(ERR_MSG_NOT_A_WORKSPACE.to_string()))?;
 
         if let Some(workspace) = manifest.workspace {
-            for item in workspace.members.iter() {
-                let path = PathBuf::from(item);
+            for member_spec in workspace.members.iter() {
+                for member_dir in glob::glob(member_spec).map_err(anyhow::Error::from)? {
+                    let member_dir = member_dir.map_err(anyhow::Error::from)?;
+                    let member_manifest_file = member_dir.join("Cargo.toml");
 
-                if !path.exists() {
-                    continue;
-                }
+                    let member_manifest = cargo_toml::Manifest::from_path(member_manifest_file)
+                        .map_err(|_| Error::CargoError(ERR_MSG_BAD_WORKSPACE_MEMBER.to_string()))?;
 
-                if !path.is_dir() {
-                    continue;
-                }
-
-                if path.ends_with(bin.clone()) {
-                    return Ok(Some(path));
+                    if let Some(package) = member_manifest.package.as_ref() {
+                        if package.name() == bin {
+                            return Ok(Some(member_dir));
+                        }
+                    }
                 }
             }
         } else {
-            return Err(Error::CargoError(ERR_MESSAGE.to_string()));
+            return Err(Error::CargoError(ERR_MSG_NOT_A_WORKSPACE.to_string()));
         }
     }
 
