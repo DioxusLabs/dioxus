@@ -313,10 +313,7 @@ async fn setup_router(
     router = if let Some(base_path) = config.dioxus_config.web.app.base_path.clone() {
         let base_path = format!("/{}", base_path.trim_matches('/'));
         Router::new()
-            .nest(
-                &base_path,
-                axum::routing::any_service(router),
-            )
+            .nest(&base_path, axum::routing::any_service(router))
             .fallback(get(move || {
                 let base_path = base_path.clone();
                 async move { format!("Outside of the base path: {}", base_path) }
