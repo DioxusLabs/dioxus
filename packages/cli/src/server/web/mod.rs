@@ -310,6 +310,21 @@ async fn setup_router(
         },
     ));
 
+    router = if let Some(base_path) = config.dioxus_config.web.app.base_path.clone() {
+        let base_path = format!("/{}", base_path.trim_matches('/'));
+        Router::new()
+            .nest_service(
+                &base_path,
+                axum::routing::method_routing::any_service(router),
+            )
+            .fallback(get(move || {
+                let base_path = base_path.clone();
+                async move { format!("Outside of the base path: {}", base_path) }
+            }))
+    } else {
+        router
+    };
+
     // Setup routes
     router = router
         .route("/_dioxus/hot_reload", get(hot_reload_handler))

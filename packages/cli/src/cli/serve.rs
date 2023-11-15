@@ -33,9 +33,6 @@ impl Serve {
             crate_config.set_features(self.serve.features.unwrap());
         }
 
-        // Subdirectories don't work with the server
-        crate_config.dioxus_config.web.app.base_path = None;
-
         let platform = self
             .serve
             .platform

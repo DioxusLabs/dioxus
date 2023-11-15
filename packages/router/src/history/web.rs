@@ -15,14 +15,13 @@ use super::{
 
 #[allow(dead_code)]
 fn base_path() -> Option<&'static str> {
-    dioxus_cli_config::CURRENT_CONFIG.as_ref().ok().and_then(|c| {
-          c.dioxus_config
-              .web
-              .app
-              .base_path
-              .as_deref()
-      })
-  }
+    let base_path = dioxus_cli_config::CURRENT_CONFIG
+        .as_ref()
+        .ok()
+        .and_then(|c| c.dioxus_config.web.app.base_path.as_deref());
+    tracing::trace!("Using base_path from Dioxus.toml: {:?}", base_path);
+    base_path
+}
 
 #[cfg(not(feature = "serde"))]
 #[allow(clippy::extra_unused_type_parameters)]
@@ -171,12 +170,16 @@ impl<R: Routable> WebHistory<R> {
                 .expect("`history` can set scroll restoration");
         }
 
+        let prefix = prefix
+            .or_else(|| base_path().map(|s| s.to_string()))
+            .map(|prefix| format!("/{}", prefix.trim_matches('/')));
+
         Self {
             do_scroll_restoration,
             history,
             listener_navigation: None,
             listener_animation_frame: Default::default(),
-            prefix: prefix.or_else(||base_path().map(|s| s.to_string())),
+            prefix,
             window,
             phantom: Default::default(),
         }
