@@ -35,7 +35,10 @@ pub fn copy_assets() {
         if has_assets {
             println!("Copying and optimizing assets...");
             manifest.copy_static_assets_to(&asset_location).unwrap();
-            println!("Copied assets to {}", asset_location.display());
+            println!(
+                "Copied assets to {}",
+                asset_location.canonicalize().unwrap().display()
+            );
         } else {
             println!("No assets found");
         }

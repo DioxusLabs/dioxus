@@ -126,8 +126,7 @@ async fn setup_file_watcher<F: Fn() -> Result<BuildResult> + Send + 'static>(
             .watch(
                 &config.crate_dir.join(sub_path),
                 notify::RecursiveMode::Recursive,
-            )
-            .unwrap();
+            );
     }
     Ok(watcher)
 }

@@ -39,4 +39,6 @@ pub mod prelude {
 
     #[cfg(all(not(target_arch = "wasm32"), feature = "hot-reload"))]
     pub use dioxus_hot_reload::{self, hot_reload_init};
+
+    pub use manganis::{self, classes, file as asset, font, image};
 }
