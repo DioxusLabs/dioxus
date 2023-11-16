@@ -38,7 +38,7 @@ pub fn copy_assets() {
             manifest.copy_static_assets_to(&asset_location).unwrap();
             println!(
                 "Copied assets to {}",
-                asset_location.display().canonicalize().unwrap()
+                asset_location.canonicalize().unwrap().display()
             );
         } else {
             println!("No assets found");
