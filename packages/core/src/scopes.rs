@@ -8,7 +8,8 @@ use crate::{
     nodes::{IntoAttributeValue, IntoDynNode, RenderReturn},
     runtime::Runtime,
     scope_context::ScopeContext,
-    AnyValue, Attribute, AttributeValue, Element, Event, Properties, TaskId,
+    AnyValue, Attribute, AttributeType, AttributeValue, Element, Event, MountedAttribute,
+    Properties, TaskId,
 };
 use bumpalo::{boxed::Box as BumpBox, Bump};
 use std::{
@@ -350,14 +351,10 @@ impl<'src> ScopeState {
 
         let mut listeners = self.attributes_to_drop.borrow_mut();
         for attr in element.dynamic_attrs {
-            match attr.value {
-                AttributeValue::Any(_) | AttributeValue::Listener(_) => {
-                    let unbounded = unsafe { std::mem::transmute(attr as *const Attribute) };
-                    listeners.push(unbounded);
-                }
-
-                _ => (),
-            }
+            attr.ty.for_each(|attr| {
+                let unbounded = unsafe { std::mem::transmute(attr as *const Attribute) };
+                listeners.push(unbounded);
+            })
         }
 
         let mut props = self.borrowed_props.borrow_mut();
@@ -408,13 +405,15 @@ impl<'src> ScopeState {
         value: impl IntoAttributeValue<'src>,
         namespace: Option<&'static str>,
         volatile: bool,
-    ) -> Attribute<'src> {
-        Attribute {
-            name,
-            namespace,
-            volatile,
+    ) -> MountedAttribute<'src> {
+        MountedAttribute {
+            ty: AttributeType::Single(Attribute {
+                name,
+                namespace,
+                volatile,
+                value: value.into_value(self.bump()),
+            }),
             mounted_element: Default::default(),
-            value: value.into_value(self.bump()),
         }
     }
 
@@ -440,7 +439,7 @@ impl<'src> ScopeState {
     ) -> DynamicNode<'src>
     where
         // The properties must be valid until the next bump frame
-        P: Properties + 'src,
+        P: Properties<'src> + 'src,
         // The current bump allocator frame must outlive the child's borrowed props
         'src: 'child,
     {

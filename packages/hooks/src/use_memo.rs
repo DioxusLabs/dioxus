@@ -28,6 +28,7 @@ use crate::UseFutureDep;
 ///     render!(Calculator { number: 0 })
 /// }
 /// ```
+#[must_use = "Consider using `use_effect` to run rerun a callback when dependencies change"]
 pub fn use_memo<T, D>(cx: &ScopeState, dependencies: D, callback: impl FnOnce(D::Out) -> T) -> &T
 where
     T: 'static,

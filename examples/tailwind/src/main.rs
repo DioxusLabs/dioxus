@@ -14,9 +14,13 @@ fn main() {
 }
 
 pub fn app(cx: Scope) -> Element {
+    let grey_background = true;
     cx.render(rsx!(
         div {
-            header { class: "text-gray-400 bg-gray-900 body-font",
+            header {
+                class: "text-gray-400 body-font",
+                // you can use optional attributes to optionally apply a tailwind class
+                class: if grey_background { "bg-gray-900" },
                 div { class: "container mx-auto flex flex-wrap p-5 flex-col md:flex-row items-center",
                     a { class: "flex title-font font-medium items-center text-white mb-4 md:mb-0",
                         StacksIcon {}

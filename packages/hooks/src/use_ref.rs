@@ -110,6 +110,7 @@ use std::{
 ///     }
 /// })
 /// ```
+#[must_use]
 pub fn use_ref<T: 'static>(cx: &ScopeState, initialize_refcell: impl FnOnce() -> T) -> &UseRef<T> {
     let hook = cx.use_hook(|| UseRef {
         update: cx.schedule_update(),

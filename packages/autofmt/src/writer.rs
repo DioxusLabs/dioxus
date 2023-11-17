@@ -1,4 +1,4 @@
-use dioxus_rsx::{BodyNode, ElementAttr, ElementAttrNamed, ForLoop};
+use dioxus_rsx::{AttributeType, BodyNode, ElementAttrValue, ForLoop};
 use proc_macro2::{LineColumn, Span};
 use quote::ToTokens;
 use std::{
@@ -132,12 +132,45 @@ impl<'a> Writer<'a> {
         Ok(())
     }
 
-    pub(crate) fn is_short_attrs(&mut self, attributes: &[ElementAttrNamed]) -> usize {
+    pub(crate) fn attr_value_len(&mut self, value: &ElementAttrValue) -> usize {
+        match value {
+            ElementAttrValue::AttrOptionalExpr { condition, value } => {
+                let condition_len = self.retrieve_formatted_expr(condition).len();
+                let value_len = self.attr_value_len(value);
+
+                condition_len + value_len + 6
+            }
+            ElementAttrValue::AttrLiteral(lit) => ifmt_to_string(lit).len(),
+            ElementAttrValue::AttrExpr(expr) => expr.span().line_length(),
+            ElementAttrValue::EventTokens(tokens) => {
+                let location = Location::new(tokens.span().start());
+
+                let len = if let std::collections::hash_map::Entry::Vacant(e) =
+                    self.cached_formats.entry(location)
+                {
+                    let formatted = prettyplease::unparse_expr(tokens);
+                    let len = if formatted.contains('\n') {
+                        10000
+                    } else {
+                        formatted.len()
+                    };
+                    e.insert(formatted);
+                    len
+                } else {
+                    self.cached_formats[&location].len()
+                };
+
+                len
+            }
+        }
+    }
+
+    pub(crate) fn is_short_attrs(&mut self, attributes: &[AttributeType]) -> usize {
         let mut total = 0;
 
         for attr in attributes {
-            if self.current_span_is_primary(attr.attr.start()) {
-                'line: for line in self.src[..attr.attr.start().start().line - 1].iter().rev() {
+            if self.current_span_is_primary(attr.start()) {
+                'line: for line in self.src[..attr.start().start().line - 1].iter().rev() {
                     match (line.trim().starts_with("//"), line.is_empty()) {
                         (true, _) => return 100000,
                         (_, true) => continue 'line,
@@ -146,40 +179,25 @@ impl<'a> Writer<'a> {
                 }
             }
 
-            total += match &attr.attr {
-                ElementAttr::AttrText { value, name } => {
-                    ifmt_to_string(value).len() + name.span().line_length() + 6
-                }
-                ElementAttr::AttrExpression { name, value } => {
-                    value.span().line_length() + name.span().line_length() + 6
-                }
-                ElementAttr::CustomAttrText { value, name } => {
-                    ifmt_to_string(value).len() + name.to_token_stream().to_string().len() + 6
-                }
-                ElementAttr::CustomAttrExpression { name, value } => {
-                    name.to_token_stream().to_string().len() + value.span().line_length() + 6
-                }
-                ElementAttr::EventTokens { tokens, name } => {
-                    let location = Location::new(tokens.span().start());
-
-                    let len = if let std::collections::hash_map::Entry::Vacant(e) =
-                        self.cached_formats.entry(location)
-                    {
-                        let formatted = prettyplease::unparse_expr(tokens);
-                        let len = if formatted.contains('\n') {
-                            10000
-                        } else {
-                            formatted.len()
-                        };
-                        e.insert(formatted);
-                        len
-                    } else {
-                        self.cached_formats[&location].len()
+            match attr {
+                AttributeType::Named(attr) => {
+                    let name_len = match &attr.attr.name {
+                        dioxus_rsx::ElementAttrName::BuiltIn(name) => {
+                            let name = name.to_string();
+                            name.len()
+                        }
+                        dioxus_rsx::ElementAttrName::Custom(name) => name.value().len() + 2,
                     };
-
-                    len + name.span().line_length() + 6
+                    total += name_len;
+                    total += self.attr_value_len(&attr.attr.value);
+                }
+                AttributeType::Spread(expr) => {
+                    let expr_len = self.retrieve_formatted_expr(expr).len();
+                    total += expr_len + 3;
                 }
             };
+
+            total += 6;
         }
 
         total
@@ -218,7 +236,7 @@ impl<'a> Writer<'a> {
     }
 }
 
-trait SpanLength {
+pub(crate) trait SpanLength {
     fn line_length(&self) -> usize;
 }
 impl SpanLength for Span {

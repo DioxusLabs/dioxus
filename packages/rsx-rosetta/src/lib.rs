@@ -4,7 +4,8 @@
 
 use convert_case::{Case, Casing};
 use dioxus_rsx::{
-    BodyNode, CallBody, Component, Element, ElementAttr, ElementAttrNamed, ElementName, IfmtInput,
+    AttributeType, BodyNode, CallBody, Component, Element, ElementAttr, ElementAttrNamed,
+    ElementName, IfmtInput,
 };
 pub use html_parser::{Dom, Node};
 use proc_macro2::{Ident, Span};
@@ -38,35 +39,43 @@ pub fn rsx_node_from_html(node: &Node) -> Option<BodyNode> {
                         Ident::new(new_name.as_str(), Span::call_site())
                     };
 
-                    ElementAttrNamed {
+                    AttributeType::Named(ElementAttrNamed {
                         el_name: el_name.clone(),
-                        attr: ElementAttr::AttrText {
-                            value: ifmt_from_text(value.as_deref().unwrap_or("false")),
-                            name: ident,
+                        attr: ElementAttr {
+                            value: dioxus_rsx::ElementAttrValue::AttrLiteral(ifmt_from_text(
+                                value.as_deref().unwrap_or("false"),
+                            )),
+                            name: dioxus_rsx::ElementAttrName::BuiltIn(ident),
                         },
-                    }
+                    })
                 })
                 .collect();
 
             let class = el.classes.join(" ");
             if !class.is_empty() {
-                attributes.push(ElementAttrNamed {
+                attributes.push(AttributeType::Named(ElementAttrNamed {
                     el_name: el_name.clone(),
-                    attr: ElementAttr::AttrText {
-                        name: Ident::new("class", Span::call_site()),
-                        value: ifmt_from_text(&class),
+                    attr: ElementAttr {
+                        name: dioxus_rsx::ElementAttrName::BuiltIn(Ident::new(
+                            "class",
+                            Span::call_site(),
+                        )),
+                        value: dioxus_rsx::ElementAttrValue::AttrLiteral(ifmt_from_text(&class)),
                     },
-                });
+                }));
             }
 
             if let Some(id) = &el.id {
-                attributes.push(ElementAttrNamed {
+                attributes.push(AttributeType::Named(ElementAttrNamed {
                     el_name: el_name.clone(),
-                    attr: ElementAttr::AttrText {
-                        name: Ident::new("id", Span::call_site()),
-                        value: ifmt_from_text(id),
+                    attr: ElementAttr {
+                        name: dioxus_rsx::ElementAttrName::BuiltIn(Ident::new(
+                            "id",
+                            Span::call_site(),
+                        )),
+                        value: dioxus_rsx::ElementAttrValue::AttrLiteral(ifmt_from_text(id)),
                     },
-                });
+                }));
             }
 
             let children = el.children.iter().filter_map(rsx_node_from_html).collect();
@@ -75,6 +84,7 @@ pub fn rsx_node_from_html(node: &Node) -> Option<BodyNode> {
                 name: el_name,
                 children,
                 attributes,
+                merged_attributes: Default::default(),
                 key: None,
                 brace: Default::default(),
             }))

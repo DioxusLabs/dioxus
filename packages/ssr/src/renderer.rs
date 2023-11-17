@@ -81,18 +81,21 @@ impl Renderer {
             match segment {
                 Segment::Attr(idx) => {
                     let attr = &template.dynamic_attrs[*idx];
-                    if attr.name == "dangerous_inner_html" {
-                        inner_html = Some(attr);
-                    } else if attr.namespace == Some("style") {
-                        accumulated_dynamic_styles.push(attr);
-                    } else if BOOL_ATTRS.contains(&attr.name) {
-                        if truthy(&attr.value) {
-                            write!(buf, " {}=", attr.name)?;
-                            write_value(buf, &attr.value)?;
+                    attr.attribute_type().try_for_each(|attr| {
+                        if attr.name == "dangerous_inner_html" {
+                            inner_html = Some(attr);
+                        } else if attr.namespace == Some("style") {
+                            accumulated_dynamic_styles.push(attr);
+                        } else if BOOL_ATTRS.contains(&attr.name) {
+                            if truthy(&attr.value) {
+                                write_attribute(buf, attr)?;
+                            }
+                        } else {
+                            write_attribute(buf, attr)?;
                         }
-                    } else {
-                        write_attribute(buf, attr)?;
-                    }
+
+                        Ok(())
+                    })?;
                 }
                 Segment::Node(idx) => match &template.dynamic_nodes[*idx] {
                     DynamicNode::Component(node) => {
@@ -213,7 +216,7 @@ fn to_string_works() {
             assert_eq!(
                 item.1.segments,
                 vec![
-                    PreRendered("<div class=\"asdasdasd\" class=\"asdasdasd\"".into(),),
+                    PreRendered("<div class=\"asdasdasd asdasdasd\"".into(),),
                     Attr(0,),
                     StyleMarker {
                         inside_style_tag: false,
@@ -235,7 +238,7 @@ fn to_string_works() {
 
     use Segment::*;
 
-    assert_eq!(out, "<div class=\"asdasdasd\" class=\"asdasdasd\" id=\"id-123\">Hello world 1 --&gt;123&lt;-- Hello world 2<div>nest 1</div><div></div><div>nest 2</div>&lt;/diiiiiiiiv&gt;<div>finalize 0</div><div>finalize 1</div><div>finalize 2</div><div>finalize 3</div><div>finalize 4</div></div>");
+    assert_eq!(out, "<div class=\"asdasdasd asdasdasd\" id=\"id-123\">Hello world 1 --&gt;123&lt;-- Hello world 2<div>nest 1</div><div></div><div>nest 2</div>&lt;/diiiiiiiiv&gt;<div>finalize 0</div><div>finalize 1</div><div>finalize 2</div><div>finalize 3</div><div>finalize 4</div></div>");
 }
 
 pub(crate) const BOOL_ATTRS: &[&str] = &[
@@ -289,16 +292,6 @@ pub(crate) fn write_attribute(buf: &mut impl Write, attr: &Attribute) -> std::fm
         AttributeValue::Bool(value) => write!(buf, " {name}={value}"),
         AttributeValue::Int(value) => write!(buf, " {name}={value}"),
         AttributeValue::Float(value) => write!(buf, " {name}={value}"),
-        _ => Ok(()),
-    }
-}
-
-pub(crate) fn write_value(buf: &mut impl Write, value: &AttributeValue) -> std::fmt::Result {
-    match value {
-        AttributeValue::Text(value) => write!(buf, "\"{}\"", value),
-        AttributeValue::Bool(value) => write!(buf, "{}", value),
-        AttributeValue::Int(value) => write!(buf, "{}", value),
-        AttributeValue::Float(value) => write!(buf, "{}", value),
         _ => Ok(()),
     }
 }

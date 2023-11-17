@@ -15,6 +15,7 @@ use serde::{de::DeserializeOwned, Serialize};
 ///    let state1 = use_state(cx, || from_server(|| {
 ///       1234
 ///    }));
+///    todo!()
 /// }
 /// ```
 pub fn server_cached<O: 'static + Serialize + DeserializeOwned>(server_fn: impl Fn() -> O) -> O {
