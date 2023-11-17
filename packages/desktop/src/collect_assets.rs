@@ -34,7 +34,10 @@ pub fn copy_assets() {
 
         if has_assets {
             println!("Copying and optimizing assets...");
-            manifest.copy_static_assets_to(&asset_location).unwrap();
+            if let Err(err) = manifest.copy_static_assets_to(&asset_location) {
+                println!("Error copying assets: {}", err);
+                return;
+            }
             println!(
                 "Copied assets to {}",
                 asset_location.canonicalize().unwrap().display()
