@@ -23,7 +23,7 @@ use crate::{innerlude::VNode, ScopeState};
 ///
 ///
 /// ```rust, ignore
-/// LazyNodes::new(|f| f.element("div", [], [], [] None))
+/// LazyNodes::new(|f| f.render(rsx!(div {})).unwrap())
 /// ```
 pub struct LazyNodes<'a, 'b> {
     #[cfg(not(miri))]
