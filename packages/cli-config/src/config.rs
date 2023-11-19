@@ -181,11 +181,7 @@ impl Default for DioxusConfig {
                     base_path: None,
                 },
                 proxy: vec![],
-                watcher: WebWatcherConfig {
-                    watch_path: watch_path_default(),
-                    reload_html: false,
-                    index_on_404: true,
-                },
+                watcher: Default::default(),
                 resource: WebResourceConfig {
                     dev: WebDevResourceConfig {
                         style: vec![],
@@ -251,7 +247,9 @@ pub struct WebConfig {
     pub app: WebAppConfig,
     #[serde(default)]
     pub proxy: Vec<WebProxyConfig>,
+    #[serde(default)]
     pub watcher: WebWatcherConfig,
+    #[serde(default)]
     pub resource: WebResourceConfig,
     #[serde(default)]
     pub https: WebHttpsConfig,
@@ -292,18 +290,28 @@ pub struct WebWatcherConfig {
     pub index_on_404: bool,
 }
 
+impl Default for WebWatcherConfig {
+    fn default() -> Self {
+        Self {
+            watch_path: watch_path_default(),
+            reload_html: false,
+            index_on_404: true,
+        }
+    }
+}
+
 fn watch_path_default() -> Vec<PathBuf> {
     vec![PathBuf::from("src"), PathBuf::from("examples")]
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct WebResourceConfig {
     pub dev: WebDevResourceConfig,
     pub style: Option<Vec<PathBuf>>,
     pub script: Option<Vec<PathBuf>>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct WebDevResourceConfig {
     #[serde(default)]
     pub style: Vec<PathBuf>,
