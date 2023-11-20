@@ -73,6 +73,7 @@ pub async fn serve(config: CrateConfig, hot_reload_state: Option<HotReloadState>
 
             move || {
                 let mut current_child = currently_running_child.write().unwrap();
+                log::trace!("Killing old process");
                 current_child.kill()?;
                 let (child, result) = start_desktop(&config)?;
                 *current_child = child;
@@ -212,6 +213,7 @@ fn send_msg(msg: HotReloadMsg, channel: &mut impl std::io::Write) -> bool {
 
 pub fn start_desktop(config: &CrateConfig) -> Result<(Child, BuildResult)> {
     // Run the desktop application
+    log::trace!("Building application");
     let result = crate::builder::build_desktop(config, true)?;
 
     match &config.executable {
@@ -222,6 +224,7 @@ pub fn start_desktop(config: &CrateConfig) -> Result<(Child, BuildResult)> {
             if cfg!(windows) {
                 file.set_extension("exe");
             }
+            log::trace!("Running application from {:?}", file);
             let child = Command::new(file.to_str().unwrap()).spawn()?;
 
             Ok((child, result))
