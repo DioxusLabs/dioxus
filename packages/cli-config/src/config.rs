@@ -1,20 +1,16 @@
 use crate::BundleConfig;
 use crate::CargoError;
-use crate::{crate_root, Metadata};
-use clap::ValueEnum;
 use core::fmt::{Display, Formatter};
 use serde::{Deserialize, Serialize};
-use std::{
-    collections::HashMap,
-    path::{Path, PathBuf},
-};
+use std::path::PathBuf;
 
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Serialize, Deserialize, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Debug)]
+#[cfg_attr(feature = "cli", derive(clap::ValueEnum))]
 pub enum Platform {
-    #[clap(name = "web")]
+    #[cfg_attr(feature = "cli", clap(name = "web"))]
     #[serde(rename = "web")]
     Web,
-    #[clap(name = "desktop")]
+    #[cfg_attr(feature = "cli", clap(name = "desktop"))]
     #[serde(rename = "desktop")]
     Desktop,
 }
@@ -28,10 +24,12 @@ pub struct DioxusConfig {
     #[serde(default)]
     pub bundle: BundleConfig,
 
+    #[cfg(feature = "cli")]
     #[serde(default = "default_plugin")]
     pub plugin: toml::Value,
 }
 
+#[cfg(feature = "cli")]
 fn default_plugin() -> toml::Value {
     toml::Value::Boolean(true)
 }
@@ -54,6 +52,7 @@ impl std::error::Error for LoadDioxusConfigError {}
 pub enum CrateConfigError {
     Cargo(CargoError),
     Io(std::io::Error),
+    #[cfg(feature = "cli")]
     Toml(toml::de::Error),
     LoadDioxusConfig(LoadDioxusConfigError),
 }
@@ -70,6 +69,7 @@ impl From<std::io::Error> for CrateConfigError {
     }
 }
 
+#[cfg(feature = "cli")]
 impl From<toml::de::Error> for CrateConfigError {
     fn from(err: toml::de::Error) -> Self {
         Self::Toml(err)
@@ -87,6 +87,7 @@ impl Display for CrateConfigError {
         match self {
             Self::Cargo(err) => write!(f, "{}", err),
             Self::Io(err) => write!(f, "{}", err),
+            #[cfg(feature = "cli")]
             Self::Toml(err) => write!(f, "{}", err),
             Self::LoadDioxusConfig(err) => write!(f, "{}", err),
         }
@@ -96,6 +97,7 @@ impl Display for CrateConfigError {
 impl std::error::Error for CrateConfigError {}
 
 impl DioxusConfig {
+    #[cfg(feature = "cli")]
     /// Load the dioxus config from a path
     pub fn load(bin: Option<PathBuf>) -> Result<Option<DioxusConfig>, CrateConfigError> {
         let crate_dir = crate::cargo::crate_root();
@@ -145,7 +147,8 @@ impl DioxusConfig {
     }
 }
 
-fn acquire_dioxus_toml(dir: &Path) -> Option<PathBuf> {
+#[cfg(feature = "cli")]
+fn acquire_dioxus_toml(dir: &std::path::Path) -> Option<PathBuf> {
     // prefer uppercase
     let uppercase_conf = dir.join("Dioxus.toml");
     if uppercase_conf.is_file() {
@@ -171,6 +174,7 @@ impl Default for DioxusConfig {
                 out_dir: out_dir_default(),
                 asset_dir: asset_dir_default(),
 
+                #[cfg(feature = "cli")]
                 tools: Default::default(),
 
                 sub_package: None,
@@ -202,6 +206,7 @@ impl Default for DioxusConfig {
                 publisher: Some(name),
                 ..Default::default()
             },
+            #[cfg(feature = "cli")]
             plugin: toml::Value::Table(toml::map::Map::new()),
         }
     }
@@ -218,8 +223,9 @@ pub struct ApplicationConfig {
     #[serde(default = "asset_dir_default")]
     pub asset_dir: PathBuf,
 
+    #[cfg(feature = "cli")]
     #[serde(default)]
-    pub tools: HashMap<String, toml::Value>,
+    pub tools: std::collections::HashMap<String, toml::Value>,
 
     #[serde(default)]
     pub sub_package: Option<String>,
@@ -334,6 +340,7 @@ pub struct CrateConfig {
     pub workspace_dir: PathBuf,
     pub target_dir: PathBuf,
     pub asset_dir: PathBuf,
+    #[cfg(feature = "cli")]
     pub manifest: cargo_toml::Manifest<cargo_toml::Value>,
     pub executable: ExecutableType,
     pub dioxus_config: DioxusConfig,
@@ -353,10 +360,11 @@ pub enum ExecutableType {
 }
 
 impl CrateConfig {
+    #[cfg(feature = "cli")]
     pub fn new(bin: Option<PathBuf>) -> Result<Self, CrateConfigError> {
         let dioxus_config = DioxusConfig::load(bin.clone())?.unwrap_or_default();
 
-        let crate_root = crate_root()?;
+        let crate_root = crate::crate_root()?;
 
         let crate_dir = if let Some(package) = &dioxus_config.application.sub_package {
             crate_root.join(package)
@@ -366,7 +374,7 @@ impl CrateConfig {
             crate_root
         };
 
-        let meta = Metadata::get()?;
+        let meta = crate::Metadata::get()?;
         let workspace_dir = meta.workspace_root;
         let target_dir = meta.target_directory;
 
@@ -411,6 +419,7 @@ impl CrateConfig {
             workspace_dir,
             target_dir,
             asset_dir,
+            #[cfg(feature = "cli")]
             manifest,
             executable,
             release,
