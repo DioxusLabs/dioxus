@@ -632,18 +632,16 @@ mod struct_info {
             let generics_with_empty = modify_types_generics_hack(&b_initial_generics, |args| {
                 args.insert(0, syn::GenericArgument::Type(empties_tuple.clone().into()));
             });
-            let phantom_generics = self.generics.params.iter().map(|param| match param {
+            let phantom_generics = self.generics.params.iter().filter_map(|param| match param {
                 syn::GenericParam::Lifetime(lifetime) => {
                     let lifetime = &lifetime.lifetime;
-                    quote!(::core::marker::PhantomData<&#lifetime ()>)
+                    Some(quote!(::core::marker::PhantomData<&#lifetime ()>))
                 }
                 syn::GenericParam::Type(ty) => {
                     let ty = &ty.ident;
-                    quote!(::core::marker::PhantomData<#ty>)
+                    Some(quote!(::core::marker::PhantomData<#ty>))
                 }
-                syn::GenericParam::Const(_cnst) => {
-                    quote!()
-                }
+                syn::GenericParam::Const(_cnst) => None,
             });
             let builder_method_doc = match self.builder_attr.builder_method_doc {
                 Some(ref doc) => quote!(#doc),
@@ -738,7 +736,7 @@ Finally, call `.build()` to create the instance of `{name}`.
             Ok(quote! {
                 impl #impl_generics #name #ty_generics #where_clause {
                     #[doc = #builder_method_doc]
-                    #[allow(dead_code)]
+                    #[allow(dead_code, clippy::type_complexity)]
                     #vis fn builder(_cx: & #extend_lifetime ::dioxus::prelude::ScopeState) -> #builder_name #generics_with_empty {
                         #builder_name {
                             #(#extend_fields_value,)*
@@ -1073,6 +1071,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                 #[allow(dead_code, non_camel_case_types, missing_docs)]
                 impl #impl_generics #builder_name < #( #ty_generics ),* > #where_clause {
                     #doc
+                    #[allow(clippy::type_complexity)]
                     pub fn #field_name (self, #field_name: #arg_type) -> #builder_name < #( #target_generics ),* > {
                         let #field_name = (#arg_expr,);
                         let ( #(#descructuring,)* ) = self.fields;
@@ -1093,6 +1092,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                     #[deprecated(
                         note = #repeated_fields_error_message
                     )]
+                    #[allow(clippy::type_complexity)]
                     pub fn #field_name (self, _: #repeated_fields_error_type_name) -> #builder_name < #( #target_generics ),* > {
                         self
                     }

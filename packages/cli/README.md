@@ -11,7 +11,7 @@ It handles building, bundling, development and publishing to simplify developmen
 ### Install the stable version (recommended)
 
 ```
-cargo install dioxus-cli --locked
+cargo install dioxus-cli
 ```
 
 ### Install the latest development build through git

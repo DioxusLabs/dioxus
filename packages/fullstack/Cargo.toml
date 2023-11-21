@@ -11,7 +11,7 @@ keywords = ["ui", "gui", "react", "ssr", "fullstack"]
 
 [dependencies]
 # server functions
-server_fn = { version = "0.4.6", default-features = false }
+server_fn = { version = "0.5.2", default-features = false }
 dioxus_server_macro = { workspace = true }
 
 # warp

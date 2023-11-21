@@ -35,7 +35,7 @@ impl VirtualDom {
             hook_idx: Default::default(),
 
             borrowed_props: Default::default(),
-            attributes_to_drop: Default::default(),
+            attributes_to_drop_before_render: Default::default(),
         }));
 
         let context =
@@ -54,7 +54,7 @@ impl VirtualDom {
 
         let new_nodes = unsafe {
             let scope = &self.scopes[scope_id.0];
-            scope.previous_frame().bump_mut().reset();
+            scope.previous_frame().reset();
 
             scope.context().suspended.set(false);
 
