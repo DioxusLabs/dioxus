@@ -9,18 +9,17 @@ repository = "https://github.com/DioxusLabs/dioxus/"
 keywords = ["dom", "ui", "gui", "react", "ssr"]
 
 [dependencies]
-dioxus-core = { workspace = true, features = ["serialize"] }
+dioxus-core = { workspace = true }
 askama_escape = "0.10.3"
 thiserror = "1.0.23"
 rustc-hash = "1.1.0"
 lru = "0.10.0"
 tracing = { workspace = true }
 http = "0.2.9"
-tokio = { version = "1.28", features = ["full"], optional = true }
+tokio = { version = "1.28", features = ["fs", "io-util"], optional = true }
 
 [dev-dependencies]
 dioxus = { workspace = true }
-thiserror = { workspace = true }
 tracing = { workspace = true }
 fern = { version = "0.6.0", features = ["colored"] }
 anyhow = "1.0"
