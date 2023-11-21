@@ -44,7 +44,7 @@ use crate::UseFutureDep;
 ///         async move {
 ///             let user = fetch_user(id).await;
 ///             name.set(user.name);
-///             move || println!("Cleaning up from {}", id);
+///             move || println!("Cleaning up from {}", id)
 ///         }
 ///     });
 ///
