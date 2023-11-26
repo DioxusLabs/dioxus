@@ -187,7 +187,7 @@ macro_rules! impl_element_match {
         }
     ) => {
         if $el == stringify!($name) {
-            return dbg!(Some((stringify!($name), Some($namespace))));
+            return Some((stringify!($name), Some($namespace)));
         }
     };
 
@@ -199,7 +199,7 @@ macro_rules! impl_element_match {
         }
     ) => {
         if $el == stringify!($name) {
-            return dbg!(Some((stringify!($name), Some($namespace))));
+            return Some((stringify!($name), Some($namespace)));
         }
     };
 }
