@@ -47,6 +47,7 @@ impl<T: core::fmt::Display> core::fmt::Display for UseConst<T> {
 }
 
 impl<T> UseConst<T> {
+    #[allow(dead_code)]
     fn get_rc(&self) -> &Rc<T> {
         &self.value
     }
