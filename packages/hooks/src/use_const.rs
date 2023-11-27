@@ -10,7 +10,7 @@ use dioxus_core::prelude::*;
 ///
 /// ```rust, ignore
 /// struct ComplexData(i32);
-/// 
+///
 /// fn Component(cx: Scope) -> Element {
 ///   let id = use_const(cx, || ComplexData(100));
 ///
