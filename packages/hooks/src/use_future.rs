@@ -31,14 +31,13 @@ where
 
     let state = cx.use_hook(move || UseFuture {
         update: cx.schedule_update(),
-        needs_regen: Rc::new(Cell::new(true)),
+        needs_regen: Cell::new(true),
         state: val.clone(),
         task: Default::default(),
+        dependencies: Vec::new(),
     });
 
-    let state_dependencies = cx.use_hook(Vec::new);
-
-    if dependencies.clone().apply(state_dependencies) || state.needs_regen.get() {
+    if dependencies.clone().apply(&mut state.dependencies) || state.needs_regen.get() {
         // kill the old one, if it exists
         if let Some(task) = state.task.take() {
             cx.remove_future(task);
@@ -70,11 +69,11 @@ pub enum FutureState<'a, T> {
     Regenerating(&'a T), // the old value
 }
 
-#[derive(Clone)]
 pub struct UseFuture<T: 'static> {
     update: Arc<dyn Fn()>,
-    needs_regen: Rc<Cell<bool>>,
+    needs_regen: Cell<bool>,
     task: Rc<Cell<Option<TaskId>>>,
+    dependencies: Vec<Box<dyn Any>>,
     state: UseState<Option<T>>,
 }
 
