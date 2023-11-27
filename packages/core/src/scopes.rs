@@ -351,20 +351,22 @@ impl<'src> ScopeState {
 
         let mut listeners = self.attributes_to_drop_before_render.borrow_mut();
         for attr in element.dynamic_attrs {
-            match attr.value {
-                // We need to drop listeners before the next render because they may borrow data from the borrowed props which will be dropped
-                AttributeValue::Listener(_) => {
-                    let unbounded = unsafe { std::mem::transmute(attr as *const Attribute) };
-                    listeners.push(unbounded);
-                }
-                // We need to drop any values manually to make sure that their drop implementation is called before the next render
-                AttributeValue::Any(_) => {
-                    let unbounded = unsafe { std::mem::transmute(attr as *const Attribute) };
-                    self.previous_frame().add_attribute_to_drop(unbounded);
-                }
+            attr.ty.for_each(|attr| {
+                match attr.value {
+                    // We need to drop listeners before the next render because they may borrow data from the borrowed props which will be dropped
+                    AttributeValue::Listener(_) => {
+                        let unbounded = unsafe { std::mem::transmute(attr as *const Attribute) };
+                        listeners.push(unbounded);
+                    }
+                    // We need to drop any values manually to make sure that their drop implementation is called before the next render
+                    AttributeValue::Any(_) => {
+                        let unbounded = unsafe { std::mem::transmute(attr as *const Attribute) };
+                        self.previous_frame().add_attribute_to_drop(unbounded);
+                    }
 
-                _ => (),
-            }
+                    _ => (),
+                }
+            })
         }
 
         let mut props = self.borrowed_props.borrow_mut();
