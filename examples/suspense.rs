@@ -22,7 +22,8 @@ fn suspended_child(cx: Scope) -> Element {
             tokio::spawn(async move {
                 tokio::time::sleep(std::time::Duration::from_millis(100)).await;
             })
-            .await;
+            .await
+            .unwrap();
             val += 1;
         });
         cx.suspend()?;
