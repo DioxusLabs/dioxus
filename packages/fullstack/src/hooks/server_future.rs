@@ -39,6 +39,8 @@ where
         task: Cell::new(None),
     });
 
+    let state_dependencies = cx.use_hook(Vec::new);
+
     let first_run = { state.value.borrow().as_ref().is_none() && state.task.get().is_none() };
 
     #[cfg(not(feature = "ssr"))]
@@ -58,7 +60,7 @@ where
         }
     }
 
-    if dependencies.clone().apply(&mut Vec::new()) || state.needs_regen.get() {
+    if dependencies.clone().apply(state_dependencies) || state.needs_regen.get() {
         // We don't need regen anymore
         state.needs_regen.set(false);
 
