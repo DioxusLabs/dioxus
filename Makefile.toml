@@ -24,10 +24,52 @@ script = [
 ]
 script_runner = "@duckscript"
 
+[tasks.format]
+command = "cargo"
+args = ["fmt", "--all"]
+
+[tasks.check] 
+command = "cargo"
+args = ["check", "--workspace", "--examples", "--tests"]
+
+[tasks.clippy]
+command = "cargo" 
+args = ["clippy", "--workspace", "--examples", "--tests", "--", "-D", "warnings"]
+
+[tasks.tidy]
+category = "Formatting"
+dependencies = [
+  "format", "check", "clippy"
+]
+description = "Format and Check workspace"
+
+[tasks.install-miri]
+toolchain = "nightly"
+install_crate = { rustup_component_name = "miri", binary = "cargo +nightly miri", test_arg = "--help"}
+private = true
+
+[tasks.miri-native]
+command = "cargo"
+toolchain = "nightly"
+dependencies = ["install-miri"]
+args = ["miri", "test", "--package", "dioxus-native-core", "--test", "miri_native"]
+
+[tasks.miri-stress]  
+command = "cargo"
+toolchain = "nightly"
+dependencies = ["install-miri"]
+args = ["miri", "test", "--package", "dioxus-core", "--test", "miri_stress"]
+
+[tasks.miri]
+dependencies = ["miri-native", "miri-stress"]
+
 [tasks.tests]
 category = "Testing"
-dependencies = ["tests-setup"]
-description = "Run all tests"
+dependencies = [
+  "tests-setup",
+  "tidy",
+]
+description = "Run all tests"  
 env = {CARGO_MAKE_WORKSPACE_SKIP_MEMBERS = ["**/examples/*"]}
 run_task = {name = ["test-flow", "test-with-browser"], fork = true}
 
