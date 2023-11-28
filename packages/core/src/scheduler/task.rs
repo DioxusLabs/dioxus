@@ -19,7 +19,7 @@ pub struct TaskId(pub usize);
 /// the task itself is the waker
 pub(crate) struct LocalTask {
     pub scope: ScopeId,
-    pub(super) task: RefCell<Pin<Box<dyn Future<Output = ()> + 'static>>>,
+    pub task: RefCell<Pin<Box<dyn Future<Output = ()> + 'static>>>,
     pub waker: Waker,
 }
 
@@ -32,8 +32,12 @@ impl Scheduler {
     /// Whenever the component that owns this future is dropped, the future will be dropped as well.
     ///
     /// Spawning a future onto the root scope will cause it to be dropped when the root component is dropped - which
-    /// will only occur when the VirtuaalDom itself has been dropped.
-    pub fn spawn(&self, scope: ScopeId, task: impl Future<Output = ()> + 'static) -> TaskId {
+    /// will only occur when the VirtualDom itself has been dropped.
+    pub fn spawn(
+        &self,
+        scope: ScopeId,
+        task: impl Future<Output = ()> + 'static,
+    ) -> Option<TaskId> {
         let mut tasks = self.tasks.borrow_mut();
 
         let entry = tasks.vacant_entry();
@@ -48,20 +52,25 @@ impl Scheduler {
             })),
         };
 
+        let mut cx = std::task::Context::from_waker(&task.waker);
+        if task.task.borrow_mut().as_mut().poll(&mut cx).is_ready() {
+            return None;
+        }
+
         entry.insert(task);
 
         self.sender
             .unbounded_send(SchedulerMsg::TaskNotified(task_id))
             .expect("Scheduler should exist");
 
-        task_id
+        Some(task_id)
     }
 
     /// Drop the future with the given TaskId
     ///
     /// This does not abort the task, so you'll want to wrap it in an aborthandle if that's important to you
-    pub fn remove(&self, id: TaskId) {
-        self.tasks.borrow_mut().try_remove(id.0);
+    pub fn remove(&self, id: TaskId) -> Option<LocalTask> {
+        self.tasks.try_borrow_mut().ok()?.try_remove(id.0)
     }
 }
 

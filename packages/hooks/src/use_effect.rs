@@ -70,9 +70,9 @@ where
         // Create the new future
         let fut = future(dependencies.out());
 
-        state.task.set(Some(cx.push_future(async move {
+        state.task.set(cx.push_future(async move {
             fut.await;
-        })));
+        }));
     }
 }
 

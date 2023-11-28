@@ -19,7 +19,8 @@ fn app(cx: Scope) -> Element {
                 emails_sent.write().push(message);
             }
         }
-    });
+    })
+    .unwrap();
 
     cx.render(rsx! {
         div {

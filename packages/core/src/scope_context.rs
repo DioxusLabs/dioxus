@@ -214,10 +214,10 @@ impl ScopeContext {
     }
 
     /// Pushes the future onto the poll queue to be polled after the component renders.
-    pub fn push_future(&self, fut: impl Future<Output = ()> + 'static) -> TaskId {
-        let id = self.tasks.spawn(self.id, fut);
+    pub fn push_future(&self, fut: impl Future<Output = ()> + 'static) -> Option<TaskId> {
+        let id = self.tasks.spawn(self.id, fut)?;
         self.spawned_tasks.borrow_mut().insert(id);
-        id
+        Some(id)
     }
 
     /// Spawns the future but does not return the [`TaskId`]
@@ -230,7 +230,10 @@ impl ScopeContext {
     /// This is good for tasks that need to be run after the component has been dropped.
     pub fn spawn_forever(&self, fut: impl Future<Output = ()> + 'static) -> TaskId {
         // The root scope will never be unmounted so we can just add the task at the top of the app
-        let id = self.tasks.spawn(ScopeId::ROOT, fut);
+        let id = self
+            .tasks
+            .spawn(ScopeId::ROOT, fut)
+            .expect("Future quit immediately!");
 
         // wake up the scheduler if it is sleeping
         self.tasks
@@ -338,7 +341,7 @@ pub fn throw(error: impl Debug + 'static) -> Option<()> {
 }
 
 /// Pushes the future onto the poll queue to be polled after the component renders.
-pub fn push_future(fut: impl Future<Output = ()> + 'static) -> Option<TaskId> {
+pub fn push_future(fut: impl Future<Output = ()> + 'static) -> Option<Option<TaskId>> {
     with_current_scope(|cx| cx.push_future(fut))
 }
 

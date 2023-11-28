@@ -63,17 +63,19 @@ use std::future::Future;
 ///     }
 /// })
 /// ```
-pub fn use_coroutine<M, G, F>(cx: &ScopeState, init: G) -> &Coroutine<M>
+pub fn use_coroutine<M, G, F>(cx: &ScopeState, init: G) -> Option<&Coroutine<M>>
 where
     M: 'static,
     G: FnOnce(UnboundedReceiver<M>) -> F,
     F: Future<Output = ()> + 'static,
 {
-    cx.use_hook(|| {
+    Some(cx.use_hook(|| {
         let (tx, rx) = futures_channel::mpsc::unbounded();
-        let task = cx.push_future(init(rx));
+        let task = cx
+            .push_future(init(rx))
+            .expect("Future finished immediately"); // TODO Don't panic when this happens
         cx.provide_context(Coroutine { tx, task })
-    })
+    }))
 }
 
 /// Get a handle to a coroutine higher in the tree

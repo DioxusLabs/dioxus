@@ -309,7 +309,7 @@ impl<'src> ScopeState {
     }
 
     /// Pushes the future onto the poll queue to be polled after the component renders.
-    pub fn push_future(&self, fut: impl Future<Output = ()> + 'static) -> TaskId {
+    pub fn push_future(&self, fut: impl Future<Output = ()> + 'static) -> Option<TaskId> {
         self.context().push_future(fut)
     }
 
