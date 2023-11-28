@@ -29,21 +29,27 @@ impl<'b> VirtualDom {
                 .try_load_node()
                 .expect("Call rebuild before diffing");
 
-            use RenderReturn::{Aborted, Ready};
+            use RenderReturn::{Aborted, Ready, Suspended};
 
             match (old, new) {
                 // Normal pathway
                 (Ready(l), Ready(r)) => self.diff_node(l, r),
 
                 // Unwind the mutations if need be
-                (Ready(l), Aborted(p)) => self.diff_ok_to_err(l, p),
+                (Ready(l), Aborted(p) | Suspended(Some(p))) => self.diff_ok_to_err(l, p),
 
                 // Just move over the placeholder
-                (Aborted(l), Aborted(r)) => r.id.set(l.id.get()),
+                (Aborted(l) | Suspended(Some(l)), Aborted(r) | Suspended(Some(r))) => {
+                    r.id.set(l.id.get())
+                }
 
                 // Placeholder becomes something
                 // We should also clear the error now
-                (Aborted(l), Ready(r)) => self.replace_placeholder(l, [r]),
+                (Aborted(l) | Suspended(Some(l)), Ready(r)) => self.replace_placeholder(l, [r]),
+
+                // A suspended component was incorrectly rendered
+                (Suspended(None), _) => {}
+                (_, Suspended(None)) => {}
             };
         }
         self.runtime.scope_stack.borrow_mut().pop();
@@ -560,7 +566,7 @@ impl<'b> VirtualDom {
         // If none of the old keys are reused by the new children, then we remove all the remaining old children and
         // create the new children afresh.
         if shared_keys.is_empty() {
-            if old.get(0).is_some() {
+            if !old.is_empty() {
                 self.remove_nodes(&old[1..]);
                 self.replace(&old[0], new);
             } else {
@@ -731,7 +737,7 @@ impl<'b> VirtualDom {
                                 .extend_lifetime_ref()
                         } {
                             RenderReturn::Ready(node) => self.push_all_real_nodes(node),
-                            RenderReturn::Aborted(_node) => todo!(),
+                            RenderReturn::Suspended(_) | RenderReturn::Aborted(_) => todo!(),
                         }
                     }
                 }
@@ -937,7 +943,10 @@ impl<'b> VirtualDom {
                 .extend_lifetime_ref()
         } {
             RenderReturn::Ready(t) => self.remove_node(t, gen_muts),
-            RenderReturn::Aborted(placeholder) => self.remove_placeholder(placeholder, gen_muts),
+            RenderReturn::Suspended(Some(placeholder)) | RenderReturn::Aborted(placeholder) => {
+                self.remove_placeholder(placeholder, gen_muts)
+            }
+            RenderReturn::Suspended(_) => unreachable!("Suspended components are not diffed"),
         };
 
         // Restore the props back to the vcomponent in case it gets rendered again

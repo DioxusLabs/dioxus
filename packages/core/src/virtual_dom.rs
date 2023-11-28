@@ -561,11 +561,14 @@ impl VirtualDom {
                 });
             }
             // If an error occurs, we should try to render the default error component and context where the error occured
-            RenderReturn::Aborted(placeholder) => {
-                tracing::debug!("Ran into suspended or aborted scope during rebuild");
+            RenderReturn::Suspended(Some(placeholder)) | RenderReturn::Aborted(placeholder) => {
+                tracing::debug!("Ran into suspended or aborted placeholder scope during rebuild");
                 let id = self.next_null();
                 placeholder.id.set(Some(id));
                 self.mutations.push(Mutation::CreatePlaceholder { id });
+            }
+            RenderReturn::Suspended(None) => {
+                tracing::debug!("Ran into suspended scope during rebuild");
             }
         }
 

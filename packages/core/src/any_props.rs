@@ -2,7 +2,7 @@ use crate::{
     innerlude::Scoped,
     nodes::RenderReturn,
     scopes::{Scope, ScopeState},
-    Element,
+    Element, VPlaceholder,
 };
 use std::panic::AssertUnwindSafe;
 
@@ -65,11 +65,11 @@ unsafe impl<'a, P> AnyProps<'a> for VProps<'a, P> {
 
         match res {
             Ok(Some(e)) => RenderReturn::Ready(e),
-            Ok(None) => RenderReturn::default(),
+            Ok(None) => RenderReturn::Aborted(VPlaceholder::default()),
             Err(err) => {
                 let component_name = cx.name();
                 tracing::error!("Error while rendering component `{component_name}`: {err:?}");
-                RenderReturn::default()
+                RenderReturn::Aborted(VPlaceholder::default())
             }
         }
     }

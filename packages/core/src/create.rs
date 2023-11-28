@@ -515,7 +515,8 @@ impl<'b> VirtualDom {
         match unsafe { self.run_scope(scope).extend_lifetime_ref() } {
             // Create the component's root element
             Ready(t) => self.create_scope(scope, t),
-            Aborted(t) => self.mount_aborted(template, t),
+            Suspended(Some(t)) | Aborted(t) => self.mount_aborted(template, t),
+            Suspended(None) => unreachable!("Suspended(None) should never be created"),
         }
     }
 

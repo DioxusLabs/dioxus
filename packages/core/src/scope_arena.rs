@@ -52,7 +52,7 @@ impl VirtualDom {
         // Remove all the outdated listeners
         self.ensure_drop_safety(scope_id);
 
-        let new_nodes = unsafe {
+        let mut new_nodes = unsafe {
             let scope = &self.scopes[scope_id.0];
             scope.previous_frame().reset();
 
@@ -73,30 +73,40 @@ impl VirtualDom {
         // We write on top of the previous frame and then make it the current by pushing the generation forward
         let frame = scope.previous_frame();
 
+        let context = scope.context();
+
+        if context.suspended.get() {
+            if matches!(new_nodes, RenderReturn::Aborted(_)) {
+                self.suspended_scopes.insert(context.id);
+                if scope.render_cnt.get() == 0 {
+                    new_nodes = RenderReturn::Suspended(Some(Default::default()));
+                } else {
+                    new_nodes = RenderReturn::Suspended(None);
+                }
+            }
+        } else if !self.suspended_scopes.is_empty() {
+            _ = self.suspended_scopes.remove(&context.id);
+        }
         // set the new head of the bump frame
         let allocated = &*frame.bump().alloc(new_nodes);
         frame.node.set(allocated);
 
-        // And move the render generation forward by one
-        scope.render_cnt.set(scope.render_cnt.get() + 1);
-
-        let context = scope.context();
         // remove this scope from dirty scopes
         self.dirty_scopes.remove(&DirtyScope {
             height: context.height,
             id: context.id,
         });
 
-        if context.suspended.get() {
-            if matches!(allocated, RenderReturn::Aborted(_)) {
-                self.suspended_scopes.insert(context.id);
-            }
-        } else if !self.suspended_scopes.is_empty() {
-            _ = self.suspended_scopes.remove(&context.id);
-        }
-
         // rebind the lifetime now that its stored internally
         let result = unsafe { allocated.extend_lifetime_ref() };
+
+        // If the scope is suspended and the last frame was valid, don't remove the last successful render bump frame
+        if !matches!(result, RenderReturn::Suspended(None)) {
+            // Move the render generation forward by one
+            scope.render_cnt.set(scope.render_cnt.get() + 1);
+        } else {
+            println!("Pausing scope {}", context.name);
+        }
 
         self.runtime.scope_stack.borrow_mut().pop();
 

@@ -18,6 +18,7 @@ pub type TemplateId = &'static str;
 ///
 /// Dioxus will do its best to immediately resolve any async components into a regular Element, but as an implementor
 /// you might need to handle the case where there's no node immediately ready.
+
 pub enum RenderReturn<'a> {
     /// A currently-available element
     Ready(VNode<'a>),
@@ -27,6 +28,9 @@ pub enum RenderReturn<'a> {
     /// In its place we've produced a placeholder to locate its spot in the dom when
     /// it recovers.
     Aborted(VPlaceholder),
+
+    /// The component is currently suspended, and will be resumed when the promise resolves
+    Suspended(Option<VPlaceholder>),
 }
 
 impl<'a> Default for RenderReturn<'a> {
