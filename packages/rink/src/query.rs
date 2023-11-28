@@ -15,11 +15,11 @@ use crate::{get_abs_layout, layout_to_screen_space};
 /// # Example
 /// ```rust, ignore
 /// use dioxus::prelude::*;
-/// use dioxus_ratatui::query::Query;
-/// use dioxus_ratatui::Size;
+/// use dioxus_tui::query::Query;
+/// use dioxus_tui::Size;
 ///
 /// fn main() {
-///     dioxus_ratatui::launch(app);
+///     dioxus_tui::launch(app);
 /// }
 ///
 /// fn app(cx: Scope) -> Element {
