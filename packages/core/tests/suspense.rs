@@ -1,7 +1,7 @@
 use dioxus::prelude::*;
 
 #[test]
-fn it_works() {
+fn suspense_works() {
     // wait just a moment, not enough time for the boundary to resolve
 
     tokio::runtime::Builder::new_current_thread()
