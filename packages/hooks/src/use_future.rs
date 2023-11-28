@@ -1,5 +1,5 @@
 #![allow(missing_docs)]
-use dioxus_core::{ScopeState, TaskId};
+use dioxus_core::{prelude::suspend, ScopeState, TaskId};
 use std::{any::Any, cell::Cell, future::Future, rc::Rc, sync::Arc};
 
 use crate::{use_state, UseState};
@@ -132,6 +132,16 @@ impl<T> UseFuture<T> {
 
             // Task, no value - we're still pending
             (Some(_), None) => UseFutureState::Pending,
+        }
+    }
+
+    /// Suspend the current component until the future has resolved.
+    pub fn suspend(&self) -> Option<&T> {
+        if let UseFutureState::Complete(val) = self.state() {
+            Some(val)
+        } else {
+            _ = suspend();
+            None
         }
     }
 }
