@@ -37,7 +37,7 @@ use std::future::Future;
 /// ### Notice
 /// In order to use ``rx.next().await``, you will need to extend the ``Stream`` trait (used by ``UnboundedReceiver``)
 /// by adding the ``futures-util`` crate as a dependency and adding ``StreamExt`` into scope via ``use futures_util::stream::StreamExt;``
-/// 
+///
 /// Returns ``None`` if the future ends immediately
 ///
 /// ## Example
@@ -73,9 +73,7 @@ where
 {
     let (tx, rx) = futures_channel::mpsc::unbounded();
     let task = cx.push_future(init(rx))?;
-    Some(cx.use_hook(move || {
-        cx.provide_context(Coroutine { tx, task })
-    }))
+    Some(cx.use_hook(move || cx.provide_context(Coroutine { tx, task })))
 }
 
 /// Get a handle to a coroutine higher in the tree
