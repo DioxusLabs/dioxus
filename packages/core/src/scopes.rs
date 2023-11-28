@@ -309,6 +309,7 @@ impl<'src> ScopeState {
     }
 
     /// Pushes the future onto the poll queue to be polled after the component renders.
+    /// Returns `None` if the future finishes immediately
     pub fn push_future(&self, fut: impl Future<Output = ()> + 'static) -> Option<TaskId> {
         self.context().push_future(fut)
     }
@@ -321,7 +322,8 @@ impl<'src> ScopeState {
     /// Spawn a future that Dioxus won't clean up when this component is unmounted
     ///
     /// This is good for tasks that need to be run after the component has been dropped.
-    pub fn spawn_forever(&self, fut: impl Future<Output = ()> + 'static) -> TaskId {
+    /// Returns `None` if the future finishes immediately
+    pub fn spawn_forever(&self, fut: impl Future<Output = ()> + 'static) -> Option<TaskId> {
         self.context().spawn_forever(fut)
     }
 

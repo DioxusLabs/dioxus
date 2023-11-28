@@ -228,11 +228,10 @@ impl ScopeContext {
     /// Spawn a future that Dioxus won't clean up when this component is unmounted
     ///
     /// This is good for tasks that need to be run after the component has been dropped.
+    /// Returns `None` if the future finishes immediately
     pub fn spawn_forever(&self, fut: impl Future<Output = ()> + 'static) -> Option<TaskId> {
         // The root scope will never be unmounted so we can just add the task at the top of the app
-        let id = self
-            .tasks
-            .spawn(ScopeId::ROOT, fut)?;
+        let id = self.tasks.spawn(ScopeId::ROOT, fut)?;
 
         // wake up the scheduler if it is sleeping
         self.tasks
