@@ -78,7 +78,7 @@ dependencies = ["miri-native", "miri-stress"]
 
 [tasks.tests]
 category = "Testing"
-dependencies = ["tests-setup", "tidy"]
+dependencies = ["tests-setup"]
 description = "Run all tests"
 env = { CARGO_MAKE_WORKSPACE_SKIP_MEMBERS = ["**/examples/*"] }
 run_task = { name = ["test-flow", "test-with-browser"], fork = true }
