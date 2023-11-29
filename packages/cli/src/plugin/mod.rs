@@ -1,6 +1,6 @@
 use std::{
     io::{Read, Write},
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::Command,
     sync::Mutex,
 };
@@ -275,7 +275,10 @@ impl PluginManager {
         Ok(())
     }
 
-    pub fn before_serve_rebuild(timestamp: i64, files: Vec<PathBuf>) -> anyhow::Result<()> {
+    pub fn before_serve_rebuild(
+        timestamp: i64,
+        files: Vec<impl AsRef<Path>>,
+    ) -> anyhow::Result<()> {
         //* */
         let lua = LUA.lock().expect("Lua runtime load failed.");
 
@@ -285,7 +288,7 @@ impl PluginManager {
         args.set("timestamp", timestamp)?;
         let files: Vec<String> = files
             .iter()
-            .map(|v| v.to_str().unwrap().to_string())
+            .map(|v| v.as_ref().to_str().unwrap().to_string())
             .collect();
         args.set("changed_files", files)?;
 

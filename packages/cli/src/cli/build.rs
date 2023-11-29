@@ -37,7 +37,7 @@ impl Build {
             .platform
             .unwrap_or(crate_config.dioxus_config.application.default_platform);
 
-        let _ = PluginManager::on_build_start(&crate_config, platform);
+        PluginManager::on_build_start(&crate_config, platform)?;
 
         match platform {
             Platform::Web => {
@@ -65,7 +65,7 @@ impl Build {
         )?;
         file.write_all(temp.as_bytes())?;
 
-        let _ = PluginManager::on_build_finish(&crate_config, platform);
+        PluginManager::on_build_finish(&crate_config, platform)?;
 
         Ok(())
     }

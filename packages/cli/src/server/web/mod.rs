@@ -329,14 +329,12 @@ async fn setup_router(
 /// Starts dx serve with no hot reload
 async fn start_server(
     port: u16,
-    _config: &CrateConfig,
+    config: &CrateConfig,
     router: Router,
     start_browser: bool,
     rustls: Option<RustlsConfig>,
 ) -> Result<()> {
-    // If plugins, call on_serve_start event
-
-    PluginManager::on_serve_start(_config)?;
+    PluginManager::on_serve_start(config)?;
 
     // Parse address
     let addr = format!("0.0.0.0:{}", port).parse().unwrap();
@@ -425,8 +423,6 @@ fn build(config: &CrateConfig, reload_tx: &Sender<()>) -> Result<BuildResult> {
         .unwrap_or(false)
     {
         let _ = Serve::regen_dev_page(config);
-
-        PluginManager::on_build_finish(config, crate::cfg::Platform::Web)?;
     }
     let _ = reload_tx.send(());
     Ok(result)

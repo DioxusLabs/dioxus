@@ -107,73 +107,65 @@ pub async fn serve(config: CrateConfig, hot_reload_state: Option<HotReloadState>
 }
 
 async fn start_desktop_hot_reload(hot_reload_state: HotReloadState) -> Result<()> {
-    match LocalSocketListener::bind("@dioxusin") {
-        Ok(local_socket_stream) => {
-            let aborted = Arc::new(Mutex::new(false));
-            // States
-            // The open interprocess sockets
-            let channels = Arc::new(Mutex::new(Vec::new()));
+    let local_socket_stream = LocalSocketListener::bind("@dioxusin")?;
 
-            // listen for connections
-            std::thread::spawn({
-                let file_map = hot_reload_state.file_map.clone();
-                let channels = channels.clone();
-                let aborted = aborted.clone();
-                let _ = local_socket_stream.set_nonblocking(true);
-                move || {
-                    loop {
-                        match local_socket_stream.accept() {
-                            Ok(mut connection) => {
-                                // send any templates than have changed before the socket connected
-                                let templates: Vec<_> = {
-                                    file_map
-                                        .lock()
-                                        .unwrap()
-                                        .map
-                                        .values()
-                                        .filter_map(|(_, template_slot)| *template_slot)
-                                        .collect()
-                                };
-                                for template in templates {
-                                    if !send_msg(
-                                        HotReloadMsg::UpdateTemplate(template),
-                                        &mut connection,
-                                    ) {
-                                        continue;
-                                    }
-                                }
-                                channels.lock().unwrap().push(connection);
-                                println!("Connected to hot reloading 🚀");
-                            }
-                            Err(err) => {
-                                if err.kind() != std::io::ErrorKind::WouldBlock {
-                                    println!("Error connecting to hot reloading: {} (Hot reloading is a feature of the dioxus-cli. If you are not using the CLI, this error can be ignored)", err);
-                                }
-                            }
+    let aborted = Arc::new(Mutex::new(false));
+    // States
+    // The open interprocess sockets
+    let channels = Arc::new(Mutex::new(Vec::new()));
+
+    // listen for connections
+    std::thread::spawn({
+        let file_map = hot_reload_state.file_map.clone();
+        let channels = channels.clone();
+        let aborted = aborted.clone();
+        let _ = local_socket_stream.set_nonblocking(true);
+        move || {
+            loop {
+                match local_socket_stream.accept() {
+                    Ok(mut connection) => {
+                        // send any templates than have changed before the socket connected
+                        let templates: Vec<_> = {
+                            file_map
+                                .lock()
+                                .unwrap()
+                                .map
+                                .values()
+                                .filter_map(|(_, template_slot)| *template_slot)
+                                .collect()
+                        };
+                        for template in templates {
+                            send_msg(HotReloadMsg::UpdateTemplate(template), &mut connection);
                         }
-                        if *aborted.lock().unwrap() {
-                            break;
+                        channels.lock().unwrap().push(connection);
+                        println!("Connected to hot reloading 🚀");
+                    }
+                    Err(err) => {
+                        if err.kind() != std::io::ErrorKind::WouldBlock {
+                            println!("Error connecting to hot reloading: {} (Hot reloading is a feature of the dioxus-cli. If you are not using the CLI, this error can be ignored)", err);
                         }
                     }
                 }
-            });
-
-            let mut hot_reload_rx = hot_reload_state.messages.subscribe();
-
-            while let Ok(template) = hot_reload_rx.recv().await {
-                let channels = &mut *channels.lock().unwrap();
-                let mut i = 0;
-                while i < channels.len() {
-                    let channel = &mut channels[i];
-                    if send_msg(HotReloadMsg::UpdateTemplate(template), channel) {
-                        i += 1;
-                    } else {
-                        channels.remove(i);
-                    }
+                if *aborted.lock().unwrap() {
+                    break;
                 }
             }
         }
-        Err(error) => println!("failed to connect to hot reloading\n{error}"),
+    });
+
+    let mut hot_reload_rx = hot_reload_state.messages.subscribe();
+
+    while let Ok(template) = hot_reload_rx.recv().await {
+        let channels = &mut *channels.lock().unwrap();
+        let mut i = 0;
+        while i < channels.len() {
+            let channel = &mut channels[i];
+            if send_msg(HotReloadMsg::UpdateTemplate(template), channel) {
+                i += 1;
+            } else {
+                channels.remove(i);
+            }
+        }
     }
 
     Ok(())
@@ -211,6 +203,8 @@ fn send_msg(msg: HotReloadMsg, channel: &mut impl std::io::Write) -> bool {
 pub fn start_desktop(config: &CrateConfig) -> Result<(Child, BuildResult)> {
     // Run the desktop application
     let result = crate::builder::build_desktop(config, true)?;
+
+    PluginManager::on_serve_start(config)?;
 
     match &config.executable {
         crate::ExecutableType::Binary(name)
