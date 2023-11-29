@@ -1,8 +1,9 @@
-use mlua::{FromLua, Function, ToLua};
+use mlua::{FromLua, Function, IntoLua};
 
 pub mod command;
 pub mod dirs;
 pub mod fs;
+pub mod json;
 pub mod log;
 pub mod network;
 pub mod os;
@@ -71,8 +72,8 @@ impl<'lua> FromLua<'lua> for PluginInfo<'lua> {
     }
 }
 
-impl<'lua> ToLua<'lua> for PluginInfo<'lua> {
-    fn to_lua(self, lua: &'lua mlua::Lua) -> mlua::Result<mlua::Value<'lua>> {
+impl<'lua> IntoLua<'lua> for PluginInfo<'lua> {
+    fn into_lua(self, lua: &'lua mlua::Lua) -> mlua::Result<mlua::Value<'lua>> {
         let res = lua.create_table()?;
 
         res.set("name", self.name.to_string())?;
@@ -117,8 +118,8 @@ impl<'lua> FromLua<'lua> for PluginInner {
     }
 }
 
-impl<'lua> ToLua<'lua> for PluginInner {
-    fn to_lua(self, lua: &'lua mlua::Lua) -> mlua::Result<mlua::Value<'lua>> {
+impl<'lua> IntoLua<'lua> for PluginInner {
+    fn into_lua(self, lua: &'lua mlua::Lua) -> mlua::Result<mlua::Value<'lua>> {
         let res = lua.create_table()?;
 
         res.set("plugin_dir", self.plugin_dir)?;
@@ -154,8 +155,8 @@ impl<'lua> FromLua<'lua> for PluginBuildInfo<'lua> {
     }
 }
 
-impl<'lua> ToLua<'lua> for PluginBuildInfo<'lua> {
-    fn to_lua(self, lua: &'lua mlua::Lua) -> mlua::Result<mlua::Value<'lua>> {
+impl<'lua> IntoLua<'lua> for PluginBuildInfo<'lua> {
+    fn into_lua(self, lua: &'lua mlua::Lua) -> mlua::Result<mlua::Value<'lua>> {
         let res = lua.create_table()?;
 
         if let Some(v) = self.on_start {
@@ -172,11 +173,9 @@ impl<'lua> ToLua<'lua> for PluginBuildInfo<'lua> {
 
 #[derive(Debug, Clone, Default)]
 pub struct PluginServeInfo<'lua> {
-    pub interval: i32,
-
     pub on_start: Option<Function<'lua>>,
-    pub on_interval: Option<Function<'lua>>,
-    pub on_rebuild: Option<Function<'lua>>,
+    pub on_rebuild_start: Option<Function<'lua>>,
+    pub on_rebuild_end: Option<Function<'lua>>,
     pub on_shutdown: Option<Function<'lua>>,
 }
 
@@ -185,17 +184,14 @@ impl<'lua> FromLua<'lua> for PluginServeInfo<'lua> {
         let mut res = Self::default();
 
         if let mlua::Value::Table(tab) = lua_value {
-            if let Ok(v) = tab.get::<_, i32>("interval") {
-                res.interval = v;
-            }
             if let Ok(v) = tab.get::<_, Function>("on_start") {
                 res.on_start = Some(v);
             }
-            if let Ok(v) = tab.get::<_, Function>("on_interval") {
-                res.on_interval = Some(v);
+            if let Ok(v) = tab.get::<_, Function>("on_rebuild_start") {
+                res.on_rebuild_start = Some(v);
             }
-            if let Ok(v) = tab.get::<_, Function>("on_rebuild") {
-                res.on_rebuild = Some(v);
+            if let Ok(v) = tab.get::<_, Function>("on_rebuild_end") {
+                res.on_rebuild_end = Some(v);
             }
             if let Ok(v) = tab.get::<_, Function>("on_shutdown") {
                 res.on_shutdown = Some(v);
@@ -206,22 +202,18 @@ impl<'lua> FromLua<'lua> for PluginServeInfo<'lua> {
     }
 }
 
-impl<'lua> ToLua<'lua> for PluginServeInfo<'lua> {
-    fn to_lua(self, lua: &'lua mlua::Lua) -> mlua::Result<mlua::Value<'lua>> {
+impl<'lua> IntoLua<'lua> for PluginServeInfo<'lua> {
+    fn into_lua(self, lua: &'lua mlua::Lua) -> mlua::Result<mlua::Value<'lua>> {
         let res = lua.create_table()?;
-
-        res.set("interval", self.interval)?;
 
         if let Some(v) = self.on_start {
             res.set("on_start", v)?;
         }
-
-        if let Some(v) = self.on_interval {
-            res.set("on_interval", v)?;
+        if let Some(v) = self.on_rebuild_start {
+            res.set("on_rebuild_start", v)?;
         }
-
-        if let Some(v) = self.on_rebuild {
-            res.set("on_rebuild", v)?;
+        if let Some(v) = self.on_rebuild_end {
+            res.set("on_rebuild_end", v)?;
         }
 
         if let Some(v) = self.on_shutdown {

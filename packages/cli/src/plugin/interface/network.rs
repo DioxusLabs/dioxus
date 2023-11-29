@@ -9,19 +9,20 @@ impl UserData for PluginNetwork {
             let url = args.0;
             let path = args.1;
 
-            let resp = reqwest::blocking::get(url);
-            if let Ok(resp) = resp {
-                let mut content = Cursor::new(resp.bytes().unwrap());
-                let file = std::fs::File::create(PathBuf::from(path));
-                if file.is_err() {
-                    return Ok(false);
+            tokio::task::block_in_place(|| {
+                let resp = reqwest::blocking::get(url);
+                if let Ok(resp) = resp {
+                    let mut content = Cursor::new(resp.bytes().unwrap());
+                    let file = std::fs::File::create(PathBuf::from(path));
+                    if file.is_err() {
+                        return Ok(false);
+                    }
+                    let mut file = file.unwrap();
+                    let res = std::io::copy(&mut content, &mut file);
+                    return Ok(res.is_ok());
                 }
-                let mut file = file.unwrap();
-                let res = std::io::copy(&mut content, &mut file);
-                return Ok(res.is_ok());
-            }
-
-            Ok(false)
+                Ok(false)
+            })
         });
     }
 }

@@ -35,8 +35,7 @@ use tower_http::{
     ServiceBuilderExt,
 };
 
-#[cfg(feature = "plugin")]
-use plugin::PluginManager;
+use crate::plugin::PluginManager;
 
 mod proxy;
 
@@ -51,7 +50,6 @@ pub async fn startup(port: u16, config: CrateConfig, start_browser: bool) -> Res
     // ctrl-c shutdown checker
     let _crate_config = config.clone();
     let _ = ctrlc::set_handler(move || {
-        #[cfg(feature = "plugin")]
         let _ = PluginManager::on_serve_shutdown(&_crate_config);
         std::process::exit(0);
     });
@@ -139,10 +137,10 @@ pub async fn serve(
     );
 
     // Router
-    let router = setup_router(config, ws_reload_state, hot_reload_state).await?;
+    let router = setup_router(&config, ws_reload_state, hot_reload_state).await?;
 
     // Start server
-    start_server(port, router, start_browser, rustls_config).await?;
+    start_server(port, &config, router, start_browser, rustls_config).await?;
 
     Ok(())
 }
@@ -228,7 +226,7 @@ fn get_rustls_without_mkcert(web_config: &WebHttpsConfig) -> Result<(String, Str
 
 /// Sets up and returns a router
 async fn setup_router(
-    config: CrateConfig,
+    config: &CrateConfig,
     ws_reload: Arc<WsReloadState>,
     hot_reload: Option<HotReloadState>,
 ) -> Result<Router> {
@@ -299,8 +297,10 @@ async fn setup_router(
     let mut router = Router::new().route("/_dioxus/ws", get(ws_handler));
 
     // Setup proxy
-    for proxy_config in config.dioxus_config.web.proxy.unwrap_or_default() {
-        router = proxy::add_proxy(router, &proxy_config)?;
+    if let Some(proxy_config) = config.dioxus_config.web.proxy.as_ref() {
+        for proxy in proxy_config.iter() {
+            router = proxy::add_proxy(router, proxy)?;
+        }
     }
 
     // Route file service
@@ -329,13 +329,14 @@ async fn setup_router(
 /// Starts dx serve with no hot reload
 async fn start_server(
     port: u16,
+    _config: &CrateConfig,
     router: Router,
     start_browser: bool,
     rustls: Option<RustlsConfig>,
 ) -> Result<()> {
     // If plugins, call on_serve_start event
-    #[cfg(feature = "plugin")]
-    PluginManager::on_serve_start(&config)?;
+
+    PluginManager::on_serve_start(_config)?;
 
     // Parse address
     let addr = format!("0.0.0.0:{}", port).parse().unwrap();
@@ -424,6 +425,8 @@ fn build(config: &CrateConfig, reload_tx: &Sender<()>) -> Result<BuildResult> {
         .unwrap_or(false)
     {
         let _ = Serve::regen_dev_page(config);
+
+        PluginManager::on_build_finish(config, crate::cfg::Platform::Web)?;
     }
     let _ = reload_tx.send(());
     Ok(result)

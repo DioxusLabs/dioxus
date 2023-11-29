@@ -4,7 +4,6 @@ use anyhow::anyhow;
 use clap::Parser;
 use dioxus_cli::*;
 
-#[cfg(feature = "plugin")]
 use dioxus_cli::plugin::PluginManager;
 
 use Commands::*;
@@ -44,15 +43,14 @@ async fn main() -> anyhow::Result<()> {
 
     let bin = get_bin(args.bin)?;
 
-    let _dioxus_config = DioxusConfig::load(Some(bin.clone()))
+    let dioxus_config = DioxusConfig::load(Some(bin.clone()))
         .map_err(|e| anyhow!("Failed to load Dioxus config because: {e}"))?
         .unwrap_or_else(|| {
             log::warn!("You appear to be creating a Dioxus project from scratch; we will use the default config");
             DioxusConfig::default()
         });
 
-    #[cfg(feature = "plugin")]
-    PluginManager::init(_dioxus_config.plugin)
+    PluginManager::init(dioxus_config)
         .map_err(|e| anyhow!("🚫 Plugin system initialization failed: {e}"))?;
 
     match args.action {
@@ -85,7 +83,6 @@ async fn main() -> anyhow::Result<()> {
             .bundle(Some(bin.clone()))
             .map_err(|e| anyhow!("🚫 Bundling project failed: {}", e)),
 
-        #[cfg(feature = "plugin")]
         Plugin(opts) => opts
             .plugin()
             .await

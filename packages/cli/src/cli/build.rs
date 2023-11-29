@@ -1,5 +1,5 @@
 use crate::cfg::Platform;
-#[cfg(feature = "plugin")]
+
 use crate::plugin::PluginManager;
 
 use super::*;
@@ -37,8 +37,7 @@ impl Build {
             .platform
             .unwrap_or(crate_config.dioxus_config.application.default_platform);
 
-        #[cfg(feature = "plugin")]
-        let _ = PluginManager::on_build_start(&crate_config, &platform);
+        let _ = PluginManager::on_build_start(&crate_config, platform);
 
         match platform {
             Platform::Web => {
@@ -66,8 +65,7 @@ impl Build {
         )?;
         file.write_all(temp.as_bytes())?;
 
-        #[cfg(feature = "plugin")]
-        let _ = PluginManager::on_build_finish(&crate_config, &platform);
+        let _ = PluginManager::on_build_finish(&crate_config, platform);
 
         Ok(())
     }

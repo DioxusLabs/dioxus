@@ -15,7 +15,7 @@ use crate::{
     cfg::{ConfigOptsBuild, ConfigOptsServe},
     custom_error,
     error::Result,
-    gen_page, server, CrateConfig, Error,
+    gen_page, CrateConfig, Error,
 };
 use clap::{Parser, Subcommand};
 use html_parser::Dom;
@@ -81,7 +81,7 @@ pub enum Commands {
     Config(config::Config),
 
     /// Manage plugins for dioxus cli
-    #[cfg(feature = "plugin")]
+
     #[clap(subcommand)]
     Plugin(plugin::Plugin),
 }
@@ -100,7 +100,6 @@ impl Display for Commands {
             Commands::Check(_) => write!(f, "check"),
             Commands::Bundle(_) => write!(f, "bundle"),
 
-            #[cfg(feature = "plugin")]
             Commands::Plugin(_) => write!(f, "plugin"),
         }
     }

@@ -1,4 +1,6 @@
 use clap::ValueEnum;
+
+use mlua::IntoLua;
 use serde::Serialize;
 
 use super::*;
@@ -99,6 +101,28 @@ pub enum Platform {
     #[clap(name = "desktop")]
     #[serde(rename = "desktop")]
     Desktop,
+}
+
+impl Display for Platform {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Platform::Web => "web",
+                Platform::Desktop => "desktop",
+            }
+        )
+    }
+}
+
+impl<'lua> IntoLua<'lua> for Platform {
+    fn into_lua(
+        self,
+        lua: &'lua mlua::prelude::Lua,
+    ) -> mlua::prelude::LuaResult<mlua::prelude::LuaValue<'lua>> {
+        Ok(mlua::Value::String(lua.create_string(self.to_string())?))
+    }
 }
 
 /// Config options for the bundling system.

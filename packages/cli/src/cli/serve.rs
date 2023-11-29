@@ -45,11 +45,11 @@ impl Serve {
                 Serve::regen_dev_page(&crate_config)?;
 
                 // start the develop server
-                server::web::startup(self.serve.port, crate_config.clone(), self.serve.open)
+                crate::server::web::startup(self.serve.port, crate_config.clone(), self.serve.open)
                     .await?;
             }
             cfg::Platform::Desktop => {
-                server::desktop::startup(crate_config.clone()).await?;
+                crate::server::desktop::startup(crate_config.clone()).await?;
             }
         }
         Ok(())

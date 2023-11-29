@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use mlua::ToLua;
+use mlua::IntoLua;
 
 #[derive(Debug, Clone)]
 pub struct PluginConfig {
@@ -9,8 +9,8 @@ pub struct PluginConfig {
     pub config_info: HashMap<String, HashMap<String, Value>>,
 }
 
-impl<'lua> ToLua<'lua> for PluginConfig {
-    fn to_lua(self, lua: &'lua mlua::Lua) -> mlua::Result<mlua::Value<'lua>> {
+impl<'lua> IntoLua<'lua> for PluginConfig {
+    fn into_lua(self, lua: &'lua mlua::Lua) -> mlua::Result<mlua::Value<'lua>> {
         let table = lua.create_table()?;
 
         table.set("available", self.available)?;
@@ -89,19 +89,19 @@ pub enum Value {
 impl Value {
     pub fn from_toml(origin: toml::Value) -> Self {
         match origin {
-            cargo_toml::Value::String(s) => Value::String(s),
-            cargo_toml::Value::Integer(i) => Value::Integer(i),
-            cargo_toml::Value::Float(f) => Value::Float(f),
-            cargo_toml::Value::Boolean(b) => Value::Boolean(b),
-            cargo_toml::Value::Datetime(d) => Value::String(d.to_string()),
-            cargo_toml::Value::Array(a) => {
+            toml::Value::String(s) => Value::String(s),
+            toml::Value::Integer(i) => Value::Integer(i),
+            toml::Value::Float(f) => Value::Float(f),
+            toml::Value::Boolean(b) => Value::Boolean(b),
+            toml::Value::Datetime(d) => Value::String(d.to_string()),
+            toml::Value::Array(a) => {
                 let mut v = vec![];
                 for i in a {
                     v.push(Value::from_toml(i));
                 }
                 Value::Array(v)
             }
-            cargo_toml::Value::Table(t) => {
+            toml::Value::Table(t) => {
                 let mut h = HashMap::new();
                 for (n, v) in t {
                     h.insert(n, Value::from_toml(v));
@@ -112,8 +112,8 @@ impl Value {
     }
 }
 
-impl<'lua> ToLua<'lua> for Value {
-    fn to_lua(self, lua: &'lua mlua::Lua) -> mlua::Result<mlua::Value<'lua>> {
+impl<'lua> IntoLua<'lua> for Value {
+    fn into_lua(self, lua: &'lua mlua::Lua) -> mlua::Result<mlua::Value<'lua>> {
         Ok(match self {
             Value::String(s) => mlua::Value::String(lua.create_string(&s)?),
             Value::Integer(i) => mlua::Value::Integer(i),
