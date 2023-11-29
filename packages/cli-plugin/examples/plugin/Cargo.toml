@@ -10,4 +10,4 @@ crate-type = ["cdylib"]
 
 [dependencies]
 dioxus-cli-plugin = { path = "../.." }
-wit-bindgen = { git = "https://github.com/bytecodealliance/wit-bindgen" }
+wit-bindgen = "0.15.0"
