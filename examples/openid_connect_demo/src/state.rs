@@ -1,9 +1,4 @@
 //! OIDC Auth implemented as a Fermi atom
-//!
-//!
-//!
-//!
-//!
 
 use crate::constants::*;
 use anyhow::Context;
@@ -44,9 +39,9 @@ struct Token {
 }
 
 #[derive(Clone, Deserialize, Serialize)]
-pub struct AuthRequest {
-    pub nonce: Nonce,
-    pub authorize_url: String,
+struct AuthRequest {
+    nonce: Nonce,
+    authorize_url: String,
 }
 
 impl Auth {
@@ -61,10 +56,22 @@ impl Auth {
 
     pub async fn load_client() -> anyhow::Result<()> {
         // Discover the OIDC provider
-        let metadata = init_provider_metadata().await?;
+        let metadata = ProviderMetadataWithLogout::discover_async(
+            IssuerUrl::new(crate::constants::DIOXUS_FRONT_ISSUER_URL.to_string())?,
+            async_http_client,
+        )
+        .await?;
 
-        // Load the client
-        let client = init_oidc_client(metadata.clone()).await?;
+        // Load the client from the metadata
+        let client = CoreClient::from_provider_metadata(
+            metadata.clone(),
+            ClientId::new(crate::constants::DIOXUS_FRONT_CLIENT_ID.to_string()),
+            None,
+        )
+        .set_redirect_uri(RedirectUrl::new(format!(
+            "{}/login",
+            crate::constants::DIOXUS_FRONT_URL
+        ))?);
 
         // Try and refresh the token if we can
         USER.write().client = Some(client);
@@ -80,10 +87,6 @@ impl Auth {
 
     pub fn logged_in(&self) -> bool {
         self.token.is_some()
-    }
-
-    pub fn profile(&self) -> Option<String> {
-        todo!()
     }
 
     pub fn login_token(&self) -> Option<&CoreIdToken> {
@@ -217,23 +220,6 @@ async fn refresh_session() -> Result<(), anyhow::Error> {
         id_token: token_response.id_token().cloned().unwrap(),
         refresh_token: token_response.refresh_token().cloned().unwrap(),
     });
+
     Ok(())
-}
-
-pub async fn init_oidc_client(
-    provider_metadata: ProviderMetadataWithLogout,
-) -> anyhow::Result<CoreClient> {
-    let client_id = ClientId::new(crate::constants::DIOXUS_FRONT_CLIENT_ID.to_string());
-    let client_secret = None;
-    let redirect_url = RedirectUrl::new(format!("{}/login", crate::constants::DIOXUS_FRONT_URL))?;
-
-    Ok(
-        CoreClient::from_provider_metadata(provider_metadata, client_id, client_secret)
-            .set_redirect_uri(redirect_url),
-    )
-}
-
-pub async fn init_provider_metadata() -> anyhow::Result<ProviderMetadataWithLogout> {
-    let issuer_url = IssuerUrl::new(crate::constants::DIOXUS_FRONT_ISSUER_URL.to_string())?;
-    Ok(ProviderMetadataWithLogout::discover_async(issuer_url, async_http_client).await?)
 }

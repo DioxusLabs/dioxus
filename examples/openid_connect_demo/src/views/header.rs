@@ -13,7 +13,7 @@ pub fn AuthHeader(cx: Scope) -> Element {
     // If the user is logged out, load the OIDC client and then show a Login button.
     // We'll make the button open the OIDC provider's login page.
     //
-    // We might want to consider a design where the page is suspended until the client is loaded
+    // We might want to consider a design where the page is suspended until the client is loaded for SSR purposes
     _ = use_future(cx, (), |_| async move { crate::Auth::load_client().await });
 
     render! {

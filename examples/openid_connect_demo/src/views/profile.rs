@@ -2,15 +2,12 @@ use dioxus::prelude::*;
 
 #[component]
 pub fn Profile(cx: Scope) -> Element {
-    let token = crate::USER()
-        .profile()
+    let email = crate::USER()
+        .email()
         .throw_with(cx, || anyhow::anyhow!("Not logged in"))?;
 
     render! {
         h1 { "Welcome to the admin page" }
-        div {
-            "You have token"
-            pre { "{token:?}"}
-        }
+        div { "Your email from the token is: {email}" }
     }
 }

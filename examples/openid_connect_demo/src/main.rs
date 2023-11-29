@@ -3,6 +3,7 @@ pub(crate) mod model;
 pub(crate) mod state;
 pub(crate) mod views;
 
+// Re-export Auth and USER to the rest of the app
 pub use state::{Auth, USER};
 
 use dioxus::prelude::*;
