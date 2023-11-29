@@ -4,6 +4,8 @@ members = [
     "packages/dioxus",
     "packages/core",
     "packages/cli",
+    "packages/cli-plugin",
+    "packages/cli-plugin/examples/plugin",
     "packages/core-macro",
     "packages/router-macro",
     "packages/extension",

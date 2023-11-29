@@ -1,0 +1,13 @@
+package plugins:main;
+
+interface definitions {
+  on-rebuild: func() -> bool;
+
+  on-hot-reload: func();
+}
+
+world plugin-world {
+  import output-directory: func() -> string;
+
+  export definitions;
+}
