@@ -20,6 +20,7 @@ tracing = { workspace = true }
 thiserror = { workspace = true }
 slab = { workspace = true }
 dioxus-debug-cell = "0.1.1"
+dioxus-signals = { workspace = true }
 
 [dev-dependencies]
 futures-util = { workspace = true, default-features = false }

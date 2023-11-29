@@ -69,6 +69,9 @@ pub use use_state::{use_state, UseState};
 mod use_ref;
 pub use use_ref::*;
 
+mod use_signal;
+pub use use_signal::*;
+
 mod use_shared_state;
 pub use use_shared_state::*;
 
