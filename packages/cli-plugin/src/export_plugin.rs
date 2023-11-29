@@ -37,7 +37,7 @@ interface imports {
   }
 
   get-platform: func() -> platform;
-  
+
   output-directory: func() -> string;
 
   reload-browser: func();

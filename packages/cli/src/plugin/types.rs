@@ -1,31 +1,10 @@
 use std::collections::HashMap;
 
-use mlua::ToLua;
-
 #[derive(Debug, Clone)]
 pub struct PluginConfig {
     pub available: bool,
     pub loader: Vec<String>,
     pub config_info: HashMap<String, HashMap<String, Value>>,
-}
-
-impl<'lua> ToLua<'lua> for PluginConfig {
-    fn to_lua(self, lua: &'lua mlua::Lua) -> mlua::Result<mlua::Value<'lua>> {
-        let table = lua.create_table()?;
-
-        table.set("available", self.available)?;
-        table.set("loader", self.loader)?;
-
-        let config_info = lua.create_table()?;
-
-        for (name, data) in self.config_info {
-            config_info.set(name, data)?;
-        }
-
-        table.set("config_info", config_info)?;
-
-        Ok(mlua::Value::Table(table))
-    }
 }
 
 impl PluginConfig {
@@ -109,30 +88,5 @@ impl Value {
                 Value::Table(h)
             }
         }
-    }
-}
-
-impl<'lua> ToLua<'lua> for Value {
-    fn to_lua(self, lua: &'lua mlua::Lua) -> mlua::Result<mlua::Value<'lua>> {
-        Ok(match self {
-            Value::String(s) => mlua::Value::String(lua.create_string(&s)?),
-            Value::Integer(i) => mlua::Value::Integer(i),
-            Value::Float(f) => mlua::Value::Number(f),
-            Value::Boolean(b) => mlua::Value::Boolean(b),
-            Value::Array(a) => {
-                let table = lua.create_table()?;
-                for (i, v) in a.iter().enumerate() {
-                    table.set(i, v.clone())?;
-                }
-                mlua::Value::Table(table)
-            }
-            Value::Table(t) => {
-                let table = lua.create_table()?;
-                for (i, v) in t.iter() {
-                    table.set(i.clone(), v.clone())?;
-                }
-                mlua::Value::Table(table)
-            }
-        })
     }
 }

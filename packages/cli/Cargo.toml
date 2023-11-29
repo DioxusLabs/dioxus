@@ -59,13 +59,6 @@ syn = { version = "2.0", features = ["full", "extra-traits"] }
 lazy_static = "1.4.0"
 
 # plugin packages
-mlua = { version = "0.8.1", features = [
-    "lua54",
-    "vendored",
-    "async",
-    "send",
-    "macros",
-], optional = true }
 ctrlc = "3.2.3"
 open = "4.1.0"
 cargo-generate = "0.18"
@@ -86,7 +79,7 @@ interprocess-docfix = { version = "1.2.2" }
 
 [features]
 default = []
-plugin = ["mlua"]
+plugin = []
 
 [[bin]]
 path = "src/main.rs"
