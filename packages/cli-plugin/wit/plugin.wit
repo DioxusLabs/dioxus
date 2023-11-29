@@ -23,6 +23,13 @@ interface definitions {
   // Reload on serve with hot-reloading
   on-hot-reload: func();
 
+  /// Check if there is an update to the plugin 
+  /// with a given git repo?
+  /// returns error if there was error getting git
+  /// Some(url) => git clone url
+  /// None => No update needed
+  /// check-update: func() -> result<option<string>>
+
   on-watched-paths-change: func(path: list<string>);
 }
 
@@ -36,11 +43,21 @@ interface imports {
 
   output-directory: func() -> string;
 
-  reload-browser: func();
+  refresh-browser-page: func();
+
+  /// Searches through links to only refresh the 
+  /// necessary components when changing assets
   refresh-asset: func(old-url: string, new-url: string);
 
-  // Add path to list of watched paths
+  /// Add path to list of watched paths
   watch-path: func(path: string);
+
+  /// Get list of watched paths
+  watched-paths: func() -> list<string>;
+
+  /// Try to remove a path from list of watched paths
+  /// returns false if path not in list
+  remove-path: func(path: string) -> bool;
 
 }
 

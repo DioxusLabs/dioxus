@@ -2,6 +2,7 @@
 From the cli-plugin directory
 
 ```sh
+rustup target add wasm32-wasi
 cargo install wasm-tools
 
 cd ./examples/plugin

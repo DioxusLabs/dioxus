@@ -41,6 +41,9 @@ interface imports {
   output-directory: func() -> string;
 
   reload-browser: func();
+
+  /// Searches through links to only refresh the 
+  /// necessary components when changing assets
   refresh-asset: func(old-url: string, new-url: string);
 
   // Add path to list of watched paths

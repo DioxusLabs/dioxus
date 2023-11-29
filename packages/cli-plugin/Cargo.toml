@@ -16,6 +16,6 @@ wit-bindgen = "0.15.0"
 [dev-dependencies]
 wasmtime = { version = "15.0.0", features = ['component-model'] }
 wasmtime-wasi = { version = "15.0.0", features = ['preview2'] }
-wit-component = "0.11.0"
+wit-component = "0.18.2"
 async-trait = "0.1.73"
 tokio = { workspace = true, features = ["full"] }
