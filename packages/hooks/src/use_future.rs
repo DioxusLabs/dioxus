@@ -133,6 +133,13 @@ impl<T> UseFuture<T> {
             (Some(_), None) => UseFutureState::Pending,
         }
     }
+
+    pub fn pending(&self) -> bool {
+        match self.state() {
+            UseFutureState::Pending => true,
+            _ => false,
+        }
+    }
 }
 
 pub trait UseFutureDep: Sized + Clone {

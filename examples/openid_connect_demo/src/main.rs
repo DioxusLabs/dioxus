@@ -1,60 +1,47 @@
-#![allow(non_snake_case)]
-use dioxus::prelude::*;
-use fermi::*;
-use gloo_storage::{LocalStorage, Storage};
-use log::LevelFilter;
 pub(crate) mod constants;
-pub(crate) mod errors;
 pub(crate) mod model;
-pub(crate) mod oidc;
-pub(crate) mod props;
-pub(crate) mod router;
-pub(crate) mod storage;
+pub(crate) mod state;
 pub(crate) mod views;
-use oidc::{AuthRequestState, AuthTokenState};
-use router::Route;
 
+pub use state::{Auth, USER};
+
+use dioxus::prelude::*;
 use dioxus_router::prelude::*;
+use views::{header::AuthHeader, home::Home, login::Login, not_found::NotFound, profile::Profile};
 
-use crate::{
-    constants::{DIOXUS_FRONT_AUTH_REQUEST, DIOXUS_FRONT_AUTH_TOKEN},
-    oidc::ClientState,
-};
-pub static FERMI_CLIENT: fermi::AtomRef<ClientState> = AtomRef(|_| ClientState::default());
+/// The app's router, using the modern Dioxus Router API.
+///
+/// We show how to use the layout attribute to wrap the routes with a header that provides a typical login/logout flow.
+/// Within the routes themselves, we also show how to tap into the state of the router to show a different view if the
+/// user is logged in or not.
+///
+/// We also demonstrate that Layouts can also be used to guard routes from being accessed if the user is not logged in.
+/// In practice, this is done by "throwing" an error from a child component.
+///
+/// To handle OIDC requests, we use the login route to parse the query string and exchange the auth code for a token.
+#[rustfmt::skip]
+#[derive(Routable, Clone)]
+pub enum Route {
+    #[layout(AuthHeader)]
+        // Show a different view based on the login state of the app
+        #[route("/")]
+        Home,
 
-// An option is required to prevent the component from being constantly refreshed
-pub static FERMI_AUTH_TOKEN: fermi::AtomRef<Option<AuthTokenState>> = AtomRef(|_| None);
-pub static FERMI_AUTH_REQUEST: fermi::AtomRef<Option<AuthRequestState>> = AtomRef(|_| None);
+        // Throw an error if the user is not logged in to the parent layout
+        #[route("/profile")]
+        Profile,
 
-pub static DIOXUS_FRONT_ISSUER_URL: &str = env!("DIOXUS_FRONT_ISSUER_URL");
-pub static DIOXUS_FRONT_CLIENT_ID: &str = env!("DIOXUS_FRONT_CLIENT_ID");
-pub static DIOXUS_FRONT_URL: &str = env!("DIOXUS_FRONT_URL");
+        // Handle login redirects from the oidc service
+        #[route("/login?:query_string")]
+        Login { query_string: String },
+    #[end_layout]
 
-fn App(cx: Scope) -> Element {
-    use_init_atom_root(cx);
-
-    // Retrieve the value stored in the browser's storage
-    let stored_auth_token = LocalStorage::get(DIOXUS_FRONT_AUTH_TOKEN)
-        .ok()
-        .unwrap_or(AuthTokenState::default());
-    let fermi_auth_token = use_atom_ref(cx, &FERMI_AUTH_TOKEN);
-    if fermi_auth_token.read().is_none() {
-        *fermi_auth_token.write() = Some(stored_auth_token);
-    }
-
-    let stored_auth_request = LocalStorage::get(DIOXUS_FRONT_AUTH_REQUEST)
-        .ok()
-        .unwrap_or(AuthRequestState::default());
-    let fermi_auth_request = use_atom_ref(cx, &FERMI_AUTH_REQUEST);
-    if fermi_auth_request.read().is_none() {
-        *fermi_auth_request.write() = Some(stored_auth_request);
-    }
-    render! { Router::<Route> {} }
+    #[route("/:..route")]
+    NotFound { route: Vec<String> },
 }
 
 fn main() {
-    dioxus_logger::init(LevelFilter::Info).expect("failed to init logger");
     console_error_panic_hook::set_once();
-    log::info!("starting app");
-    dioxus_web::launch(App);
+    dioxus_logger::init(log::LevelFilter::Info).unwrap();
+    dioxus_web::launch(|cx| render! { Router::<Route> {} });
 }

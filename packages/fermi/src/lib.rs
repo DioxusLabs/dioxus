@@ -46,6 +46,7 @@ use std::{
     cell::{Ref, RefCell},
     collections::HashMap,
     fmt::Display,
+    marker::PhantomData,
     rc::Rc,
 };
 
@@ -75,10 +76,21 @@ pub fn consume_root_context() -> Rc<AtomRoot> {
 ///     render! { "{NAME}" }
 /// }
 /// ```
-pub struct Atom<T>(pub fn(AtomBuilder) -> T);
+pub struct Atom<T> {
+    builder: fn(AtomBuilder<T>) -> T,
+}
+
+impl<T> Atom<T> {
+    pub const fn new(builder: fn(AtomBuilder<T>) -> T) -> Self {
+        Self { builder }
+    }
+}
+
 impl<T> Clone for Atom<T> {
     fn clone(&self) -> Self {
-        Self(self.0)
+        Self {
+            builder: self.builder,
+        }
     }
 }
 impl<T> Copy for Atom<T> {}
@@ -97,7 +109,16 @@ impl<T: 'static> std::ops::Index<usize> for Atom<Vec<T>> {
     }
 }
 
-pub struct AtomBuilder;
+pub struct AtomBuilder<T> {
+    value: PhantomData<T>,
+}
+
+impl<T> AtomBuilder<T> {
+    fn new() -> Self {
+        Self { value: PhantomData }
+    }
+    pub fn add_effect(&self, f: impl FnMut(&mut T)) {}
+}
 
 impl<T: 'static> Atom<T> {
     pub fn value(&self) -> Signal<T> {
@@ -107,7 +128,7 @@ impl<T: 'static> Atom<T> {
         let mut atoms = root.atoms.borrow_mut();
 
         let slot = atoms.entry(id).or_insert_with(|| {
-            let slot = Signal::new((self.0)(AtomBuilder));
+            let slot = Signal::new((self.builder)(AtomBuilder::new()));
             Box::new(slot)
         });
 
@@ -136,6 +157,10 @@ impl<T: 'static> Atom<T> {
 
     pub fn with<O>(&self, f: impl FnOnce(&T) -> O) -> O {
         self.value().with(f)
+    }
+
+    pub fn with_mut<O>(&self, f: impl FnOnce(&mut T) -> O) -> O {
+        self.value().with_mut(f)
     }
 
     /// Create a selection of this atom by caching the returned value
@@ -200,7 +225,7 @@ pub struct SelectorBuilder;
 
 #[test]
 fn it_works() {
-    static NAME: Atom<String> = Atom(|_| "world".to_string());
+    static NAME: Atom<String> = Atom::new(|_| "world".to_string());
 
     let r = NAME();
 }
