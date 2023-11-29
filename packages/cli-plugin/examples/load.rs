@@ -29,6 +29,10 @@ impl Host for MyState {
     async fn watch_path(&mut self, _: String) -> wasmtime::Result<()> {
         Ok(())
     }
+
+    async fn get_platform(&mut self) -> wasmtime::Result<String> { // TODO make an enum
+      Ok("".to_string())
+    }
 }
 
 impl WasiView for MyState {
