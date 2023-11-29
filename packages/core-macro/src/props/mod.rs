@@ -243,10 +243,6 @@ mod field_info {
             }
             .into()
         }
-
-        pub fn type_from_inside_option(&self, check_option_name: bool) -> Option<&syn::Type> {
-            type_from_inside_option(self.ty, check_option_name)
-        }
     }
 
     #[derive(Debug, Default, Clone)]
