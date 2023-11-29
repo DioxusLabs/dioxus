@@ -16,6 +16,12 @@ fn app(cx: Scope) -> Element {
             a: "asd".to_string(),
             c: "asd".to_string(),
             d: Some("asd".to_string()),
+            e: Some("asd".to_string()),
+        }
+        Button {
+            a: "asd".to_string(),
+            c: "asd".to_string(),
+            d: Some("asd".to_string()),
             e: "asd".to_string(),
         }
     })
