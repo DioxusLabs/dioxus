@@ -1,4 +1,4 @@
-use crate::plugins::main::imports::Host;
+use crate::plugins::main::imports::*;
 use async_trait::async_trait;
 use wasmtime::component::*;
 use wasmtime::{Config, Engine, Store};
@@ -30,8 +30,8 @@ impl Host for MyState {
         Ok(())
     }
 
-    async fn get_platform(&mut self) -> wasmtime::Result<String> { // TODO make an enum
-      Ok("".to_string())
+    async fn get_platform(&mut self) -> wasmtime::Result<Platform> {
+        Ok(Platform::Desktop)
     }
 }
 

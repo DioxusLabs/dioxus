@@ -5,9 +5,11 @@ macro_rules! export_plugin {
             inline: "package plugins:main;
 
 interface definitions {
+  use imports.{platform};
 
   record config {
     // DioxusConfig?
+    default-platform: platform
   }
 
   // Initialize the plugin
