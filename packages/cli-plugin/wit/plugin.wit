@@ -4,10 +4,21 @@ interface definitions {
   on-rebuild: func() -> bool;
 
   on-hot-reload: func();
+
+  on-watched-paths-change: func(path: list<string>);
+}
+
+interface imports {
+  output-directory: func() -> string;
+
+  reload-browser: func();
+  refresh-asset: func(old-url: string, new-url: string);
+
+  watch-path: func(path: string);
 }
 
 world plugin-world {
-  import output-directory: func() -> string;
+  import imports;
 
   export definitions;
 }

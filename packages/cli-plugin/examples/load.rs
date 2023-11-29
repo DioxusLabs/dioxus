@@ -1,3 +1,4 @@
+use crate::plugins::main::imports::Host;
 use async_trait::async_trait;
 use wasmtime::component::*;
 use wasmtime::{Config, Engine, Store};
@@ -12,9 +13,21 @@ struct MyState {
 }
 
 #[async_trait]
-impl PluginWorldImports for MyState {
+impl Host for MyState {
     async fn output_directory(&mut self) -> wasmtime::Result<String> {
         Ok("output".to_string())
+    }
+
+    async fn reload_browser(&mut self) -> wasmtime::Result<()> {
+        Ok(())
+    }
+
+    async fn refresh_asset(&mut self, _: String, _: String) -> wasmtime::Result<()> {
+        Ok(())
+    }
+
+    async fn watch_path(&mut self, _: String) -> wasmtime::Result<()> {
+        Ok(())
     }
 }
 
@@ -38,17 +51,6 @@ impl WasiView for MyState {
 
 #[tokio::main]
 async fn main() -> wasmtime::Result<()> {
-    // let bytes = std::fs::read("/Users/evanalmloff/Desktop/Github/dioxus/packages/cli-plugin/examples/dioxus_cli_plugin_test.wasm")?;
-    // let component = ComponentEncoder::default()
-    //     .validate(false)
-    //     .module(bytes.as_slice())?
-    //     .adapter(
-    //         "wasi_snapshot_preview1",
-    //         include_bytes!("../wasi_snapshot_preview1.wasm",),
-    //     )
-    //     .unwrap()
-    //     .encode()?;
-
     let mut config = Config::new();
     config.wasm_component_model(true);
     config.async_support(true);
@@ -56,23 +58,10 @@ async fn main() -> wasmtime::Result<()> {
 
     let component = Component::from_file(&engine, "./output.wasm")?;
 
-    // Instantiation of bindings always happens through a `Linker`.
-    // Configuration of the linker is done through a generated `add_to_linker`
-    // method on the bindings structure.
-    //
-    // Note that the closure provided here is a projection from `T` in
-    // `Store<T>` to `&mut U` where `U` implements the `HelloWorldImports`
-    // trait. In this case the `T`, `MyState`, is stored directly in the
-    // structure so no projection is necessary here.
     let mut linker = Linker::new(&engine);
     preview2::command::add_to_linker(&mut linker)?;
     PluginWorld::add_to_linker(&mut linker, |state: &mut MyState| state)?;
 
-    // As with the core wasm API of Wasmtime instantiation occurs within a
-    // `Store`. The bindings structure contains an `instantiate` method which
-    // takes the store, component, and linker. This returns the `bindings`
-    // structure which is an instance of `HelloWorld` and supports typed access
-    // to the exports of the component.
     let sandbox = "./plugin-sandbox";
     std::fs::create_dir_all(sandbox)?;
     let mut ctx = WasiCtxBuilder::new();
