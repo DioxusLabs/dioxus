@@ -1,6 +1,5 @@
 use dioxus_core::ScopeState;
-use dioxus_signals::CopyValue;
-use std::future::Future;
+use std::{cell::Cell, future::Future};
 
 /// A hook that runs a future when the component is mounted.
 ///
@@ -12,9 +11,9 @@ where
     T: 'static,
     F: Future<Output = T> + 'static,
 {
-    let needs_regen = cx.use_hook(|| CopyValue::new(true));
+    let needs_regen = cx.use_hook(|| Cell::new(true));
 
-    if needs_regen.value() {
+    if needs_regen.get() {
         needs_regen.set(false);
 
         let fut = future();
