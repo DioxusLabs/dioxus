@@ -43,11 +43,11 @@ interface definitions {
 
 interface toml {
   resource toml {
-    /// Creates a new handle from value
+    /// Creates a value in table and returns the handle
     constructor(value: toml-value);
-    /// Clones value from table by handle
+    /// Clones value from table
     get: func() -> toml-value;
-    /// Sets value in table by handle
+    /// Sets value in table
     set: func(value: toml-value);
     /// Clones the handle, not the value
     clone: func() -> toml;
