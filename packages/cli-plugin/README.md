@@ -9,7 +9,7 @@ cd ./examples/plugin
 cargo build --target wasm32-wasi
 cd ..
 wasm-tools component new ../../../target/wasm32-wasi/debug/dioxus_cli_plugin_test.wasm --adapt ../wasi_snapshot_preview1.wasm -o output.wasm
-cargo run --example load
+cargo test --package dioxus-cli --test plugins
 cd ..
 ```
 

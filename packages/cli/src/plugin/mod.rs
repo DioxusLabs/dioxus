@@ -1,3 +1,4 @@
+
 use std::{
     io::{Read, Write},
     path::PathBuf,
@@ -11,29 +12,22 @@ use crate::{
     CrateConfig,
 };
 
-use self::types::PluginConfig;
 
-mod interface;
-mod types;
+pub mod interface;
 
 pub struct PluginManager;
 
 impl PluginManager {
     pub fn init(config: toml::Value) -> anyhow::Result<()> {
-        let config = PluginConfig::from_toml_value(config);
-
-        if !config.available {
-            return Ok(());
-        }
-
+        
         Ok(())
     }
 
-    pub fn on_build_start(crate_config: &CrateConfig, platform: &str) -> anyhow::Result<()> {
+    pub fn on_build_start(crate_config: &CrateConfig, platform: &crate::cfg::Platform) -> anyhow::Result<()> {
         Ok(())
     }
 
-    pub fn on_build_finish(crate_config: &CrateConfig, platform: &str) -> anyhow::Result<()> {
+    pub fn on_build_finish(crate_config: &CrateConfig, platform:  &crate::cfg::Platform) -> anyhow::Result<()> {
         Ok(())
     }
 

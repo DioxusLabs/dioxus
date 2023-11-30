@@ -16,8 +16,7 @@ use std::{
 };
 use tokio::sync::broadcast::{self};
 
-#[cfg(feature = "plugin")]
-use plugin::PluginManager;
+use crate::plugin::PluginManager;
 
 use super::HotReloadState;
 
@@ -25,7 +24,6 @@ pub async fn startup(config: CrateConfig) -> Result<()> {
     // ctrl-c shutdown checker
     let _crate_config = config.clone();
     let _ = ctrlc::set_handler(move || {
-        #[cfg(feature = "plugin")]
         let _ = PluginManager::on_serve_shutdown(&_crate_config);
         std::process::exit(0);
     });

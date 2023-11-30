@@ -35,8 +35,7 @@ use tower_http::{
     ServiceBuilderExt,
 };
 
-#[cfg(feature = "plugin")]
-use plugin::PluginManager;
+use crate::plugin::PluginManager;
 
 mod proxy;
 
@@ -51,7 +50,6 @@ pub async fn startup(port: u16, config: CrateConfig, start_browser: bool) -> Res
     // ctrl-c shutdown checker
     let _crate_config = config.clone();
     let _ = ctrlc::set_handler(move || {
-        #[cfg(feature = "plugin")]
         let _ = PluginManager::on_serve_shutdown(&_crate_config);
         std::process::exit(0);
     });
@@ -333,10 +331,6 @@ async fn start_server(
     start_browser: bool,
     rustls: Option<RustlsConfig>,
 ) -> Result<()> {
-    // If plugins, call on_serve_start event
-    #[cfg(feature = "plugin")]
-    PluginManager::on_serve_start(&config)?;
-
     // Parse address
     let addr = format!("0.0.0.0:{}", port).parse().unwrap();
 
