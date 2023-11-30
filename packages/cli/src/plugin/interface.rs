@@ -3,9 +3,7 @@ use ext_toml::value::Map;
 use plugins::main::imports::{Host as ImportHost, Platform};
 use plugins::main::toml::{Host as TomlHost, *};
 use wasmtime::component::*;
-use wasmtime_wasi::preview2::{
-    WasiCtx, WasiView, Table
-};
+use wasmtime_wasi::preview2::{Table, WasiCtx, WasiView};
 
 pub struct PluginState {
     pub table: Table,
@@ -13,32 +11,36 @@ pub struct PluginState {
     pub tomls: slab::Slab<TomlValue>,
 }
 
-
 impl Clone for TomlValue {
-  fn clone(&self) -> Self {
-      match self {
-        TomlValue::String(string) => TomlValue::String(string.clone()),
-        TomlValue::Integer(num) => TomlValue::Integer(*num),
-        TomlValue::Float(float) => TomlValue::Float(*float),
-        TomlValue::Boolean(b) => TomlValue::Boolean(*b),
-        TomlValue::Datetime(d) => TomlValue::Datetime(*d),
-        TomlValue::Array(array) => TomlValue::Array(array.iter().map(|f| Resource::new_own(f.rep())).collect()),
-        TomlValue::Table(table) => TomlValue::Table(table.iter()
-        .map(|(key, val)| (key.clone(), Resource::new_own(val.rep())))
-        .collect()),
+    fn clone(&self) -> Self {
+        match self {
+            TomlValue::String(string) => TomlValue::String(string.clone()),
+            TomlValue::Integer(num) => TomlValue::Integer(*num),
+            TomlValue::Float(float) => TomlValue::Float(*float),
+            TomlValue::Boolean(b) => TomlValue::Boolean(*b),
+            TomlValue::Datetime(d) => TomlValue::Datetime(*d),
+            TomlValue::Array(array) => {
+                TomlValue::Array(array.iter().map(|f| Resource::new_own(f.rep())).collect())
+            }
+            TomlValue::Table(table) => TomlValue::Table(
+                table
+                    .iter()
+                    .map(|(key, val)| (key.clone(), Resource::new_own(val.rep())))
+                    .collect(),
+            ),
         }
-      }
     }
+}
 
-    use toml as ext_toml;
+use toml as ext_toml;
 
 impl From<ext_toml::value::Offset> for Offset {
-  fn from(value: ext_toml::value::Offset) -> Self {
-      match value {
-          ext_toml::value::Offset::Z => Offset::Z,
-          ext_toml::value::Offset::Custom { hours, minutes } => Offset::Custom((hours, minutes)),
-      }
-  }
+    fn from(value: ext_toml::value::Offset) -> Self {
+        match value {
+            ext_toml::value::Offset::Z => Offset::Z,
+            ext_toml::value::Offset::Custom { hours, minutes } => Offset::Custom((hours, minutes)),
+        }
+    }
 }
 
 impl From<ext_toml::value::Time> for Time {
@@ -171,7 +173,7 @@ impl HostToml for PluginState {
         Ok(())
     }
     async fn clone(&mut self, key: Resource<Toml>) -> wasmtime::Result<Resource<Toml>> {
-      Ok(Resource::new_own(key.rep()))
+        Ok(Resource::new_own(key.rep()))
     }
 
     /// Only is called when [`Resource`] detects the [`Toml`] instance is not being called

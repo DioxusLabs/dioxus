@@ -4,7 +4,6 @@ use anyhow::anyhow;
 use clap::Parser;
 use dioxus_cli::*;
 
-
 use dioxus_cli::plugin::PluginManager;
 
 use Commands::*;
@@ -51,7 +50,6 @@ async fn main() -> anyhow::Result<()> {
             DioxusConfig::default()
         });
 
-    
     PluginManager::init(_dioxus_config.plugin)
         .map_err(|e| anyhow!("🚫 Plugin system initialization failed: {e}"))?;
 
@@ -85,7 +83,6 @@ async fn main() -> anyhow::Result<()> {
             .bundle(Some(bin.clone()))
             .map_err(|e| anyhow!("🚫 Bundling project failed: {}", e)),
 
-        
         Plugin(opts) => opts
             .plugin()
             .await

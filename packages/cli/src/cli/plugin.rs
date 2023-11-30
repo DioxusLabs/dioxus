@@ -1,4 +1,3 @@
-
 use super::*;
 
 /// Manage plugins for dioxus cli

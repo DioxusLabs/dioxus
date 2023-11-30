@@ -107,7 +107,6 @@ async fn setup_file_watcher<F: Fn() -> Result<BuildResult> + Send + 'static>(
                                 web_info.clone(),
                             );
 
-                            
                             let _ = PluginManager::on_serve_rebuild(
                                 chrono::Local::now().timestamp(),
                                 e.paths,
