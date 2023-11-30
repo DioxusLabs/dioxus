@@ -6,19 +6,19 @@ interface definitions {
 
   get-default-config: func() -> toml;
 
-  apply-config: func(config: toml) -> bool;
+  apply-config: func(config: toml) -> result;
   
   // Initialize the plugin
-  register: func() -> bool;
+  register: func() -> result;
 
   // Before the app is built
-  before-build: func() -> bool;
+  before-build: func() -> result;
 
   // After the application is built, before serve
-  before-serve: func() -> bool;
+  before-serve: func() -> result;
 
   // Reload on serve with no hot-reloading(?)
-  on-rebuild: func() -> bool;
+  on-rebuild: func() -> result;
 
   // Reload on serve with hot-reloading
   on-hot-reload: func();
@@ -76,7 +76,7 @@ interface imports {
 
   /// Try to remove a path from list of watched paths
   /// returns false if path not in list
-  remove-path: func(path: string) -> bool;
+  remove-path: func(path: string) -> result;
 
   log: func(info: string);
 

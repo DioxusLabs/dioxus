@@ -2,14 +2,14 @@ use dioxus_cli_plugin::*;
 use exports::plugins::main::definitions::Guest;
 use plugins::main::{
     imports::log,
-    toml::{Array, Table, Toml, TomlValue},
+    toml::{Toml, TomlValue},
 };
 struct Plugin;
 
 impl Guest for Plugin {
-    fn apply_config(config: Toml) -> bool {
+    fn apply_config(config: Toml) -> Result<(), ()> {
         log(&format!("{:?}", config.get()));
-        true
+        Ok(())
     }
 
     fn get_default_config() -> Toml {
@@ -20,9 +20,9 @@ impl Guest for Plugin {
         res
     }
 
-    fn on_rebuild() -> bool {
+    fn on_rebuild() -> Result<(), ()> {
         println!("Hello from on_rebuild!");
-        true
+        Ok(())
     }
 
     fn on_hot_reload() {
@@ -31,16 +31,16 @@ impl Guest for Plugin {
 
     fn on_watched_paths_change(_: std::vec::Vec<std::string::String>) {}
 
-    fn register() -> bool {
-        true
+    fn register() -> Result<(), ()> {
+        Ok(())
     }
 
-    fn before_build() -> bool {
-        true
+    fn before_build() -> Result<(), ()> {
+        Ok(())
     }
 
-    fn before_serve() -> bool {
-        true
+    fn before_serve() -> Result<(), ()> {
+        Ok(())
     }
 }
 
