@@ -1,24 +1,10 @@
-use crate::plugin::interface::plugins::main::imports::{Host as ImportHost, Platform};
-use crate::plugin::interface::plugins::main::toml::{Host as TomlHost, *};
 use crate::plugin::interface::{PluginState, PluginWorld};
-use crate::{
-    tools::{app_path, clone_repo},
-    CrateConfig,
-};
-use async_trait::async_trait;
-use serde_json::json;
+
 use slab::Slab;
 use std::path::Path;
-use std::{
-    io::{Read, Write},
-    path::PathBuf,
-    sync::Mutex,
-};
 use wasmtime::component::*;
 use wasmtime::{Config, Engine, Store};
-use wasmtime_wasi::preview2::{
-    self, DirPerms, FilePerms, Table, WasiCtx, WasiCtxBuilder, WasiView,
-};
+use wasmtime_wasi::preview2::{self, DirPerms, FilePerms, Table, WasiCtxBuilder};
 use wasmtime_wasi::Dir;
 
 pub mod interface;
@@ -36,7 +22,8 @@ pub async fn load_plugin(path: impl AsRef<Path>) -> wasmtime::Result<CliPlugin> 
     preview2::command::add_to_linker(&mut linker)?;
     PluginWorld::add_to_linker(&mut linker, |state: &mut PluginState| state)?;
 
-    let out_dir = std::env::var("CARGO_BUILD_TARGET_DIR").unwrap_or_else(|_| "./target".to_string());
+    let out_dir =
+        std::env::var("CARGO_BUILD_TARGET_DIR").unwrap_or_else(|_| "./target".to_string());
     let sandbox = format!("{}/plugin-sandbox", out_dir);
 
     std::fs::create_dir_all(&sandbox)?;

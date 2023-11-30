@@ -83,54 +83,67 @@ impl From<ext_toml::value::Datetime> for Datetime {
 
 #[async_trait]
 pub trait ConvertWithState<T> {
-  async fn convert_with_state(self, state: &mut PluginState) -> T;
+    async fn convert_with_state(self, state: &mut PluginState) -> T;
 }
 
 pub trait Convert<T> {
-  fn convert(self) -> T;
+    fn convert(self) -> T;
 }
 
-impl<T, U> Convert<Option<T>> for Option<U> where U: Convert<T> {
-  fn convert(self) -> Option<T> {
-    self.map(Convert::convert)
-  }
+impl<T, U> Convert<Option<T>> for Option<U>
+where
+    U: Convert<T>,
+{
+    fn convert(self) -> Option<T> {
+        self.map(Convert::convert)
+    }
 }
 
 impl Convert<ext_toml::value::Datetime> for Datetime {
-  fn convert(self) -> ext_toml::value::Datetime {
-    let Datetime { date, time, offset } = self;
-    ext_toml::value::Datetime {
-      date: date.convert(),
-      time: time.convert(),
-      offset: offset.convert(),
+    fn convert(self) -> ext_toml::value::Datetime {
+        let Datetime { date, time, offset } = self;
+        ext_toml::value::Datetime {
+            date: date.convert(),
+            time: time.convert(),
+            offset: offset.convert(),
+        }
     }
-  }
 }
 
 impl Convert<ext_toml::value::Time> for Time {
-  fn convert(self) -> ext_toml::value::Time {
-    let Time { hour, minute, second, nanosecond } = self;
-    ext_toml::value::Time {hour, minute, second, nanosecond}
-  }
+    fn convert(self) -> ext_toml::value::Time {
+        let Time {
+            hour,
+            minute,
+            second,
+            nanosecond,
+        } = self;
+        ext_toml::value::Time {
+            hour,
+            minute,
+            second,
+            nanosecond,
+        }
+    }
 }
 
 impl Convert<ext_toml::value::Date> for Date {
-  fn convert(self) -> ext_toml::value::Date {
-    let Date { year, month, day } = self;
-    ext_toml::value::Date { year, month, day }
-  }
+    fn convert(self) -> ext_toml::value::Date {
+        let Date { year, month, day } = self;
+        ext_toml::value::Date { year, month, day }
+    }
 }
 
 impl Convert<ext_toml::value::Offset> for Offset {
-  fn convert(self) -> ext_toml::value::Offset {
-    match self {
-      Offset::Z => ext_toml::value::Offset::Z,
-      Offset::Custom((hours, minutes)) => ext_toml::value::Offset::Custom { hours, minutes },
+    fn convert(self) -> ext_toml::value::Offset {
+        match self {
+            Offset::Z => ext_toml::value::Offset::Z,
+            Offset::Custom((hours, minutes)) => ext_toml::value::Offset::Custom { hours, minutes },
+        }
     }
-  }
 }
 
-use ext_toml::Value as Value;
+use ext_toml::Value;
 #[async_trait]
 impl ConvertWithState<Value> for TomlValue {
     async fn convert_with_state(self, state: &mut PluginState) -> Value {
@@ -141,20 +154,32 @@ impl ConvertWithState<Value> for TomlValue {
             TomlValue::Boolean(b) => Value::Boolean(b),
             TomlValue::Datetime(datetime) => Value::Datetime(datetime.convert()),
             TomlValue::Array(array) => {
-              let mut new_array = Vec::with_capacity(array.len());
-              for item in array.into_iter() {
-                new_array.push(state.get(item).await.unwrap().convert_with_state(state).await)
-              }
-              Value::Array(new_array)
+                let mut new_array = Vec::with_capacity(array.len());
+                for item in array.into_iter() {
+                    new_array.push(
+                        state
+                            .get(item)
+                            .await
+                            .unwrap()
+                            .convert_with_state(state)
+                            .await,
+                    )
+                }
+                Value::Array(new_array)
             }
             TomlValue::Table(t) => {
-              let mut table = Map::new();
-              for (key, value) in t {
-                  let converted = state.get(value).await.unwrap().convert_with_state(state).await; 
-                  table.insert(key, converted);
-              }
-              Value::Table(table)
-          }
+                let mut table = Map::new();
+                for (key, value) in t {
+                    let converted = state
+                        .get(value)
+                        .await
+                        .unwrap()
+                        .convert_with_state(state)
+                        .await;
+                    table.insert(key, converted);
+                }
+                Value::Table(table)
+            }
         }
     }
 }
