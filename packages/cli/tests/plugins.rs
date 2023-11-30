@@ -10,6 +10,8 @@ async fn load_plugin_works() -> wasmtime::Result<()> {
         ..
     } = plugin;
 
+    let real_toml = toml::Value::Array((0..10).map(toml::Value::Integer).collect());
+
     let lib = bindings.plugins_main_definitions();
     let val = lib.call_get_default_config(&mut store).await?;
     let toml_val = store
@@ -20,7 +22,7 @@ async fn load_plugin_works() -> wasmtime::Result<()> {
         .unwrap()
         .convert_with_state(store.data_mut())
         .await;
-    dbg!(toml_val);
+    assert_eq!(toml_val, real_toml);
 
     Ok(())
 }
