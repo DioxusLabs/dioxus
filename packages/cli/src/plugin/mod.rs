@@ -7,6 +7,7 @@ use wasmtime::{Config, Engine, Store};
 use wasmtime_wasi::preview2::{self, DirPerms, FilePerms, Table, WasiCtxBuilder};
 use wasmtime_wasi::Dir;
 
+pub mod convert;
 pub mod interface;
 
 pub async fn load_plugin(path: impl AsRef<Path>) -> wasmtime::Result<CliPlugin> {
