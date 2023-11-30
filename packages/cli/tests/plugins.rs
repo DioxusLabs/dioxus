@@ -12,7 +12,6 @@ use wasmtime_wasi::preview2::{
 use wasmtime_wasi::Dir;
 use dioxus_cli::plugin::interface::{PluginWorld, PluginState};
 
-
 #[tokio::test]
 async fn load_plugin() -> wasmtime::Result<()> {
     let mut config = Config::new();
@@ -20,7 +19,7 @@ async fn load_plugin() -> wasmtime::Result<()> {
     config.async_support(true);
     let engine = Engine::new(&config)?;
 
-    let component = Component::from_file(&engine, "./output.wasm")?;
+    let component = Component::from_file(&engine, "../cli-plugin/examples/output.wasm")?;
 
     let mut linker = Linker::new(&engine);
     preview2::command::add_to_linker(&mut linker)?;
