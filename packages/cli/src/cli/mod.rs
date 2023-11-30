@@ -79,10 +79,6 @@ pub enum Commands {
     /// Dioxus config file controls.
     #[clap(subcommand)]
     Config(config::Config),
-
-    /// Manage plugins for dioxus cli
-    #[clap(subcommand)]
-    Plugin(plugin::Plugin),
 }
 
 impl Display for Commands {
@@ -98,8 +94,6 @@ impl Display for Commands {
             Commands::Autoformat(_) => write!(f, "fmt"),
             Commands::Check(_) => write!(f, "check"),
             Commands::Bundle(_) => write!(f, "bundle"),
-
-            Commands::Plugin(_) => write!(f, "plugin"),
         }
     }
 }

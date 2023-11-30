@@ -1,4 +1,3 @@
-use crate::plugin::PluginManager;
 use crate::{BuildResult, CrateConfig, Result};
 
 use cargo_metadata::diagnostic::Diagnostic;
@@ -105,11 +104,6 @@ async fn setup_file_watcher<F: Fn() -> Result<BuildResult> + Send + 'static>(
                                     elapsed_time: res.elapsed_time,
                                 },
                                 web_info.clone(),
-                            );
-
-                            let _ = PluginManager::on_serve_rebuild(
-                                chrono::Local::now().timestamp(),
-                                e.paths,
                             );
                         }
                         Err(e) => log::error!("{}", e),

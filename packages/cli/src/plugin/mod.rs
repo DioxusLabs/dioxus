@@ -73,60 +73,7 @@ pub async fn load_plugin(path: impl AsRef<Path>) -> wasmtime::Result<CliPlugin> 
 }
 
 pub struct CliPlugin {
-    bindings: PluginWorld,
-    instance: Instance,
-    store: Store<PluginState>,
-}
-
-pub struct PluginManager {}
-
-impl PluginManager {
-    pub fn init(config: toml::Value) -> anyhow::Result<()> {
-        Ok(())
-    }
-
-    pub fn on_build_start(
-        crate_config: &CrateConfig,
-        platform: &crate::cfg::Platform,
-    ) -> anyhow::Result<()> {
-        Ok(())
-    }
-
-    pub fn on_build_finish(
-        crate_config: &CrateConfig,
-        platform: &crate::cfg::Platform,
-    ) -> anyhow::Result<()> {
-        Ok(())
-    }
-
-    pub fn on_serve_start(crate_config: &CrateConfig) -> anyhow::Result<()> {
-        Ok(())
-    }
-
-    pub fn on_serve_rebuild(timestamp: i64, files: Vec<PathBuf>) -> anyhow::Result<()> {
-        Ok(())
-    }
-
-    pub fn on_serve_shutdown(crate_config: &CrateConfig) -> anyhow::Result<()> {
-        Ok(())
-    }
-
-    pub fn init_plugin_dir() -> PathBuf {
-        let app_path = app_path();
-        let plugin_path = app_path.join("plugins");
-        if !plugin_path.is_dir() {
-            log::info!("📖 Start to init plugin library ...");
-            let url = "https://github.com/DioxusLabs/cli-plugin-library";
-            if let Err(err) = clone_repo(&plugin_path, url) {
-                log::error!("Failed to init plugin dir, error caused by {}. ", err);
-            }
-        }
-        plugin_path
-    }
-
-    pub fn plugin_list() -> Vec<String> {
-        let mut res = vec![];
-
-        res
-    }
+    pub bindings: PluginWorld,
+    pub instance: Instance,
+    pub store: Store<PluginState>,
 }

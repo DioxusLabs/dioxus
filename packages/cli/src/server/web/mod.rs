@@ -34,9 +34,6 @@ use tower_http::{
     cors::{Any, CorsLayer},
     ServiceBuilderExt,
 };
-
-use crate::plugin::PluginManager;
-
 mod proxy;
 
 mod hot_reload;
@@ -50,7 +47,6 @@ pub async fn startup(port: u16, config: CrateConfig, start_browser: bool) -> Res
     // ctrl-c shutdown checker
     let _crate_config = config.clone();
     let _ = ctrlc::set_handler(move || {
-        let _ = PluginManager::on_serve_shutdown(&_crate_config);
         std::process::exit(0);
     });
 

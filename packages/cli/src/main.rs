@@ -3,9 +3,6 @@ use std::path::PathBuf;
 use anyhow::anyhow;
 use clap::Parser;
 use dioxus_cli::*;
-
-use dioxus_cli::plugin::PluginManager;
-
 use Commands::*;
 
 fn get_bin(bin: Option<String>) -> Result<PathBuf> {
@@ -49,10 +46,6 @@ async fn main() -> anyhow::Result<()> {
             log::warn!("You appear to be creating a Dioxus project from scratch; we will use the default config");
             DioxusConfig::default()
         });
-
-    PluginManager::init(_dioxus_config.plugin)
-        .map_err(|e| anyhow!("🚫 Plugin system initialization failed: {e}"))?;
-
     match args.action {
         Translate(opts) => opts
             .translate()
@@ -82,11 +75,6 @@ async fn main() -> anyhow::Result<()> {
         Bundle(opts) => opts
             .bundle(Some(bin.clone()))
             .map_err(|e| anyhow!("🚫 Bundling project failed: {}", e)),
-
-        Plugin(opts) => opts
-            .plugin()
-            .await
-            .map_err(|e| anyhow!("🚫 Error with plugin: {}", e)),
 
         Autoformat(opts) => opts
             .autoformat()
