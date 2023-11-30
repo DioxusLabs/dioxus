@@ -1,13 +1,10 @@
 use async_trait::async_trait;
 use plugins::main::imports::{Host as ImportHost, Platform};
 use plugins::main::toml::{Host as TomlHost, *};
-use slab::Slab;
 use wasmtime::component::*;
-use wasmtime::{Config, Engine, Store};
 use wasmtime_wasi::preview2::{
-    self, DirPerms, FilePerms, Table, WasiCtx, WasiCtxBuilder, WasiView,
+    WasiCtx, WasiView, Table
 };
-use wasmtime_wasi::Dir;
 
 pub struct PluginState {
     pub table: Table,
@@ -15,24 +12,85 @@ pub struct PluginState {
     pub tomls: slab::Slab<TomlValue>,
 }
 
+
 impl Clone for TomlValue {
-    fn clone(&self) -> Self {
-        match self {
-            Self::String(arg0) => Self::String(arg0.clone()),
-            Self::Integer(arg0) => Self::Integer(arg0.clone()),
-            Self::Float(arg0) => Self::Float(arg0.clone()),
-            Self::Array(arg0) => {
-                Self::Array(arg0.iter().map(|f| Resource::new_own(f.rep())).collect())
-            }
-            Self::Table(arg0) => Self::Table(
-                arg0.iter()
-                    .map(|(key, val)| (key.clone(), Resource::new_own(val.rep())))
-                    .collect(),
-            ),
+  fn clone(&self) -> Self {
+      match self {
+        TomlValue::String(string) => TomlValue::String(string.clone()),
+        TomlValue::Integer(num) => TomlValue::Integer(*num),
+        TomlValue::Float(float) => TomlValue::Float(*float),
+        TomlValue::Boolean(b) => TomlValue::Boolean(*b),
+        TomlValue::Datetime(d) => TomlValue::Datetime(*d),
+        TomlValue::Array(array) => TomlValue::Array(array.iter().map(|f| Resource::new_own(f.rep())).collect()),
+        TomlValue::Table(table) => TomlValue::Table(table.iter()
+        .map(|(key, val)| (key.clone(), Resource::new_own(val.rep())))
+        .collect()),
+        }
+      }
+    }
+
+    use toml as ext_toml;
+
+impl From<ext_toml::value::Offset> for Offset {
+  fn from(value: ext_toml::value::Offset) -> Self {
+      match value {
+          ext_toml::value::Offset::Z => Offset::Z,
+          ext_toml::value::Offset::Custom { hours, minutes } => Offset::Custom((hours, minutes)),
+      }
+  }
+}
+
+impl From<ext_toml::value::Time> for Time {
+    fn from(value: ext_toml::value::Time) -> Self {
+        let ext_toml::value::Time {
+            hour,
+            minute,
+            second,
+            nanosecond,
+        } = value;
+
+        Time {
+            hour,
+            minute,
+            second,
+            nanosecond,
         }
     }
 }
 
+impl From<ext_toml::value::Date> for Date {
+    fn from(value: ext_toml::value::Date) -> Self {
+        let ext_toml::value::Date { year, month, day } = value;
+
+        Date { year, month, day }
+    }
+}
+
+impl From<ext_toml::value::Datetime> for Datetime {
+    fn from(value: ext_toml::value::Datetime) -> Self {
+        let ext_toml::value::Datetime { date, time, offset } = value;
+
+        Datetime {
+            date: date.map(Into::into),
+            time: time.map(Into::into),
+            offset: offset.map(Into::into),
+        }
+    }
+}
+
+impl From<ext_toml::Value> for TomlValue {
+    fn from(value: ext_toml::Value) -> Self {
+        match value {
+            ext_toml::Value::String(string) => TomlValue::String(string),
+            ext_toml::Value::Integer(num) => TomlValue::Integer(num),
+            ext_toml::Value::Float(num) => TomlValue::Float(num),
+            ext_toml::Value::Boolean(b) => TomlValue::Boolean(b),
+            ext_toml::Value::Datetime(date) => TomlValue::Datetime(date.into()),
+            ext_toml::Value::Array(_array) => todo!(),
+            ext_toml::Value::Table(_table) => todo!(),
+        }
+    }
+}
 #[async_trait]
 impl HostToml for PluginState {
     async fn new(&mut self, value: TomlValue) -> wasmtime::Result<Resource<Toml>> {
@@ -45,6 +103,9 @@ impl HostToml for PluginState {
     async fn set(&mut self, key: Resource<Toml>, value: TomlValue) -> wasmtime::Result<()> {
         *self.tomls.get_mut(key.rep() as usize).unwrap() = value;
         Ok(())
+    }
+    async fn clone(&mut self, key: Resource<Toml>) -> wasmtime::Result<Resource<Toml>> {
+      Ok(Resource::new_own(key.rep()))
     }
 
     /// Only is called when [`Resource`] detects the [`Toml`] instance is not being called
