@@ -2,14 +2,14 @@ package plugins:main;
 
 interface definitions {
   use imports.{platform};
+  use toml.{toml, toml-value};
 
-  record config {
-    // DioxusConfig?
-    default-platform: platform
-  }
+  get-default-config: func() -> toml;
 
+  apply-config: func(config: toml) -> bool;
+  
   // Initialize the plugin
-  register: func(conf: config) -> bool;
+  register: func() -> bool;
 
   // Before the app is built
   before-build: func() -> bool;
@@ -31,6 +31,25 @@ interface definitions {
   /// check-update: func() -> result<option<string>>
 
   on-watched-paths-change: func(path: list<string>);
+}
+
+interface toml {
+  resource toml {
+    constructor(value: toml-value);
+    get: func() -> toml-value;
+    set: func(value: toml-value);
+  }
+
+  variant toml-value {
+    %string(string),
+    integer(s64),
+    float(float64),
+    %array(array),
+    %table(table),
+  }
+
+  type array = list<toml>;
+  type table = list<tuple<string, toml>>;
 }
 
 interface imports {
@@ -59,10 +78,12 @@ interface imports {
   /// returns false if path not in list
   remove-path: func(path: string) -> bool;
 
+  log: func(info: string);
+
 }
 
 world plugin-world {
   import imports;
-
+  import toml;
   export definitions;
 }
