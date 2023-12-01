@@ -33,8 +33,8 @@ impl Guest for Plugin {
 
     fn register() -> Result<PluginInfo, ()> {
         Ok(PluginInfo {
-          name: "TestPlugin".into(),
-          version: "0.0.1".into()
+            name: "TestPlugin".into(),
+            version: "0.0.1".into(),
         })
     }
 

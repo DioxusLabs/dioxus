@@ -8,8 +8,8 @@ use wasmtime_wasi::preview2::{self, DirPerms, FilePerms, Table, WasiCtxBuilder};
 use wasmtime_wasi::Dir;
 
 use self::convert::ConvertWithState;
-use self::interface::plugins::main::toml::Toml;
 use self::interface::plugins::main::imports::PluginInfo;
+use self::interface::plugins::main::toml::Toml;
 
 pub mod convert;
 pub mod interface;

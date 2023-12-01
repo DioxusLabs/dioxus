@@ -62,20 +62,24 @@ impl DioxusConfig {
         }
     }
 
-    pub fn set_plugin_toml_config(&mut self, plugin_name: String, value: toml::Value) -> Option<()> {
-      self.plugins
-          .as_mut()?
-          .get_mut(&plugin_name)?
-          .config = Some(value);
-      Some(())
-  }
+    pub fn set_plugin_toml_config(
+        &mut self,
+        plugin_name: String,
+        value: toml::Value,
+    ) -> Option<()> {
+        self.plugins.as_mut()?.get_mut(&plugin_name)?.config = Some(value);
+        Some(())
+    }
 
-  pub fn set_plugin_info(&mut self, plugin_name: String, plugin_info: PluginConfig) {
-    if self.plugins.is_none() {
-      self.plugins = Some(HashMap::new());
-    };
-    self.plugins.as_mut().unwrap().insert(plugin_name, plugin_info);
-  }
+    pub fn set_plugin_info(&mut self, plugin_name: String, plugin_info: PluginConfig) {
+        if self.plugins.is_none() {
+            self.plugins = Some(HashMap::new());
+        };
+        self.plugins
+            .as_mut()
+            .unwrap()
+            .insert(plugin_name, plugin_info);
+    }
 }
 
 fn acquire_dioxus_toml(dir: &Path) -> Option<PathBuf> {

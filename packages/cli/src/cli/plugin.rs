@@ -1,29 +1,29 @@
 use std::str::FromStr;
 
-use crate::PluginConfig;
-use crate::plugin::load_plugin;
-use crate::plugin::interface::exports::plugins::main::definitions::PluginInfo;
-use clap::Parser;
 use super::*;
+use crate::plugin::interface::exports::plugins::main::definitions::PluginInfo;
+use crate::plugin::load_plugin;
+use crate::PluginConfig;
+use clap::Parser;
 
 #[derive(Parser, Debug, Clone, PartialEq, Deserialize)]
 pub enum PluginAdd {
-  // Git {
-  //   #[clap(short, long)]
-  //   repo: String,
-  //   #[clap(short, long)]
-  //   branch: Option<String>,
-  // }
+    // Git {
+    //   #[clap(short, long)]
+    //   repo: String,
+    //   #[clap(short, long)]
+    //   branch: Option<String>,
+    // }
     Add {
-      #[clap(short, long)]
-      path: PathBuf,
-    }
+        #[clap(short, long)]
+        path: PathBuf,
+    },
 }
 
 #[derive(Clone, Debug, Deserialize, Subcommand)]
 #[clap(name = "plugin")]
 pub enum Plugin {
-  #[command(flatten)]
+    #[command(flatten)]
     Add(PluginAdd),
     Init {
         #[clap(long)]
@@ -91,35 +91,39 @@ impl Plugin {
             }
             Plugin::Add(data) => match data {
                 PluginAdd::Add { path } => {
-                  let mut plugin = load_plugin(&path).await?;
-                  
-                  // Todo handle errors
-                  let Ok(PluginInfo { name, version }) = plugin.register().await? else {
-                    log::warn!("Couldn't load plugin from path: {}", path.display());
-                    return Ok(());
-                  };
+                    let mut plugin = load_plugin(&path).await?;
 
-                  let Ok(default_config) = plugin.get_default_config().await else {
-                    log::warn!("Couldn't get default plugin from plugin: {}", name);
-                    return Ok(())
-                  };
+                    // Todo handle errors
+                    let Ok(PluginInfo { name, version }) = plugin.register().await? else {
+                        log::warn!("Couldn't load plugin from path: {}", path.display());
+                        return Ok(());
+                    };
 
-                  let Ok(version) = semver::Version::from_str(&version) else {
-                    log::warn!("Couldn't parse version from plugin: {} >> {}", name, version);
-                    return Ok(())
-                  };
+                    let Ok(default_config) = plugin.get_default_config().await else {
+                        log::warn!("Couldn't get default plugin from plugin: {}", name);
+                        return Ok(());
+                    };
 
-                  let new_config = PluginConfig {
-                    version,
-                    path,
-                    enabled: true,
-                    initialized: true,
-                    config: Some(default_config),
-                };
-                  
-                  crate_config.dioxus_config.set_plugin_info(name, new_config);
-                  dbg!(crate_config.dioxus_config);
-                },
+                    let Ok(version) = semver::Version::from_str(&version) else {
+                        log::warn!(
+                            "Couldn't parse version from plugin: {} >> {}",
+                            name,
+                            version
+                        );
+                        return Ok(());
+                    };
+
+                    let new_config = PluginConfig {
+                        version,
+                        path,
+                        enabled: true,
+                        initialized: true,
+                        config: Some(default_config),
+                    };
+
+                    crate_config.dioxus_config.set_plugin_info(name, new_config);
+                    dbg!(crate_config.dioxus_config);
+                }
             },
         }
         Ok(())
