@@ -14,7 +14,7 @@ pub struct DioxusConfig {
     #[serde(default)]
     pub bundle: BundleConfig,
 
-    pub plugins: Option<HashMap<String, PluginConfig>>,
+    pub plugins: HashMap<String, PluginConfig>,
 }
 
 impl DioxusConfig {
@@ -67,18 +67,12 @@ impl DioxusConfig {
         plugin_name: String,
         value: toml::Value,
     ) -> Option<()> {
-        self.plugins.as_mut()?.get_mut(&plugin_name)?.config = Some(value);
+        self.plugins.get_mut(&plugin_name)?.config = Some(value);
         Some(())
     }
 
     pub fn set_plugin_info(&mut self, plugin_name: String, plugin_info: PluginConfig) {
-        if self.plugins.is_none() {
-            self.plugins = Some(HashMap::new());
-        };
-        self.plugins
-            .as_mut()
-            .unwrap()
-            .insert(plugin_name, plugin_info);
+        self.plugins.insert(plugin_name, plugin_info);
     }
 }
 
@@ -143,7 +137,7 @@ impl Default for DioxusConfig {
                 publisher: Some(name.into()),
                 ..Default::default()
             },
-            plugins: None,
+            plugins: HashMap::new(),
         }
     }
 }

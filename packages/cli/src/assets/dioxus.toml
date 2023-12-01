@@ -81,3 +81,5 @@ An amazing dioxus application.
 # initialized=false
 #
 # [plugins.plugin_name.config]
+
+[plugins]

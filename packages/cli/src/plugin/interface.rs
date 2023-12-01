@@ -23,6 +23,10 @@ impl PluginState {
         self.tomls.insert(value)
     }
 
+    pub fn new_toml(&mut self, value: TomlValue) -> Resource<Toml> {
+        Resource::new_own(self.insert_toml(value) as u32)
+    }
+
     // Get reference so we know that a table is being kept up with
     // Probably redundant, but will probably be better if need borrow checking later
     pub fn clone_handle(&self, handle: &Resource<Toml>) -> Resource<Toml> {
@@ -54,7 +58,7 @@ impl Clone for TomlValue {
 #[async_trait]
 impl HostToml for PluginState {
     async fn new(&mut self, value: TomlValue) -> wasmtime::Result<Resource<Toml>> {
-        Ok(Resource::new_own(self.insert_toml(value) as u32))
+        Ok(self.new_toml(value))
     }
     async fn get(&mut self, value: Resource<Toml>) -> wasmtime::Result<TomlValue> {
         Ok(self.get_toml(value)) // We can unwrap because [`Resource`] makes sure the key is always valid

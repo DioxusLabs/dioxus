@@ -125,6 +125,11 @@ impl CliPlugin {
             .await
     }
 
+    pub async fn insert_toml(&mut self, value: toml::Value) -> Resource<Toml> {
+        let value = value.convert_with_state(self.store.data_mut()).await;
+        self.store.data_mut().new_toml(value)
+    }
+
     pub async fn set(&mut self, handle: Resource<Toml>, value: toml::Value) {
         // Should probably check if there is a Toml in the store
         // that is the same as the one we are putting in, currently will just add it to the
