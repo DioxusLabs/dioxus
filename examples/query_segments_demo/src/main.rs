@@ -70,7 +70,6 @@ fn BlogPost(cx: Scope, query_params: ManualBlogQuerySegments) -> Element {
     }
 }
 
-
 #[component]
 fn AutomaticBlogPost(cx: Scope, name: String, surname: String) -> Element {
     render! {
