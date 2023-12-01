@@ -24,7 +24,7 @@ impl<E: Display> Display for RouteParseError<E> {
     }
 }
 
-/// Something that can be created from a query string.
+/// Something that can be created from an entire query string.
 ///
 /// This trait needs to be implemented if you want to turn a query string into a struct.
 ///
@@ -37,6 +37,41 @@ pub trait FromQuery {
 impl<T: for<'a> From<&'a str>> FromQuery for T {
     fn from_query(query: &str) -> Self {
         T::from(&*urlencoding::decode(query).expect("Failed to decode url encoding"))
+    }
+}
+
+/// Something that can be created from a query argument.
+///
+/// This trait must be implemented for every type used within a query string in the router macro.
+pub trait FromQueryArgument: Default {
+    /// The error that can occur when parsing a query argument.
+    type Err;
+
+    /// Create an instance of `Self` from a query string.
+    fn from_query_argument(argument: &str) -> Result<Self, Self::Err>;
+}
+
+impl<T: Default + FromStr> FromQueryArgument for T
+where
+    <T as FromStr>::Err: Display,
+{
+    type Err = <T as FromStr>::Err;
+
+    fn from_query_argument(argument: &str) -> Result<Self, Self::Err> {
+        let result = match urlencoding::decode(argument) {
+            Ok(argument) => T::from_str(&argument),
+            Err(err) => {
+                tracing::error!("Failed to decode url encoding: {}", err);
+                T::from_str(argument)
+            }
+        };
+        match result {
+            Ok(result) => Ok(result),
+            Err(err) => {
+                tracing::error!("Failed to parse query argument: {}", err);
+                Err(err)
+            }
+        }
     }
 }
 

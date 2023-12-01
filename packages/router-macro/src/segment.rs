@@ -3,7 +3,7 @@ use syn::{Ident, Type};
 
 use proc_macro2::{Span, TokenStream as TokenStream2};
 
-use crate::query::QuerySegment;
+use crate::query::{FullQuerySegment, QueryArgument, QuerySegment};
 
 #[derive(Debug, Clone)]
 pub enum RouteSegment {
@@ -201,7 +201,7 @@ pub fn parse_route_segments<'a>(
     // check if the route has a query string
     let parsed_query = match query {
         Some(query) => {
-            if let Some(query) = query.strip_prefix(':') {
+            if let Some(query) = query.strip_prefix(":..") {
                 let query_ident = Ident::new(query, Span::call_site());
                 let field = fields.find(|(name, _)| *name == &query_ident);
 
@@ -214,12 +214,44 @@ pub fn parse_route_segments<'a>(
                     ));
                 };
 
-                Some(QuerySegment {
+                Some(QuerySegment::Single(FullQuerySegment {
                     ident: query_ident,
                     ty,
-                })
+                }))
             } else {
-                None
+                let mut query_arguments = Vec::new();
+                for segment in query.split('&') {
+                    if segment.is_empty() {
+                        return Err(syn::Error::new(
+                            route_span,
+                            "Query segments should be non-empty",
+                        ));
+                    }
+                    if let Some(query_argument) = segment.strip_prefix(':') {
+                        let query_ident = Ident::new(query_argument, Span::call_site());
+                        let field = fields.find(|(name, _)| *name == &query_ident);
+
+                        let ty = if let Some((_, ty)) = field {
+                            ty.clone()
+                        } else {
+                            return Err(syn::Error::new(
+                                route_span,
+                                format!("Could not find a field with the name '{}'", query_ident),
+                            ));
+                        };
+
+                        query_arguments.push(QueryArgument {
+                            ident: query_ident,
+                            ty,
+                        });
+                    } else {
+                        return Err(syn::Error::new(
+                            route_span,
+                            "Query segments should be a : followed by the name of the query argument",
+                        ));
+                    }
+                }
+                Some(QuerySegment::Segments(query_arguments))
             }
         }
         None => None,
