@@ -1,8 +1,7 @@
 #![allow(missing_docs)]
 use dioxus_core::{ScopeState, TaskId};
+use dioxus_signals::{use_signal, Signal};
 use std::{any::Any, cell::Cell, future::Future, rc::Rc, sync::Arc};
-
-use crate::{use_state, UseState};
 
 /// A future that resolves to a value.
 ///
@@ -27,7 +26,7 @@ where
     F: Future<Output = T> + 'static,
     D: UseFutureDep,
 {
-    let val = use_state(cx, || None);
+    let val = use_signal(cx, || None);
 
     let state = cx.use_hook(move || UseFuture {
         update: cx.schedule_update(),
@@ -58,7 +57,7 @@ where
     }
 
     // update the current value
-    state.state.current_val = val.current_val.clone();
+    state.state.set(val.take());
 
     state
 }
@@ -74,7 +73,7 @@ pub struct UseFuture<T: 'static> {
     needs_regen: Cell<bool>,
     task: Rc<Cell<Option<TaskId>>>,
     dependencies: Vec<Box<dyn Any>>,
-    state: UseState<Option<T>>,
+    state: Signal<Option<T>>,
 }
 
 pub enum UseFutureState<'a, T> {
@@ -108,8 +107,8 @@ impl<T> UseFuture<T> {
     /// Return any value, even old values if the future has not yet resolved.
     ///
     /// If the future has never completed, the returned value will be `None`.
-    pub fn value(&self) -> Option<&T> {
-        self.state.current_val.as_ref().as_ref()
+    pub fn value(&self) -> Option<T> {
+        self.state.take()
     }
 
     /// Get the ID of the future in Dioxus' internal scheduler
@@ -121,7 +120,7 @@ impl<T> UseFuture<T> {
     pub fn state(&self) -> UseFutureState<T> {
         match (&self.task.get(), &self.value()) {
             // If we have a task and an existing value, we're reloading
-            (Some(_), Some(val)) => UseFutureState::Reloading(val),
+            (Some(_), Some(val)) => UseFutureState::Reloading(val), // -> cannot return a value referencing temporary value
 
             // no task, but value - we're done
             (None, Some(val)) => UseFutureState::Complete(val),
