@@ -10,6 +10,26 @@ pub struct PluginState {
     pub tomls: slab::Slab<TomlValue>,
 }
 
+impl PluginState {
+    pub fn get_toml(&mut self, value: Resource<Toml>) -> TomlValue {
+        self.tomls.get(value.rep() as usize).unwrap().clone()
+    }
+
+    pub fn set_toml(&mut self, key: Resource<Toml>, value: TomlValue) {
+        *self.tomls.get_mut(key.rep() as usize).unwrap() = value;
+    }
+
+    pub fn insert_toml(&mut self, value: TomlValue) -> usize {
+        self.tomls.insert(value)
+    }
+
+    // Get reference so we know that a table is being kept up with
+    // Probably redundant, but will probably be better if need borrow checking later
+    pub fn clone_handle(&self, handle: &Resource<Toml>) -> Resource<Toml> {
+        Resource::new_own(handle.rep()) 
+    }
+}
+
 impl Clone for TomlValue {
     fn clone(&self) -> Self {
         match self {
@@ -34,18 +54,17 @@ impl Clone for TomlValue {
 #[async_trait]
 impl HostToml for PluginState {
     async fn new(&mut self, value: TomlValue) -> wasmtime::Result<Resource<Toml>> {
-        let new_toml = self.tomls.insert(value);
-        Ok(Resource::new_own(new_toml as u32))
+        Ok(Resource::new_own(self.insert_toml(value) as u32))
     }
     async fn get(&mut self, value: Resource<Toml>) -> wasmtime::Result<TomlValue> {
-        Ok(self.tomls.get(value.rep() as usize).unwrap().clone()) // We can unwrap because [`Resource`] makes sure the key is always valid
+        Ok(self.get_toml(value)) // We can unwrap because [`Resource`] makes sure the key is always valid
     }
     async fn set(&mut self, key: Resource<Toml>, value: TomlValue) -> wasmtime::Result<()> {
-        *self.tomls.get_mut(key.rep() as usize).unwrap() = value;
+        self.set_toml(key, value);
         Ok(())
     }
     async fn clone(&mut self, key: Resource<Toml>) -> wasmtime::Result<Resource<Toml>> {
-        Ok(Resource::new_own(key.rep()))
+        Ok(self.clone_handle(&key))
     }
 
     /// Only is called when [`Resource`] detects the [`Toml`] instance is not being called

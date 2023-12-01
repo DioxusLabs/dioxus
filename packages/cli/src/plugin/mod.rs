@@ -7,6 +7,9 @@ use wasmtime::{Config, Engine, Store};
 use wasmtime_wasi::preview2::{self, DirPerms, FilePerms, Table, WasiCtxBuilder};
 use wasmtime_wasi::Dir;
 
+use self::convert::ConvertWithState;
+use self::interface::plugins::main::toml::Toml;
+
 pub mod convert;
 pub mod interface;
 
@@ -64,4 +67,56 @@ pub struct CliPlugin {
     pub bindings: PluginWorld,
     pub instance: Instance,
     pub store: Store<PluginState>,
+}
+
+impl AsMut<PluginState> for CliPlugin {
+    fn as_mut(&mut self) -> &mut PluginState {
+        self.store.data_mut()
+    }
+}
+
+impl CliPlugin {
+    pub async fn get_default_config(&mut self) -> wasmtime::Result<toml::Value> {
+        let default_config = self
+            .bindings
+            .plugins_main_definitions()
+            .call_get_default_config(&mut self.store)
+            .await?;
+        let t = self
+            .store
+            .data_mut()
+            .get_toml(default_config)
+            .convert_with_state(self.store.data_mut())
+            .await;
+        Ok(t)
+    }
+
+    pub async fn apply_config(&mut self, config: Resource<Toml>) -> wasmtime::Result<()> {
+        let _ = self
+            .bindings
+            .plugins_main_definitions()
+            .call_apply_config(&mut self.store, config)
+            .await?;
+        Ok(())
+    }
+
+    pub fn clone_handle(&self, handle: &Resource<Toml>) -> Resource<Toml> {
+        self.store.data().clone_handle(handle)
+    }
+
+    pub async fn get(&mut self, value: Resource<Toml>) -> toml::Value {
+        self.store
+            .data_mut()
+            .get_toml(value)
+            .convert_with_state(self.store.data_mut())
+            .await
+    }
+
+    pub async fn set(&mut self, handle: Resource<Toml>, value: toml::Value) {
+        // Should probably check if there is a Toml in the store
+        // that is the same as the one we are putting in, currently will just add it to the
+        // table
+        let value = value.convert_with_state(self.store.data_mut()).await;
+        self.store.data_mut().set_toml(handle, value);
+    }
 }

@@ -19,6 +19,7 @@ where
     }
 }
 
+// Could these converts be simplified with bytemuck POD perhaps?
 impl Convert<ext_toml::value::Datetime> for Datetime {
     fn convert(self) -> ext_toml::value::Datetime {
         let Datetime { date, time, offset } = self;
@@ -121,26 +122,14 @@ impl ConvertWithState<Value> for TomlValue {
             TomlValue::Array(array) => {
                 let mut new_array = Vec::with_capacity(array.len());
                 for item in array.into_iter() {
-                    new_array.push(
-                        state
-                            .get(item)
-                            .await
-                            .unwrap()
-                            .convert_with_state(state)
-                            .await,
-                    )
+                    new_array.push(state.get_toml(item).convert_with_state(state).await)
                 }
                 Value::Array(new_array)
             }
             TomlValue::Table(t) => {
                 let mut table = Map::new();
                 for (key, value) in t {
-                    let converted = state
-                        .get(value)
-                        .await
-                        .unwrap()
-                        .convert_with_state(state)
-                        .await;
+                    let converted = state.get_toml(value).convert_with_state(state).await;
                     table.insert(key, converted);
                 }
                 Value::Table(table)
@@ -150,9 +139,9 @@ impl ConvertWithState<Value> for TomlValue {
 }
 
 #[async_trait]
-impl ConvertWithState<Resource<Toml>> for Value {
-    async fn convert_with_state(self, state: &mut PluginState) -> Resource<Toml> {
-        let val = match self {
+impl ConvertWithState<TomlValue> for Value {
+    async fn convert_with_state(self, state: &mut PluginState) -> TomlValue {
+        match self {
             Value::String(string) => TomlValue::String(string),
             Value::Integer(int) => TomlValue::Integer(int),
             Value::Float(float) => TomlValue::Float(float),
@@ -172,7 +161,23 @@ impl ConvertWithState<Resource<Toml>> for Value {
                 }
                 TomlValue::Table(table)
             }
-        };
-        state.new(val).await.unwrap()
+        }
+    }
+}
+
+#[async_trait]
+impl ConvertWithState<Resource<Toml>> for Value {
+    async fn convert_with_state(self, state: &mut PluginState) -> Resource<Toml> {
+      let toml_value: TomlValue = self.convert_with_state(state).await;
+      toml_value.convert_with_state(state).await
+    }
+}
+
+#[async_trait]
+impl ConvertWithState<Resource<Toml>> for TomlValue {
+    async fn convert_with_state(self, state: &mut PluginState) -> Resource<Toml> {
+      // This impl causes the set function add whole new toml's, check if it's
+      // already in state somehow?
+      state.new(self).await.unwrap() 
     }
 }
