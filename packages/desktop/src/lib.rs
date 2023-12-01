@@ -81,7 +81,7 @@ pub fn launch(root: Component) {
 /// use dioxus::prelude::*;
 ///
 /// fn main() {
-///     dioxus_desktop::launch_cfg(app, |c| c.with_window(|w| w.with_title("My App")));
+///     dioxus_desktop::launch_cfg(app, Config::default().with_window(WindowBuilder::new().with_title("My App")));
 /// }
 ///
 /// fn app(cx: Scope) -> Element {
