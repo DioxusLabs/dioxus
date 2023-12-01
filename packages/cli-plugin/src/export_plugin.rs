@@ -5,7 +5,7 @@ macro_rules! export_plugin {
             inline: "package plugins:main;
 
 interface definitions {
-  use imports.{platform};
+  use imports.{platform, plugin-info};
   use toml.{toml, toml-value};
 
   /// Get the default layout for the plugin to put
@@ -17,7 +17,7 @@ interface definitions {
   apply-config: func(config: toml) -> result;
   
   // Initialize the plugin
-  register: func() -> result;
+  register: func() -> result<plugin-info>;
 
   // Before the app is built
   before-build: func() -> result;
@@ -95,6 +95,12 @@ interface imports {
   enum platform {
     web,
     desktop,
+  }
+
+  record plugin-info {
+    name: string,
+    version: string,
+    // perms?
   }
 
   get-platform: func() -> platform;

@@ -1,7 +1,7 @@
 use dioxus_cli_plugin::*;
 use exports::plugins::main::definitions::Guest;
 use plugins::main::{
-    imports::log,
+    imports::{log, PluginInfo},
     toml::{Toml, TomlValue},
 };
 struct Plugin;
@@ -31,8 +31,11 @@ impl Guest for Plugin {
 
     fn on_watched_paths_change(_: std::vec::Vec<std::string::String>) {}
 
-    fn register() -> Result<(), ()> {
-        Ok(())
+    fn register() -> Result<PluginInfo, ()> {
+        Ok(PluginInfo {
+          name: "TestPlugin".into(),
+          version: "0.0.1".into()
+        })
     }
 
     fn before_build() -> Result<(), ()> {

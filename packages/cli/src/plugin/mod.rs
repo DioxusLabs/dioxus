@@ -9,6 +9,7 @@ use wasmtime_wasi::Dir;
 
 use self::convert::ConvertWithState;
 use self::interface::plugins::main::toml::Toml;
+use self::interface::plugins::main::imports::PluginInfo;
 
 pub mod convert;
 pub mod interface;
@@ -105,7 +106,7 @@ impl CliPlugin {
             .await
     }
 
-    pub async fn register(&mut self) -> wasmtime::Result<Result<(), ()>> {
+    pub async fn register(&mut self) -> wasmtime::Result<Result<PluginInfo, ()>> {
         self.bindings
             .plugins_main_definitions()
             .call_register(&mut self.store)
