@@ -13,16 +13,20 @@ use self::interface::plugins::main::toml::Toml;
 pub mod convert;
 pub mod interface;
 
-pub async fn load_plugin(path: impl AsRef<Path>) -> wasmtime::Result<CliPlugin> {
-    let path = path.as_ref();
+lazy_static::lazy_static!(
+  static ref ENGINE: Engine = {
     let mut config = Config::new();
     config.wasm_component_model(true);
     config.async_support(true);
-    let engine = Engine::new(&config)?;
+    Engine::new(&config).unwrap()
+  };
+);
 
-    let component = Component::from_file(&engine, path)?;
+pub async fn load_plugin(path: impl AsRef<Path>) -> wasmtime::Result<CliPlugin> {
+    let path = path.as_ref();
+    let component = Component::from_file(&ENGINE, path)?;
 
-    let mut linker = Linker::new(&engine);
+    let mut linker = Linker::new(&ENGINE);
     preview2::command::add_to_linker(&mut linker)?;
     PluginWorld::add_to_linker(&mut linker, |state: &mut PluginState| state)?;
 
@@ -46,7 +50,7 @@ pub async fn load_plugin(path: impl AsRef<Path>) -> wasmtime::Result<CliPlugin> 
     let table = Table::new();
     let ctx = ctx_builder.build();
     let mut store = Store::new(
-        &engine,
+        &ENGINE,
         PluginState {
             table,
             ctx,
@@ -91,13 +95,21 @@ impl CliPlugin {
         Ok(t)
     }
 
-    pub async fn apply_config(&mut self, config: Resource<Toml>) -> wasmtime::Result<()> {
-        let _ = self
-            .bindings
+    pub async fn apply_config(
+        &mut self,
+        config: Resource<Toml>,
+    ) -> wasmtime::Result<Result<(), ()>> {
+        self.bindings
             .plugins_main_definitions()
             .call_apply_config(&mut self.store, config)
-            .await?;
-        Ok(())
+            .await
+    }
+
+    pub async fn register(&mut self) -> wasmtime::Result<Result<(), ()>> {
+        self.bindings
+            .plugins_main_definitions()
+            .call_register(&mut self.store)
+            .await
     }
 
     pub fn clone_handle(&self, handle: &Resource<Toml>) -> Resource<Toml> {

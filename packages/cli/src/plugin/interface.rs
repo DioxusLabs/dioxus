@@ -26,7 +26,7 @@ impl PluginState {
     // Get reference so we know that a table is being kept up with
     // Probably redundant, but will probably be better if need borrow checking later
     pub fn clone_handle(&self, handle: &Resource<Toml>) -> Resource<Toml> {
-        Resource::new_own(handle.rep()) 
+        Resource::new_own(handle.rep())
     }
 }
 

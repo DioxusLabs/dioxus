@@ -72,3 +72,12 @@ short_description = "An amazing dioxus application."
 long_description = """
 An amazing dioxus application.
 """
+
+## add a plugin with:
+# [plugins.plugin_name]
+# version=1
+# path="path/to/wasm/from/crate/dir"
+# enabled=true
+# initialized=false
+#
+# [plugins.plugin_name.config]

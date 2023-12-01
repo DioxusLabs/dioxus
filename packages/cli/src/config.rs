@@ -14,12 +14,7 @@ pub struct DioxusConfig {
     #[serde(default)]
     pub bundle: BundleConfig,
 
-    #[serde(default = "default_plugin")]
-    pub plugin: toml::Value,
-}
-
-fn default_plugin() -> toml::Value {
-    toml::Value::Boolean(true)
+    pub plugins: Option<HashMap<String, PluginConfig>>,
 }
 
 impl DioxusConfig {
@@ -129,7 +124,7 @@ impl Default for DioxusConfig {
                 publisher: Some(name.into()),
                 ..Default::default()
             },
-            plugin: toml::Value::Table(toml::map::Map::new()),
+            plugins: None,
         }
     }
 }
@@ -295,6 +290,15 @@ impl CrateConfig {
             features,
             verbose,
         })
+    }
+
+    pub fn set_plugin_toml(&mut self, plugin_name: String, value: toml::Value) -> Option<()> {
+        self.dioxus_config
+            .plugins
+            .as_mut()?
+            .get_mut(&plugin_name)?
+            .config = Some(value);
+        Some(())
     }
 
     pub fn as_example(&mut self, example_name: String) -> &mut Self {
@@ -579,4 +583,14 @@ impl Default for WebviewInstallMode {
     fn default() -> Self {
         Self::OfflineInstaller { silent: false }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PluginConfig {
+    pub version: semver::Version,
+    pub path: PathBuf,
+    pub enabled: bool,
+    pub initialized: bool,
+    #[serde(default)]
+    pub config: Option<toml::Value>,
 }

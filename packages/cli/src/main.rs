@@ -72,6 +72,11 @@ async fn main() -> anyhow::Result<()> {
             .config()
             .map_err(|e| anyhow!("🚫 Configuring new project failed: {}", e)),
 
+        Plugin(opts) => opts
+            .plugin(Some(bin.clone()))
+            .await
+            .map_err(|e| anyhow!("🚫 Plugin manager failed: {}", e)),
+
         Bundle(opts) => opts
             .bundle(Some(bin.clone()))
             .map_err(|e| anyhow!("🚫 Bundling project failed: {}", e)),

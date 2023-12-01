@@ -168,16 +168,16 @@ impl ConvertWithState<TomlValue> for Value {
 #[async_trait]
 impl ConvertWithState<Resource<Toml>> for Value {
     async fn convert_with_state(self, state: &mut PluginState) -> Resource<Toml> {
-      let toml_value: TomlValue = self.convert_with_state(state).await;
-      toml_value.convert_with_state(state).await
+        let toml_value: TomlValue = self.convert_with_state(state).await;
+        toml_value.convert_with_state(state).await
     }
 }
 
 #[async_trait]
 impl ConvertWithState<Resource<Toml>> for TomlValue {
     async fn convert_with_state(self, state: &mut PluginState) -> Resource<Toml> {
-      // This impl causes the set function add whole new toml's, check if it's
-      // already in state somehow?
-      state.new(self).await.unwrap() 
+        // This impl causes the set function add whole new toml's, check if it's
+        // already in state somehow?
+        state.new(self).await.unwrap()
     }
 }
