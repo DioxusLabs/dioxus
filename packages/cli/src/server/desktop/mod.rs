@@ -121,9 +121,9 @@ async fn start_desktop_hot_reload(hot_reload_state: HotReloadState) -> Result<()
                 let file_map = hot_reload_state.file_map.clone();
                 let channels = channels.clone();
                 let aborted = aborted.clone();
-                let _ = local_socket_stream.set_nonblocking(true);
                 move || {
                     loop {
+                        //accept() will block the thread when local_socket_stream is in blocking mode (default)
                         match local_socket_stream.accept() {
                             Ok(mut connection) => {
                                 // send any templates than have changed before the socket connected
