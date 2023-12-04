@@ -58,7 +58,7 @@ impl Plugin {
                     );
                     return Ok(());
                 }
-                for (name, data) in plugins.plugin.iter() {
+                for (name, data) in plugins.plugin.iter_mut() {
                     if !data.enabled {
                         log::info!("Plugin {} disabled, skipping..", name);
                         continue;
@@ -79,6 +79,8 @@ impl Plugin {
                             log::warn!("Couldn't apply config from `Dioxus.toml` to {}! skipping..", name);
                             continue;
                         }
+                        data.initialized = true;
+                        changed_config = true;
                     }
                 }
                 log::info!("🚩 Plugin refresh completed.");
@@ -159,6 +161,7 @@ impl Plugin {
                 diox_doc["plugins"]["config"][&name] = config.convert();
             }
             std::fs::write(toml_path, diox_doc.to_string())?;
+            log::info!("✔️  Successfully saved config");
         }
 
         Ok(())
