@@ -1,19 +1,14 @@
 use super::interface::plugins::main::toml::*;
 use toml as ext_toml;
+// Could these converts be simplified with bytemuck POD perhaps?
 
 #[async_trait]
 pub trait ConvertWithState<T> {
-    async fn convert_with_state(self, state: &mut PluginState) -> T;
+  async fn convert_with_state(self, state: &mut PluginState) -> T;
 }
 
 pub trait Convert<T> {
-    fn convert(self) -> T;
-}
-
-impl Convert<toml_edit::Value> for toml::Value {
-    fn convert(self) -> toml_edit::Value {
-        todo!()
-    }
+  fn convert(self) -> T;
 }
 
 impl<T, U> Convert<Option<T>> for Option<U>
@@ -25,7 +20,94 @@ where
     }
 }
 
-// Could these converts be simplified with bytemuck POD perhaps?
+impl Convert<toml_edit::Offset> for toml::value::Offset {
+  fn convert(self) -> toml_edit::Offset {
+        match self {
+            ext_toml::value::Offset::Z => toml_edit::Offset::Z,
+            // Todo make an issue to make these the same
+            ext_toml::value::Offset::Custom { minutes, .. } => toml_edit::Offset::Custom {
+                minutes: minutes as i16,
+            },
+        }
+    }
+}
+impl Convert<toml_edit::Date> for toml::value::Date {
+    fn convert(self) -> toml_edit::Date {
+        let Self { year, month, day } = self;
+        toml_edit::Date { year, month, day }
+    }
+}
+impl Convert<toml_edit::Time> for toml::value::Time {
+    fn convert(self) -> toml_edit::Time {
+        let Self {
+            hour,
+            minute,
+            second,
+            nanosecond,
+        } = self;
+        toml_edit::Time {
+            hour,
+            minute,
+            second,
+            nanosecond,
+        }
+    }
+}
+impl Convert<toml_edit::Datetime> for toml::value::Datetime {
+    fn convert(self) -> toml_edit::Datetime {
+        let Self { date, time, offset } = self;
+        toml_edit::Datetime {
+            date: date.convert(),
+            time: time.convert(),
+            offset: offset.convert(),
+        }
+    }
+}
+
+impl Convert<toml_edit::Item> for toml::Value {
+    fn convert(self) -> toml_edit::Item {
+        let val: toml_edit::Value = self.convert();
+        if let toml_edit::Value::InlineTable(table) = val {
+            toml_edit::Item::Table(table.into_table())
+        } else {
+            toml_edit::value(val)
+        }
+    }
+}
+
+impl Convert<toml_edit::Value> for toml::Value {
+    fn convert(self) -> toml_edit::Value {
+        match self {
+            Value::String(val) => val.into(),
+            Value::Integer(val) => val.into(),
+            Value::Float(val) => val.into(),
+            Value::Boolean(val) => val.into(),
+            Value::Datetime(val) => {
+                toml_edit::Value::Datetime(toml_edit::Formatted::new(val.convert()))
+            }
+            Value::Array(arr) => {
+                let arr = arr
+                    .into_iter()
+                    .fold(toml_edit::Array::new(), |mut acc, next| {
+                        acc.push_formatted(next.convert());
+                        acc
+                    });
+                arr.into()
+            }
+            Value::Table(map) => {
+                let map =
+                    map.into_iter()
+                        .fold(toml_edit::InlineTable::new(), |mut acc, (key, item)| {
+                            acc.insert(&key, item.convert());
+                            acc
+                        });
+                map.into()
+            }
+        }
+    }
+}
+
+
 impl Convert<ext_toml::value::Datetime> for Datetime {
     fn convert(self) -> ext_toml::value::Datetime {
         let Datetime { date, time, offset } = self;

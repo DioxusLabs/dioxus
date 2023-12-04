@@ -25,20 +25,21 @@ pub enum PluginAdd {
 pub enum Plugin {
     #[command(flatten)]
     Add(PluginAdd),
-    Init {
+
+    /// Checks the config for any more plugins that have been added,
+    /// if there is register them and add them to the `Dioxus.toml`
+    Refresh {
         #[clap(long)]
         #[serde(default)]
         force: bool,
     },
+
     // Go through each plugin and check for updates
     // Update {
     //   #[clap(long)]
     //   #[serde(default)]
     //   ignore_error: bool
     // },
-    /// Checks the config for any more plugins that have been added,
-    /// if there is register them and add them to the `Dioxus.toml`
-    Refresh,
 
     /// List all of the plugins installed
     List,
@@ -49,7 +50,7 @@ impl Plugin {
         let mut crate_config = crate::CrateConfig::new(bin)?;
         let mut changed_config = false;
         match self {
-            Plugin::Init { force, .. } => {
+            Plugin::Refresh { force, .. } => {
                 let plugins = &mut crate_config.dioxus_config.plugins;
                 if plugins.plugin.is_empty() {
                     log::warn!(
@@ -70,17 +71,18 @@ impl Plugin {
 
                     let mut plugin = load_plugin(&data.path).await?;
 
+                    let _ = plugin.register().await?; // Dont update, most likely user set
+
                     if let Some(config) = plugins.config.get(name).cloned() {
                         let handle = plugin.insert_toml(config).await;
                         if plugin.apply_config(handle).await.is_err() {
-                            log::warn!("Couldn't apply config from `Dioxus.toml` to {}!", name);
-                            return Ok(()); // Skip maybe?
+                            log::warn!("Couldn't apply config from `Dioxus.toml` to {}! skipping..", name);
+                            continue;
                         }
                     }
                 }
-                log::info!("🚩 Plugin init completed.");
+                log::info!("🚩 Plugin refresh completed.");
             }
-            Plugin::Refresh => {}
             // Plugin::Update { ignore_error } => todo!(),
             Plugin::List => {
                 let plugins = &crate_config.dioxus_config.plugins.plugin;
@@ -132,7 +134,7 @@ impl Plugin {
                     plugins.set_plugin_info(name.clone(), new_config);
                     plugins.set_plugin_toml_config(&name, default_config);
                     changed_config = true;
-                    dbg!(crate_config.dioxus_config.clone());
+                    log::info!("✔️  Successfully added {name}");
                 }
             },
         }
@@ -149,21 +151,12 @@ impl Plugin {
             };
             let PluginConfig { plugin, config } = crate_config.dioxus_config.plugins;
             for (name, info) in plugin.into_iter() {
-                let mut tab = toml_edit::table();
-                let PluginConfigInfo {
-                    version,
-                    path,
-                    enabled,
-                    initialized,
-                } = info;
-                tab["version"] = toml_edit::value(version.to_string());
-                tab["path"] = toml_edit::value(format!("{}", path.display()));
-                tab["enabled"] = toml_edit::value(enabled);
-                tab["initialized"] = toml_edit::value(initialized);
-                diox_doc["plugins"]["plugin"][&name] = tab;
+              // There is probably a better way of doing this, but this just looks clean to me
+                let val = toml::Value::try_from(info).expect("Invalid PluginInfo!");
+                diox_doc["plugins"]["plugin"][&name] = val.convert();
             }
             for (name, config) in config.into_iter() {
-                diox_doc["plugins"]["config"][&name] = toml_edit::value(config.convert());
+                diox_doc["plugins"]["config"][&name] = config.convert();
             }
             std::fs::write(toml_path, diox_doc.to_string())?;
         }

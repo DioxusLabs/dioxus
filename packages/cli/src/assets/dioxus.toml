@@ -83,3 +83,9 @@ An amazing dioxus application.
 # [plugins.plugin_name.config]
 
 [plugins]
+
+
+[plugins.plugin]
+
+
+[plugins.config]
