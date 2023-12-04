@@ -1,10 +1,9 @@
-use std::fs::OpenOptions;
 use std::str::FromStr;
 
 use super::*;
 use crate::plugin::interface::exports::plugins::main::definitions::PluginInfo;
-use crate::plugin::load_plugin;
-use crate::PluginConfig;
+use crate::plugin::{convert::Convert, load_plugin};
+use crate::{PluginConfig, PluginConfigInfo};
 use clap::Parser;
 
 #[derive(Parser, Debug, Clone, PartialEq, Deserialize)]
@@ -51,13 +50,14 @@ impl Plugin {
         let mut changed_config = false;
         match self {
             Plugin::Init { force, .. } => {
-                if crate_config.dioxus_config.plugins.len() == 0 {
+                let plugins = &mut crate_config.dioxus_config.plugins;
+                if plugins.plugin.is_empty() {
                     log::warn!(
                         "No plugins found! Add a `[plugins.PLUGIN_NAME]` to your `Dioxus.toml!`"
                     );
                     return Ok(());
                 }
-                for (name, data) in crate_config.dioxus_config.plugins.iter() {
+                for (name, data) in plugins.plugin.iter() {
                     if !data.enabled {
                         log::info!("Plugin {} disabled, skipping..", name);
                         continue;
@@ -70,7 +70,7 @@ impl Plugin {
 
                     let mut plugin = load_plugin(&data.path).await?;
 
-                    if let Some(config) = data.config.clone() {
+                    if let Some(config) = plugins.config.get(name).cloned() {
                         let handle = plugin.insert_toml(config).await;
                         if plugin.apply_config(handle).await.is_err() {
                             log::warn!("Couldn't apply config from `Dioxus.toml` to {}!", name);
@@ -83,14 +83,18 @@ impl Plugin {
             Plugin::Refresh => {}
             // Plugin::Update { ignore_error } => todo!(),
             Plugin::List => {
-                if crate_config.dioxus_config.plugins.len() == 0 {
+                let plugins = &crate_config.dioxus_config.plugins.plugin;
+                if plugins.is_empty() {
                     log::warn!("No plugins found! Run `dx config init` and Add a `[plugins.PLUGIN_NAME]` to your `Dioxus.toml`!");
                     return Ok(());
                 };
-                
-                for (name, data) in crate_config.dioxus_config.plugins.iter() {
+
+                for (name, data) in plugins.iter() {
                     let enabled_icon = if data.enabled { "✔️" } else { "❌" };
-                    log::info!("Found Plugin: {name} | Version {} | Enabled {enabled_icon} | Config = {:#?}", data.version, data.config)
+                    log::info!(
+                        "Found Plugin: {name} | Version {} | Enabled {enabled_icon}",
+                        data.version
+                    );
                 }
             }
             Plugin::Add(data) => match data {
@@ -117,15 +121,16 @@ impl Plugin {
                         return Ok(());
                     };
 
-                    let new_config = PluginConfig {
+                    let new_config = PluginConfigInfo {
                         version,
                         path,
                         enabled: true,
                         initialized: true,
-                        config: Some(default_config),
                     };
 
-                    crate_config.dioxus_config.set_plugin_info(name, new_config);
+                    let plugins = &mut crate_config.dioxus_config.plugins;
+                    plugins.set_plugin_info(name.clone(), new_config);
+                    plugins.set_plugin_toml_config(&name, default_config);
                     changed_config = true;
                     dbg!(crate_config.dioxus_config.clone());
                 }
@@ -133,13 +138,34 @@ impl Plugin {
         }
 
         if changed_config {
-            let dioxus_toml = toml::to_string_pretty(&crate_config.dioxus_config)
-                .expect("Could not convert Dioxus config to Toml!");
-            let mut file = OpenOptions::new()
-                .write(true)
-                .create(false)
-                .open(crate_config.crate_dir.join("Dioxus.toml"))?;
-            write!(file, "{dioxus_toml}")?;
+            let toml_path = crate_config.crate_dir.join("Dioxus.toml");
+            let toml_string = std::fs::read_to_string(&toml_path)?;
+            let mut diox_doc: toml_edit::Document = match toml_string.parse() {
+                Ok(doc) => doc,
+                Err(err) => {
+                    log::warn!("Could not parse Dioxus toml! {}", err);
+                    return Ok(());
+                }
+            };
+            let PluginConfig { plugin, config } = crate_config.dioxus_config.plugins;
+            for (name, info) in plugin.into_iter() {
+                let mut tab = toml_edit::table();
+                let PluginConfigInfo {
+                    version,
+                    path,
+                    enabled,
+                    initialized,
+                } = info;
+                tab["version"] = toml_edit::value(version.to_string());
+                tab["path"] = toml_edit::value(format!("{}", path.display()));
+                tab["enabled"] = toml_edit::value(enabled);
+                tab["initialized"] = toml_edit::value(initialized);
+                diox_doc["plugins"]["plugin"][&name] = tab;
+            }
+            for (name, config) in config.into_iter() {
+                diox_doc["plugins"]["config"][&name] = toml_edit::value(config.convert());
+            }
+            std::fs::write(toml_path, diox_doc.to_string())?;
         }
 
         Ok(())

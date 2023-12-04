@@ -1,9 +1,10 @@
 use crate::{cfg::Platform, error::Result};
-use serde::{Deserialize, Serialize};
+use serde::{ser::SerializeMap, Deserialize, Serialize};
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
 };
+use toml::value::Map;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DioxusConfig {
@@ -14,7 +15,7 @@ pub struct DioxusConfig {
     #[serde(default)]
     pub bundle: BundleConfig,
 
-    pub plugins: HashMap<String, PluginConfig>,
+    pub plugins: PluginConfig,
 }
 
 impl DioxusConfig {
@@ -60,19 +61,6 @@ impl DioxusConfig {
             }
             cfg => cfg,
         }
-    }
-
-    pub fn set_plugin_toml_config(
-        &mut self,
-        plugin_name: String,
-        value: toml::Value,
-    ) -> Option<()> {
-        self.plugins.get_mut(&plugin_name)?.config = Some(value);
-        Some(())
-    }
-
-    pub fn set_plugin_info(&mut self, plugin_name: String, plugin_info: PluginConfig) {
-        self.plugins.insert(plugin_name, plugin_info);
     }
 }
 
@@ -137,7 +125,7 @@ impl Default for DioxusConfig {
                 publisher: Some(name.into()),
                 ..Default::default()
             },
-            plugins: HashMap::new(),
+            plugins: PluginConfig::default(),
         }
     }
 }
@@ -589,12 +577,55 @@ impl Default for WebviewInstallMode {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Default)]
 pub struct PluginConfig {
+    pub plugin: HashMap<String, PluginConfigInfo>,
+    pub config: HashMap<String, toml::Value>,
+}
+
+impl PluginConfig {
+    pub fn set_plugin_toml_config(
+        &mut self,
+        plugin_name: &String,
+        value: toml::Value,
+    ) -> Option<()> {
+        *self.config.get_mut(plugin_name)? = value;
+        Some(())
+    }
+
+    pub fn set_plugin_info(&mut self, plugin_name: String, plugin_info: PluginConfigInfo) {
+        self.plugin.insert(plugin_name.clone(), plugin_info);
+        self.config
+            .insert(plugin_name, toml::Value::Table(Map::new()));
+    }
+}
+
+impl Serialize for PluginConfig {
+    fn serialize<S>(&self, serializer: S) -> std::prelude::v1::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let (after, before): (Vec<_>, Vec<_>) = self
+            .config
+            .iter()
+            .partition(|(_, value)| matches!(value, toml::Value::Table(_) | toml::Value::Array(_)));
+
+        let mut plugins = serializer.serialize_map(None)?;
+        for (name, config) in before.into_iter().chain(after.into_iter()) {
+            plugins.serialize_entry(&format!("config.{name}"), config)?;
+        }
+        for (name, info) in self.plugin.iter() {
+            plugins.serialize_entry(&format!("plugin.{name}"), info)?;
+        }
+
+        plugins.end()
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PluginConfigInfo {
     pub version: semver::Version,
     pub path: PathBuf,
     pub enabled: bool,
     pub initialized: bool,
-    #[serde(default)]
-    pub config: Option<toml::Value>,
 }

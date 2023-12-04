@@ -10,6 +10,12 @@ pub trait Convert<T> {
     fn convert(self) -> T;
 }
 
+impl Convert<toml_edit::Value> for toml::Value {
+    fn convert(self) -> toml_edit::Value {
+        todo!()
+    }
+}
+
 impl<T, U> Convert<Option<T>> for Option<U>
 where
     U: Convert<T>,
