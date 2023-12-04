@@ -1,5 +1,5 @@
 use crate::{cfg::Platform, error::Result};
-use serde::{ser::SerializeMap, Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
@@ -15,6 +15,7 @@ pub struct DioxusConfig {
     #[serde(default)]
     pub bundle: BundleConfig,
 
+    #[serde(default)]
     pub plugins: PluginConfig,
 }
 
@@ -579,7 +580,9 @@ impl Default for WebviewInstallMode {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PluginConfig {
+    #[serde(default)]
     pub plugin: HashMap<String, PluginConfigInfo>,
+    #[serde(default)]
     pub config: HashMap<String, toml::Value>,
 }
 
