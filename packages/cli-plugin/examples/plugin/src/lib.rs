@@ -1,5 +1,5 @@
 use dioxus_cli_plugin::*;
-use exports::plugins::main::definitions::Guest;
+use exports::plugins::main::definitions::{Event, Guest};
 use plugins::main::{
     imports::{log, PluginInfo},
     toml::{Toml, TomlValue},
@@ -20,15 +20,6 @@ impl Guest for Plugin {
         res
     }
 
-    fn on_rebuild() -> Result<(), ()> {
-        println!("Hello from on_rebuild!");
-        Ok(())
-    }
-
-    fn on_hot_reload() {
-        println!("Hello from on_hot_reload!");
-    }
-
     fn on_watched_paths_change(_: std::vec::Vec<std::string::String>) {}
 
     fn register() -> Result<(), ()> {
@@ -42,11 +33,13 @@ impl Guest for Plugin {
         }
     }
 
-    fn before_build() -> Result<(), ()> {
+    fn before_event(event: Event) -> Result<(), ()> {
+        log(&format!("Got before event in plugin: {event:?}"));
         Ok(())
     }
 
-    fn before_serve() -> Result<(), ()> {
+    fn after_event(event: Event) -> Result<(), ()> {
+        log(&format!("Got after event in plugin: {event:?}"));
         Ok(())
     }
 }

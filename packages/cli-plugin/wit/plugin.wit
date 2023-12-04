@@ -4,8 +4,17 @@ interface definitions {
   use imports.{platform, plugin-info};
   use toml.{toml, toml-value};
 
+  enum event {
+    build,
+    serve, 
+    translate,
+    bundle,
+    rebuild,
+    hot-reload,
+  } 
+
   /// Get the default layout for the plugin to put
-  /// into `Dioxus.html`
+  /// into `Dioxus.toml`
   get-default-config: func() -> toml;
 
   /// Take config from `Dioxus.toml` and apply
@@ -15,20 +24,14 @@ interface definitions {
   /// Initialize the plugin. This will be called once after the plugin is added
   register: func() -> result;
 
-  // Get the metadata of the plugin
+  /// Get the metadata of the plugin
   metadata: func() -> plugin-info;
 
-  // Before the app is built
-  before-build: func() -> result;
-
-  // After the application is built, before serve
-  before-serve: func() -> result;
-
-  // Reload on serve with no hot-reloading(?)
-  on-rebuild: func() -> result;
-
-  // Reload on serve with hot-reloading
-  on-hot-reload: func();
+  /// Called right before the event given
+  before-event: func(event: event) -> result;
+  
+  /// Called right after the event given
+  after-event: func(event: event) -> result;
 
   /// Check if there is an update to the plugin 
   /// with a given git repo?
@@ -96,6 +99,13 @@ interface imports {
     desktop,
   }
 
+  enum file-error {
+    // Could not find a file with that path
+    not-found,
+    // Could not open with current permissions
+    no-access,
+  }
+
   record plugin-info {
     name: string,
     version: string,
@@ -114,6 +124,12 @@ interface imports {
 
   /// Add path to list of watched paths
   watch-path: func(path: string);
+
+  /// Attempt to read file from path
+  read-file: func(path: string) -> result<list<u8>, file-error>;
+
+  /// Attempt to write file from path and content 
+  write-file: func(path: string, content: list<u8>) -> result<_, file-error>;
 
   /// Try to remove a path from list of watched paths
   /// returns false if path not in list
