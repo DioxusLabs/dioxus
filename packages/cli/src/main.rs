@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use anyhow::anyhow;
 use clap::Parser;
-use dioxus_cli::*;
+use dioxus_cli::{plugin::init_plugins, *};
 use Commands::*;
 
 fn get_bin(bin: Option<String>) -> Result<PathBuf> {
@@ -40,19 +40,24 @@ async fn main() -> anyhow::Result<()> {
 
     let bin = get_bin(args.bin)?;
 
-    let _dioxus_config = DioxusConfig::load(Some(bin.clone()))
+    let dioxus_config = DioxusConfig::load(Some(bin.clone()))
         .map_err(|e| anyhow!("Failed to load Dioxus config because: {e}"))?
         .unwrap_or_else(|| {
             log::warn!("You appear to be creating a Dioxus project from scratch; we will use the default config");
             DioxusConfig::default()
         });
+
+    init_plugins(&dioxus_config.plugins).await?;
+
     match args.action {
         Translate(opts) => opts
             .translate()
+            .await
             .map_err(|e| anyhow!("🚫 Translation of HTML into RSX failed: {}", e)),
 
         Build(opts) => opts
             .build(Some(bin.clone()))
+            .await
             .map_err(|e| anyhow!("🚫 Building project failed: {}", e)),
 
         Clean(opts) => opts
@@ -79,6 +84,7 @@ async fn main() -> anyhow::Result<()> {
 
         Bundle(opts) => opts
             .bundle(Some(bin.clone()))
+            .await
             .map_err(|e| anyhow!("🚫 Bundling project failed: {}", e)),
 
         Autoformat(opts) => opts

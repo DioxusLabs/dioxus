@@ -3,18 +3,42 @@ use crate::plugin::interface::{PluginState, PluginWorld};
 use crate::PluginConfig;
 
 use slab::Slab;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use tokio::sync::Mutex;
 use wasmtime::component::*;
 use wasmtime::{Config, Engine, Store};
 use wasmtime_wasi::preview2::{self, DirPerms, FilePerms, Table, WasiCtxBuilder};
 use wasmtime_wasi::Dir;
 
 use self::convert::ConvertWithState;
+use self::interface::exports::plugins::main::definitions::Event;
 use self::interface::plugins::main::imports::PluginInfo;
 use self::interface::plugins::main::toml::Toml;
 
 pub mod convert;
 pub mod interface;
+
+#[macro_export]
+macro_rules! call_plugins {
+  (before $event:ident $(, $arg:expr)*) => {{
+      for plugin in $crate::plugin::PLUGINS.lock().await.iter_mut() {
+          if plugin.before_event($event $(, $arg)*).await.is_err() {
+              log::warn!("Could not call Before {:?} on: {}!", $event, plugin.metadata.name);
+          } else {
+              log::info!("Called Before {:?} on: {}", $event, plugin.metadata.name);
+          }
+      }
+  }};
+  (after $event:ident $(, $arg:expr)*) => {{
+      for plugin in $crate::plugin::PLUGINS.lock().await.iter_mut() {
+          if plugin.after_event($event $(, $arg)*).await.is_err() {
+              log::warn!("Could not call After {:?} on: {}!", $event, plugin.metadata.name);
+          } else {
+              log::info!("Called After {:?} on: {}", $event, plugin.metadata.name);
+          }
+      }
+  }};
+}
 
 lazy_static::lazy_static!(
   static ref ENGINE: Engine = {
@@ -23,26 +47,28 @@ lazy_static::lazy_static!(
     config.async_support(true);
     Engine::new(&config).unwrap()
   };
+
+  pub static ref PLUGINS: Mutex<Vec<CliPlugin>> = Default::default();
 );
 
-pub struct Plugins {
-    pub plugins: Vec<CliPlugin>,
+async fn load_plugins(config: &PluginConfig) -> wasmtime::Result<Vec<CliPlugin>> {
+    let mut plugins = Vec::new();
+    for plugin in config.plugins.values() {
+        let plugin = load_plugin(&plugin.path).await?;
+        plugins.push(plugin);
+    }
+
+    let mut dioxus_lock = DioxusLock::load()?;
+
+    dioxus_lock.initialize_new_plugins(&mut plugins).await?;
+
+    Ok(plugins)
 }
 
-impl Plugins {
-    async fn load(config: &PluginConfig) -> wasmtime::Result<Self> {
-        let mut plugins = Vec::new();
-        for plugin in config.plugins.values() {
-            let plugin = load_plugin(&plugin.path).await?;
-            plugins.push(plugin);
-        }
-
-        let mut dioxus_lock = DioxusLock::load()?;
-
-        dioxus_lock.initialize_new_plugins(&mut plugins).await?;
-
-        Ok(Self { plugins })
-    }
+pub async fn init_plugins(config: &PluginConfig) -> wasmtime::Result<()> {
+    let val = load_plugins(config).await?;
+    *PLUGINS.lock().await = val;
+    Ok(())
 }
 
 pub async fn load_plugin(path: impl AsRef<Path>) -> wasmtime::Result<CliPlugin> {
@@ -83,10 +109,16 @@ pub async fn load_plugin(path: impl AsRef<Path>) -> wasmtime::Result<CliPlugin> 
     let (bindings, instance) =
         PluginWorld::instantiate_async(&mut store, &component, &linker).await?;
 
+    let metadata = bindings
+        .plugins_main_definitions()
+        .call_metadata(&mut store)
+        .await?;
+
     Ok(CliPlugin {
         bindings,
         instance,
         store,
+        metadata,
     })
 }
 
@@ -94,6 +126,7 @@ pub struct CliPlugin {
     pub bindings: PluginWorld,
     pub instance: Instance,
     pub store: Store<PluginState>,
+    pub metadata: PluginInfo,
 }
 
 impl AsMut<PluginState> for CliPlugin {
@@ -134,11 +167,16 @@ impl CliPlugin {
             .call_register(&mut self.store)
             .await
     }
-
-    pub async fn metadata(&mut self) -> wasmtime::Result<PluginInfo, anyhow::Error> {
+    pub async fn before_event(&mut self, event: Event) -> wasmtime::Result<Result<(), ()>> {
         self.bindings
             .plugins_main_definitions()
-            .call_metadata(&mut self.store)
+            .call_before_event(&mut self.store, event)
+            .await
+    }
+    pub async fn after_event(&mut self, event: Event) -> wasmtime::Result<Result<(), ()>> {
+        self.bindings
+            .plugins_main_definitions()
+            .call_after_event(&mut self.store, event)
             .await
     }
 

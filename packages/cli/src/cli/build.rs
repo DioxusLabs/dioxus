@@ -1,6 +1,7 @@
-use crate::cfg::Platform;
+use crate::{call_plugins, cfg::Platform};
 
 use super::*;
+use crate::plugin::interface::exports::plugins::main::definitions::Event::Build as BuildEvent;
 
 /// Build the Rust WASM app and all of its assets.
 #[derive(Clone, Debug, Parser)]
@@ -11,7 +12,7 @@ pub struct Build {
 }
 
 impl Build {
-    pub fn build(self, bin: Option<PathBuf>) -> Result<()> {
+    pub async fn build(self, bin: Option<PathBuf>) -> Result<()> {
         let mut crate_config = crate::CrateConfig::new(bin)?;
 
         // change the release state.
@@ -35,6 +36,8 @@ impl Build {
             .platform
             .unwrap_or(crate_config.dioxus_config.application.default_platform);
 
+        call_plugins!(before BuildEvent);
+
         match platform {
             Platform::Web => {
                 crate::builder::build(&crate_config, true)?;
@@ -43,6 +46,8 @@ impl Build {
                 crate::builder::build_desktop(&crate_config, false)?;
             }
         }
+
+        call_plugins!(after BuildEvent);
 
         let temp = gen_page(&crate_config.dioxus_config, false);
 

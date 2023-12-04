@@ -5,10 +5,10 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 
-use crate::plugin::{interface::plugins::main::imports::PluginInfo, CliPlugin};
+use crate::plugin::CliPlugin;
 
 #[derive(Default, Debug, Clone, Deserialize, Serialize)]
-pub(crate) struct DioxusLock {
+pub struct DioxusLock {
     #[serde(skip)]
     path: PathBuf,
     plugins: HashMap<String, PluginState>,
@@ -64,19 +64,21 @@ impl DioxusLock {
     ) -> crate::error::Result<()> {
         let mut new_plugins = HashMap::new();
         for plugin in &mut *plugins {
-            let PluginInfo { name, .. } = plugin.metadata().await?;
-            let state = self.plugins.entry(name.clone()).or_default();
+            let state = self
+                .plugins
+                .entry(plugin.metadata.name.clone())
+                .or_default();
             if !state.initialized {
                 match plugin.register().await? {
                     Ok(()) => {
                         state.initialized = true;
                     }
                     Err(_) => {
-                        log::warn!("Couldn't initialize plugin: {}", name);
+                        log::warn!("Couldn't initialize plugin: {}", &plugin.metadata.name);
                     }
                 }
             }
-            new_plugins.insert(name, state.clone());
+            new_plugins.insert(plugin.metadata.name.clone(), state.clone());
         }
 
         self.plugins = new_plugins;
@@ -89,16 +91,17 @@ impl DioxusLock {
     }
 
     pub async fn add_plugin(&mut self, plugin: &mut CliPlugin) -> crate::error::Result<()> {
-        let PluginInfo { name, .. } = plugin.metadata().await?;
-
-        let state = self.plugins.entry(name.clone()).or_default();
+        let state = self
+            .plugins
+            .entry(plugin.metadata.name.clone())
+            .or_default();
         if !state.initialized {
             match plugin.register().await? {
                 Ok(()) => {
                     state.initialized = true;
                 }
                 Err(_) => {
-                    log::warn!("Couldn't initialize plugin: {}", name);
+                    log::warn!("Couldn't initialize plugin: {}", plugin.metadata.name);
                 }
             }
         }

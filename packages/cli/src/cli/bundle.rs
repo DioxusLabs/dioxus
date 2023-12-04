@@ -3,8 +3,10 @@ use std::{fs::create_dir_all, str::FromStr};
 
 use tauri_bundler::{BundleSettings, PackageSettings, SettingsBuilder};
 
+use crate::plugin::interface::exports::plugins::main::definitions::Event::Bundle as BundleEvent;
+
 use super::*;
-use crate::{build_desktop, cfg::ConfigOptsBundle};
+use crate::{build_desktop, call_plugins, cfg::ConfigOptsBundle};
 
 /// Bundle the Rust desktop app and all of its assets
 #[derive(Clone, Debug, Parser)]
@@ -61,8 +63,11 @@ impl From<PackageType> for tauri_bundler::PackageType {
 }
 
 impl Bundle {
-    pub fn bundle(self, bin: Option<PathBuf>) -> Result<()> {
+    pub async fn bundle(self, bin: Option<PathBuf>) -> Result<()> {
         let mut crate_config = crate::CrateConfig::new(bin)?;
+
+        // Todo plugin before bundle
+        call_plugins!(before BundleEvent);
 
         // change the release state.
         crate_config.with_release(self.build.release);
@@ -155,11 +160,14 @@ impl Bundle {
         std::env::set_var("CI", "true");
 
         tauri_bundler::bundle::bundle_project(settings.unwrap()).unwrap_or_else(|err|{
-            #[cfg(target_os = "macos")]
-            panic!("Failed to bundle project: {}\nMake sure you have automation enabled in your terminal (https://github.com/tauri-apps/tauri/issues/3055#issuecomment-1624389208) and full disk access enabled for your terminal (https://github.com/tauri-apps/tauri/issues/3055#issuecomment-1624389208)", err);
-            #[cfg(not(target_os = "macos"))]
-            panic!("Failed to bundle project: {}", err);
-        });
+    #[cfg(target_os = "macos")]
+    panic!("Failed to bundle project: {}\nMake sure you have automation enabled in your terminal (https://github.com/tauri-apps/tauri/issues/3055#issuecomment-1624389208) and full disk access enabled for your terminal (https://github.com/tauri-apps/tauri/issues/3055#issuecomment-1624389208)", err);
+    #[cfg(not(target_os = "macos"))]
+    panic!("Failed to bundle project: {}", err);
+  });
+
+        // Todo plugin after bundle
+        call_plugins!(after BundleEvent);
 
         Ok(())
     }

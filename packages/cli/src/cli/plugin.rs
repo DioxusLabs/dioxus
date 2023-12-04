@@ -2,7 +2,6 @@ use std::str::FromStr;
 
 use super::*;
 use crate::lock::DioxusLock;
-use crate::plugin::interface::exports::plugins::main::definitions::PluginInfo;
 use crate::plugin::{convert::Convert, load_plugin};
 use crate::PluginConfigInfo;
 use clap::Parser;
@@ -46,7 +45,9 @@ impl Plugin {
             Plugin::List => {
                 let plugins = &crate_config.dioxus_config.plugins.plugins;
                 if plugins.is_empty() {
-                    log::warn!("No plugins found! Run `dx config init` and Add a `[plugins.PLUGIN_NAME]` to your `Dioxus.toml`!");
+                    log::warn!(
+                        "No plugins found! Run `dx config init` and then run `dx add --path WASM"
+                    );
                     return Ok(());
                 };
 
@@ -62,18 +63,19 @@ impl Plugin {
                     let mut dioxus_lock = DioxusLock::load()?;
                     dioxus_lock.add_plugin(&mut plugin).await?;
 
-                    let PluginInfo { name, version } = plugin.metadata().await?;
-
                     let Ok(default_config) = plugin.get_default_config().await else {
-                        log::warn!("Couldn't get default config from plugin: {}", name);
+                        log::warn!(
+                            "Couldn't get default config from plugin: {}",
+                            plugin.metadata.name
+                        );
                         return Ok(());
                     };
 
-                    let Ok(version) = semver::Version::from_str(&version) else {
+                    let Ok(version) = semver::Version::from_str(&plugin.metadata.version) else {
                         log::warn!(
                             "Couldn't parse version from plugin: {} >> {}",
-                            name,
-                            version
+                            plugin.metadata.name,
+                            plugin.metadata.version
                         );
                         return Ok(());
                     };
@@ -85,9 +87,9 @@ impl Plugin {
                     };
 
                     let plugins = &mut crate_config.dioxus_config.plugins;
-                    plugins.set_plugin_info(name.clone(), new_config);
+                    plugins.set_plugin_info(plugin.metadata.name.clone(), new_config);
                     changed_config = true;
-                    log::info!("✔️  Successfully added {name}");
+                    log::info!("✔️  Successfully added {}", plugin.metadata.name);
                 }
             },
         }

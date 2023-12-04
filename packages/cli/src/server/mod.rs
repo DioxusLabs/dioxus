@@ -1,4 +1,8 @@
-use crate::{BuildResult, CrateConfig, Result};
+use crate::{
+    call_plugins,
+    plugin::interface::exports::plugins::main::definitions::Event::{HotReload, Rebuild},
+    BuildResult, CrateConfig, Result,
+};
 
 use cargo_metadata::diagnostic::Diagnostic;
 use dioxus_core::Template;
@@ -39,8 +43,14 @@ async fn setup_file_watcher<F: Fn() -> Result<BuildResult> + Send + 'static>(
         let config = watcher_config.clone();
         if let Ok(e) = info {
             if chrono::Local::now().timestamp() > last_update_time {
+                // Todo plugin on-watched-paths-change
+
                 let mut needs_full_rebuild;
                 if let Some(hot_reload) = &hot_reload {
+                    futures::executor::block_on(async {
+                        call_plugins!(before HotReload);
+                    });
+
                     // find changes to the rsx in the file
                     let mut rsx_file_map = hot_reload.file_map.lock().unwrap();
                     let mut messages: Vec<Template<'static>> = Vec::new();
@@ -69,6 +79,10 @@ async fn setup_file_watcher<F: Fn() -> Result<BuildResult> + Send + 'static>(
                         }
                     }
 
+                    futures::executor::block_on(async {
+                        call_plugins!(after HotReload);
+                    });
+
                     if needs_full_rebuild {
                         // Reset the file map to the new state of the project
                         let FileMapBuildResult {
@@ -91,6 +105,10 @@ async fn setup_file_watcher<F: Fn() -> Result<BuildResult> + Send + 'static>(
                 }
 
                 if needs_full_rebuild {
+                    futures::executor::block_on(async {
+                        call_plugins!(before Rebuild);
+                    });
+
                     match build_with() {
                         Ok(res) => {
                             last_update_time = chrono::Local::now().timestamp();
@@ -108,6 +126,10 @@ async fn setup_file_watcher<F: Fn() -> Result<BuildResult> + Send + 'static>(
                         }
                         Err(e) => log::error!("{}", e),
                     }
+
+                    futures::executor::block_on(async {
+                        call_plugins!(after Rebuild);
+                    });
                 }
             }
         }

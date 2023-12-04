@@ -4,6 +4,8 @@ use plugins::main::toml::{Host as TomlHost, *};
 use wasmtime::component::*;
 use wasmtime_wasi::preview2::{Table, WasiCtx, WasiView};
 
+use self::plugins::main::imports::FileError;
+
 pub struct PluginState {
     pub table: Table,
     pub ctx: WasiCtx,
@@ -104,6 +106,19 @@ impl ImportHost for PluginState {
     }
 
     async fn remove_watched_path(&mut self, _: String) -> wasmtime::Result<Result<(), ()>> {
+        Ok(Ok(()))
+    }
+
+    // Todo Implement these
+    async fn read_file(&mut self, _path: String) -> wasmtime::Result<Result<Vec<u8>, FileError>> {
+        Ok(Ok(vec![]))
+    }
+
+    async fn write_file(
+        &mut self,
+        _path: String,
+        _content: Vec<u8>,
+    ) -> wasmtime::Result<Result<(), FileError>> {
         Ok(Ok(()))
     }
 
