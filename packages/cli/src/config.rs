@@ -577,7 +577,7 @@ impl Default for WebviewInstallMode {
     }
 }
 
-#[derive(Debug, Clone, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PluginConfig {
     pub plugin: HashMap<String, PluginConfigInfo>,
     pub config: HashMap<String, toml::Value>,
@@ -597,28 +597,6 @@ impl PluginConfig {
         self.plugin.insert(plugin_name.clone(), plugin_info);
         self.config
             .insert(plugin_name, toml::Value::Table(Map::new()));
-    }
-}
-
-impl Serialize for PluginConfig {
-    fn serialize<S>(&self, serializer: S) -> std::prelude::v1::Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        let (after, before): (Vec<_>, Vec<_>) = self
-            .config
-            .iter()
-            .partition(|(_, value)| matches!(value, toml::Value::Table(_) | toml::Value::Array(_)));
-
-        let mut plugins = serializer.serialize_map(None)?;
-        for (name, config) in before.into_iter().chain(after.into_iter()) {
-            plugins.serialize_entry(&format!("config.{name}"), config)?;
-        }
-        for (name, info) in self.plugin.iter() {
-            plugins.serialize_entry(&format!("plugin.{name}"), info)?;
-        }
-
-        plugins.end()
     }
 }
 
