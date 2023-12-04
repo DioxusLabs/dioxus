@@ -369,15 +369,19 @@ fn apply_request_parts_to_response<B>(
     }
 }
 
-/// SSR renderer handler for Axum
-pub async fn render_handler<P: Clone + serde::Serialize + Send + Sync + 'static>(
-    State((cfg, ssr_state)): State<(ServeConfig<P>, SSRState)>,
+/// SSR renderer handler for Axum with added state.
+pub async fn render_handler_with_state<
+    P: Clone + serde::Serialize + Send + Sync + 'static,
+    S: Send + Sync + 'static,
+>(
+    State((state, cfg, ssr_state)): State<(S, ServeConfig<P>, SSRState)>,
     request: Request<Body>,
 ) -> impl IntoResponse {
     let (parts, _) = request.into_parts();
     let url = parts.uri.path_and_query().unwrap().to_string();
     let parts: Arc<RwLock<http::request::Parts>> = Arc::new(RwLock::new(parts.into()));
-    let server_context = DioxusServerContext::new(parts.clone());
+    let mut server_context = DioxusServerContext::new(parts.clone());
+    let _ = server_context.insert(state);
 
     match ssr_state.render(url, &cfg, &server_context).await {
         Ok(rendered) => {
@@ -393,6 +397,14 @@ pub async fn render_handler<P: Clone + serde::Serialize + Send + Sync + 'static>
             report_err(e).into_response()
         }
     }
+}
+
+/// SSR renderer handler for Axum
+pub async fn render_handler<P: Clone + serde::Serialize + Send + Sync + 'static>(
+    State((cfg, ssr_state)): State<(ServeConfig<P>, SSRState)>,
+    request: Request<Body>,
+) -> impl IntoResponse {
+    render_handler_with_state(State(((), cfg, ssr_state)), request).await
 }
 
 fn report_err<E: std::fmt::Display>(e: E) -> Response<BoxBody> {
