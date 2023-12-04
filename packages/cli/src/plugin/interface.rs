@@ -103,7 +103,7 @@ impl ImportHost for PluginState {
         Ok(vec!["All of them".into()])
     }
 
-    async fn remove_path(&mut self, _: String) -> wasmtime::Result<Result<(), ()>> {
+    async fn remove_watched_path(&mut self, _: String) -> wasmtime::Result<Result<(), ()>> {
         Ok(Ok(()))
     }
 

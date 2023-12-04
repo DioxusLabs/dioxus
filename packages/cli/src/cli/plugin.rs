@@ -40,7 +40,6 @@ pub enum Plugin {
     //   #[serde(default)]
     //   ignore_error: bool
     // },
-
     /// List all of the plugins installed
     List,
 }
@@ -76,7 +75,10 @@ impl Plugin {
                     if let Some(config) = plugins.config.get(name).cloned() {
                         let handle = plugin.insert_toml(config).await;
                         if plugin.apply_config(handle).await.is_err() {
-                            log::warn!("Couldn't apply config from `Dioxus.toml` to {}! skipping..", name);
+                            log::warn!(
+                                "Couldn't apply config from `Dioxus.toml` to {}! skipping..",
+                                name
+                            );
                             continue;
                         }
                         data.initialized = true;
@@ -153,7 +155,7 @@ impl Plugin {
             };
             let PluginConfig { plugin, config } = crate_config.dioxus_config.plugins;
             for (name, info) in plugin.into_iter() {
-              // There is probably a better way of doing this, but this just looks clean to me
+                // There is probably a better way of doing this, but this just looks clean to me
                 let val = toml::Value::try_from(info).expect("Invalid PluginInfo!");
                 diox_doc["plugins"]["plugin"][&name] = val.convert();
             }

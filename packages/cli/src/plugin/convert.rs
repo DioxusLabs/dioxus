@@ -4,11 +4,11 @@ use toml as ext_toml;
 
 #[async_trait]
 pub trait ConvertWithState<T> {
-  async fn convert_with_state(self, state: &mut PluginState) -> T;
+    async fn convert_with_state(self, state: &mut PluginState) -> T;
 }
 
 pub trait Convert<T> {
-  fn convert(self) -> T;
+    fn convert(self) -> T;
 }
 
 impl<T, U> Convert<Option<T>> for Option<U>
@@ -21,7 +21,7 @@ where
 }
 
 impl Convert<toml_edit::Offset> for toml::value::Offset {
-  fn convert(self) -> toml_edit::Offset {
+    fn convert(self) -> toml_edit::Offset {
         match self {
             ext_toml::value::Offset::Z => toml_edit::Offset::Z,
             // Todo make an issue to make these the same
@@ -106,7 +106,6 @@ impl Convert<toml_edit::Value> for toml::Value {
         }
     }
 }
-
 
 impl Convert<ext_toml::value::Datetime> for Datetime {
     fn convert(self) -> ext_toml::value::Datetime {

@@ -112,12 +112,12 @@ interface imports {
   /// Add path to list of watched paths
   watch-path: func(path: string);
 
-  /// Get list of watched paths
-  watched-paths: func() -> list<string>;
-
   /// Try to remove a path from list of watched paths
   /// returns false if path not in list
-  remove-path: func(path: string) -> result;
+  remove-watched-path: func(path: string) -> result;
+
+  /// Get list of watched paths
+  watched-paths: func() -> list<string>;
 
   log: func(info: string);
 
