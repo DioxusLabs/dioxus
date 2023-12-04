@@ -586,7 +586,7 @@ pub struct PluginConfig {
 
 impl PluginConfig {
     pub fn set_plugin_info(&mut self, plugin_name: String, plugin_info: PluginConfigInfo) {
-        self.plugins.insert(plugin_name.clone(), plugin_info);
+        self.plugins.insert(plugin_name, plugin_info);
     }
 }
 

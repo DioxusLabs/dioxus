@@ -65,7 +65,7 @@ impl Plugin {
                     let PluginInfo { name, version } = plugin.metadata().await?;
 
                     let Ok(default_config) = plugin.get_default_config().await else {
-                        log::warn!("Couldn't get default plugin from plugin: {}", name);
+                        log::warn!("Couldn't get default config from plugin: {}", name);
                         return Ok(());
                     };
 
