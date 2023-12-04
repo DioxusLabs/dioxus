@@ -1,6 +1,7 @@
 use std::str::FromStr;
 
 use super::*;
+use crate::lock::DioxusLock;
 use crate::plugin::interface::exports::plugins::main::definitions::PluginInfo;
 use crate::plugin::{convert::Convert, load_plugin};
 use crate::PluginConfigInfo;
@@ -26,14 +27,6 @@ pub enum Plugin {
     #[command(flatten)]
     Add(PluginAdd),
 
-    /// Checks the config for any more plugins that have been added,
-    /// if there is register them and add them to the `Dioxus.toml`
-    Refresh {
-        #[clap(long)]
-        #[serde(default)]
-        force: bool,
-    },
-
     // Go through each plugin and check for updates
     // Update {
     //   #[clap(long)]
@@ -49,69 +42,27 @@ impl Plugin {
         let mut crate_config = crate::CrateConfig::new(bin)?;
         let mut changed_config = false;
         match self {
-            Plugin::Refresh { force, .. } => {
-                let plugins = &mut crate_config.dioxus_config.plugins;
-                if plugins.plugin.is_empty() {
-                    log::warn!(
-                        "No plugins found! Add a `[plugins.PLUGIN_NAME]` to your `Dioxus.toml!`"
-                    );
-                    return Ok(());
-                }
-                for (name, data) in plugins.plugin.iter_mut() {
-                    if !data.enabled {
-                        log::info!("Plugin {} disabled, skipping..", name);
-                        continue;
-                    }
-
-                    if data.initialized && !force {
-                        log::info!("Plugin {} already initialized, skipping..", name);
-                        continue;
-                    }
-
-                    let mut plugin = load_plugin(&data.path).await?;
-
-                    let _ = plugin.register().await?; // Dont update, most likely user set
-
-                    if let Some(config) = plugins.config.get(name).cloned() {
-                        let handle = plugin.insert_toml(config).await;
-                        if plugin.apply_config(handle).await.is_err() {
-                            log::warn!(
-                                "Couldn't apply config from `Dioxus.toml` to {}! skipping..",
-                                name
-                            );
-                            continue;
-                        }
-                        data.initialized = true;
-                        changed_config = true;
-                    }
-                }
-                log::info!("🚩 Plugin refresh completed.");
-            }
             // Plugin::Update { ignore_error } => todo!(),
             Plugin::List => {
-                let plugins = &crate_config.dioxus_config.plugins.plugin;
+                let plugins = &crate_config.dioxus_config.plugins.plugins;
                 if plugins.is_empty() {
                     log::warn!("No plugins found! Run `dx config init` and Add a `[plugins.PLUGIN_NAME]` to your `Dioxus.toml`!");
                     return Ok(());
                 };
 
                 for (name, data) in plugins.iter() {
-                    let enabled_icon = if data.enabled { "✔️" } else { "❌" };
-                    log::info!(
-                        "Found Plugin: {name} | Version {} | Enabled {enabled_icon}",
-                        data.version
-                    );
+                    log::info!("Found Plugin: {name} | Version {}", data.version);
                 }
             }
             Plugin::Add(data) => match data {
                 PluginAdd::Add { path } => {
                     let mut plugin = load_plugin(&path).await?;
 
-                    // Todo handle errors
-                    let Ok(PluginInfo { name, version }) = plugin.register().await? else {
-                        log::warn!("Couldn't load plugin from path: {}", path.display());
-                        return Ok(());
-                    };
+                    // Add the plugin to the lock file
+                    let mut dioxus_lock = DioxusLock::load()?;
+                    dioxus_lock.add_plugin(&mut plugin).await?;
+
+                    let PluginInfo { name, version } = plugin.metadata().await?;
 
                     let Ok(default_config) = plugin.get_default_config().await else {
                         log::warn!("Couldn't get default plugin from plugin: {}", name);
@@ -130,13 +81,11 @@ impl Plugin {
                     let new_config = PluginConfigInfo {
                         version,
                         path,
-                        enabled: true,
-                        initialized: true,
+                        config: default_config,
                     };
 
                     let plugins = &mut crate_config.dioxus_config.plugins;
                     plugins.set_plugin_info(name.clone(), new_config);
-                    plugins.set_plugin_toml_config(&name, default_config);
                     changed_config = true;
                     log::info!("✔️  Successfully added {name}");
                 }

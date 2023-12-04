@@ -19,6 +19,9 @@ pub use cli::*;
 pub mod config;
 pub use config::*;
 
+mod lock;
+pub(crate) use lock::*;
+
 pub mod error;
 pub use error::*;
 

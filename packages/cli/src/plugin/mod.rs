@@ -1,7 +1,9 @@
+use crate::lock::DioxusLock;
 use crate::plugin::interface::{PluginState, PluginWorld};
+use crate::PluginConfig;
 
 use slab::Slab;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use wasmtime::component::*;
 use wasmtime::{Config, Engine, Store};
 use wasmtime_wasi::preview2::{self, DirPerms, FilePerms, Table, WasiCtxBuilder};
@@ -22,6 +24,26 @@ lazy_static::lazy_static!(
     Engine::new(&config).unwrap()
   };
 );
+
+pub struct Plugins {
+    pub plugins: Vec<CliPlugin>,
+}
+
+impl Plugins {
+    async fn load(config: &PluginConfig) -> wasmtime::Result<Self> {
+        let mut plugins = Vec::new();
+        for plugin in config.plugins.values() {
+            let plugin = load_plugin(&plugin.path).await?;
+            plugins.push(plugin);
+        }
+
+        let mut dioxus_lock = DioxusLock::load()?;
+
+        dioxus_lock.initialize_new_plugins(&mut plugins).await?;
+
+        Ok(Self { plugins })
+    }
+}
 
 pub async fn load_plugin(path: impl AsRef<Path>) -> wasmtime::Result<CliPlugin> {
     let path = path.as_ref();
@@ -106,10 +128,17 @@ impl CliPlugin {
             .await
     }
 
-    pub async fn register(&mut self) -> wasmtime::Result<Result<PluginInfo, ()>> {
+    pub async fn register(&mut self) -> wasmtime::Result<Result<(), ()>> {
         self.bindings
             .plugins_main_definitions()
             .call_register(&mut self.store)
+            .await
+    }
+
+    pub async fn metadata(&mut self) -> wasmtime::Result<PluginInfo, anyhow::Error> {
+        self.bindings
+            .plugins_main_definitions()
+            .call_metadata(&mut self.store)
             .await
     }
 

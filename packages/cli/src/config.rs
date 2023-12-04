@@ -580,26 +580,13 @@ impl Default for WebviewInstallMode {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PluginConfig {
-    #[serde(default)]
-    pub plugin: HashMap<String, PluginConfigInfo>,
-    #[serde(default)]
-    pub config: HashMap<String, toml::Value>,
+    #[serde(flatten)]
+    pub plugins: HashMap<String, PluginConfigInfo>,
 }
 
 impl PluginConfig {
-    pub fn set_plugin_toml_config(
-        &mut self,
-        plugin_name: &String,
-        value: toml::Value,
-    ) -> Option<()> {
-        *self.config.get_mut(plugin_name)? = value;
-        Some(())
-    }
-
     pub fn set_plugin_info(&mut self, plugin_name: String, plugin_info: PluginConfigInfo) {
-        self.plugin.insert(plugin_name.clone(), plugin_info);
-        self.config
-            .insert(plugin_name, toml::Value::Table(Map::new()));
+        self.plugins.insert(plugin_name.clone(), plugin_info);
     }
 }
 
@@ -607,6 +594,10 @@ impl PluginConfig {
 pub struct PluginConfigInfo {
     pub version: semver::Version,
     pub path: PathBuf,
-    pub enabled: bool,
-    pub initialized: bool,
+    #[serde(default = "default_plugin_config")]
+    pub config: toml::Value,
+}
+
+fn default_plugin_config() -> toml::Value {
+    toml::Value::Table(Map::new())
 }

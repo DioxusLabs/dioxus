@@ -31,11 +31,15 @@ impl Guest for Plugin {
 
     fn on_watched_paths_change(_: std::vec::Vec<std::string::String>) {}
 
-    fn register() -> Result<PluginInfo, ()> {
-        Ok(PluginInfo {
+    fn register() -> Result<(), ()> {
+        Ok(())
+    }
+
+    fn metadata() -> exports::plugins::main::definitions::PluginInfo {
+        PluginInfo {
             name: "TestPlugin".into(),
             version: "0.0.1".into(),
-        })
+        }
     }
 
     fn before_build() -> Result<(), ()> {

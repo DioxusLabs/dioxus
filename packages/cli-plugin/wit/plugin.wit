@@ -12,8 +12,11 @@ interface definitions {
   /// to the plugin, returns false if couldn't apply
   apply-config: func(config: toml) -> result;
   
-  // Initialize the plugin
-  register: func() -> result<plugin-info>;
+  /// Initialize the plugin. This will be called once after the plugin is added
+  register: func() -> result;
+
+  // Get the metadata of the plugin
+  metadata: func() -> plugin-info;
 
   // Before the app is built
   before-build: func() -> result;
