@@ -3,7 +3,7 @@ use std::str::FromStr;
 use super::*;
 use crate::plugin::interface::exports::plugins::main::definitions::PluginInfo;
 use crate::plugin::{convert::Convert, load_plugin};
-use crate::{PluginConfig, PluginConfigInfo};
+use crate::PluginConfigInfo;
 use clap::Parser;
 
 #[derive(Parser, Debug, Clone, PartialEq, Deserialize)]
@@ -153,15 +153,9 @@ impl Plugin {
                     return Ok(());
                 }
             };
-            let PluginConfig { plugin, config } = crate_config.dioxus_config.plugins;
-            for (name, info) in plugin.into_iter() {
-                // There is probably a better way of doing this, but this just looks clean to me
-                let val = toml::Value::try_from(info).expect("Invalid PluginInfo!");
-                diox_doc["plugins"]["plugin"][&name] = val.convert();
-            }
-            for (name, config) in config.into_iter() {
-                diox_doc["plugins"]["config"][&name] = config.convert();
-            }
+            let val = toml::Value::try_from(&crate_config.dioxus_config.plugins)
+                .expect("Invalid PluginInfo!");
+            diox_doc["plugins"] = val.convert();
             std::fs::write(toml_path, diox_doc.to_string())?;
             log::info!("✔️  Successfully saved config");
         }
