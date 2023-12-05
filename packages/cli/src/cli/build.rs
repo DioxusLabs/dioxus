@@ -1,3 +1,6 @@
+use std::io::Stdout;
+
+
 use crate::cfg::Platform;
 #[cfg(feature = "plugin")]
 use crate::plugin::PluginManager;
@@ -16,6 +19,7 @@ impl Build {
     pub fn build(self, bin: Option<PathBuf>) -> Result<()> {
         let mut crate_config = crate::CrateConfig::new(bin)?;
 
+        
         // change the release state.
         crate_config.with_release(self.build.release);
         crate_config.with_verbose(self.build.verbose);
@@ -37,11 +41,18 @@ impl Build {
             .platform
             .unwrap_or(crate_config.dioxus_config.application.default_platform);
 
-        #[cfg(feature = "plugin")]
-        let _ = PluginManager::on_build_start(&crate_config, &platform);
+        // #[cfg(feature = "plugin")]
+        // let _ = PluginManager::on_build_start(&crate_config, &platform);
 
         match platform {
             Platform::Web => {
+              let command = std::process::Command::new("rustup").args(&["show"]).output()?;
+              let command_output = String::from_utf8(command.stdout).unwrap();
+              if !command_output.contains("wasm32-unknown-unknown") {
+                log::info!("wasm32-unknown-unknown target not detected, installing..");
+                let _ = std::process::Command::new("rustup").args(&["target", "add", "wasm32-unknown-unknown"]).output()?;
+              }
+
                 crate::builder::build(&crate_config, true)?;
             }
             Platform::Desktop => {
@@ -66,8 +77,8 @@ impl Build {
         )?;
         file.write_all(temp.as_bytes())?;
 
-        #[cfg(feature = "plugin")]
-        let _ = PluginManager::on_build_finish(&crate_config, &platform);
+        // #[cfg(feature = "plugin")]
+        // let _ = PluginManager::on_build_finish(&crate_config, &platform);
 
         Ok(())
     }
