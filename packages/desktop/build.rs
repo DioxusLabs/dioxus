@@ -44,7 +44,9 @@ fn main() {
           .then(response => {{
               response.arrayBuffer()
                   .then(bytes => {{
-                      run_from_bytes(bytes);
+                      requestAnimationFrame(() => {{
+                        run_from_bytes(bytes);
+                      }});
                       window.interpreter.wait_for_request();
                   }});
           }})
