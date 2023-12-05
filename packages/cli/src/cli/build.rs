@@ -46,13 +46,6 @@ impl Build {
 
         match platform {
             Platform::Web => {
-              let command = std::process::Command::new("rustup").args(&["show"]).output()?;
-              let command_output = String::from_utf8(command.stdout).unwrap();
-              if !command_output.contains("wasm32-unknown-unknown") {
-                log::info!("wasm32-unknown-unknown target not detected, installing..");
-                let _ = std::process::Command::new("rustup").args(&["target", "add", "wasm32-unknown-unknown"]).output()?;
-              }
-
                 crate::builder::build(&crate_config, true)?;
             }
             Platform::Desktop => {
