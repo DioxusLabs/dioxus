@@ -419,7 +419,7 @@ fn apply_request_parts_to_response<B>(
 /// ```
 pub async fn render_handler_with_context<
     P: Clone + serde::Serialize + Send + Sync + 'static,
-    F: for<'a> FnMut(&'a mut DioxusServerContext),
+    F: FnMut(&mut DioxusServerContext),
 >(
     State((mut inject_context, cfg, ssr_state)): State<(F, ServeConfig<P>, SSRState)>,
     request: Request<Body>,
