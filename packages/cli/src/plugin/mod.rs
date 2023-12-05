@@ -20,18 +20,18 @@ pub mod interface;
 
 #[macro_export]
 macro_rules! call_plugins {
-  (before $event:ident $(, $arg:expr)*) => {{
+  (before $event:ident) => {{
       for plugin in $crate::plugin::PLUGINS.lock().await.iter_mut() {
-          if plugin.before_event($event $(, $arg)*).await.is_err() {
+          if plugin.before_event($event).await.is_err() {
               log::warn!("Could not call Before {:?} on: {}!", $event, plugin.metadata.name);
           } else {
               log::info!("Called Before {:?} on: {}", $event, plugin.metadata.name);
           }
       }
   }};
-  (after $event:ident $(, $arg:expr)*) => {{
+  (after $event:ident) => {{
       for plugin in $crate::plugin::PLUGINS.lock().await.iter_mut() {
-          if plugin.after_event($event $(, $arg)*).await.is_err() {
+          if plugin.after_event($event).await.is_err() {
               log::warn!("Could not call After {:?} on: {}!", $event, plugin.metadata.name);
           } else {
               log::info!("Called After {:?} on: {}", $event, plugin.metadata.name);
