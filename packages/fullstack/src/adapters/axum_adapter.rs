@@ -388,7 +388,6 @@ fn apply_request_parts_to_response<B>(
 ///
 /// #[tokio::main]
 /// async fn main() {
-///     let assets_path = concat!(env!("CARGO_MANIFEST_DIR"), "/dist");
 ///     let cfg = ServeConfigBuilder::new(app, ())
 ///         .assets_path("dist")
 ///         .build();
