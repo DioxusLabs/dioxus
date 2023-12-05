@@ -1,6 +1,3 @@
-use std::io::Stdout;
-
-
 use crate::cfg::Platform;
 #[cfg(feature = "plugin")]
 use crate::plugin::PluginManager;
@@ -19,7 +16,6 @@ impl Build {
     pub fn build(self, bin: Option<PathBuf>) -> Result<()> {
         let mut crate_config = crate::CrateConfig::new(bin)?;
 
-        
         // change the release state.
         crate_config.with_release(self.build.release);
         crate_config.with_verbose(self.build.verbose);
