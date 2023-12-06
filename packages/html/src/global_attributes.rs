@@ -269,6 +269,9 @@ trait_methods! {
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/azimuth>
     azimuth: "azimuth", "style";
 
+    /// <https://developer.mozilla.org/en-US/docs/Web/CSS/backdrop-filter>
+    backdrop_filter: "backdrop-filter", "style";
+
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/backface-visibility>
     backface_visibility: "backface-visibility", "style";
 

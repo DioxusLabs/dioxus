@@ -60,6 +60,9 @@ pub mod computed;
 mod use_on_destroy;
 pub use use_on_destroy::*;
 
+mod use_const;
+pub use use_const::*;
+
 mod use_context;
 pub use use_context::*;
 

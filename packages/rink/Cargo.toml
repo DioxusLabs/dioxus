@@ -14,7 +14,7 @@ dioxus-html = { workspace = true, version = "0.4.2" }
 dioxus-native-core = { workspace = true, version = "0.4.2", features = ["layout-attributes"] }
 dioxus-native-core-macro = { workspace = true, version = "0.4.2" }
 
-tui = "0.17.0"
+ratatui = "0.24.0"
 crossterm = "0.26.1"
 anyhow = "1.0.42"
 tokio = { workspace = true, features = ["full"] }
