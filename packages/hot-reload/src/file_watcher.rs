@@ -157,16 +157,17 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(cfg: Config<Ctx>) {
             // On unix, if you force quit the application, it can leave the file socket open
             // This will cause the local socket listener to fail to open
             // We check if the file socket is already open from an old session and then delete it
-            let paths = ["./dioxusin", "./@dioxusin"];
+            let paths = ["./dioxusin"];
             for path in paths {
-                let path = PathBuf::from(path);
+                let path = std::env::temp_dir().join(path);
                 if path.exists() {
                     let _ = std::fs::remove_file(path);
                 }
             }
         }
 
-        match LocalSocketListener::bind("@dioxusin") {
+        let path = std::env::temp_dir().join("dioxusin");
+        match LocalSocketListener::bind(path) {
             Ok(local_socket_stream) => {
                 let aborted = Arc::new(Mutex::new(false));
 

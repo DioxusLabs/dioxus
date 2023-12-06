@@ -24,7 +24,8 @@ pub enum HotReloadMsg {
 /// Connect to the hot reloading listener. The callback provided will be called every time a template change is detected
 pub fn connect(mut f: impl FnMut(HotReloadMsg) + Send + 'static) {
     std::thread::spawn(move || {
-        if let Ok(socket) = LocalSocketStream::connect("@dioxusin") {
+        let path = std::env::temp_dir().join("dioxusin");
+        if let Ok(socket) = LocalSocketStream::connect(path) {
             let mut buf_reader = BufReader::new(socket);
             loop {
                 let mut buf = String::new();

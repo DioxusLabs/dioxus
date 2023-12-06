@@ -109,7 +109,8 @@ pub async fn serve(config: CrateConfig, hot_reload_state: Option<HotReloadState>
 }
 
 async fn start_desktop_hot_reload(hot_reload_state: HotReloadState) -> Result<()> {
-    match LocalSocketListener::bind("@dioxusin") {
+    let path = std::env::temp_dir().join("dioxusin");
+    match LocalSocketListener::bind(path) {
         Ok(local_socket_stream) => {
             let aborted = Arc::new(Mutex::new(false));
             // States
@@ -188,7 +189,7 @@ fn clear_paths() {
         // We check if the file socket is already open from an old session and then delete it
         let paths = ["./dioxusin", "./@dioxusin"];
         for path in paths {
-            let path = std::path::PathBuf::from(path);
+            let path = std::env::temp_dir().join(path);
             if path.exists() {
                 let _ = std::fs::remove_file(path);
             }
