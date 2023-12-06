@@ -4,6 +4,7 @@ use crate::{desktop_context::UserWindowEvent, Config};
 use tao::event_loop::{EventLoopProxy, EventLoopWindowTarget};
 pub use wry;
 pub use wry::application as tao;
+use wry::application::menu::{MenuBar, MenuItem};
 use wry::application::window::Window;
 use wry::webview::{WebContext, WebView, WebViewBuilder};
 
@@ -12,12 +13,17 @@ pub fn build(
     event_loop: &EventLoopWindowTarget<UserWindowEvent>,
     proxy: EventLoopProxy<UserWindowEvent>,
 ) -> (WebView, WebContext) {
-    let builder = cfg.window.clone();
-    let window = builder.with_visible(false).build(event_loop).unwrap();
+    let mut builder = cfg.window.clone();
     let file_handler = cfg.file_drop_handler.take();
     let custom_head = cfg.custom_head.clone();
     let index_file = cfg.custom_index.clone();
     let root_name = cfg.root_name.clone();
+
+    if !cfg.disable_default_menu_bar {
+        builder = builder.with_menu(create_default_menu_bar());
+    }
+
+    let window = builder.with_visible(false).build(event_loop).unwrap();
 
     // We assume that if the icon is None in cfg, then the user just didnt set it
     if cfg.window.window.window_icon.is_none() {
@@ -95,4 +101,58 @@ pub fn build(
     }
 
     (webview.build().unwrap(), web_context)
+}
+
+/// Creates a standard menu bar depending on the platform
+fn create_default_menu_bar() -> MenuBar {
+    let mut menu_bar = MenuBar::new();
+
+    // since it is uncommon on windows to have an "application menu"
+    // we add a "window" menu to be more consistent across platforms with the standard menu
+    let mut window_menu = MenuBar::new();
+    #[cfg(target_os = "macos")]
+    {
+        window_menu.add_native_item(MenuItem::EnterFullScreen);
+        window_menu.add_native_item(MenuItem::Zoom);
+        window_menu.add_native_item(MenuItem::Separator);
+    }
+
+    window_menu.add_native_item(MenuItem::Hide);
+
+    #[cfg(target_os = "macos")]
+    {
+        window_menu.add_native_item(MenuItem::HideOthers);
+        window_menu.add_native_item(MenuItem::ShowAll);
+    }
+
+    window_menu.add_native_item(MenuItem::Minimize);
+    window_menu.add_native_item(MenuItem::CloseWindow);
+    window_menu.add_native_item(MenuItem::Separator);
+    window_menu.add_native_item(MenuItem::Quit);
+    menu_bar.add_submenu("Window", true, window_menu);
+
+    // since tao supports none of the below items on linux we should only add them on macos/windows
+    #[cfg(not(target_os = "linux"))]
+    {
+        let mut edit_menu = MenuBar::new();
+        #[cfg(target_os = "macos")]
+        {
+            edit_menu.add_native_item(MenuItem::Undo);
+            edit_menu.add_native_item(MenuItem::Redo);
+            edit_menu.add_native_item(MenuItem::Separator);
+        }
+
+        edit_menu.add_native_item(MenuItem::Cut);
+        edit_menu.add_native_item(MenuItem::Copy);
+        edit_menu.add_native_item(MenuItem::Paste);
+
+        #[cfg(target_os = "macos")]
+        {
+            edit_menu.add_native_item(MenuItem::Separator);
+            edit_menu.add_native_item(MenuItem::SelectAll);
+        }
+        menu_bar.add_submenu("Edit", true, edit_menu);
+    }
+
+    menu_bar
 }
