@@ -43,7 +43,33 @@ async fn setup_file_watcher<F: Fn() -> Result<BuildResult> + Send + 'static>(
         let config = watcher_config.clone();
         if let Ok(e) = info {
             if chrono::Local::now().timestamp() > last_update_time {
-                // Todo plugin on-watched-paths-change
+                futures::executor::block_on(async {
+                    let mut plugins = crate::plugin::PLUGINS.lock().await;
+                    if plugins.is_empty() {
+                        return;
+                    }
+                    let paths: Vec<String> = e
+                        .paths
+                        .iter()
+                        .filter_map(|f| match f.to_str() {
+                            Some(val) => Some(val.to_string()),
+                            None => {
+                                log::warn!("Watched path not valid UTF-8! {}", f.display());
+                                None
+                            }
+                        })
+                        .collect();
+                    for plugin in plugins.iter_mut() {
+                        if plugin.on_watched_paths_change(&paths).await.is_err() {
+                            log::warn!(
+                                "Failed to run give changed paths to {}!",
+                                plugin.metadata.name
+                            );
+                        } else {
+                            log::info!("{} successfully given changed paths", plugin.metadata.name);
+                        }
+                    }
+                });
 
                 let mut needs_full_rebuild;
                 if let Some(hot_reload) = &hot_reload {
