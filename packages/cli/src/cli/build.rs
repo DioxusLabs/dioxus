@@ -1,7 +1,7 @@
 use crate::{call_plugins, cfg::Platform};
 
 use super::*;
-use crate::plugin::interface::exports::plugins::main::definitions::Event::Build as BuildEvent;
+use crate::plugin::interface::plugins::main::types::Event::Build as BuildEvent;
 
 /// Build the Rust WASM app and all of its assets.
 #[derive(Clone, Debug, Parser)]

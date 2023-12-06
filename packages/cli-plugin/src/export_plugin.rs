@@ -5,17 +5,8 @@ macro_rules! export_plugin {
             inline: "package plugins:main;
 
 interface definitions {
-  use imports.{platform, plugin-info};
+  use types.{platform, plugin-info, event};
   use toml.{toml, toml-value};
-
-  enum event {
-    build,
-    serve, 
-    translate,
-    bundle,
-    rebuild,
-    hot-reload,
-  } 
 
   /// Get the default layout for the plugin to put
   /// into `Dioxus.toml`
@@ -97,17 +88,10 @@ interface toml {
   type table = list<tuple<string, toml>>;
 }
 
-interface imports {
+interface types {
   enum platform {
     web,
     desktop,
-  }
-
-  enum file-error {
-    // Could not find a file with that path
-    not-found,
-    // Could not open with current permissions
-    no-access,
   }
 
   record plugin-info {
@@ -116,10 +100,28 @@ interface imports {
     // perms?
   }
 
-  get-platform: func() -> platform;
+  record project-info {
+    output-directory: string,
+    asset-directory: string,
+    default-platform: platform,
+  }
 
-  output-directory: func() -> string;
+  enum event {
+    build,
+    serve, 
+    translate,
+    bundle,
+    rebuild,
+    hot-reload,
+  } 
+}
 
+interface imports {
+  use types.{project-info};
+
+  get-project-info: func() -> project-info;
+
+  /// Refresh the browser page manually
   refresh-browser-page: func();
 
   /// Searches through links to only refresh the 
@@ -128,12 +130,6 @@ interface imports {
 
   /// Add path to list of watched paths
   watch-path: func(path: string);
-
-  /// Attempt to read file from path
-  read-file: func(path: string) -> result<list<u8>, file-error>;
-
-  /// Attempt to write file from path and content 
-  write-file: func(path: string, content: list<u8>) -> result<_, file-error>;
 
   /// Try to remove a path from list of watched paths
   /// returns false if path not in list

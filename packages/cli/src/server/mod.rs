@@ -1,6 +1,6 @@
 use crate::{
     call_plugins,
-    plugin::interface::exports::plugins::main::definitions::Event::{HotReload, Rebuild},
+    plugin::interface::plugins::main::types::Event::{HotReload, Rebuild},
     BuildResult, CrateConfig, Result,
 };
 

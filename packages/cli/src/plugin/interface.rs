@@ -1,10 +1,13 @@
 use async_trait::async_trait;
-use plugins::main::imports::{Host as ImportHost, Platform};
+use plugins::main::imports::Host as ImportHost;
 use plugins::main::toml::{Host as TomlHost, *};
+use plugins::main::types::Host as TypeHost;
 use wasmtime::component::*;
 use wasmtime_wasi::preview2::{Table, WasiCtx, WasiView};
 
-use self::plugins::main::imports::FileError;
+use crate::{ApplicationConfig, CrateConfig, DioxusConfig};
+
+use self::plugins::main::types::{Platform, ProjectInfo};
 
 pub struct PluginState {
     pub table: Table,
@@ -88,9 +91,36 @@ impl HostToml for PluginState {
 impl TomlHost for PluginState {}
 
 #[async_trait]
+impl TypeHost for PluginState {}
+
+#[async_trait]
 impl ImportHost for PluginState {
-    async fn output_directory(&mut self) -> wasmtime::Result<String> {
-        Ok("output".to_string())
+    async fn get_project_info(&mut self) -> wasmtime::Result<ProjectInfo> {
+        let conf = crate::config::CrateConfig::new(None)?;
+        let CrateConfig {
+            out_dir,
+            asset_dir,
+            dioxus_config:
+                DioxusConfig {
+                    application:
+                        ApplicationConfig {
+                            default_platform, ..
+                        },
+                    ..
+                },
+            ..
+        } = conf;
+        let output_directory = out_dir.to_str().expect("Non UTF-8 Path!").to_string();
+        let asset_directory = asset_dir.to_str().expect("Non UTF-8 Path!").to_string();
+        let default_platform = match default_platform {
+            crate::cfg::Platform::Web => Platform::Web,
+            crate::cfg::Platform::Desktop => Platform::Desktop,
+        };
+        Ok(ProjectInfo {
+            output_directory,
+            asset_directory,
+            default_platform,
+        })
     }
 
     async fn refresh_browser_page(&mut self) -> wasmtime::Result<()> {
@@ -101,33 +131,16 @@ impl ImportHost for PluginState {
         Ok(())
     }
 
-    async fn watched_paths(&mut self) -> wasmtime::Result<Vec<String>> {
-        Ok(vec!["All of them".into()])
+    async fn watch_path(&mut self, _: String) -> wasmtime::Result<()> {
+        Ok(())
     }
 
     async fn remove_watched_path(&mut self, _: String) -> wasmtime::Result<Result<(), ()>> {
         Ok(Ok(()))
     }
 
-    // Todo Implement these
-    async fn read_file(&mut self, _path: String) -> wasmtime::Result<Result<Vec<u8>, FileError>> {
-        Ok(Ok(vec![]))
-    }
-
-    async fn write_file(
-        &mut self,
-        _path: String,
-        _content: Vec<u8>,
-    ) -> wasmtime::Result<Result<(), FileError>> {
-        Ok(Ok(()))
-    }
-
-    async fn watch_path(&mut self, _: String) -> wasmtime::Result<()> {
-        Ok(())
-    }
-
-    async fn get_platform(&mut self) -> wasmtime::Result<Platform> {
-        Ok(Platform::Desktop)
+    async fn watched_paths(&mut self) -> wasmtime::Result<Vec<String>> {
+        Ok(vec!["All of them".into()])
     }
 
     async fn log(&mut self, info: String) -> wasmtime::Result<()> {

@@ -3,8 +3,7 @@ use std::process::exit;
 use dioxus_rsx::{BodyNode, CallBody};
 
 use crate::{
-    call_plugins,
-    plugin::interface::exports::plugins::main::definitions::Event::Translate as TranslateEvent,
+    call_plugins, plugin::interface::plugins::main::types::Event::Translate as TranslateEvent,
 };
 
 use super::*;

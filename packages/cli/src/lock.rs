@@ -63,7 +63,7 @@ impl DioxusLock {
         plugins: &mut Vec<CliPlugin>,
     ) -> crate::error::Result<()> {
         let mut new_plugins = HashMap::new();
-        for plugin in &mut *plugins {
+        for plugin in plugins.iter_mut() {
             let state = self
                 .plugins
                 .entry(plugin.metadata.name.clone())

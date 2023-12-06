@@ -1,8 +1,9 @@
 use dioxus_cli_plugin::*;
 use exports::plugins::main::definitions::{Event, Guest};
 use plugins::main::{
-    imports::{log, PluginInfo},
+    imports::log,
     toml::{Toml, TomlValue},
+    types::PluginInfo,
 };
 struct Plugin;
 

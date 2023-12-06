@@ -3,7 +3,7 @@ use std::{fs::create_dir_all, str::FromStr};
 
 use tauri_bundler::{BundleSettings, PackageSettings, SettingsBuilder};
 
-use crate::plugin::interface::exports::plugins::main::definitions::Event::Bundle as BundleEvent;
+use crate::plugin::interface::plugins::main::types::Event::Bundle as BundleEvent;
 
 use super::*;
 use crate::{build_desktop, call_plugins, cfg::ConfigOptsBundle};

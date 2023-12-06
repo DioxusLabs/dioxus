@@ -1,7 +1,7 @@
 use crate::call_plugins;
 
 use super::*;
-use crate::plugin::interface::exports::plugins::main::definitions::Event::Serve as ServeEvent;
+use crate::plugin::interface::plugins::main::types::Event::Serve as ServeEvent;
 use std::{fs::create_dir_all, io::Write, path::PathBuf};
 
 /// Run the WASM project on dev-server

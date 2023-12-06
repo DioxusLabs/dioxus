@@ -12,32 +12,40 @@ use wasmtime_wasi::Dir;
 
 use self::convert::ConvertWithState;
 use self::interface::exports::plugins::main::definitions::Event;
-use self::interface::plugins::main::imports::PluginInfo;
 use self::interface::plugins::main::toml::Toml;
+use self::interface::plugins::main::types::PluginInfo;
 
 pub mod convert;
 pub mod interface;
 
 #[macro_export]
 macro_rules! call_plugins {
-  (before $event:ident) => {{
-      for plugin in $crate::plugin::PLUGINS.lock().await.iter_mut() {
-          if plugin.before_event($event).await.is_err() {
-              log::warn!("Could not call Before {:?} on: {}!", $event, plugin.metadata.name);
-          } else {
-              log::info!("Called Before {:?} on: {}", $event, plugin.metadata.name);
-          }
-      }
-  }};
-  (after $event:ident) => {{
-      for plugin in $crate::plugin::PLUGINS.lock().await.iter_mut() {
-          if plugin.after_event($event).await.is_err() {
-              log::warn!("Could not call After {:?} on: {}!", $event, plugin.metadata.name);
-          } else {
-              log::info!("Called After {:?} on: {}", $event, plugin.metadata.name);
-          }
-      }
-  }};
+    (before $event:ident) => {{
+        for plugin in $crate::plugin::PLUGINS.lock().await.iter_mut() {
+            if plugin.before_event($event).await.is_err() {
+                log::warn!(
+                    "Could not call Before {:?} on: {}!",
+                    $event,
+                    plugin.metadata.name
+                );
+            } else {
+                log::info!("Called Before {:?} on: {}", $event, plugin.metadata.name);
+            }
+        }
+    }};
+    (after $event:ident) => {{
+        for plugin in $crate::plugin::PLUGINS.lock().await.iter_mut() {
+            if plugin.after_event($event).await.is_err() {
+                log::warn!(
+                    "Could not call After {:?} on: {}!",
+                    $event,
+                    plugin.metadata.name
+                );
+            } else {
+                log::info!("Called After {:?} on: {}", $event, plugin.metadata.name);
+            }
+        }
+    }};
 }
 
 lazy_static::lazy_static!(
@@ -177,6 +185,13 @@ impl CliPlugin {
         self.bindings
             .plugins_main_definitions()
             .call_after_event(&mut self.store, event)
+            .await
+    }
+
+    pub async fn on_watched_paths_change(&mut self, paths: &[String]) -> wasmtime::Result<()> {
+        self.bindings
+            .plugins_main_definitions()
+            .call_on_watched_paths_change(&mut self.store, paths)
             .await
     }
 
