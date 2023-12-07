@@ -100,7 +100,7 @@ impl Effect {
 
     /// Run the effect callback immediately. Returns `true` if the effect was run. Returns `false` is the effect is dead.
     pub fn try_run(&self) {
-        if let Some(mut callback) = self.callback.try_write() {
+        if let Ok(mut callback) = self.callback.try_write() {
             {
                 self.effect_stack.effects.write().push(*self);
             }

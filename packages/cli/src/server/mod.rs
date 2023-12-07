@@ -32,7 +32,7 @@ async fn setup_file_watcher<F: Fn() -> Result<BuildResult> + Send + 'static>(
         .watcher
         .watch_path
         .clone()
-        .unwrap_or_else(|| vec![PathBuf::from("src")]);
+        .unwrap_or_else(|| vec![PathBuf::from("src"), PathBuf::from("examples")]);
 
     let watcher_config = config.clone();
     let mut watcher = notify::recommended_watcher(move |info: notify::Result<notify::Event>| {
@@ -53,6 +53,16 @@ async fn setup_file_watcher<F: Fn() -> Result<BuildResult> + Send + 'static>(
                         if path.extension().and_then(|p| p.to_str()) != Some("rs") {
                             needs_full_rebuild = true;
                             break;
+                        }
+
+                        // Workaround for notify and vscode-like editor:
+                        // when edit & save a file in vscode, there will be two notifications,
+                        // the first one is a file with empty content.
+                        // filter the empty file notification to avoid false rebuild during hot-reload
+                        if let Ok(metadata) = fs::metadata(path) {
+                            if metadata.len() == 0 {
+                                continue;
+                            }
                         }
 
                         match rsx_file_map.update_rsx(path, &config.crate_dir) {
@@ -121,12 +131,12 @@ async fn setup_file_watcher<F: Fn() -> Result<BuildResult> + Send + 'static>(
     .unwrap();
 
     for sub_path in allow_watch_path {
-        watcher
-            .watch(
-                &config.crate_dir.join(sub_path),
-                notify::RecursiveMode::Recursive,
-            )
-            .unwrap();
+        if let Err(err) = watcher.watch(
+            &config.crate_dir.join(sub_path),
+            notify::RecursiveMode::Recursive,
+        ) {
+            log::error!("Failed to watch path: {}", err);
+        }
     }
     Ok(watcher)
 }

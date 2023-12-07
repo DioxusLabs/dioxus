@@ -707,7 +707,7 @@ impl<'a, 'b> IntoDynNode<'b> for &'a str {
 impl IntoDynNode<'_> for String {
     fn into_vnode(self, cx: &ScopeState) -> DynamicNode {
         DynamicNode::Text(VText {
-            value: cx.bump().alloc(self),
+            value: cx.bump().alloc_str(&self),
             id: Default::default(),
         })
     }
@@ -788,6 +788,12 @@ impl<'a> IntoAttributeValue<'a> for AttributeValue<'a> {
 impl<'a> IntoAttributeValue<'a> for &'a str {
     fn into_value(self, _: &'a Bump) -> AttributeValue<'a> {
         AttributeValue::Text(self)
+    }
+}
+
+impl<'a> IntoAttributeValue<'a> for String {
+    fn into_value(self, cx: &'a Bump) -> AttributeValue<'a> {
+        AttributeValue::Text(cx.alloc_str(&self))
     }
 }
 

@@ -122,7 +122,7 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(cfg: Config<Ctx>) {
     } = cfg;
 
     if let Ok(crate_dir) = PathBuf::from_str(root_path) {
-        // try to find the gitingore file
+        // try to find the gitignore file
         let gitignore_file_path = crate_dir.join(".gitignore");
         let (gitignore, _) = ignore::gitignore::Gitignore::new(gitignore_file_path);
 
