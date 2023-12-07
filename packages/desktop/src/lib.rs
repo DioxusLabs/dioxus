@@ -45,6 +45,7 @@ use tao::{
     event::{Event, StartCause, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
 };
+pub use webview::build_default_menu_bar;
 pub use wry;
 pub use wry::application as tao;
 use wry::webview::WebView;
