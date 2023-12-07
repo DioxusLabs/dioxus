@@ -40,7 +40,7 @@
     <span> | </span>
     <a href="https://github.com/DioxusLabs/example-projects"> Examples </a>
     <span> | </span>
-    <a href="https://dioxuslabs.com/docs/0.3/guide/en/"> Guide </a>
+    <a href="https://dioxuslabs.com/learn/0.4/guide"> Guide </a>
     <span> | </span>
     <a href="https://github.com/DioxusLabs/dioxus/blob/master/notes/README/ZH_CN.md"> 中文 </a>
     <span> | </span>
@@ -159,6 +159,7 @@ So... Dioxus is great, but why won't it work for me?
 
 
 ## Contributing
+- Check out the website [section on contributing](https://dioxuslabs.com/learn/0.4/contributing).
 - Report issues on our [issue tracker](https://github.com/dioxuslabs/dioxus/issues).
 - Join the discord and ask questions!
 

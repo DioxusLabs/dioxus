@@ -1,4 +1,4 @@
-#![allow(non_snake_case, unused)]
+#![allow(unused)]
 
 use dioxus::prelude::*;
 use dioxus_router::prelude::*;
@@ -34,6 +34,7 @@ fn prepare(path: impl Into<String>) -> VirtualDom {
         path: String,
     }
 
+    #[component]
     fn App(cx: Scope<AppProps>) -> Element {
         render! {
             h1 { "App" }
@@ -46,14 +47,14 @@ fn prepare(path: impl Into<String>) -> VirtualDom {
         }
     }
 
-    #[inline_props]
+    #[component]
     fn RootIndex(cx: Scope) -> Element {
         render! {
             h2 { "Root Index" }
         }
     }
 
-    #[inline_props]
+    #[component]
     fn Fixed(cx: Scope) -> Element {
         render! {
             h2 { "Fixed" }
@@ -61,21 +62,21 @@ fn prepare(path: impl Into<String>) -> VirtualDom {
         }
     }
 
-    #[inline_props]
+    #[component]
     fn FixedIndex(cx: Scope) -> Element {
         render! {
             h3 { "Fixed - Index" }
         }
     }
 
-    #[inline_props]
+    #[component]
     fn FixedFixed(cx: Scope) -> Element {
         render! {
             h3 { "Fixed - Fixed"}
         }
     }
 
-    #[inline_props]
+    #[component]
     fn Parameter(cx: Scope, id: u8) -> Element {
         render! {
             h2 { "Parameter {id}" }
@@ -83,14 +84,14 @@ fn prepare(path: impl Into<String>) -> VirtualDom {
         }
     }
 
-    #[inline_props]
+    #[component]
     fn ParameterIndex(cx: Scope, id: u8) -> Element {
         render! {
             h3 { "Parameter - Index" }
         }
     }
 
-    #[inline_props]
+    #[component]
     fn ParameterFixed(cx: Scope, id: u8) -> Element {
         render! {
             h3 { "Parameter - Fixed" }

@@ -29,7 +29,7 @@ where
                                 .to_string()
                                 .parse()
                                 .unwrap_or_else(|err| {
-                                    log::error!("Failed to parse uri: {}", err);
+                                    tracing::error!("Failed to parse uri: {}", err);
                                     "/"
                                         .parse()
                                         .unwrap_or_else(|err| {
@@ -53,7 +53,7 @@ fn default_external_navigation_handler() -> fn(Scope) -> Element {
     dioxus_router::prelude::FailureExternalNavigation
 }
 
-/// The configeration for the router
+/// The configuration for the router
 #[derive(Props, serde::Serialize, serde::Deserialize)]
 pub struct FullstackRouterConfig<R>
 where

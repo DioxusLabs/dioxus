@@ -35,7 +35,7 @@ impl ElementRef {
         Self {
             template: None,
             path: ElementPath::Root(0),
-            scope: ScopeId(0),
+            scope: ScopeId::ROOT,
         }
     }
 }
@@ -60,7 +60,7 @@ impl VirtualDom {
     fn next_reference(&mut self, template: &VNode, path: ElementPath) -> ElementId {
         let entry = self.elements.vacant_entry();
         let id = entry.key();
-        let scope = self.runtime.current_scope_id().unwrap_or(ScopeId(0));
+        let scope = self.runtime.current_scope_id().unwrap_or(ScopeId::ROOT);
 
         entry.insert(ElementRef {
             // We know this is non-null because it comes from a reference
@@ -164,17 +164,11 @@ impl VirtualDom {
         });
 
         // Now that all the references are gone, we can safely drop our own references in our listeners.
-        let mut listeners = scope.attributes_to_drop.borrow_mut();
+        let mut listeners = scope.attributes_to_drop_before_render.borrow_mut();
         listeners.drain(..).for_each(|listener| {
             let listener = unsafe { &*listener };
-            match &listener.value {
-                AttributeValue::Listener(l) => {
-                    _ = l.take();
-                }
-                AttributeValue::Any(a) => {
-                    _ = a.take();
-                }
-                _ => (),
+            if let AttributeValue::Listener(l) = &listener.value {
+                _ = l.take();
             }
         });
     }

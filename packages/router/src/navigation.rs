@@ -18,7 +18,7 @@ pub enum NavigationTarget<R> {
     /// # use dioxus::prelude::*;
     /// # use dioxus_router::prelude::*;
     /// # use dioxus_router::navigation::NavigationTarget;
-    /// # #[inline_props]
+    /// # #[component]
     /// # fn Index(cx: Scope) -> Element {
     /// #     todo!()
     /// # }
@@ -38,7 +38,7 @@ pub enum NavigationTarget<R> {
     /// # use dioxus::prelude::*;
     /// # use dioxus_router::prelude::*;
     /// # use dioxus_router::navigation::NavigationTarget;
-    /// # #[inline_props]
+    /// # #[component]
     /// # fn Index(cx: Scope) -> Element {
     /// #     todo!()
     /// # }

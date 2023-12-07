@@ -1,0 +1,25 @@
+[package]
+name = "openid_auth_demo"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+console_error_panic_hook = "0.1"
+dioxus-logger = "0.4.1"
+dioxus = { path = "../../packages/dioxus", version = "*" }
+dioxus-router = { path = "../../packages/router", version = "*" }
+dioxus-web = { path = "../../packages/web", version = "*" }
+fermi = { path = "../../packages/fermi", version = "*" }
+form_urlencoded = "1.2.0"
+gloo-storage = "0.3.0"
+log = "0.4"
+openidconnect = "3.4.0"
+reqwest = "0.11.20"
+serde = { version = "1.0.188", features = ["derive"] }
+serde_json = "1.0.105"
+thiserror = "1.0.48"
+uuid = "1.4"
+web-sys = { version = "0.3", features = ["Request", "Document"] }

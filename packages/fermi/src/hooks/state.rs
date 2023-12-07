@@ -30,6 +30,7 @@ use std::{
 ///     ))
 /// }
 /// ```
+#[must_use]
 pub fn use_atom_state<T: 'static>(cx: &ScopeState, f: impl Writable<T>) -> &AtomState<T> {
     let root = crate::use_atom_root(cx);
 
@@ -85,7 +86,9 @@ impl<T: 'static> AtomState<T> {
     /// ```
     #[must_use]
     pub fn current(&self) -> Rc<T> {
-        self.value.as_ref().unwrap().clone()
+        let atoms = self.root.atoms.borrow();
+        let slot = atoms.get(&self.id).unwrap();
+        slot.value.clone().downcast().unwrap()
     }
 
     /// Get the `setter` function directly without the `AtomState` wrapper.

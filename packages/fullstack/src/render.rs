@@ -45,15 +45,17 @@ impl SsrRendererPool {
                         .expect("couldn't spawn runtime")
                         .block_on(async move {
                             let mut vdom = VirtualDom::new_with_props(component, props);
+                            // Make sure the evaluator is initialized
+                            dioxus_ssr::eval::init_eval(vdom.base_scope());
                             let mut to = WriteBuffer { buffer: Vec::new() };
                             // before polling the future, we need to set the context
                             let prev_context =
                                 SERVER_CONTEXT.with(|ctx| ctx.replace(server_context));
                             // poll the future, which may call server_context()
-                            log::info!("Rebuilding vdom");
+                            tracing::info!("Rebuilding vdom");
                             let _ = vdom.rebuild();
                             vdom.wait_for_suspense().await;
-                            log::info!("Suspense resolved");
+                            tracing::info!("Suspense resolved");
                             // after polling the future, we need to restore the context
                             SERVER_CONTEXT.with(|ctx| ctx.replace(prev_context));
 
@@ -116,10 +118,10 @@ impl SsrRendererPool {
                                             let prev_context = SERVER_CONTEXT
                                                 .with(|ctx| ctx.replace(Box::new(server_context)));
                                             // poll the future, which may call server_context()
-                                            log::info!("Rebuilding vdom");
+                                            tracing::info!("Rebuilding vdom");
                                             let _ = vdom.rebuild();
                                             vdom.wait_for_suspense().await;
-                                            log::info!("Suspense resolved");
+                                            tracing::info!("Suspense resolved");
                                             // after polling the future, we need to restore the context
                                             SERVER_CONTEXT.with(|ctx| ctx.replace(prev_context));
                                         })

@@ -77,7 +77,7 @@ fn reading_subscribes() {
         }
     }
 
-    dom.mark_dirty(ScopeId(0));
+    dom.mark_dirty(ScopeId::ROOT);
     dom.render_immediate();
     dom.render_immediate();
 

@@ -22,6 +22,7 @@ pub struct BuildResult {
     pub elapsed_time: u128,
 }
 
+#[allow(unused)]
 pub fn build(config: &CrateConfig, quiet: bool) -> Result<BuildResult> {
     // [1] Build the project with cargo, generating a wasm32-unknown-unknown target (is there a more specific, better target to leverage?)
     // [2] Generate the appropriate build folders
@@ -63,10 +64,8 @@ pub fn build(config: &CrateConfig, quiet: bool) -> Result<BuildResult> {
     let cmd = if config.verbose {
         cmd.arg("--verbose")
     } else {
-        cmd
+        cmd.arg("--quiet")
     };
-
-    let cmd = if quiet { cmd.arg("--quiet") } else { cmd };
 
     let cmd = if config.custom_profile.is_some() {
         let custom_profile = config.custom_profile.as_ref().unwrap();
@@ -254,6 +253,7 @@ pub fn build_desktop(config: &CrateConfig, _is_serve: bool) -> Result<BuildResul
     let mut cmd = subprocess::Exec::cmd("cargo")
         .cwd(&config.crate_dir)
         .arg("build")
+        .arg("--quiet")
         .arg("--message-format=json");
 
     if config.release {
@@ -312,7 +312,7 @@ pub fn build_desktop(config: &CrateConfig, _is_serve: bool) -> Result<BuildResul
     if !config.out_dir.is_dir() {
         create_dir_all(&config.out_dir)?;
     }
-    copy(res_path, &config.out_dir.join(target_file))?;
+    copy(res_path, config.out_dir.join(target_file))?;
 
     // this code will copy all public file to the output dir
     if config.asset_dir.is_dir() {
@@ -386,10 +386,9 @@ fn prettier_build(cmd: subprocess::Exec) -> anyhow::Result<Vec<Diagnostic>> {
         }
     }
 
-    StopSpinOnDrop(pb.clone());
-
     let stdout = cmd.detached().stream_stdout()?;
     let reader = std::io::BufReader::new(stdout);
+
     for message in cargo_metadata::Message::parse_stream(reader) {
         match message.unwrap() {
             Message::CompilerMessage(msg) => {
@@ -409,7 +408,7 @@ fn prettier_build(cmd: subprocess::Exec) -> anyhow::Result<Vec<Diagnostic>> {
                 }
             }
             Message::CompilerArtifact(artifact) => {
-                pb.set_message(format!("Compiling {} ", artifact.package_id));
+                pb.set_message(format!("⚙️ Compiling {} ", artifact.package_id));
                 pb.tick();
             }
             Message::BuildScriptExecuted(script) => {
@@ -443,14 +442,14 @@ pub fn gen_page(config: &DioxusConfig, serve: bool) -> String {
         String::from(include_str!("./assets/index.html"))
     };
 
-    let resouces = config.web.resource.clone();
+    let resources = config.web.resource.clone();
 
-    let mut style_list = resouces.style.unwrap_or_default();
-    let mut script_list = resouces.script.unwrap_or_default();
+    let mut style_list = resources.style.unwrap_or_default();
+    let mut script_list = resources.script.unwrap_or_default();
 
     if serve {
-        let mut dev_style = resouces.dev.style.clone().unwrap_or_default();
-        let mut dev_script = resouces.dev.script.unwrap_or_default();
+        let mut dev_style = resources.dev.style.clone().unwrap_or_default();
+        let mut dev_script = resources.dev.script.unwrap_or_default();
         style_list.append(&mut dev_style);
         script_list.append(&mut dev_script);
     }
@@ -469,7 +468,7 @@ pub fn gen_page(config: &DioxusConfig, serve: bool) -> String {
         .unwrap_or_default()
         .contains_key("tailwindcss")
     {
-        style_str.push_str("<link rel=\"stylesheet\" href=\"tailwind.css\">\n");
+        style_str.push_str("<link rel=\"stylesheet\" href=\"/{base_path}/tailwind.css\">\n");
     }
 
     replace_or_insert_before("{style_include}", &style_str, "</head", &mut html);
@@ -689,35 +688,3 @@ fn build_assets(config: &CrateConfig) -> Result<Vec<PathBuf>> {
 
     Ok(result)
 }
-
-// use binary_install::{Cache, Download};
-
-// /// Attempts to find `wasm-opt` in `PATH` locally, or failing that downloads a
-// /// precompiled binary.
-// ///
-// /// Returns `Some` if a binary was found or it was successfully downloaded.
-// /// Returns `None` if a binary wasn't found in `PATH` and this platform doesn't
-// /// have precompiled binaries. Returns an error if we failed to download the
-// /// binary.
-// pub fn find_wasm_opt(
-//     cache: &Cache,
-//     install_permitted: bool,
-// ) -> Result<install::Status, failure::Error> {
-//     // First attempt to look up in PATH. If found assume it works.
-//     if let Ok(path) = which::which("wasm-opt") {
-//         PBAR.info(&format!("found wasm-opt at {:?}", path));
-
-//         match path.as_path().parent() {
-//             Some(path) => return Ok(install::Status::Found(Download::at(path))),
-//             None => {}
-//         }
-//     }
-
-//     let version = "version_78";
-//     Ok(install::download_prebuilt(
-//         &install::Tool::WasmOpt,
-//         cache,
-//         version,
-//         install_permitted,
-//     )?)
-// }

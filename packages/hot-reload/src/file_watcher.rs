@@ -13,11 +13,12 @@ use dioxus_rsx::{
 };
 use interprocess_docfix::local_socket::{LocalSocketListener, LocalSocketStream};
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
-
-pub use dioxus_html::HtmlCtx;
 use serde::{Deserialize, Serialize};
 
-pub struct Config<Ctx: HotReloadingContext = HtmlCtx> {
+#[cfg(feature = "file_watcher")]
+use dioxus_html::HtmlCtx;
+
+pub struct Config<Ctx: HotReloadingContext> {
     root_path: &'static str,
     listening_paths: &'static [&'static str],
     excluded_paths: &'static [&'static str],
@@ -39,6 +40,7 @@ impl<Ctx: HotReloadingContext> Default for Config<Ctx> {
     }
 }
 
+#[cfg(feature = "file_watcher")]
 impl Config<HtmlCtx> {
     pub const fn new() -> Self {
         Self {
@@ -120,7 +122,7 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(cfg: Config<Ctx>) {
     } = cfg;
 
     if let Ok(crate_dir) = PathBuf::from_str(root_path) {
-        // try to find the gitingore file
+        // try to find the gitignore file
         let gitignore_file_path = crate_dir.join(".gitignore");
         let (gitignore, _) = ignore::gitignore::Gitignore::new(gitignore_file_path);
 

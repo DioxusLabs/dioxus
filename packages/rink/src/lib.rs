@@ -1,3 +1,7 @@
+#![doc = include_str!("../README.md")]
+#![doc(html_logo_url = "https://avatars.githubusercontent.com/u/79236386")]
+#![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
+
 use crate::focus::Focus;
 use anyhow::Result;
 use crossterm::{
@@ -13,6 +17,7 @@ use futures::{channel::mpsc::UnboundedSender, pin_mut, Future, StreamExt};
 use futures_channel::mpsc::unbounded;
 use layout::TaffyLayout;
 use prevent_default::PreventDefault;
+use ratatui::{backend::CrosstermBackend, Terminal};
 use std::{io, time::Duration};
 use std::{
     pin::Pin,
@@ -22,7 +27,6 @@ use std::{rc::Rc, sync::RwLock};
 use style_attributes::StyleModifier;
 pub use taffy::{geometry::Point, prelude::*};
 use tokio::select;
-use tui::{backend::CrosstermBackend, Terminal};
 use widgets::{register_widgets, RinkWidgetResponder, RinkWidgetTraitObject};
 
 mod config;
@@ -176,7 +180,7 @@ pub fn render<R: Driver>(
 
                 if !to_rerender.is_empty() || updated {
                     updated = false;
-                    fn resize(dims: tui::layout::Rect, taffy: &mut Taffy, rdom: &RealDom) {
+                    fn resize(dims: ratatui::layout::Rect, taffy: &mut Taffy, rdom: &RealDom) {
                         let width = screen_to_layout_space(dims.width);
                         let height = screen_to_layout_space(dims.height);
                         let root_node = rdom
@@ -218,7 +222,7 @@ pub fn render<R: Driver>(
                     } else {
                         let rdom = rdom.read().unwrap();
                         resize(
-                            tui::layout::Rect {
+                            ratatui::layout::Rect {
                                 x: 0,
                                 y: 0,
                                 width: 1000,

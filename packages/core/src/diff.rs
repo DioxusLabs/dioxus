@@ -15,6 +15,7 @@ use DynamicNode::*;
 
 impl<'b> VirtualDom {
     pub(super) fn diff_scope(&mut self, scope: ScopeId) {
+        self.runtime.scope_stack.borrow_mut().push(scope);
         let scope_state = &mut self.get_scope(scope).unwrap();
         unsafe {
             // Load the old and new bump arenas
@@ -45,6 +46,7 @@ impl<'b> VirtualDom {
                 (Aborted(l), Ready(r)) => self.replace_placeholder(l, [r]),
             };
         }
+        self.runtime.scope_stack.borrow_mut().pop();
     }
 
     fn diff_ok_to_err(&mut self, l: &'b VNode<'b>, p: &'b VPlaceholder) {
@@ -126,7 +128,13 @@ impl<'b> VirtualDom {
             });
 
         // Make sure the roots get transferred over while we're here
-        *right_template.root_ids.borrow_mut() = left_template.root_ids.borrow().clone();
+        {
+            let mut right = right_template.root_ids.borrow_mut();
+            right.clear();
+            for &element in left_template.root_ids.borrow().iter() {
+                right.push(element);
+            }
+        }
 
         let root_ids = right_template.root_ids.borrow();
 
@@ -188,7 +196,8 @@ impl<'b> VirtualDom {
         right.scope.set(Some(scope_id));
 
         // copy out the box for both
-        let old = self.scopes[scope_id.0].props.as_ref();
+        let old_scope = &self.scopes[scope_id.0];
+        let old = old_scope.props.as_ref();
         let new: Box<dyn AnyProps> = right.props.take().unwrap();
         let new: Box<dyn AnyProps> = unsafe { std::mem::transmute(new) };
 
@@ -196,6 +205,11 @@ impl<'b> VirtualDom {
         // The target scopestate still has the reference to the old props, so there's no need to update anything
         // This also implicitly drops the new props since they're not used
         if left.static_props && unsafe { old.as_ref().unwrap().memoize(new.as_ref()) } {
+            tracing::trace!(
+                "Memoized props for component {:#?} ({})",
+                scope_id,
+                old_scope.context().name
+            );
             return;
         }
 
@@ -569,8 +583,7 @@ impl<'b> VirtualDom {
         }
 
         // 4. Compute the LIS of this list
-        let mut lis_sequence = Vec::default();
-        lis_sequence.reserve(new_index_to_old_index.len());
+        let mut lis_sequence = Vec::with_capacity(new_index_to_old_index.len());
 
         let mut predecessors = vec![0; new_index_to_old_index.len()];
         let mut starts = vec![0; new_index_to_old_index.len()];

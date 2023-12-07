@@ -33,6 +33,7 @@ type EvalCreator = Rc<dyn Fn(&str) -> Result<UseEval, EvalError>>;
 /// parts is practically asking for a hacker to find an XSS vulnerability in
 /// it. **This applies especially to web targets, where the JavaScript context
 /// has access to most, if not all of your application data.**
+#[must_use]
 pub fn use_eval(cx: &ScopeState) -> &EvalCreator {
     &*cx.use_hook(|| {
         let eval_provider = cx

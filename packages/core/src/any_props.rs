@@ -68,7 +68,7 @@ unsafe impl<'a, P> AnyProps<'a> for VProps<'a, P> {
             Ok(None) => RenderReturn::default(),
             Err(err) => {
                 let component_name = cx.name();
-                log::error!("Error while rendering component `{component_name}`: {err:?}");
+                tracing::error!("Error while rendering component `{component_name}`: {err:?}");
                 RenderReturn::default()
             }
         }

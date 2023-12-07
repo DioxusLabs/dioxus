@@ -1,17 +1,39 @@
 //! This file exports functions into the vscode extension
 
-use dioxus_autofmt::FormattedBlock;
+use dioxus_autofmt::{FormattedBlock, IndentOptions, IndentType};
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
-pub fn format_rsx(raw: String) -> String {
-    let block = dioxus_autofmt::fmt_block(&raw, 0);
+pub fn format_rsx(raw: String, use_tabs: bool, indent_size: usize) -> String {
+    let block = dioxus_autofmt::fmt_block(
+        &raw,
+        0,
+        IndentOptions::new(
+            if use_tabs {
+                IndentType::Tabs
+            } else {
+                IndentType::Spaces
+            },
+            indent_size,
+        ),
+    );
     block.unwrap()
 }
 
 #[wasm_bindgen]
-pub fn format_selection(raw: String) -> String {
-    let block = dioxus_autofmt::fmt_block(&raw, 0);
+pub fn format_selection(raw: String, use_tabs: bool, indent_size: usize) -> String {
+    let block = dioxus_autofmt::fmt_block(
+        &raw,
+        0,
+        IndentOptions::new(
+            if use_tabs {
+                IndentType::Tabs
+            } else {
+                IndentType::Spaces
+            },
+            indent_size,
+        ),
+    );
     block.unwrap()
 }
 
@@ -35,8 +57,18 @@ impl FormatBlockInstance {
 }
 
 #[wasm_bindgen]
-pub fn format_file(contents: String) -> FormatBlockInstance {
-    let _edits = dioxus_autofmt::fmt_file(&contents);
+pub fn format_file(contents: String, use_tabs: bool, indent_size: usize) -> FormatBlockInstance {
+    let _edits = dioxus_autofmt::fmt_file(
+        &contents,
+        IndentOptions::new(
+            if use_tabs {
+                IndentType::Tabs
+            } else {
+                IndentType::Spaces
+            },
+            indent_size,
+        ),
+    );
     let out = dioxus_autofmt::apply_formats(&contents, _edits.clone());
     FormatBlockInstance { new: out, _edits }
 }

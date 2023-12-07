@@ -54,7 +54,7 @@ use wry::{application::window::WindowId, webview::WebContext};
 ///
 /// This function will start a multithreaded Tokio runtime as well the WebView event loop.
 ///
-/// ```rust, ignore
+/// ```rust, no_run
 /// use dioxus::prelude::*;
 ///
 /// fn main() {
@@ -77,11 +77,12 @@ pub fn launch(root: Component) {
 ///
 /// You can configure the WebView window with a configuration closure
 ///
-/// ```rust, ignore
+/// ```rust, no_run
 /// use dioxus::prelude::*;
+/// use dioxus_desktop::*;
 ///
 /// fn main() {
-///     dioxus_desktop::launch_cfg(app, |c| c.with_window(|w| w.with_title("My App")));
+///     dioxus_desktop::launch_cfg(app, Config::default().with_window(WindowBuilder::new().with_title("My App")));
 /// }
 ///
 /// fn app(cx: Scope) -> Element {
@@ -100,8 +101,9 @@ pub fn launch_cfg(root: Component, config_builder: Config) {
 ///
 /// You can configure the WebView window with a configuration closure
 ///
-/// ```rust, ignore
+/// ```rust, no_run
 /// use dioxus::prelude::*;
+/// use dioxus_desktop::Config;
 ///
 /// fn main() {
 ///     dioxus_desktop::launch_with_props(app, AppProps { name: "asd" }, Config::default());
@@ -161,6 +163,7 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
     // iOS panics if we create a window before the event loop is started
     let props = Rc::new(Cell::new(Some(props)));
     let cfg = Rc::new(Cell::new(Some(cfg)));
+    let mut is_visible_before_start = true;
 
     event_loop.run(move |window_event, event_loop, control_flow| {
         *control_flow = ControlFlow::Wait;
@@ -209,6 +212,8 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
 
                 // Create a dom
                 let dom = VirtualDom::new_with_props(root, props);
+
+                is_visible_before_start = cfg.window.window.visible;
 
                 let handler = create_new_window(
                     cfg,
@@ -323,6 +328,10 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
                 EventData::Ipc(msg) if msg.method() == "initialize" => {
                     let view = webviews.get_mut(&event.1).unwrap();
                     send_edits(view.dom.rebuild(), &view.desktop_context.webview);
+                    view.desktop_context
+                        .webview
+                        .window()
+                        .set_visible(is_visible_before_start);
                 }
 
                 EventData::Ipc(msg) if msg.method() == "browser_open" => {
@@ -330,7 +339,7 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
                         if temp.contains_key("href") {
                             let open = webbrowser::open(temp["href"].as_str().unwrap());
                             if let Err(e) = open {
-                                log::error!("Open Browser error: {:?}", e);
+                                tracing::error!("Open Browser error: {:?}", e);
                             }
                         }
                     }

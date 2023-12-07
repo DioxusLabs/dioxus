@@ -1,15 +1,21 @@
 [package]
 name = "dioxus-signals"
 authors = ["Jonathan Kelley"]
-version = "0.0.0"
+version = "0.4.3"
 edition = "2018"
+description = "Signals for Dioxus"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/DioxusLabs/dioxus/"
+homepage = "https://dioxuslabs.com"
+keywords = ["dom", "ui", "gui", "react", "wasm"]
+rust-version = "1.60.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 dioxus-core = { workspace = true }
 generational-box = { workspace = true }
-log.workspace = true
+tracing = { workspace = true }
 simple_logger = "4.2.0"
 serde = { version = "1", features = ["derive"], optional = true }
 

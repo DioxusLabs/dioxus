@@ -249,7 +249,6 @@ impl WebsysDom {
         for id in to_mount {
             let node = get_node(id.0 as u32);
             if let Some(element) = node.dyn_ref::<Element>() {
-                log::info!("mounted event fired: {}", id.0);
                 let data: MountedData = element.into();
                 let data = Rc::new(data);
                 let _ = self.event_channel.unbounded_send(UiEvent {
@@ -295,7 +294,7 @@ pub fn virtual_event_from_websys_event(event: web_sys::Event, target: Element) -
         "select" => Rc::new(SelectionData {}),
         "touchcancel" | "touchend" | "touchmove" | "touchstart" => Rc::new(TouchData::from(event)),
 
-        "scroll" => Rc::new(()),
+        "scroll" => Rc::new(ScrollData {}),
         "wheel" => Rc::new(WheelData::from(event)),
         "animationstart" | "animationend" | "animationiteration" => {
             Rc::new(AnimationData::from(event))
@@ -392,6 +391,7 @@ fn read_input_to_data(target: Element) -> Rc<FormData> {
         .dyn_ref()
         .and_then(|input: &web_sys::HtmlInputElement| {
             input.files().and_then(|files| {
+                #[allow(clippy::arc_with_non_send_sync)]
                 crate::file_engine::WebFileEngine::new(files)
                     .map(|f| std::sync::Arc::new(f) as std::sync::Arc<dyn dioxus_html::FileEngine>)
             })

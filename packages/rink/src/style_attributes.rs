@@ -187,8 +187,8 @@ pub enum BorderStyle {
 }
 
 impl BorderStyle {
-    pub fn symbol_set(&self) -> Option<tui::symbols::line::Set> {
-        use tui::symbols::line::*;
+    pub fn symbol_set(&self) -> Option<ratatui::symbols::line::Set> {
+        use ratatui::symbols::line::*;
         const DASHED: Set = Set {
             horizontal: "╌",
             vertical: "╎",
@@ -570,7 +570,7 @@ fn apply_animation(name: &str, _value: &str, _style: &mut StyleModifier) {
 }
 
 fn apply_font(name: &str, value: &str, style: &mut StyleModifier) {
-    use tui::style::Modifier;
+    use ratatui::style::Modifier;
     match name {
         "font" => (),
         "font-family" => (),
@@ -593,7 +593,7 @@ fn apply_font(name: &str, value: &str, style: &mut StyleModifier) {
 }
 
 fn apply_text(name: &str, value: &str, style: &mut StyleModifier) {
-    use tui::style::Modifier;
+    use ratatui::style::Modifier;
 
     match name {
         "text-align" => todo!(),

@@ -63,6 +63,21 @@ impl<'a, T> std::ops::Deref for Scoped<'a, T> {
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
 pub struct ScopeId(pub usize);
 
+impl ScopeId {
+    /// The root ScopeId.
+    ///
+    /// This scope will last for the entire duration of your app, making it convenient for long-lived state
+    /// that is created dynamically somewhere down the component tree.
+    ///
+    /// # Example
+    ///
+    /// ```rust, ignore
+    /// use dioxus_signals::*;
+    /// let my_persistent_state = Signal::new_in_scope(ScopeId::ROOT, String::new());
+    /// ```
+    pub const ROOT: ScopeId = ScopeId(0);
+}
+
 /// A component's state separate from its props.
 ///
 /// This struct exists to provide a common interface for all scopes without relying on generics.
@@ -79,7 +94,7 @@ pub struct ScopeState {
     pub(crate) hook_idx: Cell<usize>,
 
     pub(crate) borrowed_props: RefCell<Vec<*const VComponent<'static>>>,
-    pub(crate) attributes_to_drop: RefCell<Vec<*const Attribute<'static>>>,
+    pub(crate) attributes_to_drop_before_render: RefCell<Vec<*const Attribute<'static>>>,
 
     pub(crate) props: Option<Box<dyn AnyProps<'static>>>,
 }
@@ -333,12 +348,18 @@ impl<'src> ScopeState {
     pub fn render(&'src self, rsx: LazyNodes<'src, '_>) -> Element<'src> {
         let element = rsx.call(self);
 
-        let mut listeners = self.attributes_to_drop.borrow_mut();
+        let mut listeners = self.attributes_to_drop_before_render.borrow_mut();
         for attr in element.dynamic_attrs {
             match attr.value {
-                AttributeValue::Any(_) | AttributeValue::Listener(_) => {
+                // We need to drop listeners before the next render because they may borrow data from the borrowed props which will be dropped
+                AttributeValue::Listener(_) => {
                     let unbounded = unsafe { std::mem::transmute(attr as *const Attribute) };
                     listeners.push(unbounded);
+                }
+                // We need to drop any values manually to make sure that their drop implementation is called before the next render
+                AttributeValue::Any(_) => {
+                    let unbounded = unsafe { std::mem::transmute(attr as *const Attribute) };
+                    self.previous_frame().add_attribute_to_drop(unbounded);
                 }
 
                 _ => (),
@@ -346,12 +367,17 @@ impl<'src> ScopeState {
         }
 
         let mut props = self.borrowed_props.borrow_mut();
+        let mut drop_props = self
+            .previous_frame()
+            .props_to_drop_before_reset
+            .borrow_mut();
         for node in element.dynamic_nodes {
             if let DynamicNode::Component(comp) = node {
+                let unbounded = unsafe { std::mem::transmute(comp as *const VComponent) };
                 if !comp.static_props {
-                    let unbounded = unsafe { std::mem::transmute(comp as *const VComponent) };
                     props.push(unbounded);
                 }
+                drop_props.push(unbounded);
             }
         }
 
@@ -424,7 +450,9 @@ impl<'src> ScopeState {
         fn_name: &'static str,
     ) -> DynamicNode<'src>
     where
-        P: Properties + 'child,
+        // The properties must be valid until the next bump frame
+        P: Properties + 'src,
+        // The current bump allocator frame must outlive the child's borrowed props
         'src: 'child,
     {
         let vcomp = VProps::new(component, P::memoize, props);

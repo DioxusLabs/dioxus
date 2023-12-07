@@ -1,10 +1,16 @@
 #![doc = include_str!("../README.md")]
+#![doc(html_logo_url = "https://avatars.githubusercontent.com/u/79236386")]
+#![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
 
 mod cache;
 pub mod config;
 mod fs_cache;
+#[cfg(feature = "incremental")]
 pub mod incremental;
+#[cfg(feature = "incremental")]
 mod incremental_cfg;
+
+pub mod eval;
 pub mod renderer;
 pub mod template;
 
@@ -37,6 +43,7 @@ pub fn render_lazy(f: LazyNodes<'_, '_>) -> String {
     };
 
     let mut dom = VirtualDom::new_with_props(lazy_app, props);
+    crate::eval::init_eval(dom.base_scope());
     _ = dom.rebuild();
 
     Renderer::new().render(&dom)
