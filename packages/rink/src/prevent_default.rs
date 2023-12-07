@@ -43,27 +43,28 @@ impl State for PreventDefault {
         _: Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>,
         _: &SendAnyMap,
     ) -> bool {
-        let new = match node_view.attributes().and_then(|mut attrs| {
-            attrs
-                .find(|a| a.attribute.name == "dioxus-prevent-default")
-                .and_then(|a| a.value.as_text())
-        }) {
-            Some("onfocus") => PreventDefault::Focus,
-            Some("onkeypress") => PreventDefault::KeyPress,
-            Some("onkeyrelease") => PreventDefault::KeyRelease,
-            Some("onkeydown") => PreventDefault::KeyDown,
-            Some("onkeyup") => PreventDefault::KeyUp,
-            Some("onclick") => PreventDefault::Click,
-            Some("onmousedown") => PreventDefault::MouseDown,
-            Some("onmouseup") => PreventDefault::MouseUp,
-            Some("onmouseenter") => PreventDefault::MouseEnter,
-            Some("onmouseover") => PreventDefault::MouseOver,
-            Some("onmouseleave") => PreventDefault::MouseLeave,
-            Some("onmouseout") => PreventDefault::MouseOut,
-            Some("onwheel") => PreventDefault::Wheel,
-            Some("oncontextmenu") => PreventDefault::ContextMenu,
-            _ => return false,
-        };
+        let new =
+            match node_view.attributes().and_then(|mut attrs| {
+                attrs
+                    .find(|a| a.attribute.name == "dioxus-prevent-default")
+                    .and_then(|a| a.value.as_text())
+            }) {
+                Some("onfocus") => PreventDefault::Focus,
+                Some("onkeypress") => PreventDefault::KeyPress,
+                Some("onkeyrelease") => PreventDefault::KeyRelease,
+                Some("onkeydown") => PreventDefault::KeyDown,
+                Some("onkeyup") => PreventDefault::KeyUp,
+                Some("onclick") => PreventDefault::Click,
+                Some("onmousedown") => PreventDefault::MouseDown,
+                Some("onmouseup") => PreventDefault::MouseUp,
+                Some("onmouseenter") => PreventDefault::MouseEnter,
+                Some("onmouseover") => PreventDefault::MouseOver,
+                Some("onmouseleave") => PreventDefault::MouseLeave,
+                Some("onmouseout") => PreventDefault::MouseOut,
+                Some("onwheel") => PreventDefault::Wheel,
+                Some("oncontextmenu") => PreventDefault::ContextMenu,
+                _ => return false,
+            };
         if new == *self {
             false
         } else {

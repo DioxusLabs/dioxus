@@ -6,13 +6,14 @@ use dioxus_signals::*;
 
 #[test]
 fn create_signals_global() {
-    let mut dom = VirtualDom::new(|cx| {
-        render! {
-            for _ in 0..10 {
-                Child {}
+    let mut dom =
+        VirtualDom::new(|cx| {
+            render! {
+                for _ in 0..10 {
+                    Child {}
+                }
             }
-        }
-    });
+        });
 
     fn Child(cx: Scope) -> Element {
         let signal = create_without_cx();
@@ -31,13 +32,14 @@ fn create_signals_global() {
 
 #[test]
 fn deref_signal() {
-    let mut dom = VirtualDom::new(|cx| {
-        render! {
-            for _ in 0..10 {
-                Child {}
+    let mut dom =
+        VirtualDom::new(|cx| {
+            render! {
+                for _ in 0..10 {
+                    Child {}
+                }
             }
-        }
-    });
+        });
 
     fn Child(cx: Scope) -> Element {
         let signal = Signal::new("hello world".to_string());
@@ -55,16 +57,17 @@ fn deref_signal() {
 
 #[test]
 fn drop_signals() {
-    let mut dom = VirtualDom::new(|cx| {
-        let generation = cx.generation();
+    let mut dom =
+        VirtualDom::new(|cx| {
+            let generation = cx.generation();
 
-        let count = if generation % 2 == 0 { 10 } else { 0 };
-        render! {
-            for _ in 0..count {
-                Child {}
+            let count = if generation % 2 == 0 { 10 } else { 0 };
+            render! {
+                for _ in 0..count {
+                    Child {}
+                }
             }
-        }
-    });
+        });
 
     fn Child(cx: Scope) -> Element {
         let signal = create_without_cx();

@@ -46,11 +46,9 @@ where
                 > + Send,
         >,
     > {
-        let fut = self.call(req).instrument(tracing::trace_span!(
-            "service",
-            "{}",
-            std::any::type_name::<S>()
-        ));
+        let fut = self.call(req).instrument(
+            tracing::trace_span!("service", "{}", std::any::type_name::<S>())
+        );
         Box::pin(async move { fut.await.map_err(|err| err.into()) })
     }
 }

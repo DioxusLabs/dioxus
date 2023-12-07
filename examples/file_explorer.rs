@@ -73,11 +73,12 @@ struct Files {
 
 impl Files {
     fn new() -> Self {
-        let mut files = Self {
-            path_stack: vec!["./".to_string()],
-            path_names: vec![],
-            err: None,
-        };
+        let mut files =
+            Self {
+                path_stack: vec!["./".to_string()],
+                path_names: vec![],
+                err: None,
+            };
 
         files.reload_path_list();
 

@@ -11,14 +11,15 @@ use crate::prelude::*;
 /// - [`None`], when the current component isn't a descendant of a [`Link`] component.
 /// - Otherwise [`Some`].
 pub(crate) fn use_router_internal(cx: &ScopeState) -> &Option<RouterContext> {
-    let inner = cx.use_hook(|| {
-        let router = cx.consume_context::<RouterContext>()?;
+    let inner =
+        cx.use_hook(|| {
+            let router = cx.consume_context::<RouterContext>()?;
 
-        let id = cx.scope_id();
-        router.subscribe(id);
+            let id = cx.scope_id();
+            router.subscribe(id);
 
-        Some(Subscription { router, id })
-    });
+            Some(Subscription { router, id })
+        });
     cx.use_hook(|| inner.as_ref().map(|s| s.router.clone()))
 }
 

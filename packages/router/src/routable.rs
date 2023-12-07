@@ -134,11 +134,12 @@ impl<I: std::iter::FromIterator<String>> FromRouteSegments for I {
 
 /// A flattened version of [`Routable::SITE_MAP`].
 /// This essentially represents a `Vec<Vec<SegmentType>>`, which you can collect it into.
-type SiteMapFlattened<'a> = FlatMap<
-    Iter<'a, SiteMapSegment>,
-    Vec<Vec<SegmentType>>,
-    fn(&SiteMapSegment) -> Vec<Vec<SegmentType>>,
->;
+type SiteMapFlattened<'a> =
+    FlatMap<
+        Iter<'a, SiteMapSegment>,
+        Vec<Vec<SegmentType>>,
+        fn(&SiteMapSegment) -> Vec<Vec<SegmentType>>,
+    >;
 
 fn seg_strs_to_route<T>(segs_maybe: &Option<Vec<&str>>) -> Option<T>
 where

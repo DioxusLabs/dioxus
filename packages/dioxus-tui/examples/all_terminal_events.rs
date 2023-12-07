@@ -40,9 +40,10 @@ fn app(cx: Scope) -> Element {
         rsx!(p { "{trimmed}" })
     });
 
-    let log_event = move |event: Event| {
-        events.write().push(event);
-    };
+    let log_event =
+        move |event: Event| {
+            events.write().push(event);
+        };
 
     cx.render(rsx! {
         div {

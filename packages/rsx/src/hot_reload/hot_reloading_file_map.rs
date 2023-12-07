@@ -77,11 +77,12 @@ impl<Ctx: HotReloadingContext> FileMap<Ctx> {
         }
 
         let FileMapSearchResult { map, errors } = find_rs_files(path, &mut filter)?;
-        let result = Self {
-            map,
-            in_workspace: HashMap::new(),
-            phantom: std::marker::PhantomData,
-        };
+        let result =
+            Self {
+                map,
+                in_workspace: HashMap::new(),
+                phantom: std::marker::PhantomData,
+            };
         Ok(FileMapBuildResult {
             map: result,
             errors,

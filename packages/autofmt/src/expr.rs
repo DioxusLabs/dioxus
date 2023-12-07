@@ -34,13 +34,14 @@ impl Writer<'_> {
         for (id, line) in self.src[start.line..end.line].iter().enumerate() {
             writeln!(self.out)?;
             // check if this is the last line
-            let line = {
-                if id == (end.line - start.line) - 1 {
-                    &line[..end.column]
-                } else {
-                    line
-                }
-            };
+            let line =
+                {
+                    if id == (end.line - start.line) - 1 {
+                        &line[..end.column]
+                    } else {
+                        line
+                    }
+                };
 
             // trim the leading whitespace
             let previous_indent = crate::leading_whitespaces(line) / 4;

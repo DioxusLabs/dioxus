@@ -66,12 +66,13 @@ pub fn partial_derive_state(_: TokenStream, input: TokenStream) -> TokenStream {
         Some(tuple) => {
             let mut parent_dependencies = Vec::new();
             for type_ in &tuple.elems {
-                let mut type_ = extract_type_path(type_).unwrap_or_else(|| {
-                    panic!(
-                        "ParentDependencies must be a tuple of type paths, found {}",
-                        quote!(#type_)
-                    )
-                });
+                let mut type_ =
+                    extract_type_path(type_).unwrap_or_else(|| {
+                        panic!(
+                            "ParentDependencies must be a tuple of type paths, found {}",
+                            quote!(#type_)
+                        )
+                    });
                 if type_ == self_path {
                     type_ = this_type.clone();
                 }
@@ -80,21 +81,24 @@ pub fn partial_derive_state(_: TokenStream, input: TokenStream) -> TokenStream {
             }
             parent_dependencies
         }
-        _ => panic!(
-            "ParentDependencies must be a tuple, found {}",
-            quote!(#parent_dependencies)
-        ),
+        _ => {
+            panic!(
+                "ParentDependencies must be a tuple, found {}",
+                quote!(#parent_dependencies)
+            )
+        }
     };
     let child_dependencies = match extract_tuple(child_dependencies) {
         Some(tuple) => {
             let mut child_dependencies = Vec::new();
             for type_ in &tuple.elems {
-                let mut type_ = extract_type_path(type_).unwrap_or_else(|| {
-                    panic!(
-                        "ChildDependencies must be a tuple of type paths, found {}",
-                        quote!(#type_)
-                    )
-                });
+                let mut type_ =
+                    extract_type_path(type_).unwrap_or_else(|| {
+                        panic!(
+                            "ChildDependencies must be a tuple of type paths, found {}",
+                            quote!(#type_)
+                        )
+                    });
                 if type_ == self_path {
                     type_ = this_type.clone();
                 }
@@ -103,34 +107,39 @@ pub fn partial_derive_state(_: TokenStream, input: TokenStream) -> TokenStream {
             }
             child_dependencies
         }
-        _ => panic!(
-            "ChildDependencies must be a tuple, found {}",
-            quote!(#child_dependencies)
-        ),
-    };
-    let node_dependencies = match extract_tuple(node_dependencies) {
-        Some(tuple) => {
-            let mut node_dependencies = Vec::new();
-            for type_ in &tuple.elems {
-                let mut type_ = extract_type_path(type_).unwrap_or_else(|| {
-                    panic!(
-                        "NodeDependencies must be a tuple of type paths, found {}",
-                        quote!(#type_)
-                    )
-                });
-                if type_ == self_path {
-                    type_ = this_type.clone();
-                }
-                combined_dependencies.insert(type_.clone());
-                node_dependencies.push(type_);
-            }
-            node_dependencies
+        _ => {
+            panic!(
+                "ChildDependencies must be a tuple, found {}",
+                quote!(#child_dependencies)
+            )
         }
-        _ => panic!(
-            "NodeDependencies must be a tuple, found {}",
-            quote!(#node_dependencies)
-        ),
     };
+    let node_dependencies =
+        match extract_tuple(node_dependencies) {
+            Some(tuple) => {
+                let mut node_dependencies = Vec::new();
+                for type_ in &tuple.elems {
+                    let mut type_ = extract_type_path(type_).unwrap_or_else(|| {
+                        panic!(
+                            "NodeDependencies must be a tuple of type paths, found {}",
+                            quote!(#type_)
+                        )
+                    });
+                    if type_ == self_path {
+                        type_ = this_type.clone();
+                    }
+                    combined_dependencies.insert(type_.clone());
+                    node_dependencies.push(type_);
+                }
+                node_dependencies
+            }
+            _ => {
+                panic!(
+                    "NodeDependencies must be a tuple, found {}",
+                    quote!(#node_dependencies)
+                )
+            }
+        };
     combined_dependencies.insert(this_type.clone());
 
     let combined_dependencies: Vec<_> = combined_dependencies.into_iter().collect();

@@ -67,11 +67,12 @@ fn get_props_struct(component_body: &ComponentBody) -> ItemStruct {
 
     let struct_ident = Ident::new(&format!("{fn_ident}Props"), fn_ident.span());
 
-    let first_lifetime = if let Some(GenericParam::Lifetime(lt)) = generics.params.first() {
-        Some(lt)
-    } else {
-        None
-    };
+    let first_lifetime =
+        if let Some(GenericParam::Lifetime(lt)) = generics.params.first() {
+            Some(lt)
+        } else {
+            None
+        };
 
     let struct_attrs = if first_lifetime.is_some() {
         quote! { #[derive(Props)] }
@@ -250,16 +251,18 @@ fn get_function(component_body: &ComponentBody) -> ItemFn {
     let struct_ident = Ident::new(&format!("{fn_ident}Props"), fn_ident.span());
 
     // Skip first arg since that's the context
-    let struct_field_names = inputs.iter().skip(1).filter_map(|f| match f {
-        FnArg::Receiver(_) => unreachable!(), // ComponentBody prohibits receiver parameters.
-        FnArg::Typed(pt) => Some(&pt.pat),
-    });
+    let struct_field_names =
+        inputs.iter().skip(1).filter_map(|f| match f {
+            FnArg::Receiver(_) => unreachable!(), // ComponentBody prohibits receiver parameters.
+            FnArg::Typed(pt) => Some(&pt.pat),
+        });
 
-    let first_lifetime = if let Some(GenericParam::Lifetime(lt)) = generics.params.first() {
-        Some(lt)
-    } else {
-        None
-    };
+    let first_lifetime =
+        if let Some(GenericParam::Lifetime(lt)) = generics.params.first() {
+            Some(lt)
+        } else {
+            None
+        };
 
     let (scope_lifetime, fn_generics) = if let Some(lt) = first_lifetime {
         (quote! { #lt, }, generics.clone())

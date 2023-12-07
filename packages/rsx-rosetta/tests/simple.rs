@@ -36,7 +36,8 @@ fn simple_elements() {
 
 #[test]
 fn deeply_nested() {
-    let html = r#"
+    let html =
+        r#"
     <div>
         <div class="asd">
             <div class="asd">
@@ -48,7 +49,7 @@ fn deeply_nested() {
         </div>
     </div>
     "#
-    .trim();
+        .trim();
 
     let dom = Dom::parse(html).unwrap();
 

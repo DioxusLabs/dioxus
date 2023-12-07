@@ -531,9 +531,9 @@ impl<'a> From<&'a AttributeValue<'a>> for BorrowedAttributeValue<'a> {
             }
             AttributeValue::Any(value) => {
                 let value = value.borrow();
-                BorrowedAttributeValue::Any(std::cell::Ref::map(value, |value| {
-                    &**value.as_ref().unwrap()
-                }))
+                BorrowedAttributeValue::Any(
+                    std::cell::Ref::map(value, |value| &**value.as_ref().unwrap())
+                )
             }
             AttributeValue::None => BorrowedAttributeValue::None,
         }

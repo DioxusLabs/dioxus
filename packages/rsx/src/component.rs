@@ -162,10 +162,11 @@ impl ToTokens for Component {
                 }
 
                 if !self.children.is_empty() {
-                    let renderer: TemplateRenderer = TemplateRenderer {
-                        roots: &self.children,
-                        location: None,
-                    };
+                    let renderer: TemplateRenderer =
+                        TemplateRenderer {
+                            roots: &self.children,
+                            location: None,
+                        };
 
                     toks.append_all(quote! {
                         .children(
@@ -183,10 +184,11 @@ impl ToTokens for Component {
 
         let fn_name = self.name.segments.last().unwrap().ident.to_string();
 
-        let gen_name = match &self.prop_gen_args {
-            Some(gen) => quote! { #name #gen },
-            None => quote! { #name },
-        };
+        let gen_name =
+            match &self.prop_gen_args {
+                Some(gen) => quote! { #name #gen },
+                None => quote! { #name },
+            };
 
         tokens.append_all(quote! {
             __cx.component(

@@ -83,36 +83,37 @@ impl State for Focus {
         _: &SendAnyMap,
     ) -> bool {
         let new = Focus {
-            level: if let Some(a) = node_view
-                .attributes()
-                .and_then(|mut a| a.find(|a| a.attribute.name == "tabindex"))
-            {
-                if let Some(index) = a
-                    .value
-                    .as_int()
-                    .or_else(|| a.value.as_text().and_then(|v| v.parse::<i64>().ok()))
+            level:
+                if let Some(a) = node_view
+                    .attributes()
+                    .and_then(|mut a| a.find(|a| a.attribute.name == "tabindex"))
                 {
-                    match index.cmp(&0) {
-                        Ordering::Less => FocusLevel::Unfocusable,
-                        Ordering::Equal => FocusLevel::Focusable,
-                        Ordering::Greater => {
-                            FocusLevel::Ordered(NonZeroU16::new(index as u16).unwrap())
+                    if let Some(index) = a
+                        .value
+                        .as_int()
+                        .or_else(|| a.value.as_text().and_then(|v| v.parse::<i64>().ok()))
+                    {
+                        match index.cmp(&0) {
+                            Ordering::Less => FocusLevel::Unfocusable,
+                            Ordering::Equal => FocusLevel::Focusable,
+                            Ordering::Greater => {
+                                FocusLevel::Ordered(NonZeroU16::new(index as u16).unwrap())
+                            }
                         }
+                    } else {
+                        FocusLevel::Unfocusable
                     }
+                } else if node_view
+                    .listeners()
+                    .and_then(
+                        |mut listeners| listeners.any(|l| FOCUS_EVENTS.contains(&l)).then_some(())
+                    )
+                    .is_some()
+                {
+                    FocusLevel::Focusable
                 } else {
                     FocusLevel::Unfocusable
-                }
-            } else if node_view
-                .listeners()
-                .and_then(|mut listeners| {
-                    listeners.any(|l| FOCUS_EVENTS.contains(&l)).then_some(())
-                })
-                .is_some()
-            {
-                FocusLevel::Focusable
-            } else {
-                FocusLevel::Unfocusable
-            },
+                },
         };
         if *self != new {
             *self = new;

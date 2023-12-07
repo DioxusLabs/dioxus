@@ -8,9 +8,7 @@ fn random_ns() -> Option<&'static str> {
     let namespace = rand::random::<u8>() % 2;
     match namespace {
         0 => None,
-        1 => Some(Box::leak(
-            format!("ns{}", rand::random::<usize>()).into_boxed_str(),
-        )),
+        1 => Some(Box::leak(format!("ns{}", rand::random::<usize>()).into_boxed_str())),
         _ => unreachable!(),
     }
 }
@@ -22,13 +20,15 @@ fn create_random_attribute(attr_idx: &mut usize) -> TemplateAttribute<'static> {
             value: Box::leak(format!("value{}", rand::random::<usize>()).into_boxed_str()),
             namespace: random_ns(),
         },
-        1 => TemplateAttribute::Dynamic {
-            id: {
-                let old_idx = *attr_idx;
-                *attr_idx += 1;
-                old_idx
-            },
-        },
+        1 => {
+            TemplateAttribute::Dynamic {
+                id: {
+                    let old_idx = *attr_idx;
+                    *attr_idx += 1;
+                    old_idx
+                },
+            }
+        }
         _ => unreachable!(),
     }
 }
@@ -73,22 +73,26 @@ fn create_random_template_node(
         1 => TemplateNode::Text {
             text: Box::leak(format!("{}", rand::random::<usize>()).into_boxed_str()),
         },
-        2 => TemplateNode::DynamicText {
-            id: {
-                let old_idx = *template_idx;
-                *template_idx += 1;
-                dynamic_node_types.push(DynamicNodeType::Text);
-                old_idx
-            },
-        },
-        3 => TemplateNode::Dynamic {
-            id: {
-                let old_idx = *template_idx;
-                *template_idx += 1;
-                dynamic_node_types.push(DynamicNodeType::Other);
-                old_idx
-            },
-        },
+        2 => {
+            TemplateNode::DynamicText {
+                id: {
+                    let old_idx = *template_idx;
+                    *template_idx += 1;
+                    dynamic_node_types.push(DynamicNodeType::Text);
+                    old_idx
+                },
+            }
+        }
+        3 => {
+            TemplateNode::Dynamic {
+                id: {
+                    let old_idx = *template_idx;
+                    *template_idx += 1;
+                    dynamic_node_types.push(DynamicNodeType::Other);
+                    old_idx
+                },
+            }
+        }
         _ => unreachable!(),
     }
 }
@@ -207,9 +211,9 @@ fn create_random_dynamic_node(cx: &ScopeState, depth: usize) -> DynamicNode {
 
 fn create_random_dynamic_attr(cx: &ScopeState) -> Attribute {
     let value = match rand::random::<u8>() % 7 {
-        0 => AttributeValue::Text(Box::leak(
-            format!("{}", rand::random::<usize>()).into_boxed_str(),
-        )),
+        0 => {
+            AttributeValue::Text(Box::leak(format!("{}", rand::random::<usize>()).into_boxed_str()))
+        }
         1 => AttributeValue::Float(rand::random()),
         2 => AttributeValue::Int(rand::random()),
         3 => AttributeValue::Bool(rand::random()),
@@ -272,31 +276,32 @@ fn create_random_element(cx: Scope<DepthProps>) -> Element {
                 .into_boxed_str(),
             ));
             // println!("{template:#?}");
-            let node = VNode {
-                key: None,
-                parent: None,
-                template: Cell::new(template),
-                root_ids: bumpalo::collections::Vec::new_in(cx.bump()).into(),
-                dynamic_nodes: {
-                    let dynamic_nodes: Vec<_> = dynamic_node_types
-                        .iter()
-                        .map(|ty| match ty {
-                            DynamicNodeType::Text => DynamicNode::Text(VText::new(Box::leak(
-                                format!("{}", rand::random::<usize>()).into_boxed_str(),
-                            ))),
-                            DynamicNodeType::Other => {
-                                create_random_dynamic_node(cx, cx.props.depth + 1)
-                            }
-                        })
-                        .collect();
-                    cx.bump().alloc(dynamic_nodes)
-                },
-                dynamic_attrs: cx.bump().alloc(
-                    (0..template.attr_paths.len())
-                        .map(|_| create_random_dynamic_attr(cx))
-                        .collect::<Vec<_>>(),
-                ),
-            };
+            let node =
+                VNode {
+                    key: None,
+                    parent: None,
+                    template: Cell::new(template),
+                    root_ids: bumpalo::collections::Vec::new_in(cx.bump()).into(),
+                    dynamic_nodes: {
+                        let dynamic_nodes: Vec<_> = dynamic_node_types
+                            .iter()
+                            .map(|ty| match ty {
+                                DynamicNodeType::Text => DynamicNode::Text(VText::new(Box::leak(
+                                    format!("{}", rand::random::<usize>()).into_boxed_str(),
+                                ))),
+                                DynamicNodeType::Other => {
+                                    create_random_dynamic_node(cx, cx.props.depth + 1)
+                                }
+                            })
+                            .collect();
+                        cx.bump().alloc(dynamic_nodes)
+                    },
+                    dynamic_attrs: cx.bump().alloc(
+                        (0..template.attr_paths.len())
+                            .map(|_| create_random_dynamic_attr(cx))
+                            .collect::<Vec<_>>(),
+                    ),
+                };
             Some(node)
         }
         _ => None,

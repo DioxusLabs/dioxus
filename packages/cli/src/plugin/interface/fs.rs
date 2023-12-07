@@ -67,11 +67,12 @@ impl UserData for PluginFileSystem {
             let file = PathBuf::from(args.0);
             let target = PathBuf::from(args.1);
 
-            let tar_gz = if let Ok(v) = File::open(file) {
-                v
-            } else {
-                return Ok(false);
-            };
+            let tar_gz =
+                if let Ok(v) = File::open(file) {
+                    v
+                } else {
+                    return Ok(false);
+                };
 
             let tar = GzDecoder::new(tar_gz);
             let mut archive = Archive::new(tar);

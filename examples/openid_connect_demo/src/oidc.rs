@@ -112,11 +112,12 @@ pub async fn exchange_refresh_token(
 
 pub async fn log_out_url(id_token_hint: CoreIdToken) -> Result<Url, crate::errors::Error> {
     let provider_metadata = init_provider_metadata().await?;
-    let end_session_url = provider_metadata
-        .additional_metadata()
-        .clone()
-        .end_session_endpoint
-        .unwrap();
+    let end_session_url =
+        provider_metadata
+            .additional_metadata()
+            .clone()
+            .end_session_endpoint
+            .unwrap();
     let logout_request: LogoutRequest = LogoutRequest::from(end_session_url);
     Ok(logout_request
         .set_client_id(ClientId::new(DIOXUS_FRONT_CLIENT_ID.to_string()))

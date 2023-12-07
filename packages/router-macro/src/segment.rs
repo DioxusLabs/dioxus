@@ -135,10 +135,11 @@ pub fn parse_route_segments<'a>(
 ) -> syn::Result<(Vec<RouteSegment>, Option<QuerySegment>)> {
     let mut route_segments = Vec::new();
 
-    let (route_string, query) = match route.rsplit_once('?') {
-        Some((route, query)) => (route, Some(query)),
-        None => (route, None),
-    };
+    let (route_string, query) =
+        match route.rsplit_once('?') {
+            Some((route, query)) => (route, Some(query)),
+            None => (route, None),
+        };
     let mut iterator = route_string.split('/');
 
     // skip the first empty segment
@@ -157,11 +158,12 @@ pub fn parse_route_segments<'a>(
         if let Some(segment) = segment.strip_prefix(':') {
             let spread = segment.starts_with("..");
 
-            let ident = if spread {
-                segment[2..].to_string()
-            } else {
-                segment.to_string()
-            };
+            let ident =
+                if spread {
+                    segment[2..].to_string()
+                } else {
+                    segment.to_string()
+                };
 
             let field = fields.find(|(name, _)| **name == ident);
 
@@ -205,14 +207,15 @@ pub fn parse_route_segments<'a>(
                 let query_ident = Ident::new(query, Span::call_site());
                 let field = fields.find(|(name, _)| *name == &query_ident);
 
-                let ty = if let Some((_, ty)) = field {
-                    ty.clone()
-                } else {
-                    return Err(syn::Error::new(
-                        route_span,
-                        format!("Could not find a field with the name '{}'", query_ident),
-                    ));
-                };
+                let ty =
+                    if let Some((_, ty)) = field {
+                        ty.clone()
+                    } else {
+                        return Err(syn::Error::new(
+                            route_span,
+                            format!("Could not find a field with the name '{}'", query_ident),
+                        ));
+                    };
 
                 Some(QuerySegment {
                     ident: query_ident,

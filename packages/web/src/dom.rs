@@ -80,12 +80,13 @@ impl WebsysDom {
                     }
 
                     let data = virtual_event_from_websys_event(event.clone(), target);
-                    let _ = event_channel.unbounded_send(UiEvent {
-                        name,
-                        bubbles,
-                        element,
-                        data,
-                    });
+                    let _ =
+                        event_channel.unbounded_send(UiEvent {
+                            name,
+                            bubbles,
+                            element,
+                            data,
+                        });
                 }
             }
         }));

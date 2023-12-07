@@ -585,13 +585,14 @@ impl RinkInputHandler {
         let queued_events = Rc::new(RefCell::new(Vec::new()));
         let queued_events2 = Rc::downgrade(&queued_events);
 
-        let regester_event = move |evt: crossterm::event::Event| {
-            if let Some(evt) = get_event(evt) {
-                if let Some(v) = queued_events2.upgrade() {
-                    (*v).borrow_mut().push(evt);
+        let regester_event =
+            move |evt: crossterm::event::Event| {
+                if let Some(evt) = get_event(evt) {
+                    if let Some(v) = queued_events2.upgrade() {
+                        (*v).borrow_mut().push(evt);
+                    }
                 }
-            }
-        };
+            };
 
         let state = Rc::new(RefCell::new(InnerInputState::create(rdom)));
 
@@ -680,48 +681,49 @@ fn get_event(evt: TermEvent) -> Option<(&'static str, EventData)> {
             let ctrl = m.modifiers.contains(KeyModifiers::CONTROL);
             let meta = false;
 
-            let get_mouse_data = |crossterm_button: Option<MouseButton>| {
-                let button = crossterm_button.map(|b| match b {
-                    MouseButton::Left => DioxusMouseButton::Primary,
-                    MouseButton::Right => DioxusMouseButton::Secondary,
-                    MouseButton::Middle => DioxusMouseButton::Auxiliary,
-                });
+            let get_mouse_data =
+                |crossterm_button: Option<MouseButton>| {
+                    let button = crossterm_button.map(|b| match b {
+                        MouseButton::Left => DioxusMouseButton::Primary,
+                        MouseButton::Right => DioxusMouseButton::Secondary,
+                        MouseButton::Middle => DioxusMouseButton::Auxiliary,
+                    });
 
-                // from https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent
+                    // from https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent
 
-                // The `page` and `screen` coordinates are inconsistent with the MDN definition, as they are relative to the viewport (client), not the target element/page/screen, respectively.
-                // todo?
-                // But then, MDN defines them in terms of pixels, yet crossterm provides only row/column, and it might not be possible to get pixels. So we can't get 100% consistency anyway.
-                let coordinates = Coordinates::new(
-                    ScreenPoint::new(x, y),
-                    ClientPoint::new(x, y),
-                    // offset x/y are set when the origin of the event is assigned to an element
-                    ElementPoint::new(0., 0.),
-                    PagePoint::new(x, y),
-                );
+                    // The `page` and `screen` coordinates are inconsistent with the MDN definition, as they are relative to the viewport (client), not the target element/page/screen, respectively.
+                    // todo?
+                    // But then, MDN defines them in terms of pixels, yet crossterm provides only row/column, and it might not be possible to get pixels. So we can't get 100% consistency anyway.
+                    let coordinates = Coordinates::new(
+                        ScreenPoint::new(x, y),
+                        ClientPoint::new(x, y),
+                        // offset x/y are set when the origin of the event is assigned to an element
+                        ElementPoint::new(0., 0.),
+                        PagePoint::new(x, y),
+                    );
 
-                let mut modifiers = Modifiers::empty();
-                if shift {
-                    modifiers.insert(Modifiers::SHIFT);
-                }
-                if ctrl {
-                    modifiers.insert(Modifiers::CONTROL);
-                }
-                if meta {
-                    modifiers.insert(Modifiers::META);
-                }
-                if alt {
-                    modifiers.insert(Modifiers::ALT);
-                }
+                    let mut modifiers = Modifiers::empty();
+                    if shift {
+                        modifiers.insert(Modifiers::SHIFT);
+                    }
+                    if ctrl {
+                        modifiers.insert(Modifiers::CONTROL);
+                    }
+                    if meta {
+                        modifiers.insert(Modifiers::META);
+                    }
+                    if alt {
+                        modifiers.insert(Modifiers::ALT);
+                    }
 
-                // held mouse buttons get set later by maintaining state, as crossterm does not provide them
-                EventData::Mouse(MouseData::new(
-                    coordinates,
-                    button,
-                    DioxusMouseButtons::empty(),
-                    modifiers,
-                ))
-            };
+                    // held mouse buttons get set later by maintaining state, as crossterm does not provide them
+                    EventData::Mouse(MouseData::new(
+                        coordinates,
+                        button,
+                        DioxusMouseButtons::empty(),
+                        modifiers,
+                    ))
+                };
 
             let get_wheel_data = |up| {
                 let y = if up { -1.0 } else { 1.0 };

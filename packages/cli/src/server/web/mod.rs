@@ -165,9 +165,7 @@ async fn get_rustls(config: &CrateConfig) -> Result<Option<RustlsConfig>> {
         get_rustls_without_mkcert(web_config)?
     };
 
-    Ok(Some(
-        RustlsConfig::from_pem_file(cert_path, key_path).await?,
-    ))
+    Ok(Some(RustlsConfig::from_pem_file(cert_path, key_path).await?))
 }
 
 fn get_rustls_with_mkcert(web_config: &WebHttpsConfig) -> Result<(String, String)> {
@@ -314,10 +312,11 @@ async fn setup_router(
     ));
 
     // Setup routes
-    router = router
-        .route("/_dioxus/hot_reload", get(hot_reload_handler))
-        .layer(cors)
-        .layer(Extension(ws_reload));
+    router =
+        router
+            .route("/_dioxus/hot_reload", get(hot_reload_handler))
+            .layer(cors)
+            .layer(Extension(ws_reload));
 
     if let Some(hot_reload) = hot_reload {
         router = router.layer(Extension(hot_reload))

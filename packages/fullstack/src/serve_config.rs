@@ -122,14 +122,16 @@ fn load_index_html(path: PathBuf, root_id: &'static str) -> IndexHtml {
 
     let (pre_main, post_main) = contents.split_once(&format!("id=\"{root_id}\"")).unwrap_or_else(|| panic!("Failed to find id=\"{root_id}\" in index.html. The id is used to inject the application into the page."));
 
-    let post_main = post_main.split_once('>').unwrap_or_else(|| {
-        panic!("Failed to find closing > after id=\"{root_id}\" in index.html.")
-    });
+    let post_main =
+        post_main.split_once('>').unwrap_or_else(
+            || panic!("Failed to find closing > after id=\"{root_id}\" in index.html.")
+        );
 
-    let (pre_main, post_main) = (
-        pre_main.to_string() + &format!("id=\"{root_id}\"") + post_main.0 + ">",
-        post_main.1.to_string(),
-    );
+    let (pre_main, post_main) =
+        (
+            pre_main.to_string() + &format!("id=\"{root_id}\"") + post_main.0 + ">",
+            post_main.1.to_string(),
+        );
 
     IndexHtml {
         pre_main,

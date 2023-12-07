@@ -99,10 +99,9 @@ impl FromStr for IfmtInput {
                         current_literal.push(c);
                         continue;
                     } else {
-                        return Err(Error::new(
-                            Span::call_site(),
-                            "unmatched closing '}' in format string",
-                        ));
+                        return Err(
+                            Error::new(Span::call_site(), "unmatched closing '}' in format string")
+                        );
                     }
                 }
                 current_literal.push(c);
@@ -147,17 +146,18 @@ impl ToTokens for IfmtInput {
             }
         }
 
-        let positional_args = self.segments.iter().filter_map(|seg| {
-            if let Segment::Formatted(FormattedSegment {
-                segment: FormattedSegmentType::Expr(expr),
-                ..
-            }) = seg
-            {
-                Some(expr)
-            } else {
-                None
-            }
-        });
+        let positional_args =
+            self.segments.iter().filter_map(|seg| {
+                if let Segment::Formatted(FormattedSegment {
+                    segment: FormattedSegmentType::Expr(expr),
+                    ..
+                }) = seg
+                {
+                    Some(expr)
+                } else {
+                    None
+                }
+            });
 
         // remove duplicate idents
         let named_args_idents: HashSet<_> = self
@@ -228,10 +228,7 @@ impl FormattedSegmentType {
         if let Ok(expr) = parse_str(input) {
             Ok(Self::Expr(Box::new(expr)))
         } else {
-            Err(Error::new(
-                Span::call_site(),
-                "Expected Ident or Expression",
-            ))
+            Err(Error::new(Span::call_site(), "Expected Ident or Expression"))
         }
     }
 }

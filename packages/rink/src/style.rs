@@ -350,24 +350,26 @@ pub fn convert(mode: RenderingMode, c: Color) -> Color {
                 let rgb = to_rgb(c);
                 Color::Rgb(rgb[0], rgb[1], rgb[2])
             }
-            crate::RenderingMode::Ansi => match c {
-                Color::Indexed(_) => c,
-                _ => {
-                    let rgb = to_rgb(c);
-                    // 16-231: 6 × 6 × 6 color cube
-                    // 232-255: 23 step grayscale
-                    if rgb[0] == rgb[1] && rgb[1] == rgb[2] {
-                        let idx = 232 + (rgb[0] as u16 * 23 / 255) as u8;
-                        Color::Indexed(idx)
-                    } else {
-                        let r = (rgb[0] as u16 * 5) / 255;
-                        let g = (rgb[1] as u16 * 5) / 255;
-                        let b = (rgb[2] as u16 * 5) / 255;
-                        let idx = 16 + r * 36 + g * 6 + b;
-                        Color::Indexed(idx as u8)
+            crate::RenderingMode::Ansi => {
+                match c {
+                    Color::Indexed(_) => c,
+                    _ => {
+                        let rgb = to_rgb(c);
+                        // 16-231: 6 × 6 × 6 color cube
+                        // 232-255: 23 step grayscale
+                        if rgb[0] == rgb[1] && rgb[1] == rgb[2] {
+                            let idx = 232 + (rgb[0] as u16 * 23 / 255) as u8;
+                            Color::Indexed(idx)
+                        } else {
+                            let r = (rgb[0] as u16 * 5) / 255;
+                            let g = (rgb[1] as u16 * 5) / 255;
+                            let b = (rgb[2] as u16 * 5) / 255;
+                            let idx = 16 + r * 36 + g * 6 + b;
+                            Color::Indexed(idx as u8)
+                        }
                     }
                 }
-            },
+            }
         }
     }
 }

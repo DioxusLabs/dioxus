@@ -62,24 +62,18 @@ impl WebEvaluator {
                 if let Ok(stringified) = js_sys::JSON::stringify(&result) {
                     if !stringified.is_undefined() && stringified.is_valid_utf16() {
                         let string: String = stringified.into();
-                        Value::from_str(&string).map_err(|e| {
-                            EvalError::Communication(format!("Failed to parse result - {}", e))
-                        })?
+                        Value::from_str(&string).map_err(
+                            |e| EvalError::Communication(format!("Failed to parse result - {}", e))
+                        )?
                     } else {
-                        return Err(EvalError::Communication(
-                            "Failed to stringify result".into(),
-                        ));
+                        return Err(EvalError::Communication("Failed to stringify result".into()));
                     }
                 } else {
-                    return Err(EvalError::Communication(
-                        "Failed to stringify result".into(),
-                    ));
+                    return Err(EvalError::Communication("Failed to stringify result".into()));
                 }
             }
             Err(err) => {
-                return Err(EvalError::InvalidJs(
-                    err.as_string().unwrap_or("unknown".to_string()),
-                ));
+                return Err(EvalError::InvalidJs(err.as_string().unwrap_or("unknown".to_string())));
             }
         };
 

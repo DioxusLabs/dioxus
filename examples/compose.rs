@@ -12,14 +12,15 @@ fn app(cx: Scope) -> Element {
     let window = use_window(cx);
     let emails_sent = use_ref(cx, Vec::new);
 
-    let tx = use_coroutine(cx, |mut rx: UnboundedReceiver<String>| {
-        to_owned![emails_sent];
-        async move {
-            while let Some(message) = rx.next().await {
-                emails_sent.write().push(message);
+    let tx =
+        use_coroutine(cx, |mut rx: UnboundedReceiver<String>| {
+            to_owned![emails_sent];
+            async move {
+                while let Some(message) = rx.next().await {
+                    emails_sent.write().push(message);
+                }
             }
-        }
-    });
+        });
 
     cx.render(rsx! {
         div {

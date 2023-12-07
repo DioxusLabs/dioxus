@@ -236,10 +236,11 @@ impl Slider {
             let id = root.id();
             let rdom = root.real_dom_mut();
             let world = rdom.raw_world_mut();
-            let taffy = {
-                let query: UniqueView<Query> = world.borrow().unwrap();
-                query.stretch.clone()
-            };
+            let taffy =
+                {
+                    let query: UniqueView<Query> = world.borrow().unwrap();
+                    query.stretch.clone()
+                };
 
             let taffy = taffy.lock().unwrap();
 
@@ -267,10 +268,11 @@ impl CustomElement for Slider {
             panic!("input must be an element")
         };
 
-        let value = el.attributes.get(&OwnedAttributeDiscription {
-            name: "value".to_string(),
-            namespace: None,
-        });
+        let value =
+            el.attributes.get(&OwnedAttributeDiscription {
+                name: "value".to_string(),
+                namespace: None,
+            });
         let value = value
             .and_then(|value| match value {
                 OwnedAttributeValue::Text(text) => text.as_str().parse().ok(),
@@ -301,11 +303,12 @@ impl CustomElement for Slider {
 
         let cursor_text = rdom.create_node("|".to_string());
         let cursor_text_id = cursor_text.id();
-        let mut cursor_span = rdom.create_node(NodeType::Element(ElementNode {
-            tag: "div".to_string(),
-            attributes: [].into_iter().collect(),
-            ..Default::default()
-        }));
+        let mut cursor_span =
+            rdom.create_node(NodeType::Element(ElementNode {
+                tag: "div".to_string(),
+                attributes: [].into_iter().collect(),
+                ..Default::default()
+            }));
         cursor_span.add_child(cursor_text_id);
         let cursor_span_id = cursor_span.id();
 

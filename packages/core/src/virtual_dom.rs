@@ -267,10 +267,11 @@ impl VirtualDom {
             suspended_scopes: Default::default(),
         };
 
-        let root = dom.new_scope(
-            Box::new(VProps::new(root, |_, _| unreachable!(), root_props)),
-            "app",
-        );
+        let root =
+            dom.new_scope(
+                Box::new(VProps::new(root, |_, _| unreachable!(), root_props)),
+                "app",
+            );
 
         // Unlike react, we provide a default error boundary that just renders the error as a string
         root.provide_context(Rc::new(ErrorBoundary::new(ScopeId::ROOT)));

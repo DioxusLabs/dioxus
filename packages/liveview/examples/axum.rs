@@ -37,9 +37,9 @@ async fn main() {
             .route(
                 "/",
                 get(move || async move {
-                    index_page_with_glue(&dioxus_liveview::interpreter_glue(&format!(
-                        "ws://{addr}/ws"
-                    )))
+                    index_page_with_glue(
+                        &dioxus_liveview::interpreter_glue(&format!("ws://{addr}/ws"))
+                    )
                 }),
             )
             .route(

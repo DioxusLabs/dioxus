@@ -9,20 +9,23 @@ use dioxus_core::BorrowedAttributeValue;
 
 #[test]
 fn attrs_cycle() {
-    let mut dom = VirtualDom::new(|cx| {
-        let id = cx.generation();
-        match cx.generation() % 2 {
-            0 => cx.render(rsx! {
-                div {}
-            }),
-            1 => cx.render(rsx! {
-                div {
-                    h1 { class: "{id}", id: "{id}" }
+    let mut dom =
+        VirtualDom::new(|cx| {
+            let id = cx.generation();
+            match cx.generation() % 2 {
+                0 => {
+                    cx.render(rsx! {
+                        div {}
+                    })
                 }
-            }),
-            _ => unreachable!(),
-        }
-    });
+                1 => cx.render(rsx! {
+                    div {
+                        h1 { class: "{id}", id: "{id}" }
+                    }
+                }),
+                _ => unreachable!(),
+            }
+        });
 
     let bump = Bump::new();
 

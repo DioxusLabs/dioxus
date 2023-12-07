@@ -65,10 +65,11 @@ use syn::{
 #[proc_macro_attribute]
 pub fn server(args: proc_macro::TokenStream, s: TokenStream) -> TokenStream {
     // before we pass this off to the server function macro, we apply extractors and middleware
-    let mut function: syn::ItemFn = match syn::parse(s).map_err(|e| e.to_compile_error()) {
-        Ok(f) => f,
-        Err(e) => return e.into(),
-    };
+    let mut function: syn::ItemFn =
+        match syn::parse(s).map_err(|e| e.to_compile_error()) {
+            Ok(f) => f,
+            Err(e) => return e.into(),
+        };
 
     // extract all #[middleware] attributes
     let mut middlewares: Vec<Middleware> = vec![];

@@ -43,14 +43,15 @@ const RECT_STYLE: &str = r#"
 fn app(cx: Scope) -> Element {
     let events = use_ref(cx, std::collections::VecDeque::new);
 
-    let log_event = move |event: Event| {
-        let mut events = events.write();
+    let log_event =
+        move |event: Event| {
+            let mut events = events.write();
 
-        if events.len() >= MAX_EVENTS {
-            events.pop_front();
-        }
-        events.push_back(event);
-    };
+            if events.len() >= MAX_EVENTS {
+                events.pop_front();
+            }
+            events.push_back(event);
+        };
 
     cx.render(rsx! (
         div {

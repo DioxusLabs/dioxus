@@ -31,9 +31,9 @@ pub fn format_type_string(ty: &Type) -> String {
 
     // This should always be valid syntax.
     // Not Rust code, but syntax, which is the only thing that `syn` cares about.
-    let Ok(file_unformatted) = syn::parse_file(&format!(
-        "{FORMATTED_TYPE_START}{ty_unformatted}{FORMATTED_TYPE_END}"
-    )) else {
+    let Ok(file_unformatted) =
+        syn::parse_file(&format!("{FORMATTED_TYPE_START}{ty_unformatted}{FORMATTED_TYPE_END}"))
+    else {
         return ty_unformatted.to_string();
     };
 
@@ -60,10 +60,7 @@ impl DeprecatedAttribute {
     /// Returns `None` if the given attribute was not a valid form of the `#[deprecated]` attribute.
     pub fn from_meta(meta: &Meta) -> syn::Result<Self> {
         if meta.path() != &parse_quote!(deprecated) {
-            return Err(syn::Error::new(
-                meta.span(),
-                "attribute path is not `deprecated`",
-            ));
+            return Err(syn::Error::new(meta.span(), "attribute path is not `deprecated`"));
         }
 
         match &meta {

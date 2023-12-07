@@ -22,12 +22,13 @@ pub fn print_console_info(
     options: PrettierOptions,
     web_info: Option<WebServerInfo>,
 ) {
-    if let Ok(native_clearseq) = Command::new(if cfg!(target_os = "windows") {
-        "cls"
-    } else {
-        "clear"
-    })
-    .output()
+    if let Ok(native_clearseq) =
+        Command::new(if cfg!(target_os = "windows") {
+            "cls"
+        } else {
+            "clear"
+        })
+        .output()
     {
         print!("{}", String::from_utf8_lossy(&native_clearseq.stdout));
     } else {
@@ -46,17 +47,18 @@ pub fn print_console_info(
     } else {
         "Default"
     };
-    let url_rewrite = if config
-        .dioxus_config
-        .web
-        .watcher
-        .index_on_404
-        .unwrap_or(false)
-    {
-        "True"
-    } else {
-        "False"
-    };
+    let url_rewrite =
+        if config
+            .dioxus_config
+            .web
+            .watcher
+            .index_on_404
+            .unwrap_or(false)
+        {
+            "True"
+        } else {
+            "False"
+        };
 
     let proxies = config.dioxus_config.web.proxy.as_ref();
 

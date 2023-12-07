@@ -144,13 +144,14 @@ impl Route {
             _ => Vec::new(),
         };
 
-        let (route_segments, query) = {
-            parse_route_segments(
-                variant.ident.span(),
-                fields.iter().map(|f| (&f.0, &f.1)),
-                &route,
-            )?
-        };
+        let (route_segments, query) =
+            {
+                parse_route_segments(
+                    variant.ident.span(),
+                    fields.iter().map(|f| (&f.0, &f.1)),
+                    &route,
+                )?
+            };
 
         Ok(Self {
             ty,
@@ -323,10 +324,11 @@ impl Route {
 
     pub fn error_type(&self) -> TokenStream2 {
         let error_name = self.error_ident();
-        let child_type = match &self.ty {
-            RouteType::Child(field) => Some(&field.ty),
-            RouteType::Leaf { .. } => None,
-        };
+        let child_type =
+            match &self.ty {
+                RouteType::Child(field) => Some(&field.ty),
+                RouteType::Leaf { .. } => None,
+            };
 
         create_error_type(error_name, &self.segments, child_type)
     }

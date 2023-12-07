@@ -340,26 +340,27 @@ pub fn apply_layout_attributes_cfg(
             }
             Property::JustifyContent(justify, _) => {
                 use AlignContent::*;
-                style.justify_content = match justify {
-                    align::JustifyContent::ContentDistribution(distribution) => {
-                        match distribution {
-                            align::ContentDistribution::SpaceBetween => Some(SpaceBetween),
-                            align::ContentDistribution::SpaceAround => Some(SpaceAround),
-                            align::ContentDistribution::SpaceEvenly => Some(SpaceEvenly),
-                            _ => return,
+                style.justify_content =
+                    match justify {
+                        align::JustifyContent::ContentDistribution(distribution) => {
+                            match distribution {
+                                align::ContentDistribution::SpaceBetween => Some(SpaceBetween),
+                                align::ContentDistribution::SpaceAround => Some(SpaceAround),
+                                align::ContentDistribution::SpaceEvenly => Some(SpaceEvenly),
+                                _ => return,
+                            }
                         }
-                    }
-                    align::JustifyContent::ContentPosition {
-                        value: position, ..
-                    } => match position {
-                        align::ContentPosition::Center => Some(Center),
-                        align::ContentPosition::Start => Some(Start),
-                        align::ContentPosition::FlexStart => Some(FlexStart),
-                        align::ContentPosition::End => Some(End),
-                        align::ContentPosition::FlexEnd => Some(FlexEnd),
-                    },
-                    _ => return,
-                };
+                        align::JustifyContent::ContentPosition {
+                            value: position, ..
+                        } => match position {
+                            align::ContentPosition::Center => Some(Center),
+                            align::ContentPosition::Start => Some(Start),
+                            align::ContentPosition::FlexStart => Some(FlexStart),
+                            align::ContentPosition::End => Some(End),
+                            align::ContentPosition::FlexEnd => Some(FlexEnd),
+                        },
+                        _ => return,
+                    };
             }
             Property::AlignSelf(align, _) => {
                 use AlignItems::*;
@@ -585,11 +586,13 @@ fn convert_grid_track_size(input: grid::TrackSize) -> NonRepeatedTrackSizingFunc
             convert_track_breadth_min(&min),
             convert_track_breadth_max(&max),
         ),
-        grid::TrackSize::FitContent(limit) => match limit {
-            DimensionPercentage::Dimension(LengthValue::Px(len)) => minmax(auto(), points(len)),
-            DimensionPercentage::Percentage(Percentage(pct)) => minmax(auto(), percent(pct)),
-            _ => unimplemented!(),
-        },
+        grid::TrackSize::FitContent(limit) => {
+            match limit {
+                DimensionPercentage::Dimension(LengthValue::Px(len)) => minmax(auto(), points(len)),
+                DimensionPercentage::Percentage(Percentage(pct)) => minmax(auto(), percent(pct)),
+                _ => unimplemented!(),
+            }
+        }
     }
 }
 

@@ -24,12 +24,13 @@ fn empty_fragment_creates_nothing() {
 
 #[test]
 fn root_fragments_work() {
-    let mut vdom = VirtualDom::new(|cx| {
-        cx.render(rsx!(
-            div { "hello" }
-            div { "goodbye" }
-        ))
-    });
+    let mut vdom =
+        VirtualDom::new(|cx| {
+            cx.render(rsx!(
+                div { "hello" }
+                div { "goodbye" }
+            ))
+        });
 
     assert_eq!(
         vdom.rebuild().edits.last().unwrap(),

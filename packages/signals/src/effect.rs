@@ -87,11 +87,12 @@ impl Effect {
     ///
     /// The signal will be owned by the current component and will be dropped when the component is dropped.
     pub fn new(callback: impl FnMut() + 'static) -> Self {
-        let myself = Self {
-            source: current_scope_id().expect("in a virtual dom"),
-            callback: CopyValue::new(Box::new(callback)),
-            effect_stack: get_effect_stack(),
-        };
+        let myself =
+            Self {
+                source: current_scope_id().expect("in a virtual dom"),
+                callback: CopyValue::new(Box::new(callback)),
+                effect_stack: get_effect_stack(),
+            };
 
         myself.try_run();
 
