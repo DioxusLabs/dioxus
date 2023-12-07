@@ -59,6 +59,7 @@ devtools = ["wry/devtools"]
 tray = ["wry/tray"]
 dox = ["wry/dox"]
 hot-reload = ["dioxus-hot-reload"]
+gnu = []
 
 [package.metadata.docs.rs]
 default-features = false
