@@ -139,7 +139,9 @@ impl ToTokens for RenderCallBody {
         out_tokens.append_all(quote! {
             Some({
                 let __cx = cx;
-                #body
+                let __element = { #body };
+                cx.link_node(&__element);
+                __element
             })
         })
     }

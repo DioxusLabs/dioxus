@@ -1,4 +1,4 @@
-use std::ptr::NonNull;
+use crate::ScopeState;use std::ptr::NonNull;
 
 use crate::{
     innerlude::DirtyScope, nodes::RenderReturn, nodes::VNode, virtual_dom::VirtualDom,
@@ -174,7 +174,14 @@ impl VirtualDom {
         scope.borrowed_props.borrow_mut().clear();
 
         // Now that all the references are gone, we can safely drop our own references in our listeners.
-        let mut listeners = scope.attributes_to_drop_before_render.borrow_mut();
+        scope.drop_listeners();
+    }
+}
+
+impl ScopeState {
+    /// Drop all listeners that were allocated in the bump allocator.
+    pub(crate) fn drop_listeners(&self) {
+        let mut listeners = self.attributes_to_drop_before_render.borrow_mut();
         listeners.drain(..).for_each(|listener| {
             let listener = unsafe { &*listener };
             if let AttributeValue::Listener(l) = &listener.value {

@@ -102,6 +102,7 @@ pub struct ScopeState {
 
 impl Drop for ScopeState {
     fn drop(&mut self) {
+        self.drop_listeners();
         self.runtime.remove_context(self.context_id);
     }
 }
@@ -345,7 +346,7 @@ impl<'src> ScopeState {
     ///     // Actually build the tree and allocate it
     ///     cx.render(lazy_tree)
     /// }
-    ///```
+    /// ```
     pub fn render(&'src self, rsx: LazyNodes<'src, '_>) -> Element<'src> {
         let element = rsx.call(self);
 
@@ -385,6 +386,45 @@ impl<'src> ScopeState {
         }
 
         Some(element)
+    }
+
+    #[doc(hidden)]
+    /// Take a [`crate::VNode`] and link it to a [`ScopeState`]
+    /// 
+    /// This is used internally in the render macro
+    pub fn link_node(&'src self, element: &crate::VNode<'src>) {
+        let mut listeners = self.attributes_to_drop_before_render.borrow_mut();
+        for attr in element.dynamic_attrs {
+            match attr.value {
+                // We need to drop listeners before the next render because they may borrow data from the borrowed props which will be dropped
+                AttributeValue::Listener(_) => {
+                    let unbounded = unsafe { std::mem::transmute(attr as *const Attribute) };
+                    listeners.push(unbounded);
+                }
+                // We need to drop any values manually to make sure that their drop implementation is called before the next render
+                AttributeValue::Any(_) => {
+                    let unbounded = unsafe { std::mem::transmute(attr as *const Attribute) };
+                    self.previous_frame().add_attribute_to_drop(unbounded);
+                }
+
+                _ => (),
+            }
+        }
+
+        let mut props = self.borrowed_props.borrow_mut();
+        let mut drop_props = self
+            .previous_frame()
+            .props_to_drop_before_reset
+            .borrow_mut();
+        for node in element.dynamic_nodes {
+            if let DynamicNode::Component(comp) = node {
+                let unbounded = unsafe { std::mem::transmute(comp as *const VComponent) };
+                if !comp.static_props {
+                    props.push(unbounded);
+                }
+                drop_props.push(unbounded);
+            }
+        }
     }
 
     /// Create a dynamic text node using [`Arguments`] and the [`ScopeState`]'s internal [`Bump`] allocator
