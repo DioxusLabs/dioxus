@@ -48,6 +48,18 @@ pub fn build(config: &CrateConfig, quiet: bool) -> Result<BuildResult> {
 
     // [1] Build the .wasm module
     log::info!("🚅 Running build command...");
+
+    let wasm_check_command = std::process::Command::new("rustup")
+        .args(["show"])
+        .output()?;
+    let wasm_check_output = String::from_utf8(wasm_check_command.stdout).unwrap();
+    if !wasm_check_output.contains("wasm32-unknown-unknown") {
+        log::info!("wasm32-unknown-unknown target not detected, installing..");
+        let _ = std::process::Command::new("rustup")
+            .args(["target", "add", "wasm32-unknown-unknown"])
+            .output()?;
+    }
+
     let cmd = subprocess::Exec::cmd("cargo");
     let cmd = cmd
         .cwd(crate_dir)
