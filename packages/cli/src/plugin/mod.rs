@@ -1,6 +1,6 @@
 use crate::lock::DioxusLock;
 use crate::plugin::interface::{PluginState, PluginWorld};
-use crate::PluginConfig;
+use crate::{DioxusConfig, PluginConfig};
 
 use slab::Slab;
 use std::path::Path;
@@ -57,6 +57,7 @@ lazy_static::lazy_static!(
   };
 
   pub static ref PLUGINS: Mutex<Vec<CliPlugin>> = Default::default();
+  pub static ref PLUGINS_CONFIG: Mutex<DioxusConfig> = Default::default();
 );
 
 async fn load_plugins(config: &PluginConfig) -> wasmtime::Result<Vec<CliPlugin>> {
@@ -73,9 +74,10 @@ async fn load_plugins(config: &PluginConfig) -> wasmtime::Result<Vec<CliPlugin>>
     Ok(plugins)
 }
 
-pub async fn init_plugins(config: &PluginConfig) -> wasmtime::Result<()> {
-    let val = load_plugins(config).await?;
-    *PLUGINS.lock().await = val;
+pub async fn init_plugins(config: DioxusConfig) -> wasmtime::Result<()> {
+    let plugins = load_plugins(&config.plugins).await?;
+    *PLUGINS.lock().await = plugins;
+    *PLUGINS_CONFIG.lock().await = config;
     Ok(())
 }
 

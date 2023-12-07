@@ -1,10 +1,11 @@
 use dioxus_cli_plugin::*;
 use exports::plugins::main::definitions::{Event, Guest};
 use plugins::main::{
-    imports::log,
+    imports::{log, watched_paths},
     toml::{Toml, TomlValue},
     types::PluginInfo,
 };
+
 struct Plugin;
 
 impl Guest for Plugin {
@@ -15,6 +16,9 @@ impl Guest for Plugin {
 
     fn get_default_config() -> Toml {
         log("Starting to make default config from plugin!");
+
+        log(&format!("{:?}", watched_paths()));
+
         let tomls: Vec<Toml> = (0..10).map(TomlValue::Integer).map(Toml::new).collect();
         let res = Toml::new(TomlValue::Array(tomls));
         log("Got a default config from plugin!");

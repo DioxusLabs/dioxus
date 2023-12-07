@@ -32,7 +32,6 @@ async fn setup_file_watcher<F: Fn() -> Result<BuildResult> + Send + 'static>(
     // file watcher: check file change
     let allow_watch_path = config
         .dioxus_config
-        .web
         .watcher
         .watch_path
         .clone()
@@ -105,10 +104,6 @@ async fn setup_file_watcher<F: Fn() -> Result<BuildResult> + Send + 'static>(
                         }
                     }
 
-                    futures::executor::block_on(async {
-                        call_plugins!(after HotReload);
-                    });
-
                     if needs_full_rebuild {
                         // Reset the file map to the new state of the project
                         let FileMapBuildResult {
@@ -126,6 +121,9 @@ async fn setup_file_watcher<F: Fn() -> Result<BuildResult> + Send + 'static>(
                             let _ = hot_reload.messages.send(msg);
                         }
                     }
+                    futures::executor::block_on(async {
+                        call_plugins!(after HotReload);
+                    });
                 } else {
                     needs_full_rebuild = true;
                 }

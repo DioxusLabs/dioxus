@@ -47,7 +47,7 @@ async fn main() -> anyhow::Result<()> {
             DioxusConfig::default()
         });
 
-    init_plugins(&dioxus_config.plugins).await?;
+    init_plugins(dioxus_config).await?;
 
     match args.action {
         Translate(opts) => opts

@@ -10,6 +10,8 @@ use toml::value::Map;
 pub struct DioxusConfig {
     pub application: ApplicationConfig,
 
+    pub watcher: WatcherConfig,
+
     pub web: WebConfig,
 
     #[serde(default)]
@@ -95,17 +97,17 @@ impl Default for DioxusConfig {
 
                 sub_package: None,
             },
+            watcher: WatcherConfig {
+                watch_path: Some(vec![PathBuf::from("src"), PathBuf::from("examples")]),
+                reload_html: Some(false),
+                index_on_404: Some(true),
+            },
             web: WebConfig {
                 app: WebAppConfig {
                     title: Some("dioxus | ⛺".into()),
                     base_path: None,
                 },
                 proxy: Some(vec![]),
-                watcher: WebWatcherConfig {
-                    watch_path: Some(vec![PathBuf::from("src"), PathBuf::from("examples")]),
-                    reload_html: Some(false),
-                    index_on_404: Some(true),
-                },
                 resource: WebResourceConfig {
                     dev: WebDevResourceConfig {
                         style: Some(vec![]),
@@ -147,7 +149,6 @@ pub struct ApplicationConfig {
 pub struct WebConfig {
     pub app: WebAppConfig,
     pub proxy: Option<Vec<WebProxyConfig>>,
-    pub watcher: WebWatcherConfig,
     pub resource: WebResourceConfig,
     #[serde(default)]
     pub https: WebHttpsConfig,
@@ -165,7 +166,7 @@ pub struct WebProxyConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WebWatcherConfig {
+pub struct WatcherConfig {
     pub watch_path: Option<Vec<PathBuf>>,
     pub reload_html: Option<bool>,
     pub index_on_404: Option<bool>,

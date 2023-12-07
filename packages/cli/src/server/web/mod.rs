@@ -258,7 +258,6 @@ async fn setup_router(
             move |response: Response<ServeFileSystemResponseBody>| async move {
                 let response = if file_service_config
                     .dioxus_config
-                    .web
                     .watcher
                     .index_on_404
                     .unwrap_or(false)
@@ -406,13 +405,7 @@ fn build(config: &CrateConfig, reload_tx: &Sender<()>) -> Result<BuildResult> {
     let result = builder::build(config, true)?;
     // change the websocket reload state to true;
     // the page will auto-reload.
-    if config
-        .dioxus_config
-        .web
-        .watcher
-        .reload_html
-        .unwrap_or(false)
-    {
+    if config.dioxus_config.watcher.reload_html.unwrap_or(false) {
         let _ = Serve::regen_dev_page(config);
     }
     let _ = reload_tx.send(());

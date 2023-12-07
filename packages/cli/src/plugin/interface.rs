@@ -5,9 +5,9 @@ use plugins::main::types::Host as TypeHost;
 use wasmtime::component::*;
 use wasmtime_wasi::preview2::{Table, WasiCtx, WasiView};
 
-use crate::{ApplicationConfig, CrateConfig, DioxusConfig};
-
 use self::plugins::main::types::{Platform, ProjectInfo};
+
+use super::PLUGINS_CONFIG;
 
 pub struct PluginState {
     pub table: Table,
@@ -96,26 +96,27 @@ impl TypeHost for PluginState {}
 #[async_trait]
 impl ImportHost for PluginState {
     async fn get_project_info(&mut self) -> wasmtime::Result<ProjectInfo> {
-        let conf = crate::config::CrateConfig::new(None)?;
-        let CrateConfig {
-            out_dir,
-            asset_dir,
-            dioxus_config:
-                DioxusConfig {
-                    application:
-                        ApplicationConfig {
-                            default_platform, ..
-                        },
-                    ..
-                },
-            ..
-        } = conf;
-        let output_directory = out_dir.to_str().expect("Non UTF-8 Path!").to_string();
-        let asset_directory = asset_dir.to_str().expect("Non UTF-8 Path!").to_string();
-        let default_platform = match default_platform {
+        let application = &PLUGINS_CONFIG.lock().await.application;
+
+        let output_directory = application
+            .out_dir
+            .clone()
+            .unwrap_or_default()
+            .to_str()
+            .expect("Non UTF-8 Output Directory!")
+            .to_string();
+        let asset_directory = application
+            .asset_dir
+            .clone()
+            .unwrap_or_default()
+            .to_str()
+            .expect("Non UTF-8 Asset Directory!")
+            .to_string();
+        let default_platform = match application.default_platform {
             crate::cfg::Platform::Web => Platform::Web,
             crate::cfg::Platform::Desktop => Platform::Desktop,
         };
+
         Ok(ProjectInfo {
             output_directory,
             asset_directory,
@@ -124,23 +125,52 @@ impl ImportHost for PluginState {
     }
 
     async fn refresh_browser_page(&mut self) -> wasmtime::Result<()> {
-        Ok(())
+        todo!()
     }
 
     async fn refresh_asset(&mut self, _: String, _: String) -> wasmtime::Result<()> {
+        todo!()
+    }
+
+    async fn watch_path(&mut self, path: String) -> wasmtime::Result<()> {
+        let mut config = PLUGINS_CONFIG.lock().await;
+        let pathbuf = path.into();
+        match config.watcher.watch_path.as_mut() {
+            Some(watched_paths) => watched_paths.push(pathbuf),
+            None => config.watcher.watch_path = Some(vec![pathbuf]),
+        }
         Ok(())
     }
 
-    async fn watch_path(&mut self, _: String) -> wasmtime::Result<()> {
-        Ok(())
-    }
+    async fn remove_watched_path(&mut self, path: String) -> wasmtime::Result<Result<(), ()>> {
+        let mut config = PLUGINS_CONFIG.lock().await;
 
-    async fn remove_watched_path(&mut self, _: String) -> wasmtime::Result<Result<(), ()>> {
+        let Some(paths) = config.watcher.watch_path.as_mut() else {
+            return Ok(Err(()));
+        };
+
+        let Some(index) = paths
+            .iter()
+            .position(|f| format!("{}", f.display()) == path)
+        else {
+            return Ok(Err(()));
+        };
+
+        paths.remove(index);
+
         Ok(Ok(()))
     }
 
     async fn watched_paths(&mut self) -> wasmtime::Result<Vec<String>> {
-        Ok(vec!["All of them".into()])
+        Ok(
+            match PLUGINS_CONFIG.lock().await.watcher.watch_path.as_ref() {
+                Some(paths) => paths
+                    .iter()
+                    .map(|f| f.to_str().unwrap_or_default().to_string())
+                    .collect(),
+                None => vec![],
+            },
+        )
     }
 
     async fn log(&mut self, info: String) -> wasmtime::Result<()> {
