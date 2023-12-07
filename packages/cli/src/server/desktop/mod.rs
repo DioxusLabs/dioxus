@@ -43,8 +43,6 @@ pub async fn startup(config: CrateConfig) -> Result<()> {
 
             let hot_reload_tx = broadcast::channel(100).0;
 
-            clear_paths();
-
             Some(HotReloadState {
                 messages: hot_reload_tx.clone(),
                 file_map: file_map.clone(),
@@ -110,7 +108,14 @@ pub async fn serve(config: CrateConfig, hot_reload_state: Option<HotReloadState>
 }
 
 async fn start_desktop_hot_reload(hot_reload_state: HotReloadState) -> Result<()> {
-    match LocalSocketListener::bind("@dioxusin") {
+    let metadata = cargo_metadata::MetadataCommand::new()
+        .no_deps()
+        .exec()
+        .unwrap();
+    let target_dir = metadata.target_directory.as_std_path();
+    let path = target_dir.join("dioxusin");
+    clear_paths(&path);
+    match LocalSocketListener::bind(path) {
         Ok(local_socket_stream) => {
             let aborted = Arc::new(Mutex::new(false));
             // States
@@ -182,17 +187,14 @@ async fn start_desktop_hot_reload(hot_reload_state: HotReloadState) -> Result<()
     Ok(())
 }
 
-fn clear_paths() {
+fn clear_paths(file_socket_path: &std::path::Path) {
     if cfg!(target_os = "macos") {
         // On unix, if you force quit the application, it can leave the file socket open
         // This will cause the local socket listener to fail to open
         // We check if the file socket is already open from an old session and then delete it
-        let paths = ["./dioxusin", "./@dioxusin"];
-        for path in paths {
-            let path = std::path::PathBuf::from(path);
-            if path.exists() {
-                let _ = std::fs::remove_file(path);
-            }
+
+        if file_socket_path.exists() {
+            let _ = std::fs::remove_file(file_socket_path);
         }
     }
 }
