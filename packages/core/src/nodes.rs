@@ -707,7 +707,7 @@ impl<'a, 'b> IntoDynNode<'b> for &'a str {
 impl IntoDynNode<'_> for String {
     fn into_vnode(self, cx: &ScopeState) -> DynamicNode {
         DynamicNode::Text(VText {
-            value: cx.bump().alloc(self),
+            value: cx.bump().alloc_str(&self),
             id: Default::default(),
         })
     }
