@@ -19,8 +19,8 @@ pub fn build(
     let index_file = cfg.custom_index.clone();
     let root_name = cfg.root_name.clone();
 
-    if !cfg.disable_default_menu_bar {
-        builder = builder.with_menu(create_default_menu_bar());
+    if cfg.enable_default_menu_bar {
+        builder = builder.with_menu(build_default_menu_bar());
     }
 
     let window = builder.with_visible(false).build(event_loop).unwrap();
@@ -103,8 +103,12 @@ pub fn build(
     (webview.build().unwrap(), web_context)
 }
 
-/// Creates a standard menu bar depending on the platform
-fn create_default_menu_bar() -> MenuBar {
+/// Builds a standard menu bar depending on the users platform. It may be used as a starting point
+/// to further customize the menu bar and pass it to a [`WindowBuilder`](tao::window::WindowBuilder).
+/// > Note: The default menu bar enables macOS shortcuts like cut/copy/paste.
+/// > The menu bar differs per platform because of constraints introduced
+/// > by [`MenuItem`](tao::menu::MenuItem).
+pub fn build_default_menu_bar() -> MenuBar {
     let mut menu_bar = MenuBar::new();
 
     // since it is uncommon on windows to have an "application menu"
