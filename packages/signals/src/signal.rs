@@ -237,9 +237,9 @@ impl<T: 'static> Signal<T> {
     /// Get the current value of the signal. **Unlike read, this will not subscribe the current scope to the signal which can cause parts of your UI to not update.**
     ///
     /// If the signal has been dropped, this will panic.
-    pub fn peak(&self) -> Ref<T> {
+    pub fn peak(&self) -> GenerationalRef<T> {
         let inner = self.inner.read();
-        Ref::map(inner, |v| &v.value)
+        GenerationalRef::map(inner, |v| &v.value)
     }
 
     /// Get a mutable reference to the signal's value.
@@ -439,7 +439,7 @@ impl<T: 'static> ReadOnlySignal<T> {
     /// Get the current value of the signal. **Unlike read, this will not subscribe the current scope to the signal which can cause parts of your UI to not update.**
     ///
     /// If the signal has been dropped, this will panic.
-    pub fn peak(&self) -> Ref<T> {
+    pub fn peak(&self) -> GenerationalRef<T> {
         self.inner.peak()
     }
 
