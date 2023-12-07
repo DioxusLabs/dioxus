@@ -171,7 +171,8 @@ impl<T: 'static> Signal<T> {
         self.inner.origin_scope()
     }
 
-    /// Get the current value of the signal. This will subscribe the current scope to the signal.
+    /// Get the current value of the signal. This will subscribe the current scope to the signal.  If you would like to read the signal without subscribing to it, you can use [`Self::peak`] instead.
+    ///
     /// If the signal has been dropped, this will panic.
     pub fn read(&self) -> Ref<T> {
         let inner = self.inner.read();
@@ -201,13 +202,15 @@ impl<T: 'static> Signal<T> {
     }
 
     /// Get the current value of the signal. **Unlike read, this will not subscribe the current scope to the signal which can cause parts of your UI to not update.**
+    ///
     /// If the signal has been dropped, this will panic.
-    pub fn read_untracked(&self) -> Ref<T> {
+    pub fn peak(&self) -> Ref<T> {
         let inner = self.inner.read();
         Ref::map(inner, |v| &v.value)
     }
 
     /// Get a mutable reference to the signal's value.
+    ///
     /// If the signal has been dropped, this will panic.
     pub fn write(&self) -> Write<'_, T> {
         let inner = self.inner.write();
@@ -387,15 +390,18 @@ impl<T: 'static> ReadOnlySignal<T> {
         self.inner.origin_scope()
     }
 
-    /// Get the current value of the signal. This will subscribe the current scope to the signal.
+    /// Get the current value of the signal. This will subscribe the current scope to the signal. If you would like to read the signal without subscribing to it, you can use [`Self::peak`] instead.
+    ///
+    /// If the signal has been dropped, this will panic.
     pub fn read(&self) -> Ref<T> {
         self.inner.read()
     }
 
     /// Get the current value of the signal. **Unlike read, this will not subscribe the current scope to the signal which can cause parts of your UI to not update.**
+    ///
     /// If the signal has been dropped, this will panic.
-    pub fn read_untracked(&self) -> Ref<T> {
-        self.inner.read_untracked()
+    pub fn peak(&self) -> Ref<T> {
+        self.inner.peak()
     }
 
     /// Run a closure with a reference to the signal's value.
