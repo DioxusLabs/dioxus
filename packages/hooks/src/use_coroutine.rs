@@ -38,6 +38,8 @@ use std::future::Future;
 /// In order to use ``rx.next().await``, you will need to extend the ``Stream`` trait (used by ``UnboundedReceiver``)
 /// by adding the ``futures-util`` crate as a dependency and adding ``StreamExt`` into scope via ``use futures_util::stream::StreamExt;``
 ///
+/// Returns ``None`` if the future ends immediately
+///
 /// ## Example
 ///
 /// ```rust, ignore
@@ -63,17 +65,15 @@ use std::future::Future;
 ///     }
 /// })
 /// ```
-pub fn use_coroutine<M, G, F>(cx: &ScopeState, init: G) -> &Coroutine<M>
+pub fn use_coroutine<M, G, F>(cx: &ScopeState, init: G) -> Option<&Coroutine<M>>
 where
     M: 'static,
     G: FnOnce(UnboundedReceiver<M>) -> F,
     F: Future<Output = ()> + 'static,
 {
-    cx.use_hook(|| {
-        let (tx, rx) = futures_channel::mpsc::unbounded();
-        let task = cx.push_future(init(rx));
-        cx.provide_context(Coroutine { tx, task })
-    })
+    let (tx, rx) = futures_channel::mpsc::unbounded();
+    let task = cx.push_future(init(rx))?;
+    Some(cx.use_hook(move || cx.provide_context(Coroutine { tx, task })))
 }
 
 /// Get a handle to a coroutine higher in the tree

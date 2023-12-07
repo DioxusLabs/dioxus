@@ -1,6 +1,5 @@
 use dioxus::prelude::*;
 use serde::{de::DeserializeOwned, Serialize};
-use std::any::Any;
 use std::cell::Cell;
 use std::cell::Ref;
 use std::cell::RefCell;
@@ -38,8 +37,9 @@ where
         needs_regen: Cell::new(true),
         value: Default::default(),
         task: Cell::new(None),
-        dependencies: Vec::new(),
     });
+
+    let state_dependencies = cx.use_hook(Vec::new);
 
     let first_run = { state.value.borrow().as_ref().is_none() && state.task.get().is_none() };
 
@@ -60,7 +60,7 @@ where
         }
     }
 
-    if dependencies.clone().apply(&mut state.dependencies) || state.needs_regen.get() {
+    if dependencies.clone().apply(state_dependencies) || state.needs_regen.get() {
         // We don't need regen anymore
         state.needs_regen.set(false);
 
@@ -76,7 +76,7 @@ where
             cx.remove_future(current);
         }
 
-        state.task.set(Some(cx.push_future(async move {
+        state.task.set(cx.push_future(async move {
             let data;
             #[cfg(feature = "ssr")]
             {
@@ -94,7 +94,7 @@ where
             *value.borrow_mut() = Some(Box::new(data));
 
             schedule_update();
-        })));
+        }));
     }
 
     if first_run {
@@ -113,7 +113,6 @@ pub struct UseServerFuture<T> {
     update: Arc<dyn Fn()>,
     needs_regen: Cell<bool>,
     task: Cell<Option<TaskId>>,
-    dependencies: Vec<Box<dyn Any>>,
     value: Rc<RefCell<Option<Box<T>>>>,
 }
 
