@@ -19,17 +19,6 @@ mod webview;
 #[cfg(any(target_os = "ios", target_os = "android"))]
 mod mobile_shortcut;
 
-// WARN about wry support on windows gnu targets. GNU windows targets don't work well in wry currently
-#[cfg(all(windows, target_env = "gnu", not(feature = "gnu")))]
-mod wry_gnu_warning {
-    #[allow(dead_code)]
-    #[must_use = "GNU windows targets have some limitations within Wry. Using the MSVC windows toolchain is recommended. If you would like to use continue using GNU, you can read https://github.com/wravery/webview2-rs#cross-compilation and disable this warning by adding the gnu feature to dioxus-desktop in your Cargo.toml"]
-    struct WryGnuWarning;
-    const _: () = {
-        let dont_use_gnu = WryGnuWarning;
-    };
-}
-
 use crate::query::QueryResult;
 pub use cfg::{Config, WindowCloseBehaviour};
 pub use desktop_context::DesktopContext;
