@@ -18,3 +18,5 @@ rand = "0.8.5"
 [features]
 default = ["check_generation"]
 check_generation = []
+debug_borrows = []
+debug_ownership = []
