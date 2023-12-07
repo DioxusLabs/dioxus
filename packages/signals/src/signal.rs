@@ -203,7 +203,8 @@ impl<T: 'static> Signal<T> {
         self.inner.origin_scope()
     }
 
-    /// Get the current value of the signal. This will subscribe the current scope to the signal.
+    /// Get the current value of the signal. This will subscribe the current scope to the signal.  If you would like to read the signal without subscribing to it, you can use [`Self::peek`] instead.
+    ///
     /// If the signal has been dropped, this will panic.
     #[track_caller]
     pub fn read(&self) -> GenerationalRef<T> {
@@ -233,7 +234,16 @@ impl<T: 'static> Signal<T> {
         GenerationalRef::map(inner, |v| &v.value)
     }
 
+    /// Get the current value of the signal. **Unlike read, this will not subscribe the current scope to the signal which can cause parts of your UI to not update.**
+    ///
+    /// If the signal has been dropped, this will panic.
+    pub fn peek(&self) -> GenerationalRef<T> {
+        let inner = self.inner.read();
+        GenerationalRef::map(inner, |v| &v.value)
+    }
+
     /// Get a mutable reference to the signal's value.
+    ///
     /// If the signal has been dropped, this will panic.
     #[track_caller]
     pub fn write(&self) -> Write<T> {
@@ -418,10 +428,19 @@ impl<T: 'static> ReadOnlySignal<T> {
         self.inner.origin_scope()
     }
 
-    /// Get the current value of the signal. This will subscribe the current scope to the signal.
+    /// Get the current value of the signal. This will subscribe the current scope to the signal. If you would like to read the signal without subscribing to it, you can use [`Self::peek`] instead.
+    ///
+    /// If the signal has been dropped, this will panic.
     #[track_caller]
     pub fn read(&self) -> GenerationalRef<T> {
         self.inner.read()
+    }
+
+    /// Get the current value of the signal. **Unlike read, this will not subscribe the current scope to the signal which can cause parts of your UI to not update.**
+    ///
+    /// If the signal has been dropped, this will panic.
+    pub fn peek(&self) -> GenerationalRef<T> {
+        self.inner.peek()
     }
 
     /// Run a closure with a reference to the signal's value.
