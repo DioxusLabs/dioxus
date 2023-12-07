@@ -791,6 +791,12 @@ impl<'a> IntoAttributeValue<'a> for &'a str {
     }
 }
 
+impl<'a> IntoAttributeValue<'a> for String {
+    fn into_value(self, cx: &'a Bump) -> AttributeValue<'a> {
+        AttributeValue::Text(cx.alloc_str(&self))
+    }
+}
+
 impl<'a> IntoAttributeValue<'a> for f64 {
     fn into_value(self, _: &'a Bump) -> AttributeValue<'a> {
         AttributeValue::Float(self)
