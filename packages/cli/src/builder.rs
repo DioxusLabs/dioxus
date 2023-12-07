@@ -57,8 +57,7 @@ pub fn build(config: &CrateConfig, quiet: bool) -> Result<BuildResult> {
         .arg("build")
         .arg("--target")
         .arg("wasm32-unknown-unknown")
-        .arg("--message-format=json")
-        .arg("--quiet");
+        .arg("--message-format=json");
 
     let cmd = if config.release {
         cmd.arg("--release")
@@ -68,7 +67,7 @@ pub fn build(config: &CrateConfig, quiet: bool) -> Result<BuildResult> {
     let cmd = if config.verbose {
         cmd.arg("--verbose")
     } else {
-        cmd
+        cmd.arg("--quiet")
     };
 
     let cmd = if config.custom_profile.is_some() {

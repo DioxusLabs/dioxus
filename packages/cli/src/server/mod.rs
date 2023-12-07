@@ -47,6 +47,16 @@ async fn setup_file_watcher<F: Fn() -> Result<BuildResult> + Send + 'static>(
                             break;
                         }
 
+                        // Workaround for notify and vscode-like editor:
+                        // when edit & save a file in vscode, there will be two notifications,
+                        // the first one is a file with empty content.
+                        // filter the empty file notification to avoid false rebuild during hot-reload
+                        if let Ok(metadata) = fs::metadata(path) {
+                            if metadata.len() == 0 {
+                                continue;
+                            }
+                        }
+
                         match rsx_file_map.update_rsx(path, &config.crate_dir) {
                             Ok(UpdateResult::UpdatedRsx(msgs)) => {
                                 messages.extend(msgs);
