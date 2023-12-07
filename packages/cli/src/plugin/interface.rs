@@ -149,10 +149,9 @@ impl ImportHost for PluginState {
             return Ok(Err(()));
         };
 
-        let Some(index) = paths
-            .iter()
-            .position(|f| format!("{}", f.display()) == path)
-        else {
+        let pathbuf: std::path::PathBuf = path.into();
+
+        let Some(index) = paths.iter().position(|f| f == &pathbuf) else {
             return Ok(Err(()));
         };
 
