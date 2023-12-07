@@ -67,21 +67,19 @@ pub fn build(config: &CrateConfig, quiet: bool) -> Result<BuildResult> {
         cmd.arg("--quiet")
     };
 
-    let cmd =
-        if config.custom_profile.is_some() {
-            let custom_profile = config.custom_profile.as_ref().unwrap();
-            cmd.arg("--profile").arg(custom_profile)
-        } else {
-            cmd
-        };
+    let cmd = if config.custom_profile.is_some() {
+        let custom_profile = config.custom_profile.as_ref().unwrap();
+        cmd.arg("--profile").arg(custom_profile)
+    } else {
+        cmd
+    };
 
-    let cmd =
-        if config.features.is_some() {
-            let features_str = config.features.as_ref().unwrap().join(" ");
-            cmd.arg("--features").arg(features_str)
-        } else {
-            cmd
-        };
+    let cmd = if config.features.is_some() {
+        let features_str = config.features.as_ref().unwrap().join(" ");
+        cmd.arg("--features").arg(features_str)
+    } else {
+        cmd
+    };
 
     let cmd = match executable {
         ExecutableType::Binary(name) => cmd.arg("--bin").arg(name),
@@ -94,14 +92,13 @@ pub fn build(config: &CrateConfig, quiet: bool) -> Result<BuildResult> {
     // [2] Establish the output directory structure
     let bindgen_outdir = out_dir.join("assets").join("dioxus");
 
-    let build_profile =
-        if config.custom_profile.is_some() {
-            config.custom_profile.as_ref().unwrap()
-        } else if config.release {
-            "release"
-        } else {
-            "debug"
-        };
+    let build_profile = if config.custom_profile.is_some() {
+        config.custom_profile.as_ref().unwrap()
+    } else if config.release {
+        "release"
+    } else {
+        "debug"
+    };
 
     let input_path = match executable {
         ExecutableType::Binary(name) | ExecutableType::Lib(name) => target_dir
@@ -210,15 +207,14 @@ pub fn build(config: &CrateConfig, quiet: bool) -> Result<BuildResult> {
     }
 
     // this code will copy all public file to the output dir
-    let copy_options =
-        fs_extra::dir::CopyOptions {
-            overwrite: true,
-            skip_exist: false,
-            buffer_size: 64000,
-            copy_inside: false,
-            content_only: false,
-            depth: 0,
-        };
+    let copy_options = fs_extra::dir::CopyOptions {
+        overwrite: true,
+        skip_exist: false,
+        buffer_size: 64000,
+        copy_inside: false,
+        content_only: false,
+        depth: 0,
+    };
     if asset_dir.is_dir() {
         for entry in std::fs::read_dir(asset_dir)? {
             let path = entry?.path();
@@ -291,21 +287,20 @@ pub fn build_desktop(config: &CrateConfig, _is_serve: bool) -> Result<BuildResul
     };
 
     let file_name: String;
-    let mut res_path =
-        match &config.executable {
-            crate::ExecutableType::Binary(name) | crate::ExecutableType::Lib(name) => {
-                file_name = name.clone();
-                config.target_dir.join(release_type).join(name)
-            }
-            crate::ExecutableType::Example(name) => {
-                file_name = name.clone();
-                config
-                    .target_dir
-                    .join(release_type)
-                    .join("examples")
-                    .join(name)
-            }
-        };
+    let mut res_path = match &config.executable {
+        crate::ExecutableType::Binary(name) | crate::ExecutableType::Lib(name) => {
+            file_name = name.clone();
+            config.target_dir.join(release_type).join(name)
+        }
+        crate::ExecutableType::Example(name) => {
+            file_name = name.clone();
+            config
+                .target_dir
+                .join(release_type)
+                .join("examples")
+                .join(name)
+        }
+    };
 
     let target_file = if cfg!(windows) {
         res_path.set_extension("exe");
@@ -401,7 +396,9 @@ fn prettier_build(cmd: subprocess::Exec) -> anyhow::Result<Vec<Diagnostic>> {
                 match message.level {
                     cargo_metadata::diagnostic::DiagnosticLevel::Error => {
                         return {
-                            Err(anyhow::anyhow!(message.rendered.unwrap_or("Unknown".into())))
+                            Err(anyhow::anyhow!(message
+                                .rendered
+                                .unwrap_or("Unknown".into())))
                         };
                     }
                     cargo_metadata::diagnostic::DiagnosticLevel::Warning => {
@@ -478,7 +475,10 @@ pub fn gen_page(config: &DioxusConfig, serve: bool) -> String {
 
     let mut script_str = String::new();
     for script in script_list {
-        script_str.push_str(&format!("<script src=\"{}\"></script>\n", &script.to_str().unwrap(),))
+        script_str.push_str(&format!(
+            "<script src=\"{}\"></script>\n",
+            &script.to_str().unwrap(),
+        ))
     }
 
     replace_or_insert_before("{script_include}", &script_str, "</body", &mut html);
@@ -502,11 +502,10 @@ pub fn gen_page(config: &DioxusConfig, serve: bool) -> String {
         html = html.replace("{base_path}", base_path);
     } else {
         // If not, insert the script
-        html =
-            html.replace(
-                "</body",
-                &format!(
-                    r#"<script type="module">
+        html = html.replace(
+            "</body",
+            &format!(
+                r#"<script type="module">
     import init from "/{base_path}/assets/dioxus/{app_name}.js";
     init("/{base_path}/assets/dioxus/{app_name}_bg.wasm").then(wasm => {{
       if (wasm.__wbindgen_start == undefined) {{
@@ -515,8 +514,8 @@ pub fn gen_page(config: &DioxusConfig, serve: bool) -> String {
     }});
     </script>
     </body"#
-                ),
-            );
+            ),
+        );
     }
 
     let title = config

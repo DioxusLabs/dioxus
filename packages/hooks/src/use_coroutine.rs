@@ -129,12 +129,11 @@ mod tests {
     use futures_util::StreamExt;
 
     fn app(cx: Scope, name: String) -> Element {
-        let task =
-            use_coroutine(cx, |mut rx: UnboundedReceiver<i32>| async move {
-                while let Some(msg) = rx.next().await {
-                    println!("got message: {msg}");
-                }
-            });
+        let task = use_coroutine(cx, |mut rx: UnboundedReceiver<i32>| async move {
+            while let Some(msg) = rx.next().await {
+                println!("got message: {msg}");
+            }
+        });
 
         let task2 = use_coroutine(cx, view_task);
 

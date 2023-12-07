@@ -9,7 +9,9 @@ fn random_ns() -> Option<&'static str> {
     let namespace = rand::random::<u8>() % 2;
     match namespace {
         0 => None,
-        1 => Some(Box::leak(format!("ns{}", rand::random::<usize>()).into_boxed_str())),
+        1 => Some(Box::leak(
+            format!("ns{}", rand::random::<usize>()).into_boxed_str(),
+        )),
         _ => unreachable!(),
     }
 }
@@ -21,15 +23,13 @@ fn create_random_attribute(attr_idx: &mut usize) -> TemplateAttribute<'static> {
             value: Box::leak(format!("value{}", rand::random::<usize>()).into_boxed_str()),
             namespace: random_ns(),
         },
-        1 => {
-            TemplateAttribute::Dynamic {
-                id: {
-                    let old_idx = *attr_idx;
-                    *attr_idx += 1;
-                    old_idx
-                },
-            }
-        }
+        1 => TemplateAttribute::Dynamic {
+            id: {
+                let old_idx = *attr_idx;
+                *attr_idx += 1;
+                old_idx
+            },
+        },
         _ => unreachable!(),
     }
 }
@@ -74,26 +74,22 @@ fn create_random_template_node(
         1 => TemplateNode::Text {
             text: Box::leak(format!("{}", rand::random::<usize>()).into_boxed_str()),
         },
-        2 => {
-            TemplateNode::DynamicText {
-                id: {
-                    let old_idx = *template_idx;
-                    *template_idx += 1;
-                    dynamic_node_types.push(DynamicNodeType::Text);
-                    old_idx
-                },
-            }
-        }
-        3 => {
-            TemplateNode::Dynamic {
-                id: {
-                    let old_idx = *template_idx;
-                    *template_idx += 1;
-                    dynamic_node_types.push(DynamicNodeType::Other);
-                    old_idx
-                },
-            }
-        }
+        2 => TemplateNode::DynamicText {
+            id: {
+                let old_idx = *template_idx;
+                *template_idx += 1;
+                dynamic_node_types.push(DynamicNodeType::Text);
+                old_idx
+            },
+        },
+        3 => TemplateNode::Dynamic {
+            id: {
+                let old_idx = *template_idx;
+                *template_idx += 1;
+                dynamic_node_types.push(DynamicNodeType::Other);
+                old_idx
+            },
+        },
         _ => unreachable!(),
     }
 }
@@ -210,9 +206,9 @@ fn create_random_dynamic_node(cx: &ScopeState, depth: usize) -> DynamicNode {
 
 fn create_random_dynamic_attr(cx: &ScopeState) -> Attribute {
     let value = match rand::random::<u8>() % 6 {
-        0 => {
-            AttributeValue::Text(Box::leak(format!("{}", rand::random::<usize>()).into_boxed_str()))
-        }
+        0 => AttributeValue::Text(Box::leak(
+            format!("{}", rand::random::<usize>()).into_boxed_str(),
+        )),
         1 => AttributeValue::Float(rand::random()),
         2 => AttributeValue::Int(rand::random()),
         3 => AttributeValue::Bool(rand::random()),

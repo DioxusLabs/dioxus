@@ -160,13 +160,12 @@ impl State<X> for Border {
         _context: &SendAnyMap,
     ) -> bool {
         // check if the node contians a border attribute
-        let new =
-            Self(
-                node_view
-                    .attributes()
-                    .and_then(|mut attrs| attrs.next().map(|a| a.attribute.name == "border"))
-                    .is_some(),
-            );
+        let new = Self(
+            node_view
+                .attributes()
+                .and_then(|mut attrs| attrs.next().map(|a| a.attribute.name == "border"))
+                .is_some(),
+        );
         // check if the member has changed
         let changed = new != *self;
         *self = new;

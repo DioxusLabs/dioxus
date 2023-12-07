@@ -226,12 +226,10 @@ impl<T> UseSharedState<T> {
     pub fn read(&self) -> Ref<'_, T> {
         match self.try_read() {
             Ok(value) => value,
-            Err(message) => {
-                panic!(
-                    "Reading the shared state failed: {}\n({:?})",
-                    message, message
-                )
-            }
+            Err(message) => panic!(
+                "Reading the shared state failed: {}\n({:?})",
+                message, message
+            ),
         }
     }
 
@@ -260,12 +258,10 @@ impl<T> UseSharedState<T> {
     pub fn write(&self) -> RefMut<'_, T> {
         match self.try_write() {
             Ok(value) => value,
-            Err(message) => {
-                panic!(
-                    "Writing to shared state failed: {}\n({:?})",
-                    message, message
-                )
-            }
+            Err(message) => panic!(
+                "Writing to shared state failed: {}\n({:?})",
+                message, message
+            ),
         }
     }
 
@@ -288,12 +284,10 @@ impl<T> UseSharedState<T> {
     pub fn write_silent(&self) -> RefMut<'_, T> {
         match self.try_write_silent() {
             Ok(value) => value,
-            Err(message) => {
-                panic!(
-                    "Writing to shared state silently failed: {}\n({:?})",
-                    message, message
-                )
-            }
+            Err(message) => panic!(
+                "Writing to shared state silently failed: {}\n({:?})",
+                message, message
+            ),
         }
     }
 
@@ -369,13 +363,12 @@ impl<T> PartialEq for UseSharedState<T> {
 /// ```
 pub fn use_shared_state_provider<T: 'static>(cx: &ScopeState, f: impl FnOnce() -> T) {
     cx.use_hook(|| {
-        let state: ProvidedState<T> =
-            Rc::new(RefCell::new(ProvidedStateInner {
-                value: f(),
-                notify_any: cx.schedule_update_any(),
-                consumers: HashSet::new(),
-                gen: 0,
-            }));
+        let state: ProvidedState<T> = Rc::new(RefCell::new(ProvidedStateInner {
+            value: f(),
+            notify_any: cx.schedule_update_any(),
+            consumers: HashSet::new(),
+            gen: 0,
+        }));
 
         cx.provide_context(state);
     });

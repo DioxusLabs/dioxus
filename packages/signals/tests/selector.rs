@@ -100,15 +100,14 @@ fn memos_prevents_component_rerun() {
         let signal = cx.props.signal;
         counter.borrow_mut().component += 1;
 
-        let memo =
-            cx.use_hook(move || {
-                to_owned![counter];
-                selector(move || {
-                    counter.borrow_mut().effect += 1;
-                    println!("Signal: {:?}", signal);
-                    signal.value()
-                })
-            });
+        let memo = cx.use_hook(move || {
+            to_owned![counter];
+            selector(move || {
+                counter.borrow_mut().effect += 1;
+                println!("Signal: {:?}", signal);
+                signal.value()
+            })
+        });
         match cx.generation() {
             0 => {
                 assert_eq!(memo.value(), 0);

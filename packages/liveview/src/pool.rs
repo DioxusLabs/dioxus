@@ -112,14 +112,13 @@ impl<S> LiveViewSocket for S where
 /// You might need to transform the error types of the web backend into the LiveView error type.
 pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), LiveViewError> {
     #[cfg(all(feature = "hot-reload", debug_assertions))]
-    let mut hot_reload_rx =
-        {
-            let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
-            dioxus_hot_reload::connect(move |template| {
-                let _ = tx.send(template);
-            });
-            rx
-        };
+    let mut hot_reload_rx = {
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        dioxus_hot_reload::connect(move |template| {
+            let _ = tx.send(template);
+        });
+        rx
+    };
 
     // Create the a proxy for query engine
     let (query_tx, mut query_rx) = tokio::sync::mpsc::unbounded_channel();

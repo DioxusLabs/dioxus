@@ -90,12 +90,11 @@ impl Button {
     }
 
     fn switch(&mut self, ctx: &WidgetContext, node: NodeMut) {
-        let data =
-            FormData {
-                value: self.value.to_string(),
-                values: HashMap::new(),
-                files: None,
-            };
+        let data = FormData {
+            value: self.value.to_string(),
+            values: HashMap::new(),
+            files: None,
+        };
         ctx.send(crate::Event {
             id: node.id(),
             name: "input",

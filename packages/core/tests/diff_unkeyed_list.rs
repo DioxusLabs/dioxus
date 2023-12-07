@@ -4,18 +4,17 @@ use pretty_assertions::assert_eq;
 
 #[test]
 fn list_creates_one_by_one() {
-    let mut dom =
-        VirtualDom::new(|cx| {
-            let gen = cx.generation();
+    let mut dom = VirtualDom::new(|cx| {
+        let gen = cx.generation();
 
-            cx.render(rsx! {
-                div {
-                    (0..gen).map(|i| rsx! {
-                        div { "{i}" }
-                    })
-                }
-            })
-        });
+        cx.render(rsx! {
+            div {
+                (0..gen).map(|i| rsx! {
+                    div { "{i}" }
+                })
+            }
+        })
+    });
 
     // load the div and then assign the empty fragment as a placeholder
     assert_eq!(
@@ -74,18 +73,17 @@ fn list_creates_one_by_one() {
 
 #[test]
 fn removes_one_by_one() {
-    let mut dom =
-        VirtualDom::new(|cx| {
-            let gen = 3 - cx.generation() % 4;
+    let mut dom = VirtualDom::new(|cx| {
+        let gen = 3 - cx.generation() % 4;
 
-            cx.render(rsx! {
-                div {
-                    (0..gen).map(|i| rsx! {
-                        div { "{i}" }
-                    })
-                }
-            })
-        });
+        cx.render(rsx! {
+            div {
+                (0..gen).map(|i| rsx! {
+                    div { "{i}" }
+                })
+            }
+        })
+    });
 
     // load the div and then assign the empty fragment as a placeholder
     assert_eq!(
@@ -152,17 +150,16 @@ fn removes_one_by_one() {
 
 #[test]
 fn list_shrink_multiroot() {
-    let mut dom =
-        VirtualDom::new(|cx| {
-            cx.render(rsx! {
-                div {
-                    (0..cx.generation()).map(|i| rsx! {
-                        div { "{i}" }
-                        div { "{i}" }
-                    })
-                }
-            })
-        });
+    let mut dom = VirtualDom::new(|cx| {
+        cx.render(rsx! {
+            div {
+                (0..cx.generation()).map(|i| rsx! {
+                    div { "{i}" }
+                    div { "{i}" }
+                })
+            }
+        })
+    });
 
     assert_eq!(
         dom.rebuild().santize().edits,

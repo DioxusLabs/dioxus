@@ -41,10 +41,16 @@ pub fn impl_my_derive(ast: &syn::DeriveInput) -> Result<TokenStream, Error> {
                 }
             }
             syn::Fields::Unnamed(_) => {
-                return Err(Error::new(ast.span(), "Props is not supported for tuple structs"))
+                return Err(Error::new(
+                    ast.span(),
+                    "Props is not supported for tuple structs",
+                ))
             }
             syn::Fields::Unit => {
-                return Err(Error::new(ast.span(), "Props is not supported for unit structs"))
+                return Err(Error::new(
+                    ast.span(),
+                    "Props is not supported for unit structs",
+                ))
             }
         },
         syn::Data::Enum(_) => {
@@ -328,9 +334,10 @@ mod field_info {
                             }
                             Ok(())
                         }
-                        _ => {
-                            Err(Error::new_spanned(&assign, format!("Unknown parameter {name:?}")))
-                        }
+                        _ => Err(Error::new_spanned(
+                            &assign,
+                            format!("Unknown parameter {name:?}"),
+                        )),
                     }
                 }
 
@@ -445,13 +452,12 @@ fn type_from_inside_option(ty: &syn::Type, check_option_name: bool) -> Option<&s
     if check_option_name && segment.ident != "Option" {
         return None;
     }
-    let generic_params = if let syn::PathArguments::AngleBracketed(generic_params) =
-        &segment.arguments
-    {
-        generic_params
-    } else {
-        return None;
-    };
+    let generic_params =
+        if let syn::PathArguments::AngleBracketed(generic_params) = &segment.arguments {
+            generic_params
+        } else {
+            return None;
+        };
     if let syn::GenericArgument::Type(ty) = generic_params.args.first()? {
         Some(ty)
     } else {
@@ -556,38 +562,37 @@ mod struct_info {
                 }
                 syn::GenericParam::Const(_cnst) => None,
             });
-            let builder_method_doc =
-                match self.builder_attr.builder_method_doc {
-                    Some(ref doc) => quote!(#doc),
-                    None => {
-                        let doc = format!(
-                            "
+            let builder_method_doc = match self.builder_attr.builder_method_doc {
+                Some(ref doc) => quote!(#doc),
+                None => {
+                    let doc = format!(
+                        "
 Create a builder for building `{name}`.
 On the builder, call {setters} to set the values of the fields.
 Finally, call `.build()` to create the instance of `{name}`.
                     ",
-                            name = self.name,
-                            setters = {
-                                let mut result = String::new();
-                                let mut is_first = true;
-                                for field in self.included_fields() {
-                                    use std::fmt::Write;
-                                    if is_first {
-                                        is_first = false;
-                                    } else {
-                                        write!(&mut result, ", ").unwrap();
-                                    }
-                                    write!(&mut result, "`.{}(...)`", field.name).unwrap();
-                                    if field.builder_attr.default.is_some() {
-                                        write!(&mut result, "(optional)").unwrap();
-                                    }
+                        name = self.name,
+                        setters = {
+                            let mut result = String::new();
+                            let mut is_first = true;
+                            for field in self.included_fields() {
+                                use std::fmt::Write;
+                                if is_first {
+                                    is_first = false;
+                                } else {
+                                    write!(&mut result, ", ").unwrap();
                                 }
-                                result
+                                write!(&mut result, "`.{}(...)`", field.name).unwrap();
+                                if field.builder_attr.default.is_some() {
+                                    write!(&mut result, "(optional)").unwrap();
+                                }
                             }
-                        );
-                        quote!(#doc)
-                    }
-                };
+                            result
+                        }
+                    );
+                    quote!(#doc)
+                }
+            };
             let builder_type_doc = if self.builder_attr.doc {
                 match self.builder_attr.builder_type_doc {
                     Some(ref doc) => quote!(#[doc = #doc]),
@@ -618,11 +623,10 @@ Finally, call `.build()` to create the instance of `{name}`.
                 false => quote! { self == other },
             };
 
-            let is_static =
-                match are_there_generics {
-                    true => quote! { false  },
-                    false => quote! { true },
-                };
+            let is_static = match are_there_generics {
+                true => quote! { false  },
+                false => quote! { true },
+            };
 
             Ok(quote! {
                 impl #impl_generics #name #ty_generics #where_clause {
@@ -707,15 +711,14 @@ Finally, call `.build()` to create the instance of `{name}`.
                 ref builder_name, ..
             } = *self;
 
-            let descructuring =
-                self.included_fields().map(|f| {
-                    if f.ordinal == field.ordinal {
-                        quote!(_)
-                    } else {
-                        let name = f.name;
-                        quote!(#name)
-                    }
-                });
+            let descructuring = self.included_fields().map(|f| {
+                if f.ordinal == field.ordinal {
+                    quote!(_)
+                } else {
+                    let name = f.name;
+                    quote!(#name)
+                }
+            });
             let reconstructing = self.included_fields().map(|f| f.name);
 
             let mut ty_generics: Vec<syn::GenericArgument> = self
@@ -782,17 +785,16 @@ Finally, call `.build()` to create the instance of `{name}`.
 
             // NOTE: both auto_into and strip_option affect `arg_type` and `arg_expr`, but the order of
             // nesting is different so we have to do this little dance.
-            let arg_type =
-                if field.builder_attr.strip_option {
-                    field.type_from_inside_option(false).ok_or_else(|| {
-                        Error::new_spanned(
-                            field_type,
-                            "can't `strip_option` - field is not `Option<...>`",
-                        )
-                    })?
-                } else {
-                    field_type
-                };
+            let arg_type = if field.builder_attr.strip_option {
+                field.type_from_inside_option(false).ok_or_else(|| {
+                    Error::new_spanned(
+                        field_type,
+                        "can't `strip_option` - field is not `Option<...>`",
+                    )
+                })?
+            } else {
+                field_type
+            };
             let (arg_type, arg_expr) = if field.builder_attr.auto_into {
                 (
                     quote!(impl ::core::convert::Into<#arg_type>),
@@ -878,45 +880,44 @@ Finally, call `.build()` to create the instance of `{name}`.
                 })
                 .collect();
             let mut builder_generics_tuple = empty_type_tuple();
-            let generics =
-                self.modify_generics(|g| {
-                    let index_after_lifetime_in_generics = g
-                        .params
-                        .iter()
-                        .filter(|arg| matches!(arg, syn::GenericParam::Lifetime(_)))
-                        .count();
-                    for f in self.included_fields() {
-                        if f.builder_attr.default.is_some() {
-                            // `f` is not mandatory - it does not have it's own fake `build` method, so `field` will need
-                            // to warn about missing `field` whether or not `f` is set.
-                            assert!(
-                                f.ordinal != field.ordinal,
-                                "`required_field_impl` called for optional field {}",
-                                field.name
-                            );
-                            g.params
-                                .insert(index_after_lifetime_in_generics, f.generic_ty_param());
-                            builder_generics_tuple.elems.push_value(f.type_ident());
-                        } else if f.ordinal < field.ordinal {
-                            // Only add a `build` method that warns about missing `field` if `f` is set. If `f` is not set,
-                            // `f`'s `build` method will warn, since it appears earlier in the argument list.
-                            builder_generics_tuple
-                                .elems
-                                .push_value(f.tuplized_type_ty_param());
-                        } else if f.ordinal == field.ordinal {
-                            builder_generics_tuple.elems.push_value(empty_type());
-                        } else {
-                            // `f` appears later in the argument list after `field`, so if they are both missing we will
-                            // show a warning for `field` and not for `f` - which means this warning should appear whether
-                            // or not `f` is set.
-                            g.params
-                                .insert(index_after_lifetime_in_generics, f.generic_ty_param());
-                            builder_generics_tuple.elems.push_value(f.type_ident());
-                        }
-
-                        builder_generics_tuple.elems.push_punct(Default::default());
+            let generics = self.modify_generics(|g| {
+                let index_after_lifetime_in_generics = g
+                    .params
+                    .iter()
+                    .filter(|arg| matches!(arg, syn::GenericParam::Lifetime(_)))
+                    .count();
+                for f in self.included_fields() {
+                    if f.builder_attr.default.is_some() {
+                        // `f` is not mandatory - it does not have it's own fake `build` method, so `field` will need
+                        // to warn about missing `field` whether or not `f` is set.
+                        assert!(
+                            f.ordinal != field.ordinal,
+                            "`required_field_impl` called for optional field {}",
+                            field.name
+                        );
+                        g.params
+                            .insert(index_after_lifetime_in_generics, f.generic_ty_param());
+                        builder_generics_tuple.elems.push_value(f.type_ident());
+                    } else if f.ordinal < field.ordinal {
+                        // Only add a `build` method that warns about missing `field` if `f` is set. If `f` is not set,
+                        // `f`'s `build` method will warn, since it appears earlier in the argument list.
+                        builder_generics_tuple
+                            .elems
+                            .push_value(f.tuplized_type_ty_param());
+                    } else if f.ordinal == field.ordinal {
+                        builder_generics_tuple.elems.push_value(empty_type());
+                    } else {
+                        // `f` appears later in the argument list after `field`, so if they are both missing we will
+                        // show a warning for `field` and not for `f` - which means this warning should appear whether
+                        // or not `f` is set.
+                        g.params
+                            .insert(index_after_lifetime_in_generics, f.generic_ty_param());
+                        builder_generics_tuple.elems.push_value(f.type_ident());
                     }
-                });
+
+                    builder_generics_tuple.elems.push_punct(Default::default());
+                }
+            });
 
             let index_after_lifetime_in_generics = builder_generics
                 .iter()
@@ -1138,9 +1139,10 @@ Finally, call `.build()` to create the instance of `{name}`.
                             self.doc = true;
                             Ok(())
                         }
-                        _ => {
-                            Err(Error::new_spanned(&assign, format!("Unknown parameter {name:?}")))
-                        }
+                        _ => Err(Error::new_spanned(
+                            &assign,
+                            format!("Unknown parameter {name:?}"),
+                        )),
                     }
                 }
                 syn::Expr::Path(path) => {
@@ -1151,9 +1153,10 @@ Finally, call `.build()` to create the instance of `{name}`.
                             self.doc = true;
                             Ok(())
                         }
-                        _ => {
-                            Err(Error::new_spanned(&path, format!("Unknown parameter {name:?}")))
-                        }
+                        _ => Err(Error::new_spanned(
+                            &path,
+                            format!("Unknown parameter {name:?}"),
+                        )),
                     }
                 }
                 syn::Expr::Call(call) => {

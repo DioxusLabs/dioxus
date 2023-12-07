@@ -77,18 +77,17 @@ where
                 self.routes.retain(|&lhs, _| lhs <= last_visited);
             }
         };
-        let state =
-            match state {
-                Some(state) => {
-                    self.current_index = state.index;
-                    state
-                }
-                None => {
-                    let index = depth - 1;
-                    self.current_index = index;
-                    State { index }
-                }
-            };
+        let state = match state {
+            Some(state) => {
+                self.current_index = state.index;
+                state
+            }
+            None => {
+                let index = depth - 1;
+                self.current_index = index;
+                State { index }
+            }
+        };
         self.routes.insert(state.index, route);
         state
     }

@@ -34,13 +34,12 @@ fn use_inner_html(cx: &ScopeState, id: &'static str) -> Option<String> {
         to_owned![value, eval_provider];
         async move {
             tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-            let html =
-                eval_provider(&format!(
-                    r#"let element = document.getElementById('{}');
+            let html = eval_provider(&format!(
+                r#"let element = document.getElementById('{}');
                     return element.innerHTML"#,
-                    id
-                ))
-                .unwrap();
+                id
+            ))
+            .unwrap();
             if let Ok(serde_json::Value::String(html)) = html.await {
                 println!("html: {}", html);
                 value.set(Some(html));

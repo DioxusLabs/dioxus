@@ -488,5 +488,8 @@ fn persist_instertions_after() {
     ));
     let text = "hello world".to_string();
     let idx = iter.next(&rdom).id();
-    assert!(matches!(&*rdom.get(idx).unwrap().node_type(), NodeType::Text(text)));
+    assert!(matches!(
+        &*rdom.get(idx).unwrap().node_type(),
+        NodeType::Text(text)
+    ));
 }

@@ -302,16 +302,15 @@ where
         let s = self.listener_animation_frame.clone();
         let d = self.do_scroll_restoration;
 
-        self.listener_navigation =
-            Some(EventListener::new(&self.window, "popstate", move |_| {
-                (*callback)();
-                if d {
-                    let mut s = s.lock().expect("unpoisoned scroll mutex");
-                    if let Some(current_state) = get_current::<WebHistoryState<R>>(&h) {
-                        *s = Some(current_state.scroll.scroll_to(w.clone()));
-                    }
+        self.listener_navigation = Some(EventListener::new(&self.window, "popstate", move |_| {
+            (*callback)();
+            if d {
+                let mut s = s.lock().expect("unpoisoned scroll mutex");
+                if let Some(current_state) = get_current::<WebHistoryState<R>>(&h) {
+                    *s = Some(current_state.scroll.scroll_to(w.clone()));
                 }
-            }));
+            }
+        }));
     }
 }
 
@@ -378,15 +377,14 @@ where
         let s = self.listener_animation_frame.clone();
         let d = self.do_scroll_restoration;
 
-        self.listener_navigation =
-            Some(EventListener::new(&self.window, "popstate", move |_| {
-                (*callback)();
-                if d {
-                    let mut s = s.lock().expect("unpoisoned scroll mutex");
-                    if let Some([x, y]) = get_current(&h) {
-                        *s = Some(ScrollPosition { x, y }.scroll_to(w.clone()));
-                    }
+        self.listener_navigation = Some(EventListener::new(&self.window, "popstate", move |_| {
+            (*callback)();
+            if d {
+                let mut s = s.lock().expect("unpoisoned scroll mutex");
+                if let Some([x, y]) = get_current(&h) {
+                    *s = Some(ScrollPosition { x, y }.scroll_to(w.clone()));
                 }
-            }));
+            }
+        }));
     }
 }

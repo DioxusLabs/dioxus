@@ -162,11 +162,10 @@ impl Tool {
                 )
             }
             Self::Tailwind => {
-                let windows_extension =
-                    match self.target_platform() {
-                        "windows" => ".exe",
-                        _ => "",
-                    };
+                let windows_extension = match self.target_platform() {
+                    "windows" => ".exe",
+                    _ => "",
+                };
                 format!(
                     "https://github.com/tailwindlabs/tailwindcss/releases/download/{version}/tailwindcss-{target}-x64{optional_ext}",
                     version = self.tool_version(),
@@ -281,30 +280,29 @@ impl Tool {
     pub fn call(&self, command: &str, args: Vec<&str>) -> anyhow::Result<Vec<u8>> {
         let bin_path = tools_path().join(self.name()).join(self.bin_path());
 
-        let command_file =
-            match self {
-                Tool::Binaryen => {
-                    if cfg!(target_os = "windows") {
-                        format!("{}.exe", command)
-                    } else {
-                        command.to_string()
-                    }
+        let command_file = match self {
+            Tool::Binaryen => {
+                if cfg!(target_os = "windows") {
+                    format!("{}.exe", command)
+                } else {
+                    command.to_string()
                 }
-                Tool::Sass => {
-                    if cfg!(target_os = "windows") {
-                        format!("{}.bat", command)
-                    } else {
-                        command.to_string()
-                    }
+            }
+            Tool::Sass => {
+                if cfg!(target_os = "windows") {
+                    format!("{}.bat", command)
+                } else {
+                    command.to_string()
                 }
-                Tool::Tailwind => {
-                    if cfg!(target_os = "windows") {
-                        format!("{}.exe", command)
-                    } else {
-                        command.to_string()
-                    }
+            }
+            Tool::Tailwind => {
+                if cfg!(target_os = "windows") {
+                    format!("{}.exe", command)
+                } else {
+                    command.to_string()
                 }
-            };
+            }
+        };
 
         if !bin_path.join(&command_file).is_file() {
             return Err(anyhow::anyhow!("Command file not found."));

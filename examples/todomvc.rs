@@ -202,14 +202,13 @@ pub fn ListFooter<'a>(cx: Scope<'a, ListFooterProps<'a>>) -> Element {
     let active_todo_count = cx.props.active_todo_count;
     let active_todo_text = cx.props.active_todo_text;
 
-    let selected =
-        |state| {
-            if *cx.props.filter == state {
-                "selected"
-            } else {
-                "false"
-            }
-        };
+    let selected = |state| {
+        if *cx.props.filter == state {
+            "selected"
+        } else {
+            "false"
+        }
+    };
 
     cx.render(rsx! {
         footer { class: "footer",

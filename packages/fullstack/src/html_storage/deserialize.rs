@@ -7,14 +7,13 @@ use super::HTMLDataCursor;
 
 #[allow(unused)]
 pub(crate) fn serde_from_bytes<T: DeserializeOwned>(string: &[u8]) -> Option<T> {
-    let decompressed =
-        match STANDARD.decode(string) {
-            Ok(bytes) => bytes,
-            Err(err) => {
-                tracing::error!("Failed to decode base64: {}", err);
-                return None;
-            }
-        };
+    let decompressed = match STANDARD.decode(string) {
+        Ok(bytes) => bytes,
+        Err(err) => {
+            tracing::error!("Failed to decode base64: {}", err);
+            return None;
+        }
+    };
 
     match postcard::from_bytes(&decompressed) {
         Ok(data) => Some(data),

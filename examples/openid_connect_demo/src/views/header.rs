@@ -22,31 +22,29 @@ pub fn LogOut(cx: Scope<ClientProps>) -> Element {
         Some(fermi_auth_token_read) => match fermi_auth_token_read.id_token.clone() {
             Some(id_token) => match log_out_url_state.get() {
                 Some(log_out_url_result) => match log_out_url_result {
-                    Some(uri) => {
-                        match uri {
-                            Ok(uri) => {
-                                rsx! {
-                                    Link {
-                                        onclick: move |_| {
-                                            {
-                                                AuthTokenState::persistent_set(
-                                                    fermi_auth_token,
-                                                    Some(AuthTokenState::default()),
-                                                );
-                                            }
-                                        },
-                                        to: uri.to_string(),
-                                        "Log out"
-                                    }
-                                }
-                            }
-                            Err(error) => {
-                                rsx! {
-                                    div { format!{"Failed to load disconnection url: {:?}", error} }
+                    Some(uri) => match uri {
+                        Ok(uri) => {
+                            rsx! {
+                                Link {
+                                    onclick: move |_| {
+                                        {
+                                            AuthTokenState::persistent_set(
+                                                fermi_auth_token,
+                                                Some(AuthTokenState::default()),
+                                            );
+                                        }
+                                    },
+                                    to: uri.to_string(),
+                                    "Log out"
                                 }
                             }
                         }
-                    }
+                        Err(error) => {
+                            rsx! {
+                                div { format!{"Failed to load disconnection url: {:?}", error} }
+                            }
+                        }
+                    },
                     None => {
                         rsx! { div { "Loading... Please wait" } }
                     }

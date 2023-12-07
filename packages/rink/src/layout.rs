@@ -195,12 +195,11 @@ impl State for TaffyLayout {
                     taffy.set_children(n, &child_layout).unwrap();
                 }
             } else {
-                self.node =
-                    PossiblyUninitalized::Initialized(
-                        taffy
-                            .new_with_children(scaled_style, &child_layout)
-                            .unwrap(),
-                    );
+                self.node = PossiblyUninitalized::Initialized(
+                    taffy
+                        .new_with_children(scaled_style, &child_layout)
+                        .unwrap(),
+                );
                 changed = true;
             }
         }

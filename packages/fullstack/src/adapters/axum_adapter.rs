@@ -280,13 +280,12 @@ where
         let assets_path = assets_path.into();
 
         // Serve all files in dist folder except index.html
-        let dir =
-            std::fs::read_dir(&assets_path).unwrap_or_else(|e| {
-                panic!(
-                    "Couldn't read assets directory at {:?}: {}",
-                    &assets_path, e
-                )
-            });
+        let dir = std::fs::read_dir(&assets_path).unwrap_or_else(|e| {
+            panic!(
+                "Couldn't read assets directory at {:?}: {}",
+                &assets_path, e
+            )
+        });
 
         for entry in dir.flatten() {
             let path = entry.path();
@@ -298,9 +297,9 @@ where
                 .unwrap()
                 .iter()
                 .map(|segment| {
-                    segment.to_str().unwrap_or_else(
-                        || panic!("Failed to convert path segment {:?} to string", segment)
-                    )
+                    segment.to_str().unwrap_or_else(|| {
+                        panic!("Failed to convert path segment {:?} to string", segment)
+                    })
                 })
                 .collect::<Vec<_>>()
                 .join("/");

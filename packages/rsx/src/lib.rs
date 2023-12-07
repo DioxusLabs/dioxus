@@ -199,11 +199,10 @@ impl<'a> ToTokens for TemplateRenderer<'a> {
             _ => None,
         };
 
-        let key_tokens =
-            match key {
-                Some(tok) => quote! { Some( __cx.raw_text(#tok) ) },
-                None => quote! { None },
-            };
+        let key_tokens = match key {
+            Some(tok) => quote! { Some( __cx.raw_text(#tok) ) },
+            None => quote! { None },
+        };
 
         let spndbg = format!("{:?}", self.roots[0].span());
         let root_col = spndbg
@@ -519,13 +518,12 @@ impl<'a> DynamicContext<'a> {
 
                 let attrs = quote! { #(#static_attrs),*};
 
-                let children =
-                    el.children.iter().enumerate().map(|(idx, root)| {
-                        self.current_path.push(idx as u8);
-                        let out = self.render_static_node(root);
-                        self.current_path.pop();
-                        out
-                    });
+                let children = el.children.iter().enumerate().map(|(idx, root)| {
+                    self.current_path.push(idx as u8);
+                    let out = self.render_static_node(root);
+                    self.current_path.pop();
+                    out
+                });
 
                 let _opt = el.children.len() == 1;
                 let children = quote! { #(#children),* };

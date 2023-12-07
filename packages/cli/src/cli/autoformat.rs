@@ -93,48 +93,47 @@ async fn autoformat_project(check: bool) -> Result<()> {
     let mut files_to_format = vec![];
     collect_rs_files(&crate_config.crate_dir, &mut files_to_format);
 
-    let counts =
-        files_to_format
-            .into_iter()
-            .filter(|file| {
-                if file.components().any(|f| f.as_os_str() == "target") {
-                    return false;
+    let counts = files_to_format
+        .into_iter()
+        .filter(|file| {
+            if file.components().any(|f| f.as_os_str() == "target") {
+                return false;
+            }
+
+            true
+        })
+        .map(|path| async {
+            let _path = path.clone();
+            let res = tokio::spawn(async move {
+                let contents = tokio::fs::read_to_string(&path).await?;
+
+                let edits = dioxus_autofmt::fmt_file(&contents);
+                let len = edits.len();
+
+                if !edits.is_empty() {
+                    let out = dioxus_autofmt::apply_formats(&contents, edits);
+                    tokio::fs::write(&path, out).await?;
                 }
 
-                true
+                Ok(len) as Result<usize, tokio::io::Error>
             })
-            .map(|path| async {
-                let _path = path.clone();
-                let res = tokio::spawn(async move {
-                    let contents = tokio::fs::read_to_string(&path).await?;
-
-                    let edits = dioxus_autofmt::fmt_file(&contents);
-                    let len = edits.len();
-
-                    if !edits.is_empty() {
-                        let out = dioxus_autofmt::apply_formats(&contents, edits);
-                        tokio::fs::write(&path, out).await?;
-                    }
-
-                    Ok(len) as Result<usize, tokio::io::Error>
-                })
-                .await;
-
-                match res {
-                    Err(err) => {
-                        eprintln!("error formatting file: {}\n{err}", _path.display());
-                        None
-                    }
-                    Ok(Err(err)) => {
-                        eprintln!("error formatting file: {}\n{err}", _path.display());
-                        None
-                    }
-                    Ok(Ok(res)) => Some(res),
-                }
-            })
-            .collect::<FuturesUnordered<_>>()
-            .collect::<Vec<_>>()
             .await;
+
+            match res {
+                Err(err) => {
+                    eprintln!("error formatting file: {}\n{err}", _path.display());
+                    None
+                }
+                Ok(Err(err)) => {
+                    eprintln!("error formatting file: {}\n{err}", _path.display());
+                    None
+                }
+                Ok(Ok(res)) => Some(res),
+            }
+        })
+        .collect::<FuturesUnordered<_>>()
+        .collect::<Vec<_>>()
+        .await;
 
     let files_formatted: usize = counts
         .into_iter()

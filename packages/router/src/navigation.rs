@@ -114,9 +114,11 @@ impl<R: Routable> FromStr for NavigationTarget<R> {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match Url::parse(s) {
             Ok(_) => Ok(Self::External(s.to_string())),
-            Err(ParseError::RelativeUrlWithoutBase) => Ok(Self::Internal(
-                R::from_str(s).map_err(|e| NavigationTargetParseError::InvalidInternalURL(e))?,
-            )),
+            Err(ParseError::RelativeUrlWithoutBase) => {
+                Ok(Self::Internal(R::from_str(s).map_err(|e| {
+                    NavigationTargetParseError::InvalidInternalURL(e)
+                })?))
+            }
             Err(e) => Err(NavigationTargetParseError::InvalidUrl(e)),
         }
     }

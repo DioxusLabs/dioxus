@@ -91,11 +91,10 @@ impl SsrRendererPool {
                 Ok((freshness, html))
             }
             Self::Incremental(pool) => {
-                let mut renderer = pool
-                    .write()
-                    .unwrap()
-                    .pop()
-                    .unwrap_or_else(|| incremental_pre_renderer(cfg.incremental.as_ref().unwrap()));
+                let mut renderer =
+                    pool.write().unwrap().pop().unwrap_or_else(|| {
+                        incremental_pre_renderer(cfg.incremental.as_ref().unwrap())
+                    });
 
                 let (tx, rx) = tokio::sync::oneshot::channel();
 

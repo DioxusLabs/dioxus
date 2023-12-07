@@ -332,60 +332,59 @@ impl ToTokens for ElementAttrNamed {
             }
         };
 
-        let attribute =
-            match attr {
-                ElementAttr::AttrText { name, value } => {
-                    let ns = ns(name);
-                    let volitile = volitile(name);
-                    let attribute = attribute(name);
-                    quote! {
-                        __cx.attr(
-                            #attribute,
-                            #value,
-                            #ns,
-                            #volitile
-                        )
-                    }
+        let attribute = match attr {
+            ElementAttr::AttrText { name, value } => {
+                let ns = ns(name);
+                let volitile = volitile(name);
+                let attribute = attribute(name);
+                quote! {
+                    __cx.attr(
+                        #attribute,
+                        #value,
+                        #ns,
+                        #volitile
+                    )
                 }
-                ElementAttr::AttrExpression { name, value } => {
-                    let ns = ns(name);
-                    let volitile = volitile(name);
-                    let attribute = attribute(name);
-                    quote! {
-                        __cx.attr(
-                            #attribute,
-                            #value,
-                            #ns,
-                            #volitile
-                        )
-                    }
+            }
+            ElementAttr::AttrExpression { name, value } => {
+                let ns = ns(name);
+                let volitile = volitile(name);
+                let attribute = attribute(name);
+                quote! {
+                    __cx.attr(
+                        #attribute,
+                        #value,
+                        #ns,
+                        #volitile
+                    )
                 }
-                ElementAttr::CustomAttrText { name, value } => {
-                    quote! {
-                        __cx.attr(
-                            #name,
-                            #value,
-                            None,
-                            false
-                        )
-                    }
+            }
+            ElementAttr::CustomAttrText { name, value } => {
+                quote! {
+                    __cx.attr(
+                        #name,
+                        #value,
+                        None,
+                        false
+                    )
                 }
-                ElementAttr::CustomAttrExpression { name, value } => {
-                    quote! {
-                        __cx.attr(
-                            #name,
-                            #value,
-                            None,
-                            false
-                        )
-                    }
+            }
+            ElementAttr::CustomAttrExpression { name, value } => {
+                quote! {
+                    __cx.attr(
+                        #name,
+                        #value,
+                        None,
+                        false
+                    )
                 }
-                ElementAttr::EventTokens { name, tokens } => {
-                    quote! {
-                        dioxus_elements::events::#name(__cx, #tokens)
-                    }
+            }
+            ElementAttr::EventTokens { name, tokens } => {
+                quote! {
+                    dioxus_elements::events::#name(__cx, #tokens)
                 }
-            };
+            }
+        };
 
         tokens.append_all(attribute);
     }

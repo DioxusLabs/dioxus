@@ -11,16 +11,15 @@ use dioxus_core::ElementId;
 
 #[test]
 fn test_original_diff() {
-    let mut dom =
-        VirtualDom::new(|cx| {
-            cx.render(rsx! {
+    let mut dom = VirtualDom::new(|cx| {
+        cx.render(rsx! {
+            div {
                 div {
-                    div {
-                        "Hello, world!"
-                    }
+                    "Hello, world!"
                 }
-            })
-        });
+            }
+        })
+    });
 
     let edits = dom.rebuild().santize();
 
@@ -83,12 +82,11 @@ fn create() {
 
 #[test]
 fn create_list() {
-    let mut dom =
-        VirtualDom::new(|cx| {
-            cx.render(rsx! {
-                (0..3).map(|f| rsx!( div { "hello" } ))
-            })
-        });
+    let mut dom = VirtualDom::new(|cx| {
+        cx.render(rsx! {
+            (0..3).map(|f| rsx!( div { "hello" } ))
+        })
+    });
 
     let _edits = dom.rebuild().santize();
 
@@ -162,17 +160,16 @@ fn create_components() {
 
 #[test]
 fn anchors() {
-    let mut dom =
-        VirtualDom::new(|cx| {
-            cx.render(rsx! {
-                if true {
-                    rsx!( div { "hello" } )
-                }
-                if false {
-                    rsx!( div { "goodbye" } )
-                }
-            })
-        });
+    let mut dom = VirtualDom::new(|cx| {
+        cx.render(rsx! {
+            if true {
+                rsx!( div { "hello" } )
+            }
+            if false {
+                rsx!( div { "goodbye" } )
+            }
+        })
+    });
 
     // note that the template under "false" doesn't show up since it's not loaded
     let edits = dom.rebuild().santize();

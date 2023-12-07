@@ -72,10 +72,9 @@ where
 ///
 /// Selectors can be used to efficiently compute derived data from signals.
 pub fn selector<R: PartialEq>(mut f: impl FnMut() -> R + 'static) -> ReadOnlySignal<R> {
-    let state =
-        Signal::<R> {
-            inner: CopyValue::invalid(),
-        };
+    let state = Signal::<R> {
+        inner: CopyValue::invalid(),
+    };
     let effect = Effect {
         source: current_scope_id().expect("in a virtual dom"),
         callback: CopyValue::invalid(),

@@ -317,12 +317,11 @@ impl PluginManager {
                 let name = i.get::<_, String>("name").unwrap();
                 let loader = i.get::<_, bool>("loader").unwrap();
 
-                let text =
-                    if loader {
-                        format!("{name} [:loader]")
-                    } else {
-                        name
-                    };
+                let text = if loader {
+                    format!("{name} [:loader]")
+                } else {
+                    name
+                };
                 res.push(text);
             }
         }

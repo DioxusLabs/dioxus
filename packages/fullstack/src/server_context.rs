@@ -22,9 +22,9 @@ impl Default for DioxusServerContext {
     fn default() -> Self {
         Self {
             shared_context: std::sync::Arc::new(std::sync::RwLock::new(anymap::Map::new())),
-            response_parts: std::sync::Arc::new(
-                RwLock::new(http::response::Response::new(()).into_parts().0)
-            ),
+            response_parts: std::sync::Arc::new(RwLock::new(
+                http::response::Response::new(()).into_parts().0,
+            )),
             parts: std::sync::Arc::new(RwLock::new(http::request::Request::new(()).into_parts().0)),
             html_data: Arc::new(RwLock::new(HTMLData::default())),
         }
@@ -45,9 +45,9 @@ mod server_fn_impl {
             Self {
                 parts: parts.into(),
                 shared_context: Arc::new(RwLock::new(SendSyncAnyMap::new())),
-                response_parts: std::sync::Arc::new(
-                    RwLock::new(http::response::Response::new(()).into_parts().0)
-                ),
+                response_parts: std::sync::Arc::new(RwLock::new(
+                    http::response::Response::new(()).into_parts().0,
+                )),
                 html_data: Arc::new(RwLock::new(HTMLData::default())),
             }
         }
@@ -221,9 +221,9 @@ impl<T: Send + Sync + Clone + 'static> FromServerContext for FromContext<T> {
     type Rejection = NotFoundInServerContext<T>;
 
     async fn from_request(req: &DioxusServerContext) -> Result<Self, Self::Rejection> {
-        Ok(Self(req.clone().get::<T>().ok_or_else(
-            || NotFoundInServerContext::<T>(std::marker::PhantomData::<T>)
-        )?))
+        Ok(Self(req.clone().get::<T>().ok_or_else(|| {
+            NotFoundInServerContext::<T>(std::marker::PhantomData::<T>)
+        })?))
     }
 }
 

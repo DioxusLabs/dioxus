@@ -63,23 +63,23 @@ pub fn Die<'a>(cx: Scope<'a, DieProps<'a>>) -> Element {
 
     let active_dots = &DOTS_FOR_VALUE[(value - 1) as usize];
     let fill = if keep { HELD_COLOR } else { UNHELD_COLOR };
-    let dots =
-        DOTS.iter()
-            .zip(active_dots.iter())
-            .filter(|(_, &active)| active)
-            .map(|((x, y), _)| {
-                let dcx = x * OFFSET;
-                let dcy = y * OFFSET;
+    let dots = DOTS
+        .iter()
+        .zip(active_dots.iter())
+        .filter(|(_, &active)| active)
+        .map(|((x, y), _)| {
+            let dcx = x * OFFSET;
+            let dcy = y * OFFSET;
 
-                rsx! {
-                    circle {
-                        cx: "{dcx}",
-                        cy: "{dcy}",
-                        r: "{DOT_RADIUS}",
-                        fill: "#333"
-                    }
+            rsx! {
+                circle {
+                    cx: "{dcx}",
+                    cy: "{dcy}",
+                    r: "{DOT_RADIUS}",
+                    fill: "#333"
                 }
-            });
+            }
+        });
 
     cx.render(rsx! {
       svg {
