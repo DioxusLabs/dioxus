@@ -79,6 +79,7 @@ where
 /// Get a handle to a coroutine higher in the tree
 ///
 /// See the docs for [`use_coroutine`] for more details.
+#[must_use]
 pub fn use_coroutine_handle<M: 'static>(cx: &ScopeState) -> Option<&Coroutine<M>> {
     cx.use_hook(|| cx.consume_context::<Coroutine<M>>())
         .as_ref()

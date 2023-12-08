@@ -13,7 +13,7 @@ pub fn build(
     proxy: EventLoopProxy<UserWindowEvent>,
 ) -> (WebView, WebContext) {
     let builder = cfg.window.clone();
-    let window = builder.build(event_loop).unwrap();
+    let window = builder.with_visible(false).build(event_loop).unwrap();
     let file_handler = cfg.file_drop_handler.take();
     let custom_head = cfg.custom_head.clone();
     let index_file = cfg.custom_index.clone();

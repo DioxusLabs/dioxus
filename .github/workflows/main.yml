@@ -130,7 +130,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ilammy/setup-nasm@v1
-
       - name: install stable
         uses: dtolnay/rust-toolchain@master
         with:
@@ -145,6 +144,11 @@ jobs:
         with:
           workspaces: core -> ../target
           save-if: ${{ matrix.features.key == 'all' }}
+
+      - name: Install rustfmt
+        run: rustup component add rustfmt
+
+      - uses: actions/checkout@v4
 
       - name: test
         run: |
