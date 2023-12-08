@@ -70,6 +70,7 @@ jobs:
         run: echo "MIRIFLAGS=-Zmiri-tag-gc=1" >> $GITHUB_ENV
 
       - uses: actions/checkout@v4
+      - uses: ilammy/setup-nasm@v1
       - name: Install Rust ${{ env.rust_nightly }}
         uses: dtolnay/rust-toolchain@master
         with:
