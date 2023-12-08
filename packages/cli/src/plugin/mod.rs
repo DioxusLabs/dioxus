@@ -21,7 +21,7 @@ pub mod interface;
 
 #[macro_export]
 macro_rules! call_plugins {
-    (before $event:ident) => {{
+    (before $event:expr) => {{
         for plugin in $crate::plugin::PLUGINS.lock().await.iter_mut() {
             if plugin.before_event($event).await.is_err() {
                 log::warn!(
@@ -34,7 +34,7 @@ macro_rules! call_plugins {
             }
         }
     }};
-    (after $event:ident) => {{
+    (after $event:expr) => {{
         for plugin in $crate::plugin::PLUGINS.lock().await.iter_mut() {
             if plugin.after_event($event).await.is_err() {
                 log::warn!(

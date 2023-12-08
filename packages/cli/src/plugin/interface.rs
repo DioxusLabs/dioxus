@@ -1,3 +1,5 @@
+use crate::plugin::interface::plugins::main::server;
+use crate::plugin::interface::server::Server;
 use async_trait::async_trait;
 use plugins::main::imports::Host as ImportHost;
 use plugins::main::toml::{Host as TomlHost, *};
@@ -94,6 +96,29 @@ impl TomlHost for PluginState {}
 impl TypeHost for PluginState {}
 
 #[async_trait]
+impl server::HostServer for PluginState {
+    async fn refresh_browser_page(&mut self, _key: Resource<Server>) -> wasmtime::Result<()> {
+        todo!()
+    }
+
+    async fn refresh_asset(
+        &mut self,
+        _key: Resource<Server>,
+        _: String,
+        _: String,
+    ) -> wasmtime::Result<()> {
+        todo!()
+    }
+
+    fn drop(&mut self, _: Resource<Server>) -> wasmtime::Result<()> {
+        todo!()
+    }
+}
+
+#[async_trait]
+impl server::Host for PluginState {}
+
+#[async_trait]
 impl ImportHost for PluginState {
     async fn get_project_info(&mut self) -> wasmtime::Result<ProjectInfo> {
         let application = &PLUGINS_CONFIG.lock().await.application;
@@ -122,14 +147,6 @@ impl ImportHost for PluginState {
             asset_directory,
             default_platform,
         })
-    }
-
-    async fn refresh_browser_page(&mut self) -> wasmtime::Result<()> {
-        todo!()
-    }
-
-    async fn refresh_asset(&mut self, _: String, _: String) -> wasmtime::Result<()> {
-        todo!()
     }
 
     async fn watch_path(&mut self, path: String) -> wasmtime::Result<()> {

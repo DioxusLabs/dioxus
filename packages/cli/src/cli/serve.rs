@@ -42,7 +42,7 @@ impl Serve {
             .platform
             .unwrap_or(crate_config.dioxus_config.application.default_platform);
 
-        call_plugins!(before ServeEvent);
+        call_plugins!(before ServeEvent(None));
 
         match platform {
             cfg::Platform::Web => {
@@ -58,7 +58,7 @@ impl Serve {
             }
         }
 
-        call_plugins!(after ServeEvent);
+        call_plugins!(after ServeEvent(None));
 
         Ok(())
     }

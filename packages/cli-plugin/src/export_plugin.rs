@@ -88,7 +88,20 @@ interface toml {
   type table = list<tuple<string, toml>>;
 }
 
+interface server {
+  resource server {
+    /// Refresh the browser page manually
+    refresh-browser-page: func();
+
+    /// Searches through links to only refresh the 
+    /// necessary components when changing assets
+    refresh-asset: func(old-url: string, new-url: string);
+  }
+}
+
 interface types {
+  use server.{server};
+
   enum platform {
     web,
     desktop,
@@ -106,27 +119,20 @@ interface types {
     default-platform: platform,
   }
 
-  enum event {
+  variant event {
     build,
-    serve, 
+    serve(option<server>),
     translate,
     bundle,
     rebuild,
-    hot-reload,
-  } 
+    hot-reload
+  }
 }
 
 interface imports {
   use types.{project-info};
 
   get-project-info: func() -> project-info;
-
-  /// Refresh the browser page manually
-  refresh-browser-page: func();
-
-  /// Searches through links to only refresh the 
-  /// necessary components when changing assets
-  refresh-asset: func(old-url: string, new-url: string);
 
   /// Add path to list of watched paths
   watch-path: func(path: string);
@@ -145,6 +151,7 @@ interface imports {
 world plugin-world {
   import imports;
   import toml;
+  import server;
   export definitions;
 }
 ",
