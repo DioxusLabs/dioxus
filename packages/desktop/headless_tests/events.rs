@@ -17,7 +17,7 @@ pub(crate) fn check_app_exits(app: Component) {
 
     dioxus_desktop::launch_cfg(
         app,
-        Config::new().with_window(WindowBuilder::new().with_visible(false)),
+        Config::new().with_window(WindowBuilder::new().with_visible(true)),
     );
 
     // Stop deadman's switch
@@ -52,7 +52,7 @@ fn mock_event(cx: &ScopeState, id: &'static str, value: &'static str) {
 #[allow(deprecated)]
 fn app(cx: Scope) -> Element {
     let desktop_context: DesktopContext = cx.consume_context().unwrap();
-    let recieved_events = use_state(cx, || 0);
+    let received_events = use_state(cx, || 0);
 
     // button
     mock_event(
@@ -216,7 +216,7 @@ fn app(cx: Scope) -> Element {
         r#"new FocusEvent("focusout",{bubbles: true})"#,
     );
 
-    if **recieved_events == 12 {
+    if **received_events == 12 {
         println!("all events recieved");
         desktop_context.close();
     }
@@ -230,7 +230,7 @@ fn app(cx: Scope) -> Element {
                     assert!(event.data.modifiers().is_empty());
                     assert!(event.data.held_buttons().is_empty());
                     assert_eq!(event.data.trigger_button(), Some(dioxus_html::input_data::MouseButton::Primary));
-                    recieved_events.modify(|x| *x + 1)
+                    received_events.modify(|x| *x + 1)
                 },
             }
             div {
@@ -239,7 +239,7 @@ fn app(cx: Scope) -> Element {
                     println!("{:?}", event.data);
                     assert!(event.data.modifiers().is_empty());
                     assert!(event.data.held_buttons().contains(dioxus_html::input_data::MouseButton::Secondary));
-                    recieved_events.modify(|x| *x + 1)
+                    received_events.modify(|x| *x + 1)
                 },
             }
             div {
@@ -249,7 +249,7 @@ fn app(cx: Scope) -> Element {
                     assert!(event.data.modifiers().is_empty());
                     assert!(event.data.held_buttons().contains(dioxus_html::input_data::MouseButton::Secondary));
                     assert_eq!(event.data.trigger_button(), Some(dioxus_html::input_data::MouseButton::Secondary));
-                    recieved_events.modify(|x| *x + 1)
+                    received_events.modify(|x| *x + 1)
                 },
             }
             div{
@@ -260,7 +260,7 @@ fn app(cx: Scope) -> Element {
                     assert!(event.data.held_buttons().contains(dioxus_html::input_data::MouseButton::Primary));
                     assert!(event.data.held_buttons().contains(dioxus_html::input_data::MouseButton::Secondary));
                     assert_eq!(event.data.trigger_button(), Some(dioxus_html::input_data::MouseButton::Secondary));
-                    recieved_events.modify(|x| *x + 1)
+                    received_events.modify(|x| *x + 1)
                 }
             }
             div{
@@ -270,7 +270,7 @@ fn app(cx: Scope) -> Element {
                     assert!(event.data.modifiers().is_empty());
                     assert!(event.data.held_buttons().contains(dioxus_html::input_data::MouseButton::Secondary));
                     assert_eq!(event.data.trigger_button(), Some(dioxus_html::input_data::MouseButton::Secondary));
-                    recieved_events.modify(|x| *x + 1)
+                    received_events.modify(|x| *x + 1)
                 }
             }
             div{
@@ -280,7 +280,7 @@ fn app(cx: Scope) -> Element {
                     assert!(event.data.modifiers().is_empty());
                     assert!(event.data.held_buttons().is_empty());
                     assert_eq!(event.data.trigger_button(), Some(dioxus_html::input_data::MouseButton::Primary));
-                    recieved_events.modify(|x| *x + 1)
+                    received_events.modify(|x| *x + 1)
                 }
             }
             div{
@@ -294,7 +294,7 @@ fn app(cx: Scope) -> Element {
                         panic!("Expected delta to be in pixels")
                     };
                     assert_eq!(delta, Vector3D::new(1.0, 2.0, 3.0));
-                    recieved_events.modify(|x| *x + 1)
+                    received_events.modify(|x| *x + 1)
                 }
             }
             input{
@@ -307,7 +307,7 @@ fn app(cx: Scope) -> Element {
                     assert_eq!(event.data.location, 0);
                     assert!(event.data.is_auto_repeating());
 
-                    recieved_events.modify(|x| *x + 1)
+                    received_events.modify(|x| *x + 1)
                 }
             }
             input{
@@ -320,7 +320,7 @@ fn app(cx: Scope) -> Element {
                     assert_eq!(event.data.location, 0);
                     assert!(!event.data.is_auto_repeating());
 
-                    recieved_events.modify(|x| *x + 1)
+                    received_events.modify(|x| *x + 1)
                 }
             }
             input{
@@ -333,21 +333,21 @@ fn app(cx: Scope) -> Element {
                     assert_eq!(event.data.location, 0);
                     assert!(!event.data.is_auto_repeating());
 
-                    recieved_events.modify(|x| *x + 1)
+                    received_events.modify(|x| *x + 1)
                 }
             }
             input{
                 id: "focus_in_div",
                 onfocusin: move |event| {
                     println!("{:?}", event.data);
-                    recieved_events.modify(|x| *x + 1)
+                    received_events.modify(|x| *x + 1)
                 }
             }
             input{
                 id: "focus_out_div",
                 onfocusout: move |event| {
                     println!("{:?}", event.data);
-                    recieved_events.modify(|x| *x + 1)
+                    received_events.modify(|x| *x + 1)
                 }
             }
         }

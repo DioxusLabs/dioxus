@@ -29,6 +29,9 @@ pub enum Error {
     #[error("Cargo Error: {0}")]
     CargoError(String),
 
+    #[error("Couldn't retrieve cargo metadata")]
+    CargoMetadata(#[source] cargo_metadata::Error),
+
     #[error("{0}")]
     CustomError(String),
 

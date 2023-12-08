@@ -294,7 +294,7 @@ pub fn virtual_event_from_websys_event(event: web_sys::Event, target: Element) -
         "select" => Rc::new(SelectionData {}),
         "touchcancel" | "touchend" | "touchmove" | "touchstart" => Rc::new(TouchData::from(event)),
 
-        "scroll" => Rc::new(()),
+        "scroll" => Rc::new(ScrollData {}),
         "wheel" => Rc::new(WheelData::from(event)),
         "animationstart" | "animationend" | "animationiteration" => {
             Rc::new(AnimationData::from(event))
