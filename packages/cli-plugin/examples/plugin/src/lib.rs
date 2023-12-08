@@ -1,7 +1,7 @@
 use dioxus_cli_plugin::*;
 use exports::plugins::main::definitions::{Event, Guest};
 use plugins::main::{
-    imports::{log, watched_paths},
+    imports::{log, watch_path, watched_paths},
     toml::{Toml, TomlValue},
     types::PluginInfo,
 };
@@ -16,9 +16,6 @@ impl Guest for Plugin {
 
     fn get_default_config() -> Toml {
         log("Starting to make default config from plugin!");
-
-        log(&format!("{:?}", watched_paths()));
-
         let tomls: Vec<Toml> = (0..10).map(TomlValue::Integer).map(Toml::new).collect();
         let res = Toml::new(TomlValue::Array(tomls));
         log("Got a default config from plugin!");
@@ -28,6 +25,11 @@ impl Guest for Plugin {
     fn on_watched_paths_change(_: std::vec::Vec<std::string::String>) {}
 
     fn register() -> Result<(), ()> {
+        log(&format!("{:?}", watched_paths()));
+
+        watch_path("tests");
+
+        log("Watched `tests` path!");
         Ok(())
     }
 

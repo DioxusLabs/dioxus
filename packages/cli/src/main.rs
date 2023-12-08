@@ -2,7 +2,10 @@ use std::path::PathBuf;
 
 use anyhow::anyhow;
 use clap::Parser;
-use dioxus_cli::{plugin::init_plugins, *};
+use dioxus_cli::{
+    plugin::{init_plugins, save_plugin_config},
+    *,
+};
 use Commands::*;
 
 fn get_bin(bin: Option<String>) -> Result<PathBuf> {
@@ -78,7 +81,7 @@ async fn main() -> anyhow::Result<()> {
             .map_err(|e| anyhow!("🚫 Configuring new project failed: {}", e)),
 
         Plugin(opts) => opts
-            .plugin(Some(bin.clone()))
+            .plugin()
             .await
             .map_err(|e| anyhow!("🚫 Plugin manager failed: {}", e)),
 
@@ -103,5 +106,9 @@ async fn main() -> anyhow::Result<()> {
 
             Ok(())
         }
-    }
+    }?;
+
+    save_plugin_config(bin).await?;
+
+    Ok(())
 }

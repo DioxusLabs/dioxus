@@ -2,7 +2,8 @@ use std::str::FromStr;
 
 use super::*;
 use crate::lock::DioxusLock;
-use crate::plugin::{convert::Convert, load_plugin};
+use crate::plugin::load_plugin;
+use crate::plugin::PLUGINS_CONFIG;
 use crate::PluginConfigInfo;
 use clap::Parser;
 
@@ -37,13 +38,11 @@ pub enum Plugin {
 }
 
 impl Plugin {
-    pub async fn plugin(self, bin: Option<PathBuf>) -> Result<()> {
-        let mut crate_config = crate::CrateConfig::new(bin)?;
-        let mut changed_config = false;
+    pub async fn plugin(self) -> Result<()> {
         match self {
             // Plugin::Update { ignore_error } => todo!(),
             Plugin::List => {
-                let plugins = &crate_config.dioxus_config.plugins.plugins;
+                let plugins = &PLUGINS_CONFIG.lock().await.plugins.plugins;
                 if plugins.is_empty() {
                     log::warn!(
                         "No plugins found! Run `dx config init` and then run `dx add --path WASM"
@@ -86,31 +85,12 @@ impl Plugin {
                         config: default_config,
                     };
 
-                    let plugins = &mut crate_config.dioxus_config.plugins;
+                    let plugins = &mut PLUGINS_CONFIG.lock().await.plugins;
                     plugins.set_plugin_info(plugin.metadata.name.clone(), new_config);
-                    changed_config = true;
                     log::info!("✔️  Successfully added {}", plugin.metadata.name);
                 }
             },
         }
-
-        if changed_config {
-            let toml_path = crate_config.crate_dir.join("Dioxus.toml");
-            let toml_string = std::fs::read_to_string(&toml_path)?;
-            let mut diox_doc: toml_edit::Document = match toml_string.parse() {
-                Ok(doc) => doc,
-                Err(err) => {
-                    log::warn!("Could not parse Dioxus toml! {}", err);
-                    return Ok(());
-                }
-            };
-            let val = toml::Value::try_from(&crate_config.dioxus_config.plugins)
-                .expect("Invalid PluginInfo!");
-            diox_doc["plugins"] = val.convert();
-            std::fs::write(toml_path, diox_doc.to_string())?;
-            log::info!("✔️  Successfully saved config");
-        }
-
         Ok(())
     }
 }

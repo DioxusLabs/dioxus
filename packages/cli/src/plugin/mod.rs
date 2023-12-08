@@ -1,9 +1,10 @@
 use crate::lock::DioxusLock;
+use crate::plugin::convert::Convert;
 use crate::plugin::interface::{PluginState, PluginWorld};
 use crate::{DioxusConfig, PluginConfig};
 
 use slab::Slab;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use tokio::sync::Mutex;
 use wasmtime::component::*;
 use wasmtime::{Config, Engine, Store};
@@ -78,6 +79,35 @@ pub async fn init_plugins(config: DioxusConfig) -> wasmtime::Result<()> {
     let plugins = load_plugins(&config.plugins).await?;
     *PLUGINS.lock().await = plugins;
     *PLUGINS_CONFIG.lock().await = config;
+    Ok(())
+}
+
+pub async fn save_plugin_config(bin: PathBuf) -> crate::Result<()> {
+    let crate_root = crate::cargo::crate_root()?.join(bin);
+
+    let toml_path = crate_root.join("Dioxus.toml");
+
+    let toml_string = std::fs::read_to_string(&toml_path)?;
+    let mut diox_doc: toml_edit::Document = match toml_string.parse() {
+        Ok(doc) => doc,
+        Err(err) => {
+            return Err(crate::Error::Unique(format!(
+                "Could not parse Dioxus toml! {}",
+                err
+            )));
+        }
+    };
+
+    let watcher_info = toml::Value::try_from(&PLUGINS_CONFIG.lock().await.watcher)
+        .expect("Invalid Watcher Config!");
+    diox_doc["watcher"] = watcher_info.convert();
+
+    let plugin_info =
+        toml::Value::try_from(&PLUGINS_CONFIG.lock().await.plugins).expect("Invalid Plugin Info!");
+    diox_doc["plugins"] = plugin_info.convert();
+
+    std::fs::write(toml_path, diox_doc.to_string())?;
+    log::info!("✔️  Successfully saved config");
     Ok(())
 }
 
