@@ -12,7 +12,7 @@ use crate::desktop_context::EditQueue;
 
 static MINIFIED: &str = include_str!("./minified.js");
 
-fn module_loader(root_name: &str) -> String {
+fn module_loader(root_name: &str, headless: bool) -> String {
     format!(
         r#"
 <script type="module">
@@ -25,7 +25,7 @@ fn module_loader(root_name: &str) -> String {
             window.interpreter.initialize(root_element);
             window.ipc.postMessage(window.interpreter.serializeIpcMessage("initialize"));
         }}
-        window.interpreter.wait_for_request();
+        window.interpreter.wait_for_request({headless});
     }}
 </script>
 "#
@@ -39,6 +39,7 @@ pub(super) fn desktop_handler(
     custom_index: Option<String>,
     root_name: &str,
     edit_queue: &EditQueue,
+    headless: bool,
 ) {
     // If the request is for the root, we'll serve the index.html file.
     if request.uri().path() == "/" {
@@ -46,7 +47,7 @@ pub(super) fn desktop_handler(
         // we'll look for the closing </body> tag and insert our little module loader there.
         let body = match custom_index {
             Some(custom_index) => custom_index
-                .replace("</body>", &format!("{}</body>", module_loader(root_name)))
+                .replace("</body>", &format!("{}</body>", module_loader(root_name, headless)))
                 .into_bytes(),
 
             None => {
@@ -58,7 +59,7 @@ pub(super) fn desktop_handler(
                 }
 
                 template
-                    .replace("<!-- MODULE LOADER -->", &module_loader(root_name))
+                    .replace("<!-- MODULE LOADER -->", &module_loader(root_name, headless))
                     .into_bytes()
             }
         };

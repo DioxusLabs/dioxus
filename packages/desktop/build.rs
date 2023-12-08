@@ -51,15 +51,21 @@ fn main() {
     }"#;
     let polling_request = format!(
         r#"// Poll for requests
-    window.interpreter.wait_for_request = () => {{
+    window.interpreter.wait_for_request = (headless) => {{
       fetch(new Request("{EDITS_PATH}"))
           .then(response => {{
               response.arrayBuffer()
                   .then(bytes => {{
-                      requestAnimationFrame(() => {{
+                      // In headless mode, the requestAnimationFrame callback is never called, so we need to run the bytes directly
+                      if (headless) {{
                         run_from_bytes(bytes);
-                      }});
-                      window.interpreter.wait_for_request();
+                      }}
+                      else {{
+                        requestAnimationFrame(() => {{
+                          run_from_bytes(bytes);
+                        }});
+                      }}
+                      window.interpreter.wait_for_request(headless);
                   }});
           }})
     }}"#

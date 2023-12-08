@@ -17,7 +17,7 @@ pub(crate) fn check_app_exits(app: Component) {
 
     dioxus_desktop::launch_cfg(
         app,
-        Config::new().with_window(WindowBuilder::new().with_visible(true)),
+        Config::new().with_window(WindowBuilder::new().with_visible(false)),
     );
 
     // Stop deadman's switch

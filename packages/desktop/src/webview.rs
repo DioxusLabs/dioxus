@@ -33,6 +33,7 @@ pub(crate) fn build(
 
     let mut web_context = WebContext::new(cfg.data_dir.clone());
     let edit_queue = EditQueue::default();
+    let headless = !cfg.window.window.visible;
 
     let mut webview = WebViewBuilder::new(window)
         .unwrap()
@@ -55,6 +56,7 @@ pub(crate) fn build(
                     index_file.clone(),
                     &root_name,
                     &edit_queue,
+                    headless
                 )
             }
         })
