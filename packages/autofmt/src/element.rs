@@ -102,7 +102,7 @@ impl Writer<'_> {
         }
 
         // multiline handlers bump everything down
-        if attr_len > 1000 || self.out.indent.inline_attributes() {
+        if attr_len > 1000 || self.out.indent.split_line_attributes() {
             opt_level = ShortOptimization::NoOpt;
         }
 
@@ -254,7 +254,6 @@ impl Writer<'_> {
 
             ElementAttr::EventTokens { name, tokens } => {
                 let out = self.retrieve_formatted_expr(tokens).to_string();
-
                 let mut lines = out.split('\n').peekable();
                 let first = lines.next().unwrap();
 
@@ -295,6 +294,10 @@ impl Writer<'_> {
             .unwrap_or_default();
 
         beginning.is_empty()
+    }
+
+    pub fn is_empty_children(&self, children: &[BodyNode]) -> bool {
+        children.is_empty()
     }
 
     // check if the children are short enough to be on the same line

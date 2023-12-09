@@ -8,11 +8,11 @@ pub enum IndentType {
 pub struct IndentOptions {
     width: usize,
     indent_string: String,
-    inline_attributes: bool,
+    split_line_attributes: bool,
 }
 
 impl IndentOptions {
-    pub fn new(typ: IndentType, width: usize, inline_attributes: bool) -> Self {
+    pub fn new(typ: IndentType, width: usize, split_line_attributes: bool) -> Self {
         assert_ne!(width, 0, "Cannot have an indent width of 0");
         Self {
             width,
@@ -20,7 +20,7 @@ impl IndentOptions {
                 IndentType::Tabs => "\t".into(),
                 IndentType::Spaces => " ".repeat(width),
             },
-            inline_attributes,
+            split_line_attributes,
         }
     }
 
@@ -65,8 +65,8 @@ impl IndentOptions {
         indent
     }
 
-    pub fn inline_attributes(&self) -> bool {
-        self.inline_attributes
+    pub fn split_line_attributes(&self) -> bool {
+        self.split_line_attributes
     }
 }
 

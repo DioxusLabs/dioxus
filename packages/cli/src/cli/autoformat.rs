@@ -23,9 +23,9 @@ pub struct Autoformat {
     #[clap(short, long)]
     pub file: Option<String>,
 
-    /// Inline attributes or not
-    #[clap(short, long)]
-    pub inline_attributes: bool,
+    /// Split attributes in lines or not
+    #[clap(short, long, default_value = "false")]
+    pub split_line_attributes: bool,
 }
 
 impl Autoformat {
@@ -33,14 +33,14 @@ impl Autoformat {
     pub async fn autoformat(self) -> Result<()> {
         // Default to formatting the project
         if self.raw.is_none() && self.file.is_none() {
-            if let Err(e) = autoformat_project(self.check, self.inline_attributes).await {
+            if let Err(e) = autoformat_project(self.check, self.split_line_attributes).await {
                 eprintln!("error formatting project: {}", e);
                 exit(1);
             }
         }
 
         if let Some(raw) = self.raw {
-            let indent = indentation_for(".", self.inline_attributes)?;
+            let indent = indentation_for(".", self.split_line_attributes)?;
             if let Some(inner) = dioxus_autofmt::fmt_block(&raw, 0, indent) {
                 println!("{}", inner);
             } else {
@@ -55,12 +55,12 @@ impl Autoformat {
             let file_content;
             let indent;
             if file == "-" {
-                indent = indentation_for(".", self.inline_attributes)?;
+                indent = indentation_for(".", self.split_line_attributes)?;
                 let mut contents = String::new();
                 std::io::stdin().read_to_string(&mut contents)?;
                 file_content = Ok(contents);
             } else {
-                indent = indentation_for(".", self.inline_attributes)?;
+                indent = indentation_for(".", self.split_line_attributes)?;
                 file_content = fs::read_to_string(&file);
             };
 
@@ -97,7 +97,7 @@ impl Autoformat {
 /// Runs using Tokio for multithreading, so it should be really really fast
 ///
 /// Doesn't do mod-descending, so it will still try to format unreachable files. TODO.
-async fn autoformat_project(check: bool, inline_attributes: bool) -> Result<()> {
+async fn autoformat_project(check: bool, split_line_attributes: bool) -> Result<()> {
     let crate_config = crate::CrateConfig::new(None)?;
 
     let mut files_to_format = vec![];
@@ -107,7 +107,7 @@ async fn autoformat_project(check: bool, inline_attributes: bool) -> Result<()> 
         return Ok(());
     }
 
-    let indent = indentation_for(&files_to_format[0], inline_attributes)?;
+    let indent = indentation_for(&files_to_format[0], split_line_attributes)?;
 
     let counts = files_to_format
         .into_iter()
@@ -170,7 +170,7 @@ async fn autoformat_project(check: bool, inline_attributes: bool) -> Result<()> 
 
 fn indentation_for(
     file_or_dir: impl AsRef<Path>,
-    inline_attributes: bool,
+    split_line_attributes: bool,
 ) -> Result<IndentOptions> {
     let out = std::process::Command::new("cargo")
         .args(["fmt", "--", "--print-config", "current"])
@@ -211,7 +211,7 @@ fn indentation_for(
             IndentType::Spaces
         },
         tab_spaces,
-        inline_attributes,
+        split_line_attributes,
     ))
 }
 
@@ -262,7 +262,7 @@ async fn test_auto_fmt() {
         check: false,
         raw: Some(test_rsx),
         file: None,
-        inline_attributes: false,
+        split_line_attributes: false,
     };
 
     fmt.autoformat().await.unwrap();
