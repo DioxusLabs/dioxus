@@ -8,6 +8,7 @@ use cargo_metadata::{diagnostic::Diagnostic, Message};
 use indicatif::{ProgressBar, ProgressStyle};
 use serde::Serialize;
 use std::{
+    ffi::OsStr,
     fs::{copy, create_dir_all, File},
     io::Read,
     panic,
@@ -555,135 +556,128 @@ fn build_assets(config: &CrateConfig) -> Result<Vec<PathBuf>> {
 
     // check sass tool state
     let sass = Tool::Sass;
-    if sass.is_installed() && dioxus_tools.contains_key("sass") {
-        let sass_conf = dioxus_tools.get("sass").unwrap();
-        if let Some(tab) = sass_conf.as_table() {
-            let source_map = tab.contains_key("source_map");
-            let source_map = if source_map && tab.get("source_map").unwrap().is_bool() {
-                if tab.get("source_map").unwrap().as_bool().unwrap_or_default() {
-                    "--source-map"
-                } else {
-                    "--no-source-map"
+
+    if !sass.is_installed() || !dioxus_tools.contains_key("sass") {
+        return Ok(result);
+    }
+
+    let sass_conf = dioxus_tools.get("sass").unwrap();
+    let Some(tab) = sass_conf.as_table() else {
+        return Ok(result);
+    };
+
+    let source_map = if let Some(toml::Value::Boolean(map)) = tab.get("source_map") {
+        if *map {
+            "--source-map"
+        } else {
+            "--no-source-map"
+        }
+    } else {
+        "--no-source-map"
+    };
+
+    let Some(input) = tab.get("input") else {
+        return Ok(result);
+    };
+
+    match &input {
+        // if the sass open auto, we need auto-check the assets dir.
+        toml::Value::String(file) if file.trim() == "*" => {
+            let asset_dir = config.asset_dir.clone();
+            if !asset_dir.is_dir() {
+                return Ok(result);
+            }
+            for entry in walkdir::WalkDir::new(&asset_dir)
+                .into_iter()
+                .filter_map(Result::ok)
+            {
+                let temp = entry.path();
+                if !temp.is_file() {
+                    continue;
                 }
-            } else {
-                "--source-map"
-            };
 
-            if tab.contains_key("input") {
-                if tab.get("input").unwrap().is_str() {
-                    let file = tab.get("input").unwrap().as_str().unwrap().trim();
+                let Some(Some(suffix)) = temp.extension().map(OsStr::to_str) else {
+                    continue;
+                };
 
-                    if file == "*" {
-                        // if the sass open auto, we need auto-check the assets dir.
-                        let asset_dir = config.asset_dir.clone();
-                        if asset_dir.is_dir() {
-                            for entry in walkdir::WalkDir::new(&asset_dir)
-                                .into_iter()
-                                .filter_map(|e| e.ok())
-                            {
-                                let temp = entry.path();
-                                if temp.is_file() {
-                                    let suffix = temp.extension();
-                                    if suffix.is_none() {
-                                        continue;
-                                    }
-                                    let suffix = suffix.unwrap().to_str().unwrap();
-                                    if suffix == "scss" || suffix == "sass" {
-                                        // if file suffix is `scss` / `sass` we need transform it.
-                                        let out_file = format!(
-                                            "{}.css",
-                                            temp.file_stem().unwrap().to_str().unwrap()
-                                        );
-                                        let target_path = config
-                                            .out_dir
-                                            .join(
-                                                temp.strip_prefix(&asset_dir)
-                                                    .unwrap()
-                                                    .parent()
-                                                    .unwrap(),
-                                            )
-                                            .join(out_file);
-                                        let res = sass.call(
-                                            "sass",
-                                            vec![
-                                                temp.to_str().unwrap(),
-                                                target_path.to_str().unwrap(),
-                                                source_map,
-                                            ],
-                                        );
-                                        if res.is_ok() {
-                                            result.push(temp.to_path_buf());
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    } else {
-                        // just transform one file.
-                        let relative_path = if &file[0..1] == "/" {
-                            &file[1..file.len()]
-                        } else {
-                            file
-                        };
-                        let path = config.asset_dir.join(relative_path);
-                        let out_file =
-                            format!("{}.css", path.file_stem().unwrap().to_str().unwrap());
-                        let target_path = config
-                            .out_dir
-                            .join(PathBuf::from(relative_path).parent().unwrap())
-                            .join(out_file);
-                        if path.is_file() {
-                            let res = sass.call(
-                                "sass",
-                                vec![
-                                    path.to_str().unwrap(),
-                                    target_path.to_str().unwrap(),
-                                    source_map,
-                                ],
-                            );
-                            if res.is_ok() {
-                                result.push(path);
-                            } else {
-                                log::error!("{:?}", res);
-                            }
-                        }
-                    }
-                } else if tab.get("input").unwrap().is_array() {
-                    // check files list.
-                    let list = tab.get("input").unwrap().as_array().unwrap();
-                    for i in list {
-                        if i.is_str() {
-                            let path = i.as_str().unwrap();
-                            let relative_path = if &path[0..1] == "/" {
-                                &path[1..path.len()]
-                            } else {
-                                path
-                            };
-                            let path = config.asset_dir.join(relative_path);
-                            let out_file =
-                                format!("{}.css", path.file_stem().unwrap().to_str().unwrap());
-                            let target_path = config
-                                .out_dir
-                                .join(PathBuf::from(relative_path).parent().unwrap())
-                                .join(out_file);
-                            if path.is_file() {
-                                let res = sass.call(
-                                    "sass",
-                                    vec![
-                                        path.to_str().unwrap(),
-                                        target_path.to_str().unwrap(),
-                                        source_map,
-                                    ],
-                                );
-                                if res.is_ok() {
-                                    result.push(path);
-                                }
-                            }
-                        }
-                    }
+                if suffix != "scss" && suffix != "sass" {
+                    continue;
+                }
+                // if file suffix is `scss` / `sass` we need transform it.
+                let out_file = format!("{}.css", temp.file_stem().unwrap().to_str().unwrap());
+                let target_path = config
+                    .out_dir
+                    .join(temp.strip_prefix(&asset_dir).unwrap().parent().unwrap())
+                    .join(out_file);
+                let res = sass.call(
+                    "sass",
+                    vec![
+                        temp.to_str().unwrap(),
+                        target_path.to_str().unwrap(),
+                        source_map,
+                    ],
+                );
+                if res.is_ok() {
+                    result.push(temp.to_path_buf());
                 }
             }
         }
+        toml::Value::String(file) => {
+            let relative_path = file.trim().strip_prefix('/').unwrap_or(file);
+            let path = config.asset_dir.join(relative_path);
+            let out_file = format!("{}.css", path.file_stem().unwrap().to_str().unwrap());
+            let target_path = config
+                .out_dir
+                .join(PathBuf::from(relative_path).parent().unwrap())
+                .join(out_file);
+            if !path.is_file() {
+                return Ok(result);
+            }
+            let res = sass.call(
+                "sass",
+                vec![
+                    path.to_str().unwrap(),
+                    target_path.to_str().unwrap(),
+                    source_map,
+                ],
+            );
+            if res.is_ok() {
+                result.push(path);
+            } else {
+                log::error!("{:?}", res);
+            }
+        }
+        toml::Value::Array(list) => {
+            for i in list {
+                let Some(path) = i.as_str() else {
+                    continue;
+                };
+                let relative_path = path.strip_prefix('/').unwrap_or(path);
+                let path = config.asset_dir.join(relative_path);
+                let out_file = format!("{}.css", path.file_stem().unwrap().to_str().unwrap());
+                let target_path = config
+                    .out_dir
+                    .join(PathBuf::from(relative_path).parent().unwrap())
+                    .join(out_file);
+                if !path.is_file() {
+                    continue;
+                }
+                let res = sass.call(
+                    "sass",
+                    vec![
+                        path.to_str().unwrap(),
+                        target_path.to_str().unwrap(),
+                        source_map,
+                    ],
+                );
+                if res.is_ok() {
+                    result.push(path);
+                } else {
+                    log::error!("{:?}", res);
+                }
+            }
+        }
+        _ => (),
     }
     // SASS END
 
