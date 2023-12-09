@@ -154,17 +154,11 @@ impl Writer<'_> {
         manual_props: &Option<syn::Expr>,
         sameline: bool,
     ) -> Result {
-        println!("fields {fields:?}");
-        println!("manual_props {manual_props:?}");
-
         let mut field_iter = fields.iter().peekable();
 
         while let Some(field) = field_iter.next() {
-            println!("{:?}", field);
             if !sameline {
                 self.out.indented_tabbed_line().unwrap();
-            } else {
-                println!("not  line????");
             }
 
             let name = &field.name;
@@ -206,17 +200,13 @@ impl Writer<'_> {
 
                 if sameline {
                     write!(self.out, " ")?;
-                    println!("not  line-----");
                 }
             }
         }
 
         if let Some(exp) = manual_props {
-            println!("{:?}", exp);
             if !sameline {
                 self.out.indented_tabbed_line().unwrap();
-            } else {
-                println!("not  line!!!!!!");
             }
             self.write_manual_props(exp)?;
         }
