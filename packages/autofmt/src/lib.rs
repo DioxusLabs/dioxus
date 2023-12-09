@@ -140,7 +140,7 @@ pub fn write_block_out(body: CallBody) -> Option<String> {
 }
 
 fn write_body(buf: &mut Writer, body: &CallBody) {
-    if buf.is_short_children(&body.roots).is_some() {
+    if buf.is_short_children(&body.roots).is_some() && !buf.out.indent.inline_attributes() {
         // write all the indents with spaces and commas between
         for idx in 0..body.roots.len() - 1 {
             let ident = &body.roots[idx];
