@@ -8,10 +8,11 @@ pub enum IndentType {
 pub struct IndentOptions {
     width: usize,
     indent_string: String,
+    inline_attributes: bool,
 }
 
 impl IndentOptions {
-    pub fn new(typ: IndentType, width: usize) -> Self {
+    pub fn new(typ: IndentType, width: usize, inline_attributes: bool) -> Self {
         assert_ne!(width, 0, "Cannot have an indent width of 0");
         Self {
             width,
@@ -19,6 +20,7 @@ impl IndentOptions {
                 IndentType::Tabs => "\t".into(),
                 IndentType::Spaces => " ".repeat(width),
             },
+            inline_attributes,
         }
     }
 
@@ -62,11 +64,15 @@ impl IndentOptions {
         }
         indent
     }
+
+    pub fn inline_attributes(&self) -> bool {
+        self.inline_attributes
+    }
 }
 
 impl Default for IndentOptions {
     fn default() -> Self {
-        Self::new(IndentType::Spaces, 4)
+        Self::new(IndentType::Spaces, 4, false)
     }
 }
 
@@ -77,31 +83,31 @@ mod tests {
     #[test]
     fn count_indents() {
         assert_eq!(
-            IndentOptions::new(IndentType::Spaces, 4).count_indents("no indentation here!"),
+            IndentOptions::new(IndentType::Spaces, 4, false).count_indents("no indentation here!"),
             0
         );
         assert_eq!(
-            IndentOptions::new(IndentType::Spaces, 4).count_indents("    v += 2"),
+            IndentOptions::new(IndentType::Spaces, 4, false).count_indents("    v += 2"),
             1
         );
         assert_eq!(
-            IndentOptions::new(IndentType::Spaces, 4).count_indents("        v += 2"),
+            IndentOptions::new(IndentType::Spaces, 4, false).count_indents("        v += 2"),
             2
         );
         assert_eq!(
-            IndentOptions::new(IndentType::Spaces, 4).count_indents("          v += 2"),
+            IndentOptions::new(IndentType::Spaces, 4, false).count_indents("          v += 2"),
             2
         );
         assert_eq!(
-            IndentOptions::new(IndentType::Spaces, 4).count_indents("\t\tv += 2"),
+            IndentOptions::new(IndentType::Spaces, 4, false).count_indents("\t\tv += 2"),
             2
         );
         assert_eq!(
-            IndentOptions::new(IndentType::Spaces, 4).count_indents("\t\t  v += 2"),
+            IndentOptions::new(IndentType::Spaces, 4, false).count_indents("\t\t  v += 2"),
             2
         );
         assert_eq!(
-            IndentOptions::new(IndentType::Spaces, 2).count_indents("    v += 2"),
+            IndentOptions::new(IndentType::Spaces, 2, false).count_indents("    v += 2"),
             2
         );
     }

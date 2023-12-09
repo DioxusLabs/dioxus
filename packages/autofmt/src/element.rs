@@ -102,7 +102,7 @@ impl Writer<'_> {
         }
 
         // multiline handlers bump everything down
-        if attr_len > 1000 {
+        if attr_len > 1000 || self.out.indent.inline_attributes() {
             opt_level = ShortOptimization::NoOpt;
         }
 
