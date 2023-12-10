@@ -117,11 +117,14 @@ impl server::HostServer for PluginState {
 
     async fn refresh_asset(
         &mut self,
-        _key: Resource<Server>,
-        _: String,
-        _: String,
+        key: Resource<Server>,
+        url: String,
     ) -> wasmtime::Result<()> {
-        todo!()
+        self.servers
+            .get_mut(key.rep() as usize)
+            .unwrap()
+            .refresh_asset(&url);
+        Ok(())
     }
 
     fn drop(&mut self, key: Resource<Server>) -> wasmtime::Result<()> {

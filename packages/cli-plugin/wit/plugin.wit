@@ -94,7 +94,7 @@ interface server {
 
     /// Searches through links to only refresh the 
     /// necessary components when changing assets
-    refresh-asset: func(old-url: string, new-url: string);
+    refresh-asset: func(url: string);
   }
 }
 

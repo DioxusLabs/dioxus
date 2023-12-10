@@ -1,3 +1,5 @@
+
+
 use crate::{
     call_plugins,
     plugin::interface::plugins::main::types::Event::{HotReload, Rebuild},
@@ -216,7 +218,7 @@ async fn setup_file_watcher<F: Fn() -> Result<BuildResult> + Sync + Send + 'stat
 pub struct ServerReloadState {
     relaunch_queued: Arc<Notify>,
     pub hot_reload: Option<HotReloadState>,
-    reload_tx: Option<Sender<()>>,
+    reload_tx: Option<Sender<WsMessage>>,
 }
 
 impl ServerReloadState {
@@ -228,7 +230,7 @@ impl ServerReloadState {
         }
     }
 
-    pub fn with_reload_tx(self, reload_tx: Option<Sender<()>>) -> Self {
+    pub fn with_reload_tx(self, reload_tx: Option<Sender<WsMessage>>) -> Self {
         Self {
             relaunch_queued: self.relaunch_queued,
             hot_reload: None,
@@ -242,7 +244,15 @@ impl ServerReloadState {
 
     pub fn reload_browser(&self) {
         if let Some(reload_tx) = &self.reload_tx {
-            let _ = reload_tx.send(());
+            let _ = reload_tx.send(WsMessage::Reload);
+        }
+    }
+
+    pub fn refresh_asset(&self, asset_url: &str) {
+        if let Some(reload_tx) = &self.reload_tx {
+            let _ = reload_tx.send(WsMessage::RefreshAsset {
+                url: asset_url.to_string(),
+            });
         }
     }
 }
@@ -251,4 +261,14 @@ impl ServerReloadState {
 pub struct HotReloadState {
     pub messages: broadcast::Sender<Template<'static>>,
     pub file_map: Arc<Mutex<FileMap<HtmlCtx>>>,
+}
+
+
+#[derive(serde::Deserialize, Debug, Clone)]
+#[serde(tag = "method", content = "params")]
+pub enum WsMessage {
+    #[serde(rename = "reload")]
+    Reload,
+    #[serde(rename = "refresh_asset")]
+    RefreshAsset { url: String },
 }

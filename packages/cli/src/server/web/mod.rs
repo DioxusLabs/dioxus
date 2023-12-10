@@ -1,3 +1,4 @@
+use crate::server::WsMessage;
 use crate::server::ServerReloadState;
 use crate::{
     builder,
@@ -41,7 +42,7 @@ mod hot_reload;
 use hot_reload::*;
 
 struct WsReloadState {
-    update: broadcast::Sender<()>,
+    update: broadcast::Sender<WsMessage>,
 }
 
 pub async fn startup(port: u16, config: CrateConfig, start_browser: bool) -> Result<()> {
@@ -77,7 +78,8 @@ pub async fn startup(port: u16, config: CrateConfig, start_browser: bool) -> Res
     // WS Reload Watching
     let (reload_tx, _) = broadcast::channel(100);
 
-    let reload_state = ServerReloadState::new(hot_reload_state).with_reload_tx(Some(reload_tx.clone()));
+    let reload_state =
+        ServerReloadState::new(hot_reload_state).with_reload_tx(Some(reload_tx.clone()));
 
     serve(ip, port, config, start_browser, reload_state, reload_tx).await?;
 
@@ -91,7 +93,7 @@ pub async fn serve(
     config: CrateConfig,
     start_browser: bool,
     reload_state: ServerReloadState,
-    reload_tx: Sender<()>,
+    reload_tx: Sender<WsMessage>,
 ) -> Result<()> {
     let first_build_result = crate::builder::build(&config, true)?;
 
@@ -389,7 +391,7 @@ async fn ws_handler(
                 rx.recv().await.unwrap();
                 // ignore the error
                 if socket
-                    .send(Message::Text(String::from("reload")))
+                    .send(Message::Text(String::from("{type:\"reload\"}")))
                     .await
                     .is_err()
                 {
@@ -405,13 +407,13 @@ async fn ws_handler(
     })
 }
 
-fn build(config: &CrateConfig, reload_tx: &Sender<()>) -> Result<BuildResult> {
+fn build(config: &CrateConfig, reload_tx: &Sender<WsMessage>) -> Result<BuildResult> {
     let result = builder::build(config, true)?;
     // change the websocket reload state to true;
     // the page will auto-reload.
     if config.dioxus_config.watcher.reload_html.unwrap_or(false) {
         let _ = Serve::regen_dev_page(config);
     }
-    let _ = reload_tx.send(());
+    let _ = reload_tx.send(WsMessage::Reload);
     Ok(result)
 }
