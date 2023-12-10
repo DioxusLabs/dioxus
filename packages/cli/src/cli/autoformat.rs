@@ -97,7 +97,7 @@ async fn autoformat_project(check: bool) -> Result<()> {
     let gitignore_path = crate_config.crate_dir.join(".gitignore");
     if gitignore_path.is_file() {
         let gitigno = gitignore::File::new(gitignore_path.as_path()).unwrap();
-        if let Some(files) = gitigno.included_files() {
+        if let Ok(files) = gitigno.included_files() {
             files_to_format.extend(files)
         };
     } else {
