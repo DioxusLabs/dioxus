@@ -22,6 +22,7 @@ serde = { version = "1", features = ["derive"] }
 execute = { version = "0.2.11", optional = true }
 once_cell = { version = "1.17.0", optional = true }
 ignore = { version = "0.4.19", optional = true }
+serde-json-fmt = "0.1.0"
 
 [features]
 default = ["dioxus-html"]

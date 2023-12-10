@@ -340,15 +340,14 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(cfg: Config<Ctx>) {
 }
 
 fn send_msg(msg: HotReloadMsg, channel: &mut impl Write) -> bool {
-    if let Ok(msg) = serde_json::to_string(&msg) {
-        if channel.write_all(msg.as_bytes()).is_err() {
-            return false;
-        }
-        if channel.write_all(&[b'\n']).is_err() {
-            return false;
-        }
-        true
-    } else {
-        false
-    }
+    let Ok(mut msg) = serde_json_fmt::JsonFormat::new()
+        .ascii(true)
+        .format_to_string(&msg)
+    else {
+        return false;
+    };
+
+    msg.push('\n');
+
+    channel.write_all(msg.as_bytes()).is_ok()
 }
