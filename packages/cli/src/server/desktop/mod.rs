@@ -5,7 +5,7 @@ use crate::{
     },
     BuildResult, CrateConfig, Result,
 };
-
+use dioxus_hot_reload::write_hot_reload_msg;
 use dioxus_hot_reload::HotReloadMsg;
 use dioxus_html::HtmlCtx;
 use dioxus_rsx::hot_reload::*;
@@ -143,7 +143,7 @@ async fn start_desktop_hot_reload(hot_reload_state: HotReloadState) -> Result<()
                                         .collect()
                                 };
                                 for template in templates {
-                                    if !send_msg(
+                                    if !write_hot_reload_msg(
                                         HotReloadMsg::UpdateTemplate(template),
                                         &mut connection,
                                     ) {
@@ -173,7 +173,7 @@ async fn start_desktop_hot_reload(hot_reload_state: HotReloadState) -> Result<()
                 let mut i = 0;
                 while i < channels.len() {
                     let channel = &mut channels[i];
-                    if send_msg(HotReloadMsg::UpdateTemplate(template), channel) {
+                    if write_hot_reload_msg(HotReloadMsg::UpdateTemplate(template), channel) {
                         i += 1;
                     } else {
                         channels.remove(i);
@@ -196,20 +196,6 @@ fn clear_paths(file_socket_path: &std::path::Path) {
         if file_socket_path.exists() {
             let _ = std::fs::remove_file(file_socket_path);
         }
-    }
-}
-
-fn send_msg(msg: HotReloadMsg, channel: &mut impl std::io::Write) -> bool {
-    if let Ok(msg) = serde_json::to_string(&msg) {
-        if channel.write_all(msg.as_bytes()).is_err() {
-            return false;
-        }
-        if channel.write_all(&[b'\n']).is_err() {
-            return false;
-        }
-        true
-    } else {
-        false
     }
 }
 

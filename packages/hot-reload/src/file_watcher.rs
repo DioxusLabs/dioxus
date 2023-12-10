@@ -1,19 +1,17 @@
 use std::{
-    io::{BufRead, BufReader, Write},
+    io::Write,
     path::PathBuf,
     str::FromStr,
     sync::{Arc, Mutex},
 };
 
 use crate::HotReloadMsg;
-use dioxus_core::Template;
 use dioxus_rsx::{
     hot_reload::{FileMap, FileMapBuildResult, UpdateResult},
     HotReloadingContext,
 };
-use interprocess_docfix::local_socket::{LocalSocketListener, LocalSocketStream};
+use interprocess_docfix::local_socket::LocalSocketListener;
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
-use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "file_watcher")]
 use dioxus_html::HtmlCtx;
@@ -161,7 +159,7 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(cfg: Config<Ctx>) {
             // This will cause the local socket listener to fail to open
             // We check if the file socket is already open from an old session and then delete it
             if hot_reload_socket_path.exists() {
-                let _ = std::fs::remove_file(hot_reload_socket_path);
+                let _ = std::fs::remove_file(&hot_reload_socket_path);
             }
         }
 
@@ -189,7 +187,7 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(cfg: Config<Ctx>) {
                                         .collect()
                                 };
                                 for template in templates {
-                                    if !send_msg(
+                                    if !write_hot_reload_msg(
                                         HotReloadMsg::UpdateTemplate(template),
                                         &mut connection,
                                     ) {
@@ -243,7 +241,7 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(cfg: Config<Ctx>) {
                                 }
 
                                 for channel in &mut *channels.lock().unwrap() {
-                                    send_msg(HotReloadMsg::Shutdown, channel);
+                                    write_hot_reload_msg(HotReloadMsg::Shutdown, channel);
                                 }
 
                                 return shutdown;
@@ -301,7 +299,7 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(cfg: Config<Ctx>) {
                                                 let mut i = 0;
                                                 while i < channels.len() {
                                                     let channel = &mut channels[i];
-                                                    if send_msg(
+                                                    if write_hot_reload_msg(
                                                         HotReloadMsg::UpdateTemplate(msg),
                                                         channel,
                                                     ) {
@@ -339,7 +337,8 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(cfg: Config<Ctx>) {
     }
 }
 
-fn send_msg(msg: HotReloadMsg, channel: &mut impl Write) -> bool {
+/// Write a message to the hot reloading socket as JSON
+pub fn write_hot_reload_msg(msg: HotReloadMsg, channel: &mut impl Write) -> bool {
     let Ok(mut msg) = serde_json_fmt::JsonFormat::new()
         .ascii(true)
         .format_to_string(&msg)
