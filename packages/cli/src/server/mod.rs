@@ -3,6 +3,7 @@ use crate::{
     plugin::interface::plugins::main::types::Event::{HotReload, Rebuild},
     BuildResult, CrateConfig, Result,
 };
+use tokio::sync::Notify;
 
 use cargo_metadata::diagnostic::Diagnostic;
 use dioxus_core::Template;
@@ -21,12 +22,51 @@ pub mod desktop;
 pub mod web;
 
 /// Sets up a file watcher
-async fn setup_file_watcher<F: Fn() -> Result<BuildResult> + Send + 'static>(
+async fn setup_file_watcher<F: Fn() -> Result<BuildResult> + Sync + Send + 'static>(
     build_with: F,
     config: &CrateConfig,
     web_info: Option<WebServerInfo>,
-    hot_reload: Option<HotReloadState>,
+    reload: ServerReloadState,
 ) -> Result<RecommendedWatcher> {
+    let build_with = Arc::new(build_with);
+
+    let ServerReloadState {
+        relaunch_queued,
+        hot_reload,
+    } = reload;
+
+    let weak_reload_state = Arc::downgrade(&relaunch_queued);
+    tokio::spawn({
+        let build_with = build_with.clone();
+        let web_info = web_info.clone();
+        let config = config.clone();
+        async move {
+            loop {
+                match weak_reload_state.upgrade() {
+                    Some(reload_state) => {
+                        reload_state.notified().await;
+                        match build_with() {
+                            Ok(res) => {
+                                #[allow(clippy::redundant_clone)]
+                                print_console_info(
+                                    &config,
+                                    PrettierOptions {
+                                        changed: Vec::new(),
+                                        warnings: res.warnings,
+                                        elapsed_time: res.elapsed_time,
+                                    },
+                                    web_info.clone(),
+                                );
+                            }
+                            Err(e) => log::error!("{}", e),
+                        }
+                    }
+                    None => break,
+                }
+            }
+        }
+    });
+
     let mut last_update_time = chrono::Local::now().timestamp();
 
     // file watcher: check file change
@@ -169,6 +209,25 @@ async fn setup_file_watcher<F: Fn() -> Result<BuildResult> + Send + 'static>(
         }
     }
     Ok(watcher)
+}
+
+#[derive(Clone)]
+pub struct ServerReloadState {
+    relaunch_queued: Arc<Notify>,
+    pub hot_reload: Option<HotReloadState>,
+}
+
+impl ServerReloadState {
+    pub fn new(hot_reload_state: Option<HotReloadState>) -> Self {
+        Self {
+            relaunch_queued: Arc::new(Notify::new()),
+            hot_reload: hot_reload_state,
+        }
+    }
+
+    pub fn queue_relaunch(&self) {
+        self.relaunch_queued.notify_one();
+    }
 }
 
 #[derive(Clone)]

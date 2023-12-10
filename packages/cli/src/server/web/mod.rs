@@ -1,3 +1,4 @@
+use crate::server::ServerReloadState;
 use crate::{
     builder,
     serve::Serve,
@@ -73,7 +74,9 @@ pub async fn startup(port: u16, config: CrateConfig, start_browser: bool) -> Res
         false => None,
     };
 
-    serve(ip, port, config, start_browser, hot_reload_state).await?;
+    let reload_state = ServerReloadState::new(hot_reload_state);
+
+    serve(ip, port, config, start_browser, reload_state).await?;
 
     Ok(())
 }
@@ -84,7 +87,7 @@ pub async fn serve(
     port: u16,
     config: CrateConfig,
     start_browser: bool,
-    hot_reload_state: Option<HotReloadState>,
+    reload_state: ServerReloadState,
 ) -> Result<()> {
     let first_build_result = crate::builder::build(&config, true)?;
 
@@ -106,7 +109,7 @@ pub async fn serve(
             ip: ip.clone(),
             port,
         }),
-        hot_reload_state.clone(),
+        reload_state.clone(),
     )
     .await?;
 
@@ -133,7 +136,7 @@ pub async fn serve(
     );
 
     // Router
-    let router = setup_router(config, ws_reload_state, hot_reload_state).await?;
+    let router = setup_router(config, ws_reload_state, reload_state.hot_reload).await?;
 
     // Start server
     start_server(port, router, start_browser, rustls_config).await?;

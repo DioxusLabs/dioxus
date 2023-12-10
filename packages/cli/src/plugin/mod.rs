@@ -144,6 +144,7 @@ pub async fn load_plugin(path: impl AsRef<Path>) -> wasmtime::Result<CliPlugin> 
             table,
             ctx,
             tomls: Slab::new(),
+            servers: Slab::new(),
         },
     );
     let (bindings, instance) =

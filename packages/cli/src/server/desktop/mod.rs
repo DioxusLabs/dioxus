@@ -1,3 +1,4 @@
+use crate::server::ServerReloadState;
 use crate::{
     server::{
         output::{print_console_info, PrettierOptions},
@@ -48,13 +49,15 @@ pub async fn startup(config: CrateConfig) -> Result<()> {
         false => None,
     };
 
-    serve(config, hot_reload_state).await?;
+    let reload_state = ServerReloadState::new(hot_reload_state);
+
+    serve(config, reload_state).await?;
 
     Ok(())
 }
 
 /// Start the server without hot reload
-pub async fn serve(config: CrateConfig, hot_reload_state: Option<HotReloadState>) -> Result<()> {
+pub async fn serve(config: CrateConfig, reload_state: ServerReloadState) -> Result<()> {
     let (child, first_build_result) = start_desktop(&config)?;
     let currently_running_child: RwLock<Child> = RwLock::new(child);
 
@@ -76,7 +79,7 @@ pub async fn serve(config: CrateConfig, hot_reload_state: Option<HotReloadState>
         },
         &config,
         None,
-        hot_reload_state.clone(),
+        reload_state.clone(),
     )
     .await?;
 
@@ -91,7 +94,7 @@ pub async fn serve(config: CrateConfig, hot_reload_state: Option<HotReloadState>
         None,
     );
 
-    match hot_reload_state {
+    match reload_state.hot_reload {
         Some(hot_reload_state) => {
             start_desktop_hot_reload(hot_reload_state).await?;
         }
