@@ -27,15 +27,17 @@ pub struct Autoformat {
 impl Autoformat {
     // Todo: autoformat the entire crate
     pub async fn autoformat(self) -> Result<()> {
+        let Autoformat { check, raw, file } = self;
+
         // Default to formatting the project
-        if self.raw.is_none() && self.file.is_none() {
-            if let Err(e) = autoformat_project(self.check).await {
+        if raw.is_none() && file.is_none() {
+            if let Err(e) = autoformat_project(check).await {
                 eprintln!("error formatting project: {}", e);
                 exit(1);
             }
         }
 
-        if let Some(raw) = self.raw {
+        if let Some(raw) = raw {
             let indent = indentation_for(".")?;
             if let Some(inner) = dioxus_autofmt::fmt_block(&raw, 0, indent) {
                 println!("{}", inner);
@@ -47,45 +49,39 @@ impl Autoformat {
         }
 
         // Format single file
-        if let Some(file) = self.file {
-            let file_content;
-            let indent;
-            if file == "-" {
-                indent = indentation_for(".")?;
-                let mut contents = String::new();
-                std::io::stdin().read_to_string(&mut contents)?;
-                file_content = Ok(contents);
-            } else {
-                indent = indentation_for(".")?;
-                file_content = fs::read_to_string(&file);
-            };
-
-            match file_content {
-                Ok(s) => {
-                    let edits = dioxus_autofmt::fmt_file(&s, indent);
-                    let out = dioxus_autofmt::apply_formats(&s, edits);
-                    if file == "-" {
-                        print!("{}", out);
-                    } else {
-                        match fs::write(&file, out) {
-                            Ok(_) => {
-                                println!("formatted {}", file);
-                            }
-                            Err(e) => {
-                                eprintln!("failed to write formatted content to file: {}", e);
-                            }
-                        }
-                    }
-                }
-                Err(e) => {
-                    eprintln!("failed to open file: {}", e);
-                    exit(1);
-                }
-            }
+        if let Some(file) = file {
+            refactor_file(file)?;
         }
 
         Ok(())
     }
+}
+
+fn refactor_file(file: String) -> Result<(), Error> {
+    let indent = indentation_for(".")?;
+    let file_content = if file == "-" {
+        let mut contents = String::new();
+        std::io::stdin().read_to_string(&mut contents)?;
+        Ok(contents)
+    } else {
+        fs::read_to_string(&file)
+    };
+    let Ok(s) = file_content else {
+        eprintln!("failed to open file: {}", file_content.unwrap_err());
+        exit(1);
+    };
+    let edits = dioxus_autofmt::fmt_file(&s, indent);
+    let out = dioxus_autofmt::apply_formats(&s, edits);
+
+    if file == "-" {
+        print!("{}", out);
+    } else if let Err(e) = fs::write(&file, out) {
+        eprintln!("failed to write formatted content to file: {e}",);
+    } else {
+        println!("formatted {}", file);
+    }
+
+    Ok(())
 }
 
 /// Read every .rs file accessible when considering the .gitignore and try to format it
@@ -97,7 +93,14 @@ async fn autoformat_project(check: bool) -> Result<()> {
     let crate_config = crate::CrateConfig::new(None)?;
 
     let mut files_to_format = vec![];
-    collect_rs_files(&crate_config.crate_dir, &mut files_to_format);
+
+    let gitignore_path = crate_config.crate_dir.join(".gitignore");
+    if gitignore_path.is_file() {
+        let gitigno = gitignore::File::new(gitignore_path.as_path()).unwrap();
+        files_to_format.extend(gitigno.included_files().unwrap());
+    } else {
+        collect_rs_files(&crate_config.crate_dir, &mut files_to_format);
+    }
 
     if files_to_format.is_empty() {
         return Ok(());
@@ -107,13 +110,7 @@ async fn autoformat_project(check: bool) -> Result<()> {
 
     let counts = files_to_format
         .into_iter()
-        .filter(|file| {
-            if file.components().any(|f| f.as_os_str() == "target") {
-                return false;
-            }
-
-            true
-        })
+        .filter(|file| !file.components().any(|f| f.as_os_str() == "target"))
         .map(|path| async {
             let _path = path.clone();
             let _indent = indent.clone();
@@ -207,24 +204,20 @@ fn indentation_for(file_or_dir: impl AsRef<Path>) -> Result<IndentOptions> {
     ))
 }
 
-fn collect_rs_files(folder: &Path, files: &mut Vec<PathBuf>) {
-    let Ok(folder) = folder.read_dir() else {
+fn collect_rs_files(folder: &impl AsRef<Path>, files: &mut Vec<PathBuf>) {
+    let Ok(folder) = folder.as_ref().read_dir() else {
         return;
     };
-
     // load the gitignore
-
     for entry in folder {
         let Ok(entry) = entry else {
             continue;
         };
-
         let path = entry.path();
-
         if path.is_dir() {
             collect_rs_files(&path, files);
+            return;
         }
-
         if let Some(ext) = path.extension() {
             if ext == "rs" {
                 files.push(path);
