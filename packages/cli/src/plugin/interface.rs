@@ -99,11 +99,19 @@ impl TypeHost for PluginState {}
 
 #[async_trait]
 impl server::HostServer for PluginState {
-    async fn refresh_browser_page(&mut self, key: Resource<Server>) -> wasmtime::Result<()> {
+    async fn rebuild_application(&mut self, key: Resource<Server>) -> wasmtime::Result<()> {
         self.servers
             .get_mut(key.rep() as usize)
             .unwrap()
             .queue_relaunch();
+        Ok(())
+    }
+
+    async fn refresh_browser_page(&mut self, key: Resource<Server>) -> wasmtime::Result<()> {
+        self.servers
+            .get_mut(key.rep() as usize)
+            .unwrap()
+            .reload_browser();
         Ok(())
     }
 

@@ -14,7 +14,7 @@ use std::{
     path::PathBuf,
     sync::{Arc, Mutex},
 };
-use tokio::sync::broadcast::{self};
+use tokio::sync::broadcast::{self, Sender};
 
 mod output;
 use output::*;
@@ -33,6 +33,7 @@ async fn setup_file_watcher<F: Fn() -> Result<BuildResult> + Sync + Send + 'stat
     let ServerReloadState {
         relaunch_queued,
         hot_reload,
+        ..
     } = reload;
 
     let weak_reload_state = Arc::downgrade(&relaunch_queued);
@@ -215,6 +216,7 @@ async fn setup_file_watcher<F: Fn() -> Result<BuildResult> + Sync + Send + 'stat
 pub struct ServerReloadState {
     relaunch_queued: Arc<Notify>,
     pub hot_reload: Option<HotReloadState>,
+    reload_tx: Option<Sender<()>>,
 }
 
 impl ServerReloadState {
@@ -222,11 +224,26 @@ impl ServerReloadState {
         Self {
             relaunch_queued: Arc::new(Notify::new()),
             hot_reload: hot_reload_state,
+            reload_tx: None,
+        }
+    }
+
+    pub fn with_reload_tx(self, reload_tx: Option<Sender<()>>) -> Self {
+        Self {
+            relaunch_queued: self.relaunch_queued,
+            hot_reload: None,
+            reload_tx,
         }
     }
 
     pub fn queue_relaunch(&self) {
         self.relaunch_queued.notify_one();
+    }
+
+    pub fn reload_browser(&self) {
+        if let Some(reload_tx) = &self.reload_tx {
+            let _ = reload_tx.send(());
+        }
     }
 }
 

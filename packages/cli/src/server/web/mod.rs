@@ -74,9 +74,12 @@ pub async fn startup(port: u16, config: CrateConfig, start_browser: bool) -> Res
         false => None,
     };
 
-    let reload_state = ServerReloadState::new(hot_reload_state);
+    // WS Reload Watching
+    let (reload_tx, _) = broadcast::channel(100);
 
-    serve(ip, port, config, start_browser, reload_state).await?;
+    let reload_state = ServerReloadState::new(hot_reload_state).with_reload_tx(Some(reload_tx.clone()));
+
+    serve(ip, port, config, start_browser, reload_state, reload_tx).await?;
 
     Ok(())
 }
@@ -88,13 +91,11 @@ pub async fn serve(
     config: CrateConfig,
     start_browser: bool,
     reload_state: ServerReloadState,
+    reload_tx: Sender<()>,
 ) -> Result<()> {
     let first_build_result = crate::builder::build(&config, true)?;
 
     log::info!("🚀 Starting development server...");
-
-    // WS Reload Watching
-    let (reload_tx, _) = broadcast::channel(100);
 
     // We got to own watcher so that it exists for the duration of serve
     // Otherwise full reload won't work.
