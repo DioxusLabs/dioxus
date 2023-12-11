@@ -33,7 +33,18 @@ impl Eq for ResponseEvent {}
 
 impl Ord for ResponseEvent {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.partial_cmp(other).unwrap()
+        match (self, other) {
+            (ResponseEvent::Refresh(_), ResponseEvent::Refresh(_)) => std::cmp::Ordering::Equal,
+            (Self::Rebuild, Self::Rebuild) => std::cmp::Ordering::Equal,
+            (Self::Reload, Self::Reload) => std::cmp::Ordering::Equal,
+            (Self::None, Self::None) => std::cmp::Ordering::Equal,
+            (_, Self::None) => std::cmp::Ordering::Greater,
+            (Self::None, _) => std::cmp::Ordering::Less,
+            (Self::Rebuild, _) => std::cmp::Ordering::Greater,
+            (_, Self::Rebuild) => std::cmp::Ordering::Less,
+            (Self::Reload, Self::Refresh(_)) => std::cmp::Ordering::Greater,
+            (Self::Refresh(_), Self::Reload) => std::cmp::Ordering::Less,
+        }
     }
 
     fn max(self, other: Self) -> Self
@@ -61,20 +72,7 @@ impl Ord for ResponseEvent {
 
 impl PartialOrd for ResponseEvent {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        match (self, other) {
-            (ResponseEvent::Refresh(_), ResponseEvent::Refresh(_)) => {
-                Some(std::cmp::Ordering::Equal)
-            }
-            (Self::Rebuild, Self::Rebuild) => Some(std::cmp::Ordering::Equal),
-            (Self::Reload, Self::Reload) => Some(std::cmp::Ordering::Equal),
-            (Self::None, Self::None) => Some(std::cmp::Ordering::Equal),
-            (_, Self::None) => Some(std::cmp::Ordering::Greater),
-            (Self::None, _) => Some(std::cmp::Ordering::Less),
-            (Self::Rebuild, _) => Some(std::cmp::Ordering::Greater),
-            (_, Self::Rebuild) => Some(std::cmp::Ordering::Less),
-            (Self::Reload, Self::Refresh(_)) => Some(std::cmp::Ordering::Greater),
-            (Self::Refresh(_), Self::Reload) => Some(std::cmp::Ordering::Less),
-        }
+        Some(self.cmp(other))
     }
 }
 
