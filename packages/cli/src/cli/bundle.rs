@@ -3,7 +3,7 @@ use std::{fs::create_dir_all, str::FromStr};
 
 use tauri_bundler::{BundleSettings, PackageSettings, SettingsBuilder};
 
-use crate::plugin::interface::plugins::main::types::Event::Bundle as BundleEvent;
+use crate::plugin::interface::plugins::main::types::CompileEvent::Bundle as BundleEvent;
 
 use super::*;
 use crate::{build_desktop, call_plugins, cfg::ConfigOptsBundle};
@@ -67,7 +67,7 @@ impl Bundle {
         let mut crate_config = crate::CrateConfig::new(bin)?;
 
         // Todo plugin before bundle
-        call_plugins!(before BundleEvent);
+        call_plugins!(before_compile_event BundleEvent);
 
         // change the release state.
         crate_config.with_release(self.build.release);
@@ -166,8 +166,7 @@ impl Bundle {
     panic!("Failed to bundle project: {}", err);
   });
 
-        // Todo plugin after bundle
-        call_plugins!(after BundleEvent);
+        call_plugins!(after_compile_event BundleEvent);
 
         Ok(())
     }

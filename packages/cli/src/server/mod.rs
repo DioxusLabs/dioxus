@@ -1,11 +1,11 @@
-
-
 use crate::{
     call_plugins,
-    plugin::interface::plugins::main::types::Event::{HotReload, Rebuild},
+    plugin::interface::plugins::main::types::{
+        ResponseEvent,
+        RuntimeEvent::{HotReload, Rebuild},
+    },
     BuildResult, CrateConfig, Result,
 };
-use tokio::sync::Notify;
 
 use cargo_metadata::diagnostic::Diagnostic;
 use dioxus_core::Template;
@@ -32,43 +32,7 @@ async fn setup_file_watcher<F: Fn() -> Result<BuildResult> + Sync + Send + 'stat
 ) -> Result<RecommendedWatcher> {
     let build_with = Arc::new(build_with);
 
-    let ServerReloadState {
-        relaunch_queued,
-        hot_reload,
-        ..
-    } = reload;
-
-    let weak_reload_state = Arc::downgrade(&relaunch_queued);
-    tokio::spawn({
-        let build_with = build_with.clone();
-        let web_info = web_info.clone();
-        let config = config.clone();
-        async move {
-            loop {
-                match weak_reload_state.upgrade() {
-                    Some(reload_state) => {
-                        reload_state.notified().await;
-                        match build_with() {
-                            Ok(res) => {
-                                #[allow(clippy::redundant_clone)]
-                                print_console_info(
-                                    &config,
-                                    PrettierOptions {
-                                        changed: Vec::new(),
-                                        warnings: res.warnings,
-                                        elapsed_time: res.elapsed_time,
-                                    },
-                                    web_info.clone(),
-                                );
-                            }
-                            Err(e) => log::error!("{}", e),
-                        }
-                    }
-                    None => break,
-                }
-            }
-        }
-    });
+    let ServerReloadState { hot_reload, .. } = reload;
 
     let mut last_update_time = chrono::Local::now().timestamp();
 
@@ -102,6 +66,7 @@ async fn setup_file_watcher<F: Fn() -> Result<BuildResult> + Sync + Send + 'stat
                         })
                         .collect();
                     for plugin in plugins.iter_mut() {
+                        // TODO Handle the options that are returned here
                         if plugin.on_watched_paths_change(&paths).await.is_err() {
                             log::warn!(
                                 "Failed to run give changed paths to {}!",
@@ -116,7 +81,7 @@ async fn setup_file_watcher<F: Fn() -> Result<BuildResult> + Sync + Send + 'stat
                 let mut needs_full_rebuild;
                 if let Some(hot_reload) = &hot_reload {
                     futures::executor::block_on(async {
-                        call_plugins!(before HotReload);
+                        call_plugins!(before_runtime_event HotReload);
                     });
 
                     // find changes to the rsx in the file
@@ -164,8 +129,32 @@ async fn setup_file_watcher<F: Fn() -> Result<BuildResult> + Sync + Send + 'stat
                             let _ = hot_reload.messages.send(msg);
                         }
                     }
+
                     futures::executor::block_on(async {
-                        call_plugins!(after HotReload);
+                        let changes_to_enact = call_plugins!(after_runtime_event HotReload);
+                        let _change = {
+                            let mut option = ResponseEvent::None;
+                            for change in changes_to_enact.into_iter() {
+                                match (&mut option, change) {
+                                    (ResponseEvent::Rebuild, _) | (_, ResponseEvent::Rebuild) => {
+                                        break
+                                    }
+                                    (
+                                        ResponseEvent::Refresh(assets),
+                                        ResponseEvent::Refresh(new_assets),
+                                    ) => {
+                                        assets.extend(new_assets);
+                                    }
+                                    (ResponseEvent::None, other) => option = other,
+                                    (ResponseEvent::Refresh(_), ResponseEvent::Reload) => {
+                                        option = ResponseEvent::Reload
+                                    }
+                                    _ => (),
+                                }
+                            }
+                            option
+                        };
+                        // Todo Send this change over the web socket
                     });
                 } else {
                     needs_full_rebuild = true;
@@ -173,7 +162,7 @@ async fn setup_file_watcher<F: Fn() -> Result<BuildResult> + Sync + Send + 'stat
 
                 if needs_full_rebuild {
                     futures::executor::block_on(async {
-                        call_plugins!(before Rebuild);
+                        call_plugins!(before_runtime_event Rebuild);
                     });
 
                     match build_with() {
@@ -194,8 +183,9 @@ async fn setup_file_watcher<F: Fn() -> Result<BuildResult> + Sync + Send + 'stat
                         Err(e) => log::error!("{}", e),
                     }
 
+                    // TODO Handle the options that are returned here
                     futures::executor::block_on(async {
-                        call_plugins!(after Rebuild);
+                        call_plugins!(after_runtime_event Rebuild);
                     });
                 }
             }
@@ -216,7 +206,6 @@ async fn setup_file_watcher<F: Fn() -> Result<BuildResult> + Sync + Send + 'stat
 
 #[derive(Clone)]
 pub struct ServerReloadState {
-    relaunch_queued: Arc<Notify>,
     pub hot_reload: Option<HotReloadState>,
     reload_tx: Option<Sender<WsMessage>>,
 }
@@ -224,7 +213,6 @@ pub struct ServerReloadState {
 impl ServerReloadState {
     pub fn new(hot_reload_state: Option<HotReloadState>) -> Self {
         Self {
-            relaunch_queued: Arc::new(Notify::new()),
             hot_reload: hot_reload_state,
             reload_tx: None,
         }
@@ -232,14 +220,9 @@ impl ServerReloadState {
 
     pub fn with_reload_tx(self, reload_tx: Option<Sender<WsMessage>>) -> Self {
         Self {
-            relaunch_queued: self.relaunch_queued,
             hot_reload: None,
             reload_tx,
         }
-    }
-
-    pub fn queue_relaunch(&self) {
-        self.relaunch_queued.notify_one();
     }
 
     pub fn reload_browser(&self) {
@@ -262,7 +245,6 @@ pub struct HotReloadState {
     pub messages: broadcast::Sender<Template<'static>>,
     pub file_map: Arc<Mutex<FileMap<HtmlCtx>>>,
 }
-
 
 #[derive(serde::Deserialize, Debug, Clone)]
 #[serde(tag = "method", content = "params")]

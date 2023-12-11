@@ -5,7 +5,7 @@ macro_rules! export_plugin {
             inline: "package plugins:main;
 
 interface definitions {
-  use types.{platform, plugin-info, event};
+  use types.{platform, plugin-info, compile-event, runtime-event, response-event};
   use toml.{toml, toml-value};
 
   /// Get the default layout for the plugin to put
@@ -23,10 +23,18 @@ interface definitions {
   metadata: func() -> plugin-info;
 
   /// Called right before the event given
-  before-event: func(event: event) -> result;
+  /// These are the compile-time functions like `Build`, `Translate`, etc
+  before-compile-event: func(event: compile-event) -> result;
+  /// Called right before the event given
+  /// These are the runtime-functions like `HotReload` and `Serve`
+  before-runtime-event: func(event: runtime-event) -> result<response-event>;
   
   /// Called right after the event given
-  after-event: func(event: event) -> result;
+  after-compile-event: func(event: compile-event) -> result;
+  /// Called right after the event given
+  after-runtime-event: func(event: runtime-event) -> result<response-event>;
+  
+  on-watched-paths-change: func(path: list<string>) -> result<response-event>;
 
   /// Check if there is an update to the plugin 
   /// with a given git repo?
@@ -34,8 +42,6 @@ interface definitions {
   /// Some(url) => git clone url
   /// None => No update needed
   /// check-update: func() -> result<option<string>>
-
-  on-watched-paths-change: func(path: list<string>);
 }
 
 interface toml {
@@ -83,25 +89,12 @@ interface toml {
     z,
     custom(tuple<s8,u8>),
   }
-  
+
   type array = list<toml>;
   type table = list<tuple<string, toml>>;
 }
 
-interface server {
-  resource server {
-    /// Refresh the browser page manually
-    refresh-browser-page: func();
-
-    /// Searches through links to only refresh the 
-    /// necessary components when changing assets
-    refresh-asset: func(old-url: string, new-url: string);
-  }
-}
-
 interface types {
-  use server.{server};
-
   enum platform {
     web,
     desktop,
@@ -119,13 +112,23 @@ interface types {
     default-platform: platform,
   }
 
-  variant event {
+  enum compile-event {
     build,
-    serve(option<server>),
     translate,
     bundle,
+  }
+
+  enum runtime-event {
+    serve,
     rebuild,
     hot-reload
+  }
+
+  variant response-event {
+    none,
+    reload,
+    rebuild,
+    refresh(list<string>)
   }
 }
 
@@ -151,7 +154,6 @@ interface imports {
 world plugin-world {
   import imports;
   import toml;
-  import server;
   export definitions;
 }
 ",

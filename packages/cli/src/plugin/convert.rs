@@ -1,5 +1,9 @@
-use super::interface::plugins::main::toml::*;
+use super::interface::{plugins::main::toml::*, PluginState};
+use async_trait::async_trait;
+use ext_toml::value::Map;
+use ext_toml::Value;
 use toml as ext_toml;
+use wasmtime::component::Resource;
 // Could these converts be simplified with bytemuck POD perhaps?
 
 #[async_trait]
@@ -191,12 +195,7 @@ impl Convert<Offset> for ext_toml::value::Offset {
         }
     }
 }
-use async_trait::async_trait;
-use ext_toml::value::Map;
-use ext_toml::Value;
-use wasmtime::component::Resource;
 
-use super::interface::PluginState;
 #[async_trait]
 impl ConvertWithState<Value> for TomlValue {
     async fn convert_with_state(self, state: &mut PluginState) -> Value {

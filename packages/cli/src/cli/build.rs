@@ -1,7 +1,8 @@
-use crate::{call_plugins, cfg::Platform};
-
 use super::*;
-use crate::plugin::interface::plugins::main::types::Event::Build as BuildEvent;
+use crate::{
+    call_plugins, cfg::Platform,
+    plugin::interface::plugins::main::types::CompileEvent::Build as BuildEvent,
+};
 
 /// Build the Rust WASM app and all of its assets.
 #[derive(Clone, Debug, Parser)]
@@ -36,7 +37,7 @@ impl Build {
             .platform
             .unwrap_or(crate_config.dioxus_config.application.default_platform);
 
-        call_plugins!(before BuildEvent);
+        call_plugins!(before_compile_event BuildEvent);
 
         match platform {
             Platform::Web => {
@@ -47,7 +48,7 @@ impl Build {
             }
         }
 
-        call_plugins!(after BuildEvent);
+        call_plugins!(after_compile_event BuildEvent);
 
         let temp = gen_page(&crate_config.dioxus_config, false);
 

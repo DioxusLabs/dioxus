@@ -1,6 +1,3 @@
-use crate::plugin::interface::plugins::main::server;
-use crate::plugin::interface::server::Server;
-use crate::server::ServerReloadState;
 use async_trait::async_trait;
 use plugins::main::imports::Host as ImportHost;
 use plugins::main::toml::{Host as TomlHost, *};
@@ -16,7 +13,6 @@ pub struct PluginState {
     pub table: Table,
     pub ctx: WasiCtx,
     pub tomls: slab::Slab<TomlValue>,
-    pub servers: slab::Slab<ServerReloadState>,
 }
 
 impl PluginState {
@@ -96,45 +92,6 @@ impl TomlHost for PluginState {}
 
 #[async_trait]
 impl TypeHost for PluginState {}
-
-#[async_trait]
-impl server::HostServer for PluginState {
-    async fn rebuild_application(&mut self, key: Resource<Server>) -> wasmtime::Result<()> {
-        self.servers
-            .get_mut(key.rep() as usize)
-            .unwrap()
-            .queue_relaunch();
-        Ok(())
-    }
-
-    async fn refresh_browser_page(&mut self, key: Resource<Server>) -> wasmtime::Result<()> {
-        self.servers
-            .get_mut(key.rep() as usize)
-            .unwrap()
-            .reload_browser();
-        Ok(())
-    }
-
-    async fn refresh_asset(
-        &mut self,
-        key: Resource<Server>,
-        url: String,
-    ) -> wasmtime::Result<()> {
-        self.servers
-            .get_mut(key.rep() as usize)
-            .unwrap()
-            .refresh_asset(&url);
-        Ok(())
-    }
-
-    fn drop(&mut self, key: Resource<Server>) -> wasmtime::Result<()> {
-        self.servers.remove(key.rep() as usize);
-        Ok(())
-    }
-}
-
-#[async_trait]
-impl server::Host for PluginState {}
 
 #[async_trait]
 impl ImportHost for PluginState {

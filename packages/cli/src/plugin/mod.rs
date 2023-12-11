@@ -12,40 +12,98 @@ use wasmtime_wasi::preview2::{self, DirPerms, FilePerms, Table, WasiCtxBuilder};
 use wasmtime_wasi::Dir;
 
 use self::convert::ConvertWithState;
-use self::interface::exports::plugins::main::definitions::Event;
 use self::interface::plugins::main::toml::Toml;
-use self::interface::plugins::main::types::PluginInfo;
+use self::interface::plugins::main::types::{
+    CompileEvent, PluginInfo, ResponseEvent, RuntimeEvent,
+};
 
 pub mod convert;
 pub mod interface;
 
+impl PartialEq for ResponseEvent {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Refresh(l0), Self::Refresh(r0)) => l0 == r0,
+            _ => core::mem::discriminant(self) == core::mem::discriminant(other),
+        }
+    }
+}
+
+impl Eq for ResponseEvent {}
+
+impl Ord for ResponseEvent {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.partial_cmp(other).unwrap()
+    }
+
+    fn max(self, other: Self) -> Self
+    where
+        Self: Sized,
+    {
+        std::cmp::max_by(self, other, Ord::cmp)
+    }
+
+    fn min(self, other: Self) -> Self
+    where
+        Self: Sized,
+    {
+        std::cmp::min_by(self, other, Ord::cmp)
+    }
+
+    fn clamp(self, min: Self, max: Self) -> Self
+    where
+        Self: Sized,
+        Self: PartialOrd,
+    {
+        self.max(min).min(max)
+    }
+}
+
+impl PartialOrd for ResponseEvent {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        match (self, other) {
+            (ResponseEvent::Refresh(_), ResponseEvent::Refresh(_)) => {
+                Some(std::cmp::Ordering::Equal)
+            }
+            (Self::Rebuild, Self::Rebuild) => Some(std::cmp::Ordering::Equal),
+            (Self::Reload, Self::Reload) => Some(std::cmp::Ordering::Equal),
+            (Self::None, Self::None) => Some(std::cmp::Ordering::Equal),
+            (_, Self::None) => Some(std::cmp::Ordering::Greater),
+            (Self::None, _) => Some(std::cmp::Ordering::Less),
+            (Self::Rebuild, _) => Some(std::cmp::Ordering::Greater),
+            (_, Self::Rebuild) => Some(std::cmp::Ordering::Less),
+            (Self::Reload, Self::Refresh(_)) => Some(std::cmp::Ordering::Greater),
+            (Self::Refresh(_), Self::Reload) => Some(std::cmp::Ordering::Less),
+        }
+    }
+}
+
+/// Calls the global plugins with the function given
+/// It will return a Vec of the results of the function
 #[macro_export]
 macro_rules! call_plugins {
-    (before $event:expr) => {{
+    ($func:ident $event:expr) => {{
+        let mut successful = vec![];
         for plugin in $crate::plugin::PLUGINS.lock().await.iter_mut() {
-            if plugin.before_event($event).await.is_err() {
+            let Ok(success) = plugin.$func($event).await else {
                 log::warn!(
-                    "Could not call Before {:?} on: {}!",
+                    "Could not call {} {:?} on: {}!",
+                    stringify!($func),
                     $event,
                     plugin.metadata.name
                 );
-            } else {
-                log::info!("Called Before {:?} on: {}", $event, plugin.metadata.name);
-            }
+                continue;
+            };
+            log::info!(
+                "Called {} {:?} on: {}",
+                stringify!($func),
+                $event,
+                plugin.metadata.name
+            );
+            successful.push(success);
         }
-    }};
-    (after $event:expr) => {{
-        for plugin in $crate::plugin::PLUGINS.lock().await.iter_mut() {
-            if plugin.after_event($event).await.is_err() {
-                log::warn!(
-                    "Could not call After {:?} on: {}!",
-                    $event,
-                    plugin.metadata.name
-                );
-            } else {
-                log::info!("Called After {:?} on: {}", $event, plugin.metadata.name);
-            }
-        }
+        let successful = successful.into_iter().flatten().collect::<Vec<_>>();
+        successful
     }};
 }
 
@@ -144,7 +202,6 @@ pub async fn load_plugin(path: impl AsRef<Path>) -> wasmtime::Result<CliPlugin> 
             table,
             ctx,
             tomls: Slab::new(),
-            servers: Slab::new(),
         },
     );
     let (bindings, instance) =
@@ -208,20 +265,47 @@ impl CliPlugin {
             .call_register(&mut self.store)
             .await
     }
-    pub async fn before_event(&mut self, event: Event) -> wasmtime::Result<Result<(), ()>> {
+    pub async fn before_compile_event(
+        &mut self,
+        event: CompileEvent,
+    ) -> wasmtime::Result<Result<(), ()>> {
         self.bindings
             .plugins_main_definitions()
-            .call_before_event(&mut self.store, event)
+            .call_before_compile_event(&mut self.store, event)
             .await
     }
-    pub async fn after_event(&mut self, event: Event) -> wasmtime::Result<Result<(), ()>> {
+    pub async fn after_compile_event(
+        &mut self,
+        event: CompileEvent,
+    ) -> wasmtime::Result<Result<(), ()>> {
         self.bindings
             .plugins_main_definitions()
-            .call_after_event(&mut self.store, event)
+            .call_after_compile_event(&mut self.store, event)
+            .await
+    }
+    pub async fn before_runtime_event(
+        &mut self,
+        event: RuntimeEvent,
+    ) -> wasmtime::Result<Result<ResponseEvent, ()>> {
+        self.bindings
+            .plugins_main_definitions()
+            .call_before_runtime_event(&mut self.store, event)
+            .await
+    }
+    pub async fn after_runtime_event(
+        &mut self,
+        event: RuntimeEvent,
+    ) -> wasmtime::Result<Result<ResponseEvent, ()>> {
+        self.bindings
+            .plugins_main_definitions()
+            .call_after_runtime_event(&mut self.store, event)
             .await
     }
 
-    pub async fn on_watched_paths_change(&mut self, paths: &[String]) -> wasmtime::Result<()> {
+    pub async fn on_watched_paths_change(
+        &mut self,
+        paths: &[String],
+    ) -> wasmtime::Result<Result<ResponseEvent, ()>> {
         self.bindings
             .plugins_main_definitions()
             .call_on_watched_paths_change(&mut self.store, paths)

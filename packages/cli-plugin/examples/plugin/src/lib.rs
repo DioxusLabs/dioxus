@@ -1,9 +1,9 @@
 use dioxus_cli_plugin::*;
-use exports::plugins::main::definitions::{Event, Guest};
+use exports::plugins::main::definitions::Guest;
 use plugins::main::{
     imports::{log, watch_path, watched_paths},
     toml::{Toml, TomlValue},
-    types::PluginInfo,
+    types::{CompileEvent, PluginInfo, ResponseEvent, RuntimeEvent},
 };
 
 struct Plugin;
@@ -22,7 +22,9 @@ impl Guest for Plugin {
         res
     }
 
-    fn on_watched_paths_change(_: std::vec::Vec<std::string::String>) {}
+    fn on_watched_paths_change(_: std::vec::Vec<std::string::String>) -> Result<ResponseEvent, ()> {
+        Ok(ResponseEvent::None)
+    }
 
     fn register() -> Result<(), ()> {
         log(&format!("{:?}", watched_paths()));
@@ -40,14 +42,23 @@ impl Guest for Plugin {
         }
     }
 
-    fn before_event(event: Event) -> Result<(), ()> {
+    fn before_compile_event(event: CompileEvent) -> Result<(), ()> {
         log(&format!("Got before event in plugin: {event:?}"));
         Ok(())
     }
+    fn before_runtime_event(event: RuntimeEvent) -> Result<ResponseEvent, ()> {
+        log(&format!("Got before event in plugin: {event:?}"));
+        Ok(ResponseEvent::None)
+    }
 
-    fn after_event(event: Event) -> Result<(), ()> {
+    fn after_compile_event(event: CompileEvent) -> Result<(), ()> {
         log(&format!("Got after event in plugin: {event:?}"));
         Ok(())
+    }
+
+    fn after_runtime_event(event: RuntimeEvent) -> Result<ResponseEvent, ()> {
+        log(&format!("Got after event in plugin: {event:?}"));
+        Ok(ResponseEvent::None)
     }
 }
 

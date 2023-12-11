@@ -3,7 +3,8 @@ use std::process::exit;
 use dioxus_rsx::{BodyNode, CallBody};
 
 use crate::{
-    call_plugins, plugin::interface::plugins::main::types::Event::Translate as TranslateEvent,
+    call_plugins,
+    plugin::interface::plugins::main::types::CompileEvent::Translate as TranslateEvent,
 };
 
 use super::*;
@@ -32,7 +33,7 @@ pub struct Translate {
 
 impl Translate {
     pub async fn translate(self) -> Result<()> {
-        call_plugins!(before TranslateEvent);
+        call_plugins!(before_compile_event TranslateEvent);
 
         // Get the right input for the translation
         let contents = determine_input(self.file, self.raw)?;
@@ -49,7 +50,7 @@ impl Translate {
             None => print!("{}", out),
         }
 
-        call_plugins!(after TranslateEvent);
+        call_plugins!(after_compile_event TranslateEvent);
 
         Ok(())
     }
