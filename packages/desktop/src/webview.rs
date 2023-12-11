@@ -56,7 +56,7 @@ pub(crate) fn build(
                     index_file.clone(),
                     &root_name,
                     &edit_queue,
-                    headless
+                    headless,
                 )
             }
         })

@@ -47,7 +47,10 @@ pub(super) fn desktop_handler(
         // we'll look for the closing </body> tag and insert our little module loader there.
         let body = match custom_index {
             Some(custom_index) => custom_index
-                .replace("</body>", &format!("{}</body>", module_loader(root_name, headless)))
+                .replace(
+                    "</body>",
+                    &format!("{}</body>", module_loader(root_name, headless)),
+                )
                 .into_bytes(),
 
             None => {
@@ -59,7 +62,10 @@ pub(super) fn desktop_handler(
                 }
 
                 template
-                    .replace("<!-- MODULE LOADER -->", &module_loader(root_name, headless))
+                    .replace(
+                        "<!-- MODULE LOADER -->",
+                        &module_loader(root_name, headless),
+                    )
                     .into_bytes()
             }
         };
