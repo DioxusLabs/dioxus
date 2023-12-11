@@ -117,7 +117,7 @@ where
     T: Future<Output = ()> + 'static,
 {
     fn apply(self, _: UseEffectCleanup, cx: &ScopeState) -> Option<TaskId> {
-        Some(cx.push_future(self))
+        cx.push_future(self)
     }
 }
 
@@ -129,11 +129,10 @@ where
     F: FnOnce() + 'static,
 {
     fn apply(self, oncleanup: UseEffectCleanup, cx: &ScopeState) -> Option<TaskId> {
-        let task = cx.push_future(async move {
+        cx.push_future(async move {
             let cleanup = self.await;
             *oncleanup.borrow_mut() = Some(Box::new(cleanup) as Box<dyn FnOnce()>);
-        });
-        Some(task)
+        })
     }
 }
 

@@ -76,7 +76,7 @@ where
             cx.remove_future(current);
         }
 
-        state.task.set(Some(cx.push_future(async move {
+        state.task.set(cx.push_future(async move {
             let data;
             #[cfg(feature = "ssr")]
             {
@@ -94,7 +94,7 @@ where
             *value.borrow_mut() = Some(Box::new(data));
 
             schedule_update();
-        })));
+        }));
     }
 
     if first_run {

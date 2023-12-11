@@ -49,10 +49,10 @@ where
         let val = val.clone();
         let task = state.task.clone();
 
-        state.task.set(Some(cx.push_future(async move {
+        state.task.set(cx.push_future(async move {
             val.set(Some(fut.await));
             task.take();
-        })));
+        }));
 
         // Mark that we don't need to regenerate
         state.needs_regen.set(false);
