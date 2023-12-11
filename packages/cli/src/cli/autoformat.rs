@@ -84,6 +84,47 @@ fn refactor_file(file: String) -> Result<(), Error> {
     Ok(())
 }
 
+fn get_project_files(config: &CrateConfig) -> Vec<PathBuf> {
+    let mut files = vec![];
+
+    let gitignore_path = config.crate_dir.join(".gitignore");
+    if gitignore_path.is_file() {
+        let gitigno = gitignore::File::new(gitignore_path.as_path()).unwrap();
+        if let Ok(git_files) = gitigno.included_files() {
+            let git_files: Vec<_> = git_files
+                .into_iter()
+                .filter_map(|f| (f.ends_with(".rs") && !is_target_dir(&f)).then_some(f))
+                .collect();
+            files.extend(git_files)
+        };
+    } else {
+        collect_rs_files(&config.crate_dir, &mut files);
+    }
+
+    files
+}
+
+fn is_target_dir(file: &PathBuf) -> bool {
+    file.components().any(|f| f.as_os_str() == "target")
+}
+
+async fn format_file(
+    path: impl AsRef<Path>,
+    indent: IndentOptions,
+) -> Result<usize, tokio::io::Error> {
+    let contents = tokio::fs::read_to_string(&path).await?;
+
+    let edits = dioxus_autofmt::fmt_file(&contents, indent);
+    let len = edits.len();
+
+    if !edits.is_empty() {
+        let out = dioxus_autofmt::apply_formats(&contents, edits);
+        tokio::fs::write(path, out).await?;
+    }
+
+    Ok(len)
+}
+
 /// Read every .rs file accessible when considering the .gitignore and try to format it
 ///
 /// Runs using Tokio for multithreading, so it should be really really fast
@@ -92,17 +133,7 @@ fn refactor_file(file: String) -> Result<(), Error> {
 async fn autoformat_project(check: bool) -> Result<()> {
     let crate_config = crate::CrateConfig::new(None)?;
 
-    let mut files_to_format = vec![];
-
-    let gitignore_path = crate_config.crate_dir.join(".gitignore");
-    if gitignore_path.is_file() {
-        let gitigno = gitignore::File::new(gitignore_path.as_path()).unwrap();
-        if let Ok(files) = gitigno.included_files() {
-            files_to_format.extend(files)
-        };
-    } else {
-        collect_rs_files(&crate_config.crate_dir, &mut files_to_format);
-    }
+    let files_to_format = get_project_files(&crate_config);
 
     if files_to_format.is_empty() {
         return Ok(());
@@ -112,32 +143,17 @@ async fn autoformat_project(check: bool) -> Result<()> {
 
     let counts = files_to_format
         .into_iter()
-        .filter(|file| !file.components().any(|f| f.as_os_str() == "target"))
         .map(|path| async {
-            let _path = path.clone();
-            let _indent = indent.clone();
-            let res = tokio::spawn(async move {
-                let contents = tokio::fs::read_to_string(&path).await?;
-
-                let edits = dioxus_autofmt::fmt_file(&contents, _indent.clone());
-                let len = edits.len();
-
-                if !edits.is_empty() {
-                    let out = dioxus_autofmt::apply_formats(&contents, edits);
-                    tokio::fs::write(&path, out).await?;
-                }
-
-                Ok(len) as Result<usize, tokio::io::Error>
-            })
-            .await;
+            let path_clone = path.clone();
+            let res = tokio::spawn(format_file(path, indent.clone())).await;
 
             match res {
                 Err(err) => {
-                    eprintln!("error formatting file: {}\n{err}", _path.display());
+                    eprintln!("error formatting file: {}\n{err}", path_clone.display());
                     None
                 }
                 Ok(Err(err)) => {
-                    eprintln!("error formatting file: {}\n{err}", _path.display());
+                    eprintln!("error formatting file: {}\n{err}", path_clone.display());
                     None
                 }
                 Ok(Ok(res)) => Some(res),
@@ -147,13 +163,7 @@ async fn autoformat_project(check: bool) -> Result<()> {
         .collect::<Vec<_>>()
         .await;
 
-    let files_formatted: usize = counts
-        .into_iter()
-        .map(|f| match f {
-            Some(res) => res,
-            _ => 0,
-        })
-        .sum();
+    let files_formatted: usize = counts.into_iter().flatten().sum();
 
     if files_formatted > 0 && check {
         eprintln!("{} files needed formatting", files_formatted);
@@ -221,7 +231,7 @@ fn collect_rs_files(folder: &impl AsRef<Path>, files: &mut Vec<PathBuf>) {
             return;
         }
         if let Some(ext) = path.extension() {
-            if ext == "rs" {
+            if ext == "rs" && !is_target_dir(&path) {
                 files.push(path);
             }
         }
