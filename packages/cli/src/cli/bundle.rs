@@ -3,10 +3,13 @@ use std::{fs::create_dir_all, str::FromStr};
 
 use tauri_bundler::{BundleSettings, PackageSettings, SettingsBuilder};
 
-use crate::plugin::interface::plugins::main::types::CompileEvent::Bundle as BundleEvent;
+use crate::plugin::{
+    interface::plugins::main::types::CompileEvent::Bundle as BundleEvent, plugins_after_compile,
+    plugins_before_compile,
+};
 
 use super::*;
-use crate::{build_desktop, call_plugins, cfg::ConfigOptsBundle};
+use crate::{build_desktop, cfg::ConfigOptsBundle};
 
 /// Bundle the Rust desktop app and all of its assets
 #[derive(Clone, Debug, Parser)]
@@ -66,8 +69,7 @@ impl Bundle {
     pub async fn bundle(self, bin: Option<PathBuf>) -> Result<()> {
         let mut crate_config = crate::CrateConfig::new(bin)?;
 
-        // Todo plugin before bundle
-        call_plugins!(before_compile_event BundleEvent);
+        plugins_before_compile(BundleEvent).await;
 
         // change the release state.
         crate_config.with_release(self.build.release);
@@ -166,7 +168,7 @@ impl Bundle {
     panic!("Failed to bundle project: {}", err);
   });
 
-        call_plugins!(after_compile_event BundleEvent);
+        plugins_after_compile(BundleEvent).await;
 
         Ok(())
     }

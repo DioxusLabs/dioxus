@@ -20,6 +20,27 @@ use self::interface::plugins::main::types::{
 pub mod convert;
 pub mod interface;
 
+pub trait ChangeFold {
+    fn fold_changes(self) -> ResponseEvent;
+}
+
+impl ChangeFold for Vec<ResponseEvent> {
+    fn fold_changes(self) -> ResponseEvent {
+        let mut option = ResponseEvent::None;
+        for change in self.into_iter() {
+            match (&mut option, change) {
+                (ResponseEvent::Rebuild, _) | (_, ResponseEvent::Rebuild) => break,
+                (ResponseEvent::Refresh(assets), ResponseEvent::Refresh(new_assets)) => {
+                    assets.extend(new_assets);
+                }
+                (a, b) if *a < b => *a = b,
+                _ => (),
+            }
+        }
+        option
+    }
+}
+
 impl PartialEq for ResponseEvent {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
@@ -78,7 +99,6 @@ impl PartialOrd for ResponseEvent {
 
 /// Calls the global plugins with the function given
 /// It will return a Vec of the results of the function
-#[macro_export]
 macro_rules! call_plugins {
     ($func:ident $event:expr) => {{
         let mut successful = vec![];
@@ -103,6 +123,19 @@ macro_rules! call_plugins {
         let successful = successful.into_iter().flatten().collect::<Vec<_>>();
         successful
     }};
+}
+
+pub async fn plugins_before_compile(compile_event: CompileEvent) {
+    call_plugins!(before_compile_event compile_event);
+}
+pub async fn plugins_after_compile(compile_event: CompileEvent) {
+    call_plugins!(after_compile_event compile_event);
+}
+pub async fn plugins_before_runtime(runtime_event: RuntimeEvent) -> ResponseEvent {
+    call_plugins!(before_runtime_event runtime_event).fold_changes()
+}
+pub async fn plugins_after_runtime(runtime_event: RuntimeEvent) -> ResponseEvent {
+    call_plugins!(after_runtime_event runtime_event).fold_changes()
 }
 
 lazy_static::lazy_static!(

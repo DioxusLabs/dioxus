@@ -1,8 +1,7 @@
 use crate::{
-    call_plugins,
-    plugin::interface::plugins::main::types::{
-        ResponseEvent,
-        RuntimeEvent::{HotReload, Rebuild},
+    plugin::{
+        interface::plugins::main::types::RuntimeEvent::{HotReload, Rebuild},
+        plugins_after_runtime, plugins_before_runtime,
     },
     BuildResult, CrateConfig, Result,
 };
@@ -80,8 +79,8 @@ async fn setup_file_watcher<F: Fn() -> Result<BuildResult> + Sync + Send + 'stat
 
                 let mut needs_full_rebuild;
                 if let Some(hot_reload) = &hot_reload {
-                    futures::executor::block_on(async {
-                        call_plugins!(before_runtime_event HotReload);
+                    let _change = futures::executor::block_on(async {
+                        plugins_before_runtime(HotReload).await
                     });
 
                     // find changes to the rsx in the file
@@ -130,39 +129,16 @@ async fn setup_file_watcher<F: Fn() -> Result<BuildResult> + Sync + Send + 'stat
                         }
                     }
 
-                    futures::executor::block_on(async {
-                        let changes_to_enact = call_plugins!(after_runtime_event HotReload);
-                        let _change = {
-                            let mut option = ResponseEvent::None;
-                            for change in changes_to_enact.into_iter() {
-                                match (&mut option, change) {
-                                    (ResponseEvent::Rebuild, _) | (_, ResponseEvent::Rebuild) => {
-                                        break
-                                    }
-                                    (
-                                        ResponseEvent::Refresh(assets),
-                                        ResponseEvent::Refresh(new_assets),
-                                    ) => {
-                                        assets.extend(new_assets);
-                                    }
-                                    (ResponseEvent::None, other) => option = other,
-                                    (ResponseEvent::Refresh(_), ResponseEvent::Reload) => {
-                                        option = ResponseEvent::Reload
-                                    }
-                                    _ => (),
-                                }
-                            }
-                            option
-                        };
-                        // Todo Send this change over the web socket
+                    let _change = futures::executor::block_on(async {
+                        plugins_after_runtime(HotReload).await
                     });
                 } else {
                     needs_full_rebuild = true;
                 }
 
                 if needs_full_rebuild {
-                    futures::executor::block_on(async {
-                        call_plugins!(before_runtime_event Rebuild);
+                    let _change = futures::executor::block_on(async {
+                        plugins_before_runtime(Rebuild).await
                     });
 
                     match build_with() {
@@ -183,10 +159,8 @@ async fn setup_file_watcher<F: Fn() -> Result<BuildResult> + Sync + Send + 'stat
                         Err(e) => log::error!("{}", e),
                     }
 
-                    // TODO Handle the options that are returned here
-                    futures::executor::block_on(async {
-                        call_plugins!(after_runtime_event Rebuild);
-                    });
+                    let _change =
+                        futures::executor::block_on(async { plugins_after_runtime(Rebuild).await });
                 }
             }
         }

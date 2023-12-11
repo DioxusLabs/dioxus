@@ -1,4 +1,4 @@
-use crate::call_plugins;
+use crate::plugin::{plugins_after_runtime, plugins_before_runtime};
 
 use super::*;
 use crate::plugin::interface::plugins::main::types::RuntimeEvent::Serve as ServeEvent;
@@ -42,7 +42,7 @@ impl Serve {
             .platform
             .unwrap_or(crate_config.dioxus_config.application.default_platform);
 
-        call_plugins!(before_runtime_event ServeEvent);
+        let _change = plugins_before_runtime(ServeEvent).await;
 
         match platform {
             cfg::Platform::Web => {
@@ -58,7 +58,7 @@ impl Serve {
             }
         }
 
-        call_plugins!(after_runtime_event ServeEvent);
+        let _change = plugins_after_runtime(ServeEvent).await;
 
         Ok(())
     }
