@@ -104,7 +104,7 @@ fn get_project_files(config: &CrateConfig) -> Vec<PathBuf> {
     files
 }
 
-fn is_target_dir(file: &PathBuf) -> bool {
+fn is_target_dir(file: &Path) -> bool {
     file.components().any(|f| f.as_os_str() == "target")
 }
 
