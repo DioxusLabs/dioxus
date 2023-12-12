@@ -214,10 +214,10 @@ impl ScopeContext {
     }
 
     /// Pushes the future onto the poll queue to be polled after the component renders.
-    pub fn push_future(&self, fut: impl Future<Output = ()> + 'static) -> Option<TaskId> {
-        let id = self.tasks.spawn(self.id, fut)?;
+    pub fn push_future(&self, fut: impl Future<Output = ()> + 'static) -> TaskId {
+        let id = self.tasks.spawn(self.id, fut);
         self.spawned_tasks.borrow_mut().insert(id);
-        Some(id)
+        id
     }
 
     /// Spawns the future but does not return the [`TaskId`]
@@ -228,9 +228,9 @@ impl ScopeContext {
     /// Spawn a future that Dioxus won't clean up when this component is unmounted
     ///
     /// This is good for tasks that need to be run after the component has been dropped.
-    pub fn spawn_forever(&self, fut: impl Future<Output = ()> + 'static) -> Option<TaskId> {
+    pub fn spawn_forever(&self, fut: impl Future<Output = ()> + 'static) -> TaskId {
         // The root scope will never be unmounted so we can just add the task at the top of the app
-        let id = self.tasks.spawn(ScopeId::ROOT, fut)?;
+        let id = self.tasks.spawn(ScopeId::ROOT, fut);
 
         // wake up the scheduler if it is sleeping
         self.tasks
@@ -240,7 +240,7 @@ impl ScopeContext {
 
         self.spawned_tasks.borrow_mut().insert(id);
 
-        Some(id)
+        id
     }
 
     /// Informs the scheduler that this task is no longer needed and should be removed.
@@ -339,7 +339,7 @@ pub fn throw(error: impl Debug + 'static) -> Option<()> {
 
 /// Pushes the future onto the poll queue to be polled after the component renders.
 pub fn push_future(fut: impl Future<Output = ()> + 'static) -> Option<TaskId> {
-    with_current_scope(|cx| cx.push_future(fut)).flatten()
+    with_current_scope(|cx| cx.push_future(fut))
 }
 
 /// Spawns the future but does not return the [`TaskId`]
@@ -351,7 +351,7 @@ pub fn spawn(fut: impl Future<Output = ()> + 'static) {
 ///
 /// This is good for tasks that need to be run after the component has been dropped.
 pub fn spawn_forever(fut: impl Future<Output = ()> + 'static) -> Option<TaskId> {
-    with_current_scope(|cx| cx.spawn_forever(fut)).flatten()
+    with_current_scope(|cx| cx.spawn_forever(fut))
 }
 
 /// Informs the scheduler that this task is no longer needed and should be removed.

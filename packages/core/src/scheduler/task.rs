@@ -33,11 +33,7 @@ impl Scheduler {
     ///
     /// Spawning a future onto the root scope will cause it to be dropped when the root component is dropped - which
     /// will only occur when the VirtuaalDom itself has been dropped.
-    pub fn spawn(
-        &self,
-        scope: ScopeId,
-        task: impl Future<Output = ()> + 'static,
-    ) -> Option<TaskId> {
+    pub fn spawn(&self, scope: ScopeId, task: impl Future<Output = ()> + 'static) -> TaskId {
         let mut tasks = self.tasks.borrow_mut();
 
         let entry = tasks.vacant_entry();
@@ -53,9 +49,7 @@ impl Scheduler {
         };
 
         let mut cx = std::task::Context::from_waker(&task.waker);
-        if task.task.borrow_mut().as_mut().poll(&mut cx).is_ready() {
-            return None;
-        }
+        let _ = task.task.borrow_mut().as_mut().poll(&mut cx);
 
         entry.insert(task);
 
@@ -63,7 +57,7 @@ impl Scheduler {
             .unbounded_send(SchedulerMsg::TaskNotified(task_id))
             .expect("Scheduler should exist");
 
-        Some(task_id)
+        task_id
     }
 
     /// Drop the future with the given TaskId
