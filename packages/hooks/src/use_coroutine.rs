@@ -69,9 +69,11 @@ where
     G: FnOnce(UnboundedReceiver<M>) -> F,
     F: Future<Output = ()> + 'static,
 {
-    let (tx, rx) = futures_channel::mpsc::unbounded();
-    let task = cx.push_future(init(rx));
-    cx.use_hook(|| cx.provide_context(Coroutine { tx, task }))
+    cx.use_hook(|| {
+        let (tx, rx) = futures_channel::mpsc::unbounded();
+        let task = cx.push_future(init(rx));
+        cx.provide_context(Coroutine { tx, task })
+    })
 }
 
 /// Get a handle to a coroutine higher in the tree
