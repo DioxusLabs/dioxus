@@ -228,7 +228,6 @@ fn collect_rs_files(folder: &impl AsRef<Path>, files: &mut Vec<PathBuf>) {
         let path = entry.path();
         if path.is_dir() {
             collect_rs_files(&path, files);
-            return;
         }
         if let Some(ext) = path.extension() {
             if ext == "rs" && !is_target_dir(&path) {
