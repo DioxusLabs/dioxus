@@ -91,10 +91,9 @@ fn get_project_files(config: &CrateConfig) -> Vec<PathBuf> {
     if gitignore_path.is_file() {
         let gitigno = gitignore::File::new(gitignore_path.as_path()).unwrap();
         if let Ok(git_files) = gitigno.included_files() {
-            let git_files: Vec<_> = git_files
+            let git_files = git_files
                 .into_iter()
-                .filter_map(|f| (f.ends_with(".rs") && !is_target_dir(&f)).then_some(f))
-                .collect();
+                .filter(|f| f.ends_with(".rs") && !is_target_dir(f));
             files.extend(git_files)
         };
     } else {
@@ -105,7 +104,16 @@ fn get_project_files(config: &CrateConfig) -> Vec<PathBuf> {
 }
 
 fn is_target_dir(file: &Path) -> bool {
-    file.components().any(|f| f.as_os_str() == "target")
+    let stripped = if let Ok(cwd) = std::env::current_dir() {
+        file.strip_prefix(cwd).unwrap_or(file)
+    } else {
+        file
+    };
+    if let Some(first) = stripped.components().next() {
+        first.as_os_str() == "target"
+    } else {
+        false
+    }
 }
 
 async fn format_file(
@@ -217,6 +225,9 @@ fn indentation_for(file_or_dir: impl AsRef<Path>) -> Result<IndentOptions> {
 }
 
 fn collect_rs_files(folder: &impl AsRef<Path>, files: &mut Vec<PathBuf>) {
+    if is_target_dir(folder.as_ref()) {
+        return;
+    }
     let Ok(folder) = folder.as_ref().read_dir() else {
         return;
     };
