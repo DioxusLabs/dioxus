@@ -83,6 +83,7 @@ dioxus-html = { workspace = true, features = ["hot-reload-context"] }
 dioxus-core = { workspace = true, features = ["serialize"] }
 dioxus-hot-reload = { workspace = true }
 interprocess-docfix = { version = "1.2.2" }
+gitignore = "1.0.8"
 
 [features]
 default = []
