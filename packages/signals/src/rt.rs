@@ -7,8 +7,10 @@ use std::rc::Rc;
 use dioxus_core::prelude::*;
 use dioxus_core::ScopeId;
 
-use generational_box::Storage;
-use generational_box::{GenerationalBox, Owner};
+use generational_box::{
+    BorrowError, BorrowMutError, GenerationalBox, GenerationalRef, GenerationalRefMut, Owner,
+    Storage, Store,
+};
 
 use crate::Effect;
 
@@ -74,6 +76,7 @@ impl<T: 'static> CopyValue<T> {
     /// Create a new CopyValue. The value will be stored in the current component.
     ///
     /// Once the component this value is created in is dropped, the value will be dropped.
+    #[track_caller]
     pub fn new(value: T) -> Self {
         Self::new_maybe_sync(value)
     }
@@ -93,6 +96,22 @@ impl<T: 'static, S: Storage<T>> CopyValue<T, S> {
 
         Self {
             value: owner.insert(value),
+            origin_scope: current_scope_id().expect("in a virtual dom"),
+        }
+    }
+
+    pub(crate) fn new_with_caller(
+        value: T,
+        #[cfg(debug_assertions)] caller: &'static std::panic::Location<'static>,
+    ) -> Self {
+        let owner = current_owner();
+
+        Self {
+            value: owner.insert_with_caller(
+                value,
+                #[cfg(debug_assertions)]
+                caller,
+            ),
             origin_scope: current_scope_id().expect("in a virtual dom"),
         }
     }
@@ -122,21 +141,26 @@ impl<T: 'static, S: Storage<T>> CopyValue<T, S> {
     }
 
     /// Try to read the value. If the value has been dropped, this will return None.
+    #[track_caller]
+
     pub fn try_read(&self) -> Option<S::Ref> {
         self.value.try_read()
     }
 
     /// Read the value. If the value has been dropped, this will panic.
+    #[track_caller]
     pub fn read(&self) -> S::Ref {
         self.value.read()
     }
 
     /// Try to write the value. If the value has been dropped, this will return None.
+    #[track_caller]
     pub fn try_write(&self) -> Option<S::Mut> {
         self.value.try_write()
     }
 
     /// Write the value. If the value has been dropped, this will panic.
+    #[track_caller]
     pub fn write(&self) -> S::Mut {
         self.value.write()
     }

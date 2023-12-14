@@ -49,9 +49,19 @@ use crate::{get_effect_ref, CopyValue, EffectStackRef, EFFECT_STACK};
 ///     }
 /// }
 /// ```
+#[track_caller]
 #[must_use]
 pub fn use_signal<T: 'static>(cx: &ScopeState, f: impl FnOnce() -> T) -> Signal<T, UnsyncStorage> {
-    *cx.use_hook(|| Signal::new(f()))
+    #[cfg(debug_assertions)]
+    let caller = std::panic::Location::caller();
+
+    *cx.use_hook(|| {
+        Signal::new_with_caller(
+            f(),
+            #[cfg(debug_assertions)]
+            caller,
+        )
+    })
 }
 
 /// Creates a new `Send + Sync`` Signal. Signals are a Copy state management solution with automatic dependency tracking.
@@ -191,6 +201,7 @@ impl<'de, T: serde::Deserialize<'de> + 'static> serde::Deserialize<'de> for Sign
 
 impl<T: 'static> Signal<T> {
     /// Creates a new Signal. Signals are a Copy state management solution with automatic dependency tracking.
+    #[track_caller]
     pub fn new(value: T) -> Self {
         Self::new_maybe_sync(value)
     }
@@ -215,6 +226,26 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
         }
     }
 
+    /// Creates a new Signal. Signals are a Copy state management solution with automatic dependency tracking.
+    fn new_with_caller(
+        value: T,
+        #[cfg(debug_assertions)] caller: &'static std::panic::Location<'static>,
+    ) -> Self {
+        Self {
+            inner: CopyValue::new_with_caller(
+                SignalData {
+                    subscribers: Default::default(),
+                    effect_subscribers: Default::default(),
+                    update_any: schedule_update_any().expect("in a virtual dom"),
+                    value,
+                    effect_stack: get_effect_stack(),
+                },
+                #[cfg(debug_assertions)]
+                caller,
+            ),
+        }
+    }
+
     /// Create a new signal with a custom owner scope. The signal will be dropped when the owner scope is dropped instead of the current scope.
     #[tracing::instrument(skip(value))]
     pub fn new_maybe_sync_in_scope(value: T, owner: ScopeId) -> Self {
@@ -236,8 +267,10 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
         self.inner.origin_scope()
     }
 
-    /// Get the current value of the signal. This will subscribe the current scope to the signal.
+    /// Get the current value of the signal. This will subscribe the current scope to the signal.  If you would like to read the signal without subscribing to it, you can use [`Self::peek`] instead.
+    ///
     /// If the signal has been dropped, this will panic.
+    #[track_caller]
     pub fn read(
         &self,
     ) -> <<S as Storage<SignalData<T>>>::Ref as Mappable<SignalData<T>>>::Mapped<T> {
@@ -270,8 +303,20 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
         S::Ref::map(inner, |v| &v.value)
     }
 
-    /// Get a mutable reference to the signal's value.
+    /// Get the current value of the signal. **Unlike read, this will not subscribe the current scope to the signal which can cause parts of your UI to not update.**
+    ///
     /// If the signal has been dropped, this will panic.
+    pub fn peek(
+        &self,
+    ) -> <<S as Storage<SignalData<T>>>::Ref as Mappable<SignalData<T>>>::Mapped<T> {
+        let inner = self.inner.read();
+        S::Ref::map(inner, |v| &v.value)
+    }
+
+    /// Get a mutable reference to the signal's value.
+    ///
+    /// If the signal has been dropped, this will panic.
+    #[track_caller]
     pub fn write(
         &self,
     ) -> Write<T, <<S as Storage<SignalData<T>>>::Mut as MappableMut<SignalData<T>>>::Mapped<T>, S>
@@ -315,12 +360,14 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
     }
 
     /// Set the value of the signal. This will trigger an update on all subscribers.
+    #[track_caller]
     pub fn set(&self, value: T) {
         *self.write() = value;
     }
 
     /// Run a closure with a reference to the signal's value.
     /// If the signal has been dropped, this will panic.
+    #[track_caller]
     pub fn with<O>(&self, f: impl FnOnce(&T) -> O) -> O {
         let write = self.read();
         f(&*write)
@@ -328,6 +375,7 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
 
     /// Run a closure with a mutable reference to the signal's value.
     /// If the signal has been dropped, this will panic.
+    #[track_caller]
     pub fn with_mut<O>(&self, f: impl FnOnce(&mut T) -> O) -> O {
         let mut write = self.write();
         f(&mut *write)
@@ -342,6 +390,7 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
 impl<T: Clone + 'static, S: Storage<SignalData<T>>> Signal<T, S> {
     /// Get the current value of the signal. This will subscribe the current scope to the signal.
     /// If the signal has been dropped, this will panic.
+    #[track_caller]
     pub fn value(&self) -> T {
         self.read().clone()
     }
@@ -482,13 +531,24 @@ impl<T: 'static, S: Storage<SignalData<T>>> ReadOnlySignal<T, S> {
     }
 
     /// Get the current value of the signal. This will subscribe the current scope to the signal.
+    ///
+    /// If the signal has been dropped, this will panic.
+    #[track_caller]
     pub fn read(
         &self,
     ) -> <<S as Storage<SignalData<T>>>::Ref as Mappable<SignalData<T>>>::Mapped<T> {
         self.inner.read()
     }
 
+    /// Get the current value of the signal. **Unlike read, this will not subscribe the current scope to the signal which can cause parts of your UI to not update.**
+    ///
+    /// If the signal has been dropped, this will panic.
+    pub fn peek(&self) -> GenerationalRef<T> {
+        self.inner.peek()
+    }
+
     /// Run a closure with a reference to the signal's value.
+    #[track_caller]
     pub fn with<O>(&self, f: impl FnOnce(&T) -> O) -> O {
         self.inner.with(f)
     }

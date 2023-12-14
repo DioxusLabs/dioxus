@@ -4,12 +4,16 @@
 use parking_lot::{
     MappedRwLockReadGuard, MappedRwLockWriteGuard, Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard,
 };
+use std::any::Any;
+use std::error::Error;
+use std::fmt::Display;
+use std::sync::atomic::AtomicU32;
 use std::{
     cell::{Ref, RefCell, RefMut},
     fmt::Debug,
     marker::PhantomData,
     ops::{Deref, DerefMut},
-    sync::{atomic::AtomicU32, Arc, OnceLock},
+    sync::{Arc, OnceLock},
 };
 
 /// # Example
@@ -52,7 +56,10 @@ fn leaking_is_ok() {
         // don't drop the owner
         std::mem::forget(owner);
     }
-    assert_eq!(key.try_read().as_deref(), Some(&"hello world".to_string()));
+    assert_eq!(
+        key.try_read().as_deref().unwrap(),
+        &"hello world".to_string()
+    );
 }
 
 #[test]
@@ -66,7 +73,7 @@ fn drops() {
         key = owner.insert(data);
         // drop the owner
     }
-    assert!(key.try_read().is_none());
+    assert!(key.try_read().is_err());
 }
 
 #[test]
@@ -123,7 +130,7 @@ fn fuzz() {
             println!("{:?}", path);
             for key in valid_keys.iter() {
                 let value = key.read();
-                println!("{:?}", value);
+                println!("{:?}", &*value);
                 assert!(value.starts_with("hello world"));
             }
             #[cfg(any(debug_assertions, feature = "check_generation"))]
@@ -164,10 +171,12 @@ impl Debug for GenerationalBoxId {
 }
 
 /// The core Copy state type. The generational box will be dropped when the [Owner] is dropped.
-pub struct GenerationalBox<T, S = UnsyncStorage> {
+pub struct GenerationalBox<T, S: 'static = UnsyncStorage> {
     raw: MemoryLocation<S>,
     #[cfg(any(debug_assertions, feature = "check_generation"))]
     generation: u32,
+    #[cfg(any(debug_assertions, feature = "debug_ownership"))]
+    created_at: &'static std::panic::Location<'static>,
     _marker: PhantomData<T>,
 }
 
@@ -176,11 +185,11 @@ impl<T: 'static, S: AnyStorage> Debug for GenerationalBox<T, S> {
         #[cfg(any(debug_assertions, feature = "check_generation"))]
         f.write_fmt(format_args!(
             "{:?}@{:?}",
-            self.raw.data.data_ptr(),
+            self.raw.0.data.data_ptr(),
             self.generation
         ))?;
         #[cfg(not(any(debug_assertions, feature = "check_generation")))]
-        f.write_fmt(format_args!("{:?}", self.raw.data.as_ptr()))?;
+        f.write_fmt(format_args!("{:?}", self.raw.0.data.as_ptr()))?;
         Ok(())
     }
 }
@@ -191,6 +200,7 @@ impl<T: 'static, S: Storage<T>> GenerationalBox<T, S> {
         #[cfg(any(debug_assertions, feature = "check_generation"))]
         {
             self.raw
+                .0
                 .generation
                 .load(std::sync::atomic::Ordering::Relaxed)
                 == self.generation
@@ -204,28 +214,54 @@ impl<T: 'static, S: Storage<T>> GenerationalBox<T, S> {
     /// Get the id of the generational box.
     pub fn id(&self) -> GenerationalBoxId {
         GenerationalBoxId {
-            data_ptr: self.raw.data.data_ptr(),
+            data_ptr: self.raw.0.data.data_ptr(),
             #[cfg(any(debug_assertions, feature = "check_generation"))]
             generation: self.generation,
         }
     }
 
     /// Try to read the value. Returns None if the value is no longer valid.
-    pub fn try_read(&self) -> Option<S::Ref> {
-        self.validate().then(|| self.raw.data.try_read()).flatten()
+    #[track_caller]
+    pub fn try_read(&self) -> Result<S::Ref, BorrowError> {
+        if !self.validate() {
+            return Err(BorrowError::Dropped(ValueDroppedError {
+                #[cfg(any(debug_assertions, feature = "debug_borrows"))]
+                created_at: self.created_at,
+            }));
+        }
+        self.raw.0.data.try_read().ok_or_else(|| {
+            BorrowError::Dropped(ValueDroppedError {
+                #[cfg(any(debug_assertions, feature = "debug_ownership"))]
+                created_at: self.created_at,
+            })
+        })
     }
 
     /// Read the value. Panics if the value is no longer valid.
+    #[track_caller]
     pub fn read(&self) -> S::Ref {
         self.try_read().unwrap()
     }
 
     /// Try to write the value. Returns None if the value is no longer valid.
-    pub fn try_write(&self) -> Option<S::Mut> where {
-        self.validate().then(|| self.raw.data.try_write()).flatten()
+    #[track_caller]
+    pub fn try_write(&self) -> Result<S::Mut, BorrowMutError> {
+        if !self.validate() {
+            return Err(BorrowMutError::Dropped(ValueDroppedError {
+                #[cfg(any(debug_assertions, feature = "debug_borrows"))]
+                created_at: self.created_at,
+            }));
+        }
+        self.raw.0.data.try_write().ok_or_else(|| {
+            BorrowMutError::Dropped(ValueDroppedError {
+                #[cfg(any(debug_assertions, feature = "debug_ownership"))]
+                created_at: self.created_at,
+            })
+        })
     }
 
     /// Write the value. Panics if the value is no longer valid.
+    #[track_caller]
     pub fn write(&self) -> S::Mut {
         self.try_write().unwrap()
     }
@@ -233,7 +269,7 @@ impl<T: 'static, S: Storage<T>> GenerationalBox<T, S> {
     /// Set the value. Panics if the value is no longer valid.
     pub fn set(&self, value: T) {
         self.validate().then(|| {
-            self.raw.data.set(value);
+            self.raw.0.data.set(value);
         });
     }
 
@@ -241,7 +277,7 @@ impl<T: 'static, S: Storage<T>> GenerationalBox<T, S> {
     pub fn ptr_eq(&self, other: &Self) -> bool {
         #[cfg(any(debug_assertions, feature = "check_generation"))]
         {
-            self.raw.data.data_ptr() == other.raw.data.data_ptr()
+            self.raw.0.data.data_ptr() == other.raw.0.data.data_ptr()
                 && self.generation == other.generation
         }
         #[cfg(not(any(debug_assertions, feature = "check_generation")))]
@@ -251,7 +287,7 @@ impl<T: 'static, S: Storage<T>> GenerationalBox<T, S> {
     }
 }
 
-impl<T, S: Copy> Copy for GenerationalBox<T, S> {}
+impl<T, S: 'static + Copy> Copy for GenerationalBox<T, S> {}
 
 impl<T, S: Copy> Clone for GenerationalBox<T, S> {
     fn clone(&self) -> Self {
@@ -260,12 +296,11 @@ impl<T, S: Copy> Clone for GenerationalBox<T, S> {
 }
 
 /// A unsync storage. This is the default storage type.
-#[derive(Clone, Copy)]
-pub struct UnsyncStorage(&'static RefCell<Option<Box<dyn std::any::Any>>>);
+pub struct UnsyncStorage(RefCell<Option<Box<dyn std::any::Any>>>);
 
 impl Default for UnsyncStorage {
     fn default() -> Self {
-        Self(Box::leak(Box::new(RefCell::new(None))))
+        Self(RefCell::new(None))
     }
 }
 
@@ -370,7 +405,7 @@ impl<T> MappableMut<T> for MappedRwLockWriteGuard<'static, T> {
 }
 
 /// A trait for a storage backing type. (RefCell, RwLock, etc.)
-pub trait Storage<Data>: Copy + AnyStorage + 'static {
+pub trait Storage<Data>: AnyStorage + 'static {
     /// The reference this storage type returns.
     type Ref: Mappable<Data> + Deref<Target = Data>;
     /// The mutable reference this storage type returns.
@@ -453,11 +488,17 @@ impl AnyStorage for UnsyncStorage {
             if let Some(location) = runtime.borrow_mut().pop() {
                 location
             } else {
-                MemoryLocation {
-                    data: UnsyncStorage(Box::leak(Box::new(RefCell::new(None)))),
-                    #[cfg(any(debug_assertions, feature = "check_generation"))]
-                    generation: Box::leak(Box::default()),
-                }
+                let data: &'static MemoryLocationInner =
+                    &*Box::leak(Box::new(MemoryLocationInner {
+                        data: Self::default(),
+                        #[cfg(any(debug_assertions, feature = "check_generation"))]
+                        generation: 0.into(),
+                        #[cfg(any(debug_assertions, feature = "debug_borrows"))]
+                        borrowed_at: Default::default(),
+                        #[cfg(any(debug_assertions, feature = "debug_borrows"))]
+                        borrowed_mut_at: Default::default(),
+                    }));
+                MemoryLocation(data)
             }
         })
     }
@@ -501,11 +542,19 @@ impl AnyStorage for SyncStorage {
     }
 
     fn claim() -> MemoryLocation<Self> {
-        MemoryLocation {
-            data: SyncStorage(Box::leak(Box::new(RwLock::new(None)))),
-            #[cfg(any(debug_assertions, feature = "check_generation"))]
-            generation: Box::leak(Box::default()),
-        }
+        sync_runtime().lock().pop().unwrap_or_else(|| {
+            let data: &'static MemoryLocationInner<Self> =
+                &*Box::leak(Box::new(MemoryLocationInner {
+                    data: Self::default(),
+                    #[cfg(any(debug_assertions, feature = "check_generation"))]
+                    generation: 0.into(),
+                    #[cfg(any(debug_assertions, feature = "debug_borrows"))]
+                    borrowed_at: Default::default(),
+                    #[cfg(any(debug_assertions, feature = "debug_borrows"))]
+                    borrowed_mut_at: Default::default(),
+                }));
+            MemoryLocation(data)
+        })
     }
 
     fn recycle(location: &MemoryLocation<Self>) {
@@ -514,12 +563,17 @@ impl AnyStorage for SyncStorage {
     }
 }
 
-/// A memory location. This is the core type that is used to store values.
 #[derive(Clone, Copy)]
-pub struct MemoryLocation<S = UnsyncStorage> {
+struct MemoryLocation<S: 'static = UnsyncStorage>(&'static MemoryLocationInner<S>);
+
+struct MemoryLocationInner<S = UnsyncStorage> {
     data: S,
     #[cfg(any(debug_assertions, feature = "check_generation"))]
-    generation: &'static AtomicU32,
+    generation: AtomicU32,
+    #[cfg(any(debug_assertions, feature = "debug_borrows"))]
+    borrowed_at: RwLock<Vec<&'static std::panic::Location<'static>>>,
+    #[cfg(any(debug_assertions, feature = "debug_borrows"))]
+    borrowed_mut_at: RwLock<Option<&'static std::panic::Location<'static>>>,
 }
 
 impl<S> MemoryLocation<S> {
@@ -528,44 +582,380 @@ impl<S> MemoryLocation<S> {
     where
         S: AnyStorage,
     {
-        let old = self.data.take();
+        let old = self.0.data.take();
         #[cfg(any(debug_assertions, feature = "check_generation"))]
         if old {
-            let new_generation = self.generation.load(std::sync::atomic::Ordering::Relaxed) + 1;
-            self.generation
+            let new_generation = self.0.generation.load(std::sync::atomic::Ordering::Relaxed) + 1;
+            self.0
+                .generation
                 .store(new_generation, std::sync::atomic::Ordering::Relaxed);
         }
     }
 
-    fn replace<T: 'static>(&mut self, value: T) -> GenerationalBox<T, S>
+    fn replace_with_caller<T: 'static>(
+        &mut self,
+        value: T,
+        #[cfg(any(debug_assertions, feature = "debug_ownership"))]
+        caller: &'static std::panic::Location<'static>,
+    ) -> GenerationalBox<T, S>
     where
-        S: Storage<T> + Copy,
+        S: Storage<T>,
     {
-        self.data.set(value);
+        self.0.data.set(value);
         GenerationalBox {
             raw: *self,
             #[cfg(any(debug_assertions, feature = "check_generation"))]
-            generation: self.generation.load(std::sync::atomic::Ordering::Relaxed),
+            generation: self.0.generation.load(std::sync::atomic::Ordering::Relaxed),
+            #[cfg(any(debug_assertions, feature = "debug_ownership"))]
+            created_at: caller,
             _marker: PhantomData,
+        }
+    }
+
+    #[track_caller]
+    fn try_borrow<T: Any>(
+        &self,
+        #[cfg(any(debug_assertions, feature = "debug_ownership"))]
+        created_at: &'static std::panic::Location<'static>,
+    ) -> Result<GenerationalRef<T, S>, BorrowError>
+    where
+        S: Storage<T>,
+    {
+        #[cfg(any(debug_assertions, feature = "debug_borrows"))]
+        self.0
+            .borrowed_at
+            .write()
+            .push(std::panic::Location::caller());
+        match self.0.data.try_read() {
+            Some(borrow) => {
+                match Ref::filter_map(borrow, |any| any.as_ref()?.downcast_ref::<T>()) {
+                    Ok(reference) => Ok(GenerationalRef {
+                        inner: reference,
+                        #[cfg(any(debug_assertions, feature = "debug_borrows"))]
+                        borrow: GenerationalRefBorrowInfo {
+                            borrowed_at: std::panic::Location::caller(),
+                            borrowed_from: self.0,
+                        },
+                    }),
+                    Err(_) => Err(BorrowError::Dropped(ValueDroppedError {
+                        #[cfg(any(debug_assertions, feature = "debug_ownership"))]
+                        created_at,
+                    })),
+                }
+            }
+            None => Err(BorrowError::AlreadyBorrowedMut(AlreadyBorrowedMutError {
+                #[cfg(any(debug_assertions, feature = "debug_borrows"))]
+                borrowed_mut_at: self.0.borrowed_mut_at.read().unwrap(),
+            })),
+        }
+    }
+
+    #[track_caller]
+    fn try_borrow_mut<T: Any>(
+        &self,
+        #[cfg(any(debug_assertions, feature = "debug_ownership"))]
+        created_at: &'static std::panic::Location<'static>,
+    ) -> Result<GenerationalRefMut<T>, BorrowMutError> {
+        #[cfg(any(debug_assertions, feature = "debug_borrows"))]
+        {
+            self.0.borrowed_mut_at.write().unwrap() = Some(std::panic::Location::caller());
+        }
+        match self.0.data.try_borrow_mut() {
+            Ok(borrow_mut) => {
+                match RefMut::filter_map(borrow_mut, |any| any.as_mut()?.downcast_mut::<T>()) {
+                    Ok(reference) => Ok(GenerationalRefMut {
+                        inner: reference,
+                        #[cfg(any(debug_assertions, feature = "debug_borrows"))]
+                        borrow: GenerationalRefMutBorrowInfo {
+                            borrowed_from: self.0,
+                        },
+                    }),
+                    Err(_) => Err(BorrowMutError::Dropped(ValueDroppedError {
+                        #[cfg(any(debug_assertions, feature = "debug_ownership"))]
+                        created_at,
+                    })),
+                }
+            }
+            Err(_) => Err(BorrowMutError::AlreadyBorrowed(AlreadyBorrowedError {
+                #[cfg(any(debug_assertions, feature = "debug_borrows"))]
+                borrowed_at: self.0.borrowed_at.read().clone(),
+            })),
         }
     }
 }
 
+#[derive(Debug, Clone)]
+/// An error that can occur when trying to borrow a value.
+pub enum BorrowError {
+    /// The value was dropped.
+    Dropped(ValueDroppedError),
+    /// The value was already borrowed mutably.
+    AlreadyBorrowedMut(AlreadyBorrowedMutError),
+}
+
+impl Display for BorrowError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            BorrowError::Dropped(error) => Display::fmt(error, f),
+            BorrowError::AlreadyBorrowedMut(error) => Display::fmt(error, f),
+        }
+    }
+}
+
+impl Error for BorrowError {}
+
+#[derive(Debug, Clone)]
+/// An error that can occur when trying to borrow a value mutably.
+pub enum BorrowMutError {
+    /// The value was dropped.
+    Dropped(ValueDroppedError),
+    /// The value was already borrowed.
+    AlreadyBorrowed(AlreadyBorrowedError),
+    /// The value was already borrowed mutably.
+    AlreadyBorrowedMut(AlreadyBorrowedMutError),
+}
+
+impl Display for BorrowMutError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            BorrowMutError::Dropped(error) => Display::fmt(error, f),
+            BorrowMutError::AlreadyBorrowedMut(error) => Display::fmt(error, f),
+            BorrowMutError::AlreadyBorrowed(error) => Display::fmt(error, f),
+        }
+    }
+}
+
+impl Error for BorrowMutError {}
+
+/// An error that can occur when trying to use a value that has been dropped.
+#[derive(Debug, Copy, Clone)]
+pub struct ValueDroppedError {
+    #[cfg(any(debug_assertions, feature = "debug_ownership"))]
+    created_at: &'static std::panic::Location<'static>,
+}
+
+impl Display for ValueDroppedError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Failed to borrow because the value was dropped.")?;
+        #[cfg(any(debug_assertions, feature = "debug_ownership"))]
+        f.write_fmt(format_args!("created_at: {}", self.created_at))?;
+        Ok(())
+    }
+}
+
+impl std::error::Error for ValueDroppedError {}
+
+/// An error that can occur when trying to borrow a value that has already been borrowed mutably.
+#[derive(Debug, Copy, Clone)]
+pub struct AlreadyBorrowedMutError {
+    #[cfg(any(debug_assertions, feature = "debug_borrows"))]
+    borrowed_mut_at: &'static std::panic::Location<'static>,
+}
+
+impl Display for AlreadyBorrowedMutError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Failed to borrow because the value was already borrowed mutably.")?;
+        #[cfg(any(debug_assertions, feature = "debug_borrows"))]
+        f.write_fmt(format_args!("borrowed_mut_at: {}", self.borrowed_mut_at))?;
+        Ok(())
+    }
+}
+
+impl std::error::Error for AlreadyBorrowedMutError {}
+
+/// An error that can occur when trying to borrow a value mutably that has already been borrowed immutably.
+#[derive(Debug, Clone)]
+pub struct AlreadyBorrowedError {
+    #[cfg(any(debug_assertions, feature = "debug_borrows"))]
+    borrowed_at: Vec<&'static std::panic::Location<'static>>,
+}
+
+impl Display for AlreadyBorrowedError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Failed to borrow mutably because the value was already borrowed immutably.")?;
+        #[cfg(any(debug_assertions, feature = "debug_borrows"))]
+        f.write_str("borrowed_at:")?;
+        #[cfg(any(debug_assertions, feature = "debug_borrows"))]
+        for location in self.borrowed_at.iter() {
+            f.write_fmt(format_args!("\t{}", location))?;
+        }
+        Ok(())
+    }
+}
+
+impl std::error::Error for AlreadyBorrowedError {}
+
+/// A reference to a value in a generational box.
+pub struct GenerationalRef<T: 'static> {
+    inner: Ref<'static, T>,
+    #[cfg(any(debug_assertions, feature = "debug_borrows"))]
+    borrow: GenerationalRefBorrowInfo,
+}
+
+impl<T: 'static> GenerationalRef<T> {
+    /// Map one ref type to another.
+    pub fn map<U, F>(orig: GenerationalRef<T>, f: F) -> GenerationalRef<U>
+    where
+        F: FnOnce(&T) -> &U,
+    {
+        GenerationalRef {
+            inner: Ref::map(orig.inner, f),
+            #[cfg(any(debug_assertions, feature = "debug_borrows"))]
+            borrow: GenerationalRefBorrowInfo {
+                borrowed_at: orig.borrow.borrowed_at,
+                borrowed_from: orig.borrow.borrowed_from,
+            },
+        }
+    }
+
+    /// Filter one ref type to another.
+    pub fn filter_map<U, F>(orig: GenerationalRef<T>, f: F) -> Option<GenerationalRef<U>>
+    where
+        F: FnOnce(&T) -> Option<&U>,
+    {
+        let Self {
+            inner,
+            #[cfg(any(debug_assertions, feature = "debug_borrows"))]
+            borrow,
+        } = orig;
+        Ref::filter_map(inner, f).ok().map(|inner| GenerationalRef {
+            inner,
+            #[cfg(any(debug_assertions, feature = "debug_borrows"))]
+            borrow: GenerationalRefBorrowInfo {
+                borrowed_at: borrow.borrowed_at,
+                borrowed_from: borrow.borrowed_from,
+            },
+        })
+    }
+}
+
+impl<T: 'static> Deref for GenerationalRef<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        self.inner.deref()
+    }
+}
+
+#[cfg(any(debug_assertions, feature = "debug_borrows"))]
+struct GenerationalRefBorrowInfo {
+    borrowed_at: &'static std::panic::Location<'static>,
+    borrowed_from: &'static MemoryLocationInner,
+}
+
+#[cfg(any(debug_assertions, feature = "debug_borrows"))]
+impl Drop for GenerationalRefBorrowInfo {
+    fn drop(&mut self) {
+        self.borrowed_from
+            .borrowed_at
+            .borrow_mut()
+            .retain(|location| std::ptr::eq(*location, self.borrowed_at as *const _));
+    }
+}
+
+/// A mutable reference to a value in a generational box.
+pub struct GenerationalRefMut<T: 'static> {
+    inner: RefMut<'static, T>,
+    #[cfg(any(debug_assertions, feature = "debug_borrows"))]
+    borrow: GenerationalRefMutBorrowInfo,
+}
+
+impl<T: 'static> GenerationalRefMut<T> {
+    /// Map one ref type to another.
+    pub fn map<U, F>(orig: GenerationalRefMut<T>, f: F) -> GenerationalRefMut<U>
+    where
+        F: FnOnce(&mut T) -> &mut U,
+    {
+        GenerationalRefMut {
+            inner: RefMut::map(orig.inner, f),
+            #[cfg(any(debug_assertions, feature = "debug_borrows"))]
+            borrow: orig.borrow,
+        }
+    }
+
+    /// Filter one ref type to another.
+    pub fn filter_map<U, F>(orig: GenerationalRefMut<T>, f: F) -> Option<GenerationalRefMut<U>>
+    where
+        F: FnOnce(&mut T) -> Option<&mut U>,
+    {
+        let Self {
+            inner,
+            #[cfg(any(debug_assertions, feature = "debug_borrows"))]
+            borrow,
+        } = orig;
+        RefMut::filter_map(inner, f)
+            .ok()
+            .map(|inner| GenerationalRefMut {
+                inner,
+                #[cfg(any(debug_assertions, feature = "debug_borrows"))]
+                borrow,
+            })
+    }
+}
+
+impl<T: 'static> Deref for GenerationalRefMut<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        self.inner.deref()
+    }
+}
+
+impl<T: 'static> DerefMut for GenerationalRefMut<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.inner.deref_mut()
+    }
+}
+
+#[cfg(any(debug_assertions, feature = "debug_borrows"))]
+struct GenerationalRefMutBorrowInfo {
+    borrowed_from: &'static MemoryLocationInner,
+}
+
+#[cfg(any(debug_assertions, feature = "debug_borrows"))]
+impl Drop for GenerationalRefMutBorrowInfo {
+    fn drop(&mut self) {
+        self.borrowed_from.borrowed_mut_at.take();
+    }
+}
+
 /// Owner: Handles dropping generational boxes. The owner acts like a runtime lifetime guard. Any states that you create with an owner will be dropped when that owner is dropped.
-pub struct Owner<S: AnyStorage = UnsyncStorage> {
+pub struct Owner<S: AnyStorage + 'static = UnsyncStorage> {
     owned: Arc<Mutex<Vec<MemoryLocation<S>>>>,
     phantom: PhantomData<S>,
 }
 
 impl<S: AnyStorage + Copy> Owner<S> {
     /// Insert a value into the store. The value will be dropped when the owner is dropped.
+    #[track_caller]
     pub fn insert<T: 'static>(&self, value: T) -> GenerationalBox<T, S>
     where
         S: Storage<T>,
     {
         let mut location = S::claim();
-        let key = location.replace(value);
+        let key = location.replace_with_caller(
+            value,
+            #[cfg(any(debug_assertions, feature = "debug_borrows"))]
+            std::panic::Location::caller(),
+        );
         self.owned.lock().push(location);
+        key
+    }
+
+    /// Insert a value into the store with a specific location blamed for creating the value. The value will be dropped when the owner is dropped.
+    pub fn insert_with_caller<T: 'static>(
+        &self,
+        value: T,
+        #[cfg(any(debug_assertions, feature = "debug_ownership"))]
+        caller: &'static std::panic::Location<'static>,
+    ) -> GenerationalBox<T> {
+        let mut location = self.store.claim();
+        let key = location.replace_with_caller(
+            value,
+            #[cfg(any(debug_assertions, feature = "debug_borrows"))]
+            caller,
+        );
+        self.owned.borrow_mut().push(location);
         key
     }
 
@@ -576,8 +966,11 @@ impl<S: AnyStorage + Copy> Owner<S> {
             raw: location,
             #[cfg(any(debug_assertions, feature = "check_generation"))]
             generation: location
+                .0
                 .generation
                 .load(std::sync::atomic::Ordering::Relaxed),
+            #[cfg(any(debug_assertions, feature = "debug_ownership"))]
+            created_at: std::panic::Location::caller(),
             _marker: PhantomData,
         }
     }

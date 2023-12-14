@@ -186,13 +186,13 @@ fn get_props_docs(fn_ident: &Ident, inputs: Vec<&FnArg>) -> Vec<Attribute> {
         let arg_name = arg_name.into_token_stream().to_string();
         let arg_type = crate::utils::format_type_string(arg_type);
 
-        let input_arg_doc =
-            keep_up_to_n_consecutive_chars(input_arg_doc.trim(), 2, '\n').replace('\n', "<br/>");
+        let input_arg_doc = keep_up_to_n_consecutive_chars(input_arg_doc.trim(), 2, '\n')
+            .replace("\n\n", "</p><p>");
         let prop_def_link = format!("{props_def_link}::{arg_name}");
         let mut arg_doc = format!("- [`{arg_name}`]({prop_def_link}) : `{arg_type}`");
 
         if let Some(deprecation) = deprecation {
-            arg_doc.push_str("<br/>👎 Deprecated");
+            arg_doc.push_str("<p>👎 Deprecated");
 
             if let Some(since) = deprecation.since {
                 arg_doc.push_str(&format!(" since {since}"));
@@ -205,14 +205,16 @@ fn get_props_docs(fn_ident: &Ident, inputs: Vec<&FnArg>) -> Vec<Attribute> {
                 arg_doc.push_str(&format!(": {note}"));
             }
 
+            arg_doc.push_str("</p>");
+
             if !input_arg_doc.is_empty() {
                 arg_doc.push_str("<hr/>");
             }
-        } else {
-            arg_doc.push_str("<br/>");
         }
 
-        arg_doc.push_str(&input_arg_doc);
+        if !input_arg_doc.is_empty() {
+            arg_doc.push_str(&format!("<p>{input_arg_doc}</p>"));
+        }
 
         props_docs.push(parse_quote! {
             #[doc = #arg_doc]
