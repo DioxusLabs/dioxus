@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use crate::desktop_context::EventData;
 use crate::protocol::{self, AssetHandlerRegistry};
 use crate::{desktop_context::UserWindowEvent, Config};

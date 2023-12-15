@@ -1,6 +1,4 @@
 use std::cell::RefCell;
-use std::future::Future;
-use std::path::Path;
 use std::rc::Rc;
 use std::rc::Weak;
 
@@ -9,7 +7,6 @@ use crate::events::IpcMessage;
 use crate::protocol::AssetFuture;
 use crate::protocol::AssetHandlerId;
 use crate::protocol::AssetHandlerRegistry;
-use crate::protocol::AssetResponse;
 use crate::query::QueryEngine;
 use crate::shortcut::{HotKey, ShortcutId, ShortcutRegistry, ShortcutRegistryError};
 use crate::AssetHandler;
