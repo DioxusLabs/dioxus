@@ -1,7 +1,7 @@
 use crate::{
     plugin::{
         interface::plugins::main::types::RuntimeEvent::{HotReload, Rebuild},
-        plugins_after_runtime, plugins_before_runtime,
+        plugins_after_runtime, plugins_before_runtime, plugins_watched_paths_changed,
     },
     BuildResult, CrateConfig, Result,
 };
@@ -46,123 +46,99 @@ async fn setup_file_watcher<F: Fn() -> Result<BuildResult> + Sync + Send + 'stat
     let watcher_config = config.clone();
     let mut watcher = notify::recommended_watcher(move |info: notify::Result<notify::Event>| {
         let config = watcher_config.clone();
-        if let Ok(e) = info {
-            if chrono::Local::now().timestamp() > last_update_time {
-                futures::executor::block_on(async {
-                    let mut plugins = crate::plugin::PLUGINS.lock().await;
-                    if plugins.is_empty() {
-                        return;
-                    }
-                    let paths: Vec<String> = e
-                        .paths
-                        .iter()
-                        .filter_map(|f| match f.to_str() {
-                            Some(val) => Some(val.to_string()),
-                            None => {
-                                log::warn!("Watched path not valid UTF-8! {}", f.display());
-                                None
-                            }
-                        })
-                        .collect();
-                    for plugin in plugins.iter_mut() {
-                        // TODO Handle the options that are returned here
-                        if plugin.on_watched_paths_change(&paths).await.is_err() {
-                            log::warn!(
-                                "Failed to run give changed paths to {}!",
-                                plugin.metadata.name
-                            );
-                        } else {
-                            log::info!("{} successfully given changed paths", plugin.metadata.name);
-                        }
-                    }
-                });
 
-                let mut needs_full_rebuild;
-                if let Some(hot_reload) = &hot_reload {
-                    let _change = futures::executor::block_on(async {
-                        plugins_before_runtime(HotReload).await
-                    });
+        let Ok(e) = info else {
+            return;
+        };
 
-                    // find changes to the rsx in the file
-                    let mut rsx_file_map = hot_reload.file_map.lock().unwrap();
-                    let mut messages: Vec<Template<'static>> = Vec::new();
+        if chrono::Local::now().timestamp() <= last_update_time {
+            return;
+        }
 
-                    // In hot reload mode, we only need to rebuild if non-rsx code is changed
-                    needs_full_rebuild = false;
+        let _change =
+            futures::executor::block_on(async { plugins_watched_paths_changed(&e.paths).await });
 
-                    for path in &e.paths {
-                        // if this is not a rust file, rebuild the whole project
-                        if path.extension().and_then(|p| p.to_str()) != Some("rs") {
-                            needs_full_rebuild = true;
-                            break;
-                        }
+        let mut needs_full_rebuild;
+        if let Some(hot_reload) = &hot_reload {
+            let _change =
+                futures::executor::block_on(async { plugins_before_runtime(HotReload).await });
 
-                        match rsx_file_map.update_rsx(path, &config.crate_dir) {
-                            Ok(UpdateResult::UpdatedRsx(msgs)) => {
-                                messages.extend(msgs);
-                                needs_full_rebuild = false;
-                            }
-                            Ok(UpdateResult::NeedsRebuild) => {
-                                needs_full_rebuild = true;
-                            }
-                            Err(err) => {
-                                log::error!("{}", err);
-                            }
-                        }
-                    }
+            // find changes to the rsx in the file
+            let mut rsx_file_map = hot_reload.file_map.lock().unwrap();
+            let mut messages: Vec<Template<'static>> = Vec::new();
 
-                    if needs_full_rebuild {
-                        // Reset the file map to the new state of the project
-                        let FileMapBuildResult {
-                            map: new_file_map,
-                            errors,
-                        } = FileMap::<HtmlCtx>::create(config.crate_dir.clone()).unwrap();
+            // In hot reload mode, we only need to rebuild if non-rsx code is changed
+            needs_full_rebuild = false;
 
-                        for err in errors {
-                            log::error!("{}", err);
-                        }
-
-                        *rsx_file_map = new_file_map;
-                    } else {
-                        for msg in messages {
-                            let _ = hot_reload.messages.send(msg);
-                        }
-                    }
-
-                    let _change = futures::executor::block_on(async {
-                        plugins_after_runtime(HotReload).await
-                    });
-                } else {
+            for path in &e.paths {
+                // if this is not a rust file, rebuild the whole project
+                if path.extension().and_then(|p| p.to_str()) != Some("rs") {
                     needs_full_rebuild = true;
+                    break;
                 }
 
-                if needs_full_rebuild {
-                    let _change = futures::executor::block_on(async {
-                        plugins_before_runtime(Rebuild).await
-                    });
-
-                    match build_with() {
-                        Ok(res) => {
-                            last_update_time = chrono::Local::now().timestamp();
-
-                            #[allow(clippy::redundant_clone)]
-                            print_console_info(
-                                &config,
-                                PrettierOptions {
-                                    changed: e.paths.clone(),
-                                    warnings: res.warnings,
-                                    elapsed_time: res.elapsed_time,
-                                },
-                                web_info.clone(),
-                            );
-                        }
-                        Err(e) => log::error!("{}", e),
+                match rsx_file_map.update_rsx(path, &config.crate_dir) {
+                    Ok(UpdateResult::UpdatedRsx(msgs)) => {
+                        messages.extend(msgs);
+                        needs_full_rebuild = false;
                     }
-
-                    let _change =
-                        futures::executor::block_on(async { plugins_after_runtime(Rebuild).await });
+                    Ok(UpdateResult::NeedsRebuild) => {
+                        needs_full_rebuild = true;
+                    }
+                    Err(err) => {
+                        log::error!("{}", err);
+                    }
                 }
             }
+
+            if needs_full_rebuild {
+                // Reset the file map to the new state of the project
+                let FileMapBuildResult {
+                    map: new_file_map,
+                    errors,
+                } = FileMap::<HtmlCtx>::create(config.crate_dir.clone()).unwrap();
+
+                for err in errors {
+                    log::error!("{}", err);
+                }
+
+                *rsx_file_map = new_file_map;
+            } else {
+                for msg in messages {
+                    let _ = hot_reload.messages.send(msg);
+                }
+            }
+
+            let _change =
+                futures::executor::block_on(async { plugins_after_runtime(HotReload).await });
+        } else {
+            needs_full_rebuild = true;
+        }
+
+        if needs_full_rebuild {
+            let _change =
+                futures::executor::block_on(async { plugins_before_runtime(Rebuild).await });
+
+            match build_with() {
+                Ok(res) => {
+                    last_update_time = chrono::Local::now().timestamp();
+
+                    #[allow(clippy::redundant_clone)]
+                    print_console_info(
+                        &config,
+                        PrettierOptions {
+                            changed: e.paths.clone(),
+                            warnings: res.warnings,
+                            elapsed_time: res.elapsed_time,
+                        },
+                        web_info.clone(),
+                    );
+                }
+                Err(e) => log::error!("{}", e),
+            }
+
+            let _change =
+                futures::executor::block_on(async { plugins_after_runtime(Rebuild).await });
         }
     })
     .unwrap();

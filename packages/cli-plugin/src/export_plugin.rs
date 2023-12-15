@@ -34,6 +34,7 @@ interface definitions {
   /// Called right after the event given
   after-runtime-event: func(event: runtime-event) -> result<response-event>;
   
+  /// Gives a list of the paths that have been changed
   on-watched-paths-change: func(path: list<string>) -> result<response-event>;
 
   /// Check if there is an update to the plugin 

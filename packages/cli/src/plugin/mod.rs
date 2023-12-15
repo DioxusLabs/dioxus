@@ -137,6 +137,22 @@ pub async fn plugins_before_runtime(runtime_event: RuntimeEvent) -> ResponseEven
 pub async fn plugins_after_runtime(runtime_event: RuntimeEvent) -> ResponseEvent {
     call_plugins!(after_runtime_event runtime_event).fold_changes()
 }
+pub async fn plugins_watched_paths_changed(paths: &[PathBuf]) -> ResponseEvent {
+    if crate::plugin::PLUGINS.lock().await.is_empty() {
+        return ResponseEvent::None;
+    }
+    let paths: Vec<String> = paths
+        .iter()
+        .filter_map(|f| match f.to_str() {
+            Some(val) => Some(val.to_string()),
+            None => {
+                log::warn!("Watched path not valid UTF-8! {}", f.display());
+                None
+            }
+        })
+        .collect();
+    call_plugins!(on_watched_paths_change & paths).fold_changes()
+}
 
 lazy_static::lazy_static!(
   static ref ENGINE: Engine = {
