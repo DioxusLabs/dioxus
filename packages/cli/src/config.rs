@@ -347,6 +347,7 @@ pub struct BundleConfig {
     pub deb: Option<DebianSettings>,
     pub macos: Option<MacOsSettings>,
     pub windows: Option<WindowsSettings>,
+    pub updater: Option<UpdaterSettings>,
 }
 
 impl From<BundleConfig> for tauri_bundler::BundleSettings {
@@ -364,6 +365,7 @@ impl From<BundleConfig> for tauri_bundler::BundleSettings {
             deb: val.deb.map(Into::into).unwrap_or_default(),
             macos: val.macos.map(Into::into).unwrap_or_default(),
             windows: val.windows.map(Into::into).unwrap_or_default(),
+            updater: val.updater.map(Into::into),
             ..Default::default()
         }
     }
@@ -578,5 +580,25 @@ impl WebviewInstallMode {
 impl Default for WebviewInstallMode {
     fn default() -> Self {
         Self::OfflineInstaller { silent: false }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct UpdaterSettings {
+    pub active: bool,
+    pub endpoints: Option<Vec<String>>,
+    pub pubkey: Option<String>,
+    pub dialog: bool,
+}
+
+impl From<UpdaterSettings> for tauri_bundler::UpdaterSettings {
+    fn from(val: UpdaterSettings) -> Self {
+        tauri_bundler::UpdaterSettings {
+            active: val.active,
+            endpoints: val.endpoints,
+            pubkey: val.pubkey.unwrap_or_default(),
+            dialog: val.dialog,
+            ..Default::default()
+        }
     }
 }
