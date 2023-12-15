@@ -235,10 +235,9 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
             inner: CopyValue::new_with_caller(
                 SignalData {
                     subscribers: Default::default(),
-                    effect_subscribers: Default::default(),
                     update_any: schedule_update_any().expect("in a virtual dom"),
                     value,
-                    effect_stack: get_effect_stack(),
+                    effect_ref: get_effect_ref(),
                 },
                 #[cfg(debug_assertions)]
                 caller,
