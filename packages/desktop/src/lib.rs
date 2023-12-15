@@ -32,6 +32,7 @@ use dioxus_html::{native_bind::NativeFileEngine, FormData, HtmlEvent};
 use element::DesktopElement;
 use eval::init_eval;
 use futures_util::{pin_mut, FutureExt};
+pub use protocol::{use_asset_handler, AssetFuture, AssetHandler, AssetHandlerId, AssetResponse};
 use shortcut::ShortcutRegistry;
 pub use shortcut::{use_global_shortcut, ShortcutHandle, ShortcutId, ShortcutRegistryError};
 use std::cell::Cell;
@@ -393,7 +394,8 @@ fn create_new_window(
     event_handlers: &WindowEventHandlers,
     shortcut_manager: ShortcutRegistry,
 ) -> WebviewHandler {
-    let (webview, web_context) = webview::build(&mut cfg, event_loop, proxy.clone());
+    let (webview, web_context, asset_handlers) =
+        webview::build(&mut cfg, event_loop, proxy.clone());
     let desktop_context = Rc::from(DesktopService::new(
         webview,
         proxy.clone(),
@@ -401,6 +403,7 @@ fn create_new_window(
         queue.clone(),
         event_handlers.clone(),
         shortcut_manager,
+        asset_handlers,
     ));
 
     let cx = dom.base_scope();
