@@ -115,12 +115,12 @@ interface types {
 
   enum compile-event {
     build,
-    translate,
     bundle,
+    translate,
+    serve,
   }
 
   enum runtime-event {
-    serve,
     rebuild,
     hot-reload
   }

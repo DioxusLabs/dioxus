@@ -1,7 +1,7 @@
-use crate::plugin::{plugins_after_runtime, plugins_before_runtime};
+use crate::plugin::{plugins_after_compile, plugins_before_compile};
 
 use super::*;
-use crate::plugin::interface::plugins::main::types::RuntimeEvent::Serve as ServeEvent;
+use crate::plugin::interface::plugins::main::types::CompileEvent::Serve as ServeEvent;
 use std::{fs::create_dir_all, io::Write, path::PathBuf};
 
 /// Run the WASM project on dev-server
@@ -42,7 +42,7 @@ impl Serve {
             .platform
             .unwrap_or(crate_config.dioxus_config.application.default_platform);
 
-        let _change = plugins_before_runtime(ServeEvent).await;
+        plugins_before_compile(ServeEvent).await;
 
         match platform {
             cfg::Platform::Web => {
@@ -58,7 +58,7 @@ impl Serve {
             }
         }
 
-        let _change = plugins_after_runtime(ServeEvent).await;
+        plugins_after_compile(ServeEvent).await;
 
         Ok(())
     }

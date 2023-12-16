@@ -271,11 +271,11 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(cfg: Config<Ctx>) {
                 .filter(|path| {
                     // skip non rust files
                     matches!(
-                      path.extension().and_then(|p| p.to_str()), 
+                      path.extension().and_then(|p| p.to_str()),
                       Some("rs" | "toml" | "css" | "html" | "js")
-                    )  
+                    )
                     // skip excluded paths
-                    && !excluded_paths.iter().any(|p| path.starts_with(p)) 
+                    && !excluded_paths.iter().any(|p| path.starts_with(p))
                     // respect .gitignore
                     && !gitignore
                       .matched_path_or_any_parents(path, false)

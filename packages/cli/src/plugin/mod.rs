@@ -1,10 +1,12 @@
 use crate::lock::DioxusLock;
 use crate::plugin::convert::Convert;
 use crate::plugin::interface::{PluginState, PluginWorld};
+use crate::server::WsMessage;
 use crate::{DioxusConfig, PluginConfig};
 
 use slab::Slab;
 use std::path::{Path, PathBuf};
+use tokio::sync::broadcast::Sender;
 use tokio::sync::Mutex;
 use wasmtime::component::*;
 use wasmtime::{Config, Engine, Store};
@@ -137,6 +139,27 @@ pub async fn plugins_before_runtime(runtime_event: RuntimeEvent) -> ResponseEven
 pub async fn plugins_after_runtime(runtime_event: RuntimeEvent) -> ResponseEvent {
     call_plugins!(after_runtime_event runtime_event).fold_changes()
 }
+
+pub(crate) fn handle_change(
+    change: ResponseEvent,
+    reload_tx: &Option<Sender<WsMessage>>,
+    needs_full_rebuild: &mut bool,
+) {
+    match change {
+        ResponseEvent::Rebuild if reload_tx.is_some() => {
+            let _ = reload_tx.as_ref().unwrap().send(WsMessage::Reload);
+        }
+        ResponseEvent::Refresh(assets) if reload_tx.is_some() => {
+            let _ = reload_tx
+                .as_ref()
+                .unwrap()
+                .send(WsMessage::RefreshAssets { urls: assets });
+        }
+        ResponseEvent::Rebuild => *needs_full_rebuild = true,
+        _ => (),
+    }
+}
+
 pub async fn plugins_watched_paths_changed(paths: &[PathBuf]) -> ResponseEvent {
     if crate::plugin::PLUGINS.lock().await.is_empty() {
         return ResponseEvent::None;

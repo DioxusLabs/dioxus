@@ -1,5 +1,6 @@
 use crate::{
     plugin::{
+        handle_change,
         interface::plugins::main::types::RuntimeEvent::{HotReload, Rebuild},
         plugins_after_runtime, plugins_before_runtime, plugins_watched_paths_changed,
     },
@@ -31,7 +32,10 @@ async fn setup_file_watcher<F: Fn() -> Result<BuildResult> + Sync + Send + 'stat
 ) -> Result<RecommendedWatcher> {
     let build_with = Arc::new(build_with);
 
-    let ServerReloadState { hot_reload, .. } = reload;
+    let ServerReloadState {
+        hot_reload,
+        reload_tx,
+    } = reload;
 
     let mut last_update_time = chrono::Local::now().timestamp();
 
@@ -55,20 +59,17 @@ async fn setup_file_watcher<F: Fn() -> Result<BuildResult> + Sync + Send + 'stat
             return;
         }
 
-        let _change =
-            futures::executor::block_on(async { plugins_watched_paths_changed(&e.paths).await });
+        let mut needs_full_rebuild = false;
+        let change = futures::executor::block_on(plugins_watched_paths_changed(&e.paths));
+        handle_change(change, &reload_tx, &mut needs_full_rebuild);
 
-        let mut needs_full_rebuild;
         if let Some(hot_reload) = &hot_reload {
-            let _change =
-                futures::executor::block_on(async { plugins_before_runtime(HotReload).await });
+            let change = futures::executor::block_on(plugins_before_runtime(HotReload));
+            handle_change(change, &reload_tx, &mut needs_full_rebuild);
 
             // find changes to the rsx in the file
             let mut rsx_file_map = hot_reload.file_map.lock().unwrap();
             let mut messages: Vec<Template<'static>> = Vec::new();
-
-            // In hot reload mode, we only need to rebuild if non-rsx code is changed
-            needs_full_rebuild = false;
 
             for path in &e.paths {
                 // if this is not a rust file, rebuild the whole project
@@ -109,15 +110,15 @@ async fn setup_file_watcher<F: Fn() -> Result<BuildResult> + Sync + Send + 'stat
                 }
             }
 
-            let _change =
-                futures::executor::block_on(async { plugins_after_runtime(HotReload).await });
+            let change = futures::executor::block_on(plugins_after_runtime(HotReload));
+            handle_change(change, &reload_tx, &mut needs_full_rebuild);
         } else {
             needs_full_rebuild = true;
         }
 
         if needs_full_rebuild {
-            let _change =
-                futures::executor::block_on(async { plugins_before_runtime(Rebuild).await });
+            // Can be ignored, going to rebuild anyway
+            let _change = futures::executor::block_on(plugins_before_runtime(Rebuild));
 
             match build_with() {
                 Ok(res) => {
@@ -137,8 +138,9 @@ async fn setup_file_watcher<F: Fn() -> Result<BuildResult> + Sync + Send + 'stat
                 Err(e) => log::error!("{}", e),
             }
 
-            let _change =
-                futures::executor::block_on(async { plugins_after_runtime(Rebuild).await });
+            let change = futures::executor::block_on(plugins_after_runtime(Rebuild));
+            // Todo handle plugins requesting rebuild here
+            handle_change(change, &reload_tx, &mut needs_full_rebuild);
         }
     })
     .unwrap();
@@ -181,11 +183,9 @@ impl ServerReloadState {
         }
     }
 
-    pub fn refresh_asset(&self, asset_url: &str) {
+    pub fn refresh_assets(&self, urls: Vec<String>) {
         if let Some(reload_tx) = &self.reload_tx {
-            let _ = reload_tx.send(WsMessage::RefreshAsset {
-                url: asset_url.to_string(),
-            });
+            let _ = reload_tx.send(WsMessage::RefreshAssets { urls });
         }
     }
 }
@@ -201,6 +201,6 @@ pub struct HotReloadState {
 pub enum WsMessage {
     #[serde(rename = "reload")]
     Reload,
-    #[serde(rename = "refresh_asset")]
-    RefreshAsset { url: String },
+    #[serde(rename = "refresh_assets")]
+    RefreshAssets { urls: Vec<String> },
 }
