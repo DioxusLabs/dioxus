@@ -1,4 +1,5 @@
 use proc_macro2::TokenStream;
+use quote::ToTokens;
 use syn::{File, Macro};
 
 pub enum DiffResult {
@@ -10,13 +11,30 @@ pub enum DiffResult {
 pub fn find_rsx(new: &File, old: &File) -> DiffResult {
     let mut rsx_calls = Vec::new();
     if new.items.len() != old.items.len() {
+        tracing::trace!(
+            "found not hot reload-able change {:#?} != {:#?}",
+            new.items
+                .iter()
+                .map(|i| i.to_token_stream().to_string())
+                .collect::<Vec<_>>(),
+            old.items
+                .iter()
+                .map(|i| i.to_token_stream().to_string())
+                .collect::<Vec<_>>()
+        );
         return DiffResult::CodeChanged;
     }
     for (new, old) in new.items.iter().zip(old.items.iter()) {
         if find_rsx_item(new, old, &mut rsx_calls) {
+            tracing::trace!(
+                "found not hot reload-able change {:#?} != {:#?}",
+                new.to_token_stream().to_string(),
+                old.to_token_stream().to_string()
+            );
             return DiffResult::CodeChanged;
         }
     }
+    tracing::trace!("found hot reload-able changes {:#?}", rsx_calls);
     DiffResult::RsxChanged(rsx_calls)
 }
 
@@ -93,6 +111,9 @@ fn find_rsx_item(
                     }
                     (syn::ImplItem::Macro(new_item), syn::ImplItem::Macro(old_item)) => {
                         old_item != new_item
+                    }
+                    (syn::ImplItem::Verbatim(stream), syn::ImplItem::Verbatim(stream2)) => {
+                        stream.to_string() != stream2.to_string()
                     }
                     _ => true,
                 } {
@@ -186,10 +207,12 @@ fn find_rsx_trait(
                 }
             }
             (syn::TraitItem::Fn(new_item), syn::TraitItem::Fn(old_item)) => {
-                if let (Some(new_block), Some(old_block)) = (&new_item.default, &old_item.default) {
-                    find_rsx_block(new_block, old_block, rsx_calls)
-                } else {
-                    true
+                match (&new_item.default, &old_item.default) {
+                    (Some(new_block), Some(old_block)) => {
+                        find_rsx_block(new_block, old_block, rsx_calls)
+                    }
+                    (None, None) => false,
+                    _ => true,
                 }
             }
             (syn::TraitItem::Type(new_item), syn::TraitItem::Type(old_item)) => {
@@ -197,6 +220,9 @@ fn find_rsx_trait(
             }
             (syn::TraitItem::Macro(new_item), syn::TraitItem::Macro(old_item)) => {
                 old_item != new_item
+            }
+            (syn::TraitItem::Verbatim(stream), syn::TraitItem::Verbatim(stream2)) => {
+                stream.to_string() != stream2.to_string()
             }
             _ => true,
         } {
@@ -355,6 +381,11 @@ fn find_rsx_expr(
                 || new_expr.or2_token != old_expr.or2_token
                 || new_expr.output != old_expr.output
         }
+        (syn::Expr::Const(new_expr), syn::Expr::Const(old_expr)) => {
+            find_rsx_block(&new_expr.block, &old_expr.block, rsx_calls)
+                || new_expr.attrs != old_expr.attrs
+                || new_expr.const_token != old_expr.const_token
+        }
         (syn::Expr::Continue(new_expr), syn::Expr::Continue(old_expr)) => old_expr != new_expr,
         (syn::Expr::Field(new_expr), syn::Expr::Field(old_expr)) => {
             find_rsx_expr(&new_expr.base, &old_expr.base, rsx_calls)
@@ -402,6 +433,7 @@ fn find_rsx_expr(
                 || new_expr.attrs != old_expr.attrs
                 || new_expr.bracket_token != old_expr.bracket_token
         }
+        (syn::Expr::Infer(new_expr), syn::Expr::Infer(old_expr)) => new_expr != old_expr,
         (syn::Expr::Let(new_expr), syn::Expr::Let(old_expr)) => {
             find_rsx_expr(&new_expr.expr, &old_expr.expr, rsx_calls)
                 || new_expr.attrs != old_expr.attrs
@@ -589,7 +621,9 @@ fn find_rsx_expr(
                 _ => true,
             }
         }
-        (syn::Expr::Verbatim(_), syn::Expr::Verbatim(_)) => false,
+        (syn::Expr::Verbatim(stream), syn::Expr::Verbatim(stream2)) => {
+            stream.to_string() != stream2.to_string()
+        }
         _ => true,
     }
 }

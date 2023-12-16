@@ -48,14 +48,25 @@ pub fn build(config: &CrateConfig, quiet: bool) -> Result<BuildResult> {
 
     // [1] Build the .wasm module
     log::info!("🚅 Running build command...");
+
+    let wasm_check_command = std::process::Command::new("rustup")
+        .args(["show"])
+        .output()?;
+    let wasm_check_output = String::from_utf8(wasm_check_command.stdout).unwrap();
+    if !wasm_check_output.contains("wasm32-unknown-unknown") {
+        log::info!("wasm32-unknown-unknown target not detected, installing..");
+        let _ = std::process::Command::new("rustup")
+            .args(["target", "add", "wasm32-unknown-unknown"])
+            .output()?;
+    }
+
     let cmd = subprocess::Exec::cmd("cargo");
     let cmd = cmd
         .cwd(crate_dir)
         .arg("build")
         .arg("--target")
         .arg("wasm32-unknown-unknown")
-        .arg("--message-format=json")
-        .arg("--quiet");
+        .arg("--message-format=json");
 
     let cmd = if config.release {
         cmd.arg("--release")
@@ -65,7 +76,7 @@ pub fn build(config: &CrateConfig, quiet: bool) -> Result<BuildResult> {
     let cmd = if config.verbose {
         cmd.arg("--verbose")
     } else {
-        cmd
+        cmd.arg("--quiet")
     };
 
     let cmd = if config.custom_profile.is_some() {
@@ -254,7 +265,6 @@ pub fn build_desktop(config: &CrateConfig, _is_serve: bool) -> Result<BuildResul
     let mut cmd = subprocess::Exec::cmd("cargo")
         .cwd(&config.crate_dir)
         .arg("build")
-        .arg("--quiet")
         .arg("--message-format=json");
 
     if config.release {
@@ -262,6 +272,8 @@ pub fn build_desktop(config: &CrateConfig, _is_serve: bool) -> Result<BuildResul
     }
     if config.verbose {
         cmd = cmd.arg("--verbose");
+    } else {
+        cmd = cmd.arg("--quiet");
     }
 
     if config.custom_profile.is_some() {
@@ -469,7 +481,7 @@ pub fn gen_page(config: &DioxusConfig, serve: bool) -> String {
         .unwrap_or_default()
         .contains_key("tailwindcss")
     {
-        style_str.push_str("<link rel=\"stylesheet\" href=\"tailwind.css\">\n");
+        style_str.push_str("<link rel=\"stylesheet\" href=\"/{base_path}/tailwind.css\">\n");
     }
 
     replace_or_insert_before("{style_include}", &style_str, "</head", &mut html);

@@ -91,7 +91,7 @@ pub enum Mutation<'a> {
         id: ElementId,
     },
 
-    /// Create an placeholder int he DOM that we will use later.
+    /// Create a placeholder in the DOM that we will use later.
     ///
     /// Dioxus currently requires the use of placeholders to maintain a re-entrance point for things like list diffing
     CreatePlaceholder {

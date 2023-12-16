@@ -602,7 +602,7 @@ impl<'b> VirtualDom {
         // If none of the old keys are reused by the new children, then we remove all the remaining old children and
         // create the new children afresh.
         if shared_keys.is_empty() {
-            if old.get(0).is_some() {
+            if old.first().is_some() {
                 self.remove_nodes(&old[1..]);
                 self.replace(&old[0], new, Some(parent));
             } else {
