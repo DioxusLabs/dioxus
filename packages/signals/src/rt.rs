@@ -7,10 +7,7 @@ use std::rc::Rc;
 use dioxus_core::prelude::*;
 use dioxus_core::ScopeId;
 
-use generational_box::{
-    BorrowError, BorrowMutError, GenerationalBox, GenerationalRef, GenerationalRefMut, Owner,
-    Storage, Store,
-};
+use generational_box::{GenerationalBox, Owner, Storage};
 
 use crate::Effect;
 
@@ -82,6 +79,7 @@ impl<T: 'static> CopyValue<T> {
     }
 
     /// Create a new CopyValue. The value will be stored in the given scope. When the specified scope is dropped, the value will be dropped.
+    #[track_caller]
     pub fn new_in_scope(value: T, scope: ScopeId) -> Self {
         Self::new_maybe_sync_in_scope(value, scope)
     }
@@ -91,6 +89,7 @@ impl<T: 'static, S: Storage<T>> CopyValue<T, S> {
     /// Create a new CopyValue. The value will be stored in the current component.
     ///
     /// Once the component this value is created in is dropped, the value will be dropped.
+    #[track_caller]
     pub fn new_maybe_sync(value: T) -> Self {
         let owner = current_owner();
 
@@ -117,6 +116,7 @@ impl<T: 'static, S: Storage<T>> CopyValue<T, S> {
     }
 
     /// Create a new CopyValue. The value will be stored in the given scope. When the specified scope is dropped, the value will be dropped.
+    #[track_caller]
     pub fn new_maybe_sync_in_scope(value: T, scope: ScopeId) -> Self {
         let owner = owner_in_scope(scope);
 
@@ -143,7 +143,7 @@ impl<T: 'static, S: Storage<T>> CopyValue<T, S> {
     /// Try to read the value. If the value has been dropped, this will return None.
     #[track_caller]
 
-    pub fn try_read(&self) -> Option<S::Ref> {
+    pub fn try_read(&self) -> Result<S::Ref, generational_box::BorrowError> {
         self.value.try_read()
     }
 
@@ -155,7 +155,7 @@ impl<T: 'static, S: Storage<T>> CopyValue<T, S> {
 
     /// Try to write the value. If the value has been dropped, this will return None.
     #[track_caller]
-    pub fn try_write(&self) -> Option<S::Mut> {
+    pub fn try_write(&self) -> Result<S::Mut, generational_box::BorrowMutError> {
         self.value.try_write()
     }
 

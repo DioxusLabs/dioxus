@@ -1,8 +1,5 @@
 use crate::{
-    references::{
-        GenerationalRef, GenerationalRefBorrowInfo, GenerationalRefMut,
-        GenerationalRefMutBorrowInfo,
-    },
+    references::{GenerationalRef, GenerationalRefMut},
     AnyStorage, Mappable, MappableMut, MemoryLocation, MemoryLocationInner, Storage,
 };
 use std::cell::{Ref, RefCell, RefMut};
@@ -54,14 +51,19 @@ impl<T: 'static> Storage<T> for UnsyncStorage {
         &'static self,
         #[cfg(any(debug_assertions, feature = "debug_ownership"))]
         created_at: &'static std::panic::Location<'static>,
-        #[cfg(any(debug_assertions, feature = "debug_ownership"))] at: GenerationalRefBorrowInfo,
+        #[cfg(any(debug_assertions, feature = "debug_ownership"))]
+        at: crate::GenerationalRefBorrowInfo,
     ) -> Result<Self::Ref, crate::error::BorrowError> {
-        Ref::filter_map(self.0.borrow(), |any| any.as_ref()?.downcast_ref())
+        let borrow = self
+            .0
+            .try_borrow()
+            .map_err(|_| at.borrowed_from.borrow_error())?;
+        Ref::filter_map(borrow, |any| any.as_ref()?.downcast_ref())
             .map_err(|_| {
-                crate::error::BorrowError::Dropped(
+                crate::error::BorrowError::Dropped(crate::error::ValueDroppedError {
                     #[cfg(any(debug_assertions, feature = "debug_ownership"))]
-                    crate::error::ValueDroppedError { created_at },
-                )
+                    created_at,
+                })
             })
             .map(|guard| {
                 GenerationalRef::new(
@@ -76,14 +78,19 @@ impl<T: 'static> Storage<T> for UnsyncStorage {
         &'static self,
         #[cfg(any(debug_assertions, feature = "debug_ownership"))]
         created_at: &'static std::panic::Location<'static>,
-        #[cfg(any(debug_assertions, feature = "debug_ownership"))] at: GenerationalRefMutBorrowInfo,
+        #[cfg(any(debug_assertions, feature = "debug_ownership"))]
+        at: crate::GenerationalRefMutBorrowInfo,
     ) -> Result<Self::Mut, crate::error::BorrowMutError> {
-        RefMut::filter_map(self.0.borrow_mut(), |any| any.as_mut()?.downcast_mut())
+        let borrow = self
+            .0
+            .try_borrow_mut()
+            .map_err(|_| at.borrowed_from.borrow_mut_error())?;
+        RefMut::filter_map(borrow, |any| any.as_mut()?.downcast_mut())
             .map_err(|_| {
-                crate::error::BorrowMutError::Dropped(
+                crate::error::BorrowMutError::Dropped(crate::error::ValueDroppedError {
                     #[cfg(any(debug_assertions, feature = "debug_ownership"))]
-                    crate::error::ValueDroppedError { created_at },
-                )
+                    created_at,
+                })
             })
             .map(|guard| {
                 GenerationalRefMut::new(

@@ -99,11 +99,20 @@ pub fn use_signal<T: 'static>(cx: &ScopeState, f: impl FnOnce() -> T) -> Signal<
 /// }
 /// ```
 #[must_use]
+#[track_caller]
 pub fn use_signal_sync<T: Send + Sync + 'static>(
     cx: &ScopeState,
     f: impl FnOnce() -> T,
 ) -> Signal<T, SyncStorage> {
-    *cx.use_hook(|| Signal::new_maybe_sync(f()))
+    #[cfg(debug_assertions)]
+    let caller = std::panic::Location::caller();
+    *cx.use_hook(|| {
+        Signal::new_with_caller(
+            f(),
+            #[cfg(debug_assertions)]
+            caller,
+        )
+    })
 }
 
 #[derive(Clone)]
@@ -207,6 +216,7 @@ impl<T: 'static> Signal<T> {
     }
 
     /// Create a new signal with a custom owner scope. The signal will be dropped when the owner scope is dropped instead of the current scope.
+    #[track_caller]
     pub fn new_in_scope(value: T, owner: ScopeId) -> Self {
         Self::new_maybe_sync_in_scope(value, owner)
     }
@@ -214,6 +224,7 @@ impl<T: 'static> Signal<T> {
 
 impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
     /// Creates a new Signal. Signals are a Copy state management solution with automatic dependency tracking.
+    #[track_caller]
     #[tracing::instrument(skip(value))]
     pub fn new_maybe_sync(value: T) -> Self {
         Self {
@@ -246,6 +257,7 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
     }
 
     /// Create a new signal with a custom owner scope. The signal will be dropped when the owner scope is dropped instead of the current scope.
+    #[track_caller]
     #[tracing::instrument(skip(value))]
     pub fn new_maybe_sync_in_scope(value: T, owner: ScopeId) -> Self {
         Self {
@@ -513,6 +525,7 @@ pub struct ReadOnlySignal<T: 'static, S: Storage<SignalData<T>> = UnsyncStorage>
 
 impl<T: 'static> ReadOnlySignal<T> {
     /// Create a new read-only signal.
+    #[track_caller]
     pub fn new(signal: Signal<T>) -> Self {
         Self::new_maybe_sync(signal)
     }
@@ -520,6 +533,7 @@ impl<T: 'static> ReadOnlySignal<T> {
 
 impl<T: 'static, S: Storage<SignalData<T>>> ReadOnlySignal<T, S> {
     /// Create a new read-only signal that is maybe sync.
+    #[track_caller]
     pub fn new_maybe_sync(signal: Signal<T, S>) -> Self {
         Self { inner: signal }
     }
@@ -542,7 +556,9 @@ impl<T: 'static, S: Storage<SignalData<T>>> ReadOnlySignal<T, S> {
     /// Get the current value of the signal. **Unlike read, this will not subscribe the current scope to the signal which can cause parts of your UI to not update.**
     ///
     /// If the signal has been dropped, this will panic.
-    pub fn peek(&self) -> GenerationalRef<T> {
+    pub fn peek(
+        &self,
+    ) -> <<S as Storage<SignalData<T>>>::Ref as Mappable<SignalData<T>>>::Mapped<T> {
         self.inner.peek()
     }
 

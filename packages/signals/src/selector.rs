@@ -22,6 +22,7 @@ use crate::{use_signal, EffectInner, EFFECT_STACK};
 ///     render! { "{double}" }
 /// }
 /// ```
+#[track_caller]
 #[must_use = "Consider using `use_effect` to rerun a callback when dependencies change"]
 pub fn use_selector<R: PartialEq>(
     cx: &ScopeState,
@@ -47,6 +48,7 @@ pub fn use_selector<R: PartialEq>(
 ///     render! { "{double}" }
 /// }
 /// ```
+#[track_caller]
 #[must_use = "Consider using `use_effect` to rerun a callback when dependencies change"]
 pub fn use_maybe_sync_selector<R: PartialEq, S: Storage<SignalData<R>>>(
     cx: &ScopeState,
@@ -71,6 +73,7 @@ pub fn use_maybe_sync_selector<R: PartialEq, S: Storage<SignalData<R>>>(
 ///     render! { "{double}" }
 /// }
 /// ```
+#[track_caller]
 #[must_use = "Consider using `use_effect` to rerun a callback when dependencies change"]
 pub fn use_selector_with_dependencies<R: PartialEq, D: Dependency>(
     cx: &ScopeState,
@@ -99,6 +102,7 @@ where
 ///     render! { "{double}" }
 /// }
 /// ```
+#[track_caller]
 #[must_use = "Consider using `use_effect` to rerun a callback when dependencies change"]
 pub fn use_maybe_sync_selector_with_dependencies<
     R: PartialEq,
@@ -129,6 +133,7 @@ where
 /// Creates a new unsync Selector. The selector will be run immediately and whenever any signal it reads changes.
 ///
 /// Selectors can be used to efficiently compute derived data from signals.
+#[track_caller]
 pub fn selector<R: PartialEq>(f: impl FnMut() -> R + 'static) -> ReadOnlySignal<R> {
     maybe_sync_selector(f)
 }
@@ -136,6 +141,7 @@ pub fn selector<R: PartialEq>(f: impl FnMut() -> R + 'static) -> ReadOnlySignal<
 /// Creates a new Selector that may be Sync + Send. The selector will be run immediately and whenever any signal it reads changes.
 ///
 /// Selectors can be used to efficiently compute derived data from signals.
+#[track_caller]
 pub fn maybe_sync_selector<R: PartialEq, S: Storage<SignalData<R>>>(
     mut f: impl FnMut() -> R + 'static,
 ) -> ReadOnlySignal<R, S> {

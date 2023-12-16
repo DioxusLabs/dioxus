@@ -3,7 +3,7 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
-use crate::{Mappable, MappableMut, MemoryLocationBorrowInfo};
+use crate::{Mappable, MappableMut};
 
 /// A reference to a value in a generational box.
 pub struct GenerationalRef<T: 'static, R: Mappable<T>> {
@@ -73,9 +73,10 @@ impl<T: 'static, R: Mappable<T>> Deref for GenerationalRef<T, R> {
 }
 
 #[cfg(any(debug_assertions, feature = "debug_borrows"))]
-pub(crate) struct GenerationalRefBorrowInfo {
+/// Information about a borrow.
+pub struct GenerationalRefBorrowInfo {
     pub(crate) borrowed_at: &'static std::panic::Location<'static>,
-    pub(crate) borrowed_from: &'static MemoryLocationBorrowInfo,
+    pub(crate) borrowed_from: &'static crate::MemoryLocationBorrowInfo,
 }
 
 #[cfg(any(debug_assertions, feature = "debug_borrows"))]
@@ -157,8 +158,10 @@ impl<T: 'static, W: MappableMut<T>> DerefMut for GenerationalRefMut<T, W> {
 }
 
 #[cfg(any(debug_assertions, feature = "debug_borrows"))]
-pub(crate) struct GenerationalRefMutBorrowInfo {
-    pub(crate) borrowed_from: &'static MemoryLocationBorrowInfo,
+/// Information about a mutable borrow.
+pub struct GenerationalRefMutBorrowInfo {
+    /// The location where the borrow occurred.
+    pub(crate) borrowed_from: &'static crate::MemoryLocationBorrowInfo,
 }
 
 #[cfg(any(debug_assertions, feature = "debug_borrows"))]

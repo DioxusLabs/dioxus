@@ -1,10 +1,7 @@
 #![doc = include_str!("../README.md")]
 #![warn(missing_docs)]
 
-use error::*;
-use parking_lot::{Mutex, RwLock};
-use references::{GenerationalRefBorrowInfo, GenerationalRefMutBorrowInfo};
-use std::any::Any;
+use parking_lot::Mutex;
 use std::sync::atomic::AtomicU32;
 use std::{
     fmt::Debug,
@@ -13,7 +10,10 @@ use std::{
     sync::Arc,
 };
 
-use unsync::UnsyncStorage;
+pub use error::*;
+pub use references::*;
+pub use sync::SyncStorage;
+pub use unsync::UnsyncStorage;
 
 mod error;
 mod references;
@@ -37,12 +37,12 @@ fn reused() {
     let first_ptr;
     {
         let owner = UnsyncStorage::owner();
-        first_ptr = owner.insert(1).raw.data.data_ptr();
+        first_ptr = owner.insert(1).raw.0.data.data_ptr();
         drop(owner);
     }
     {
         let owner = UnsyncStorage::owner();
-        let second_ptr = owner.insert(1234).raw.data.data_ptr();
+        let second_ptr = owner.insert(1234).raw.0.data.data_ptr();
         assert_eq!(first_ptr, second_ptr);
         drop(owner);
     }
@@ -233,7 +233,7 @@ impl<T: 'static, S: Storage<T>> GenerationalBox<T, S> {
                 created_at: self.created_at,
             }));
         }
-        self.raw.0.data.try_read(
+        let result = self.raw.0.data.try_read(
             #[cfg(any(debug_assertions, feature = "debug_ownership"))]
             self.created_at,
             #[cfg(any(debug_assertions, feature = "debug_ownership"))]
@@ -241,7 +241,18 @@ impl<T: 'static, S: Storage<T>> GenerationalBox<T, S> {
                 borrowed_at: std::panic::Location::caller(),
                 borrowed_from: &self.raw.0.borrow,
             },
-        )
+        );
+
+        if result.is_ok() {
+            self.raw
+                .0
+                .borrow
+                .borrowed_at
+                .write()
+                .push(std::panic::Location::caller());
+        }
+
+        result
     }
 
     /// Read the value. Panics if the value is no longer valid.
@@ -259,14 +270,20 @@ impl<T: 'static, S: Storage<T>> GenerationalBox<T, S> {
                 created_at: self.created_at,
             }));
         }
-        self.raw.0.data.try_write(
+        let result = self.raw.0.data.try_write(
             #[cfg(any(debug_assertions, feature = "debug_ownership"))]
             self.created_at,
             #[cfg(any(debug_assertions, feature = "debug_ownership"))]
             GenerationalRefMutBorrowInfo {
                 borrowed_from: &self.raw.0.borrow,
             },
-        )
+        );
+
+        if result.is_ok() {
+            *self.raw.0.borrow.borrowed_mut_at.write() = Some(std::panic::Location::caller());
+        }
+
+        result
     }
 
     /// Write the value. Panics if the value is no longer valid.
@@ -296,9 +313,9 @@ impl<T: 'static, S: Storage<T>> GenerationalBox<T, S> {
     }
 }
 
-impl<T, S: 'static + Copy> Copy for GenerationalBox<T, S> {}
+impl<T, S: 'static> Copy for GenerationalBox<T, S> {}
 
-impl<T, S: Copy> Clone for GenerationalBox<T, S> {
+impl<T, S> Clone for GenerationalBox<T, S> {
     fn clone(&self) -> Self {
         *self
     }
@@ -384,7 +401,8 @@ pub trait AnyStorage: Default {
     }
 }
 
-struct MemoryLocation<S: 'static = UnsyncStorage>(&'static MemoryLocationInner<S>);
+/// A dynamic memory location that can be used in a generational box.
+pub struct MemoryLocation<S: 'static = UnsyncStorage>(&'static MemoryLocationInner<S>);
 
 impl<S: 'static> Clone for MemoryLocation<S> {
     fn clone(&self) -> Self {
@@ -397,8 +415,31 @@ impl<S: 'static> Copy for MemoryLocation<S> {}
 #[cfg(any(debug_assertions, feature = "debug_borrows"))]
 #[derive(Debug, Default)]
 struct MemoryLocationBorrowInfo {
-    borrowed_at: RwLock<Vec<&'static std::panic::Location<'static>>>,
-    borrowed_mut_at: RwLock<Option<&'static std::panic::Location<'static>>>,
+    pub(crate) borrowed_at: parking_lot::RwLock<Vec<&'static std::panic::Location<'static>>>,
+    pub(crate) borrowed_mut_at: parking_lot::RwLock<Option<&'static std::panic::Location<'static>>>,
+}
+
+impl MemoryLocationBorrowInfo {
+    fn borrow_mut_error(&self) -> BorrowMutError {
+        if let Some(borrowed_mut_at) = self.borrowed_mut_at.read().as_ref() {
+            BorrowMutError::AlreadyBorrowedMut(crate::error::AlreadyBorrowedMutError {
+                #[cfg(any(debug_assertions, feature = "debug_borrows"))]
+                borrowed_mut_at,
+            })
+        } else {
+            BorrowMutError::AlreadyBorrowed(crate::error::AlreadyBorrowedError {
+                #[cfg(any(debug_assertions, feature = "debug_borrows"))]
+                borrowed_at: self.borrowed_at.read().clone(),
+            })
+        }
+    }
+
+    fn borrow_error(&self) -> BorrowError {
+        BorrowError::AlreadyBorrowedMut(crate::error::AlreadyBorrowedMutError {
+            #[cfg(any(debug_assertions, feature = "debug_ownership"))]
+            borrowed_mut_at: self.borrowed_mut_at.read().unwrap(),
+        })
+    }
 }
 
 struct MemoryLocationInner<S = UnsyncStorage> {
@@ -444,65 +485,6 @@ impl<S> MemoryLocation<S> {
             _marker: PhantomData,
         }
     }
-
-    #[track_caller]
-    fn try_borrow<T: Any>(
-        &self,
-        #[cfg(any(debug_assertions, feature = "debug_ownership"))]
-        created_at: &'static std::panic::Location<'static>,
-    ) -> std::result::Result<<S as Storage<T>>::Ref, error::BorrowError>
-    where
-        S: Storage<T>,
-    {
-        match self.0.data.try_read(
-            #[cfg(any(debug_assertions, feature = "debug_ownership"))]
-            created_at,
-            #[cfg(any(debug_assertions, feature = "debug_ownership"))]
-            GenerationalRefBorrowInfo {
-                borrowed_at: std::panic::Location::caller(),
-                borrowed_from: &self.0.borrow,
-            },
-        ) {
-            Ok(read) => {
-                #[cfg(any(debug_assertions, feature = "debug_borrows"))]
-                self.0
-                    .borrow
-                    .borrowed_at
-                    .write()
-                    .push(std::panic::Location::caller());
-                Ok(read)
-            }
-            Err(err) => Err(err),
-        }
-    }
-
-    #[track_caller]
-    fn try_borrow_mut<T: Any>(
-        &self,
-        #[cfg(any(debug_assertions, feature = "debug_ownership"))]
-        created_at: &'static std::panic::Location<'static>,
-    ) -> std::result::Result<<S as Storage<T>>::Mut, error::BorrowMutError>
-    where
-        S: Storage<T>,
-    {
-        match self.0.data.try_write(
-            #[cfg(any(debug_assertions, feature = "debug_ownership"))]
-            created_at,
-            #[cfg(any(debug_assertions, feature = "debug_ownership"))]
-            GenerationalRefMutBorrowInfo {
-                borrowed_from: &self.0.borrow,
-            },
-        ) {
-            Ok(read) => {
-                #[cfg(any(debug_assertions, feature = "debug_borrows"))]
-                {
-                    *self.0.borrow.borrowed_mut_at.write() = Some(std::panic::Location::caller());
-                }
-                Ok(read)
-            }
-            Err(err) => Err(err),
-        }
-    }
 }
 
 /// Owner: Handles dropping generational boxes. The owner acts like a runtime lifetime guard. Any states that you create with an owner will be dropped when that owner is dropped.
@@ -511,7 +493,20 @@ pub struct Owner<S: AnyStorage + 'static = UnsyncStorage> {
     phantom: PhantomData<S>,
 }
 
-impl<S: AnyStorage + Copy> Owner<S> {
+impl<S: AnyStorage> Owner<S> {
+    /// Insert a value into the store. The value will be dropped when the owner is dropped.
+    #[track_caller]
+    pub fn insert<T: 'static>(&self, value: T) -> GenerationalBox<T, S>
+    where
+        S: Storage<T>,
+    {
+        self.insert_with_caller(
+            value,
+            #[cfg(any(debug_assertions, feature = "debug_ownership"))]
+            std::panic::Location::caller(),
+        )
+    }
+
     /// Insert a value into the store with a specific location blamed for creating the value. The value will be dropped when the owner is dropped.
     pub fn insert_with_caller<T: 'static>(
         &self,

@@ -5,10 +5,7 @@ use std::sync::{Arc, OnceLock};
 
 use crate::{
     error::{self, ValueDroppedError},
-    references::{
-        GenerationalRef, GenerationalRefBorrowInfo, GenerationalRefMut,
-        GenerationalRefMutBorrowInfo,
-    },
+    references::{GenerationalRef, GenerationalRefMut},
     AnyStorage, Mappable, MappableMut, MemoryLocation, MemoryLocationInner, Storage,
 };
 
@@ -89,9 +86,14 @@ impl<T: Sync + Send + 'static> Storage<T> for SyncStorage {
         &'static self,
         #[cfg(any(debug_assertions, feature = "debug_ownership"))]
         created_at: &'static std::panic::Location<'static>,
-        #[cfg(any(debug_assertions, feature = "debug_ownership"))] at: GenerationalRefBorrowInfo,
+        #[cfg(any(debug_assertions, feature = "debug_ownership"))]
+        at: crate::GenerationalRefBorrowInfo,
     ) -> Result<Self::Ref, error::BorrowError> {
-        RwLockReadGuard::try_map(self.0.read(), |any| any.as_ref()?.downcast_ref())
+        let read = self
+            .0
+            .try_read()
+            .ok_or_else(|| at.borrowed_from.borrow_error())?;
+        RwLockReadGuard::try_map(read, |any| any.as_ref()?.downcast_ref())
             .map_err(|_| {
                 error::BorrowError::Dropped(ValueDroppedError {
                     #[cfg(any(debug_assertions, feature = "debug_ownership"))]
@@ -111,9 +113,14 @@ impl<T: Sync + Send + 'static> Storage<T> for SyncStorage {
         &'static self,
         #[cfg(any(debug_assertions, feature = "debug_ownership"))]
         created_at: &'static std::panic::Location<'static>,
-        #[cfg(any(debug_assertions, feature = "debug_ownership"))] at: GenerationalRefMutBorrowInfo,
+        #[cfg(any(debug_assertions, feature = "debug_ownership"))]
+        at: crate::GenerationalRefMutBorrowInfo,
     ) -> Result<Self::Mut, error::BorrowMutError> {
-        RwLockWriteGuard::try_map(self.0.write(), |any| any.as_mut()?.downcast_mut())
+        let write = self
+            .0
+            .try_write()
+            .ok_or_else(|| at.borrowed_from.borrow_mut_error())?;
+        RwLockWriteGuard::try_map(write, |any| any.as_mut()?.downcast_mut())
             .map_err(|_| {
                 error::BorrowMutError::Dropped(ValueDroppedError {
                     #[cfg(any(debug_assertions, feature = "debug_ownership"))]

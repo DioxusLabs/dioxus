@@ -11,26 +11,20 @@ Three main types manage state in Generational Box:
 Example:
 
 ```rust
-use generational_box::Store;
+use generational_box::{UnsyncStorage, AnyStorage};
 
-// Create a store for this thread
-let store = Store::default();
+// Create an owner for some state for a scope
+let owner = UnsyncStorage::owner();
 
-{
-    // Create an owner for some state for a scope
-    let owner = store.owner();
+// Create some non-copy data, move it into a owner, and work with copy data
+let data: String = "hello world".to_string();
+let key = owner.insert(data);
 
-    // Create some non-copy data, move it into a owner, and work with copy data
-    let data: String = "hello world".to_string();
-    let key = owner.insert(data);
-    
-    // The generational box can be read from and written to like a RefCell
-    let value = key.read();
-    assert_eq!(*value, "hello world");
-}
-// Reading value at this point will cause a panic
+// The generational box can be read from and written to like a RefCell
+let value = key.read();
+assert_eq!(*value, "hello world");
 ```
 
 ## How it works
 
-Internally, `generational-box` creates an arena of generational RefCell's that are recyled when the owner is dropped. You can think of the cells as something like `&'static RefCell<Box<dyn Any>>` with a generational check to make recyling a cell easier to debug. Then GenerationalBox's are `Copy` because the `&'static` pointer is `Copy`
+Internally, `generational-box` creates an arena of generational `RefCell`'s that are recycled when the owner is dropped. You can think of the cells as something like `&'static RefCell<Box<dyn Any>>` with a generational check to make recycling a cell easier to debug. Then GenerationalBox's are `Copy` because the `&'static` pointer is `Copy`
