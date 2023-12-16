@@ -49,13 +49,14 @@ impl Scheduler {
         };
 
         let mut cx = std::task::Context::from_waker(&task.waker);
-        let _ = task.task.borrow_mut().as_mut().poll(&mut cx);
+
+        if !task.task.borrow_mut().as_mut().poll(&mut cx).is_ready() {
+            self.sender
+                .unbounded_send(SchedulerMsg::TaskNotified(task_id))
+                .expect("Scheduler should exist");
+        }
 
         entry.insert(task);
-
-        self.sender
-            .unbounded_send(SchedulerMsg::TaskNotified(task_id))
-            .expect("Scheduler should exist");
 
         task_id
     }
