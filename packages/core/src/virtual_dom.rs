@@ -318,9 +318,9 @@ impl VirtualDom {
         }
     }
 
-    /// Call a listener inside the VirtualDom with data from outside the VirtualDom.
+    /// Call a listener inside the VirtualDom with data from outside the VirtualDom. **The ElementId passed in must be the id of an dynamic element, not a static node or a text node.**
     ///
-    /// This method will identify the appropriate element. The data must match up with the listener delcared. Note that
+    /// This method will identify the appropriate element. The data must match up with the listener declared. Note that
     /// this method does not give any indication as to the success of the listener call. If the listener is not found,
     /// nothing will happen.
     ///
