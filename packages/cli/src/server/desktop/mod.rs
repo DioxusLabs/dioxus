@@ -7,11 +7,10 @@ use crate::{
 };
 
 use dioxus_hot_reload::HotReloadMsg;
-use dioxus_html::{HtmlCtx, SvgAttributes};
+use dioxus_html::HtmlCtx;
 use dioxus_rsx::hot_reload::*;
 use interprocess_docfix::local_socket::LocalSocketListener;
 use std::{
-    collections::HashSet,
     process::{Child, Command},
     sync::{Arc, Mutex, RwLock},
 };
