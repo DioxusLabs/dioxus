@@ -54,7 +54,7 @@ pub fn build(
             let asset_handlers_ref = asset_handlers_ref.clone();
             tokio::spawn(async move {
                 let response_res = protocol::desktop_handler(
-                    &request,
+                    request,
                     custom_head.clone(),
                     index_file.clone(),
                     &root_name,
