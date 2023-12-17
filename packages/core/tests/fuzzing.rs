@@ -2,7 +2,7 @@
 
 use dioxus::prelude::Props;
 use dioxus_core::*;
-use std::collections::HashSet;
+use std::{cfg, collections::HashSet};
 
 fn random_ns() -> Option<&'static str> {
     let namespace = rand::random::<u8>() % 2;
@@ -307,7 +307,8 @@ fn create_random_element(cx: Scope<DepthProps>) -> Element {
 // test for panics when creating random nodes and templates
 #[test]
 fn create() {
-    for _ in 0..100 {
+    let repeat_count = if cfg!(miri) { 100 } else { 1000 };
+    for _ in 0..repeat_count {
         let mut vdom =
             VirtualDom::new_with_props(create_random_element, DepthProps { depth: 0, root: true });
         let _ = vdom.rebuild();
@@ -318,7 +319,8 @@ fn create() {
 // This test will change the template every render which is not very realistic, but it helps stress the system
 #[test]
 fn diff() {
-    for _ in 0..10 {
+    let repeat_count = if cfg!(miri) { 100 } else { 1000 };
+    for _ in 0..repeat_count {
         let mut vdom =
             VirtualDom::new_with_props(create_random_element, DepthProps { depth: 0, root: true });
         let _ = vdom.rebuild();
