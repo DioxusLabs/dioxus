@@ -147,8 +147,6 @@ async fn autoformat_project(check: bool) -> Result<()> {
         return Ok(());
     }
 
-    let indent = indentation_for(&files_to_format[0])?;
-
     if files_to_format.is_empty() {
         return Ok(());
     }

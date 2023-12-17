@@ -10,9 +10,9 @@ fn main() {
 
 #[derive(Clone, Copy)]
 enum ErrorComponent {
-    ReadsSignal,
-    ReadsMutSignal,
-    ReadDroppedSignal,
+    Read,
+    ReadMut,
+    ReadDropped,
 }
 
 fn app(cx: Scope) -> Element {
@@ -20,28 +20,28 @@ fn app(cx: Scope) -> Element {
 
     render! {
         match *error() {
-            Some(ErrorComponent::ReadsSignal) => render! { ReadsSignal {} },
-            Some(ErrorComponent::ReadsMutSignal) => render! { ReadsMutSignal {} },
-            Some(ErrorComponent::ReadDroppedSignal) => render! { ReadDroppedSignal {} },
+            Some(ErrorComponent::Read) => render! { Read {} },
+            Some(ErrorComponent::ReadMut) => render! { ReadMut {} },
+            Some(ErrorComponent::ReadDropped) => render! { ReadDropped {} },
             None => render! {
                 button {
-                    onclick: move |_| error.set(Some(ErrorComponent::ReadsSignal)),
-                    "ReadsSignal"
+                    onclick: move |_| error.set(Some(ErrorComponent::Read)),
+                    "Read"
                 }
                 button {
-                    onclick: move |_| error.set(Some(ErrorComponent::ReadsMutSignal)),
-                    "ReadsMutSignal"
+                    onclick: move |_| error.set(Some(ErrorComponent::ReadMut)),
+                    "ReadMut"
                 }
                 button {
-                    onclick: move |_| error.set(Some(ErrorComponent::ReadDroppedSignal)),
-                    "ReadDroppedSignal"
+                    onclick: move |_| error.set(Some(ErrorComponent::ReadDropped)),
+                    "ReadDropped"
                 }
             }
         }
     }
 }
 
-fn ReadsSignal(cx: Scope) -> Element {
+fn Read(cx: Scope) -> Element {
     let signal = use_signal_sync(cx, || 0);
 
     let _write = signal.write();
@@ -50,7 +50,7 @@ fn ReadsSignal(cx: Scope) -> Element {
     todo!()
 }
 
-fn ReadsMutSignal(cx: Scope) -> Element {
+fn ReadMut(cx: Scope) -> Element {
     let signal = use_signal_sync(cx, || 0);
 
     let _read = signal.read();
@@ -59,7 +59,7 @@ fn ReadsMutSignal(cx: Scope) -> Element {
     todo!()
 }
 
-fn ReadDroppedSignal(cx: Scope) -> Element {
+fn ReadDropped(cx: Scope) -> Element {
     let signal = use_signal_sync(cx, || None);
     if cx.generation() < 4 {
         cx.needs_update();
@@ -82,7 +82,7 @@ fn ReadDroppedSignalChild(
 ) -> Element {
     let signal = use_signal_sync(cx, || 0);
     cx.use_hook(move || {
-        parent_signal.set(Some(signal.clone()));
+        parent_signal.set(Some(signal));
     });
     render! {
         "{signal}"
