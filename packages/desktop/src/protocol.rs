@@ -1,5 +1,6 @@
 use dioxus_core::ScopeState;
 use dioxus_interpreter_js::{COMMON_JS, INTERPRETER_JS};
+use slab::Slab;
 use std::{
     borrow::Cow,
     collections::HashMap,
@@ -76,50 +77,30 @@ impl<T: Future<Output = Option<AssetResponse>> + Send + Sync + 'static> AssetFut
 pub trait AssetHandler<F: AssetFuture>: Fn(&Path) -> F + Send + Sync + 'static {}
 impl<F: AssetFuture, T: Fn(&Path) -> F + Send + Sync + 'static> AssetHandler<F> for T {}
 
-/// An identifier for a registered asset handler, returned by [`AssetHandlerRegistry::register_handler`].
-#[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
-pub struct AssetHandlerId(usize);
-
-struct AssetHandlerRegistryInner {
-    handlers: HashMap<
-        AssetHandlerId,
-        Box<dyn Fn(&Path) -> Pin<Box<dyn AssetFuture>> + Send + Sync + 'static>,
-    >,
-    counter: AssetHandlerId,
-}
+type AssetHandlerRegistryInner =
+    Slab<Box<dyn Fn(&Path) -> Pin<Box<dyn AssetFuture>> + Send + Sync + 'static>>;
 
 #[derive(Clone)]
 pub struct AssetHandlerRegistry(Arc<RwLock<AssetHandlerRegistryInner>>);
 
 impl AssetHandlerRegistry {
     pub fn new() -> Self {
-        AssetHandlerRegistry(Arc::new(RwLock::new(AssetHandlerRegistryInner {
-            handlers: HashMap::new(),
-            counter: AssetHandlerId(0),
-        })))
+        AssetHandlerRegistry(Arc::new(RwLock::new(Slab::new())))
     }
 
-    pub async fn register_handler<F: AssetFuture>(
-        &self,
-        f: impl AssetHandler<F>,
-    ) -> AssetHandlerId {
+    pub async fn register_handler<F: AssetFuture>(&self, f: impl AssetHandler<F>) -> usize {
         let mut registry = self.0.write().await;
-        let id = registry.counter;
-        registry
-            .handlers
-            .insert(id, Box::new(move |path| Box::pin(f(path))));
-        registry.counter.0 += 1;
-        id
+        registry.insert(Box::new(move |path| Box::pin(f(path))))
     }
 
-    pub async fn remove_handler(&self, id: AssetHandlerId) -> Option<()> {
+    pub async fn remove_handler(&self, id: usize) -> Option<()> {
         let mut registry = self.0.write().await;
-        registry.handlers.remove(&id).map(|_| ())
+        registry.try_remove(id).map(|_| ())
     }
 
     pub async fn try_handlers(&self, path: &Path) -> Option<AssetResponse> {
         let registry = self.0.read().await;
-        for handler in registry.handlers.values() {
+        for (_, handler) in registry.iter() {
             if let Some(response) = handler(path).await {
                 return Some(response);
             }
@@ -131,15 +112,15 @@ impl AssetHandlerRegistry {
 /// A handle to a registered asset handler.
 pub struct AssetHandlerHandle {
     desktop: DesktopContext,
-    handler_id: Rc<OnceCell<AssetHandlerId>>,
+    handler_id: Rc<OnceCell<usize>>,
 }
 
 impl AssetHandlerHandle {
-    /// Returns the [`AssetHandlerId`] for this handle.
+    /// Returns the ID for this handle.
     ///
     /// Because registering an ID is asynchronous, this may return `None` if the
     /// registration has not completed yet.
-    pub fn handler_id(&self) -> Option<AssetHandlerId> {
+    pub fn handler_id(&self) -> Option<usize> {
         self.handler_id.get().copied()
     }
 }
@@ -166,7 +147,7 @@ pub fn use_asset_handler<F: AssetFuture>(
     cx: &ScopeState,
     handler: impl AssetHandler<F>,
 ) -> &AssetHandlerHandle {
-    let desktop = Rc::clone(&use_window(cx));
+    let desktop = Rc::clone(use_window(cx));
     cx.use_hook(|| {
         let handler_id = Rc::new(OnceCell::new());
         let handler_id_ref = Rc::clone(&handler_id);

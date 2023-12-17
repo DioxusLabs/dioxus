@@ -5,7 +5,6 @@ use std::rc::Weak;
 use crate::create_new_window;
 use crate::events::IpcMessage;
 use crate::protocol::AssetFuture;
-use crate::protocol::AssetHandlerId;
 use crate::protocol::AssetHandlerRegistry;
 use crate::query::QueryEngine;
 use crate::shortcut::{HotKey, ShortcutId, ShortcutRegistry, ShortcutRegistryError};
@@ -258,13 +257,15 @@ impl DesktopService {
     /// Provide a callback to handle asset loading yourself.
     ///
     /// See [`use_asset_handle`](crate::use_asset_handle) for a convenient hook.
-    pub async fn register_asset_handler<F: AssetFuture>(&self, f: impl AssetHandler<F>) {
-        self.asset_handlers.register_handler(f).await;
+    pub async fn register_asset_handler<F: AssetFuture>(&self, f: impl AssetHandler<F>) -> usize {
+        self.asset_handlers.register_handler(f).await
     }
 
     /// Removes an asset handler by its identifier.
-    pub async fn remove_asset_handler(&self, id: AssetHandlerId) {
-        self.asset_handlers.remove_handler(id).await;
+    ///
+    /// Returns `None` if the handler did not exist.
+    pub async fn remove_asset_handler(&self, id: usize) -> Option<()> {
+        self.asset_handlers.remove_handler(id).await
     }
 
     /// Push an objc view to the window

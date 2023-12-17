@@ -32,7 +32,7 @@ use dioxus_html::{native_bind::NativeFileEngine, FormData, HtmlEvent};
 use element::DesktopElement;
 use eval::init_eval;
 use futures_util::{pin_mut, FutureExt};
-pub use protocol::{use_asset_handler, AssetFuture, AssetHandler, AssetHandlerId, AssetResponse};
+pub use protocol::{use_asset_handler, AssetFuture, AssetHandler, AssetResponse};
 use shortcut::ShortcutRegistry;
 pub use shortcut::{use_global_shortcut, ShortcutHandle, ShortcutId, ShortcutRegistryError};
 use std::cell::Cell;
