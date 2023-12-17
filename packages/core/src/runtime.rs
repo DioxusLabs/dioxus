@@ -98,7 +98,7 @@ impl Runtime {
     }
 }
 
-/// A gaurd for a new runtime. This must be used to override the current runtime when importing components from a dynamic library that has it's own runtime.
+/// A guard for a new runtime. This must be used to override the current runtime when importing components from a dynamic library that has it's own runtime.
 ///
 /// ```rust
 /// use dioxus::prelude::*;
