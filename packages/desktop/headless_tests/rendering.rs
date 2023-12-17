@@ -16,7 +16,7 @@ pub(crate) fn check_app_exits(app: Component) {
 
     dioxus_desktop::launch_cfg(
         app,
-        Config::new().with_window(WindowBuilder::new().with_visible(false)),
+        Config::new().with_window(WindowBuilder::new().with_visible(true)),
     );
 
     should_panic.store(false, std::sync::atomic::Ordering::SeqCst);
