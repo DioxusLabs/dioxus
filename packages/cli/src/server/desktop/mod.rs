@@ -127,6 +127,7 @@ async fn start_desktop_hot_reload(hot_reload_state: HotReloadState) -> Result<()
                 let file_map = hot_reload_state.file_map.clone();
                 let channels = channels.clone();
                 let aborted = aborted.clone();
+                let mut error_shown = false;
                 move || {
                     loop {
                         //accept() will block the thread when local_socket_stream is in blocking mode (default)
@@ -154,7 +155,8 @@ async fn start_desktop_hot_reload(hot_reload_state: HotReloadState) -> Result<()
                                 println!("Connected to hot reloading 🚀");
                             }
                             Err(err) => {
-                                if err.kind() != std::io::ErrorKind::WouldBlock {
+                                if !error_shown && err.kind() != std::io::ErrorKind::WouldBlock {
+                                    error_shown = true;
                                     println!("Error connecting to hot reloading: {} (Hot reloading is a feature of the dioxus-cli. If you are not using the CLI, this error can be ignored)", err);
                                 }
                             }
