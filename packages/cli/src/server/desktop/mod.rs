@@ -7,10 +7,11 @@ use crate::{
 };
 
 use dioxus_hot_reload::HotReloadMsg;
-use dioxus_html::HtmlCtx;
+use dioxus_html::{HtmlCtx, SvgAttributes};
 use dioxus_rsx::hot_reload::*;
 use interprocess_docfix::local_socket::LocalSocketListener;
 use std::{
+    collections::HashSet,
     process::{Child, Command},
     sync::{Arc, Mutex, RwLock},
 };
@@ -127,7 +128,6 @@ async fn start_desktop_hot_reload(hot_reload_state: HotReloadState) -> Result<()
                 let file_map = hot_reload_state.file_map.clone();
                 let channels = channels.clone();
                 let aborted = aborted.clone();
-                let mut error_shown = false;
                 move || {
                     loop {
                         //accept() will block the thread when local_socket_stream is in blocking mode (default)
@@ -155,8 +155,11 @@ async fn start_desktop_hot_reload(hot_reload_state: HotReloadState) -> Result<()
                                 println!("Connected to hot reloading 🚀");
                             }
                             Err(err) => {
-                                if !error_shown && err.kind() != std::io::ErrorKind::WouldBlock {
-                                    error_shown = true;
+                                let error_string = err.to_string();
+                                // Filter out any error messages about a operation that may block and an error message that triggers on some operating systems that says "Waiting for a process to open the other end of the pipe" without WouldBlock being set
+                                let display_error = err.kind() != std::io::ErrorKind::WouldBlock
+                                    && !error_string.contains("Waiting for a process");
+                                if display_error {
                                     println!("Error connecting to hot reloading: {} (Hot reloading is a feature of the dioxus-cli. If you are not using the CLI, this error can be ignored)", err);
                                 }
                             }
