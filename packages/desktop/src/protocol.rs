@@ -4,7 +4,7 @@ use slab::Slab;
 use std::{
     borrow::Cow,
     future::Future,
-    ops::{Deref, DerefMut},
+    ops::Deref,
     path::{Path, PathBuf},
     pin::Pin,
     rc::Rc,
@@ -72,10 +72,11 @@ pub type AssetResponse = Response<Cow<'static, [u8]>>;
 pub trait AssetFuture: Future<Output = Option<AssetResponse>> + Send + Sync + 'static {}
 impl<T: Future<Output = Option<AssetResponse>> + Send + Sync + 'static> AssetFuture for T {}
 
+#[derive(Debug, Clone)]
 /// A request for an asset. This is a wrapper around [`Request<Vec<u8>>`] that provides methods specific to asset requests.
 pub struct AssetRequest {
     path: PathBuf,
-    request: Request<Vec<u8>>,
+    request: Arc<Request<Vec<u8>>>,
 }
 
 impl AssetRequest {
@@ -90,7 +91,10 @@ impl From<Request<Vec<u8>>> for AssetRequest {
         let decoded = urlencoding::decode(request.uri().path().trim_start_matches('/'))
             .expect("expected URL to be UTF-8 encoded");
         let path = PathBuf::from(&*decoded);
-        Self { request, path }
+        Self {
+            request: Arc::new(request),
+            path,
+        }
     }
 }
 
@@ -99,12 +103,6 @@ impl Deref for AssetRequest {
 
     fn deref(&self) -> &Self::Target {
         &self.request
-    }
-}
-
-impl DerefMut for AssetRequest {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.request
     }
 }
 
