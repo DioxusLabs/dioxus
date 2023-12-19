@@ -123,8 +123,42 @@ mod js {
     export function save_template(nodes, tmpl_id) {
         templates[tmpl_id] = nodes;
     }
-    export function set_node(id, node) {
-        nodes[id] = node;
+    export function hydrate() {
+        const hydrateNodes = document.querySelectorAll('[data-node-hydration]');
+        for (let i = 0; i < hydrateNodes.length; i++) {
+            const hydrateNode = hydrateNodes[i];
+            const hydration = hydrateNode.getAttribute('data-node-hydration');
+            const split = hydration.split(',');
+            const id = parseInt(split[0]);
+            nodes[id] = hydrateNode;
+            console.log("hydrating node", hydrateNode, id);
+            if (split.length > 1) {
+                hydrateNode.listening = split.length - 1;
+                hydrateNode.setAttribute('data-dioxus-id', id);
+                for (let j = 1; j < split.length; j++) {
+                    const listener = split[j];
+                    const split2 = listener.split(':');
+                    const event_name = split2[0];
+                    const bubbles = split2[1] === '1';
+                    console.log("hydrating listener", event_name, bubbles);
+                    listeners.create(event_name, hydrateNode, bubbles);
+                }
+            }
+        }
+        const treeWalker = document.createTreeWalker(
+            document.body,
+            NodeFilter.SHOW_COMMENT,
+        );
+        let currentNode = treeWalker.nextNode();
+        while (currentNode) {
+            const id = currentNode.textContent;
+            const split = id.split('node-id');
+            if (split.length > 1) {
+                console.log("hydrating text", currentNode.nextSibling, id);
+                nodes[parseInt(split[1])] = currentNode.nextSibling;
+            }
+            currentNode = treeWalker.nextNode();
+        }
     }
     export function get_node(id) {
         return nodes[id];
@@ -181,7 +215,7 @@ mod js {
         pub fn save_template(nodes: Vec<Node>, tmpl_id: u32);
 
         #[wasm_bindgen]
-        pub fn set_node(id: u32, node: Node);
+        pub fn hydrate();
 
         #[wasm_bindgen]
         pub fn get_node(id: u32) -> Node;

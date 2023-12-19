@@ -69,13 +69,19 @@ impl Renderer {
         let entry = self
             .template_cache
             .entry(template.template.get().name)
-            .or_insert_with(|| Arc::new(StringCache::from_template(template).unwrap()))
+            .or_insert_with({
+                let prerender = self.pre_render;
+                move || Arc::new(StringCache::from_template(template, prerender).unwrap())
+            })
             .clone();
 
         let mut inner_html = None;
 
         // We need to keep track of the dynamic styles so we can insert them into the right place
         let mut accumulated_dynamic_styles = Vec::new();
+
+        // We need to keep track of the listeners so we can insert them into the right place
+        let mut accumulated_listeners = Vec::new();
 
         for segment in entry.segments.iter() {
             match segment {
@@ -92,6 +98,12 @@ impl Renderer {
                         }
                     } else {
                         write_attribute(buf, attr)?;
+                    }
+
+                    if self.pre_render {
+                        if let AttributeValue::Listener(_) = &attr.value {
+                            accumulated_listeners.push(attr.name);
+                        }
                     }
                 }
                 Segment::Node(idx) => match &template.dynamic_nodes[*idx] {
@@ -115,7 +127,10 @@ impl Renderer {
                     DynamicNode::Text(text) => {
                         // in SSR, we are concerned that we can't hunt down the right text node since they might get merged
                         if self.pre_render {
-                            write!(buf, "<!--#-->")?;
+                            let node_id = text
+                                .mounted_element()
+                                .expect("Text nodes must be mounted before rendering");
+                            write!(buf, "<!--node-id{}-->", node_id.0)?;
                         }
 
                         write!(
@@ -134,9 +149,12 @@ impl Renderer {
                         }
                     }
 
-                    DynamicNode::Placeholder(_el) => {
+                    DynamicNode::Placeholder(el) => {
                         if self.pre_render {
-                            write!(buf, "<pre></pre>")?;
+                            let id = el
+                                .mounted_element()
+                                .expect("Elements must be mounted before rendering");
+                            write!(buf, "<pre data-node-hydration={}></pre>", id.0)?;
                         }
                     }
                 },
@@ -175,6 +193,22 @@ impl Renderer {
                         }
                     }
                 }
+
+                Segment::AttributeNodeMarker(idx) => {
+                    let id = template.dynamic_attrs[*idx].mounted_element();
+                    // first write the id
+                    write!(buf, "{}", id.0)?;
+                    // then write any listeners
+                    for name in accumulated_listeners.drain(..) {
+                        write!(buf, ",{}:", &name[2..])?;
+                        write!(buf, "{}", dioxus_html::event_bubbles(name) as u8)?;
+                    }
+                }
+
+                Segment::RootNodeMarker(idx) => {
+                    let id = template.root_ids.borrow()[*idx];
+                    write!(buf, "{}", id.0)?;
+                }
             }
         }
 
@@ -192,7 +226,9 @@ fn to_string_works() {
 
         render! {
             div { class: "asdasdasd", class: "asdasdasd", id: "id-{dynamic}",
-                "Hello world 1 -->" "{dynamic}" "<-- Hello world 2"
+                "Hello world 1 -->"
+                "{dynamic}"
+                "<-- Hello world 2"
                 div { "nest 1" }
                 div {}
                 div { "nest 2" }

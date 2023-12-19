@@ -27,6 +27,10 @@ pub enum Segment {
     },
     /// A marker for where to insert a dynamic inner html
     InnerHtmlMarker,
+    /// A marker for where to insert a node id for an attribute
+    AttributeNodeMarker(usize),
+    /// A marker for where to insert a node id for a root node
+    RootNodeMarker(usize),
 }
 
 impl std::fmt::Write for StringChain {
@@ -41,13 +45,13 @@ impl std::fmt::Write for StringChain {
 }
 
 impl StringCache {
-    pub fn from_template(template: &VNode) -> Result<Self, std::fmt::Error> {
+    pub fn from_template(template: &VNode, prerender: bool) -> Result<Self, std::fmt::Error> {
         let mut chain = StringChain::default();
 
         let mut cur_path = vec![];
 
         for (root_idx, root) in template.template.get().roots.iter().enumerate() {
-            Self::recurse(root, &mut cur_path, root_idx, &mut chain)?;
+            Self::recurse(root, &mut cur_path, root_idx, true, prerender, &mut chain)?;
         }
 
         Ok(Self {
@@ -60,6 +64,8 @@ impl StringCache {
         root: &TemplateNode,
         cur_path: &mut Vec<usize>,
         root_idx: usize,
+        is_root: bool,
+        prerender: bool,
         chain: &mut StringChain,
     ) -> Result<(), std::fmt::Error> {
         match root {
@@ -76,7 +82,7 @@ impl StringCache {
                 // we need to collect the inner html and write it at the end
                 let mut inner_html = None;
                 // we need to keep track of if we have dynamic attrs to know if we need to insert a style and inner_html marker
-                let mut has_dynamic_attrs = false;
+                let mut last_dyn_attr_id = None;
                 for attr in *attrs {
                     match attr {
                         TemplateAttribute::Static {
@@ -97,8 +103,9 @@ impl StringCache {
                             }
                         }
                         TemplateAttribute::Dynamic { id: index } => {
-                            chain.segments.push(Segment::Attr(*index));
-                            has_dynamic_attrs = true;
+                            let index = *index;
+                            chain.segments.push(Segment::Attr(index));
+                            last_dyn_attr_id = Some(index);
                         }
                     }
                 }
@@ -113,10 +120,23 @@ impl StringCache {
                         inside_style_tag: true,
                     });
                     write!(chain, "\"")?;
-                } else if has_dynamic_attrs {
+                } else if last_dyn_attr_id.is_some() {
                     chain.segments.push(Segment::StyleMarker {
                         inside_style_tag: false,
                     });
+                }
+
+                // write the id if we are prerendering and this is either a root node or a node with a dynamic attribute
+                if prerender {
+                    write!(chain, " data-node-hydration=\"")?;
+                    if let Some(last_dyn_attr_id) = last_dyn_attr_id {
+                        chain
+                            .segments
+                            .push(Segment::AttributeNodeMarker(last_dyn_attr_id));
+                    } else if is_root {
+                        chain.segments.push(Segment::RootNodeMarker(root_idx));
+                    }
+                    write!(chain, "\"")?;
                 }
 
                 if children.is_empty() && tag_is_self_closing(tag) {
@@ -126,12 +146,12 @@ impl StringCache {
                     // Write the static inner html, or insert a marker if dynamic inner html is possible
                     if let Some(inner_html) = inner_html {
                         chain.write_str(inner_html)?;
-                    } else if has_dynamic_attrs {
+                    } else if last_dyn_attr_id.is_some() {
                         chain.segments.push(Segment::InnerHtmlMarker);
                     }
 
                     for child in *children {
-                        Self::recurse(child, cur_path, root_idx, chain)?;
+                        Self::recurse(child, cur_path, root_idx, false, prerender, chain)?;
                     }
                     write!(chain, "</{tag}>")?;
                 }
