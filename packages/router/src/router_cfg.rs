@@ -53,10 +53,15 @@ where
 {
     pub(crate) fn get_history(self) -> Box<dyn HistoryProvider<R>> {
         self.history.unwrap_or_else(|| {
-            #[cfg(all(target_arch = "wasm32", feature = "web"))]
+            #[cfg(all(not(feature = "liveview"), target_arch = "wasm32", feature = "web"))]
             let history = Box::<WebHistory<R>>::default();
-            #[cfg(not(all(target_arch = "wasm32", feature = "web")))]
+            #[cfg(all(
+                not(feature = "liveview"),
+                any(not(target_arch = "wasm32"), not(feature = "web"))
+            ))]
             let history = Box::<MemoryHistory<R>>::default();
+            #[cfg(feature = "liveview")]
+            let history = Box::<LiveviewHistory<R>>::default();
             history
         })
     }
@@ -83,10 +88,15 @@ where
 {
     pub(crate) fn take_history(&mut self) -> Box<dyn AnyHistoryProvider> {
         self.history.take().unwrap_or_else(|| {
-            #[cfg(all(target_arch = "wasm32", feature = "web"))]
+            #[cfg(all(not(feature = "liveview"), target_arch = "wasm32", feature = "web"))]
             let history = Box::<AnyHistoryProviderImplWrapper<R, WebHistory<R>>>::default();
-            #[cfg(not(all(target_arch = "wasm32", feature = "web")))]
+            #[cfg(all(
+                not(feature = "liveview"),
+                any(not(target_arch = "wasm32"), not(feature = "web"))
+            ))]
             let history = Box::<AnyHistoryProviderImplWrapper<R, MemoryHistory<R>>>::default();
+            #[cfg(feature = "liveview")]
+            let history = Box::<AnyHistoryProviderImplWrapper<R, LiveviewHistory<R>>>::default();
             history
         })
     }
