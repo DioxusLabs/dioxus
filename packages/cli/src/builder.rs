@@ -274,7 +274,6 @@ pub fn build_desktop(
     let mut cmd = subprocess::Exec::cmd("cargo")
         .cwd(&config.crate_dir)
         .arg("build")
-        .arg("--quiet")
         .arg("--message-format=json");
 
     if config.release {
@@ -282,6 +281,8 @@ pub fn build_desktop(
     }
     if config.verbose {
         cmd = cmd.arg("--verbose");
+    } else {
+        cmd = cmd.arg("--quiet");
     }
 
     if config.custom_profile.is_some() {
