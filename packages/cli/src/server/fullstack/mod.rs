@@ -9,6 +9,16 @@ pub async fn startup(config: CrateConfig, serve: &ConfigOptsServe) -> Result<()>
     desktop::startup_with_platform::<FullstackPlatform>(config, serve).await
 }
 
+fn start_web_build_thread(
+    config: &CrateConfig,
+    serve: &ConfigOptsServe,
+) -> std::thread::JoinHandle<Result<()>> {
+    let serve = serve.clone();
+    let target_directory = config.crate_dir.join(".dioxus").join("web");
+    std::fs::create_dir_all(&target_directory).unwrap();
+    std::thread::spawn(move || build_web(serve, &target_directory))
+}
+
 struct FullstackPlatform {
     serve: ConfigOptsServe,
     desktop: desktop::DesktopPlatform,
@@ -20,9 +30,7 @@ impl Platform for FullstackPlatform {
     where
         Self: Sized,
     {
-        {
-            build_web(serve.clone())?;
-        }
+        let thread_handle = start_web_build_thread(config, serve);
 
         let mut desktop_config = config.clone();
         let desktop_feature = serve.server_feature.clone();
@@ -35,6 +43,9 @@ impl Platform for FullstackPlatform {
         };
         let config = WebAssetConfigDropGuard::new();
         let desktop = desktop::DesktopPlatform::start(&desktop_config, serve)?;
+        thread_handle
+            .join()
+            .map_err(|_| anyhow::anyhow!("Failed to join thread"))??;
 
         Ok(Self {
             desktop,
@@ -44,8 +55,8 @@ impl Platform for FullstackPlatform {
     }
 
     fn rebuild(&mut self, crate_config: &CrateConfig) -> Result<crate::BuildResult> {
-        build_web(self.serve.clone())?;
-        {
+        let thread_handle = start_web_build_thread(crate_config, &self.serve);
+        let result = {
             let mut desktop_config = crate_config.clone();
             let desktop_feature = self.serve.server_feature.clone();
             let features = &mut desktop_config.features;
@@ -57,11 +68,15 @@ impl Platform for FullstackPlatform {
             };
             let _gaurd = FullstackServerEnvGuard::new(self.serve.debug);
             self.desktop.rebuild(&desktop_config)
-        }
+        };
+        thread_handle
+            .join()
+            .map_err(|_| anyhow::anyhow!("Failed to join thread"))??;
+        result
     }
 }
 
-fn build_web(serve: ConfigOptsServe) -> Result<()> {
+fn build_web(serve: ConfigOptsServe, target_directory: &std::path::Path) -> Result<()> {
     let mut web_config: ConfigOptsBuild = serve.into();
     let web_feature = web_config.client_feature.clone();
     let features = &mut web_config.features;
@@ -74,7 +89,7 @@ fn build_web(serve: ConfigOptsServe) -> Result<()> {
     web_config.platform = Some(crate::cfg::Platform::Web);
 
     let _gaurd = FullstackWebEnvGuard::new(web_config.debug);
-    crate::cli::build::Build { build: web_config }.build(None)
+    crate::cli::build::Build { build: web_config }.build(None, Some(target_directory))
 }
 
 // Debug mode web builds have a very large size by default. If debug mode is not enabled, we strip some of the debug info by default

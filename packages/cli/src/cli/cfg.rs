@@ -112,7 +112,7 @@ pub struct ConfigOptsServe {
     #[clap(long)]
     pub profile: Option<String>,
 
-    /// Build platform: support Web & Desktop [default: "default_platform"]
+    /// Build platform: support Web, Desktop, and Fullstack [default: "default_platform"]
     #[clap(long, value_enum)]
     pub platform: Option<Platform>,
 

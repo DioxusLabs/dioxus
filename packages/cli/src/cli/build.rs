@@ -15,8 +15,11 @@ pub struct Build {
 }
 
 impl Build {
-    pub fn build(self, bin: Option<PathBuf>) -> Result<()> {
+    pub fn build(self, bin: Option<PathBuf>, target_dir: Option<&std::path::Path>) -> Result<()> {
         let mut crate_config = crate::CrateConfig::new(bin)?;
+        if let Some(target_dir) = target_dir {
+            crate_config.target_dir = target_dir.to_path_buf();
+        }
 
         // change the release state.
         crate_config.with_release(self.build.release);

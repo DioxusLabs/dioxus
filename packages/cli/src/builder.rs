@@ -5,6 +5,7 @@ use crate::{
 };
 use cargo_metadata::{diagnostic::Diagnostic, Message};
 use indicatif::{ProgressBar, ProgressStyle};
+use lazy_static::lazy_static;
 use manganis_cli_support::AssetManifestExt;
 use serde::Serialize;
 use std::{
@@ -16,6 +17,10 @@ use std::{
 };
 use wasm_bindgen_cli_support::Bindgen;
 
+lazy_static! {
+    static ref PROGRESS_BARS: indicatif::MultiProgress = indicatif::MultiProgress::new();
+}
+
 #[derive(Serialize, Debug, Clone)]
 pub struct BuildResult {
     pub warnings: Vec<Diagnostic>,
@@ -25,7 +30,7 @@ pub struct BuildResult {
 pub fn build(config: &CrateConfig, _: bool, skip_assets: bool) -> Result<BuildResult> {
     // [1] Build the project with cargo, generating a wasm32-unknown-unknown target (is there a more specific, better target to leverage?)
     // [2] Generate the appropriate build folders
-    // [3] Wasm-bindgen the .wasm fiile, and move it into the {builddir}/modules/xxxx/xxxx_bg.wasm
+    // [3] Wasm-bindgen the .wasm file, and move it into the {builddir}/modules/xxxx/xxxx_bg.wasm
     // [4] Wasm-opt the .wasm file with whatever optimizations need to be done
     // [5][OPTIONAL] Builds the Tailwind CSS file using the Tailwind standalone binary
     // [6] Link up the html page to the wasm module
@@ -61,8 +66,8 @@ pub fn build(config: &CrateConfig, _: bool, skip_assets: bool) -> Result<BuildRe
             .output()?;
     }
 
-    let cmd = subprocess::Exec::cmd("cargo");
-    let cmd = cmd
+    let cmd = subprocess::Exec::cmd("cargo")
+        .env("CARGO_TARGET_DIR", target_dir)
         .cwd(crate_dir)
         .arg("build")
         .arg("--target")
@@ -272,6 +277,7 @@ pub fn build_desktop(
     let ignore_files = build_assets(config)?;
 
     let mut cmd = subprocess::Exec::cmd("cargo")
+        .env("CARGO_TARGET_DIR", &config.target_dir)
         .cwd(&config.crate_dir)
         .arg("build")
         .arg("--quiet")
@@ -404,22 +410,15 @@ fn create_assets_head(config: &CrateConfig) -> Result<()> {
 fn prettier_build(cmd: subprocess::Exec) -> anyhow::Result<Vec<Diagnostic>> {
     let mut warning_messages: Vec<Diagnostic> = vec![];
 
-    let pb = ProgressBar::new_spinner();
+    let mut pb = ProgressBar::new_spinner();
     pb.enable_steady_tick(Duration::from_millis(200));
+    pb = PROGRESS_BARS.add(pb);
     pb.set_style(
         ProgressStyle::with_template("{spinner:.dim.bold} {wide_msg}")
             .unwrap()
             .tick_chars("/|\\- "),
     );
     pb.set_message("💼 Waiting to start build the project...");
-
-    struct StopSpinOnDrop(ProgressBar);
-
-    impl Drop for StopSpinOnDrop {
-        fn drop(&mut self) {
-            self.0.finish_and_clear();
-        }
-    }
 
     let stdout = cmd.detached().stream_stdout()?;
     let reader = std::io::BufReader::new(stdout);
@@ -456,7 +455,9 @@ fn prettier_build(cmd: subprocess::Exec) -> anyhow::Result<Vec<Diagnostic>> {
                     std::process::exit(1);
                 }
             }
-            _ => (), // Unknown message
+            _ => {
+                // Unknown message
+            }
         }
     }
     Ok(warning_messages)
