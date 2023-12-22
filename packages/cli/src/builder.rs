@@ -280,7 +280,6 @@ pub fn build_desktop(
         .env("CARGO_TARGET_DIR", &config.target_dir)
         .cwd(&config.crate_dir)
         .arg("build")
-        .arg("--quiet")
         .arg("--message-format=json");
 
     if config.release {
@@ -288,6 +287,8 @@ pub fn build_desktop(
     }
     if config.verbose {
         cmd = cmd.arg("--verbose");
+    } else {
+        cmd = cmd.arg("--quiet");
     }
 
     if config.custom_profile.is_some() {
