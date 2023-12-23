@@ -16,7 +16,10 @@ mod collect_macros;
 mod component;
 mod element;
 mod expr;
+mod indent;
 mod writer;
+
+pub use indent::{IndentOptions, IndentType};
 
 /// A modification to the original file to be applied by an IDE
 ///
@@ -47,7 +50,7 @@ pub struct FormattedBlock {
 /// back to the file precisely.
 ///
 /// Nested blocks of RSX will be handled automatically
-pub fn fmt_file(contents: &str) -> Vec<FormattedBlock> {
+pub fn fmt_file(contents: &str, indent: IndentOptions) -> Vec<FormattedBlock> {
     let mut formatted_blocks = Vec::new();
 
     let parsed = syn::parse_file(contents).unwrap();
@@ -61,6 +64,7 @@ pub fn fmt_file(contents: &str) -> Vec<FormattedBlock> {
     }
 
     let mut writer = Writer::new(contents);
+    writer.out.indent = indent;
 
     // Don't parse nested macros
     let mut end_span = LineColumn { column: 0, line: 0 };
@@ -76,7 +80,10 @@ pub fn fmt_file(contents: &str) -> Vec<FormattedBlock> {
 
         let rsx_start = macro_path.span().start();
 
-        writer.out.indent = leading_whitespaces(writer.src[rsx_start.line - 1]) / 4;
+        writer.out.indent_level = writer
+            .out
+            .indent
+            .count_indents(writer.src[rsx_start.line - 1]);
 
         write_body(&mut writer, &body);
 
@@ -159,12 +166,13 @@ pub fn fmt_block_from_expr(raw: &str, expr: ExprMacro) -> Option<String> {
     buf.consume()
 }
 
-pub fn fmt_block(block: &str, indent_level: usize) -> Option<String> {
+pub fn fmt_block(block: &str, indent_level: usize, indent: IndentOptions) -> Option<String> {
     let body = syn::parse_str::<dioxus_rsx::CallBody>(block).unwrap();
 
     let mut buf = Writer::new(block);
 
-    buf.out.indent = indent_level;
+    buf.out.indent = indent;
+    buf.out.indent_level = indent_level;
 
     write_body(&mut buf, &body);
 
@@ -229,15 +237,4 @@ pub(crate) fn ifmt_to_string(input: &IfmtInput) -> String {
 pub(crate) fn write_ifmt(input: &IfmtInput, writable: &mut impl Write) -> std::fmt::Result {
     let display = DisplayIfmt(input);
     write!(writable, "{}", display)
-}
-
-pub fn leading_whitespaces(input: &str) -> usize {
-    input
-        .chars()
-        .map_while(|c| match c {
-            ' ' => Some(1),
-            '\t' => Some(4),
-            _ => None,
-        })
-        .sum()
 }

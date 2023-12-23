@@ -45,7 +45,16 @@ impl WebsysDom {
         let document = load_document();
         let root = match document.get_element_by_id(&cfg.rootname) {
             Some(root) => root,
-            None => document.create_element("body").ok().unwrap(),
+            None => {
+                web_sys::console::error_1(
+                    &format!(
+                        "element '#{}' not found. mounting to the body.",
+                        cfg.rootname
+                    )
+                    .into(),
+                );
+                document.create_element("body").ok().unwrap()
+            }
         };
         let interpreter = Channel::default();
 
@@ -294,7 +303,7 @@ pub fn virtual_event_from_websys_event(event: web_sys::Event, target: Element) -
         "select" => Rc::new(SelectionData {}),
         "touchcancel" | "touchend" | "touchmove" | "touchstart" => Rc::new(TouchData::from(event)),
 
-        "scroll" => Rc::new(()),
+        "scroll" => Rc::new(ScrollData {}),
         "wheel" => Rc::new(WheelData::from(event)),
         "animationstart" | "animationend" | "animationiteration" => {
             Rc::new(AnimationData::from(event))

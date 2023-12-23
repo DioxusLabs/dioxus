@@ -164,17 +164,11 @@ impl VirtualDom {
         });
 
         // Now that all the references are gone, we can safely drop our own references in our listeners.
-        let mut listeners = scope.attributes_to_drop.borrow_mut();
+        let mut listeners = scope.attributes_to_drop_before_render.borrow_mut();
         listeners.drain(..).for_each(|listener| {
             let listener = unsafe { &*listener };
-            match &listener.value {
-                AttributeValue::Listener(l) => {
-                    _ = l.take();
-                }
-                AttributeValue::Any(a) => {
-                    _ = a.take();
-                }
-                _ => (),
+            if let AttributeValue::Listener(l) = &listener.value {
+                _ = l.take();
             }
         });
     }

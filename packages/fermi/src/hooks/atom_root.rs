@@ -7,6 +7,6 @@ use dioxus_core::ScopeState;
 pub fn use_atom_root(cx: &ScopeState) -> &Rc<AtomRoot> {
     cx.use_hook(|| match cx.consume_context::<Rc<AtomRoot>>() {
         Some(root) => root,
-        None => panic!("No atom root found in context. Did you forget place an AtomRoot component at the top of your app?"),
+        None => panic!("No atom root found in context. Did you forget to call use_init_atom_root at the top of your app?"),
     })
 }
