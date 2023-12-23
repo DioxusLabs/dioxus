@@ -1,14 +1,14 @@
 use crate::CopyValue;
 use crate::Signal;
 use dioxus_core::ScopeId;
-use std::cell::Ref;
+use generational_box::GenerationalRef;
 use std::fmt::Debug;
 use std::fmt::Display;
 
 /// A read only signal that has been mapped to a new type.
 pub struct SignalMap<U: 'static + ?Sized> {
     origin_scope: ScopeId,
-    mapping: CopyValue<Box<dyn Fn() -> Ref<'static, U>>>,
+    mapping: CopyValue<Box<dyn Fn() -> GenerationalRef<U>>>,
 }
 
 impl<U: ?Sized> SignalMap<U> {
@@ -16,7 +16,9 @@ impl<U: ?Sized> SignalMap<U> {
     pub fn new<T: 'static>(signal: Signal<T>, mapping: impl Fn(&T) -> &U + 'static) -> Self {
         Self {
             origin_scope: signal.origin_scope(),
-            mapping: CopyValue::new(Box::new(move || Ref::map(signal.read(), |v| (mapping)(v)))),
+            mapping: CopyValue::new(Box::new(move || {
+                GenerationalRef::map(signal.read(), |v| (mapping)(v))
+            })),
         }
     }
 
@@ -26,7 +28,7 @@ impl<U: ?Sized> SignalMap<U> {
     }
 
     /// Get the current value of the signal. This will subscribe the current scope to the signal.
-    pub fn read(&self) -> Ref<'static, U> {
+    pub fn read(&self) -> GenerationalRef<U> {
         (self.mapping.read())()
     }
 
@@ -71,8 +73,8 @@ impl<U: ?Sized + Debug> Debug for SignalMap<U> {
 
 impl<U> SignalMap<Vec<U>> {
     /// Read a value from the inner vector.
-    pub fn get(&self, index: usize) -> Option<Ref<'static, U>> {
-        Ref::filter_map(self.read(), |v| v.get(index)).ok()
+    pub fn get(&self, index: usize) -> Option<GenerationalRef<U>> {
+        GenerationalRef::filter_map(self.read(), |v| v.get(index))
     }
 }
 
@@ -86,7 +88,40 @@ impl<U: Clone + 'static> SignalMap<Option<U>> {
     }
 
     /// Attemps to read the inner value of the Option.
-    pub fn as_ref(&self) -> Option<Ref<'static, U>> {
-        Ref::filter_map(self.read(), |v| v.as_ref()).ok()
+    pub fn as_ref(&self) -> Option<GenerationalRef<U>> {
+        GenerationalRef::filter_map(self.read(), |v| v.as_ref())
+    }
+}
+
+impl<T> std::ops::Deref for SignalMap<T> {
+    type Target = dyn Fn() -> GenerationalRef<T>;
+
+    fn deref(&self) -> &Self::Target {
+        // https://github.com/dtolnay/case-studies/tree/master/callable-types
+
+        // First we create a closure that captures something with the Same in memory layout as Self (MaybeUninit<Self>).
+        let uninit_callable = std::mem::MaybeUninit::<Self>::uninit();
+        // Then move that value into the closure. We assume that the closure now has a in memory layout of Self.
+        let uninit_closure = move || Self::read(unsafe { &*uninit_callable.as_ptr() });
+
+        // Check that the size of the closure is the same as the size of Self in case the compiler changed the layout of the closure.
+        let size_of_closure = std::mem::size_of_val(&uninit_closure);
+        assert_eq!(size_of_closure, std::mem::size_of::<Self>());
+
+        // Then cast the lifetime of the closure to the lifetime of &self.
+        fn cast_lifetime<'a, T>(_a: &T, b: &'a T) -> &'a T {
+            b
+        }
+        let reference_to_closure = cast_lifetime(
+            {
+                // The real closure that we will never use.
+                &uninit_closure
+            },
+            // We transmute self into a reference to the closure. This is safe because we know that the closure has the same memory layout as Self so &Closure == &Self.
+            unsafe { std::mem::transmute(self) },
+        );
+
+        // Cast the closure to a trait object.
+        reference_to_closure as &Self::Target
     }
 }

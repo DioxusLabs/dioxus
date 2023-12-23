@@ -479,7 +479,7 @@ impl Display for AlreadyBorrowedError {
 impl std::error::Error for AlreadyBorrowedError {}
 
 /// A reference to a value in a generational box.
-pub struct GenerationalRef<T: 'static> {
+pub struct GenerationalRef<T: ?Sized + 'static> {
     inner: Ref<'static, T>,
     #[cfg(any(debug_assertions, feature = "debug_borrows"))]
     borrow: GenerationalRefBorrowInfo,
@@ -487,7 +487,7 @@ pub struct GenerationalRef<T: 'static> {
 
 impl<T: 'static> GenerationalRef<T> {
     /// Map one ref type to another.
-    pub fn map<U, F>(orig: GenerationalRef<T>, f: F) -> GenerationalRef<U>
+    pub fn map<U: ?Sized, F>(orig: GenerationalRef<T>, f: F) -> GenerationalRef<U>
     where
         F: FnOnce(&T) -> &U,
     {
@@ -502,7 +502,7 @@ impl<T: 'static> GenerationalRef<T> {
     }
 
     /// Filter one ref type to another.
-    pub fn filter_map<U, F>(orig: GenerationalRef<T>, f: F) -> Option<GenerationalRef<U>>
+    pub fn filter_map<U: ?Sized, F>(orig: GenerationalRef<T>, f: F) -> Option<GenerationalRef<U>>
     where
         F: FnOnce(&T) -> Option<&U>,
     {
@@ -522,7 +522,7 @@ impl<T: 'static> GenerationalRef<T> {
     }
 }
 
-impl<T: 'static> Deref for GenerationalRef<T> {
+impl<T: ?Sized + 'static> Deref for GenerationalRef<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {

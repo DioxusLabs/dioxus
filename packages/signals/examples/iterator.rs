@@ -16,8 +16,8 @@ fn App(cx: Scope) -> Element {
             },
             "Add one"
         }
-        for i in 0..signal().len() {
-            Child { signal: signal.map(move |v| v.get(i).unwrap()) }
+        for item in signal.iter_signals() {
+            Child { signal: item }
         }
     }
 }

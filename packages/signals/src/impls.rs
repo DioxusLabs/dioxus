@@ -1,5 +1,6 @@
 use crate::rt::CopyValue;
 use crate::signal::{ReadOnlySignal, Signal, Write};
+use crate::SignalMap;
 use generational_box::GenerationalRef;
 use generational_box::GenerationalRefMut;
 
@@ -213,20 +214,20 @@ pub struct CopyValueIterator<T: 'static> {
     value: CopyValue<Vec<T>>,
 }
 
-impl<T: Clone> Iterator for CopyValueIterator<T> {
-    type Item = T;
+impl<T> Iterator for CopyValueIterator<T> {
+    type Item = GenerationalRef<T>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let index = self.index;
         self.index += 1;
-        self.value.get(index).map(|v| v.clone())
+        self.value.get(index)
     }
 }
 
-impl<T: Clone + 'static> IntoIterator for CopyValue<Vec<T>> {
+impl<T: 'static> IntoIterator for CopyValue<Vec<T>> {
     type IntoIter = CopyValueIterator<T>;
 
-    type Item = T;
+    type Item = GenerationalRef<T>;
 
     fn into_iter(self) -> Self::IntoIter {
         CopyValueIterator {
@@ -256,20 +257,20 @@ pub struct SignalIterator<T: 'static> {
     value: Signal<Vec<T>>,
 }
 
-impl<T: Clone> Iterator for SignalIterator<T> {
-    type Item = T;
+impl<T> Iterator for SignalIterator<T> {
+    type Item = GenerationalRef<T>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let index = self.index;
         self.index += 1;
-        self.value.get(index).map(|v| v.clone())
+        self.value.get(index)
     }
 }
 
-impl<T: Clone + 'static> IntoIterator for Signal<Vec<T>> {
+impl<T: 'static> IntoIterator for Signal<Vec<T>> {
     type IntoIter = SignalIterator<T>;
 
-    type Item = T;
+    type Item = GenerationalRef<T>;
 
     fn into_iter(self) -> Self::IntoIter {
         SignalIterator {
@@ -279,10 +280,36 @@ impl<T: Clone + 'static> IntoIterator for Signal<Vec<T>> {
     }
 }
 
+/// An iterator over items in a `Signal<Vec<T>>` that yields [`SignalMap`]s.
+pub struct MappedSignalIterator<T: 'static> {
+    index: usize,
+    length: usize,
+    value: Signal<Vec<T>>,
+}
+
+impl<T> Iterator for MappedSignalIterator<T> {
+    type Item = SignalMap<T>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let index = self.index;
+        self.index += 1;
+        (index < self.length).then(|| self.value.map(move |v| v.get(index).unwrap()))
+    }
+}
+
 impl<T: 'static> Signal<Vec<T>> {
     /// Returns a reference to an element or `None` if out of bounds.
     pub fn get_mut(&self, index: usize) -> Option<Write<T, Vec<T>>> {
         Write::filter_map(self.write(), |v| v.get_mut(index))
+    }
+
+    /// Create an iterator of [`SignalMap`]s over the inner vector.
+    pub fn iter_signals(&self) -> MappedSignalIterator<T> {
+        MappedSignalIterator {
+            index: 0,
+            length: self.read().len(),
+            value: *self,
+        }
     }
 }
 
