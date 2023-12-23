@@ -13,7 +13,7 @@ pub struct SignalMap<U: 'static + ?Sized> {
 
 impl<U: ?Sized> SignalMap<U> {
     /// Create a new mapped signal.
-    pub fn new<T: 'static>(signal: Signal<T>, mapping: fn(&T) -> &U) -> Self {
+    pub fn new<T: 'static>(signal: Signal<T>, mapping: impl Fn(&T) -> &U + 'static) -> Self {
         Self {
             origin_scope: signal.origin_scope(),
             mapping: CopyValue::new(Box::new(move || Ref::map(signal.read(), |v| (mapping)(v)))),
