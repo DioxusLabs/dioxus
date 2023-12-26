@@ -15,25 +15,25 @@ server_fn = { version = "0.5.2", default-features = false }
 dioxus_server_macro = { workspace = true }
 
 # warp
-warp = { version = "0.3.5", features = ["compression-gzip"], optional = true }
-http-body = { version = "0.4.5", optional = true }
-http-body-util = "0.1.0-rc.2"
+warp = { version = "0.3.6", features = ["compression-gzip"], optional = true }
+http-body = { version = "^1.0.0", optional = true }
+http-body-util = "0.1.0"
 
 # axum
-axum = { version = "0.6.1", features = ["ws", "macros"], optional = true }
-tower-http = { version = "0.4.0", optional = true, features = ["fs", "compression-gzip"] }
+axum = { version = "0.7.2", features = ["ws", "macros"], optional = true }
+tower-http = { version = "0.5.0", optional = true, features = ["fs", "compression-gzip"] }
 tower = { version = "0.4.13", features = ["util"], optional = true }
-axum-macros = "0.3.7"
+axum-macros = "0.4.0"
 
 # salvo
-salvo = { version = "0.46.0", optional = true, features = ["serve-static", "websocket", "compression"] }
+salvo = { version = "0.63.1", optional = true, features = ["serve-static", "websocket", "compression"] }
 serde = "1.0.159"
 
 # Dioxus + SSR
 dioxus = { workspace = true }
 dioxus-ssr = { workspace = true, optional = true }
-hyper = { version = "0.14.25", optional = true }
-http = { version = "0.2.9", optional = true }
+hyper = { version = "1.1.0", optional = true }
+http = { version = "1.0.0", optional = true }
 
 # Web Integration
 dioxus-web = { workspace = true, features = ["hydrate"], optional = true }

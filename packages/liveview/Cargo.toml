@@ -28,15 +28,15 @@ dioxus-interpreter-js = { workspace = true }
 dioxus-hot-reload = { workspace = true, optional = true }
 
 # warp
-warp = { version = "0.3.3", optional = true }
+warp = { version = "0.3.6", optional = true }
 
 # axum
-axum = { version = "0.6.1", optional = true, features = ["ws"] }
+axum = { version = "0.7.2", optional = true, features = ["ws"] }
 
 # salvo
-salvo = { version = "0.44.1", optional = true, features = ["ws"] }
-once_cell = "1.17.1"
-async-trait = "0.1.71"
+salvo = { version = "^0.63.1", optional = true, features = ["websocket"] }
+once_cell = "1.19.0"
+async-trait = "0.1.75"
 
 # actix is ... complicated?
 # actix-files = { version = "0.6.2", optional = true }
@@ -47,9 +47,9 @@ async-trait = "0.1.71"
 pretty_env_logger = { version = "0.5.0" }
 tokio = { workspace = true, features = ["full"] }
 dioxus = { workspace = true }
-warp = "0.3.3"
-axum = { version = "0.6.1", features = ["ws"] }
-salvo = { version = "0.44.1", features = ["affix", "ws"] }
+warp = "0.3.6"
+axum = { version = "0.7.2", features = ["ws"] }
+salvo = { version = "^0.63.1", features = ["affix", "websocket"] }
 tower = "0.4.13"
 
 [features]
