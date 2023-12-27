@@ -1,10 +1,7 @@
 use crate::dom::WebsysDom;
 use dioxus_core::{
-    AttributeValue, DynamicNode, ElementId, ScopeState, TemplateNode, VNode, VirtualDom,
+     DynamicNode, ElementId, ScopeState, TemplateNode, VNode, VirtualDom,
 };
-use dioxus_html::event_bubbles;
-use wasm_bindgen::JsCast;
-use web_sys::{Comment, Node};
 
 #[derive(Debug)]
 pub enum RehydrationError {
@@ -76,7 +73,6 @@ impl WebsysDom {
                 for attr in *attrs {
                     if let dioxus_core::TemplateAttribute::Dynamic { id } = attr {
                         let attribute = &vnode.dynamic_attrs[*id];
-                        let value = &attribute.value;
                         let id = attribute.mounted_element();
                         mounted_id = Some(id);
                     }

@@ -98,6 +98,7 @@ fn text_nodes() {
     );
 }
 
+#[allow(non_snake_case)]
 #[test]
 fn components_hydrate() {
     fn app(cx: Scope) -> Element {
