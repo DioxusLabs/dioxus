@@ -123,13 +123,14 @@ mod js {
     export function save_template(nodes, tmpl_id) {
         templates[tmpl_id] = nodes;
     }
-    export function hydrate() {
+    export function hydrate(ids) {
+        console.log("hydrating", ids);
         const hydrateNodes = document.querySelectorAll('[data-node-hydration]');
         for (let i = 0; i < hydrateNodes.length; i++) {
             const hydrateNode = hydrateNodes[i];
             const hydration = hydrateNode.getAttribute('data-node-hydration');
             const split = hydration.split(',');
-            const id = parseInt(split[0]);
+            const id = ids[parseInt(split[0])];
             nodes[id] = hydrateNode;
             console.log("hydrating node", hydrateNode, id);
             if (split.length > 1) {
@@ -155,7 +156,7 @@ mod js {
             const split = id.split('node-id');
             if (split.length > 1) {
                 console.log("hydrating text", currentNode.nextSibling, id);
-                nodes[parseInt(split[1])] = currentNode.nextSibling;
+                nodes[ids[parseInt(split[1])]] = currentNode.nextSibling;
             }
             currentNode = treeWalker.nextNode();
         }
@@ -215,7 +216,7 @@ mod js {
         pub fn save_template(nodes: Vec<Node>, tmpl_id: u32);
 
         #[wasm_bindgen]
-        pub fn hydrate();
+        pub fn hydrate(ids: Vec<u32>);
 
         #[wasm_bindgen]
         pub fn get_node(id: u32) -> Node;

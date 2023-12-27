@@ -215,21 +215,23 @@ pub async fn run_with_props<T: 'static>(root: fn(Scope<T>) -> Element, root_prop
             // todo: we need to split rebuild and initialize into two phases
             // it's a waste to produce edits just to get the vdom loaded
 
-            let mutations = dom.rebuild();
-            web_sys::console::log_1(&format!("mutations: {:#?}", mutations).into());
-            let templates = mutations.templates;
-            websys_dom.load_templates(&templates);
-            websys_dom.interpreter.flush();
-            websys_dom.rehydrate();
-            // if !true {
-            //     tracing::error!("Rehydration failed. Rebuild DOM into element from scratch");
-            //     websys_dom.root.set_text_content(None);
+            {
+                let mutations = dom.rebuild();
+                web_sys::console::log_1(&format!("mutations: {:#?}", mutations).into());
+                let templates = mutations.templates;
+                websys_dom.load_templates(&templates);
+                websys_dom.interpreter.flush();
+            }
+            if let Err(err) = websys_dom.rehydrate(&dom) {
+                tracing::error!("Rehydration failed. {:?}", err);
+                tracing::error!("Rebuild DOM into element from scratch");
+                websys_dom.root.set_text_content(None);
 
-            //     let edits = dom.rebuild();
+                let edits = dom.rebuild();
 
-            //     websys_dom.load_templates(&edits.templates);
-            //     websys_dom.apply_edits(edits.edits);
-            // }
+                websys_dom.load_templates(&edits.templates);
+                websys_dom.apply_edits(edits.edits);
+            }
         }
     } else {
         let edits = dom.rebuild();

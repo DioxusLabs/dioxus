@@ -28,6 +28,9 @@ pub struct Renderer {
 
     /// A cache of templates that have been rendered
     template_cache: HashMap<&'static str, Arc<StringCache>>,
+
+    /// The current dynamic node id for hydration
+    dynamic_node_id: usize,
 }
 
 impl Renderer {
@@ -54,6 +57,7 @@ impl Renderer {
         // We should never ever run into async or errored nodes in SSR
         // Error boundaries and suspense boundaries will convert these to sync
         if let RenderReturn::Ready(node) = dom.get_scope(scope).unwrap().root_node() {
+            self.dynamic_node_id = 0;
             self.render_template(buf, dom, node)?
         };
 
@@ -127,10 +131,8 @@ impl Renderer {
                     DynamicNode::Text(text) => {
                         // in SSR, we are concerned that we can't hunt down the right text node since they might get merged
                         if self.pre_render {
-                            let node_id = text
-                                .mounted_element()
-                                .expect("Text nodes must be mounted before rendering");
-                            write!(buf, "<!--node-id{}-->", node_id.0)?;
+                            write!(buf, "<!--node-id{}-->", self.dynamic_node_id)?;
+                            self.dynamic_node_id += 1;
                         }
 
                         write!(
@@ -149,12 +151,14 @@ impl Renderer {
                         }
                     }
 
-                    DynamicNode::Placeholder(el) => {
+                    DynamicNode::Placeholder(_) => {
                         if self.pre_render {
-                            let id = el
-                                .mounted_element()
-                                .expect("Elements must be mounted before rendering");
-                            write!(buf, "<pre data-node-hydration={}></pre>", id.0)?;
+                            write!(
+                                buf,
+                                "<pre data-node-hydration={}></pre>",
+                                self.dynamic_node_id
+                            )?;
+                            self.dynamic_node_id += 1;
                         }
                     }
                 },
@@ -194,10 +198,10 @@ impl Renderer {
                     }
                 }
 
-                Segment::AttributeNodeMarker(idx) => {
-                    let id = template.dynamic_attrs[*idx].mounted_element();
+                Segment::AttributeNodeMarker => {
                     // first write the id
-                    write!(buf, "{}", id.0)?;
+                    write!(buf, "{}", self.dynamic_node_id)?;
+                    self.dynamic_node_id += 1;
                     // then write any listeners
                     for name in accumulated_listeners.drain(..) {
                         write!(buf, ",{}:", &name[2..])?;
@@ -205,9 +209,9 @@ impl Renderer {
                     }
                 }
 
-                Segment::RootNodeMarker(idx) => {
-                    let id = template.root_ids.borrow()[*idx];
-                    write!(buf, "{}", id.0)?;
+                Segment::RootNodeMarker => {
+                    write!(buf, "{}", self.dynamic_node_id)?;
+                    self.dynamic_node_id += 1
                 }
             }
         }

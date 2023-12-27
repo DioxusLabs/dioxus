@@ -28,9 +28,9 @@ pub enum Segment {
     /// A marker for where to insert a dynamic inner html
     InnerHtmlMarker,
     /// A marker for where to insert a node id for an attribute
-    AttributeNodeMarker(usize),
+    AttributeNodeMarker,
     /// A marker for where to insert a node id for a root node
-    RootNodeMarker(usize),
+    RootNodeMarker,
 }
 
 impl std::fmt::Write for StringChain {
@@ -82,7 +82,7 @@ impl StringCache {
                 // we need to collect the inner html and write it at the end
                 let mut inner_html = None;
                 // we need to keep track of if we have dynamic attrs to know if we need to insert a style and inner_html marker
-                let mut last_dyn_attr_id = None;
+                let mut has_dyn_attrs = false;
                 for attr in *attrs {
                     match attr {
                         TemplateAttribute::Static {
@@ -105,7 +105,7 @@ impl StringCache {
                         TemplateAttribute::Dynamic { id: index } => {
                             let index = *index;
                             chain.segments.push(Segment::Attr(index));
-                            last_dyn_attr_id = Some(index);
+                            has_dyn_attrs = true
                         }
                     }
                 }
@@ -120,21 +120,19 @@ impl StringCache {
                         inside_style_tag: true,
                     });
                     write!(chain, "\"")?;
-                } else if last_dyn_attr_id.is_some() {
+                } else if has_dyn_attrs {
                     chain.segments.push(Segment::StyleMarker {
                         inside_style_tag: false,
                     });
                 }
 
                 // write the id if we are prerendering and this is either a root node or a node with a dynamic attribute
-                if prerender {
+                if prerender && (has_dyn_attrs || is_root) {
                     write!(chain, " data-node-hydration=\"")?;
-                    if let Some(last_dyn_attr_id) = last_dyn_attr_id {
-                        chain
-                            .segments
-                            .push(Segment::AttributeNodeMarker(last_dyn_attr_id));
+                    if has_dyn_attrs {
+                        chain.segments.push(Segment::AttributeNodeMarker);
                     } else if is_root {
-                        chain.segments.push(Segment::RootNodeMarker(root_idx));
+                        chain.segments.push(Segment::RootNodeMarker);
                     }
                     write!(chain, "\"")?;
                 }
@@ -146,7 +144,7 @@ impl StringCache {
                     // Write the static inner html, or insert a marker if dynamic inner html is possible
                     if let Some(inner_html) = inner_html {
                         chain.write_str(inner_html)?;
-                    } else if last_dyn_attr_id.is_some() {
+                    } else if has_dyn_attrs {
                         chain.segments.push(Segment::InnerHtmlMarker);
                     }
 
