@@ -1,7 +1,5 @@
 use crate::dom::WebsysDom;
-use dioxus_core::{
-     DynamicNode, ElementId, ScopeState, TemplateNode, VNode, VirtualDom,
-};
+use dioxus_core::{DynamicNode, ElementId, ScopeState, TemplateNode, VNode, VirtualDom};
 
 #[derive(Debug)]
 pub enum RehydrationError {
