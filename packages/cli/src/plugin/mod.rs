@@ -1,6 +1,6 @@
 use crate::lock::DioxusLock;
 use crate::plugin::convert::Convert;
-use crate::plugin::interface::{PluginState, PluginWorld};
+use crate::plugin::interface::{PluginRuntimeState, PluginWorld};
 use crate::server::WsMessage;
 use crate::{DioxusConfig, PluginConfig};
 
@@ -21,6 +21,17 @@ use self::interface::plugins::main::types::{
 
 pub mod convert;
 pub mod interface;
+lazy_static::lazy_static!(
+  static ref ENGINE: Engine = {
+    let mut config = Config::new();
+    config.wasm_component_model(true);
+    config.async_support(true);
+    Engine::new(&config).unwrap()
+  };
+
+  pub static ref PLUGINS: Mutex<Vec<CliPlugin>> = Default::default();
+  pub static ref PLUGINS_CONFIG: Mutex<DioxusConfig> = Default::default();
+);
 
 pub trait ChangeFold {
     fn fold_changes(self) -> ResponseEvent;
@@ -177,22 +188,13 @@ pub async fn plugins_watched_paths_changed(paths: &[PathBuf]) -> ResponseEvent {
     call_plugins!(on_watched_paths_change & paths).fold_changes()
 }
 
-lazy_static::lazy_static!(
-  static ref ENGINE: Engine = {
-    let mut config = Config::new();
-    config.wasm_component_model(true);
-    config.async_support(true);
-    Engine::new(&config).unwrap()
-  };
-
-  pub static ref PLUGINS: Mutex<Vec<CliPlugin>> = Default::default();
-  pub static ref PLUGINS_CONFIG: Mutex<DioxusConfig> = Default::default();
-);
-
-async fn load_plugins(config: &PluginConfig) -> wasmtime::Result<Vec<CliPlugin>> {
+async fn load_plugins(
+    config: &PluginConfig,
+    dioxus_lock: &DioxusLock,
+) -> wasmtime::Result<Vec<CliPlugin>> {
     let mut plugins = Vec::new();
     for plugin in config.plugins.values() {
-        let plugin = load_plugin(&plugin.path).await?;
+        let plugin = load_plugin(&plugin.path, dioxus_lock).await?;
         plugins.push(plugin);
     }
 
@@ -203,8 +205,9 @@ async fn load_plugins(config: &PluginConfig) -> wasmtime::Result<Vec<CliPlugin>>
     Ok(plugins)
 }
 
-pub async fn init_plugins(config: DioxusConfig) -> wasmtime::Result<()> {
-    let plugins = load_plugins(&config.plugins).await?;
+pub async fn init_plugins(config: DioxusConfig) -> crate::Result<()> {
+    let dioxus_lock = DioxusLock::load()?;
+    let plugins = load_plugins(&config.plugins, &dioxus_lock).await?;
     *PLUGINS.lock().await = plugins;
     *PLUGINS_CONFIG.lock().await = config;
     Ok(())
@@ -234,18 +237,24 @@ pub async fn save_plugin_config(bin: PathBuf) -> crate::Result<()> {
         toml::Value::try_from(&PLUGINS_CONFIG.lock().await.plugins).expect("Invalid Plugin Info!");
     diox_doc["plugins"] = plugin_info.convert();
 
+    let mut dioxus_lock = DioxusLock::load()?;
+    dioxus_lock.save(Some(PLUGINS.lock().await.as_ref()))?;
+
     std::fs::write(toml_path, diox_doc.to_string())?;
     log::info!("✔️  Successfully saved config");
     Ok(())
 }
 
-pub async fn load_plugin(path: impl AsRef<Path>) -> wasmtime::Result<CliPlugin> {
+pub async fn load_plugin(
+    path: impl AsRef<Path>,
+    dioxus_lock: &DioxusLock,
+) -> wasmtime::Result<CliPlugin> {
     let path = path.as_ref();
     let component = Component::from_file(&ENGINE, path)?;
 
     let mut linker = Linker::new(&ENGINE);
     preview2::command::add_to_linker(&mut linker)?;
-    PluginWorld::add_to_linker(&mut linker, |state: &mut PluginState| state)?;
+    PluginWorld::add_to_linker(&mut linker, |state: &mut PluginRuntimeState| state)?;
 
     let out_dir =
         std::env::var("CARGO_BUILD_TARGET_DIR").unwrap_or_else(|_| "./target".to_string());
@@ -266,12 +275,14 @@ pub async fn load_plugin(path: impl AsRef<Path>) -> wasmtime::Result<CliPlugin> 
         );
     let table = Table::new();
     let ctx = ctx_builder.build();
+
     let mut store = Store::new(
         &ENGINE,
-        PluginState {
+        PluginRuntimeState {
             table,
             ctx,
             tomls: Slab::new(),
+            map: std::collections::HashMap::new(),
         },
     );
     let (bindings, instance) =
@@ -281,6 +292,10 @@ pub async fn load_plugin(path: impl AsRef<Path>) -> wasmtime::Result<CliPlugin> 
         .plugins_main_definitions()
         .call_metadata(&mut store)
         .await?;
+
+    if let Some(existing) = dioxus_lock.plugins.get(&metadata.name) {
+        store.data_mut().map = existing.map.clone();
+    }
 
     Ok(CliPlugin {
         bindings,
@@ -293,12 +308,12 @@ pub async fn load_plugin(path: impl AsRef<Path>) -> wasmtime::Result<CliPlugin> 
 pub struct CliPlugin {
     pub bindings: PluginWorld,
     pub instance: Instance,
-    pub store: Store<PluginState>,
+    pub store: Store<PluginRuntimeState>,
     pub metadata: PluginInfo,
 }
 
-impl AsMut<PluginState> for CliPlugin {
-    fn as_mut(&mut self) -> &mut PluginState {
+impl AsMut<PluginRuntimeState> for CliPlugin {
+    fn as_mut(&mut self) -> &mut PluginRuntimeState {
         self.store.data_mut()
     }
 }

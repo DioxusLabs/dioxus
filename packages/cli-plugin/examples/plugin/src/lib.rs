@@ -1,7 +1,9 @@
+use std::path::PathBuf;
+
 use dioxus_cli_plugin::*;
 use exports::plugins::main::definitions::Guest;
 use plugins::main::{
-    imports::{log, watch_path, watched_paths},
+    imports::{get_data, get_project_info, log, set_data, watched_paths},
     toml::{Toml, TomlValue},
     types::{CompileEvent, PluginInfo, ResponseEvent, RuntimeEvent},
 };
@@ -22,16 +24,62 @@ impl Guest for Plugin {
         res
     }
 
-    fn on_watched_paths_change(_: std::vec::Vec<std::string::String>) -> Result<ResponseEvent, ()> {
-        Ok(ResponseEvent::None)
+    fn on_watched_paths_change(
+        paths: std::vec::Vec<std::string::String>,
+    ) -> Result<ResponseEvent, ()> {
+        if !paths.iter().any(|f| f.ends_with(".rs")) {
+            log("Skipping tailwind reload, no change necessary");
+            return Ok(ResponseEvent::None);
+        };
+
+        // Not necessary, just for testing
+        let Some(tailwind_output) = get_data("tailwind_output").map(|data| {
+            let path = String::from_utf8(data).unwrap();
+            PathBuf::from(path)
+        }) else {
+            log("Tailwind Plugin not registered!");
+            return Err(());
+        };
+
+        // Todo make this work
+        match std::process::Command::new("npx")
+            .args([
+                "tailwindcss",
+                "-i",
+                "INPUT_CSS",
+                "-o",
+                tailwind_output.to_str().unwrap(),
+            ])
+            .output()
+        {
+            Ok(text) => {
+                log(std::str::from_utf8(&text.stdout).expect("Invalid command output!"));
+                Ok(ResponseEvent::Refresh(vec![tailwind_output
+                    .to_str()
+                    .unwrap()
+                    .to_string()]))
+            }
+            Err(err) => {
+                let err_text = format!("Tailwind err: {err}");
+                log(&err_text);
+                Err(())
+            }
+        }
     }
 
     fn register() -> Result<(), ()> {
         log(&format!("{:?}", watched_paths()));
 
-        watch_path("tests");
+        let project_info = get_project_info();
 
-        log("Watched `tests` path!");
+        let tailwind_path =
+            std::path::PathBuf::from(project_info.asset_directory).join("tailwind.css");
+        set_data(
+            "tailwind_output",
+            tailwind_path.as_os_str().as_encoded_bytes(),
+        );
+
+        log("Registered Tailwind Plugin Successfully!");
         Ok(())
     }
 

@@ -1,4 +1,4 @@
-use super::interface::{plugins::main::toml::*, PluginState};
+use super::interface::{plugins::main::toml::*, PluginRuntimeState};
 use async_trait::async_trait;
 use ext_toml::value::Map;
 use ext_toml::Value;
@@ -8,7 +8,7 @@ use wasmtime::component::Resource;
 
 #[async_trait]
 pub trait ConvertWithState<T> {
-    async fn convert_with_state(self, state: &mut PluginState) -> T;
+    async fn convert_with_state(self, state: &mut PluginRuntimeState) -> T;
 }
 
 pub trait Convert<T> {
@@ -198,7 +198,7 @@ impl Convert<Offset> for ext_toml::value::Offset {
 
 #[async_trait]
 impl ConvertWithState<Value> for TomlValue {
-    async fn convert_with_state(self, state: &mut PluginState) -> Value {
+    async fn convert_with_state(self, state: &mut PluginRuntimeState) -> Value {
         match self {
             TomlValue::String(string) => Value::String(string),
             TomlValue::Integer(int) => Value::Integer(int),
@@ -226,7 +226,7 @@ impl ConvertWithState<Value> for TomlValue {
 
 #[async_trait]
 impl ConvertWithState<TomlValue> for Value {
-    async fn convert_with_state(self, state: &mut PluginState) -> TomlValue {
+    async fn convert_with_state(self, state: &mut PluginRuntimeState) -> TomlValue {
         match self {
             Value::String(string) => TomlValue::String(string),
             Value::Integer(int) => TomlValue::Integer(int),
@@ -253,7 +253,7 @@ impl ConvertWithState<TomlValue> for Value {
 
 #[async_trait]
 impl ConvertWithState<Resource<Toml>> for Value {
-    async fn convert_with_state(self, state: &mut PluginState) -> Resource<Toml> {
+    async fn convert_with_state(self, state: &mut PluginRuntimeState) -> Resource<Toml> {
         let toml_value: TomlValue = self.convert_with_state(state).await;
         toml_value.convert_with_state(state).await
     }
@@ -261,7 +261,7 @@ impl ConvertWithState<Resource<Toml>> for Value {
 
 #[async_trait]
 impl ConvertWithState<Resource<Toml>> for TomlValue {
-    async fn convert_with_state(self, state: &mut PluginState) -> Resource<Toml> {
+    async fn convert_with_state(self, state: &mut PluginRuntimeState) -> Resource<Toml> {
         // This impl causes the set function add whole new toml's, check if it's
         // already in state somehow?
         state.new(self).await.unwrap()

@@ -37,6 +37,8 @@ interface definitions {
   /// Gives a list of the paths that have been changed
   on-watched-paths-change: func(path: list<string>) -> result<response-event>;
 
+  
+
   /// Check if there is an update to the plugin 
   /// with a given git repo?
   /// returns error if there was error getting git
@@ -147,6 +149,12 @@ interface imports {
 
   /// Get list of watched paths
   watched-paths: func() -> list<string>;
+
+  /// Set data in a map, is saved between sessions in the lock file
+  set-data: func(key: string, data: list<u8>);
+
+  /// Grab data from map, returns none if key not in map
+  get-data: func(key: string) -> option<list<u8>>;
 
   log: func(info: string);
 

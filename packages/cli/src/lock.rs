@@ -10,8 +10,8 @@ use crate::plugin::CliPlugin;
 #[derive(Default, Debug, Clone, Deserialize, Serialize)]
 pub struct DioxusLock {
     #[serde(skip)]
-    path: PathBuf,
-    plugins: HashMap<String, PluginState>,
+    pub path: PathBuf,
+    pub plugins: HashMap<String, PluginLockState>,
 }
 
 impl DioxusLock {
@@ -46,8 +46,29 @@ impl DioxusLock {
         Ok(myself)
     }
 
-    pub fn save(&self) -> crate::error::Result<()> {
-        std::fs::create_dir_all(self.path.parent().unwrap())?;
+    // TODO Check if the uses for this require the clones
+    /// Save the lock file to disk, changing the plugin maps of the lock if they
+    /// are passed in, otherwise saving what it currently has
+    pub fn save(&mut self, plugins: Option<&Vec<CliPlugin>>) -> crate::error::Result<()> {
+        let parent_path = self.path.parent().unwrap();
+
+        if !parent_path.is_dir() {
+            std::fs::create_dir_all(parent_path)?;
+        }
+
+        if let Some(plugins) = plugins {
+            for plugin in plugins.iter() {
+                let state = self
+                    .plugins
+                    .entry(plugin.metadata.name.clone())
+                    .or_default();
+                if !state.initialized {
+                    continue;
+                }
+                state.map = plugin.store.data().map.clone();
+            }
+        }
+
         std::fs::write(
             &self.path,
             toml::to_string_pretty(self).map_err(|err| anyhow::anyhow!(err))?,
@@ -84,7 +105,7 @@ impl DioxusLock {
         self.plugins = new_plugins;
 
         if !plugins.is_empty() {
-            self.save()?;
+            self.save(Some(plugins))?;
         }
 
         Ok(())
@@ -106,7 +127,9 @@ impl DioxusLock {
             }
         }
 
-        self.save()?;
+        state.map = plugin.store.data().map.clone();
+
+        self.save(None)?;
 
         Ok(())
     }
@@ -129,6 +152,8 @@ fn acquire_dioxus_lock(dir: &Path) -> Option<PathBuf> {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
-struct PluginState {
-    initialized: bool,
+pub struct PluginLockState {
+    pub initialized: bool,
+    // TODO Make this serialize as a block of chars instead of an array of numbers
+    pub map: HashMap<String, Vec<u8>>,
 }

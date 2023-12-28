@@ -2,6 +2,7 @@ use async_trait::async_trait;
 use plugins::main::imports::Host as ImportHost;
 use plugins::main::toml::{Host as TomlHost, *};
 use plugins::main::types::Host as TypeHost;
+use std::collections::HashMap;
 use wasmtime::component::*;
 use wasmtime_wasi::preview2::{Table, WasiCtx, WasiView};
 
@@ -9,13 +10,14 @@ use self::plugins::main::types::{Platform, ProjectInfo};
 
 use super::PLUGINS_CONFIG;
 
-pub struct PluginState {
+pub struct PluginRuntimeState {
     pub table: Table,
     pub ctx: WasiCtx,
     pub tomls: slab::Slab<TomlValue>,
+    pub map: HashMap<String, Vec<u8>>,
 }
 
-impl PluginState {
+impl PluginRuntimeState {
     pub fn get_toml(&mut self, value: Resource<Toml>) -> TomlValue {
         self.tomls.get(value.rep() as usize).unwrap().clone()
     }
@@ -61,7 +63,7 @@ impl Clone for TomlValue {
 }
 
 #[async_trait]
-impl HostToml for PluginState {
+impl HostToml for PluginRuntimeState {
     async fn new(&mut self, value: TomlValue) -> wasmtime::Result<Resource<Toml>> {
         Ok(self.new_toml(value))
     }
@@ -88,13 +90,13 @@ impl HostToml for PluginState {
 }
 
 #[async_trait]
-impl TomlHost for PluginState {}
+impl TomlHost for PluginRuntimeState {}
 
 #[async_trait]
-impl TypeHost for PluginState {}
+impl TypeHost for PluginRuntimeState {}
 
 #[async_trait]
-impl ImportHost for PluginState {
+impl ImportHost for PluginRuntimeState {
     async fn get_project_info(&mut self) -> wasmtime::Result<ProjectInfo> {
         let application = &PLUGINS_CONFIG.lock().await.application;
 
@@ -164,13 +166,22 @@ impl ImportHost for PluginState {
         )
     }
 
+    async fn set_data(&mut self, key: String, data: Vec<u8>) -> wasmtime::Result<()> {
+        self.map.insert(key, data);
+        Ok(())
+    }
+
+    async fn get_data(&mut self, key: String) -> wasmtime::Result<Option<Vec<u8>>> {
+        Ok(self.map.get(&key).cloned())
+    }
+
     async fn log(&mut self, info: String) -> wasmtime::Result<()> {
         println!("{info}");
         Ok(())
     }
 }
 
-impl WasiView for PluginState {
+impl WasiView for PluginRuntimeState {
     fn table(&self) -> &Table {
         &self.table
     }

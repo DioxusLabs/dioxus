@@ -56,13 +56,13 @@ impl Plugin {
             }
             Plugin::Add(data) => match data {
                 PluginAdd::Add { path } => {
-                    let mut plugin = load_plugin(&path).await?;
+                    let mut dioxus_lock = DioxusLock::load()?;
+                    let mut plugin = load_plugin(&path, &dioxus_lock).await?;
 
                     // Add the plugin to the lock file
-                    let mut dioxus_lock = DioxusLock::load()?;
                     dioxus_lock.add_plugin(&mut plugin).await?;
 
-                    let Ok(default_config) = plugin.get_default_config().await else {
+                    let Ok(config) = plugin.get_default_config().await else {
                         log::warn!(
                             "Couldn't get default config from plugin: {}",
                             plugin.metadata.name
@@ -82,7 +82,7 @@ impl Plugin {
                     let new_config = PluginConfigInfo {
                         version,
                         path,
-                        config: default_config,
+                        config,
                     };
 
                     let plugins = &mut PLUGINS_CONFIG.lock().await.plugins;

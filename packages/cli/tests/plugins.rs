@@ -1,8 +1,12 @@
-use dioxus_cli::plugin::{convert::ConvertWithState, load_plugin};
+use dioxus_cli::{
+    plugin::{convert::ConvertWithState, load_plugin},
+    DioxusLock,
+};
 
 #[tokio::test]
-async fn load_plugin_works() -> wasmtime::Result<()> {
-    let mut plugin = load_plugin("../cli-plugin/examples/output.wasm").await?;
+async fn load_plugin_works() -> dioxus_cli::Result<()> {
+    let dioxus_lock = DioxusLock::load()?;
+    let mut plugin = load_plugin("../cli-plugin/examples/output.wasm", &dioxus_lock).await?;
 
     // let CliPlugin {
     //     bindings,
