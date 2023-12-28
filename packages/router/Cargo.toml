@@ -40,7 +40,7 @@ serde = ["dep:serde", "gloo-utils/serde"]
 web = ["gloo", "web-sys", "wasm-bindgen", "gloo-utils", "js-sys"]
 
 [dev-dependencies]
-axum = { version = "0.6.1", features = ["ws"] }
+axum = { version = "0.7.2", features = ["ws"] }
 dioxus = { path = "../dioxus" }
 dioxus-liveview = { workspace = true, features = ["axum"] }
 dioxus-ssr = { path = "../ssr" }

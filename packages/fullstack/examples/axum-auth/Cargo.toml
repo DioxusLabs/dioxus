@@ -10,7 +10,7 @@ publish = false
 dioxus-web = { workspace = true, features = ["hydrate"], optional = true }
 dioxus = { workspace = true }
 dioxus-fullstack = { workspace = true }
-axum = { version = "0.6.12", optional = true }
+axum = { version = "0.7.2", optional = true }
 tokio = { workspace = true, features = ["full"], optional = true }
 serde = "1.0.159"
 execute = "0.2.12"
