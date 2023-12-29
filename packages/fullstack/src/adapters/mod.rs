@@ -22,12 +22,12 @@ use server_fn::{Encoding, Payload};
 use std::sync::{Arc, RwLock};
 
 use crate::{
-    layer::{BoxedService, Service},
+    layer::{BoxedService, Service, HttpBody},
     prelude::{DioxusServerContext, ProvideServerContext},
 };
 
 /// Create a server function handler with the given server context and server function.
-pub fn server_fn_service(
+pub fn server_fn_service<B>(
     context: DioxusServerContext,
     function: server_fn::ServerFnTraitObj<()>,
 ) -> crate::layer::BoxedService {
@@ -36,7 +36,7 @@ pub fn server_fn_service(
     if let Some(middleware) = crate::server_fn::MIDDLEWARE.get(&(&prefix, &url)) {
         let mut service = BoxedService(Box::new(ServerFnHandler::new(context, function)));
         for middleware in middleware {
-            service = middleware.layer(service);
+            service = middleware.layer(service).into();
         }
         service
     } else {
@@ -68,11 +68,11 @@ impl ServerFnHandler {
 impl Service for ServerFnHandler {
     fn run(
         &mut self,
-        req: http::Request<hyper::body::Body>,
+        req: http::Request<HttpBody>,
     ) -> std::pin::Pin<
         Box<
             dyn std::future::Future<
-                    Output = Result<http::Response<hyper::body::Body>, server_fn::ServerFnError>,
+                    Output = Result<http::Response<HttpBody>, server_fn::ServerFnError>,
                 > + Send,
         >,
     > {
@@ -83,7 +83,7 @@ impl Service for ServerFnHandler {
         Box::pin(async move {
             let query = req.uri().query().unwrap_or_default().as_bytes().to_vec();
             let (parts, body) = req.into_parts();
-            let body = hyper::body::to_bytes(body).await?.to_vec();
+            let body = http_body_util::BodyExt::collect(body).await.unwrap_or_default().to_bytes().into();
             let headers = &parts.headers;
             let accept_header = headers.get("Accept").cloned();
             let parts = Arc::new(RwLock::new(parts));

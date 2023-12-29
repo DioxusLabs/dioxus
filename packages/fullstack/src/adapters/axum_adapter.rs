@@ -55,7 +55,7 @@
 //! ```
 
 use axum::{
-    body::{self, Body, BoxBody},
+    body::{self, Body},
     extract::State,
     handler::Handler,
     http::{Request, Response, StatusCode},
@@ -232,7 +232,7 @@ where
         mut handler: impl FnMut(server_fn::ServerFnTraitObj<()>) -> H,
     ) -> Self
     where
-        H: Handler<T, S, Body>,
+        H: Handler<T, S>,
         T: 'static,
         S: Clone + Send + Sync + 'static,
     {
@@ -453,10 +453,10 @@ pub async fn render_handler<P: Clone + serde::Serialize + Send + Sync + 'static>
     render_handler_with_context(State((|_: &mut _| (), cfg, ssr_state)), request).await
 }
 
-fn report_err<E: std::fmt::Display>(e: E) -> Response<BoxBody> {
+fn report_err<E: std::fmt::Display>(e: E) -> Response<Body> {
     Response::builder()
         .status(StatusCode::INTERNAL_SERVER_ERROR)
-        .body(body::boxed(format!("Error: {}", e)))
+        .body(body::Body::new(format!("Error: {}", e)))
         .unwrap()
 }
 

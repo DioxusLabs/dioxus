@@ -3,6 +3,8 @@ use tracing_futures::Instrument;
 
 use http::{Request, Response};
 
+pub type HttpBody = http_body_util::Full<bytes::Bytes>;
+
 /// A layer that wraps a service. This can be used to add additional information to the request, or response on top of some other service
 pub trait Layer: Send + Sync + 'static {
     /// Wrap a boxed service with this layer
@@ -12,7 +14,19 @@ pub trait Layer: Send + Sync + 'static {
 impl<L> Layer for L
 where
     L: tower_layer::Layer<BoxedService> + Sync + Send + 'static,
-    L::Service: Service + Send + 'static,
+    L::Service: tower::Service<http::Request<HttpBody>, Response = http::Response<HttpBody>>
+        + Send
+        + 'static,
+        <<L as tower_layer::Layer<BoxedService>>::Service as tower::Service<
+            http::Request<
+                HttpBody
+            >,
+        >>::Error: std::error::Error,
+        <<L as tower_layer::Layer<BoxedService>>::Service as tower::Service<
+            http::Request<
+                HttpBody
+            >,
+        >>::Future: Send,
 {
     fn layer(&self, inner: BoxedService) -> BoxedService {
         BoxedService(Box::new(self.layer(inner)))
@@ -24,30 +38,28 @@ pub trait Service {
     /// Run the service and produce a future that resolves to a response
     fn run(
         &mut self,
-        req: http::Request<hyper::body::Body>,
+        req: http::Request<HttpBody>,
     ) -> Pin<
         Box<
-            dyn std::future::Future<
-                    Output = Result<Response<hyper::body::Body>, server_fn::ServerFnError>,
-                > + Send,
+            dyn std::future::Future<Output = Result<Response<HttpBody>, server_fn::ServerFnError>>
+                + Send,
         >,
     >;
 }
 
 impl<S> Service for S
 where
-    S: tower::Service<http::Request<hyper::body::Body>, Response = Response<hyper::body::Body>>,
+    S: tower::Service<http::Request<HttpBody>, Response = Response<HttpBody>>,
     S::Future: Send + 'static,
     S::Error: Into<server_fn::ServerFnError>,
 {
     fn run(
         &mut self,
-        req: http::Request<hyper::body::Body>,
+        req: http::Request<HttpBody>,
     ) -> Pin<
         Box<
-            dyn std::future::Future<
-                    Output = Result<Response<hyper::body::Body>, server_fn::ServerFnError>,
-                > + Send,
+            dyn std::future::Future<Output = Result<Response<HttpBody>, server_fn::ServerFnError>>
+                + Send,
         >,
     > {
         let fut = self.call(req).instrument(tracing::trace_span!(
@@ -62,13 +74,13 @@ where
 /// A boxed service is a type-erased service that can be used without knowing the underlying type
 pub struct BoxedService(pub Box<dyn Service + Send>);
 
-impl tower::Service<http::Request<hyper::body::Body>> for BoxedService {
-    type Response = http::Response<hyper::body::Body>;
+impl tower::Service<http::Request<HttpBody>> for BoxedService {
+    type Response = http::Response<HttpBody>;
     type Error = server_fn::ServerFnError;
     type Future = Pin<
         Box<
             dyn std::future::Future<
-                    Output = Result<http::Response<hyper::body::Body>, server_fn::ServerFnError>,
+                    Output = Result<http::Response<HttpBody>, server_fn::ServerFnError>,
                 > + Send,
         >,
     >;
@@ -80,7 +92,7 @@ impl tower::Service<http::Request<hyper::body::Body>> for BoxedService {
         Ok(()).into()
     }
 
-    fn call(&mut self, req: Request<hyper::body::Body>) -> Self::Future {
-        self.0.run(req)
+    fn call(&mut self, req: Request<HttpBody>) -> Self::Future {
+        Service::run(self, req)
     }
 }
