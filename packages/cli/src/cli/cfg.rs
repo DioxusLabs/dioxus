@@ -15,10 +15,10 @@ pub struct ConfigOptsBuild {
     #[serde(default)]
     pub release: bool,
 
-    /// Build with all debug info [default: false]
+    /// This flag only applies to fullstack builds. By default fullstack builds will run with something in between debug and release mode. This flag will force the build to run in debug mode. [default: false]
     #[clap(long)]
     #[serde(default)]
-    pub debug: bool,
+    pub force_debug: bool,
 
     // Use verbose output [default: false]
     #[clap(long)]
@@ -68,7 +68,7 @@ impl From<ConfigOptsServe> for ConfigOptsBuild {
             client_feature: serve.client_feature,
             server_feature: serve.server_feature,
             skip_assets: serve.skip_assets,
-            debug: serve.debug,
+            force_debug: serve.force_debug,
         }
     }
 }
@@ -98,10 +98,10 @@ pub struct ConfigOptsServe {
     #[serde(default)]
     pub release: bool,
 
-    /// Build with all debug info [default: false]
+    /// This flag only applies to fullstack builds. By default fullstack builds will run with something in between debug and release mode. This flag will force the build to run in debug mode. [default: false]
     #[clap(long)]
     #[serde(default)]
-    pub debug: bool,
+    pub force_debug: bool,
 
     // Use verbose output [default: false]
     #[clap(long)]

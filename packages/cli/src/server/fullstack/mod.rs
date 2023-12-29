@@ -66,7 +66,7 @@ impl Platform for FullstackPlatform {
                 }
                 None => desktop_config.features = Some(vec![desktop_feature]),
             };
-            let _gaurd = FullstackServerEnvGuard::new(self.serve.debug, self.serve.release);
+            let _gaurd = FullstackServerEnvGuard::new(self.serve.force_debug, self.serve.release);
             self.desktop.rebuild(&desktop_config)
         };
         thread_handle
@@ -101,7 +101,7 @@ pub(crate) struct FullstackWebEnvGuard {
 impl FullstackWebEnvGuard {
     pub fn new(serve: &ConfigOptsBuild) -> Self {
         Self {
-            old_rustflags: (!serve.debug).then(|| {
+            old_rustflags: (!serve.force_debug).then(|| {
                 let old_rustflags = std::env::var("RUSTFLAGS").unwrap_or_default();
                 let debug_assertions = if serve.release {
                     ""

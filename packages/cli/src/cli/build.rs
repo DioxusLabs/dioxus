@@ -78,7 +78,8 @@ impl Build {
                         }
                         None => desktop_config.features = Some(vec![desktop_feature]),
                     };
-                    let _gaurd = FullstackServerEnvGuard::new(self.build.debug, self.build.release);
+                    let _gaurd =
+                        FullstackServerEnvGuard::new(self.build.force_debug, self.build.release);
                     crate::builder::build_desktop(&desktop_config, false, self.build.skip_assets)?;
                 }
             }
