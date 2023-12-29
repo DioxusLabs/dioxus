@@ -11,4 +11,5 @@ crate-type = ["cdylib"]
 [dependencies]
 dioxus-cli-plugin = { path = "../.." }
 railwind = "0.1.5"
+regex = "1.10.2"
 wit-bindgen = "0.16.0"
