@@ -263,6 +263,7 @@ impl Platform for DesktopPlatform {
     }
 
     fn rebuild(&mut self, config: &CrateConfig) -> Result<BuildResult> {
+        self.currently_running_child.0.kill()?;
         let (child, result) = start_desktop(config, self.skip_assets)?;
         self.currently_running_child = child;
         Ok(result)
