@@ -14,8 +14,7 @@ keywords = ["ui", "gui", "react", "ssr", "fullstack"]
 server_fn = { version = "0.5.2", default-features = false }
 dioxus_server_macro = { workspace = true }
 
-# warp
-warp = { version = "0.3.6", features = ["compression-gzip"], optional = true }
+# http crates
 http-body = { version = "^1.0.0", optional = true }
 http-body-util = "0.1.0"
 
@@ -76,7 +75,6 @@ router = ["dioxus-router"]
 hot-reload = ["serde_json", "futures-util"]
 web = ["dioxus-web"]
 desktop = ["dioxus-desktop"]
-warp = ["dep:warp", "ssr"]
 axum = ["dep:axum", "tower-http", "ssr"]
 salvo = ["dep:salvo", "ssr"]
 ssr = ["server_fn/ssr", "dioxus_server_macro/ssr", "tokio", "tokio-util", "dioxus-ssr", "tower", "hyper", "http", "http-body", "dioxus-router/ssr", "tokio-stream"]

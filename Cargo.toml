@@ -35,7 +35,6 @@ members = [
     "packages/fullstack/examples/axum-desktop",
     "packages/fullstack/examples/axum-auth",
     "packages/fullstack/examples/salvo-hello-world",
-    "packages/fullstack/examples/warp-hello-world",
     "packages/fullstack/examples/static-hydrated",
     # Full project examples
     "examples/tailwind",
