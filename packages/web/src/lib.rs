@@ -252,13 +252,6 @@ pub async fn run_with_props<T: 'static>(root: fn(Scope<T>) -> Element, root_prop
             pin_mut!(work);
 
             #[cfg(all(feature = "hot_reload", debug_assertions))]
-            // futures_util::select! {
-            //     _ = work => (None, None),
-            //     new_template = hotreload_rx.next() => {
-            //         (None, new_template)
-            //     }
-            //     evt = rx.next() =>
-            // }
             match select(work, select(hotreload_rx.next(), rx.next())).await {
                 Either::Left((_, _)) => (None, None),
                 Either::Right((Either::Left((new_template, _)), _)) => (None, new_template),

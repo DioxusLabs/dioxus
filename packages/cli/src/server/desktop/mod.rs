@@ -210,7 +210,7 @@ fn send_msg(msg: HotReloadMsg, channel: &mut impl std::io::Write) -> bool {
     }
 }
 
-fn start_desktop(config: &CrateConfig, skip_assets: bool) -> Result<(Child, BuildResult)> {
+fn start_desktop(config: &CrateConfig, skip_assets: bool) -> Result<(RAIIChild, BuildResult)> {
     // Run the desktop application
     let result = crate::builder::build_desktop(config, true, skip_assets)?;
 
@@ -223,9 +223,9 @@ fn start_desktop(config: &CrateConfig, skip_assets: bool) -> Result<(Child, Buil
                 file.set_extension("exe");
             }
             let active = "DIOXUS_ACTIVE";
-            let child = Command::new(file.to_str().unwrap())
+            let child = RAIIChild(Command::new(file.to_str().unwrap())
                 .env(active, "true")
-                .spawn()?;
+                .spawn()?);
 
             Ok((child, result))
         }
@@ -233,7 +233,7 @@ fn start_desktop(config: &CrateConfig, skip_assets: bool) -> Result<(Child, Buil
 }
 
 pub(crate) struct DesktopPlatform {
-    currently_running_child: Child,
+    currently_running_child: RAIIChild,
     skip_assets: bool,
 }
 
@@ -261,9 +261,16 @@ impl Platform for DesktopPlatform {
     }
 
     fn rebuild(&mut self, config: &CrateConfig) -> Result<BuildResult> {
-        self.currently_running_child.kill()?;
         let (child, result) = start_desktop(config, self.skip_assets)?;
         self.currently_running_child = child;
         Ok(result)
+    }
+}
+
+struct RAIIChild(Child);
+
+impl Drop for RAIIChild {
+    fn drop(&mut self) {
+        let _ = self.0.kill();
     }
 }
