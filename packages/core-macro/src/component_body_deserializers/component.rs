@@ -45,6 +45,7 @@ fn get_out_comp_fn(orig_comp_fn: &ItemFn, cx_pat: &Pat) -> ItemFn {
 #[derive(Clone)]
 pub struct ComponentDeserializerArgs {
     pub case_check: bool,
+    pub island: bool,
 }
 
 /// The output fields and [`ToTokens`] implementation for the [`crate::component`] macro.
@@ -52,12 +53,17 @@ pub struct ComponentDeserializerArgs {
 pub struct ComponentDeserializerOutput {
     pub comp_fn: ItemFn,
     pub props_struct: Option<ItemStruct>,
+    pub island: bool,
 }
 
 impl ToTokens for ComponentDeserializerOutput {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         let comp_fn = &self.comp_fn;
         let props_struct = &self.props_struct;
+
+        if !self.island && cfg!(all(feature = "islands", not(feature = "ssr"))) {
+            return;
+        }
 
         tokens.append_all(quote! {
             #props_struct
@@ -75,11 +81,17 @@ impl DeserializerArgs<ComponentDeserializerOutput> for ComponentDeserializerArgs
             return Err(Error::new(ident.span(), COMPONENT_ARG_CASE_CHECK_ERROR));
         }
 
-        if component_body.has_extra_args {
+        let mut output = if component_body.has_extra_args {
             Self::deserialize_with_props(component_body)
         } else {
             Ok(Self::deserialize_no_props(component_body))
+        };
+
+        if let Ok(output) = &mut output {
+            output.island = self.island;
         }
+
+        output
     }
 }
 
@@ -97,6 +109,7 @@ impl ComponentDeserializerArgs {
         ComponentDeserializerOutput {
             comp_fn,
             props_struct: None,
+            island: false
         }
     }
 
@@ -132,6 +145,7 @@ impl ComponentDeserializerArgs {
         Ok(ComponentDeserializerOutput {
             comp_fn,
             props_struct: Some(props_struct),
+            island: false
         })
     }
 }

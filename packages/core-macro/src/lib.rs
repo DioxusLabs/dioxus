@@ -95,6 +95,7 @@ pub fn inline_props(_args: TokenStream, s: TokenStream) -> TokenStream {
 }
 
 pub(crate) const COMPONENT_ARG_CASE_CHECK_OFF: &str = "no_case_check";
+pub(crate) const COMPONENT_ARG_ISLAND: &str = "island";
 
 /// Streamlines component creation.
 /// This is the recommended way of creating components,
@@ -183,18 +184,22 @@ pub(crate) const COMPONENT_ARG_CASE_CHECK_OFF: &str = "no_case_check";
 #[proc_macro_attribute]
 pub fn component(args: TokenStream, input: TokenStream) -> TokenStream {
     let component_body = parse_macro_input!(input as ComponentBody);
-    let case_check = match Punctuated::<Path, Token![,]>::parse_terminated.parse(args) {
+    let mut case_check = false;
+    let mut island = false;
+    match Punctuated::<Path, Token![,]>::parse_terminated.parse(args) {
         Err(e) => return e.to_compile_error().into(),
         Ok(args) => {
-            if let Some(first) = args.first() {
-                !first.is_ident(COMPONENT_ARG_CASE_CHECK_OFF)
-            } else {
-                true
+            for arg in args {
+                if arg.is_ident(COMPONENT_ARG_CASE_CHECK_OFF) {
+                    case_check = true
+                } else if arg.is_ident(COMPONENT_ARG_ISLAND) {
+                    island = true
+                }
             }
         }
     };
 
-    match component_body.deserialize(ComponentDeserializerArgs { case_check }) {
+    match component_body.deserialize(ComponentDeserializerArgs { case_check, island }) {
         Err(e) => e.to_compile_error().into(),
         Ok(output) => output.to_token_stream().into(),
     }
