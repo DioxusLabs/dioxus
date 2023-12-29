@@ -165,7 +165,8 @@ impl<Props: Clone + serde::Serialize + serde::de::DeserializeOwned + Send + Sync
                         .layer(tower_http::compression::CompressionLayer::new().gzip(true)),
                 )
                 .into_make_service();
-            axum::Server::bind(&addr).serve(router).await.unwrap();
+            let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+            axum::serve(listener, router).await.unwrap();
         }
         #[cfg(all(feature = "warp", not(feature = "axum"), not(feature = "salvo")))]
         {

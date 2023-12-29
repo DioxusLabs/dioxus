@@ -27,7 +27,7 @@ use crate::{
 };
 
 /// Create a server function handler with the given server context and server function.
-pub fn server_fn_service<B>(
+pub fn server_fn_service(
     context: DioxusServerContext,
     function: server_fn::ServerFnTraitObj<()>,
 ) -> crate::layer::BoxedService {

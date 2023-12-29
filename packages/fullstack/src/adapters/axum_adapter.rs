@@ -259,10 +259,25 @@ where
                 let mut service = crate::server_fn_service(Default::default(), func);
                 async move {
                     let (req, body) = req.into_parts();
+                    let body = http_body_util::BodyExt::collect(body)
+                        .await
+                        .unwrap_or_default()
+                        .to_bytes()
+                        .into();
                     let req = Request::from_parts(req, body);
                     let res = service.run(req);
                     match res.await {
-                        Ok(res) => Ok::<_, std::convert::Infallible>(res.map(|b| b.into())),
+                        Ok(res) => {
+                            let (parts, body) = res.into_parts();
+
+                            let body = http_body_util::BodyExt::collect(body)
+                                .await
+                                .unwrap_or_default()
+                                .to_bytes()
+                                .into();
+
+                            Ok::<_, std::convert::Infallible>(Response::from_parts(parts, body))
+                        }
                         Err(e) => {
                             let mut res = Response::new(Body::from(e.to_string()));
                             *res.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
