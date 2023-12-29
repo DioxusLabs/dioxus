@@ -22,7 +22,7 @@ use server_fn::{Encoding, Payload};
 use std::sync::{Arc, RwLock};
 
 use crate::{
-    layer::{BoxedService, Service, HttpBody},
+    layer::{BoxedService, HttpBody, Service},
     prelude::{DioxusServerContext, ProvideServerContext},
 };
 
@@ -83,7 +83,11 @@ impl Service for ServerFnHandler {
         Box::pin(async move {
             let query = req.uri().query().unwrap_or_default().as_bytes().to_vec();
             let (parts, body) = req.into_parts();
-            let body = http_body_util::BodyExt::collect(body).await.unwrap_or_default().to_bytes().into();
+            let body = http_body_util::BodyExt::collect(body)
+                .await
+                .unwrap_or_default()
+                .to_bytes()
+                .into();
             let headers = &parts.headers;
             let accept_header = headers.get("Accept").cloned();
             let parts = Arc::new(RwLock::new(parts));

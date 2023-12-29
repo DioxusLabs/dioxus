@@ -1,8 +1,8 @@
 use async_trait::async_trait;
 use axum::{
+    extract::FromRequestParts,
     http::Method,
     response::{IntoResponse, Response},
-    extract::FromRequestParts,
     routing::get,
     Router,
 };
