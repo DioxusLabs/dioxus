@@ -50,11 +50,11 @@
 //! ```
 
 use http_body_util::{BodyExt, Limited};
-use hyper::body::Body as HyperBody;
 use hyper::StatusCode;
 use salvo::{
     async_trait, handler,
     http::{
+        body::{ReqBody, ResBody},
         cookie::{Cookie, CookieJar},
         ParseError,
     },
@@ -71,8 +71,8 @@ use crate::{
     server_fn::DioxusServerFnRegistry, server_fn_service,
 };
 
-type HyperRequest = hyper::Request<hyper::Body>;
-type HyperResponse = hyper::Response<HyperBody>;
+type HyperRequest = hyper::Request<ReqBody>;
+type HyperResponse = hyper::Response<ResBody>;
 
 /// A extension trait with utilities for integrating Dioxus with your Salvo router.
 pub trait DioxusRouterExt {
@@ -297,10 +297,10 @@ impl DioxusRouterExt for Router {
     fn connect_hot_reload(self) -> Self {
         let mut _dioxus_router = Router::with_path("_dioxus");
         _dioxus_router =
-            _dioxus_router.push(Router::with_path("hot_reload").handle(HotReloadHandler));
+            _dioxus_router.push(Router::with_path("hot_reload").hoop(HotReloadHandler));
         #[cfg(all(debug_assertions, feature = "hot-reload", feature = "ssr"))]
         {
-            _dioxus_router = _dioxus_router.push(Router::with_path("disconnect").handle(ignore_ws));
+            _dioxus_router = _dioxus_router.push(Router::with_path("disconnect").hoop(ignore_ws));
         }
         self.push(_dioxus_router)
     }
@@ -370,9 +370,12 @@ async fn convert_response(response: HyperResponse, res: &mut Response) {
     }
     res.headers = headers;
     res.version = version;
-    if let Ok(bytes) = hyper::body::to_bytes(body).await {
-        res.body = bytes.into()
-    }
+    let bytes = http_body_util::BodyExt::collect(body)
+        .await
+        .unwrap_or_default()
+        .to_bytes();
+
+    res.body = bytes.into()
 }
 
 /// A handler that renders a Dioxus application to HTML using server-side rendering.
@@ -397,7 +400,7 @@ impl<P: Clone + serde::Serialize + Send + Sync + 'static> Handler for SSRHandler
         _flow: &mut FlowCtrl,
     ) {
         // Get the SSR renderer from the depot or create a new one if it doesn't exist
-        let renderer_pool = if let Some(renderer) = depot.obtain::<SSRState>() {
+        let renderer_pool = if let Some(renderer) = depot.obtain::<SSRState>().ok() {
             renderer.clone()
         } else {
             let renderer = SSRState::new(&self.cfg);
@@ -455,11 +458,26 @@ impl ServerFnHandler {
     async fn handle(&self, req: &mut Request, _depot: &mut Depot, res: &mut Response) {
         match convert_request(req).await {
             Ok(hyper_req) => {
+                let (req, body) = hyper_req.into_parts();
+                let body = http_body_util::BodyExt::collect(body)
+                    .await
+                    .unwrap_or_default()
+                    .to_bytes()
+                    .into();
+                let hyper_req = hyper::Request::from_parts(req, body);
                 let response =
                     server_fn_service(self.server_context.clone(), self.function.clone())
                         .run(hyper_req)
                         .await
                         .unwrap();
+                
+                let (resp, body) = response.into_parts();
+                let body = http_body_util::BodyExt::collect(body)
+                    .await
+                    .unwrap_or_default()
+                    .to_bytes()
+                    .into();
+                let response = hyper::Response::from_parts(resp, body);
                 convert_response(response, res).await;
             }
             Err(err) => handle_error(err, res),
