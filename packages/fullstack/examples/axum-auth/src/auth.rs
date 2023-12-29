@@ -2,6 +2,7 @@ use async_trait::async_trait;
 use axum::{
     http::Method,
     response::{IntoResponse, Response},
+    extract::FromRequestParts,
     routing::get,
     Router,
 };

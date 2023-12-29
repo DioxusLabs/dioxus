@@ -27,20 +27,20 @@ sqlx = { version = "0.7.0", features = [
     "runtime-tokio",
 ], optional = true }
 anyhow = "1.0.71"
-http = { version = "0.2.9", optional = true }
+http = { version = "1.0.0", optional = true }
 tower = { version = "0.4.13", optional = true }
 
 [dependencies.axum_session]
-version = "0.3.0"
+version = "0.11.1"
 features = ["sqlite-rustls"]
 optional = true
 
 [dependencies.axum_session_auth]
-version = "0.3.0"
+version = "0.11.0"
 features = ["sqlite-rustls"]
 optional = true
 
 [features]
-default = []
+default = ["ssr", "web"]
 ssr = ["axum", "tokio", "dioxus-fullstack/axum", "tower-http", "simple_logger", "async-trait", "sqlx", "axum_session", "axum_session_auth", "http", "tower"]
 web = ["dioxus-web"]
