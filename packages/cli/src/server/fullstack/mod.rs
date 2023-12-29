@@ -140,11 +140,7 @@ impl FullstackServerEnvGuard {
         Self {
             old_rustflags: (!debug).then(|| {
                 let old_rustflags = std::env::var("RUSTFLAGS").unwrap_or_default();
-                let debug_assertions = if release {
-                    ""
-                } else {
-                    " -C debug-assertions"
-                };
+                let debug_assertions = if release { "" } else { " -C debug-assertions" };
 
                 std::env::set_var(
                     "RUSTFLAGS",
