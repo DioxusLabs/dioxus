@@ -60,7 +60,8 @@ async fn setup_file_watcher<F: Fn() -> Result<BuildResult> + Sync + Send + 'stat
         }
 
         let mut needs_full_rebuild = false;
-        let change = futures::executor::block_on(plugins_watched_paths_changed(&e.paths));
+        let change =
+            futures::executor::block_on(plugins_watched_paths_changed(&e.paths, &config.crate_dir));
         handle_change(change, &reload_tx, &mut needs_full_rebuild);
 
         if let Some(hot_reload) = &hot_reload {

@@ -1,12 +1,13 @@
-use std::path::PathBuf;
+use std::{fs::File, io::Write, path::PathBuf};
 
 use dioxus_cli_plugin::*;
 use exports::plugins::main::definitions::Guest;
 use plugins::main::{
-    imports::{get_data, get_project_info, log, set_data, watched_paths},
+    imports::{get_data, log, set_data, watched_paths},
     toml::{Toml, TomlValue},
     types::{CompileEvent, PluginInfo, ResponseEvent, RuntimeEvent},
 };
+use railwind::{parse_to_string, SourceOptions};
 
 struct Plugin;
 
@@ -27,53 +28,51 @@ impl Guest for Plugin {
     fn on_watched_paths_change(
         paths: std::vec::Vec<std::string::String>,
     ) -> Result<ResponseEvent, ()> {
-        if !paths.iter().any(|f| f.ends_with(".rs")) {
+        let paths: Vec<PathBuf> = paths
+            .into_iter()
+            .filter_map(|f| f.ends_with(".rs").then(|| PathBuf::from(f)))
+            .collect();
+
+        if paths.is_empty() {
             log("Skipping tailwind reload, no change necessary");
             return Ok(ResponseEvent::None);
         };
 
+        let sources: Vec<_> = paths
+            .iter()
+            .map(|input| SourceOptions {
+                input,
+                option: railwind::CollectionOptions::Html,
+            })
+            .collect();
+
         // Not necessary, just for testing
-        let Some(tailwind_output) = get_data("tailwind_output").map(|data| {
-            let path = String::from_utf8(data).unwrap();
-            PathBuf::from(path)
-        }) else {
+        let Some(tailwind_output) =
+            get_data("tailwind_output").map(|f| String::from_utf8(f).unwrap())
+        else {
             log("Tailwind Plugin not registered!");
             return Err(());
         };
+        log(&tailwind_output);
 
-        // Todo make this work
-        match std::process::Command::new("npx")
-            .args([
-                "tailwindcss",
-                "-i",
-                "INPUT_CSS",
-                "-o",
-                tailwind_output.to_str().unwrap(),
-            ])
-            .output()
-        {
-            Ok(text) => {
-                log(std::str::from_utf8(&text.stdout).expect("Invalid command output!"));
-                Ok(ResponseEvent::Refresh(vec![tailwind_output
-                    .to_str()
-                    .unwrap()
-                    .to_string()]))
-            }
-            Err(err) => {
-                let err_text = format!("Tailwind err: {err}");
-                log(&err_text);
-                Err(())
-            }
+        let mut warnings = vec![];
+        let parsed = parse_to_string(railwind::Source::Files(sources), false, &mut warnings);
+
+        let mut file = File::create(&tailwind_output).unwrap();
+
+        file.write(parsed.as_bytes()).unwrap();
+
+        match warnings.is_empty() {
+            true => Ok(ResponseEvent::Refresh(vec![tailwind_output])),
+            false => Err(()),
         }
     }
 
     fn register() -> Result<(), ()> {
         log(&format!("{:?}", watched_paths()));
 
-        let project_info = get_project_info();
-
-        let tailwind_path =
-            std::path::PathBuf::from(project_info.asset_directory).join("tailwind.css");
+        // Todo make this automatically get asset directory
+        let tailwind_path = std::path::PathBuf::from("/public").join("tailwind.css");
         set_data(
             "tailwind_output",
             tailwind_path.as_os_str().as_encoded_bytes(),

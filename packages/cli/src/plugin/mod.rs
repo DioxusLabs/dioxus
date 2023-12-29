@@ -171,16 +171,24 @@ pub(crate) fn handle_change(
     }
 }
 
-pub async fn plugins_watched_paths_changed(paths: &[PathBuf]) -> ResponseEvent {
+pub async fn plugins_watched_paths_changed(
+    paths: &[PathBuf],
+    crate_dir: &PathBuf,
+) -> ResponseEvent {
     if crate::plugin::PLUGINS.lock().await.is_empty() {
         return ResponseEvent::None;
     }
+
     let paths: Vec<String> = paths
         .iter()
-        .filter_map(|f| match f.to_str() {
-            Some(val) => Some(val.to_string()),
-            None => {
-                log::warn!("Watched path not valid UTF-8! {}", f.display());
+        .filter_map(|f| match f.strip_prefix(&crate_dir) {
+            Ok(val) => val.to_str().map(|f| f.to_string()),
+            Err(_) => {
+                log::warn!(
+                    "Path won't be available to plugins: {}! Plugins can only access paths under {}, Skipping..",
+                    f.display(),
+                    crate_dir.display(),
+                );
                 None
             }
         })
@@ -205,11 +213,11 @@ async fn load_plugins(
     Ok(plugins)
 }
 
-pub async fn init_plugins(config: DioxusConfig) -> crate::Result<()> {
+pub async fn init_plugins(config: &DioxusConfig) -> crate::Result<()> {
     let dioxus_lock = DioxusLock::load()?;
     let plugins = load_plugins(&config.plugins, &dioxus_lock).await?;
     *PLUGINS.lock().await = plugins;
-    *PLUGINS_CONFIG.lock().await = config;
+    *PLUGINS_CONFIG.lock().await = config.clone();
     Ok(())
 }
 
@@ -248,7 +256,7 @@ pub async fn save_plugin_config(bin: PathBuf) -> crate::Result<()> {
 pub async fn load_plugin(
     path: impl AsRef<Path>,
     dioxus_lock: &DioxusLock,
-) -> wasmtime::Result<CliPlugin> {
+) -> crate::Result<CliPlugin> {
     let path = path.as_ref();
     let component = Component::from_file(&ENGINE, path)?;
 
@@ -256,25 +264,21 @@ pub async fn load_plugin(
     preview2::command::add_to_linker(&mut linker)?;
     PluginWorld::add_to_linker(&mut linker, |state: &mut PluginRuntimeState| state)?;
 
-    let out_dir =
-        std::env::var("CARGO_BUILD_TARGET_DIR").unwrap_or_else(|_| "./target".to_string());
-    let sandbox = format!("{}/plugin-sandbox", out_dir);
+    let current_dir = crate::crate_root()?;
 
-    std::fs::create_dir_all(&sandbox)?;
-    let mut ctx = WasiCtxBuilder::new();
-    let ctx_builder = ctx
+    let ctx = WasiCtxBuilder::new()
         .inherit_stderr()
         .inherit_stdin()
         .inherit_stdio()
         .inherit_stdout()
         .preopened_dir(
-            Dir::open_ambient_dir(sandbox, wasmtime_wasi::sync::ambient_authority()).unwrap(),
+            Dir::open_ambient_dir(&current_dir, wasmtime_wasi::sync::ambient_authority()).unwrap(),
             DirPerms::all(),
             FilePerms::all(),
             ".",
-        );
+        )
+        .build();
     let table = Table::new();
-    let ctx = ctx_builder.build();
 
     let mut store = Store::new(
         &ENGINE,
