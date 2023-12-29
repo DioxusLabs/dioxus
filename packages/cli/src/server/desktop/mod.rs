@@ -223,9 +223,11 @@ fn start_desktop(config: &CrateConfig, skip_assets: bool) -> Result<(RAIIChild, 
                 file.set_extension("exe");
             }
             let active = "DIOXUS_ACTIVE";
-            let child = RAIIChild(Command::new(file.to_str().unwrap())
-                .env(active, "true")
-                .spawn()?);
+            let child = RAIIChild(
+                Command::new(file.to_str().unwrap())
+                    .env(active, "true")
+                    .spawn()?,
+            );
 
             Ok((child, result))
         }
