@@ -13,12 +13,10 @@ async fn main() {
     let _ = PostServerData::register_explicit();
     let _ = GetServerData::register_explicit();
 
-    axum::Server::bind(&addr)
-        .serve(
-            axum::Router::new()
-                .register_server_fns("")
-                .into_make_service(),
-        )
-        .await
-        .unwrap();
+    let app = axum::Router::new()
+        .register_server_fns("")
+        .into_make_service();
+
+    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+    axum::serve(listener, app).await.unwrap();
 }
