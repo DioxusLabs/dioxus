@@ -26,15 +26,15 @@ impl Build {
         crate_config.with_verbose(self.build.verbose);
 
         if self.build.example.is_some() {
-            crate_config.as_example(self.build.example.unwrap());
+            crate_config.as_example(self.build.example.clone().unwrap());
         }
 
         if self.build.profile.is_some() {
-            crate_config.set_profile(self.build.profile.unwrap());
+            crate_config.set_profile(self.build.profile.clone().unwrap());
         }
 
         if self.build.features.is_some() {
-            crate_config.set_features(self.build.features.unwrap());
+            crate_config.set_features(self.build.features.clone().unwrap());
         }
 
         let platform = self
@@ -57,6 +57,7 @@ impl Build {
                 let _config = WebAssetConfigDropGuard::new();
                 {
                     let mut web_config = crate_config.clone();
+                    let _gaurd = FullstackWebEnvGuard::new(&self.build);
                     let web_feature = self.build.client_feature;
                     let features = &mut web_config.features;
                     match features {
@@ -65,7 +66,6 @@ impl Build {
                         }
                         None => web_config.features = Some(vec![web_feature]),
                     };
-                    let _gaurd = FullstackWebEnvGuard::new(self.build.debug);
                     crate::builder::build(&crate_config, false, self.build.skip_assets)?;
                 }
                 {
@@ -78,7 +78,7 @@ impl Build {
                         }
                         None => desktop_config.features = Some(vec![desktop_feature]),
                     };
-                    let _gaurd = FullstackServerEnvGuard::new(self.build.debug);
+                    let _gaurd = FullstackServerEnvGuard::new(self.build.debug, self.build.release);
                     crate::builder::build_desktop(&desktop_config, false, self.build.skip_assets)?;
                 }
             }
