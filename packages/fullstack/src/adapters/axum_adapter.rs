@@ -254,7 +254,6 @@ where
 
     fn register_server_fns(self, server_fn_route: &'static str) -> Self {
         self.register_server_fns_with_handler(server_fn_route, |func| {
-            use crate::layer::Service;
             move |req: Request<Body>| {
                 let mut service = crate::server_fn_service(Default::default(), func);
                 async move {

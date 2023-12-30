@@ -1,0 +1,23 @@
+[package]
+name = "axum-islands"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+dioxus = { workspace = true }
+dioxus-fullstack = { features = ["islands"], workspace = true }
+axum = { version = "0.6.12", optional = true }
+serde = "1.0.159"
+simple_logger = "4.2.0"
+tracing-wasm = "0.2.1"
+tracing.workspace = true
+tracing-subscriber = "0.3.17"
+reqwest = "0.11.18"
+
+[features]
+default = []
+ssr = ["axum", "dioxus-fullstack/axum"]
+web = ["dioxus-fullstack/web"]

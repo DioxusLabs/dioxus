@@ -1,0 +1,4 @@
+/.dioxus
+dist
+target
+static

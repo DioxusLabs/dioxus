@@ -47,9 +47,7 @@ fn dynamic() {
 fn components() {
     #[component]
     fn MyComponent(cx: Scope, name: i32) -> Element {
-        render! {
-            div { "component {name}" }
-        }
+        render! { div { "component {name}" } }
     }
 
     assert_eq!(

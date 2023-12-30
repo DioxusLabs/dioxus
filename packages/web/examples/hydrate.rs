@@ -4,14 +4,10 @@ use web_sys::window;
 
 fn app(cx: Scope) -> Element {
     cx.render(rsx! {
+        div { h1 { "thing 1" } }
+        div { h2 { "thing 2" } }
         div {
-            h1 { "thing 1" }
-        }
-        div {
-            h2 { "thing 2"}
-        }
-        div {
-            h2 { "thing 2"}
+            h2 { "thing 2" }
             "asd"
             "asd"
             Bapp {}
@@ -27,14 +23,10 @@ fn app(cx: Scope) -> Element {
 #[allow(non_snake_case)]
 fn Bapp(cx: Scope) -> Element {
     cx.render(rsx! {
+        div { h1 { "thing 1" } }
+        div { h2 { "thing 2" } }
         div {
-            h1 { "thing 1" }
-        }
-        div {
-            h2 { "thing 2"}
-        }
-        div {
-            h2 { "thing 2"}
+            h2 { "thing 2" }
             "asd"
             "asd"
         }
@@ -60,6 +52,6 @@ fn main() {
         .unwrap()
         .set_inner_html(&pre);
 
-    // now rehydtrate
+    // now rehydrate
     dioxus_web::launch_with_props(app, (), Config::new().hydrate(true));
 }

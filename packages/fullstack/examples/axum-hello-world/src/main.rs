@@ -27,9 +27,7 @@ fn app(cx: Scope<AppProps>) -> Element {
     let eval = use_eval(cx);
 
     cx.render(rsx! {
-        div {
-            "Server state: {state}"
-        }
+        div { "Server state: {state}" }
         h1 { "High-Five counter: {count}" }
         button { onclick: move |_| count += 1, "Up high!" }
         button { onclick: move |_| count -= 1, "Down low!" }
