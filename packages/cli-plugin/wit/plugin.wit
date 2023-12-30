@@ -106,8 +106,10 @@ interface types {
   }
 
   record project-info {
-    output-directory: string,
-    asset-directory: string,
+    // Is true when there is a `/dist` folder available
+    has-output-directory: bool,
+    // Is true when there is a `/assets` folder available
+    has-assets-directory: bool,
     default-platform: platform,
   }
 

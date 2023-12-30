@@ -50,7 +50,8 @@ async fn main() -> anyhow::Result<()> {
             DioxusConfig::default()
         });
 
-    init_plugins(&dioxus_config).await?;
+    let crate_dir = crate::crate_root()?;
+    init_plugins(&dioxus_config, &crate_dir).await?;
 
     match args.action {
         Translate(opts) => opts
@@ -81,7 +82,7 @@ async fn main() -> anyhow::Result<()> {
             .map_err(|e| anyhow!("🚫 Configuring new project failed: {}", e)),
 
         Plugin(opts) => opts
-            .plugin()
+            .plugin(&dioxus_config)
             .await
             .map_err(|e| anyhow!("🚫 Plugin manager failed: {}", e)),
 

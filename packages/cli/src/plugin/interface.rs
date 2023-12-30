@@ -100,28 +100,16 @@ impl ImportHost for PluginRuntimeState {
     async fn get_project_info(&mut self) -> wasmtime::Result<ProjectInfo> {
         let application = &PLUGINS_CONFIG.lock().await.application;
 
-        let output_directory = application
-            .out_dir
-            .clone()
-            .unwrap_or_default()
-            .to_str()
-            .expect("Non UTF-8 Output Directory!")
-            .to_string();
-        let asset_directory = application
-            .asset_dir
-            .clone()
-            .unwrap_or_default()
-            .to_str()
-            .expect("Non UTF-8 Asset Directory!")
-            .to_string();
+        let has_output_directory = application.out_dir.is_some();
+        let has_assets_directory = application.asset_dir.is_some();
         let default_platform = match application.default_platform {
             crate::cfg::Platform::Web => Platform::Web,
             crate::cfg::Platform::Desktop => Platform::Desktop,
         };
 
         Ok(ProjectInfo {
-            output_directory,
-            asset_directory,
+            has_output_directory,
+            has_assets_directory,
             default_platform,
         })
     }

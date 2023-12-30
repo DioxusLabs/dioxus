@@ -2,7 +2,7 @@ use crate::lock::DioxusLock;
 use crate::plugin::convert::Convert;
 use crate::plugin::interface::{PluginRuntimeState, PluginWorld};
 use crate::server::WsMessage;
-use crate::{DioxusConfig, PluginConfig};
+use crate::DioxusConfig;
 
 use slab::Slab;
 use std::path::{Path, PathBuf};
@@ -197,12 +197,13 @@ pub async fn plugins_watched_paths_changed(
 }
 
 async fn load_plugins(
-    config: &PluginConfig,
+    config: &DioxusConfig,
+    crate_dir: &PathBuf,
     dioxus_lock: &DioxusLock,
 ) -> wasmtime::Result<Vec<CliPlugin>> {
     let mut plugins = Vec::new();
-    for plugin in config.plugins.values() {
-        let plugin = load_plugin(&plugin.path, dioxus_lock).await?;
+    for plugin in config.plugins.plugins.values() {
+        let plugin = load_plugin(&plugin.path, config, crate_dir, dioxus_lock).await?;
         plugins.push(plugin);
     }
 
@@ -213,9 +214,9 @@ async fn load_plugins(
     Ok(plugins)
 }
 
-pub async fn init_plugins(config: &DioxusConfig) -> crate::Result<()> {
+pub async fn init_plugins(config: &DioxusConfig, crate_dir: &PathBuf) -> crate::Result<()> {
     let dioxus_lock = DioxusLock::load()?;
-    let plugins = load_plugins(&config.plugins, &dioxus_lock).await?;
+    let plugins = load_plugins(config, crate_dir, &dioxus_lock).await?;
     *PLUGINS.lock().await = plugins;
     *PLUGINS_CONFIG.lock().await = config.clone();
     Ok(())
@@ -255,6 +256,8 @@ pub async fn save_plugin_config(bin: PathBuf) -> crate::Result<()> {
 
 pub async fn load_plugin(
     path: impl AsRef<Path>,
+    config: &DioxusConfig,
+    crate_dir: &PathBuf,
     dioxus_lock: &DioxusLock,
 ) -> crate::Result<CliPlugin> {
     let path = path.as_ref();
@@ -264,20 +267,41 @@ pub async fn load_plugin(
     preview2::command::add_to_linker(&mut linker)?;
     PluginWorld::add_to_linker(&mut linker, |state: &mut PluginRuntimeState| state)?;
 
-    let current_dir = crate::crate_root()?;
+    let mut ctx = WasiCtxBuilder::new();
 
-    let ctx = WasiCtxBuilder::new()
+    // Give the plugins access to the terminal as well as crate files
+    let mut ctx_pointer = ctx
         .inherit_stderr()
         .inherit_stdin()
         .inherit_stdio()
         .inherit_stdout()
         .preopened_dir(
-            Dir::open_ambient_dir(&current_dir, wasmtime_wasi::sync::ambient_authority()).unwrap(),
+            Dir::open_ambient_dir(crate_dir, wasmtime_wasi::sync::ambient_authority()).unwrap(),
             DirPerms::all(),
             FilePerms::all(),
             ".",
-        )
-        .build();
+        );
+
+    // If the application has these directories they might be seperate from the crate root
+    if let Some(out_dir) = config.application.out_dir.as_ref() {
+        ctx_pointer = ctx_pointer.preopened_dir(
+            Dir::open_ambient_dir(out_dir, wasmtime_wasi::sync::ambient_authority()).unwrap(),
+            DirPerms::all(),
+            FilePerms::all(),
+            "/dist",
+        );
+    }
+
+    if let Some(asset_dir) = config.application.asset_dir.as_ref() {
+        ctx_pointer = ctx_pointer.preopened_dir(
+            Dir::open_ambient_dir(asset_dir, wasmtime_wasi::sync::ambient_authority()).unwrap(),
+            DirPerms::all(),
+            FilePerms::all(),
+            "/assets",
+        );
+    }
+
+    let ctx = ctx_pointer.build();
     let table = Table::new();
 
     let mut store = Store::new(

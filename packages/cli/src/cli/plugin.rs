@@ -4,6 +4,7 @@ use super::*;
 use crate::lock::DioxusLock;
 use crate::plugin::load_plugin;
 use crate::plugin::PLUGINS_CONFIG;
+use crate::DioxusConfig;
 use crate::PluginConfigInfo;
 use clap::Parser;
 
@@ -38,7 +39,7 @@ pub enum Plugin {
 }
 
 impl Plugin {
-    pub async fn plugin(self) -> Result<()> {
+    pub async fn plugin(self, dx_config: &DioxusConfig) -> Result<()> {
         match self {
             // Plugin::Update { ignore_error } => todo!(),
             Plugin::List => {
@@ -57,7 +58,9 @@ impl Plugin {
             Plugin::Add(data) => match data {
                 PluginAdd::Add { path } => {
                     let mut dioxus_lock = DioxusLock::load()?;
-                    let mut plugin = load_plugin(&path, &dioxus_lock).await?;
+                    let crate_dir = crate::crate_root()?;
+                    let mut plugin =
+                        load_plugin(&path, dx_config, &crate_dir, &dioxus_lock).await?;
 
                     // Add the plugin to the lock file
                     dioxus_lock.add_plugin(&mut plugin).await?;

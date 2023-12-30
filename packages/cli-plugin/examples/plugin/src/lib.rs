@@ -49,10 +49,13 @@ fn parse_and_save_css(paths: Vec<PathBuf>) -> Result<ResponseEvent, ()> {
         .map(|f| f.strip_prefix("class:").unwrap().trim().replace('"', ""))
         .collect();
 
-    let classes = classes.join(" ");
+    // If it's empty then nothing will change
+    if classes.is_empty() {
+        log("Skipping tailwind reload, no change necessary");
+        return Ok(ResponseEvent::None);
+    }
 
-    // TODO Automatically set
-    let tailwind_output = "public/tailwind.css".to_string();
+    let classes = classes.join(" ");
 
     let mut warnings = vec![];
     let parsed = parse_to_string(
@@ -61,14 +64,27 @@ fn parse_and_save_css(paths: Vec<PathBuf>) -> Result<ResponseEvent, ()> {
         &mut warnings,
     );
 
-    let mut file = File::create(&tailwind_output).unwrap();
-
+    let tailwind_output = "assets/tailwind.css";
+    let mut file = File::create(tailwind_output).unwrap();
     file.write(parsed.as_bytes()).unwrap();
 
-    match warnings.is_empty() {
-        true => Ok(ResponseEvent::Refresh(vec![tailwind_output])),
-        false => Err(()),
+    for warning in warnings.iter() {
+        log(&warning.to_string())
     }
+
+    Ok(ResponseEvent::Refresh(vec!["tailwind.css".into()]))
+}
+
+fn gen_tailwind() -> Result<ResponseEvent, ()> {
+    let watched_paths: Vec<_> = watched_paths().into_iter().map(PathBuf::from).collect();
+    let mut event = ResponseEvent::None;
+    for path in watched_paths.iter() {
+        let paths = get_parsable_files(path);
+        if let ResponseEvent::Refresh(paths) = parse_and_save_css(paths)? {
+            event = ResponseEvent::Refresh(paths);
+        }
+    }
+    Ok(event)
 }
 
 impl Guest for Plugin {
@@ -81,9 +97,9 @@ impl Guest for Plugin {
     }
 
     fn on_watched_paths_change(
-        paths: std::vec::Vec<std::string::String>,
+        _paths: std::vec::Vec<std::string::String>,
     ) -> Result<ResponseEvent, ()> {
-        parse_and_save_css(paths.into_iter().map(PathBuf::from).collect())
+        gen_tailwind()
     }
 
     fn register() -> Result<(), ()> {
@@ -106,21 +122,12 @@ impl Guest for Plugin {
     }
 
     fn after_compile_event(_event: CompileEvent) -> Result<(), ()> {
-        let watched_paths: Vec<_> = watched_paths().into_iter().map(PathBuf::from).collect();
-        for path in watched_paths.iter() {
-            let paths = get_parsable_files(path);
-            parse_and_save_css(paths)?;
-        }
+        gen_tailwind()?;
         Ok(())
     }
 
     fn after_runtime_event(_event: RuntimeEvent) -> Result<ResponseEvent, ()> {
-        let watched_paths: Vec<_> = watched_paths().into_iter().map(PathBuf::from).collect();
-        for path in watched_paths.iter() {
-            let paths = get_parsable_files(path);
-            parse_and_save_css(paths)?;
-        }
-        Ok(ResponseEvent::None)
+        gen_tailwind()
     }
 }
 

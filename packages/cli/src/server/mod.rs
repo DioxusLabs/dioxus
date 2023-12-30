@@ -173,7 +173,7 @@ impl ServerReloadState {
 
     pub fn with_reload_tx(self, reload_tx: Option<Sender<WsMessage>>) -> Self {
         Self {
-            hot_reload: None,
+            hot_reload: self.hot_reload,
             reload_tx,
         }
     }
