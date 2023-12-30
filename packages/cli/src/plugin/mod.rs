@@ -313,6 +313,7 @@ pub async fn load_plugin(
             map: std::collections::HashMap::new(),
         },
     );
+
     let (bindings, instance) =
         PluginWorld::instantiate_async(&mut store, &component, &linker).await?;
 
@@ -321,6 +322,7 @@ pub async fn load_plugin(
         .call_metadata(&mut store)
         .await?;
 
+    // TODO find a way to get name before it's loaded?
     if let Some(existing) = dioxus_lock.plugins.get(&metadata.name) {
         store.data_mut().map = existing.map.clone();
     }

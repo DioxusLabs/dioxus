@@ -20,16 +20,18 @@ fn get_classes(path: &PathBuf, regex: &Regex) -> Vec<String> {
         .collect()
 }
 
-fn get_parsable_files(path: &PathBuf) -> Vec<PathBuf> {
-    std::fs::read_dir(path)
-        .unwrap()
-        .map(|e| e.unwrap().path())
-        .filter(|p| {
-            p.to_str()
-                .map(|s| s.ends_with(".rs") || s.ends_with(".html"))
-                .unwrap_or(false)
-        })
-        .collect()
+fn get_parsable_files(path: &PathBuf) -> Option<Vec<PathBuf>> {
+    Some(
+        std::fs::read_dir(path)
+            .ok()?
+            .map(|e| e.unwrap().path())
+            .filter(|p| {
+                p.to_str()
+                    .map(|s| s.ends_with(".rs") || s.ends_with(".html"))
+                    .unwrap_or(false)
+            })
+            .collect(),
+    )
 }
 
 fn parse_and_save_css(paths: Vec<PathBuf>) -> Result<ResponseEvent, ()> {
@@ -79,7 +81,9 @@ fn gen_tailwind() -> Result<ResponseEvent, ()> {
     let watched_paths: Vec<_> = watched_paths().into_iter().map(PathBuf::from).collect();
     let mut event = ResponseEvent::None;
     for path in watched_paths.iter() {
-        let paths = get_parsable_files(path);
+        let Some(paths) = get_parsable_files(path) else {
+            continue;
+        };
         if let ResponseEvent::Refresh(paths) = parse_and_save_css(paths)? {
             event = ResponseEvent::Refresh(paths);
         }
