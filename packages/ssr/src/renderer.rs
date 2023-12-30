@@ -106,7 +106,10 @@ impl Renderer {
 
                     if self.pre_render {
                         if let AttributeValue::Listener(_) = &attr.value {
-                            accumulated_listeners.push(attr.name);
+                            // The onmounted event doesn't need a DOM listener
+                            if attr.name != "onmounted" {
+                                accumulated_listeners.push(attr.name);
+                            }
                         }
                     }
                 }

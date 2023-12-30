@@ -255,17 +255,21 @@ impl WebsysDom {
         i.flush();
 
         for id in to_mount {
-            let node = get_node(id.0 as u32);
-            if let Some(element) = node.dyn_ref::<Element>() {
-                let data: MountedData = element.into();
-                let data = Rc::new(data);
-                let _ = self.event_channel.unbounded_send(UiEvent {
-                    name: "mounted".to_string(),
-                    bubbles: false,
-                    element: id,
-                    data,
-                });
-            }
+            self.send_mount_event(id);
+        }
+    }
+
+    pub(crate) fn send_mount_event(&self, id: ElementId) {
+        let node = get_node(id.0 as u32);
+        if let Some(element) = node.dyn_ref::<Element>() {
+            let data: MountedData = element.into();
+            let data = Rc::new(data);
+            let _ = self.event_channel.unbounded_send(UiEvent {
+                name: "mounted".to_string(),
+                bubbles: false,
+                element: id,
+                data,
+            });
         }
     }
 }
