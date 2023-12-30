@@ -155,7 +155,7 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(cfg: Config<Ctx>) {
         let target_dir = crate_dir.join("target");
         let hot_reload_socket_path = target_dir.join("dioxusin");
 
-        #[cfg(target_os = "macos")]
+        #[cfg(unix)]
         {
             // On unix, if you force quit the application, it can leave the file socket open
             // This will cause the local socket listener to fail to open

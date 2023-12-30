@@ -185,7 +185,7 @@ async fn start_desktop_hot_reload(hot_reload_state: HotReloadState) -> Result<()
 }
 
 fn clear_paths(file_socket_path: &std::path::Path) {
-    if cfg!(target_os = "macos") {
+    if cfg!(unix) {
         // On unix, if you force quit the application, it can leave the file socket open
         // This will cause the local socket listener to fail to open
         // We check if the file socket is already open from an old session and then delete it
