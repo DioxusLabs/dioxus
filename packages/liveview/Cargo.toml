@@ -34,7 +34,7 @@ warp = { version = "0.3.3", optional = true }
 axum = { version = "0.6.1", optional = true, features = ["ws"] }
 
 # salvo
-salvo = { version = "0.63.1", optional = true, features = ["ws"] }
+salvo = { version = "0.63.1", optional = true, features = ["websocket"] }
 once_cell = "1.17.1"
 async-trait = "0.1.71"
 

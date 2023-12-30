@@ -27,9 +27,7 @@ fn app(cx: Scope<AppProps>) -> Element {
     let eval = use_eval(cx);
 
     cx.render(rsx! {
-        div {
-            "Server state: {state}"
-        }
+        div { "Server state: {state}" }
         h1 { "High-Five counter: {count}" }
         button { onclick: move |_| count += 1, "Up high!" }
         button { onclick: move |_| count -= 1, "Down low!" }
@@ -52,16 +50,16 @@ fn app(cx: Scope<AppProps>) -> Element {
 
 #[server]
 async fn post_server_data(data: String) -> Result<(), ServerFnError> {
-    let axum::extract::Host(host): axum::extract::Host = extract().await?;
+    // let axum::extract::Host(host): axum::extract::Host = extract().await?;
     println!("Server received: {}", data);
-    println!("{:?}", host);
+    // println!("{:?}", host);
 
     Ok(())
 }
 
 #[server]
 async fn get_server_data() -> Result<String, ServerFnError> {
-    Ok(reqwest::get("https://httpbin.org/ip").await?.text().await?)
+    Ok(reqwest::get("https://httpbin.org/ip").await.unwrap().text().await.unwrap())
 }
 
 fn main() {

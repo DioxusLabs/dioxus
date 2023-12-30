@@ -55,9 +55,9 @@
 //! ```
 
 use axum::{
-    body::{self, Body, BoxBody},
+    body::{ Body},
     extract::State,
-    handler::Handler,
+
     http::{Request, Response, StatusCode},
     response::IntoResponse,
     routing::{get, post},
@@ -435,10 +435,10 @@ pub async fn render_handler<P: Clone + serde::Serialize + Send + Sync + 'static>
     render_handler_with_context(State((|_: &mut _| (), cfg, ssr_state)), request).await
 }
 
-fn report_err<E: std::fmt::Display>(e: E) -> Response<BoxBody> {
+fn report_err<E: std::fmt::Display>(e: E) -> impl IntoResponse {
     Response::builder()
         .status(StatusCode::INTERNAL_SERVER_ERROR)
-        .body(body::boxed(format!("Error: {}", e)))
+        .body(format!("Error: {}", e))
         .unwrap()
 }
 

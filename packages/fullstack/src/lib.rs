@@ -19,8 +19,6 @@ mod hooks;
 mod hot_reload;
 pub mod launch;
 #[cfg(feature = "ssr")]
-mod layer;
-#[cfg(feature = "ssr")]
 mod render;
 #[cfg(feature = "ssr")]
 mod serve_config;
@@ -39,8 +37,6 @@ pub mod prelude {
     #[cfg(not(feature = "ssr"))]
     pub use crate::html_storage::deserialize::get_root_props_from_document;
     pub use crate::launch::LaunchBuilder;
-    #[cfg(feature = "ssr")]
-    pub use crate::layer::{Layer, Service};
     #[cfg(all(feature = "ssr", feature = "router"))]
     pub use crate::render::pre_cache_static_routes_with_props;
     #[cfg(feature = "ssr")]

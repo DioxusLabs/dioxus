@@ -11,7 +11,7 @@ keywords = ["ui", "gui", "react", "ssr", "fullstack"]
 
 [dependencies]
 # server functions
-server_fns = { git = "https://github.com/gbj/server_fns", features = ["json"], default-features = false }
+server_fns = { git = "https://github.com/gbj/server_fns", features = ["json", "url"], default-features = false }
 server_fn_macro_default = { git = "https://github.com/gbj/server_fns" }
 
 # warp
@@ -19,8 +19,8 @@ warp = { version = "0.3.5", features = ["compression-gzip"], optional = true }
 http-body-util = { version = "0.1.0", optional = true }
 
 # axum
-axum = { version = "0.6.1", features = ["ws", "macros"], optional = true }
-tower-http = { version = "0.4.0", optional = true, features = ["fs", "compression-gzip"] }
+axum = { version = "0.7.3", features = ["ws", "macros"], optional = true }
+tower-http = { version = "0.5", optional = true, features = ["fs", "compression-gzip"] }
 axum-macros = "0.3.7"
 
 # salvo
@@ -30,7 +30,7 @@ serde = "1.0.159"
 # Dioxus + SSR
 dioxus = { workspace = true }
 dioxus-ssr = { workspace = true, optional = true }
-http = { version = "0.2.9", optional = true }
+http = { version = "1", optional = true }
 
 # Web Integration
 dioxus-web = { workspace = true, features = ["hydrate"], optional = true }
@@ -59,7 +59,9 @@ base64 = "0.21.0"
 pin-project = "1.1.2"
 async-trait = "0.1.71"
 bytes = "1.4.0"
-tower-layer = "0.3.2"
+tower-layer = "0.3"
+tower = { version = "0.4", features = ["util"], optional = true }
+hyper = "1.1.0"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 dioxus-hot-reload = { workspace = true }
@@ -74,11 +76,12 @@ hot-reload = ["serde_json", "futures-util"]
 web = ["dioxus-web", "server_fns/browser"]
 desktop = ["dioxus-desktop"]
 warp = ["dep:warp", "ssr"]
-axum = ["dep:axum", "tower-http", "ssr", "server_fns/axum"]
+axum = ["dep:axum", "dep:tower", "tower-http", "ssr", "server_fns/axum", "server_fn_macro_default/axum"]
 salvo = ["dep:salvo", "ssr", "http-body-util"]
 ssr = ["server_fn_macro_default/ssr", "tokio", "tokio-util", "dioxus-ssr", "http", "dioxus-router/ssr", "tokio-stream"]
 default-tls = ["server_fns/default-tls"]
 rustls = ["server_fns/rustls"]
+tower = ["dep:tower"]
 
 [dev-dependencies]
 dioxus-fullstack = { path = ".", features = ["router"] }
