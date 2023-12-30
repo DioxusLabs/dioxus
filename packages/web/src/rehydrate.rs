@@ -125,6 +125,7 @@ impl WebsysDom {
                 children, attrs, ..
             } => {
                 let mut mounted_id = None;
+                let mut should_send_mount_event = true;
                 for attr in *attrs {
                     if let dioxus_core::TemplateAttribute::Dynamic { id } = attr {
                         let attribute = &vnode.dynamic_attrs[*id];
@@ -134,16 +135,24 @@ impl WebsysDom {
                         let name = attribute.name;
                         if let AttributeValue::Listener(_) = value {
                             let event_name = &name[2..];
-                            self.interpreter.new_event_listener(
-                                event_name,
-                                id.0 as u32,
-                                event_bubbles(event_name) as u8,
-                            );
+                            match event_name {
+                                "mounted" => should_send_mount_event = true,
+                                _ => {
+                                    self.interpreter.new_event_listener(
+                                        event_name,
+                                        id.0 as u32,
+                                        event_bubbles(event_name) as u8,
+                                    );
+                                }
+                            }
                         }
                     }
                 }
                 if let Some(id) = mounted_id {
                     set_node(hydrated, id, current_child.clone()?);
+                    if should_send_mount_event {
+                        self.send_mount_event(id);
+                    }
                 }
                 if !children.is_empty() {
                     let mut children_current_child = current_child
