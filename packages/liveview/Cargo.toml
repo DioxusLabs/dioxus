@@ -49,7 +49,7 @@ tokio = { workspace = true, features = ["full"] }
 dioxus = { workspace = true }
 warp = "0.3.3"
 axum = { version = "0.6.1", features = ["ws"] }
-salvo = { version = "0.63.1", features = ["affix", "ws"] }
+salvo = { version = "0.63.1", features = ["affix", "websocket"] }
 tower = "0.4.13"
 
 [features]
