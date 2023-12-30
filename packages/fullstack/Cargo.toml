@@ -11,28 +11,25 @@ keywords = ["ui", "gui", "react", "ssr", "fullstack"]
 
 [dependencies]
 # server functions
-server_fn = { version = "0.5.2", default-features = false }
-dioxus_server_macro = { workspace = true }
+server_fns = { git = "https://github.com/gbj/server_fns", features = ["json"], default-features = false }
+server_fn_macro_default = { git = "https://github.com/gbj/server_fns" }
 
 # warp
 warp = { version = "0.3.5", features = ["compression-gzip"], optional = true }
-http-body = { version = "0.4.5", optional = true }
-http-body-util = "0.1.0-rc.2"
+http-body-util = { version = "0.1.0", optional = true }
 
 # axum
 axum = { version = "0.6.1", features = ["ws", "macros"], optional = true }
 tower-http = { version = "0.4.0", optional = true, features = ["fs", "compression-gzip"] }
-tower = { version = "0.4.13", features = ["util"], optional = true }
 axum-macros = "0.3.7"
 
 # salvo
-salvo = { version = "0.46.0", optional = true, features = ["serve-static", "websocket", "compression"] }
+salvo = { version = "0.63.1", optional = true, features = ["serve-static", "websocket", "compression"] }
 serde = "1.0.159"
 
 # Dioxus + SSR
 dioxus = { workspace = true }
 dioxus-ssr = { workspace = true, optional = true }
-hyper = { version = "0.14.25", optional = true }
 http = { version = "0.2.9", optional = true }
 
 # Web Integration
@@ -74,14 +71,14 @@ web-sys = { version = "0.3.61", features = ["Window", "Document", "Element", "Ht
 default = ["hot-reload", "default-tls"]
 router = ["dioxus-router"]
 hot-reload = ["serde_json", "futures-util"]
-web = ["dioxus-web"]
+web = ["dioxus-web", "server_fns/browser"]
 desktop = ["dioxus-desktop"]
 warp = ["dep:warp", "ssr"]
-axum = ["dep:axum", "tower-http", "ssr"]
-salvo = ["dep:salvo", "ssr"]
-ssr = ["server_fn/ssr", "dioxus_server_macro/ssr", "tokio", "tokio-util", "dioxus-ssr", "tower", "hyper", "http", "http-body", "dioxus-router/ssr", "tokio-stream"]
-default-tls = ["server_fn/default-tls"]
-rustls = ["server_fn/rustls"]
+axum = ["dep:axum", "tower-http", "ssr", "server_fns/axum"]
+salvo = ["dep:salvo", "ssr", "http-body-util"]
+ssr = ["server_fn_macro_default/ssr", "tokio", "tokio-util", "dioxus-ssr", "http", "dioxus-router/ssr", "tokio-stream"]
+default-tls = ["server_fns/default-tls"]
+rustls = ["server_fns/rustls"]
 
 [dev-dependencies]
 dioxus-fullstack = { path = ".", features = ["router"] }

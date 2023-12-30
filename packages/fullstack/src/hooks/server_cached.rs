@@ -17,10 +17,10 @@ use serde::{de::DeserializeOwned, Serialize};
 ///    }));
 /// }
 /// ```
-pub fn server_cached<O: 'static + Serialize + DeserializeOwned>(server_fn: impl Fn() -> O) -> O {
+pub fn server_cached<O: 'static + Serialize + DeserializeOwned>(server_fns: impl Fn() -> O) -> O {
     #[cfg(feature = "ssr")]
     {
-        let data = server_fn();
+        let data = server_fns();
         let sc = crate::prelude::server_context();
         if let Err(err) = sc.push_html_data(&data) {
             tracing::error!("Failed to push HTML data: {}", err);
@@ -29,6 +29,6 @@ pub fn server_cached<O: 'static + Serialize + DeserializeOwned>(server_fn: impl 
     }
     #[cfg(not(feature = "ssr"))]
     {
-        crate::html_storage::deserialize::take_server_data().unwrap_or_else(server_fn)
+        crate::html_storage::deserialize::take_server_data().unwrap_or_else(server_fns)
     }
 }

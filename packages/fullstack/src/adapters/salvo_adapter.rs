@@ -61,14 +61,14 @@ use salvo::{
     serve_static::{StaticDir, StaticFile},
     Depot, Error as SalvoError, FlowCtrl, Handler, Request, Response, Router,
 };
-use server_fn::{Encoding, ServerFunctionRegistry};
+use server_fns::{Encoding, ServerFunctionRegistry};
 use std::error::Error;
 use std::sync::Arc;
 use std::sync::RwLock;
 
 use crate::{
     layer::Service, prelude::*, render::SSRState, serve_config::ServeConfig,
-    server_fn::DioxusServerFnRegistry, server_fn_service,
+    server_fns::DioxusServerFnRegistry, server_fn_service,
 };
 
 type HyperRequest = hyper::Request<hyper::Body>;
@@ -85,7 +85,7 @@ pub trait DioxusRouterExt {
     /// use dioxus_fullstack::prelude::*;
     ///
     /// struct ServerFunctionHandler {
-    ///     server_fn: server_fn::ServerFnTraitObj<()>,
+    ///     server_fns: server_fns::ServerFnTraitObj<()>,
     /// }
     ///
     /// #[handler]
@@ -98,7 +98,7 @@ pub trait DioxusRouterExt {
     ///         flow: &mut FlowCtrl,
     ///     ) {
     ///         // Add the headers to server context
-    ///         ServerFnHandler::new((req.headers().clone(),), self.server_fn.clone())
+    ///         ServerFnHandler::new((req.headers().clone(),), self.server_fns.clone())
     ///             .handle(req, depot, res, flow)
     ///             .await
     ///     }
@@ -118,7 +118,7 @@ pub trait DioxusRouterExt {
     fn register_server_fns_with_handler<H>(
         self,
         server_fn_route: &'static str,
-        handler: impl Fn(server_fn::ServerFnTraitObj<()>) -> H,
+        handler: impl Fn(server_fns::ServerFnTraitObj<()>) -> H,
     ) -> Self
     where
         H: Handler + 'static;
@@ -212,7 +212,7 @@ impl DioxusRouterExt for Router {
     fn register_server_fns_with_handler<H>(
         self,
         server_fn_route: &'static str,
-        mut handler: impl FnMut(server_fn::ServerFnTraitObj<()>) -> H,
+        mut handler: impl FnMut(server_fns::ServerFnTraitObj<()>) -> H,
     ) -> Self
     where
         H: Handler + 'static,
@@ -433,14 +433,14 @@ impl<P: Clone + serde::Serialize + Send + Sync + 'static> Handler for SSRHandler
 /// A default handler for server functions. It will deserialize the request body, call the server function, and serialize the response.
 pub struct ServerFnHandler {
     server_context: DioxusServerContext,
-    function: server_fn::ServerFnTraitObj<()>,
+    function: server_fns::ServerFnTraitObj<()>,
 }
 
 impl ServerFnHandler {
     /// Create a new server function handler with the given server context and server function.
     pub fn new(
         server_context: impl Into<DioxusServerContext>,
-        function: server_fn::ServerFnTraitObj<()>,
+        function: server_fns::ServerFnTraitObj<()>,
     ) -> Self {
         let server_context = server_context.into();
         Self {

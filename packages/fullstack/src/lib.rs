@@ -26,7 +26,6 @@ mod render;
 mod serve_config;
 #[cfg(feature = "ssr")]
 mod server_context;
-mod server_fn;
 
 /// A prelude of commonly used items in dioxus-fullstack.
 pub mod prelude {
@@ -56,13 +55,10 @@ pub mod prelude {
     pub use crate::server_context::{
         extract, server_context, DioxusServerContext, FromServerContext, ProvideServerContext,
     };
-    pub use crate::server_fn::DioxusServerFn;
-    #[cfg(feature = "ssr")]
-    pub use crate::server_fn::{ServerFnMiddleware, ServerFnTraitObj, ServerFunction};
-    pub use dioxus_server_macro::*;
+        pub use server_fn_macro_default::*;
     #[cfg(feature = "ssr")]
     pub use dioxus_ssr::incremental::IncrementalRendererConfig;
-    pub use server_fn::{self, ServerFn as _, ServerFnError};
+    pub use server_fns::{self, ServerFn as _, ServerFnError};
 
     pub use hooks::{server_cached::server_cached, server_future::use_server_future};
 }

@@ -63,53 +63,52 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use server_fn::{Encoding, ServerFunctionRegistry};
 use std::sync::Arc;
 use std::sync::RwLock;
 
 use crate::{
     prelude::*, render::SSRState, serve_config::ServeConfig, server_context::DioxusServerContext,
-    server_fn::DioxusServerFnRegistry,
+
 };
 
 /// A extension trait with utilities for integrating Dioxus with your Axum router.
 pub trait DioxusRouterExt<S> {
-    /// Registers server functions with a custom handler function. This allows you to pass custom context to your server functions by generating a [`DioxusServerContext`] from the request.
-    ///
-    /// # Example
-    /// ```rust
-    /// use dioxus::prelude::*;
-    /// use dioxus_fullstack::prelude::*;
-    ///
-    /// #[tokio::main]
-    /// async fn main() {
-    ///    let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 8080));
-    ///    axum::Server::bind(&addr)
-    ///        .serve(
-    ///            axum::Router::new()
-    ///                .register_server_fns_with_handler("", |func| {
-    ///                    move |req: Request<Body>| async move {
-    ///                        let (parts, body) = req.into_parts();
-    ///                        let parts: Arc<http::request::Parts> = Arc::new(parts.into());
-    ///                        let server_context = DioxusServerContext::new(parts.clone());
-    ///                        server_fn_handler(server_context, func.clone(), parts, body).await
-    ///                    }
-    ///                })
-    ///                .into_make_service(),
-    ///        )
-    ///        .await
-    ///        .unwrap();
-    /// }
-    /// ```
-    fn register_server_fns_with_handler<H, T>(
-        self,
-        server_fn_route: &'static str,
-        handler: impl FnMut(server_fn::ServerFnTraitObj<()>) -> H,
-    ) -> Self
-    where
-        H: Handler<T, S>,
-        T: 'static,
-        S: Clone + Send + Sync + 'static;
+    // /// Registers server functions with a custom handler function. This allows you to pass custom context to your server functions by generating a [`DioxusServerContext`] from the request.
+    // ///
+    // /// # Example
+    // /// ```rust
+    // /// use dioxus::prelude::*;
+    // /// use dioxus_fullstack::prelude::*;
+    // ///
+    // /// #[tokio::main]
+    // /// async fn main() {
+    // ///    let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 8080));
+    // ///    axum::Server::bind(&addr)
+    // ///        .serve(
+    // ///            axum::Router::new()
+    // ///                .register_server_fns_with_handler("", |func| {
+    // ///                    move |req: Request<Body>| async move {
+    // ///                        let (parts, body) = req.into_parts();
+    // ///                        let parts: Arc<http::request::Parts> = Arc::new(parts.into());
+    // ///                        let server_context = DioxusServerContext::new(parts.clone());
+    // ///                        server_fn_handler(server_context, func.clone(), parts, body).await
+    // ///                    }
+    // ///                })
+    // ///                .into_make_service(),
+    // ///        )
+    // ///        .await
+    // ///        .unwrap();
+    // /// }
+    // /// ```
+    // fn register_server_fns_with_handler<H, T>(
+    //     self,
+    //     server_fn_route: &'static str,
+    //     handler: impl FnMut(server_fns::ServerFnTraitObj<Request<Body>, Response<Body>>) -> H,
+    // ) -> Self
+    // where
+    //     H: Handler<T, S>,
+    //     T: 'static,
+    //     S: Clone + Send + Sync + 'static;
 
     /// Registers server functions with the default handler. This handler function will pass an empty [`DioxusServerContext`] to your server functions.
     ///
@@ -189,7 +188,7 @@ pub trait DioxusRouterExt<S> {
     fn serve_static_assets(self, assets_path: impl Into<std::path::PathBuf>) -> Self;
 
     /// Serves the Dioxus application. This will serve a complete server side rendered application.
-    /// This will serve static assets, server render the application, register server functions, and intigrate with hot reloading.
+    /// This will serve static assets, server render the application, register server functions, and integrate with hot reloading.
     ///
     /// # Example
     /// ```rust
@@ -226,52 +225,35 @@ impl<S> DioxusRouterExt<S> for Router<S>
 where
     S: Send + Sync + Clone + 'static,
 {
-    fn register_server_fns_with_handler<H, T>(
-        self,
-        server_fn_route: &'static str,
-        mut handler: impl FnMut(server_fn::ServerFnTraitObj<()>) -> H,
-    ) -> Self
-    where
-        H: Handler<T, S, Body>,
-        T: 'static,
-        S: Clone + Send + Sync + 'static,
-    {
-        let mut router = self;
-        for server_fn_path in DioxusServerFnRegistry::paths_registered() {
-            let func = DioxusServerFnRegistry::get(server_fn_path).unwrap();
-            let full_route = format!("{server_fn_route}/{server_fn_path}");
-            match func.encoding() {
-                Encoding::Url | Encoding::Cbor => {
-                    router = router.route(&full_route, post(handler(func)));
-                }
-                Encoding::GetJSON | Encoding::GetCBOR => {
-                    router = router.route(&full_route, get(handler(func)));
-                }
-            }
-        }
-        router
-    }
+    // fn register_server_fns_with_handler<H, T>(
+    //     self,
+    //     server_fn_route: &'static str,
+    //     mut handler: impl FnMut(Request<Body>, Response<Body>) -> H,
+    // ) -> Self
+    // where
+    //     H: Handler<T, S, Body>,
+    //     T: 'static,
+    //     S: Clone + Send + Sync + 'static,
+    // {
+    //     let mut router = self;
+    //     for server_fn_path in DioxusServerFnRegistry::paths_registered() {
+    //         let func = DioxusServerFnRegistry::get(server_fn_path).unwrap();
+    //         let full_route = format!("{server_fn_route}/{server_fn_path}");
+    //         match func.encoding() {
+    //             Encoding::Url | Encoding::Cbor => {
+    //                 router = router.route(&full_route, post(handler(func)));
+    //             }
+    //             Encoding::GetJSON | Encoding::GetCBOR => {
+    //                 router = router.route(&full_route, get(handler(func)));
+    //             }
+    //         }
+    //     }
+    //     router
+    // }
 
     fn register_server_fns(self, server_fn_route: &'static str) -> Self {
-        self.register_server_fns_with_handler(server_fn_route, |func| {
-            use crate::layer::Service;
-            move |req: Request<Body>| {
-                let mut service = crate::server_fn_service(Default::default(), func);
-                async move {
-                    let (req, body) = req.into_parts();
-                    let req = Request::from_parts(req, body);
-                    let res = service.run(req);
-                    match res.await {
-                        Ok(res) => Ok::<_, std::convert::Infallible>(res.map(|b| b.into())),
-                        Err(e) => {
-                            let mut res = Response::new(Body::from(e.to_string()));
-                            *res.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
-                            Ok(res)
-                        }
-                    }
-                }
-            }
-        })
+        self.route(server_fn_route, post(server_fns::axum::handle_server_fn))
+        .route(server_fn_route, get(server_fns::axum::handle_server_fn))
     }
 
     fn serve_static_assets(mut self, assets_path: impl Into<std::path::PathBuf>) -> Self {

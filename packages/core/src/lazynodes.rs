@@ -48,8 +48,8 @@ use crate::{innerlude::VNode, ScopeState};
 ///             .into(),
 ///         dynamic_nodes: f.bump().alloc([]),
 ///         dynamic_attrs: f.bump().alloc([]),
-///     })
-/// }
+///     }
+/// })
 /// ```
 ///
 /// Find more information about how to construct [`VNode`] at <https://dioxuslabs.com/learn/0.4/contributing/walkthrough_readme#the-rsx-macro>

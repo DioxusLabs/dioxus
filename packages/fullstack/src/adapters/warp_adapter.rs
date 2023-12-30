@@ -48,11 +48,11 @@
 
 use crate::layer::Service;
 use crate::{
-    prelude::*, render::SSRState, serve_config::ServeConfig, server_fn::DioxusServerFnRegistry,
+    prelude::*, render::SSRState, serve_config::ServeConfig, server_fns::DioxusServerFnRegistry,
 };
 
 use crate::server_fn_service;
-use server_fn::{Encoding, Payload, ServerFunctionRegistry};
+use server_fns::{Encoding, Payload, ServerFunctionRegistry};
 use std::error::Error;
 use std::sync::Arc;
 use std::sync::RwLock;
@@ -98,7 +98,7 @@ pub fn register_server_fns_with_handler<H, F, R>(
     mut handler: H,
 ) -> BoxedFilter<(R,)>
 where
-    H: FnMut(String, server_fn::ServerFnTraitObj<()>) -> F,
+    H: FnMut(String, server_fns::ServerFnTraitObj<()>) -> F,
     F: Filter<Extract = (R,), Error = warp::Rejection> + Send + Sync + 'static,
     F::Extract: Send,
     R: Reply + 'static,

@@ -28,7 +28,7 @@ pub trait Service {
     ) -> Pin<
         Box<
             dyn std::future::Future<
-                    Output = Result<Response<hyper::body::Body>, server_fn::ServerFnError>,
+                    Output = Result<Response<hyper::body::Body>, server_fns::ServerFnError>,
                 > + Send,
         >,
     >;
@@ -38,7 +38,7 @@ impl<S> Service for S
 where
     S: tower::Service<http::Request<hyper::body::Body>, Response = Response<hyper::body::Body>>,
     S::Future: Send + 'static,
-    S::Error: Into<server_fn::ServerFnError>,
+    S::Error: Into<server_fns::ServerFnError>,
 {
     fn run(
         &mut self,
@@ -46,7 +46,7 @@ where
     ) -> Pin<
         Box<
             dyn std::future::Future<
-                    Output = Result<Response<hyper::body::Body>, server_fn::ServerFnError>,
+                    Output = Result<Response<hyper::body::Body>, server_fns::ServerFnError>,
                 > + Send,
         >,
     > {
@@ -64,11 +64,11 @@ pub struct BoxedService(pub Box<dyn Service + Send>);
 
 impl tower::Service<http::Request<hyper::body::Body>> for BoxedService {
     type Response = http::Response<hyper::body::Body>;
-    type Error = server_fn::ServerFnError;
+    type Error = server_fns::ServerFnError;
     type Future = Pin<
         Box<
             dyn std::future::Future<
-                    Output = Result<http::Response<hyper::body::Body>, server_fn::ServerFnError>,
+                    Output = Result<http::Response<hyper::body::Body>, server_fns::ServerFnError>,
                 > + Send,
         >,
     >;

@@ -4,7 +4,7 @@
 // ```
 
 use axum_desktop::*;
-use dioxus_fullstack::prelude::server_fn::set_server_url;
+use dioxus_fullstack::prelude::server_fns::set_server_url;
 
 fn main() {
     // Set the url of the server where server functions are hosted.
