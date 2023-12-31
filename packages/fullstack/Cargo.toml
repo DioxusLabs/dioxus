@@ -11,7 +11,7 @@ keywords = ["ui", "gui", "react", "ssr", "fullstack"]
 
 [dependencies]
 # server functions
-server_fns = { git = "https://github.com/gbj/server_fns", features = ["json", "url"], default-features = false }
+server_fns = { git = "https://github.com/gbj/server_fns", features = ["json", "url", "browser"], default-features = false }
 server_fn_macro_default = { git = "https://github.com/gbj/server_fns" }
 
 # warp
@@ -73,7 +73,7 @@ web-sys = { version = "0.3.61", features = ["Window", "Document", "Element", "Ht
 default = ["hot-reload", "default-tls"]
 router = ["dioxus-router"]
 hot-reload = ["serde_json", "futures-util"]
-web = ["dioxus-web", "server_fns/browser"]
+web = ["dioxus-web"]
 desktop = ["dioxus-desktop"]
 warp = ["dep:warp", "ssr"]
 axum = ["dep:axum", "dep:tower", "tower-http", "ssr", "server_fns/axum", "server_fn_macro_default/axum"]
