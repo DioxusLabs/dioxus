@@ -1,5 +1,3 @@
-use std::cell::{Ref, RefMut};
-
 use std::mem::MaybeUninit;
 use std::ops::Deref;
 use std::rc::Rc;
@@ -7,7 +5,9 @@ use std::rc::Rc;
 use dioxus_core::prelude::*;
 use dioxus_core::ScopeId;
 
-use generational_box::{GenerationalBox, Owner, Store};
+use generational_box::{
+    BorrowError, BorrowMutError, GenerationalBox, GenerationalRef, GenerationalRefMut, Owner, Store,
+};
 
 use crate::Effect;
 
@@ -83,11 +83,28 @@ impl<T: 'static> CopyValue<T> {
     /// Create a new CopyValue. The value will be stored in the current component.
     ///
     /// Once the component this value is created in is dropped, the value will be dropped.
+    #[track_caller]
     pub fn new(value: T) -> Self {
         let owner = current_owner();
 
         Self {
             value: owner.insert(value),
+            origin_scope: current_scope_id().expect("in a virtual dom"),
+        }
+    }
+
+    pub(crate) fn new_with_caller(
+        value: T,
+        #[cfg(debug_assertions)] caller: &'static std::panic::Location<'static>,
+    ) -> Self {
+        let owner = current_owner();
+
+        Self {
+            value: owner.insert_with_caller(
+                value,
+                #[cfg(debug_assertions)]
+                caller,
+            ),
             origin_scope: current_scope_id().expect("in a virtual dom"),
         }
     }
@@ -117,22 +134,26 @@ impl<T: 'static> CopyValue<T> {
     }
 
     /// Try to read the value. If the value has been dropped, this will return None.
-    pub fn try_read(&self) -> Option<Ref<'_, T>> {
+    #[track_caller]
+    pub fn try_read(&self) -> Result<GenerationalRef<T>, BorrowError> {
         self.value.try_read()
     }
 
     /// Read the value. If the value has been dropped, this will panic.
-    pub fn read(&self) -> Ref<'static, T> {
+    #[track_caller]
+    pub fn read(&self) -> GenerationalRef<T> {
         self.value.read()
     }
 
     /// Try to write the value. If the value has been dropped, this will return None.
-    pub fn try_write(&self) -> Option<RefMut<'static, T>> {
+    #[track_caller]
+    pub fn try_write(&self) -> Result<GenerationalRefMut<T>, BorrowMutError> {
         self.value.try_write()
     }
 
     /// Write the value. If the value has been dropped, this will panic.
-    pub fn write(&self) -> RefMut<'static, T> {
+    #[track_caller]
+    pub fn write(&self) -> GenerationalRefMut<T> {
         self.value.write()
     }
 
@@ -168,7 +189,7 @@ impl<T: 'static> PartialEq for CopyValue<T> {
 }
 
 impl<T> Deref for CopyValue<T> {
-    type Target = dyn Fn() -> Ref<'static, T>;
+    type Target = dyn Fn() -> GenerationalRef<T>;
 
     fn deref(&self) -> &Self::Target {
         // https://github.com/dtolnay/case-studies/tree/master/callable-types

@@ -125,14 +125,6 @@ impl server_fn::ServerFunctionRegistry<()> for DioxusServerFnRegistry {
         }
     }
 
-    fn register(
-        url: &'static str,
-        server_function: ServerFunction,
-        encoding: server_fn::Encoding,
-    ) -> Result<(), Self::Error> {
-        Self::register_explicit("", url, server_function, encoding)
-    }
-
     /// Returns the server function registered at the given URL, or `None` if no function is registered at that URL.
     fn get(url: &str) -> Option<server_fn::ServerFnTraitObj<()>> {
         REGISTERED_SERVER_FUNCTIONS

@@ -94,7 +94,7 @@ pub struct ScopeState {
     pub(crate) hook_idx: Cell<usize>,
 
     pub(crate) borrowed_props: RefCell<Vec<*const VComponent<'static>>>,
-    pub(crate) attributes_to_drop: RefCell<Vec<*const Attribute<'static>>>,
+    pub(crate) attributes_to_drop_before_render: RefCell<Vec<*const Attribute<'static>>>,
 
     pub(crate) props: Option<Box<dyn AnyProps<'static>>>,
 }
@@ -348,12 +348,18 @@ impl<'src> ScopeState {
     pub fn render(&'src self, rsx: LazyNodes<'src, '_>) -> Element<'src> {
         let element = rsx.call(self);
 
-        let mut listeners = self.attributes_to_drop.borrow_mut();
+        let mut listeners = self.attributes_to_drop_before_render.borrow_mut();
         for attr in element.dynamic_attrs {
             match attr.value {
-                AttributeValue::Any(_) | AttributeValue::Listener(_) => {
+                // We need to drop listeners before the next render because they may borrow data from the borrowed props which will be dropped
+                AttributeValue::Listener(_) => {
                     let unbounded = unsafe { std::mem::transmute(attr as *const Attribute) };
                     listeners.push(unbounded);
+                }
+                // We need to drop any values manually to make sure that their drop implementation is called before the next render
+                AttributeValue::Any(_) => {
+                    let unbounded = unsafe { std::mem::transmute(attr as *const Attribute) };
+                    self.previous_frame().add_attribute_to_drop(unbounded);
                 }
 
                 _ => (),
@@ -361,12 +367,17 @@ impl<'src> ScopeState {
         }
 
         let mut props = self.borrowed_props.borrow_mut();
+        let mut drop_props = self
+            .previous_frame()
+            .props_to_drop_before_reset
+            .borrow_mut();
         for node in element.dynamic_nodes {
             if let DynamicNode::Component(comp) = node {
+                let unbounded = unsafe { std::mem::transmute(comp as *const VComponent) };
                 if !comp.static_props {
-                    let unbounded = unsafe { std::mem::transmute(comp as *const VComponent) };
                     props.push(unbounded);
                 }
+                drop_props.push(unbounded);
             }
         }
 

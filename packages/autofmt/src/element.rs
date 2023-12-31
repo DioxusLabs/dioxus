@@ -66,7 +66,7 @@ impl Writer<'_> {
 
         // check if we have a lot of attributes
         let attr_len = self.is_short_attrs(attributes);
-        let is_short_attr_list = (attr_len + self.out.indent * 4) < 80;
+        let is_short_attr_list = (attr_len + self.out.indent_level * 4) < 80;
         let children_len = self.is_short_children(children);
         let is_small_children = children_len.is_some();
 
@@ -86,7 +86,7 @@ impl Writer<'_> {
 
         // if we have few children and few attributes, make it a one-liner
         if is_short_attr_list && is_small_children {
-            if children_len.unwrap() + attr_len + self.out.indent * 4 < 100 {
+            if children_len.unwrap() + attr_len + self.out.indent_level * 4 < 100 {
                 opt_level = ShortOptimization::Oneliner;
             } else {
                 opt_level = ShortOptimization::PropsOnTop;
@@ -185,11 +185,11 @@ impl Writer<'_> {
         }
 
         while let Some(attr) = attr_iter.next() {
-            self.out.indent += 1;
+            self.out.indent_level += 1;
             if !sameline {
                 self.write_comments(attr.attr.start())?;
             }
-            self.out.indent -= 1;
+            self.out.indent_level -= 1;
 
             if !sameline {
                 self.out.indented_tabbed_line()?;
@@ -398,14 +398,14 @@ impl Writer<'_> {
         for idx in start.line..end.line {
             let line = &self.src[idx];
             if line.trim().starts_with("//") {
-                for _ in 0..self.out.indent + 1 {
+                for _ in 0..self.out.indent_level + 1 {
                     write!(self.out, "    ")?
                 }
                 writeln!(self.out, "{}", line.trim()).unwrap();
             }
         }
 
-        for _ in 0..self.out.indent {
+        for _ in 0..self.out.indent_level {
             write!(self.out, "    ")?
         }
 

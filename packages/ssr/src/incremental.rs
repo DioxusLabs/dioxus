@@ -81,6 +81,7 @@ impl IncrementalRenderer {
         let mut html_buffer = WriteBuffer { buffer: Vec::new() };
         {
             let mut vdom = VirtualDom::new_with_props(comp, props);
+            crate::eval::init_eval(vdom.base_scope());
             rebuild_with(&mut vdom).await;
 
             renderer.render_before_body(&mut *html_buffer)?;

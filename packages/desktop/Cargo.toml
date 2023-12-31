@@ -59,6 +59,7 @@ fullscreen = ["wry/fullscreen"]
 transparent = ["wry/transparent"]
 devtools = ["wry/devtools"]
 hot-reload = ["dioxus-hot-reload"]
+gnu = []
 
 [package.metadata.docs.rs]
 default-features = false

@@ -55,7 +55,7 @@ use wry::{application::window::WindowId, webview::WebContext};
 ///
 /// This function will start a multithreaded Tokio runtime as well the WebView event loop.
 ///
-/// ```rust, ignore
+/// ```rust, no_run
 /// use dioxus::prelude::*;
 ///
 /// fn main() {
@@ -78,11 +78,12 @@ pub fn launch(root: Component) {
 ///
 /// You can configure the WebView window with a configuration closure
 ///
-/// ```rust, ignore
+/// ```rust, no_run
 /// use dioxus::prelude::*;
+/// use dioxus_desktop::*;
 ///
 /// fn main() {
-///     dioxus_desktop::launch_cfg(app, |c| c.with_window(|w| w.with_title("My App")));
+///     dioxus_desktop::launch_cfg(app, Config::default().with_window(WindowBuilder::new().with_title("My App")));
 /// }
 ///
 /// fn app(cx: Scope) -> Element {
@@ -101,8 +102,9 @@ pub fn launch_cfg(root: Component, config_builder: Config) {
 ///
 /// You can configure the WebView window with a configuration closure
 ///
-/// ```rust, ignore
+/// ```rust, no_run
 /// use dioxus::prelude::*;
+/// use dioxus_desktop::Config;
 ///
 /// fn main() {
 ///     dioxus_desktop::launch_with_props(app, AppProps { name: "asd" }, Config::default());
