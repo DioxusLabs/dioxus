@@ -30,8 +30,8 @@ pub(crate) fn init() -> UnboundedReceiver<Template<'static>> {
     // change the rsx when new data is received
     let cl = Closure::wrap(Box::new(move |e: MessageEvent| {
         if let Ok(text) = e.data().dyn_into::<js_sys::JsString>() {
-            let text: String = text.into();
-            let val = serde_json::from_str::<serde_json::Value>(&text).unwrap();
+            let string: String = text.into();
+            let val = serde_json::from_str::<serde_json::Value>(&string).unwrap();
             // leak the value
             let val: &'static serde_json::Value = Box::leak(Box::new(val));
             let template: Template<'_> = Template::deserialize(val).unwrap();

@@ -64,12 +64,12 @@ async fn main() -> anyhow::Result<()> {
             .await
             .map_err(|e| anyhow!("🚫 Building project failed: {}", e)),
 
-        Clean(opts) => opts
-            .clean(Some(bin.clone()))
+        Clean(opts) if bin.is_ok() => opts
+            .clean(Some(bin.unwrap().clone()))
             .map_err(|e| anyhow!("🚫 Cleaning project failed: {}", e)),
 
-        Serve(opts) => opts
-            .serve(Some(bin.clone()))
+        Serve(opts) if bin.is_ok() => opts
+            .serve(Some(bin.unwrap().clone()))
             .await
             .map_err(|e| anyhow!("🚫 Serving project failed: {}", e)),
 
