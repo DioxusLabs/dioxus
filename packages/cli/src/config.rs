@@ -211,6 +211,7 @@ pub struct CrateConfig {
     pub verbose: bool,
     pub custom_profile: Option<String>,
     pub features: Option<Vec<String>>,
+    pub cargo_args: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -278,6 +279,7 @@ impl CrateConfig {
         let verbose = false;
         let custom_profile = None;
         let features = None;
+        let cargo_args = vec![];
 
         Ok(Self {
             out_dir,
@@ -294,6 +296,7 @@ impl CrateConfig {
             custom_profile,
             features,
             verbose,
+            cargo_args,
         })
     }
 
@@ -329,6 +332,11 @@ impl CrateConfig {
 
     pub fn set_features(&mut self, features: Vec<String>) -> &mut Self {
         self.features = Some(features);
+        self
+    }
+
+    pub fn set_cargo_args(&mut self, cargo_args: Vec<String>) -> &mut Self {
+        self.cargo_args = cargo_args;
         self
     }
 }

@@ -93,6 +93,8 @@ pub fn build(config: &CrateConfig, quiet: bool) -> Result<BuildResult> {
         cmd
     };
 
+    let cmd = cmd.args(&config.cargo_args);
+
     let cmd = match executable {
         ExecutableType::Binary(name) => cmd.arg("--bin").arg(name),
         ExecutableType::Lib(name) => cmd.arg("--lib").arg(name),
@@ -285,6 +287,8 @@ pub fn build_desktop(config: &CrateConfig, _is_serve: bool) -> Result<BuildResul
         let features_str = config.features.as_ref().unwrap().join(" ");
         cmd = cmd.arg("--features").arg(features_str);
     }
+
+    let cmd = cmd.args(&config.cargo_args);
 
     let cmd = match &config.executable {
         crate::ExecutableType::Binary(name) => cmd.arg("--bin").arg(name),

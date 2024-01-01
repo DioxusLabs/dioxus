@@ -35,6 +35,10 @@ pub struct ConfigOptsBuild {
     /// Space separated list of features to activate
     #[clap(long)]
     pub features: Option<Vec<String>>,
+
+    /// Extra arguments passed to cargo build
+    #[clap(last = true)]
+    pub cargo_args: Vec<String>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Parser)]
@@ -89,6 +93,10 @@ pub struct ConfigOptsServe {
     /// Space separated list of features to activate
     #[clap(long)]
     pub features: Option<Vec<String>>,
+
+    /// Extra arguments passed to cargo build
+    #[clap(last = true)]
+    pub cargo_args: Vec<String>,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Serialize, Deserialize, Debug)]
@@ -129,4 +137,8 @@ pub struct ConfigOptsBundle {
     /// Space separated list of features to activate
     #[clap(long)]
     pub features: Option<Vec<String>>,
+
+    /// Extra arguments passed to cargo build
+    #[clap(last = true)]
+    pub cargo_args: Vec<String>,
 }
