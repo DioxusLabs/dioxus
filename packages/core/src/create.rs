@@ -78,11 +78,13 @@ impl<'b> VirtualDom {
         #[cfg(debug_assertions)]
         {
             let (path, byte_index) = node.template.get().name.rsplit_once(':').unwrap();
-            if let Some(template) = self
-                .templates
-                .get(path)
-                .and_then(|map| map.get(&byte_index.parse().unwrap()))
-            {
+            if let Some(template) = self.templates.get(path).and_then(|map| {
+                if byte_index.is_empty() {
+                    None
+                } else {
+                    map.get(&byte_index.parse().unwrap())
+                }
+            }) {
                 node.template.set(*template);
             }
         }
@@ -405,6 +407,10 @@ impl<'b> VirtualDom {
     #[allow(unused_mut)]
     pub(crate) fn register_template(&mut self, mut template: Template<'static>) {
         let (path, byte_index) = template.name.rsplit_once(':').unwrap();
+        if byte_index.is_empty() {
+            return;
+        }
+
         let byte_index = byte_index.parse::<usize>().unwrap();
         // First, check if we've already seen this template
         if self
