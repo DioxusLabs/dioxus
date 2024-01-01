@@ -48,7 +48,7 @@ fn app(cx: Scope<AppProps>) -> Element {
     })
 }
 
-#[server]
+#[server(input = GetUrl)]
 async fn post_server_data(data: String) -> Result<(), ServerFnError> {
     // let axum::extract::Host(host): axum::extract::Host = extract().await?;
     println!("Server received: {}", data);
@@ -57,16 +57,25 @@ async fn post_server_data(data: String) -> Result<(), ServerFnError> {
     Ok(())
 }
 
-#[server]
+#[server(input = GetUrl)]
 async fn get_server_data() -> Result<String, ServerFnError> {
-    Ok(reqwest::get("https://httpbin.org/ip").await.unwrap().text().await.unwrap())
+    Ok(reqwest::get("https://httpbin.org/ip")
+        .await
+        .unwrap()
+        .text()
+        .await
+        .unwrap())
 }
 
 fn main() {
     #[cfg(feature = "web")]
     tracing_wasm::set_as_global_default();
     #[cfg(feature = "ssr")]
-    tracing_subscriber::fmt::init();
+    {
+        tracing_subscriber::fmt::init();
+        println!("{:?}", GetServerData::PATH);
+    }
+
 
     LaunchBuilder::new_with_props(app, AppProps { count: 0 }).launch()
 }

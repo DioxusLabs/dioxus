@@ -16,7 +16,7 @@
 //!             .unwrap()
 //!             .block_on(async move {
 //!                 let router =
-//!                     Router::new().serve_dioxus_application("", ServeConfigBuilder::new(app, ()));
+//!                     Router::new().serve_dioxus_application("/api", ServeConfigBuilder::new(app, ()));
 //!                 Server::new(TcpListener::bind("127.0.0.1:8080"))
 //!                     .serve(router)
 //!                     .await;
@@ -67,8 +67,8 @@ use std::sync::Arc;
 use std::sync::RwLock;
 
 use crate::{
-    layer::Service, prelude::*, render::SSRState, serve_config::ServeConfig,
-    server_fns::DioxusServerFnRegistry, server_fn_service,
+    layer::Service, prelude::*, render::SSRState, serve_config::ServeConfig, server_fn_service,
+    server_fns::DioxusServerFnRegistry,
 };
 
 type HyperRequest = hyper::Request<hyper::Body>;
@@ -107,7 +107,7 @@ pub trait DioxusRouterExt {
     /// #[tokio::main]
     /// async fn main() {
     ///     let router = Router::new()
-    ///         .register_server_fns_with_handler("", |func| {
+    ///         .register_server_fns_with_handler("/api", |func| {
     ///             ServerFnHandler::new(DioxusServerContext::default(), func)
     ///         });
     ///     Server::new(TcpListener::bind("127.0.0.1:8080"))
@@ -134,7 +134,7 @@ pub trait DioxusRouterExt {
     /// #[tokio::main]
     /// async fn main() {
     ///     let router = Router::new()
-    ///         .register_server_fns("");
+    ///         .register_server_fns("/api");
     ///     Server::new(TcpListener::bind("127.0.0.1:8080"))
     ///         .serve(router)
     ///         .await;
@@ -193,7 +193,7 @@ pub trait DioxusRouterExt {
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let router = Router::new().serve_dioxus_application("", ServeConfigBuilder::new(app, ()));
+    ///     let router = Router::new().serve_dioxus_application("/api", ServeConfigBuilder::new(app, ()));
     ///     Server::new(TcpListener::bind("127.0.0.1:8080"))
     ///         .serve(router)
     ///         .await;

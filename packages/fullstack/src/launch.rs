@@ -43,7 +43,7 @@ impl<Props: Clone + serde::Serialize + serde::de::DeserializeOwned + Send + Sync
             #[cfg(not(feature = "ssr"))]
             props,
             #[cfg(feature = "ssr")]
-            server_fn_route: "",
+            server_fn_route: "/api",
             #[cfg(feature = "ssr")]
             addr: std::net::SocketAddr::from(([127, 0, 0, 1], 8080)),
             #[cfg(feature = "ssr")]

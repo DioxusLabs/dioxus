@@ -51,9 +51,9 @@ pub mod prelude {
     pub use crate::server_context::{
         extract, server_context, DioxusServerContext, FromServerContext, ProvideServerContext,
     };
-        pub use server_fn_macro_default::*;
     #[cfg(feature = "ssr")]
     pub use dioxus_ssr::incremental::IncrementalRendererConfig;
+    pub use server_fn_macro_default::*;
     pub use server_fns::{self, ServerFn as _, ServerFnError};
 
     pub use hooks::{server_cached::server_cached, server_future::use_server_future};

@@ -51,7 +51,7 @@ fn main() {
                 // build our application with some routes
                 let app = Router::new()
                     // Server side render the application, serve static assets, and register server functions
-                    .serve_dioxus_application("", ServeConfigBuilder::new(app, ()))
+                    .serve_dioxus_application("/api", ServeConfigBuilder::new(app, ()))
                     .layer(
                         axum_session_auth::AuthSessionLayer::<
                             crate::auth::User,
@@ -80,8 +80,7 @@ fn app(cx: Scope) -> Element {
 
     cx.render(rsx! {
         div {
-            button {
-                onclick: move |_| {
+            button { onclick: move |_| {
                     async move {
                         login().await.unwrap();
                     }

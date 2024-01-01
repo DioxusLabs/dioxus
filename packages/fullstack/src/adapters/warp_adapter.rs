@@ -14,7 +14,7 @@
 //!         tokio::runtime::Runtime::new()
 //!             .unwrap()
 //!             .block_on(async move {
-//!                 let routes = serve_dioxus_application("", ServeConfigBuilder::new(app, ()));
+//!                 let routes = serve_dioxus_application("/api", ServeConfigBuilder::new(app, ()));
 //!                 warp::serve(routes).run(([127, 0, 0, 1], 8080)).await;
 //!             });
 //!     }
@@ -127,7 +127,7 @@ where
 ///
 /// #[tokio::main]
 /// async fn main() {
-///     let routes = register_server_fns("");
+///     let routes = register_server_fns("/api");
 ///     warp::serve(routes).run(([127, 0, 0, 1], 8080)).await;
 /// }
 /// ```
@@ -171,7 +171,7 @@ pub fn register_server_fns(server_fn_route: &'static str) -> BoxedFilter<(impl R
 ///
 /// #[tokio::main]
 /// async fn main() {
-///     let routes = serve_dioxus_application("", ServeConfigBuilder::new(app, ()));
+///     let routes = serve_dioxus_application("/api", ServeConfigBuilder::new(app, ()));
 ///     warp::serve(routes).run(([127, 0, 0, 1], 8080)).await;
 /// }
 ///

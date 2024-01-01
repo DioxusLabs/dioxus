@@ -20,7 +20,7 @@
 //!                     .serve(
 //!                         axum::Router::new()
 //!                             // Server side render the application, serve static assets, and register server functions
-//!                             .serve_dioxus_application("", ServeConfigBuilder::new(app, ()))
+//!                             .serve_dioxus_application("/api", ServeConfigBuilder::new(app, ()))
 //!                             .into_make_service(),
 //!                     )
 //!                     .await
@@ -55,9 +55,8 @@
 //! ```
 
 use axum::{
-    body::{ Body},
+    body::Body,
     extract::State,
-
     http::{Request, Response, StatusCode},
     response::IntoResponse,
     routing::{get, post},
@@ -68,7 +67,6 @@ use std::sync::RwLock;
 
 use crate::{
     prelude::*, render::SSRState, serve_config::ServeConfig, server_context::DioxusServerContext,
-
 };
 
 /// A extension trait with utilities for integrating Dioxus with your Axum router.
@@ -86,7 +84,7 @@ pub trait DioxusRouterExt<S> {
     // ///    axum::Server::bind(&addr)
     // ///        .serve(
     // ///            axum::Router::new()
-    // ///                .register_server_fns_with_handler("", |func| {
+    // ///                .register_server_fns_with_handler("/api", |func| {
     // ///                    move |req: Request<Body>| async move {
     // ///                        let (parts, body) = req.into_parts();
     // ///                        let parts: Arc<http::request::Parts> = Arc::new(parts.into());
@@ -124,7 +122,7 @@ pub trait DioxusRouterExt<S> {
     ///         .serve(
     ///             axum::Router::new()
     ///                 // Register server functions routes with the default handler
-    ///                 .register_server_fns("")
+    ///                 .register_server_fns("/api")
     ///                 .into_make_service(),
     ///         )
     ///         .await
@@ -203,7 +201,7 @@ pub trait DioxusRouterExt<S> {
     ///         .serve(
     ///             axum::Router::new()
     ///                 // Server side render the application, serve static assets, and register server functions
-    ///                 .serve_dioxus_application("", ServeConfigBuilder::new(app, ()))
+    ///                 .serve_dioxus_application("/api", ServeConfigBuilder::new(app, ()))
     ///                 .into_make_service(),
     ///         )
     ///         .await
@@ -250,10 +248,8 @@ where
     //     }
     //     router
     // }
-
     fn register_server_fns(self, server_fn_route: &'static str) -> Self {
-        self.route(server_fn_route, post(server_fns::axum::handle_server_fn))
-        .route(server_fn_route, get(server_fns::axum::handle_server_fn))
+        self.route(&format!("{server_fn_route}/*name"), post(server_fns::axum::handle_server_fn).get(server_fns::axum::handle_server_fn))
     }
 
     fn serve_static_assets(mut self, assets_path: impl Into<std::path::PathBuf>) -> Self {

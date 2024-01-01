@@ -16,7 +16,7 @@ async fn main() {
     axum::Server::bind(&addr)
         .serve(
             axum::Router::new()
-                .register_server_fns("")
+                .register_server_fns("/api")
                 .into_make_service(),
         )
         .await
