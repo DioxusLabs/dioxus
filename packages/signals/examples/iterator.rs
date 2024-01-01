@@ -23,6 +23,6 @@ fn App(cx: Scope) -> Element {
 }
 
 #[component]
-fn Child(cx: Scope, signal: SignalMap<String>) -> Element {
+fn Child(cx: Scope, signal: MappedSignal<String>) -> Element {
     render! {"{signal:?}"}
 }

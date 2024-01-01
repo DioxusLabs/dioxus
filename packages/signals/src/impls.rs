@@ -1,6 +1,6 @@
 use crate::rt::CopyValue;
 use crate::signal::{ReadOnlySignal, Signal, Write};
-use crate::SignalMap;
+use crate::MappedSignal;
 use generational_box::GenerationalRef;
 use generational_box::GenerationalRefMut;
 
@@ -280,7 +280,7 @@ impl<T: 'static> IntoIterator for Signal<Vec<T>> {
     }
 }
 
-/// An iterator over items in a `Signal<Vec<T>>` that yields [`SignalMap`]s.
+/// An iterator over items in a `Signal<Vec<T>>` that yields [`MappedSignal`]s.
 pub struct MappedSignalIterator<T: 'static> {
     index: usize,
     length: usize,
@@ -288,7 +288,7 @@ pub struct MappedSignalIterator<T: 'static> {
 }
 
 impl<T> Iterator for MappedSignalIterator<T> {
-    type Item = SignalMap<T>;
+    type Item = MappedSignal<T>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let index = self.index;
@@ -303,7 +303,7 @@ impl<T: 'static> Signal<Vec<T>> {
         Write::filter_map(self.write(), |v| v.get_mut(index))
     }
 
-    /// Create an iterator of [`SignalMap`]s over the inner vector.
+    /// Create an iterator of [`MappedSignal`]s over the inner vector.
     pub fn iter_signals(&self) -> MappedSignalIterator<T> {
         MappedSignalIterator {
             index: 0,
@@ -317,5 +317,14 @@ impl<T: 'static> Signal<Option<T>> {
     /// Returns a reference to an element or `None` if out of bounds.
     pub fn as_mut(&self) -> Option<Write<T, Option<T>>> {
         Write::filter_map(self.write(), |v| v.as_mut())
+    }
+
+    /// Try to create a [`MappedSignal`] over the inner value.
+    pub fn as_mapped_ref(&self) -> Option<MappedSignal<T>> {
+        if self.read().is_some() {
+            Some(self.map(|v| v.as_ref().unwrap()))
+        } else {
+            None
+        }
     }
 }

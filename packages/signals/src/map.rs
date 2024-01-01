@@ -6,12 +6,12 @@ use std::fmt::Debug;
 use std::fmt::Display;
 
 /// A read only signal that has been mapped to a new type.
-pub struct SignalMap<U: 'static + ?Sized> {
+pub struct MappedSignal<U: 'static + ?Sized> {
     origin_scope: ScopeId,
     mapping: CopyValue<Box<dyn Fn() -> GenerationalRef<U>>>,
 }
 
-impl<U: ?Sized> SignalMap<U> {
+impl<U: ?Sized> MappedSignal<U> {
     /// Create a new mapped signal.
     pub fn new<T: 'static>(signal: Signal<T>, mapping: impl Fn(&T) -> &U + 'static) -> Self {
         Self {
@@ -38,47 +38,47 @@ impl<U: ?Sized> SignalMap<U> {
     }
 }
 
-impl<U: ?Sized + Clone> SignalMap<U> {
+impl<U: ?Sized + Clone> MappedSignal<U> {
     /// Get the current value of the signal. This will subscribe the current scope to the signal.
     pub fn value(&self) -> U {
         self.read().clone()
     }
 }
 
-impl<U: ?Sized> PartialEq for SignalMap<U> {
+impl<U: ?Sized> PartialEq for MappedSignal<U> {
     fn eq(&self, other: &Self) -> bool {
         self.mapping == other.mapping
     }
 }
 
-impl<U> std::clone::Clone for SignalMap<U> {
+impl<U> std::clone::Clone for MappedSignal<U> {
     fn clone(&self) -> Self {
         *self
     }
 }
 
-impl<U> Copy for SignalMap<U> {}
+impl<U> Copy for MappedSignal<U> {}
 
-impl<U: ?Sized + Display> Display for SignalMap<U> {
+impl<U: ?Sized + Display> Display for MappedSignal<U> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.with(|v| Display::fmt(v, f))
     }
 }
 
-impl<U: ?Sized + Debug> Debug for SignalMap<U> {
+impl<U: ?Sized + Debug> Debug for MappedSignal<U> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.with(|v| Debug::fmt(v, f))
     }
 }
 
-impl<U> SignalMap<Vec<U>> {
+impl<U> MappedSignal<Vec<U>> {
     /// Read a value from the inner vector.
     pub fn get(&self, index: usize) -> Option<GenerationalRef<U>> {
         GenerationalRef::filter_map(self.read(), |v| v.get(index))
     }
 }
 
-impl<U: Clone + 'static> SignalMap<Option<U>> {
+impl<U: Clone + 'static> MappedSignal<Option<U>> {
     /// Unwraps the inner value and clones it.
     pub fn unwrap(&self) -> U
     where
@@ -93,7 +93,7 @@ impl<U: Clone + 'static> SignalMap<Option<U>> {
     }
 }
 
-impl<T> std::ops::Deref for SignalMap<T> {
+impl<T> std::ops::Deref for MappedSignal<T> {
     type Target = dyn Fn() -> GenerationalRef<T>;
 
     fn deref(&self) -> &Self::Target {

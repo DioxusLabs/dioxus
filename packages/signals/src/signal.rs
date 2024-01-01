@@ -1,4 +1,4 @@
-use crate::SignalMap;
+use crate::MappedSignal;
 use std::{
     cell::RefCell,
     mem::MaybeUninit,
@@ -307,8 +307,8 @@ impl<T: 'static> Signal<T> {
     }
 
     /// Map the signal to a new type.
-    pub fn map<O>(self, f: impl Fn(&T) -> &O + 'static) -> SignalMap<O> {
-        SignalMap::new(self, f)
+    pub fn map<O>(self, f: impl Fn(&T) -> &O + 'static) -> MappedSignal<O> {
+        MappedSignal::new(self, f)
     }
 }
 

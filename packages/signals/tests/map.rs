@@ -16,7 +16,7 @@ fn create_signals_global() {
 
     fn Child(cx: Scope) -> Element {
         let signal = create_without_cx();
-        let mapped = SignalMap::new(signal, |v| v.as_bytes());
+        let mapped = MappedSignal::new(signal, |v| v.as_bytes());
 
         render! {
             "{signal:?}"
