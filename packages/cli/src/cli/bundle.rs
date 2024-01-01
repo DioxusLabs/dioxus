@@ -76,6 +76,12 @@ impl Bundle {
             crate_config.set_profile(self.build.profile.unwrap());
         }
 
+        if let Some(platform_triple) = self.build.platform_triple {
+            crate_config.set_platform_triple(platform_triple);
+        }
+
+        crate_config.set_cargo_args(self.build.cargo_args);
+
         // build the desktop app
         build_desktop(&crate_config, false)?;
 
