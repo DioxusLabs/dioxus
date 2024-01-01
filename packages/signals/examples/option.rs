@@ -25,7 +25,7 @@ fn App(cx: Scope) -> Element {
             },
             "Change"
         }
-        if let Some(item) = signal.as_mapped_ref(){
+        if let Some(item) = signal.as_mapped_ref() {
             render! {
                 Child { signal: item }
             }
