@@ -288,7 +288,13 @@ pub fn build_desktop(config: &CrateConfig, _is_serve: bool) -> Result<BuildResul
         cmd = cmd.arg("--features").arg(features_str);
     }
 
-    let cmd = cmd.args(&config.cargo_args);
+    if let Some(platform_triple) = &config.platform_triple {
+        cmd = cmd.arg("--target").arg(platform_triple);
+    }
+
+    let target_platform = config.platform_triple.as_deref().unwrap_or("");
+
+    cmd = cmd.args(&config.cargo_args);
 
     let cmd = match &config.executable {
         crate::ExecutableType::Binary(name) => cmd.arg("--bin").arg(name),
@@ -307,12 +313,17 @@ pub fn build_desktop(config: &CrateConfig, _is_serve: bool) -> Result<BuildResul
     let mut res_path = match &config.executable {
         crate::ExecutableType::Binary(name) | crate::ExecutableType::Lib(name) => {
             file_name = name.clone();
-            config.target_dir.join(release_type).join(name)
+            config
+                .target_dir
+                .join(target_platform)
+                .join(release_type)
+                .join(name)
         }
         crate::ExecutableType::Example(name) => {
             file_name = name.clone();
             config
                 .target_dir
+                .join(target_platform)
                 .join(release_type)
                 .join("examples")
                 .join(name)

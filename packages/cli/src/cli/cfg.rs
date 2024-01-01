@@ -36,6 +36,10 @@ pub struct ConfigOptsBuild {
     #[clap(long)]
     pub features: Option<Vec<String>>,
 
+    /// Rustc platform triple (equivalent to cargo build --target)
+    #[clap(long)]
+    pub platform_triple: Option<String>,
+
     /// Extra arguments passed to cargo build
     #[clap(last = true)]
     pub cargo_args: Vec<String>,
@@ -94,6 +98,10 @@ pub struct ConfigOptsServe {
     #[clap(long)]
     pub features: Option<Vec<String>>,
 
+    /// Rustc platform triple (equivalent to cargo build --target)
+    #[clap(long)]
+    pub platform_triple: Option<String>,
+
     /// Extra arguments passed to cargo build
     #[clap(last = true)]
     pub cargo_args: Vec<String>,
@@ -137,6 +145,10 @@ pub struct ConfigOptsBundle {
     /// Space separated list of features to activate
     #[clap(long)]
     pub features: Option<Vec<String>>,
+
+    /// Rustc platform triple (equivalent to cargo build --target)
+    #[clap(long)]
+    pub platform_triple: Option<String>,
 
     /// Extra arguments passed to cargo build
     #[clap(last = true)]

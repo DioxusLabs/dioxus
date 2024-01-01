@@ -37,6 +37,10 @@ impl Build {
             .platform
             .unwrap_or(crate_config.dioxus_config.application.default_platform);
 
+        if let Some(platform_triple) = self.build.platform_triple {
+            crate_config.set_platform_triple(platform_triple);
+        }
+
         crate_config.set_cargo_args(self.build.cargo_args);
 
         // #[cfg(feature = "plugin")]
