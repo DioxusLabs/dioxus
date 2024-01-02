@@ -18,11 +18,17 @@ generational-box = { workspace = true }
 tracing = { workspace = true }
 simple_logger = "4.2.0"
 serde = { version = "1", features = ["derive"], optional = true }
+parking_lot = "0.12.1"
+once_cell = "1.18.0"
+rustc-hash.workspace = true
+futures-channel.workspace = true
+futures-util.workspace = true
 
 [dev-dependencies]
 dioxus = { workspace = true }
 dioxus-desktop = { workspace = true }
 tokio = { version = "1", features = ["full"] }
+tracing-subscriber = "0.3.17"
 
 [features]
 default = []
