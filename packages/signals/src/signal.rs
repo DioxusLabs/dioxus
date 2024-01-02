@@ -495,3 +495,9 @@ impl<T> Deref for ReadOnlySignal<T> {
         reference_to_closure as &Self::Target
     }
 }
+
+impl<T> From<Signal<T>> for ReadOnlySignal<T> {
+    fn from(signal: Signal<T>) -> Self {
+        Self::new(signal)
+    }
+}
