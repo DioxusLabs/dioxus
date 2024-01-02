@@ -17,8 +17,12 @@ pub enum PluginAdd {
     //   branch: Option<String>,
     // }
     Add {
+        // The path to the .wasm Plugin file
         #[clap(short, long)]
         path: PathBuf,
+        // Optional priority value to change the order of how plugins are loaded
+        #[clap(long)]
+        priority: Option<usize>,
     },
 }
 
@@ -46,7 +50,7 @@ impl Plugin {
                 let plugins = &PLUGINS_CONFIG.lock().await.plugins.plugins;
                 if plugins.is_empty() {
                     log::warn!(
-                        "No plugins found! Run `dx config init` and then run `dx add --path WASM"
+                        "No plugins found! Run `dx config init` and then run `dx add --path /path/to/.wasm"
                     );
                     return Ok(());
                 };
@@ -56,7 +60,7 @@ impl Plugin {
                 }
             }
             Plugin::Add(data) => match data {
-                PluginAdd::Add { path } => {
+                PluginAdd::Add { path, priority } => {
                     let mut dioxus_lock = DioxusLock::load()?;
                     let crate_dir = crate::crate_root()?;
                     let mut plugin =
@@ -86,6 +90,7 @@ impl Plugin {
                         version,
                         path,
                         config,
+                        priority,
                     };
 
                     let plugins = &mut PLUGINS_CONFIG.lock().await.plugins;

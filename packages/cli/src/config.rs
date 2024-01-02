@@ -597,6 +597,7 @@ pub struct PluginConfigInfo {
     pub path: PathBuf,
     #[serde(default = "default_plugin_config")]
     pub config: toml::Value,
+    pub priority: Option<usize>,
 }
 
 fn default_plugin_config() -> toml::Value {

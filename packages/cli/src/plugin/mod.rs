@@ -2,7 +2,7 @@ use crate::lock::DioxusLock;
 use crate::plugin::convert::Convert;
 use crate::plugin::interface::{PluginRuntimeState, PluginWorld};
 use crate::server::WsMessage;
-use crate::DioxusConfig;
+use crate::{DioxusConfig, PluginConfigInfo};
 
 use slab::Slab;
 use std::path::{Path, PathBuf};
@@ -196,13 +196,18 @@ pub async fn plugins_watched_paths_changed(
     call_plugins!(on_watched_paths_change & paths).fold_changes()
 }
 
+/// Returns a sorted list of plugins that are loaded in order
+/// of priority from the dioxus config
 async fn load_plugins(
     config: &DioxusConfig,
     crate_dir: &PathBuf,
     dioxus_lock: &DioxusLock,
 ) -> wasmtime::Result<Vec<CliPlugin>> {
-    let mut plugins = Vec::new();
-    for plugin in config.plugins.plugins.values() {
+    let mut sorted_plugins: Vec<&PluginConfigInfo> = config.plugins.plugins.values().collect();
+    sorted_plugins.sort_by_key(|f| f.priority.unwrap_or(0));
+    let mut plugins = Vec::with_capacity(sorted_plugins.len());
+
+    for plugin in sorted_plugins.into_iter() {
         let plugin = load_plugin(&plugin.path, config, crate_dir, dioxus_lock).await?;
         plugins.push(plugin);
     }
