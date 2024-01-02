@@ -154,6 +154,7 @@ impl Bundle {
                     .collect(),
             );
         }
+
         let settings = settings.build();
 
         // on macos we need to set CI=true (https://github.com/tauri-apps/tauri/issues/2567)
@@ -162,9 +163,9 @@ impl Bundle {
 
         tauri_bundler::bundle::bundle_project(settings.unwrap()).unwrap_or_else(|err|{
             #[cfg(target_os = "macos")]
-            panic!("Failed to bundle project: {}\nMake sure you have automation enabled in your terminal (https://github.com/tauri-apps/tauri/issues/3055#issuecomment-1624389208) and full disk access enabled for your terminal (https://github.com/tauri-apps/tauri/issues/3055#issuecomment-1624389208)", err);
+            panic!("Failed to bundle project: {:#?}\nMake sure you have automation enabled in your terminal (https://github.com/tauri-apps/tauri/issues/3055#issuecomment-1624389208) and full disk access enabled for your terminal (https://github.com/tauri-apps/tauri/issues/3055#issuecomment-1624389208)", err);
             #[cfg(not(target_os = "macos"))]
-            panic!("Failed to bundle project: {}", err);
+            panic!("Failed to bundle project: {:#?}", err);
         });
 
         Ok(())
