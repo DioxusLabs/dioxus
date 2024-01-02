@@ -76,6 +76,5 @@ fn main() {
         println!("{:?}", GetServerData::PATH);
     }
 
-
     LaunchBuilder::new_with_props(app, AppProps { count: 0 }).launch()
 }
