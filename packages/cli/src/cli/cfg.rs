@@ -6,6 +6,7 @@ use super::*;
 /// Config options for the build system.
 #[derive(Clone, Debug, Default, Deserialize, Parser)]
 pub struct ConfigOptsBuild {
+    /// Build in release mode [default: false]
     #[clap(long)]
     #[serde(default)]
     pub release: bool,
@@ -42,6 +43,7 @@ pub struct ConfigOptsBuild {
 
 #[derive(Clone, Debug, Default, Deserialize, Parser)]
 pub struct ConfigOptsServe {
+    /// Port of dev server
     #[clap(long)]
     #[clap(default_value_t = 8080)]
     pub port: u16,
