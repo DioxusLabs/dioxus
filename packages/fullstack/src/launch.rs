@@ -159,12 +159,7 @@ impl<Props: Clone + serde::Serialize + serde::de::DeserializeOwned + Send + Sync
                 .serve_static_assets(cfg.assets_path)
                 .connect_hot_reload()
                 .fallback(get(render_handler).with_state((cfg, ssr_state)));
-            let router = router
-                .layer(
-                    ServiceBuilder::new()
-                        .layer(tower_http::compression::CompressionLayer::new().gzip(true)),
-                )
-                .into_make_service();
+            let router = router.into_make_service();
             let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
             axum::serve(listener, router).await.unwrap();
         }
@@ -187,9 +182,7 @@ impl<Props: Clone + serde::Serialize + serde::de::DeserializeOwned + Send + Sync
                     // Then all other routes
                     .or(render_ssr(cfg))
             };
-            warp::serve(router.boxed().with(warp::filters::compression::gzip()))
-                .run(addr)
-                .await;
+            warp::serve(router.boxed()).run(addr).await;
         }
         #[cfg(all(feature = "salvo", not(feature = "axum"), not(feature = "warp")))]
         {
@@ -201,10 +194,6 @@ impl<Props: Clone + serde::Serialize + serde::de::DeserializeOwned + Send + Sync
                 .serve_static_assets(cfg.assets_path)
                 .connect_hot_reload()
                 .push(salvo::Router::with_path("/<**any_path>").get(SSRHandler::new(cfg)));
-            let router = router.hoop(
-                salvo::compression::Compression::new()
-                    .enable_gzip(salvo::prelude::CompressionLevel::Default),
-            );
             salvo::Server::new(salvo::conn::tcp::TcpListener::new(addr).bind().await)
                 .serve(router)
                 .await;

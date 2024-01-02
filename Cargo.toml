@@ -30,6 +30,7 @@ members = [
     "packages/hot-reload",
     "packages/fullstack",
     "packages/fullstack/examples/axum-hello-world",
+    "packages/fullstack/examples/axum-streaming",
     "packages/fullstack/examples/axum-router",
     "packages/fullstack/examples/axum-desktop",
     "packages/fullstack/examples/axum-auth",

@@ -64,6 +64,7 @@ use axum::{
 };
 use std::sync::Arc;
 use std::sync::RwLock;
+use tower::ServiceBuilder;
 
 use crate::{
     prelude::*, render::SSRState, serve_config::ServeConfig, server_context::DioxusServerContext,
@@ -249,7 +250,10 @@ where
     //     router
     // }
     fn register_server_fns(self, server_fn_route: &'static str) -> Self {
-        self.route(&format!("{server_fn_route}/*name"), post(server_fns::axum::handle_server_fn).get(server_fns::axum::handle_server_fn))
+        self.route(
+            &format!("{server_fn_route}/*name"),
+            post(server_fns::axum::handle_server_fn).get(server_fns::axum::handle_server_fn),
+        )
     }
 
     fn serve_static_assets(mut self, assets_path: impl Into<std::path::PathBuf>) -> Self {
@@ -283,9 +287,19 @@ where
                 .join("/");
             let route = format!("/{}", route);
             if path.is_dir() {
-                self = self.nest_service(&route, ServeDir::new(path));
+                self = self.nest_service(
+                    &route,
+                    ServiceBuilder::new()
+                        .layer(tower_http::compression::CompressionLayer::new().gzip(true))
+                        .service(ServeDir::new(path)),
+                );
             } else {
-                self = self.nest_service(&route, ServeFile::new(path));
+                self = self.nest_service(
+                    &route,
+                    ServiceBuilder::new()
+                        .layer(tower_http::compression::CompressionLayer::new().gzip(true))
+                        .service(ServeFile::new(path)),
+                );
             }
         }
 
