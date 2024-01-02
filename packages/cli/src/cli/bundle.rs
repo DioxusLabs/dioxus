@@ -76,8 +76,8 @@ impl Bundle {
             crate_config.set_profile(self.build.profile.unwrap());
         }
 
-        if let Some(platform_triple) = &self.build.platform_triple {
-            crate_config.set_platform_triple(platform_triple.to_string());
+        if let Some(target) = &self.build.target {
+            crate_config.set_target(target.to_string());
         }
 
         crate_config.set_cargo_args(self.build.cargo_args);
@@ -155,8 +155,8 @@ impl Bundle {
             );
         }
 
-        if let Some(platform_triple) = &self.build.platform_triple {
-            settings = settings.target(platform_triple.to_string());
+        if let Some(target) = &self.build.target {
+            settings = settings.target(target.to_string());
         }
 
         let settings = settings.build();

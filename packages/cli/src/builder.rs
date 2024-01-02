@@ -288,11 +288,11 @@ pub fn build_desktop(config: &CrateConfig, _is_serve: bool) -> Result<BuildResul
         cmd = cmd.arg("--features").arg(features_str);
     }
 
-    if let Some(platform_triple) = &config.platform_triple {
-        cmd = cmd.arg("--target").arg(platform_triple);
+    if let Some(target) = &config.target {
+        cmd = cmd.arg("--target").arg(target);
     }
 
-    let target_platform = config.platform_triple.as_deref().unwrap_or("");
+    let target_platform = config.target.as_deref().unwrap_or("");
 
     cmd = cmd.args(&config.cargo_args);
 

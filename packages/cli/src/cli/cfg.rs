@@ -6,11 +6,6 @@ use super::*;
 /// Config options for the build system.
 #[derive(Clone, Debug, Default, Deserialize, Parser)]
 pub struct ConfigOptsBuild {
-    /// The index HTML file to drive the bundling process [default: index.html]
-    #[arg(long)]
-    pub target: Option<PathBuf>,
-
-    /// Build in release mode [default: false]
     #[clap(long)]
     #[serde(default)]
     pub release: bool,
@@ -36,9 +31,9 @@ pub struct ConfigOptsBuild {
     #[clap(long)]
     pub features: Option<Vec<String>>,
 
-    /// Rustc platform triple (equivalent to cargo build --target)
+    /// Rustc platform triple
     #[clap(long)]
-    pub platform_triple: Option<String>,
+    pub target: Option<String>,
 
     /// Extra arguments passed to cargo build
     #[clap(last = true)]
@@ -47,11 +42,6 @@ pub struct ConfigOptsBuild {
 
 #[derive(Clone, Debug, Default, Deserialize, Parser)]
 pub struct ConfigOptsServe {
-    /// The index HTML file to drive the bundling process [default: index.html]
-    #[arg(short, long)]
-    pub target: Option<PathBuf>,
-
-    /// Port of dev server
     #[clap(long)]
     #[clap(default_value_t = 8080)]
     pub port: u16,
@@ -98,9 +88,9 @@ pub struct ConfigOptsServe {
     #[clap(long)]
     pub features: Option<Vec<String>>,
 
-    /// Rustc platform triple (equivalent to cargo build --target)
+    /// Rustc platform triple
     #[clap(long)]
-    pub platform_triple: Option<String>,
+    pub target: Option<String>,
 
     /// Extra arguments passed to cargo build
     #[clap(last = true)]
@@ -146,9 +136,9 @@ pub struct ConfigOptsBundle {
     #[clap(long)]
     pub features: Option<Vec<String>>,
 
-    /// Rustc platform triple (equivalent to cargo build --target)
+    /// Rustc platform triple
     #[clap(long)]
-    pub platform_triple: Option<String>,
+    pub target: Option<String>,
 
     /// Extra arguments passed to cargo build
     #[clap(last = true)]
