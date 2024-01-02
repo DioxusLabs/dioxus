@@ -18,7 +18,7 @@ use crate::{innerlude::VNode, ScopeState};
 
 /// A concrete type provider for closures that build [`VNode`] structures.
 ///
-/// This struct wraps lazy structs that build [`VNode`] trees Normally, we cannot perform a blanket implementation over
+/// This struct wraps lazy structs that build [`VNode`] trees. Normally, we cannot perform a blanket implementation over
 /// closures, but if we wrap the closure in a concrete type, we can use it for different branches in matching.
 ///
 ///
