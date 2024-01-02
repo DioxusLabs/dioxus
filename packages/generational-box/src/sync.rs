@@ -48,14 +48,14 @@ impl AnyStorage for SyncStorage {
     }
 }
 
-impl<T> Mappable<T> for MappedRwLockReadGuard<'static, T> {
-    type Mapped<U: 'static> = MappedRwLockReadGuard<'static, U>;
+impl<T: ?Sized> Mappable<T> for MappedRwLockReadGuard<'static, T> {
+    type Mapped<U: ?Sized + 'static> = MappedRwLockReadGuard<'static, U>;
 
-    fn map<U: 'static>(_self: Self, f: impl FnOnce(&T) -> &U) -> Self::Mapped<U> {
+    fn map<U: ?Sized + 'static>(_self: Self, f: impl FnOnce(&T) -> &U) -> Self::Mapped<U> {
         MappedRwLockReadGuard::map(_self, f)
     }
 
-    fn try_map<U: 'static>(
+    fn try_map<U: ?Sized + 'static>(
         _self: Self,
         f: impl FnOnce(&T) -> Option<&U>,
     ) -> Option<Self::Mapped<U>> {
@@ -63,14 +63,14 @@ impl<T> Mappable<T> for MappedRwLockReadGuard<'static, T> {
     }
 }
 
-impl<T> MappableMut<T> for MappedRwLockWriteGuard<'static, T> {
-    type Mapped<U: 'static> = MappedRwLockWriteGuard<'static, U>;
+impl<T: ?Sized> MappableMut<T> for MappedRwLockWriteGuard<'static, T> {
+    type Mapped<U: ?Sized + 'static> = MappedRwLockWriteGuard<'static, U>;
 
-    fn map<U: 'static>(_self: Self, f: impl FnOnce(&mut T) -> &mut U) -> Self::Mapped<U> {
+    fn map<U: ?Sized + 'static>(_self: Self, f: impl FnOnce(&mut T) -> &mut U) -> Self::Mapped<U> {
         MappedRwLockWriteGuard::map(_self, f)
     }
 
-    fn try_map<U: 'static>(
+    fn try_map<U: ?Sized + 'static>(
         _self: Self,
         f: impl FnOnce(&mut T) -> Option<&mut U>,
     ) -> Option<Self::Mapped<U>> {

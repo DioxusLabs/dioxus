@@ -322,30 +322,30 @@ impl<T, S> Clone for GenerationalBox<T, S> {
 }
 
 /// A trait for types that can be mapped.
-pub trait Mappable<T>: Deref<Target = T> {
+pub trait Mappable<T: ?Sized>: Deref<Target = T> {
     /// The type after the mapping.
-    type Mapped<U: 'static>: Mappable<U> + Deref<Target = U>;
+    type Mapped<U: ?Sized + 'static>: Mappable<U> + Deref<Target = U>;
 
     /// Map the value.
-    fn map<U: 'static>(_self: Self, f: impl FnOnce(&T) -> &U) -> Self::Mapped<U>;
+    fn map<U: ?Sized + 'static>(_self: Self, f: impl FnOnce(&T) -> &U) -> Self::Mapped<U>;
 
     /// Try to map the value.
-    fn try_map<U: 'static>(
+    fn try_map<U: ?Sized + 'static>(
         _self: Self,
         f: impl FnOnce(&T) -> Option<&U>,
     ) -> Option<Self::Mapped<U>>;
 }
 
 /// A trait for types that can be mapped mutably.
-pub trait MappableMut<T>: DerefMut<Target = T> {
+pub trait MappableMut<T: ?Sized>: DerefMut<Target = T> {
     /// The type after the mapping.
-    type Mapped<U: 'static>: MappableMut<U> + DerefMut<Target = U>;
+    type Mapped<U: ?Sized + 'static>: MappableMut<U> + DerefMut<Target = U>;
 
     /// Map the value.
-    fn map<U: 'static>(_self: Self, f: impl FnOnce(&mut T) -> &mut U) -> Self::Mapped<U>;
+    fn map<U: ?Sized + 'static>(_self: Self, f: impl FnOnce(&mut T) -> &mut U) -> Self::Mapped<U>;
 
     /// Try to map the value.
-    fn try_map<U: 'static>(
+    fn try_map<U: ?Sized + 'static>(
         _self: Self,
         f: impl FnOnce(&mut T) -> Option<&mut U>,
     ) -> Option<Self::Mapped<U>>;

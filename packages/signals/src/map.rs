@@ -15,7 +15,7 @@ pub struct MappedSignal<U: 'static + ?Sized> {
 
 impl MappedSignal<()> {
     /// Create a new mapped signal.
-    pub fn new<T, S: Storage<SignalData<T>>, U>(
+    pub fn new<T, S: Storage<SignalData<T>>, U: ?Sized>(
         signal: Signal<T, S>,
         mapping: impl Fn(&T) -> &U + 'static,
     ) -> MappedSignal<

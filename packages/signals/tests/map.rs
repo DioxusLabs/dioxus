@@ -18,10 +18,7 @@ fn create_signals_global() {
         let signal = create_without_cx();
         let mapped = MappedSignal::new(signal, |v| v.as_bytes());
 
-        render! {
-            "{signal:?}"
-            "{mapped:?}"
-        }
+        render! { "{signal:?}", "{mapped:?}" }
     }
 
     let _edits = dom.rebuild().santize();

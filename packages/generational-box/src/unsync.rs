@@ -13,14 +13,14 @@ impl Default for UnsyncStorage {
     }
 }
 
-impl<T> Mappable<T> for Ref<'static, T> {
-    type Mapped<U: 'static> = Ref<'static, U>;
+impl<T: ?Sized> Mappable<T> for Ref<'static, T> {
+    type Mapped<U: ?Sized + 'static> = Ref<'static, U>;
 
-    fn map<U: 'static>(_self: Self, f: impl FnOnce(&T) -> &U) -> Self::Mapped<U> {
+    fn map<U: ?Sized + 'static>(_self: Self, f: impl FnOnce(&T) -> &U) -> Self::Mapped<U> {
         Ref::map(_self, f)
     }
 
-    fn try_map<U: 'static>(
+    fn try_map<U: ?Sized + 'static>(
         _self: Self,
         f: impl FnOnce(&T) -> Option<&U>,
     ) -> Option<Self::Mapped<U>> {
@@ -28,14 +28,14 @@ impl<T> Mappable<T> for Ref<'static, T> {
     }
 }
 
-impl<T> MappableMut<T> for RefMut<'static, T> {
-    type Mapped<U: 'static> = RefMut<'static, U>;
+impl<T: ?Sized> MappableMut<T> for RefMut<'static, T> {
+    type Mapped<U: ?Sized + 'static> = RefMut<'static, U>;
 
-    fn map<U: 'static>(_self: Self, f: impl FnOnce(&mut T) -> &mut U) -> Self::Mapped<U> {
+    fn map<U: ?Sized + 'static>(_self: Self, f: impl FnOnce(&mut T) -> &mut U) -> Self::Mapped<U> {
         RefMut::map(_self, f)
     }
 
-    fn try_map<U: 'static>(
+    fn try_map<U: ?Sized + 'static>(
         _self: Self,
         f: impl FnOnce(&mut T) -> Option<&mut U>,
     ) -> Option<Self::Mapped<U>> {
