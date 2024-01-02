@@ -1,6 +1,5 @@
 use crate::rt::CopyValue;
 use crate::signal::{ReadOnlySignal, Signal, Write};
-use crate::MappedSignal;
 use crate::SignalData;
 use generational_box::Mappable;
 use generational_box::{MappableMut, Storage};
@@ -333,7 +332,7 @@ pub struct CopyValueIterator<T: 'static, S: Storage<Vec<T>>> {
 }
 
 impl<T, S: Storage<Vec<T>>> Iterator for CopyValueIterator<T, S> {
-    type Item = S::Ref;
+    type Item = <S::Ref as Mappable<Vec<T>>>::Mapped<T>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let index = self.index;
@@ -343,9 +342,9 @@ impl<T, S: Storage<Vec<T>>> Iterator for CopyValueIterator<T, S> {
 }
 
 impl<T: 'static, S: Storage<Vec<T>>> IntoIterator for CopyValue<Vec<T>, S> {
-    type IntoIter = S::Ref;
+    type IntoIter = CopyValueIterator<T, S>;
 
-    type Item = GenerationalRef<T>;
+    type Item = <S::Ref as Mappable<Vec<T>>>::Mapped<T>;
 
     fn into_iter(self) -> Self::IntoIter {
         CopyValueIterator {
@@ -378,7 +377,9 @@ pub struct SignalIterator<T: 'static, S: Storage<SignalData<Vec<T>>>> {
 }
 
 impl<T, S: Storage<SignalData<Vec<T>>>> Iterator for SignalIterator<T, S> {
-    type Item = S::Ref;
+    type Item = <<<S as Storage<SignalData<Vec<T>>>>::Ref as Mappable<SignalData<Vec<T>>>>::Mapped<
+        Vec<T>,
+    > as Mappable<Vec<T>>>::Mapped<T>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let index = self.index;
@@ -390,30 +391,15 @@ impl<T, S: Storage<SignalData<Vec<T>>>> Iterator for SignalIterator<T, S> {
 impl<T: 'static, S: Storage<SignalData<Vec<T>>>> IntoIterator for Signal<Vec<T>, S> {
     type IntoIter = SignalIterator<T, S>;
 
-    type Item = GenerationalRef<T>;
+    type Item = <<<S as Storage<SignalData<Vec<T>>>>::Ref as Mappable<SignalData<Vec<T>>>>::Mapped<
+        Vec<T>,
+    > as Mappable<Vec<T>>>::Mapped<T>;
 
     fn into_iter(self) -> Self::IntoIter {
         SignalIterator {
             index: 0,
             value: self,
         }
-    }
-}
-
-/// An iterator over items in a `Signal<Vec<T>>` that yields [`MappedSignal`]s.
-pub struct MappedSignalIterator<T: 'static, S: Storage<SignalData<Vec<T>>>> {
-    index: usize,
-    length: usize,
-    value: Signal<Vec<T>, S>,
-}
-
-impl<T, S: Storage<SignalData<Vec<T>>>> Iterator for MappedSignalIterator<T, S> {
-    type Item = MappedSignal<T, S>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let index = self.index;
-        self.index += 1;
-        (index < self.length).then(|| self.value.map(move |v| v.get(index).unwrap()))
     }
 }
 
@@ -439,29 +425,11 @@ where
     > {
         Write::filter_map(self.write(), |v| v.get_mut(index))
     }
-
-    /// Create an iterator of [`MappedSignal`]s over the inner vector.
-    pub fn iter_signals(&self) -> MappedSignalIterator<T> {
-        MappedSignalIterator {
-            index: 0,
-            length: self.read().len(),
-            value: *self,
-        }
-    }
 }
 
 impl<T: 'static, S: Storage<SignalData<Option<T>>>> Signal<Option<T>, S> {
     /// Returns a reference to an element or `None` if out of bounds.
     pub fn as_mut(&self) -> Option<Write<T, <<<S as Storage<SignalData<Option<T>>>>::Mut as MappableMut<SignalData<Option<T>>>>::Mapped<Option<T>> as MappableMut<Option<T>>>::Mapped<T>, S, Option<T>>>{
         Write::filter_map(self.write(), |v| v.as_mut())
-    }
-
-    /// Try to create a [`MappedSignal`] over the inner value.
-    pub fn as_mapped_ref(&self) -> Option<MappedSignal<T>> {
-        if self.read().is_some() {
-            Some(self.map(|v| v.as_ref().unwrap()))
-        } else {
-            None
-        }
     }
 }

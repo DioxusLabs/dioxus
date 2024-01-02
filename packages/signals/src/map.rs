@@ -1,40 +1,54 @@
 use crate::CopyValue;
 use crate::Signal;
+use crate::SignalData;
 use dioxus_core::ScopeId;
-use generational_box::GenerationalRef;
+use generational_box::Mappable;
+use generational_box::Storage;
 use std::fmt::Debug;
 use std::fmt::Display;
 
 /// A read only signal that has been mapped to a new type.
 pub struct MappedSignal<U: 'static + ?Sized> {
     origin_scope: ScopeId,
-    mapping: CopyValue<Box<dyn Fn() -> GenerationalRef<U>>>,
+    mapping: CopyValue<Box<dyn Fn() -> U>>,
 }
 
-impl<U: ?Sized> MappedSignal<U> {
+impl MappedSignal<()> {
     /// Create a new mapped signal.
-    pub fn new<T: 'static>(signal: Signal<T>, mapping: impl Fn(&T) -> &U + 'static) -> Self {
-        Self {
+    pub fn new<T, S: Storage<SignalData<T>>, U>(
+        signal: Signal<T, S>,
+        mapping: impl Fn(&T) -> &U + 'static,
+    ) -> MappedSignal<
+        <<<S as generational_box::Storage<SignalData<T>>>::Ref as Mappable<SignalData<T>>>::Mapped<
+            T,
+        > as generational_box::Mappable<T>>::Mapped<U>,
+    > {
+        MappedSignal {
             origin_scope: signal.origin_scope(),
             mapping: CopyValue::new(Box::new(move || {
-                GenerationalRef::map(signal.read(), |v| (mapping)(v))
+                <<<S as Storage<SignalData<T>>>::Ref as Mappable<SignalData<T>>>::Mapped<T>>::map(
+                    signal.read(),
+                    &mapping,
+                )
             })),
         }
     }
+}
 
+impl<U> MappedSignal<U> {
     /// Get the scope that the signal was created in.
     pub fn origin_scope(&self) -> ScopeId {
         self.origin_scope
     }
 
     /// Get the current value of the signal. This will subscribe the current scope to the signal.
-    pub fn read(&self) -> GenerationalRef<U> {
+    pub fn read(&self) -> U {
         (self.mapping.read())()
     }
 
     /// Run a closure with a reference to the signal's value.
-    pub fn with<O>(&self, f: impl FnOnce(&U) -> O) -> O {
-        f(&*self.read())
+    pub fn with<O>(&self, f: impl FnOnce(U) -> O) -> O {
+        f(self.read())
     }
 }
 
@@ -59,42 +73,20 @@ impl<U> std::clone::Clone for MappedSignal<U> {
 
 impl<U> Copy for MappedSignal<U> {}
 
-impl<U: ?Sized + Display> Display for MappedSignal<U> {
+impl<U: Display> Display for MappedSignal<U> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.with(|v| Display::fmt(v, f))
+        self.with(|v| Display::fmt(&v, f))
     }
 }
 
-impl<U: ?Sized + Debug> Debug for MappedSignal<U> {
+impl<U: Debug> Debug for MappedSignal<U> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.with(|v| Debug::fmt(v, f))
-    }
-}
-
-impl<U> MappedSignal<Vec<U>> {
-    /// Read a value from the inner vector.
-    pub fn get(&self, index: usize) -> Option<GenerationalRef<U>> {
-        GenerationalRef::filter_map(self.read(), |v| v.get(index))
-    }
-}
-
-impl<U: Clone + 'static> MappedSignal<Option<U>> {
-    /// Unwraps the inner value and clones it.
-    pub fn unwrap(&self) -> U
-    where
-        U: Clone,
-    {
-        self.with(|v| v.clone()).unwrap()
-    }
-
-    /// Attemps to read the inner value of the Option.
-    pub fn as_ref(&self) -> Option<GenerationalRef<U>> {
-        GenerationalRef::filter_map(self.read(), |v| v.as_ref())
+        self.with(|v| Debug::fmt(&v, f))
     }
 }
 
 impl<T> std::ops::Deref for MappedSignal<T> {
-    type Target = dyn Fn() -> GenerationalRef<T>;
+    type Target = dyn Fn() -> T;
 
     fn deref(&self) -> &Self::Target {
         // https://github.com/dtolnay/case-studies/tree/master/callable-types

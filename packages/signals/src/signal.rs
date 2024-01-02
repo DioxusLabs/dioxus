@@ -394,7 +394,14 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
     }
 
     /// Map the signal to a new type.
-    pub fn map<O>(self, f: impl Fn(&T) -> &O + 'static) -> MappedSignal<O> {
+    pub fn map<O>(
+        self,
+        f: impl Fn(&T) -> &O + 'static,
+    ) -> MappedSignal<
+        <<<S as generational_box::Storage<SignalData<T>>>::Ref as generational_box::Mappable<
+            SignalData<T>,
+        >>::Mapped<T> as generational_box::Mappable<T>>::Mapped<O>,
+    > {
         MappedSignal::new(self, f)
     }
 
