@@ -78,9 +78,11 @@ impl<'b> VirtualDom {
         #[cfg(debug_assertions)]
         {
             let (path, byte_index) = node.template.get().name.rsplit_once(':').unwrap();
-            if let Some(template) = self.templates.get(path).and_then(|map| {
-                map.get(&byte_index.parse().unwrap())
-            }) {
+            if let Some(template) = self
+                .templates
+                .get(path)
+                .and_then(|map| map.get(&byte_index.parse().unwrap()))
+            {
                 node.template.set(*template);
             }
         }

@@ -212,7 +212,7 @@ impl<'a> ToTokens for TemplateRenderer<'a> {
                     .and_then(|(_, after)| after.split_once(')').map(|(before, _)| before))
                     .unwrap_or_default()
                     .to_string()
-            },
+            }
             _ => "0".to_string(),
         };
         let root_printer = self.roots.iter().enumerate().map(|(idx, root)| {
