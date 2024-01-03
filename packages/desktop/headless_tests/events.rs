@@ -229,75 +229,111 @@ fn app(cx: Scope) -> Element {
                     println!("{:?}", event.data);
                     assert!(event.data.modifiers().is_empty());
                     assert!(event.data.held_buttons().is_empty());
-                    assert_eq!(event.data.trigger_button(), Some(dioxus_html::input_data::MouseButton::Primary));
+                    assert_eq!(
+                        event.data.trigger_button(),
+                        Some(dioxus_html::input_data::MouseButton::Primary),
+                    );
                     recieved_events.modify(|x| *x + 1)
-                },
+                }
             }
             div {
                 id: "mouse_move_div",
                 onmousemove: move |event| {
                     println!("{:?}", event.data);
                     assert!(event.data.modifiers().is_empty());
-                    assert!(event.data.held_buttons().contains(dioxus_html::input_data::MouseButton::Secondary));
+                    assert!(
+                        event
+                            .data
+                            .held_buttons()
+                            .contains(dioxus_html::input_data::MouseButton::Secondary),
+                    );
                     recieved_events.modify(|x| *x + 1)
-                },
+                }
             }
             div {
                 id: "mouse_click_div",
                 onclick: move |event| {
                     println!("{:?}", event.data);
                     assert!(event.data.modifiers().is_empty());
-                    assert!(event.data.held_buttons().contains(dioxus_html::input_data::MouseButton::Secondary));
-                    assert_eq!(event.data.trigger_button(), Some(dioxus_html::input_data::MouseButton::Secondary));
-                    recieved_events.modify(|x| *x + 1)
-                },
-            }
-            div{
-                id: "mouse_dblclick_div",
-                ondblclick: move |event| {
-                    println!("{:?}", event.data);
-                    assert!(event.data.modifiers().is_empty());
-                    assert!(event.data.held_buttons().contains(dioxus_html::input_data::MouseButton::Primary));
-                    assert!(event.data.held_buttons().contains(dioxus_html::input_data::MouseButton::Secondary));
-                    assert_eq!(event.data.trigger_button(), Some(dioxus_html::input_data::MouseButton::Secondary));
+                    assert!(
+                        event
+                            .data
+                            .held_buttons()
+                            .contains(dioxus_html::input_data::MouseButton::Secondary),
+                    );
+                    assert_eq!(
+                        event.data.trigger_button(),
+                        Some(dioxus_html::input_data::MouseButton::Secondary),
+                    );
                     recieved_events.modify(|x| *x + 1)
                 }
             }
-            div{
+            div {
+                id: "mouse_dblclick_div",
+                ondoubleclick: move |event| {
+                    println!("{:?}", event.data);
+                    assert!(event.data.modifiers().is_empty());
+                    assert!(
+                        event.data.held_buttons().contains(dioxus_html::input_data::MouseButton::Primary),
+                    );
+                    assert!(
+                        event
+                            .data
+                            .held_buttons()
+                            .contains(dioxus_html::input_data::MouseButton::Secondary),
+                    );
+                    assert_eq!(
+                        event.data.trigger_button(),
+                        Some(dioxus_html::input_data::MouseButton::Secondary),
+                    );
+                    recieved_events.modify(|x| *x + 1)
+                }
+            }
+            div {
                 id: "mouse_down_div",
                 onmousedown: move |event| {
                     println!("{:?}", event.data);
                     assert!(event.data.modifiers().is_empty());
-                    assert!(event.data.held_buttons().contains(dioxus_html::input_data::MouseButton::Secondary));
-                    assert_eq!(event.data.trigger_button(), Some(dioxus_html::input_data::MouseButton::Secondary));
+                    assert!(
+                        event
+                            .data
+                            .held_buttons()
+                            .contains(dioxus_html::input_data::MouseButton::Secondary),
+                    );
+                    assert_eq!(
+                        event.data.trigger_button(),
+                        Some(dioxus_html::input_data::MouseButton::Secondary),
+                    );
                     recieved_events.modify(|x| *x + 1)
                 }
             }
-            div{
+            div {
                 id: "mouse_up_div",
                 onmouseup: move |event| {
                     println!("{:?}", event.data);
                     assert!(event.data.modifiers().is_empty());
                     assert!(event.data.held_buttons().is_empty());
-                    assert_eq!(event.data.trigger_button(), Some(dioxus_html::input_data::MouseButton::Primary));
+                    assert_eq!(
+                        event.data.trigger_button(),
+                        Some(dioxus_html::input_data::MouseButton::Primary),
+                    );
                     recieved_events.modify(|x| *x + 1)
                 }
             }
-            div{
+            div {
                 id: "wheel_div",
                 width: "100px",
                 height: "100px",
                 background_color: "red",
                 onwheel: move |event| {
                     println!("{:?}", event.data);
-                    let dioxus_html::geometry::WheelDelta::Pixels(delta)= event.data.delta()else{
-                        panic!("Expected delta to be in pixels")
-                    };
+                    let dioxus_html::geometry::WheelDelta::Pixels(delta) = event.data.delta() else {
+                    panic!("Expected delta to be in pixels") };
                     assert_eq!(delta, Vector3D::new(1.0, 2.0, 3.0));
                     recieved_events.modify(|x| *x + 1)
                 }
             }
-            input{
+            input {
                 id: "key_down_div",
                 onkeydown: move |event| {
                     println!("{:?}", event.data);
@@ -306,11 +342,10 @@ fn app(cx: Scope) -> Element {
                     assert_eq!(event.data.code().to_string(), "KeyA");
                     assert_eq!(event.data.location, 0);
                     assert!(event.data.is_auto_repeating());
-
                     recieved_events.modify(|x| *x + 1)
                 }
             }
-            input{
+            input {
                 id: "key_up_div",
                 onkeyup: move |event| {
                     println!("{:?}", event.data);
@@ -319,11 +354,10 @@ fn app(cx: Scope) -> Element {
                     assert_eq!(event.data.code().to_string(), "KeyA");
                     assert_eq!(event.data.location, 0);
                     assert!(!event.data.is_auto_repeating());
-
                     recieved_events.modify(|x| *x + 1)
                 }
             }
-            input{
+            input {
                 id: "key_press_div",
                 onkeypress: move |event| {
                     println!("{:?}", event.data);
@@ -332,18 +366,17 @@ fn app(cx: Scope) -> Element {
                     assert_eq!(event.data.code().to_string(), "KeyA");
                     assert_eq!(event.data.location, 0);
                     assert!(!event.data.is_auto_repeating());
-
                     recieved_events.modify(|x| *x + 1)
                 }
             }
-            input{
+            input {
                 id: "focus_in_div",
                 onfocusin: move |event| {
                     println!("{:?}", event.data);
                     recieved_events.modify(|x| *x + 1)
                 }
             }
-            input{
+            input {
                 id: "focus_out_div",
                 onfocusout: move |event| {
                     println!("{:?}", event.data);
