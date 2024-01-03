@@ -700,14 +700,16 @@ impl Owner {
     /// Creates an invalid handle. This is useful for creating a handle that will be filled in later. If you use this before the value is filled in, you will get may get a panic or an out of date value.
     pub fn invalid<T: 'static>(&self) -> GenerationalBox<T> {
         let location = self.store.claim();
-        GenerationalBox {
+        let key = GenerationalBox {
             raw: location,
             #[cfg(any(debug_assertions, feature = "check_generation"))]
             generation: location.0.generation.get(),
             #[cfg(any(debug_assertions, feature = "debug_ownership"))]
             created_at: std::panic::Location::caller(),
             _marker: PhantomData,
-        }
+        };
+        self.owned.borrow_mut().push(location);
+        key
     }
 }
 
