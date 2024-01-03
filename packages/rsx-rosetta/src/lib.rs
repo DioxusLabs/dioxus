@@ -2,8 +2,8 @@
 #![doc(html_logo_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
 
-use dioxus_html::{map_html_element_to_rsx, map_html_attribute_to_rsx};
 use convert_case::{Case, Casing};
+use dioxus_html::{map_html_attribute_to_rsx, map_html_element_to_rsx};
 use dioxus_rsx::{
     BodyNode, CallBody, Component, Element, ElementAttr, ElementAttrNamed, ElementName, IfmtInput,
 };
@@ -33,10 +33,7 @@ pub fn rsx_node_from_html(node: &Node) -> Option<BodyNode> {
                     ElementName::Custom(LitStr::new(&el.name, Span::call_site()))
                 } else {
                     // otherwise, it might be an element that isn't supported yet
-                    ElementName::Ident(Ident::new(
-                        &el.name.to_case(Case::Snake),
-                        Span::call_site(),
-                    ))
+                    ElementName::Ident(Ident::new(&el.name.to_case(Case::Snake), Span::call_site()))
                 }
             };
 
@@ -51,10 +48,7 @@ pub fn rsx_node_from_html(node: &Node) -> Option<BodyNode> {
                         } else {
                             Ident::new(name, Span::call_site())
                         };
-                        ElementAttr::AttrText {
-                            value,
-                            name: ident,
-                        }
+                        ElementAttr::AttrText { value, name: ident }
                     } else {
                         // If we don't recognize the attribute, we assume it's a custom attribute
                         ElementAttr::CustomAttrText {
@@ -65,7 +59,7 @@ pub fn rsx_node_from_html(node: &Node) -> Option<BodyNode> {
 
                     ElementAttrNamed {
                         el_name: el_name.clone(),
-                        attr
+                        attr,
                     }
                 })
                 .collect();
