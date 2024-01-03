@@ -345,6 +345,14 @@ macro_rules! builder_constructors {
                 )*
             )*
 
+            if let Some(name) = crate::map_html_global_attributes_to_rsx(html) {
+                return Some(name);
+            }
+
+            if let Some(name) = crate::map_html_svg_attributes_to_rsx(html) {
+                return Some(name);
+            }
+
             None
         }
 
