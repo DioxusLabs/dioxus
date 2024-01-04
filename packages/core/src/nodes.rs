@@ -682,52 +682,52 @@ pub trait IntoDynNode<'a, A = ()> {
     /// Consume this item along with a scopestate and produce a DynamicNode
     ///
     /// You can use the bump alloactor of the scopestate to creat the dynamic node
-    fn into_vnode(self, cx: &'a ScopeState) -> DynamicNode<'a>;
+    fn into_dyn_node(self, cx: &'a ScopeState) -> DynamicNode<'a>;
 }
 
 impl<'a> IntoDynNode<'a> for () {
-    fn into_vnode(self, _cx: &'a ScopeState) -> DynamicNode<'a> {
+    fn into_dyn_node(self, _cx: &'a ScopeState) -> DynamicNode<'a> {
         DynamicNode::default()
     }
 }
 impl<'a> IntoDynNode<'a> for VNode<'a> {
-    fn into_vnode(self, _cx: &'a ScopeState) -> DynamicNode<'a> {
+    fn into_dyn_node(self, _cx: &'a ScopeState) -> DynamicNode<'a> {
         DynamicNode::Fragment(_cx.bump().alloc([self]))
     }
 }
 
 impl<'a> IntoDynNode<'a> for DynamicNode<'a> {
-    fn into_vnode(self, _cx: &'a ScopeState) -> DynamicNode<'a> {
+    fn into_dyn_node(self, _cx: &'a ScopeState) -> DynamicNode<'a> {
         self
     }
 }
 
 impl<'a, T: IntoDynNode<'a>> IntoDynNode<'a> for Option<T> {
-    fn into_vnode(self, _cx: &'a ScopeState) -> DynamicNode<'a> {
+    fn into_dyn_node(self, _cx: &'a ScopeState) -> DynamicNode<'a> {
         match self {
-            Some(val) => val.into_vnode(_cx),
+            Some(val) => val.into_dyn_node(_cx),
             None => DynamicNode::default(),
         }
     }
 }
 
 impl<'a> IntoDynNode<'a> for &Element<'a> {
-    fn into_vnode(self, _cx: &'a ScopeState) -> DynamicNode<'a> {
+    fn into_dyn_node(self, _cx: &'a ScopeState) -> DynamicNode<'a> {
         match self.as_ref() {
-            Some(val) => val.clone().into_vnode(_cx),
+            Some(val) => val.clone().into_dyn_node(_cx),
             _ => DynamicNode::default(),
         }
     }
 }
 
 impl<'a, 'b> IntoDynNode<'a> for LazyNodes<'a, 'b> {
-    fn into_vnode(self, cx: &'a ScopeState) -> DynamicNode<'a> {
+    fn into_dyn_node(self, cx: &'a ScopeState) -> DynamicNode<'a> {
         DynamicNode::Fragment(cx.bump().alloc([cx.render(self).unwrap()]))
     }
 }
 
 impl<'a, 'b> IntoDynNode<'b> for &'a str {
-    fn into_vnode(self, cx: &'b ScopeState) -> DynamicNode<'b> {
+    fn into_dyn_node(self, cx: &'b ScopeState) -> DynamicNode<'b> {
         DynamicNode::Text(VText {
             value: cx.bump().alloc_str(self),
             id: Default::default(),
@@ -736,7 +736,7 @@ impl<'a, 'b> IntoDynNode<'b> for &'a str {
 }
 
 impl IntoDynNode<'_> for String {
-    fn into_vnode(self, cx: &ScopeState) -> DynamicNode {
+    fn into_dyn_node(self, cx: &ScopeState) -> DynamicNode {
         DynamicNode::Text(VText {
             value: cx.bump().alloc_str(&self),
             id: Default::default(),
@@ -745,13 +745,13 @@ impl IntoDynNode<'_> for String {
 }
 
 impl<'b> IntoDynNode<'b> for Arguments<'_> {
-    fn into_vnode(self, cx: &'b ScopeState) -> DynamicNode<'b> {
+    fn into_dyn_node(self, cx: &'b ScopeState) -> DynamicNode<'b> {
         cx.text_node(self)
     }
 }
 
 impl<'a> IntoDynNode<'a> for &'a VNode<'a> {
-    fn into_vnode(self, _cx: &'a ScopeState) -> DynamicNode<'a> {
+    fn into_dyn_node(self, _cx: &'a ScopeState) -> DynamicNode<'a> {
         DynamicNode::Fragment(_cx.bump().alloc([VNode {
             parent: self.parent.clone(),
             stable_id: self.stable_id.clone(),
@@ -764,24 +764,24 @@ impl<'a> IntoDynNode<'a> for &'a VNode<'a> {
     }
 }
 
-pub trait IntoTemplate<'a> {
-    fn into_template(self, _cx: &'a ScopeState) -> VNode<'a>;
+pub trait IntoVNode<'a> {
+    fn into_vnode(self, _cx: &'a ScopeState) -> VNode<'a>;
 }
-impl<'a> IntoTemplate<'a> for VNode<'a> {
-    fn into_template(self, _cx: &'a ScopeState) -> VNode<'a> {
+impl<'a> IntoVNode<'a> for VNode<'a> {
+    fn into_vnode(self, _cx: &'a ScopeState) -> VNode<'a> {
         self
     }
 }
-impl<'a> IntoTemplate<'a> for Element<'a> {
-    fn into_template(self, cx: &'a ScopeState) -> VNode<'a> {
+impl<'a> IntoVNode<'a> for Element<'a> {
+    fn into_vnode(self, cx: &'a ScopeState) -> VNode<'a> {
         match self {
-            Some(val) => val.into_template(cx),
+            Some(val) => val.into_vnode(cx),
             _ => VNode::empty(cx).unwrap(),
         }
     }
 }
-impl<'a, 'b> IntoTemplate<'a> for LazyNodes<'a, 'b> {
-    fn into_template(self, cx: &'a ScopeState) -> VNode<'a> {
+impl<'a, 'b> IntoVNode<'a> for LazyNodes<'a, 'b> {
+    fn into_vnode(self, cx: &'a ScopeState) -> VNode<'a> {
         cx.render(self).unwrap()
     }
 }
@@ -791,12 +791,12 @@ pub struct FromNodeIterator;
 impl<'a, T, I> IntoDynNode<'a, FromNodeIterator> for T
 where
     T: Iterator<Item = I>,
-    I: IntoTemplate<'a>,
+    I: IntoVNode<'a>,
 {
-    fn into_vnode(self, cx: &'a ScopeState) -> DynamicNode<'a> {
+    fn into_dyn_node(self, cx: &'a ScopeState) -> DynamicNode<'a> {
         let mut nodes = bumpalo::collections::Vec::new_in(cx.bump());
 
-        nodes.extend(self.into_iter().map(|node| node.into_template(cx)));
+        nodes.extend(self.into_iter().map(|node| node.into_vnode(cx)));
 
         match nodes.into_bump_slice() {
             children if children.is_empty() => DynamicNode::default(),
