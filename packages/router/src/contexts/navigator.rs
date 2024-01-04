@@ -1,5 +1,19 @@
 use crate::prelude::{ExternalNavigationFailure, IntoRoutable, RouterContext};
 
+/// Acquire the navigator without subscribing to updates.
+///
+/// Can be called anywhere in the application provided a Router has been initialized.
+///
+/// ## Panics
+///
+/// Panics if there is no router present.
+pub fn navigator() -> Navigator {
+    Navigator(
+        dioxus::core::prelude::consume_context::<RouterContext>()
+            .expect("A router must be present to use navigator"),
+    )
+}
+
 /// A view into the navigation state of a router.
 #[derive(Clone)]
 pub struct Navigator(pub(crate) RouterContext);

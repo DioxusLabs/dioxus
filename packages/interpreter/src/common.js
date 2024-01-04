@@ -1,33 +1,3 @@
-const bool_attrs = {
-  allowfullscreen: true,
-  allowpaymentrequest: true,
-  async: true,
-  autofocus: true,
-  autoplay: true,
-  checked: true,
-  controls: true,
-  default: true,
-  defer: true,
-  disabled: true,
-  formnovalidate: true,
-  hidden: true,
-  ismap: true,
-  itemscope: true,
-  loop: true,
-  multiple: true,
-  muted: true,
-  nomodule: true,
-  novalidate: true,
-  open: true,
-  playsinline: true,
-  readonly: true,
-  required: true,
-  reversed: true,
-  selected: true,
-  truespeed: true,
-  webkitdirectory: true,
-};
-
 export function setAttributeInner(node, field, value, ns) {
   const name = field;
   if (ns === "style") {
@@ -36,7 +6,7 @@ export function setAttributeInner(node, field, value, ns) {
       node.style = {};
     }
     node.style[name] = value;
-  } else if (ns != null && ns != undefined) {
+  } else if (!!ns) {
     node.setAttributeNS(ns, name, value);
   } else {
     switch (name) {
@@ -73,6 +43,36 @@ export function setAttributeInner(node, field, value, ns) {
     }
   }
 }
+
+const bool_attrs = {
+  allowfullscreen: true,
+  allowpaymentrequest: true,
+  async: true,
+  autofocus: true,
+  autoplay: true,
+  checked: true,
+  controls: true,
+  default: true,
+  defer: true,
+  disabled: true,
+  formnovalidate: true,
+  hidden: true,
+  ismap: true,
+  itemscope: true,
+  loop: true,
+  multiple: true,
+  muted: true,
+  nomodule: true,
+  novalidate: true,
+  open: true,
+  playsinline: true,
+  readonly: true,
+  required: true,
+  reversed: true,
+  selected: true,
+  truespeed: true,
+  webkitdirectory: true,
+};
 
 function truthy(val) {
   return val === "true" || val === true;

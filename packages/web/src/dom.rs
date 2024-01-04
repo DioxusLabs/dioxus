@@ -24,8 +24,8 @@ pub struct WebsysDom {
     document: Document,
     #[allow(dead_code)]
     pub(crate) root: Element,
-    templates: FxHashMap<String, u32>,
-    max_template_id: u32,
+    templates: FxHashMap<String, u16>,
+    max_template_id: u16,
     pub(crate) interpreter: Channel,
     event_channel: mpsc::UnboundedSender<UiEvent>,
 }
@@ -98,7 +98,7 @@ impl WebsysDom {
             }
         }));
 
-        dioxus_interpreter_js::initilize(
+        dioxus_interpreter_js::initialize(
             root.clone().unchecked_into(),
             handler.as_ref().unchecked_ref(),
         );
@@ -183,7 +183,7 @@ impl WebsysDom {
         let mut to_mount = Vec::new();
         for edit in &edits {
             match edit {
-                AppendChildren { id, m } => i.append_children(id.0 as u32, *m as u32),
+                AppendChildren { id, m } => i.append_children(id.0 as u32, *m as u16),
                 AssignId { path, id } => {
                     i.assign_id(path.as_ptr() as u32, path.len() as u8, id.0 as u32)
                 }
@@ -194,15 +194,15 @@ impl WebsysDom {
                 }
                 LoadTemplate { name, index, id } => {
                     if let Some(tmpl_id) = self.templates.get(*name) {
-                        i.load_template(*tmpl_id, *index as u32, id.0 as u32)
+                        i.load_template(*tmpl_id, *index as u16, id.0 as u32)
                     }
                 }
-                ReplaceWith { id, m } => i.replace_with(id.0 as u32, *m as u32),
+                ReplaceWith { id, m } => i.replace_with(id.0 as u32, *m as u16),
                 ReplacePlaceholder { path, m } => {
-                    i.replace_placeholder(path.as_ptr() as u32, path.len() as u8, *m as u32)
+                    i.replace_placeholder(path.as_ptr() as u32, path.len() as u8, *m as u16)
                 }
-                InsertAfter { id, m } => i.insert_after(id.0 as u32, *m as u32),
-                InsertBefore { id, m } => i.insert_before(id.0 as u32, *m as u32),
+                InsertAfter { id, m } => i.insert_after(id.0 as u32, *m as u16),
+                InsertBefore { id, m } => i.insert_before(id.0 as u32, *m as u16),
                 SetAttribute {
                     name,
                     value,

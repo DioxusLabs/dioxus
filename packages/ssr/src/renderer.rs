@@ -256,7 +256,7 @@ fn to_string_works() {
             assert_eq!(
                 item.1.segments,
                 vec![
-                    PreRendered("<div class=\"asdasdasd\" class=\"asdasdasd\"".into(),),
+                    PreRendered("<div class=\"asdasdasd asdasdasd\"".into(),),
                     Attr(0,),
                     StyleMarker {
                         inside_style_tag: false,
@@ -278,7 +278,95 @@ fn to_string_works() {
 
     use Segment::*;
 
-    assert_eq!(out, "<div class=\"asdasdasd\" class=\"asdasdasd\" id=\"id-123\">Hello world 1 --&gt;123&lt;-- Hello world 2<div>nest 1</div><div></div><div>nest 2</div>&lt;/diiiiiiiiv&gt;<div>finalize 0</div><div>finalize 1</div><div>finalize 2</div><div>finalize 3</div><div>finalize 4</div></div>");
+    assert_eq!(out, "<div class=\"asdasdasd asdasdasd\" id=\"id-123\">Hello world 1 --&gt;123&lt;-- Hello world 2<div>nest 1</div><div></div><div>nest 2</div>&lt;/diiiiiiiiv&gt;<div>finalize 0</div><div>finalize 1</div><div>finalize 2</div><div>finalize 3</div><div>finalize 4</div></div>");
+}
+
+#[test]
+fn empty_for_loop_works() {
+    use dioxus::prelude::*;
+
+    fn app(cx: Scope) -> Element {
+        render! {
+            div { class: "asdasdasd",
+                for _ in (0..5) {
+
+                }
+            }
+        }
+    }
+
+    let mut dom = VirtualDom::new(app);
+    _ = dom.rebuild();
+
+    let mut renderer = Renderer::new();
+    let out = renderer.render(&dom);
+
+    for item in renderer.template_cache.iter() {
+        if item.1.segments.len() > 5 {
+            assert_eq!(
+                item.1.segments,
+                vec![
+                    PreRendered("<div class=\"asdasdasd\"".into(),),
+                    Attr(0,),
+                    StyleMarker {
+                        inside_style_tag: false,
+                    },
+                    PreRendered(">".into()),
+                    InnerHtmlMarker,
+                    PreRendered("</div>".into(),),
+                ]
+            );
+        }
+    }
+
+    use Segment::*;
+
+    assert_eq!(out, "<div class=\"asdasdasd\"></div>");
+}
+
+#[test]
+fn empty_render_works() {
+    use dioxus::prelude::*;
+
+    fn app(cx: Scope) -> Element {
+        render! {}
+    }
+
+    let mut dom = VirtualDom::new(app);
+    _ = dom.rebuild();
+
+    let mut renderer = Renderer::new();
+    let out = renderer.render(&dom);
+
+    for item in renderer.template_cache.iter() {
+        if item.1.segments.len() > 5 {
+            assert_eq!(item.1.segments, vec![]);
+        }
+    }
+    assert_eq!(out, "");
+}
+
+#[test]
+fn empty_rsx_works() {
+    use dioxus::prelude::*;
+
+    fn app(_: Scope) -> Element {
+        rsx! {};
+        None
+    }
+
+    let mut dom = VirtualDom::new(app);
+    _ = dom.rebuild();
+
+    let mut renderer = Renderer::new();
+    let out = renderer.render(&dom);
+
+    for item in renderer.template_cache.iter() {
+        if item.1.segments.len() > 5 {
+            assert_eq!(item.1.segments, vec![]);
+        }
+    }
+    assert_eq!(out, "");
 }
 
 pub(crate) const BOOL_ATTRS: &[&str] = &[

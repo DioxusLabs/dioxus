@@ -19,6 +19,8 @@
 mod elements;
 #[cfg(feature = "hot-reload-context")]
 pub use elements::HtmlCtx;
+#[cfg(feature = "html-to-rsx")]
+pub use elements::{map_html_attribute_to_rsx, map_html_element_to_rsx};
 pub mod events;
 pub mod geometry;
 mod global_attributes;
