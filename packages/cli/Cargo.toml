@@ -1,6 +1,6 @@
 [package]
 name = "dioxus-cli"
-version = "0.4.1"
+version = "0.4.3"
 authors = ["Jonathan Kelley"]
 edition = "2021"
 description = "CLI tool for developing, testing, and publishing Dioxus apps"
@@ -83,6 +83,7 @@ dioxus-html = { workspace = true, features = ["hot-reload-context"] }
 dioxus-core = { workspace = true, features = ["serialize"] }
 dioxus-hot-reload = { workspace = true }
 interprocess-docfix = { version = "1.2.2" }
+gitignore = "1.0.8"
 
 [features]
 default = []

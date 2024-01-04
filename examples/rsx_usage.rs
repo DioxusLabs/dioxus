@@ -53,6 +53,7 @@ fn App(cx: Scope) -> Element {
     let formatting = "formatting!";
     let formatting_tuple = ("a", "b");
     let lazy_fmt = format_args!("lazily formatted text");
+    let asd = 123;
     cx.render(rsx! {
         div {
             // Elements
@@ -80,6 +81,10 @@ fn App(cx: Scope) -> Element {
                 // pass simple rust expressions in
                 class: lazy_fmt,
                 id: format_args!("attributes can be passed lazily with std::fmt::Arguments"),
+                class: "asd",
+                class: "{asd}",
+                // if statements can be used to conditionally render attributes
+                class: if formatting.contains("form") { "{asd}" },
                 div {
                     class: {
                         const WORD: &str = "expressions";

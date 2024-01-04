@@ -112,7 +112,6 @@ fn Route2(cx: Scope, user_id: usize) -> Element {
 
 #[component]
 fn Route3(cx: Scope, dynamic: String) -> Element {
-    let navigator = use_navigator(cx);
     let current_route = use_route(cx)?;
     let current_route_str = use_ref(cx, String::new);
     let parsed = Route::from_str(&current_route_str.read());
@@ -122,11 +121,11 @@ fn Route3(cx: Scope, dynamic: String) -> Element {
         .flat_map(|seg| seg.flatten().into_iter())
         .collect::<Vec<_>>();
 
+    let navigator = use_navigator(cx);
+  
     render! {
         input {
-            oninput: move |evt| {
-                *current_route_str.write() = evt.value.clone();
-            },
+            oninput: move |evt| *current_route_str.write() = evt.value.clone(),
             value: "{current_route_str.read()}"
         }
         "dynamic: {dynamic}"

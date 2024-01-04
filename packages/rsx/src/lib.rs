@@ -16,6 +16,7 @@
 
 #[macro_use]
 mod errors;
+mod attribute;
 mod component;
 mod element;
 #[cfg(feature = "hot_reload")]
@@ -26,6 +27,7 @@ mod node;
 use std::{fmt::Debug, hash::Hash};
 
 // Re-export the namespaces into each other
+pub use attribute::*;
 pub use component::*;
 #[cfg(feature = "hot_reload")]
 use dioxus_core::{Template, TemplateAttribute, TemplateNode};
@@ -193,7 +195,7 @@ impl<'a> ToTokens for TemplateRenderer<'a> {
     fn to_tokens(&self, out_tokens: &mut TokenStream2) {
         let mut context = DynamicContext::default();
 
-        let key = match self.roots.get(0) {
+        let key = match self.roots.first() {
             Some(BodyNode::Element(el)) if self.roots.len() == 1 => el.key.clone(),
             Some(BodyNode::Component(comp)) if self.roots.len() == 1 => comp.key().cloned(),
             _ => None,
@@ -204,12 +206,17 @@ impl<'a> ToTokens for TemplateRenderer<'a> {
             None => quote! { None },
         };
 
-        let spndbg = format!("{:?}", self.roots[0].span());
-        let root_col = spndbg
-            .rsplit_once("..")
-            .and_then(|(_, after)| after.split_once(')').map(|(before, _)| before))
-            .unwrap_or_default();
-
+        let root_col = match self.roots.first() {
+            Some(first_root) => {
+                let first_root_span = format!("{:?}", first_root.span());
+                first_root_span
+                    .rsplit_once("..")
+                    .and_then(|(_, after)| after.split_once(')').map(|(before, _)| before))
+                    .unwrap_or_default()
+                    .to_string()
+            }
+            _ => "0".to_string(),
+        };
         let root_printer = self.roots.iter().enumerate().map(|(idx, root)| {
             context.current_path.push(idx as u8);
             let out = context.render_static_node(root);
@@ -247,14 +254,13 @@ impl<'a> ToTokens for TemplateRenderer<'a> {
                 node_paths: &[ #(#node_paths),* ],
                 attr_paths: &[ #(#attr_paths),* ],
             };
-            ::dioxus::core::VNode {
-                parent: None,
-                key: #key_tokens,
-                template: std::cell::Cell::new(TEMPLATE),
-                root_ids: dioxus::core::exports::bumpalo::collections::Vec::with_capacity_in(#root_count, __cx.bump()).into(),
-                dynamic_nodes: __cx.bump().alloc([ #( #node_printer ),* ]),
-                dynamic_attrs: __cx.bump().alloc([ #( #dyn_attr_printer ),* ]),
-            }
+            ::dioxus::core::VNode::new(
+                #key_tokens,
+                TEMPLATE,
+                dioxus::core::exports::bumpalo::collections::Vec::with_capacity_in(#root_count, __cx.bump()),
+                __cx.bump().alloc([ #( #node_printer ),* ]),
+                __cx.bump().alloc([ #( #dyn_attr_printer ),* ]),
+            )
         });
     }
 }
@@ -309,17 +315,10 @@ impl DynamicMapping {
     fn add_node(&mut self, node: BodyNode) {
         match node {
             BodyNode::Element(el) => {
-                for attr in el.attributes {
-                    match &attr.attr {
-                        ElementAttr::CustomAttrText { value, .. }
-                        | ElementAttr::AttrText { value, .. }
-                            if value.is_static() => {}
-
-                        ElementAttr::AttrExpression { .. }
-                        | ElementAttr::AttrText { .. }
-                        | ElementAttr::CustomAttrText { .. }
-                        | ElementAttr::CustomAttrExpression { .. }
-                        | ElementAttr::EventTokens { .. } => {
+                for attr in el.merged_attributes {
+                    match &attr.attr.value {
+                        ElementAttrValue::AttrLiteral(input) if input.is_static() => {}
+                        _ => {
                             self.insert_attribute(attr.attr);
                         }
                     }
@@ -367,10 +366,11 @@ impl<'a> DynamicContext<'a> {
                 let element_name_rust = el.name.to_string();
 
                 let mut static_attrs = Vec::new();
-                for attr in &el.attributes {
-                    match &attr.attr {
-                        ElementAttr::AttrText { name, value } if value.is_static() => {
+                for attr in &el.merged_attributes {
+                    match &attr.attr.value {
+                        ElementAttrValue::AttrLiteral(value) if value.is_static() => {
                             let value = value.source.as_ref().unwrap();
+                            let name = &attr.attr.name;
                             let attribute_name_rust = name.to_string();
                             let (name, namespace) =
                                 Ctx::map_attribute(&element_name_rust, &attribute_name_rust)
@@ -382,20 +382,7 @@ impl<'a> DynamicContext<'a> {
                             })
                         }
 
-                        ElementAttr::CustomAttrText { name, value } if value.is_static() => {
-                            let value = value.source.as_ref().unwrap();
-                            static_attrs.push(TemplateAttribute::Static {
-                                name: intern(name.value().as_str()),
-                                namespace: None,
-                                value: intern(value.value().as_str()),
-                            })
-                        }
-
-                        ElementAttr::AttrExpression { .. }
-                        | ElementAttr::AttrText { .. }
-                        | ElementAttr::CustomAttrText { .. }
-                        | ElementAttr::CustomAttrExpression { .. }
-                        | ElementAttr::EventTokens { .. } => {
+                        _ => {
                             let idx = match mapping {
                                 Some(mapping) => mapping.get_attribute_idx(&attr.attr)?,
                                 None => self.dynamic_attributes.len(),
@@ -467,54 +454,47 @@ impl<'a> DynamicContext<'a> {
                     ElementName::Ident(i) => quote! { dioxus_elements::#i::#name },
                     ElementName::Custom(_) => quote! { None },
                 };
-                let static_attrs = el.attributes.iter().map(|attr| match &attr.attr {
-                    ElementAttr::AttrText { name, value } if value.is_static() => {
-                        let value = value.to_static().unwrap();
-                        let ns = ns(quote!(#name.1));
-                        let name = match el_name {
-                            ElementName::Ident(_) => quote! { #el_name::#name.0 },
-                            ElementName::Custom(_) => {
-                                let as_string = name.to_string();
-                                quote! { #as_string }
-                            }
-                        };
-                        quote! {
-                            ::dioxus::core::TemplateAttribute::Static {
-                                name: #name,
-                                namespace: #ns,
-                                value: #value,
+                let static_attrs = el
+                    .merged_attributes
+                    .iter()
+                    .map(|attr| match &attr.attr.value {
+                        ElementAttrValue::AttrLiteral(value) if value.is_static() => {
+                            let value = value.to_static().unwrap();
+                            let ns = {
+                                match &attr.attr.name {
+                                    ElementAttrName::BuiltIn(name) => ns(quote!(#name.1)),
+                                    ElementAttrName::Custom(_) => quote!(None),
+                                }
+                            };
+                            let name = &attr.attr.name;
+                            let name = match (el_name, name) {
+                                (ElementName::Ident(_), ElementAttrName::BuiltIn(_)) => {
+                                    quote! { #el_name::#name.0 }
+                                }
+                                _ => {
+                                    let as_string = name.to_string();
+                                    quote! { #as_string }
+                                }
+                            };
+                            quote! {
+                                ::dioxus::core::TemplateAttribute::Static {
+                                    name: #name,
+                                    namespace: #ns,
+                                    value: #value,
 
-                                // todo: we don't diff these so we never apply the volatile flag
-                                // volatile: dioxus_elements::#el_name::#name.2,
-                            }
-                        }
-                    }
-
-                    ElementAttr::CustomAttrText { name, value } if value.is_static() => {
-                        let value = value.to_static().unwrap();
-                        quote! {
-                            ::dioxus::core::TemplateAttribute::Static {
-                                name: #name,
-                                namespace: None,
-                                value: #value,
-
-                                // todo: we don't diff these so we never apply the volatile flag
-                                // volatile: dioxus_elements::#el_name::#name.2,
+                                    // todo: we don't diff these so we never apply the volatile flag
+                                    // volatile: dioxus_elements::#el_name::#name.2,
+                                }
                             }
                         }
-                    }
 
-                    ElementAttr::AttrExpression { .. }
-                    | ElementAttr::AttrText { .. }
-                    | ElementAttr::CustomAttrText { .. }
-                    | ElementAttr::CustomAttrExpression { .. }
-                    | ElementAttr::EventTokens { .. } => {
-                        let ct = self.dynamic_attributes.len();
-                        self.dynamic_attributes.push(attr);
-                        self.attr_paths.push(self.current_path.clone());
-                        quote! { ::dioxus::core::TemplateAttribute::Dynamic { id: #ct } }
-                    }
-                });
+                        _ => {
+                            let ct = self.dynamic_attributes.len();
+                            self.dynamic_attributes.push(attr);
+                            self.attr_paths.push(self.current_path.clone());
+                            quote! { ::dioxus::core::TemplateAttribute::Dynamic { id: #ct } }
+                        }
+                    });
 
                 let attrs = quote! { #(#static_attrs),*};
 

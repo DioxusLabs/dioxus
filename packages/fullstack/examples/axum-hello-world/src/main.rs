@@ -24,6 +24,7 @@ fn app(cx: Scope<AppProps>) -> Element {
 
     let mut count = use_state(cx, || 0);
     let text = use_state(cx, || "...".to_string());
+    let eval = use_eval(cx);
 
     cx.render(rsx! {
         div {

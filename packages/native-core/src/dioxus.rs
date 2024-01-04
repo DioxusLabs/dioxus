@@ -57,7 +57,12 @@ impl DioxusState {
         node.insert(ElementIdComponent(element_id));
         if self.node_id_mapping.len() <= element_id.0 {
             self.node_id_mapping.resize(element_id.0 + 1, None);
+        } else if let Some(mut node) =
+            self.node_id_mapping[element_id.0].and_then(|id| node.real_dom_mut().get_mut(id))
+        {
+            node.remove();
         }
+
         self.node_id_mapping[element_id.0] = Some(node_id);
     }
 

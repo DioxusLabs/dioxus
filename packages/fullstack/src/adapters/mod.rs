@@ -89,26 +89,26 @@ impl Service for ServerFnHandler {
             let parts = Arc::new(RwLock::new(parts));
 
             // Because the future returned by `server_fn_handler` is `Send`, and the future returned by this function must be send, we need to spawn a new runtime
-            let (resp_tx, resp_rx) = tokio::sync::oneshot::channel();
             let pool = get_local_pool();
-            pool.spawn_pinned({
-                let function = function.clone();
-                let mut server_context = server_context.clone();
-                server_context.parts = parts;
-                move || async move {
-                    let data = match function.encoding() {
-                        Encoding::Url | Encoding::Cbor => &body,
-                        Encoding::GetJSON | Encoding::GetCBOR => &query,
-                    };
-                    let server_function_future = function.call((), data);
-                    let server_function_future =
-                        ProvideServerContext::new(server_function_future, server_context.clone());
-                    let resp = server_function_future.await;
-
-                    resp_tx.send(resp).unwrap();
-                }
-            });
-            let result = resp_rx.await.unwrap();
+            let result = pool
+                .spawn_pinned({
+                    let function = function.clone();
+                    let mut server_context = server_context.clone();
+                    server_context.parts = parts;
+                    move || async move {
+                        let data = match function.encoding() {
+                            Encoding::Url | Encoding::Cbor => &body,
+                            Encoding::GetJSON | Encoding::GetCBOR => &query,
+                        };
+                        let server_function_future = function.call((), data);
+                        let server_function_future = ProvideServerContext::new(
+                            server_function_future,
+                            server_context.clone(),
+                        );
+                        server_function_future.await
+                    }
+                })
+                .await?;
             let mut res = http::Response::builder();
 
             // Set the headers from the server context

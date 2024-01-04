@@ -37,8 +37,14 @@ impl Build {
             .platform
             .unwrap_or(crate_config.dioxus_config.application.default_platform);
 
-        #[cfg(feature = "plugin")]
-        let _ = PluginManager::on_build_start(&crate_config, &platform);
+        if let Some(target) = self.build.target {
+            crate_config.set_target(target);
+        }
+
+        crate_config.set_cargo_args(self.build.cargo_args);
+
+        // #[cfg(feature = "plugin")]
+        // let _ = PluginManager::on_build_start(&crate_config, &platform);
 
         match platform {
             Platform::Web => {
@@ -66,8 +72,8 @@ impl Build {
         )?;
         file.write_all(temp.as_bytes())?;
 
-        #[cfg(feature = "plugin")]
-        let _ = PluginManager::on_build_finish(&crate_config, &platform);
+        // #[cfg(feature = "plugin")]
+        // let _ = PluginManager::on_build_finish(&crate_config, &platform);
 
         Ok(())
     }

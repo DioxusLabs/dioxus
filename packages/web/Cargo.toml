@@ -13,8 +13,8 @@ keywords = ["dom", "ui", "gui", "react", "wasm"]
 dioxus-core = { workspace = true, features = ["serialize"] }
 dioxus-html = { workspace = true, features = ["wasm-bind"] }
 dioxus-interpreter-js = { workspace = true, features = [
-    "sledgehammer",
     "minimal_bindings",
+    "web",
 ] }
 
 js-sys = "0.3.56"
@@ -42,6 +42,7 @@ features = [
     "HtmlFormElement",
     "Text",
     "Window",
+    "console",
 ]
 
 [features]

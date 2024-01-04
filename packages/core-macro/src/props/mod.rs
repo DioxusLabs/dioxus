@@ -243,10 +243,6 @@ mod field_info {
             }
             .into()
         }
-
-        pub fn type_from_inside_option(&self, check_option_name: bool) -> Option<&syn::Type> {
-            type_from_inside_option(self.ty, check_option_name)
-        }
     }
 
     #[derive(Debug, Default, Clone)]
@@ -631,7 +627,7 @@ Finally, call `.build()` to create the instance of `{name}`.
             Ok(quote! {
                 impl #impl_generics #name #ty_generics #where_clause {
                     #[doc = #builder_method_doc]
-                    #[allow(dead_code)]
+                    #[allow(dead_code, clippy::type_complexity)]
                     #vis fn builder() -> #builder_name #generics_with_empty {
                         #builder_name {
                             fields: #empties_tuple,
@@ -783,31 +779,16 @@ Finally, call `.build()` to create the instance of `{name}`.
                 None => quote!(),
             };
 
-            // NOTE: both auto_into and strip_option affect `arg_type` and `arg_expr`, but the order of
-            // nesting is different so we have to do this little dance.
-            let arg_type = if field.builder_attr.strip_option {
-                field.type_from_inside_option(false).ok_or_else(|| {
-                    Error::new_spanned(
-                        field_type,
-                        "can't `strip_option` - field is not `Option<...>`",
+            let arg_type = field_type;
+            let (arg_type, arg_expr) =
+                if field.builder_attr.auto_into || field.builder_attr.strip_option {
+                    (
+                        quote!(impl ::core::convert::Into<#arg_type>),
+                        quote!(#field_name.into()),
                     )
-                })?
-            } else {
-                field_type
-            };
-            let (arg_type, arg_expr) = if field.builder_attr.auto_into {
-                (
-                    quote!(impl ::core::convert::Into<#arg_type>),
-                    quote!(#field_name.into()),
-                )
-            } else {
-                (quote!(#arg_type), quote!(#field_name))
-            };
-            let arg_expr = if field.builder_attr.strip_option {
-                quote!(Some(#arg_expr))
-            } else {
-                arg_expr
-            };
+                } else {
+                    (quote!(#arg_type), quote!(#field_name))
+                };
 
             let repeated_fields_error_type_name = syn::Ident::new(
                 &format!(
@@ -823,6 +804,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                 #[allow(dead_code, non_camel_case_types, missing_docs)]
                 impl #impl_generics #builder_name < #( #ty_generics ),* > #where_clause {
                     #doc
+                    #[allow(clippy::type_complexity)]
                     pub fn #field_name (self, #field_name: #arg_type) -> #builder_name < #( #target_generics ),* > {
                         let #field_name = (#arg_expr,);
                         let ( #(#descructuring,)* ) = self.fields;
@@ -841,6 +823,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                     #[deprecated(
                         note = #repeated_fields_error_message
                     )]
+                    #[allow(clippy::type_complexity)]
                     pub fn #field_name (self, _: #repeated_fields_error_type_name) -> #builder_name < #( #target_generics ),* > {
                         self
                     }
