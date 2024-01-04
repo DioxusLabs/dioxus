@@ -37,7 +37,7 @@ fn app(cx: Scope) -> Element {
         // todo: remove
         let mut trimmed = format!("{event:?}");
         trimmed.truncate(200);
-        rsx!(p { "{trimmed}" })
+        rsx!( p { "{trimmed}" } )
     });
 
     let log_event = move |event: Event| {
@@ -45,10 +45,7 @@ fn app(cx: Scope) -> Element {
     };
 
     cx.render(rsx! {
-        div {
-            width: "100%",
-            height: "100%",
-            flex_direction: "column",
+        div { width: "100%", height: "100%", flex_direction: "column",
             div {
                 width: "80%",
                 height: "50%",
@@ -59,7 +56,7 @@ fn app(cx: Scope) -> Element {
 
                 onmousemove: move |event| log_event(Event::MouseMove(event.inner().clone())),
                 onclick: move |event| log_event(Event::MouseClick(event.inner().clone())),
-                ondblclick: move |event| log_event(Event::MouseDoubleClick(event.inner().clone())),
+                ondoubleclick: move |event| log_event(Event::MouseDoubleClick(event.inner().clone())),
                 onmousedown: move |event| log_event(Event::MouseDown(event.inner().clone())),
                 onmouseup: move |event| log_event(Event::MouseUp(event.inner().clone())),
 
@@ -73,13 +70,8 @@ fn app(cx: Scope) -> Element {
                 onfocusout: move |event| log_event(Event::FocusOut(event.inner().clone())),
 
                 "Hover, click, type or scroll to see the info down below"
-            },
-            div {
-                width: "80%",
-                height: "50%",
-                flex_direction: "column",
-                events_rendered,
-            },
-        },
+            }
+            div { width: "80%", height: "50%", flex_direction: "column", events_rendered }
+        }
     })
 }
