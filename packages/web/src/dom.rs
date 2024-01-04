@@ -1,11 +1,10 @@
 //! Implementation of a renderer for Dioxus on the web.
 //!
 //! Oustanding todos:
-//! - Removing event listeners (delegation)
 //! - Passive event listeners
 //! - no-op event listener patch for safari
 //! - tests to ensure dyn_into works for various event types.
-//! - Partial delegation?>
+//! - Partial delegation?
 
 use dioxus_core::{
     BorrowedAttributeValue, ElementId, Mutation, Template, TemplateAttribute, TemplateNode,
