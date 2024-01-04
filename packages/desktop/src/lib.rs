@@ -10,16 +10,16 @@ mod escape;
 mod eval;
 mod events;
 mod file_upload;
+#[cfg(any(target_os = "ios", target_os = "android"))]
+mod mobile_shortcut;
 mod protocol;
 mod query;
 mod shortcut;
 mod waker;
 mod webview;
 
-#[cfg(any(target_os = "ios", target_os = "android"))]
-mod mobile_shortcut;
-
 use crate::query::QueryResult;
+use crate::shortcut::GlobalHotKeyEvent;
 pub use cfg::{Config, WindowCloseBehaviour};
 pub use desktop_context::DesktopContext;
 pub use desktop_context::{
@@ -32,6 +32,7 @@ use dioxus_html::{native_bind::NativeFileEngine, FormData, HtmlEvent};
 use element::DesktopElement;
 use eval::init_eval;
 use futures_util::{pin_mut, FutureExt};
+pub use protocol::{use_asset_handler, AssetFuture, AssetHandler, AssetRequest, AssetResponse};
 use shortcut::ShortcutRegistry;
 pub use shortcut::{use_global_shortcut, ShortcutHandle, ShortcutId, ShortcutRegistryError};
 use std::cell::Cell;
@@ -43,10 +44,11 @@ use tao::event_loop::{EventLoopProxy, EventLoopWindowTarget};
 pub use tao::window::WindowBuilder;
 use tao::{
     event::{Event, StartCause, WindowEvent},
-    event_loop::{ControlFlow, EventLoop},
+    event_loop::ControlFlow,
 };
 pub use wry;
 pub use wry::application as tao;
+use wry::application::event_loop::EventLoopBuilder;
 use wry::webview::WebView;
 use wry::{application::window::WindowId, webview::WebContext};
 
@@ -120,7 +122,7 @@ pub fn launch_cfg(root: Component, config_builder: Config) {
 /// }
 /// ```
 pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) {
-    let event_loop = EventLoop::<UserWindowEvent>::with_user_event();
+    let event_loop = EventLoopBuilder::<UserWindowEvent>::with_user_event().build();
 
     let proxy = event_loop.create_proxy();
 
@@ -157,7 +159,8 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
 
     let queue = WebviewQueue::default();
 
-    let shortcut_manager = ShortcutRegistry::new(&event_loop);
+    let shortcut_manager = ShortcutRegistry::new();
+    let global_hotkey_channel = GlobalHotKeyEvent::receiver();
 
     // move the props into a cell so we can pop it out later to create the first window
     // iOS panics if we create a window before the event loop is started
@@ -166,9 +169,13 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
     let mut is_visible_before_start = true;
 
     event_loop.run(move |window_event, event_loop, control_flow| {
-        *control_flow = ControlFlow::Wait;
+        *control_flow = ControlFlow::Poll;
 
         event_handlers.apply_event(&window_event, event_loop);
+
+        if let Ok(event) = global_hotkey_channel.try_recv() {
+            shortcut_manager.call_handlers(event);
+        }
 
         match window_event {
             Event::WindowEvent {
@@ -375,7 +382,6 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
 
                 _ => {}
             },
-            Event::GlobalShortcutEvent(id) => shortcut_manager.call_handlers(id),
             _ => {}
         }
     })
@@ -390,7 +396,8 @@ fn create_new_window(
     event_handlers: &WindowEventHandlers,
     shortcut_manager: ShortcutRegistry,
 ) -> WebviewHandler {
-    let (webview, web_context) = webview::build(&mut cfg, event_loop, proxy.clone());
+    let (webview, web_context, asset_handlers) =
+        webview::build(&mut cfg, event_loop, proxy.clone());
     let desktop_context = Rc::from(DesktopService::new(
         webview,
         proxy.clone(),
@@ -398,6 +405,7 @@ fn create_new_window(
         queue.clone(),
         event_handlers.clone(),
         shortcut_manager,
+        asset_handlers,
     ));
 
     let cx = dom.base_scope();

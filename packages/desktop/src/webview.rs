@@ -1,17 +1,18 @@
 use crate::desktop_context::EventData;
-use crate::protocol;
+use crate::protocol::{self, AssetHandlerRegistry};
 use crate::{desktop_context::UserWindowEvent, Config};
 use tao::event_loop::{EventLoopProxy, EventLoopWindowTarget};
 pub use wry;
 pub use wry::application as tao;
 use wry::application::window::Window;
+use wry::http::Response;
 use wry::webview::{WebContext, WebView, WebViewBuilder};
 
 pub fn build(
     cfg: &mut Config,
     event_loop: &EventLoopWindowTarget<UserWindowEvent>,
     proxy: EventLoopProxy<UserWindowEvent>,
-) -> (WebView, WebContext) {
+) -> (WebView, WebContext, AssetHandlerRegistry) {
     let builder = cfg.window.clone();
     let window = builder.with_visible(false).build(event_loop).unwrap();
     let file_handler = cfg.file_drop_handler.take();
@@ -32,6 +33,8 @@ pub fn build(
     }
 
     let mut web_context = WebContext::new(cfg.data_dir.clone());
+    let asset_handlers = AssetHandlerRegistry::new();
+    let asset_handlers_ref = asset_handlers.clone();
 
     let mut webview = WebViewBuilder::new(window)
         .unwrap()
@@ -44,8 +47,29 @@ pub fn build(
                 _ = proxy.send_event(UserWindowEvent(EventData::Ipc(message), window.id()));
             }
         })
-        .with_custom_protocol(String::from("dioxus"), move |r| {
-            protocol::desktop_handler(r, custom_head.clone(), index_file.clone(), &root_name)
+        .with_asynchronous_custom_protocol(String::from("dioxus"), move |request, responder| {
+            let custom_head = custom_head.clone();
+            let index_file = index_file.clone();
+            let root_name = root_name.clone();
+            let asset_handlers_ref = asset_handlers_ref.clone();
+            tokio::spawn(async move {
+                let response_res = protocol::desktop_handler(
+                    request,
+                    custom_head.clone(),
+                    index_file.clone(),
+                    &root_name,
+                    &asset_handlers_ref,
+                )
+                .await;
+                let response = response_res.unwrap_or_else(|err| {
+                    tracing::error!("Error: {}", err);
+                    Response::builder()
+                        .status(500)
+                        .body(err.to_string().into_bytes().into())
+                        .unwrap()
+                });
+                responder.respond(response);
+            });
         })
         .with_file_drop_handler(move |window, evet| {
             file_handler
@@ -71,7 +95,16 @@ pub fn build(
     // .with_web_context(&mut web_context);
 
     for (name, handler) in cfg.protocols.drain(..) {
-        webview = webview.with_custom_protocol(name, handler)
+        webview = webview.with_custom_protocol(name, move |r| match handler(&r) {
+            Ok(response) => response,
+            Err(err) => {
+                tracing::error!("Error: {}", err);
+                Response::builder()
+                    .status(500)
+                    .body(err.to_string().into_bytes().into())
+                    .unwrap()
+            }
+        })
     }
 
     if cfg.disable_context_menu {
@@ -94,5 +127,5 @@ pub fn build(
         webview = webview.with_devtools(true);
     }
 
-    (webview.build().unwrap(), web_context)
+    (webview.build().unwrap(), web_context, asset_handlers)
 }
