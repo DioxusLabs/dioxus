@@ -67,13 +67,6 @@ pub fn build(
                     &asset_handlers_ref,
                 )
                 .await;
-                let response = response_res.unwrap_or_else(|err| {
-                    tracing::error!("Error: {}", err);
-                    Response::builder()
-                        .status(500)
-                        .body(err.to_string().into_bytes().into())
-                        .unwrap()
-                });
                 responder.respond(response);
             });
         })
