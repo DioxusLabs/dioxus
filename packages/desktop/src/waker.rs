@@ -1,7 +1,7 @@
 use crate::desktop_context::{EventData, UserWindowEvent};
-use futures_util::task::ArcWake;
+use futures_util::{pin_mut, task::ArcWake, FutureExt};
 use std::sync::Arc;
-use wry::application::{event_loop::EventLoopProxy, window::WindowId};
+use tao::{event_loop::EventLoopProxy, window::WindowId};
 
 /// Create a waker that will send a poll event to the event loop.
 ///

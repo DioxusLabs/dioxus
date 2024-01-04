@@ -1,20 +1,18 @@
 use crate::desktop_context::{EditQueue, EventData};
 use crate::protocol::{self, AssetHandlerRegistry};
 use crate::{desktop_context::UserWindowEvent, Config};
+use muda::{Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tao::event_loop::{EventLoopProxy, EventLoopWindowTarget};
-pub use wry;
-pub use wry::application as tao;
-use wry::application::window::Window;
+use tao::window::Window;
 use wry::http::Response;
-use wry::webview::{WebContext, WebView, WebViewBuilder};
+use wry::{WebContext, WebView, WebViewBuilder};
 
 pub(crate) fn build(
     cfg: &mut Config,
     event_loop: &EventLoopWindowTarget<UserWindowEvent>,
     proxy: EventLoopProxy<UserWindowEvent>,
-) -> (WebView, WebContext, AssetHandlerRegistry, EditQueue) {
+) -> (WebView, WebContext, AssetHandlerRegistry, EditQueue, Window) {
     let builder = cfg.window.clone();
-    let window = builder.with_visible(false).build(event_loop).unwrap();
     let file_handler = cfg.file_drop_handler.take();
     let custom_head = cfg.custom_head.clone();
     let index_file = cfg.custom_index.clone();
@@ -43,15 +41,14 @@ pub(crate) fn build(
     let asset_handlers = AssetHandlerRegistry::new();
     let asset_handlers_ref = asset_handlers.clone();
 
-    let mut webview = WebViewBuilder::new(window)
-        .unwrap()
+    let mut webview = WebViewBuilder::new(&window)
         .with_transparent(cfg.window.window.transparent)
         .with_url("dioxus://index.html/")
         .unwrap()
-        .with_ipc_handler(move |window: &Window, payload: String| {
+        .with_ipc_handler(move |payload: String| {
             // defer the event to the main thread
             if let Ok(message) = serde_json::from_str(&payload) {
-                _ = proxy.send_event(UserWindowEvent(EventData::Ipc(message), window.id()));
+                _ = proxy.send_event(UserWindowEvent(EventData::Ipc(message), window_id));
             }
         })
         .with_asynchronous_custom_protocol(String::from("dioxus"), {
@@ -77,10 +74,10 @@ pub(crate) fn build(
                 });
             }
         })
-        .with_file_drop_handler(move |window, evet| {
+        .with_file_drop_handler(move |event| {
             file_handler
                 .as_ref()
-                .map(|handler| handler(window, evet))
+                .map(|handler| handler(event))
                 .unwrap_or_default()
         })
         .with_web_context(&mut web_context);
@@ -129,63 +126,47 @@ pub(crate) fn build(
         web_context,
         asset_handlers,
         edit_queue,
+        window,
     )
 }
 
-// /// Builds a standard menu bar depending on the users platform. It may be used as a starting point
-// /// to further customize the menu bar and pass it to a [`WindowBuilder`](tao::window::WindowBuilder).
-// /// > Note: The default menu bar enables macOS shortcuts like cut/copy/paste.
-// /// > The menu bar differs per platform because of constraints introduced
-// /// > by [`MenuItem`](tao::menu::MenuItem).
-// pub fn build_default_menu_bar() -> MenuBar {
-//     let mut menu_bar = MenuBar::new();
+/// Builds a standard menu bar depending on the users platform. It may be used as a starting point
+/// to further customize the menu bar and pass it to a [`WindowBuilder`](tao::window::WindowBuilder).
+/// > Note: The default menu bar enables macOS shortcuts like cut/copy/paste.
+/// > The menu bar differs per platform because of constraints introduced
+/// > by [`MenuItem`](tao::menu::MenuItem).
+pub fn build_default_menu_bar() -> Menu {
+    let menu = Menu::new();
 
-//     // since it is uncommon on windows to have an "application menu"
-//     // we add a "window" menu to be more consistent across platforms with the standard menu
-//     let mut window_menu = MenuBar::new();
-//     #[cfg(target_os = "macos")]
-//     {
-//         window_menu.add_native_item(MenuItem::EnterFullScreen);
-//         window_menu.add_native_item(MenuItem::Zoom);
-//         window_menu.add_native_item(MenuItem::Separator);
-//     }
+    // since it is uncommon on windows to have an "application menu"
+    // we add a "window" menu to be more consistent across platforms with the standard menu
+    let window_menu = Submenu::new("Window", true);
+    window_menu.append_items(&[
+        &PredefinedMenuItem::fullscreen(None),
+        &PredefinedMenuItem::separator(),
+        &PredefinedMenuItem::hide(None),
+        &PredefinedMenuItem::hide_others(None),
+        &PredefinedMenuItem::show_all(None),
+        &PredefinedMenuItem::maximize(None),
+        &PredefinedMenuItem::minimize(None),
+        &PredefinedMenuItem::close_window(None),
+        &PredefinedMenuItem::separator(),
+        &PredefinedMenuItem::quit(None),
+    ]);
 
-//     window_menu.add_native_item(MenuItem::Hide);
+    let edit_menu = Submenu::new("Window", true);
+    edit_menu.append_items(&[
+        &PredefinedMenuItem::undo(None),
+        &PredefinedMenuItem::redo(None),
+        &PredefinedMenuItem::separator(),
+        &PredefinedMenuItem::cut(None),
+        &PredefinedMenuItem::copy(None),
+        &PredefinedMenuItem::paste(None),
+        &PredefinedMenuItem::separator(),
+        &PredefinedMenuItem::select_all(None),
+    ]);
 
-//     #[cfg(target_os = "macos")]
-//     {
-//         window_menu.add_native_item(MenuItem::HideOthers);
-//         window_menu.add_native_item(MenuItem::ShowAll);
-//     }
+    menu.append_items(&[&window_menu, &edit_menu]);
 
-//     window_menu.add_native_item(MenuItem::Minimize);
-//     window_menu.add_native_item(MenuItem::CloseWindow);
-//     window_menu.add_native_item(MenuItem::Separator);
-//     window_menu.add_native_item(MenuItem::Quit);
-//     menu_bar.add_submenu("Window", true, window_menu);
-
-//     // since tao supports none of the below items on linux we should only add them on macos/windows
-//     #[cfg(not(target_os = "linux"))]
-//     {
-//         let mut edit_menu = MenuBar::new();
-//         #[cfg(target_os = "macos")]
-//         {
-//             edit_menu.add_native_item(MenuItem::Undo);
-//             edit_menu.add_native_item(MenuItem::Redo);
-//             edit_menu.add_native_item(MenuItem::Separator);
-//         }
-
-//         edit_menu.add_native_item(MenuItem::Cut);
-//         edit_menu.add_native_item(MenuItem::Copy);
-//         edit_menu.add_native_item(MenuItem::Paste);
-
-//         #[cfg(target_os = "macos")]
-//         {
-//             edit_menu.add_native_item(MenuItem::Separator);
-//             edit_menu.add_native_item(MenuItem::SelectAll);
-//         }
-//         menu_bar.add_submenu("Edit", true, edit_menu);
-//     }
-
-//     menu_bar
-// }
+    menu
+}

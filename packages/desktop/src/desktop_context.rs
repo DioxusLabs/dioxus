@@ -1,38 +1,29 @@
-use crate::create_new_window;
-use crate::events::IpcMessage;
 use crate::protocol::AssetFuture;
 use crate::protocol::AssetHandlerRegistry;
 use crate::query::QueryEngine;
 use crate::shortcut::{HotKey, ShortcutId, ShortcutRegistry, ShortcutRegistryError};
 use crate::AssetHandler;
 use crate::Config;
-use crate::WebviewHandler;
+use crate::{app::WebviewHandler, events::IpcMessage};
 use dioxus_core::ScopeState;
 use dioxus_core::VirtualDom;
-#[cfg(all(feature = "hot-reload", debug_assertions))]
-use dioxus_hot_reload::HotReloadMsg;
 use dioxus_interpreter_js::binary_protocol::Channel;
 use rustc_hash::FxHashMap;
 use slab::Slab;
-use std::cell::RefCell;
-use std::fmt::Debug;
-use std::fmt::Formatter;
-use std::rc::Rc;
-use std::rc::Weak;
-use std::sync::atomic::AtomicU16;
-use std::sync::Arc;
-use std::sync::Mutex;
-use wry::application::event::Event;
-use wry::application::event_loop::EventLoopProxy;
-use wry::application::event_loop::EventLoopWindowTarget;
-#[cfg(target_os = "ios")]
-use wry::application::platform::ios::WindowExtIOS;
-use wry::application::window::Fullscreen as WryFullscreen;
-use wry::application::window::Window;
-use wry::application::window::WindowId;
-use wry::webview::WebView;
+use std::{
+    cell::RefCell, fmt::Debug, fmt::Formatter, rc::Rc, rc::Weak, sync::atomic::AtomicU16,
+    sync::Arc, sync::Mutex,
+};
+use tao::{
+    event::Event,
+    event_loop::{EventLoopProxy, EventLoopWindowTarget},
+    window::{Fullscreen as WryFullscreen, Window, WindowId},
+};
 
-pub type ProxyType = EventLoopProxy<UserWindowEvent>;
+use wry::{RequestAsyncResponder, WebView};
+
+#[cfg(target_os = "ios")]
+use tao::platform::ios::WindowExtIOS;
 
 /// Get an imperative handle to the current window without using a hook
 ///
@@ -44,7 +35,6 @@ pub fn window() -> DesktopContext {
 }
 
 /// Get an imperative handle to the current window
-#[deprecated = "Prefer the using the `window` function directly for cleaner code"]
 pub fn use_window(cx: &ScopeState) -> &DesktopContext {
     cx.use_hook(|| cx.consume_context::<DesktopContext>())
         .as_ref()
@@ -56,7 +46,7 @@ pub fn use_window(cx: &ScopeState) -> &DesktopContext {
 #[derive(Default, Clone)]
 pub(crate) struct EditQueue {
     queue: Arc<Mutex<Vec<Vec<u8>>>>,
-    responder: Arc<Mutex<Option<wry::webview::RequestAsyncResponder>>>,
+    responder: Arc<Mutex<Option<RequestAsyncResponder>>>,
 }
 
 impl Debug for EditQueue {
@@ -71,7 +61,7 @@ impl Debug for EditQueue {
 }
 
 impl EditQueue {
-    pub fn handle_request(&self, responder: wry::webview::RequestAsyncResponder) {
+    pub fn handle_request(&self, responder: RequestAsyncResponder) {
         let mut queue = self.queue.lock().unwrap();
         if let Some(bytes) = queue.pop() {
             responder.respond(wry::http::Response::new(bytes));
@@ -106,10 +96,12 @@ pub(crate) type WebviewQueue = Rc<RefCell<Vec<WebviewHandler>>>;
 /// ```
 pub struct DesktopService {
     /// The wry/tao proxy to the current window
-    pub webview: Rc<WebView>,
+    pub webview: WebView,
+
+    pub window: Window,
 
     /// The proxy to the event loop
-    pub proxy: ProxyType,
+    pub proxy: EventLoopProxy<UserWindowEvent>,
 
     /// The receiver for queries about the current window
     pub(super) query: QueryEngine,
@@ -141,14 +133,15 @@ impl std::ops::Deref for DesktopService {
     type Target = Window;
 
     fn deref(&self) -> &Self::Target {
-        self.webview.window()
+        &self.window
     }
 }
 
 impl DesktopService {
     pub(crate) fn new(
+        window: Window,
         webview: WebView,
-        proxy: ProxyType,
+        proxy: EventLoopProxy<UserWindowEvent>,
         event_loop: EventLoopWindowTarget<UserWindowEvent>,
         webviews: WebviewQueue,
         event_handlers: WindowEventHandlers,
@@ -157,7 +150,8 @@ impl DesktopService {
         asset_handlers: AssetHandlerRegistry,
     ) -> Self {
         Self {
-            webview: Rc::new(webview),
+            window,
+            webview,
             proxy,
             event_loop,
             query: Default::default(),
@@ -198,7 +192,7 @@ impl DesktopService {
             .consume_context::<Rc<DesktopService>>()
             .unwrap();
 
-        let id = window.desktop_context.webview.window().id();
+        let id = window.desktop_context.window.id();
 
         self.proxy
             .send_event(UserWindowEvent(EventData::NewWindow, id))
@@ -222,7 +216,7 @@ impl DesktopService {
     /// onmousedown: move |_| { desktop.drag_window(); }
     /// ```
     pub fn drag(&self) {
-        let window = self.webview.window();
+        let window = &self.window;
 
         // if the drag_window has any errors, we don't do anything
         if window.fullscreen().is_none() {
@@ -232,7 +226,7 @@ impl DesktopService {
 
     /// Toggle whether the window is maximized or not
     pub fn toggle_maximized(&self) {
-        let window = self.webview.window();
+        let window = &self.window;
 
         window.set_maximized(!window.is_maximized())
     }
@@ -253,10 +247,10 @@ impl DesktopService {
 
     /// change window to fullscreen
     pub fn set_fullscreen(&self, fullscreen: bool) {
-        if let Some(handle) = self.webview.window().current_monitor() {
-            self.webview
-                .window()
-                .set_fullscreen(fullscreen.then_some(WryFullscreen::Borderless(Some(handle))));
+        if let Some(handle) = &self.window.current_monitor() {
+            self.window.set_fullscreen(
+                fullscreen.then_some(WryFullscreen::Borderless(Some(handle.clone()))),
+            );
         }
     }
 
@@ -336,7 +330,7 @@ impl DesktopService {
     /// Push an objc view to the window
     #[cfg(target_os = "ios")]
     pub fn push_view(&self, view: objc_id::ShareId<objc::runtime::Object>) {
-        let window = self.webview.window();
+        let window = &self.window;
 
         unsafe {
             use objc::runtime::Object;
@@ -356,7 +350,7 @@ impl DesktopService {
     /// Pop an objc view from the window
     #[cfg(target_os = "ios")]
     pub fn pop_view(&self) {
-        let window = self.webview.window();
+        let window = &self.window;
 
         unsafe {
             use objc::runtime::Object;
@@ -380,7 +374,7 @@ pub enum EventData {
     Ipc(IpcMessage),
 
     #[cfg(all(feature = "hot-reload", debug_assertions))]
-    HotReloadEvent(HotReloadMsg),
+    HotReloadEvent(dioxus_hot_reload::HotReloadMsg),
 
     NewWindow,
 

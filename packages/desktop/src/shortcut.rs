@@ -3,7 +3,7 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc, str::FromStr};
 use dioxus_core::ScopeState;
 use dioxus_html::input_data::keyboard_types::Modifiers;
 use slab::Slab;
-use wry::application::keyboard::ModifiersState;
+use tao::keyboard::ModifiersState;
 
 use crate::{desktop_context::DesktopContext, window};
 

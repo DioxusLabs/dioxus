@@ -1,4 +1,4 @@
-use crate::{window, DesktopContext};
+use crate::{use_window, DesktopContext};
 use dioxus_core::ScopeState;
 use dioxus_interpreter_js::INTERPRETER_JS;
 use slab::Slab;
@@ -17,7 +17,7 @@ use tokio::{
 };
 use wry::{
     http::{status::StatusCode, Request, Response},
-    Result,
+    RequestAsyncResponder, Result,
 };
 
 use crate::desktop_context::EditQueue;
@@ -259,8 +259,7 @@ pub(super) async fn desktop_handler(
             .body(Cow::from(body))
         {
             Ok(response) => {
-                responder.respond(response);
-                return;
+                return Ok(response);
             }
             Err(err) => tracing::error!("error building response: {}", err),
         }
@@ -307,8 +306,7 @@ pub(super) async fn desktop_handler(
             .body(Cow::from(asset))
         {
             Ok(response) => {
-                responder.respond(response);
-                return;
+                return response;
             }
             Err(err) => tracing::error!("error building response: {}", err),
         }

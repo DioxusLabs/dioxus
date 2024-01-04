@@ -6,7 +6,7 @@ use crate::{
 use std::{
     any::{Any, TypeId},
     backtrace::Backtrace,
-    cell::RefCell,
+    cell::{Cell, RefCell},
     error::Error,
     fmt::{Debug, Display},
     rc::Rc,
@@ -472,8 +472,8 @@ pub fn ErrorBoundary<'a>(cx: Scope<'a, ErrorBoundaryProps<'a>>) -> Element {
                 attr_paths: &[],
             };
             VNode {
-                parent: Default::default(),
-                stable_id: Default::default(),
+                parent: Cell::new(None),
+                stable_id: Cell::new(None),
                 key: None,
                 template: std::cell::Cell::new(TEMPLATE),
                 root_ids: bumpalo::collections::Vec::with_capacity_in(1usize, __cx.bump()).into(),
