@@ -35,6 +35,7 @@ pub struct Config {
     pub(crate) root_name: String,
     pub(crate) background_color: Option<(u8, u8, u8, u8)>,
     pub(crate) last_window_close_behaviour: WindowCloseBehaviour,
+    pub(crate) enable_default_menu_bar: bool,
 }
 
 type DropHandler = Box<dyn Fn(&Window, FileDropEvent) -> bool>;
@@ -64,7 +65,16 @@ impl Config {
             root_name: "main".to_string(),
             background_color: None,
             last_window_close_behaviour: WindowCloseBehaviour::LastWindowExitsApp,
+            enable_default_menu_bar: true,
         }
+    }
+
+    /// Set whether the default menu bar should be enabled.
+    ///
+    /// > Note: `enable` is `true` by default. To disable the default menu bar pass `false`.
+    pub fn with_default_menu_bar(mut self, enable: bool) -> Self {
+        self.enable_default_menu_bar = enable;
+        self
     }
 
     /// set the directory from which assets will be searched in release mode

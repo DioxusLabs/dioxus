@@ -3,7 +3,7 @@ use crate::{
     any_props::VProps,
     bump_frame::BumpFrame,
     innerlude::ErrorBoundary,
-    innerlude::{DynamicNode, EventHandler, VComponent, VText},
+    innerlude::{DynamicNode, EventHandler, VComponent, VNodeId, VText},
     lazynodes::LazyNodes,
     nodes::{IntoAttributeValue, IntoDynNode, RenderReturn},
     runtime::Runtime,
@@ -94,6 +94,7 @@ pub struct ScopeState {
     pub(crate) hook_idx: Cell<usize>,
 
     pub(crate) borrowed_props: RefCell<Vec<*const VComponent<'static>>>,
+    pub(crate) element_refs_to_drop: RefCell<Vec<VNodeId>>,
     pub(crate) attributes_to_drop_before_render: RefCell<Vec<*const Attribute<'static>>>,
 
     pub(crate) props: Option<Box<dyn AnyProps<'static>>>,
@@ -466,7 +467,7 @@ impl<'src> ScopeState {
             render_fn: component as *const (),
             static_props: P::IS_STATIC,
             props: RefCell::new(Some(extended)),
-            scope: Cell::new(None),
+            scope: Default::default(),
         })
     }
 

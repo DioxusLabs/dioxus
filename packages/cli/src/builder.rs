@@ -93,6 +93,8 @@ pub fn build(config: &CrateConfig, quiet: bool) -> Result<BuildResult> {
         cmd
     };
 
+    let cmd = cmd.args(&config.cargo_args);
+
     let cmd = match executable {
         ExecutableType::Binary(name) => cmd.arg("--bin").arg(name),
         ExecutableType::Lib(name) => cmd.arg("--lib").arg(name),
@@ -265,7 +267,6 @@ pub fn build_desktop(config: &CrateConfig, _is_serve: bool) -> Result<BuildResul
     let mut cmd = subprocess::Exec::cmd("cargo")
         .cwd(&config.crate_dir)
         .arg("build")
-        .arg("--quiet")
         .arg("--message-format=json");
 
     if config.release {
@@ -273,6 +274,8 @@ pub fn build_desktop(config: &CrateConfig, _is_serve: bool) -> Result<BuildResul
     }
     if config.verbose {
         cmd = cmd.arg("--verbose");
+    } else {
+        cmd = cmd.arg("--quiet");
     }
 
     if config.custom_profile.is_some() {
@@ -284,6 +287,14 @@ pub fn build_desktop(config: &CrateConfig, _is_serve: bool) -> Result<BuildResul
         let features_str = config.features.as_ref().unwrap().join(" ");
         cmd = cmd.arg("--features").arg(features_str);
     }
+
+    if let Some(target) = &config.target {
+        cmd = cmd.arg("--target").arg(target);
+    }
+
+    let target_platform = config.target.as_deref().unwrap_or("");
+
+    cmd = cmd.args(&config.cargo_args);
 
     let cmd = match &config.executable {
         crate::ExecutableType::Binary(name) => cmd.arg("--bin").arg(name),
@@ -302,12 +313,17 @@ pub fn build_desktop(config: &CrateConfig, _is_serve: bool) -> Result<BuildResul
     let mut res_path = match &config.executable {
         crate::ExecutableType::Binary(name) | crate::ExecutableType::Lib(name) => {
             file_name = name.clone();
-            config.target_dir.join(release_type).join(name)
+            config
+                .target_dir
+                .join(target_platform)
+                .join(release_type)
+                .join(name)
         }
         crate::ExecutableType::Example(name) => {
             file_name = name.clone();
             config
                 .target_dir
+                .join(target_platform)
                 .join(release_type)
                 .join("examples")
                 .join(name)

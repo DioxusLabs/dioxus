@@ -34,6 +34,7 @@ use element::DesktopElement;
 use eval::init_eval;
 use futures_util::{pin_mut, FutureExt};
 use rustc_hash::FxHashMap;
+pub use protocol::{use_asset_handler, AssetFuture, AssetHandler, AssetRequest, AssetResponse};
 use shortcut::ShortcutRegistry;
 pub use shortcut::{use_global_shortcut, ShortcutHandle, ShortcutId, ShortcutRegistryError};
 use std::cell::Cell;
@@ -48,6 +49,7 @@ use tao::{
     event::{Event, StartCause, WindowEvent},
     event_loop::ControlFlow,
 };
+pub use webview::build_default_menu_bar;
 pub use wry;
 pub use wry::application as tao;
 use wry::application::event_loop::EventLoopBuilder;
@@ -401,7 +403,8 @@ fn create_new_window(
     event_handlers: &WindowEventHandlers,
     shortcut_manager: ShortcutRegistry,
 ) -> WebviewHandler {
-    let (webview, web_context, edit_queue) = webview::build(&mut cfg, event_loop, proxy.clone());
+    let (webview, web_context, asset_handlers, edit_queue) =
+        webview::build(&mut cfg, event_loop, proxy.clone());
     let desktop_context = Rc::from(DesktopService::new(
         webview,
         proxy.clone(),
@@ -409,6 +412,7 @@ fn create_new_window(
         queue.clone(),
         event_handlers.clone(),
         shortcut_manager,
+        asset_handlers,
         edit_queue,
     ));
 

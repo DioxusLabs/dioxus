@@ -18,6 +18,11 @@ pub mod adapters {
 
     #[cfg(feature = "salvo")]
     pub use salvo_adapter::*;
+
+    #[cfg(feature = "rocket")]
+    pub mod rocket_adapter;
+    #[cfg(feature = "rocket")]
+    pub use rocket_adapter::*;
 }
 
 pub use adapters::*;

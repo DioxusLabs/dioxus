@@ -154,7 +154,11 @@ async fn start_desktop_hot_reload(hot_reload_state: HotReloadState) -> Result<()
                                 println!("Connected to hot reloading 🚀");
                             }
                             Err(err) => {
-                                if err.kind() != std::io::ErrorKind::WouldBlock {
+                                let error_string = err.to_string();
+                                // Filter out any error messages about a operation that may block and an error message that triggers on some operating systems that says "Waiting for a process to open the other end of the pipe" without WouldBlock being set
+                                let display_error = err.kind() != std::io::ErrorKind::WouldBlock
+                                    && !error_string.contains("Waiting for a process");
+                                if display_error {
                                     println!("Error connecting to hot reloading: {} (Hot reloading is a feature of the dioxus-cli. If you are not using the CLI, this error can be ignored)", err);
                                 }
                             }

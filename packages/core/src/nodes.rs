@@ -1,3 +1,4 @@
+use crate::innerlude::{ElementRef, VNodeId};
 use crate::{
     any_props::AnyProps, arena::ElementId, Element, Event, LazyNodes, ScopeId, ScopeState,
 };
@@ -47,7 +48,10 @@ pub struct VNode<'a> {
     pub key: Option<&'a str>,
 
     /// When rendered, this template will be linked to its parent manually
-    pub parent: Option<ElementId>,
+    pub(crate) parent: Cell<Option<ElementRef>>,
+
+    /// The bubble id assigned to the child that we need to update and drop when diffing happens
+    pub(crate) stable_id: Cell<Option<VNodeId>>,
 
     /// The static nodes and static descriptor of the template
     pub template: Cell<Template<'static>>,
@@ -68,7 +72,8 @@ impl<'a> VNode<'a> {
     pub fn empty(cx: &'a ScopeState) -> Element<'a> {
         Some(VNode {
             key: None,
-            parent: None,
+            parent: Default::default(),
+            stable_id: Default::default(),
             root_ids: RefCell::new(bumpalo::collections::Vec::new_in(cx.bump())),
             dynamic_nodes: &[],
             dynamic_attrs: &[],
@@ -79,6 +84,30 @@ impl<'a> VNode<'a> {
                 attr_paths: &[],
             }),
         })
+    }
+
+    /// Create a new VNode
+    pub fn new(
+        key: Option<&'a str>,
+        template: Template<'static>,
+        root_ids: bumpalo::collections::Vec<'a, ElementId>,
+        dynamic_nodes: &'a [DynamicNode<'a>],
+        dynamic_attrs: &'a [Attribute<'a>],
+    ) -> Self {
+        Self {
+            key,
+            parent: Cell::new(None),
+            stable_id: Cell::new(None),
+            template: Cell::new(template),
+            root_ids: RefCell::new(root_ids),
+            dynamic_nodes,
+            dynamic_attrs,
+        }
+    }
+
+    /// Get the stable id of this node used for bubbling events
+    pub(crate) fn stable_id(&self) -> Option<VNodeId> {
+        self.stable_id.get()
     }
 
     /// Load a dynamic root at the given index
@@ -319,7 +348,7 @@ pub struct VComponent<'a> {
 
     /// The function pointer of the component, known at compile time
     ///
-    /// It is possible that components get folded at comppile time, so these shouldn't be really used as a key
+    /// It is possible that components get folded at compile time, so these shouldn't be really used as a key
     pub(crate) render_fn: *const (),
 
     pub(crate) props: RefCell<Option<Box<dyn AnyProps<'a> + 'a>>>,
@@ -372,6 +401,8 @@ impl<'a> VText<'a> {
 pub struct VPlaceholder {
     /// The ID of this node in the real DOM
     pub(crate) id: Cell<Option<ElementId>>,
+    /// The parent of this node
+    pub(crate) parent: Cell<Option<ElementRef>>,
 }
 
 impl VPlaceholder {
@@ -722,7 +753,8 @@ impl<'b> IntoDynNode<'b> for Arguments<'_> {
 impl<'a> IntoDynNode<'a> for &'a VNode<'a> {
     fn into_vnode(self, _cx: &'a ScopeState) -> DynamicNode<'a> {
         DynamicNode::Fragment(_cx.bump().alloc([VNode {
-            parent: self.parent,
+            parent: self.parent.clone(),
+            stable_id: self.stable_id.clone(),
             template: self.template.clone(),
             root_ids: self.root_ids.clone(),
             key: self.key,

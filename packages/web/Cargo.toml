@@ -42,6 +42,7 @@ features = [
     "HtmlFormElement",
     "Text",
     "Window",
+    "console",
 ]
 
 [features]
