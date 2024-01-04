@@ -1,4 +1,4 @@
-use crate::desktop_context::EventData;
+use crate::desktop_context::{EditQueue, EventData};
 use crate::protocol::{self, AssetHandlerRegistry};
 use crate::{desktop_context::UserWindowEvent, Config};
 use tao::event_loop::{EventLoopProxy, EventLoopWindowTarget};
@@ -9,11 +9,12 @@ use wry::application::window::Window;
 use wry::http::Response;
 use wry::webview::{WebContext, WebView, WebViewBuilder};
 
-pub fn build(
+pub(crate) fn build(
     cfg: &mut Config,
     event_loop: &EventLoopWindowTarget<UserWindowEvent>,
     proxy: EventLoopProxy<UserWindowEvent>,
-) -> (WebView, WebContext, AssetHandlerRegistry) {
+) -> (WebView, WebContext, AssetHandlerRegistry, EditQueue) {
+    let builder = cfg.window.clone();
     let window = builder.with_visible(false).build(event_loop).unwrap();
     let file_handler = cfg.file_drop_handler.take();
     let custom_head = cfg.custom_head.clone();
@@ -39,6 +40,8 @@ pub fn build(
     }
 
     let mut web_context = WebContext::new(cfg.data_dir.clone());
+    let edit_queue = EditQueue::default();
+    let headless = !cfg.window.window.visible;
     let asset_handlers = AssetHandlerRegistry::new();
     let asset_handlers_ref = asset_handlers.clone();
 
@@ -126,7 +129,7 @@ pub fn build(
         webview = webview.with_devtools(true);
     }
 
-    (webview.build().unwrap(), web_context, asset_handlers)
+    (webview.build().unwrap(), web_context, asset_handlers, edit_queue)
 }
 
 /// Builds a standard menu bar depending on the users platform. It may be used as a starting point

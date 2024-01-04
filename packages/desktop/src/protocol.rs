@@ -16,12 +16,16 @@ use tokio::{
 };
 use wry::{
     http::{status::StatusCode, Request, Response},
+    webview::RequestAsyncResponder,
     Result,
 };
-
 use crate::{use_window, DesktopContext};
 
-fn module_loader(root_name: &str) -> String {
+use crate::desktop_context::EditQueue;
+
+static MINIFIED: &str = include_str!("./minified.js");
+
+fn module_loader(root_name: &str, headless: bool) -> String {
     let js = INTERPRETER_JS.replace(
         "/*POST_HANDLE_EDITS*/",
         r#"// Prevent file inputs from opening the file dialog on click
@@ -48,16 +52,20 @@ fn module_loader(root_name: &str) -> String {
       }
     }"#,
     );
+  
     format!(
         r#"
 <script type="module">
-    {js}
-
-    let rootname = "{root_name}";
-    let root = window.document.getElementById(rootname);
-    if (root != null) {{
-        window.interpreter = new Interpreter(root, new InterpreterConfig(true));
-        window.ipc.postMessage(serializeIpcMessage("initialize"));
+    {MINIFIED}
+    // Wait for the page to load
+    window.onload = function() {{
+        let rootname = "{root_name}";
+        let root_element = window.document.getElementById(rootname);
+        if (root_element != null) {{
+            window.interpreter.initialize(root_element);
+            window.ipc.postMessage(window.interpreter.serializeIpcMessage("initialize"));
+        }}
+        window.interpreter.wait_for_request({headless});
     }}
 </script>
 "#
@@ -211,6 +219,8 @@ pub(super) async fn desktop_handler(
     custom_index: Option<String>,
     root_name: &str,
     asset_handlers: &AssetHandlerRegistry,
+    edit_queue: &EditQueue,
+    headless: bool,
 ) -> Result<AssetResponse> {
     let request = AssetRequest::from(request);
 
@@ -220,7 +230,10 @@ pub(super) async fn desktop_handler(
         // we'll look for the closing </body> tag and insert our little module loader there.
         let body = match custom_index {
             Some(custom_index) => custom_index
-                .replace("</body>", &format!("{}</body>", module_loader(root_name)))
+                .replace(
+                    "</body>",
+                    &format!("{}</body>", module_loader(root_name, headless)),
+                )
                 .into_bytes(),
 
             None => {
@@ -232,20 +245,28 @@ pub(super) async fn desktop_handler(
                 }
 
                 template
-                    .replace("<!-- MODULE LOADER -->", &module_loader(root_name))
+                    .replace(
+                        "<!-- MODULE LOADER -->",
+                        &module_loader(root_name, headless),
+                    )
                     .into_bytes()
             }
         };
 
-        return Response::builder()
+        match Response::builder()
             .header("Content-Type", "text/html")
+            .header("Access-Control-Allow-Origin", "*")
             .body(Cow::from(body))
-            .map_err(From::from);
-    } else if request.uri().path() == "/common.js" {
-        return Response::builder()
-            .header("Content-Type", "text/javascript")
-            .body(Cow::from(COMMON_JS.as_bytes()))
-            .map_err(From::from);
+        {
+            Ok(response) => {
+                responder.respond(response);
+                return;
+            }
+            Err(err) => tracing::error!("error building response: {}", err),
+        }
+    } else if request.uri().path().trim_matches('/') == "edits" {
+        edit_queue.handle_request(responder);
+        return;
     }
 
     // If the user provided a custom asset handler, then call it and return the response
@@ -266,16 +287,41 @@ pub(super) async fn desktop_handler(
     }
 
     if asset.exists() {
-        return Response::builder()
-            .header("Content-Type", get_mime_from_path(&asset)?)
-            .body(Cow::from(std::fs::read(asset)?))
-            .map_err(From::from);
+        let content_type = match get_mime_from_path(&asset) {
+            Ok(content_type) => content_type,
+            Err(err) => {
+                tracing::error!("error getting mime type: {}", err);
+                return;
+            }
+        };
+        let asset = match std::fs::read(asset) {
+            Ok(asset) => asset,
+            Err(err) => {
+                tracing::error!("error reading asset: {}", err);
+                return;
+            }
+        };
+        match Response::builder()
+            .header("Content-Type", content_type)
+            .body(Cow::from(asset))
+        {
+            Ok(response) => {
+                responder.respond(response);
+                return;
+            }
+            Err(err) => tracing::error!("error building response: {}", err),
+        }
     }
 
-    Response::builder()
+    match Response::builder()
         .status(StatusCode::NOT_FOUND)
         .body(Cow::from(String::from("Not Found").into_bytes()))
-        .map_err(From::from)
+    {
+        Ok(response) => {
+            responder.respond(response);
+        }
+        Err(err) => tracing::error!("error building response: {}", err),
+    }
 }
 
 #[allow(unreachable_code)]

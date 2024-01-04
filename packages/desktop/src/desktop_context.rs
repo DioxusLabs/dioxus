@@ -1,7 +1,3 @@
-use std::cell::RefCell;
-use std::rc::Rc;
-use std::rc::Weak;
-
 use crate::create_new_window;
 use crate::events::IpcMessage;
 use crate::protocol::AssetFuture;
@@ -15,7 +11,17 @@ use dioxus_core::ScopeState;
 use dioxus_core::VirtualDom;
 #[cfg(all(feature = "hot-reload", debug_assertions))]
 use dioxus_hot_reload::HotReloadMsg;
+use dioxus_interpreter_js::binary_protocol::Channel;
+use rustc_hash::FxHashMap;
 use slab::Slab;
+use std::cell::RefCell;
+use std::fmt::Debug;
+use std::fmt::Formatter;
+use std::rc::Rc;
+use std::rc::Weak;
+use std::sync::atomic::AtomicU16;
+use std::sync::Arc;
+use std::sync::Mutex;
 use wry::application::event::Event;
 use wry::application::event_loop::EventLoopProxy;
 use wry::application::event_loop::EventLoopWindowTarget;
@@ -33,6 +39,45 @@ pub fn use_window(cx: &ScopeState) -> &DesktopContext {
     cx.use_hook(|| cx.consume_context::<DesktopContext>())
         .as_ref()
         .unwrap()
+}
+
+/// This handles communication between the requests that the webview makes and the interpreter. The interpreter constantly makes long running requests to the webview to get any edits that should be made to the DOM almost like server side events.
+/// It will hold onto the requests until the interpreter is ready to handle them and hold onto any pending edits until a new request is made.
+#[derive(Default, Clone)]
+pub(crate) struct EditQueue {
+    queue: Arc<Mutex<Vec<Vec<u8>>>>,
+    responder: Arc<Mutex<Option<wry::webview::RequestAsyncResponder>>>,
+}
+
+impl Debug for EditQueue {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("EditQueue")
+            .field("queue", &self.queue)
+            .field("responder", {
+                &self.responder.lock().unwrap().as_ref().map(|_| ())
+            })
+            .finish()
+    }
+}
+
+impl EditQueue {
+    pub fn handle_request(&self, responder: wry::webview::RequestAsyncResponder) {
+        let mut queue = self.queue.lock().unwrap();
+        if let Some(bytes) = queue.pop() {
+            responder.respond(wry::http::Response::new(bytes));
+        } else {
+            *self.responder.lock().unwrap() = Some(responder);
+        }
+    }
+
+    pub fn add_edits(&self, edits: Vec<u8>) {
+        let mut responder = self.responder.lock().unwrap();
+        if let Some(responder) = responder.take() {
+            responder.respond(wry::http::Response::new(edits));
+        } else {
+            self.queue.lock().unwrap().push(edits);
+        }
+    }
 }
 
 pub(crate) type WebviewQueue = Rc<RefCell<Vec<WebviewHandler>>>;
@@ -67,6 +112,11 @@ pub struct DesktopService {
 
     pub(crate) shortcut_manager: ShortcutRegistry,
 
+    pub(crate) edit_queue: EditQueue,
+    pub(crate) templates: RefCell<FxHashMap<String, u16>>,
+    pub(crate) max_template_count: AtomicU16,
+
+    pub(crate) channel: RefCell<Channel>,
     pub(crate) asset_handlers: AssetHandlerRegistry,
 
     #[cfg(target_os = "ios")]
@@ -93,6 +143,7 @@ impl DesktopService {
         webviews: WebviewQueue,
         event_handlers: WindowEventHandlers,
         shortcut_manager: ShortcutRegistry,
+        edit_queue: EditQueue,
         asset_handlers: AssetHandlerRegistry,
     ) -> Self {
         Self {
@@ -103,6 +154,10 @@ impl DesktopService {
             pending_windows: webviews,
             event_handlers,
             shortcut_manager,
+            edit_queue,
+            templates: Default::default(),
+            max_template_count: Default::default(),
+            channel: Default::default(),
             asset_handlers,
             #[cfg(target_os = "ios")]
             views: Default::default(),

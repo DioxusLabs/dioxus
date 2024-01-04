@@ -22,9 +22,10 @@ tokio-stream = { version = "0.1.11", features = ["net"] }
 tokio-util = { version = "0.7.4", features = ["rt"] }
 serde = { version = "1.0.151", features = ["derive"] }
 serde_json = "1.0.91"
+rustc-hash = { workspace = true }
 dioxus-html = { workspace = true, features = ["serialize"] }
 dioxus-core = { workspace = true, features = ["serialize"] }
-dioxus-interpreter-js = { workspace = true }
+dioxus-interpreter-js = { workspace = true, features = ["binary-protocol"] }
 dioxus-hot-reload = { workspace = true, optional = true }
 
 # warp
@@ -58,6 +59,10 @@ rocket = "0.5.0"
 rocket_ws = "0.1.0"
 tower = "0.4.13"
 
+[build-dependencies]
+dioxus-interpreter-js = { workspace = true, features = ["binary-protocol"] }
+minify-js = "0.5.6"
+
 [features]
 default = ["hot-reload"]
 # actix = ["actix-files", "actix-web", "actix-ws"]
@@ -66,6 +71,10 @@ rocket = ["dep:rocket", "dep:rocket_ws"]
 
 [[example]]
 name = "axum"
+required-features = ["axum"]
+
+[[example]]
+name = "axum_stress"
 required-features = ["axum"]
 
 [[example]]
