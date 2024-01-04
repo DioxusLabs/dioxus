@@ -34,7 +34,17 @@ use wry::webview::WebView;
 
 pub type ProxyType = EventLoopProxy<UserWindowEvent>;
 
+/// Get an imperative handle to the current window without using a hook
+///
+/// ## Panics
+///
+/// This function will panic if it is called outside of the context of a Dioxus App.
+pub fn window() -> DesktopContext {
+    dioxus_core::prelude::consume_context().unwrap()
+}
+
 /// Get an imperative handle to the current window
+#[deprecated = "Prefer the using the `window` function directly for cleaner code"]
 pub fn use_window(cx: &ScopeState) -> &DesktopContext {
     cx.use_hook(|| cx.consume_context::<DesktopContext>())
         .as_ref()
