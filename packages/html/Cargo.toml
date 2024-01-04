@@ -68,3 +68,4 @@ mounted = [
 wasm-bind = ["web-sys", "wasm-bindgen"]
 native-bind = ["tokio"]
 hot-reload-context = ["dioxus-rsx"]
+html-to-rsx = []
