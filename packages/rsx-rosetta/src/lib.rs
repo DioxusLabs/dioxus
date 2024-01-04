@@ -59,6 +59,12 @@ pub fn rsx_node_from_html(node: &Node) -> Option<BodyNode> {
 
                     ElementAttrNamed {
                         el_name: el_name.clone(),
+//                         attr: ElementAttr {
+//                             value: dioxus_rsx::ElementAttrValue::AttrLiteral(ifmt_from_text(
+//                                 value.as_deref().unwrap_or("false"),
+//                             )),
+//                             name: dioxus_rsx::ElementAttrName::BuiltIn(ident),
+                        // },
                         attr,
                     }
                 })
@@ -68,9 +74,12 @@ pub fn rsx_node_from_html(node: &Node) -> Option<BodyNode> {
             if !class.is_empty() {
                 attributes.push(ElementAttrNamed {
                     el_name: el_name.clone(),
-                    attr: ElementAttr::AttrText {
-                        name: Ident::new("class", Span::call_site()),
-                        value: ifmt_from_text(&class),
+                    attr: ElementAttr {
+                        name: dioxus_rsx::ElementAttrName::BuiltIn(Ident::new(
+                            "class",
+                            Span::call_site(),
+                        )),
+                        value: dioxus_rsx::ElementAttrValue::AttrLiteral(ifmt_from_text(&class)),
                     },
                 });
             }
@@ -78,9 +87,12 @@ pub fn rsx_node_from_html(node: &Node) -> Option<BodyNode> {
             if let Some(id) = &el.id {
                 attributes.push(ElementAttrNamed {
                     el_name: el_name.clone(),
-                    attr: ElementAttr::AttrText {
-                        name: Ident::new("id", Span::call_site()),
-                        value: ifmt_from_text(id),
+                    attr: ElementAttr {
+                        name: dioxus_rsx::ElementAttrName::BuiltIn(Ident::new(
+                            "id",
+                            Span::call_site(),
+                        )),
+                        value: dioxus_rsx::ElementAttrValue::AttrLiteral(ifmt_from_text(id)),
                     },
                 });
             }
@@ -91,6 +103,7 @@ pub fn rsx_node_from_html(node: &Node) -> Option<BodyNode> {
                 name: el_name,
                 children,
                 attributes,
+                merged_attributes: Default::default(),
                 key: None,
                 brace: Default::default(),
             }))
