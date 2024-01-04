@@ -16,7 +16,7 @@ use crate::{
 use futures_util::{pin_mut, StreamExt};
 use rustc_hash::{FxHashMap, FxHashSet};
 use slab::Slab;
-use std::{any::Any, cell::Cell, collections::BTreeSet, future::Future, ptr::NonNull, rc::Rc};
+use std::{any::Any, cell::Cell, collections::BTreeSet, future::Future, ptr::NonNull, rc::Rc, sync::Arc};
 
 /// A virtual node system that progresses user events and diffs UI trees.
 ///
@@ -277,7 +277,10 @@ impl VirtualDom {
         );
 
         // Unlike react, we provide a default error boundary that just renders the error as a string
-        root.provide_context(Rc::new(ErrorBoundary::new(ScopeId::ROOT)));
+        root.provide_context(Rc::new(ErrorBoundary::new_in_scope(
+            ScopeId::ROOT,
+            Arc::new(|_| {}),
+        )));
 
         // the root element is always given element ID 0 since it's the container for the entire tree
         dom.elements.insert(None);
