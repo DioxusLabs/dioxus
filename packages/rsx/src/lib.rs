@@ -204,12 +204,17 @@ impl<'a> ToTokens for TemplateRenderer<'a> {
             None => quote! { None },
         };
 
-        let spndbg = format!("{:?}", self.roots[0].span());
-        let root_col = spndbg
-            .rsplit_once("..")
-            .and_then(|(_, after)| after.split_once(')').map(|(before, _)| before))
-            .unwrap_or_default();
-
+        let root_col = match self.roots.first() {
+            Some(first_root) => {
+                let first_root_span = format!("{:?}", first_root.span());
+                first_root_span
+                    .rsplit_once("..")
+                    .and_then(|(_, after)| after.split_once(')').map(|(before, _)| before))
+                    .unwrap_or_default()
+                    .to_string()
+            }
+            _ => "0".to_string(),
+        };
         let root_printer = self.roots.iter().enumerate().map(|(idx, root)| {
             context.current_path.push(idx as u8);
             let out = context.render_static_node(root);

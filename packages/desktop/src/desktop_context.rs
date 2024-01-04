@@ -4,8 +4,11 @@ use std::rc::Weak;
 
 use crate::create_new_window;
 use crate::events::IpcMessage;
+use crate::protocol::AssetFuture;
+use crate::protocol::AssetHandlerRegistry;
 use crate::query::QueryEngine;
 use crate::shortcut::{HotKey, ShortcutId, ShortcutRegistry, ShortcutRegistryError};
+use crate::AssetHandler;
 use crate::Config;
 use crate::WebviewHandler;
 use dioxus_core::ScopeState;
@@ -64,6 +67,8 @@ pub struct DesktopService {
 
     pub(crate) shortcut_manager: ShortcutRegistry,
 
+    pub(crate) asset_handlers: AssetHandlerRegistry,
+
     #[cfg(target_os = "ios")]
     pub(crate) views: Rc<RefCell<Vec<*mut objc::runtime::Object>>>,
 }
@@ -88,6 +93,7 @@ impl DesktopService {
         webviews: WebviewQueue,
         event_handlers: WindowEventHandlers,
         shortcut_manager: ShortcutRegistry,
+        asset_handlers: AssetHandlerRegistry,
     ) -> Self {
         Self {
             webview: Rc::new(webview),
@@ -97,6 +103,7 @@ impl DesktopService {
             pending_windows: webviews,
             event_handlers,
             shortcut_manager,
+            asset_handlers,
             #[cfg(target_os = "ios")]
             views: Default::default(),
         }
@@ -245,6 +252,20 @@ impl DesktopService {
     /// Remove all global shortcuts
     pub fn remove_all_shortcuts(&self) {
         self.shortcut_manager.remove_all()
+    }
+
+    /// Provide a callback to handle asset loading yourself.
+    ///
+    /// See [`use_asset_handle`](crate::use_asset_handle) for a convenient hook.
+    pub async fn register_asset_handler<F: AssetFuture>(&self, f: impl AssetHandler<F>) -> usize {
+        self.asset_handlers.register_handler(f).await
+    }
+
+    /// Removes an asset handler by its identifier.
+    ///
+    /// Returns `None` if the handler did not exist.
+    pub async fn remove_asset_handler(&self, id: usize) -> Option<()> {
+        self.asset_handlers.remove_handler(id).await
     }
 
     /// Push an objc view to the window
