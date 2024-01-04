@@ -41,11 +41,11 @@ impl<'a> Default for RenderReturn<'a> {
 /// The dynamic parts of the template are stored separately from the static parts. This allows faster diffing by skipping
 /// static parts of the template.
 #[derive(Debug, Clone)]
-pub struct VNode<'a> {
+pub struct VNode {
     /// The key given to the root of this template.
     ///
     /// In fragments, this is the key of the first child. In other cases, it is the key of the root.
-    pub key: Option<&'a str>,
+    pub key: Option<String>,
 
     /// When rendered, this template will be linked to its parent manually
     pub(crate) parent: Cell<Option<ElementRef>>,
@@ -58,25 +58,25 @@ pub struct VNode<'a> {
 
     /// The IDs for the roots of this template - to be used when moving the template around and removing it from
     /// the actual Dom
-    pub root_ids: RefCell<bumpalo::collections::Vec<'a, ElementId>>,
+    pub root_ids: RefCell<Vec<ElementId>>,
 
     /// The dynamic parts of the template
-    pub dynamic_nodes: &'a [DynamicNode<'a>],
+    pub dynamic_nodes: Vec<DynamicNode>,
 
     /// The dynamic parts of the template
-    pub dynamic_attrs: &'a [Attribute<'a>],
+    pub dynamic_attrs: Vec<Attribute>,
 }
 
-impl<'a> VNode<'a> {
+impl VNode {
     /// Create a template with no nodes that will be skipped over during diffing
-    pub fn empty(cx: &'a ScopeState) -> Element<'a> {
+    pub fn empty() -> Element {
         Some(VNode {
             key: None,
             parent: Default::default(),
             stable_id: Default::default(),
-            root_ids: RefCell::new(bumpalo::collections::Vec::new_in(cx.bump())),
-            dynamic_nodes: &[],
-            dynamic_attrs: &[],
+            root_ids: Default::default(),
+            dynamic_nodes: Vec::new(),
+            dynamic_attrs: Vec::new(),
             template: Cell::new(Template {
                 name: "dioxus-empty",
                 roots: &[],

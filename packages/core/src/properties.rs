@@ -32,13 +32,10 @@ use crate::innerlude::*;
 ///     data: &'a str
 /// }
 /// ```
-pub trait Properties: Sized {
+pub trait Properties: Sized + 'static {
     /// The type of the builder for this component.
     /// Used to create "in-progress" versions of the props.
     type Builder;
-
-    /// An indication if these props are can be memoized automatically.
-    const IS_STATIC: bool;
 
     /// Create a builder for this component.
     fn builder() -> Self::Builder;
@@ -48,16 +45,15 @@ pub trait Properties: Sized {
     /// # Safety
     /// The user must know if their props are static, but if they make a mistake, UB happens
     /// Therefore it's unsafe to memoize.
-    unsafe fn memoize(&self, other: &Self) -> bool;
+    fn memoize(&self, other: &Self) -> bool;
 }
 
 impl Properties for () {
     type Builder = EmptyBuilder;
-    const IS_STATIC: bool = true;
     fn builder() -> Self::Builder {
         EmptyBuilder {}
     }
-    unsafe fn memoize(&self, _other: &Self) -> bool {
+    fn memoize(&self, _other: &Self) -> bool {
         true
     }
 }

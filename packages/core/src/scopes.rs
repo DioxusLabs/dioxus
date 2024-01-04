@@ -87,9 +87,6 @@ pub struct ScopeState {
 
     pub(crate) render_cnt: Cell<usize>,
 
-    pub(crate) node_arena_1: BumpFrame,
-    pub(crate) node_arena_2: BumpFrame,
-
     pub(crate) hooks: RefCell<Vec<Box<UnsafeCell<dyn Any>>>>,
     pub(crate) hook_idx: Cell<usize>,
 

@@ -39,15 +39,15 @@ pub fn Fragment<'a>(cx: Scope<'a, FragmentProps<'a>>) -> Element {
     })
 }
 
-pub struct FragmentProps<'a>(Element<'a>);
-pub struct FragmentBuilder<'a, const BUILT: bool>(Element<'a>);
-impl<'a> FragmentBuilder<'a, false> {
-    pub fn children(self, children: Element<'a>) -> FragmentBuilder<'a, true> {
+pub struct FragmentProps(Element);
+pub struct FragmentBuilder<const BUILT: bool>(Element);
+impl FragmentBuilder<false> {
+    pub fn children(self, children: Element) -> FragmentBuilder<true> {
         FragmentBuilder(children)
     }
 }
-impl<'a, const A: bool> FragmentBuilder<'a, A> {
-    pub fn build(self) -> FragmentProps<'a> {
+impl<const A: bool> FragmentBuilder<A> {
+    pub fn build(self) -> FragmentProps {
         FragmentProps(self.0)
     }
 }
@@ -94,11 +94,10 @@ impl<'a, const A: bool> FragmentBuilder<'a, A> {
 /// ```
 impl<'a> Properties for FragmentProps<'a> {
     type Builder = FragmentBuilder<'a, false>;
-    const IS_STATIC: bool = false;
     fn builder() -> Self::Builder {
         FragmentBuilder(None)
     }
-    unsafe fn memoize(&self, _other: &Self) -> bool {
+    fn memoize(&self, _other: &Self) -> bool {
         false
     }
 }
