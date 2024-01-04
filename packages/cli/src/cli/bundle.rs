@@ -76,6 +76,12 @@ impl Bundle {
             crate_config.set_profile(self.build.profile.unwrap());
         }
 
+        if let Some(target) = &self.build.target {
+            crate_config.set_target(target.to_string());
+        }
+
+        crate_config.set_cargo_args(self.build.cargo_args);
+
         // build the desktop app
         build_desktop(&crate_config, false)?;
 
@@ -132,10 +138,10 @@ impl Bundle {
             .project_out_directory(crate_config.out_dir)
             .package_settings(PackageSettings {
                 product_name: crate_config.dioxus_config.application.name.clone(),
-                version: package.version,
-                description: package.description.unwrap_or_default(),
-                homepage: package.homepage,
-                authors: Some(package.authors),
+                version: package.version().to_string(),
+                description: package.description().unwrap_or_default().to_string(),
+                homepage: Some(package.homepage().unwrap_or_default().to_string()),
+                authors: Some(Vec::from(package.authors())),
                 default_run: Some(crate_config.dioxus_config.application.name.clone()),
             })
             .binaries(binaries)
@@ -148,6 +154,11 @@ impl Bundle {
                     .collect(),
             );
         }
+
+        if let Some(target) = &self.build.target {
+            settings = settings.target(target.to_string());
+        }
+
         let settings = settings.build();
 
         // on macos we need to set CI=true (https://github.com/tauri-apps/tauri/issues/2567)
@@ -156,9 +167,9 @@ impl Bundle {
 
         tauri_bundler::bundle::bundle_project(settings.unwrap()).unwrap_or_else(|err|{
             #[cfg(target_os = "macos")]
-            panic!("Failed to bundle project: {}\nMake sure you have automation enabled in your terminal (https://github.com/tauri-apps/tauri/issues/3055#issuecomment-1624389208) and full disk access enabled for your terminal (https://github.com/tauri-apps/tauri/issues/3055#issuecomment-1624389208)", err);
+            panic!("Failed to bundle project: {:#?}\nMake sure you have automation enabled in your terminal (https://github.com/tauri-apps/tauri/issues/3055#issuecomment-1624389208) and full disk access enabled for your terminal (https://github.com/tauri-apps/tauri/issues/3055#issuecomment-1624389208)", err);
             #[cfg(not(target_os = "macos"))]
-            panic!("Failed to bundle project: {}", err);
+            panic!("Failed to bundle project: {:#?}", err);
         });
 
         Ok(())

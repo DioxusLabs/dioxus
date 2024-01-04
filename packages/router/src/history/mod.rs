@@ -22,6 +22,11 @@ pub use web::*;
 #[cfg(feature = "web")]
 pub(crate) mod web_history;
 
+#[cfg(feature = "liveview")]
+mod liveview;
+#[cfg(feature = "liveview")]
+pub use liveview::*;
+
 // #[cfg(feature = "web")]
 // mod web_hash;
 // #[cfg(feature = "web")]
@@ -48,9 +53,9 @@ pub trait HistoryProvider<R: Routable> {
     /// ```rust
     /// # use dioxus_router::prelude::*;
     /// # use dioxus::prelude::*;
-    /// # #[inline_props]
+    /// # #[component]
     /// # fn Index(cx: Scope) -> Element { todo!() }
-    /// # #[inline_props]
+    /// # #[component]
     /// # fn OtherPage(cx: Scope) -> Element { todo!() }
     /// #[derive(Clone, Routable, Debug, PartialEq)]
     /// enum Route {
@@ -86,17 +91,20 @@ pub trait HistoryProvider<R: Routable> {
     /// ```rust
     /// # use dioxus_router::prelude::*;
     /// # use dioxus::prelude::*;   
-    /// # #[inline_props]
+    /// # #[component]
     /// # fn Index(cx: Scope) -> Element { todo!() }
+    /// # fn Other(cx: Scope) -> Element { todo!() }
     /// #[derive(Clone, Routable, Debug, PartialEq)]
     /// enum Route {
     ///     #[route("/")]
     ///     Index {},
+    ///     #[route("/other")]
+    ///     Other {},
     /// }
     /// let mut history = MemoryHistory::<Route>::default();
     /// assert_eq!(history.can_go_back(), false);
     ///
-    /// history.push(Route::Index {});
+    /// history.push(Route::Other {});
     /// assert_eq!(history.can_go_back(), true);
     /// ```
     #[must_use]
@@ -112,9 +120,9 @@ pub trait HistoryProvider<R: Routable> {
     /// ```rust
     /// # use dioxus_router::prelude::*;
     /// # use dioxus::prelude::*;
-    /// # #[inline_props]
+    /// # #[component]
     /// # fn Index(cx: Scope) -> Element { todo!() }
-    /// # #[inline_props]
+    /// # #[component]
     /// # fn OtherPage(cx: Scope) -> Element { todo!() }
     /// #[derive(Clone, Routable, Debug, PartialEq)]
     /// enum Route {
@@ -144,9 +152,9 @@ pub trait HistoryProvider<R: Routable> {
     /// ```rust
     /// # use dioxus_router::prelude::*;
     /// # use dioxus::prelude::*;
-    /// # #[inline_props]
+    /// # #[component]
     /// # fn Index(cx: Scope) -> Element { todo!() }
-    /// # #[inline_props]
+    /// # #[component]
     /// # fn OtherPage(cx: Scope) -> Element { todo!() }
     /// #[derive(Clone, Routable, Debug, PartialEq)]
     /// enum Route {
@@ -177,9 +185,9 @@ pub trait HistoryProvider<R: Routable> {
     /// ```rust
     /// # use dioxus_router::prelude::*;
     /// # use dioxus::prelude::*;
-    /// # #[inline_props]
+    /// # #[component]
     /// # fn Index(cx: Scope) -> Element { todo!() }
-    /// # #[inline_props]
+    /// # #[component]
     /// # fn OtherPage(cx: Scope) -> Element { todo!() }
     /// #[derive(Clone, Routable, Debug, PartialEq)]
     /// enum Route {
@@ -210,9 +218,9 @@ pub trait HistoryProvider<R: Routable> {
     /// ```rust
     /// # use dioxus_router::prelude::*;
     /// # use dioxus::prelude::*;
-    /// # #[inline_props]
+    /// # #[component]
     /// # fn Index(cx: Scope) -> Element { todo!() }
-    /// # #[inline_props]
+    /// # #[component]
     /// # fn OtherPage(cx: Scope) -> Element { todo!() }
     /// #[derive(Clone, Routable, Debug, PartialEq)]
     /// enum Route {
@@ -239,9 +247,9 @@ pub trait HistoryProvider<R: Routable> {
     /// ```rust
     /// # use dioxus_router::prelude::*;
     /// # use dioxus::prelude::*;
-    /// # #[inline_props]
+    /// # #[component]
     /// # fn Index(cx: Scope) -> Element { todo!() }
-    /// # #[inline_props]
+    /// # #[component]
     /// # fn OtherPage(cx: Scope) -> Element { todo!() }
     /// #[derive(Clone, Routable, Debug, PartialEq)]
     /// enum Route {

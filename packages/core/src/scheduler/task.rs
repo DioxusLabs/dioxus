@@ -19,7 +19,7 @@ pub struct TaskId(pub usize);
 /// the task itself is the waker
 pub(crate) struct LocalTask {
     pub scope: ScopeId,
-    pub(super) task: RefCell<Pin<Box<dyn Future<Output = ()> + 'static>>>,
+    pub task: RefCell<Pin<Box<dyn Future<Output = ()> + 'static>>>,
     pub waker: Waker,
 }
 
@@ -48,11 +48,15 @@ impl Scheduler {
             })),
         };
 
-        entry.insert(task);
+        let mut cx = std::task::Context::from_waker(&task.waker);
 
-        self.sender
-            .unbounded_send(SchedulerMsg::TaskNotified(task_id))
-            .expect("Scheduler should exist");
+        if !task.task.borrow_mut().as_mut().poll(&mut cx).is_ready() {
+            self.sender
+                .unbounded_send(SchedulerMsg::TaskNotified(task_id))
+                .expect("Scheduler should exist");
+        }
+
+        entry.insert(task);
 
         task_id
     }
@@ -60,8 +64,8 @@ impl Scheduler {
     /// Drop the future with the given TaskId
     ///
     /// This does not abort the task, so you'll want to wrap it in an aborthandle if that's important to you
-    pub fn remove(&self, id: TaskId) {
-        self.tasks.borrow_mut().try_remove(id.0);
+    pub fn remove(&self, id: TaskId) -> Option<LocalTask> {
+        self.tasks.borrow_mut().try_remove(id.0)
     }
 }
 

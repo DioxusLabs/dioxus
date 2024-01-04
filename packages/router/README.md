@@ -15,7 +15,7 @@
 [discord-url]: https://discord.gg/XgGxMSkvUM
 
 [Website](https://dioxuslabs.com) |
-[Guides](https://dioxuslabs.com/docs/0.3/router/) |
+[Guides](https://dioxuslabs.com/learn/0.4/router/) |
 [API Docs](https://docs.rs/dioxus-router/latest/dioxus_router) |
 [Chat](https://discord.gg/XgGxMSkvUM)
 
@@ -26,8 +26,6 @@ interface similar to React Router, but takes advantage of types for more
 expressiveness.
 
 ```rust, no_run
-#![allow(non_snake_case)]
-
 use dioxus::prelude::*;
 use dioxus_router::prelude::*;
 use std::str::FromStr;
@@ -48,14 +46,14 @@ enum Route {
     Index {},
 }
 
-
+#[component]
 fn App(cx: Scope) -> Element {
     render! {
         Router::<Route> { }
     }
 }
 
-#[inline_props]
+#[component]
 fn Index(cx: Scope) -> Element {
     render! {
         h1 { "Index" }
@@ -66,7 +64,7 @@ fn Index(cx: Scope) -> Element {
     }
 }
 
-#[inline_props]
+#[component]
 fn Blog(cx: Scope) -> Element {
     render! {
         h1 { "Blog" }
@@ -74,7 +72,7 @@ fn Blog(cx: Scope) -> Element {
     }
 }
 
-#[inline_props]
+#[component]
 fn BlogList(cx: Scope) -> Element {
     render! {
         h2 { "List of blog posts" }
@@ -89,7 +87,7 @@ fn BlogList(cx: Scope) -> Element {
     }
 }
 
-#[inline_props]
+#[component]
 fn BlogPost(cx: Scope, blog_id: usize) -> Element {
     render! {
         h2 { "Blog Post" }

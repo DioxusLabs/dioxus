@@ -1,4 +1,6 @@
 #![doc = include_str!("../README.md")]
+#![doc(html_logo_url = "https://avatars.githubusercontent.com/u/79236386")]
+#![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
 
 pub mod prelude {
     pub use crate::*;
@@ -20,8 +22,6 @@ mod atoms {
     pub use atom::*;
     pub use atomfamily::*;
     pub use atomref::*;
-    pub use selector::*;
-    pub use selectorfamily::*;
 }
 
 pub mod hooks {

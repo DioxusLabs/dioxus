@@ -96,11 +96,11 @@ impl<'a> Writer<'a> {
 
     // Push out the indent level and write each component, line by line
     pub fn write_body_indented(&mut self, children: &[BodyNode]) -> Result {
-        self.out.indent += 1;
+        self.out.indent_level += 1;
 
         self.write_body_no_indent(children)?;
 
-        self.out.indent -= 1;
+        self.out.indent_level -= 1;
         Ok(())
     }
 

@@ -1,10 +1,11 @@
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus_desktop::launch(app);
+    dioxus_desktop::launch(App);
 }
 
-fn app(cx: Scope) -> Element {
+#[component]
+fn App(cx: Scope) -> Element {
     let val = use_state(cx, || "0.0001");
 
     let num = match val.parse::<f32>() {
@@ -19,13 +20,13 @@ fn app(cx: Scope) -> Element {
             "Set an invalid number"
         }
         (0..5).map(|i| rsx! {
-            demo_c { x: i }
+            DemoC { x: i }
         })
     })
 }
 
-#[inline_props]
-fn demo_c(cx: Scope, x: i32) -> Element {
+#[component]
+fn DemoC(cx: Scope, x: i32) -> Element {
     cx.render(rsx! {
         h1 {
             "asdasdasdasd {x}"

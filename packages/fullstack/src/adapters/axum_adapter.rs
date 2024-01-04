@@ -263,8 +263,8 @@ where
                     let res = service.run(req);
                     match res.await {
                         Ok(res) => Ok::<_, std::convert::Infallible>(res.map(|b| b.into())),
-                        Err(_e) => {
-                            let mut res = Response::new(Body::empty());
+                        Err(e) => {
+                            let mut res = Response::new(Body::from(e.to_string()));
                             *res.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
                             Ok(res)
                         }
@@ -369,15 +369,65 @@ fn apply_request_parts_to_response<B>(
     }
 }
 
-/// SSR renderer handler for Axum
-pub async fn render_handler<P: Clone + serde::Serialize + Send + Sync + 'static>(
-    State((cfg, ssr_state)): State<(ServeConfig<P>, SSRState)>,
+/// SSR renderer handler for Axum with added context injection.
+///
+/// # Example
+/// ```rust,no_run
+/// #![allow(non_snake_case)]
+/// use std::sync::{Arc, Mutex};
+///
+/// use axum::routing::get;
+/// use dioxus::prelude::*;
+/// use dioxus_fullstack::{axum_adapter::render_handler_with_context, prelude::*};
+///
+/// fn app(cx: Scope) -> Element {
+///     render! {
+///         "hello!"
+///     }
+/// }
+///
+/// #[tokio::main]
+/// async fn main() {
+///     let cfg = ServeConfigBuilder::new(app, ())
+///         .assets_path("dist")
+///         .build();
+///     let ssr_state = SSRState::new(&cfg);
+///
+///     // This could be any state you want to be accessible from your server
+///     // functions using `[DioxusServerContext::get]`.
+///     let state = Arc::new(Mutex::new("state".to_string()));
+///
+///     let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 8080));
+///     axum::Server::bind(&addr)
+///         .serve(
+///             axum::Router::new()
+///                 // Register server functions, etc.
+///                 // Note you probably want to use `register_server_fns_with_handler`
+///                 // to inject the context into server functions running outside
+///                 // of an SSR render context.
+///                 .fallback(get(render_handler_with_context).with_state((
+///                     move |ctx| ctx.insert(state.clone()).unwrap(),
+///                     cfg,
+///                     ssr_state,
+///                 )))
+///                 .into_make_service(),
+///         )
+///         .await
+///         .unwrap();
+/// }
+/// ```
+pub async fn render_handler_with_context<
+    P: Clone + serde::Serialize + Send + Sync + 'static,
+    F: FnMut(&mut DioxusServerContext),
+>(
+    State((mut inject_context, cfg, ssr_state)): State<(F, ServeConfig<P>, SSRState)>,
     request: Request<Body>,
 ) -> impl IntoResponse {
     let (parts, _) = request.into_parts();
     let url = parts.uri.path_and_query().unwrap().to_string();
     let parts: Arc<RwLock<http::request::Parts>> = Arc::new(RwLock::new(parts.into()));
-    let server_context = DioxusServerContext::new(parts.clone());
+    let mut server_context = DioxusServerContext::new(parts.clone());
+    inject_context(&mut server_context);
 
     match ssr_state.render(url, &cfg, &server_context).await {
         Ok(rendered) => {
@@ -393,6 +443,14 @@ pub async fn render_handler<P: Clone + serde::Serialize + Send + Sync + 'static>
             report_err(e).into_response()
         }
     }
+}
+
+/// SSR renderer handler for Axum
+pub async fn render_handler<P: Clone + serde::Serialize + Send + Sync + 'static>(
+    State((cfg, ssr_state)): State<(ServeConfig<P>, SSRState)>,
+    request: Request<Body>,
+) -> impl IntoResponse {
+    render_handler_with_context(State((|_: &mut _| (), cfg, ssr_state)), request).await
 }
 
 fn report_err<E: std::fmt::Display>(e: E) -> Response<BoxBody> {

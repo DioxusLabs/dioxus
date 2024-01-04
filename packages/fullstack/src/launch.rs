@@ -121,8 +121,15 @@ impl<Props: Clone + serde::Serialize + serde::de::DeserializeOwned + Send + Sync
     #[cfg(feature = "web")]
     /// Launch the web application
     pub fn launch_web(self) {
-        let cfg = self.web_cfg.hydrate(true);
-        dioxus_web::launch_with_props(self.component, get_root_props_from_document().unwrap(), cfg);
+        #[cfg(not(feature = "ssr"))]
+        {
+            let cfg = self.web_cfg.hydrate(true);
+            dioxus_web::launch_with_props(
+                self.component,
+                get_root_props_from_document().unwrap(),
+                cfg,
+            );
+        }
     }
 
     #[cfg(feature = "desktop")]

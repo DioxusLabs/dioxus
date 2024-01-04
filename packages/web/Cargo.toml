@@ -6,15 +6,15 @@ edition = "2018"
 description = "Web renderer for Dioxus using websys"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
-homepage = "https://dioxuslabs.com/docs/0.3/guide/en/getting_started/web.html"
+homepage = "https://dioxuslabs.com/learn/0.4/getting_started/wasm"
 keywords = ["dom", "ui", "gui", "react", "wasm"]
 
 [dependencies]
 dioxus-core = { workspace = true, features = ["serialize"] }
 dioxus-html = { workspace = true, features = ["wasm-bind"] }
 dioxus-interpreter-js = { workspace = true, features = [
-    "sledgehammer",
     "minimal_bindings",
+    "web",
 ] }
 
 js-sys = "0.3.56"
@@ -42,6 +42,7 @@ features = [
     "HtmlFormElement",
     "Text",
     "Window",
+    "console",
 ]
 
 [features]

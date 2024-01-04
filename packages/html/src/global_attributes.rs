@@ -33,12 +33,44 @@ macro_rules! trait_method_mapping {
     };
 }
 
+#[cfg(feature = "html-to-rsx")]
+macro_rules! html_to_rsx_attribute_mapping {
+    (
+        $matching:ident;
+        $(#[$attr:meta])*
+        $name:ident;
+    ) => {
+        if $matching == stringify!($name) {
+            return Some(stringify!($name));
+        }
+    };
+    (
+        $matching:ident;
+        $(#[$attr:meta])*
+        $name:ident: $lit:literal;
+    ) => {
+        if $matching == stringify!($lit) {
+            return Some(stringify!($name));
+        }
+    };
+    (
+        $matching:ident;
+        $(#[$attr:meta])*
+        $name:ident: $lit:literal, $ns:literal;
+    ) => {
+        if $matching == stringify!($lit) {
+            return Some(stringify!($name));
+        }
+    };
+}
+
 macro_rules! trait_methods {
     (
         @base
         $(#[$trait_attr:meta])*
         $trait:ident;
         $fn:ident;
+        $fn_html_to_rsx:ident;
         $(
             $(#[$attr:meta])*
             $name:ident $(: $($arg:literal),*)*;
@@ -62,6 +94,18 @@ macro_rules! trait_methods {
             )*
             None
         }
+
+        #[cfg(feature = "html-to-rsx")]
+        #[doc = "Converts an HTML attribute to an RSX attribute"]
+        pub(crate) fn $fn_html_to_rsx(html: &str) -> Option<&'static str> {
+            $(
+                html_to_rsx_attribute_mapping! {
+                    html;
+                    $name$(: $($arg),*)*;
+                }
+            )*
+            None
+        }
     };
 
     // Rename the incoming ident and apply a custom namespace
@@ -79,6 +123,7 @@ trait_methods! {
 
     GlobalAttributes;
     map_global_attributes;
+    map_html_global_attributes_to_rsx;
 
     /// Prevent the default action for this element.
     ///
@@ -268,6 +313,9 @@ trait_methods! {
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/azimuth>
     azimuth: "azimuth", "style";
+
+    /// <https://developer.mozilla.org/en-US/docs/Web/CSS/backdrop-filter>
+    backdrop_filter: "backdrop-filter", "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/backface-visibility>
     backface_visibility: "backface-visibility", "style";
@@ -1590,6 +1638,7 @@ trait_methods! {
     @base
     SvgAttributes;
     map_svg_attributes;
+    map_html_svg_attributes_to_rsx;
 
     /// Prevent the default action for this element.
     ///

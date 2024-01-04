@@ -74,7 +74,26 @@ macro_rules! impl_attribute_match {
         $attr:ident $fil:ident: $vil:ident (in $ns:literal),
     ) => {
         if $attr == stringify!($fil) {
-            return Some((stringify!(fil), Some(ns)));
+            return Some((stringify!(fil), Some($ns)));
+        }
+    };
+}
+
+#[cfg(feature = "html-to-rsx")]
+macro_rules! impl_html_to_rsx_attribute_match {
+    (
+        $attr:ident $fil:ident $name:literal
+    ) => {
+        if $attr == $name {
+            return Some(stringify!($fil));
+        }
+    };
+
+    (
+        $attr:ident $fil:ident $_:tt
+    ) => {
+        if $attr == stringify!($fil) {
+            return Some(stringify!($fil));
         }
     };
 }
@@ -180,14 +199,26 @@ macro_rules! impl_element_match {
     };
 
     (
-        $el:ident $name:ident $namespace:tt {
+        $el:ident $name:ident $namespace:literal {
             $(
                 $fil:ident: $vil:ident $extra:tt,
             )*
         }
     ) => {
         if $el == stringify!($name) {
-            return Some((stringify!($name), Some(stringify!($namespace))));
+            return Some((stringify!($name), Some($namespace)));
+        }
+    };
+
+    (
+        $el:ident $name:ident [$_:literal, $namespace:tt] {
+            $(
+                $fil:ident: $vil:ident $extra:tt,
+            )*
+        }
+    ) => {
+        if $el == stringify!($name) {
+            return Some((stringify!($name), Some($namespace)));
         }
     };
 }
@@ -207,6 +238,8 @@ macro_rules! impl_element_match_attributes {
                     $attr $fil: $vil ($extra),
                 );
             )*
+
+            return impl_map_global_attributes!($el $attr $name None);
         }
     };
 
@@ -223,8 +256,39 @@ macro_rules! impl_element_match_attributes {
                     $attr $fil: $vil ($extra),
                 );
             )*
+
+            return impl_map_global_attributes!($el $attr $name $namespace);
         }
     }
+}
+
+#[cfg(feature = "hot-reload-context")]
+macro_rules! impl_map_global_attributes {
+    (
+        $el:ident $attr:ident $element:ident None
+    ) => {
+        map_global_attributes($attr)
+    };
+
+    (
+        $el:ident $attr:ident $element:ident $namespace:literal
+    ) => {
+        if $namespace == "http://www.w3.org/2000/svg" {
+            map_svg_attributes($attr)
+        } else {
+            map_global_attributes($attr)
+        }
+    };
+
+    (
+        $el:ident $attr:ident $element:ident [$name:literal, $namespace:tt]
+    ) => {
+        if $namespace == "http://www.w3.org/2000/svg" {
+            map_svg_attributes($attr)
+        } else {
+            map_global_attributes($attr)
+        }
+    };
 }
 
 macro_rules! builder_constructors {
@@ -254,7 +318,7 @@ macro_rules! builder_constructors {
                         }
                     );
                 )*
-                map_global_attributes(attribute).or_else(|| map_svg_attributes(attribute))
+                None
             }
 
             fn map_element(element: &str) -> Option<(&'static str, Option<&'static str>)> {
@@ -269,6 +333,38 @@ macro_rules! builder_constructors {
                 )*
                 None
             }
+        }
+
+        #[cfg(feature = "html-to-rsx")]
+        pub fn map_html_attribute_to_rsx(html: &str) -> Option<&'static str> {
+            $(
+                $(
+                    impl_html_to_rsx_attribute_match!(
+                        html $fil $extra
+                    );
+                )*
+            )*
+
+            if let Some(name) = crate::map_html_global_attributes_to_rsx(html) {
+                return Some(name);
+            }
+
+            if let Some(name) = crate::map_html_svg_attributes_to_rsx(html) {
+                return Some(name);
+            }
+
+            None
+        }
+
+        #[cfg(feature = "html-to-rsx")]
+        pub fn map_html_element_to_rsx(html: &str) -> Option<&'static str> {
+            $(
+                if html == stringify!($name) {
+                    return Some(stringify!($name));
+                }
+            )*
+
+            None
         }
 
         $(
@@ -782,6 +878,7 @@ builder_constructors! {
         decoding: ImageDecoding DEFAULT,
         height: usize DEFAULT,
         ismap: Bool DEFAULT,
+        loading: String DEFAULT,
         src: Uri DEFAULT,
         srcset: String DEFAULT, // FIXME this is much more complicated
         usemap: String DEFAULT, // FIXME should be a fragment starting with '#'
@@ -952,9 +1049,8 @@ builder_constructors! {
         src: Uri DEFAULT,
         text: String DEFAULT,
 
-        // r#async: Bool,
-        // r#type: String, // TODO could be an enum
-        r#type: String "type",
+        r#async: Bool "async",
+        r#type: String "type", // TODO could be an enum
         r#script: String "script",
     };
 
@@ -1107,6 +1203,7 @@ builder_constructors! {
         formnovalidate: Bool DEFAULT,
         formtarget: Target DEFAULT,
         height: isize DEFAULT,
+        initial_checked: Bool DEFAULT,
         list: Id DEFAULT,
         max: String DEFAULT,
         maxlength: usize DEFAULT,
@@ -1203,6 +1300,7 @@ builder_constructors! {
         value: String DEFAULT,
 
         selected: Bool volatile,
+        initial_selected: Bool DEFAULT,
     };
 
     /// Build a

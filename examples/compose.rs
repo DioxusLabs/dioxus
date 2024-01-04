@@ -27,13 +27,7 @@ fn app(cx: Scope) -> Element {
 
             button {
                 onclick: move |_| {
-                    let dom = VirtualDom::new_with_props(compose, ComposeProps {
-                        app_tx: tx.clone()
-                    });
-
-                    // this returns a weak reference to the other window
-                    // Be careful not to keep a strong reference to the other window or it will never be dropped
-                    // and the window will never close.
+                    let dom = VirtualDom::new_with_props(compose, ComposeProps { app_tx: tx.clone() });
                     window.new_window(dom, Default::default());
                 },
                 "Click to compose a new email"

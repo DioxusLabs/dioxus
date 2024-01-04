@@ -12,7 +12,7 @@ use crate::utils::use_router_internal::use_router_internal;
 /// - Otherwise the current route.
 ///
 /// # Panic
-/// - When the calling component is not nested within a [`Link`] component durring a debug build.
+/// - When the calling component is not nested within a [`Link`] component during a debug build.
 ///
 /// # Example
 /// ```rust
@@ -25,6 +25,7 @@ use crate::utils::use_router_internal::use_router_internal;
 ///     Index {},
 /// }
 ///
+/// #[component]
 /// fn App(cx: Scope) -> Element {
 ///     render! {
 ///         h1 { "App" }
@@ -32,9 +33,9 @@ use crate::utils::use_router_internal::use_router_internal;
 ///     }
 /// }
 ///
-/// #[inline_props]
+/// #[component]
 /// fn Index(cx: Scope) -> Element {
-///     let path = use_route(&cx).unwrap();
+///     let path: Route = use_route(&cx).unwrap();
 ///     render! {
 ///         h2 { "Current Path" }
 ///         p { "{path}" }
@@ -45,6 +46,7 @@ use crate::utils::use_router_internal::use_router_internal;
 /// # let _ = vdom.rebuild();
 /// # assert_eq!(dioxus_ssr::render(&vdom), "<h1>App</h1><h2>Current Path</h2><p>/</p>")
 /// ```
+#[must_use]
 pub fn use_route<R: Routable + Clone>(cx: &ScopeState) -> Option<R> {
     match use_router_internal(cx) {
         Some(r) => Some(r.current()),

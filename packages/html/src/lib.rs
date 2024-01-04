@@ -1,3 +1,6 @@
+#![doc = include_str!("../README.md")]
+#![doc(html_logo_url = "https://avatars.githubusercontent.com/u/79236386")]
+#![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![allow(non_snake_case)]
 
 //! # Dioxus Namespace for HTML
@@ -16,6 +19,8 @@
 mod elements;
 #[cfg(feature = "hot-reload-context")]
 pub use elements::HtmlCtx;
+#[cfg(feature = "html-to-rsx")]
+pub use elements::{map_html_attribute_to_rsx, map_html_element_to_rsx};
 pub mod events;
 pub mod geometry;
 mod global_attributes;

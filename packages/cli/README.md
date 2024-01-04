@@ -4,14 +4,14 @@
 </div>
 
 The **dioxus-cli** (inspired by wasm-pack and webpack) is a tool for getting Dioxus projects up and running.
-It handles all building, bundling, development and publishing to simplify development.
+It handles building, bundling, development and publishing to simplify development.
 
 ## Installation
 
 ### Install the stable version (recommended)
 
-```
-cargo install dioxus-cli --locked
+```shell
+cargo install dioxus-cli
 ```
 
 ### Install the latest development build through git
@@ -20,7 +20,7 @@ To get the latest bug fixes and features, you can install the development versio
 However, this is not fully tested.
 That means you're probably going to have more bugs despite having the latest bug fixes.
 
-```
+```shell
 cargo install --git https://github.com/DioxusLabs/dioxus dioxus-cli
 ```
 
@@ -29,7 +29,7 @@ and install it in Cargo's global binary directory (`~/.cargo/bin/` by default).
 
 ### Install from local folder
 
-```
+```shell
 cargo install --path . --debug
 ```
 
@@ -40,7 +40,7 @@ It will be cloned from the [dioxus-template](https://github.com/DioxusLabs/dioxu
 
 Alternatively, you can specify the template path:
 
-```
+```shell
 dx create hello --template gh:dioxuslabs/dioxus-template
 ```
 

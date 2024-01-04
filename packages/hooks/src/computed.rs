@@ -17,6 +17,7 @@ use std::{
 /// ```rust
 /// use dioxus::prelude::*;
 ///
+/// #[component]
 /// fn Parent(cx: Scope) -> Element {
 ///    let count = use_tracked_state(cx, || 0);
 ///
@@ -27,7 +28,7 @@ use std::{
 ///    }
 /// }
 ///
-/// #[inline_props]
+/// #[component]
 /// fn Child(cx: Scope, count: Tracked<usize>) -> Element {
 ///    let less_than_five = use_selector(cx, count, |count| *count < 5);
 ///
@@ -36,6 +37,7 @@ use std::{
 ///    }
 /// }
 /// ```
+#[must_use]
 pub fn use_tracked_state<T: 'static>(cx: &ScopeState, init: impl FnOnce() -> T) -> &Tracked<T> {
     cx.use_hook(|| {
         let init = init();
@@ -159,6 +161,7 @@ impl<I> Drop for Tracker<I> {
     }
 }
 
+#[must_use = "Consider using the `use_effect` hook to rerun an effect whenever the tracked state changes if you don't need the result of the computation"]
 pub fn use_selector<I: 'static, O: Clone + PartialEq + 'static>(
     cx: &ScopeState,
     tracked: &Tracked<I>,

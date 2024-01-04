@@ -1,3 +1,5 @@
+#![doc(html_logo_url = "https://avatars.githubusercontent.com/u/79236386")]
+#![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![deny(missing_docs)]
 
 //! Dioxus WebSys
@@ -54,6 +56,7 @@
 //     - Do DOM work in the next requestAnimationFrame callback
 
 pub use crate::cfg::Config;
+#[cfg(feature = "file_engine")]
 pub use crate::file_engine::WebFileEngineExt;
 use dioxus_core::{Element, Scope, VirtualDom};
 use futures_util::{

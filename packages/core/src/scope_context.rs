@@ -128,7 +128,7 @@ impl ScopeContext {
                     parent.name
                 );
                 if let Some(shared) = parent.shared_contexts.borrow().iter().find_map(|any| {
-                    tracing::trace!("found context {:?}", any.type_id());
+                    tracing::trace!("found context {:?}", (**any).type_id());
                     any.downcast_ref::<T>()
                 }) {
                     return Some(shared.clone());
@@ -230,17 +230,7 @@ impl ScopeContext {
     /// This is good for tasks that need to be run after the component has been dropped.
     pub fn spawn_forever(&self, fut: impl Future<Output = ()> + 'static) -> TaskId {
         // The root scope will never be unmounted so we can just add the task at the top of the app
-        let id = self.tasks.spawn(ScopeId::ROOT, fut);
-
-        // wake up the scheduler if it is sleeping
-        self.tasks
-            .sender
-            .unbounded_send(SchedulerMsg::TaskNotified(id))
-            .expect("Scheduler should exist");
-
-        self.spawned_tasks.borrow_mut().insert(id);
-
-        id
+        self.tasks.spawn(ScopeId::ROOT, fut)
     }
 
     /// Informs the scheduler that this task is no longer needed and should be removed.

@@ -169,10 +169,7 @@ pub(crate) struct Query<V: DeserializeOwned> {
 impl<V: DeserializeOwned> Query<V> {
     /// Resolve the query
     pub async fn resolve(mut self) -> Result<V, QueryError> {
-        match self.receiver.recv().await {
-            Some(result) => V::deserialize(result).map_err(QueryError::Deserialize),
-            None => Err(QueryError::Recv(RecvError::Closed)),
-        }
+        V::deserialize(self.result().await?).map_err(QueryError::Deserialize)
     }
 
     /// Send a message to the query

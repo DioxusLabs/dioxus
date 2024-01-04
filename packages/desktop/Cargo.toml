@@ -6,20 +6,20 @@ edition = "2018"
 description = "WebView renderer for Dioxus"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
-homepage = "https://dioxuslabs.com/docs/0.3/guide/en/getting_started/desktop.html"
+homepage = "https://dioxuslabs.com/learn/0.4/getting_started/desktop"
 keywords = ["dom", "ui", "gui", "react"]
 
 [dependencies]
 dioxus-core = { workspace = true, features = ["serialize"] }
 dioxus-html = { workspace = true, features = ["serialize", "native-bind"] }
-dioxus-interpreter-js = { workspace = true }
+dioxus-interpreter-js = { workspace = true, features = ["binary-protocol"] }
 dioxus-hot-reload = { workspace = true, optional = true }
 
 serde = "1.0.136"
 serde_json = "1.0.79"
 thiserror = { workspace = true }
 tracing = { workspace = true }
-wry = { version = "0.28.0" }
+wry = { version = "0.34.0", default-features = false, features = ["tao", "protocol", "file-drop"] }
 futures-channel = { workspace = true }
 tokio = { workspace = true, features = [
     "sync",
@@ -33,14 +33,17 @@ webbrowser = "0.8.0"
 infer = "0.11.0"
 dunce = "1.0.2"
 slab = { workspace = true }
+rustc-hash = { workspace = true }
 
 futures-util = { workspace = true }
 urlencoding = "2.1.2"
 async-trait = "0.1.68"
+crossbeam-channel = "0.5.8"
 
 
 [target.'cfg(any(target_os = "windows",target_os = "macos",target_os = "linux",target_os = "dragonfly", target_os = "freebsd", target_os = "netbsd", target_os = "openbsd"))'.dependencies]
-rfd = "0.11.3"
+rfd = "0.12"
+global-hotkey = { git = "https://github.com/tauri-apps/global-hotkey" }
 
 [target.'cfg(target_os = "ios")'.dependencies]
 objc = "0.2.7"
@@ -51,13 +54,18 @@ core-foundation = "0.9.3"
 objc = "0.2.7"
 
 [features]
-default = ["tokio_runtime", "hot-reload"]
+default = ["tokio_runtime", "hot-reload", "wry/objc-exception"]
 tokio_runtime = ["tokio"]
 fullscreen = ["wry/fullscreen"]
 transparent = ["wry/transparent"]
 devtools = ["wry/devtools"]
 dox = ["wry/dox"]
 hot-reload = ["dioxus-hot-reload"]
+gnu = []
+
+[package.metadata.docs.rs]
+default-features = false
+features = [ "dox", "tokio_runtime", "hot-reload" ]
 
 [dev-dependencies]
 dioxus-core-macro = { workspace = true }
@@ -65,6 +73,10 @@ dioxus-hooks = { workspace = true }
 dioxus = { workspace = true }
 exitcode = "1.1.2"
 scraper = "0.16.0"
+
+[build-dependencies]
+dioxus-interpreter-js = { workspace = true, features = ["binary-protocol"] }
+minify-js = "0.5.6"
 
 # These tests need to be run on the main thread, so they cannot use rust's test harness.
 [[test]]
