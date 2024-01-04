@@ -62,7 +62,19 @@ impl ToTokens for ComponentDeserializerOutput {
         let props_struct = &self.props_struct;
 
         if !self.island && cfg!(all(feature = "islands", not(feature = "ssr"))) {
-            return;
+            // if this is not an island, we snip the body of the component function and replace it with unreachable!()
+            let sig = &comp_fn.sig;
+            let attrs = &comp_fn.attrs;
+            let vis = &comp_fn.vis;
+            tokens.append_all(quote! {
+                #props_struct
+
+                #[allow(non_snake_case)]
+                #(#attrs)*
+                #vis #sig {
+                    unreachable!()
+                }
+            });
         }
 
         tokens.append_all(quote! {
