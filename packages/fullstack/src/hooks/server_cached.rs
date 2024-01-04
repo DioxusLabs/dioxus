@@ -15,7 +15,6 @@ use serde::{de::DeserializeOwned, Serialize};
 ///    let state1 = use_state(cx, || server_cached(|| {
 ///       1234
 ///    }));
-///
 ///    todo!()
 /// }
 /// ```
