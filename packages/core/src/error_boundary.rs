@@ -286,7 +286,8 @@ fn default_handler<'a>(error: CapturedError) -> LazyNodes<'a, 'a> {
             attr_paths: &[],
         };
         VNode {
-            parent: None,
+            parent: Default::default(),
+            stable_id: Default::default(),
             key: None,
             template: std::cell::Cell::new(TEMPLATE),
             root_ids: bumpalo::collections::Vec::with_capacity_in(1usize, __cx.bump()).into(),
@@ -471,12 +472,13 @@ pub fn ErrorBoundary<'a>(cx: Scope<'a, ErrorBoundaryProps<'a>>) -> Element {
                 attr_paths: &[],
             };
             VNode {
-                parent: None,
+                parent: Default::default(),
+                stable_id: Default::default(),
                 key: None,
                 template: std::cell::Cell::new(TEMPLATE),
                 root_ids: bumpalo::collections::Vec::with_capacity_in(1usize, __cx.bump()).into(),
                 dynamic_nodes: __cx.bump().alloc([{
-                    let ___nodes = (&cx.props.children).into_vnode(__cx);
+                    let ___nodes = (&cx.props.children).into_dyn_node(__cx);
                     ___nodes
                 }]),
                 dynamic_attrs: __cx.bump().alloc([]),

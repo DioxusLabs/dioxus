@@ -59,13 +59,12 @@ tokio_runtime = ["tokio"]
 fullscreen = ["wry/fullscreen"]
 transparent = ["wry/transparent"]
 devtools = ["wry/devtools"]
-dox = ["wry/dox"]
 hot-reload = ["dioxus-hot-reload"]
 gnu = []
 
 [package.metadata.docs.rs]
 default-features = false
-features = [ "dox", "tokio_runtime", "hot-reload" ]
+features = ["tokio_runtime", "hot-reload"]
 
 [dev-dependencies]
 dioxus-core-macro = { workspace = true }

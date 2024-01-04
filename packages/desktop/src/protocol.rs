@@ -1,5 +1,6 @@
+use crate::{window, DesktopContext};
 use dioxus_core::ScopeState;
-use dioxus_interpreter_js::{COMMON_JS, INTERPRETER_JS};
+use dioxus_interpreter_js::INTERPRETER_JS;
 use slab::Slab;
 use std::{
     borrow::Cow,
@@ -16,10 +17,8 @@ use tokio::{
 };
 use wry::{
     http::{status::StatusCode, Request, Response},
-    webview::RequestAsyncResponder,
     Result,
 };
-use crate::{use_window, DesktopContext};
 
 use crate::desktop_context::EditQueue;
 
@@ -52,7 +51,7 @@ fn module_loader(root_name: &str, headless: bool) -> String {
       }
     }"#,
     );
-  
+
     format!(
         r#"
 <script type="module">
@@ -197,8 +196,8 @@ pub fn use_asset_handler<F: AssetFuture>(
     cx: &ScopeState,
     handler: impl AssetHandler<F>,
 ) -> &AssetHandlerHandle {
-    let desktop = Rc::clone(use_window(cx));
     cx.use_hook(|| {
+        let desktop = window();
         let handler_id = Rc::new(OnceCell::new());
         let handler_id_ref = Rc::clone(&handler_id);
         let desktop_ref = Rc::clone(&desktop);
@@ -221,7 +220,8 @@ pub(super) async fn desktop_handler(
     asset_handlers: &AssetHandlerRegistry,
     edit_queue: &EditQueue,
     headless: bool,
-) -> Result<AssetResponse> {
+    responder: wry::webview::RequestAsyncResponder,
+) {
     let request = AssetRequest::from(request);
 
     // If the request is for the root, we'll serve the index.html file.
@@ -272,7 +272,8 @@ pub(super) async fn desktop_handler(
     // If the user provided a custom asset handler, then call it and return the response
     // if the request was handled.
     if let Some(response) = asset_handlers.try_handlers(&request).await {
-        return Ok(response);
+        responder.respond(response);
+        return;
     }
 
     // Else, try to serve a file from the filesystem.

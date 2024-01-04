@@ -22,6 +22,7 @@ use crate::query::QueryResult;
 use crate::shortcut::GlobalHotKeyEvent;
 pub use cfg::{Config, WindowCloseBehaviour};
 pub use desktop_context::DesktopContext;
+#[allow(deprecated)]
 pub use desktop_context::{
     use_window, use_wry_event_handler, window, DesktopService, WryEventHandler, WryEventHandlerId,
 };
@@ -33,8 +34,8 @@ use dioxus_interpreter_js::binary_protocol::Channel;
 use element::DesktopElement;
 use eval::init_eval;
 use futures_util::{pin_mut, FutureExt};
-use rustc_hash::FxHashMap;
 pub use protocol::{use_asset_handler, AssetFuture, AssetHandler, AssetRequest, AssetResponse};
+use rustc_hash::FxHashMap;
 use shortcut::ShortcutRegistry;
 pub use shortcut::{use_global_shortcut, ShortcutHandle, ShortcutId, ShortcutRegistryError};
 use std::cell::Cell;
@@ -49,7 +50,7 @@ use tao::{
     event::{Event, StartCause, WindowEvent},
     event_loop::ControlFlow,
 };
-pub use webview::build_default_menu_bar;
+// pub use webview::build_default_menu_bar;
 pub use wry;
 pub use wry::application as tao;
 use wry::application::event_loop::EventLoopBuilder;
@@ -412,8 +413,8 @@ fn create_new_window(
         queue.clone(),
         event_handlers.clone(),
         shortcut_manager,
-        asset_handlers,
         edit_queue,
+        asset_handlers,
     ));
 
     let cx = dom.base_scope();

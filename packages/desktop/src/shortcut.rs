@@ -5,7 +5,7 @@ use dioxus_html::input_data::keyboard_types::Modifiers;
 use slab::Slab;
 use wry::application::keyboard::ModifiersState;
 
-use crate::{desktop_context::DesktopContext, use_window};
+use crate::{desktop_context::DesktopContext, window};
 
 #[cfg(any(
     target_os = "windows",
@@ -183,9 +183,8 @@ pub fn use_global_shortcut(
     accelerator: impl IntoAccelerator,
     handler: impl FnMut() + 'static,
 ) -> &Result<ShortcutHandle, ShortcutRegistryError> {
-    let desktop = use_window(cx);
     cx.use_hook(move || {
-        let desktop = desktop.clone();
+        let desktop = window();
 
         let id = desktop.create_shortcut(accelerator.accelerator(), handler);
 

@@ -48,23 +48,23 @@ pub fn rsx_node_from_html(node: &Node) -> Option<BodyNode> {
                         } else {
                             Ident::new(name, Span::call_site())
                         };
-                        ElementAttr::AttrText { value, name: ident }
+                        ElementAttr {
+                            value: dioxus_rsx::ElementAttrValue::AttrLiteral(value),
+                            name: dioxus_rsx::ElementAttrName::BuiltIn(ident),
+                        }
                     } else {
                         // If we don't recognize the attribute, we assume it's a custom attribute
-                        ElementAttr::CustomAttrText {
-                            value,
-                            name: LitStr::new(name, Span::call_site()),
+                        ElementAttr {
+                            value: dioxus_rsx::ElementAttrValue::AttrLiteral(value),
+                            name: dioxus_rsx::ElementAttrName::Custom(LitStr::new(
+                                name,
+                                Span::call_site(),
+                            )),
                         }
                     };
 
                     ElementAttrNamed {
                         el_name: el_name.clone(),
-//                         attr: ElementAttr {
-//                             value: dioxus_rsx::ElementAttrValue::AttrLiteral(ifmt_from_text(
-//                                 value.as_deref().unwrap_or("false"),
-//                             )),
-//                             name: dioxus_rsx::ElementAttrName::BuiltIn(ident),
-                        // },
                         attr,
                     }
                 })

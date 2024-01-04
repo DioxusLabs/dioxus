@@ -466,9 +466,8 @@ pub fn use_wry_event_handler(
     cx: &ScopeState,
     handler: impl FnMut(&Event<UserWindowEvent>, &EventLoopWindowTarget<UserWindowEvent>) + 'static,
 ) -> &WryEventHandler {
-    let desktop = use_window(cx);
     cx.use_hook(move || {
-        let desktop = desktop.clone();
+        let desktop = window();
 
         let id = desktop.create_wry_event_handler(handler);
 
