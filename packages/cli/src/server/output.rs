@@ -22,17 +22,20 @@ pub fn print_console_info(
     options: PrettierOptions,
     web_info: Option<WebServerInfo>,
 ) {
-    if let Ok(native_clearseq) = Command::new(if cfg!(target_os = "windows") {
-        "cls"
-    } else {
-        "clear"
-    })
-    .output()
-    {
-        print!("{}", String::from_utf8_lossy(&native_clearseq.stdout));
-    } else {
-        // Try ANSI-Escape characters
-        print!("\x1b[2J\x1b[H");
+    // Don't clear the screen if the user has set the DIOXUS_LOG environment variable to "trace" so that we can see the logs
+    if Some("trace") != std::env::var("DIOXUS_LOG").ok().as_deref() {
+        if let Ok(native_clearseq) = Command::new(if cfg!(target_os = "windows") {
+            "cls"
+        } else {
+            "clear"
+        })
+        .output()
+        {
+            print!("{}", String::from_utf8_lossy(&native_clearseq.stdout));
+        } else {
+            // Try ANSI-Escape characters
+            print!("\x1b[2J\x1b[H");
+        }
     }
 
     let mut profile = if config.release { "Release" } else { "Debug" }.to_string();

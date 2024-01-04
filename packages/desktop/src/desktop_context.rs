@@ -4,10 +4,11 @@ use std::rc::Weak;
 
 use crate::create_new_window;
 use crate::events::IpcMessage;
+use crate::protocol::AssetFuture;
+use crate::protocol::AssetHandlerRegistry;
 use crate::query::QueryEngine;
-use crate::shortcut::ShortcutId;
-use crate::shortcut::ShortcutRegistry;
-use crate::shortcut::ShortcutRegistryError;
+use crate::shortcut::{HotKey, ShortcutId, ShortcutRegistry, ShortcutRegistryError};
+use crate::AssetHandler;
 use crate::Config;
 use crate::WebviewHandler;
 use dioxus_core::ScopeState;
@@ -15,7 +16,6 @@ use dioxus_core::VirtualDom;
 #[cfg(all(feature = "hot-reload", debug_assertions))]
 use dioxus_hot_reload::HotReloadMsg;
 use slab::Slab;
-use wry::application::accelerator::Accelerator;
 use wry::application::event::Event;
 use wry::application::event_loop::EventLoopProxy;
 use wry::application::event_loop::EventLoopWindowTarget;
@@ -67,6 +67,8 @@ pub struct DesktopService {
 
     pub(crate) shortcut_manager: ShortcutRegistry,
 
+    pub(crate) asset_handlers: AssetHandlerRegistry,
+
     #[cfg(target_os = "ios")]
     pub(crate) views: Rc<RefCell<Vec<*mut objc::runtime::Object>>>,
 }
@@ -91,6 +93,7 @@ impl DesktopService {
         webviews: WebviewQueue,
         event_handlers: WindowEventHandlers,
         shortcut_manager: ShortcutRegistry,
+        asset_handlers: AssetHandlerRegistry,
     ) -> Self {
         Self {
             webview: Rc::new(webview),
@@ -100,6 +103,7 @@ impl DesktopService {
             pending_windows: webviews,
             event_handlers,
             shortcut_manager,
+            asset_handlers,
             #[cfg(target_os = "ios")]
             views: Default::default(),
         }
@@ -233,11 +237,11 @@ impl DesktopService {
     /// Linux: Only works on x11. See [this issue](https://github.com/tauri-apps/tao/issues/331) for more information.
     pub fn create_shortcut(
         &self,
-        accelerator: Accelerator,
+        hotkey: HotKey,
         callback: impl FnMut() + 'static,
     ) -> Result<ShortcutId, ShortcutRegistryError> {
         self.shortcut_manager
-            .add_shortcut(accelerator, Box::new(callback))
+            .add_shortcut(hotkey, Box::new(callback))
     }
 
     /// Remove a global shortcut
@@ -248,6 +252,20 @@ impl DesktopService {
     /// Remove all global shortcuts
     pub fn remove_all_shortcuts(&self) {
         self.shortcut_manager.remove_all()
+    }
+
+    /// Provide a callback to handle asset loading yourself.
+    ///
+    /// See [`use_asset_handle`](crate::use_asset_handle) for a convenient hook.
+    pub async fn register_asset_handler<F: AssetFuture>(&self, f: impl AssetHandler<F>) -> usize {
+        self.asset_handlers.register_handler(f).await
+    }
+
+    /// Removes an asset handler by its identifier.
+    ///
+    /// Returns `None` if the handler did not exist.
+    pub async fn remove_asset_handler(&self, id: usize) -> Option<()> {
+        self.asset_handlers.remove_handler(id).await
     }
 
     /// Push an objc view to the window
@@ -369,17 +387,10 @@ impl WryWindowEventHandlerInner {
         target: &EventLoopWindowTarget<UserWindowEvent>,
     ) {
         // if this event does not apply to the window this listener cares about, return
-        match event {
-            Event::WindowEvent { window_id, .. }
-            | Event::MenuEvent {
-                window_id: Some(window_id),
-                ..
-            } => {
-                if *window_id != self.window_id {
-                    return;
-                }
+        if let Event::WindowEvent { window_id, .. } = event {
+            if *window_id != self.window_id {
+                return;
             }
-            _ => (),
         }
         (self.handler)(event, target)
     }

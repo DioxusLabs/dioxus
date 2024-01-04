@@ -205,7 +205,7 @@ impl<'b> VirtualDom {
         });
     }
 
-    /// We write all the descndent data for this element
+    /// We write all the descendent data for this element
     ///
     /// Elements can contain other nodes - and those nodes can be dynamic or static
     ///
@@ -405,6 +405,7 @@ impl<'b> VirtualDom {
     #[allow(unused_mut)]
     pub(crate) fn register_template(&mut self, mut template: Template<'static>) {
         let (path, byte_index) = template.name.rsplit_once(':').unwrap();
+
         let byte_index = byte_index.parse::<usize>().unwrap();
         // First, check if we've already seen this template
         if self

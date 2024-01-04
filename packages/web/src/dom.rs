@@ -45,7 +45,16 @@ impl WebsysDom {
         let document = load_document();
         let root = match document.get_element_by_id(&cfg.rootname) {
             Some(root) => root,
-            None => document.create_element("body").ok().unwrap(),
+            None => {
+                web_sys::console::error_1(
+                    &format!(
+                        "element '#{}' not found. mounting to the body.",
+                        cfg.rootname
+                    )
+                    .into(),
+                );
+                document.create_element("body").ok().unwrap()
+            }
         };
         let interpreter = Channel::default();
 
@@ -247,17 +256,21 @@ impl WebsysDom {
         i.flush();
 
         for id in to_mount {
-            let node = get_node(id.0 as u32);
-            if let Some(element) = node.dyn_ref::<Element>() {
-                let data: MountedData = element.into();
-                let data = Rc::new(data);
-                let _ = self.event_channel.unbounded_send(UiEvent {
-                    name: "mounted".to_string(),
-                    bubbles: false,
-                    element: id,
-                    data,
-                });
-            }
+            self.send_mount_event(id);
+        }
+    }
+
+    pub(crate) fn send_mount_event(&self, id: ElementId) {
+        let node = get_node(id.0 as u32);
+        if let Some(element) = node.dyn_ref::<Element>() {
+            let data: MountedData = element.into();
+            let data = Rc::new(data);
+            let _ = self.event_channel.unbounded_send(UiEvent {
+                name: "mounted".to_string(),
+                bubbles: false,
+                element: id,
+                data,
+            });
         }
     }
 }
