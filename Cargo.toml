@@ -50,7 +50,7 @@ members = [
 exclude = ["examples/mobile_demo"]
 
 [workspace.package]
-version = "0.4.2"
+version = "0.4.3"
 
 # dependencies that are shared across packages
 [workspace.dependencies]
@@ -77,7 +77,7 @@ dioxus-native-core = { path = "packages/native-core", version = "0.4.0" }
 dioxus-native-core-macro = { path = "packages/native-core-macro", version = "0.4.0" }
 rsx-rosetta = { path = "packages/rsx-rosetta", version = "0.4.0" }
 dioxus-signals = { path = "packages/signals" }
-generational-box = { path = "packages/generational-box" }
+generational-box = { path = "packages/generational-box", version = "0.4.3" }
 dioxus-hot-reload = { path = "packages/hot-reload", version = "0.4.0" }
 dioxus-fullstack = { path = "packages/fullstack", version = "0.4.1"  }
 dioxus_server_macro = { path = "packages/server-macro", version = "0.4.1" }
@@ -88,7 +88,7 @@ slab = "0.4.2"
 futures-channel = "0.3.21"
 futures-util = { version = "0.3", default-features = false }
 rustc-hash = "1.1.0"
-wasm-bindgen = "0.2.87"
+wasm-bindgen = "0.2.88"
 html_parser = "0.7.0"
 thiserror = "1.0.40"
 prettyplease = { package = "prettier-please", version = "0.2", features = [
@@ -99,7 +99,7 @@ prettyplease = { package = "prettier-please", version = "0.2", features = [
 # It is not meant to be published, but is used so "cargo run --example XYZ" works properly
 [package]
 name = "dioxus-examples"
-version = "0.0.0"
+version = "0.4.3"
 authors = ["Jonathan Kelley"]
 edition = "2021"
 description = "Top level crate for the Dioxus repository"
@@ -133,3 +133,4 @@ fern = { version = "0.6.0", features = ["colored"] }
 env_logger = "0.10.0"
 simple_logger = "4.0.0"
 thiserror = { workspace = true }
+http-range = "0.1.5"

@@ -142,7 +142,7 @@ pub fn GoForwardButton<'a>(cx: Scope<'a, HistoryButtonProps<'a>>) -> Element {
         }
     };
 
-    let disabled = !router.can_go_back();
+    let disabled = !router.can_go_forward();
 
     render! {
         button {

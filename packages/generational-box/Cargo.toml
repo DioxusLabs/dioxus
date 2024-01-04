@@ -1,9 +1,12 @@
 [package]
 name = "generational-box"
 authors = ["Evan Almloff"]
-version = "0.0.0"
+version = "0.4.3"
 edition = "2018"
-
+description = "A box backed by a generational runtime"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/DioxusLabs/dioxus/"
+keywords = ["generational", "box", "memory", "allocator"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
@@ -15,3 +18,5 @@ rand = "0.8.5"
 [features]
 default = ["check_generation"]
 check_generation = []
+debug_borrows = []
+debug_ownership = []

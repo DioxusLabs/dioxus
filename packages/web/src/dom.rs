@@ -25,8 +25,8 @@ pub struct WebsysDom {
     document: Document,
     #[allow(dead_code)]
     pub(crate) root: Element,
-    templates: FxHashMap<String, u32>,
-    max_template_id: u32,
+    templates: FxHashMap<String, u16>,
+    max_template_id: u16,
     pub(crate) interpreter: Channel,
     event_channel: mpsc::UnboundedSender<UiEvent>,
 }
@@ -45,7 +45,16 @@ impl WebsysDom {
         let document = load_document();
         let root = match document.get_element_by_id(&cfg.rootname) {
             Some(root) => root,
-            None => document.create_element("body").ok().unwrap(),
+            None => {
+                web_sys::console::error_1(
+                    &format!(
+                        "element '#{}' not found. mounting to the body.",
+                        cfg.rootname
+                    )
+                    .into(),
+                );
+                document.create_element("body").ok().unwrap()
+            }
         };
         let interpreter = Channel::default();
 
@@ -90,7 +99,7 @@ impl WebsysDom {
             }
         }));
 
-        dioxus_interpreter_js::initilize(
+        dioxus_interpreter_js::initialize(
             root.clone().unchecked_into(),
             handler.as_ref().unchecked_ref(),
         );
@@ -175,7 +184,7 @@ impl WebsysDom {
         let mut to_mount = Vec::new();
         for edit in &edits {
             match edit {
-                AppendChildren { id, m } => i.append_children(id.0 as u32, *m as u32),
+                AppendChildren { id, m } => i.append_children(id.0 as u32, *m as u16),
                 AssignId { path, id } => {
                     i.assign_id(path.as_ptr() as u32, path.len() as u8, id.0 as u32)
                 }
@@ -186,15 +195,15 @@ impl WebsysDom {
                 }
                 LoadTemplate { name, index, id } => {
                     if let Some(tmpl_id) = self.templates.get(*name) {
-                        i.load_template(*tmpl_id, *index as u32, id.0 as u32)
+                        i.load_template(*tmpl_id, *index as u16, id.0 as u32)
                     }
                 }
-                ReplaceWith { id, m } => i.replace_with(id.0 as u32, *m as u32),
+                ReplaceWith { id, m } => i.replace_with(id.0 as u32, *m as u16),
                 ReplacePlaceholder { path, m } => {
-                    i.replace_placeholder(path.as_ptr() as u32, path.len() as u8, *m as u32)
+                    i.replace_placeholder(path.as_ptr() as u32, path.len() as u8, *m as u16)
                 }
-                InsertAfter { id, m } => i.insert_after(id.0 as u32, *m as u32),
-                InsertBefore { id, m } => i.insert_before(id.0 as u32, *m as u32),
+                InsertAfter { id, m } => i.insert_after(id.0 as u32, *m as u16),
+                InsertBefore { id, m } => i.insert_before(id.0 as u32, *m as u16),
                 SetAttribute {
                     name,
                     value,
@@ -247,17 +256,21 @@ impl WebsysDom {
         i.flush();
 
         for id in to_mount {
-            let node = get_node(id.0 as u32);
-            if let Some(element) = node.dyn_ref::<Element>() {
-                let data: MountedData = element.into();
-                let data = Rc::new(data);
-                let _ = self.event_channel.unbounded_send(UiEvent {
-                    name: "mounted".to_string(),
-                    bubbles: false,
-                    element: id,
-                    data,
-                });
-            }
+            self.send_mount_event(id);
+        }
+    }
+
+    pub(crate) fn send_mount_event(&self, id: ElementId) {
+        let node = get_node(id.0 as u32);
+        if let Some(element) = node.dyn_ref::<Element>() {
+            let data: MountedData = element.into();
+            let data = Rc::new(data);
+            let _ = self.event_channel.unbounded_send(UiEvent {
+                name: "mounted".to_string(),
+                bubbles: false,
+                element: id,
+                data,
+            });
         }
     }
 }
@@ -294,7 +307,7 @@ pub fn virtual_event_from_websys_event(event: web_sys::Event, target: Element) -
         "select" => Rc::new(SelectionData {}),
         "touchcancel" | "touchend" | "touchmove" | "touchstart" => Rc::new(TouchData::from(event)),
 
-        "scroll" => Rc::new(()),
+        "scroll" => Rc::new(ScrollData {}),
         "wheel" => Rc::new(WheelData::from(event)),
         "animationstart" | "animationend" | "animationiteration" => {
             Rc::new(AnimationData::from(event))

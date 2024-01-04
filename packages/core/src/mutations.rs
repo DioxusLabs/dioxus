@@ -26,7 +26,7 @@ pub struct Mutations<'a> {
     /// Any templates encountered while diffing the DOM.
     ///
     /// These must be loaded into a cache before applying the edits
-    pub templates: Vec<Template<'a>>,
+    pub templates: Vec<Template<'static>>,
 
     /// Any mutations required to patch the renderer to match the layout of the VirtualDom
     pub edits: Vec<Mutation<'a>>,
@@ -91,7 +91,7 @@ pub enum Mutation<'a> {
         id: ElementId,
     },
 
-    /// Create an placeholder int he DOM that we will use later.
+    /// Create a placeholder in the DOM that we will use later.
     ///
     /// Dioxus currently requires the use of placeholders to maintain a re-entrance point for things like list diffing
     CreatePlaceholder {

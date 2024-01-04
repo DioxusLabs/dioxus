@@ -20,5 +20,5 @@ fn transform_rx(message: Result<Message, axum::Error>) -> Result<Vec<u8>, LiveVi
 }
 
 async fn transform_tx(message: Vec<u8>) -> Result<Message, axum::Error> {
-    Ok(Message::Text(String::from_utf8_lossy(&message).to_string()))
+    Ok(Message::Binary(message))
 }

@@ -12,9 +12,10 @@ use serde::{de::DeserializeOwned, Serialize};
 /// use dioxus_fullstack::prelude::*;
 ///
 /// fn app(cx: Scope) -> Element {
-///    let state1 = use_state(cx, || from_server(|| {
+///    let state1 = use_state(cx, || server_cached(|| {
 ///       1234
 ///    }));
+///    todo!()
 /// }
 /// ```
 pub fn server_cached<O: 'static + Serialize + DeserializeOwned>(server_fn: impl Fn() -> O) -> O {

@@ -48,14 +48,25 @@ pub fn build(config: &CrateConfig, quiet: bool) -> Result<BuildResult> {
 
     // [1] Build the .wasm module
     log::info!("🚅 Running build command...");
+
+    let wasm_check_command = std::process::Command::new("rustup")
+        .args(["show"])
+        .output()?;
+    let wasm_check_output = String::from_utf8(wasm_check_command.stdout).unwrap();
+    if !wasm_check_output.contains("wasm32-unknown-unknown") {
+        log::info!("wasm32-unknown-unknown target not detected, installing..");
+        let _ = std::process::Command::new("rustup")
+            .args(["target", "add", "wasm32-unknown-unknown"])
+            .output()?;
+    }
+
     let cmd = subprocess::Exec::cmd("cargo");
     let cmd = cmd
         .cwd(crate_dir)
         .arg("build")
         .arg("--target")
         .arg("wasm32-unknown-unknown")
-        .arg("--message-format=json")
-        .arg("--quiet");
+        .arg("--message-format=json");
 
     let cmd = if config.release {
         cmd.arg("--release")
@@ -65,7 +76,7 @@ pub fn build(config: &CrateConfig, quiet: bool) -> Result<BuildResult> {
     let cmd = if config.verbose {
         cmd.arg("--verbose")
     } else {
-        cmd
+        cmd.arg("--quiet")
     };
 
     let cmd = if config.custom_profile.is_some() {
@@ -81,6 +92,8 @@ pub fn build(config: &CrateConfig, quiet: bool) -> Result<BuildResult> {
     } else {
         cmd
     };
+
+    let cmd = cmd.args(&config.cargo_args);
 
     let cmd = match executable {
         ExecutableType::Binary(name) => cmd.arg("--bin").arg(name),
@@ -261,6 +274,8 @@ pub fn build_desktop(config: &CrateConfig, _is_serve: bool) -> Result<BuildResul
     }
     if config.verbose {
         cmd = cmd.arg("--verbose");
+    } else {
+        cmd = cmd.arg("--quiet");
     }
 
     if config.custom_profile.is_some() {
@@ -272,6 +287,14 @@ pub fn build_desktop(config: &CrateConfig, _is_serve: bool) -> Result<BuildResul
         let features_str = config.features.as_ref().unwrap().join(" ");
         cmd = cmd.arg("--features").arg(features_str);
     }
+
+    if let Some(target) = &config.target {
+        cmd = cmd.arg("--target").arg(target);
+    }
+
+    let target_platform = config.target.as_deref().unwrap_or("");
+
+    cmd = cmd.args(&config.cargo_args);
 
     let cmd = match &config.executable {
         crate::ExecutableType::Binary(name) => cmd.arg("--bin").arg(name),
@@ -290,12 +313,17 @@ pub fn build_desktop(config: &CrateConfig, _is_serve: bool) -> Result<BuildResul
     let mut res_path = match &config.executable {
         crate::ExecutableType::Binary(name) | crate::ExecutableType::Lib(name) => {
             file_name = name.clone();
-            config.target_dir.join(release_type).join(name)
+            config
+                .target_dir
+                .join(target_platform)
+                .join(release_type)
+                .join(name)
         }
         crate::ExecutableType::Example(name) => {
             file_name = name.clone();
             config
                 .target_dir
+                .join(target_platform)
                 .join(release_type)
                 .join("examples")
                 .join(name)
@@ -468,7 +496,7 @@ pub fn gen_page(config: &DioxusConfig, serve: bool) -> String {
         .unwrap_or_default()
         .contains_key("tailwindcss")
     {
-        style_str.push_str("<link rel=\"stylesheet\" href=\"tailwind.css\">\n");
+        style_str.push_str("<link rel=\"stylesheet\" href=\"/{base_path}/tailwind.css\">\n");
     }
 
     replace_or_insert_before("{style_include}", &style_str, "</head", &mut html);
