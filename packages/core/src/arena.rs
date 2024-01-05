@@ -1,8 +1,8 @@
 use std::ptr::NonNull;
 
 use crate::{
-    innerlude::DirtyScope, nodes::RenderReturn, nodes::VNode, virtual_dom::VirtualDom,
-    AttributeValue, DynamicNode, ScopeId,
+    innerlude::DirtyScope, nodes::RenderReturn, nodes::VNode, virtual_dom::VirtualDom, DynamicNode,
+    ScopeId,
 };
 
 /// An Element's unique identifier.
@@ -48,14 +48,6 @@ impl VirtualDom {
             std::mem::transmute::<NonNull<VNode>, _>(vnode.into())
         })));
 
-        // Set this id to be dropped when the scope is rerun
-        if let Some(scope) = self.runtime.current_scope_id() {
-            self.scopes[scope.0]
-                .element_refs_to_drop
-                .borrow_mut()
-                .push(new_id);
-        }
-
         new_id
     }
 
@@ -89,17 +81,6 @@ impl VirtualDom {
             id,
         });
 
-        // Remove all VNode ids from the scope
-        for id in self.scopes[id.0]
-            .element_refs_to_drop
-            .borrow_mut()
-            .drain(..)
-        {
-            self.element_refs.try_remove(id.0);
-        }
-
-        self.ensure_drop_safety(id);
-
         if recursive {
             if let Some(root) = self.scopes[id.0].try_root_node() {
                 if let RenderReturn::Ready(node) = root {
@@ -109,18 +90,6 @@ impl VirtualDom {
         }
 
         let scope = &mut self.scopes[id.0];
-
-        // Drop all the hooks once the children are dropped
-        // this means we'll drop hooks bottom-up
-        scope.hooks.get_mut().clear();
-        {
-            let context = scope.context();
-
-            // Drop all the futures once the hooks are dropped
-            for task_id in context.spawned_tasks.borrow_mut().drain() {
-                context.tasks.remove(task_id);
-            }
-        }
 
         self.scopes.remove(id.0);
     }
@@ -137,45 +106,6 @@ impl VirtualDom {
             }
             DynamicNode::Placeholder(_) => {}
             DynamicNode::Text(_) => {}
-        });
-    }
-
-    /// Descend through the tree, removing any borrowed props and listeners
-    pub(crate) fn ensure_drop_safety(&mut self, scope_id: ScopeId) {
-        let scope = &self.scopes[scope_id.0];
-
-        {
-            // Drop all element refs that could be invalidated when the component was rerun
-            let mut element_refs = self.scopes[scope_id.0].element_refs_to_drop.borrow_mut();
-            let element_refs_slab = &mut self.element_refs;
-            for element_ref in element_refs.drain(..) {
-                if let Some(element_ref) = element_refs_slab.get_mut(element_ref.0) {
-                    *element_ref = None;
-                }
-            }
-        }
-
-        // make sure we drop all borrowed props manually to guarantee that their drop implementation is called before we
-        // run the hooks (which hold an &mut Reference)
-        // recursively call ensure_drop_safety on all children
-        let props = { scope.borrowed_props.borrow_mut().clone() };
-        for comp in props {
-            let comp = unsafe { &*comp };
-            match comp.scope.get() {
-                Some(child) if child != scope_id => self.ensure_drop_safety(child),
-                _ => (),
-            }
-        }
-        let scope = &self.scopes[scope_id.0];
-        scope.borrowed_props.borrow_mut().clear();
-
-        // Now that all the references are gone, we can safely drop our own references in our listeners.
-        let mut listeners = scope.attributes_to_drop_before_render.borrow_mut();
-        listeners.drain(..).for_each(|listener| {
-            let listener = unsafe { &*listener };
-            if let AttributeValue::Listener(l) = &listener.value {
-                _ = l.take();
-            }
         });
     }
 }

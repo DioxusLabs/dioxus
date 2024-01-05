@@ -22,9 +22,14 @@ pub(crate) struct ScopeContext {
     pub(crate) parent_id: Option<ScopeId>,
 
     pub(crate) height: u32,
+    pub(crate) render_count: Cell<usize>,
+
     pub(crate) suspended: Cell<bool>,
 
     pub(crate) shared_contexts: RefCell<Vec<Box<dyn Any>>>,
+
+    pub(crate) hooks: RefCell<Vec<Box<dyn Any>>>,
+    pub(crate) hook_index: Cell<usize>,
 
     pub(crate) tasks: Rc<Scheduler>,
     pub(crate) spawned_tasks: RefCell<FxHashSet<TaskId>>,
@@ -43,10 +48,13 @@ impl ScopeContext {
             id,
             parent_id,
             height,
+            render_count: Cell::new(0),
             suspended: Cell::new(false),
             shared_contexts: RefCell::new(vec![]),
             tasks,
             spawned_tasks: RefCell::new(FxHashSet::default()),
+            hooks: RefCell::new(vec![]),
+            hook_index: Cell::new(0),
         }
     }
 
@@ -243,6 +251,65 @@ impl ScopeContext {
     pub fn suspend(&self) -> Option<Element> {
         self.suspended.set(true);
         None
+    }
+
+    /// Store a value between renders. The foundational hook for all other hooks.
+    ///
+    /// Accepts an `initializer` closure, which is run on the first use of the hook (typically the initial render). The return value of this closure is stored for the lifetime of the component, and a mutable reference to it is provided on every render as the return value of `use_hook`.
+    ///
+    /// When the component is unmounted (removed from the UI), the value is dropped. This means you can return a custom type and provide cleanup code by implementing the [`Drop`] trait
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use dioxus_core::ScopeState;
+    ///
+    /// // prints a greeting on the initial render
+    /// pub fn use_hello_world(cx: &ScopeState) {
+    ///     cx.use_hook(|| println!("Hello, world!"));
+    /// }
+    /// ```
+    #[allow(clippy::mut_from_ref)]
+    pub fn use_hook<State: 'static>(&self, initializer: impl FnOnce() -> State) -> &mut State {
+        let cur_hook = self.hook_index.get();
+        let mut hooks = self.hooks.try_borrow_mut().expect("The hook list is already borrowed: This error is likely caused by trying to use a hook inside a hook which violates the rules of hooks.");
+
+        if cur_hook >= hooks.len() {
+            hooks.push(Box::new(initializer()));
+        }
+
+        hooks
+            .get(cur_hook)
+            .and_then(|inn| {
+                self.hook_index.set(cur_hook + 1);
+                let raw_ref: &mut dyn Any = inn.as_mut();
+                raw_ref.downcast_mut::<State>()
+            })
+            .expect(
+                r#"
+                Unable to retrieve the hook that was initialized at this index.
+                Consult the `rules of hooks` to understand how to use hooks properly.
+
+                You likely used the hook in a conditional. Hooks rely on consistent ordering between renders.
+                Functions prefixed with "use" should never be called conditionally.
+                "#,
+            )
+    }
+
+    /// Get the current render since the inception of this component
+    ///
+    /// This can be used as a helpful diagnostic when debugging hooks/renders, etc
+    pub fn generation(&self) -> usize {
+        self.render_count.get()
+    }
+}
+
+impl Drop for ScopeContext {
+    fn drop(&mut self) {
+        // Drop all spawned tasks
+        for id in self.spawned_tasks.borrow().iter() {
+            self.tasks.remove(*id);
+        }
     }
 }
 

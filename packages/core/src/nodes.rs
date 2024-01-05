@@ -341,7 +341,7 @@ pub struct VComponent {
     /// It is possible that components get folded at compile time, so these shouldn't be really used as a key
     pub(crate) render_fn: *const (),
 
-    pub(crate) props: Box<dyn AnyProps>,
+    pub(crate) props: BoxedAnyProps,
 }
 
 impl<'a> VComponent {
@@ -362,7 +362,7 @@ impl<'a> std::fmt::Debug for VComponent {
 }
 
 /// An instance of some text, mounted to the DOM
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct VText {
     /// The actual text itself
     pub value: String,
@@ -436,7 +436,7 @@ pub enum TemplateAttribute {
 }
 
 /// An attribute on a DOM node, such as `id="my-thing"` or `href="https://example.com"`
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Attribute {
     /// The name of the attribute.
     pub name: &'static str,
@@ -483,6 +483,7 @@ impl Attribute {
 ///
 /// These are built-in to be faster during the diffing process. To use a custom value, use the [`AttributeValue::Any`]
 /// variant.
+#[derive(Clone)]
 pub enum AttributeValue {
     /// Text attribute
     Text(String),
@@ -497,10 +498,10 @@ pub enum AttributeValue {
     Bool(bool),
 
     /// A listener, like "onclick"
-    Listener(RefCell<Option<ListenerCb>>),
+    Listener(ListenerCb),
 
     /// An arbitrary value that implements PartialEq and is static
-    Any(RefCell<Option<Box<dyn AnyValue>>>),
+    Any(Box<dyn AnyValue>),
 
     /// A "none" value, resulting in the removal of an attribute from the dom
     None,

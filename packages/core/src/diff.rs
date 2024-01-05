@@ -219,13 +219,12 @@ impl VirtualDom {
         // copy out the box for both
         let old_scope = &self.scopes[scope_id.0];
         let old = old_scope.props.as_ref();
-        let new: Box<dyn AnyProps> = right.props.take().unwrap();
-        let new: Box<dyn AnyProps> = unsafe { std::mem::transmute(new) };
+        let new: &dyn AnyProps = right.props.as_ref();
 
         // If the props are static, then we try to memoize by setting the new with the old
         // The target scopestate still has the reference to the old props, so there's no need to update anything
         // This also implicitly drops the new props since they're not used
-        if left.static_props && unsafe { old.as_ref().unwrap().memoize(new.as_ref()) } {
+        if old.memoize(new) {
             tracing::trace!(
                 "Memoized props for component {:#?} ({})",
                 scope_id,
@@ -235,7 +234,7 @@ impl VirtualDom {
         }
 
         // First, move over the props from the old to the new, dropping old props in the process
-        self.scopes[scope_id.0].props = Some(new);
+        self.scopes[scope_id.0].props = new;
 
         // Now run the component and diff it
         self.run_scope(scope_id);

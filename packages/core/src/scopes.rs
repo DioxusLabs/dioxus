@@ -1,7 +1,7 @@
 use crate::{
     any_props::AnyProps,
     any_props::VProps,
-    innerlude::{DynamicNode, EventHandler, VComponent, VNodeId, VText},
+    innerlude::{DynamicNode, EventHandler, VComponent, VText},
     nodes::{IntoAttributeValue, IntoDynNode, RenderReturn},
     runtime::Runtime,
     scope_context::ScopeContext,
@@ -9,7 +9,7 @@ use crate::{
 };
 use std::{
     any::Any,
-    cell::{Cell, Ref, RefCell, UnsafeCell},
+    cell::{Ref, RefCell},
     fmt::{Arguments, Debug},
     future::Future,
     rc::Rc,
@@ -47,16 +47,9 @@ pub struct ScopeState {
     pub(crate) runtime: Rc<Runtime>,
     pub(crate) context_id: ScopeId,
 
-    pub(crate) render_cnt: Cell<usize>,
+    pub(crate) last_rendered_node: Option<RenderReturn>,
 
-    pub(crate) hooks: RefCell<Vec<Box<UnsafeCell<dyn Any>>>>,
-    pub(crate) hook_idx: Cell<usize>,
-
-    pub(crate) borrowed_props: RefCell<Vec<*const VComponent>>,
-    pub(crate) element_refs_to_drop: RefCell<Vec<VNodeId>>,
-    pub(crate) attributes_to_drop_before_render: RefCell<Vec<*const Attribute>>,
-
-    pub(crate) props: Option<Box<dyn AnyProps>>,
+    pub(crate) props: Box<dyn AnyProps>,
 }
 
 impl Drop for ScopeState {
@@ -75,13 +68,6 @@ impl<'src> ScopeState {
         self.context().name
     }
 
-    /// Get the current render since the inception of this component
-    ///
-    /// This can be used as a helpful diagnostic when debugging hooks/renders, etc
-    pub fn generation(&self) -> usize {
-        self.render_cnt.get()
-    }
-
     /// Get a handle to the currently active head node arena for this Scope
     ///
     /// This is useful for traversing the tree outside of the VirtualDom, such as in a custom renderer or in SSR.
@@ -98,15 +84,7 @@ impl<'src> ScopeState {
     ///
     /// Returns [`None`] if the tree has not been built yet.
     pub fn try_root_node(&self) -> Option<&RenderReturn> {
-        let ptr = self.current_frame().node.get();
-
-        if ptr.is_null() {
-            return None;
-        }
-
-        let r: &RenderReturn = unsafe { &*ptr };
-
-        unsafe { std::mem::transmute(r) }
+        self.last_rendered_node.as_ref()
     }
 
     /// Get the height of this Scope - IE the number of scopes above it.
@@ -354,21 +332,19 @@ impl<'src> ScopeState {
         &'src self,
         mut callback: impl FnMut(Event<T>) + 'src,
     ) -> AttributeValue {
-        AttributeValue::Listener(RefCell::new(Some(Box::new(
-            move |event: Event<dyn Any>| {
-                if let Ok(data) = event.data.downcast::<T>() {
-                    callback(Event {
-                        propagates: event.propagates,
-                        data,
-                    });
-                }
-            },
-        ))))
+        AttributeValue::Listener(Box::new(move |event: Event<dyn Any>| {
+            if let Ok(data) = event.data.downcast::<T>() {
+                callback(Event {
+                    propagates: event.propagates,
+                    data,
+                });
+            }
+        }))
     }
 
     /// Create a new [`AttributeValue`] with a value that implements [`AnyValue`]
     pub fn any_value<T: AnyValue>(&'src self, value: T) -> AttributeValue {
-        AttributeValue::Any(RefCell::new(Some(Box::new(value))))
+        AttributeValue::Any(Box::new(value))
     }
 
     /// Mark this component as suspended and then return None
@@ -376,48 +352,5 @@ impl<'src> ScopeState {
         let cx = self.context();
         cx.suspend();
         None
-    }
-
-    /// Store a value between renders. The foundational hook for all other hooks.
-    ///
-    /// Accepts an `initializer` closure, which is run on the first use of the hook (typically the initial render). The return value of this closure is stored for the lifetime of the component, and a mutable reference to it is provided on every render as the return value of `use_hook`.
-    ///
-    /// When the component is unmounted (removed from the UI), the value is dropped. This means you can return a custom type and provide cleanup code by implementing the [`Drop`] trait
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// use dioxus_core::ScopeState;
-    ///
-    /// // prints a greeting on the initial render
-    /// pub fn use_hello_world(cx: &ScopeState) {
-    ///     cx.use_hook(|| println!("Hello, world!"));
-    /// }
-    /// ```
-    #[allow(clippy::mut_from_ref)]
-    pub fn use_hook<State: 'static>(&self, initializer: impl FnOnce() -> State) -> &mut State {
-        let cur_hook = self.hook_idx.get();
-        let mut hooks = self.hooks.try_borrow_mut().expect("The hook list is already borrowed: This error is likely caused by trying to use a hook inside a hook which violates the rules of hooks.");
-
-        if cur_hook >= hooks.len() {
-            hooks.push(Box::new(UnsafeCell::new(initializer())));
-        }
-
-        hooks
-            .get(cur_hook)
-            .and_then(|inn| {
-                self.hook_idx.set(cur_hook + 1);
-                let raw_ref = unsafe { &mut *inn.get() };
-                raw_ref.downcast_mut::<State>()
-            })
-            .expect(
-                r#"
-                Unable to retrieve the hook that was initialized at this index.
-                Consult the `rules of hooks` to understand how to use hooks properly.
-
-                You likely used the hook in a conditional. Hooks rely on consistent ordering between renders.
-                Functions prefixed with "use" should never be called conditionally.
-                "#,
-            )
     }
 }

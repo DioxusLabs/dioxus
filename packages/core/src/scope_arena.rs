@@ -24,15 +24,8 @@ impl VirtualDom {
             runtime: self.runtime.clone(),
             context_id: id,
 
-            props: Some(props),
-
-            render_cnt: Default::default(),
-            hooks: Default::default(),
-            hook_idx: Default::default(),
-
-            borrowed_props: Default::default(),
-            attributes_to_drop_before_render: Default::default(),
-            element_refs_to_drop: Default::default(),
+            props,
+            last_rendered_node: Default::default(),
         }));
 
         let context =
@@ -42,42 +35,30 @@ impl VirtualDom {
         scope
     }
 
-    pub(crate) fn run_scope(&mut self, scope_id: ScopeId) -> &RenderReturn {
+    pub(crate) fn run_scope(&mut self, scope_id: ScopeId) -> RenderReturn {
         self.runtime.scope_stack.borrow_mut().push(scope_id);
-        // Cycle to the next frame and then reset it
-        // This breaks any latent references, invalidating every pointer referencing into it.
-        // Remove all the outdated listeners
-        self.ensure_drop_safety(scope_id);
 
         let new_nodes = unsafe {
             let scope = &self.scopes[scope_id.0];
-            scope.previous_frame().reset();
 
-            scope.context().suspended.set(false);
-
-            scope.hook_idx.set(0);
+            let context = scope.context();
+            context.suspended.set(false);
+            context.hook_index.set(0);
 
             // safety: due to how we traverse the tree, we know that the scope is not currently aliased
-            let props: &dyn AnyProps = scope.props.as_ref().unwrap().as_ref();
-            let props: &dyn AnyProps = std::mem::transmute(props);
+            let props: &dyn AnyProps = &*scope.props;
 
             let _span = tracing::trace_span!("render", scope = %scope.context().name);
-            props.render(scope)
+            props.render()
         };
 
-        let scope = &self.scopes[scope_id.0];
-
-        // We write on top of the previous frame and then make it the current by pushing the generation forward
-        let frame = scope.previous_frame();
-
-        // set the new head of the bump frame
-        let allocated = &*frame.bump().alloc(new_nodes);
-        frame.node.set(allocated);
-
-        // And move the render generation forward by one
-        scope.render_cnt.set(scope.render_cnt.get() + 1);
+        let scope = &mut self.scopes[scope_id.0];
 
         let context = scope.context();
+
+        // And move the render generation forward by one
+        context.render_count.set(context.render_count.get() + 1);
+
         // remove this scope from dirty scopes
         self.dirty_scopes.remove(&DirtyScope {
             height: context.height,
@@ -85,18 +66,15 @@ impl VirtualDom {
         });
 
         if context.suspended.get() {
-            if matches!(allocated, RenderReturn::Aborted(_)) {
+            if matches!(new_nodes, RenderReturn::Aborted(_)) {
                 self.suspended_scopes.insert(context.id);
             }
         } else if !self.suspended_scopes.is_empty() {
             _ = self.suspended_scopes.remove(&context.id);
         }
 
-        // rebind the lifetime now that its stored internally
-        let result = unsafe { allocated };
-
         self.runtime.scope_stack.borrow_mut().pop();
 
-        result
+        new_nodes
     }
 }

@@ -1,14 +1,40 @@
-use crate::{nodes::RenderReturn, scopes::ScopeState, Element};
-use std::panic::AssertUnwindSafe;
+use crate::{nodes::RenderReturn, Element};
+use std::{ops::Deref, panic::AssertUnwindSafe};
+
+/// A boxed version of AnyProps that can be cloned
+pub(crate) struct BoxedAnyProps {
+    inner: Box<dyn AnyProps>,
+}
+
+impl BoxedAnyProps {
+    fn new(inner: impl AnyProps + 'static) -> Self {
+        Self {
+            inner: Box::new(inner),
+        }
+    }
+}
+
+impl Deref for BoxedAnyProps {
+    type Target = dyn AnyProps;
+
+    fn deref(&self) -> &Self::Target {
+        &*self.inner
+    }
+}
+
+impl Clone for BoxedAnyProps {
+    fn clone(&self) -> Self {
+        Self {
+            inner: self.inner.duplicate(),
+        }
+    }
+}
 
 /// A trait that essentially allows VComponentProps to be used generically
-///
-/// # Safety
-///
-/// This should not be implemented outside this module
 pub(crate) trait AnyProps {
-    fn render<'a>(&'a self, bump: &'a ScopeState) -> RenderReturn;
+    fn render<'a>(&'a self) -> RenderReturn;
     fn memoize(&self, other: &dyn AnyProps) -> bool;
+    fn duplicate(&self) -> Box<dyn AnyProps>;
 }
 
 pub(crate) struct VProps<P> {
@@ -36,7 +62,7 @@ impl<P: Clone> AnyProps for VProps<P> {
         (self.memo)(self, other)
     }
 
-    fn render(&self, cx: &ScopeState) -> RenderReturn {
+    fn render(&self) -> RenderReturn {
         let res = std::panic::catch_unwind(AssertUnwindSafe(move || {
             // Call the render function directly
             (self.render_fn)(self.props.clone())
@@ -51,5 +77,13 @@ impl<P: Clone> AnyProps for VProps<P> {
                 RenderReturn::default()
             }
         }
+    }
+
+    fn duplicate(&self) -> Box<dyn AnyProps> {
+        Box::new(Self {
+            render_fn: self.render_fn,
+            memo: self.memo,
+            props: self.props.clone(),
+        })
     }
 }
