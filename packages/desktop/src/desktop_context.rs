@@ -98,6 +98,7 @@ pub struct DesktopService {
     /// The wry/tao proxy to the current window
     pub webview: WebView,
 
+    /// The tao window itself
     pub window: Window,
 
     /// The proxy to the event loop
@@ -176,7 +177,7 @@ impl DesktopService {
     ///
     /// Be careful to not create a cycle of windows, or you might leak memory.
     pub fn new_window(&self, dom: VirtualDom, cfg: Config) -> Weak<DesktopService> {
-        let window = create_new_window(
+        let window = crate::app::create_new_window(
             cfg,
             &self.event_loop,
             &self.proxy,

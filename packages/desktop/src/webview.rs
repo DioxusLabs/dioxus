@@ -12,16 +12,20 @@ pub(crate) fn build(
     event_loop: &EventLoopWindowTarget<UserWindowEvent>,
     proxy: EventLoopProxy<UserWindowEvent>,
 ) -> (WebView, WebContext, AssetHandlerRegistry, EditQueue, Window) {
-    let builder = cfg.window.clone();
+    let mut builder = cfg.window.clone();
+
+    // TODO: restore the menu bar with muda: https://github.com/tauri-apps/muda/blob/dev/examples/wry.rs
+    if cfg.enable_default_menu_bar {
+        // builder = builder.with_menu(build_default_menu_bar());
+    }
+
+    let window = builder.build(event_loop).unwrap();
+
+    let window_id = window.id();
     let file_handler = cfg.file_drop_handler.take();
     let custom_head = cfg.custom_head.clone();
     let index_file = cfg.custom_index.clone();
     let root_name = cfg.root_name.clone();
-
-    // TODO: restore the menu bar with muda: https://github.com/tauri-apps/muda/blob/dev/examples/wry.rs
-    // if cfg.enable_default_menu_bar {
-    //     builder = builder.with_menu(build_default_menu_bar());
-    // }
 
     // We assume that if the icon is None in cfg, then the user just didnt set it
     if cfg.window.window.window_icon.is_none() {

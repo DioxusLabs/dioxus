@@ -197,7 +197,7 @@ pub fn use_asset_handler<F: AssetFuture>(
     handler: impl AssetHandler<F>,
 ) -> &AssetHandlerHandle {
     cx.use_hook(|| {
-        let desktop = window();
+        let desktop = crate::window();
         let handler_id = Rc::new(OnceCell::new());
         let handler_id_ref = Rc::clone(&handler_id);
         let desktop_ref = Rc::clone(&desktop);
@@ -220,7 +220,7 @@ pub(super) async fn desktop_handler(
     asset_handlers: &AssetHandlerRegistry,
     edit_queue: &EditQueue,
     headless: bool,
-    responder: wry::webview::RequestAsyncResponder,
+    responder: wry::RequestAsyncResponder,
 ) {
     let request = AssetRequest::from(request);
 
@@ -259,7 +259,7 @@ pub(super) async fn desktop_handler(
             .body(Cow::from(body))
         {
             Ok(response) => {
-                return Ok(response);
+                return responder.respond(response);
             }
             Err(err) => tracing::error!("error building response: {}", err),
         }
@@ -305,9 +305,7 @@ pub(super) async fn desktop_handler(
             .header("Content-Type", content_type)
             .body(Cow::from(asset))
         {
-            Ok(response) => {
-                return response;
-            }
+            Ok(response) => return responder.respond(response),
             Err(err) => tracing::error!("error building response: {}", err),
         }
     }

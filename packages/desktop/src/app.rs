@@ -4,26 +4,26 @@ pub use crate::desktop_context::{
     use_window, use_wry_event_handler, window, DesktopService, WryEventHandler, WryEventHandlerId,
 };
 use crate::desktop_context::{EventData, UserWindowEvent, WebviewQueue, WindowEventHandlers};
+use crate::element::DesktopElement;
+use crate::eval::init_eval;
 use crate::events::{IpcMessage, KnownIpcMethod};
 use crate::file_upload;
+pub use crate::protocol::{
+    use_asset_handler, AssetFuture, AssetHandler, AssetRequest, AssetResponse,
+};
 use crate::query::QueryResult;
 use crate::shortcut::GlobalHotKeyEvent;
+use crate::shortcut::ShortcutRegistry;
+pub use crate::shortcut::{use_global_shortcut, ShortcutHandle, ShortcutId, ShortcutRegistryError};
 use dioxus_core::*;
 use dioxus_html::{event_bubbles, MountedData};
 use dioxus_html::{native_bind::NativeFileEngine, FormData, HtmlEvent};
+use dioxus_interpreter_js::binary_protocol::Channel;
+use futures_util::{pin_mut, FutureExt};
 use global_hotkey::{
     hotkey::{Code, HotKey, Modifiers},
     GlobalHotKeyManager,
 };
-// use dioxus_interpreter_js::binary_protocol::Channel;
-use crate::element::DesktopElement;
-use crate::eval::init_eval;
-pub use crate::protocol::{
-    use_asset_handler, AssetFuture, AssetHandler, AssetRequest, AssetResponse,
-};
-use crate::shortcut::ShortcutRegistry;
-pub use crate::shortcut::{use_global_shortcut, ShortcutHandle, ShortcutId, ShortcutRegistryError};
-use futures_util::{pin_mut, FutureExt};
 use rustc_hash::FxHashMap;
 use std::rc::Rc;
 use std::sync::atomic::AtomicU16;
@@ -61,7 +61,7 @@ pub struct App<P> {
     pub(crate) is_visible_before_start: bool,
 }
 
-impl<P> App<P> {
+impl<P: 'static> App<P> {
     pub fn new(cfg: Config, props: P, root: Component<P>) -> (EventLoop<UserWindowEvent>, Self) {
         let event_loop = EventLoopBuilder::<UserWindowEvent>::with_user_event().build();
 
@@ -279,9 +279,12 @@ impl<P> App<P> {
             dioxus_hot_reload::HotReloadMsg::UpdateTemplate(template) => {
                 for webview in self.webviews.values_mut() {
                     webview.dom.replace_template(template);
+                }
 
-                    // poll_vdom(webview);
-                    todo!()
+                let ids = self.webviews.keys().copied().collect::<Vec<_>>();
+
+                for id in ids {
+                    self.poll_vdom(id);
                 }
             }
             dioxus_hot_reload::HotReloadMsg::Shutdown => {
@@ -290,7 +293,7 @@ impl<P> App<P> {
         }
     }
 
-    pub fn handle_file_dialog_msg(&self, msg: IpcMessage, window: WindowId) {
+    pub fn handle_file_dialog_msg(&mut self, msg: IpcMessage, window: WindowId) {
         if let Ok(file_diolog) =
             serde_json::from_value::<file_upload::FileDialogRequest>(msg.params())
         {
@@ -385,9 +388,9 @@ pub fn create_new_window(
 }
 
 pub struct WebviewHandler {
-    dom: VirtualDom,
-    desktop_context: DesktopContext,
-    waker: Waker,
+    pub dom: VirtualDom,
+    pub desktop_context: DesktopContext,
+    pub waker: Waker,
 
     // Wry assumes the webcontext is alive for the lifetime of the webview.
     // We need to keep the webcontext alive, otherwise the webview will crash
@@ -407,8 +410,6 @@ pub fn send_edits(edits: Mutations, desktop_context: &DesktopContext) {
         desktop_context.edit_queue.add_edits(bytes)
     }
 }
-
-pub struct Channel {}
 
 pub fn apply_edits(
     mutations: Mutations,
