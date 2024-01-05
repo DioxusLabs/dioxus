@@ -6,11 +6,13 @@ static CLICKS: Mutex<usize> = Mutex::new(0);
 
 #[test]
 fn events_propagate() {
+    set_event_converter(Box::new(dioxus_html::SerializedHtmlEventConverter));
+
     let mut dom = VirtualDom::new(app);
     _ = dom.rebuild();
 
     // Top-level click is registered
-    dom.handle_event("click", Rc::new(MouseData::default()), ElementId(1), true);
+    dom.handle_event("click", Rc::new(PlatformEventData::new(Box::<SerializedMouseData>::default())), ElementId(1), true);
     assert_eq!(*CLICKS.lock().unwrap(), 1);
 
     // break reference....
@@ -20,7 +22,7 @@ fn events_propagate() {
     }
 
     // Lower click is registered
-    dom.handle_event("click", Rc::new(MouseData::default()), ElementId(2), true);
+    dom.handle_event("click", Rc::new(PlatformEventData::new(Box::<SerializedMouseData>::default())), ElementId(2), true);
     assert_eq!(*CLICKS.lock().unwrap(), 3);
 
     // break reference....
@@ -30,14 +32,13 @@ fn events_propagate() {
     }
 
     // Stop propagation occurs
-    dom.handle_event("click", Rc::new(MouseData::default()), ElementId(2), true);
+    dom.handle_event("click", Rc::new(PlatformEventData::new(Box::<SerializedMouseData>::default())), ElementId(2), true);
     assert_eq!(*CLICKS.lock().unwrap(), 3);
 }
 
 fn app(cx: Scope) -> Element {
     render! {
-        div {
-            onclick: move |_| {
+        div { onclick: move |_| {
                 println!("top clicked");
                 *CLICKS.lock().unwrap() += 1;
             },
@@ -53,17 +54,14 @@ fn app(cx: Scope) -> Element {
 
 fn problematic_child(cx: Scope) -> Element {
     render! {
-        button {
-            onclick: move |evt| {
+        button { onclick: move |evt| {
                 println!("bottom clicked");
                 let mut clicks = CLICKS.lock().unwrap();
-
                 if *clicks == 3 {
                     evt.stop_propagation();
                 } else {
                     *clicks += 1;
                 }
-            }
-        }
+            } }
     }
 }
