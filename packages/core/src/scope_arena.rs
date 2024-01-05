@@ -11,7 +11,7 @@ impl VirtualDom {
     pub(super) fn new_scope(&mut self, props: BoxedAnyProps, name: &'static str) -> &ScopeState {
         let parent_id = self.runtime.current_scope_id();
         let height = parent_id
-            .and_then(|parent_id| self.get_scope(parent_id).map(|f| f.context().height + 1))
+            .and_then(|parent_id| self.runtime.get_context(parent_id).map(|f| f.height + 1))
             .unwrap_or(0);
         let entry = self.scopes.vacant_entry();
         let id = ScopeId(entry.key());

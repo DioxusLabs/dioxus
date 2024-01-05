@@ -7,11 +7,13 @@ use crate::shortcut::{HotKey, ShortcutId, ShortcutRegistry, ShortcutRegistryErro
 use crate::AssetHandler;
 use crate::Config;
 use crate::WebviewHandler;
-use dioxus_core::ScopeState;
+use dioxus_core::once;
+use dioxus_core::ScopeId;
 use dioxus_core::VirtualDom;
 #[cfg(all(feature = "hot-reload", debug_assertions))]
 use dioxus_hot_reload::HotReloadMsg;
 use dioxus_interpreter_js::binary_protocol::Channel;
+use dioxus_interpreter_js::MutationState;
 use rustc_hash::FxHashMap;
 use slab::Slab;
 use std::cell::RefCell;
@@ -45,10 +47,8 @@ pub fn window() -> DesktopContext {
 
 /// Get an imperative handle to the current window
 #[deprecated = "Prefer the using the `window` function directly for cleaner code"]
-pub fn use_window(cx: &ScopeState) -> &DesktopContext {
-    cx.use_hook(|| cx.consume_context::<DesktopContext>())
-        .as_ref()
-        .unwrap()
+pub fn use_window() -> DesktopContext {
+    once(window)
 }
 
 /// This handles communication between the requests that the webview makes and the interpreter. The interpreter constantly makes long running requests to the webview to get any edits that should be made to the DOM almost like server side events.
@@ -123,10 +123,8 @@ pub struct DesktopService {
     pub(crate) shortcut_manager: ShortcutRegistry,
 
     pub(crate) edit_queue: EditQueue,
-    pub(crate) templates: RefCell<FxHashMap<String, u16>>,
-    pub(crate) max_template_count: AtomicU16,
+    pub(crate) mutation_state: RefCell<MutationState>,
 
-    pub(crate) channel: RefCell<Channel>,
     pub(crate) asset_handlers: AssetHandlerRegistry,
 
     #[cfg(target_os = "ios")]
@@ -165,9 +163,7 @@ impl DesktopService {
             event_handlers,
             shortcut_manager,
             edit_queue,
-            templates: Default::default(),
-            max_template_count: Default::default(),
-            channel: Default::default(),
+            mutation_state: Default::default(),
             asset_handlers,
             #[cfg(target_os = "ios")]
             views: Default::default(),
@@ -192,11 +188,11 @@ impl DesktopService {
             self.shortcut_manager.clone(),
         );
 
-        let desktop_context = window
-            .dom
-            .base_scope()
-            .consume_context::<Rc<DesktopService>>()
-            .unwrap();
+        let desktop_context = window.dom.in_runtime(|| {
+            ScopeId::ROOT
+                .consume_context::<Rc<DesktopService>>()
+                .unwrap()
+        });
 
         let id = window.desktop_context.webview.window().id();
 
@@ -463,10 +459,9 @@ impl WryWindowEventHandlerInner {
 
 /// Get a closure that executes any JavaScript in the WebView context.
 pub fn use_wry_event_handler(
-    cx: &ScopeState,
     handler: impl FnMut(&Event<UserWindowEvent>, &EventLoopWindowTarget<UserWindowEvent>) + 'static,
-) -> &WryEventHandler {
-    cx.use_hook(move || {
+) -> WryEventHandler {
+    once(move || {
         let desktop = window();
 
         let id = desktop.create_wry_event_handler(handler);
@@ -481,6 +476,7 @@ pub fn use_wry_event_handler(
 /// A wry event handler that is scoped to the current component and window. The event handler will only receive events for the window it was created for and global events.
 ///
 /// This will automatically be removed when the component is unmounted.
+#[derive(Clone)]
 pub struct WryEventHandler {
     handlers: WindowEventHandlers,
     /// The unique identifier of the event handler.

@@ -1,4 +1,4 @@
-use crate::{runtime::with_runtime, scope_context::current_scope_id, ScopeId};
+use crate::{global_context::current_scope_id, runtime::with_runtime, ScopeId};
 use std::{
     cell::{Cell, RefCell},
     rc::Rc,

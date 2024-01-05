@@ -9,11 +9,11 @@ macro_rules! impl_event {
         $(
             $( #[$attr] )*
             #[inline]
-            pub fn $name<'a, E: crate::EventReturn<T>, T>(_cx: &'a ::dioxus_core::ScopeState, mut _f: impl FnMut(::dioxus_core::Event<$data>) -> E + 'a) -> ::dioxus_core::Attribute {
+            pub fn $name<E: crate::EventReturn<T>, T>(mut _f: impl FnMut(::dioxus_core::Event<$data>) -> E + 'static) -> ::dioxus_core::Attribute {
                 ::dioxus_core::Attribute::new(
                     stringify!($name),
-                    _cx.listener(move |e: ::dioxus_core::Event<$data>| {
-                        _f(e).spawn(_cx);
+                    ::dioxus_core::AttributeValue::listener(move |e: ::dioxus_core::Event<$data>| {
+                        _f(e).spawn();
                     }),
                     None,
                     false,
@@ -155,7 +155,7 @@ use std::future::Future;
 
 #[doc(hidden)]
 pub trait EventReturn<P>: Sized {
-    fn spawn(self, _cx: &dioxus_core::ScopeState) {}
+    fn spawn(self) {}
 }
 
 impl EventReturn<()> for () {}
@@ -167,7 +167,7 @@ where
     T: Future<Output = ()> + 'static,
 {
     #[inline]
-    fn spawn(self, cx: &dioxus_core::ScopeState) {
-        cx.spawn(self);
+    fn spawn(self) {
+        dioxus_core::prelude::spawn(self);
     }
 }

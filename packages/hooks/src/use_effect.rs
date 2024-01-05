@@ -1,4 +1,4 @@
-use dioxus_core::{ScopeState, TaskId};
+use dioxus_core::{ScopeState, Task};
 use std::{
     any::Any,
     cell::{Cell, RefCell},
@@ -67,7 +67,7 @@ where
 {
     struct UseEffect {
         needs_regen: bool,
-        task: Cell<Option<TaskId>>,
+        task: Cell<Option<Task>>,
         dependencies: Vec<Box<dyn Any>>,
         cleanup: UseEffectCleanup,
     }
@@ -108,14 +108,14 @@ type UseEffectCleanup = Rc<RefCell<Option<Box<dyn FnOnce()>>>>;
 
 /// Something that can be returned from a `use_effect` hook.
 pub trait UseEffectReturn<T> {
-    fn apply(self, oncleanup: UseEffectCleanup, cx: &ScopeState) -> TaskId;
+    fn apply(self, oncleanup: UseEffectCleanup, cx: &ScopeState) -> Task;
 }
 
 impl<T> UseEffectReturn<()> for T
 where
     T: Future<Output = ()> + 'static,
 {
-    fn apply(self, _: UseEffectCleanup, cx: &ScopeState) -> TaskId {
+    fn apply(self, _: UseEffectCleanup, cx: &ScopeState) -> Task {
         cx.push_future(self)
     }
 }
@@ -127,7 +127,7 @@ where
     T: Future<Output = F> + 'static,
     F: FnOnce() + 'static,
 {
-    fn apply(self, oncleanup: UseEffectCleanup, cx: &ScopeState) -> TaskId {
+    fn apply(self, oncleanup: UseEffectCleanup, cx: &ScopeState) -> Task {
         cx.push_future(async move {
             let cleanup = self.await;
             *oncleanup.borrow_mut() = Some(Box::new(cleanup) as Box<dyn FnOnce()>);

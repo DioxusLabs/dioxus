@@ -1,16 +1,17 @@
 #![allow(clippy::await_holding_refcell_ref)]
 use async_trait::async_trait;
-use dioxus_core::ScopeState;
+use dioxus_core::prelude::consume_context;
+use dioxus_core::prelude::provide_context;
 use dioxus_html::prelude::{EvalError, EvalProvider, Evaluator};
 use std::{cell::RefCell, rc::Rc};
 
 use crate::{query::Query, DesktopContext};
 
 /// Provides the DesktopEvalProvider through [`cx.provide_context`].
-pub fn init_eval(cx: &ScopeState) {
-    let desktop_ctx = cx.consume_context::<DesktopContext>().unwrap();
+pub fn init_eval() {
+    let desktop_ctx = consume_context::<DesktopContext>().unwrap();
     let provider: Rc<dyn EvalProvider> = Rc::new(DesktopEvalProvider { desktop_ctx });
-    cx.provide_context(provider);
+    provide_context(provider);
 }
 
 /// Reprents the desktop-target's provider of evaluators.

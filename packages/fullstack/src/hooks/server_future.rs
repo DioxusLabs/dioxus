@@ -112,7 +112,7 @@ where
 pub struct UseServerFuture<T> {
     update: Arc<dyn Fn()>,
     needs_regen: Cell<bool>,
-    task: Cell<Option<TaskId>>,
+    task: Cell<Option<Task>>,
     dependencies: Vec<Box<dyn Any>>,
     value: Rc<RefCell<Option<Box<T>>>>,
 }
@@ -142,7 +142,7 @@ impl<T> UseServerFuture<T> {
     }
 
     /// Get the ID of the future in Dioxus' internal scheduler
-    pub fn task(&self) -> Option<TaskId> {
+    pub fn task(&self) -> Option<Task> {
         self.task.get()
     }
 

@@ -1,5 +1,5 @@
 use crate::{window, DesktopContext};
-use dioxus_core::ScopeState;
+use dioxus_core::prelude::{once, spawn};
 use dioxus_interpreter_js::INTERPRETER_JS;
 use slab::Slab;
 use std::{
@@ -159,6 +159,7 @@ impl AssetHandlerRegistry {
 }
 
 /// A handle to a registered asset handler.
+#[derive(Clone)]
 pub struct AssetHandlerHandle {
     desktop: DesktopContext,
     handler_id: Rc<OnceCell<usize>>,
@@ -192,16 +193,13 @@ impl Drop for AssetHandlerHandle {
 ///
 /// The callback takes a path as requested by the web view, and it should return `Some(response)`
 /// if you want to load the asset, and `None` if you want to fallback on the default behavior.
-pub fn use_asset_handler<F: AssetFuture>(
-    cx: &ScopeState,
-    handler: impl AssetHandler<F>,
-) -> &AssetHandlerHandle {
-    cx.use_hook(|| {
+pub fn use_asset_handler<F: AssetFuture>(handler: impl AssetHandler<F>) -> AssetHandlerHandle {
+    once(|| {
         let desktop = window();
         let handler_id = Rc::new(OnceCell::new());
         let handler_id_ref = Rc::clone(&handler_id);
         let desktop_ref = Rc::clone(&desktop);
-        cx.push_future(async move {
+        spawn(async move {
             let id = desktop.asset_handlers.register_handler(handler).await;
             handler_id.set(id).unwrap();
         });

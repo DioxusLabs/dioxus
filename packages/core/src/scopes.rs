@@ -10,7 +10,7 @@ use std::{cell::Ref, fmt::Debug, rc::Rc};
 /// time for any logic that relies on these IDs to properly update.
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
-pub struct ScopeId(pub usize);
+pub struct ScopeId(pub(crate) usize);
 
 impl ScopeId {
     /// The root ScopeId.
@@ -30,7 +30,7 @@ impl ScopeId {
 /// A component's state separate from its props.
 ///
 /// This struct exists to provide a common interface for all scopes without relying on generics.
-pub struct ScopeState {
+pub(crate) struct ScopeState {
     pub(crate) runtime: Rc<Runtime>,
     pub(crate) context_id: ScopeId,
 

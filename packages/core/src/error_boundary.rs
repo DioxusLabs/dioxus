@@ -1,5 +1,5 @@
 use crate::{
-    scope_context::{consume_context, current_scope_id, schedule_update_any},
+    global_context::{consume_context, current_scope_id},
     Element, IntoDynNode, Properties, ScopeId, Template, TemplateAttribute, TemplateNode, VNode,
 };
 use std::{
@@ -9,7 +9,6 @@ use std::{
     error::Error,
     fmt::{Debug, Display},
     rc::Rc,
-    sync::Arc,
 };
 
 /// Provide an error boundary to catch errors from child components
@@ -28,7 +27,6 @@ pub struct ErrorBoundary {
 pub struct ErrorBoundaryInner {
     error: RefCell<Option<CapturedError>>,
     _id: ScopeId,
-    rerun_boundary: Arc<dyn Fn(ScopeId) + Send + Sync>,
 }
 
 impl Debug for ErrorBoundaryInner {
@@ -81,7 +79,6 @@ impl Default for ErrorBoundaryInner {
             error: RefCell::new(None),
             _id: current_scope_id()
                 .expect("Cannot create an error boundary outside of a component's scope."),
-            rerun_boundary: schedule_update_any().unwrap(),
         }
     }
 }
@@ -93,15 +90,11 @@ impl ErrorBoundary {
     }
 
     /// Create a new error boundary in the current scope
-    pub(crate) fn new_in_scope(
-        scope: ScopeId,
-        rerun_boundary: Arc<dyn Fn(ScopeId) + Send + Sync>,
-    ) -> Self {
+    pub(crate) fn new_in_scope(scope: ScopeId) -> Self {
         Self {
             inner: Rc::new(ErrorBoundaryInner {
                 error: RefCell::new(None),
                 _id: scope,
-                rerun_boundary,
             }),
         }
     }
@@ -113,13 +106,14 @@ impl ErrorBoundary {
         error: Box<dyn Debug + 'static>,
         backtrace: Backtrace,
     ) {
-        println!("{:?} {:?}", error, self.inner._id);
         self.inner.error.replace(Some(CapturedError {
             error,
             scope,
             backtrace,
         }));
-        (self.inner.rerun_boundary)(self.inner._id);
+        if self.inner._id != ScopeId::ROOT {
+            self.inner._id.needs_update();
+        }
     }
 
     /// Take any error that has been captured by this error boundary

@@ -15,7 +15,7 @@ pub(crate) enum SchedulerMsg {
     Immediate(ScopeId),
 
     /// A task has woken and needs to be progressed
-    TaskNotified(TaskId),
+    TaskNotified(Task),
 }
 
 use std::{cell::RefCell, rc::Rc};

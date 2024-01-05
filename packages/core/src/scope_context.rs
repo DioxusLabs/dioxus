@@ -1,7 +1,7 @@
 use crate::{
     innerlude::{Scheduler, SchedulerMsg},
-    runtime::{with_current_scope, with_runtime},
-    Element, ScopeId, TaskId,
+    runtime::{with_runtime, with_scope},
+    Element, ScopeId, Task,
 };
 use rustc_hash::FxHashSet;
 use std::{
@@ -9,7 +9,6 @@ use std::{
     cell::{Cell, RefCell},
     future::Future,
     rc::Rc,
-    sync::Arc,
 };
 
 /// A component's state separate from its props.
@@ -32,7 +31,7 @@ pub(crate) struct ScopeContext {
     pub(crate) hook_index: Cell<usize>,
 
     pub(crate) tasks: Rc<Scheduler>,
-    pub(crate) spawned_tasks: RefCell<FxHashSet<TaskId>>,
+    pub(crate) spawned_tasks: RefCell<FxHashSet<Task>>,
 }
 
 impl ScopeContext {
@@ -62,42 +61,11 @@ impl ScopeContext {
         self.parent_id
     }
 
-    pub fn scope_id(&self) -> ScopeId {
-        self.id
-    }
-
-    /// Create a subscription that schedules a future render for the reference component
-    ///
-    /// ## Notice: you should prefer using [`Self::schedule_update_any`] and [`Self::scope_id`]
-    pub fn schedule_update(&self) -> Arc<dyn Fn() + Send + Sync + 'static> {
-        let (chan, id) = (self.tasks.sender.clone(), self.scope_id());
-        Arc::new(move || drop(chan.unbounded_send(SchedulerMsg::Immediate(id))))
-    }
-
-    /// Schedule an update for any component given its [`ScopeId`].
-    ///
-    /// A component's [`ScopeId`] can be obtained from `use_hook` or the [`ScopeState::scope_id`] method.
-    ///
-    /// This method should be used when you want to schedule an update for a component
-    pub fn schedule_update_any(&self) -> Arc<dyn Fn(ScopeId) + Send + Sync> {
-        let chan = self.tasks.sender.clone();
-        Arc::new(move |id| {
-            chan.unbounded_send(SchedulerMsg::Immediate(id)).unwrap();
-        })
-    }
-
     /// Mark this scope as dirty, and schedule a render for it.
     pub fn needs_update(&self) {
-        self.needs_update_any(self.scope_id());
-    }
-
-    /// Get the [`ScopeId`] of a mounted component.
-    ///
-    /// `ScopeId` is not unique for the lifetime of the [`crate::VirtualDom`] - a [`ScopeId`] will be reused if a component is unmounted.
-    pub fn needs_update_any(&self, id: ScopeId) {
         self.tasks
             .sender
-            .unbounded_send(SchedulerMsg::Immediate(id))
+            .unbounded_send(SchedulerMsg::Immediate(self.id))
             .expect("Scheduler to exist if scope exists");
     }
 
@@ -221,7 +189,7 @@ impl ScopeContext {
     }
 
     /// Pushes the future onto the poll queue to be polled after the component renders.
-    pub fn push_future(&self, fut: impl Future<Output = ()> + 'static) -> TaskId {
+    pub fn push_future(&self, fut: impl Future<Output = ()> + 'static) -> Task {
         let id = self.tasks.spawn(self.id, fut);
         self.spawned_tasks.borrow_mut().insert(id);
         id
@@ -235,7 +203,7 @@ impl ScopeContext {
     /// Spawn a future that Dioxus won't clean up when this component is unmounted
     ///
     /// This is good for tasks that need to be run after the component has been dropped.
-    pub fn spawn_forever(&self, fut: impl Future<Output = ()> + 'static) -> TaskId {
+    pub fn spawn_forever(&self, fut: impl Future<Output = ()> + 'static) -> Task {
         // The root scope will never be unmounted so we can just add the task at the top of the app
         self.tasks.spawn(ScopeId::ROOT, fut)
     }
@@ -243,7 +211,7 @@ impl ScopeContext {
     /// Informs the scheduler that this task is no longer needed and should be removed.
     ///
     /// This drops the task immediately.
-    pub fn remove_future(&self, id: TaskId) {
+    pub fn remove_future(&self, id: Task) {
         self.tasks.remove(id);
     }
 
@@ -317,115 +285,74 @@ impl Drop for ScopeContext {
     }
 }
 
-/// Schedule an update for any component given its [`ScopeId`].
-///
-/// A component's [`ScopeId`] can be obtained from `use_hook` or the [`crate::scopes::ScopeState::scope_id`] method.
-///
-/// This method should be used when you want to schedule an update for a component
-pub fn schedule_update_any() -> Option<Arc<dyn Fn(ScopeId) + Send + Sync>> {
-    with_current_scope(|cx| cx.schedule_update_any())
-}
+impl ScopeId {
+    /// Get the current scope id
+    pub fn current_scope_id(self) -> Option<ScopeId> {
+        with_runtime(|rt| rt.current_scope_id()).flatten()
+    }
 
-/// Get the current scope id
-pub fn current_scope_id() -> Option<ScopeId> {
-    with_runtime(|rt| rt.current_scope_id()).flatten()
-}
+    #[doc(hidden)]
+    /// Check if the virtual dom is currently inside of the body of a component
+    pub fn vdom_is_rendering(self) -> bool {
+        with_runtime(|rt| rt.rendering.get()).unwrap_or_default()
+    }
 
-#[doc(hidden)]
-/// Check if the virtual dom is currently inside of the body of a component
-pub fn vdom_is_rendering() -> bool {
-    with_runtime(|rt| rt.rendering.get()).unwrap_or_default()
-}
+    /// Consume context from the current scope
+    pub fn consume_context<T: 'static + Clone>(self) -> Option<T> {
+        with_scope(self, |cx| cx.consume_context::<T>()).flatten()
+    }
 
-/// Consume context from the current scope
-pub fn consume_context<T: 'static + Clone>() -> Option<T> {
-    with_current_scope(|cx| cx.consume_context::<T>()).flatten()
-}
+    /// Consume context from the current scope
+    pub fn consume_context_from_scope<T: 'static + Clone>(self, scope_id: ScopeId) -> Option<T> {
+        with_runtime(|rt| {
+            rt.get_context(scope_id)
+                .and_then(|cx| cx.consume_context::<T>())
+        })
+        .flatten()
+    }
 
-/// Consume context from the current scope
-pub fn consume_context_from_scope<T: 'static + Clone>(scope_id: ScopeId) -> Option<T> {
-    with_runtime(|rt| {
-        rt.get_context(scope_id)
-            .and_then(|cx| cx.consume_context::<T>())
-    })
-    .flatten()
-}
+    /// Check if the current scope has a context
+    pub fn has_context<T: 'static + Clone>(self) -> Option<T> {
+        with_scope(self, |cx| cx.has_context::<T>()).flatten()
+    }
 
-/// Check if the current scope has a context
-pub fn has_context<T: 'static + Clone>() -> Option<T> {
-    with_current_scope(|cx| cx.has_context::<T>()).flatten()
-}
+    /// Provide context to the current scope
+    pub fn provide_context<T: 'static + Clone>(self, value: T) -> Option<T> {
+        with_scope(self, |cx| cx.provide_context(value))
+    }
 
-/// Provide context to the current scope
-pub fn provide_context<T: 'static + Clone>(value: T) -> Option<T> {
-    with_current_scope(|cx| cx.provide_context(value))
-}
+    /// Suspends the current component
+    pub fn suspend(self) -> Option<Element> {
+        with_scope(self, |cx| {
+            cx.suspend();
+        });
+        None
+    }
 
-/// Provide context to the the given scope
-pub fn provide_context_to_scope<T: 'static + Clone>(scope_id: ScopeId, value: T) -> Option<T> {
-    with_runtime(|rt| rt.get_context(scope_id).map(|cx| cx.provide_context(value))).flatten()
-}
+    /// Pushes the future onto the poll queue to be polled after the component renders.
+    pub fn push_future(self, fut: impl Future<Output = ()> + 'static) -> Option<Task> {
+        with_scope(self, |cx| cx.push_future(fut))
+    }
 
-/// Provide a context to the root scope
-pub fn provide_root_context<T: 'static + Clone>(value: T) -> Option<T> {
-    with_current_scope(|cx| cx.provide_root_context(value))
-}
+    /// Spawns the future but does not return the [`TaskId`]
+    pub fn spawn(self, fut: impl Future<Output = ()> + 'static) {
+        with_scope(self, |cx| cx.spawn(fut));
+    }
 
-/// Suspends the current component
-pub fn suspend() -> Option<Element> {
-    with_current_scope(|cx| {
-        cx.suspend();
-    });
-    None
-}
+    /// Get the current render since the inception of this component
+    ///
+    /// This can be used as a helpful diagnostic when debugging hooks/renders, etc
+    pub fn generation(self) -> Option<usize> {
+        with_scope(self, |cx| Some(cx.generation())).expect("to be in a dioxus runtime")
+    }
 
-/// Pushes the future onto the poll queue to be polled after the component renders.
-pub fn push_future(fut: impl Future<Output = ()> + 'static) -> Option<TaskId> {
-    with_current_scope(|cx| cx.push_future(fut))
-}
+    /// Get the parent of the current scope if it exists
+    pub fn parent_scope(self) -> Option<ScopeId> {
+        with_scope(self, |cx| cx.parent_id()).flatten()
+    }
 
-/// Spawns the future but does not return the [`TaskId`]
-pub fn spawn(fut: impl Future<Output = ()> + 'static) {
-    with_current_scope(|cx| cx.spawn(fut));
-}
-
-/// Spawn a future that Dioxus won't clean up when this component is unmounted
-///
-/// This is good for tasks that need to be run after the component has been dropped.
-pub fn spawn_forever(fut: impl Future<Output = ()> + 'static) -> Option<TaskId> {
-    with_current_scope(|cx| cx.spawn_forever(fut))
-}
-
-/// Informs the scheduler that this task is no longer needed and should be removed.
-///
-/// This drops the task immediately.
-pub fn remove_future(id: TaskId) {
-    with_current_scope(|cx| cx.remove_future(id));
-}
-
-/// Store a value between renders. The foundational hook for all other hooks.
-///
-/// Accepts an `initializer` closure, which is run on the first use of the hook (typically the initial render). The return value of this closure is stored for the lifetime of the component, and a mutable reference to it is provided on every render as the return value of `use_hook`.
-///
-/// When the component is unmounted (removed from the UI), the value is dropped. This means you can return a custom type and provide cleanup code by implementing the [`Drop`] trait
-///
-/// # Example
-///
-/// ```
-/// use dioxus_core::ScopeState;
-///
-/// // prints a greeting on the initial render
-/// pub fn use_hello_world() {
-///     once(|| println!("Hello, world!"));
-/// }
-/// ```
-pub fn once<State: Clone + 'static>(initializer: impl FnOnce() -> State) -> State {
-    with_current_scope(|cx| cx.use_hook(initializer)).expect("to be in a dioxus runtime")
-}
-
-/// Get the current render since the inception of this component
-///
-/// This can be used as a helpful diagnostic when debugging hooks/renders, etc
-pub fn generation() -> Option<usize> {
-    with_current_scope(|cx| Some(cx.generation())).expect("to be in a dioxus runtime")
+    /// Mark the current scope as dirty, causing it to re-render
+    pub fn needs_update(self) {
+        with_scope(self, |cx| cx.needs_update());
+    }
 }

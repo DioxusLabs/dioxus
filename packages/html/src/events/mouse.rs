@@ -148,14 +148,13 @@ impl_event! {
 
 /// ondoubleclick
 #[inline]
-pub fn ondoubleclick<'a, E: crate::EventReturn<T>, T>(
-    _cx: &'a ::dioxus_core::ScopeState,
-    mut _f: impl FnMut(::dioxus_core::Event<MouseData>) -> E + 'a,
+pub fn ondoubleclick<E: crate::EventReturn<T>, T>(
+    mut _f: impl FnMut(::dioxus_core::Event<MouseData>) -> E + 'static,
 ) -> ::dioxus_core::Attribute {
     ::dioxus_core::Attribute::new(
         "ondblclick",
-        _cx.listener(move |e: ::dioxus_core::Event<MouseData>| {
-            _f(e).spawn(_cx);
+        dioxus_core::AttributeValue::listener(move |e: ::dioxus_core::Event<MouseData>| {
+            _f(e).spawn();
         }),
         None,
         false,

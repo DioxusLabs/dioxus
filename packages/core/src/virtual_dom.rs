@@ -18,7 +18,7 @@ use crate::{
 use futures_util::{pin_mut, StreamExt};
 use rustc_hash::{FxHashMap, FxHashSet};
 use slab::Slab;
-use std::{any::Any, cell::Cell, collections::BTreeSet, future::Future, rc::Rc, sync::Arc};
+use std::{any::Any, cell::Cell, collections::BTreeSet, future::Future, rc::Rc};
 
 /// A virtual node system that progresses user events and diffs UI trees.
 ///
@@ -277,10 +277,7 @@ impl VirtualDom {
 
         // Unlike react, we provide a default error boundary that just renders the error as a string
         root.context()
-            .provide_context(Rc::new(ErrorBoundary::new_in_scope(
-                ScopeId::ROOT,
-                Arc::new(|_| {}),
-            )));
+            .provide_context(Rc::new(ErrorBoundary::new_in_scope(ScopeId::ROOT)));
 
         // the root element is always given element ID 0 since it's the container for the entire tree
         dom.elements.insert(None);
@@ -291,15 +288,21 @@ impl VirtualDom {
     /// Get the state for any scope given its ID
     ///
     /// This is useful for inserting or removing contexts from a scope, or rendering out its root node
-    pub fn get_scope(&self, id: ScopeId) -> Option<&ScopeState> {
+    pub(crate) fn get_scope(&self, id: ScopeId) -> Option<&ScopeState> {
         self.scopes.get(id.0).map(|s| &**s)
     }
 
     /// Get the single scope at the top of the VirtualDom tree that will always be around
     ///
     /// This scope has a ScopeId of 0 and is the root of the tree
-    pub fn base_scope(&self) -> &ScopeState {
+    pub(crate) fn base_scope(&self) -> &ScopeState {
         self.get_scope(ScopeId::ROOT).unwrap()
+    }
+
+    /// Run a closure inside the dioxus runtime
+    pub fn in_runtime<O>(&self, f: impl FnOnce() -> O) -> O {
+        let _runtime = RuntimeGuard::new(self.runtime.clone());
+        f()
     }
 
     /// Build the virtualdom with a global context inserted into the base scope

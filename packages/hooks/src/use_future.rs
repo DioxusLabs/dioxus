@@ -1,5 +1,5 @@
 #![allow(missing_docs)]
-use dioxus_core::{ScopeState, TaskId};
+use dioxus_core::{ScopeState, Task};
 use std::{any::Any, cell::Cell, future::Future, rc::Rc, sync::Arc};
 
 use crate::{use_state, UseState};
@@ -74,7 +74,7 @@ pub enum FutureState<'a, T> {
 pub struct UseFuture<T: 'static> {
     update: Arc<dyn Fn()>,
     needs_regen: Rc<Cell<bool>>,
-    task: Rc<Cell<Option<TaskId>>>,
+    task: Rc<Cell<Option<Task>>>,
     state: UseState<Option<T>>,
 }
 
@@ -114,7 +114,7 @@ impl<T> UseFuture<T> {
     }
 
     /// Get the ID of the future in Dioxus' internal scheduler
-    pub fn task(&self) -> Option<TaskId> {
+    pub fn task(&self) -> Option<Task> {
         self.task.get()
     }
 

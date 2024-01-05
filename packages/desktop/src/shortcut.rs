@@ -1,6 +1,5 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc, str::FromStr};
 
-use dioxus_core::ScopeState;
 use dioxus_html::input_data::keyboard_types::Modifiers;
 use slab::Slab;
 use wry::application::keyboard::ModifiersState;
@@ -100,7 +99,7 @@ impl ShortcutRegistry {
                     Err(HotkeyError::HotKeyParseError(shortcut)) => {
                         return Err(ShortcutRegistryError::InvalidShortcut(shortcut))
                     }
-                    Err(err) => return Err(ShortcutRegistryError::Other(Box::new(err))),
+                    Err(err) => return Err(ShortcutRegistryError::Other(Rc::new(err))),
                 }
             },
         )
@@ -125,24 +124,25 @@ impl ShortcutRegistry {
     }
 }
 
-#[non_exhaustive]
-#[derive(Debug)]
 /// An error that can occur when registering a shortcut.
+#[non_exhaustive]
+#[derive(Debug, Clone)]
 pub enum ShortcutRegistryError {
     /// The shortcut is invalid.
     InvalidShortcut(String),
     /// An unknown error occurred.
-    Other(Box<dyn std::error::Error>),
+    Other(Rc<dyn std::error::Error>),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 /// An global id for a shortcut.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ShortcutId {
     id: u32,
     number: usize,
 }
 
 /// A global shortcut. This will be automatically removed when it is dropped.
+#[derive(Clone)]
 pub struct ShortcutHandle {
     desktop: DesktopContext,
     /// The id of the shortcut
@@ -179,11 +179,10 @@ impl IntoAccelerator for &str {
 
 /// Get a closure that executes any JavaScript in the WebView context.
 pub fn use_global_shortcut(
-    cx: &ScopeState,
     accelerator: impl IntoAccelerator,
     handler: impl FnMut() + 'static,
-) -> &Result<ShortcutHandle, ShortcutRegistryError> {
-    cx.use_hook(move || {
+) -> Result<ShortcutHandle, ShortcutRegistryError> {
+    dioxus_core::once(move || {
         let desktop = window();
 
         let id = desktop.create_shortcut(accelerator.accelerator(), handler);

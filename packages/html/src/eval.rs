@@ -1,7 +1,7 @@
 #![allow(clippy::await_holding_refcell_ref)]
 
 use async_trait::async_trait;
-use dioxus_core::ScopeState;
+use dioxus_core::prelude::*;
 use std::future::{Future, IntoFuture};
 use std::pin::Pin;
 use std::rc::Rc;
@@ -34,18 +34,14 @@ type EvalCreator = Rc<dyn Fn(&str) -> Result<UseEval, EvalError>>;
 /// it. **This applies especially to web targets, where the JavaScript context
 /// has access to most, if not all of your application data.**
 #[must_use]
-pub fn use_eval(cx: &ScopeState) -> &EvalCreator {
-    &*cx.use_hook(|| {
-        let eval_provider = cx
-            .consume_context::<Rc<dyn EvalProvider>>()
-            .expect("evaluator not provided");
+pub fn eval_provider() -> EvalCreator {
+    let eval_provider = consume_context::<Rc<dyn EvalProvider>>().expect("evaluator not provided");
 
-        Rc::new(move |script: &str| {
-            eval_provider
-                .new_evaluator(script.to_string())
-                .map(UseEval::new)
-        }) as Rc<dyn Fn(&str) -> Result<UseEval, EvalError>>
-    })
+    Rc::new(move |script: &str| {
+        eval_provider
+            .new_evaluator(script.to_string())
+            .map(UseEval::new)
+    }) as Rc<dyn Fn(&str) -> Result<UseEval, EvalError>>
 }
 
 pub fn eval(script: &str) -> Result<UseEval, EvalError> {

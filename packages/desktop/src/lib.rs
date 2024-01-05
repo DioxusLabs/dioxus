@@ -126,7 +126,7 @@ pub fn launch_cfg(root: Component, config_builder: Config) {
 ///     })
 /// }
 /// ```
-pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) {
+pub fn launch_with_props<P: Clone + 'static>(root: Component<P>, props: P, cfg: Config) {
     let event_loop = EventLoopBuilder::<UserWindowEvent>::with_user_event().build();
 
     let proxy = event_loop.create_proxy();
@@ -301,13 +301,13 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
 
                     // check for a mounted event placeholder and replace it with a desktop specific element
                     let as_any = if let dioxus_html::EventData::Mounted = &data {
-                        let query = view
-                            .dom
-                            .base_scope()
-                            .consume_context::<DesktopContext>()
-                            .unwrap()
-                            .query
-                            .clone();
+                        let query = view.dom.in_runtime(|| {
+                            ScopeId::ROOT
+                                .consume_context::<DesktopContext>()
+                                .unwrap()
+                                .query
+                                .clone()
+                        });
 
                         let element =
                             DesktopElement::new(element, view.desktop_context.clone(), query);
@@ -319,7 +319,9 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
 
                     view.dom.handle_event(&name, as_any, element, bubbles);
 
-                    send_edits(view.dom.render_immediate(), &view.desktop_context);
+                    view.dom
+                        .render_immediate(&mut *view.desktop_context.mutation_state.borrow_mut());
+                    send_edits(&view.desktop_context);
                 }
 
                 // When the webview sends a query, we need to send it to the query manager which handles dispatching the data to the correct pending query
@@ -328,13 +330,13 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
 
                     if let Ok(result) = serde_json::from_value::<QueryResult>(params) {
                         let view = webviews.get(&event.1).unwrap();
-                        let query = view
-                            .dom
-                            .base_scope()
-                            .consume_context::<DesktopContext>()
-                            .unwrap()
-                            .query
-                            .clone();
+                        let query = view.dom.in_runtime(|| {
+                            ScopeId::ROOT
+                                .consume_context::<DesktopContext>()
+                                .unwrap()
+                                .query
+                                .clone()
+                        });
 
                         query.send(result);
                     }
@@ -342,7 +344,9 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
 
                 EventData::Ipc(msg) if msg.method() == "initialize" => {
                     let view = webviews.get_mut(&event.1).unwrap();
-                    send_edits(view.dom.rebuild(), &view.desktop_context);
+                    view.dom
+                        .rebuild(&mut *view.desktop_context.mutation_state.borrow_mut());
+                    send_edits(&view.desktop_context);
                     view.desktop_context
                         .webview
                         .window()
@@ -384,7 +388,10 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
                             view.dom.handle_event(event_name, data, id, event_bubbles);
                         }
 
-                        send_edits(view.dom.render_immediate(), &view.desktop_context);
+                        view.dom.render_immediate(
+                            &mut *view.desktop_context.mutation_state.borrow_mut(),
+                        );
+                        send_edits(&view.desktop_context);
                     }
                 }
 
@@ -417,11 +424,12 @@ fn create_new_window(
         asset_handlers,
     ));
 
-    let cx = dom.base_scope();
-    cx.provide_context(desktop_context.clone());
-
-    // Init eval
-    init_eval(cx);
+    let query = dom.in_runtime(|| {
+        let query = ScopeId::ROOT.provide_context(desktop_context.clone());
+        // Init eval
+        init_eval();
+        query
+    });
 
     WebviewHandler {
         // We want to poll the virtualdom and the event loop at the same time, so the waker will be connected to both
@@ -461,149 +469,17 @@ fn poll_vdom(view: &mut WebviewHandler) {
             }
         }
 
-        send_edits(view.dom.render_immediate(), &view.desktop_context);
+        view.dom
+            .render_immediate(&mut *view.desktop_context.mutation_state.borrow_mut());
+        send_edits(&view.desktop_context);
     }
 }
 
 /// Send a list of mutations to the webview
-fn send_edits(edits: Mutations, desktop_context: &DesktopContext) {
-    let mut channel = desktop_context.channel.borrow_mut();
-    let mut templates = desktop_context.templates.borrow_mut();
-    if let Some(bytes) = apply_edits(
-        edits,
-        &mut channel,
-        &mut templates,
-        &desktop_context.max_template_count,
-    ) {
-        desktop_context.edit_queue.add_edits(bytes)
-    }
-}
-
-fn apply_edits(
-    mutations: Mutations,
-    channel: &mut Channel,
-    templates: &mut FxHashMap<String, u16>,
-    max_template_count: &AtomicU16,
-) -> Option<Vec<u8>> {
-    use dioxus_core::Mutation::*;
-    if mutations.templates.is_empty() && mutations.edits.is_empty() {
-        return None;
-    }
-    for template in mutations.templates {
-        add_template(&template, channel, templates, max_template_count);
-    }
-    for edit in mutations.edits {
-        match edit {
-            AppendChildren { id, m } => channel.append_children(id.0 as u32, m as u16),
-            AssignId { path, id } => channel.assign_id(path, id.0 as u32),
-            CreatePlaceholder { id } => channel.create_placeholder(id.0 as u32),
-            CreateTextNode { value, id } => channel.create_text_node(value, id.0 as u32),
-            HydrateText { path, value, id } => channel.hydrate_text(path, value, id.0 as u32),
-            LoadTemplate { name, index, id } => {
-                if let Some(tmpl_id) = templates.get(name) {
-                    channel.load_template(*tmpl_id, index as u16, id.0 as u32)
-                }
-            }
-            ReplaceWith { id, m } => channel.replace_with(id.0 as u32, m as u16),
-            ReplacePlaceholder { path, m } => channel.replace_placeholder(path, m as u16),
-            InsertAfter { id, m } => channel.insert_after(id.0 as u32, m as u16),
-            InsertBefore { id, m } => channel.insert_before(id.0 as u32, m as u16),
-            SetAttribute {
-                name,
-                value,
-                id,
-                ns,
-            } => match value {
-                BorrowedAttributeValue::Text(txt) => {
-                    channel.set_attribute(id.0 as u32, name, txt, ns.unwrap_or_default())
-                }
-                BorrowedAttributeValue::Float(f) => {
-                    channel.set_attribute(id.0 as u32, name, &f.to_string(), ns.unwrap_or_default())
-                }
-                BorrowedAttributeValue::Int(n) => {
-                    channel.set_attribute(id.0 as u32, name, &n.to_string(), ns.unwrap_or_default())
-                }
-                BorrowedAttributeValue::Bool(b) => channel.set_attribute(
-                    id.0 as u32,
-                    name,
-                    if b { "true" } else { "false" },
-                    ns.unwrap_or_default(),
-                ),
-                BorrowedAttributeValue::None => {
-                    channel.remove_attribute(id.0 as u32, name, ns.unwrap_or_default())
-                }
-                _ => unreachable!(),
-            },
-            SetText { value, id } => channel.set_text(id.0 as u32, value),
-            NewEventListener { name, id, .. } => {
-                channel.new_event_listener(name, id.0 as u32, event_bubbles(name) as u8)
-            }
-            RemoveEventListener { name, id } => {
-                channel.remove_event_listener(name, id.0 as u32, event_bubbles(name) as u8)
-            }
-            Remove { id } => channel.remove(id.0 as u32),
-            PushRoot { id } => channel.push_root(id.0 as u32),
-        }
-    }
-
-    let bytes: Vec<_> = channel.export_memory().collect();
-    channel.reset();
-    Some(bytes)
-}
-
-fn add_template(
-    template: &Template<'static>,
-    channel: &mut Channel,
-    templates: &mut FxHashMap<String, u16>,
-    max_template_count: &AtomicU16,
-) {
-    let current_max_template_count = max_template_count.load(std::sync::atomic::Ordering::Relaxed);
-    for root in template.roots.iter() {
-        create_template_node(channel, root);
-        templates.insert(template.name.to_owned(), current_max_template_count);
-    }
-    channel.add_templates(current_max_template_count, template.roots.len() as u16);
-
-    max_template_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-}
-
-fn create_template_node(channel: &mut Channel, v: &'static TemplateNode<'static>) {
-    use TemplateNode::*;
-    match v {
-        Element {
-            tag,
-            namespace,
-            attrs,
-            children,
-            ..
-        } => {
-            // Push the current node onto the stack
-            match namespace {
-                Some(ns) => channel.create_element_ns(tag, ns),
-                None => channel.create_element(tag),
-            }
-            // Set attributes on the current node
-            for attr in *attrs {
-                if let TemplateAttribute::Static {
-                    name,
-                    value,
-                    namespace,
-                } = attr
-                {
-                    channel.set_top_attribute(name, value, namespace.unwrap_or_default())
-                }
-            }
-            // Add each child to the stack
-            for child in *children {
-                create_template_node(channel, child);
-            }
-            // Add all children to the parent
-            channel.append_children_to_top(children.len() as u16);
-        }
-        Text { text } => channel.create_raw_text(text),
-        DynamicText { .. } => channel.create_raw_text("p"),
-        Dynamic { .. } => channel.add_placeholder(),
-    }
+fn send_edits(desktop_context: &DesktopContext) {
+    let mut mutations = desktop_context.mutation_state.borrow_mut();
+    let serialized_edits = mutations.export_memory();
+    desktop_context.edit_queue.add_edits(serialized_edits);
 }
 
 /// Different hide implementations per platform

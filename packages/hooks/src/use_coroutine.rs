@@ -1,4 +1,4 @@
-use dioxus_core::{ScopeState, TaskId};
+use dioxus_core::{ScopeState, Task};
 pub use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use std::future::Future;
 
@@ -87,7 +87,7 @@ pub fn use_coroutine_handle<M: 'static>(cx: &ScopeState) -> Option<&Coroutine<M>
 
 pub struct Coroutine<T> {
     tx: UnboundedSender<T>,
-    task: TaskId,
+    task: Task,
 }
 
 // for use in futures
@@ -103,7 +103,7 @@ impl<T> Clone for Coroutine<T> {
 impl<T> Coroutine<T> {
     /// Get the ID of this coroutine
     #[must_use]
-    pub fn task_id(&self) -> TaskId {
+    pub fn task_id(&self) -> Task {
         self.task
     }
 

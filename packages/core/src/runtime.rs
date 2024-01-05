@@ -41,6 +41,14 @@ where
     .flatten()
 }
 
+/// Runs a function with the current scope
+pub(crate) fn with_scope<F, R>(scope: ScopeId, f: F) -> Option<R>
+where
+    F: FnOnce(&ScopeContext) -> R,
+{
+    with_runtime(|runtime| runtime.get_context(scope).map(|sc| f(&sc))).flatten()
+}
+
 /// A global runtime that is shared across all scopes that provides the async runtime and context API
 pub struct Runtime {
     pub(crate) scope_contexts: RefCell<Vec<Option<ScopeContext>>>,
@@ -98,7 +106,7 @@ impl Runtime {
     }
 }
 
-/// A gaurd for a new runtime. This must be used to override the current runtime when importing components from a dynamic library that has it's own runtime.
+/// A guard for a new runtime. This must be used to override the current runtime when importing components from a dynamic library that has it's own runtime.
 ///
 /// ```rust
 /// use dioxus::prelude::*;

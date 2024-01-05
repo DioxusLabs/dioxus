@@ -11,6 +11,7 @@ mod dirty_scope;
 mod error_boundary;
 mod events;
 mod fragment;
+mod global_context;
 mod mutations;
 mod nodes;
 mod properties;
@@ -27,13 +28,13 @@ pub(crate) mod innerlude {
     pub use crate::error_boundary::*;
     pub use crate::events::*;
     pub use crate::fragment::*;
+    pub use crate::global_context::*;
     pub use crate::mutations::*;
     pub use crate::nodes::RenderReturn;
     pub use crate::nodes::*;
     pub use crate::properties::*;
     pub use crate::runtime::{Runtime, RuntimeGuard};
     pub use crate::scheduler::*;
-    pub use crate::scope_context::*;
     pub use crate::scopes::*;
     pub use crate::virtual_dom::*;
 
@@ -75,8 +76,8 @@ pub(crate) mod innerlude {
 pub use crate::innerlude::{
     fc_to_builder, generation, once, vdom_is_rendering, AnyValue, Attribute, AttributeValue,
     CapturedError, Component, DynamicNode, Element, ElementId, Event, Fragment, IntoDynNode,
-    Mutation, MutationsVec, Properties, RenderReturn, ScopeId, ScopeState, TaskId, Template,
-    TemplateAttribute, TemplateNode, VComponent, VNode, VPlaceholder, VText, VirtualDom,
+    Mutation, MutationsVec, Properties, RenderReturn, ScopeId, Task, Template, TemplateAttribute,
+    TemplateNode, VComponent, VNode, VPlaceholder, VText, VirtualDom, WriteMutations,
 };
 
 /// The purpose of this module is to alleviate imports of many common types
@@ -85,10 +86,10 @@ pub use crate::innerlude::{
 pub mod prelude {
     pub use crate::innerlude::{
         consume_context, consume_context_from_scope, current_scope_id, fc_to_builder, generation,
-        has_context, once, provide_context, provide_context_to_scope, provide_root_context,
-        push_future, remove_future, schedule_update_any, spawn, spawn_forever, suspend,
-        use_error_boundary, AnyValue, Component, Element, ErrorBoundary, Event, EventHandler,
-        Fragment, IntoAttributeValue, IntoDynNode, Properties, Runtime, RuntimeGuard, ScopeId,
-        TaskId, Template, TemplateAttribute, TemplateNode, Throw, VNode, VirtualDom,
+        has_context, needs_update, once, parent_scope, provide_context, provide_root_context,
+        push_future, remove_future, spawn, spawn_forever, suspend, use_error_boundary, AnyValue,
+        Component, Element, ErrorBoundary, Event, EventHandler, Fragment, IntoAttributeValue,
+        IntoDynNode, Properties, Runtime, RuntimeGuard, ScopeId, Task, Template, TemplateAttribute,
+        TemplateNode, Throw, VNode, VirtualDom,
     };
 }

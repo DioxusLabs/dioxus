@@ -518,8 +518,7 @@ impl Attribute {
     ///
     /// "Volatile" referes to whether or not Dioxus should always override the value. This helps prevent the UI in
     /// some renderers stay in sync with the VirtualDom's understanding of the world
-    pub fn attr(
-        &self,
+    pub fn new(
         name: &'static str,
         value: impl IntoAttributeValue,
         namespace: Option<&'static str>,

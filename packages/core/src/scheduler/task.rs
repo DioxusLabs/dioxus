@@ -1,6 +1,7 @@
 use futures_util::task::ArcWake;
 
 use super::{Scheduler, SchedulerMsg};
+use crate::innerlude::{push_future, remove_future};
 use crate::ScopeId;
 use std::cell::RefCell;
 use std::future::Future;
@@ -14,7 +15,29 @@ use std::task::Waker;
 /// once a Task has been completed.
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct TaskId(pub usize);
+pub struct Task(pub(crate) usize);
+
+impl Task {
+    /// Start a new future on the same thread as the rest of the VirtualDom.
+    ///
+    /// This future will not contribute to suspense resolving, so you should primarily use this for reacting to changes
+    /// and long running tasks.
+    ///
+    /// Whenever the component that owns this future is dropped, the future will be dropped as well.
+    ///
+    /// Spawning a future onto the root scope will cause it to be dropped when the root component is dropped - which
+    /// will only occur when the VirtualDom itself has been dropped.
+    pub fn new(task: impl Future<Output = ()> + 'static) -> Self {
+        push_future(task).expect("to be in a dioxus runtime")
+    }
+
+    /// Drop the task immediately.
+    ///
+    /// This does not abort the task, so you'll want to wrap it in an abort handle if that's important to you
+    pub fn stop(self) {
+        remove_future(self);
+    }
+}
 
 /// the task itself is the waker
 pub(crate) struct LocalTask {
@@ -32,12 +55,12 @@ impl Scheduler {
     /// Whenever the component that owns this future is dropped, the future will be dropped as well.
     ///
     /// Spawning a future onto the root scope will cause it to be dropped when the root component is dropped - which
-    /// will only occur when the VirtuaalDom itself has been dropped.
-    pub fn spawn(&self, scope: ScopeId, task: impl Future<Output = ()> + 'static) -> TaskId {
+    /// will only occur when the VirtualDom itself has been dropped.
+    pub fn spawn(&self, scope: ScopeId, task: impl Future<Output = ()> + 'static) -> Task {
         let mut tasks = self.tasks.borrow_mut();
 
         let entry = tasks.vacant_entry();
-        let task_id = TaskId(entry.key());
+        let task_id = Task(entry.key());
 
         let task = LocalTask {
             task: RefCell::new(Box::pin(task)),
@@ -63,14 +86,14 @@ impl Scheduler {
 
     /// Drop the future with the given TaskId
     ///
-    /// This does not abort the task, so you'll want to wrap it in an aborthandle if that's important to you
-    pub fn remove(&self, id: TaskId) -> Option<LocalTask> {
+    /// This does not abort the task, so you'll want to wrap it in an abort handle if that's important to you
+    pub fn remove(&self, id: Task) -> Option<LocalTask> {
         self.tasks.borrow_mut().try_remove(id.0)
     }
 }
 
 pub struct LocalTaskHandle {
-    id: TaskId,
+    id: Task,
     tx: futures_channel::mpsc::UnboundedSender<SchedulerMsg>,
 }
 

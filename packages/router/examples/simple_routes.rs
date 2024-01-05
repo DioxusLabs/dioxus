@@ -122,7 +122,7 @@ fn Route3(cx: Scope, dynamic: String) -> Element {
         .collect::<Vec<_>>();
 
     let navigator = use_navigator(cx);
-  
+
     render! {
         input {
             oninput: move |evt| *current_route_str.write() = evt.value.clone(),
