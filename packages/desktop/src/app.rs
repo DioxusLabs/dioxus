@@ -91,16 +91,17 @@ impl<P: 'static> App<P> {
         window_event: &Event<'_, UserWindowEvent>,
         event_loop: &EventLoopWindowTarget<UserWindowEvent>,
     ) {
-        // Set the control flow here, but make sure to update it at the end of the match
         self.control_flow = ControlFlow::Wait;
 
         self.event_handlers.apply_event(window_event, event_loop);
 
-        if let Ok(event) = self.global_hotkey_channel.try_recv() {
-            self.shortcut_manager.call_handlers(event);
-        }
+        _ = self
+            .global_hotkey_channel
+            .try_recv()
+            .map(|event| self.shortcut_manager.call_handlers(event));
     }
 
+    #[cfg(all(feature = "hot-reload", debug_assertions))]
     pub fn connect_hotreload(&mut self) {
         let proxy = self.proxy.clone();
         dioxus_hot_reload::connect({
@@ -317,8 +318,7 @@ impl<P: 'static> App<P> {
                 view.dom.handle_event(event_name, data, id, event_bubbles);
             }
 
-            todo!()
-            // send_edits(view.dom.render_immediate(), &view.desktop_context);
+            send_edits(view.dom.render_immediate(), &view.desktop_context);
         }
     }
 

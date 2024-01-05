@@ -97,10 +97,6 @@ pub(crate) fn build(
         webview = webview.with_background_color(color);
     }
 
-    // These are commented out because wry is currently broken in wry
-    // let mut web_context = WebContext::new(cfg.data_dir.clone());
-    // .with_web_context(&mut web_context);
-
     for (name, handler) in cfg.protocols.drain(..) {
         webview = webview.with_custom_protocol(name, move |r| handler(r))
     }
@@ -145,32 +141,36 @@ pub fn build_default_menu_bar() -> Menu {
     // since it is uncommon on windows to have an "application menu"
     // we add a "window" menu to be more consistent across platforms with the standard menu
     let window_menu = Submenu::new("Window", true);
-    window_menu.append_items(&[
-        &PredefinedMenuItem::fullscreen(None),
-        &PredefinedMenuItem::separator(),
-        &PredefinedMenuItem::hide(None),
-        &PredefinedMenuItem::hide_others(None),
-        &PredefinedMenuItem::show_all(None),
-        &PredefinedMenuItem::maximize(None),
-        &PredefinedMenuItem::minimize(None),
-        &PredefinedMenuItem::close_window(None),
-        &PredefinedMenuItem::separator(),
-        &PredefinedMenuItem::quit(None),
-    ]);
+    window_menu
+        .append_items(&[
+            &PredefinedMenuItem::fullscreen(None),
+            &PredefinedMenuItem::separator(),
+            &PredefinedMenuItem::hide(None),
+            &PredefinedMenuItem::hide_others(None),
+            &PredefinedMenuItem::show_all(None),
+            &PredefinedMenuItem::maximize(None),
+            &PredefinedMenuItem::minimize(None),
+            &PredefinedMenuItem::close_window(None),
+            &PredefinedMenuItem::separator(),
+            &PredefinedMenuItem::quit(None),
+        ])
+        .unwrap();
 
     let edit_menu = Submenu::new("Window", true);
-    edit_menu.append_items(&[
-        &PredefinedMenuItem::undo(None),
-        &PredefinedMenuItem::redo(None),
-        &PredefinedMenuItem::separator(),
-        &PredefinedMenuItem::cut(None),
-        &PredefinedMenuItem::copy(None),
-        &PredefinedMenuItem::paste(None),
-        &PredefinedMenuItem::separator(),
-        &PredefinedMenuItem::select_all(None),
-    ]);
+    edit_menu
+        .append_items(&[
+            &PredefinedMenuItem::undo(None),
+            &PredefinedMenuItem::redo(None),
+            &PredefinedMenuItem::separator(),
+            &PredefinedMenuItem::cut(None),
+            &PredefinedMenuItem::copy(None),
+            &PredefinedMenuItem::paste(None),
+            &PredefinedMenuItem::separator(),
+            &PredefinedMenuItem::select_all(None),
+        ])
+        .unwrap();
 
-    menu.append_items(&[&window_menu, &edit_menu]);
+    menu.append_items(&[&window_menu, &edit_menu]).unwrap();
 
     menu
 }
