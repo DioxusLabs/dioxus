@@ -6,10 +6,6 @@ use super::*;
 /// Config options for the build system.
 #[derive(Clone, Debug, Default, Deserialize, Parser)]
 pub struct ConfigOptsBuild {
-    /// The index HTML file to drive the bundling process [default: index.html]
-    #[arg(long)]
-    pub target: Option<PathBuf>,
-
     /// Build in release mode [default: false]
     #[clap(long)]
     #[serde(default)]
@@ -53,6 +49,14 @@ pub struct ConfigOptsBuild {
     /// The feature to use for the server in a fullstack app [default: "ssr"]
     #[clap(long, default_value_t = { "ssr".to_string() })]
     pub server_feature: String,
+    
+/// Rustc platform triple
+#[clap(long)]
+pub target: Option<String>,
+
+/// Extra arguments passed to cargo build
+#[clap(last = true)]
+pub cargo_args: Vec<String>,
 }
 
 impl From<ConfigOptsServe> for ConfigOptsBuild {
@@ -71,14 +75,10 @@ impl From<ConfigOptsServe> for ConfigOptsBuild {
             force_debug: serve.force_debug,
         }
     }
-}
+    
 
 #[derive(Clone, Debug, Default, Deserialize, Parser)]
 pub struct ConfigOptsServe {
-    /// The index HTML file to drive the bundling process [default: index.html]
-    #[arg(short, long)]
-    pub target: Option<PathBuf>,
-
     /// Port of dev server
     #[clap(long)]
     #[clap(default_value_t = 8080)]
@@ -143,6 +143,14 @@ pub struct ConfigOptsServe {
     /// The feature to use for the server in a fullstack app [default: "ssr"]
     #[clap(long, default_value_t = { "ssr".to_string() })]
     pub server_feature: String,
+    
+    /// Rustc platform triple
+    #[clap(long)]
+    pub target: Option<String>,
+
+    /// Extra arguments passed to cargo build
+    #[clap(last = true)]
+    pub cargo_args: Vec<String>,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Serialize, Deserialize, Debug)]
@@ -186,4 +194,12 @@ pub struct ConfigOptsBundle {
     /// Space separated list of features to activate
     #[clap(long)]
     pub features: Option<Vec<String>>,
+
+    /// Rustc platform triple
+    #[clap(long)]
+    pub target: Option<String>,
+
+    /// Extra arguments passed to cargo build
+    #[clap(last = true)]
+    pub cargo_args: Vec<String>,
 }

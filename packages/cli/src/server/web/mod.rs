@@ -11,6 +11,7 @@ use axum::{
     body::{Full, HttpBody},
     extract::{ws::Message, Extension, TypedHeader, WebSocketUpgrade},
     http::{
+        self,
         header::{HeaderName, HeaderValue},
         Method, Response, StatusCode,
     },
@@ -276,7 +277,7 @@ async fn setup_router(
         .override_response_header(HeaderName::from_static("cross-origin-opener-policy"), coop)
         .and_then(
             move |response: Response<ServeFileSystemResponseBody>| async move {
-                let response = if file_service_config
+                let mut response = if file_service_config
                     .dioxus_config
                     .web
                     .watcher
@@ -304,6 +305,13 @@ async fn setup_router(
                 } else {
                     response.map(|body| body.boxed())
                 };
+                let headers = response.headers_mut();
+                headers.insert(
+                    http::header::CACHE_CONTROL,
+                    HeaderValue::from_static("no-cache"),
+                );
+                headers.insert(http::header::PRAGMA, HeaderValue::from_static("no-cache"));
+                headers.insert(http::header::EXPIRES, HeaderValue::from_static("0"));
                 Ok(response)
             },
         )

@@ -48,6 +48,15 @@ pub fn use_eval(cx: &ScopeState) -> &EvalCreator {
     })
 }
 
+pub fn eval(script: &str) -> Result<UseEval, EvalError> {
+    let eval_provider = dioxus_core::prelude::consume_context::<Rc<dyn EvalProvider>>()
+        .expect("evaluator not provided");
+
+    eval_provider
+        .new_evaluator(script.to_string())
+        .map(UseEval::new)
+}
+
 /// A wrapper around the target platform's evaluator.
 #[derive(Clone)]
 pub struct UseEval {

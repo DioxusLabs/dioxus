@@ -216,14 +216,16 @@ pub async fn run_with_props<T: 'static>(root: fn(Scope<T>) -> Element, root_prop
             // todo: we need to split rebuild and initialize into two phases
             // it's a waste to produce edits just to get the vdom loaded
 
-            let templates = dom.rebuild().templates;
-            websys_dom.load_templates(&templates);
-
+            {
+                let mutations = dom.rebuild();
+                web_sys::console::log_1(&format!("mutations: {:#?}", mutations).into());
+                let templates = mutations.templates;
+                websys_dom.load_templates(&templates);
+                websys_dom.interpreter.flush();
+            }
             if let Err(err) = websys_dom.rehydrate(&dom) {
-                tracing::error!(
-                    "Rehydration failed {:?}. Rebuild DOM into element from scratch",
-                    &err
-                );
+                tracing::error!("Rehydration failed. {:?}", err);
+                tracing::error!("Rebuild DOM into element from scratch");
                 websys_dom.root.set_text_content(None);
 
                 let edits = dom.rebuild();
@@ -271,6 +273,13 @@ pub async fn run_with_props<T: 'static>(root: fn(Scope<T>) -> Element, root_prop
         // Dequeue all of the events from the channel in send order
         // todo: we should re-order these if possible
         while let Some(evt) = res {
+            web_sys::console::log_1(
+                &format!(
+                    "event: {:?}, {:?}, {:?}",
+                    evt.name, evt.bubbles, evt.element
+                )
+                .into(),
+            );
             dom.handle_event(evt.name.as_str(), evt.data, evt.element, evt.bubbles);
             res = rx.try_next().transpose().unwrap().ok();
         }

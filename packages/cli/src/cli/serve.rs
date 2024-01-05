@@ -35,6 +35,12 @@ impl Serve {
         // Subdirectories don't work with the server
         crate_config.dioxus_config.web.app.base_path = None;
 
+        if let Some(target) = self.serve.target {
+            crate_config.set_target(target);
+        }
+
+        crate_config.set_cargo_args(self.serve.cargo_args);
+
         let platform = self
             .serve
             .platform
