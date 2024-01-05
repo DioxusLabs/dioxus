@@ -11,6 +11,11 @@ pub struct ConfigOptsBuild {
     #[serde(default)]
     pub release: bool,
 
+    /// This flag only applies to fullstack builds. By default fullstack builds will run with something in between debug and release mode. This flag will force the build to run in debug mode. [default: false]
+    #[clap(long)]
+    #[serde(default)]
+    pub force_debug: bool,
+
     // Use verbose output [default: false]
     #[clap(long)]
     #[serde(default)]
@@ -28,9 +33,22 @@ pub struct ConfigOptsBuild {
     #[clap(long, value_enum)]
     pub platform: Option<Platform>,
 
+    /// Skip collecting assets from dependencies [default: false]
+    #[clap(long)]
+    #[serde(default)]
+    pub skip_assets: bool,
+
     /// Space separated list of features to activate
     #[clap(long)]
     pub features: Option<Vec<String>>,
+
+    /// The feature to use for the client in a fullstack app [default: "web"]
+    #[clap(long, default_value_t = { "web".to_string() })]
+    pub client_feature: String,
+
+    /// The feature to use for the server in a fullstack app [default: "ssr"]
+    #[clap(long, default_value_t = { "ssr".to_string() })]
+    pub server_feature: String,
 
     /// Rustc platform triple
     #[clap(long)]
@@ -39,6 +57,25 @@ pub struct ConfigOptsBuild {
     /// Extra arguments passed to cargo build
     #[clap(last = true)]
     pub cargo_args: Vec<String>,
+}
+
+impl From<ConfigOptsServe> for ConfigOptsBuild {
+    fn from(serve: ConfigOptsServe) -> Self {
+        Self {
+            target: serve.target,
+            release: serve.release,
+            verbose: serve.verbose,
+            example: serve.example,
+            profile: serve.profile,
+            platform: serve.platform,
+            features: serve.features,
+            client_feature: serve.client_feature,
+            server_feature: serve.server_feature,
+            skip_assets: serve.skip_assets,
+            force_debug: serve.force_debug,
+            cargo_args: serve.cargo_args,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Parser)]
@@ -62,6 +99,11 @@ pub struct ConfigOptsServe {
     #[serde(default)]
     pub release: bool,
 
+    /// This flag only applies to fullstack builds. By default fullstack builds will run with something in between debug and release mode. This flag will force the build to run in debug mode. [default: false]
+    #[clap(long)]
+    #[serde(default)]
+    pub force_debug: bool,
+
     // Use verbose output [default: false]
     #[clap(long)]
     #[serde(default)]
@@ -71,7 +113,7 @@ pub struct ConfigOptsServe {
     #[clap(long)]
     pub profile: Option<String>,
 
-    /// Build platform: support Web & Desktop [default: "default_platform"]
+    /// Build platform: support Web, Desktop, and Fullstack [default: "default_platform"]
     #[clap(long, value_enum)]
     pub platform: Option<Platform>,
 
@@ -90,6 +132,19 @@ pub struct ConfigOptsServe {
     #[clap(long)]
     pub features: Option<Vec<String>>,
 
+    /// Skip collecting assets from dependencies [default: false]
+    #[clap(long)]
+    #[serde(default)]
+    pub skip_assets: bool,
+
+    /// The feature to use for the client in a fullstack app [default: "web"]
+    #[clap(long, default_value_t = { "web".to_string() })]
+    pub client_feature: String,
+
+    /// The feature to use for the server in a fullstack app [default: "ssr"]
+    #[clap(long, default_value_t = { "ssr".to_string() })]
+    pub server_feature: String,
+
     /// Rustc platform triple
     #[clap(long)]
     pub target: Option<String>,
@@ -107,6 +162,9 @@ pub enum Platform {
     #[clap(name = "desktop")]
     #[serde(rename = "desktop")]
     Desktop,
+    #[clap(name = "fullstack")]
+    #[serde(rename = "fullstack")]
+    Fullstack,
 }
 
 /// Config options for the bundling system.

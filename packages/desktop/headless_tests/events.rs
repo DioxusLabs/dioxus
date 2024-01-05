@@ -17,7 +17,7 @@ pub(crate) fn check_app_exits(app: Component) {
 
     dioxus_desktop::launch_cfg(
         app,
-        Config::new().with_window(WindowBuilder::new().with_visible(false)),
+        Config::new().with_window(WindowBuilder::new().with_visible(true)),
     );
 
     // Stop deadman's switch
@@ -221,7 +221,7 @@ fn app(cx: Scope) -> Element {
         desktop_context.close();
     }
 
-    cx.render(rsx! {
+    render! {
         div {
             button {
                 id: "button",
@@ -229,7 +229,10 @@ fn app(cx: Scope) -> Element {
                     println!("{:?}", event.data);
                     assert!(event.data.modifiers().is_empty());
                     assert!(event.data.held_buttons().is_empty());
-                    assert_eq!(event.data.trigger_button(), Some(dioxus_html::input_data::MouseButton::Primary));
+                    assert_eq!(
+                        event.data.trigger_button(),
+                        Some(dioxus_html::input_data::MouseButton::Primary),
+                    );
                     received_events.modify(|x| *x + 1)
                 }
             }
@@ -238,7 +241,12 @@ fn app(cx: Scope) -> Element {
                 onmousemove: move |event| {
                     println!("{:?}", event.data);
                     assert!(event.data.modifiers().is_empty());
-                    assert!(event.data.held_buttons().contains(dioxus_html::input_data::MouseButton::Secondary));
+                    assert!(
+                        event
+                            .data
+                            .held_buttons()
+                            .contains(dioxus_html::input_data::MouseButton::Secondary),
+                    );
                     received_events.modify(|x| *x + 1)
                 }
             }
@@ -247,8 +255,16 @@ fn app(cx: Scope) -> Element {
                 onclick: move |event| {
                     println!("{:?}", event.data);
                     assert!(event.data.modifiers().is_empty());
-                    assert!(event.data.held_buttons().contains(dioxus_html::input_data::MouseButton::Secondary));
-                    assert_eq!(event.data.trigger_button(), Some(dioxus_html::input_data::MouseButton::Secondary));
+                    assert!(
+                        event
+                            .data
+                            .held_buttons()
+                            .contains(dioxus_html::input_data::MouseButton::Secondary),
+                    );
+                    assert_eq!(
+                        event.data.trigger_button(),
+                        Some(dioxus_html::input_data::MouseButton::Secondary),
+                    );
                     received_events.modify(|x| *x + 1)
                 }
             }
@@ -257,9 +273,19 @@ fn app(cx: Scope) -> Element {
                 ondoubleclick: move |event| {
                     println!("{:?}", event.data);
                     assert!(event.data.modifiers().is_empty());
-                    assert!(event.data.held_buttons().contains(dioxus_html::input_data::MouseButton::Primary));
-                    assert!(event.data.held_buttons().contains(dioxus_html::input_data::MouseButton::Secondary));
-                    assert_eq!(event.data.trigger_button(), Some(dioxus_html::input_data::MouseButton::Secondary));
+                    assert!(
+                        event.data.held_buttons().contains(dioxus_html::input_data::MouseButton::Primary),
+                    );
+                    assert!(
+                        event
+                            .data
+                            .held_buttons()
+                            .contains(dioxus_html::input_data::MouseButton::Secondary),
+                    );
+                    assert_eq!(
+                        event.data.trigger_button(),
+                        Some(dioxus_html::input_data::MouseButton::Secondary),
+                    );
                     received_events.modify(|x| *x + 1)
                 }
             }
@@ -268,8 +294,16 @@ fn app(cx: Scope) -> Element {
                 onmousedown: move |event| {
                     println!("{:?}", event.data);
                     assert!(event.data.modifiers().is_empty());
-                    assert!(event.data.held_buttons().contains(dioxus_html::input_data::MouseButton::Secondary));
-                    assert_eq!(event.data.trigger_button(), Some(dioxus_html::input_data::MouseButton::Secondary));
+                    assert!(
+                        event
+                            .data
+                            .held_buttons()
+                            .contains(dioxus_html::input_data::MouseButton::Secondary),
+                    );
+                    assert_eq!(
+                        event.data.trigger_button(),
+                        Some(dioxus_html::input_data::MouseButton::Secondary),
+                    );
                     received_events.modify(|x| *x + 1)
                 }
             }
@@ -279,7 +313,10 @@ fn app(cx: Scope) -> Element {
                     println!("{:?}", event.data);
                     assert!(event.data.modifiers().is_empty());
                     assert!(event.data.held_buttons().is_empty());
-                    assert_eq!(event.data.trigger_button(), Some(dioxus_html::input_data::MouseButton::Primary));
+                    assert_eq!(
+                        event.data.trigger_button(),
+                        Some(dioxus_html::input_data::MouseButton::Primary),
+                    );
                     received_events.modify(|x| *x + 1)
                 }
             }
@@ -303,10 +340,9 @@ fn app(cx: Scope) -> Element {
                     assert!(event.data.modifiers().is_empty());
                     assert_eq!(event.data.key().to_string(), "a");
                     assert_eq!(event.data.code().to_string(), "KeyA");
-                    assert_eq!(event.data.location, 0);
+                    assert_eq!(event.data.location(), Location::Standard);
                     assert!(event.data.is_auto_repeating());
                     received_events.modify(|x| *x + 1)
-
                 }
             }
             input {
@@ -316,7 +352,7 @@ fn app(cx: Scope) -> Element {
                     assert!(event.data.modifiers().is_empty());
                     assert_eq!(event.data.key().to_string(), "a");
                     assert_eq!(event.data.code().to_string(), "KeyA");
-                    assert_eq!(event.data.location, 0);
+                    assert_eq!(event.data.location(), Location::Standard);
                     assert!(!event.data.is_auto_repeating());
                     received_events.modify(|x| *x + 1)
                 }
@@ -328,7 +364,7 @@ fn app(cx: Scope) -> Element {
                     assert!(event.data.modifiers().is_empty());
                     assert_eq!(event.data.key().to_string(), "a");
                     assert_eq!(event.data.code().to_string(), "KeyA");
-                    assert_eq!(event.data.location, 0);
+                    assert_eq!(event.data.location(), Location::Standard);
                     assert!(!event.data.is_auto_repeating());
                     received_events.modify(|x| *x + 1)
                 }
@@ -348,5 +384,5 @@ fn app(cx: Scope) -> Element {
                 }
             }
         }
-    })
+    }
 }

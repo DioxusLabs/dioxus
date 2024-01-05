@@ -145,6 +145,11 @@ fn module_loader(root_id: &str, headless: bool) -> String {
 /// - [ ] iOS
 /// - [ ] Android
 #[allow(unreachable_code)]
+pub(crate) fn get_asset_root_or_default() -> PathBuf {
+    get_asset_root().unwrap_or_else(|| Path::new(".").to_path_buf())
+}
+
+#[allow(unreachable_code)]
 fn get_asset_root() -> Option<PathBuf> {
     // If running under cargo, there's no bundle!
     // There might be a smarter/more resilient way of doing this

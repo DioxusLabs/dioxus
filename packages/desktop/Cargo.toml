@@ -11,7 +11,12 @@ keywords = ["dom", "ui", "gui", "react"]
 
 [dependencies]
 dioxus-core = { workspace = true, features = ["serialize"] }
-dioxus-html = { workspace = true, features = ["serialize", "native-bind"] }
+dioxus-html = { workspace = true, features = [
+    "serialize",
+    "native-bind",
+    "mounted",
+    "eval",
+] }
 dioxus-interpreter-js = { workspace = true, features = ["binary-protocol"] }
 dioxus-hot-reload = { workspace = true, optional = true }
 
@@ -45,8 +50,12 @@ crossbeam-channel = "0.5.8"
 tao = { version = "0.24.0", features = ["rwh_05"] }
 muda = "0.11.3"
 
-
 [target.'cfg(any(target_os = "windows",target_os = "macos",target_os = "linux",target_os = "dragonfly", target_os = "freebsd", target_os = "netbsd", target_os = "openbsd"))'.dependencies]
+# This is only for debug mode, and it appears mobile does not support some packages this uses
+manganis-cli-support = { git = "https://github.com/DioxusLabs/collect-assets", features = [
+    "webp",
+    "html",
+] }
 rfd = "0.12"
 global-hotkey = "0.4.1"
 

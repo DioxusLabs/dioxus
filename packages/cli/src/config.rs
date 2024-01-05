@@ -1,4 +1,6 @@
 use crate::{cfg::Platform, error::Result};
+use manganis_cli_support::AssetManifest;
+use manganis_cli_support::AssetManifestExt;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
@@ -301,6 +303,13 @@ impl CrateConfig {
             target,
             cargo_args,
         })
+    }
+
+    pub fn asset_manifest(&self) -> AssetManifest {
+        AssetManifest::load_from_path(
+            self.crate_dir.join("Cargo.toml"),
+            self.workspace_dir.join("Cargo.lock"),
+        )
     }
 
     pub fn as_example(&mut self, example_name: String) -> &mut Self {

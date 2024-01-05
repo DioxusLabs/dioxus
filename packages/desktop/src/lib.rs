@@ -6,6 +6,7 @@
 mod app;
 mod assets;
 mod cfg;
+mod collect_assets;
 mod desktop_context;
 mod edits;
 mod element;

@@ -27,6 +27,7 @@ mod global_attributes;
 pub mod input_data;
 #[cfg(feature = "native-bind")]
 pub mod native_bind;
+pub mod point_interaction;
 mod render_template;
 #[cfg(feature = "wasm-bind")]
 mod web_sys_bind;
@@ -42,9 +43,13 @@ pub use events::*;
 pub use global_attributes::*;
 pub use render_template::*;
 
-mod eval;
+#[cfg(feature = "eval")]
+pub mod eval;
 
 pub mod prelude {
+    #[cfg(feature = "eval")]
     pub use crate::eval::*;
     pub use crate::events::*;
+    pub use crate::point_interaction::*;
+    pub use keyboard_types::{self, Code, Key, Location, Modifiers};
 }

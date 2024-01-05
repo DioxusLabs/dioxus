@@ -63,7 +63,7 @@ fn key_down() {
                 onkeydown: move |evt| {
                     assert_eq!(evt.data.code(), Code::KeyA);
                     tui_ctx.quit();
-                },
+                }
             }
         })
     }
@@ -95,9 +95,11 @@ fn mouse_down() {
                 width: "100%",
                 height: "100%",
                 onmousedown: move |evt| {
-                    assert!(evt.data.held_buttons().contains(dioxus_html::input_data::MouseButton::Primary));
+                    assert!(
+                        evt.data.held_buttons().contains(dioxus_html::input_data::MouseButton::Primary)
+                    );
                     tui_ctx.quit();
-                },
+                }
             }
         })
     }
@@ -136,7 +138,7 @@ fn mouse_up() {
                 height: "100%",
                 onmouseup: move |_| {
                     tui_ctx.quit();
-                },
+                }
             }
         })
     }
@@ -175,7 +177,7 @@ fn mouse_enter() {
                 height: "50%",
                 onmouseenter: move |_| {
                     tui_ctx.quit();
-                },
+                }
             }
         })
     }
@@ -214,7 +216,7 @@ fn mouse_exit() {
                 height: "50%",
                 onmouseenter: move |_| {
                     tui_ctx.quit();
-                },
+                }
             }
         })
     }
@@ -251,9 +253,9 @@ fn mouse_move() {
             div {
                 width: "100%",
                 height: "100%",
-                onmousemove: move |_|{
+                onmousemove: move |_| {
                     tui_ctx.quit();
-                },
+                }
             }
         })
     }
@@ -293,7 +295,7 @@ fn wheel() {
                 onwheel: move |evt| {
                     assert!(evt.data.delta().strip_units().y > 0.0);
                     tui_ctx.quit();
-                },
+                }
             }
         })
     }
@@ -330,9 +332,9 @@ fn click() {
             div {
                 width: "100%",
                 height: "100%",
-                onclick: move |_|{
+                onclick: move |_| {
                     tui_ctx.quit();
-                },
+                }
             }
         })
     }
@@ -369,9 +371,9 @@ fn context_menu() {
             div {
                 width: "100%",
                 height: "100%",
-                oncontextmenu: move |_|{
+                oncontextmenu: move |_| {
                     tui_ctx.quit();
-                },
+                }
             }
         })
     }
