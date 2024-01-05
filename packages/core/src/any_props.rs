@@ -32,7 +32,7 @@ impl Clone for BoxedAnyProps {
 
 /// A trait that essentially allows VComponentProps to be used generically
 pub(crate) trait AnyProps {
-    fn render<'a>(&'a self) -> RenderReturn;
+    fn render(&self) -> RenderReturn;
     fn memoize(&self, other: &dyn Any) -> bool;
     fn props(&self) -> &dyn Any;
     fn duplicate(&self) -> Box<dyn AnyProps>;

@@ -252,7 +252,7 @@ impl VirtualDom {
         parent: Option<&ElementRef>,
         to: &mut impl WriteMutations,
     ) {
-        let m = self.create_component_node(parent, right, to);
+        let _m = self.create_component_node(parent, right, to);
 
         // TODO: Instead of *just* removing it, we can use the replace mutation
         self.remove_component_node(left, true, to);
@@ -854,7 +854,7 @@ impl VirtualDom {
             "replace_nodes must have at least one node"
         );
 
-        self.remove_nodes(&nodes, to);
+        self.remove_nodes(nodes, to);
     }
 
     /// Remove these nodes from the dom

@@ -1,5 +1,5 @@
 use crate::{
-    innerlude::DirtyScope, nodes::RenderReturn, nodes::VNode, virtual_dom::VirtualDom, DynamicNode,
+    nodes::VNode, virtual_dom::VirtualDom, DynamicNode,
     ScopeId,
 };
 
@@ -60,7 +60,7 @@ impl VirtualDom {
     // Drop a scope and all its children
     //
     // Note: This will not remove any ids from the arena
-    pub(crate) fn drop_scope(&mut self, id: ScopeId, recursive: bool) {
+    pub(crate) fn drop_scope(&mut self, _id: ScopeId, _recursive: bool) {
         // todo: Do we need this now that we don't have a bunch of unsafe code?
         // self.dirty_scopes.remove(&DirtyScope {
         //     height: self.scopes[id.0].height(),

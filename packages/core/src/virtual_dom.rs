@@ -597,7 +597,7 @@ impl VirtualDom {
 
             self.wait_for_work().await;
 
-            _ = self.render_immediate(&mut NoOpMutations);
+            self.render_immediate(&mut NoOpMutations);;
         }
     }
 

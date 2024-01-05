@@ -345,7 +345,7 @@ impl VirtualDom {
         attribute.mounted_element.set(id);
 
         // Safety: we promise not to re-alias this text later on after committing it to the mutation
-        let unbounded_name: &str = &attribute.name;
+        let unbounded_name: &str = attribute.name;
 
         match &attribute.value {
             AttributeValue::Listener(_) => {
@@ -564,7 +564,7 @@ impl VirtualDom {
     fn load_scope_from_vcomponent(
         &mut self,
         component: &VComponent,
-        to: &mut impl WriteMutations,
+        _to: &mut impl WriteMutations,
     ) -> ScopeId {
         component.scope.get().unwrap_or_else(|| {
             self.new_scope(component.props.clone(), component.name)
