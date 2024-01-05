@@ -12,8 +12,8 @@ fn app(cx: Scope) -> Element {
         let resp = reqwest::Client::new()
             .post("http://localhost:8080/login")
             .form(&[
-                ("username", &evt.values["username"]),
-                ("password", &evt.values["password"]),
+                ("username", &evt.values()["username"]),
+                ("password", &evt.values()["password"]),
             ])
             .send()
             .await;
@@ -31,8 +31,7 @@ fn app(cx: Scope) -> Element {
 
     cx.render(rsx! {
         h1 { "Login" }
-        form {
-            onsubmit: onsubmit,
+        form { onsubmit: onsubmit,
             input { r#type: "text", id: "username", name: "username" }
             label { "Username" }
             br {}

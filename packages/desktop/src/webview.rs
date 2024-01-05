@@ -5,7 +5,6 @@ use tao::event_loop::{EventLoopProxy, EventLoopWindowTarget};
 pub use wry;
 pub use wry::application as tao;
 use wry::application::window::Window;
-use wry::http::Response;
 use wry::webview::{WebContext, WebView, WebViewBuilder};
 
 pub(crate) fn build(

@@ -55,6 +55,8 @@
 //     - Do the VDOM work during the idlecallback
 //     - Do DOM work in the next requestAnimationFrame callback
 
+use std::rc::Rc;
+
 pub use crate::cfg::Config;
 #[cfg(feature = "file_engine")]
 pub use crate::file_engine::WebFileEngineExt;
@@ -69,6 +71,8 @@ mod cfg;
 mod dom;
 #[cfg(feature = "eval")]
 mod eval;
+mod event;
+pub use event::*;
 #[cfg(feature = "file_engine")]
 mod file_engine;
 #[cfg(all(feature = "hot_reload", debug_assertions))]
@@ -273,14 +277,12 @@ pub async fn run_with_props<T: 'static>(root: fn(Scope<T>) -> Element, root_prop
         // Dequeue all of the events from the channel in send order
         // todo: we should re-order these if possible
         while let Some(evt) = res {
-            web_sys::console::log_1(
-                &format!(
-                    "event: {:?}, {:?}, {:?}",
-                    evt.name, evt.bubbles, evt.element
-                )
-                .into(),
+            dom.handle_event(
+                evt.name.as_str(),
+                Rc::new(evt.data),
+                evt.element,
+                evt.bubbles,
             );
-            dom.handle_event(evt.name.as_str(), evt.data, evt.element, evt.bubbles);
             res = rx.try_next().transpose().unwrap().ok();
         }
 

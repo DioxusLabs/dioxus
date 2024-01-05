@@ -3,22 +3,18 @@
 use euclid::Rect;
 
 use std::{
-    any::Any,
     fmt::{Display, Formatter},
     future::Future,
     pin::Pin,
-    rc::Rc,
 };
 
 /// An Element that has been rendered and allows reading and modifying information about it.
 ///
 /// Different platforms will have different implementations and different levels of support for this trait. Renderers that do not support specific features will return `None` for those queries.
 // we can not use async_trait here because it does not create a trait that is object safe
-pub trait RenderedElementBacking {
-    /// Get the renderer specific element for the given id
-    fn get_raw_element(&self) -> MountedResult<&dyn Any> {
-        Err(MountedError::NotSupported)
-    }
+pub trait RenderedElementBacking: std::any::Any {
+    /// return self as Any
+    fn as_any(&self) -> &dyn std::any::Any;
 
     /// Get the bounding rectangle of the element relative to the viewport (this does not include the scroll position)
     #[allow(clippy::type_complexity)]
@@ -40,7 +36,11 @@ pub trait RenderedElementBacking {
     }
 }
 
-impl RenderedElementBacking for () {}
+impl RenderedElementBacking for () {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+}
 
 /// The way that scrolling should be performed
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
@@ -57,20 +57,21 @@ pub enum ScrollBehavior {
 ///
 /// Different platforms will have different implementations and different levels of support for this trait. Renderers that do not support specific features will return `None` for those queries.
 pub struct MountedData {
-    inner: Rc<dyn RenderedElementBacking>,
+    inner: Box<dyn RenderedElementBacking>,
+}
+
+impl<E: RenderedElementBacking> From<E> for MountedData {
+    fn from(e: E) -> Self {
+        Self { inner: Box::new(e) }
+    }
 }
 
 impl MountedData {
     /// Create a new MountedData
     pub fn new(registry: impl RenderedElementBacking + 'static) -> Self {
         Self {
-            inner: Rc::new(registry),
+            inner: Box::new(registry),
         }
-    }
-
-    /// Get the renderer specific element for the given id
-    pub fn get_raw_element(&self) -> MountedResult<&dyn Any> {
-        self.inner.get_raw_element()
     }
 
     /// Get the bounding rectangle of the element relative to the viewport (this does not include the scroll position)
@@ -89,6 +90,11 @@ impl MountedData {
     /// Set the focus on the element
     pub fn set_focus(&self, focus: bool) -> Pin<Box<dyn Future<Output = MountedResult<()>>>> {
         self.inner.set_focus(focus)
+    }
+
+    /// Downcast this event to a concrete event type
+    pub fn downcast<T: 'static>(&self) -> Option<&T> {
+        self.inner.as_any().downcast_ref::<T>()
     }
 }
 

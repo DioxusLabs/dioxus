@@ -26,7 +26,7 @@ fn app(cx: Scope) -> Element {
             button {
                 onclick: move |_| {
                     let dom = VirtualDom::new_with_props(compose, ComposeProps { app_tx: tx.clone() });
-                    window.new_window(dom, Default::default());
+                    dioxus_desktop::window().new_window(dom, Default::default());
                 },
                 "Click to compose a new email"
             }
@@ -62,10 +62,7 @@ fn compose(cx: Scope<ComposeProps>) -> Element {
                 "Click to send"
             }
 
-            input {
-                oninput: move |e| user_input.set(e.value.clone()),
-                value: "{user_input}"
-            }
+            input { oninput: move |e| user_input.set(e.value()), value: "{user_input}" }
         }
     })
 }

@@ -4,6 +4,7 @@ use dioxus_html::{geometry::euclid::Rect, MountedResult, RenderedElementBacking}
 use crate::query::QueryEngine;
 
 /// A mounted element passed to onmounted events
+#[derive(Clone)]
 pub struct LiveviewElement {
     id: ElementId,
     query: QueryEngine,
@@ -16,8 +17,8 @@ impl LiveviewElement {
 }
 
 impl RenderedElementBacking for LiveviewElement {
-    fn get_raw_element(&self) -> dioxus_html::MountedResult<&dyn std::any::Any> {
-        Ok(self)
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 
     fn get_client_rect(
