@@ -1,10 +1,10 @@
-use crate::protocol::AssetFuture;
-use crate::protocol::AssetHandlerRegistry;
 use crate::query::QueryEngine;
 use crate::shortcut::{HotKey, ShortcutId, ShortcutRegistry, ShortcutRegistryError};
 use crate::AssetHandler;
 use crate::Config;
-use crate::{app::WebviewHandler, events::IpcMessage};
+use crate::{assets::AssetFuture, edits::WebviewQueue};
+use crate::{assets::AssetHandlerRegistry, edits::EditQueue};
+use crate::{events::IpcMessage, webview::WebviewHandler};
 use dioxus_core::ScopeState;
 use dioxus_core::VirtualDom;
 use dioxus_interpreter_js::binary_protocol::Channel;
@@ -33,54 +33,6 @@ use tao::platform::ios::WindowExtIOS;
 pub fn window() -> DesktopContext {
     dioxus_core::prelude::consume_context().unwrap()
 }
-
-/// Get an imperative handle to the current window
-pub fn use_window(cx: &ScopeState) -> &DesktopContext {
-    cx.use_hook(|| cx.consume_context::<DesktopContext>())
-        .as_ref()
-        .unwrap()
-}
-
-/// This handles communication between the requests that the webview makes and the interpreter. The interpreter constantly makes long running requests to the webview to get any edits that should be made to the DOM almost like server side events.
-/// It will hold onto the requests until the interpreter is ready to handle them and hold onto any pending edits until a new request is made.
-#[derive(Default, Clone)]
-pub(crate) struct EditQueue {
-    queue: Arc<Mutex<Vec<Vec<u8>>>>,
-    responder: Arc<Mutex<Option<RequestAsyncResponder>>>,
-}
-
-impl Debug for EditQueue {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("EditQueue")
-            .field("queue", &self.queue)
-            .field("responder", {
-                &self.responder.lock().unwrap().as_ref().map(|_| ())
-            })
-            .finish()
-    }
-}
-
-impl EditQueue {
-    pub fn handle_request(&self, responder: RequestAsyncResponder) {
-        let mut queue = self.queue.lock().unwrap();
-        if let Some(bytes) = queue.pop() {
-            responder.respond(wry::http::Response::new(bytes));
-        } else {
-            *self.responder.lock().unwrap() = Some(responder);
-        }
-    }
-
-    pub fn add_edits(&self, edits: Vec<u8>) {
-        let mut responder = self.responder.lock().unwrap();
-        if let Some(responder) = responder.take() {
-            responder.respond(wry::http::Response::new(edits));
-        } else {
-            self.queue.lock().unwrap().push(edits);
-        }
-    }
-}
-
-pub(crate) type WebviewQueue = Rc<RefCell<Vec<WebviewHandler>>>;
 
 /// An imperative interface to the current window.
 ///
@@ -177,7 +129,7 @@ impl DesktopService {
     ///
     /// Be careful to not create a cycle of windows, or you might leak memory.
     pub fn new_window(&self, dom: VirtualDom, cfg: Config) -> Weak<DesktopService> {
-        let window = crate::app::create_new_window(
+        let window = crate::webview::create_new_window(
             cfg,
             &self.event_loop,
             &self.proxy,
@@ -456,28 +408,11 @@ impl WryWindowEventHandlerInner {
     }
 }
 
-/// Get a closure that executes any JavaScript in the WebView context.
-pub fn use_wry_event_handler(
-    cx: &ScopeState,
-    handler: impl FnMut(&Event<UserWindowEvent>, &EventLoopWindowTarget<UserWindowEvent>) + 'static,
-) -> &WryEventHandler {
-    cx.use_hook(move || {
-        let desktop = window();
-
-        let id = desktop.create_wry_event_handler(handler);
-
-        WryEventHandler {
-            handlers: desktop.event_handlers.clone(),
-            id,
-        }
-    })
-}
-
 /// A wry event handler that is scoped to the current component and window. The event handler will only receive events for the window it was created for and global events.
 ///
 /// This will automatically be removed when the component is unmounted.
 pub struct WryEventHandler {
-    handlers: WindowEventHandlers,
+    pub(crate) handlers: WindowEventHandlers,
     /// The unique identifier of the event handler.
     pub id: WryEventHandlerId,
 }

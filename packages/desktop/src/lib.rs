@@ -4,15 +4,17 @@
 #![deny(missing_docs)]
 
 mod app;
-mod asset_handler;
+mod assets;
 mod cfg;
 mod desktop_context;
+mod edits;
 mod element;
 mod escape;
 mod eval;
 mod events;
 mod file_upload;
 mod hooks;
+mod menubar;
 #[cfg(any(target_os = "ios", target_os = "android"))]
 mod mobile_shortcut;
 mod protocol;
@@ -21,25 +23,30 @@ mod shortcut;
 mod waker;
 mod webview;
 
-pub use cfg::{Config, WindowCloseBehaviour};
-pub use desktop_context::use_window;
-pub use desktop_context::DesktopContext;
-#[allow(deprecated)]
-pub use desktop_context::{
-    use_wry_event_handler, window, DesktopService, WryEventHandler, WryEventHandlerId,
+// Re-exports
+pub use tao::{
+    self,
+    dpi::{LogicalSize, PhysicalSize},
+    window::WindowBuilder,
 };
+pub use wry;
+
+// Public exports
+pub use assets::{AssetFuture, AssetHandler, AssetRequest, AssetResponse};
+pub use cfg::{Config, WindowCloseBehaviour};
+pub use desktop_context::{
+    window, DesktopContext, DesktopService, WryEventHandler, WryEventHandlerId,
+};
+pub use hooks::{use_asset_handler, use_window, use_wry_event_handler};
+pub use menubar::build_default_menu_bar;
+pub use shortcut::{use_global_shortcut, ShortcutHandle, ShortcutId, ShortcutRegistryError};
+
+#[allow(deprecated)]
 use desktop_context::{EventData, UserWindowEvent};
 use dioxus_core::*;
 use events::IpcMethod;
-pub use protocol::{use_asset_handler, AssetFuture, AssetHandler, AssetRequest, AssetResponse};
-pub use shortcut::{use_global_shortcut, ShortcutHandle, ShortcutId, ShortcutRegistryError};
-pub use tao;
-pub use tao::dpi::{LogicalSize, PhysicalSize};
 use tao::event::{Event, StartCause, WindowEvent};
-pub use tao::window::WindowBuilder;
 use tokio::runtime::Builder;
-pub use webview::build_default_menu_bar;
-pub use wry;
 
 /// Launch the WebView and run the event loop.
 ///

@@ -1,20 +1,21 @@
+pub use crate::assets::{AssetFuture, AssetHandler, AssetRequest, AssetResponse};
 pub use crate::cfg::{Config, WindowCloseBehaviour};
 pub use crate::desktop_context::DesktopContext;
-pub use crate::desktop_context::{
-    use_window, use_wry_event_handler, window, DesktopService, WryEventHandler, WryEventHandlerId,
-};
-use crate::desktop_context::{EventData, UserWindowEvent, WebviewQueue, WindowEventHandlers};
+pub use crate::desktop_context::{window, DesktopService, WryEventHandler, WryEventHandlerId};
+use crate::edits::{send_edits, EditQueue, WebviewQueue};
 use crate::element::DesktopElement;
 use crate::eval::init_eval;
 use crate::events::{IpcMessage, IpcMethod};
 use crate::file_upload;
-pub use crate::protocol::{
-    use_asset_handler, AssetFuture, AssetHandler, AssetRequest, AssetResponse,
-};
+use crate::hooks::*;
 use crate::query::QueryResult;
 use crate::shortcut::GlobalHotKeyEvent;
 use crate::shortcut::ShortcutRegistry;
 pub use crate::shortcut::{use_global_shortcut, ShortcutHandle, ShortcutId, ShortcutRegistryError};
+use crate::{
+    desktop_context::{EventData, UserWindowEvent, WindowEventHandlers},
+    webview::WebviewHandler,
+};
 use dioxus_core::*;
 use dioxus_html::{event_bubbles, MountedData};
 use dioxus_html::{native_bind::NativeFileEngine, FormData, HtmlEvent};
@@ -168,7 +169,7 @@ impl<P: 'static> App<P> {
 
         self.is_visible_before_start = cfg.window.window.visible;
 
-        let handler = create_new_window(
+        let handler = crate::webview::create_new_window(
             cfg,
             target,
             &self.proxy,
@@ -333,208 +334,16 @@ impl<P: 'static> App<P> {
         let mut cx = std::task::Context::from_waker(&view.waker);
 
         loop {
-            {
-                let fut = view.dom.wait_for_work();
-                pin_mut!(fut);
+            let fut = view.dom.wait_for_work();
+            pin_mut!(fut);
 
-                match fut.poll_unpin(&mut cx) {
-                    std::task::Poll::Ready(_) => {}
-                    std::task::Poll::Pending => break,
-                }
+            match fut.poll_unpin(&mut cx) {
+                std::task::Poll::Ready(_) => {}
+                std::task::Poll::Pending => break,
             }
 
             send_edits(view.dom.render_immediate(), &view.desktop_context);
         }
-    }
-}
-
-pub fn create_new_window(
-    mut cfg: Config,
-    event_loop: &EventLoopWindowTarget<UserWindowEvent>,
-    proxy: &EventLoopProxy<UserWindowEvent>,
-    dom: VirtualDom,
-    queue: &WebviewQueue,
-    event_handlers: &WindowEventHandlers,
-    shortcut_manager: ShortcutRegistry,
-) -> WebviewHandler {
-    let (webview, web_context, asset_handlers, edit_queue, window) =
-        crate::webview::build(&mut cfg, event_loop, proxy.clone());
-
-    let desktop_context = Rc::from(DesktopService::new(
-        window,
-        webview,
-        proxy.clone(),
-        event_loop.clone(),
-        queue.clone(),
-        event_handlers.clone(),
-        shortcut_manager,
-        edit_queue,
-        asset_handlers,
-    ));
-
-    let cx = dom.base_scope();
-    cx.provide_context(desktop_context.clone());
-
-    // Init eval
-    init_eval(cx);
-
-    WebviewHandler {
-        // We want to poll the virtualdom and the event loop at the same time, so the waker will be connected to both
-        waker: crate::waker::tao_waker(proxy, desktop_context.window.id()),
-        desktop_context,
-        dom,
-        _web_context: web_context,
-    }
-}
-
-pub struct WebviewHandler {
-    pub dom: VirtualDom,
-    pub desktop_context: DesktopContext,
-    pub waker: Waker,
-
-    // Wry assumes the webcontext is alive for the lifetime of the webview.
-    // We need to keep the webcontext alive, otherwise the webview will crash
-    _web_context: WebContext,
-}
-
-/// Send a list of mutations to the webview
-pub fn send_edits(edits: Mutations, desktop_context: &DesktopContext) {
-    let mut channel = desktop_context.channel.borrow_mut();
-    let mut templates = desktop_context.templates.borrow_mut();
-    if let Some(bytes) = apply_edits(
-        edits,
-        &mut channel,
-        &mut templates,
-        &desktop_context.max_template_count,
-    ) {
-        desktop_context.edit_queue.add_edits(bytes)
-    }
-}
-
-pub fn apply_edits(
-    mutations: Mutations,
-    channel: &mut Channel,
-    templates: &mut FxHashMap<String, u16>,
-    max_template_count: &AtomicU16,
-) -> Option<Vec<u8>> {
-    use dioxus_core::Mutation::*;
-    if mutations.templates.is_empty() && mutations.edits.is_empty() {
-        return None;
-    }
-    for template in mutations.templates {
-        add_template(&template, channel, templates, max_template_count);
-    }
-    for edit in mutations.edits {
-        match edit {
-            AppendChildren { id, m } => channel.append_children(id.0 as u32, m as u16),
-            AssignId { path, id } => channel.assign_id(path, id.0 as u32),
-            CreatePlaceholder { id } => channel.create_placeholder(id.0 as u32),
-            CreateTextNode { value, id } => channel.create_text_node(value, id.0 as u32),
-            HydrateText { path, value, id } => channel.hydrate_text(path, value, id.0 as u32),
-            LoadTemplate { name, index, id } => {
-                if let Some(tmpl_id) = templates.get(name) {
-                    channel.load_template(*tmpl_id, index as u16, id.0 as u32)
-                }
-            }
-            ReplaceWith { id, m } => channel.replace_with(id.0 as u32, m as u16),
-            ReplacePlaceholder { path, m } => channel.replace_placeholder(path, m as u16),
-            InsertAfter { id, m } => channel.insert_after(id.0 as u32, m as u16),
-            InsertBefore { id, m } => channel.insert_before(id.0 as u32, m as u16),
-            SetAttribute {
-                name,
-                value,
-                id,
-                ns,
-            } => match value {
-                BorrowedAttributeValue::Text(txt) => {
-                    channel.set_attribute(id.0 as u32, name, txt, ns.unwrap_or_default())
-                }
-                BorrowedAttributeValue::Float(f) => {
-                    channel.set_attribute(id.0 as u32, name, &f.to_string(), ns.unwrap_or_default())
-                }
-                BorrowedAttributeValue::Int(n) => {
-                    channel.set_attribute(id.0 as u32, name, &n.to_string(), ns.unwrap_or_default())
-                }
-                BorrowedAttributeValue::Bool(b) => channel.set_attribute(
-                    id.0 as u32,
-                    name,
-                    if b { "true" } else { "false" },
-                    ns.unwrap_or_default(),
-                ),
-                BorrowedAttributeValue::None => {
-                    channel.remove_attribute(id.0 as u32, name, ns.unwrap_or_default())
-                }
-                _ => unreachable!(),
-            },
-            SetText { value, id } => channel.set_text(id.0 as u32, value),
-            NewEventListener { name, id, .. } => {
-                channel.new_event_listener(name, id.0 as u32, event_bubbles(name) as u8)
-            }
-            RemoveEventListener { name, id } => {
-                channel.remove_event_listener(name, id.0 as u32, event_bubbles(name) as u8)
-            }
-            Remove { id } => channel.remove(id.0 as u32),
-            PushRoot { id } => channel.push_root(id.0 as u32),
-        }
-    }
-
-    let bytes: Vec<_> = channel.export_memory().collect();
-    channel.reset();
-    Some(bytes)
-}
-
-pub fn add_template(
-    template: &Template<'static>,
-    channel: &mut Channel,
-    templates: &mut FxHashMap<String, u16>,
-    max_template_count: &AtomicU16,
-) {
-    let current_max_template_count = max_template_count.load(std::sync::atomic::Ordering::Relaxed);
-    for root in template.roots.iter() {
-        create_template_node(channel, root);
-        templates.insert(template.name.to_owned(), current_max_template_count);
-    }
-    channel.add_templates(current_max_template_count, template.roots.len() as u16);
-
-    max_template_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-}
-
-pub fn create_template_node(channel: &mut Channel, v: &'static TemplateNode<'static>) {
-    use TemplateNode::*;
-    match v {
-        Element {
-            tag,
-            namespace,
-            attrs,
-            children,
-            ..
-        } => {
-            // Push the current node onto the stack
-            match namespace {
-                Some(ns) => channel.create_element_ns(tag, ns),
-                None => channel.create_element(tag),
-            }
-            // Set attributes on the current node
-            for attr in *attrs {
-                if let TemplateAttribute::Static {
-                    name,
-                    value,
-                    namespace,
-                } = attr
-                {
-                    channel.set_top_attribute(name, value, namespace.unwrap_or_default())
-                }
-            }
-            // Add each child to the stack
-            for child in *children {
-                create_template_node(channel, child);
-            }
-            // Add all children to the parent
-            channel.append_children_to_top(children.len() as u16);
-        }
-        Text { text } => channel.create_raw_text(text),
-        DynamicText { .. } => channel.create_raw_text("p"),
-        Dynamic { .. } => channel.add_placeholder(),
     }
 }
 

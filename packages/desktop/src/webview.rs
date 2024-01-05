@@ -1,25 +1,49 @@
-use crate::desktop_context::{EditQueue, EventData};
-use crate::protocol::{self, AssetHandlerRegistry};
-use crate::{desktop_context::UserWindowEvent, Config};
-use muda::{Menu, MenuItem, PredefinedMenuItem, Submenu};
+use std::{rc::Rc, task::Waker};
+
+use crate::edits::{EditQueue, WebviewQueue};
+use crate::{
+    assets::AssetHandlerRegistry, desktop_context::UserWindowEvent, waker::tao_waker, Config,
+    DesktopContext,
+};
+use crate::{
+    desktop_context::{EventData, WindowEventHandlers},
+    eval::init_eval,
+    shortcut::ShortcutRegistry,
+};
+use crate::{
+    protocol::{self},
+    DesktopService,
+};
+use dioxus_core::VirtualDom;
 use tao::event_loop::{EventLoopProxy, EventLoopWindowTarget};
-use tao::window::Window;
-use wry::http::Response;
-use wry::{WebContext, WebView, WebViewBuilder};
+use wry::{WebContext, WebViewBuilder};
 
-pub(crate) fn build(
-    cfg: &mut Config,
+pub struct WebviewHandler {
+    pub dom: VirtualDom,
+    pub desktop_context: DesktopContext,
+    pub waker: Waker,
+
+    // Wry assumes the webcontext is alive for the lifetime of the webview.
+    // We need to keep the webcontext alive, otherwise the webview will crash
+    _web_context: WebContext,
+}
+
+pub fn create_new_window(
+    mut cfg: Config,
     event_loop: &EventLoopWindowTarget<UserWindowEvent>,
-    proxy: EventLoopProxy<UserWindowEvent>,
-) -> (WebView, WebContext, AssetHandlerRegistry, EditQueue, Window) {
-    let mut builder = cfg.window.clone();
+    proxy: &EventLoopProxy<UserWindowEvent>,
+    dom: VirtualDom,
+    queue: &WebviewQueue,
+    event_handlers: &WindowEventHandlers,
+    shortcut_manager: ShortcutRegistry,
+) -> WebviewHandler {
+    let window = cfg.window.clone().build(event_loop).unwrap();
 
-    // TODO: restore the menu bar with muda: https://github.com/tauri-apps/muda/blob/dev/examples/wry.rs
+    // TODO: allow users to specify their own menubars, again :/
     if cfg.enable_default_menu_bar {
-        // builder = builder.with_menu(build_default_menu_bar());
+        use crate::menubar::*;
+        build_menu_bar(build_default_menu_bar(), &window);
     }
-
-    let window = builder.build(event_loop).unwrap();
 
     let window_id = window.id();
     let file_handler = cfg.file_drop_handler.take();
@@ -49,10 +73,13 @@ pub(crate) fn build(
         .with_transparent(cfg.window.window.transparent)
         .with_url("dioxus://index.html/")
         .unwrap()
-        .with_ipc_handler(move |payload: String| {
-            // defer the event to the main thread
-            if let Ok(message) = serde_json::from_str(&payload) {
-                _ = proxy.send_event(UserWindowEvent(EventData::Ipc(message), window_id));
+        .with_ipc_handler({
+            let proxy = proxy.clone();
+            move |payload: String| {
+                // defer the event to the main thread
+                if let Ok(message) = serde_json::from_str(&payload) {
+                    _ = proxy.send_event(UserWindowEvent(EventData::Ipc(message), window_id));
+                }
             }
         })
         .with_asynchronous_custom_protocol(String::from("dioxus"), {
@@ -101,76 +128,49 @@ pub(crate) fn build(
         webview = webview.with_custom_protocol(name, move |r| handler(r))
     }
 
+    const INITIALIZATION_SCRIPT: &str = r#"
+        if (document.addEventListener) {
+        document.addEventListener('contextmenu', function(e) {
+            e.preventDefault();
+        }, false);
+        } else {
+        document.attachEvent('oncontextmenu', function() {
+            window.event.returnValue = false;
+        });
+        }
+    "#;
+
     if cfg.disable_context_menu {
         // in release mode, we don't want to show the dev tool or reload menus
-        webview = webview.with_initialization_script(
-            r#"
-                        if (document.addEventListener) {
-                        document.addEventListener('contextmenu', function(e) {
-                            e.preventDefault();
-                        }, false);
-                        } else {
-                        document.attachEvent('oncontextmenu', function() {
-                            window.event.returnValue = false;
-                        });
-                        }
-                    "#,
-        )
+        webview = webview.with_initialization_script(INITIALIZATION_SCRIPT)
     } else {
         // in debug, we are okay with the reload menu showing and dev tool
         webview = webview.with_devtools(true);
     }
 
-    (
-        webview.build().unwrap(),
-        web_context,
-        asset_handlers,
-        edit_queue,
+    let webview = webview.build().unwrap();
+
+    let desktop_context = Rc::from(DesktopService::new(
         window,
-    )
-}
+        webview,
+        proxy.clone(),
+        event_loop.clone(),
+        queue.clone(),
+        event_handlers.clone(),
+        shortcut_manager,
+        edit_queue,
+        asset_handlers,
+    ));
 
-/// Builds a standard menu bar depending on the users platform. It may be used as a starting point
-/// to further customize the menu bar and pass it to a [`WindowBuilder`](tao::window::WindowBuilder).
-/// > Note: The default menu bar enables macOS shortcuts like cut/copy/paste.
-/// > The menu bar differs per platform because of constraints introduced
-/// > by [`MenuItem`](tao::menu::MenuItem).
-pub fn build_default_menu_bar() -> Menu {
-    let menu = Menu::new();
+    dom.base_scope().provide_context(desktop_context.clone());
 
-    // since it is uncommon on windows to have an "application menu"
-    // we add a "window" menu to be more consistent across platforms with the standard menu
-    let window_menu = Submenu::new("Window", true);
-    window_menu
-        .append_items(&[
-            &PredefinedMenuItem::fullscreen(None),
-            &PredefinedMenuItem::separator(),
-            &PredefinedMenuItem::hide(None),
-            &PredefinedMenuItem::hide_others(None),
-            &PredefinedMenuItem::show_all(None),
-            &PredefinedMenuItem::maximize(None),
-            &PredefinedMenuItem::minimize(None),
-            &PredefinedMenuItem::close_window(None),
-            &PredefinedMenuItem::separator(),
-            &PredefinedMenuItem::quit(None),
-        ])
-        .unwrap();
+    init_eval(dom.base_scope());
 
-    let edit_menu = Submenu::new("Window", true);
-    edit_menu
-        .append_items(&[
-            &PredefinedMenuItem::undo(None),
-            &PredefinedMenuItem::redo(None),
-            &PredefinedMenuItem::separator(),
-            &PredefinedMenuItem::cut(None),
-            &PredefinedMenuItem::copy(None),
-            &PredefinedMenuItem::paste(None),
-            &PredefinedMenuItem::separator(),
-            &PredefinedMenuItem::select_all(None),
-        ])
-        .unwrap();
-
-    menu.append_items(&[&window_menu, &edit_menu]).unwrap();
-
-    menu
+    WebviewHandler {
+        // We want to poll the virtualdom and the event loop at the same time, so the waker will be connected to both
+        waker: tao_waker(proxy.clone(), desktop_context.window.id()),
+        desktop_context,
+        dom,
+        _web_context: web_context,
+    }
 }

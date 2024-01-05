@@ -1,5 +1,5 @@
 use crate::desktop_context::{EventData, UserWindowEvent};
-use futures_util::{pin_mut, task::ArcWake, FutureExt};
+use futures_util::task::ArcWake;
 use std::sync::Arc;
 use tao::{event_loop::EventLoopProxy, window::WindowId};
 
@@ -8,7 +8,7 @@ use tao::{event_loop::EventLoopProxy, window::WindowId};
 /// This lets the VirtualDom "come up for air" and process events while the main thread is blocked by the WebView.
 ///
 /// All other IO lives in the Tokio runtime,
-pub fn tao_waker(proxy: &EventLoopProxy<UserWindowEvent>, id: WindowId) -> std::task::Waker {
+pub fn tao_waker(proxy: EventLoopProxy<UserWindowEvent>, id: WindowId) -> std::task::Waker {
     struct DomHandle {
         proxy: EventLoopProxy<UserWindowEvent>,
         id: WindowId,
@@ -27,8 +27,5 @@ pub fn tao_waker(proxy: &EventLoopProxy<UserWindowEvent>, id: WindowId) -> std::
         }
     }
 
-    futures_util::task::waker(Arc::new(DomHandle {
-        id,
-        proxy: proxy.clone(),
-    }))
+    futures_util::task::waker(Arc::new(DomHandle { id, proxy }))
 }
