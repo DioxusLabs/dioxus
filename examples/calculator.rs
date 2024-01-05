@@ -62,6 +62,7 @@ fn app(cx: Scope) -> Element {
         div { id: "wrapper",
             div { class: "app",
                 div { class: "calculator",
+                    tabindex: "0",
                     onkeydown: handle_key_down_event,
                     div { class: "calculator-display", val.to_string() }
                     div { class: "calculator-keypad",

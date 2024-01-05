@@ -75,6 +75,7 @@ impl Redirect {
 
         let (segments, query) = parse_route_segments(
             path.span(),
+            #[allow(clippy::map_identity)]
             closure_arguments.iter().map(|(name, ty)| (name, ty)),
             &path.value(),
         )?;

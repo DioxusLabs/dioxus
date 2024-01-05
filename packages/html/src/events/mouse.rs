@@ -75,10 +75,7 @@ impl_event! {
     /// oncontextmenu
     oncontextmenu
 
-    /// ondoubleclick
-    ondoubleclick
-
-    /// ondoubleclick
+    #[deprecated(since = "0.5.0", note = "use ondoubleclick instead")]
     ondblclick
 
     /// onmousedown
@@ -103,6 +100,22 @@ impl_event! {
 
     /// onmouseup
     onmouseup
+}
+
+/// ondoubleclick
+#[inline]
+pub fn ondoubleclick<'a, E: crate::EventReturn<T>, T>(
+    _cx: &'a ::dioxus_core::ScopeState,
+    mut _f: impl FnMut(::dioxus_core::Event<MouseData>) -> E + 'a,
+) -> ::dioxus_core::Attribute<'a> {
+    ::dioxus_core::Attribute::new(
+        "ondblclick",
+        _cx.listener(move |e: ::dioxus_core::Event<MouseData>| {
+            _f(e).spawn(_cx);
+        }),
+        None,
+        false,
+    )
 }
 
 impl MouseData {

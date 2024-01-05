@@ -19,7 +19,7 @@ use syn::{
 /// are enabled), it will instead make a network request to the server.
 ///
 /// You can specify one, two, or three arguments to the server function:
-/// 1. **Required**: A type name that will be used to identify and register the server function
+/// 1. *Optional*: A type name that will be used to identify and register the server function
 ///   (e.g., `MyServerFn`).
 /// 2. *Optional*: A URL prefix at which the function will be mounted when it’s registered
 ///   (e.g., `"/api"`). Defaults to `"/"`.

@@ -87,8 +87,6 @@ fn ClientAdd(cx: Scope) -> Element {
     let last_name = use_state(cx, String::new);
     let description = use_state(cx, String::new);
 
-    let navigator = use_navigator(cx);
-
     cx.render(rsx! {
         h2 { "Add new Client" }
 
@@ -103,7 +101,7 @@ fn ClientAdd(cx: Scope) -> Element {
                     description: description.to_string(),
                 });
 
-                navigator.push(Route::ClientList {});
+                dioxus_router::router().push(Route::ClientList {});
             },
 
             fieldset {

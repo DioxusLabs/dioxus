@@ -31,6 +31,7 @@ fn get_out_comp_fn(orig_comp_fn: &ItemFn, cx_pat: &Pat) -> ItemFn {
         block: parse_quote! {
             {
                 #[warn(non_snake_case)]
+                #[allow(clippy::inline_always)]
                 #[inline(always)]
                 #inner_comp_fn
                 #inner_comp_ident (#cx_pat)
@@ -57,8 +58,11 @@ impl ToTokens for ComponentDeserializerOutput {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         let comp_fn = &self.comp_fn;
         let props_struct = &self.props_struct;
+        let fn_ident = &comp_fn.sig.ident;
 
+        let doc = format!("Properties for the [`{fn_ident}`] component.");
         tokens.append_all(quote! {
+            #[doc = #doc]
             #props_struct
             #[allow(non_snake_case)]
             #comp_fn

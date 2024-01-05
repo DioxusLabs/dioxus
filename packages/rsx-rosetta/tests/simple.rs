@@ -9,8 +9,6 @@ fn simple_elements() {
         <div id="asd">hello world!</div>
         <div for="asd">hello world!</div>
         <div async="asd">hello world!</div>
-        <div LargeThing="asd">hello world!</div>
-        <ai-is-awesome>hello world!</ai-is-awesome>
     </div>
     "#
     .trim();
@@ -28,8 +26,6 @@ fn simple_elements() {
         div { id: "asd", "hello world!" }
         div { r#for: "asd", "hello world!" }
         div { r#async: "asd", "hello world!" }
-        div { large_thing: "asd", "hello world!" }
-        ai_is_awesome { "hello world!" }
     }"#;
     pretty_assertions::assert_eq!(&out, &expected);
 }

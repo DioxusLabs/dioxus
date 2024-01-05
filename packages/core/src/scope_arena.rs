@@ -36,6 +36,7 @@ impl VirtualDom {
 
             borrowed_props: Default::default(),
             attributes_to_drop_before_render: Default::default(),
+            element_refs_to_drop: Default::default(),
         }));
 
         let context =
