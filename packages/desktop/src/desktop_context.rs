@@ -54,7 +54,7 @@ pub struct DesktopService {
     /// The tao window itself
     pub window: Window,
 
-    pub(crate) shared: SharedContext,
+    pub(crate) shared: Rc<SharedContext>,
 
     /// The receiver for queries about the current window
     pub(super) query: QueryEngine,
@@ -81,7 +81,7 @@ impl DesktopService {
     pub(crate) fn new(
         window: Window,
         webview: WebView,
-        shared: SharedContext,
+        shared: Rc<SharedContext>,
         edit_queue: EditQueue,
         asset_handlers: AssetHandlerRegistry,
     ) -> Self {

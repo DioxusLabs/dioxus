@@ -12,7 +12,7 @@ use crate::{
 use crossbeam_channel::Receiver;
 use dioxus_core::{Component, ElementId, VirtualDom};
 use dioxus_html::{
-    native_bind::NativeFileEngine, FileEngine, FormData, HasFormData, HtmlEvent, MountedData,
+    native_bind::NativeFileEngine, FileEngine, HasFormData, HtmlEvent, MountedData,
     PlatformEventData, SerializedHtmlEventConverter,
 };
 use std::{
@@ -35,22 +35,24 @@ pub(crate) struct App<P> {
     pub(crate) cfg: Cell<Option<Config>>,
 
     // Stuff we need mutable access to
+    pub(crate) root: Component<P>,
     pub(crate) control_flow: ControlFlow,
     pub(crate) is_visible_before_start: bool,
-    pub(crate) root: Component<P>,
-    pub(crate) webviews: HashMap<WindowId, WebviewInstance>,
     pub(crate) window_behavior: WindowCloseBehaviour,
+    pub(crate) webviews: HashMap<WindowId, WebviewInstance>,
 
-    pub(crate) shared: SharedContext,
+    /// This single blob of state is shared between all the windows so they have access to the runtime state
+    ///
+    /// This includes stuff like the event handlers, shortcuts, etc as well as ways to modify *other* windows
+    pub(crate) shared: Rc<SharedContext>,
 }
 
 /// A bundle of state shared between all the windows, providing a way for us to communicate with running webview.
 ///
 /// Todo: everything in this struct is wrapped in Rc<>, but we really only need the one top-level refcell
-#[derive(Clone)]
 pub struct SharedContext {
     pub(crate) event_handlers: WindowEventHandlers,
-    pub(crate) pending_webviews: Rc<RefCell<Vec<WebviewInstance>>>,
+    pub(crate) pending_webviews: RefCell<Vec<WebviewInstance>>,
     pub(crate) shortcut_manager: ShortcutRegistry,
     pub(crate) global_hotkey_channel: Receiver<GlobalHotKeyEvent>,
     pub(crate) proxy: EventLoopProxy<UserWindowEvent>,
@@ -69,14 +71,14 @@ impl<P: 'static> App<P> {
             control_flow: ControlFlow::Wait,
             props: Cell::new(Some(props)),
             cfg: Cell::new(Some(cfg)),
-            shared: SharedContext {
+            shared: Rc::new(SharedContext {
                 event_handlers: WindowEventHandlers::default(),
                 pending_webviews: Default::default(),
                 shortcut_manager: ShortcutRegistry::new(),
                 global_hotkey_channel: GlobalHotKeyEvent::receiver().clone(),
                 proxy: event_loop.create_proxy(),
                 target: event_loop.clone(),
-            },
+            }),
         };
 
         // Copy over any assets we find

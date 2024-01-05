@@ -37,6 +37,7 @@ pub(super) async fn desktop_handler(
     }
 
     // If the user provided a custom asset handler, then call it and return the response if the request was handled.
+    // todo(jon): I dont want this function to be async - we can probably just use a drop handler on the responder
     if let Some(response) = asset_handlers.try_handlers(&request).await {
         return responder.respond(response);
     }
@@ -50,9 +51,7 @@ pub(super) async fn desktop_handler(
 
 fn serve_from_fs(request: AssetRequest) -> Result<AssetResponse> {
     // If the path is relative, we'll try to serve it from the assets directory.
-    let mut asset = get_asset_root()
-        .unwrap_or_else(|| Path::new(".").to_path_buf())
-        .join(&request.path);
+    let mut asset = get_asset_root_or_default().join(&request.path);
 
     // If we can't find it, make it absolute and try again
     if !asset.exists() {
@@ -87,7 +86,7 @@ fn build_index_file(
     custom_head: Option<String>,
     root_name: &str,
     headless: bool,
-) -> std::result::Result<Response<Cow<'static, [u8]>>, wry::http::Error> {
+) -> std::result::Result<Response<Vec<u8>>, wry::http::Error> {
     // Load a custom index file if provided
     let mut index = custom_index.unwrap_or_else(|| DEFAULT_INDEX.to_string());
 
@@ -97,7 +96,9 @@ fn build_index_file(
         index.insert_str(index.find("</head>").expect("Head element to exist"), &head);
     }
 
-    // Inject our module loader
+    // Inject our module loader by looking for a body tag
+    // A failure mode here, obviously, is if the user provided a custom index without a body tag
+    // Might want to document this
     index.insert_str(
         index.find("</body>").expect("Body element to exist"),
         &module_loader(root_name, headless),
@@ -106,7 +107,7 @@ fn build_index_file(
     Response::builder()
         .header("Content-Type", "text/html")
         .header("Access-Control-Allow-Origin", "*")
-        .body(Cow::from(index.into_bytes()))
+        .body(index.into_bytes().into())
 }
 
 /// Construct the inline script that boots up the page and bridges the webview with rust code.
@@ -135,6 +136,14 @@ fn module_loader(root_id: &str, headless: bool) -> String {
     )
 }
 
+//// Get the assset directory, following tauri/cargo-bundles directory discovery approach
+////
+//// Defaults to the current directory if no asset directory is found, which is useful for development when the app
+//// isn't bundled.
+fn get_asset_root_or_default() -> PathBuf {
+    get_asset_root().unwrap_or_else(|| Path::new(".").to_path_buf())
+}
+
 /// Get the asset directory, following tauri/cargo-bundles directory discovery approach
 ///
 /// Currently supports:
@@ -144,11 +153,6 @@ fn module_loader(root_id: &str, headless: bool) -> String {
 /// - [ ] Linux (deb)
 /// - [ ] iOS
 /// - [ ] Android
-#[allow(unreachable_code)]
-pub(crate) fn get_asset_root_or_default() -> PathBuf {
-    get_asset_root().unwrap_or_else(|| Path::new(".").to_path_buf())
-}
-
 #[allow(unreachable_code)]
 fn get_asset_root() -> Option<PathBuf> {
     // If running under cargo, there's no bundle!

@@ -1,4 +1,4 @@
-use std::{cell::RefCell, collections::HashMap, rc::Rc, str::FromStr};
+use std::{cell::RefCell, collections::HashMap, str::FromStr};
 
 use dioxus_html::input_data::keyboard_types::Modifiers;
 use slab::Slab;
@@ -23,13 +23,10 @@ pub use global_hotkey::{
 #[cfg(any(target_os = "ios", target_os = "android"))]
 pub use crate::mobile_shortcut::*;
 
-#[derive(Clone)]
 pub(crate) struct ShortcutRegistry {
-    manager: Rc<GlobalHotKeyManager>,
-    shortcuts: ShortcutMap,
+    manager: GlobalHotKeyManager,
+    shortcuts: RefCell<HashMap<u32, Shortcut>>,
 }
-
-type ShortcutMap = Rc<RefCell<HashMap<u32, Shortcut>>>;
 
 struct Shortcut {
     #[allow(unused)]
@@ -54,8 +51,8 @@ impl Shortcut {
 impl ShortcutRegistry {
     pub fn new() -> Self {
         Self {
-            manager: Rc::new(GlobalHotKeyManager::new().unwrap()),
-            shortcuts: Rc::new(RefCell::new(HashMap::new())),
+            manager: GlobalHotKeyManager::new().unwrap(),
+            shortcuts: RefCell::new(HashMap::new()),
         }
     }
 

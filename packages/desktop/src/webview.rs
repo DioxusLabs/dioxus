@@ -24,7 +24,7 @@ pub struct WebviewInstance {
 }
 
 impl WebviewInstance {
-    pub fn new(mut cfg: Config, dom: VirtualDom, shared: SharedContext) -> WebviewInstance {
+    pub fn new(mut cfg: Config, dom: VirtualDom, shared: Rc<SharedContext>) -> WebviewInstance {
         let window = cfg.window.clone().build(&shared.target).unwrap();
 
         // TODO: allow users to specify their own menubars, again :/

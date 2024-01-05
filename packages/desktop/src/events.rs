@@ -1,9 +1,7 @@
 //! Convert a serialized event to an event trigger
 
-use dioxus_html::*;
-use serde::{Deserialize, Serialize};
-
 use crate::element::DesktopElement;
+use dioxus_html::*;
 
 pub(crate) struct SerializedHtmlEventConverter;
 
