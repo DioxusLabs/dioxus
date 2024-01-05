@@ -147,7 +147,7 @@ impl<T> Default for EventHandler<'_, T> {
     }
 }
 
-type ExternalListenerCallback<'bump, T> = bumpalo::boxed::Box<'bump, dyn FnMut(T) + 'bump>;
+type ExternalListenerCallback<'bump, T> = Box<dyn FnMut(T)>;
 
 impl<T> EventHandler<'_, T> {
     /// Call this event handler with the appropriate event type

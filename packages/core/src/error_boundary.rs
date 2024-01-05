@@ -262,7 +262,7 @@ impl<T> Throw for Option<T> {
     }
 }
 
-pub struct ErrorHandler<'a>(Box<dyn Fn(CapturedError) -> LazyNodes<'a, 'a> + 'a>);
+pub struct ErrorHandler(Box<dyn Fn(CapturedError) -> LazyNodes<'a, 'a>>);
 impl<'a, F: Fn(CapturedError) -> LazyNodes<'a, 'a> + 'a> From<F> for ErrorHandler<'a> {
     fn from(value: F) -> Self {
         Self(Box::new(value))
@@ -290,7 +290,7 @@ fn default_handler<'a>(error: CapturedError) -> LazyNodes<'a, 'a> {
             stable_id: Default::default(),
             key: None,
             template: std::cell::Cell::new(TEMPLATE),
-            root_ids: bumpalo::collections::Vec::with_capacity_in(1usize, __cx.bump()).into(),
+            root_ids: Vec::with_capacity(1usize).into(),
             dynamic_nodes: __cx
                 .bump()
                 .alloc([__cx.text_node(format_args!("{0}", error))]),
@@ -298,45 +298,39 @@ fn default_handler<'a>(error: CapturedError) -> LazyNodes<'a, 'a> {
         }
     })
 }
-pub struct ErrorBoundaryProps<'a> {
-    children: Element<'a>,
-    handle_error: ErrorHandler<'a>,
+pub struct ErrorBoundaryProps {
+    children: Element,
+    handle_error: ErrorHandler,
 }
-impl<'a> ErrorBoundaryProps<'a> {
+impl ErrorBoundaryProps {
     /**
     Create a builder for building `ErrorBoundaryProps`.
     On the builder, call `.children(...)`(optional), `.handle_error(...)`(optional) to set the values of the fields.
     Finally, call `.build()` to create the instance of `ErrorBoundaryProps`.
                         */
     #[allow(dead_code)]
-    pub fn builder() -> ErrorBoundaryPropsBuilder<'a, ((), ())> {
-        ErrorBoundaryPropsBuilder {
-            fields: ((), ()),
-            _phantom: ::core::default::Default::default(),
-        }
+    pub fn builder() -> ErrorBoundaryPropsBuilder<((), ())> {
+        ErrorBoundaryPropsBuilder { fields: ((), ()) }
     }
 }
 #[must_use]
 #[doc(hidden)]
 #[allow(dead_code, non_camel_case_types, non_snake_case)]
-pub struct ErrorBoundaryPropsBuilder<'a, TypedBuilderFields> {
+pub struct ErrorBoundaryPropsBuilder<TypedBuilderFields> {
     fields: TypedBuilderFields,
-    _phantom: ::core::marker::PhantomData<&'a ()>,
 }
-impl<'a, TypedBuilderFields> Clone for ErrorBoundaryPropsBuilder<'a, TypedBuilderFields>
+impl<TypedBuilderFields> Clone for ErrorBoundaryPropsBuilder<TypedBuilderFields>
 where
     TypedBuilderFields: Clone,
 {
     fn clone(&self) -> Self {
         Self {
             fields: self.fields.clone(),
-            _phantom: ::core::default::Default::default(),
         }
     }
 }
-impl<'a> Properties for ErrorBoundaryProps<'a> {
-    type Builder = ErrorBoundaryPropsBuilder<'a, ((), ())>;
-    const IS_STATIC: bool = false;
+impl Properties for ErrorBoundaryProps {
+    type Builder = ErrorBoundaryPropsBuilder<((), ())>;
     fn builder() -> Self::Builder {
         ErrorBoundaryProps::builder()
     }

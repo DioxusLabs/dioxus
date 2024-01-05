@@ -10,9 +10,6 @@ homepage = "https://dioxuslabs.com"
 keywords = ["dom", "ui", "gui", "react"]
 
 [dependencies]
-# Bumpalo is used as a micro heap backing each component
-bumpalo = { version = "3.6", features = ["collections", "boxed"] }
-
 # faster hashmaps
 rustc-hash = { workspace = true }
 

@@ -59,7 +59,7 @@ impl<'b> VirtualDom {
         self.runtime.scope_stack.borrow_mut().pop();
     }
 
-    fn diff_ok_to_err(&mut self, l: &'b VNode<'b>, p: &'b VPlaceholder) {
+    fn diff_ok_to_err(&mut self, l: &'b VNode, p: &'b VPlaceholder) {
         let id = self.next_element();
         p.id.set(Some(id));
         p.parent.set(l.parent.get());
@@ -82,7 +82,7 @@ impl<'b> VirtualDom {
         };
     }
 
-    fn diff_node(&mut self, left_template: &'b VNode<'b>, right_template: &'b VNode<'b>) {
+    fn diff_node(&mut self, left_template: &'b VNode, right_template: &'b VNode) {
         // If hot reloading is enabled, we need to make sure we're using the latest template
         #[cfg(debug_assertions)]
         {
@@ -198,8 +198,8 @@ impl<'b> VirtualDom {
 
     fn diff_vcomponent(
         &mut self,
-        left: &'b VComponent<'b>,
-        right: &'b VComponent<'b>,
+        left: &'b VComponent,
+        right: &'b VComponent,
         parent: Option<ElementRef>,
     ) {
         if std::ptr::eq(left, right) {
@@ -249,8 +249,8 @@ impl<'b> VirtualDom {
 
     fn replace_vcomponent(
         &mut self,
-        right: &'b VComponent<'b>,
-        left: &'b VComponent<'b>,
+        right: &'b VComponent,
+        left: &'b VComponent,
         parent: Option<ElementRef>,
     ) {
         let m = self.create_component_node(parent, right);
@@ -307,7 +307,7 @@ impl<'b> VirtualDom {
     ///     Component { ..props }
     /// }
     /// ```
-    fn light_diff_templates(&mut self, left: &'b VNode<'b>, right: &'b VNode<'b>) {
+    fn light_diff_templates(&mut self, left: &'b VNode, right: &'b VNode) {
         let parent = left.parent.take();
         match matching_components(left, right) {
             None => self.replace(left, [right], parent),
@@ -321,7 +321,7 @@ impl<'b> VirtualDom {
     ///
     /// This just moves the ID of the old node over to the new node, and then sets the text of the new node if it's
     /// different.
-    fn diff_vtext(&mut self, left: &'b VText<'b>, right: &'b VText<'b>) {
+    fn diff_vtext(&mut self, left: &'b VText, right: &'b VText) {
         let id = left.id.get().unwrap_or_else(|| self.next_element());
 
         right.id.set(Some(id));
@@ -331,12 +331,7 @@ impl<'b> VirtualDom {
         }
     }
 
-    fn diff_non_empty_fragment(
-        &mut self,
-        old: &'b [VNode<'b>],
-        new: &'b [VNode<'b>],
-        parent: ElementRef,
-    ) {
+    fn diff_non_empty_fragment(&mut self, old: &'b [VNode], new: &'b [VNode], parent: ElementRef) {
         let new_is_keyed = new[0].key.is_some();
         let old_is_keyed = old[0].key.is_some();
         debug_assert!(
@@ -363,12 +358,7 @@ impl<'b> VirtualDom {
     //     [... parent]
     //
     // the change list stack is in the same state when this function returns.
-    fn diff_non_keyed_children(
-        &mut self,
-        old: &'b [VNode<'b>],
-        new: &'b [VNode<'b>],
-        parent: ElementRef,
-    ) {
+    fn diff_non_keyed_children(&mut self, old: &'b [VNode], new: &'b [VNode], parent: ElementRef) {
         use std::cmp::Ordering;
 
         // Handled these cases in `diff_children` before calling this function.
@@ -404,15 +394,10 @@ impl<'b> VirtualDom {
     // https://github.com/infernojs/inferno/blob/36fd96/packages/inferno/src/DOM/patching.ts#L530-L739
     //
     // The stack is empty upon entry.
-    fn diff_keyed_children(
-        &mut self,
-        old: &'b [VNode<'b>],
-        new: &'b [VNode<'b>],
-        parent: ElementRef,
-    ) {
+    fn diff_keyed_children(&mut self, old: &'b [VNode], new: &'b [VNode], parent: ElementRef) {
         if cfg!(debug_assertions) {
             let mut keys = rustc_hash::FxHashSet::default();
-            let mut assert_unique_keys = |children: &'b [VNode<'b>]| {
+            let mut assert_unique_keys = |children: &'b [VNode]| {
                 keys.clear();
                 for child in children {
                     let key = child.key;
@@ -485,8 +470,8 @@ impl<'b> VirtualDom {
     /// If there is no offset, then this function returns None and the diffing is complete.
     fn diff_keyed_ends(
         &mut self,
-        old: &'b [VNode<'b>],
-        new: &'b [VNode<'b>],
+        old: &'b [VNode],
+        new: &'b [VNode],
         parent: ElementRef,
     ) -> Option<(usize, usize)> {
         let mut left_offset = 0;
@@ -542,12 +527,7 @@ impl<'b> VirtualDom {
     //
     // Upon exit from this function, it will be restored to that same self.
     #[allow(clippy::too_many_lines)]
-    fn diff_keyed_middle(
-        &mut self,
-        old: &'b [VNode<'b>],
-        new: &'b [VNode<'b>],
-        parent: ElementRef,
-    ) {
+    fn diff_keyed_middle(&mut self, old: &'b [VNode], new: &'b [VNode], parent: ElementRef) {
         /*
         1. Map the old keys into a numerical ordering based on indices.
         2. Create a map of old key to its index
@@ -729,7 +709,7 @@ impl<'b> VirtualDom {
     }
 
     /// Push all the real nodes on the stack
-    fn push_all_real_nodes(&mut self, node: &'b VNode<'b>) -> usize {
+    fn push_all_real_nodes(&mut self, node: &'b VNode) -> usize {
         node.template
             .get()
             .roots
@@ -783,7 +763,7 @@ impl<'b> VirtualDom {
 
     pub(crate) fn create_children(
         &mut self,
-        nodes: impl IntoIterator<Item = &'b VNode<'b>>,
+        nodes: impl IntoIterator<Item = &'b VNode>,
         parent: Option<ElementRef>,
     ) -> usize {
         nodes
@@ -797,8 +777,8 @@ impl<'b> VirtualDom {
 
     fn create_and_insert_before(
         &mut self,
-        new: &'b [VNode<'b>],
-        before: &'b VNode<'b>,
+        new: &'b [VNode],
+        before: &'b VNode,
         parent: ElementRef,
     ) {
         let m = self.create_children(new, Some(parent));
@@ -806,12 +786,7 @@ impl<'b> VirtualDom {
         self.mutations.push(Mutation::InsertBefore { id, m })
     }
 
-    fn create_and_insert_after(
-        &mut self,
-        new: &'b [VNode<'b>],
-        after: &'b VNode<'b>,
-        parent: ElementRef,
-    ) {
+    fn create_and_insert_after(&mut self, new: &'b [VNode], after: &'b VNode, parent: ElementRef) {
         let m = self.create_children(new, Some(parent));
         let id = self.find_last_element(after);
         self.mutations.push(Mutation::InsertAfter { id, m })
@@ -821,7 +796,7 @@ impl<'b> VirtualDom {
     fn replace_placeholder(
         &mut self,
         l: &'b VPlaceholder,
-        r: impl IntoIterator<Item = &'b VNode<'b>>,
+        r: impl IntoIterator<Item = &'b VNode>,
         parent: ElementRef,
     ) {
         let m = self.create_children(r, Some(parent));
@@ -832,8 +807,8 @@ impl<'b> VirtualDom {
 
     fn replace(
         &mut self,
-        left: &'b VNode<'b>,
-        right: impl IntoIterator<Item = &'b VNode<'b>>,
+        left: &'b VNode,
+        right: impl IntoIterator<Item = &'b VNode>,
         parent: Option<ElementRef>,
     ) {
         let m = self.create_children(right, parent);
@@ -855,7 +830,7 @@ impl<'b> VirtualDom {
         };
     }
 
-    fn node_to_placeholder(&mut self, l: &'b [VNode<'b>], r: &'b VPlaceholder, parent: ElementRef) {
+    fn node_to_placeholder(&mut self, l: &'b [VNode], r: &'b VPlaceholder, parent: ElementRef) {
         // Create the placeholder first, ensuring we get a dedicated ID for the placeholder
         let placeholder = self.next_element();
 
@@ -878,14 +853,14 @@ impl<'b> VirtualDom {
 
     /// Remove these nodes from the dom
     /// Wont generate mutations for the inner nodes
-    fn remove_nodes(&mut self, nodes: &'b [VNode<'b>]) {
+    fn remove_nodes(&mut self, nodes: &'b [VNode]) {
         nodes
             .iter()
             .rev()
             .for_each(|node| self.remove_node(node, true));
     }
 
-    fn remove_node(&mut self, node: &'b VNode<'b>, gen_muts: bool) {
+    fn remove_node(&mut self, node: &'b VNode, gen_muts: bool) {
         // Clean up any attributes that have claimed a static node as dynamic for mount/unmounta
         // Will not generate mutations!
         self.reclaim_attributes(node);
@@ -903,7 +878,7 @@ impl<'b> VirtualDom {
         self.reclaim_vnode_id(node);
     }
 
-    fn reclaim_vnode_id(&mut self, node: &'b VNode<'b>) {
+    fn reclaim_vnode_id(&mut self, node: &'b VNode) {
         // Clean up the vnode id
         if let Some(id) = node.stable_id() {
             self.element_refs.remove(id.0);
@@ -1025,7 +1000,7 @@ impl<'b> VirtualDom {
         self.drop_scope(scope, false);
     }
 
-    fn find_first_element(&self, node: &'b VNode<'b>) -> ElementId {
+    fn find_first_element(&self, node: &'b VNode) -> ElementId {
         match node.dynamic_root(0) {
             None => node.root_ids.borrow()[0],
             Some(Text(t)) => t.id.get().unwrap(),
@@ -1046,7 +1021,7 @@ impl<'b> VirtualDom {
         }
     }
 
-    fn find_last_element(&self, node: &'b VNode<'b>) -> ElementId {
+    fn find_last_element(&self, node: &'b VNode) -> ElementId {
         match node.dynamic_root(node.template.get().roots.len() - 1) {
             None => *node.root_ids.borrow().last().unwrap(),
             Some(Text(t)) => t.id.get().unwrap(),
@@ -1067,7 +1042,7 @@ impl<'b> VirtualDom {
         }
     }
 
-    pub(crate) fn assign_boundary_ref(&mut self, parent: Option<ElementRef>, child: &'b VNode<'b>) {
+    pub(crate) fn assign_boundary_ref(&mut self, parent: Option<ElementRef>, child: &'b VNode) {
         if let Some(parent) = parent {
             // assign the parent of the child
             child.parent.set(Some(parent));
@@ -1080,7 +1055,7 @@ impl<'b> VirtualDom {
 /// We need to check for the obvious case, and the non-obvious case where the template as cloned
 ///
 /// We use the pointer of the dynamic_node list in this case
-fn templates_are_the_same<'b>(left_template: &'b VNode<'b>, right_template: &'b VNode<'b>) -> bool {
+fn templates_are_the_same<'b>(left_template: &'b VNode, right_template: &'b VNode) -> bool {
     std::ptr::eq(left_template, right_template)
 }
 
@@ -1092,9 +1067,9 @@ fn templates_are_different(left_template: &VNode, right_template: &VNode) -> boo
 }
 
 fn matching_components<'a>(
-    left: &'a VNode<'a>,
-    right: &'a VNode<'a>,
-) -> Option<Vec<(&'a VComponent<'a>, &'a VComponent<'a>)>> {
+    left: &'a VNode,
+    right: &'a VNode,
+) -> Option<Vec<(&'a VComponent, &'a VComponent)>> {
     let left_template = left.template.get();
     let right_template = right.template.get();
     if left_template.roots.len() != right_template.roots.len() {

@@ -16,7 +16,9 @@ use crate::{
 use futures_util::{pin_mut, StreamExt};
 use rustc_hash::{FxHashMap, FxHashSet};
 use slab::Slab;
-use std::{any::Any, cell::Cell, collections::BTreeSet, future::Future, ptr::NonNull, rc::Rc, sync::Arc};
+use std::{
+    any::Any, cell::Cell, collections::BTreeSet, future::Future, ptr::NonNull, rc::Rc, sync::Arc,
+};
 
 /// A virtual node system that progresses user events and diffs UI trees.
 ///
@@ -186,7 +188,7 @@ pub struct VirtualDom {
     pub(crate) templates: FxHashMap<TemplateId, FxHashMap<usize, Template<'static>>>,
 
     // Every element is actually a dual reference - one to the template and the other to the dynamic node in that template
-    pub(crate) element_refs: Slab<Option<NonNull<VNode<'static>>>>,
+    pub(crate) element_refs: Slab<Option<NonNull<VNode>>>,
 
     // The element ids that are used in the renderer
     pub(crate) elements: Slab<Option<ElementRef>>,

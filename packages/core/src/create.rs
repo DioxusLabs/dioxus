@@ -67,7 +67,7 @@ impl<'b> VirtualDom {
     /// Create a new template [`VNode`] and write it to the [`Mutations`] buffer.
     ///
     /// This method pushes the ScopeID to the internal scopestack and returns the number of nodes created.
-    pub(crate) fn create_scope(&mut self, scope: ScopeId, template: &'b VNode<'b>) -> usize {
+    pub(crate) fn create_scope(&mut self, scope: ScopeId, template: &'b VNode) -> usize {
         self.runtime.scope_stack.borrow_mut().push(scope);
         let nodes = self.create(template);
         self.runtime.scope_stack.borrow_mut().pop();
@@ -75,7 +75,7 @@ impl<'b> VirtualDom {
     }
 
     /// Create this template and write its mutations
-    pub(crate) fn create(&mut self, node: &'b VNode<'b>) -> usize {
+    pub(crate) fn create(&mut self, node: &'b VNode) -> usize {
         // check for a overriden template
         #[cfg(debug_assertions)]
         {
@@ -182,7 +182,7 @@ impl<'b> VirtualDom {
         1
     }
 
-    fn write_dynamic_root(&mut self, template: &'b VNode<'b>, idx: usize) -> usize {
+    fn write_dynamic_root(&mut self, template: &'b VNode, idx: usize) -> usize {
         use DynamicNode::*;
         match &template.dynamic_nodes[idx] {
             node @ Component { .. } | node @ Fragment(_) => {
@@ -232,7 +232,7 @@ impl<'b> VirtualDom {
     /// We want to make sure we write these nodes while on top of the root
     fn write_element_root(
         &mut self,
-        template: &'b VNode<'b>,
+        template: &'b VNode,
         root_idx: usize,
         dynamic_attrs: &mut Peekable<impl Iterator<Item = (usize, &'static [u8])>>,
         dynamic_nodes_iter: &mut Peekable<impl Iterator<Item = ((usize, usize), &'static [u8])>>,
@@ -269,7 +269,7 @@ impl<'b> VirtualDom {
         dynamic_nodes_iter: &mut Peekable<impl Iterator<Item = ((usize, usize), &'static [u8])>>,
         dynamic_nodes: &[(usize, &'static [u8])],
         root_idx: u8,
-        template: &'b VNode<'b>,
+        template: &'b VNode,
     ) {
         let (start, end) = match collect_dyn_node_range(dynamic_nodes_iter, root_idx) {
             Some((a, b)) => (a, b),
@@ -306,7 +306,7 @@ impl<'b> VirtualDom {
         attrs: &mut Peekable<impl Iterator<Item = (usize, &'static [u8])>>,
         root_idx: u8,
         root: ElementId,
-        node: &'b VNode<'b>,
+        node: &'b VNode,
     ) {
         while let Some((mut attr_id, path)) =
             attrs.next_if(|(_, p)| p.first().copied() == Some(root_idx))
@@ -327,7 +327,7 @@ impl<'b> VirtualDom {
 
     fn write_attribute(
         &mut self,
-        template: &'b VNode<'b>,
+        template: &'b VNode,
         idx: usize,
         attribute: &'b crate::Attribute<'b>,
         id: ElementId,
@@ -490,7 +490,7 @@ impl<'b> VirtualDom {
         }
     }
 
-    fn create_dynamic_text(&mut self, parent: ElementRef, text: &'b VText<'b>) -> usize {
+    fn create_dynamic_text(&mut self, parent: ElementRef, text: &'b VText) -> usize {
         // Allocate a dynamic element reference for this text node
         let new_id = self.next_element();
 
@@ -538,7 +538,7 @@ impl<'b> VirtualDom {
     pub(super) fn create_component_node(
         &mut self,
         parent: Option<ElementRef>,
-        component: &'b VComponent<'b>,
+        component: &'b VComponent,
     ) -> usize {
         use RenderReturn::*;
 

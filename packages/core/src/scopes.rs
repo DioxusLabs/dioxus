@@ -1,16 +1,13 @@
 use crate::{
     any_props::AnyProps,
     any_props::VProps,
-    bump_frame::BumpFrame,
     innerlude::ErrorBoundary,
     innerlude::{DynamicNode, EventHandler, VComponent, VNodeId, VText},
-    lazynodes::LazyNodes,
     nodes::{IntoAttributeValue, IntoDynNode, RenderReturn},
     runtime::Runtime,
     scope_context::ScopeContext,
     AnyValue, Attribute, AttributeValue, Element, Event, Properties, TaskId,
 };
-use bumpalo::{boxed::Box as BumpBox, Bump};
 use std::{
     any::Any,
     cell::{Cell, Ref, RefCell, UnsafeCell},
@@ -90,11 +87,11 @@ pub struct ScopeState {
     pub(crate) hooks: RefCell<Vec<Box<UnsafeCell<dyn Any>>>>,
     pub(crate) hook_idx: Cell<usize>,
 
-    pub(crate) borrowed_props: RefCell<Vec<*const VComponent<'static>>>,
+    pub(crate) borrowed_props: RefCell<Vec<*const VComponent>>,
     pub(crate) element_refs_to_drop: RefCell<Vec<VNodeId>>,
-    pub(crate) attributes_to_drop_before_render: RefCell<Vec<*const Attribute<'static>>>,
+    pub(crate) attributes_to_drop_before_render: RefCell<Vec<*const Attribute>>,
 
-    pub(crate) props: Option<Box<dyn AnyProps<'static>>>,
+    pub(crate) props: Option<Box<dyn AnyProps>>,
 }
 
 impl Drop for ScopeState {
@@ -108,22 +105,6 @@ impl<'src> ScopeState {
         self.runtime.get_context(self.context_id).unwrap()
     }
 
-    pub(crate) fn current_frame(&self) -> &BumpFrame {
-        match self.render_cnt.get() % 2 {
-            0 => &self.node_arena_1,
-            1 => &self.node_arena_2,
-            _ => unreachable!(),
-        }
-    }
-
-    pub(crate) fn previous_frame(&self) -> &BumpFrame {
-        match self.render_cnt.get() % 2 {
-            1 => &self.node_arena_1,
-            0 => &self.node_arena_2,
-            _ => unreachable!(),
-        }
-    }
-
     /// Get the name of this component
     pub fn name(&self) -> &str {
         self.context().name
@@ -134,17 +115,6 @@ impl<'src> ScopeState {
     /// This can be used as a helpful diagnostic when debugging hooks/renders, etc
     pub fn generation(&self) -> usize {
         self.render_cnt.get()
-    }
-
-    /// Get a handle to the currently active bump arena for this Scope
-    ///
-    /// This is a bump memory allocator. Be careful using this directly since the contents will be wiped on the next render.
-    /// It's easy to leak memory here since the drop implementation will not be called for any objects allocated in this arena.
-    ///
-    /// If you need to allocate items that need to be dropped, use bumpalo's box.
-    pub fn bump(&self) -> &Bump {
-        // note that this is actually the previous frame since we use that as scratch space while the component is rendering
-        self.previous_frame().bump()
     }
 
     /// Get a handle to the currently active head node arena for this Scope
@@ -343,7 +313,7 @@ impl<'src> ScopeState {
     ///     cx.render(lazy_tree)
     /// }
     ///```
-    pub fn render(&'src self, rsx: LazyNodes<'src, '_>) -> Element<'src> {
+    pub fn render(&'src self, rsx: LazyNodes<'src, '_>) -> Element {
         let element = rsx.call(self);
 
         let mut listeners = self.attributes_to_drop_before_render.borrow_mut();
@@ -383,22 +353,10 @@ impl<'src> ScopeState {
     }
 
     /// Create a dynamic text node using [`Arguments`] and the [`ScopeState`]'s internal [`Bump`] allocator
-    pub fn text_node(&'src self, args: Arguments) -> DynamicNode<'src> {
+    pub fn text_node(&'src self, args: Arguments) -> DynamicNode {
         DynamicNode::Text(VText {
             value: self.raw_text(args),
             id: Default::default(),
-        })
-    }
-
-    /// Allocate some text inside the [`ScopeState`] from [`Arguments`]
-    ///
-    /// Uses the currently active [`Bump`] allocator
-    pub fn raw_text(&'src self, args: Arguments) -> &'src str {
-        args.as_str().unwrap_or_else(|| {
-            use bumpalo::core_alloc::fmt::Write;
-            let mut str_buf = bumpalo::collections::String::new_in(self.bump());
-            str_buf.write_fmt(args).unwrap();
-            str_buf.into_bump_str()
         })
     }
 
@@ -417,7 +375,7 @@ impl<'src> ScopeState {
         value: impl IntoAttributeValue<'src>,
         namespace: Option<&'static str>,
         volatile: bool,
-    ) -> Attribute<'src> {
+    ) -> Attribute {
         Attribute {
             name,
             namespace,
@@ -443,10 +401,10 @@ impl<'src> ScopeState {
     /// ```
     pub fn component<'child, P>(
         &'src self,
-        component: fn(Scope<'child, P>) -> Element<'child>,
+        component: fn(Scope<'child, P>) -> Element,
         props: P,
         fn_name: &'static str,
-    ) -> DynamicNode<'src>
+    ) -> DynamicNode
     where
         // The properties must be valid until the next bump frame
         P: Properties + 'src,
@@ -456,13 +414,12 @@ impl<'src> ScopeState {
         let vcomp = VProps::new(component, P::memoize, props);
 
         // cast off the lifetime of the render return
-        let as_dyn: Box<dyn AnyProps<'child> + '_> = Box::new(vcomp);
-        let extended: Box<dyn AnyProps<'src> + 'src> = unsafe { std::mem::transmute(as_dyn) };
+        let as_dyn: Box<dyn AnyProps + '_> = Box::new(vcomp);
+        let extended: Box<dyn AnyProps + 'src> = unsafe { std::mem::transmute(as_dyn) };
 
         DynamicNode::Component(VComponent {
             name: fn_name,
             render_fn: component as *const (),
-            static_props: P::IS_STATIC,
             props: RefCell::new(Some(extended)),
             scope: Default::default(),
         })
@@ -470,9 +427,9 @@ impl<'src> ScopeState {
 
     /// Create a new [`EventHandler`] from an [`FnMut`]
     pub fn event_handler<T>(&'src self, f: impl FnMut(T) + 'src) -> EventHandler<'src, T> {
-        let handler: &mut dyn FnMut(T) = self.bump().alloc(f);
-        let caller = unsafe { BumpBox::from_raw(handler as *mut dyn FnMut(T)) };
-        let callback = RefCell::new(Some(caller));
+        let callback = RefCell::new(Some(Box::new(move |event: Event<T>| {
+            f(event.data);
+        })));
         EventHandler {
             callback,
             origin: self.context().id,
@@ -485,34 +442,22 @@ impl<'src> ScopeState {
     pub fn listener<T: 'static>(
         &'src self,
         mut callback: impl FnMut(Event<T>) + 'src,
-    ) -> AttributeValue<'src> {
-        // safety: there's no other way to create a dynamicly-dispatched bump box other than alloc + from-raw
-        // This is the suggested way to build a bumpbox
-        //
-        // In theory, we could just use regular boxes
-        let boxed: BumpBox<'src, dyn FnMut(_) + 'src> = unsafe {
-            BumpBox::from_raw(self.bump().alloc(move |event: Event<dyn Any>| {
+    ) -> AttributeValue {
+        AttributeValue::Listener(RefCell::new(Some(Box::new(
+            move |event: Event<dyn Any>| {
                 if let Ok(data) = event.data.downcast::<T>() {
                     callback(Event {
                         propagates: event.propagates,
                         data,
                     });
                 }
-            }))
-        };
-
-        AttributeValue::Listener(RefCell::new(Some(boxed)))
+            },
+        ))))
     }
 
     /// Create a new [`AttributeValue`] with a value that implements [`AnyValue`]
-    pub fn any_value<T: AnyValue>(&'src self, value: T) -> AttributeValue<'src> {
-        // safety: there's no other way to create a dynamicly-dispatched bump box other than alloc + from-raw
-        // This is the suggested way to build a bumpbox
-        //
-        // In theory, we could just use regular boxes
-        let boxed: BumpBox<'src, dyn AnyValue> =
-            unsafe { BumpBox::from_raw(self.bump().alloc(value)) };
-        AttributeValue::Any(RefCell::new(Some(boxed)))
+    pub fn any_value<T: AnyValue>(&'src self, value: T) -> AttributeValue {
+        AttributeValue::Any(RefCell::new(Some(Box::new(value))))
     }
 
     /// Mark this component as suspended and then return None

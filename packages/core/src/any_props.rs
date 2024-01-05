@@ -11,9 +11,9 @@ use std::panic::AssertUnwindSafe;
 /// # Safety
 ///
 /// This should not be implemented outside this module
-pub(crate) unsafe trait AnyProps<'a> {
+pub(crate) unsafe trait AnyProps {
     fn props_ptr(&self) -> *const ();
-    fn render(&'a self, bump: &'a ScopeState) -> RenderReturn<'a>;
+    fn render<'a>(&'a self, bump: &'a ScopeState) -> RenderReturn<'a>;
     unsafe fn memoize(&self, other: &dyn AnyProps) -> bool;
 }
 
@@ -37,7 +37,7 @@ impl<'a, P> VProps<'a, P> {
     }
 }
 
-unsafe impl<'a, P> AnyProps<'a> for VProps<'a, P> {
+unsafe impl<'a, P> AnyProps for VProps<'a, P> {
     fn props_ptr(&self) -> *const () {
         &self.props as *const _ as *const ()
     }

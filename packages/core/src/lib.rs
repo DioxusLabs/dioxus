@@ -5,7 +5,6 @@
 
 mod any_props;
 mod arena;
-mod bump_frame;
 mod create;
 mod diff;
 mod dirty_scope;
@@ -43,7 +42,7 @@ pub(crate) mod innerlude {
     /// An [`Element`] is a possibly-none [`VNode`] created by calling `render` on [`Scope`] or [`ScopeState`].
     ///
     /// An Errored [`Element`] will propagate the error to the nearest error boundary.
-    pub type Element<'a> = Option<VNode<'a>>;
+    pub type Element = Option<VNode>;
 
     /// A [`Component`] is a function that takes a [`Scope`] and returns an [`Element`].
     ///
@@ -96,10 +95,4 @@ pub mod prelude {
         ScopeId, ScopeState, Scoped, TaskId, Template, TemplateAttribute, TemplateNode, Throw,
         VNode, VirtualDom,
     };
-}
-
-pub mod exports {
-    //! Important dependencies that are used by the rest of the library
-    //! Feel free to just add the dependencies in your own Crates.toml
-    pub use bumpalo;
 }

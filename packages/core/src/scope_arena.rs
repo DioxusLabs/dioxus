@@ -1,6 +1,5 @@
 use crate::{
     any_props::AnyProps,
-    bump_frame::BumpFrame,
     innerlude::DirtyScope,
     nodes::RenderReturn,
     scope_context::ScopeContext,
@@ -11,7 +10,7 @@ use crate::{
 impl VirtualDom {
     pub(super) fn new_scope(
         &mut self,
-        props: Box<dyn AnyProps<'static>>,
+        props: Box<dyn AnyProps>,
         name: &'static str,
     ) -> &ScopeState {
         let parent_id = self.runtime.current_scope_id();
@@ -26,9 +25,6 @@ impl VirtualDom {
             context_id: id,
 
             props: Some(props),
-
-            node_arena_1: BumpFrame::new(0),
-            node_arena_2: BumpFrame::new(0),
 
             render_cnt: Default::default(),
             hooks: Default::default(),

@@ -301,7 +301,7 @@ pub fn provide_root_context<T: 'static + Clone>(value: T) -> Option<T> {
 }
 
 /// Suspends the current component
-pub fn suspend() -> Option<Element<'static>> {
+pub fn suspend() -> Option<Element> {
     with_current_scope(|cx| {
         cx.suspend();
     });

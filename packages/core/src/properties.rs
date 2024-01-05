@@ -32,7 +32,7 @@ use crate::innerlude::*;
 ///     data: &'a str
 /// }
 /// ```
-pub trait Properties: Sized + 'static {
+pub trait Properties: Clone + Sized + 'static {
     /// The type of the builder for this component.
     /// Used to create "in-progress" versions of the props.
     type Builder;
@@ -66,7 +66,7 @@ impl EmptyBuilder {
 
 /// This utility function launches the builder method so rsx! and html! macros can use the typed-builder pattern
 /// to initialize a component's props.
-pub fn fc_to_builder<'a, T: Properties + 'a>(_: fn(Scope<'a, T>) -> Element<'a>) -> T::Builder {
+pub fn fc_to_builder<'a, T: Properties + 'a>(_: fn(Scope<'a, T>) -> Element) -> T::Builder {
     T::builder()
 }
 
