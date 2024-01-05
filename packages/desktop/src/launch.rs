@@ -1,12 +1,11 @@
 use crate::{
     app::App,
     desktop_context::{EventData, UserWindowEvent},
-    events::IpcMethod,
+    ipc::IpcMethod,
     Config,
 };
 use dioxus_core::*;
 use tao::event::{Event, StartCause, WindowEvent};
-use tokio::runtime::Builder;
 
 /// Launch the WebView and run the event loop.
 ///
@@ -55,6 +54,7 @@ pub fn launch_cfg(root: Component, config_builder: Config) {
 
 /// Launch the WebView and run the event loop, with configuration and root props.
 ///
+/// If the [`tokio`] feature is enabled, this will also startup and block a tokio runtime using the unconstrained task.
 /// This function will start a multithreaded Tokio runtime as well the WebView event loop. This will block the current thread.
 ///
 /// You can configure the WebView window with a configuration closure
@@ -78,12 +78,24 @@ pub fn launch_cfg(root: Component, config_builder: Config) {
 /// }
 /// ```
 pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) {
-    // We start the tokio runtime *on this thread*
-    // Any future we poll later will use this runtime to spawn tasks and for IO
-    // I would love to just allow dioxus to work with any runtime... but tokio is weird
-    let rt = Builder::new_multi_thread().enable_all().build().unwrap();
-    let _guard = rt.enter();
+    #[cfg(feature = "tokio")]
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .unwrap()
+        .block_on(tokio::task::unconstrained(async move {
+            launch_with_props_blocking(root, props, cfg);
+        }));
 
+    #[cfg(not(feature = "tokio"))]
+    launch_with_props_blocking(root, props, cfg);
+}
+
+/// Launch the WebView and run the event loop, with configuration and root props.
+///
+/// This will block the main thread, and *must* be spawned on the main thread. This function does not assume any runtime
+/// and is equivalent to calling launch_with_props with the tokio feature disabled.
+pub fn launch_with_props_blocking<P: 'static>(root: Component<P>, props: P, cfg: Config) {
     let (event_loop, mut app) = App::new(cfg, props, root);
 
     event_loop.run(move |window_event, event_loop, control_flow| {

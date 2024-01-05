@@ -57,7 +57,8 @@ pub(super) async fn desktop_handler(
             .body(Cow::from(body))
         {
             Ok(response) => {
-                return responder.respond(response);
+                responder.respond(response);
+                return;
             }
             Err(err) => tracing::error!("error building response: {}", err),
         }
@@ -103,7 +104,10 @@ pub(super) async fn desktop_handler(
             .header("Content-Type", content_type)
             .body(Cow::from(asset))
         {
-            Ok(response) => return responder.respond(response),
+            Ok(response) => {
+                responder.respond(response);
+                return;
+            }
             Err(err) => tracing::error!("error building response: {}", err),
         }
     }
@@ -114,6 +118,7 @@ pub(super) async fn desktop_handler(
     {
         Ok(response) => {
             responder.respond(response);
+            return;
         }
         Err(err) => tracing::error!("error building response: {}", err),
     }

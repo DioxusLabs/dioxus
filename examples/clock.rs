@@ -1,7 +1,8 @@
 use dioxus::prelude::*;
 use dioxus_signals::use_signal;
 
-fn main() {
+#[tokio::main]
+async fn main() {
     dioxus_desktop::launch(app);
 }
 
@@ -10,7 +11,7 @@ fn app(cx: Scope) -> Element {
 
     use_future!(cx, || async move {
         loop {
-            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
             count += 1;
             println!("current: {count}");
         }

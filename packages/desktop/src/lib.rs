@@ -11,17 +11,18 @@ mod edits;
 mod element;
 mod escape;
 mod eval;
-mod events;
 mod file_upload;
 mod hooks;
+mod ipc;
 mod menubar;
-#[cfg(any(target_os = "ios", target_os = "android"))]
-mod mobile_shortcut;
 mod protocol;
 mod query;
 mod shortcut;
 mod waker;
 mod webview;
+
+#[cfg(any(target_os = "ios", target_os = "android"))]
+mod mobile_shortcut;
 
 // The main entrypoint for this crate
 pub use launch::*;

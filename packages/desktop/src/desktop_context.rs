@@ -1,4 +1,4 @@
-use crate::events::IpcMessage;
+use crate::ipc::IpcMessage;
 use crate::query::QueryEngine;
 use crate::shortcut::{HotKey, ShortcutId, ShortcutRegistry, ShortcutRegistryError};
 use crate::AssetHandler;

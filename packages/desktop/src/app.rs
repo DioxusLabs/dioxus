@@ -3,30 +3,28 @@ use crate::{
     desktop_context::{EventData, UserWindowEvent, WindowEventHandlers},
     edits::WebviewQueue,
     element::DesktopElement,
-    events::IpcMessage,
     file_upload::FileDialogRequest,
+    ipc::IpcMessage,
     query::QueryResult,
     shortcut::{GlobalHotKeyEvent, ShortcutRegistry},
     webview::WebviewHandler,
 };
 use dioxus_core::{Component, ElementId, VirtualDom};
-use dioxus_html::MountedData;
-use dioxus_html::{native_bind::NativeFileEngine, FormData, HtmlEvent};
+use dioxus_html::{native_bind::NativeFileEngine, FormData, HtmlEvent, MountedData};
 use futures_util::{pin_mut, FutureExt};
-use std::cell::Cell;
-use std::rc::Rc;
-use std::{collections::HashMap, sync::Arc};
-use tao::event_loop::EventLoopBuilder;
-use tao::event_loop::{EventLoop, EventLoopProxy, EventLoopWindowTarget};
-use tao::window::WindowId;
-use tao::{event::Event, event_loop::ControlFlow};
-use wry::WebView;
+use std::{cell::Cell, collections::HashMap, rc::Rc, sync::Arc};
+use tao::{
+    event::Event,
+    event_loop::{ControlFlow, EventLoop, EventLoopBuilder, EventLoopProxy, EventLoopWindowTarget},
+    window::WindowId,
+};
 
-pub struct App<P> {
+pub(crate) struct App<P> {
     // move the props into a cell so we can pop it out later to create the first window
     // iOS panics if we create a window before the event loop is started
     pub(crate) props: Rc<Cell<Option<P>>>,
     pub(crate) cfg: Rc<Cell<Option<Config>>>,
+
     pub(crate) root: Component<P>,
     pub(crate) webviews: HashMap<WindowId, WebviewHandler>,
     pub(crate) event_handlers: WindowEventHandlers,
@@ -310,7 +308,7 @@ impl<P: 'static> App<P> {
 
 /// Different hide implementations per platform
 #[allow(unused)]
-pub fn hide_app_window(webview: &WebView) {
+pub fn hide_app_window(webview: &wry::WebView) {
     #[cfg(target_os = "windows")]
     {
         use wry::application::platform::windows::WindowExtWindows;
