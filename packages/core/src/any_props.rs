@@ -1,9 +1,4 @@
-use crate::{
-    innerlude::Scoped,
-    nodes::RenderReturn,
-    scopes::{Scope, ScopeState},
-    Element,
-};
+use crate::{nodes::RenderReturn, scopes::ScopeState, Element};
 use std::panic::AssertUnwindSafe;
 
 /// A trait that essentially allows VComponentProps to be used generically
@@ -11,24 +6,19 @@ use std::panic::AssertUnwindSafe;
 /// # Safety
 ///
 /// This should not be implemented outside this module
-pub(crate) unsafe trait AnyProps {
-    fn props_ptr(&self) -> *const ();
-    fn render<'a>(&'a self, bump: &'a ScopeState) -> RenderReturn<'a>;
-    unsafe fn memoize(&self, other: &dyn AnyProps) -> bool;
+pub(crate) trait AnyProps {
+    fn render<'a>(&'a self, bump: &'a ScopeState) -> RenderReturn;
+    fn memoize(&self, other: &dyn AnyProps) -> bool;
 }
 
-pub(crate) struct VProps<'a, P> {
-    pub render_fn: fn(Scope<'a, P>) -> Element<'a>,
-    pub memo: unsafe fn(&P, &P) -> bool,
+pub(crate) struct VProps<P> {
+    pub render_fn: fn(P) -> Element,
+    pub memo: fn(&P, &P) -> bool,
     pub props: P,
 }
 
-impl<'a, P> VProps<'a, P> {
-    pub(crate) fn new(
-        render_fn: fn(Scope<'a, P>) -> Element<'a>,
-        memo: unsafe fn(&P, &P) -> bool,
-        props: P,
-    ) -> Self {
+impl<P> VProps<P> {
+    pub(crate) fn new(render_fn: fn(P) -> Element, memo: fn(&P, &P) -> bool, props: P) -> Self {
         Self {
             render_fn,
             memo,
@@ -37,30 +27,19 @@ impl<'a, P> VProps<'a, P> {
     }
 }
 
-unsafe impl<'a, P> AnyProps for VProps<'a, P> {
-    fn props_ptr(&self) -> *const () {
-        &self.props as *const _ as *const ()
-    }
-
+impl<P: Clone> AnyProps for VProps<P> {
     // Safety:
     // this will downcast the other ptr as our swallowed type!
     // you *must* make this check *before* calling this method
     // if your functions are not the same, then you will downcast a pointer into a different type (UB)
-    unsafe fn memoize(&self, other: &dyn AnyProps) -> bool {
-        let real_other: &P = &*(other.props_ptr() as *const _ as *const P);
-        let real_us: &P = &*(self.props_ptr() as *const _ as *const P);
-        (self.memo)(real_us, real_other)
+    fn memoize(&self, other: &dyn AnyProps) -> bool {
+        (self.memo)(self, other)
     }
 
-    fn render(&'a self, cx: &'a ScopeState) -> RenderReturn<'a> {
+    fn render(&self, cx: &ScopeState) -> RenderReturn {
         let res = std::panic::catch_unwind(AssertUnwindSafe(move || {
             // Call the render function directly
-            let scope: &mut Scoped<P> = cx.bump().alloc(Scoped {
-                props: &self.props,
-                scope: cx,
-            });
-
-            (self.render_fn)(scope)
+            (self.render_fn)(self.props.clone())
         }));
 
         match res {

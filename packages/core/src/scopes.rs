@@ -1,7 +1,6 @@
 use crate::{
     any_props::AnyProps,
     any_props::VProps,
-    innerlude::ErrorBoundary,
     innerlude::{DynamicNode, EventHandler, VComponent, VNodeId, VText},
     nodes::{IntoAttributeValue, IntoDynNode, RenderReturn},
     runtime::Runtime,
@@ -16,40 +15,6 @@ use std::{
     rc::Rc,
     sync::Arc,
 };
-
-/// A wrapper around the [`Scoped`] object that contains a reference to the [`ScopeState`] and properties for a given
-/// component.
-///
-/// The [`Scope`] is your handle to the [`crate::VirtualDom`] and the component state. Every component is given its own
-/// [`ScopeState`] and merged with its properties to create a [`Scoped`].
-///
-/// The [`Scope`] handle specifically exists to provide a stable reference to these items for the lifetime of the
-/// component render.
-pub type Scope<'a, T = ()> = &'a Scoped<'a, T>;
-
-// This ScopedType exists because we want to limit the amount of monomorphization that occurs when making inner
-// state type generic over props. When the state is generic, it causes every method to be monomorphized for every
-// instance of Scope<T> in the codebase.
-//
-//
-/// A wrapper around a component's [`ScopeState`] and properties. The [`ScopeState`] provides the majority of methods
-/// for the VirtualDom and component state.
-pub struct Scoped<'a, T = ()> {
-    /// The component's state and handle to the scheduler.
-    ///
-    /// Stores things like the custom bump arena, spawn functions, hooks, and the scheduler.
-    pub scope: &'a ScopeState,
-
-    /// The component's properties.
-    pub props: &'a T,
-}
-
-impl<'a, T> std::ops::Deref for Scoped<'a, T> {
-    type Target = &'a ScopeState;
-    fn deref(&self) -> &Self::Target {
-        &self.scope
-    }
-}
 
 /// A component's unique identifier.
 ///
@@ -300,69 +265,17 @@ impl<'src> ScopeState {
         self.context().remove_future(id);
     }
 
-    /// Take a lazy [`crate::VNode`] structure and actually build it with the context of the efficient [`bumpalo::Bump`] allocator.
-    ///
-    /// ## Example
-    ///
-    /// ```ignore
-    /// fn Component(cx: Scope<Props>) -> Element {
-    ///     // Lazy assemble the VNode tree
-    ///     let lazy_nodes = rsx!("hello world");
-    ///
-    ///     // Actually build the tree and allocate it
-    ///     cx.render(lazy_tree)
-    /// }
-    ///```
-    pub fn render(&'src self, rsx: LazyNodes<'src, '_>) -> Element {
-        let element = rsx.call(self);
-
-        let mut listeners = self.attributes_to_drop_before_render.borrow_mut();
-        for attr in element.dynamic_attrs {
-            match attr.value {
-                // We need to drop listeners before the next render because they may borrow data from the borrowed props which will be dropped
-                AttributeValue::Listener(_) => {
-                    let unbounded = unsafe { std::mem::transmute(attr as *const Attribute) };
-                    listeners.push(unbounded);
-                }
-                // We need to drop any values manually to make sure that their drop implementation is called before the next render
-                AttributeValue::Any(_) => {
-                    let unbounded = unsafe { std::mem::transmute(attr as *const Attribute) };
-                    self.previous_frame().add_attribute_to_drop(unbounded);
-                }
-
-                _ => (),
-            }
-        }
-
-        let mut props = self.borrowed_props.borrow_mut();
-        let mut drop_props = self
-            .previous_frame()
-            .props_to_drop_before_reset
-            .borrow_mut();
-        for node in element.dynamic_nodes {
-            if let DynamicNode::Component(comp) = node {
-                let unbounded = unsafe { std::mem::transmute(comp as *const VComponent) };
-                if !comp.static_props {
-                    props.push(unbounded);
-                }
-                drop_props.push(unbounded);
-            }
-        }
-
-        Some(element)
-    }
-
     /// Create a dynamic text node using [`Arguments`] and the [`ScopeState`]'s internal [`Bump`] allocator
     pub fn text_node(&'src self, args: Arguments) -> DynamicNode {
         DynamicNode::Text(VText {
-            value: self.raw_text(args),
+            value: args.to_string(),
             id: Default::default(),
         })
     }
 
     /// Convert any item that implements [`IntoDynNode`] into a [`DynamicNode`] using the internal [`Bump`] allocator
-    pub fn make_node<'c, I>(&'src self, into: impl IntoDynNode<'src, I> + 'c) -> DynamicNode {
-        into.into_dyn_node(self)
+    pub fn make_node<'c, I>(&'src self, into: impl IntoDynNode<I> + 'c) -> DynamicNode {
+        into.into_dyn_node()
     }
 
     /// Create a new [`Attribute`] from a name, value, namespace, and volatile bool
@@ -372,7 +285,7 @@ impl<'src> ScopeState {
     pub fn attr(
         &'src self,
         name: &'static str,
-        value: impl IntoAttributeValue<'src>,
+        value: impl IntoAttributeValue,
         namespace: Option<&'static str>,
         volatile: bool,
     ) -> Attribute {
@@ -381,7 +294,7 @@ impl<'src> ScopeState {
             namespace,
             volatile,
             mounted_element: Default::default(),
-            value: value.into_value(self.bump()),
+            value: value.into_value(),
         }
     }
 
@@ -399,37 +312,35 @@ impl<'src> ScopeState {
     /// fn(Scope<Props>) -> Element;
     /// async fn(Scope<Props<'_>>) -> Element;
     /// ```
-    pub fn component<'child, P>(
-        &'src self,
-        component: fn(Scope<'child, P>) -> Element,
+    pub fn component<P>(
+        &self,
+        component: fn(P) -> Element,
         props: P,
         fn_name: &'static str,
     ) -> DynamicNode
     where
         // The properties must be valid until the next bump frame
-        P: Properties + 'src,
-        // The current bump allocator frame must outlive the child's borrowed props
-        'src: 'child,
+        P: Properties,
     {
         let vcomp = VProps::new(component, P::memoize, props);
 
         // cast off the lifetime of the render return
-        let as_dyn: Box<dyn AnyProps + '_> = Box::new(vcomp);
-        let extended: Box<dyn AnyProps + 'src> = unsafe { std::mem::transmute(as_dyn) };
+        let as_dyn: Box<dyn AnyProps> = Box::new(vcomp);
+        let extended: Box<dyn AnyProps> = unsafe { std::mem::transmute(as_dyn) };
 
         DynamicNode::Component(VComponent {
             name: fn_name,
             render_fn: component as *const (),
-            props: RefCell::new(Some(extended)),
+            props: extended,
             scope: Default::default(),
         })
     }
 
     /// Create a new [`EventHandler`] from an [`FnMut`]
-    pub fn event_handler<T>(&'src self, f: impl FnMut(T) + 'src) -> EventHandler<'src, T> {
-        let callback = RefCell::new(Some(Box::new(move |event: Event<T>| {
-            f(event.data);
-        })));
+    pub fn event_handler<T>(&self, f: impl FnMut(T)) -> EventHandler<T> {
+        let callback = RefCell::new(Some(Box::new(move |event: T| {
+            f(event);
+        }) as Box<dyn FnMut(T)>));
         EventHandler {
             callback,
             origin: self.context().id,

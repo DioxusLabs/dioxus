@@ -15,7 +15,7 @@ fn random_ns() -> Option<&'static str> {
     }
 }
 
-fn create_random_attribute(attr_idx: &mut usize) -> TemplateAttribute<'static> {
+fn create_random_attribute(attr_idx: &mut usize) -> TemplateAttribute {
     match rand::random::<u8>() % 2 {
         0 => TemplateAttribute::Static {
             name: Box::leak(format!("attr{}", rand::random::<usize>()).into_boxed_str()),
@@ -238,7 +238,7 @@ struct BorrowedDepthProps<'a> {
     inner: DepthProps,
 }
 
-fn create_random_element_borrowed<'a>(cx: Scope<'a, BorrowedDepthProps<'a>>) -> Element<'a> {
+fn create_random_element_borrowed<'a>(cx: Scope<'a, BorrowedDepthProps<'a>>) -> Element {
     println!("{}", cx.props.borrow);
     let bump = cx.bump();
     let allocated = bump.alloc(Scoped { scope: cx, props: &cx.props.inner });

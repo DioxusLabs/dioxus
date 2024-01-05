@@ -11,7 +11,7 @@ use crate::{
     nodes::{Template, TemplateId},
     runtime::{Runtime, RuntimeGuard},
     scopes::{ScopeId, ScopeState},
-    AttributeValue, Element, Event, Scope, VNode,
+    AttributeValue, Element, Event, VNode,
 };
 use futures_util::{pin_mut, StreamExt};
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -76,7 +76,7 @@ use std::{
 /// }
 ///
 /// #[component]
-/// fn Title<'a>(cx: Scope<'a>, children: Element<'a>) -> Element {
+/// fn Title<'a>(cx: Scope<'a>, children: Element) -> Element {
 ///     cx.render(rsx! {
 ///         div { id: "title", children }
 ///     })
@@ -224,7 +224,7 @@ impl VirtualDom {
     /// ```
     ///
     /// Note: the VirtualDom is not progressed, you must either "run_with_deadline" or use "rebuild" to progress it.
-    pub fn new(app: fn(Scope) -> Element) -> Self {
+    pub fn new(app: fn() -> Element) -> Self {
         Self::new_with_props(app, ())
     }
 
@@ -258,7 +258,7 @@ impl VirtualDom {
     /// let mut dom = VirtualDom::new_with_props(Example, SomeProps { name: "jane" });
     /// let mutations = dom.rebuild();
     /// ```
-    pub fn new_with_props<P: 'static>(root: fn(Scope<P>) -> Element, root_props: P) -> Self {
+    pub fn new_with_props<P: 'static>(root: fn(P) -> Element, root_props: P) -> Self {
         let (tx, rx) = futures_channel::mpsc::unbounded();
         let scheduler = Scheduler::new(tx);
         let mut dom = Self {
@@ -567,7 +567,7 @@ impl VirtualDom {
     /// ```
     pub fn rebuild(&mut self) -> Mutations {
         let _runtime = RuntimeGuard::new(self.runtime.clone());
-        match unsafe { self.run_scope(ScopeId::ROOT).extend_lifetime_ref() } {
+        match unsafe { self.run_scope(ScopeId::ROOT) } {
             // Rebuilding implies we append the created elements to the root
             RenderReturn::Ready(node) => {
                 let m = self.create_scope(ScopeId::ROOT, node);

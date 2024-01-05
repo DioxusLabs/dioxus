@@ -14,10 +14,10 @@ fn app(cx: Scope) -> Element {
 
 #[derive(Props)]
 struct Testing<'a> {
-    borrowed: &'a RefCell<Vec<Element<'a>>>,
+    borrowed: &'a RefCell<Vec<Element>>,
 }
 
-fn unsafe_child_component<'a>(cx: Scope<'a, Testing<'a>>) -> Element<'a> {
+fn unsafe_child_component<'a>(cx: Scope<'a, Testing<'a>>) -> Element {
     let Testing { borrowed } = cx.props;
     let borrowed_temporary_data =
         cx.use_hook(|| String::from("This data is only valid for the lifetime of the child"));

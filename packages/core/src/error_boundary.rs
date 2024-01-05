@@ -1,7 +1,7 @@
 use crate::{
     scope_context::{consume_context, current_scope_id, schedule_update_any},
-    Element, IntoDynNode, LazyNodes, Properties, Scope, ScopeId, ScopeState, Template,
-    TemplateAttribute, TemplateNode, VNode,
+    Element, IntoDynNode, Properties, ScopeId, ScopeState, Template, TemplateAttribute,
+    TemplateNode, VNode,
 };
 use std::{
     any::{Any, TypeId},
@@ -262,42 +262,40 @@ impl<T> Throw for Option<T> {
     }
 }
 
-pub struct ErrorHandler(Box<dyn Fn(CapturedError) -> LazyNodes<'a, 'a>>);
-impl<'a, F: Fn(CapturedError) -> LazyNodes<'a, 'a> + 'a> From<F> for ErrorHandler<'a> {
+pub struct ErrorHandler(Box<dyn Fn(CapturedError) -> Element>);
+impl<F: Fn(CapturedError) -> Element> From<F> for ErrorHandler {
     fn from(value: F) -> Self {
         Self(Box::new(value))
     }
 }
-fn default_handler<'a>(error: CapturedError) -> LazyNodes<'a, 'a> {
-    LazyNodes::new(move |__cx: &ScopeState| -> VNode {
-        static TEMPLATE: Template = Template {
-            name: "error_handle.rs:42:5:884",
-            roots: &[TemplateNode::Element {
-                tag: "pre",
-                namespace: None,
-                attrs: &[TemplateAttribute::Static {
-                    name: "color",
-                    namespace: Some("style"),
-                    value: "red",
-                }],
-                children: &[TemplateNode::DynamicText { id: 0usize }],
+fn default_handler(error: CapturedError) -> Element {
+    static TEMPLATE: Template = Template {
+        name: "error_handle.rs:42:5:884",
+        roots: &[TemplateNode::Element {
+            tag: "pre",
+            namespace: None,
+            attrs: &[TemplateAttribute::Static {
+                name: "color",
+                namespace: Some("style"),
+                value: "red",
             }],
-            node_paths: &[&[0u8, 0u8]],
-            attr_paths: &[],
-        };
-        VNode {
-            parent: Default::default(),
-            stable_id: Default::default(),
-            key: None,
-            template: std::cell::Cell::new(TEMPLATE),
-            root_ids: Vec::with_capacity(1usize).into(),
-            dynamic_nodes: __cx
-                .bump()
-                .alloc([__cx.text_node(format_args!("{0}", error))]),
-            dynamic_attrs: __cx.bump().alloc([]),
-        }
+            children: &[TemplateNode::DynamicText { id: 0usize }],
+        }],
+        node_paths: &[&[0u8, 0u8]],
+        attr_paths: &[],
+    };
+    Some(VNode {
+        parent: Default::default(),
+        stable_id: Default::default(),
+        key: None,
+        template: std::cell::Cell::new(TEMPLATE),
+        root_ids: Vec::with_capacity(1usize).into(),
+        dynamic_nodes: vec![error.to_string().into_dyn_node()],
+        dynamic_attrs: Default::default(),
     })
 }
+
+#[derive(Clone)]
 pub struct ErrorBoundaryProps {
     children: Element,
     handle_error: ErrorHandler,
@@ -334,7 +332,7 @@ impl Properties for ErrorBoundaryProps {
     fn builder() -> Self::Builder {
         ErrorBoundaryProps::builder()
     }
-    unsafe fn memoize(&self, _: &Self) -> bool {
+    fn memoize(&self, _: &Self) -> bool {
         false
     }
 }
@@ -354,16 +352,15 @@ impl<T> ErrorBoundaryPropsBuilder_Optional<T> for (T,) {
     }
 }
 #[allow(dead_code, non_camel_case_types, missing_docs)]
-impl<'a, __handle_error> ErrorBoundaryPropsBuilder<'a, ((), __handle_error)> {
+impl<__handle_error> ErrorBoundaryPropsBuilder<((), __handle_error)> {
     pub fn children(
         self,
-        children: Element<'a>,
-    ) -> ErrorBoundaryPropsBuilder<'a, ((Element<'a>,), __handle_error)> {
+        children: Element,
+    ) -> ErrorBoundaryPropsBuilder<((Element,), __handle_error)> {
         let children = (children,);
         let (_, handle_error) = self.fields;
         ErrorBoundaryPropsBuilder {
             fields: (children, handle_error),
-            _phantom: self._phantom,
         }
     }
 }
@@ -372,26 +369,25 @@ impl<'a, __handle_error> ErrorBoundaryPropsBuilder<'a, ((), __handle_error)> {
 pub enum ErrorBoundaryPropsBuilder_Error_Repeated_field_children {}
 #[doc(hidden)]
 #[allow(dead_code, non_camel_case_types, missing_docs)]
-impl<'a, __handle_error> ErrorBoundaryPropsBuilder<'a, ((Element<'a>,), __handle_error)> {
+impl<__handle_error> ErrorBoundaryPropsBuilder<((Element,), __handle_error)> {
     #[deprecated(note = "Repeated field children")]
     pub fn children(
         self,
         _: ErrorBoundaryPropsBuilder_Error_Repeated_field_children,
-    ) -> ErrorBoundaryPropsBuilder<'a, ((Element<'a>,), __handle_error)> {
+    ) -> ErrorBoundaryPropsBuilder<((Element,), __handle_error)> {
         self
     }
 }
 #[allow(dead_code, non_camel_case_types, missing_docs)]
-impl<'a, __children> ErrorBoundaryPropsBuilder<'a, (__children, ())> {
+impl<__children> ErrorBoundaryPropsBuilder<(__children, ())> {
     pub fn handle_error(
         self,
-        handle_error: impl ::core::convert::Into<ErrorHandler<'a>>,
-    ) -> ErrorBoundaryPropsBuilder<'a, (__children, (ErrorHandler<'a>,))> {
+        handle_error: impl ::core::convert::Into<ErrorHandler>,
+    ) -> ErrorBoundaryPropsBuilder<(__children, (ErrorHandler,))> {
         let handle_error = (handle_error.into(),);
         let (children, _) = self.fields;
         ErrorBoundaryPropsBuilder {
             fields: (children, handle_error),
-            _phantom: self._phantom,
         }
     }
 }
@@ -400,23 +396,22 @@ impl<'a, __children> ErrorBoundaryPropsBuilder<'a, (__children, ())> {
 pub enum ErrorBoundaryPropsBuilder_Error_Repeated_field_handle_error {}
 #[doc(hidden)]
 #[allow(dead_code, non_camel_case_types, missing_docs)]
-impl<'a, __children> ErrorBoundaryPropsBuilder<'a, (__children, (ErrorHandler<'a>,))> {
+impl<__children> ErrorBoundaryPropsBuilder<(__children, (ErrorHandler,))> {
     #[deprecated(note = "Repeated field handle_error")]
     pub fn handle_error(
         self,
         _: ErrorBoundaryPropsBuilder_Error_Repeated_field_handle_error,
-    ) -> ErrorBoundaryPropsBuilder<'a, (__children, (ErrorHandler<'a>,))> {
+    ) -> ErrorBoundaryPropsBuilder<(__children, (ErrorHandler,))> {
         self
     }
 }
 #[allow(dead_code, non_camel_case_types, missing_docs)]
 impl<
-        'a,
-        __handle_error: ErrorBoundaryPropsBuilder_Optional<ErrorHandler<'a>>,
-        __children: ErrorBoundaryPropsBuilder_Optional<Element<'a>>,
-    > ErrorBoundaryPropsBuilder<'a, (__children, __handle_error)>
+        __handle_error: ErrorBoundaryPropsBuilder_Optional<ErrorHandler>,
+        __children: ErrorBoundaryPropsBuilder_Optional<Element>,
+    > ErrorBoundaryPropsBuilder<(__children, __handle_error)>
 {
-    pub fn build(self) -> ErrorBoundaryProps<'a> {
+    pub fn build(self) -> ErrorBoundaryProps {
         let (children, handle_error) = self.fields;
         let children = ErrorBoundaryPropsBuilder_Optional::into_value(children, || {
             ::core::default::Default::default()
@@ -453,7 +448,7 @@ impl<
 /// They are similar to `try/catch` in JavaScript, but they only catch errors in the tree below them.
 /// Error boundaries are quick to implement, but it can be useful to individually handle errors in your components to provide a better user experience when you know that an error is likely to occur.
 #[allow(non_upper_case_globals, non_snake_case)]
-pub fn ErrorBoundary<'a>(cx: Scope<'a, ErrorBoundaryProps<'a>>) -> Element {
+pub fn ErrorBoundary(cx: ErrorBoundaryProps) -> Element {
     let error_boundary = use_error_boundary(cx);
     match error_boundary.take_error() {
         Some(error) => cx.render((cx.props.handle_error.0)(error)),
@@ -470,11 +465,8 @@ pub fn ErrorBoundary<'a>(cx: Scope<'a, ErrorBoundaryProps<'a>>) -> Element {
                 stable_id: Default::default(),
                 key: None,
                 template: std::cell::Cell::new(TEMPLATE),
-                root_ids: bumpalo::collections::Vec::with_capacity_in(1usize, __cx.bump()).into(),
-                dynamic_nodes: __cx.bump().alloc([{
-                    let ___nodes = (&cx.props.children).into_dyn_node(__cx);
-                    ___nodes
-                }]),
+                root_ids: Vec::with_capacity(1usize).into(),
+                dynamic_nodes: vec![(&cx.props.children).into_dyn_node()],
                 dynamic_attrs: __cx.bump().alloc([]),
             }
         }),

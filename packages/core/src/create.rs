@@ -63,11 +63,11 @@ fn sorting() {
     );
 }
 
-impl<'b> VirtualDom {
+impl VirtualDom {
     /// Create a new template [`VNode`] and write it to the [`Mutations`] buffer.
     ///
     /// This method pushes the ScopeID to the internal scopestack and returns the number of nodes created.
-    pub(crate) fn create_scope(&mut self, scope: ScopeId, template: &'b VNode) -> usize {
+    pub(crate) fn create_scope(&mut self, scope: ScopeId, template: &VNode) -> usize {
         self.runtime.scope_stack.borrow_mut().push(scope);
         let nodes = self.create(template);
         self.runtime.scope_stack.borrow_mut().pop();
@@ -75,7 +75,7 @@ impl<'b> VirtualDom {
     }
 
     /// Create this template and write its mutations
-    pub(crate) fn create(&mut self, node: &'b VNode) -> usize {
+    pub(crate) fn create(&mut self, node: &VNode) -> usize {
         // check for a overriden template
         #[cfg(debug_assertions)]
         {
@@ -182,7 +182,7 @@ impl<'b> VirtualDom {
         1
     }
 
-    fn write_dynamic_root(&mut self, template: &'b VNode, idx: usize) -> usize {
+    fn write_dynamic_root(&mut self, template: &VNode, idx: usize) -> usize {
         use DynamicNode::*;
         match &template.dynamic_nodes[idx] {
             node @ Component { .. } | node @ Fragment(_) => {
@@ -232,7 +232,7 @@ impl<'b> VirtualDom {
     /// We want to make sure we write these nodes while on top of the root
     fn write_element_root(
         &mut self,
-        template: &'b VNode,
+        template: &VNode,
         root_idx: usize,
         dynamic_attrs: &mut Peekable<impl Iterator<Item = (usize, &'static [u8])>>,
         dynamic_nodes_iter: &mut Peekable<impl Iterator<Item = ((usize, usize), &'static [u8])>>,
@@ -269,7 +269,7 @@ impl<'b> VirtualDom {
         dynamic_nodes_iter: &mut Peekable<impl Iterator<Item = ((usize, usize), &'static [u8])>>,
         dynamic_nodes: &[(usize, &'static [u8])],
         root_idx: u8,
-        template: &'b VNode,
+        template: &VNode,
     ) {
         let (start, end) = match collect_dyn_node_range(dynamic_nodes_iter, root_idx) {
             Some((a, b)) => (a, b),
@@ -306,7 +306,7 @@ impl<'b> VirtualDom {
         attrs: &mut Peekable<impl Iterator<Item = (usize, &'static [u8])>>,
         root_idx: u8,
         root: ElementId,
-        node: &'b VNode,
+        node: &VNode,
     ) {
         while let Some((mut attr_id, path)) =
             attrs.next_if(|(_, p)| p.first().copied() == Some(root_idx))
@@ -327,9 +327,9 @@ impl<'b> VirtualDom {
 
     fn write_attribute(
         &mut self,
-        template: &'b VNode,
+        template: &VNode,
         idx: usize,
-        attribute: &'b crate::Attribute<'b>,
+        attribute: &crate::Attribute,
         id: ElementId,
     ) {
         // Make sure we set the attribute's associated id
@@ -355,7 +355,7 @@ impl<'b> VirtualDom {
             }
             _ => {
                 // Safety: we promise not to re-alias this text later on after committing it to the mutation
-                let value: BorrowedAttributeValue<'b> = (&attribute.value).into();
+                let value: BorrowedAttributeValue = (&attribute.value).into();
                 let unbounded_value = unsafe { std::mem::transmute(value) };
 
                 self.mutations.push(SetAttribute {
@@ -476,35 +476,28 @@ impl<'b> VirtualDom {
         }
     }
 
-    pub(crate) fn create_dynamic_node(
-        &mut self,
-        parent: ElementRef,
-        node: &'b DynamicNode<'b>,
-    ) -> usize {
+    pub(crate) fn create_dynamic_node(&mut self, parent: ElementRef, node: &DynamicNode) -> usize {
         use DynamicNode::*;
         match node {
             Text(text) => self.create_dynamic_text(parent, text),
             Placeholder(place) => self.create_placeholder(place, parent),
             Component(component) => self.create_component_node(Some(parent), component),
-            Fragment(frag) => self.create_children(*frag, Some(parent)),
+            Fragment(frag) => self.create_children(frag, Some(parent)),
         }
     }
 
-    fn create_dynamic_text(&mut self, parent: ElementRef, text: &'b VText) -> usize {
+    fn create_dynamic_text(&mut self, parent: ElementRef, text: &VText) -> usize {
         // Allocate a dynamic element reference for this text node
         let new_id = self.next_element();
 
         // Make sure the text node is assigned to the correct element
         text.id.set(Some(new_id));
 
-        // Safety: we promise not to re-alias this text later on after committing it to the mutation
-        let value = unsafe { std::mem::transmute(text.value) };
-
         // Add the mutation to the list
         self.mutations.push(HydrateText {
             id: new_id,
             path: &parent.path.path[1..],
-            value,
+            value: &text.value,
         });
 
         // Since we're hydrating an existing node, we don't create any new nodes
@@ -538,7 +531,7 @@ impl<'b> VirtualDom {
     pub(super) fn create_component_node(
         &mut self,
         parent: Option<ElementRef>,
-        component: &'b VComponent,
+        component: &VComponent,
     ) -> usize {
         use RenderReturn::*;
 
@@ -547,7 +540,7 @@ impl<'b> VirtualDom {
 
         component.scope.set(Some(scope));
 
-        match unsafe { self.run_scope(scope).extend_lifetime_ref() } {
+        match self.run_scope(scope) {
             // Create the component's root element
             Ready(t) => {
                 self.assign_boundary_ref(parent, t);
@@ -561,7 +554,6 @@ impl<'b> VirtualDom {
     fn load_scope_from_vcomponent(&mut self, component: &VComponent) -> ScopeId {
         component
             .props
-            .take()
             .map(|props| {
                 let unbounded_props: Box<dyn AnyProps> = unsafe { std::mem::transmute(props) };
                 self.new_scope(unbounded_props, component.name).context().id
@@ -578,7 +570,7 @@ impl<'b> VirtualDom {
         1
     }
 
-    fn set_slot(&mut self, slot: &'b Cell<Option<ElementId>>) -> ElementId {
+    fn set_slot(&mut self, slot: &Cell<Option<ElementId>>) -> ElementId {
         let id = self.next_element();
         slot.set(Some(id));
         id

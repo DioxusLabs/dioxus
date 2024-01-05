@@ -133,12 +133,12 @@ impl<T: std::fmt::Debug> std::fmt::Debug for Event<T> {
 /// }
 ///
 /// ```
-pub struct EventHandler<'bump, T = ()> {
+pub struct EventHandler<T = ()> {
     pub(crate) origin: ScopeId,
-    pub(super) callback: RefCell<Option<ExternalListenerCallback<'bump, T>>>,
+    pub(super) callback: RefCell<Option<ExternalListenerCallback<T>>>,
 }
 
-impl<T> Default for EventHandler<'_, T> {
+impl<T> Default for EventHandler<T> {
     fn default() -> Self {
         Self {
             origin: ScopeId::ROOT,
@@ -147,9 +147,9 @@ impl<T> Default for EventHandler<'_, T> {
     }
 }
 
-type ExternalListenerCallback<'bump, T> = Box<dyn FnMut(T)>;
+type ExternalListenerCallback<T> = Box<dyn FnMut(T)>;
 
-impl<T> EventHandler<'_, T> {
+impl<T> EventHandler< T> {
     /// Call this event handler with the appropriate event type
     ///
     /// This borrows the event using a RefCell. Recursively calling a listener will cause a panic.

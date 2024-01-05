@@ -1,9 +1,5 @@
 use crate::innerlude::{ElementRef, VNodeId};
-use crate::{
-    any_props::AnyProps, arena::ElementId, Element, Event, LazyNodes, ScopeId, ScopeState,
-};
-use bumpalo::boxed::Box as BumpBox;
-use bumpalo::Bump;
+use crate::{any_props::AnyProps, arena::ElementId, Element, Event, ScopeId, ScopeState};
 use std::{
     any::{Any, TypeId},
     cell::{Cell, RefCell},
@@ -91,8 +87,8 @@ impl VNode {
         key: Option<String>,
         template: Template<'static>,
         root_ids: Vec<ElementId>,
-        dynamic_nodes: &'a [DynamicNode],
-        dynamic_attrs: &'a [Attribute],
+        dynamic_nodes: Vec<DynamicNode>,
+        dynamic_attrs: Vec<Attribute>,
     ) -> Self {
         Self {
             key,
@@ -113,7 +109,7 @@ impl VNode {
     /// Load a dynamic root at the given index
     ///
     /// Returns [`None`] if the root is actually a static node (Element/Text)
-    pub fn dynamic_root(&self, idx: usize) -> Option<&'a DynamicNode> {
+    pub fn dynamic_root(&self, idx: usize) -> Option<&DynamicNode> {
         match &self.template.get().roots[idx] {
             TemplateNode::Element { .. } | TemplateNode::Text { text: _ } => None,
             TemplateNode::Dynamic { id } | TemplateNode::DynamicText { id } => {
@@ -297,7 +293,7 @@ pub enum TemplateNode {
 /// A node created at runtime
 ///
 /// This node's index in the DynamicNode list on VNode should match its repsective `Dynamic` index
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum DynamicNode {
     /// A component node
     ///
@@ -322,7 +318,7 @@ pub enum DynamicNode {
     ///
     /// Note that this is not a list of dynamic nodes. These must be VNodes and created through conditional rendering
     /// or iterators.
-    Fragment(&'static [VNode]),
+    Fragment(Vec<VNode>),
 }
 
 impl Default for DynamicNode {
@@ -331,6 +327,7 @@ impl Default for DynamicNode {
     }
 }
 
+#[derive(Clone)]
 /// An instance of a child component
 pub struct VComponent {
     /// The name of this component
@@ -344,7 +341,7 @@ pub struct VComponent {
     /// It is possible that components get folded at compile time, so these shouldn't be really used as a key
     pub(crate) render_fn: *const (),
 
-    pub(crate) props: RefCell<Option<Box<dyn AnyProps>>>,
+    pub(crate) props: Box<dyn AnyProps>,
 }
 
 impl<'a> VComponent {
@@ -662,89 +659,78 @@ impl<T: Any + PartialEq + 'static> AnyValue for T {
 }
 
 /// A trait that allows various items to be converted into a dynamic node for the rsx macro
-pub trait IntoDynNode<'a, A = ()> {
+pub trait IntoDynNode<A = ()> {
     /// Consume this item along with a scopestate and produce a DynamicNode
     ///
     /// You can use the bump alloactor of the scopestate to creat the dynamic node
-    fn into_dyn_node(self, cx: &'a ScopeState) -> DynamicNode;
+    fn into_dyn_node(self) -> DynamicNode;
 }
 
-impl<'a> IntoDynNode<'a> for () {
-    fn into_dyn_node(self, _cx: &'a ScopeState) -> DynamicNode {
+impl IntoDynNode for () {
+    fn into_dyn_node(self) -> DynamicNode {
         DynamicNode::default()
     }
 }
-impl<'a> IntoDynNode<'a> for VNode {
-    fn into_dyn_node(self, _cx: &'a ScopeState) -> DynamicNode {
-        DynamicNode::Fragment(_cx.bump().alloc([self]))
+impl IntoDynNode for VNode {
+    fn into_dyn_node(self) -> DynamicNode {
+        DynamicNode::Fragment(vec![self])
     }
 }
 
-impl<'a> IntoDynNode<'a> for DynamicNode {
-    fn into_dyn_node(self, _cx: &'a ScopeState) -> DynamicNode {
+impl IntoDynNode for DynamicNode {
+    fn into_dyn_node(self) -> DynamicNode {
         self
     }
 }
 
-impl<'a, T: IntoDynNode<'a>> IntoDynNode<'a> for Option<T> {
-    fn into_dyn_node(self, _cx: &'a ScopeState) -> DynamicNode {
+impl<T: IntoDynNode> IntoDynNode for Option<T> {
+    fn into_dyn_node(self) -> DynamicNode {
         match self {
-            Some(val) => val.into_dyn_node(_cx),
+            Some(val) => val.into_dyn_node(),
             None => DynamicNode::default(),
         }
     }
 }
 
-impl<'a> IntoDynNode<'a> for &Element {
-    fn into_dyn_node(self, _cx: &'a ScopeState) -> DynamicNode {
+impl IntoDynNode for &Element {
+    fn into_dyn_node(self) -> DynamicNode {
         match self.as_ref() {
-            Some(val) => val.clone().into_dyn_node(_cx),
+            Some(val) => val.clone().into_dyn_node(),
             _ => DynamicNode::default(),
         }
     }
 }
 
-impl<'a, 'b> IntoDynNode<'a> for LazyNodes<'a, 'b> {
-    fn into_dyn_node(self, cx: &'a ScopeState) -> DynamicNode {
-        DynamicNode::Fragment(cx.bump().alloc([cx.render(self).unwrap()]))
-    }
-}
-
-impl<'a, 'b> IntoDynNode<'b> for &'a str {
-    fn into_dyn_node(self, cx: &'b ScopeState) -> DynamicNode {
+impl IntoDynNode for &str {
+    fn into_dyn_node(self) -> DynamicNode {
         DynamicNode::Text(VText {
-            value: cx.bump().alloc_str(self),
+            value: self.to_string(),
             id: Default::default(),
         })
     }
 }
 
-impl IntoDynNode<'_> for String {
-    fn into_dyn_node(self, cx: &ScopeState) -> DynamicNode {
+impl IntoDynNode for String {
+    fn into_dyn_node(self) -> DynamicNode {
         DynamicNode::Text(VText {
-            value: cx.bump().alloc_str(&self),
+            value: self,
             id: Default::default(),
         })
     }
 }
 
-impl<'b> IntoDynNode<'b> for Arguments<'_> {
-    fn into_dyn_node(self, cx: &'b ScopeState) -> DynamicNode {
-        cx.text_node(self)
+impl<'b> IntoDynNode for Arguments<'_> {
+    fn into_dyn_node(self) -> DynamicNode {
+        DynamicNode::Text(VText {
+            value: self.to_string(),
+            id: Default::default(),
+        })
     }
 }
 
-impl<'a> IntoDynNode<'a> for &'a VNode {
-    fn into_dyn_node(self, _cx: &'a ScopeState) -> DynamicNode {
-        DynamicNode::Fragment(_cx.bump().alloc([VNode {
-            parent: self.parent.clone(),
-            stable_id: self.stable_id.clone(),
-            template: self.template.clone(),
-            root_ids: self.root_ids.clone(),
-            key: self.key,
-            dynamic_nodes: self.dynamic_nodes,
-            dynamic_attrs: self.dynamic_attrs,
-        }]))
+impl IntoDynNode for &VNode {
+    fn into_dyn_node(self) -> DynamicNode {
+        DynamicNode::Fragment(vec![self.clone()])
     }
 }
 
@@ -759,97 +745,88 @@ impl<'a> IntoVNode for VNode {
 impl<'a> IntoVNode for Element {
     fn into_vnode(self) -> VNode {
         match self {
-            Some(val) => val.into_vnode(cx),
+            Some(val) => val.into_vnode(),
             _ => VNode::empty().unwrap(),
         }
-    }
-}
-impl<'a, 'b> IntoVNode for LazyNodes<'a, 'b> {
-    fn into_vnode(self) -> VNode {
-        cx.render(self).unwrap()
     }
 }
 
 // Note that we're using the E as a generic but this is never crafted anyways.
 pub struct FromNodeIterator;
-impl<'a, T, I> IntoDynNode<'a, FromNodeIterator> for T
+impl<T, I> IntoDynNode<FromNodeIterator> for T
 where
     T: Iterator<Item = I>,
     I: IntoVNode,
 {
-    fn into_dyn_node(self, cx: &'a ScopeState) -> DynamicNode {
-        let mut nodes = bumpalo::collections::Vec::new_in(cx.bump());
+    fn into_dyn_node(self) -> DynamicNode {
+        let mut children: Vec<_> = self.into_iter().map(|node| node.into_vnode()).collect();
 
-        nodes.extend(self.into_iter().map(|node| node.into_vnode(cx)));
-
-        match nodes.into_bump_slice() {
-            children if children.is_empty() => DynamicNode::default(),
-            children => DynamicNode::Fragment(children),
+        if children.is_empty() {
+            DynamicNode::default()
+        } else {
+            DynamicNode::Fragment(children)
         }
     }
 }
 
 /// A value that can be converted into an attribute value
-pub trait IntoAttributeValue<'a> {
+pub trait IntoAttributeValue {
     /// Convert into an attribute value
-    fn into_value(self, bump: &'a Bump) -> AttributeValue<'a>;
+    fn into_value(self) -> AttributeValue;
 }
 
-impl<'a> IntoAttributeValue<'a> for AttributeValue<'a> {
-    fn into_value(self, _: &'a Bump) -> AttributeValue<'a> {
+impl<'a> IntoAttributeValue for AttributeValue {
+    fn into_value(self) -> AttributeValue {
         self
     }
 }
 
-impl<'a> IntoAttributeValue<'a> for &'a str {
-    fn into_value(self, _: &'a Bump) -> AttributeValue<'a> {
+impl<'a> IntoAttributeValue for &'a str {
+    fn into_value(self) -> AttributeValue {
+        AttributeValue::Text(self.to_string())
+    }
+}
+
+impl<'a> IntoAttributeValue for String {
+    fn into_value(self) -> AttributeValue {
         AttributeValue::Text(self)
     }
 }
 
-impl<'a> IntoAttributeValue<'a> for String {
-    fn into_value(self, cx: &'a Bump) -> AttributeValue<'a> {
-        AttributeValue::Text(cx.alloc_str(&self))
-    }
-}
-
-impl<'a> IntoAttributeValue<'a> for f64 {
-    fn into_value(self, _: &'a Bump) -> AttributeValue<'a> {
+impl<'a> IntoAttributeValue for f64 {
+    fn into_value(self) -> AttributeValue {
         AttributeValue::Float(self)
     }
 }
 
-impl<'a> IntoAttributeValue<'a> for i64 {
-    fn into_value(self, _: &'a Bump) -> AttributeValue<'a> {
+impl<'a> IntoAttributeValue for i64 {
+    fn into_value(self) -> AttributeValue {
         AttributeValue::Int(self)
     }
 }
 
-impl<'a> IntoAttributeValue<'a> for bool {
-    fn into_value(self, _: &'a Bump) -> AttributeValue<'a> {
+impl<'a> IntoAttributeValue for bool {
+    fn into_value(self) -> AttributeValue {
         AttributeValue::Bool(self)
     }
 }
 
-impl<'a> IntoAttributeValue<'a> for Arguments<'_> {
-    fn into_value(self, bump: &'a Bump) -> AttributeValue<'a> {
-        use bumpalo::core_alloc::fmt::Write;
-        let mut str_buf = bumpalo::collections::String::new_in(bump);
-        str_buf.write_fmt(self).unwrap();
-        AttributeValue::Text(str_buf.into_bump_str())
+impl<'a> IntoAttributeValue for Arguments<'_> {
+    fn into_value(self) -> AttributeValue {
+        AttributeValue::Text(self.to_string())
     }
 }
 
-impl<'a> IntoAttributeValue<'a> for BumpBox<'a, dyn AnyValue> {
-    fn into_value(self, _: &'a Bump) -> AttributeValue<'a> {
+impl IntoAttributeValue for Box<dyn AnyValue> {
+    fn into_value(self) -> AttributeValue {
         AttributeValue::Any(RefCell::new(Some(self)))
     }
 }
 
-impl<'a, T: IntoAttributeValue<'a>> IntoAttributeValue<'a> for Option<T> {
-    fn into_value(self, bump: &'a Bump) -> AttributeValue<'a> {
+impl<'a, T: IntoAttributeValue> IntoAttributeValue for Option<T> {
+    fn into_value(self) -> AttributeValue {
         match self {
-            Some(val) => val.into_value(bump),
+            Some(val) => val.into_value(),
             None => AttributeValue::None,
         }
     }

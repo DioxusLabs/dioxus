@@ -102,7 +102,7 @@ impl VirtualDom {
 
         if recursive {
             if let Some(root) = self.scopes[id.0].try_root_node() {
-                if let RenderReturn::Ready(node) = unsafe { root.extend_lifetime_ref() } {
+                if let RenderReturn::Ready(node) = root {
                     self.drop_scope_inner(node)
                 }
             }
@@ -131,7 +131,6 @@ impl VirtualDom {
                 if let Some(f) = c.scope.get() {
                     self.drop_scope(f, true);
                 }
-                c.props.take();
             }
             DynamicNode::Fragment(nodes) => {
                 nodes.iter().for_each(|node| self.drop_scope_inner(node))
@@ -165,9 +164,6 @@ impl VirtualDom {
             match comp.scope.get() {
                 Some(child) if child != scope_id => self.ensure_drop_safety(child),
                 _ => (),
-            }
-            if let Ok(mut props) = comp.props.try_borrow_mut() {
-                *props = None;
             }
         }
         let scope = &self.scopes[scope_id.0];

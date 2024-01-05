@@ -11,7 +11,6 @@ mod dirty_scope;
 mod error_boundary;
 mod events;
 mod fragment;
-mod lazynodes;
 mod mutations;
 mod nodes;
 mod properties;
@@ -28,7 +27,6 @@ pub(crate) mod innerlude {
     pub use crate::error_boundary::*;
     pub use crate::events::*;
     pub use crate::fragment::*;
-    pub use crate::lazynodes::*;
     pub use crate::mutations::*;
     pub use crate::nodes::RenderReturn;
     pub use crate::nodes::*;
@@ -71,15 +69,14 @@ pub(crate) mod innerlude {
     ///     Example {}
     /// )
     /// ```
-    pub type Component<P = ()> = fn(Scope<P>) -> Element;
+    pub type Component<P = ()> = fn(P) -> Element;
 }
 
 pub use crate::innerlude::{
     fc_to_builder, vdom_is_rendering, AnyValue, Attribute, AttributeValue, BorrowedAttributeValue,
     CapturedError, Component, DynamicNode, Element, ElementId, Event, Fragment, IntoDynNode,
-    LazyNodes, Mutation, Mutations, Properties, RenderReturn, Scope, ScopeId, ScopeState, Scoped,
-    TaskId, Template, TemplateAttribute, TemplateNode, VComponent, VNode, VPlaceholder, VText,
-    VirtualDom,
+    Mutation, Mutations, Properties, RenderReturn, ScopeId, ScopeState, TaskId, Template,
+    TemplateAttribute, TemplateNode, VComponent, VNode, VPlaceholder, VText, VirtualDom,
 };
 
 /// The purpose of this module is to alleviate imports of many common types
@@ -91,8 +88,7 @@ pub mod prelude {
         provide_context, provide_context_to_scope, provide_root_context, push_future,
         remove_future, schedule_update_any, spawn, spawn_forever, suspend, use_error_boundary,
         AnyValue, Component, Element, ErrorBoundary, Event, EventHandler, Fragment,
-        IntoAttributeValue, IntoDynNode, LazyNodes, Properties, Runtime, RuntimeGuard, Scope,
-        ScopeId, ScopeState, Scoped, TaskId, Template, TemplateAttribute, TemplateNode, Throw,
-        VNode, VirtualDom,
+        IntoAttributeValue, IntoDynNode, Properties, Runtime, RuntimeGuard, ScopeId, ScopeState,
+        TaskId, Template, TemplateAttribute, TemplateNode, Throw, VNode, VirtualDom,
     };
 }

@@ -19,7 +19,7 @@ fn nested_passthru_creates() {
     }
 
     #[component]
-    fn PassThru<'a>(cx: Scope<'a>, children: Element<'a>) -> Element {
+    fn PassThru<'a>(cx: Scope<'a>, children: Element) -> Element {
         cx.render(rsx!(children))
     }
 
@@ -59,7 +59,7 @@ fn nested_passthru_creates_add() {
     }
 
     #[component]
-    fn ChildComp<'a>(cx: Scope, children: Element<'a>) -> Element {
+    fn ChildComp<'a>(cx: Scope, children: Element) -> Element {
         cx.render(rsx! { children })
     }
 

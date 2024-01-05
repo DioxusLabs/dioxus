@@ -142,7 +142,7 @@ fn create_components() {
 
     #[derive(Props)]
     struct ChildProps<'a> {
-        children: Element<'a>,
+        children: Element,
     }
 
     fn Child<'a>(cx: Scope<'a, ChildProps<'a>>) -> Element {

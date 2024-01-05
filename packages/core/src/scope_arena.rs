@@ -62,7 +62,7 @@ impl VirtualDom {
             let props: &dyn AnyProps = std::mem::transmute(props);
 
             let _span = tracing::trace_span!("render", scope = %scope.context().name);
-            props.render(scope).extend_lifetime()
+            props.render(scope)
         };
 
         let scope = &self.scopes[scope_id.0];
@@ -93,7 +93,7 @@ impl VirtualDom {
         }
 
         // rebind the lifetime now that its stored internally
-        let result = unsafe { allocated.extend_lifetime_ref() };
+        let result = unsafe { allocated };
 
         self.runtime.scope_stack.borrow_mut().pop();
 

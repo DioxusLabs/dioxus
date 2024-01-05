@@ -66,7 +66,7 @@ impl EmptyBuilder {
 
 /// This utility function launches the builder method so rsx! and html! macros can use the typed-builder pattern
 /// to initialize a component's props.
-pub fn fc_to_builder<'a, T: Properties + 'a>(_: fn(Scope<'a, T>) -> Element) -> T::Builder {
+pub fn fc_to_builder<T: Properties>(_: fn(T) -> Element) -> T::Builder {
     T::builder()
 }
 
