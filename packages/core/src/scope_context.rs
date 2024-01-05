@@ -269,7 +269,6 @@ impl ScopeContext {
     ///     cx.use_hook(|| println!("Hello, world!"));
     /// }
     /// ```
-    #[allow(clippy::mut_from_ref)]
     pub fn use_hook<State: Clone + 'static>(&self, initializer: impl FnOnce() -> State) -> State {
         let cur_hook = self.hook_index.get();
         let mut hooks = self.hooks.try_borrow_mut().expect("The hook list is already borrowed: This error is likely caused by trying to use a hook inside a hook which violates the rules of hooks.");
@@ -397,4 +396,31 @@ pub fn spawn_forever(fut: impl Future<Output = ()> + 'static) -> Option<TaskId> 
 /// This drops the task immediately.
 pub fn remove_future(id: TaskId) {
     with_current_scope(|cx| cx.remove_future(id));
+}
+
+/// Store a value between renders. The foundational hook for all other hooks.
+///
+/// Accepts an `initializer` closure, which is run on the first use of the hook (typically the initial render). The return value of this closure is stored for the lifetime of the component, and a mutable reference to it is provided on every render as the return value of `use_hook`.
+///
+/// When the component is unmounted (removed from the UI), the value is dropped. This means you can return a custom type and provide cleanup code by implementing the [`Drop`] trait
+///
+/// # Example
+///
+/// ```
+/// use dioxus_core::ScopeState;
+///
+/// // prints a greeting on the initial render
+/// pub fn use_hello_world() {
+///     once(|| println!("Hello, world!"));
+/// }
+/// ```
+pub fn once<State: Clone + 'static>(initializer: impl FnOnce() -> State) -> State {
+    with_current_scope(|cx| cx.use_hook(initializer)).expect("to be in a dioxus runtime")
+}
+
+/// Get the current render since the inception of this component
+///
+/// This can be used as a helpful diagnostic when debugging hooks/renders, etc
+pub fn generation() -> Option<usize> {
+    with_current_scope(|cx| Some(cx.generation())).expect("to be in a dioxus runtime")
 }
