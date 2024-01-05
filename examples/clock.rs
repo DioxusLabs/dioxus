@@ -1,8 +1,7 @@
 use dioxus::prelude::*;
 use dioxus_signals::use_signal;
 
-#[tokio::main]
-async fn main() {
+fn main() {
     dioxus_desktop::launch(app);
 }
 
