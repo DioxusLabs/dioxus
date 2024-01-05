@@ -26,7 +26,7 @@ fn app(cx: Scope) -> Element {
             button {
                 onclick: move |_| {
                     let dom = VirtualDom::new_with_props(compose, ComposeProps { app_tx: tx.clone() });
-                    window.new_window(dom, Default::default());
+                    dioxus_desktop::window().new_window(dom, Default::default());
                 },
                 "Click to compose a new email"
             }
