@@ -310,7 +310,7 @@ impl<'src> ScopeState {
     }
 
     /// Create a new [`EventHandler`] from an [`FnMut`]
-    pub fn event_handler<T>(&self, f: impl FnMut(T)) -> EventHandler<T> {
+    pub fn event_handler<T>(&self, f: impl FnMut(T) + 'static) -> EventHandler<T> {
         let callback = RefCell::new(Some(Box::new(move |event: T| {
             f(event);
         }) as Box<dyn FnMut(T)>));
@@ -324,8 +324,8 @@ impl<'src> ScopeState {
     ///
     /// The callback must be confined to the lifetime of the ScopeState
     pub fn listener<T: 'static>(
-        &'src self,
-        mut callback: impl FnMut(Event<T>) + 'src,
+        &self,
+        mut callback: impl FnMut(Event<T>) + 'static,
     ) -> AttributeValue {
         AttributeValue::Listener(RefCell::new(Box::new(move |event: Event<dyn Any>| {
             if let Ok(data) = event.data.downcast::<T>() {

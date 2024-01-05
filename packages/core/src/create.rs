@@ -408,11 +408,7 @@ impl VirtualDom {
     }
 
     /// Insert a new template into the VirtualDom's template registry
-    pub(crate) fn register_template_first_byte_index(
-        &mut self,
-        mut template: Template<'static>,
-        to: &mut impl WriteMutations,
-    ) {
+    pub(crate) fn register_template_first_byte_index(&mut self, mut template: Template) {
         // First, make sure we mark the template as seen, regardless if we process it
         let (path, _) = template.name.rsplit_once(':').unwrap();
         if let Some((_, old_template)) = self
@@ -435,7 +431,7 @@ impl VirtualDom {
 
         // If it's all dynamic nodes, then we don't need to register it
         if !template.is_completely_dynamic() {
-            to.register_template(template);
+            self.queued_templates.push(template);
         }
     }
 
@@ -444,7 +440,7 @@ impl VirtualDom {
     #[allow(unused_mut)]
     pub(crate) fn register_template(
         &mut self,
-        mut template: Template<'static>,
+        mut template: Template,
         to: &mut impl WriteMutations,
     ) {
         let (path, byte_index) = template.name.rsplit_once(':').unwrap();

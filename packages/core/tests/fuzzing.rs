@@ -130,7 +130,7 @@ enum DynamicNodeType {
     Other,
 }
 
-fn create_random_template(name: &'static str) -> (Template<'static>, Vec<DynamicNodeType>) {
+fn create_random_template(name: &'static str) -> (Template, Vec<DynamicNodeType>) {
     let mut dynamic_node_type = Vec::new();
     let mut template_idx = 0;
     let mut attr_idx = 0;

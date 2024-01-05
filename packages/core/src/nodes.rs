@@ -55,7 +55,7 @@ pub struct VNodeInner {
     pub root_ids: RefCell<Vec<ElementId>>,
 
     /// The static nodes and static descriptor of the template
-    pub template: Cell<Template<'static>>,
+    pub template: Cell<Template>,
 
     /// The dynamic parts of the template
     pub dynamic_nodes: Vec<DynamicNode>,
@@ -106,7 +106,7 @@ impl VNode {
     /// Create a new VNode
     pub fn new(
         key: Option<String>,
-        template: Template<'static>,
+        template: Template,
         root_ids: Vec<ElementId>,
         dynamic_nodes: Vec<DynamicNode>,
         dynamic_attrs: Vec<Attribute>,
@@ -144,7 +144,7 @@ impl VNode {
 /// ways, with the suggested approach being the unique code location (file, line, col, etc).
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, Copy, PartialEq, Hash, Eq, PartialOrd, Ord)]
-pub struct Template<'a> {
+pub struct Template {
     /// The name of the template. This must be unique across your entire program for template diffing to work properly
     ///
     /// If two templates have the same name, it's likely that Dioxus will panic when diffing.
@@ -152,13 +152,13 @@ pub struct Template<'a> {
         feature = "serialize",
         serde(deserialize_with = "deserialize_string_leaky")
     )]
-    pub name: &'a str,
+    pub name: &'static str,
 
     /// The list of template nodes that make up the template
     ///
     /// Unlike react, calls to `rsx!` can have multiple roots. This list supports that paradigm.
     #[cfg_attr(feature = "serialize", serde(deserialize_with = "deserialize_leaky"))]
-    pub roots: &'a [TemplateNode],
+    pub roots: &'static [TemplateNode],
 
     /// The paths of each node relative to the root of the template.
     ///
@@ -168,7 +168,7 @@ pub struct Template<'a> {
         feature = "serialize",
         serde(deserialize_with = "deserialize_bytes_leaky")
     )]
-    pub node_paths: &'a [&'a [u8]],
+    pub node_paths: &'static [&'static [u8]],
 
     /// The paths of each dynamic attribute relative to the root of the template
     ///
@@ -178,7 +178,7 @@ pub struct Template<'a> {
         feature = "serialize",
         serde(deserialize_with = "deserialize_bytes_leaky")
     )]
-    pub attr_paths: &'a [&'a [u8]],
+    pub attr_paths: &'static [&'static [u8]],
 }
 
 #[cfg(feature = "serialize")]
@@ -232,7 +232,7 @@ where
     Ok(deserialized.map(|deserialized| &*Box::leak(deserialized.into_boxed_str())))
 }
 
-impl<'a> Template<'a> {
+impl Template {
     /// Is this template worth caching at all, since it's completely runtime?
     ///
     /// There's no point in saving templates that are completely dynamic, since they'll be recreated every time anyway.

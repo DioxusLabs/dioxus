@@ -6,7 +6,6 @@ use crate::{
     innerlude::{
         DirtyScope, ElementPath, ElementRef, VComponent, VPlaceholder, VText, WriteMutations,
     },
-    mutations::Mutation,
     nodes::RenderReturn,
     nodes::{DynamicNode, VNode},
     scopes::ScopeId,
@@ -63,15 +62,10 @@ impl VirtualDom {
         *p.parent.borrow_mut() = l.parent.borrow().clone();
         to.create_placeholder(id);
 
-        self.remove_node(l, true, to);
+        to.insert_nodes_before(id, 1);
 
-        // We want to optimize the replace case to use one less mutation if possible
-        // Since mutations are done in reverse, the last node removed will be the first in the stack
-        // Instead of *just* removing it, we can use the replace mutation
-        match self.mutations.edits.pop().unwrap() {
-            Mutation::Remove { id } => self.mutations.push(Mutation::ReplaceWith { id, m: 1 }),
-            _ => panic!("Expected remove mutation from remove_node"),
-        };
+        // TODO: Instead of *just* removing it, we can use the replace mutation
+        self.remove_node(l, true, to);
     }
 
     fn diff_node(
@@ -250,17 +244,12 @@ impl VirtualDom {
         parent: Option<ElementRef>,
         to: &mut impl WriteMutations,
     ) {
-        let m = self.create_component_node(parent, right);
+        let m = self.create_component_node(parent, right, to);
 
+        // TODO: Instead of *just* removing it, we can use the replace mutation
         self.remove_component_node(left, true, to);
 
-        // We want to optimize the replace case to use one less mutation if possible
-        // Since mutations are done in reverse, the last node removed will be the first in the stack
-        // Instead of *just* removing it, we can use the replace mutation
-        match self.mutations.edits.pop().unwrap() {
-            Mutation::Remove { id } => self.mutations.push(Mutation::ReplaceWith { id, m }),
-            at => panic!("Expected remove mutation from remove_node {:#?}", at),
-        };
+        todo!()
     }
 
     /// Lightly diff the two templates, checking only their roots.
@@ -656,7 +645,7 @@ impl VirtualDom {
                 let new_idx = idx + last + 1;
                 let old_index = new_index_to_old_index[new_idx];
                 if old_index == u32::MAX as usize {
-                    nodes_created += self.create(new_node);
+                    nodes_created += self.create(new_node, to);
                 } else {
                     self.diff_node(&old[old_index], new_node, to);
                     nodes_created += self.push_all_real_nodes(new_node, to);
@@ -679,7 +668,7 @@ impl VirtualDom {
                     let new_idx = idx + next + 1;
                     let old_index = new_index_to_old_index[new_idx];
                     if old_index == u32::MAX as usize {
-                        nodes_created += self.create(new_node);
+                        nodes_created += self.create(new_node, to);
                     } else {
                         self.diff_node(&old[old_index], new_node, to);
                         nodes_created += self.push_all_real_nodes(new_node, to);
@@ -702,7 +691,7 @@ impl VirtualDom {
             for (idx, new_node) in new[..first_lis].iter().enumerate() {
                 let old_index = new_index_to_old_index[idx];
                 if old_index == u32::MAX as usize {
-                    nodes_created += self.create(new_node);
+                    nodes_created += self.create(new_node, to);
                 } else {
                     self.diff_node(&old[old_index], new_node, to);
                     nodes_created += self.push_all_real_nodes(new_node, to);
@@ -768,7 +757,7 @@ impl VirtualDom {
             .into_iter()
             .map(|child| {
                 self.assign_boundary_ref(parent, child);
-                self.create(child)
+                self.create(child, to)
             })
             .sum()
     }
@@ -807,7 +796,7 @@ impl VirtualDom {
     ) {
         let m = self.create_children(r, Some(parent), to);
         let id = l.id.get().unwrap();
-        to.replace_with(id, m);
+        to.replace_node_with(id, m);
         self.reclaim(id);
     }
 
@@ -820,15 +809,10 @@ impl VirtualDom {
     ) {
         let m = self.create_children(right, parent, to);
 
-        self.remove_node(left, true, to);
+        // TODO: Instead of *just* removing it, we can use the replace mutation
+        to.insert_nodes_before(self.find_first_element(left), m);
 
-        // We want to optimize the replace case to use one less mutation if possible
-        // Since mutations are done in reverse, the last node removed will be the first in the stack
-        // Instead of *just* removing it, we can use the replace mutation
-        match self.mutations.edits.pop().unwrap() {
-            Mutation::Remove { id } => self.mutations.push(Mutation::ReplaceWith { id, m }),
-            _ => panic!("Expected remove mutation from remove_node"),
-        };
+        self.remove_node(left, true, to);
     }
 
     fn node_to_placeholder(
@@ -846,15 +830,22 @@ impl VirtualDom {
 
         to.create_placeholder(placeholder);
 
-        self.remove_nodes(l, to);
+        self.replace_nodes(l, 1, to);
+    }
 
+    /// Replace many nodes with a number of nodes on the stack
+    fn replace_nodes(&mut self, nodes: &[VNode], m: usize, to: &mut impl WriteMutations) {
         // We want to optimize the replace case to use one less mutation if possible
         // Since mutations are done in reverse, the last node removed will be the first in the stack
-        // Instead of *just* removing it, we can use the replace mutation
-        match self.mutations.edits.pop().unwrap() {
-            Mutation::Remove { id } => self.mutations.push(Mutation::ReplaceWith { id, m: 1 }),
-            _ => panic!("Expected remove mutation from remove_node"),
-        };
+        // TODO: Instead of *just* removing it, we can use the replace mutation
+        to.insert_nodes_before(self.find_first_element(&nodes[0]), m);
+
+        debug_assert!(
+            !nodes.is_empty(),
+            "replace_nodes must have at least one node"
+        );
+
+        self.remove_nodes(&nodes, to);
     }
 
     /// Remove these nodes from the dom
@@ -869,7 +860,7 @@ impl VirtualDom {
     fn remove_node(&mut self, node: &VNode, gen_muts: bool, to: &mut impl WriteMutations) {
         // Clean up any attributes that have claimed a static node as dynamic for mount/unmounta
         // Will not generate mutations!
-        self.reclaim_attributes(node, to);
+        self.reclaim_attributes(node);
 
         // Remove the nested dynamic nodes
         // We don't generate mutations for these, as they will be removed by the parent (in the next line)
@@ -895,7 +886,7 @@ impl VirtualDom {
         }
     }
 
-    fn reclaim_attributes(&mut self, node: &VNode, to: &mut impl WriteMutations) {
+    fn reclaim_attributes(&mut self, node: &VNode) {
         let mut id = None;
         for (idx, attr) in node.dynamic_attrs.iter().enumerate() {
             // We'll clean up the root nodes either way, so don't worry

@@ -15,7 +15,7 @@ use crate::{arena::ElementId, AttributeValue, ScopeId, Template};
 /// Mutations are the only link between the RealDOM and the VirtualDOM.
 pub trait WriteMutations {
     /// Register a template with the renderer
-    fn register_template(&mut self, template: Template<'static>);
+    fn register_template(&mut self, template: Template);
 
     /// Add these m children to the target element
     ///
@@ -333,7 +333,7 @@ pub struct MutationsVec {
     /// Any templates encountered while diffing the DOM.
     ///
     /// These must be loaded into a cache before applying the edits
-    pub templates: Vec<Template<'static>>,
+    pub templates: Vec<Template>,
 
     /// Any mutations required to patch the renderer to match the layout of the VirtualDom
     pub edits: Vec<Mutation>,
@@ -355,7 +355,7 @@ impl MutationsVec {
 }
 
 impl WriteMutations for MutationsVec {
-    fn register_template(&mut self, template: Template<'static>) {
+    fn register_template(&mut self, template: Template) {
         self.templates.push(template)
     }
 
@@ -468,7 +468,7 @@ impl WriteMutations for MutationsVec {
 pub struct NoOpMutations;
 
 impl WriteMutations for NoOpMutations {
-    fn register_template(&mut self, template: Template<'static>) {}
+    fn register_template(&mut self, template: Template) {}
 
     fn append_children(&mut self, id: ElementId, m: usize) {}
 

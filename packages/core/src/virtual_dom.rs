@@ -6,10 +6,9 @@ use crate::{
     any_props::{BoxedAnyProps, VProps},
     arena::ElementId,
     innerlude::{
-        DirtyScope, ElementRef, ErrorBoundary, Mutations, NoOpMutations, Scheduler, SchedulerMsg,
+        DirtyScope, ElementRef, ErrorBoundary, NoOpMutations, Scheduler, SchedulerMsg,
         WriteMutations,
     },
-    mutations::Mutation,
     nodes::RenderReturn,
     nodes::{Template, TemplateId},
     runtime::{Runtime, RuntimeGuard},
@@ -186,7 +185,10 @@ pub struct VirtualDom {
     pub(crate) dirty_scopes: BTreeSet<DirtyScope>,
 
     // Maps a template path to a map of byteindexes to templates
-    pub(crate) templates: FxHashMap<TemplateId, FxHashMap<usize, Template<'static>>>,
+    pub(crate) templates: FxHashMap<TemplateId, FxHashMap<usize, Template>>,
+
+    // Templates changes that are queued for the next render
+    pub(crate) queued_templates: Vec<Template>,
 
     // The element ids that are used in the renderer
     pub(crate) elements: Slab<Option<ElementRef>>,
@@ -263,6 +265,7 @@ impl VirtualDom {
             scopes: Default::default(),
             dirty_scopes: Default::default(),
             templates: Default::default(),
+            queued_templates: Default::default(),
             elements: Default::default(),
             suspended_scopes: Default::default(),
         };
@@ -361,7 +364,6 @@ impl VirtualDom {
             _ => return,
         };
         let mut parent_node = Some(parent_path);
-        let mut listeners = vec![];
 
         // We will clone this later. The data itself is wrapped in RC to be used in callbacks if required
         let uievent = Event {
@@ -373,6 +375,8 @@ impl VirtualDom {
         if bubbles {
             // Loop through each dynamic attribute (in a depth first order) in this template before moving up to the template's parent.
             while let Some(path) = parent_node {
+                let mut listeners = vec![];
+
                 let el_ref = &path.element;
                 let node_template = el_ref.template.get();
                 let target_path = path.path;
@@ -397,7 +401,7 @@ impl VirtualDom {
 
                 // Now that we've accumulated all the parent attributes for the target element, call them in reverse order
                 // We check the bubble state between each call to see if the event has been stopped from bubbling
-                for listener in listeners.drain(..).rev() {
+                for listener in listeners.into_iter().rev() {
                     if let AttributeValue::Listener(listener) = listener {
                         let origin = path.scope;
                         self.runtime.scope_stack.borrow_mut().push(origin);
@@ -505,7 +509,7 @@ impl VirtualDom {
     /// The caller must ensure that the template refrences the same dynamic attributes and nodes as the original template.
     ///
     /// This will only replace the the parent template, not any nested templates.
-    pub fn replace_template(&mut self, template: Template<'static>) {
+    pub fn replace_template(&mut self, template: Template) {
         self.register_template_first_byte_index(template);
         // iterating a slab is very inefficient, but this is a rare operation that will only happen during development so it's fine
         for (_, scope) in self.scopes.iter() {
@@ -545,8 +549,9 @@ impl VirtualDom {
     /// apply_edits(edits);
     /// ```
     pub fn rebuild(&mut self, to: &mut impl WriteMutations) {
+        self.flush_templates(to);
         let _runtime = RuntimeGuard::new(self.runtime.clone());
-        match unsafe { self.run_scope(ScopeId::ROOT) } {
+        match self.run_scope(ScopeId::ROOT) {
             // Rebuilding implies we append the created elements to the root
             RenderReturn::Ready(node) => {
                 let m = self.create_scope(ScopeId::ROOT, &node, to);
@@ -565,6 +570,7 @@ impl VirtualDom {
     /// Render whatever the VirtualDom has ready as fast as possible without requiring an executor to progress
     /// suspended subtrees.
     pub fn render_immediate(&mut self, to: &mut impl WriteMutations) {
+        self.flush_templates(to);
         // Build a waker that won't wake up since our deadline is already expired when it's polled
         let waker = futures_util::task::noop_waker();
         let mut cx = std::task::Context::from_waker(&waker);
@@ -605,6 +611,7 @@ impl VirtualDom {
         deadline: impl Future<Output = ()>,
         to: &mut impl WriteMutations,
     ) {
+        self.flush_templates(to);
         pin_mut!(deadline);
 
         self.process_events();
@@ -652,6 +659,13 @@ impl VirtualDom {
     /// Get the current runtime
     pub fn runtime(&self) -> Rc<Runtime> {
         self.runtime.clone()
+    }
+
+    /// Flush any queued template changes
+    pub fn flush_templates(&mut self, to: &mut impl WriteMutations) {
+        for template in self.queued_templates.drain(..) {
+            to.register_template(template);
+        }
     }
 }
 
