@@ -993,7 +993,7 @@ impl VirtualDom {
             .expect("VComponents to always have a scope");
 
         // Remove the component from the dom
-        match unsafe { self.get_scope(scope).unwrap().root_node() } {
+        match self.get_scope(scope).unwrap().root_node() {
             RenderReturn::Ready(t) => self.remove_node(t, gen_muts, to),
             RenderReturn::Aborted(placeholder) => {
                 self.remove_placeholder(placeholder, gen_muts, to)
@@ -1012,7 +1012,7 @@ impl VirtualDom {
             Some(Placeholder(t)) => t.id.get().unwrap(),
             Some(Component(comp)) => {
                 let scope = comp.scope.get().unwrap();
-                match unsafe { self.get_scope(scope).unwrap().root_node() } {
+                match self.get_scope(scope).unwrap().root_node() {
                     RenderReturn::Ready(t) => self.find_first_element(t),
                     _ => todo!("cannot handle nonstandard nodes"),
                 }
@@ -1028,7 +1028,7 @@ impl VirtualDom {
             Some(Placeholder(t)) => t.id.get().unwrap(),
             Some(Component(comp)) => {
                 let scope = comp.scope.get().unwrap();
-                match unsafe { self.get_scope(scope).unwrap().root_node() } {
+                match self.get_scope(scope).unwrap().root_node() {
                     RenderReturn::Ready(t) => self.find_last_element(t),
                     _ => todo!("cannot handle nonstandard nodes"),
                 }

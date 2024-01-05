@@ -549,7 +549,7 @@ impl VirtualDom {
         match unsafe { self.run_scope(ScopeId::ROOT) } {
             // Rebuilding implies we append the created elements to the root
             RenderReturn::Ready(node) => {
-                let m = self.create_scope(ScopeId::ROOT, &node);
+                let m = self.create_scope(ScopeId::ROOT, &node, to);
                 to.append_children(ElementId(0), m);
             }
             // If an error occurs, we should try to render the default error component and context where the error occured

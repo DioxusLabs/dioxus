@@ -34,7 +34,7 @@ impl VirtualDom {
     pub(crate) fn run_scope(&mut self, scope_id: ScopeId) -> RenderReturn {
         self.runtime.scope_stack.borrow_mut().push(scope_id);
 
-        let new_nodes = unsafe {
+        let new_nodes = {
             let scope = &self.scopes[scope_id.0];
 
             let context = scope.context();
