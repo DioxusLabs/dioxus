@@ -1,4 +1,4 @@
-use crate::webview::WebviewHandler;
+use crate::webview::WebviewInstance;
 use dioxus_core::Mutations;
 use dioxus_core::{BorrowedAttributeValue, Template, TemplateAttribute, TemplateNode};
 use dioxus_html::event_bubbles;
@@ -14,7 +14,7 @@ use std::{
 
 use wry::RequestAsyncResponder;
 
-pub(crate) type WebviewQueue = Rc<RefCell<Vec<WebviewHandler>>>;
+pub(crate) type WebviewQueue = Rc<RefCell<Vec<WebviewInstance>>>;
 
 /// This handles communication between the requests that the webview makes and the interpreter. The interpreter
 /// constantly makes long running requests to the webview to get any edits that should be made to the DOM almost like

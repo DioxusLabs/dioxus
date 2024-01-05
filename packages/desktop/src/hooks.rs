@@ -23,7 +23,7 @@ pub fn use_wry_event_handler(
         let id = desktop.create_wry_event_handler(handler);
 
         WryEventHandler {
-            handlers: desktop.event_handlers.clone(),
+            handlers: desktop.shared.event_handlers.clone(),
             id,
         }
     })

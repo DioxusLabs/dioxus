@@ -102,7 +102,7 @@ pub fn launch_with_props_blocking<P: 'static>(root: Component<P>, props: P, cfg:
         app.tick(&window_event, event_loop);
 
         match window_event {
-            Event::NewEvents(StartCause::Init) => app.handle_start_cause_init(event_loop),
+            Event::NewEvents(StartCause::Init) => app.handle_start_cause_init(),
             Event::WindowEvent {
                 event, window_id, ..
             } => match event {

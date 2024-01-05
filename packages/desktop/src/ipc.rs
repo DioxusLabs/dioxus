@@ -1,13 +1,15 @@
-//! Convert a serialized event to an event trigger
-
 use serde::{Deserialize, Serialize};
 
+/// A message struct that manages the communication between the webview and the eventloop code
+///
+/// This needs to be serializable across the JS boundary, so the method names and structs are sensitive.
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct IpcMessage {
     method: String,
     params: serde_json::Value,
 }
 
+/// A set of known messages that we need to respond to
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub enum IpcMethod<'a> {
     FileDialog,
@@ -21,7 +23,7 @@ pub enum IpcMethod<'a> {
 impl IpcMessage {
     pub(crate) fn method(&self) -> IpcMethod {
         match self.method.as_str() {
-            // todo: this is a misspelling
+            // todo: this is a misspelling, needs to be fixed
             "file_diolog" => IpcMethod::FileDialog,
             "user_event" => IpcMethod::UserEvent,
             "query" => IpcMethod::Query,

@@ -7,8 +7,9 @@ use crate::{
     ipc::IpcMessage,
     query::QueryResult,
     shortcut::{GlobalHotKeyEvent, ShortcutRegistry},
-    webview::WebviewHandler,
+    webview::WebviewInstance,
 };
+use crossbeam_channel::Receiver;
 use dioxus_core::{Component, ElementId, VirtualDom};
 use dioxus_html::{native_bind::NativeFileEngine, FormData, HtmlEvent, MountedData};
 use futures_util::{pin_mut, FutureExt};
@@ -21,20 +22,28 @@ use tao::{
 
 pub(crate) struct App<P> {
     // move the props into a cell so we can pop it out later to create the first window
-    // iOS panics if we create a window before the event loop is started
-    pub(crate) props: Rc<Cell<Option<P>>>,
-    pub(crate) cfg: Rc<Cell<Option<Config>>>,
+    // iOS panics if we create a window before the event loop is started, so we toss them into a cell
+    pub(crate) props: Cell<Option<P>>,
+    pub(crate) cfg: Cell<Option<Config>>,
 
-    pub(crate) root: Component<P>,
-    pub(crate) webviews: HashMap<WindowId, WebviewHandler>,
-    pub(crate) event_handlers: WindowEventHandlers,
-    pub(crate) queue: WebviewQueue,
-    pub(crate) shortcut_manager: ShortcutRegistry,
-    pub(crate) global_hotkey_channel: crossbeam_channel::Receiver<GlobalHotKeyEvent>,
-    pub(crate) proxy: EventLoopProxy<UserWindowEvent>,
-    pub(crate) window_behavior: WindowCloseBehaviour,
+    // Stuff we need mutable access to
     pub(crate) control_flow: ControlFlow,
     pub(crate) is_visible_before_start: bool,
+    pub(crate) root: Component<P>,
+    pub(crate) webviews: HashMap<WindowId, WebviewInstance>,
+    pub(crate) window_behavior: WindowCloseBehaviour,
+
+    pub(crate) shared: SharedContext,
+}
+
+#[derive(Clone)]
+pub struct SharedContext {
+    pub(crate) event_handlers: WindowEventHandlers,
+    pub(crate) pending_webviews: WebviewQueue,
+    pub(crate) shortcut_manager: ShortcutRegistry,
+    pub(crate) global_hotkey_channel: Receiver<GlobalHotKeyEvent>,
+    pub(crate) proxy: EventLoopProxy<UserWindowEvent>,
+    pub(crate) target: EventLoopWindowTarget<UserWindowEvent>,
 }
 
 impl<P: 'static> App<P> {
@@ -46,14 +55,17 @@ impl<P: 'static> App<P> {
             window_behavior: cfg.last_window_close_behaviour,
             is_visible_before_start: true,
             webviews: HashMap::new(),
-            event_handlers: WindowEventHandlers::default(),
-            queue: WebviewQueue::default(),
-            shortcut_manager: ShortcutRegistry::new(),
-            global_hotkey_channel: GlobalHotKeyEvent::receiver().clone(),
-            proxy: event_loop.create_proxy(),
-            props: Rc::new(Cell::new(Some(props))),
-            cfg: Rc::new(Cell::new(Some(cfg))),
             control_flow: ControlFlow::Wait,
+            props: Cell::new(Some(props)),
+            cfg: Cell::new(Some(cfg)),
+            shared: SharedContext {
+                event_handlers: WindowEventHandlers::default(),
+                pending_webviews: WebviewQueue::default(),
+                shortcut_manager: ShortcutRegistry::new(),
+                global_hotkey_channel: GlobalHotKeyEvent::receiver().clone(),
+                proxy: event_loop.create_proxy(),
+                target: event_loop.clone(),
+            },
         };
 
         #[cfg(all(feature = "hot-reload", debug_assertions))]
@@ -69,18 +81,21 @@ impl<P: 'static> App<P> {
     ) {
         self.control_flow = ControlFlow::Wait;
 
-        self.event_handlers.apply_event(window_event, event_loop);
+        self.shared
+            .event_handlers
+            .apply_event(window_event, event_loop);
 
         _ = self
+            .shared
             .global_hotkey_channel
             .try_recv()
-            .map(|event| self.shortcut_manager.call_handlers(event));
+            .map(|event| self.shared.shortcut_manager.call_handlers(event));
     }
 
     #[cfg(all(feature = "hot-reload", debug_assertions))]
     pub fn connect_hotreload(&mut self) {
-        let proxy = self.proxy.clone();
         dioxus_hot_reload::connect({
+            let proxy = self.shared.proxy.clone();
             move |template| {
                 let _ = proxy.send_event(UserWindowEvent(
                     EventData::HotReloadEvent(template),
@@ -92,10 +107,13 @@ impl<P: 'static> App<P> {
 
     //
     pub fn handle_new_window(&mut self) {
-        for handler in self.queue.borrow_mut().drain(..) {
+        for handler in self.shared.pending_webviews.borrow_mut().drain(..) {
             let id = handler.desktop_context.window.id();
             self.webviews.insert(id, handler);
-            _ = self.proxy.send_event(UserWindowEvent(EventData::Poll, id));
+            _ = self
+                .shared
+                .proxy
+                .send_event(UserWindowEvent(EventData::Poll, id));
         }
     }
 
@@ -136,28 +154,25 @@ impl<P: 'static> App<P> {
         }
     }
 
-    pub fn handle_start_cause_init(&mut self, target: &EventLoopWindowTarget<UserWindowEvent>) {
+    pub fn handle_start_cause_init(&mut self) {
         let props = self.props.take().unwrap();
         let cfg = self.cfg.take().unwrap();
 
-        let dom = VirtualDom::new_with_props(self.root, props);
-
         self.is_visible_before_start = cfg.window.window.visible;
 
-        let handler = crate::webview::create_new_window(
+        let handler = WebviewInstance::new(
             cfg,
-            dom,
-            target,
-            &self.proxy,
-            &self.queue,
-            &self.event_handlers,
-            self.shortcut_manager.clone(),
+            VirtualDom::new_with_props(self.root, props),
+            self.shared.clone(),
         );
 
         let id = handler.desktop_context.window.id();
         self.webviews.insert(id, handler);
 
-        _ = self.proxy.send_event(UserWindowEvent(EventData::Poll, id));
+        _ = self
+            .shared
+            .proxy
+            .send_event(UserWindowEvent(EventData::Poll, id));
     }
 
     pub fn handle_browser_open(&mut self, msg: IpcMessage) {

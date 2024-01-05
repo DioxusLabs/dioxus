@@ -1,10 +1,10 @@
-use crate::ipc::IpcMessage;
-use crate::query::QueryEngine;
 use crate::shortcut::{HotKey, ShortcutId, ShortcutRegistry, ShortcutRegistryError};
 use crate::AssetHandler;
 use crate::Config;
+use crate::{app::SharedContext, ipc::IpcMessage};
 use crate::{assets::AssetFuture, edits::WebviewQueue};
 use crate::{assets::AssetHandlerRegistry, edits::EditQueue};
+use crate::{query::QueryEngine, webview::WebviewInstance};
 use dioxus_core::Mutations;
 use dioxus_core::VirtualDom;
 use dioxus_interpreter_js::binary_protocol::Channel;
@@ -52,21 +52,18 @@ pub struct DesktopService {
     /// The tao window itself
     pub window: Window,
 
-    /// The proxy to the event loop
-    pub proxy: EventLoopProxy<UserWindowEvent>,
-
     /// The receiver for queries about the current window
     pub(super) query: QueryEngine,
 
-    pub(super) pending_windows: WebviewQueue,
+    pub(crate) shared: SharedContext,
 
-    pub(crate) event_loop: EventLoopWindowTarget<UserWindowEvent>,
+    // pub(crate) event_handlers: WindowEventHandlers,
+    // pub(super) pending_windows: WebviewQueue,
+    // pub(crate) shortcut_manager: ShortcutRegistry,
 
-    pub(crate) event_handlers: WindowEventHandlers,
-
-    pub(crate) shortcut_manager: ShortcutRegistry,
-
+    // pub(crate) event_loop: EventLoopWindowTarget<UserWindowEvent>,
     pub(crate) edit_queue: EditQueue,
+
     pub(crate) templates: RefCell<FxHashMap<String, u16>>,
     pub(crate) max_template_count: AtomicU16,
 
@@ -90,28 +87,20 @@ impl DesktopService {
     pub(crate) fn new(
         window: Window,
         webview: WebView,
-        proxy: EventLoopProxy<UserWindowEvent>,
-        event_loop: EventLoopWindowTarget<UserWindowEvent>,
-        webviews: WebviewQueue,
-        event_handlers: WindowEventHandlers,
-        shortcut_manager: ShortcutRegistry,
+        shared: SharedContext,
         edit_queue: EditQueue,
         asset_handlers: AssetHandlerRegistry,
     ) -> Self {
         Self {
             window,
             webview,
-            proxy,
-            event_loop,
-            query: Default::default(),
-            pending_windows: webviews,
-            event_handlers,
-            shortcut_manager,
+            shared,
             edit_queue,
+            asset_handlers,
+            query: Default::default(),
             templates: Default::default(),
             max_template_count: Default::default(),
             channel: Default::default(),
-            asset_handlers,
             #[cfg(target_os = "ios")]
             views: Default::default(),
         }
@@ -136,27 +125,21 @@ impl DesktopService {
     ///
     /// Be careful to not create a cycle of windows, or you might leak memory.
     pub fn new_window(&self, dom: VirtualDom, cfg: Config) -> Weak<DesktopService> {
-        let window = crate::webview::create_new_window(
-            cfg,
-            dom,
-            &self.event_loop,
-            &self.proxy,
-            &self.pending_windows,
-            &self.event_handlers,
-            self.shortcut_manager.clone(),
-        );
+        let window = WebviewInstance::new(cfg, dom, self.shared.clone());
 
         let cx = window.desktop_context.clone();
 
-        self.proxy
+        self.shared
+            .proxy
             .send_event(UserWindowEvent(EventData::NewWindow, cx.id()))
             .unwrap();
 
-        self.proxy
+        self.shared
+            .proxy
             .send_event(UserWindowEvent(EventData::Poll, cx.id()))
             .unwrap();
 
-        self.pending_windows.borrow_mut().push(window);
+        self.shared.pending_webviews.borrow_mut().push(window);
 
         Rc::downgrade(&cx)
     }
@@ -188,6 +171,7 @@ impl DesktopService {
     /// close window
     pub fn close(&self) {
         let _ = self
+            .shared
             .proxy
             .send_event(UserWindowEvent(EventData::CloseWindow, self.id()));
     }
@@ -195,6 +179,7 @@ impl DesktopService {
     /// close window
     pub fn close_window(&self, id: WindowId) {
         let _ = self
+            .shared
             .proxy
             .send_event(UserWindowEvent(EventData::CloseWindow, id));
     }
@@ -237,12 +222,12 @@ impl DesktopService {
         &self,
         handler: impl FnMut(&Event<UserWindowEvent>, &EventLoopWindowTarget<UserWindowEvent>) + 'static,
     ) -> WryEventHandlerId {
-        self.event_handlers.add(self.id(), handler)
+        self.shared.event_handlers.add(self.window.id(), handler)
     }
 
     /// Remove a wry event handler created with [`DesktopContext::create_wry_event_handler`]
     pub fn remove_wry_event_handler(&self, id: WryEventHandlerId) {
-        self.event_handlers.remove(id)
+        self.shared.event_handlers.remove(id)
     }
 
     /// Create a global shortcut
@@ -253,18 +238,19 @@ impl DesktopService {
         hotkey: HotKey,
         callback: impl FnMut() + 'static,
     ) -> Result<ShortcutId, ShortcutRegistryError> {
-        self.shortcut_manager
+        self.shared
+            .shortcut_manager
             .add_shortcut(hotkey, Box::new(callback))
     }
 
     /// Remove a global shortcut
     pub fn remove_shortcut(&self, id: ShortcutId) {
-        self.shortcut_manager.remove_shortcut(id)
+        self.shared.shortcut_manager.remove_shortcut(id)
     }
 
     /// Remove all global shortcuts
     pub fn remove_all_shortcuts(&self) {
-        self.shortcut_manager.remove_all()
+        self.shared.shortcut_manager.remove_all()
     }
 
     /// Provide a callback to handle asset loading yourself.
