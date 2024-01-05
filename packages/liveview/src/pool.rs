@@ -6,7 +6,7 @@ use crate::{
     LiveViewError,
 };
 use dioxus_core::{prelude::*, BorrowedAttributeValue, Mutations};
-use dioxus_html::{event_bubbles,EventData, HtmlEvent, MountedData, PlatformEventData};
+use dioxus_html::{event_bubbles, EventData, HtmlEvent, MountedData, PlatformEventData};
 use dioxus_interpreter_js::binary_protocol::Channel;
 use futures_util::{pin_mut, SinkExt, StreamExt};
 use rustc_hash::FxHashMap;

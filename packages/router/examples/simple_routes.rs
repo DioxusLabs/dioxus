@@ -127,7 +127,7 @@ fn Route3(cx: Scope, dynamic: String) -> Element {
         .collect::<Vec<_>>();
 
     let navigator = use_navigator(cx);
-  
+
     render! {
         input {
             oninput: move |evt| {

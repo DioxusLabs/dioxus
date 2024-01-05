@@ -6,11 +6,11 @@
 //! - tests to ensure dyn_into works for various event types.
 //! - Partial delegation?
 
-use dioxus_interpreter_js::get_node;
 use dioxus_core::{
     BorrowedAttributeValue, ElementId, Mutation, Template, TemplateAttribute, TemplateNode,
 };
-use dioxus_html::{event_bubbles, PlatformEventData, MountedData};
+use dioxus_html::{event_bubbles, MountedData, PlatformEventData};
+use dioxus_interpreter_js::get_node;
 use dioxus_interpreter_js::{minimal_bindings, save_template, Channel};
 use futures_channel::mpsc;
 use rustc_hash::FxHashMap;

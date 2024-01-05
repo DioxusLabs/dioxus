@@ -66,7 +66,7 @@ fn ClientList(cx: Scope) -> Element {
             div {
                 class: "client",
                 style: "margin-bottom: 50px",
-        
+
                 p { "Name: {client.first_name} {client.last_name}" }
                 p { "Description: {client.description}" }
             }
