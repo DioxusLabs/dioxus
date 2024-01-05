@@ -1,20 +1,27 @@
 use serde::{Deserialize, Serialize};
 use tao::window::WindowId;
 
+/// A pair of data
 #[derive(Debug, Clone)]
 pub struct UserWindowEvent(pub EventData, pub WindowId);
 
+/// The data that might eminate from any window/webview
 #[derive(Debug, Clone)]
 pub enum EventData {
+    /// Poll the virtualdom
     Poll,
 
+    /// Handle an ipc message eminating from the window.postMessage of a given webview
     Ipc(IpcMessage),
 
+    /// Handle a hotreload event, basically telling us to update our templates
     #[cfg(all(feature = "hot-reload", debug_assertions))]
     HotReloadEvent(dioxus_hot_reload::HotReloadMsg),
 
+    /// Create a new window
     NewWindow,
 
+    /// Close a given window (could be any window!)
     CloseWindow,
 }
 
