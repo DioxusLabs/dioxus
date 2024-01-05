@@ -147,7 +147,6 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
             _ => {}
         }
 
-        // Update the control flow
         *control_flow = app.control_flow;
     })
 }
