@@ -18,6 +18,46 @@ pub(crate) fn build(
     let custom_head = cfg.custom_head.clone();
     let index_file = cfg.custom_index.clone();
     let root_name = cfg.root_name.clone();
+    let assets_head = {
+        #[cfg(all(
+            debug_assertions,
+            any(
+                target_os = "windows",
+                target_os = "macos",
+                target_os = "linux",
+                target_os = "dragonfly",
+                target_os = "freebsd",
+                target_os = "netbsd",
+                target_os = "openbsd"
+            )
+        ))]
+        {
+            None
+        }
+        #[cfg(not(all(
+            debug_assertions,
+            any(
+                target_os = "windows",
+                target_os = "macos",
+                target_os = "linux",
+                target_os = "dragonfly",
+                target_os = "freebsd",
+                target_os = "netbsd",
+                target_os = "openbsd"
+            )
+        )))]
+        {
+            let head = crate::protocol::get_asset_root_or_default();
+            let head = head.join("dist/__assets_head.html");
+            match std::fs::read_to_string(&head) {
+                Ok(s) => Some(s),
+                Err(err) => {
+                    tracing::error!("Failed to read {head:?}: {err}");
+                    None
+                }
+            }
+        }
+    };
 
     // TODO: restore the menu bar with muda: https://github.com/tauri-apps/muda/blob/dev/examples/wry.rs
     // if cfg.enable_default_menu_bar {
@@ -58,6 +98,7 @@ pub(crate) fn build(
             move |request, responder| {
                 let custom_head = custom_head.clone();
                 let index_file = index_file.clone();
+                let assets_head = assets_head.clone();
                 let root_name = root_name.clone();
                 let asset_handlers_ref = asset_handlers_ref.clone();
                 let edit_queue = edit_queue.clone();
@@ -66,6 +107,7 @@ pub(crate) fn build(
                         request,
                         custom_head.clone(),
                         index_file.clone(),
+                        assets_head.clone(),
                         &root_name,
                         &asset_handlers_ref,
                         &edit_queue,

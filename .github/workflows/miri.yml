@@ -26,8 +26,8 @@ env:
   RUST_BACKTRACE: 1
   # Change to specific Rust release to pin
   rust_stable: stable
-  rust_nightly: nightly-2022-11-03
-  rust_clippy: 1.65.0
+  rust_nightly: nightly-2023-11-16
+  rust_clippy: 1.70.0
   # When updating this, also update:
   # - README.md
   # - tokio/README.md
@@ -70,6 +70,7 @@ jobs:
         run: echo "MIRIFLAGS=-Zmiri-tag-gc=1" >> $GITHUB_ENV
 
       - uses: actions/checkout@v4
+      - uses: ilammy/setup-nasm@v1
       - name: Install Rust ${{ env.rust_nightly }}
         uses: dtolnay/rust-toolchain@master
         with:

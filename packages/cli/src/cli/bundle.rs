@@ -83,7 +83,7 @@ impl Bundle {
         crate_config.set_cargo_args(self.build.cargo_args);
 
         // build the desktop app
-        build_desktop(&crate_config, false)?;
+        build_desktop(&crate_config, false, false)?;
 
         // copy the binary to the out dir
         let package = crate_config.manifest.package.unwrap();
@@ -131,6 +131,19 @@ impl Bundle {
                     path
                 };
                 bundle_settings.windows.icon_path = icon_path;
+            }
+        }
+
+        // Add all assets from collect assets to the bundle
+        {
+            let config = manganis_cli_support::Config::current();
+            let location = config.assets_serve_location().to_string();
+            let location = format!("./{}", location);
+            println!("Adding assets from {} to bundle", location);
+            if let Some(resources) = &mut bundle_settings.resources {
+                resources.push(location);
+            } else {
+                bundle_settings.resources = Some(vec![location]);
             }
         }
 

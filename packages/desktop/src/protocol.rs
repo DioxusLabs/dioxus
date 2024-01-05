@@ -216,6 +216,7 @@ pub(super) async fn desktop_handler(
     request: Request<Vec<u8>>,
     custom_head: Option<String>,
     custom_index: Option<String>,
+    #[allow(unused_variables)] assets_head: Option<String>,
     root_name: &str,
     asset_handlers: &AssetHandlerRegistry,
     edit_queue: &EditQueue,
@@ -240,9 +241,46 @@ pub(super) async fn desktop_handler(
                 // Otherwise, we'll serve the default index.html and apply a custom head if that's specified.
                 let mut template = include_str!("./index.html").to_string();
 
-                if let Some(custom_head) = custom_head {
-                    template = template.replace("<!-- CUSTOM HEAD -->", &custom_head);
+                #[allow(unused_mut)]
+                let mut head = custom_head.unwrap_or_default();
+                #[cfg(all(
+                    debug_assertions,
+                    any(
+                        target_os = "windows",
+                        target_os = "macos",
+                        target_os = "linux",
+                        target_os = "dragonfly",
+                        target_os = "freebsd",
+                        target_os = "netbsd",
+                        target_os = "openbsd"
+                    )
+                ))]
+                {
+                    use manganis_cli_support::AssetManifestExt;
+                    let manifest = manganis_cli_support::AssetManifest::load();
+                    head += &manifest.head();
                 }
+                #[cfg(not(all(
+                    debug_assertions,
+                    any(
+                        target_os = "windows",
+                        target_os = "macos",
+                        target_os = "linux",
+                        target_os = "dragonfly",
+                        target_os = "freebsd",
+                        target_os = "netbsd",
+                        target_os = "openbsd"
+                    )
+                )))]
+                {
+                    if let Some(assets_head) = assets_head {
+                        head += &assets_head;
+                    } else {
+                        tracing::warn!("No assets head found. You can compile assets with the dioxus-cli in release mode");
+                    }
+                }
+
+                template = template.replace("<!-- CUSTOM HEAD -->", &head);
 
                 template
                     .replace(
@@ -279,12 +317,10 @@ pub(super) async fn desktop_handler(
     // Else, try to serve a file from the filesystem.
 
     // If the path is relative, we'll try to serve it from the assets directory.
-    let mut asset = get_asset_root()
-        .unwrap_or_else(|| Path::new(".").to_path_buf())
-        .join(&request.path);
+    let mut asset = get_asset_root_or_default().join(&request.path);
 
     if !asset.exists() {
-        asset = PathBuf::from("/").join(request.path);
+        asset = PathBuf::from("/").join(&request.path);
     }
 
     if asset.exists() {
@@ -295,7 +331,7 @@ pub(super) async fn desktop_handler(
                 return;
             }
         };
-        let asset = match std::fs::read(asset) {
+        let asset = match std::fs::read(&asset) {
             Ok(asset) => asset,
             Err(err) => {
                 tracing::error!("error reading asset: {}", err);
@@ -314,6 +350,12 @@ pub(super) async fn desktop_handler(
         }
     }
 
+    tracing::error!(
+        "Failed to find {} (as path {})",
+        request.uri().path(),
+        asset.display()
+    );
+
     match Response::builder()
         .status(StatusCode::NOT_FOUND)
         .body(Cow::from(String::from("Not Found").into_bytes()))
@@ -323,6 +365,11 @@ pub(super) async fn desktop_handler(
         }
         Err(err) => tracing::error!("error building response: {}", err),
     }
+}
+
+#[allow(unreachable_code)]
+pub(crate) fn get_asset_root_or_default() -> PathBuf {
+    get_asset_root().unwrap_or_else(|| Path::new(".").to_path_buf())
 }
 
 #[allow(unreachable_code)]
@@ -339,7 +386,7 @@ fn get_asset_root() -> Option<PathBuf> {
 
     */
 
-    if std::env::var_os("CARGO").is_some() {
+    if std::env::var_os("CARGO").is_some() || std::env::var_os("DIOXUS_ACTIVE").is_some() {
         return None;
     }
 

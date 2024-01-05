@@ -4,6 +4,7 @@
 #![deny(missing_docs)]
 
 mod cfg;
+mod collect_assets;
 mod desktop_context;
 mod element;
 mod escape;
@@ -146,6 +147,9 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
         }
     });
 
+    // Copy over any assets we find
+    crate::collect_assets::copy_assets();
+  
     // Set the event converter
     dioxus_html::set_event_converter(Box::new(SerializedHtmlEventConverter));
 

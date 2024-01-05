@@ -2,13 +2,11 @@
 
 use dioxus::prelude::*;
 
+const _STYLE: &str = mg!(file("./public/tailwind.css"));
+
 fn main() {
     #[cfg(not(target_arch = "wasm32"))]
-    dioxus_desktop::launch_cfg(
-        app,
-        dioxus_desktop::Config::new()
-            .with_custom_head(r#"<link rel="stylesheet" href="public/tailwind.css">"#.to_string()),
-    );
+    dioxus_desktop::launch(app);
     #[cfg(target_arch = "wasm32")]
     dioxus_web::launch(app);
 }
