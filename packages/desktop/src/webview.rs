@@ -113,7 +113,7 @@ impl WebviewInstance {
         }
 
         for (name, handler) in cfg.protocols.drain(..) {
-            webview = webview.with_custom_protocol(name, move |r| handler(r))
+            webview = webview.with_custom_protocol(name, handler);
         }
 
         const INITIALIZATION_SCRIPT: &str = r#"

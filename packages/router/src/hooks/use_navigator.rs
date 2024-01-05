@@ -49,7 +49,6 @@ use crate::prelude::{Navigator, RouterContext};
 /// # let _ = vdom.rebuild();
 /// ```
 #[must_use]
-#[deprecated = "Prefer acquiring the router directly with `dioxus_router::router()`"]
 pub fn use_navigator(cx: &ScopeState) -> &Navigator {
     &*cx.use_hook(|| {
         let router = cx

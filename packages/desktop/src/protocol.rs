@@ -11,6 +11,8 @@ use wry::{
 static MINIFIED: &str = include_str!("./minified.js");
 static DEFAULT_INDEX: &str = include_str!("./index.html");
 
+// todo: clean this up a bit
+#[allow(clippy::too_many_arguments)]
 pub(super) async fn desktop_handler(
     request: Request<Vec<u8>>,
     custom_head: Option<String>,
@@ -107,7 +109,7 @@ fn build_index_file(
     Response::builder()
         .header("Content-Type", "text/html")
         .header("Access-Control-Allow-Origin", "*")
-        .body(index.into_bytes().into())
+        .body(index.into())
 }
 
 /// Construct the inline script that boots up the page and bridges the webview with rust code.
@@ -136,10 +138,10 @@ fn module_loader(root_id: &str, headless: bool) -> String {
     )
 }
 
-//// Get the assset directory, following tauri/cargo-bundles directory discovery approach
-////
-//// Defaults to the current directory if no asset directory is found, which is useful for development when the app
-//// isn't bundled.
+/// Get the assset directory, following tauri/cargo-bundles directory discovery approach
+///
+/// Defaults to the current directory if no asset directory is found, which is useful for development when the app
+/// isn't bundled.
 fn get_asset_root_or_default() -> PathBuf {
     get_asset_root().unwrap_or_else(|| Path::new(".").to_path_buf())
 }

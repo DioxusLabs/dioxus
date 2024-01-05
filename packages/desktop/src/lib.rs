@@ -32,6 +32,9 @@ mod launch;
 
 // Reexport tao and wry, might want to re-export other important things
 pub use tao;
+pub use tao::dpi::{LogicalPosition, LogicalSize};
+pub use tao::event::WindowEvent;
+pub use tao::window::WindowBuilder;
 pub use wry;
 
 // Public exports

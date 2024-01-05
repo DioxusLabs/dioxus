@@ -102,13 +102,14 @@ impl DesktopService {
 
     /// Send a list of mutations to the webview
     pub(crate) fn send_edits(&self, edits: Mutations) {
-        crate::edits::apply_edits(
+        if let Some(bytes) = crate::edits::apply_edits(
             edits,
             &mut self.channel.borrow_mut(),
             &mut self.templates.borrow_mut(),
             &self.max_template_count,
-        )
-        .map(|bytes| self.edit_queue.add_edits(bytes));
+        ) {
+            self.edit_queue.add_edits(bytes)
+        }
     }
 
     /// Create a new window using the props and window builder

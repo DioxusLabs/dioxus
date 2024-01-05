@@ -87,6 +87,7 @@ impl<P: 'static> App<P> {
         // Set the event converter
         dioxus_html::set_event_converter(Box::new(SerializedHtmlEventConverter));
 
+        // Allow hotreloading to work - but only in debug mode
         #[cfg(all(feature = "hot-reload", debug_assertions))]
         app.connect_hotreload();
 
