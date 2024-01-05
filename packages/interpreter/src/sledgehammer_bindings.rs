@@ -11,7 +11,7 @@ pub const SLEDGEHAMMER_JS: &str = GENERATED_JS;
 #[cfg(feature = "web")]
 #[bindgen(module)]
 mod js {
-    const JS_FILE: &str = "./packages/interpreter/src/common.js";
+    const JS_FILE: &str = "./src/common.js";
     const JS: &str = r#"
     class ListenerMap {
         constructor(root) {
@@ -260,8 +260,8 @@ pub mod binary_protocol {
 
     #[bindgen]
     mod protocol_js {
-        const JS_FILE: &str = "./packages/interpreter/src/interpreter.js";
-        const JS_FILE: &str = "./packages/interpreter/src/common.js";
+        const JS_FILE: &str = "./src/interpreter.js";
+        const JS_FILE: &str = "./src/common.js";
 
         fn mount_to_root() {
             "{AppendChildren(root, stack.length-1);}"
