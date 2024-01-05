@@ -1,12 +1,14 @@
-use muda::{Menu, MenuItem, PredefinedMenuItem, Submenu};
+use muda::{Menu, PredefinedMenuItem, Submenu};
 use tao::window::Window;
 
+#[allow(unused)]
 pub fn build_menu_bar(menu: Menu, window: &Window) {
     #[cfg(target_os = "windows")]
-    menu.init_for_hwnd(window_hwnd);
+    menu.init_for_hwnd(window);
 
     #[cfg(target_os = "linux")]
-    menu.init_for_gtk_window(&gtk_window, Some(&vertical_gtk_box));
+    menu.init_for_gtk_window(window, None);
+    // menu.init_for_gtk_window(window, Some(&vertical_gtk_box));
 
     #[cfg(target_os = "macos")]
     menu.init_for_nsapp();

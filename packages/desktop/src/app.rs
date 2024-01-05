@@ -2,7 +2,7 @@ pub use crate::assets::{AssetFuture, AssetHandler, AssetRequest, AssetResponse};
 pub use crate::cfg::{Config, WindowCloseBehaviour};
 pub use crate::desktop_context::DesktopContext;
 pub use crate::desktop_context::{window, DesktopService, WryEventHandler, WryEventHandlerId};
-use crate::edits::{send_edits, EditQueue, WebviewQueue};
+use crate::edits::{EditQueue, WebviewQueue};
 use crate::element::DesktopElement;
 use crate::eval::init_eval;
 use crate::events::{IpcMessage, IpcMethod};
@@ -198,7 +198,7 @@ impl<P: 'static> App<P> {
 
     pub fn handle_initialize_msg(&mut self, id: WindowId) {
         let view = self.webviews.get_mut(&id).unwrap();
-        send_edits(view.dom.rebuild(), &view.desktop_context);
+        view.desktop_context.send_edits(view.dom.rebuild());
         view.desktop_context
             .window
             .set_visible(self.is_visible_before_start);
@@ -271,8 +271,7 @@ impl<P: 'static> App<P> {
         };
 
         view.dom.handle_event(&name, as_any, element, bubbles);
-
-        send_edits(view.dom.render_immediate(), &view.desktop_context);
+        view.desktop_context.send_edits(view.dom.render_immediate());
     }
 
     #[cfg(all(feature = "hot-reload", debug_assertions))]
@@ -319,7 +318,7 @@ impl<P: 'static> App<P> {
                 view.dom.handle_event(event_name, data, id, event_bubbles);
             }
 
-            send_edits(view.dom.render_immediate(), &view.desktop_context);
+            view.desktop_context.send_edits(view.dom.render_immediate());
         }
     }
 
@@ -344,7 +343,7 @@ impl<P: 'static> App<P> {
                 }
             }
 
-            send_edits(view.dom.render_immediate(), &view.desktop_context);
+            view.desktop_context.send_edits(view.dom.render_immediate());
         }
     }
 }

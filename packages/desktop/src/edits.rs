@@ -1,24 +1,21 @@
-use crate::assets::AssetHandlerRegistry;
 use crate::query::QueryEngine;
 use crate::shortcut::{HotKey, ShortcutId, ShortcutRegistry, ShortcutRegistryError};
 use crate::AssetHandler;
 use crate::Config;
 use crate::{assets::AssetFuture, DesktopContext};
+use crate::{assets::AssetHandlerRegistry, DesktopService};
 use crate::{events::IpcMessage, webview::WebviewHandler};
 use dioxus_core::{BorrowedAttributeValue, Template, TemplateAttribute, TemplateNode, VirtualDom};
 use dioxus_core::{Mutations, ScopeState};
 use dioxus_html::event_bubbles;
 use dioxus_interpreter_js::binary_protocol::Channel;
 use rustc_hash::FxHashMap;
-use slab::Slab;
 use std::{
-    cell::RefCell, fmt::Debug, fmt::Formatter, rc::Rc, rc::Weak, sync::atomic::AtomicU16,
-    sync::Arc, sync::Mutex,
-};
-use tao::{
-    event::Event,
-    event_loop::{EventLoopProxy, EventLoopWindowTarget},
-    window::{Fullscreen as WryFullscreen, Window, WindowId},
+    cell::RefCell,
+    rc::Rc,
+    sync::atomic::AtomicU16,
+    sync::Arc,
+    sync::{atomic::Ordering, Mutex},
 };
 
 use wry::{RequestAsyncResponder, WebView};
@@ -31,17 +28,6 @@ pub(crate) type WebviewQueue = Rc<RefCell<Vec<WebviewHandler>>>;
 pub(crate) struct EditQueue {
     queue: Arc<Mutex<Vec<Vec<u8>>>>,
     responder: Arc<Mutex<Option<RequestAsyncResponder>>>,
-}
-
-impl Debug for EditQueue {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("EditQueue")
-            .field("queue", &self.queue)
-            .field("responder", {
-                &self.responder.lock().unwrap().as_ref().map(|_| ())
-            })
-            .finish()
-    }
 }
 
 impl EditQueue {
@@ -64,33 +50,21 @@ impl EditQueue {
     }
 }
 
-/// Send a list of mutations to the webview
-pub fn send_edits(edits: Mutations, desktop_context: &DesktopContext) {
-    let mut channel = desktop_context.channel.borrow_mut();
-    let mut templates = desktop_context.templates.borrow_mut();
-    if let Some(bytes) = apply_edits(
-        edits,
-        &mut channel,
-        &mut templates,
-        &desktop_context.max_template_count,
-    ) {
-        desktop_context.edit_queue.add_edits(bytes)
-    }
-}
-
-pub fn apply_edits(
+pub(crate) fn apply_edits(
     mutations: Mutations,
     channel: &mut Channel,
     templates: &mut FxHashMap<String, u16>,
     max_template_count: &AtomicU16,
 ) -> Option<Vec<u8>> {
-    use dioxus_core::Mutation::*;
     if mutations.templates.is_empty() && mutations.edits.is_empty() {
         return None;
     }
+
     for template in mutations.templates {
         add_template(&template, channel, templates, max_template_count);
     }
+
+    use dioxus_core::Mutation::*;
     for edit in mutations.edits {
         match edit {
             AppendChildren { id, m } => channel.append_children(id.0 as u32, m as u16),
@@ -156,19 +130,19 @@ pub fn add_template(
     templates: &mut FxHashMap<String, u16>,
     max_template_count: &AtomicU16,
 ) {
-    let current_max_template_count = max_template_count.load(std::sync::atomic::Ordering::Relaxed);
+    let current_max_template_count = max_template_count.load(Ordering::Relaxed);
     for root in template.roots.iter() {
         create_template_node(channel, root);
         templates.insert(template.name.to_owned(), current_max_template_count);
     }
     channel.add_templates(current_max_template_count, template.roots.len() as u16);
 
-    max_template_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    max_template_count.fetch_add(1, Ordering::Relaxed);
 }
 
-pub fn create_template_node(channel: &mut Channel, v: &'static TemplateNode<'static>) {
+pub fn create_template_node(channel: &mut Channel, node: &'static TemplateNode<'static>) {
     use TemplateNode::*;
-    match v {
+    match node {
         Element {
             tag,
             namespace,

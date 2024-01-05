@@ -5,8 +5,8 @@ use crate::Config;
 use crate::{assets::AssetFuture, edits::WebviewQueue};
 use crate::{assets::AssetHandlerRegistry, edits::EditQueue};
 use crate::{events::IpcMessage, webview::WebviewHandler};
-use dioxus_core::ScopeState;
 use dioxus_core::VirtualDom;
+use dioxus_core::{Mutations, ScopeState};
 use dioxus_interpreter_js::binary_protocol::Channel;
 use rustc_hash::FxHashMap;
 use slab::Slab;
@@ -118,6 +118,20 @@ impl DesktopService {
             asset_handlers,
             #[cfg(target_os = "ios")]
             views: Default::default(),
+        }
+    }
+
+    /// Send a list of mutations to the webview
+    pub(crate) fn send_edits(&self, edits: Mutations) {
+        let mut channel = self.channel.borrow_mut();
+        let mut templates = self.templates.borrow_mut();
+        if let Some(bytes) = crate::edits::apply_edits(
+            edits,
+            &mut channel,
+            &mut templates,
+            &self.max_template_count,
+        ) {
+            self.edit_queue.add_edits(bytes)
         }
     }
 
