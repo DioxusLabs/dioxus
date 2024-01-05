@@ -10,6 +10,11 @@ mod sledgehammer_bindings;
 #[cfg(feature = "sledgehammer")]
 pub use sledgehammer_bindings::*;
 
+#[cfg(all(feature = "binary-protocol", feature = "sledgehammer"))]
+mod write_native_mutations;
+#[cfg(all(feature = "binary-protocol", feature = "sledgehammer"))]
+pub use write_native_mutations::*;
+
 // Common bindings for minimal usage.
 #[cfg(all(feature = "minimal_bindings", feature = "web"))]
 pub mod minimal_bindings {
