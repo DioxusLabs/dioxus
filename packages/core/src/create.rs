@@ -1,6 +1,4 @@
-use crate::innerlude::{ElementPath, ElementRef, VComponent, VPlaceholder, VText};
-use crate::mutations::Mutation;
-use crate::mutations::Mutation::*;
+use crate::innerlude::{ElementPath, ElementRef, VComponent, VPlaceholder, VText, WriteMutations};
 use crate::nodes::VNode;
 use crate::nodes::{DynamicNode, TemplateNode};
 use crate::virtual_dom::VirtualDom;
@@ -64,15 +62,20 @@ impl VirtualDom {
     /// Create a new template [`VNode`] and write it to the [`Mutations`] buffer.
     ///
     /// This method pushes the ScopeID to the internal scopestack and returns the number of nodes created.
-    pub(crate) fn create_scope(&mut self, scope: ScopeId, template: &VNode) -> usize {
+    pub(crate) fn create_scope(
+        &mut self,
+        scope: ScopeId,
+        template: &VNode,
+        to: &mut impl WriteMutations,
+    ) -> usize {
         self.runtime.scope_stack.borrow_mut().push(scope);
-        let nodes = self.create(template);
+        let nodes = self.create(template, to);
         self.runtime.scope_stack.borrow_mut().pop();
         nodes
     }
 
     /// Create this template and write its mutations
-    pub(crate) fn create(&mut self, node: &VNode) -> usize {
+    pub(crate) fn create(&mut self, node: &VNode, to: &mut impl WriteMutations) -> usize {
         // check for a overriden template
         #[cfg(debug_assertions)]
         {
@@ -95,12 +98,7 @@ impl VirtualDom {
 
         // The best renderers will have templates prehydrated and registered
         // Just in case, let's create the template using instructions anyways
-        self.register_template(node.template.get());
-
-        // we know that this will generate at least one mutation per node
-        self.mutations
-            .edits
-            .reserve(node.template.get().roots.len());
+        self.register_template(node.template.get(), to);
 
         // Walk the roots, creating nodes and assigning IDs
         // nodes in an iterator of ((dynamic_node_index, sorted_index), path)
@@ -153,30 +151,46 @@ impl VirtualDom {
             .map(|(idx, root)| match root {
                 DynamicText { id } | Dynamic { id } => {
                     nodes.next().unwrap();
-                    self.write_dynamic_root(node, *id)
+                    self.write_dynamic_root(node, *id, to)
                 }
                 Element { .. } => {
                     #[cfg(not(debug_assertions))]
                     let id = self.write_element_root(node, idx, &mut attrs, &mut nodes, &[]);
                     #[cfg(debug_assertions)]
-                    let id =
-                        self.write_element_root(node, idx, &mut attrs, &mut nodes, &nodes_sorted);
+                    let id = self.write_element_root(
+                        node,
+                        idx,
+                        &mut attrs,
+                        &mut nodes,
+                        &nodes_sorted,
+                        to,
+                    );
                     id
                 }
-                Text { .. } => self.write_static_text_root(node, idx),
+                Text { .. } => self.write_static_text_root(node, idx, to),
             })
             .sum()
     }
 
-    fn write_static_text_root(&mut self, node: &VNode, idx: usize) -> usize {
+    fn write_static_text_root(
+        &mut self,
+        node: &VNode,
+        idx: usize,
+        to: &mut impl WriteMutations,
+    ) -> usize {
         // Simply just load the template root, no modifications needed
-        self.load_template_root(node, idx);
+        self.load_template_root(node, idx, to);
 
         // Text producs just one node on the stack
         1
     }
 
-    fn write_dynamic_root(&mut self, template: &VNode, idx: usize) -> usize {
+    fn write_dynamic_root(
+        &mut self,
+        template: &VNode,
+        idx: usize,
+        to: &mut impl WriteMutations,
+    ) -> usize {
         use DynamicNode::*;
         match &template.dynamic_nodes[idx] {
             node @ Component { .. } | node @ Fragment(_) => {
@@ -187,7 +201,7 @@ impl VirtualDom {
                     element: template.clone(),
                     scope: self.runtime.current_scope_id().unwrap_or(ScopeId(0)),
                 };
-                self.create_dynamic_node(template_ref, node)
+                self.create_dynamic_node(template_ref, node, to)
             }
             Placeholder(VPlaceholder { id, parent }) => {
                 let template_ref = ElementRef {
@@ -199,19 +213,15 @@ impl VirtualDom {
                 };
                 *parent.borrow_mut() = Some(template_ref);
                 let id = self.set_slot(id);
-                self.mutations.push(CreatePlaceholder { id });
+                to.create_placeholder(id);
                 1
             }
             Text(VText { id, value }) => {
                 let id = self.set_slot(id);
-                self.create_static_text(value, id);
+                to.create_text_node(value, id);
                 1
             }
         }
-    }
-
-    fn create_static_text(&mut self, value: &str, id: ElementId) {
-        self.mutations.push(CreateTextNode { value, id });
     }
 
     /// We write all the descendent data for this element
@@ -226,15 +236,22 @@ impl VirtualDom {
         dynamic_attrs: &mut Peekable<impl Iterator<Item = (usize, &'static [u8])>>,
         dynamic_nodes_iter: &mut Peekable<impl Iterator<Item = ((usize, usize), &'static [u8])>>,
         dynamic_nodes: &[(usize, &'static [u8])],
+        to: &mut impl WriteMutations,
     ) -> usize {
         // Load the template root and get the ID for the node on the stack
-        let root_on_stack = self.load_template_root(template, root_idx);
+        let root_on_stack = self.load_template_root(template, root_idx, to);
 
         // Write all the attributes below this root
-        self.write_attrs_on_root(dynamic_attrs, root_idx as u8, root_on_stack, template);
+        self.write_attrs_on_root(dynamic_attrs, root_idx as u8, root_on_stack, template, to);
 
         // Load in all of the placeholder or dynamic content under this root too
-        self.load_placeholders(dynamic_nodes_iter, dynamic_nodes, root_idx as u8, template);
+        self.load_placeholders(
+            dynamic_nodes_iter,
+            dynamic_nodes,
+            root_idx as u8,
+            template,
+            to,
+        );
 
         1
     }
@@ -259,6 +276,7 @@ impl VirtualDom {
         dynamic_nodes: &[(usize, &'static [u8])],
         root_idx: u8,
         template: &VNode,
+        to: &mut impl WriteMutations,
     ) {
         let (start, end) = match collect_dyn_node_range(dynamic_nodes_iter, root_idx) {
             Some((a, b)) => (a, b),
@@ -281,11 +299,11 @@ impl VirtualDom {
                 element: template.clone(),
                 scope: self.runtime.current_scope_id().unwrap_or(ScopeId(0)),
             };
-            let m = self.create_dynamic_node(boundary_ref, &template.dynamic_nodes[idx]);
+            let m = self.create_dynamic_node(boundary_ref, &template.dynamic_nodes[idx], to);
             if m > 0 {
                 // The path is one shorter because the top node is the root
                 let path = &template.template.get().node_paths[idx][1..];
-                self.mutations.push(ReplacePlaceholder { m, path });
+                to.replace_placeholder_with_nodes(path, m);
             }
         }
     }
@@ -296,14 +314,15 @@ impl VirtualDom {
         root_idx: u8,
         root: ElementId,
         node: &VNode,
+        to: &mut impl WriteMutations,
     ) {
         while let Some((mut attr_id, path)) =
             attrs.next_if(|(_, p)| p.first().copied() == Some(root_idx))
         {
-            let id = self.assign_static_node_as_dynamic(path, root);
+            let id = self.assign_static_node_as_dynamic(path, root, to);
 
             loop {
-                self.write_attribute(node, attr_id, &node.dynamic_attrs[attr_id], id);
+                self.write_attribute(node, attr_id, &node.dynamic_attrs[attr_id], id, to);
 
                 // Only push the dynamic attributes forward if they match the current path (same element)
                 match attrs.next_if(|(_, p)| *p == path) {
@@ -320,6 +339,7 @@ impl VirtualDom {
         idx: usize,
         attribute: &crate::Attribute,
         id: ElementId,
+        to: &mut impl WriteMutations,
     ) {
         // Make sure we set the attribute's associated id
         attribute.mounted_element.set(id);
@@ -336,35 +356,27 @@ impl VirtualDom {
                     scope: self.runtime.current_scope_id().unwrap_or(ScopeId(0)),
                 };
                 self.elements[id.0] = Some(element_ref);
-                self.mutations.push(NewEventListener {
-                    // all listeners start with "on"
-                    name: &unbounded_name[2..],
-                    id,
-                })
+                to.create_event_listener(&unbounded_name[2..], id);
             }
             _ => {
                 let unbounded_value = &attribute.value;
 
-                self.mutations.push(SetAttribute {
-                    name: unbounded_name,
-                    value: unbounded_value,
-                    ns: attribute.namespace,
-                    id,
-                })
+                to.set_attribute(unbounded_name, attribute.namespace, unbounded_value, id);
             }
         }
     }
 
-    fn load_template_root(&mut self, template: &VNode, root_idx: usize) -> ElementId {
+    fn load_template_root(
+        &mut self,
+        template: &VNode,
+        root_idx: usize,
+        to: &mut impl WriteMutations,
+    ) -> ElementId {
         // Get an ID for this root since it's a real root
         let this_id = self.next_element();
         template.root_ids.borrow_mut()[root_idx] = this_id;
 
-        self.mutations.push(LoadTemplate {
-            name: template.template.get().name,
-            index: root_idx,
-            id: this_id,
-        });
+        to.load_template(template.template.get().name, root_idx, this_id);
 
         this_id
     }
@@ -380,6 +392,7 @@ impl VirtualDom {
         &mut self,
         path: &'static [u8],
         this_id: ElementId,
+        to: &mut impl WriteMutations,
     ) -> ElementId {
         if path.len() == 1 {
             return this_id;
@@ -389,16 +402,17 @@ impl VirtualDom {
         // Else, it's deep in the template and we should create a new id for it
         let id = self.next_element();
 
-        self.mutations.push(Mutation::AssignId {
-            path: &path[1..],
-            id,
-        });
+        to.assign_node_id(&path[1..], id);
 
         id
     }
 
     /// Insert a new template into the VirtualDom's template registry
-    pub(crate) fn register_template_first_byte_index(&mut self, mut template: Template<'static>) {
+    pub(crate) fn register_template_first_byte_index(
+        &mut self,
+        mut template: Template<'static>,
+        to: &mut impl WriteMutations,
+    ) {
         // First, make sure we mark the template as seen, regardless if we process it
         let (path, _) = template.name.rsplit_once(':').unwrap();
         if let Some((_, old_template)) = self
@@ -421,14 +435,18 @@ impl VirtualDom {
 
         // If it's all dynamic nodes, then we don't need to register it
         if !template.is_completely_dynamic() {
-            self.mutations.templates.push(template);
+            to.register_template(template);
         }
     }
 
     /// Insert a new template into the VirtualDom's template registry
     // used in conditional compilation
     #[allow(unused_mut)]
-    pub(crate) fn register_template(&mut self, mut template: Template<'static>) {
+    pub(crate) fn register_template(
+        &mut self,
+        mut template: Template<'static>,
+        to: &mut impl WriteMutations,
+    ) {
         let (path, byte_index) = template.name.rsplit_once(':').unwrap();
 
         let byte_index = byte_index.parse::<usize>().unwrap();
@@ -458,22 +476,32 @@ impl VirtualDom {
 
             // If it's all dynamic nodes, then we don't need to register it
             if !template.is_completely_dynamic() {
-                self.mutations.templates.push(template);
+                to.register_template(template)
             }
         }
     }
 
-    pub(crate) fn create_dynamic_node(&mut self, parent: ElementRef, node: &DynamicNode) -> usize {
+    pub(crate) fn create_dynamic_node(
+        &mut self,
+        parent: ElementRef,
+        node: &DynamicNode,
+        to: &mut impl WriteMutations,
+    ) -> usize {
         use DynamicNode::*;
         match node {
-            Text(text) => self.create_dynamic_text(parent, text),
-            Placeholder(place) => self.create_placeholder(place, parent),
-            Component(component) => self.create_component_node(Some(parent), component),
-            Fragment(frag) => self.create_children(frag, Some(parent)),
+            Text(text) => self.create_dynamic_text(parent, text, to),
+            Placeholder(place) => self.create_placeholder(place, parent, to),
+            Component(component) => self.create_component_node(Some(parent), component, to),
+            Fragment(frag) => self.create_children(frag, Some(parent), to),
         }
     }
 
-    fn create_dynamic_text(&mut self, parent: ElementRef, text: &VText) -> usize {
+    fn create_dynamic_text(
+        &mut self,
+        parent: ElementRef,
+        text: &VText,
+        to: &mut impl WriteMutations,
+    ) -> usize {
         // Allocate a dynamic element reference for this text node
         let new_id = self.next_element();
 
@@ -481,11 +509,7 @@ impl VirtualDom {
         text.id.set(Some(new_id));
 
         // Add the mutation to the list
-        self.mutations.push(HydrateText {
-            id: new_id,
-            path: &parent.path.path[1..],
-            value: &text.value,
-        });
+        to.hydrate_text_node(&parent.path.path[1..], &text.value, new_id);
 
         // Since we're hydrating an existing node, we don't create any new nodes
         0
@@ -495,6 +519,7 @@ impl VirtualDom {
         &mut self,
         placeholder: &VPlaceholder,
         parent: ElementRef,
+        to: &mut impl WriteMutations,
     ) -> usize {
         // Allocate a dynamic element reference for this text node
         let id = self.next_element();
@@ -506,10 +531,7 @@ impl VirtualDom {
         *placeholder.parent.borrow_mut() = Some(parent);
 
         // Assign the ID to the existing node in the template
-        self.mutations.push(AssignId {
-            path: &parent.path.path[1..],
-            id,
-        });
+        to.assign_node_id(&parent.path.path[1..], id);
 
         // Since the placeholder is already in the DOM, we don't create any new nodes
         0
@@ -519,11 +541,12 @@ impl VirtualDom {
         &mut self,
         parent: Option<ElementRef>,
         component: &VComponent,
+        to: &mut impl WriteMutations,
     ) -> usize {
         use RenderReturn::*;
 
         // Load up a ScopeId for this vcomponent
-        let scope = self.load_scope_from_vcomponent(component);
+        let scope = self.load_scope_from_vcomponent(component, to);
 
         component.scope.set(Some(scope));
 
@@ -535,14 +558,18 @@ impl VirtualDom {
             // Create the component's root element
             Ready(t) => {
                 self.assign_boundary_ref(parent, t);
-                self.create_scope(scope, t)
+                self.create_scope(scope, t, to)
             }
-            Aborted(t) => self.mount_aborted(t, parent),
+            Aborted(t) => self.mount_aborted(t, parent, to),
         }
     }
 
     /// Load a scope from a vcomponent. If the scope id doesn't exist, that means the component is currently "live"
-    fn load_scope_from_vcomponent(&mut self, component: &VComponent) -> ScopeId {
+    fn load_scope_from_vcomponent(
+        &mut self,
+        component: &VComponent,
+        to: &mut impl WriteMutations,
+    ) -> ScopeId {
         component.scope.get().unwrap_or_else(|| {
             self.new_scope(component.props.clone(), component.name)
                 .context()
@@ -550,9 +577,14 @@ impl VirtualDom {
         })
     }
 
-    fn mount_aborted(&mut self, placeholder: &VPlaceholder, parent: Option<ElementRef>) -> usize {
+    fn mount_aborted(
+        &mut self,
+        placeholder: &VPlaceholder,
+        parent: Option<ElementRef>,
+        to: &mut impl WriteMutations,
+    ) -> usize {
         let id = self.next_element();
-        self.mutations.push(Mutation::CreatePlaceholder { id });
+        to.create_placeholder(id);
         placeholder.id.set(Some(id));
         *placeholder.parent.borrow_mut() = parent;
 

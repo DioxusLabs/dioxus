@@ -5,7 +5,10 @@
 use crate::{
     any_props::{BoxedAnyProps, VProps},
     arena::ElementId,
-    innerlude::{DirtyScope, ElementRef, ErrorBoundary, Mutations, Scheduler, SchedulerMsg},
+    innerlude::{
+        DirtyScope, ElementRef, ErrorBoundary, Mutations, NoOpMutations, Scheduler, SchedulerMsg,
+        WriteMutations,
+    },
     mutations::Mutation,
     nodes::RenderReturn,
     nodes::{Template, TemplateId},
@@ -188,8 +191,6 @@ pub struct VirtualDom {
     // The element ids that are used in the renderer
     pub(crate) elements: Slab<Option<ElementRef>>,
 
-    pub(crate) mutations: Mutations<'static>,
-
     pub(crate) runtime: Rc<Runtime>,
 
     // Currently suspended scopes
@@ -263,7 +264,6 @@ impl VirtualDom {
             dirty_scopes: Default::default(),
             templates: Default::default(),
             elements: Default::default(),
-            mutations: Mutations::default(),
             suspended_scopes: Default::default(),
         };
 
@@ -544,38 +544,33 @@ impl VirtualDom {
     ///
     /// apply_edits(edits);
     /// ```
-    pub fn rebuild(&mut self) -> Mutations {
+    pub fn rebuild(&mut self, to: &mut impl WriteMutations) {
         let _runtime = RuntimeGuard::new(self.runtime.clone());
         match unsafe { self.run_scope(ScopeId::ROOT) } {
             // Rebuilding implies we append the created elements to the root
             RenderReturn::Ready(node) => {
                 let m = self.create_scope(ScopeId::ROOT, &node);
-                self.mutations.edits.push(Mutation::AppendChildren {
-                    id: ElementId(0),
-                    m,
-                });
+                to.append_children(ElementId(0), m);
             }
             // If an error occurs, we should try to render the default error component and context where the error occured
             RenderReturn::Aborted(placeholder) => {
                 tracing::debug!("Ran into suspended or aborted scope during rebuild");
                 let id = self.next_element();
                 placeholder.id.set(Some(id));
-                self.mutations.push(Mutation::CreatePlaceholder { id });
+                to.create_placeholder(id);
             }
         }
-
-        self.finalize()
     }
 
     /// Render whatever the VirtualDom has ready as fast as possible without requiring an executor to progress
     /// suspended subtrees.
-    pub fn render_immediate(&mut self) -> Mutations {
+    pub fn render_immediate(&mut self, to: &mut impl WriteMutations) {
         // Build a waker that won't wake up since our deadline is already expired when it's polled
         let waker = futures_util::task::noop_waker();
         let mut cx = std::task::Context::from_waker(&waker);
 
         // Now run render with deadline but dont even try to poll any async tasks
-        let fut = self.render_with_deadline(std::future::ready(()));
+        let fut = self.render_with_deadline(std::future::ready(()), to);
         pin_mut!(fut);
 
         // The root component is not allowed to be async
@@ -596,7 +591,7 @@ impl VirtualDom {
 
             self.wait_for_work().await;
 
-            _ = self.render_immediate();
+            _ = self.render_immediate(&mut NoOpMutations);
         }
     }
 
@@ -605,7 +600,11 @@ impl VirtualDom {
     /// It's generally a good idea to put some sort of limit on the suspense process in case a future is having issues.
     ///
     /// If no suspense trees are present
-    pub async fn render_with_deadline(&mut self, deadline: impl Future<Output = ()>) -> Mutations {
+    pub async fn render_with_deadline(
+        &mut self,
+        deadline: impl Future<Output = ()>,
+        to: &mut impl WriteMutations,
+    ) {
         pin_mut!(deadline);
 
         self.process_events();
@@ -625,7 +624,7 @@ impl VirtualDom {
                     let _runtime = RuntimeGuard::new(self.runtime.clone());
                     // Run the scope and get the mutations
                     let new_nodes = self.run_scope(dirty.id);
-                    self.diff_scope(dirty.id, new_nodes);
+                    self.diff_scope(dirty.id, new_nodes, to);
                 }
             }
 
@@ -645,14 +644,9 @@ impl VirtualDom {
             if let Either::Left((_, _)) = select(&mut deadline, pinned).await {
                 // release the borrowed
                 drop(work);
-                return self.finalize();
+                return;
             }
         }
-    }
-
-    /// Swap the current mutations with a new
-    fn finalize(&mut self) -> Mutations {
-        std::mem::take(&mut self.mutations)
     }
 
     /// Get the current runtime

@@ -3,7 +3,9 @@ use std::ops::Deref;
 use crate::{
     any_props::AnyProps,
     arena::ElementId,
-    innerlude::{DirtyScope, ElementPath, ElementRef, VComponent, VPlaceholder, VText},
+    innerlude::{
+        DirtyScope, ElementPath, ElementRef, VComponent, VPlaceholder, VText, WriteMutations,
+    },
     mutations::Mutation,
     nodes::RenderReturn,
     nodes::{DynamicNode, VNode},
@@ -16,7 +18,12 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use DynamicNode::*;
 
 impl VirtualDom {
-    pub(super) fn diff_scope(&mut self, scope: ScopeId, new_nodes: RenderReturn) {
+    pub(super) fn diff_scope(
+        &mut self,
+        scope: ScopeId,
+        new_nodes: RenderReturn,
+        to: &mut impl WriteMutations,
+    ) {
         self.runtime.scope_stack.borrow_mut().push(scope);
         let scope_state = &mut self.scopes[scope.0];
         // Load the old and new bump arenas
@@ -27,10 +34,10 @@ impl VirtualDom {
 
         match (&old, new) {
             // Normal pathway
-            (Ready(l), Ready(r)) => self.diff_node(l, r),
+            (Ready(l), Ready(r)) => self.diff_node(l, r, to),
 
             // Unwind the mutations if need be
-            (Ready(l), Aborted(p)) => self.diff_ok_to_err(l, p),
+            (Ready(l), Aborted(p)) => self.diff_ok_to_err(l, p, to),
 
             // Just move over the placeholder
             (Aborted(l), Aborted(r)) => {
@@ -44,24 +51,19 @@ impl VirtualDom {
                 l,
                 [r],
                 l.parent.borrow().expect("root node should not be none"),
+                to,
             ),
         };
         self.runtime.scope_stack.borrow_mut().pop();
     }
 
-    fn diff_ok_to_err(&mut self, l: &VNode, p: &VPlaceholder) {
+    fn diff_ok_to_err(&mut self, l: &VNode, p: &VPlaceholder, to: &mut impl WriteMutations) {
         let id = self.next_element();
         p.id.set(Some(id));
         *p.parent.borrow_mut() = l.parent.borrow().clone();
-        self.mutations.push(Mutation::CreatePlaceholder { id });
+        to.create_placeholder(id);
 
-        let pre_edits = self.mutations.edits.len();
-
-        self.remove_node(l, true);
-
-        // We should always have a remove mutation
-        // Eventually we don't want to generate placeholders, so this might not be true. But it's true today
-        assert!(self.mutations.edits.len() > pre_edits);
+        self.remove_node(l, true, to);
 
         // We want to optimize the replace case to use one less mutation if possible
         // Since mutations are done in reverse, the last node removed will be the first in the stack
@@ -72,7 +74,12 @@ impl VirtualDom {
         };
     }
 
-    fn diff_node(&mut self, left_template: &VNode, right_template: &VNode) {
+    fn diff_node(
+        &mut self,
+        left_template: &VNode,
+        right_template: &VNode,
+        to: &mut impl WriteMutations,
+    ) {
         // If hot reloading is enabled, we need to make sure we're using the latest template
         #[cfg(debug_assertions)]
         {
@@ -83,7 +90,7 @@ impl VirtualDom {
                     right_template.template.set(template);
                     if template != left_template.template.get() {
                         let parent = left_template.parent.take();
-                        return self.replace(left_template, [right_template], parent);
+                        return self.replace(left_template, [right_template], parent, to);
                     }
                 }
             }
@@ -101,7 +108,7 @@ impl VirtualDom {
 
         // If the templates are different by name, we need to replace the entire template
         if templates_are_different(left_template, right_template) {
-            return self.light_diff_templates(left_template, right_template);
+            return self.light_diff_templates(left_template, right_template, to);
         }
 
         // If the templates are the same, we can diff the attributes and children
@@ -117,7 +124,7 @@ impl VirtualDom {
 
                 // If the attributes are different (or volatile), we need to update them
                 if left_attr.value != right_attr.value || left_attr.volatile {
-                    self.update_attribute(right_attr, left_attr);
+                    self.update_attribute(right_attr, left_attr, to);
                 }
             });
 
@@ -135,7 +142,7 @@ impl VirtualDom {
                     },
                     scope: self.runtime.scope_stack.borrow().last().copied().unwrap(),
                 };
-                self.diff_dynamic_node(left_node, right_node, current_ref);
+                self.diff_dynamic_node(left_node, right_node, current_ref, to);
             });
 
         // Make sure the roots get transferred over while we're here
@@ -153,30 +160,36 @@ impl VirtualDom {
         left_node: &DynamicNode,
         right_node: &DynamicNode,
         parent: ElementRef,
+        to: &mut impl WriteMutations,
     ) {
         match (left_node, right_node) {
-            (Text(left), Text(right)) => self.diff_vtext(left, right),
-            (Fragment(left), Fragment(right)) => self.diff_non_empty_fragment(left, right, parent),
+            (Text(left), Text(right)) => self.diff_vtext(left, right, to),
+            (Fragment(left), Fragment(right)) => self.diff_non_empty_fragment(left, right, parent, to),
             (Placeholder(left), Placeholder(right)) => {
                 right.id.set(left.id.get());
                 *right.parent.borrow_mut() = left.parent.borrow().clone();
             },
-            (Component(left), Component(right)) => self.diff_vcomponent(left, right, Some(parent)),
-            (Placeholder(left), Fragment(right)) => self.replace_placeholder(left, right, parent),
-            (Fragment(left), Placeholder(right)) => self.node_to_placeholder(left, right, parent),
+            (Component(left), Component(right)) => self.diff_vcomponent(left, right, Some(parent), to),
+            (Placeholder(left), Fragment(right)) => self.replace_placeholder(left, right, parent, to),
+            (Fragment(left), Placeholder(right)) => self.node_to_placeholder(left, right, parent, to),
             _ => todo!("This is an usual custom case for dynamic nodes. We don't know how to handle it yet."),
         };
     }
 
-    fn update_attribute(&mut self, right_attr: &Attribute, left_attr: &Attribute) {
+    fn update_attribute(
+        &mut self,
+        right_attr: &Attribute,
+        left_attr: &Attribute,
+        to: &mut impl WriteMutations,
+    ) {
         let name = &left_attr.name;
         let value = &right_attr.value;
-        self.mutations.push(Mutation::SetAttribute {
-            id: left_attr.mounted_element.get(),
-            ns: right_attr.namespace,
+        to.set_attribute(
             name,
+            right_attr.namespace,
             value,
-        });
+            left_attr.mounted_element.get(),
+        );
     }
 
     fn diff_vcomponent(
@@ -184,6 +197,7 @@ impl VirtualDom {
         left: &VComponent,
         right: &VComponent,
         parent: Option<ElementRef>,
+        to: &mut impl WriteMutations,
     ) {
         if std::ptr::eq(left, right) {
             return;
@@ -191,7 +205,7 @@ impl VirtualDom {
 
         // Replace components that have different render fns
         if left.render_fn != right.render_fn {
-            return self.replace_vcomponent(right, left, parent);
+            return self.replace_vcomponent(right, left, parent, to);
         }
 
         // Make sure the new vcomponent has the right scopeid associated to it
@@ -221,7 +235,7 @@ impl VirtualDom {
 
         // Now run the component and diff it
         let new = self.run_scope(scope_id);
-        self.diff_scope(scope_id, new);
+        self.diff_scope(scope_id, new, to);
 
         self.dirty_scopes.remove(&DirtyScope {
             height: self.runtime.get_context(scope_id).unwrap().height,
@@ -234,14 +248,11 @@ impl VirtualDom {
         right: &VComponent,
         left: &VComponent,
         parent: Option<ElementRef>,
+        to: &mut impl WriteMutations,
     ) {
         let m = self.create_component_node(parent, right);
 
-        let pre_edits = self.mutations.edits.len();
-
-        self.remove_component_node(left, true);
-
-        assert!(self.mutations.edits.len() > pre_edits);
+        self.remove_component_node(left, true, to);
 
         // We want to optimize the replace case to use one less mutation if possible
         // Since mutations are done in reverse, the last node removed will be the first in the stack
@@ -289,13 +300,13 @@ impl VirtualDom {
     ///     Component { ..props }
     /// }
     /// ```
-    fn light_diff_templates(&mut self, left: &VNode, right: &VNode) {
+    fn light_diff_templates(&mut self, left: &VNode, right: &VNode, to: &mut impl WriteMutations) {
         let parent = left.parent.take();
         match matching_components(left, right) {
-            None => self.replace(left, [right], parent),
+            None => self.replace(left, [right], parent, to),
             Some(components) => components
                 .into_iter()
-                .for_each(|(l, r)| self.diff_vcomponent(l, r, parent)),
+                .for_each(|(l, r)| self.diff_vcomponent(l, r, parent, to)),
         }
     }
 
@@ -303,19 +314,22 @@ impl VirtualDom {
     ///
     /// This just moves the ID of the old node over to the new node, and then sets the text of the new node if it's
     /// different.
-    fn diff_vtext(&mut self, left: &VText, right: &VText) {
+    fn diff_vtext(&mut self, left: &VText, right: &VText, to: &mut impl WriteMutations) {
         let id = left.id.get().unwrap_or_else(|| self.next_element());
 
         right.id.set(Some(id));
         if left.value != right.value {
-            self.mutations.push(Mutation::SetText {
-                id,
-                value: &right.value,
-            });
+            to.set_node_text(&right.value, id);
         }
     }
 
-    fn diff_non_empty_fragment(&mut self, old: &[VNode], new: &[VNode], parent: ElementRef) {
+    fn diff_non_empty_fragment(
+        &mut self,
+        old: &[VNode],
+        new: &[VNode],
+        parent: ElementRef,
+        to: &mut impl WriteMutations,
+    ) {
         let new_is_keyed = new[0].key.is_some();
         let old_is_keyed = old[0].key.is_some();
         debug_assert!(
@@ -328,9 +342,9 @@ impl VirtualDom {
         );
 
         if new_is_keyed && old_is_keyed {
-            self.diff_keyed_children(old, new, parent);
+            self.diff_keyed_children(old, new, parent, to);
         } else {
-            self.diff_non_keyed_children(old, new, parent);
+            self.diff_non_keyed_children(old, new, parent, to);
         }
     }
 
@@ -342,7 +356,13 @@ impl VirtualDom {
     //     [... parent]
     //
     // the change list stack is in the same state when this function returns.
-    fn diff_non_keyed_children(&mut self, old: &[VNode], new: &[VNode], parent: ElementRef) {
+    fn diff_non_keyed_children(
+        &mut self,
+        old: &[VNode],
+        new: &[VNode],
+        parent: ElementRef,
+        to: &mut impl WriteMutations,
+    ) {
         use std::cmp::Ordering;
 
         // Handled these cases in `diff_children` before calling this function.
@@ -350,15 +370,15 @@ impl VirtualDom {
         debug_assert!(!old.is_empty());
 
         match old.len().cmp(&new.len()) {
-            Ordering::Greater => self.remove_nodes(&old[new.len()..]),
+            Ordering::Greater => self.remove_nodes(&old[new.len()..], to),
             Ordering::Less => {
-                self.create_and_insert_after(&new[old.len()..], old.last().unwrap(), parent)
+                self.create_and_insert_after(&new[old.len()..], old.last().unwrap(), parent, to)
             }
             Ordering::Equal => {}
         }
 
         for (new, old) in new.iter().zip(old.iter()) {
-            self.diff_node(old, new);
+            self.diff_node(old, new, to);
         }
     }
 
@@ -378,7 +398,13 @@ impl VirtualDom {
     // https://github.com/infernojs/inferno/blob/36fd96/packages/inferno/src/DOM/patching.ts#L530-L739
     //
     // The stack is empty upon entry.
-    fn diff_keyed_children(&mut self, old: &[VNode], new: &[VNode], parent: ElementRef) {
+    fn diff_keyed_children(
+        &mut self,
+        old: &[VNode],
+        new: &[VNode],
+        parent: ElementRef,
+        to: &mut impl WriteMutations,
+    ) {
         if cfg!(debug_assertions) {
             let mut keys = rustc_hash::FxHashSet::default();
             let mut assert_unique_keys = |children: &[VNode]| {
@@ -406,7 +432,7 @@ impl VirtualDom {
         //
         // `shared_prefix_count` is the count of how many nodes at the start of
         // `new` and `old` share the same keys.
-        let (left_offset, right_offset) = match self.diff_keyed_ends(old, new, parent) {
+        let (left_offset, right_offset) = match self.diff_keyed_ends(old, new, parent, to) {
             Some(count) => count,
             None => return,
         };
@@ -425,25 +451,25 @@ impl VirtualDom {
 
         if new_middle.is_empty() {
             // remove the old elements
-            self.remove_nodes(old_middle);
+            self.remove_nodes(old_middle, to);
         } else if old_middle.is_empty() {
             // there were no old elements, so just create the new elements
             // we need to find the right "foothold" though - we shouldn't use the "append" at all
             if left_offset == 0 {
                 // insert at the beginning of the old list
                 let foothold = &old[old.len() - right_offset];
-                self.create_and_insert_before(new_middle, foothold, parent);
+                self.create_and_insert_before(new_middle, foothold, parent, to);
             } else if right_offset == 0 {
                 // insert at the end  the old list
                 let foothold = old.last().unwrap();
-                self.create_and_insert_after(new_middle, foothold, parent);
+                self.create_and_insert_after(new_middle, foothold, parent, to);
             } else {
                 // inserting in the middle
                 let foothold = &old[left_offset - 1];
-                self.create_and_insert_after(new_middle, foothold, parent);
+                self.create_and_insert_after(new_middle, foothold, parent, to);
             }
         } else {
-            self.diff_keyed_middle(old_middle, new_middle, parent);
+            self.diff_keyed_middle(old_middle, new_middle, parent, to);
         }
     }
 
@@ -457,6 +483,7 @@ impl VirtualDom {
         old: &[VNode],
         new: &[VNode],
         parent: ElementRef,
+        to: &mut impl WriteMutations,
     ) -> Option<(usize, usize)> {
         let mut left_offset = 0;
 
@@ -465,21 +492,21 @@ impl VirtualDom {
             if old.key != new.key {
                 break;
             }
-            self.diff_node(old, new);
+            self.diff_node(old, new, to);
             left_offset += 1;
         }
 
         // If that was all of the old children, then create and append the remaining
         // new children and we're finished.
         if left_offset == old.len() {
-            self.create_and_insert_after(&new[left_offset..], old.last().unwrap(), parent);
+            self.create_and_insert_after(&new[left_offset..], old.last().unwrap(), parent, to);
             return None;
         }
 
         // And if that was all of the new children, then remove all of the remaining
         // old children and we're finished.
         if left_offset == new.len() {
-            self.remove_nodes(&old[left_offset..]);
+            self.remove_nodes(&old[left_offset..], to);
             return None;
         }
 
@@ -490,7 +517,7 @@ impl VirtualDom {
             if old.key != new.key {
                 break;
             }
-            self.diff_node(old, new);
+            self.diff_node(old, new, to);
             right_offset += 1;
         }
 
@@ -511,7 +538,13 @@ impl VirtualDom {
     //
     // Upon exit from this function, it will be restored to that same self.
     #[allow(clippy::too_many_lines)]
-    fn diff_keyed_middle(&mut self, old: &[VNode], new: &[VNode], parent: ElementRef) {
+    fn diff_keyed_middle(
+        &mut self,
+        old: &[VNode],
+        new: &[VNode],
+        parent: ElementRef,
+        to: &mut impl WriteMutations,
+    ) {
         /*
         1. Map the old keys into a numerical ordering based on indices.
         2. Create a map of old key to its index
@@ -567,8 +600,8 @@ impl VirtualDom {
         // create the new children afresh.
         if shared_keys.is_empty() {
             if !old.is_empty() {
-                self.remove_nodes(&old[1..]);
-                self.replace(&old[0], new, Some(parent));
+                self.remove_nodes(&old[1..], to);
+                self.replace(&old[0], new, Some(parent), to);
             } else {
                 // I think this is wrong - why are we appending?
                 // only valid of the if there are no trailing elements
@@ -584,7 +617,7 @@ impl VirtualDom {
         for child in old {
             let key = child.key.unwrap();
             if !shared_keys.contains(&key) {
-                self.remove_node(child, true);
+                self.remove_node(child, true, to);
             }
         }
 
@@ -611,7 +644,7 @@ impl VirtualDom {
         }
 
         for idx in &lis_sequence {
-            self.diff_node(&old[new_index_to_old_index[*idx]], &new[*idx]);
+            self.diff_node(&old[new_index_to_old_index[*idx]], &new[*idx], to);
         }
 
         let mut nodes_created = 0;
@@ -625,17 +658,14 @@ impl VirtualDom {
                 if old_index == u32::MAX as usize {
                     nodes_created += self.create(new_node);
                 } else {
-                    self.diff_node(&old[old_index], new_node);
-                    nodes_created += self.push_all_real_nodes(new_node);
+                    self.diff_node(&old[old_index], new_node, to);
+                    nodes_created += self.push_all_real_nodes(new_node, to);
                 }
             }
 
             let id = self.find_last_element(&new[last]);
             if nodes_created > 0 {
-                self.mutations.push(Mutation::InsertAfter {
-                    id,
-                    m: nodes_created,
-                })
+                to.insert_nodes_after(id, nodes_created)
             }
             nodes_created = 0;
         }
@@ -651,17 +681,14 @@ impl VirtualDom {
                     if old_index == u32::MAX as usize {
                         nodes_created += self.create(new_node);
                     } else {
-                        self.diff_node(&old[old_index], new_node);
-                        nodes_created += self.push_all_real_nodes(new_node);
+                        self.diff_node(&old[old_index], new_node, to);
+                        nodes_created += self.push_all_real_nodes(new_node, to);
                     }
                 }
 
                 let id = self.find_first_element(&new[last]);
                 if nodes_created > 0 {
-                    self.mutations.push(Mutation::InsertBefore {
-                        id,
-                        m: nodes_created,
-                    });
+                    to.insert_nodes_before(id, nodes_created);
                 }
 
                 nodes_created = 0;
@@ -677,23 +704,20 @@ impl VirtualDom {
                 if old_index == u32::MAX as usize {
                     nodes_created += self.create(new_node);
                 } else {
-                    self.diff_node(&old[old_index], new_node);
-                    nodes_created += self.push_all_real_nodes(new_node);
+                    self.diff_node(&old[old_index], new_node, to);
+                    nodes_created += self.push_all_real_nodes(new_node, to);
                 }
             }
 
             let id = self.find_first_element(&new[first_lis]);
             if nodes_created > 0 {
-                self.mutations.push(Mutation::InsertBefore {
-                    id,
-                    m: nodes_created,
-                });
+                to.insert_nodes_before(id, nodes_created);
             }
         }
     }
 
     /// Push all the real nodes on the stack
-    fn push_all_real_nodes(&mut self, node: &VNode) -> usize {
+    fn push_all_real_nodes(&mut self, node: &VNode, to: &mut impl WriteMutations) -> usize {
         node.template
             .get()
             .roots
@@ -703,35 +727,29 @@ impl VirtualDom {
                 let node = match node.dynamic_root(idx) {
                     Some(node) => node,
                     None => {
-                        self.mutations.push(Mutation::PushRoot {
-                            id: node.root_ids.borrow()[idx],
-                        });
+                        to.push_root(node.root_ids.borrow()[idx]);
                         return 1;
                     }
                 };
 
                 match node {
                     Text(t) => {
-                        self.mutations.push(Mutation::PushRoot {
-                            id: t.id.get().unwrap(),
-                        });
+                        to.push_root(t.id.get().unwrap());
                         1
                     }
                     Placeholder(t) => {
-                        self.mutations.push(Mutation::PushRoot {
-                            id: t.id.get().unwrap(),
-                        });
+                        to.push_root(t.id.get().unwrap());
                         1
                     }
                     Fragment(nodes) => nodes
                         .iter()
-                        .map(|node| self.push_all_real_nodes(node))
+                        .map(|node| self.push_all_real_nodes(node, to))
                         .sum(),
 
                     Component(comp) => {
                         let scope = comp.scope.get().unwrap();
                         match self.get_scope(scope).unwrap().root_node() {
-                            RenderReturn::Ready(node) => self.push_all_real_nodes(node),
+                            RenderReturn::Ready(node) => self.push_all_real_nodes(node, to),
                             RenderReturn::Aborted(_node) => todo!(),
                         }
                     }
@@ -744,6 +762,7 @@ impl VirtualDom {
         &mut self,
         nodes: impl IntoIterator<Item = &'a VNode>,
         parent: Option<ElementRef>,
+        to: &mut impl WriteMutations,
     ) -> usize {
         nodes
             .into_iter()
@@ -754,16 +773,28 @@ impl VirtualDom {
             .sum()
     }
 
-    fn create_and_insert_before(&mut self, new: &[VNode], before: &VNode, parent: ElementRef) {
-        let m = self.create_children(new, Some(parent));
+    fn create_and_insert_before(
+        &mut self,
+        new: &[VNode],
+        before: &VNode,
+        parent: ElementRef,
+        to: &mut impl WriteMutations,
+    ) {
+        let m = self.create_children(new, Some(parent), to);
         let id = self.find_first_element(before);
-        self.mutations.push(Mutation::InsertBefore { id, m })
+        to.insert_nodes_before(id, m);
     }
 
-    fn create_and_insert_after(&mut self, new: &[VNode], after: &VNode, parent: ElementRef) {
-        let m = self.create_children(new, Some(parent));
+    fn create_and_insert_after(
+        &mut self,
+        new: &[VNode],
+        after: &VNode,
+        parent: ElementRef,
+        to: &mut impl WriteMutations,
+    ) {
+        let m = self.create_children(new, Some(parent), to);
         let id = self.find_last_element(after);
-        self.mutations.push(Mutation::InsertAfter { id, m })
+        to.insert_nodes_after(id, m);
     }
 
     /// Simply replace a placeholder with a list of nodes
@@ -772,10 +803,11 @@ impl VirtualDom {
         l: &VPlaceholder,
         r: impl IntoIterator<Item = &'a VNode>,
         parent: ElementRef,
+        to: &mut impl WriteMutations,
     ) {
-        let m = self.create_children(r, Some(parent));
+        let m = self.create_children(r, Some(parent), to);
         let id = l.id.get().unwrap();
-        self.mutations.push(Mutation::ReplaceWith { id, m });
+        to.replace_with(id, m);
         self.reclaim(id);
     }
 
@@ -784,16 +816,11 @@ impl VirtualDom {
         left: &VNode,
         right: impl IntoIterator<Item = &'a VNode>,
         parent: Option<ElementRef>,
+        to: &mut impl WriteMutations,
     ) {
-        let m = self.create_children(right, parent);
+        let m = self.create_children(right, parent, to);
 
-        let pre_edits = self.mutations.edits.len();
-
-        self.remove_node(left, true);
-
-        // We should always have a remove mutation
-        // Eventually we don't want to generate placeholders, so this might not be true. But it's true today
-        assert!(self.mutations.edits.len() > pre_edits);
+        self.remove_node(left, true, to);
 
         // We want to optimize the replace case to use one less mutation if possible
         // Since mutations are done in reverse, the last node removed will be the first in the stack
@@ -804,17 +831,22 @@ impl VirtualDom {
         };
     }
 
-    fn node_to_placeholder(&mut self, l: &[VNode], r: &VPlaceholder, parent: ElementRef) {
+    fn node_to_placeholder(
+        &mut self,
+        l: &[VNode],
+        r: &VPlaceholder,
+        parent: ElementRef,
+        to: &mut impl WriteMutations,
+    ) {
         // Create the placeholder first, ensuring we get a dedicated ID for the placeholder
         let placeholder = self.next_element();
 
         r.id.set(Some(placeholder));
         r.parent.borrow_mut().replace(parent);
 
-        self.mutations
-            .push(Mutation::CreatePlaceholder { id: placeholder });
+        to.create_placeholder(placeholder);
 
-        self.remove_nodes(l);
+        self.remove_nodes(l, to);
 
         // We want to optimize the replace case to use one less mutation if possible
         // Since mutations are done in reverse, the last node removed will be the first in the stack
@@ -827,43 +859,43 @@ impl VirtualDom {
 
     /// Remove these nodes from the dom
     /// Wont generate mutations for the inner nodes
-    fn remove_nodes(&mut self, nodes: &[VNode]) {
+    fn remove_nodes(&mut self, nodes: &[VNode], to: &mut impl WriteMutations) {
         nodes
             .iter()
             .rev()
-            .for_each(|node| self.remove_node(node, true));
+            .for_each(|node| self.remove_node(node, true, to));
     }
 
-    fn remove_node(&mut self, node: &VNode, gen_muts: bool) {
+    fn remove_node(&mut self, node: &VNode, gen_muts: bool, to: &mut impl WriteMutations) {
         // Clean up any attributes that have claimed a static node as dynamic for mount/unmounta
         // Will not generate mutations!
-        self.reclaim_attributes(node);
+        self.reclaim_attributes(node, to);
 
         // Remove the nested dynamic nodes
         // We don't generate mutations for these, as they will be removed by the parent (in the next line)
         // But we still need to make sure to reclaim them from the arena and drop their hooks, etc
-        self.remove_nested_dyn_nodes(node);
+        self.remove_nested_dyn_nodes(node, to);
 
         // Clean up the roots, assuming we need to generate mutations for these
         // This is done last in order to preserve Node ID reclaim order (reclaim in reverse order of claim)
-        self.reclaim_roots(node, gen_muts);
+        self.reclaim_roots(node, gen_muts, to);
     }
 
-    fn reclaim_roots(&mut self, node: &VNode, gen_muts: bool) {
+    fn reclaim_roots(&mut self, node: &VNode, gen_muts: bool, to: &mut impl WriteMutations) {
         for (idx, _) in node.template.get().roots.iter().enumerate() {
             if let Some(dy) = node.dynamic_root(idx) {
-                self.remove_dynamic_node(dy, gen_muts);
+                self.remove_dynamic_node(dy, gen_muts, to);
             } else {
                 let id = node.root_ids.borrow()[idx];
                 if gen_muts {
-                    self.mutations.push(Mutation::Remove { id });
+                    to.remove_node(id);
                 }
                 self.reclaim(id);
             }
         }
     }
 
-    fn reclaim_attributes(&mut self, node: &VNode) {
+    fn reclaim_attributes(&mut self, node: &VNode, to: &mut impl WriteMutations) {
         let mut id = None;
         for (idx, attr) in node.dynamic_attrs.iter().enumerate() {
             // We'll clean up the root nodes either way, so don't worry
@@ -894,7 +926,7 @@ impl VirtualDom {
         }
     }
 
-    fn remove_nested_dyn_nodes(&mut self, node: &VNode) {
+    fn remove_nested_dyn_nodes(&mut self, node: &VNode, to: &mut impl WriteMutations) {
         for (idx, dyn_node) in node.dynamic_nodes.iter().enumerate() {
             let path_len = node
                 .template
@@ -904,41 +936,56 @@ impl VirtualDom {
                 .map(|path| path.len());
             // Roots are cleaned up automatically above and nodes with a empty path are placeholders
             if let Some(2..) = path_len {
-                self.remove_dynamic_node(dyn_node, false)
+                self.remove_dynamic_node(dyn_node, false, to)
             }
         }
     }
 
-    fn remove_dynamic_node(&mut self, node: &DynamicNode, gen_muts: bool) {
+    fn remove_dynamic_node(
+        &mut self,
+        node: &DynamicNode,
+        gen_muts: bool,
+        to: &mut impl WriteMutations,
+    ) {
         match node {
-            Component(comp) => self.remove_component_node(comp, gen_muts),
-            Text(t) => self.remove_text_node(t, gen_muts),
-            Placeholder(t) => self.remove_placeholder(t, gen_muts),
+            Component(comp) => self.remove_component_node(comp, gen_muts, to),
+            Text(t) => self.remove_text_node(t, gen_muts, to),
+            Placeholder(t) => self.remove_placeholder(t, gen_muts, to),
             Fragment(nodes) => nodes
                 .iter()
-                .for_each(|node| self.remove_node(node, gen_muts)),
+                .for_each(|node| self.remove_node(node, gen_muts, to)),
         };
     }
 
-    fn remove_placeholder(&mut self, t: &VPlaceholder, gen_muts: bool) {
+    fn remove_placeholder(
+        &mut self,
+        t: &VPlaceholder,
+        gen_muts: bool,
+        to: &mut impl WriteMutations,
+    ) {
         if let Some(id) = t.id.take() {
             if gen_muts {
-                self.mutations.push(Mutation::Remove { id });
+                to.remove_node(id);
             }
             self.reclaim(id)
         }
     }
 
-    fn remove_text_node(&mut self, t: &VText, gen_muts: bool) {
+    fn remove_text_node(&mut self, t: &VText, gen_muts: bool, to: &mut impl WriteMutations) {
         if let Some(id) = t.id.take() {
             if gen_muts {
-                self.mutations.push(Mutation::Remove { id });
+                to.remove_node(id);
             }
             self.reclaim(id)
         }
     }
 
-    fn remove_component_node(&mut self, comp: &VComponent, gen_muts: bool) {
+    fn remove_component_node(
+        &mut self,
+        comp: &VComponent,
+        gen_muts: bool,
+        to: &mut impl WriteMutations,
+    ) {
         // Remove the component reference from the vcomponent so they're not tied together
         let scope = comp
             .scope
@@ -947,8 +994,10 @@ impl VirtualDom {
 
         // Remove the component from the dom
         match unsafe { self.get_scope(scope).unwrap().root_node() } {
-            RenderReturn::Ready(t) => self.remove_node(t, gen_muts),
-            RenderReturn::Aborted(placeholder) => self.remove_placeholder(placeholder, gen_muts),
+            RenderReturn::Ready(t) => self.remove_node(t, gen_muts, to),
+            RenderReturn::Aborted(placeholder) => {
+                self.remove_placeholder(placeholder, gen_muts, to)
+            }
         };
 
         // Now drop all the resouces
