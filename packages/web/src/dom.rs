@@ -6,10 +6,11 @@
 //! - tests to ensure dyn_into works for various event types.
 //! - Partial delegation?
 
+use dioxus_interpreter_js::get_node;
 use dioxus_core::{
     BorrowedAttributeValue, ElementId, Mutation, Template, TemplateAttribute, TemplateNode,
 };
-use dioxus_html::{event_bubbles, PlatformEventData};
+use dioxus_html::{event_bubbles, PlatformEventData, MountedData};
 use dioxus_interpreter_js::{minimal_bindings, save_template, Channel};
 use futures_channel::mpsc;
 use rustc_hash::FxHashMap;
@@ -267,12 +268,12 @@ impl WebsysDom {
         let node = get_node(id.0 as u32);
         if let Some(element) = node.dyn_ref::<Element>() {
             let data: MountedData = element.into();
-            let data = Rc::new(data);
+            let data = Box::new(data);
             let _ = self.event_channel.unbounded_send(UiEvent {
                 name: "mounted".to_string(),
                 bubbles: false,
                 element: id,
-                data,
+                data: PlatformEventData::new(data),
             });
         }
     }
