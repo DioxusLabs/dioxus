@@ -1,7 +1,6 @@
 use crate::{
     cfg::{Config, WindowCloseBehaviour},
     desktop_context::WindowEventHandlers,
-    edits::WebviewQueue,
     element::DesktopElement,
     file_upload::FileDialogRequest,
     ipc::IpcMessage,
@@ -13,13 +12,19 @@ use crate::{
 use crossbeam_channel::Receiver;
 use dioxus_core::{Component, ElementId, VirtualDom};
 use dioxus_html::{native_bind::NativeFileEngine, FormData, HtmlEvent, MountedData};
-use std::{cell::Cell, collections::HashMap, rc::Rc, sync::Arc};
+use std::{
+    cell::{Cell, RefCell},
+    collections::HashMap,
+    rc::Rc,
+    sync::Arc,
+};
 use tao::{
     event::Event,
     event_loop::{ControlFlow, EventLoop, EventLoopBuilder, EventLoopProxy, EventLoopWindowTarget},
     window::WindowId,
 };
 
+/// The single top-level object that manages all the running windows, assets, shortcuts, etc
 pub(crate) struct App<P> {
     // move the props into a cell so we can pop it out later to create the first window
     // iOS panics if we create a window before the event loop is started, so we toss them into a cell
@@ -33,17 +38,16 @@ pub(crate) struct App<P> {
     pub(crate) webviews: HashMap<WindowId, WebviewInstance>,
     pub(crate) window_behavior: WindowCloseBehaviour,
 
-    /// This bit of state is shared between all the windows, providing a way for us to communicate with
-    /// running instances.
-    ///
-    /// Todo: everything in this struct is wrapped in Rc<>, but we really only need the one top-level refcell
     pub(crate) shared: SharedContext,
 }
 
+/// A bundle of state shared between all the windows, providing a way for us to communicate with running webview.
+///
+/// Todo: everything in this struct is wrapped in Rc<>, but we really only need the one top-level refcell
 #[derive(Clone)]
 pub struct SharedContext {
     pub(crate) event_handlers: WindowEventHandlers,
-    pub(crate) pending_webviews: WebviewQueue,
+    pub(crate) pending_webviews: Rc<RefCell<Vec<WebviewInstance>>>,
     pub(crate) shortcut_manager: ShortcutRegistry,
     pub(crate) global_hotkey_channel: Receiver<GlobalHotKeyEvent>,
     pub(crate) proxy: EventLoopProxy<UserWindowEvent>,
@@ -64,7 +68,7 @@ impl<P: 'static> App<P> {
             cfg: Cell::new(Some(cfg)),
             shared: SharedContext {
                 event_handlers: WindowEventHandlers::default(),
-                pending_webviews: WebviewQueue::default(),
+                pending_webviews: Default::default(),
                 shortcut_manager: ShortcutRegistry::new(),
                 global_hotkey_channel: GlobalHotKeyEvent::receiver().clone(),
                 proxy: event_loop.create_proxy(),
@@ -78,22 +82,16 @@ impl<P: 'static> App<P> {
         (event_loop, app)
     }
 
-    pub fn tick(
-        &mut self,
-        window_event: &Event<'_, UserWindowEvent>,
-        event_loop: &EventLoopWindowTarget<UserWindowEvent>,
-    ) {
+    pub fn tick(&mut self, window_event: &Event<'_, UserWindowEvent>) {
         self.control_flow = ControlFlow::Wait;
 
         self.shared
             .event_handlers
-            .apply_event(window_event, event_loop);
+            .apply_event(window_event, &self.shared.target);
 
-        _ = self
-            .shared
-            .global_hotkey_channel
-            .try_recv()
-            .map(|event| self.shared.shortcut_manager.call_handlers(event));
+        if let Ok(event) = self.shared.global_hotkey_channel.try_recv() {
+            self.shared.shortcut_manager.call_handlers(event);
+        }
     }
 
     #[cfg(all(feature = "hot-reload", debug_assertions))]
@@ -136,7 +134,6 @@ impl<P: 'static> App<P> {
                 let Some(webview) = self.webviews.get(&id) else {
                     return;
                 };
-
                 hide_app_window(&webview.desktop_context.webview);
             }
 
@@ -164,14 +161,14 @@ impl<P: 'static> App<P> {
 
         self.is_visible_before_start = cfg.window.window.visible;
 
-        let handler = WebviewInstance::new(
+        let webview = WebviewInstance::new(
             cfg,
             VirtualDom::new_with_props(self.root, props),
             self.shared.clone(),
         );
 
-        let id = handler.desktop_context.window.id();
-        self.webviews.insert(id, handler);
+        let id = webview.desktop_context.window.id();
+        self.webviews.insert(id, webview);
 
         _ = self
             .shared

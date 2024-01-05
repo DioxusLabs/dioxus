@@ -7,7 +7,8 @@ use tao::{event_loop::EventLoopProxy, window::WindowId};
 ///
 /// This lets the VirtualDom "come up for air" and process events while the main thread is blocked by the WebView.
 ///
-/// All other IO lives in the Tokio runtime,
+/// All IO and multithreading lives on other threads. Thanks to tokio's work stealing approach, the main thread can never
+/// claim a task while it's blocked by the event loop.
 pub fn tao_waker(proxy: EventLoopProxy<UserWindowEvent>, id: WindowId) -> std::task::Waker {
     struct DomHandle {
         proxy: EventLoopProxy<UserWindowEvent>,

@@ -1,10 +1,9 @@
-use std::rc::Rc;
-
 use crate::{
     assets::*, ipc::UserWindowEvent, shortcut::IntoAccelerator, window, DesktopContext,
     ShortcutHandle, ShortcutRegistryError, WryEventHandler,
 };
 use dioxus_core::ScopeState;
+use std::rc::Rc;
 use tao::{event::Event, event_loop::EventLoopWindowTarget};
 
 /// Get an imperative handle to the current window

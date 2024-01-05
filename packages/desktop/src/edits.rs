@@ -1,20 +1,14 @@
-use crate::webview::WebviewInstance;
-use dioxus_core::Mutations;
-use dioxus_core::{BorrowedAttributeValue, Template, TemplateAttribute, TemplateNode};
+use dioxus_core::{BorrowedAttributeValue, Mutations, Template, TemplateAttribute, TemplateNode};
 use dioxus_html::event_bubbles;
 use dioxus_interpreter_js::binary_protocol::Channel;
 use rustc_hash::FxHashMap;
 use std::{
-    cell::RefCell,
-    rc::Rc,
     sync::atomic::AtomicU16,
     sync::Arc,
     sync::{atomic::Ordering, Mutex},
 };
 
 use wry::RequestAsyncResponder;
-
-pub(crate) type WebviewQueue = Rc<RefCell<Vec<WebviewInstance>>>;
 
 /// This handles communication between the requests that the webview makes and the interpreter. The interpreter
 /// constantly makes long running requests to the webview to get any edits that should be made to the DOM almost like

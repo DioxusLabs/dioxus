@@ -97,8 +97,8 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
 pub fn launch_with_props_blocking<P: 'static>(root: Component<P>, props: P, cfg: Config) {
     let (event_loop, mut app) = App::new(cfg, props, root);
 
-    event_loop.run(move |window_event, event_loop, control_flow| {
-        app.tick(&window_event, event_loop);
+    event_loop.run(move |window_event, _, control_flow| {
+        app.tick(&window_event);
 
         match window_event {
             Event::NewEvents(StartCause::Init) => app.handle_start_cause_init(),

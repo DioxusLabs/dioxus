@@ -8,8 +8,6 @@ use wry::{
     FileDropEvent,
 };
 
-// pub(crate) type DynEventHandlerFn = dyn Fn(&mut EventLoop<()>, &mut WebView);
-
 /// The behaviour of the application when the last window is closed.
 #[derive(Copy, Clone, Eq, PartialEq)]
 pub enum WindowCloseBehaviour {
