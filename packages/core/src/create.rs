@@ -199,7 +199,6 @@ impl VirtualDom {
                         path: template.template.get().node_paths[idx],
                     },
                     element: template.clone(),
-                    scope: self.runtime.current_scope_id().unwrap_or(ScopeId(0)),
                 };
                 self.create_dynamic_node(&template_ref, node, to)
             }
@@ -209,7 +208,6 @@ impl VirtualDom {
                         path: template.template.get().node_paths[idx],
                     },
                     element: template.clone(),
-                    scope: self.runtime.current_scope_id().unwrap_or(ScopeId(0)),
                 };
                 *parent.borrow_mut() = Some(template_ref);
                 let id = self.set_slot(id);
@@ -297,7 +295,6 @@ impl VirtualDom {
                     path: template.template.get().node_paths[idx],
                 },
                 element: template.clone(),
-                scope: self.runtime.current_scope_id().unwrap_or(ScopeId(0)),
             };
             let m = self.create_dynamic_node(&boundary_ref, &template.dynamic_nodes[idx], to);
             if m > 0 {
@@ -353,7 +350,6 @@ impl VirtualDom {
                 let element_ref = ElementRef {
                     path: ElementPath { path },
                     element: template.clone(),
-                    scope: self.runtime.current_scope_id().unwrap_or(ScopeId(0)),
                 };
                 self.elements[id.0] = Some(element_ref);
                 to.create_event_listener(&unbounded_name[2..], id);

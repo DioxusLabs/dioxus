@@ -276,10 +276,11 @@ impl VirtualDom {
         );
 
         // Unlike react, we provide a default error boundary that just renders the error as a string
-        root.provide_context(Rc::new(ErrorBoundary::new_in_scope(
-            ScopeId::ROOT,
-            Arc::new(|_| {}),
-        )));
+        root.context()
+            .provide_context(Rc::new(ErrorBoundary::new_in_scope(
+                ScopeId::ROOT,
+                Arc::new(|_| {}),
+            )));
 
         // the root element is always given element ID 0 since it's the container for the entire tree
         dom.elements.insert(None);
@@ -305,7 +306,7 @@ impl VirtualDom {
     ///
     /// This is useful for what is essentially dependency injection when building the app
     pub fn with_root_context<T: Clone + 'static>(self, context: T) -> Self {
-        self.base_scope().provide_context(context);
+        self.base_scope().context().provide_context(context);
         self
     }
 
@@ -314,7 +315,7 @@ impl VirtualDom {
     /// Whenever the Runtime "works", it will re-render this scope
     pub fn mark_dirty(&mut self, id: ScopeId) {
         if let Some(scope) = self.get_scope(id) {
-            let height = scope.height();
+            let height = scope.context().height();
             tracing::trace!("Marking scope {:?} ({}) as dirty", id, scope.context().name);
             self.dirty_scopes.insert(DirtyScope { height, id });
         }
@@ -403,11 +404,8 @@ impl VirtualDom {
                 // We check the bubble state between each call to see if the event has been stopped from bubbling
                 for listener in listeners.into_iter().rev() {
                     if let AttributeValue::Listener(listener) = listener {
-                        let origin = path.scope;
-                        self.runtime.scope_stack.borrow_mut().push(origin);
                         self.runtime.rendering.set(false);
-                        (listener.borrow_mut())(uievent.clone());
-                        self.runtime.scope_stack.borrow_mut().pop();
+                        listener.call(uievent.clone());
                         self.runtime.rendering.set(true);
 
                         if !uievent.propagates.get() {
@@ -432,11 +430,8 @@ impl VirtualDom {
                     // Only call the listener if this is the exact target element.
                     if attr.name.trim_start_matches("on") == name && target_path == this_path {
                         if let AttributeValue::Listener(listener) = &attr.value {
-                            let origin = path.scope;
-                            self.runtime.scope_stack.borrow_mut().push(origin);
                             self.runtime.rendering.set(false);
-                            (listener.borrow_mut())(uievent.clone());
-                            self.runtime.scope_stack.borrow_mut().pop();
+                            listener.call(uievent.clone());
                             self.runtime.rendering.set(true);
 
                             break;

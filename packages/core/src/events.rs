@@ -1,4 +1,4 @@
-use crate::{runtime::with_runtime, ScopeId};
+use crate::{runtime::with_runtime, scope_context::current_scope_id, ScopeId};
 use std::{
     cell::{Cell, RefCell},
     rc::Rc,
@@ -149,7 +149,18 @@ impl<T> Default for EventHandler<T> {
 
 type ExternalListenerCallback<T> = Box<dyn FnMut(T)>;
 
-impl<T> EventHandler< T> {
+impl<T> EventHandler<T> {
+    /// Create a new [`EventHandler`] from an [`FnMut`]
+    pub fn new(mut f: impl FnMut(T) + 'static) -> EventHandler<T> {
+        let callback = RefCell::new(Some(Box::new(move |event: T| {
+            f(event);
+        }) as Box<dyn FnMut(T)>));
+        EventHandler {
+            callback,
+            origin: current_scope_id().expect("to be in a dioxus runtime"),
+        }
+    }
+
     /// Call this event handler with the appropriate event type
     ///
     /// This borrows the event using a RefCell. Recursively calling a listener will cause a panic.

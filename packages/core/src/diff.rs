@@ -142,7 +142,6 @@ impl VirtualDom {
                     path: ElementPath {
                         path: left_template.template.get().node_paths[dyn_node_idx],
                     },
-                    scope: self.runtime.scope_stack.borrow().last().copied().unwrap(),
                 };
                 self.diff_dynamic_node(left_node, right_node, &current_ref, to);
             });

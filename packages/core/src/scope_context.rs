@@ -301,6 +301,11 @@ impl ScopeContext {
     pub fn generation(&self) -> usize {
         self.render_count.get()
     }
+
+    /// Get the height of this scope
+    pub fn height(&self) -> u32 {
+        self.height
+    }
 }
 
 impl Drop for ScopeContext {

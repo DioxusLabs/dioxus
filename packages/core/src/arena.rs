@@ -21,9 +21,6 @@ pub struct ElementRef {
     // the pathway of the real element inside the template
     pub(crate) path: ElementPath,
 
-    // the scope that this element belongs to
-    pub(crate) scope: ScopeId,
-
     // The actual element
     pub(crate) element: VNode,
 }
@@ -59,7 +56,7 @@ impl VirtualDom {
     // Note: This will not remove any ids from the arena
     pub(crate) fn drop_scope(&mut self, id: ScopeId) {
         self.dirty_scopes.remove(&DirtyScope {
-            height: self.scopes[id.0].height(),
+            height: self.scopes[id.0].context().height,
             id,
         });
 

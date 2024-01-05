@@ -1,5 +1,6 @@
-use crate::any_props::BoxedAnyProps;
-use crate::innerlude::ElementRef;
+use crate::any_props::{BoxedAnyProps, VProps};
+use crate::innerlude::{ElementRef, EventHandler};
+use crate::Properties;
 use crate::{arena::ElementId, Element, Event, ScopeId};
 use std::ops::Deref;
 use std::rc::Rc;
@@ -336,6 +337,13 @@ pub enum DynamicNode {
     Fragment(Vec<VNode>),
 }
 
+impl DynamicNode {
+    /// Convert any item that implements [`IntoDynNode`] into a [`DynamicNode`]
+    pub fn make_node<'c, I>(into: impl IntoDynNode<I> + 'c) -> DynamicNode {
+        into.into_dyn_node()
+    }
+}
+
 impl Default for DynamicNode {
     fn default() -> Self {
         Self::Placeholder(Default::default())
@@ -360,6 +368,35 @@ pub struct VComponent {
 }
 
 impl VComponent {
+    /// Create a new [`VComponent`] variant
+    ///
+    ///
+    /// The given component can be any of four signatures. Remember that an [`Element`] is really a [`Result<VNode>`].
+    ///
+    /// ```rust, ignore
+    /// // Without explicit props
+    /// fn(Scope) -> Element;
+    /// async fn(Scope<'_>) -> Element;
+    ///
+    /// // With explicit props
+    /// fn(Scope<Props>) -> Element;
+    /// async fn(Scope<Props<'_>>) -> Element;
+    /// ```
+    pub fn new<P>(&self, component: fn(P) -> Element, props: P, fn_name: &'static str) -> Self
+    where
+        // The properties must be valid until the next bump frame
+        P: Properties,
+    {
+        let vcomp = VProps::new(component, P::memoize, props, fn_name);
+
+        VComponent {
+            name: fn_name,
+            render_fn: component as *const (),
+            props: BoxedAnyProps::new(vcomp),
+            scope: Default::default(),
+        }
+    }
+
     /// Get the scope that this component is mounted to
     pub fn mounted_scope(&self) -> Option<ScopeId> {
         self.scope.get()
@@ -397,6 +434,12 @@ impl VText {
     /// Get the mounted ID of this node
     pub fn mounted_element(&self) -> Option<ElementId> {
         self.id.get()
+    }
+}
+
+impl From<Arguments<'_>> for VText {
+    fn from(args: Arguments) -> Self {
+        Self::new(args.to_string())
     }
 }
 
@@ -471,19 +514,23 @@ pub struct Attribute {
 }
 
 impl Attribute {
-    /// Create a new attribute
-    pub fn new(
+    /// Create a new [`Attribute`] from a name, value, namespace, and volatile bool
+    ///
+    /// "Volatile" referes to whether or not Dioxus should always override the value. This helps prevent the UI in
+    /// some renderers stay in sync with the VirtualDom's understanding of the world
+    pub fn attr(
+        &self,
         name: &'static str,
-        value: AttributeValue,
+        value: impl IntoAttributeValue,
         namespace: Option<&'static str>,
         volatile: bool,
-    ) -> Self {
-        Self {
+    ) -> Attribute {
+        Attribute {
             name,
-            value,
             namespace,
             volatile,
-            mounted_element: Cell::new(ElementId::default()),
+            mounted_element: Default::default(),
+            value: value.into_value(),
         }
     }
 
@@ -511,7 +558,7 @@ pub enum AttributeValue {
     Bool(bool),
 
     /// A listener, like "onclick"
-    Listener(RefCell<ListenerCb>),
+    Listener(ListenerCb),
 
     /// An arbitrary value that implements PartialEq and is static
     Any(Box<dyn AnyValue>),
@@ -520,7 +567,28 @@ pub enum AttributeValue {
     None,
 }
 
-pub type ListenerCb = Box<dyn FnMut(Event<dyn Any>)>;
+impl AttributeValue {
+    /// Create a new [`AttributeValue`] with the listener variant from a callback
+    ///
+    /// The callback must be confined to the lifetime of the ScopeState
+    pub fn listener<T: 'static>(mut callback: impl FnMut(Event<T>) + 'static) -> AttributeValue {
+        AttributeValue::Listener(EventHandler::new(move |event: Event<dyn Any>| {
+            if let Ok(data) = event.data.downcast::<T>() {
+                callback(Event {
+                    propagates: event.propagates,
+                    data,
+                });
+            }
+        }))
+    }
+
+    /// Create a new [`AttributeValue`] with a value that implements [`AnyValue`]
+    pub fn any_value<T: AnyValue>(&self, value: T) -> AttributeValue {
+        AttributeValue::Any(Box::new(value))
+    }
+}
+
+pub type ListenerCb = EventHandler<Event<dyn Any>>;
 
 impl std::fmt::Debug for AttributeValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
