@@ -61,22 +61,21 @@ impl VirtualDom {
     //
     // Note: This will not remove any ids from the arena
     pub(crate) fn drop_scope(&mut self, id: ScopeId, recursive: bool) {
-        self.dirty_scopes.remove(&DirtyScope {
-            height: self.scopes[id.0].height(),
-            id,
-        });
+        // todo: Do we need this now that we don't have a bunch of unsafe code?
+        // self.dirty_scopes.remove(&DirtyScope {
+        //     height: self.scopes[id.0].height(),
+        //     id,
+        // });
 
-        if recursive {
-            if let Some(root) = self.scopes[id.0].try_root_node() {
-                if let RenderReturn::Ready(node) = root {
-                    self.drop_scope_inner(node)
-                }
-            }
-        }
+        // if recursive {
+        //     if let Some(root) = self.scopes[id.0].try_root_node() {
+        //         if let RenderReturn::Ready(node) = root {
+        //             self.drop_scope_inner(node)
+        //         }
+        //     }
+        // }
 
-        let scope = &mut self.scopes[id.0];
-
-        self.scopes.remove(id.0);
+        // self.scopes.remove(id.0);
     }
 
     fn drop_scope_inner(&mut self, node: &VNode) {

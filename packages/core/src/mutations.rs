@@ -128,13 +128,13 @@ pub trait WriteMutations {
     /// Push the given root node onto our stack.
     ///
     /// Id: The ID of the root node to push.
-    fn push_root(&mut self, id: ElementId) {}
+    fn push_root(&mut self, _id: ElementId);
 
     /// Swap to a new subtree
-    fn swap_subtree(&mut self, subtree_index: usize) {}
+    fn swap_subtree(&mut self, _subtree_index: usize) {}
 
     /// Mark a scope as dirty
-    fn mark_scope_dirty(&mut self, scope_id: ScopeId) {}
+    fn mark_scope_dirty(&mut self, _scope_id: ScopeId) {}
 }
 
 /// A `Mutation` represents a single instruction for the renderer to use to modify the UI tree to match the state
@@ -468,42 +468,44 @@ impl WriteMutations for MutationsVec {
 pub struct NoOpMutations;
 
 impl WriteMutations for NoOpMutations {
-    fn register_template(&mut self, template: Template) {}
+    fn register_template(&mut self, _: Template) {}
 
-    fn append_children(&mut self, id: ElementId, m: usize) {}
+    fn append_children(&mut self, _: ElementId, _: usize) {}
 
-    fn assign_node_id(&mut self, path: &'static [u8], id: ElementId) {}
+    fn assign_node_id(&mut self, _: &'static [u8], _: ElementId) {}
 
-    fn create_placeholder(&mut self, id: ElementId) {}
+    fn create_placeholder(&mut self, _: ElementId) {}
 
-    fn create_text_node(&mut self, value: &str, id: ElementId) {}
+    fn create_text_node(&mut self, _: &str, _: ElementId) {}
 
-    fn hydrate_text_node(&mut self, path: &'static [u8], value: &str, id: ElementId) {}
+    fn hydrate_text_node(&mut self, _: &'static [u8], _: &str, _: ElementId) {}
 
-    fn load_template(&mut self, name: &'static str, index: usize, id: ElementId) {}
+    fn load_template(&mut self, _: &'static str, _: usize, _: ElementId) {}
 
-    fn replace_node_with(&mut self, id: ElementId, m: usize) {}
+    fn replace_node_with(&mut self, _: ElementId, _: usize) {}
 
-    fn replace_placeholder_with_nodes(&mut self, path: &'static [u8], m: usize) {}
+    fn replace_placeholder_with_nodes(&mut self, _: &'static [u8], _: usize) {}
 
-    fn insert_nodes_after(&mut self, id: ElementId, m: usize) {}
+    fn insert_nodes_after(&mut self, _: ElementId, _: usize) {}
 
-    fn insert_nodes_before(&mut self, id: ElementId, m: usize) {}
+    fn insert_nodes_before(&mut self, _: ElementId, _: usize) {}
 
     fn set_attribute(
         &mut self,
-        name: &'static str,
-        ns: Option<&'static str>,
-        value: &AttributeValue,
-        id: ElementId,
+        _: &'static str,
+        _: Option<&'static str>,
+        _: &AttributeValue,
+        _: ElementId,
     ) {
     }
 
-    fn set_node_text(&mut self, value: &str, id: ElementId) {}
+    fn set_node_text(&mut self, _: &str, _: ElementId) {}
 
-    fn create_event_listener(&mut self, name: &'static str, id: ElementId) {}
+    fn create_event_listener(&mut self, _: &'static str, _: ElementId) {}
 
-    fn remove_event_listener(&mut self, name: &'static str, id: ElementId) {}
+    fn remove_event_listener(&mut self, _: &'static str, _: ElementId) {}
 
-    fn remove_node(&mut self, id: ElementId) {}
+    fn remove_node(&mut self, _: ElementId) {}
+
+    fn push_root(&mut self, _: ElementId) {}
 }

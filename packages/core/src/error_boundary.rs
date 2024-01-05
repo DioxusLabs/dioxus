@@ -264,7 +264,7 @@ impl<T> Throw for Option<T> {
 
 #[derive(Clone)]
 pub struct ErrorHandler(Rc<dyn Fn(CapturedError) -> Element>);
-impl<F: Fn(CapturedError) -> Element> From<F> for ErrorHandler {
+impl<F: Fn(CapturedError) -> Element + 'static> From<F> for ErrorHandler {
     fn from(value: F) -> Self {
         Self(Rc::new(value))
     }

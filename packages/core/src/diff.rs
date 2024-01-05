@@ -26,8 +26,8 @@ impl VirtualDom {
         self.runtime.scope_stack.borrow_mut().push(scope);
         let scope_state = &mut self.scopes[scope.0];
         // Load the old and new bump arenas
-        let old = std::mem::replace(&mut scope_state.last_rendered_node, Some(new_nodes)).unwrap();
-        let new = scope_state.last_rendered_node.as_ref().unwrap();
+        let new = &new_nodes;
+        let old = scope_state.last_rendered_node.take().unwrap();
 
         use RenderReturn::{Aborted, Ready};
 
@@ -46,13 +46,20 @@ impl VirtualDom {
 
             // Placeholder becomes something
             // We should also clear the error now
-            (Aborted(l), Ready(r)) => self.replace_placeholder(
-                l,
-                [r],
-                l.parent.borrow().expect("root node should not be none"),
-                to,
-            ),
+            (Aborted(l), Ready(r)) => {
+                let parent = l.parent.take();
+                self.replace_placeholder(
+                    l,
+                    [r],
+                    parent.as_ref().expect("root node should not be none"),
+                    to,
+                )
+            }
         };
+
+        let scope_state = &mut self.scopes[scope.0];
+        scope_state.last_rendered_node = Some(new_nodes);
+
         self.runtime.scope_stack.borrow_mut().pop();
     }
 
@@ -84,6 +91,7 @@ impl VirtualDom {
                     right_template.template.set(template);
                     if template != left_template.template.get() {
                         let parent = left_template.parent.take();
+                        let parent = parent.as_ref();
                         return self.replace(left_template, [right_template], parent, to);
                     }
                 }
@@ -136,7 +144,7 @@ impl VirtualDom {
                     },
                     scope: self.runtime.scope_stack.borrow().last().copied().unwrap(),
                 };
-                self.diff_dynamic_node(left_node, right_node, current_ref, to);
+                self.diff_dynamic_node(left_node, right_node, &current_ref, to);
             });
 
         // Make sure the roots get transferred over while we're here
@@ -153,7 +161,7 @@ impl VirtualDom {
         &mut self,
         left_node: &DynamicNode,
         right_node: &DynamicNode,
-        parent: ElementRef,
+        parent: &ElementRef,
         to: &mut impl WriteMutations,
     ) {
         match (left_node, right_node) {
@@ -190,7 +198,7 @@ impl VirtualDom {
         &mut self,
         left: &VComponent,
         right: &VComponent,
-        parent: Option<ElementRef>,
+        parent: Option<&ElementRef>,
         to: &mut impl WriteMutations,
     ) {
         if std::ptr::eq(left, right) {
@@ -241,7 +249,7 @@ impl VirtualDom {
         &mut self,
         right: &VComponent,
         left: &VComponent,
-        parent: Option<ElementRef>,
+        parent: Option<&ElementRef>,
         to: &mut impl WriteMutations,
     ) {
         let m = self.create_component_node(parent, right, to);
@@ -291,6 +299,7 @@ impl VirtualDom {
     /// ```
     fn light_diff_templates(&mut self, left: &VNode, right: &VNode, to: &mut impl WriteMutations) {
         let parent = left.parent.take();
+        let parent = parent.as_ref();
         match matching_components(left, right) {
             None => self.replace(left, [right], parent, to),
             Some(components) => components
@@ -316,7 +325,7 @@ impl VirtualDom {
         &mut self,
         old: &[VNode],
         new: &[VNode],
-        parent: ElementRef,
+        parent: &ElementRef,
         to: &mut impl WriteMutations,
     ) {
         let new_is_keyed = new[0].key.is_some();
@@ -349,7 +358,7 @@ impl VirtualDom {
         &mut self,
         old: &[VNode],
         new: &[VNode],
-        parent: ElementRef,
+        parent: &ElementRef,
         to: &mut impl WriteMutations,
     ) {
         use std::cmp::Ordering;
@@ -391,7 +400,7 @@ impl VirtualDom {
         &mut self,
         old: &[VNode],
         new: &[VNode],
-        parent: ElementRef,
+        parent: &ElementRef,
         to: &mut impl WriteMutations,
     ) {
         if cfg!(debug_assertions) {
@@ -399,7 +408,7 @@ impl VirtualDom {
             let mut assert_unique_keys = |children: &[VNode]| {
                 keys.clear();
                 for child in children {
-                    let key = child.key;
+                    let key = child.key.clone();
                     debug_assert!(
                         key.is_some(),
                         "if any sibling is keyed, all siblings must be keyed"
@@ -471,7 +480,7 @@ impl VirtualDom {
         &mut self,
         old: &[VNode],
         new: &[VNode],
-        parent: ElementRef,
+        parent: &ElementRef,
         to: &mut impl WriteMutations,
     ) -> Option<(usize, usize)> {
         let mut left_offset = 0;
@@ -531,7 +540,7 @@ impl VirtualDom {
         &mut self,
         old: &[VNode],
         new: &[VNode],
-        parent: ElementRef,
+        parent: &ElementRef,
         to: &mut impl WriteMutations,
     ) {
         /*
@@ -557,8 +566,8 @@ impl VirtualDom {
         */
         // 0. Debug sanity checks
         // Should have already diffed the shared-key prefixes and suffixes.
-        debug_assert_ne!(new.first().map(|i| i.key), old.first().map(|i| i.key));
-        debug_assert_ne!(new.last().map(|i| i.key), old.last().map(|i| i.key));
+        debug_assert_ne!(new.first().map(|i| &i.key), old.first().map(|i| &i.key));
+        debug_assert_ne!(new.last().map(|i| &i.key), old.last().map(|i| &i.key));
 
         // 1. Map the old keys into a numerical ordering based on indices.
         // 2. Create a map of old key to its index
@@ -566,7 +575,7 @@ impl VirtualDom {
         let old_key_to_old_index = old
             .iter()
             .enumerate()
-            .map(|(i, o)| (o.key.unwrap(), i))
+            .map(|(i, o)| (o.key.as_ref().unwrap(), i))
             .collect::<FxHashMap<_, _>>();
 
         let mut shared_keys = FxHashSet::default();
@@ -575,7 +584,7 @@ impl VirtualDom {
         let new_index_to_old_index = new
             .iter()
             .map(|node| {
-                let key = node.key.unwrap();
+                let key = node.key.as_ref().unwrap();
                 if let Some(&index) = old_key_to_old_index.get(&key) {
                     shared_keys.insert(key);
                     index
@@ -604,7 +613,7 @@ impl VirtualDom {
         // remove any old children that are not shared
         // todo: make this an iterator
         for child in old {
-            let key = child.key.unwrap();
+            let key = child.key.as_ref().unwrap();
             if !shared_keys.contains(&key) {
                 self.remove_node(child, true, to);
             }
@@ -706,7 +715,7 @@ impl VirtualDom {
     }
 
     /// Push all the real nodes on the stack
-    fn push_all_real_nodes(&mut self, node: &VNode, to: &mut impl WriteMutations) -> usize {
+    fn push_all_real_nodes(&self, node: &VNode, to: &mut impl WriteMutations) -> usize {
         node.template
             .get()
             .roots
@@ -750,7 +759,7 @@ impl VirtualDom {
     pub(crate) fn create_children<'a>(
         &mut self,
         nodes: impl IntoIterator<Item = &'a VNode>,
-        parent: Option<ElementRef>,
+        parent: Option<&ElementRef>,
         to: &mut impl WriteMutations,
     ) -> usize {
         nodes
@@ -766,7 +775,7 @@ impl VirtualDom {
         &mut self,
         new: &[VNode],
         before: &VNode,
-        parent: ElementRef,
+        parent: &ElementRef,
         to: &mut impl WriteMutations,
     ) {
         let m = self.create_children(new, Some(parent), to);
@@ -778,7 +787,7 @@ impl VirtualDom {
         &mut self,
         new: &[VNode],
         after: &VNode,
-        parent: ElementRef,
+        parent: &ElementRef,
         to: &mut impl WriteMutations,
     ) {
         let m = self.create_children(new, Some(parent), to);
@@ -791,7 +800,7 @@ impl VirtualDom {
         &mut self,
         l: &VPlaceholder,
         r: impl IntoIterator<Item = &'a VNode>,
-        parent: ElementRef,
+        parent: &ElementRef,
         to: &mut impl WriteMutations,
     ) {
         let m = self.create_children(r, Some(parent), to);
@@ -804,7 +813,7 @@ impl VirtualDom {
         &mut self,
         left: &VNode,
         right: impl IntoIterator<Item = &'a VNode>,
-        parent: Option<ElementRef>,
+        parent: Option<&ElementRef>,
         to: &mut impl WriteMutations,
     ) {
         let m = self.create_children(right, parent, to);
@@ -819,14 +828,14 @@ impl VirtualDom {
         &mut self,
         l: &[VNode],
         r: &VPlaceholder,
-        parent: ElementRef,
+        parent: &ElementRef,
         to: &mut impl WriteMutations,
     ) {
         // Create the placeholder first, ensuring we get a dedicated ID for the placeholder
         let placeholder = self.next_element();
 
         r.id.set(Some(placeholder));
-        r.parent.borrow_mut().replace(parent);
+        r.parent.borrow_mut().replace(parent.clone());
 
         to.create_placeholder(placeholder);
 
@@ -984,10 +993,10 @@ impl VirtualDom {
             .expect("VComponents to always have a scope");
 
         // Remove the component from the dom
-        match self.get_scope(scope).unwrap().root_node() {
-            RenderReturn::Ready(t) => self.remove_node(t, gen_muts, to),
+        match self.scopes[scope.0].last_rendered_node.take().unwrap() {
+            RenderReturn::Ready(t) => self.remove_node(&t, gen_muts, to),
             RenderReturn::Aborted(placeholder) => {
-                self.remove_placeholder(placeholder, gen_muts, to)
+                self.remove_placeholder(&placeholder, gen_muts, to)
             }
         };
 
@@ -1027,10 +1036,10 @@ impl VirtualDom {
         }
     }
 
-    pub(crate) fn assign_boundary_ref(&mut self, parent: Option<ElementRef>, child: &VNode) {
+    pub(crate) fn assign_boundary_ref(&mut self, parent: Option<&ElementRef>, child: &VNode) {
         if let Some(parent) = parent {
             // assign the parent of the child
-            child.parent.borrow_mut().replace(parent);
+            child.parent.borrow_mut().replace(parent.clone());
         }
     }
 }

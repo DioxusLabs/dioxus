@@ -690,7 +690,7 @@ where
     I: IntoVNode,
 {
     fn into_dyn_node(self) -> DynamicNode {
-        let mut children: Vec<_> = self.into_iter().map(|node| node.into_vnode()).collect();
+        let children: Vec<_> = self.into_iter().map(|node| node.into_vnode()).collect();
 
         if children.is_empty() {
             DynamicNode::default()

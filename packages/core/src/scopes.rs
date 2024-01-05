@@ -310,7 +310,7 @@ impl<'src> ScopeState {
     }
 
     /// Create a new [`EventHandler`] from an [`FnMut`]
-    pub fn event_handler<T>(&self, f: impl FnMut(T) + 'static) -> EventHandler<T> {
+    pub fn event_handler<T>(&self, mut f: impl FnMut(T) + 'static) -> EventHandler<T> {
         let callback = RefCell::new(Some(Box::new(move |event: T| {
             f(event);
         }) as Box<dyn FnMut(T)>));

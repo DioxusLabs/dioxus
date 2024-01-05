@@ -270,7 +270,7 @@ impl ScopeContext {
     /// }
     /// ```
     #[allow(clippy::mut_from_ref)]
-    pub fn use_hook<State: 'static>(&self, initializer: impl FnOnce() -> State) -> &mut State {
+    pub fn use_hook<State: Clone + 'static>(&self, initializer: impl FnOnce() -> State) -> State {
         let cur_hook = self.hook_index.get();
         let mut hooks = self.hooks.try_borrow_mut().expect("The hook list is already borrowed: This error is likely caused by trying to use a hook inside a hook which violates the rules of hooks.");
 
@@ -282,8 +282,8 @@ impl ScopeContext {
             .get(cur_hook)
             .and_then(|inn| {
                 self.hook_index.set(cur_hook + 1);
-                let raw_ref: &mut dyn Any = inn.as_mut();
-                raw_ref.downcast_mut::<State>()
+                let raw_ref: & dyn Any = inn.as_ref();
+                raw_ref.downcast_ref    ::<State>().cloned()
             })
             .expect(
                 r#"

@@ -201,7 +201,7 @@ impl VirtualDom {
                     element: template.clone(),
                     scope: self.runtime.current_scope_id().unwrap_or(ScopeId(0)),
                 };
-                self.create_dynamic_node(template_ref, node, to)
+                self.create_dynamic_node(&template_ref, node, to)
             }
             Placeholder(VPlaceholder { id, parent }) => {
                 let template_ref = ElementRef {
@@ -299,7 +299,7 @@ impl VirtualDom {
                 element: template.clone(),
                 scope: self.runtime.current_scope_id().unwrap_or(ScopeId(0)),
             };
-            let m = self.create_dynamic_node(boundary_ref, &template.dynamic_nodes[idx], to);
+            let m = self.create_dynamic_node(&boundary_ref, &template.dynamic_nodes[idx], to);
             if m > 0 {
                 // The path is one shorter because the top node is the root
                 let path = &template.template.get().node_paths[idx][1..];
@@ -479,7 +479,7 @@ impl VirtualDom {
 
     pub(crate) fn create_dynamic_node(
         &mut self,
-        parent: ElementRef,
+        parent: &ElementRef,
         node: &DynamicNode,
         to: &mut impl WriteMutations,
     ) -> usize {
@@ -494,7 +494,7 @@ impl VirtualDom {
 
     fn create_dynamic_text(
         &mut self,
-        parent: ElementRef,
+        parent: &ElementRef,
         text: &VText,
         to: &mut impl WriteMutations,
     ) -> usize {
@@ -514,7 +514,7 @@ impl VirtualDom {
     pub(crate) fn create_placeholder(
         &mut self,
         placeholder: &VPlaceholder,
-        parent: ElementRef,
+        parent: &ElementRef,
         to: &mut impl WriteMutations,
     ) -> usize {
         // Allocate a dynamic element reference for this text node
@@ -524,7 +524,7 @@ impl VirtualDom {
         placeholder.id.set(Some(id));
 
         // Assign the placeholder's parent
-        *placeholder.parent.borrow_mut() = Some(parent);
+        *placeholder.parent.borrow_mut() = Some(parent.clone());
 
         // Assign the ID to the existing node in the template
         to.assign_node_id(&parent.path.path[1..], id);
@@ -535,7 +535,7 @@ impl VirtualDom {
 
     pub(super) fn create_component_node(
         &mut self,
-        parent: Option<ElementRef>,
+        parent: Option<&ElementRef>,
         component: &VComponent,
         to: &mut impl WriteMutations,
     ) -> usize {
@@ -576,13 +576,13 @@ impl VirtualDom {
     fn mount_aborted(
         &mut self,
         placeholder: &VPlaceholder,
-        parent: Option<ElementRef>,
+        parent: Option<&ElementRef>,
         to: &mut impl WriteMutations,
     ) -> usize {
         let id = self.next_element();
         to.create_placeholder(id);
         placeholder.id.set(Some(id));
-        *placeholder.parent.borrow_mut() = parent;
+        *placeholder.parent.borrow_mut() = parent.cloned();
 
         1
     }
