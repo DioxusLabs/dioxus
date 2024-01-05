@@ -11,7 +11,7 @@ use crate::hooks::*;
 use crate::query::QueryResult;
 use crate::shortcut::GlobalHotKeyEvent;
 use crate::shortcut::ShortcutRegistry;
-pub use crate::shortcut::{use_global_shortcut, ShortcutHandle, ShortcutId, ShortcutRegistryError};
+pub use crate::shortcut::{ShortcutHandle, ShortcutId, ShortcutRegistryError};
 use crate::{
     desktop_context::{EventData, UserWindowEvent, WindowEventHandlers},
     webview::WebviewHandler,
@@ -171,9 +171,9 @@ impl<P: 'static> App<P> {
 
         let handler = crate::webview::create_new_window(
             cfg,
+            dom,
             target,
             &self.proxy,
-            dom,
             &self.queue,
             &self.event_handlers,
             self.shortcut_manager.clone(),
@@ -210,10 +210,6 @@ impl<P: 'static> App<P> {
         if self.webviews.is_empty() {
             self.control_flow = ControlFlow::Exit
         }
-    }
-
-    pub fn handle_poll_msg(&mut self, id: WindowId) {
-        self.poll_vdom(id);
     }
 
     pub fn handle_query_msg(&mut self, msg: IpcMessage, id: WindowId) {

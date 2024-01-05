@@ -30,9 +30,9 @@ pub struct WebviewHandler {
 
 pub fn create_new_window(
     mut cfg: Config,
+    dom: VirtualDom,
     event_loop: &EventLoopWindowTarget<UserWindowEvent>,
     proxy: &EventLoopProxy<UserWindowEvent>,
-    dom: VirtualDom,
     queue: &WebviewQueue,
     event_handlers: &WindowEventHandlers,
     shortcut_manager: ShortcutRegistry,

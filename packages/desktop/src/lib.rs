@@ -37,9 +37,9 @@ pub use cfg::{Config, WindowCloseBehaviour};
 pub use desktop_context::{
     window, DesktopContext, DesktopService, WryEventHandler, WryEventHandlerId,
 };
-pub use hooks::{use_asset_handler, use_window, use_wry_event_handler};
+pub use hooks::{use_asset_handler, use_global_shortcut, use_window, use_wry_event_handler};
 pub use menubar::build_default_menu_bar;
-pub use shortcut::{use_global_shortcut, ShortcutHandle, ShortcutId, ShortcutRegistryError};
+pub use shortcut::{ShortcutHandle, ShortcutId, ShortcutRegistryError};
 
 #[allow(deprecated)]
 use desktop_context::{EventData, UserWindowEvent};
@@ -139,7 +139,7 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
                 _ => {}
             },
             Event::UserEvent(UserWindowEvent(event, id)) => match event {
-                EventData::Poll => app.handle_poll_msg(id),
+                EventData::Poll => app.poll_vdom(id),
                 EventData::NewWindow => app.handle_new_window(),
                 EventData::CloseWindow => app.handle_close_msg(id),
                 EventData::HotReloadEvent(msg) => app.handle_hot_reload_msg(msg),

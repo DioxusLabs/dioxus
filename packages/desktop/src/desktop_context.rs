@@ -1,26 +1,22 @@
+use crate::events::IpcMessage;
 use crate::query::QueryEngine;
 use crate::shortcut::{HotKey, ShortcutId, ShortcutRegistry, ShortcutRegistryError};
 use crate::AssetHandler;
 use crate::Config;
 use crate::{assets::AssetFuture, edits::WebviewQueue};
 use crate::{assets::AssetHandlerRegistry, edits::EditQueue};
-use crate::{events::IpcMessage, webview::WebviewHandler};
+use dioxus_core::Mutations;
 use dioxus_core::VirtualDom;
-use dioxus_core::{Mutations, ScopeState};
 use dioxus_interpreter_js::binary_protocol::Channel;
 use rustc_hash::FxHashMap;
 use slab::Slab;
-use std::{
-    cell::RefCell, fmt::Debug, fmt::Formatter, rc::Rc, rc::Weak, sync::atomic::AtomicU16,
-    sync::Arc, sync::Mutex,
-};
+use std::{cell::RefCell, fmt::Debug, rc::Rc, rc::Weak, sync::atomic::AtomicU16};
 use tao::{
     event::Event,
     event_loop::{EventLoopProxy, EventLoopWindowTarget},
     window::{Fullscreen as WryFullscreen, Window, WindowId},
 };
-
-use wry::{RequestAsyncResponder, WebView};
+use wry::WebView;
 
 #[cfg(target_os = "ios")]
 use tao::platform::ios::WindowExtIOS;
@@ -123,16 +119,13 @@ impl DesktopService {
 
     /// Send a list of mutations to the webview
     pub(crate) fn send_edits(&self, edits: Mutations) {
-        let mut channel = self.channel.borrow_mut();
-        let mut templates = self.templates.borrow_mut();
-        if let Some(bytes) = crate::edits::apply_edits(
+        crate::edits::apply_edits(
             edits,
-            &mut channel,
-            &mut templates,
+            &mut self.channel.borrow_mut(),
+            &mut self.templates.borrow_mut(),
             &self.max_template_count,
-        ) {
-            self.edit_queue.add_edits(bytes)
-        }
+        )
+        .map(|bytes| self.edit_queue.add_edits(bytes));
     }
 
     /// Create a new window using the props and window builder
@@ -145,9 +138,9 @@ impl DesktopService {
     pub fn new_window(&self, dom: VirtualDom, cfg: Config) -> Weak<DesktopService> {
         let window = crate::webview::create_new_window(
             cfg,
+            dom,
             &self.event_loop,
             &self.proxy,
-            dom,
             &self.pending_windows,
             &self.event_handlers,
             self.shortcut_manager.clone(),

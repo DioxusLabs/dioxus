@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use crate::assets::*;
+use crate::{assets::*, shortcut::IntoAccelerator, ShortcutHandle, ShortcutRegistryError};
 use crate::{desktop_context::UserWindowEvent, window, DesktopContext, WryEventHandler};
 use dioxus_core::ScopeState;
 use tao::{event::Event, event_loop::EventLoopWindowTarget};
@@ -50,5 +50,23 @@ pub fn use_asset_handler<F: AssetFuture>(
             desktop: desktop_ref,
             handler_id: handler_id_ref,
         }
+    })
+}
+
+/// Get a closure that executes any JavaScript in the WebView context.
+pub fn use_global_shortcut(
+    cx: &ScopeState,
+    accelerator: impl IntoAccelerator,
+    handler: impl FnMut() + 'static,
+) -> &Result<ShortcutHandle, ShortcutRegistryError> {
+    cx.use_hook(move || {
+        let desktop = window();
+
+        let id = desktop.create_shortcut(accelerator.accelerator(), handler);
+
+        Ok(ShortcutHandle {
+            desktop,
+            shortcut_id: id?,
+        })
     })
 }

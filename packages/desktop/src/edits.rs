@@ -1,12 +1,6 @@
-use crate::query::QueryEngine;
-use crate::shortcut::{HotKey, ShortcutId, ShortcutRegistry, ShortcutRegistryError};
-use crate::AssetHandler;
-use crate::Config;
-use crate::{assets::AssetFuture, DesktopContext};
-use crate::{assets::AssetHandlerRegistry, DesktopService};
-use crate::{events::IpcMessage, webview::WebviewHandler};
-use dioxus_core::{BorrowedAttributeValue, Template, TemplateAttribute, TemplateNode, VirtualDom};
-use dioxus_core::{Mutations, ScopeState};
+use crate::webview::WebviewHandler;
+use dioxus_core::Mutations;
+use dioxus_core::{BorrowedAttributeValue, Template, TemplateAttribute, TemplateNode};
 use dioxus_html::event_bubbles;
 use dioxus_interpreter_js::binary_protocol::Channel;
 use rustc_hash::FxHashMap;
@@ -18,12 +12,16 @@ use std::{
     sync::{atomic::Ordering, Mutex},
 };
 
-use wry::{RequestAsyncResponder, WebView};
+use wry::RequestAsyncResponder;
 
 pub(crate) type WebviewQueue = Rc<RefCell<Vec<WebviewHandler>>>;
 
-/// This handles communication between the requests that the webview makes and the interpreter. The interpreter constantly makes long running requests to the webview to get any edits that should be made to the DOM almost like server side events.
-/// It will hold onto the requests until the interpreter is ready to handle them and hold onto any pending edits until a new request is made.
+/// This handles communication between the requests that the webview makes and the interpreter. The interpreter
+/// constantly makes long running requests to the webview to get any edits that should be made to the DOM almost like
+/// server side events.
+///
+/// It will hold onto the requests until the interpreter is ready to handle them and hold onto any pending edits until
+/// a new request is made.
 #[derive(Default, Clone)]
 pub(crate) struct EditQueue {
     queue: Arc<Mutex<Vec<Vec<u8>>>>,

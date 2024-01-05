@@ -75,8 +75,10 @@ impl<F: AssetFuture, T: Fn(&AssetRequest) -> F + Send + Sync + 'static> AssetHan
     }
 }
 
-type AssetHandlerRegistryInner =
-    Slab<Box<dyn Fn(&AssetRequest) -> Pin<Box<dyn AssetFuture>> + Send + Sync + 'static>>;
+type UserAssetHandler =
+    Box<dyn Fn(&AssetRequest) -> Pin<Box<dyn AssetFuture>> + Send + Sync + 'static>;
+
+type AssetHandlerRegistryInner = Slab<UserAssetHandler>;
 
 #[derive(Clone)]
 pub struct AssetHandlerRegistry(Arc<RwLock<AssetHandlerRegistryInner>>);
