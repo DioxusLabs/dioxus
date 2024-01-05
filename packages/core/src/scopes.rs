@@ -1,6 +1,5 @@
 use crate::{
-    any_props::AnyProps,
-    any_props::VProps,
+    any_props::{BoxedAnyProps, VProps},
     innerlude::{DynamicNode, EventHandler, VComponent, VText},
     nodes::{IntoAttributeValue, IntoDynNode, RenderReturn},
     runtime::Runtime,
@@ -49,7 +48,7 @@ pub struct ScopeState {
 
     pub(crate) last_rendered_node: Option<RenderReturn>,
 
-    pub(crate) props: Box<dyn AnyProps>,
+    pub(crate) props: BoxedAnyProps,
 }
 
 impl Drop for ScopeState {
@@ -300,16 +299,12 @@ impl<'src> ScopeState {
         // The properties must be valid until the next bump frame
         P: Properties,
     {
-        let vcomp = VProps::new(component, P::memoize, props);
-
-        // cast off the lifetime of the render return
-        let as_dyn: Box<dyn AnyProps> = Box::new(vcomp);
-        let extended: Box<dyn AnyProps> = unsafe { std::mem::transmute(as_dyn) };
+        let vcomp = VProps::new(component, P::memoize, props, fn_name);
 
         DynamicNode::Component(VComponent {
             name: fn_name,
             render_fn: component as *const (),
-            props: extended,
+            props: BoxedAnyProps::new(vcomp),
             scope: Default::default(),
         })
     }
@@ -332,14 +327,14 @@ impl<'src> ScopeState {
         &'src self,
         mut callback: impl FnMut(Event<T>) + 'src,
     ) -> AttributeValue {
-        AttributeValue::Listener(Box::new(move |event: Event<dyn Any>| {
+        AttributeValue::Listener(RefCell::new(Box::new(move |event: Event<dyn Any>| {
             if let Ok(data) = event.data.downcast::<T>() {
                 callback(Event {
                     propagates: event.propagates,
                     data,
                 });
             }
-        }))
+        })))
     }
 
     /// Create a new [`AttributeValue`] with a value that implements [`AnyValue`]

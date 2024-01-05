@@ -1,5 +1,5 @@
 use crate::{
-    any_props::AnyProps,
+    any_props::{AnyProps, BoxedAnyProps},
     innerlude::DirtyScope,
     nodes::RenderReturn,
     scope_context::ScopeContext,
@@ -8,11 +8,7 @@ use crate::{
 };
 
 impl VirtualDom {
-    pub(super) fn new_scope(
-        &mut self,
-        props: Box<dyn AnyProps>,
-        name: &'static str,
-    ) -> &ScopeState {
+    pub(super) fn new_scope(&mut self, props: BoxedAnyProps, name: &'static str) -> &ScopeState {
         let parent_id = self.runtime.current_scope_id();
         let height = parent_id
             .and_then(|parent_id| self.get_scope(parent_id).map(|f| f.context().height + 1))

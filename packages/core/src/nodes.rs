@@ -1,5 +1,8 @@
-use crate::innerlude::{ElementRef, VNodeId};
-use crate::{any_props::AnyProps, arena::ElementId, Element, Event, ScopeId, ScopeState};
+use crate::any_props::BoxedAnyProps;
+use crate::innerlude::ElementRef;
+use crate::{arena::ElementId, Element, Event, ScopeId};
+use std::ops::Deref;
+use std::rc::Rc;
 use std::{
     any::{Any, TypeId},
     cell::{Cell, RefCell},
@@ -15,6 +18,7 @@ pub type TemplateId = &'static str;
 ///
 /// Dioxus will do its best to immediately resolve any async components into a regular Element, but as an implementor
 /// you might need to handle the case where there's no node immediately ready.
+#[derive(Clone)]
 pub enum RenderReturn {
     /// A currently-available element
     Ready(VNode),
@@ -36,25 +40,22 @@ impl Default for RenderReturn {
 ///
 /// The dynamic parts of the template are stored separately from the static parts. This allows faster diffing by skipping
 /// static parts of the template.
-#[derive(Debug, Clone)]
-pub struct VNode {
+#[derive(Debug)]
+pub struct VNodeInner {
     /// The key given to the root of this template.
     ///
     /// In fragments, this is the key of the first child. In other cases, it is the key of the root.
     pub key: Option<String>,
 
     /// When rendered, this template will be linked to its parent manually
-    pub(crate) parent: Cell<Option<ElementRef>>,
-
-    /// The bubble id assigned to the child that we need to update and drop when diffing happens
-    pub(crate) stable_id: Cell<Option<VNodeId>>,
-
-    /// The static nodes and static descriptor of the template
-    pub template: Cell<Template<'static>>,
+    pub(crate) parent: RefCell<Option<ElementRef>>,
 
     /// The IDs for the roots of this template - to be used when moving the template around and removing it from
     /// the actual Dom
     pub root_ids: RefCell<Vec<ElementId>>,
+
+    /// The static nodes and static descriptor of the template
+    pub template: Cell<Template<'static>>,
 
     /// The dynamic parts of the template
     pub dynamic_nodes: Vec<DynamicNode>,
@@ -63,13 +64,33 @@ pub struct VNode {
     pub dynamic_attrs: Vec<Attribute>,
 }
 
+/// A reference to a template along with any context needed to hydrate it
+///
+/// The dynamic parts of the template are stored separately from the static parts. This allows faster diffing by skipping
+/// static parts of the template.
+#[derive(Clone, Debug)]
+pub struct VNode(Rc<VNodeInner>);
+
+impl PartialEq for VNode {
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.0, &other.0)
+    }
+}
+
+impl Deref for VNode {
+    type Target = VNodeInner;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 impl VNode {
     /// Create a template with no nodes that will be skipped over during diffing
     pub fn empty() -> Element {
-        Some(VNode {
+        Some(Self(Rc::new(VNodeInner {
             key: None,
             parent: Default::default(),
-            stable_id: Default::default(),
             root_ids: Default::default(),
             dynamic_nodes: Vec::new(),
             dynamic_attrs: Vec::new(),
@@ -79,7 +100,7 @@ impl VNode {
                 node_paths: &[],
                 attr_paths: &[],
             }),
-        })
+        })))
     }
 
     /// Create a new VNode
@@ -90,20 +111,14 @@ impl VNode {
         dynamic_nodes: Vec<DynamicNode>,
         dynamic_attrs: Vec<Attribute>,
     ) -> Self {
-        Self {
+        Self(Rc::new(VNodeInner {
             key,
-            parent: Cell::new(None),
-            stable_id: Cell::new(None),
+            parent: Default::default(),
             template: Cell::new(template),
             root_ids: RefCell::new(root_ids),
             dynamic_nodes,
             dynamic_attrs,
-        }
-    }
-
-    /// Get the stable id of this node used for bubbling events
-    pub(crate) fn stable_id(&self) -> Option<VNodeId> {
-        self.stable_id.get()
+        }))
     }
 
     /// Load a dynamic root at the given index
@@ -293,7 +308,7 @@ pub enum TemplateNode {
 /// A node created at runtime
 ///
 /// This node's index in the DynamicNode list on VNode should match its repsective `Dynamic` index
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum DynamicNode {
     /// A component node
     ///
@@ -355,7 +370,6 @@ impl<'a> std::fmt::Debug for VComponent {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("VComponent")
             .field("name", &self.name)
-            .field("static_props", &self.static_props)
             .field("scope", &self.scope)
             .finish()
     }
@@ -387,12 +401,12 @@ impl<'a> VText {
 }
 
 /// A placeholder node, used by suspense and fragments
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct VPlaceholder {
     /// The ID of this node in the real DOM
     pub(crate) id: Cell<Option<ElementId>>,
     /// The parent of this node
-    pub(crate) parent: Cell<Option<ElementRef>>,
+    pub(crate) parent: RefCell<Option<ElementRef>>,
 }
 
 impl VPlaceholder {
@@ -436,7 +450,7 @@ pub enum TemplateAttribute {
 }
 
 /// An attribute on a DOM node, such as `id="my-thing"` or `href="https://example.com"`
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Attribute {
     /// The name of the attribute.
     pub name: &'static str,
@@ -483,7 +497,6 @@ impl Attribute {
 ///
 /// These are built-in to be faster during the diffing process. To use a custom value, use the [`AttributeValue::Any`]
 /// variant.
-#[derive(Clone)]
 pub enum AttributeValue {
     /// Text attribute
     Text(String),
@@ -498,7 +511,7 @@ pub enum AttributeValue {
     Bool(bool),
 
     /// A listener, like "onclick"
-    Listener(ListenerCb),
+    Listener(RefCell<ListenerCb>),
 
     /// An arbitrary value that implements PartialEq and is static
     Any(Box<dyn AnyValue>),
@@ -508,85 +521,6 @@ pub enum AttributeValue {
 }
 
 pub type ListenerCb = Box<dyn FnMut(Event<dyn Any>)>;
-
-/// Any of the built-in values that the Dioxus VirtualDom supports as dynamic attributes on elements that are borrowed
-///
-/// These varients are used to communicate what the value of an attribute is that needs to be updated
-#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serialize", serde(untagged))]
-pub enum BorrowedAttributeValue<'a> {
-    /// Text attribute
-    Text(&'a str),
-
-    /// A float
-    Float(f64),
-
-    /// Signed integer
-    Int(i64),
-
-    /// Boolean
-    Bool(bool),
-
-    /// An arbitrary value that implements PartialEq and is static
-    #[cfg_attr(
-        feature = "serialize",
-        serde(
-            deserialize_with = "deserialize_any_value",
-            serialize_with = "serialize_any_value"
-        )
-    )]
-    Any(std::cell::Ref<'a, dyn AnyValue>),
-
-    /// A "none" value, resulting in the removal of an attribute from the dom
-    None,
-}
-
-impl<'a> From<&'a AttributeValue> for BorrowedAttributeValue<'a> {
-    fn from(value: &'a AttributeValue) -> Self {
-        match value {
-            AttributeValue::Text(value) => BorrowedAttributeValue::Text(value),
-            AttributeValue::Float(value) => BorrowedAttributeValue::Float(*value),
-            AttributeValue::Int(value) => BorrowedAttributeValue::Int(*value),
-            AttributeValue::Bool(value) => BorrowedAttributeValue::Bool(*value),
-            AttributeValue::Listener(_) => {
-                panic!("A listener cannot be turned into a borrowed value")
-            }
-            AttributeValue::Any(value) => {
-                let value = value.borrow();
-                BorrowedAttributeValue::Any(std::cell::Ref::map(value, |value| {
-                    &**value.as_ref().unwrap()
-                }))
-            }
-            AttributeValue::None => BorrowedAttributeValue::None,
-        }
-    }
-}
-
-impl Debug for BorrowedAttributeValue<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Text(arg0) => f.debug_tuple("Text").field(arg0).finish(),
-            Self::Float(arg0) => f.debug_tuple("Float").field(arg0).finish(),
-            Self::Int(arg0) => f.debug_tuple("Int").field(arg0).finish(),
-            Self::Bool(arg0) => f.debug_tuple("Bool").field(arg0).finish(),
-            Self::Any(_) => f.debug_tuple("Any").field(&"...").finish(),
-            Self::None => write!(f, "None"),
-        }
-    }
-}
-
-impl PartialEq for BorrowedAttributeValue<'_> {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Self::Text(l0), Self::Text(r0)) => l0 == r0,
-            (Self::Float(l0), Self::Float(r0)) => l0 == r0,
-            (Self::Int(l0), Self::Int(r0)) => l0 == r0,
-            (Self::Bool(l0), Self::Bool(r0)) => l0 == r0,
-            (Self::Any(l0), Self::Any(r0)) => l0.any_cmp(&**r0),
-            _ => core::mem::discriminant(self) == core::mem::discriminant(other),
-        }
-    }
-}
 
 #[cfg(feature = "serialize")]
 fn serialize_any_value<S>(_: &std::cell::Ref<'_, dyn AnyValue>, _: S) -> Result<S::Ok, S::Error>
@@ -626,11 +560,7 @@ impl PartialEq for AttributeValue {
             (Self::Int(l0), Self::Int(r0)) => l0 == r0,
             (Self::Bool(l0), Self::Bool(r0)) => l0 == r0,
             (Self::Listener(_), Self::Listener(_)) => true,
-            (Self::Any(l0), Self::Any(r0)) => {
-                let l0 = l0.borrow();
-                let r0 = r0.borrow();
-                l0.as_ref().unwrap().any_cmp(&**r0.as_ref().unwrap())
-            }
+            (Self::Any(l0), Self::Any(r0)) => l0.as_ref().any_cmp(r0.as_ref()),
             _ => false,
         }
     }
@@ -820,7 +750,7 @@ impl<'a> IntoAttributeValue for Arguments<'_> {
 
 impl IntoAttributeValue for Box<dyn AnyValue> {
     fn into_value(self) -> AttributeValue {
-        AttributeValue::Any(RefCell::new(Some(self)))
+        AttributeValue::Any(self)
     }
 }
 

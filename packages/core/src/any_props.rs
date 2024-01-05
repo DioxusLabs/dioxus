@@ -1,5 +1,5 @@
 use crate::{nodes::RenderReturn, Element};
-use std::{ops::Deref, panic::AssertUnwindSafe};
+use std::{any::Any, ops::Deref, panic::AssertUnwindSafe};
 
 /// A boxed version of AnyProps that can be cloned
 pub(crate) struct BoxedAnyProps {
@@ -7,7 +7,7 @@ pub(crate) struct BoxedAnyProps {
 }
 
 impl BoxedAnyProps {
-    fn new(inner: impl AnyProps + 'static) -> Self {
+    pub fn new(inner: impl AnyProps + 'static) -> Self {
         Self {
             inner: Box::new(inner),
         }
@@ -33,7 +33,8 @@ impl Clone for BoxedAnyProps {
 /// A trait that essentially allows VComponentProps to be used generically
 pub(crate) trait AnyProps {
     fn render<'a>(&'a self) -> RenderReturn;
-    fn memoize(&self, other: &dyn AnyProps) -> bool;
+    fn memoize(&self, other: &dyn Any) -> bool;
+    fn props(&self) -> &dyn Any;
     fn duplicate(&self) -> Box<dyn AnyProps>;
 }
 
@@ -41,25 +42,35 @@ pub(crate) struct VProps<P> {
     pub render_fn: fn(P) -> Element,
     pub memo: fn(&P, &P) -> bool,
     pub props: P,
+    pub name: &'static str,
 }
 
 impl<P> VProps<P> {
-    pub(crate) fn new(render_fn: fn(P) -> Element, memo: fn(&P, &P) -> bool, props: P) -> Self {
+    pub(crate) fn new(
+        render_fn: fn(P) -> Element,
+        memo: fn(&P, &P) -> bool,
+        props: P,
+        name: &'static str,
+    ) -> Self {
         Self {
             render_fn,
             memo,
             props,
+            name,
         }
     }
 }
 
 impl<P: Clone> AnyProps for VProps<P> {
-    // Safety:
-    // this will downcast the other ptr as our swallowed type!
-    // you *must* make this check *before* calling this method
-    // if your functions are not the same, then you will downcast a pointer into a different type (UB)
-    fn memoize(&self, other: &dyn AnyProps) -> bool {
-        (self.memo)(self, other)
+    fn memoize(&self, other: &dyn Any) -> bool {
+        match other.downcast_ref::<Self>() {
+            Some(other) => (self.memo)(&self.props, &other.props),
+            None => false,
+        }
+    }
+
+    fn props(&self) -> &dyn Any {
+        &self.props
     }
 
     fn render(&self) -> RenderReturn {
@@ -72,7 +83,7 @@ impl<P: Clone> AnyProps for VProps<P> {
             Ok(Some(e)) => RenderReturn::Ready(e),
             Ok(None) => RenderReturn::default(),
             Err(err) => {
-                let component_name = cx.name();
+                let component_name = self.name;
                 tracing::error!("Error while rendering component `{component_name}`: {err:?}");
                 RenderReturn::default()
             }
@@ -84,6 +95,7 @@ impl<P: Clone> AnyProps for VProps<P> {
             render_fn: self.render_fn,
             memo: self.memo,
             props: self.props.clone(),
+            name: self.name,
         })
     }
 }

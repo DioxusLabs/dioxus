@@ -1,7 +1,4 @@
-use crate::any_props::AnyProps;
-use crate::innerlude::{
-    BorrowedAttributeValue, ElementPath, ElementRef, VComponent, VPlaceholder, VText,
-};
+use crate::innerlude::{ElementPath, ElementRef, VComponent, VPlaceholder, VText};
 use crate::mutations::Mutation;
 use crate::mutations::Mutation::*;
 use crate::nodes::VNode;
@@ -96,9 +93,6 @@ impl VirtualDom {
             nodes_mut.resize(len, ElementId::default());
         };
 
-        // Set this node id
-        node.stable_id.set(Some(self.next_vnode_ref(node)));
-
         // The best renderers will have templates prehydrated and registered
         // Just in case, let's create the template using instructions anyways
         self.register_template(node.template.get());
@@ -190,7 +184,7 @@ impl VirtualDom {
                     path: ElementPath {
                         path: template.template.get().node_paths[idx],
                     },
-                    template: template.stable_id().unwrap(),
+                    element: template.clone(),
                     scope: self.runtime.current_scope_id().unwrap_or(ScopeId(0)),
                 };
                 self.create_dynamic_node(template_ref, node)
@@ -200,10 +194,10 @@ impl VirtualDom {
                     path: ElementPath {
                         path: template.template.get().node_paths[idx],
                     },
-                    template: template.stable_id().unwrap(),
+                    element: template.clone(),
                     scope: self.runtime.current_scope_id().unwrap_or(ScopeId(0)),
                 };
-                parent.set(Some(template_ref));
+                *parent.borrow_mut() = Some(template_ref);
                 let id = self.set_slot(id);
                 self.mutations.push(CreatePlaceholder { id });
                 1
@@ -217,12 +211,7 @@ impl VirtualDom {
     }
 
     fn create_static_text(&mut self, value: &str, id: ElementId) {
-        // Safety: we promise not to re-alias this text later on after committing it to the mutation
-        let unbounded_text: &str = unsafe { std::mem::transmute(value) };
-        self.mutations.push(CreateTextNode {
-            value: unbounded_text,
-            id,
-        });
+        self.mutations.push(CreateTextNode { value, id });
     }
 
     /// We write all the descendent data for this element
@@ -289,7 +278,7 @@ impl VirtualDom {
                 path: ElementPath {
                     path: template.template.get().node_paths[idx],
                 },
-                template: template.stable_id().unwrap(),
+                element: template.clone(),
                 scope: self.runtime.current_scope_id().unwrap_or(ScopeId(0)),
             };
             let m = self.create_dynamic_node(boundary_ref, &template.dynamic_nodes[idx]);
@@ -336,14 +325,14 @@ impl VirtualDom {
         attribute.mounted_element.set(id);
 
         // Safety: we promise not to re-alias this text later on after committing it to the mutation
-        let unbounded_name: &str = unsafe { std::mem::transmute(attribute.name) };
+        let unbounded_name: &str = &attribute.name;
 
         match &attribute.value {
             AttributeValue::Listener(_) => {
                 let path = &template.template.get().attr_paths[idx];
                 let element_ref = ElementRef {
                     path: ElementPath { path },
-                    template: template.stable_id().unwrap(),
+                    element: template.clone(),
                     scope: self.runtime.current_scope_id().unwrap_or(ScopeId(0)),
                 };
                 self.elements[id.0] = Some(element_ref);
@@ -354,9 +343,7 @@ impl VirtualDom {
                 })
             }
             _ => {
-                // Safety: we promise not to re-alias this text later on after committing it to the mutation
-                let value: BorrowedAttributeValue = (&attribute.value).into();
-                let unbounded_value = unsafe { std::mem::transmute(value) };
+                let unbounded_value = &attribute.value;
 
                 self.mutations.push(SetAttribute {
                     name: unbounded_name,
@@ -516,7 +503,7 @@ impl VirtualDom {
         placeholder.id.set(Some(id));
 
         // Assign the placeholder's parent
-        placeholder.parent.set(Some(parent));
+        *placeholder.parent.borrow_mut() = Some(parent);
 
         // Assign the ID to the existing node in the template
         self.mutations.push(AssignId {
@@ -540,7 +527,11 @@ impl VirtualDom {
 
         component.scope.set(Some(scope));
 
-        match self.run_scope(scope) {
+        let new = self.run_scope(scope);
+
+        self.scopes[scope.0].last_rendered_node = Some(new.clone());
+
+        match &new {
             // Create the component's root element
             Ready(t) => {
                 self.assign_boundary_ref(parent, t);
@@ -550,22 +541,20 @@ impl VirtualDom {
         }
     }
 
-    /// Load a scope from a vcomponent. If the props don't exist, that means the component is currently "live"
+    /// Load a scope from a vcomponent. If the scope id doesn't exist, that means the component is currently "live"
     fn load_scope_from_vcomponent(&mut self, component: &VComponent) -> ScopeId {
-        component
-            .props
-            .map(|props| {
-                let unbounded_props: Box<dyn AnyProps> = unsafe { std::mem::transmute(props) };
-                self.new_scope(unbounded_props, component.name).context().id
-            })
-            .unwrap_or_else(|| component.scope.get().unwrap())
+        component.scope.get().unwrap_or_else(|| {
+            self.new_scope(component.props.clone(), component.name)
+                .context()
+                .id
+        })
     }
 
     fn mount_aborted(&mut self, placeholder: &VPlaceholder, parent: Option<ElementRef>) -> usize {
         let id = self.next_element();
         self.mutations.push(Mutation::CreatePlaceholder { id });
         placeholder.id.set(Some(id));
-        placeholder.parent.set(parent);
+        *placeholder.parent.borrow_mut() = parent;
 
         1
     }

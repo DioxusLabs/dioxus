@@ -1,7 +1,6 @@
 use crate::{
     scope_context::{consume_context, current_scope_id, schedule_update_any},
-    Element, IntoDynNode, Properties, ScopeId, ScopeState, Template, TemplateAttribute,
-    TemplateNode, VNode,
+    Element, IntoDynNode, Properties, ScopeId, Template, TemplateAttribute, TemplateNode, VNode,
 };
 use std::{
     any::{Any, TypeId},
@@ -14,8 +13,9 @@ use std::{
 };
 
 /// Provide an error boundary to catch errors from child components
-pub fn use_error_boundary(cx: &ScopeState) -> &ErrorBoundary {
-    cx.use_hook(|| cx.provide_context(ErrorBoundary::new()))
+pub fn use_error_boundary() -> ErrorBoundary {
+    // use_hook(|| cx.provide_context(ErrorBoundary::new()))
+    todo!()
 }
 
 /// A boundary that will capture any errors from child components
@@ -262,10 +262,11 @@ impl<T> Throw for Option<T> {
     }
 }
 
-pub struct ErrorHandler(Box<dyn Fn(CapturedError) -> Element>);
+#[derive(Clone)]
+pub struct ErrorHandler(Rc<dyn Fn(CapturedError) -> Element>);
 impl<F: Fn(CapturedError) -> Element> From<F> for ErrorHandler {
     fn from(value: F) -> Self {
-        Self(Box::new(value))
+        Self(Rc::new(value))
     }
 }
 fn default_handler(error: CapturedError) -> Element {
@@ -284,15 +285,13 @@ fn default_handler(error: CapturedError) -> Element {
         node_paths: &[&[0u8, 0u8]],
         attr_paths: &[],
     };
-    Some(VNode {
-        parent: Default::default(),
-        stable_id: Default::default(),
-        key: None,
-        template: std::cell::Cell::new(TEMPLATE),
-        root_ids: Vec::with_capacity(1usize).into(),
-        dynamic_nodes: vec![error.to_string().into_dyn_node()],
-        dynamic_attrs: Default::default(),
-    })
+    Some(VNode::new(
+        None,
+        TEMPLATE,
+        Vec::with_capacity(1usize),
+        vec![error.to_string().into_dyn_node()],
+        Default::default(),
+    ))
 }
 
 #[derive(Clone)]
@@ -417,7 +416,7 @@ impl<
             ::core::default::Default::default()
         });
         let handle_error = ErrorBoundaryPropsBuilder_Optional::into_value(handle_error, || {
-            ErrorHandler(Box::new(default_handler))
+            ErrorHandler(Rc::new(default_handler))
         });
         ErrorBoundaryProps {
             children,
@@ -448,27 +447,24 @@ impl<
 /// They are similar to `try/catch` in JavaScript, but they only catch errors in the tree below them.
 /// Error boundaries are quick to implement, but it can be useful to individually handle errors in your components to provide a better user experience when you know that an error is likely to occur.
 #[allow(non_upper_case_globals, non_snake_case)]
-pub fn ErrorBoundary(cx: ErrorBoundaryProps) -> Element {
-    let error_boundary = use_error_boundary(cx);
+pub fn ErrorBoundary(props: ErrorBoundaryProps) -> Element {
+    let error_boundary = use_error_boundary();
     match error_boundary.take_error() {
-        Some(error) => cx.render((cx.props.handle_error.0)(error)),
+        Some(error) => (props.handle_error.0)(error),
         None => Some({
-            let __cx = cx;
             static TEMPLATE: Template = Template {
                 name: "examples/error_handle.rs:81:17:2342",
                 roots: &[TemplateNode::Dynamic { id: 0usize }],
                 node_paths: &[&[0u8]],
                 attr_paths: &[],
             };
-            VNode {
-                parent: Default::default(),
-                stable_id: Default::default(),
-                key: None,
-                template: std::cell::Cell::new(TEMPLATE),
-                root_ids: Vec::with_capacity(1usize).into(),
-                dynamic_nodes: vec![(&cx.props.children).into_dyn_node()],
-                dynamic_attrs: __cx.bump().alloc([]),
-            }
+            VNode::new(
+                None,
+                TEMPLATE,
+                Vec::with_capacity(1usize),
+                vec![(props.children).into_dyn_node()],
+                Default::default(),
+            )
         }),
     }
 }

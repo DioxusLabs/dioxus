@@ -1,5 +1,3 @@
-use std::ptr::NonNull;
-
 use crate::{
     innerlude::DirtyScope, nodes::RenderReturn, nodes::VNode, virtual_dom::VirtualDom, DynamicNode,
     ScopeId,
@@ -21,16 +19,16 @@ pub struct ElementId(pub usize);
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct VNodeId(pub usize);
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct ElementRef {
     // the pathway of the real element inside the template
     pub(crate) path: ElementPath,
 
-    // The actual template
-    pub(crate) template: VNodeId,
-
-    // The scope the element belongs to
+    // the scope that this element belongs to
     pub(crate) scope: ScopeId,
+
+    // The actual element
+    pub(crate) element: VNode,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -41,14 +39,6 @@ pub struct ElementPath {
 impl VirtualDom {
     pub(crate) fn next_element(&mut self) -> ElementId {
         ElementId(self.elements.insert(None))
-    }
-
-    pub(crate) fn next_vnode_ref(&mut self, vnode: &VNode) -> VNodeId {
-        let new_id = VNodeId(self.element_refs.insert(Some(unsafe {
-            std::mem::transmute::<NonNull<VNode>, _>(vnode.into())
-        })));
-
-        new_id
     }
 
     pub(crate) fn reclaim(&mut self, el: ElementId) {
@@ -65,11 +55,6 @@ impl VirtualDom {
         }
 
         self.elements.try_remove(el.0).map(|_| ())
-    }
-
-    pub(crate) fn set_template(&mut self, id: VNodeId, vnode: &VNode) {
-        self.element_refs[id.0] =
-            Some(unsafe { std::mem::transmute::<NonNull<VNode>, _>(vnode.into()) });
     }
 
     // Drop a scope and all its children

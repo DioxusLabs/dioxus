@@ -1,10 +1,9 @@
+use std::ops::Deref;
+
 use crate::{
     any_props::AnyProps,
     arena::ElementId,
-    innerlude::{
-        BorrowedAttributeValue, DirtyScope, ElementPath, ElementRef, VComponent, VPlaceholder,
-        VText,
-    },
+    innerlude::{DirtyScope, ElementPath, ElementRef, VComponent, VPlaceholder, VText},
     mutations::Mutation,
     nodes::RenderReturn,
     nodes::{DynamicNode, VNode},
@@ -17,52 +16,43 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use DynamicNode::*;
 
 impl VirtualDom {
-    pub(super) fn diff_scope(&mut self, scope: ScopeId) {
+    pub(super) fn diff_scope(&mut self, scope: ScopeId, new_nodes: RenderReturn) {
         self.runtime.scope_stack.borrow_mut().push(scope);
-        let scope_state = &mut self.get_scope(scope).unwrap();
-        unsafe {
-            // Load the old and new bump arenas
-            let old = scope_state
-                .previous_frame()
-                .try_load_node()
-                .expect("Call rebuild before diffing");
+        let scope_state = &mut self.scopes[scope.0];
+        // Load the old and new bump arenas
+        let old = std::mem::replace(&mut scope_state.last_rendered_node, Some(new_nodes)).unwrap();
+        let new = scope_state.last_rendered_node.as_ref().unwrap();
 
-            let new = scope_state
-                .current_frame()
-                .try_load_node()
-                .expect("Call rebuild before diffing");
+        use RenderReturn::{Aborted, Ready};
 
-            use RenderReturn::{Aborted, Ready};
+        match (&old, new) {
+            // Normal pathway
+            (Ready(l), Ready(r)) => self.diff_node(l, r),
 
-            match (old, new) {
-                // Normal pathway
-                (Ready(l), Ready(r)) => self.diff_node(l, r),
+            // Unwind the mutations if need be
+            (Ready(l), Aborted(p)) => self.diff_ok_to_err(l, p),
 
-                // Unwind the mutations if need be
-                (Ready(l), Aborted(p)) => self.diff_ok_to_err(l, p),
+            // Just move over the placeholder
+            (Aborted(l), Aborted(r)) => {
+                r.id.set(l.id.get());
+                *r.parent.borrow_mut() = l.parent.borrow().clone();
+            }
 
-                // Just move over the placeholder
-                (Aborted(l), Aborted(r)) => {
-                    r.id.set(l.id.get());
-                    r.parent.set(l.parent.get())
-                }
-
-                // Placeholder becomes something
-                // We should also clear the error now
-                (Aborted(l), Ready(r)) => self.replace_placeholder(
-                    l,
-                    [r],
-                    l.parent.get().expect("root node should not be none"),
-                ),
-            };
-        }
+            // Placeholder becomes something
+            // We should also clear the error now
+            (Aborted(l), Ready(r)) => self.replace_placeholder(
+                l,
+                [r],
+                l.parent.borrow().expect("root node should not be none"),
+            ),
+        };
         self.runtime.scope_stack.borrow_mut().pop();
     }
 
     fn diff_ok_to_err(&mut self, l: &VNode, p: &VPlaceholder) {
         let id = self.next_element();
         p.id.set(Some(id));
-        p.parent.set(l.parent.get());
+        *p.parent.borrow_mut() = l.parent.borrow().clone();
         self.mutations.push(Mutation::CreatePlaceholder { id });
 
         let pre_edits = self.mutations.edits.len();
@@ -101,13 +91,7 @@ impl VirtualDom {
 
         // Copy over the parent
         {
-            right_template.parent.set(left_template.parent.get());
-        }
-
-        // Update the bubble id pointer
-        right_template.stable_id.set(left_template.stable_id.get());
-        if let Some(bubble_id) = right_template.stable_id.get() {
-            self.set_template(bubble_id, right_template);
+            *right_template.parent.borrow_mut() = left_template.parent.borrow().clone();
         }
 
         // If the templates are the same, we don't need to do anything, nor do we want to
@@ -145,7 +129,7 @@ impl VirtualDom {
             .enumerate()
             .for_each(|(dyn_node_idx, (left_node, right_node))| {
                 let current_ref = ElementRef {
-                    template: right_template.stable_id().unwrap(),
+                    element: right_template.clone(),
                     path: ElementPath {
                         path: left_template.template.get().node_paths[dyn_node_idx],
                     },
@@ -175,19 +159,18 @@ impl VirtualDom {
             (Fragment(left), Fragment(right)) => self.diff_non_empty_fragment(left, right, parent),
             (Placeholder(left), Placeholder(right)) => {
                 right.id.set(left.id.get());
-                right.parent.set(left.parent.get());
+                *right.parent.borrow_mut() = left.parent.borrow().clone();
             },
             (Component(left), Component(right)) => self.diff_vcomponent(left, right, Some(parent)),
-            (Placeholder(left), Fragment(right)) => self.replace_placeholder(left, *right, parent),
+            (Placeholder(left), Fragment(right)) => self.replace_placeholder(left, right, parent),
             (Fragment(left), Placeholder(right)) => self.node_to_placeholder(left, right, parent),
             _ => todo!("This is an usual custom case for dynamic nodes. We don't know how to handle it yet."),
         };
     }
 
     fn update_attribute(&mut self, right_attr: &Attribute, left_attr: &Attribute) {
-        let name = unsafe { std::mem::transmute(left_attr.name) };
-        let value: BorrowedAttributeValue = (&right_attr.value).into();
-        let value = unsafe { std::mem::transmute(value) };
+        let name = &left_attr.name;
+        let value = &right_attr.value;
         self.mutations.push(Mutation::SetAttribute {
             id: left_attr.mounted_element.get(),
             ns: right_attr.namespace,
@@ -218,13 +201,13 @@ impl VirtualDom {
 
         // copy out the box for both
         let old_scope = &self.scopes[scope_id.0];
-        let old = old_scope.props.as_ref();
-        let new: &dyn AnyProps = right.props.as_ref();
+        let old = old_scope.props.deref();
+        let new: &dyn AnyProps = right.props.deref();
 
         // If the props are static, then we try to memoize by setting the new with the old
         // The target scopestate still has the reference to the old props, so there's no need to update anything
         // This also implicitly drops the new props since they're not used
-        if old.memoize(new) {
+        if old.memoize(new.props()) {
             tracing::trace!(
                 "Memoized props for component {:#?} ({})",
                 scope_id,
@@ -234,11 +217,11 @@ impl VirtualDom {
         }
 
         // First, move over the props from the old to the new, dropping old props in the process
-        self.scopes[scope_id.0].props = new;
+        self.scopes[scope_id.0].props = right.props.clone();
 
         // Now run the component and diff it
-        self.run_scope(scope_id);
-        self.diff_scope(scope_id);
+        let new = self.run_scope(scope_id);
+        self.diff_scope(scope_id, new);
 
         self.dirty_scopes.remove(&DirtyScope {
             height: self.runtime.get_context(scope_id).unwrap().height,
@@ -325,8 +308,10 @@ impl VirtualDom {
 
         right.id.set(Some(id));
         if left.value != right.value {
-            let value = unsafe { std::mem::transmute(right.value) };
-            self.mutations.push(Mutation::SetText { id, value });
+            self.mutations.push(Mutation::SetText {
+                id,
+                value: &right.value,
+            });
         }
     }
 
@@ -824,7 +809,7 @@ impl VirtualDom {
         let placeholder = self.next_element();
 
         r.id.set(Some(placeholder));
-        r.parent.set(Some(parent));
+        r.parent.borrow_mut().replace(parent);
 
         self.mutations
             .push(Mutation::CreatePlaceholder { id: placeholder });
@@ -862,16 +847,6 @@ impl VirtualDom {
         // Clean up the roots, assuming we need to generate mutations for these
         // This is done last in order to preserve Node ID reclaim order (reclaim in reverse order of claim)
         self.reclaim_roots(node, gen_muts);
-
-        // Clean up the vnode id
-        self.reclaim_vnode_id(node);
-    }
-
-    fn reclaim_vnode_id(&mut self, node: &VNode) {
-        // Clean up the vnode id
-        if let Some(id) = node.stable_id() {
-            self.element_refs.remove(id.0);
-        }
     }
 
     fn reclaim_roots(&mut self, node: &VNode, gen_muts: bool) {
@@ -976,10 +951,6 @@ impl VirtualDom {
             RenderReturn::Aborted(placeholder) => self.remove_placeholder(placeholder, gen_muts),
         };
 
-        // Restore the props back to the vcomponent in case it gets rendered again
-        let props = self.scopes[scope.0].props.take();
-        *comp.props.borrow_mut() = unsafe { std::mem::transmute(props) };
-
         // Now drop all the resouces
         self.drop_scope(scope, false);
     }
@@ -1019,7 +990,7 @@ impl VirtualDom {
     pub(crate) fn assign_boundary_ref(&mut self, parent: Option<ElementRef>, child: &VNode) {
         if let Some(parent) = parent {
             // assign the parent of the child
-            child.parent.set(Some(parent));
+            child.parent.borrow_mut().replace(parent);
         }
     }
 }

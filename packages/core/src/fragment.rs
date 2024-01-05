@@ -27,16 +27,7 @@ use crate::innerlude::*;
 /// You want to use this free-function when your fragment needs a key and simply returning multiple nodes from rsx! won't cut it.
 #[allow(non_upper_case_globals, non_snake_case)]
 pub fn Fragment(cx: FragmentProps) -> Element {
-    let children = cx.0.as_ref()?;
-    Some(VNode {
-        key: children.key,
-        parent: children.parent.clone(),
-        stable_id: children.stable_id.clone(),
-        template: children.template.clone(),
-        root_ids: children.root_ids.clone(),
-        dynamic_nodes: children.dynamic_nodes,
-        dynamic_attrs: children.dynamic_attrs,
-    })
+    cx.0.clone()
 }
 
 #[derive(Clone, PartialEq)]

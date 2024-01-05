@@ -3,7 +3,7 @@
 //! This module provides the primary mechanics to create a hook-based, concurrent VDOM for Rust.
 
 use crate::{
-    any_props::VProps,
+    any_props::{BoxedAnyProps, VProps},
     arena::ElementId,
     innerlude::{DirtyScope, ElementRef, ErrorBoundary, Mutations, Scheduler, SchedulerMsg},
     mutations::Mutation,
@@ -11,14 +11,12 @@ use crate::{
     nodes::{Template, TemplateId},
     runtime::{Runtime, RuntimeGuard},
     scopes::{ScopeId, ScopeState},
-    AttributeValue, Element, Event, VNode,
+    AttributeValue, Element, Event,
 };
 use futures_util::{pin_mut, StreamExt};
 use rustc_hash::{FxHashMap, FxHashSet};
 use slab::Slab;
-use std::{
-    any::Any, cell::Cell, collections::BTreeSet, future::Future, ptr::NonNull, rc::Rc, sync::Arc,
-};
+use std::{any::Any, cell::Cell, collections::BTreeSet, future::Future, rc::Rc, sync::Arc};
 
 /// A virtual node system that progresses user events and diffs UI trees.
 ///
@@ -187,9 +185,6 @@ pub struct VirtualDom {
     // Maps a template path to a map of byteindexes to templates
     pub(crate) templates: FxHashMap<TemplateId, FxHashMap<usize, Template<'static>>>,
 
-    // Every element is actually a dual reference - one to the template and the other to the dynamic node in that template
-    pub(crate) element_refs: Slab<Option<NonNull<VNode>>>,
-
     // The element ids that are used in the renderer
     pub(crate) elements: Slab<Option<ElementRef>>,
 
@@ -268,13 +263,12 @@ impl VirtualDom {
             dirty_scopes: Default::default(),
             templates: Default::default(),
             elements: Default::default(),
-            element_refs: Default::default(),
             mutations: Mutations::default(),
             suspended_scopes: Default::default(),
         };
 
         let root = dom.new_scope(
-            Box::new(VProps::new(root, |_, _| unreachable!(), root_props)),
+            BoxedAnyProps::new(VProps::new(root, |_, _| unreachable!(), root_props, "root")),
             "app",
         );
 
@@ -363,14 +357,10 @@ impl VirtualDom {
         |           <-- no, broke early
         */
         let parent_path = match self.elements.get(element.0) {
-            Some(Some(el)) => el,
+            Some(Some(el)) => el.clone(),
             _ => return,
         };
-        let mut parent_node = self
-            .element_refs
-            .get(parent_path.template.0)
-            .cloned()
-            .map(|el| (*parent_path, el));
+        let mut parent_node = Some(parent_path);
         let mut listeners = vec![];
 
         // We will clone this later. The data itself is wrapped in RC to be used in callbacks if required
@@ -382,13 +372,12 @@ impl VirtualDom {
         // If the event bubbles, we traverse through the tree until we find the target element.
         if bubbles {
             // Loop through each dynamic attribute (in a depth first order) in this template before moving up to the template's parent.
-            while let Some((path, el_ref)) = parent_node {
-                // safety: we maintain references of all vnodes in the element slab
-                let template = unsafe { el_ref.unwrap().as_ref() };
-                let node_template = template.template.get();
+            while let Some(path) = parent_node {
+                let el_ref = &path.element;
+                let node_template = el_ref.template.get();
                 let target_path = path.path;
 
-                for (idx, attr) in template.dynamic_attrs.iter().enumerate() {
+                for (idx, attr) in el_ref.dynamic_attrs.iter().enumerate() {
                     let this_path = node_template.attr_paths[idx];
 
                     // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
@@ -413,9 +402,7 @@ impl VirtualDom {
                         let origin = path.scope;
                         self.runtime.scope_stack.borrow_mut().push(origin);
                         self.runtime.rendering.set(false);
-                        if let Some(cb) = listener.borrow_mut().as_deref_mut() {
-                            cb(uievent.clone());
-                        }
+                        (listener.borrow_mut())(uievent.clone());
                         self.runtime.scope_stack.borrow_mut().pop();
                         self.runtime.rendering.set(true);
 
@@ -425,22 +412,16 @@ impl VirtualDom {
                     }
                 }
 
-                parent_node = template.parent.get().and_then(|element_ref| {
-                    self.element_refs
-                        .get(element_ref.template.0)
-                        .cloned()
-                        .map(|el| (element_ref, el))
-                });
+                parent_node = el_ref.parent.borrow().clone();
             }
         } else {
             // Otherwise, we just call the listener on the target element
-            if let Some((path, el_ref)) = parent_node {
-                // safety: we maintain references of all vnodes in the element slab
-                let template = unsafe { el_ref.unwrap().as_ref() };
-                let node_template = template.template.get();
+            if let Some(path) = parent_node {
+                let el_ref = &path.element;
+                let node_template = el_ref.template.get();
                 let target_path = path.path;
 
-                for (idx, attr) in template.dynamic_attrs.iter().enumerate() {
+                for (idx, attr) in el_ref.dynamic_attrs.iter().enumerate() {
                     let this_path = node_template.attr_paths[idx];
 
                     // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
@@ -450,9 +431,7 @@ impl VirtualDom {
                             let origin = path.scope;
                             self.runtime.scope_stack.borrow_mut().push(origin);
                             self.runtime.rendering.set(false);
-                            if let Some(cb) = listener.as_deref_mut() {
-                                cb(uievent.clone());
-                            }
+                            (listener.borrow_mut())(uievent.clone());
                             self.runtime.scope_stack.borrow_mut().pop();
                             self.runtime.rendering.set(true);
 
@@ -570,7 +549,7 @@ impl VirtualDom {
         match unsafe { self.run_scope(ScopeId::ROOT) } {
             // Rebuilding implies we append the created elements to the root
             RenderReturn::Ready(node) => {
-                let m = self.create_scope(ScopeId::ROOT, node);
+                let m = self.create_scope(ScopeId::ROOT, &node);
                 self.mutations.edits.push(Mutation::AppendChildren {
                     id: ElementId(0),
                     m,
@@ -645,8 +624,8 @@ impl VirtualDom {
                 {
                     let _runtime = RuntimeGuard::new(self.runtime.clone());
                     // Run the scope and get the mutations
-                    self.run_scope(dirty.id);
-                    self.diff_scope(dirty.id);
+                    let new_nodes = self.run_scope(dirty.id);
+                    self.diff_scope(dirty.id, new_nodes);
                 }
             }
 

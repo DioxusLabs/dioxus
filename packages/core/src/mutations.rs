@@ -1,6 +1,6 @@
 use rustc_hash::FxHashSet;
 
-use crate::{arena::ElementId, innerlude::BorrowedAttributeValue, ScopeId, Template};
+use crate::{arena::ElementId, AttributeValue, ScopeId, Template};
 
 /// A container for all the relevant steps to modify the Real DOM
 ///
@@ -13,7 +13,6 @@ use crate::{arena::ElementId, innerlude::BorrowedAttributeValue, ScopeId, Templa
 /// Templates, however, apply to all subtrees, not just target subtree.
 ///
 /// Mutations are the only link between the RealDOM and the VirtualDOM.
-#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[derive(Debug, Default)]
 #[must_use = "not handling edits can lead to visual inconsistencies in UI"]
 pub struct Mutations<'a> {
@@ -56,11 +55,6 @@ impl<'a> Mutations<'a> {
 /// of the Dioxus VirtualDom.
 ///
 /// These edits can be serialized and sent over the network or through any interface
-#[cfg_attr(
-    feature = "serialize",
-    derive(serde::Serialize, serde::Deserialize),
-    serde(tag = "type")
-)]
 #[derive(Debug, PartialEq)]
 pub enum Mutation<'a> {
     /// Add these m children to the target element
@@ -195,7 +189,7 @@ pub enum Mutation<'a> {
         name: &'a str,
 
         /// The value of the attribute.
-        value: BorrowedAttributeValue<'a>,
+        value: &'a AttributeValue,
 
         /// The ID of the node to set the attribute of.
         id: ElementId,
