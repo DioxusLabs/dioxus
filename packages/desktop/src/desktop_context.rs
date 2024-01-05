@@ -146,25 +146,19 @@ impl DesktopService {
             self.shortcut_manager.clone(),
         );
 
-        let desktop_context = window
-            .dom
-            .base_scope()
-            .consume_context::<Rc<DesktopService>>()
-            .unwrap();
-
-        let id = window.desktop_context.window.id();
+        let cx = window.desktop_context.clone();
 
         self.proxy
-            .send_event(UserWindowEvent(EventData::NewWindow, id))
+            .send_event(UserWindowEvent(EventData::NewWindow, cx.id()))
             .unwrap();
 
         self.proxy
-            .send_event(UserWindowEvent(EventData::Poll, id))
+            .send_event(UserWindowEvent(EventData::Poll, cx.id()))
             .unwrap();
 
         self.pending_windows.borrow_mut().push(window);
 
-        Rc::downgrade(&desktop_context)
+        Rc::downgrade(&cx)
     }
 
     /// trigger the drag-window event

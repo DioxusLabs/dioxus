@@ -1,6 +1,4 @@
-use crate::edits::EditQueue;
 use crate::DesktopContext;
-use dioxus_core::ScopeState;
 use slab::Slab;
 use std::{
     borrow::Cow,
@@ -15,10 +13,7 @@ use tokio::{
     runtime::Handle,
     sync::{OnceCell, RwLock},
 };
-use wry::{
-    http::{status::StatusCode, Request, Response},
-    Result,
-};
+use wry::http::{Request, Response};
 
 /// An arbitrary asset is an HTTP response containing a binary body.
 pub type AssetResponse = Response<Cow<'static, [u8]>>;

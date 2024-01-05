@@ -1,48 +1,25 @@
-pub use crate::assets::{AssetFuture, AssetHandler, AssetRequest, AssetResponse};
-pub use crate::cfg::{Config, WindowCloseBehaviour};
-pub use crate::desktop_context::DesktopContext;
-pub use crate::desktop_context::{window, DesktopService, WryEventHandler, WryEventHandlerId};
-use crate::edits::{EditQueue, WebviewQueue};
-use crate::element::DesktopElement;
-use crate::eval::init_eval;
-use crate::events::{IpcMessage, IpcMethod};
-use crate::file_upload;
-use crate::hooks::*;
-use crate::query::QueryResult;
-use crate::shortcut::GlobalHotKeyEvent;
-use crate::shortcut::ShortcutRegistry;
-pub use crate::shortcut::{ShortcutHandle, ShortcutId, ShortcutRegistryError};
 use crate::{
+    cfg::{Config, WindowCloseBehaviour},
     desktop_context::{EventData, UserWindowEvent, WindowEventHandlers},
+    edits::WebviewQueue,
+    element::DesktopElement,
+    events::IpcMessage,
+    file_upload::FileDialogRequest,
+    query::QueryResult,
+    shortcut::{GlobalHotKeyEvent, ShortcutRegistry},
     webview::WebviewHandler,
 };
-use dioxus_core::*;
-use dioxus_html::{event_bubbles, MountedData};
+use dioxus_core::{Component, ElementId, VirtualDom};
+use dioxus_html::MountedData;
 use dioxus_html::{native_bind::NativeFileEngine, FormData, HtmlEvent};
-use dioxus_interpreter_js::binary_protocol::Channel;
 use futures_util::{pin_mut, FutureExt};
-use global_hotkey::{
-    hotkey::{Code, HotKey, Modifiers},
-    GlobalHotKeyManager,
-};
-use rustc_hash::FxHashMap;
+use std::cell::Cell;
 use std::rc::Rc;
-use std::sync::atomic::AtomicU16;
-use std::task::Waker;
-use std::{borrow::Borrow, cell::Cell};
 use std::{collections::HashMap, sync::Arc};
-pub use tao::dpi::{LogicalSize, PhysicalSize};
+use tao::event_loop::EventLoopBuilder;
 use tao::event_loop::{EventLoop, EventLoopProxy, EventLoopWindowTarget};
-pub use tao::window::WindowBuilder;
 use tao::window::WindowId;
-use tao::{
-    event::{Event, StartCause, WindowEvent},
-    event_loop::ControlFlow,
-};
-use tao::{event_loop::EventLoopBuilder, window::Window};
-use tokio::runtime::Builder;
-pub use wry;
-use wry::WebContext;
+use tao::{event::Event, event_loop::ControlFlow};
 use wry::WebView;
 
 pub struct App<P> {
@@ -221,24 +198,14 @@ impl<P: 'static> App<P> {
             return;
         };
 
-        view.dom
-            .base_scope()
-            .consume_context::<DesktopContext>()
-            .unwrap()
-            .query
-            .send(result);
+        view.desktop_context.query.send(result);
     }
 
     pub fn handle_user_event_msg(&mut self, msg: IpcMessage, id: WindowId) {
-        let params = msg.params();
+        let parsed_params = serde_json::from_value(msg.params())
+            .map_err(|err| tracing::error!("Error parsing user_event: {:?}", err));
 
-        let evt = match serde_json::from_value::<HtmlEvent>(params) {
-            Ok(value) => value,
-            Err(err) => {
-                tracing::error!("Error parsing user_event: {:?}", err);
-                return;
-            }
-        };
+        let Ok(evt) = parsed_params else { return };
 
         let HtmlEvent {
             element,
@@ -250,20 +217,13 @@ impl<P: 'static> App<P> {
         let view = self.webviews.get_mut(&id).unwrap();
 
         // check for a mounted event placeholder and replace it with a desktop specific element
-        let as_any = if let dioxus_html::EventData::Mounted = &data {
-            let query = view
-                .dom
-                .base_scope()
-                .consume_context::<DesktopContext>()
-                .unwrap()
-                .query
-                .clone();
-
-            let element = DesktopElement::new(element, view.desktop_context.clone(), query);
-
-            Rc::new(MountedData::new(element))
-        } else {
-            data.into_any()
+        let as_any = match data {
+            dioxus_html::EventData::Mounted => Rc::new(MountedData::new(DesktopElement::new(
+                element,
+                view.desktop_context.clone(),
+                view.desktop_context.query.clone(),
+            ))),
+            _ => data.into_any(),
         };
 
         view.dom.handle_event(&name, as_any, element, bubbles);
@@ -278,9 +238,7 @@ impl<P: 'static> App<P> {
                     webview.dom.replace_template(template);
                 }
 
-                let ids = self.webviews.keys().copied().collect::<Vec<_>>();
-
-                for id in ids {
+                for id in self.webviews.keys().copied().collect::<Vec<_>>() {
                     self.poll_vdom(id);
                 }
             }
@@ -291,31 +249,32 @@ impl<P: 'static> App<P> {
     }
 
     pub fn handle_file_dialog_msg(&mut self, msg: IpcMessage, window: WindowId) {
-        if let Ok(file_diolog) =
-            serde_json::from_value::<file_upload::FileDialogRequest>(msg.params())
-        {
-            let id = ElementId(file_diolog.target);
-            let event_name = &file_diolog.event;
-            let event_bubbles = file_diolog.bubbles;
-            let files = file_upload::get_file_event(&file_diolog);
-            let data = Rc::new(FormData {
-                value: Default::default(),
-                values: Default::default(),
-                files: Some(Arc::new(NativeFileEngine::new(files))),
-            });
+        let Ok(file_dialog) = serde_json::from_value::<FileDialogRequest>(msg.params()) else {
+            return;
+        };
 
-            let view = self.webviews.get_mut(&window).unwrap();
+        let id = ElementId(file_dialog.target);
+        let event_name = &file_dialog.event;
+        let event_bubbles = file_dialog.bubbles;
+        let files = file_dialog.get_file_event();
 
-            if event_name == "change&input" {
-                view.dom
-                    .handle_event("input", data.clone(), id, event_bubbles);
-                view.dom.handle_event("change", data, id, event_bubbles);
-            } else {
-                view.dom.handle_event(event_name, data, id, event_bubbles);
-            }
+        let data = Rc::new(FormData {
+            value: Default::default(),
+            values: Default::default(),
+            files: Some(Arc::new(NativeFileEngine::new(files))),
+        });
 
-            view.desktop_context.send_edits(view.dom.render_immediate());
+        let view = self.webviews.get_mut(&window).unwrap();
+
+        if event_name == "change&input" {
+            view.dom
+                .handle_event("input", data.clone(), id, event_bubbles);
+            view.dom.handle_event("change", data, id, event_bubbles);
+        } else {
+            view.dom.handle_event(event_name, data, id, event_bubbles);
         }
+
+        view.desktop_context.send_edits(view.dom.render_immediate());
     }
 
     /// Poll the virtualdom until it's pending
@@ -324,10 +283,15 @@ impl<P: 'static> App<P> {
     ///
     /// All IO is done on the tokio runtime we started earlier
     pub fn poll_vdom(&mut self, id: WindowId) {
-        let view = self.webviews.get_mut(&id).unwrap();
+        let Some(view) = self.webviews.get_mut(&id) else {
+            return;
+        };
 
         let mut cx = std::task::Context::from_waker(&view.waker);
 
+        // Continously poll the virtualdom until it's pending
+        // Wait for work will return Ready when it has edits to be sent to the webview
+        // It will return Pending when it needs to be polled again - nothing is ready
         loop {
             {
                 let fut = view.dom.wait_for_work();
@@ -335,7 +299,7 @@ impl<P: 'static> App<P> {
 
                 match fut.poll_unpin(&mut cx) {
                     std::task::Poll::Ready(_) => {}
-                    std::task::Poll::Pending => break,
+                    std::task::Poll::Pending => return,
                 }
             }
 

@@ -1,14 +1,16 @@
 use std::{rc::Rc, task::Waker};
 
-use crate::edits::{EditQueue, WebviewQueue};
 use crate::{
     assets::AssetHandlerRegistry, desktop_context::UserWindowEvent, waker::tao_waker, Config,
     DesktopContext,
 };
 use crate::{
     desktop_context::{EventData, WindowEventHandlers},
-    eval::init_eval,
     shortcut::ShortcutRegistry,
+};
+use crate::{
+    edits::{EditQueue, WebviewQueue},
+    eval::DesktopEvalProvider,
 };
 use crate::{
     protocol::{self},
@@ -162,9 +164,12 @@ pub fn create_new_window(
         asset_handlers,
     ));
 
+    // Provide the desktop context to the virtualdom
     dom.base_scope().provide_context(desktop_context.clone());
 
-    init_eval(dom.base_scope());
+    // Also set up its eval provider
+    dom.base_scope()
+        .provide_context(Rc::new(DesktopEvalProvider::new(desktop_context.clone())));
 
     WebviewHandler {
         // We want to poll the virtualdom and the event loop at the same time, so the waker will be connected to both
