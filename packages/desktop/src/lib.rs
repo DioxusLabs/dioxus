@@ -113,11 +113,8 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
     // We start the tokio runtime *on this thread*
     // Any future we poll later will use this runtime to spawn tasks and for IO
     // I would love to just allow dioxus to work with any runtime... but tokio is weird
-    let _guard = Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .unwrap()
-        .enter();
+    let rt = &Builder::new_multi_thread().enable_all().build().unwrap();
+    let _guard = rt.enter();
 
     let (event_loop, mut app) = app::App::new(cfg, props, root);
 
