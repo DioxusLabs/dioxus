@@ -5,22 +5,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::element::DesktopElement;
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
-pub struct IpcMessage {
-    method: String,
-    params: serde_json::Value,
-}
-
-impl IpcMessage {
-    pub(crate) fn method(&self) -> &str {
-        self.method.as_str()
-    }
-
-    pub(crate) fn params(self) -> serde_json::Value {
-        self.params
-    }
-}
-
 pub(crate) struct SerializedHtmlEventConverter;
 
 impl HtmlEventConverter for SerializedHtmlEventConverter {

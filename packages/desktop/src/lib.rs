@@ -12,6 +12,7 @@ mod edits;
 mod element;
 mod escape;
 mod eval;
+mod events;
 mod file_upload;
 mod hooks;
 mod ipc;

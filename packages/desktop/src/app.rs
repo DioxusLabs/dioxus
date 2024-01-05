@@ -11,7 +11,10 @@ use crate::{
 };
 use crossbeam_channel::Receiver;
 use dioxus_core::{Component, ElementId, VirtualDom};
-use dioxus_html::{native_bind::NativeFileEngine, FormData, HtmlEvent, MountedData};
+use dioxus_html::{
+    native_bind::NativeFileEngine, FileEngine, FormData, HasFormData, HtmlEvent, MountedData,
+    PlatformEventData, SerializedHtmlEventConverter,
+};
 use std::{
     cell::{Cell, RefCell},
     collections::HashMap,
@@ -75,6 +78,12 @@ impl<P: 'static> App<P> {
                 target: event_loop.clone(),
             },
         };
+
+        // Copy over any assets we find
+        crate::collect_assets::copy_assets();
+
+        // Set the event converter
+        dioxus_html::set_event_converter(Box::new(SerializedHtmlEventConverter));
 
         #[cfg(all(feature = "hot-reload", debug_assertions))]
         app.connect_hotreload();
@@ -229,14 +238,14 @@ impl<P: 'static> App<P> {
         } = evt;
 
         let view = self.webviews.get_mut(&id).unwrap();
+        let query = view.desktop_context.query.clone();
 
         // check for a mounted event placeholder and replace it with a desktop specific element
         let as_any = match data {
-            dioxus_html::EventData::Mounted => Rc::new(MountedData::new(DesktopElement::new(
-                element,
-                view.desktop_context.clone(),
-                view.desktop_context.query.clone(),
-            ))),
+            dioxus_html::EventData::Mounted => {
+                let element = DesktopElement::new(element, view.desktop_context.clone(), query);
+                Rc::new(PlatformEventData::new(Box::new(MountedData::new(element))))
+            }
             _ => data.into_any(),
         };
 
@@ -263,17 +272,28 @@ impl<P: 'static> App<P> {
         let Ok(file_dialog) = serde_json::from_value::<FileDialogRequest>(msg.params()) else {
             return;
         };
+        struct DesktopFileUploadForm {
+            files: Arc<NativeFileEngine>,
+        }
+
+        impl HasFormData for DesktopFileUploadForm {
+            fn files(&self) -> Option<Arc<dyn FileEngine>> {
+                Some(self.files.clone())
+            }
+
+            fn as_any(&self) -> &dyn std::any::Any {
+                self
+            }
+        }
 
         let id = ElementId(file_dialog.target);
         let event_name = &file_dialog.event;
         let event_bubbles = file_dialog.bubbles;
         let files = file_dialog.get_file_event();
 
-        let data = Rc::new(FormData {
-            value: Default::default(),
-            values: Default::default(),
-            files: Some(Arc::new(NativeFileEngine::new(files))),
-        });
+        let data = Rc::new(PlatformEventData::new(Box::new(DesktopFileUploadForm {
+            files: Arc::new(NativeFileEngine::new(files)),
+        })));
 
         let view = self.webviews.get_mut(&window).unwrap();
 
