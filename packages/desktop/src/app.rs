@@ -6,7 +6,7 @@ pub use crate::desktop_context::{
 use crate::desktop_context::{EventData, UserWindowEvent, WebviewQueue, WindowEventHandlers};
 use crate::element::DesktopElement;
 use crate::eval::init_eval;
-use crate::events::{IpcMessage, KnownIpcMethod};
+use crate::events::{IpcMessage, IpcMethod};
 use crate::file_upload;
 pub use crate::protocol::{
     use_asset_handler, AssetFuture, AssetHandler, AssetRequest, AssetResponse,

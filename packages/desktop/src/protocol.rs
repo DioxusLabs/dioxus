@@ -1,6 +1,5 @@
-use crate::{use_window, DesktopContext};
+use crate::DesktopContext;
 use dioxus_core::ScopeState;
-use dioxus_interpreter_js::INTERPRETER_JS;
 use slab::Slab;
 use std::{
     borrow::Cow,
@@ -17,7 +16,7 @@ use tokio::{
 };
 use wry::{
     http::{status::StatusCode, Request, Response},
-    RequestAsyncResponder, Result,
+    Result,
 };
 
 use crate::desktop_context::EditQueue;
@@ -25,33 +24,6 @@ use crate::desktop_context::EditQueue;
 static MINIFIED: &str = include_str!("./minified.js");
 
 fn module_loader(root_name: &str, headless: bool) -> String {
-    let js = INTERPRETER_JS.replace(
-        "/*POST_HANDLE_EDITS*/",
-        r#"// Prevent file inputs from opening the file dialog on click
-    let inputs = document.querySelectorAll("input");
-    for (let input of inputs) {
-      if (!input.getAttribute("data-dioxus-file-listener")) {
-        // prevent file inputs from opening the file dialog on click
-        const type = input.getAttribute("type");
-        if (type === "file") {
-          input.setAttribute("data-dioxus-file-listener", true);
-          input.addEventListener("click", (event) => {
-            let target = event.target;
-            let target_id = find_real_id(target);
-            if (target_id !== null) {
-              const send = (event_name) => {
-                const message = serializeIpcMessage("file_diolog", { accept: target.getAttribute("accept"), directory: target.getAttribute("webkitdirectory") === "true", multiple: target.hasAttribute("multiple"), target: parseInt(target_id), bubbles: event_bubbles(event_name), event: event_name });
-                window.ipc.postMessage(message);
-              };
-              send("change&input");
-            }
-            event.preventDefault();
-          });
-        }
-      }
-    }"#,
-    );
-
     format!(
         r#"
 <script type="module">

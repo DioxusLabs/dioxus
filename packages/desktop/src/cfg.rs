@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 use std::path::PathBuf;
 
-use tao::window::{Icon, Window, WindowBuilder};
+use tao::window::{Icon, WindowBuilder, WindowId};
 use wry::{
     http::{Request as HttpRequest, Response as HttpResponse},
     FileDropEvent,
@@ -37,7 +37,7 @@ pub struct Config {
     pub(crate) enable_default_menu_bar: bool,
 }
 
-type DropHandler = Box<dyn Fn(FileDropEvent) -> bool>;
+type DropHandler = Box<dyn Fn(WindowId, FileDropEvent) -> bool>;
 
 pub(crate) type WryProtocol = (
     String,
@@ -119,7 +119,7 @@ impl Config {
     /// Set a file drop handler
     pub fn with_file_drop_handler(
         mut self,
-        handler: impl Fn(FileDropEvent) -> bool + 'static,
+        handler: impl Fn(WindowId, FileDropEvent) -> bool + 'static,
     ) -> Self {
         self.file_drop_handler = Some(Box::new(handler));
         self

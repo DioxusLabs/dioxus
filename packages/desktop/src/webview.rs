@@ -81,7 +81,7 @@ pub(crate) fn build(
         .with_file_drop_handler(move |event| {
             file_handler
                 .as_ref()
-                .map(|handler| handler(event))
+                .map(|handler| handler(window_id, event))
                 .unwrap_or_default()
         })
         .with_web_context(&mut web_context);

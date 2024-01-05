@@ -30,9 +30,10 @@ pub use desktop_context::{
 };
 use desktop_context::{EventData, UserWindowEvent};
 use dioxus_core::*;
-use events::KnownIpcMethod;
+use events::IpcMethod;
 pub use protocol::{use_asset_handler, AssetFuture, AssetHandler, AssetRequest, AssetResponse};
 pub use shortcut::{use_global_shortcut, ShortcutHandle, ShortcutId, ShortcutRegistryError};
+pub use tao;
 pub use tao::dpi::{LogicalSize, PhysicalSize};
 use tao::event::{Event, StartCause, WindowEvent};
 pub use tao::window::WindowBuilder;
@@ -136,12 +137,12 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
                 EventData::CloseWindow => app.handle_close_msg(id),
                 EventData::HotReloadEvent(msg) => app.handle_hot_reload_msg(msg),
                 EventData::Ipc(msg) => match msg.method() {
-                    KnownIpcMethod::FileDialog => app.handle_file_dialog_msg(msg, id),
-                    KnownIpcMethod::UserEvent => app.handle_user_event_msg(msg, id),
-                    KnownIpcMethod::Query => app.handle_query_msg(msg, id),
-                    KnownIpcMethod::BrowserOpen => app.handle_browser_open(msg),
-                    KnownIpcMethod::Initialize => app.handle_initialize_msg(id),
-                    KnownIpcMethod::Other(_) => {}
+                    IpcMethod::FileDialog => app.handle_file_dialog_msg(msg, id),
+                    IpcMethod::UserEvent => app.handle_user_event_msg(msg, id),
+                    IpcMethod::Query => app.handle_query_msg(msg, id),
+                    IpcMethod::BrowserOpen => app.handle_browser_open(msg),
+                    IpcMethod::Initialize => app.handle_initialize_msg(id),
+                    IpcMethod::Other(_) => {}
                 },
             },
             _ => {}

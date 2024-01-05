@@ -9,7 +9,7 @@ pub struct IpcMessage {
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
-pub enum KnownIpcMethod<'a> {
+pub enum IpcMethod<'a> {
     FileDialog,
     UserEvent,
     Query,
@@ -19,15 +19,15 @@ pub enum KnownIpcMethod<'a> {
 }
 
 impl IpcMessage {
-    pub(crate) fn method(&self) -> KnownIpcMethod {
+    pub(crate) fn method(&self) -> IpcMethod {
         match self.method.as_str() {
             // todo: this is a misspelling
-            "file_diolog" => KnownIpcMethod::FileDialog,
-            "user_event" => KnownIpcMethod::UserEvent,
-            "query" => KnownIpcMethod::Query,
-            "browser_open" => KnownIpcMethod::BrowserOpen,
-            "initialize" => KnownIpcMethod::Initialize,
-            _ => KnownIpcMethod::Other(&self.method),
+            "file_diolog" => IpcMethod::FileDialog,
+            "user_event" => IpcMethod::UserEvent,
+            "query" => IpcMethod::Query,
+            "browser_open" => IpcMethod::BrowserOpen,
+            "initialize" => IpcMethod::Initialize,
+            _ => IpcMethod::Other(&self.method),
         }
     }
 
