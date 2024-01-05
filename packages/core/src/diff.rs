@@ -1000,8 +1000,8 @@ impl VirtualDom {
             }
         };
 
-        // Now drop all the resouces
-        self.drop_scope(scope, false);
+        // Now drop all the resources
+        self.drop_scope(scope);
     }
 
     fn find_first_element(&self, node: &VNode) -> ElementId {

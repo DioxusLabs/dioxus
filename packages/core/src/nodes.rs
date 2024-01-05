@@ -359,14 +359,14 @@ pub struct VComponent {
     pub(crate) props: BoxedAnyProps,
 }
 
-impl<'a> VComponent {
+impl VComponent {
     /// Get the scope that this component is mounted to
     pub fn mounted_scope(&self) -> Option<ScopeId> {
         self.scope.get()
     }
 }
 
-impl<'a> std::fmt::Debug for VComponent {
+impl std::fmt::Debug for VComponent {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("VComponent")
             .field("name", &self.name)
@@ -385,7 +385,7 @@ pub struct VText {
     pub(crate) id: Cell<Option<ElementId>>,
 }
 
-impl<'a> VText {
+impl VText {
     /// Create a new VText
     pub fn new(value: String) -> Self {
         Self {
@@ -522,22 +522,6 @@ pub enum AttributeValue {
 
 pub type ListenerCb = Box<dyn FnMut(Event<dyn Any>)>;
 
-#[cfg(feature = "serialize")]
-fn serialize_any_value<S>(_: &std::cell::Ref<'_, dyn AnyValue>, _: S) -> Result<S::Ok, S::Error>
-where
-    S: serde::Serializer,
-{
-    panic!("Any cannot be serialized")
-}
-
-#[cfg(feature = "serialize")]
-fn deserialize_any_value<'de, 'a, D>(_: D) -> Result<std::cell::Ref<'a, dyn AnyValue>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    panic!("Any cannot be deserialized")
-}
-
 impl std::fmt::Debug for AttributeValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -650,7 +634,7 @@ impl IntoDynNode for String {
     }
 }
 
-impl<'b> IntoDynNode for Arguments<'_> {
+impl IntoDynNode for Arguments<'_> {
     fn into_dyn_node(self) -> DynamicNode {
         DynamicNode::Text(VText {
             value: self.to_string(),
@@ -668,12 +652,12 @@ impl IntoDynNode for &VNode {
 pub trait IntoVNode {
     fn into_vnode(self) -> VNode;
 }
-impl<'a> IntoVNode for VNode {
+impl IntoVNode for VNode {
     fn into_vnode(self) -> VNode {
         self
     }
 }
-impl<'a> IntoVNode for Element {
+impl IntoVNode for Element {
     fn into_vnode(self) -> VNode {
         match self {
             Some(val) => val.into_vnode(),
@@ -706,43 +690,43 @@ pub trait IntoAttributeValue {
     fn into_value(self) -> AttributeValue;
 }
 
-impl<'a> IntoAttributeValue for AttributeValue {
+impl IntoAttributeValue for AttributeValue {
     fn into_value(self) -> AttributeValue {
         self
     }
 }
 
-impl<'a> IntoAttributeValue for &'a str {
+impl IntoAttributeValue for &str {
     fn into_value(self) -> AttributeValue {
         AttributeValue::Text(self.to_string())
     }
 }
 
-impl<'a> IntoAttributeValue for String {
+impl IntoAttributeValue for String {
     fn into_value(self) -> AttributeValue {
         AttributeValue::Text(self)
     }
 }
 
-impl<'a> IntoAttributeValue for f64 {
+impl IntoAttributeValue for f64 {
     fn into_value(self) -> AttributeValue {
         AttributeValue::Float(self)
     }
 }
 
-impl<'a> IntoAttributeValue for i64 {
+impl IntoAttributeValue for i64 {
     fn into_value(self) -> AttributeValue {
         AttributeValue::Int(self)
     }
 }
 
-impl<'a> IntoAttributeValue for bool {
+impl IntoAttributeValue for bool {
     fn into_value(self) -> AttributeValue {
         AttributeValue::Bool(self)
     }
 }
 
-impl<'a> IntoAttributeValue for Arguments<'_> {
+impl IntoAttributeValue for Arguments<'_> {
     fn into_value(self) -> AttributeValue {
         AttributeValue::Text(self.to_string())
     }
@@ -754,7 +738,7 @@ impl IntoAttributeValue for Box<dyn AnyValue> {
     }
 }
 
-impl<'a, T: IntoAttributeValue> IntoAttributeValue for Option<T> {
+impl<T: IntoAttributeValue> IntoAttributeValue for Option<T> {
     fn into_value(self) -> AttributeValue {
         match self {
             Some(val) => val.into_value(),

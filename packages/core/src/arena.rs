@@ -1,7 +1,4 @@
-use crate::{
-    nodes::VNode, virtual_dom::VirtualDom, DynamicNode,
-    ScopeId,
-};
+use crate::{innerlude::DirtyScope, nodes::VNode, virtual_dom::VirtualDom, ScopeId};
 
 /// An Element's unique identifier.
 ///
@@ -60,37 +57,13 @@ impl VirtualDom {
     // Drop a scope and all its children
     //
     // Note: This will not remove any ids from the arena
-    pub(crate) fn drop_scope(&mut self, _id: ScopeId, _recursive: bool) {
-        // todo: Do we need this now that we don't have a bunch of unsafe code?
-        // self.dirty_scopes.remove(&DirtyScope {
-        //     height: self.scopes[id.0].height(),
-        //     id,
-        // });
-
-        // if recursive {
-        //     if let Some(root) = self.scopes[id.0].try_root_node() {
-        //         if let RenderReturn::Ready(node) = root {
-        //             self.drop_scope_inner(node)
-        //         }
-        //     }
-        // }
-
-        // self.scopes.remove(id.0);
-    }
-
-    fn drop_scope_inner(&mut self, node: &VNode) {
-        node.dynamic_nodes.iter().for_each(|node| match node {
-            DynamicNode::Component(c) => {
-                if let Some(f) = c.scope.get() {
-                    self.drop_scope(f, true);
-                }
-            }
-            DynamicNode::Fragment(nodes) => {
-                nodes.iter().for_each(|node| self.drop_scope_inner(node))
-            }
-            DynamicNode::Placeholder(_) => {}
-            DynamicNode::Text(_) => {}
+    pub(crate) fn drop_scope(&mut self, id: ScopeId) {
+        self.dirty_scopes.remove(&DirtyScope {
+            height: self.scopes[id.0].height(),
+            id,
         });
+
+        self.scopes.remove(id.0);
     }
 }
 

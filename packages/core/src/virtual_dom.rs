@@ -597,7 +597,7 @@ impl VirtualDom {
 
             self.wait_for_work().await;
 
-            self.render_immediate(&mut NoOpMutations);;
+            self.render_immediate(&mut NoOpMutations);
         }
     }
 
@@ -672,6 +672,6 @@ impl VirtualDom {
 impl Drop for VirtualDom {
     fn drop(&mut self) {
         // Simply drop this scope which drops all of its children
-        self.drop_scope(ScopeId::ROOT, true);
+        self.drop_scope(ScopeId::ROOT);
     }
 }
