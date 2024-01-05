@@ -334,12 +334,14 @@ impl<P: 'static> App<P> {
         let mut cx = std::task::Context::from_waker(&view.waker);
 
         loop {
-            let fut = view.dom.wait_for_work();
-            pin_mut!(fut);
+            {
+                let fut = view.dom.wait_for_work();
+                pin_mut!(fut);
 
-            match fut.poll_unpin(&mut cx) {
-                std::task::Poll::Ready(_) => {}
-                std::task::Poll::Pending => break,
+                match fut.poll_unpin(&mut cx) {
+                    std::task::Poll::Ready(_) => {}
+                    std::task::Poll::Pending => break,
+                }
             }
 
             send_edits(view.dom.render_immediate(), &view.desktop_context);

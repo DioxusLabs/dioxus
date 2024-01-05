@@ -34,6 +34,9 @@ pub fn window() -> DesktopContext {
     dioxus_core::prelude::consume_context().unwrap()
 }
 
+/// A handle to the [`DesktopService`] that can be passed around.
+pub type DesktopContext = Rc<DesktopService>;
+
 /// An imperative interface to the current window.
 ///
 /// To get a handle to the current window, use the [`use_window`] hook.
@@ -77,9 +80,6 @@ pub struct DesktopService {
     #[cfg(target_os = "ios")]
     pub(crate) views: Rc<RefCell<Vec<*mut objc::runtime::Object>>>,
 }
-
-/// A handle to the [`DesktopService`] that can be passed around.
-pub type DesktopContext = Rc<DesktopService>;
 
 /// A smart pointer to the current window.
 impl std::ops::Deref for DesktopService {
