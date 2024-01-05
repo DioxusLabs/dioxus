@@ -1,14 +1,15 @@
 use crate::{
     app::SharedContext,
     assets::AssetHandlerRegistry,
-    desktop_context::{EventData, UserWindowEvent},
     edits::EditQueue,
     eval::DesktopEvalProvider,
+    ipc::{EventData, UserWindowEvent},
     protocol::{self},
     waker::tao_waker,
     Config, DesktopContext, DesktopService,
 };
 use dioxus_core::VirtualDom;
+use futures_util::{pin_mut, FutureExt};
 use std::{rc::Rc, task::Waker};
 use wry::{WebContext, WebViewBuilder};
 
@@ -158,6 +159,27 @@ impl WebviewInstance {
             desktop_context,
             dom,
             _web_context: web_context,
+        }
+    }
+
+    pub fn poll_vdom(&mut self) {
+        let mut cx = std::task::Context::from_waker(&self.waker);
+
+        // Continously poll the virtualdom until it's pending
+        // Wait for work will return Ready when it has edits to be sent to the webview
+        // It will return Pending when it needs to be polled again - nothing is ready
+        loop {
+            {
+                let fut = self.dom.wait_for_work();
+                pin_mut!(fut);
+
+                match fut.poll_unpin(&mut cx) {
+                    std::task::Poll::Ready(_) => {}
+                    std::task::Poll::Pending => return,
+                }
+            }
+
+            self.desktop_context.send_edits(self.dom.render_immediate());
         }
     }
 }

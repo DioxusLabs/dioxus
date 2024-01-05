@@ -1,4 +1,22 @@
 use serde::{Deserialize, Serialize};
+use tao::window::WindowId;
+
+#[derive(Debug, Clone)]
+pub struct UserWindowEvent(pub EventData, pub WindowId);
+
+#[derive(Debug, Clone)]
+pub enum EventData {
+    Poll,
+
+    Ipc(IpcMessage),
+
+    #[cfg(all(feature = "hot-reload", debug_assertions))]
+    HotReloadEvent(dioxus_hot_reload::HotReloadMsg),
+
+    NewWindow,
+
+    CloseWindow,
+}
 
 /// A message struct that manages the communication between the webview and the eventloop code
 ///

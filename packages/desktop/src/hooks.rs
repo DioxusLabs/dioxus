@@ -1,7 +1,9 @@
 use std::rc::Rc;
 
-use crate::{assets::*, shortcut::IntoAccelerator, ShortcutHandle, ShortcutRegistryError};
-use crate::{desktop_context::UserWindowEvent, window, DesktopContext, WryEventHandler};
+use crate::{
+    assets::*, ipc::UserWindowEvent, shortcut::IntoAccelerator, window, DesktopContext,
+    ShortcutHandle, ShortcutRegistryError, WryEventHandler,
+};
 use dioxus_core::ScopeState;
 use tao::{event::Event, event_loop::EventLoopWindowTarget};
 

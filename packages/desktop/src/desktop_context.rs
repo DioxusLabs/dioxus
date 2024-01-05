@@ -1,19 +1,21 @@
-use crate::shortcut::{HotKey, ShortcutId, ShortcutRegistry, ShortcutRegistryError};
-use crate::AssetHandler;
-use crate::Config;
-use crate::{app::SharedContext, ipc::IpcMessage};
-use crate::{assets::AssetFuture, edits::WebviewQueue};
-use crate::{assets::AssetHandlerRegistry, edits::EditQueue};
-use crate::{query::QueryEngine, webview::WebviewInstance};
-use dioxus_core::Mutations;
-use dioxus_core::VirtualDom;
+use crate::{
+    app::SharedContext,
+    assets::{AssetFuture, AssetHandlerRegistry},
+    edits::EditQueue,
+    ipc::{EventData, UserWindowEvent},
+    query::QueryEngine,
+    shortcut::{HotKey, ShortcutId, ShortcutRegistryError},
+    webview::WebviewInstance,
+    AssetHandler, Config,
+};
+use dioxus_core::{Mutations, VirtualDom};
 use dioxus_interpreter_js::binary_protocol::Channel;
 use rustc_hash::FxHashMap;
 use slab::Slab;
 use std::{cell::RefCell, fmt::Debug, rc::Rc, rc::Weak, sync::atomic::AtomicU16};
 use tao::{
     event::Event,
-    event_loop::{EventLoopProxy, EventLoopWindowTarget},
+    event_loop::EventLoopWindowTarget,
     window::{Fullscreen as WryFullscreen, Window, WindowId},
 };
 use wry::WebView;
@@ -52,21 +54,13 @@ pub struct DesktopService {
     /// The tao window itself
     pub window: Window,
 
-    /// The receiver for queries about the current window
-    pub(super) query: QueryEngine,
-
     pub(crate) shared: SharedContext,
 
-    // pub(crate) event_handlers: WindowEventHandlers,
-    // pub(super) pending_windows: WebviewQueue,
-    // pub(crate) shortcut_manager: ShortcutRegistry,
-
-    // pub(crate) event_loop: EventLoopWindowTarget<UserWindowEvent>,
+    /// The receiver for queries about the current window
+    pub(super) query: QueryEngine,
     pub(crate) edit_queue: EditQueue,
-
     pub(crate) templates: RefCell<FxHashMap<String, u16>>,
     pub(crate) max_template_count: AtomicU16,
-
     pub(crate) channel: RefCell<Channel>,
     pub(crate) asset_handlers: AssetHandlerRegistry,
 
@@ -153,22 +147,17 @@ impl DesktopService {
     /// onmousedown: move |_| { desktop.drag_window(); }
     /// ```
     pub fn drag(&self) {
-        let window = &self.window;
-
-        // if the drag_window has any errors, we don't do anything
-        if window.fullscreen().is_none() {
-            window.drag_window().unwrap();
+        if self.window.fullscreen().is_none() {
+            _ = self.window.drag_window();
         }
     }
 
     /// Toggle whether the window is maximized or not
     pub fn toggle_maximized(&self) {
-        let window = &self.window;
-
-        window.set_maximized(!window.is_maximized())
+        self.window.set_maximized(!self.window.is_maximized())
     }
 
-    /// close window
+    /// Close this window
     pub fn close(&self) {
         let _ = self
             .shared
@@ -176,7 +165,7 @@ impl DesktopService {
             .send_event(UserWindowEvent(EventData::CloseWindow, self.id()));
     }
 
-    /// close window
+    /// Close a particular window, given its ID
     pub fn close_window(&self, id: WindowId) {
         let _ = self
             .shared
@@ -302,23 +291,6 @@ impl DesktopService {
             }
         }
     }
-}
-
-#[derive(Debug, Clone)]
-pub struct UserWindowEvent(pub EventData, pub WindowId);
-
-#[derive(Debug, Clone)]
-pub enum EventData {
-    Poll,
-
-    Ipc(IpcMessage),
-
-    #[cfg(all(feature = "hot-reload", debug_assertions))]
-    HotReloadEvent(dioxus_hot_reload::HotReloadMsg),
-
-    NewWindow,
-
-    CloseWindow,
 }
 
 #[cfg(target_os = "ios")]

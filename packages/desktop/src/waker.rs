@@ -1,4 +1,4 @@
-use crate::desktop_context::{EventData, UserWindowEvent};
+use crate::ipc::{EventData, UserWindowEvent};
 use futures_util::task::ArcWake;
 use std::sync::Arc;
 use tao::{event_loop::EventLoopProxy, window::WindowId};

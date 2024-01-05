@@ -1,10 +1,11 @@
 use crate::{
     cfg::{Config, WindowCloseBehaviour},
-    desktop_context::{EventData, UserWindowEvent, WindowEventHandlers},
+    desktop_context::WindowEventHandlers,
     edits::WebviewQueue,
     element::DesktopElement,
     file_upload::FileDialogRequest,
     ipc::IpcMessage,
+    ipc::{EventData, UserWindowEvent},
     query::QueryResult,
     shortcut::{GlobalHotKeyEvent, ShortcutRegistry},
     webview::WebviewInstance,
@@ -12,7 +13,6 @@ use crate::{
 use crossbeam_channel::Receiver;
 use dioxus_core::{Component, ElementId, VirtualDom};
 use dioxus_html::{native_bind::NativeFileEngine, FormData, HtmlEvent, MountedData};
-use futures_util::{pin_mut, FutureExt};
 use std::{cell::Cell, collections::HashMap, rc::Rc, sync::Arc};
 use tao::{
     event::Event,
@@ -33,6 +33,10 @@ pub(crate) struct App<P> {
     pub(crate) webviews: HashMap<WindowId, WebviewInstance>,
     pub(crate) window_behavior: WindowCloseBehaviour,
 
+    /// This bit of state is shared between all the windows, providing a way for us to communicate with
+    /// running instances.
+    ///
+    /// Todo: everything in this struct is wrapped in Rc<>, but we really only need the one top-level refcell
     pub(crate) shared: SharedContext,
 }
 
@@ -249,10 +253,7 @@ impl<P: 'static> App<P> {
             dioxus_hot_reload::HotReloadMsg::UpdateTemplate(template) => {
                 for webview in self.webviews.values_mut() {
                     webview.dom.replace_template(template);
-                }
-
-                for id in self.webviews.keys().copied().collect::<Vec<_>>() {
-                    self.poll_vdom(id);
+                    webview.poll_vdom();
                 }
             }
             dioxus_hot_reload::HotReloadMsg::Shutdown => {
@@ -300,24 +301,7 @@ impl<P: 'static> App<P> {
             return;
         };
 
-        let mut cx = std::task::Context::from_waker(&view.waker);
-
-        // Continously poll the virtualdom until it's pending
-        // Wait for work will return Ready when it has edits to be sent to the webview
-        // It will return Pending when it needs to be polled again - nothing is ready
-        loop {
-            {
-                let fut = view.dom.wait_for_work();
-                pin_mut!(fut);
-
-                match fut.poll_unpin(&mut cx) {
-                    std::task::Poll::Ready(_) => {}
-                    std::task::Poll::Pending => return,
-                }
-            }
-
-            view.desktop_context.send_edits(view.dom.render_immediate());
-        }
+        view.poll_vdom();
     }
 }
 

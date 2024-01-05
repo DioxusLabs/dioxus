@@ -1,7 +1,6 @@
 use crate::{
     app::App,
-    desktop_context::{EventData, UserWindowEvent},
-    ipc::IpcMethod,
+    ipc::{EventData, IpcMethod, UserWindowEvent},
     Config,
 };
 use dioxus_core::*;
