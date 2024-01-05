@@ -216,8 +216,7 @@ pub(super) async fn desktop_handler(
     request: Request<Vec<u8>>,
     custom_head: Option<String>,
     custom_index: Option<String>,
-    #[allow(unused_variables)]
-    assets_head: Option<String>,
+    #[allow(unused_variables)] assets_head: Option<String>,
     root_name: &str,
     asset_handlers: &AssetHandlerRegistry,
     edit_queue: &EditQueue,

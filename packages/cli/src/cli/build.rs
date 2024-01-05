@@ -42,11 +42,11 @@ impl Build {
             .platform
             .unwrap_or(crate_config.dioxus_config.application.default_platform);
 
-        if let Some(target) = self.build.target {
+        if let Some(target) = self.build.target.clone() {
             crate_config.set_target(target);
         }
 
-        crate_config.set_cargo_args(self.build.cargo_args);
+        crate_config.set_cargo_args(self.build.cargo_args.clone());
 
         // #[cfg(feature = "plugin")]
         // let _ = PluginManager::on_build_start(&crate_config, &platform);

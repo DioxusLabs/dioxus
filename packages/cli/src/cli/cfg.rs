@@ -49,14 +49,14 @@ pub struct ConfigOptsBuild {
     /// The feature to use for the server in a fullstack app [default: "ssr"]
     #[clap(long, default_value_t = { "ssr".to_string() })]
     pub server_feature: String,
-    
-/// Rustc platform triple
-#[clap(long)]
-pub target: Option<String>,
 
-/// Extra arguments passed to cargo build
-#[clap(last = true)]
-pub cargo_args: Vec<String>,
+    /// Rustc platform triple
+    #[clap(long)]
+    pub target: Option<String>,
+
+    /// Extra arguments passed to cargo build
+    #[clap(last = true)]
+    pub cargo_args: Vec<String>,
 }
 
 impl From<ConfigOptsServe> for ConfigOptsBuild {
@@ -73,9 +73,10 @@ impl From<ConfigOptsServe> for ConfigOptsBuild {
             server_feature: serve.server_feature,
             skip_assets: serve.skip_assets,
             force_debug: serve.force_debug,
+            cargo_args: serve.cargo_args,
         }
     }
-    
+}
 
 #[derive(Clone, Debug, Default, Deserialize, Parser)]
 pub struct ConfigOptsServe {
@@ -143,7 +144,7 @@ pub struct ConfigOptsServe {
     /// The feature to use for the server in a fullstack app [default: "ssr"]
     #[clap(long, default_value_t = { "ssr".to_string() })]
     pub server_feature: String,
-    
+
     /// Rustc platform triple
     #[clap(long)]
     pub target: Option<String>,
