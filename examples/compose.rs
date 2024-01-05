@@ -61,8 +61,8 @@ fn compose(cx: Scope<ComposeProps>) -> Element {
                 },
                 "Click to send"
             }
-
-            input { oninput: move |e| user_input.set(e.value.clone()), value: "{user_input}" }
+          
+            input { oninput: move |e| user_input.set(e.value()), value: "{user_input}" }
         }
     })
 }

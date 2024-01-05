@@ -55,9 +55,7 @@ fn main() {
 #[component]
 fn Root(cx: Scope) -> Element {
     let history = LiveviewHistory::new(cx);
-    render! { Router::<Route> {
-        config: || RouterConfig::default().history(history),
-    } }
+    render! { Router::<Route> { config: || RouterConfig::default().history(history) } }
 }
 
 #[cfg(not(feature = "liveview"))]
@@ -84,12 +82,19 @@ fn Route1(cx: Scope, user_id: usize, dynamic: usize, query: String, extra: Strin
             "Route1{{\n\tuser_id:{user_id},\n\tdynamic:{dynamic},\n\tquery:{query},\n\textra:{extra}\n}}"
         }
         Link {
-            to: Route::Route1 { user_id: *user_id, dynamic: *dynamic, query: String::new(), extra: extra.clone() + "." },
+            to: Route::Route1 {
+                user_id: *user_id,
+                dynamic: *dynamic,
+                query: String::new(),
+                extra: extra.clone() + ".",
+            },
             "Route1 with extra+\".\""
         }
         p { "Footer" }
         Link {
-            to: Route::Route3 { dynamic: String::new() },
+            to: Route::Route3 {
+                dynamic: String::new(),
+            },
             "Home"
         }
     }
@@ -98,13 +103,13 @@ fn Route1(cx: Scope, user_id: usize, dynamic: usize, query: String, extra: Strin
 #[component]
 fn Route2(cx: Scope, user_id: usize) -> Element {
     render! {
-        pre {
-            "Route2{{\n\tuser_id:{user_id}\n}}"
-        }
+        pre { "Route2{{\n\tuser_id:{user_id}\n}}" }
         (0..*user_id).map(|i| rsx!{ p { "{i}" } }),
         p { "Footer" }
         Link {
-            to: Route::Route3 { dynamic: String::new() },
+            to: Route::Route3 {
+                dynamic: String::new(),
+            },
             "Home"
         }
     }
@@ -125,26 +130,31 @@ fn Route3(cx: Scope, dynamic: String) -> Element {
 
     render! {
         input {
-            oninput: move |evt| *current_route_str.write() = evt.value.clone(),
+            oninput: move |evt| {
+                *current_route_str.write() = evt.value();
+            },
             value: "{current_route_str.read()}"
         }
         "dynamic: {dynamic}"
-        Link {
-            to: Route::Route2 { user_id: 8888 },
-            "hello world link"
-        }
+        Link { to: Route::Route2 { user_id: 8888 }, "hello world link" }
         button {
             disabled: !navigator.can_go_back(),
-            onclick: move |_| { navigator.go_back(); },
+            onclick: move |_| {
+                navigator.go_back();
+            },
             "go back"
         }
         button {
             disabled: !navigator.can_go_forward(),
-            onclick: move |_| { navigator.go_forward(); },
+            onclick: move |_| {
+                navigator.go_forward();
+            },
             "go forward"
         }
         button {
-            onclick: move |_| { navigator.push("https://www.google.com"); },
+            onclick: move |_| {
+                navigator.push("https://www.google.com");
+            },
             "google link"
         }
         p { "Site Map" }

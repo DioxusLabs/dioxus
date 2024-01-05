@@ -1,25 +1,8 @@
 //! Convert a serialized event to an event trigger
 
 use dioxus_html::*;
-use serde::{Deserialize, Serialize};
 
-use crate::element::DesktopElement;
-
-#[derive(Deserialize, Serialize, Debug, Clone)]
-pub struct IpcMessage {
-    method: String,
-    params: serde_json::Value,
-}
-
-impl IpcMessage {
-    pub(crate) fn method(&self) -> &str {
-        self.method.as_str()
-    }
-
-    pub(crate) fn params(self) -> serde_json::Value {
-        self.params
-    }
-}
+use crate::element::LiveviewElement;
 
 pub(crate) struct SerializedHtmlEventConverter;
 
@@ -97,7 +80,7 @@ impl HtmlEventConverter for SerializedHtmlEventConverter {
     }
 
     fn convert_mounted_data(&self, event: &PlatformEventData) -> MountedData {
-        event.downcast::<DesktopElement>().cloned().unwrap().into()
+        event.downcast::<LiveviewElement>().cloned().unwrap().into()
     }
 
     fn convert_mouse_data(&self, event: &PlatformEventData) -> MouseData {

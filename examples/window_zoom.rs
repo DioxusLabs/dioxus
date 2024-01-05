@@ -12,7 +12,7 @@ fn app(cx: Scope) -> Element {
             r#type: "number",
             value: "{level}",
             oninput: |e| {
-                if let Ok(new_zoom) = e.value.parse::<f64>() {
+                if let Ok(new_zoom) = e.value().parse::<f64>() {
                     level.set(new_zoom);
                     dioxus_desktop::window().webview.zoom(new_zoom);
                 }

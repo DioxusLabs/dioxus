@@ -47,7 +47,7 @@ pub type PagesVector = Vector3D<f64, Pages>;
 /// A vector representing the amount the mouse wheel was moved
 ///
 /// This may be expressed in Pixels, Lines or Pages
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 pub enum WheelDelta {
     /// Movement in Pixels
@@ -59,6 +59,16 @@ pub enum WheelDelta {
 }
 
 impl WheelDelta {
+    /// Construct from the attributes of the web wheel event
+    pub fn from_web_attributes(delta_mode: u32, delta_x: f64, delta_y: f64, delta_z: f64) -> Self {
+        match delta_mode {
+            0 => WheelDelta::Pixels(PixelsVector::new(delta_x, delta_y, delta_z)),
+            1 => WheelDelta::Lines(LinesVector::new(delta_x, delta_y, delta_z)),
+            2 => WheelDelta::Pages(PagesVector::new(delta_x, delta_y, delta_z)),
+            _ => panic!("Invalid delta mode, {:?}", delta_mode),
+        }
+    }
+
     /// Convenience function for constructing a WheelDelta with pixel units
     pub fn pixels(x: f64, y: f64, z: f64) -> Self {
         WheelDelta::Pixels(PixelsVector::new(x, y, z))
@@ -96,7 +106,7 @@ impl WheelDelta {
 }
 
 /// Coordinates of a point in the app's interface
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Coordinates {
     screen: ScreenPoint,
     client: ClientPoint,

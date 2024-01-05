@@ -340,7 +340,7 @@ fn app(cx: Scope) -> Element {
                     assert!(event.data.modifiers().is_empty());
                     assert_eq!(event.data.key().to_string(), "a");
                     assert_eq!(event.data.code().to_string(), "KeyA");
-                    assert_eq!(event.data.location, 0);
+                    assert_eq!(event.data.location(), Location::Standard);
                     assert!(event.data.is_auto_repeating());
                     received_events.modify(|x| *x + 1)
                 }
@@ -352,7 +352,7 @@ fn app(cx: Scope) -> Element {
                     assert!(event.data.modifiers().is_empty());
                     assert_eq!(event.data.key().to_string(), "a");
                     assert_eq!(event.data.code().to_string(), "KeyA");
-                    assert_eq!(event.data.location, 0);
+                    assert_eq!(event.data.location(), Location::Standard);
                     assert!(!event.data.is_auto_repeating());
                     received_events.modify(|x| *x + 1)
                 }
@@ -364,7 +364,7 @@ fn app(cx: Scope) -> Element {
                     assert!(event.data.modifiers().is_empty());
                     assert_eq!(event.data.key().to_string(), "a");
                     assert_eq!(event.data.code().to_string(), "KeyA");
-                    assert_eq!(event.data.location, 0);
+                    assert_eq!(event.data.location(), Location::Standard);
                     assert!(!event.data.is_auto_repeating());
                     received_events.modify(|x| *x + 1)
                 }

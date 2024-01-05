@@ -14,7 +14,7 @@ keywords = ["dom", "ui", "gui", "react", "wasm"]
 wasm-bindgen = { workspace = true, optional = true }
 js-sys = { version = "0.3.56", optional = true }
 web-sys = { version = "0.3.56", optional = true, features = ["Element", "Node"] }
-sledgehammer_bindgen = { versio = "0.3.0", default-features = false, optional = true }
+sledgehammer_bindgen = { version = "0.3.1", default-features = false, optional = true }
 sledgehammer_utils = { version = "0.2", optional = true }
 serde = { version = "1.0", features = ["derive"], optional = true }
 
