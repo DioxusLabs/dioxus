@@ -1,4 +1,4 @@
-use crate::assets::*;
+use crate::{assets::*, edits::EditQueue};
 use std::{
     borrow::Cow,
     path::{Path, PathBuf},
@@ -16,7 +16,7 @@ pub(super) async fn desktop_handler(
     custom_index: Option<String>,
     root_name: &str,
     asset_handlers: &AssetHandlerRegistry,
-    edit_queue: &crate::edits::EditQueue,
+    edit_queue: &EditQueue,
     headless: bool,
     responder: wry::RequestAsyncResponder,
 ) {
