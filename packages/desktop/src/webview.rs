@@ -9,6 +9,7 @@ use crate::{
     Config, DesktopContext, DesktopService,
 };
 use dioxus_core::VirtualDom;
+use dioxus_html::prelude::EvalProvider;
 use futures_util::{pin_mut, FutureExt};
 use std::{rc::Rc, task::Waker};
 use wry::{RequestAsyncResponder, WebContext, WebViewBuilder};
@@ -151,8 +152,11 @@ impl WebviewInstance {
         dom.base_scope().provide_context(desktop_context.clone());
 
         // Also set up its eval provider
-        dom.base_scope()
-            .provide_context(Rc::new(DesktopEvalProvider::new(desktop_context.clone())));
+        // It's important that we provide as dyn EvalProvider - using the concrete type has
+        // a different TypeId.
+        let provider: Rc<dyn EvalProvider> =
+            Rc::new(DesktopEvalProvider::new(desktop_context.clone()));
+        dom.base_scope().provide_context(provider);
 
         WebviewInstance {
             waker: tao_waker(shared.proxy.clone(), desktop_context.window.id()),
