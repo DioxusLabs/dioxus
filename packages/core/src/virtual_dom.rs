@@ -5,13 +5,13 @@
 use crate::{
     any_props::VProps,
     arena::{ElementId, ElementRef},
-    innerlude::{AttributeType, DirtyScope, ErrorBoundary, Mutations, Scheduler, SchedulerMsg},
+    innerlude::{DirtyScope, ErrorBoundary, Mutations, Scheduler, SchedulerMsg},
     mutations::Mutation,
     nodes::RenderReturn,
     nodes::{Template, TemplateId},
     runtime::{Runtime, RuntimeGuard},
     scopes::{ScopeId, ScopeState},
-    Attribute, AttributeValue, Element, Event, Scope, VNode,
+    AttributeValue, Element, Event, Scope, VNode,
 };
 use futures_util::{pin_mut, StreamExt};
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -371,7 +371,6 @@ impl VirtualDom {
             .get(parent_path.template.0)
             .cloned()
             .map(|el| (*parent_path, el));
-        let mut listeners = vec![];
 
         // We will clone this later. The data itself is wrapped in RC to be used in callbacks if required
         let uievent = Event {
@@ -383,6 +382,8 @@ impl VirtualDom {
         if bubbles {
             // Loop through each dynamic attribute (in a depth first order) in this template before moving up to the template's parent.
             while let Some((path, el_ref)) = parent_node {
+                let mut listeners = vec![];
+
                 // safety: we maintain references of all vnodes in the element slab
                 let template = unsafe { el_ref.unwrap().as_ref() };
                 let node_template = template.template.get();
@@ -396,7 +397,7 @@ impl VirtualDom {
                         attr.ty.for_each(|attribute| {
                             if attribute.name.trim_start_matches("on") == name {
                                 if let AttributeValue::Listener(listener) = &attribute.value {
-                                    listeners.push(&listener);
+                                    listeners.push(listener);
                                 }
                             }
                         });
@@ -412,7 +413,7 @@ impl VirtualDom {
 
                 // Now that we've accumulated all the parent attributes for the target element, call them in reverse order
                 // We check the bubble state between each call to see if the event has been stopped from bubbling
-                for listener in listeners.drain(..).rev() {
+                for listener in listeners.into_iter().rev() {
                     let origin = path.scope;
                     self.runtime.scope_stack.borrow_mut().push(origin);
                     self.runtime.rendering.set(false);
@@ -451,7 +452,7 @@ impl VirtualDom {
                         let mut should_stop = false;
                         attr.ty.for_each(|attribute| {
                             if attribute.name.trim_start_matches("on") == name {
-                                if let AttributeValue::Listener(listener) = &attr.value {
+                                if let AttributeValue::Listener(listener) = &attribute.value {
                                     let origin = path.scope;
                                     self.runtime.scope_stack.borrow_mut().push(origin);
                                     self.runtime.rendering.set(false);

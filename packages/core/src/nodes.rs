@@ -92,7 +92,7 @@ impl<'a> VNode<'a> {
         template: Template<'static>,
         root_ids: bumpalo::collections::Vec<'a, ElementId>,
         dynamic_nodes: &'a [DynamicNode<'a>],
-        dynamic_attrs: &'a [Attribute<'a>],
+        dynamic_attrs: &'a [MountedAttribute<'a>],
     ) -> Self {
         Self {
             key,

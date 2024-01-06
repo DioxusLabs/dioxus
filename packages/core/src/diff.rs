@@ -126,10 +126,11 @@ impl<'b> VirtualDom {
             .dynamic_attrs
             .iter()
             .zip(right_template.dynamic_attrs.iter())
-            .for_each(|(left_attr, right_attr)| {
+            .enumerate()
+            .for_each(|(idx, (left_attr, right_attr))| {
                 // Move over the ID from the old to the new
-                let mounted_element = left_attr.mounted_element.get();
-                right_attr.mounted_element.set(mounted_element);
+                let mounted_id = left_attr.mounted_element.get();
+                right_attr.mounted_element.set(mounted_id);
 
                 match (&left_attr.ty, &right_attr.ty) {
                     (AttributeType::Single(left), AttributeType::Single(right)) => {
@@ -149,9 +150,12 @@ impl<'b> VirtualDom {
                                             left.namespace,
                                             mounted_id,
                                         ),
-                                        std::cmp::Ordering::Greater => {
-                                            self.write_attribute(right, mounted_id)
-                                        }
+                                        std::cmp::Ordering::Greater => self.write_attribute(
+                                            right_template,
+                                            right,
+                                            idx,
+                                            mounted_id,
+                                        ),
                                         std::cmp::Ordering::Equal => {
                                             self.diff_attribute(left, right, mounted_id)
                                         }
@@ -163,7 +167,7 @@ impl<'b> VirtualDom {
                                 }
                                 (None, Some(_)) => {
                                     let right = right_iter.next().unwrap();
-                                    self.write_attribute(right, mounted_id)
+                                    self.write_attribute(right_template, right, idx, mounted_id)
                                 }
                                 (None, None) => break,
                             }
