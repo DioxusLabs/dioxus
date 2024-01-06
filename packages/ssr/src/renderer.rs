@@ -28,6 +28,9 @@ pub struct Renderer {
 
     /// A cache of templates that have been rendered
     template_cache: HashMap<&'static str, Arc<StringCache>>,
+
+    /// The current dynamic node id for hydration
+    dynamic_node_id: usize,
 }
 
 impl Renderer {
@@ -54,6 +57,7 @@ impl Renderer {
         // We should never ever run into async or errored nodes in SSR
         // Error boundaries and suspense boundaries will convert these to sync
         if let RenderReturn::Ready(node) = dom.get_scope(scope).unwrap().root_node() {
+            self.dynamic_node_id = 0;
             self.render_template(buf, dom, node)?
         };
 
@@ -69,13 +73,19 @@ impl Renderer {
         let entry = self
             .template_cache
             .entry(template.template.get().name)
-            .or_insert_with(|| Arc::new(StringCache::from_template(template).unwrap()))
+            .or_insert_with({
+                let prerender = self.pre_render;
+                move || Arc::new(StringCache::from_template(template, prerender).unwrap())
+            })
             .clone();
 
         let mut inner_html = None;
 
         // We need to keep track of the dynamic styles so we can insert them into the right place
         let mut accumulated_dynamic_styles = Vec::new();
+
+        // We need to keep track of the listeners so we can insert them into the right place
+        let mut accumulated_listeners = Vec::new();
 
         for segment in entry.segments.iter() {
             match segment {
@@ -94,6 +104,14 @@ impl Renderer {
                             write_attribute(buf, attr)?;
                         }
 
+                        if self.pre_render {
+                            if let AttributeValue::Listener(_) = &attr.value {
+                                // The onmounted event doesn't need a DOM listener
+                                if attr.name != "onmounted" {
+                                    accumulated_listeners.push(attr.name);
+                                }
+                            }
+                        }
                         Ok(())
                     })?;
                 }
@@ -118,7 +136,8 @@ impl Renderer {
                     DynamicNode::Text(text) => {
                         // in SSR, we are concerned that we can't hunt down the right text node since they might get merged
                         if self.pre_render {
-                            write!(buf, "<!--#-->")?;
+                            write!(buf, "<!--node-id{}-->", self.dynamic_node_id)?;
+                            self.dynamic_node_id += 1;
                         }
 
                         write!(
@@ -137,9 +156,14 @@ impl Renderer {
                         }
                     }
 
-                    DynamicNode::Placeholder(_el) => {
+                    DynamicNode::Placeholder(_) => {
                         if self.pre_render {
-                            write!(buf, "<pre></pre>")?;
+                            write!(
+                                buf,
+                                "<pre data-node-hydration={}></pre>",
+                                self.dynamic_node_id
+                            )?;
+                            self.dynamic_node_id += 1;
                         }
                     }
                 },
@@ -178,6 +202,22 @@ impl Renderer {
                         }
                     }
                 }
+
+                Segment::AttributeNodeMarker => {
+                    // first write the id
+                    write!(buf, "{}", self.dynamic_node_id)?;
+                    self.dynamic_node_id += 1;
+                    // then write any listeners
+                    for name in accumulated_listeners.drain(..) {
+                        write!(buf, ",{}:", &name[2..])?;
+                        write!(buf, "{}", dioxus_html::event_bubbles(name) as u8)?;
+                    }
+                }
+
+                Segment::RootNodeMarker => {
+                    write!(buf, "{}", self.dynamic_node_id)?;
+                    self.dynamic_node_id += 1
+                }
             }
         }
 
@@ -195,7 +235,9 @@ fn to_string_works() {
 
         render! {
             div { class: "asdasdasd", class: "asdasdasd", id: "id-{dynamic}",
-                "Hello world 1 -->" "{dynamic}" "<-- Hello world 2"
+                "Hello world 1 -->"
+                "{dynamic}"
+                "<-- Hello world 2"
                 div { "nest 1" }
                 div {}
                 div { "nest 2" }
@@ -239,6 +281,94 @@ fn to_string_works() {
     use Segment::*;
 
     assert_eq!(out, "<div class=\"asdasdasd asdasdasd\" id=\"id-123\">Hello world 1 --&gt;123&lt;-- Hello world 2<div>nest 1</div><div></div><div>nest 2</div>&lt;/diiiiiiiiv&gt;<div>finalize 0</div><div>finalize 1</div><div>finalize 2</div><div>finalize 3</div><div>finalize 4</div></div>");
+}
+
+#[test]
+fn empty_for_loop_works() {
+    use dioxus::prelude::*;
+
+    fn app(cx: Scope) -> Element {
+        render! {
+            div { class: "asdasdasd",
+                for _ in (0..5) {
+
+                }
+            }
+        }
+    }
+
+    let mut dom = VirtualDom::new(app);
+    _ = dom.rebuild();
+
+    let mut renderer = Renderer::new();
+    let out = renderer.render(&dom);
+
+    for item in renderer.template_cache.iter() {
+        if item.1.segments.len() > 5 {
+            assert_eq!(
+                item.1.segments,
+                vec![
+                    PreRendered("<div class=\"asdasdasd\"".into(),),
+                    Attr(0,),
+                    StyleMarker {
+                        inside_style_tag: false,
+                    },
+                    PreRendered(">".into()),
+                    InnerHtmlMarker,
+                    PreRendered("</div>".into(),),
+                ]
+            );
+        }
+    }
+
+    use Segment::*;
+
+    assert_eq!(out, "<div class=\"asdasdasd\"></div>");
+}
+
+#[test]
+fn empty_render_works() {
+    use dioxus::prelude::*;
+
+    fn app(cx: Scope) -> Element {
+        render! {}
+    }
+
+    let mut dom = VirtualDom::new(app);
+    _ = dom.rebuild();
+
+    let mut renderer = Renderer::new();
+    let out = renderer.render(&dom);
+
+    for item in renderer.template_cache.iter() {
+        if item.1.segments.len() > 5 {
+            assert_eq!(item.1.segments, vec![]);
+        }
+    }
+    assert_eq!(out, "");
+}
+
+#[test]
+fn empty_rsx_works() {
+    use dioxus::prelude::*;
+
+    fn app(_: Scope) -> Element {
+        rsx! {};
+        None
+    }
+
+    let mut dom = VirtualDom::new(app);
+    _ = dom.rebuild();
+
+    let mut renderer = Renderer::new();
+    let out = renderer.render(&dom);
+
+    for item in renderer.template_cache.iter() {
+        if item.1.segments.len() > 5 {
+            assert_eq!(item.1.segments, vec![]);
+        }
+    }
+    assert_eq!(out, "");
 }
 
 pub(crate) const BOOL_ATTRS: &[&str] = &[

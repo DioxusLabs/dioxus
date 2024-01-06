@@ -206,12 +206,17 @@ impl<'a> ToTokens for TemplateRenderer<'a> {
             None => quote! { None },
         };
 
-        let spndbg = format!("{:?}", self.roots[0].span());
-        let root_col = spndbg
-            .rsplit_once("..")
-            .and_then(|(_, after)| after.split_once(')').map(|(before, _)| before))
-            .unwrap_or_default();
-
+        let root_col = match self.roots.first() {
+            Some(first_root) => {
+                let first_root_span = format!("{:?}", first_root.span());
+                first_root_span
+                    .rsplit_once("..")
+                    .and_then(|(_, after)| after.split_once(')').map(|(before, _)| before))
+                    .unwrap_or_default()
+                    .to_string()
+            }
+            _ => "0".to_string(),
+        };
         let root_printer = self.roots.iter().enumerate().map(|(idx, root)| {
             context.current_path.push(idx as u8);
             let out = context.render_static_node(root);
@@ -249,14 +254,13 @@ impl<'a> ToTokens for TemplateRenderer<'a> {
                 node_paths: &[ #(#node_paths),* ],
                 attr_paths: &[ #(#attr_paths),* ],
             };
-            ::dioxus::core::VNode {
-                parent: None,
-                key: #key_tokens,
-                template: std::cell::Cell::new(TEMPLATE),
-                root_ids: dioxus::core::exports::bumpalo::collections::Vec::with_capacity_in(#root_count, __cx.bump()).into(),
-                dynamic_nodes: __cx.bump().alloc([ #( #node_printer ),* ]),
-                dynamic_attrs: __cx.bump().alloc([ #( #dyn_attr_printer ),* ]),
-            }
+            ::dioxus::core::VNode::new(
+                #key_tokens,
+                TEMPLATE,
+                dioxus::core::exports::bumpalo::collections::Vec::with_capacity_in(#root_count, __cx.bump()),
+                __cx.bump().alloc([ #( #node_printer ),* ]),
+                __cx.bump().alloc([ #( #dyn_attr_printer ),* ]),
+            )
         });
     }
 }

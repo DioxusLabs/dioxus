@@ -190,7 +190,7 @@ pub static BUILTIN_INTERNED_STRINGS: &[&str] = &[
     "oncopy",
     "oncuechange",
     "oncut",
-    "ondblclick",
+    "ondoubleclick",
     "ondrag",
     "ondragend",
     "ondragenter",

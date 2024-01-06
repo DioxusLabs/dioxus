@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use dioxus_html::input_data::keyboard_types::Key;
+use dioxus_html::{input_data::keyboard_types::Key, HasKeyboardData};
 use dioxus_native_core::{
     custom_element::CustomElement,
     node::OwnedAttributeDiscription,
@@ -11,7 +11,7 @@ use dioxus_native_core::{
 };
 use shipyard::UniqueView;
 
-use crate::FormData;
+use crate::hooks::FormData;
 
 use super::{RinkWidget, WidgetContext};
 
