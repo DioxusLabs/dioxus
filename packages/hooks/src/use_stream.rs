@@ -1,7 +1,8 @@
 #![allow(missing_docs)]
+use super::UseFutureDep;
 use dioxus_core::{ScopeState, TaskId};
 use futures_util::{future, Stream, StreamExt};
-use std::{any::Any, cell::Cell, rc::Rc, sync::Arc};
+use std::{cell::Cell, rc::Rc, sync::Arc};
 
 /// A stream that calls the provided callback when an item is available.
 ///
@@ -47,7 +48,7 @@ pub fn use_stream<T, S, D>(
 where
     T: 'static,
     S: Stream<Item = T> + 'static,
-    D: UseStreamDep,
+    D: UseFutureDep,
 {
     let state = cx.use_hook(move || UseStream {
         update: cx.schedule_update(),
@@ -99,7 +100,7 @@ pub struct UseStream {
 
 impl UseStream {
     /// Restart the stream with new dependencies.
-    ///
+///
     /// Will not cancel the previous stream, but will ignore any values that it
     /// generates.
     pub fn restart(&self) {
@@ -119,99 +120,6 @@ impl UseStream {
         self.task.get()
     }
 }
-
-pub trait UseStreamDep: Sized + Clone {
-    type Out;
-    fn out(&self) -> Self::Out;
-    fn apply(self, state: &mut Vec<Box<dyn Any>>) -> bool;
-}
-
-impl UseStreamDep for () {
-    type Out = ();
-    fn out(&self) -> Self::Out {}
-    fn apply(self, _state: &mut Vec<Box<dyn Any>>) -> bool {
-        false
-    }
-}
-
-pub trait StreamDep: 'static + PartialEq + Clone {}
-impl<T> StreamDep for T where T: 'static + PartialEq + Clone {}
-
-impl<A: StreamDep> UseStreamDep for &A {
-    type Out = A;
-    fn out(&self) -> Self::Out {
-        (*self).clone()
-    }
-    fn apply(self, state: &mut Vec<Box<dyn Any>>) -> bool {
-        match state.get_mut(0).and_then(|f| f.downcast_mut::<A>()) {
-            Some(val) => {
-                if *val != *self {
-                    *val = self.clone();
-                    return true;
-                }
-            }
-            None => {
-                state.push(Box::new(self.clone()));
-                return true;
-            }
-        }
-        false
-    }
-}
-
-macro_rules! impl_dep {
-    (
-        $($el:ident=$name:ident,)*
-    ) => {
-        impl< $($el),* > UseStreamDep for ($(&$el,)*)
-        where
-            $(
-                $el: StreamDep
-            ),*
-        {
-            type Out = ($($el,)*);
-
-            fn out(&self) -> Self::Out {
-                let ($($name,)*) = self;
-                ($((*$name).clone(),)*)
-            }
-
-            #[allow(unused)]
-            fn apply(self, state: &mut Vec<Box<dyn Any>>) -> bool {
-                let ($($name,)*) = self;
-                let mut idx = 0;
-                let mut needs_regen = false;
-
-                $(
-                    match state.get_mut(idx).map(|f| f.downcast_mut::<$el>()).flatten() {
-                        Some(val) => {
-                            if *val != *$name {
-                                *val = $name.clone();
-                                needs_regen = true;
-                            }
-                        }
-                        None => {
-                            state.push(Box::new($name.clone()));
-                            needs_regen = true;
-                        }
-                    }
-                    idx += 1;
-                )*
-
-                needs_regen
-            }
-        }
-    };
-}
-
-impl_dep!(A = a,);
-impl_dep!(A = a, B = b,);
-impl_dep!(A = a, B = b, C = c,);
-impl_dep!(A = a, B = b, C = c, D = d,);
-impl_dep!(A = a, B = b, C = c, D = d, E = e,);
-impl_dep!(A = a, B = b, C = c, D = d, E = e, F = f,);
-impl_dep!(A = a, B = b, C = c, D = d, E = e, F = f, G = g,);
-impl_dep!(A = a, B = b, C = c, D = d, E = e, F = f, G = g, H = h,);
 
 /// A helper macro that merges uses the closure syntax to elaborate the dependency array
 #[macro_export]
