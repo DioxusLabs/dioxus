@@ -16,7 +16,7 @@ pub fn build_menu_bar(menu: Menu, window: &Window) {
     {
         use tao::platform::unix::WindowExtUnix;
         menu.init_for_gtk_window(window, None);
-        // menu.init_for_gtk_window(window, Some(&vertical_gtk_box));
+        // menu.init_for_gtk_window(window, Some(&ertical_gtk_box));
     }
 
     #[cfg(target_os = "macos")]
