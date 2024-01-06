@@ -2,7 +2,7 @@
 
 use super::*;
 use std::str::FromStr;
-use wry::application::event_loop::EventLoopWindowTarget;
+use tao::event_loop::EventLoopWindowTarget;
 
 use dioxus_html::input_data::keyboard_types::Modifiers;
 
