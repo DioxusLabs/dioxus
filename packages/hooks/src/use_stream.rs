@@ -100,9 +100,6 @@ pub struct UseStream {
 
 impl UseStream {
     /// Restart the stream with new dependencies.
-///
-    /// Will not cancel the previous stream, but will ignore any values that it
-    /// generates.
     pub fn restart(&self) {
         self.needs_regen.set(true);
         (self.update)();
