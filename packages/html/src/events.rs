@@ -16,7 +16,7 @@ macro_rules! impl_event {
                 ::dioxus_core::Attribute::new(
                     stringify!($name),
 ::dioxus_core::AttributeValue::listener(move |e: ::dioxus_core::Event<crate::PlatformEventData>| {
-                        _f(e.map(|e|e.into())).spawn(_cx);
+                        _f(e.map(|e|e.into())).spawn();
                     }),
                     None,
                     false,

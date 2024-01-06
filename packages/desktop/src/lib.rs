@@ -149,7 +149,7 @@ pub fn launch_with_props<P: Clone + 'static>(root: Component<P>, props: P, cfg: 
 
     // Copy over any assets we find
     crate::collect_assets::copy_assets();
-  
+
     // Set the event converter
     dioxus_html::set_event_converter(Box::new(SerializedHtmlEventConverter));
 

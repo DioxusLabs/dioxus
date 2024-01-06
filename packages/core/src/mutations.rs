@@ -128,7 +128,7 @@ pub trait WriteMutations {
     /// Push the given root node onto our stack.
     ///
     /// Id: The ID of the root node to push.
-    fn push_root(&mut self, _id: ElementId);
+    fn push_root(&mut self, id: ElementId);
 
     /// Swap to a new subtree
     fn swap_subtree(&mut self, _subtree_index: usize) {}

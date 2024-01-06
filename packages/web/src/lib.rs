@@ -60,7 +60,7 @@ use std::rc::Rc;
 pub use crate::cfg::Config;
 #[cfg(feature = "file_engine")]
 pub use crate::file_engine::WebFileEngineExt;
-use dioxus_core::{Element, Scope, VirtualDom};
+use dioxus_core::{Element, VirtualDom};
 use futures_util::{
     future::{select, Either},
     pin_mut, FutureExt, StreamExt,
@@ -72,6 +72,7 @@ mod dom;
 #[cfg(feature = "eval")]
 mod eval;
 mod event;
+mod mutations;
 pub use event::*;
 #[cfg(feature = "file_engine")]
 mod file_engine;
@@ -105,8 +106,8 @@ mod rehydrate;
 ///     render!(div {"hello world"})
 /// }
 /// ```
-pub fn launch(root_component: fn(Scope) -> Element) {
-    launch_with_props(root_component, (), Config::default());
+pub fn launch(root_component: fn(()) -> Element) {
+    launch_with_props( root_component, (), Config::default());
 }
 
 /// Launch your app and run the event loop, with configuration.
@@ -122,13 +123,13 @@ pub fn launch(root_component: fn(Scope) -> Element) {
 ///     dioxus_web::launch_with_props(App, Config::new().pre_render(true));
 /// }
 ///
-/// fn app(cx: Scope) -> Element {
+/// fn app() -> Element {
 ///     cx.render(rsx!{
 ///         h1 {"hello world!"}
 ///     })
 /// }
 /// ```
-pub fn launch_cfg(root: fn(Scope) -> Element, config: Config) {
+pub fn launch_cfg(root: fn(()) -> Element, config: Config) {
     launch_with_props(root, (), config)
 }
 
@@ -156,8 +157,8 @@ pub fn launch_cfg(root: fn(Scope) -> Element, config: Config) {
 ///     render!(div {"hello {cx.props.name}"})
 /// }
 /// ```
-pub fn launch_with_props<T: 'static>(
-    root_component: fn(Scope<T>) -> Element,
+pub fn launch_with_props<T: Clone + 'static>(
+    root_component: fn(T) -> Element,
     root_properties: T,
     config: Config,
 ) {
@@ -176,7 +177,11 @@ pub fn launch_with_props<T: 'static>(
 ///     wasm_bindgen_futures::spawn_local(app_fut);
 /// }
 /// ```
-pub async fn run_with_props<T: 'static>(root: fn(Scope<T>) -> Element, root_props: T, cfg: Config) {
+pub async fn run_with_props<T: Clone + 'static>(
+    root: fn(T) -> Element,
+    root_props: T,
+    cfg: Config,
+) {
     tracing::info!("Starting up");
 
     let mut dom = VirtualDom::new_with_props(root, root_props);
@@ -184,8 +189,9 @@ pub async fn run_with_props<T: 'static>(root: fn(Scope<T>) -> Element, root_prop
     #[cfg(feature = "eval")]
     {
         // Eval
-        let cx = dom.base_scope();
-        eval::init_eval(cx);
+        dom.in_runtime(|| {
+            eval::init_eval();
+        });
     }
 
     #[cfg(feature = "panic_hook")]
@@ -221,28 +227,23 @@ pub async fn run_with_props<T: 'static>(root: fn(Scope<T>) -> Element, root_prop
             // it's a waste to produce edits just to get the vdom loaded
 
             {
-                let mutations = dom.rebuild();
-                web_sys::console::log_1(&format!("mutations: {:#?}", mutations).into());
-                let templates = mutations.templates;
-                websys_dom.load_templates(&templates);
-                websys_dom.interpreter.flush();
+                dom.rebuild(&mut websys_dom);
+                websys_dom.flush_edits();
             }
             if let Err(err) = websys_dom.rehydrate(&dom) {
                 tracing::error!("Rehydration failed. {:?}", err);
                 tracing::error!("Rebuild DOM into element from scratch");
                 websys_dom.root.set_text_content(None);
 
-                let edits = dom.rebuild();
+                dom.rebuild(&mut websys_dom);
 
-                websys_dom.load_templates(&edits.templates);
-                websys_dom.apply_edits(edits.edits);
+                websys_dom.flush_edits();
             }
         }
     } else {
-        let edits = dom.rebuild();
+        dom.rebuild(&mut websys_dom);
 
-        websys_dom.load_templates(&edits.templates);
-        websys_dom.apply_edits(edits.edits);
+        websys_dom.flush_edits();
     }
 
     // the mutations come back with nothing - we need to actually mount them
@@ -298,12 +299,11 @@ pub async fn run_with_props<T: 'static>(root: fn(Scope<T>) -> Element, root_prop
         // let deadline = work_loop.wait_for_idle_time().await;
 
         // run the virtualdom work phase until the frame deadline is reached
-        let edits = dom.render_immediate();
+        dom.render_immediate(&mut websys_dom);
 
         // wait for the animation frame to fire so we can apply our changes
         // work_loop.wait_for_raf().await;
 
-        websys_dom.load_templates(&edits.templates);
-        websys_dom.apply_edits(edits.edits);
+        websys_dom.flush_edits();
     }
 }

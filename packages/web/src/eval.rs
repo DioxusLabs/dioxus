@@ -1,5 +1,6 @@
 use async_trait::async_trait;
-use dioxus_core::ScopeState;
+use dioxus_core::prelude::provide_context;
+use dioxus_core::ScopeId;
 use dioxus_html::prelude::{EvalError, EvalProvider, Evaluator};
 use js_sys::Function;
 use serde_json::Value;
@@ -7,12 +8,12 @@ use std::{cell::RefCell, rc::Rc, str::FromStr};
 use wasm_bindgen::prelude::*;
 
 /// Provides the WebEvalProvider through [`cx.provide_context`].
-pub fn init_eval(cx: &ScopeState) {
+pub fn init_eval() {
     let provider: Rc<dyn EvalProvider> = Rc::new(WebEvalProvider {});
-    cx.provide_context(provider);
+    ScopeId::ROOT.provide_context(provider);
 }
 
-/// Reprents the web-target's provider of evaluators.
+/// Represents the web-target's provider of evaluators.
 pub struct WebEvalProvider;
 impl EvalProvider for WebEvalProvider {
     fn new_evaluator(&self, js: String) -> Result<Rc<dyn Evaluator>, EvalError> {
@@ -28,7 +29,7 @@ const PROMISE_WRAPPER: &str = r#"
     });
     "#;
 
-/// Reprents a web-target's JavaScript evaluator.
+/// Represents a web-target's JavaScript evaluator.
 pub struct WebEvaluator {
     dioxus: Dioxus,
     channel_receiver: async_channel::Receiver<serde_json::Value>,
