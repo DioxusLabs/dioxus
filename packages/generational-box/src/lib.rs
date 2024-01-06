@@ -11,8 +11,6 @@ use std::{
     rc::Rc,
 };
 
-use bumpalo::Bump;
-
 /// # Example
 ///
 /// ```compile_fail
@@ -615,14 +613,12 @@ impl Drop for GenerationalRefMutBorrowInfo {
 /// Handles recycling generational boxes that have been dropped. Your application should have one store or one store per thread.
 #[derive(Clone)]
 pub struct Store {
-    bump: &'static Bump,
     recycled: Rc<RefCell<Vec<MemoryLocation>>>,
 }
 
 impl Default for Store {
     fn default() -> Self {
         Self {
-            bump: Box::leak(Box::new(Bump::new())),
             recycled: Default::default(),
         }
     }
@@ -638,7 +634,7 @@ impl Store {
         if let Some(location) = self.recycled.borrow_mut().pop() {
             location
         } else {
-            let data: &'static MemoryLocationInner = self.bump.alloc(MemoryLocationInner {
+            let data: &'static MemoryLocationInner = Box::leak(Box::new(MemoryLocationInner {
                 data: RefCell::new(None),
                 #[cfg(any(debug_assertions, feature = "check_generation"))]
                 generation: Cell::new(0),
@@ -646,7 +642,7 @@ impl Store {
                 borrowed_at: Default::default(),
                 #[cfg(any(debug_assertions, feature = "debug_borrows"))]
                 borrowed_mut_at: Default::default(),
-            });
+            }));
             MemoryLocation(data)
         }
     }
