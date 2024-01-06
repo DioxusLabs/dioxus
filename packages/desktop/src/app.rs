@@ -328,7 +328,7 @@ impl<P: 'static> App<P> {
 
 /// Different hide implementations per platform
 #[allow(unused)]
-pub fn hide_app_window(webview: &wry::WebView) {
+pub fn hide_app_window(window: &wry::WebView) {
     #[cfg(target_os = "windows")]
     {
         use tao::platform::windows::WindowExtWindows;
