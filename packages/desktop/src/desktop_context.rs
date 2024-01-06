@@ -82,8 +82,8 @@ impl std::ops::Deref for DesktopService {
 
 impl DesktopService {
     pub(crate) fn new(
-        window: Window,
         webview: WebView,
+        window: Window,
         shared: Rc<SharedContext>,
         edit_queue: EditQueue,
         asset_handlers: AssetHandlerRegistry,

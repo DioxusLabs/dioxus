@@ -73,15 +73,12 @@ impl WebviewInstance {
             // Otherwise, try to serve an asset, either from the user or the filesystem
             match index_bytes {
                 Some(body) => responder.respond(body),
-                None => {
-                    // we need to do this in the context of the dioxus runtime since the user gave us these closures
-                    protocol::desktop_handler(
-                        request,
-                        asset_handlers_.clone(),
-                        &edit_queue_,
-                        responder,
-                    );
-                }
+                None => protocol::desktop_handler(
+                    request,
+                    asset_handlers_.clone(),
+                    &edit_queue_,
+                    responder,
+                ),
             }
         };
 
@@ -143,11 +140,9 @@ impl WebviewInstance {
             webview = webview.with_devtools(true);
         }
 
-        let webview = webview.build().unwrap();
-
         let desktop_context = Rc::from(DesktopService::new(
+            webview.build().unwrap(),
             window,
-            webview,
             shared.clone(),
             edit_queue,
             asset_handlers,
@@ -161,7 +156,6 @@ impl WebviewInstance {
             .provide_context(Rc::new(DesktopEvalProvider::new(desktop_context.clone())));
 
         WebviewInstance {
-            // We want to poll the virtualdom and the event loop at the same time, so the waker will be connected to both
             waker: tao_waker(shared.proxy.clone(), desktop_context.window.id()),
             desktop_context,
             dom,
