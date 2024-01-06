@@ -16,6 +16,9 @@ mod impl_ {
     #[allow(unused)]
     pub fn build_menu_bar(menu: Menu, window: &Window) {
         #[cfg(target_os = "windows")]
+        use tao::platform::windows::WindowExtWindows;
+
+        #[cfg(target_os = "windows")]
         menu.init_for_hwnd(window.hwnd());
 
         // #[cfg(target_os = "linux")]
