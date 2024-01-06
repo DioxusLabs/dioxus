@@ -37,15 +37,15 @@ impl GlobalHotKeyManager {
         Ok(Self())
     }
 
-    pub fn register(&mut self, accelerator: HotKey) -> Result<HotKey, HotkeyError> {
+    pub fn register(&self, accelerator: HotKey) -> Result<HotKey, HotkeyError> {
         Ok(HotKey)
     }
 
-    pub fn unregister(&mut self, id: HotKey) -> Result<(), HotkeyError> {
+    pub fn unregister(&self, id: HotKey) -> Result<(), HotkeyError> {
         Ok(())
     }
 
-    pub fn unregister_all(&mut self, _: &[HotKey]) -> Result<(), HotkeyError> {
+    pub fn unregister_all(&self, _: &[HotKey]) -> Result<(), HotkeyError> {
         Ok(())
     }
 }
