@@ -1,7 +1,7 @@
 use crate::{assets::*, edits::EditQueue};
 use std::path::{Path, PathBuf};
 use wry::{
-    http::{status::StatusCode, Request, Response},
+    http::{status::StatusCode, Request, Response, Uri},
     RequestAsyncResponder, Result,
 };
 
@@ -59,7 +59,7 @@ pub(super) fn index_request(
 /// - If that doesn't match, tries a user provided asset handler
 /// - If that doesn't match, tries to serve a file from the filesystem
 pub(super) fn desktop_handler(
-    request: Request<Vec<u8>>,
+    mut request: Request<Vec<u8>>,
     asset_handlers: AssetHandlerRegistry,
     edit_queue: &EditQueue,
     responder: RequestAsyncResponder,
@@ -83,6 +83,13 @@ pub(super) fn desktop_handler(
 
     if let Some(name) = name.to_str() {
         if asset_handlers.has_handler(name) {
+            // Trim the leading path from the URI
+            //
+            // I hope this is reliable!
+            //
+            // so a request for /assets/logos/logo.png?query=123 will become /logos/logo.png?query=123
+            strip_uri_prefix(&mut request, name);
+
             return asset_handlers.handle_request(name, request, responder);
         }
     }
@@ -112,6 +119,26 @@ fn serve_from_fs(path: PathBuf) -> Result<Response<Vec<u8>>> {
     Ok(Response::builder()
         .header("Content-Type", get_mime_from_path(&asset)?)
         .body(std::fs::read(asset)?)?)
+}
+
+fn strip_uri_prefix(request: &mut Request<Vec<u8>>, name: &str) {
+    // trim the leading path
+    if let Some(path) = request.uri().path_and_query() {
+        let new_path = path
+            .path()
+            .trim_start_matches('/')
+            .strip_prefix(name)
+            .expect("expected path to have prefix");
+
+        let new_uri = Uri::builder()
+            .scheme(request.uri().scheme_str().unwrap_or("http"))
+            .path_and_query(format!("{}{}", new_path, path.query().unwrap_or("")))
+            .authority("index.html")
+            .build()
+            .expect("failed to build new URI");
+
+        *request.uri_mut() = new_uri;
+    }
 }
 
 /// Construct the inline script that boots up the page and bridges the webview with rust code.
