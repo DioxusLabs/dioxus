@@ -318,11 +318,16 @@ pub fn spawn(fut: impl Future<Output = ()> + 'static) {
     with_current_scope(|cx| cx.spawn(fut));
 }
 
+/// Spawn a future on a component given its [`ScopeId`].
+pub fn spawn_at(fut: impl Future<Output = ()> + 'static, scope_id: ScopeId) -> Option<TaskId> {
+    with_runtime(|rt| rt.get_context(scope_id).unwrap().push_future(fut))
+}
+
 /// Spawn a future that Dioxus won't clean up when this component is unmounted
 ///
 /// This is good for tasks that need to be run after the component has been dropped.
 pub fn spawn_forever(fut: impl Future<Output = ()> + 'static) -> Option<TaskId> {
-    with_current_scope(|cx| cx.spawn_forever(fut))
+    spawn_at(fut, ScopeId(0))
 }
 
 /// Informs the scheduler that this task is no longer needed and should be removed.

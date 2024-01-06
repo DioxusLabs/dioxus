@@ -1,11 +1,10 @@
-use std::{cell::RefCell, collections::HashMap, rc::Rc, str::FromStr};
+use std::{cell::RefCell, collections::HashMap, str::FromStr};
 
-use dioxus_core::ScopeState;
 use dioxus_html::input_data::keyboard_types::Modifiers;
 use slab::Slab;
-use wry::application::keyboard::ModifiersState;
+use tao::keyboard::ModifiersState;
 
-use crate::{desktop_context::DesktopContext, window};
+use crate::desktop_context::DesktopContext;
 
 #[cfg(any(
     target_os = "windows",
@@ -24,13 +23,10 @@ pub use global_hotkey::{
 #[cfg(any(target_os = "ios", target_os = "android"))]
 pub use crate::mobile_shortcut::*;
 
-#[derive(Clone)]
 pub(crate) struct ShortcutRegistry {
-    manager: Rc<RefCell<GlobalHotKeyManager>>,
-    shortcuts: ShortcutMap,
+    manager: GlobalHotKeyManager,
+    shortcuts: RefCell<HashMap<u32, Shortcut>>,
 }
-
-type ShortcutMap = Rc<RefCell<HashMap<u32, Shortcut>>>;
 
 struct Shortcut {
     #[allow(unused)]
@@ -55,8 +51,8 @@ impl Shortcut {
 impl ShortcutRegistry {
     pub fn new() -> Self {
         Self {
-            manager: Rc::new(RefCell::new(GlobalHotKeyManager::new().unwrap())),
-            shortcuts: Rc::new(RefCell::new(HashMap::new())),
+            manager: GlobalHotKeyManager::new().unwrap(),
+            shortcuts: RefCell::new(HashMap::new()),
         }
     }
 
@@ -74,36 +70,36 @@ impl ShortcutRegistry {
         callback: Box<dyn FnMut()>,
     ) -> Result<ShortcutId, ShortcutRegistryError> {
         let accelerator_id = hotkey.clone().id();
+
         let mut shortcuts = self.shortcuts.borrow_mut();
-        Ok(
-            if let Some(callbacks) = shortcuts.get_mut(&accelerator_id) {
-                let id = callbacks.insert(callback);
-                ShortcutId {
-                    id: accelerator_id,
-                    number: id,
-                }
-            } else {
-                match self.manager.borrow_mut().register(hotkey) {
-                    Ok(_) => {
-                        let mut slab = Slab::new();
-                        let id = slab.insert(callback);
-                        let shortcut = Shortcut {
-                            shortcut: hotkey,
-                            callbacks: slab,
-                        };
-                        shortcuts.insert(accelerator_id, shortcut);
-                        ShortcutId {
-                            id: accelerator_id,
-                            number: id,
-                        }
-                    }
-                    Err(HotkeyError::HotKeyParseError(shortcut)) => {
-                        return Err(ShortcutRegistryError::InvalidShortcut(shortcut))
-                    }
-                    Err(err) => return Err(ShortcutRegistryError::Other(Box::new(err))),
-                }
-            },
-        )
+
+        if let Some(callbacks) = shortcuts.get_mut(&accelerator_id) {
+            return Ok(ShortcutId {
+                id: accelerator_id,
+                number: callbacks.insert(callback),
+            });
+        };
+
+        self.manager.register(hotkey).map_err(|e| match e {
+            HotkeyError::HotKeyParseError(shortcut) => {
+                ShortcutRegistryError::InvalidShortcut(shortcut)
+            }
+            err => ShortcutRegistryError::Other(Box::new(err)),
+        })?;
+
+        let mut shortcut = Shortcut {
+            shortcut: hotkey,
+            callbacks: Slab::new(),
+        };
+
+        let id = shortcut.callbacks.insert(callback);
+
+        shortcuts.insert(accelerator_id, shortcut);
+
+        Ok(ShortcutId {
+            id: accelerator_id,
+            number: id,
+        })
     }
 
     pub(crate) fn remove_shortcut(&self, id: ShortcutId) {
@@ -112,7 +108,7 @@ impl ShortcutRegistry {
             callbacks.remove(id.number);
             if callbacks.is_empty() {
                 if let Some(_shortcut) = shortcuts.remove(&id.id) {
-                    let _ = self.manager.borrow_mut().unregister(_shortcut.shortcut);
+                    let _ = self.manager.unregister(_shortcut.shortcut);
                 }
             }
         }
@@ -121,7 +117,7 @@ impl ShortcutRegistry {
     pub(crate) fn remove_all(&self) {
         let mut shortcuts = self.shortcuts.borrow_mut();
         let hotkeys: Vec<_> = shortcuts.drain().map(|(_, v)| v.shortcut).collect();
-        let _ = self.manager.borrow_mut().unregister_all(&hotkeys);
+        let _ = self.manager.unregister_all(&hotkeys);
     }
 }
 
@@ -144,7 +140,7 @@ pub struct ShortcutId {
 
 /// A global shortcut. This will be automatically removed when it is dropped.
 pub struct ShortcutHandle {
-    desktop: DesktopContext,
+    pub(crate) desktop: DesktopContext,
     /// The id of the shortcut
     pub shortcut_id: ShortcutId,
 }
@@ -175,24 +171,6 @@ impl IntoAccelerator for &str {
     fn accelerator(&self) -> HotKey {
         HotKey::from_str(self).unwrap()
     }
-}
-
-/// Get a closure that executes any JavaScript in the WebView context.
-pub fn use_global_shortcut(
-    cx: &ScopeState,
-    accelerator: impl IntoAccelerator,
-    handler: impl FnMut() + 'static,
-) -> &Result<ShortcutHandle, ShortcutRegistryError> {
-    cx.use_hook(move || {
-        let desktop = window();
-
-        let id = desktop.create_shortcut(accelerator.accelerator(), handler);
-
-        Ok(ShortcutHandle {
-            desktop,
-            shortcut_id: id?,
-        })
-    })
 }
 
 impl ShortcutHandle {

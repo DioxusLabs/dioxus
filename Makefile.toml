@@ -105,6 +105,8 @@ args = [
   "dioxus-router",
   "--exclude",
   "dioxus-desktop",
+  "--exclude",
+  "dioxus-mobile",
 ]
 private = true
 
