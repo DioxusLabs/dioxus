@@ -11,7 +11,6 @@ pub struct Config {
     #[cfg(feature = "hydrate")]
     pub(crate) hydrate: bool,
     pub(crate) rootname: String,
-    pub(crate) cached_strings: Vec<String>,
     pub(crate) default_panic_hook: bool,
 }
 
@@ -21,7 +20,6 @@ impl Default for Config {
             #[cfg(feature = "hydrate")]
             hydrate: false,
             rootname: "main".to_string(),
-            cached_strings: Vec::new(),
             default_panic_hook: true,
         }
     }
@@ -52,15 +50,6 @@ impl Config {
     /// This is akin to calling React.render() on the element with the specified name.
     pub fn rootname(mut self, name: impl Into<String>) -> Self {
         self.rootname = name.into();
-        self
-    }
-
-    /// Sets a string cache for wasm bindgen to [intern](https://docs.rs/wasm-bindgen/0.2.84/wasm_bindgen/fn.intern.html). This can help reduce the time it takes for wasm bindgen to pass
-    /// strings from rust to javascript. This can significantly improve pefromance when passing strings to javascript, but can have a negative impact on startup time.
-    ///
-    /// > Currently this cache is only used when creating static elements and attributes.
-    pub fn with_string_cache(mut self, cache: Vec<String>) -> Self {
-        self.cached_strings = cache;
         self
     }
 

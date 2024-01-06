@@ -66,7 +66,6 @@ use futures_util::{
     pin_mut, FutureExt, StreamExt,
 };
 
-mod cache;
 mod cfg;
 mod dom;
 #[cfg(feature = "eval")]
@@ -107,7 +106,7 @@ mod rehydrate;
 /// }
 /// ```
 pub fn launch(root_component: fn(()) -> Element) {
-    launch_with_props( root_component, (), Config::default());
+    launch_with_props(root_component, (), Config::default());
 }
 
 /// Launch your app and run the event loop, with configuration.
@@ -201,13 +200,6 @@ pub async fn run_with_props<T: Clone + 'static>(
 
     #[cfg(all(feature = "hot_reload", debug_assertions))]
     let mut hotreload_rx = hot_reload::init();
-
-    for s in crate::cache::BUILTIN_INTERNED_STRINGS {
-        wasm_bindgen::intern(s);
-    }
-    for s in &cfg.cached_strings {
-        wasm_bindgen::intern(s);
-    }
 
     let (tx, mut rx) = futures_channel::mpsc::unbounded();
 

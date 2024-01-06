@@ -18,7 +18,7 @@ dioxus-interpreter-js = { workspace = true, features = [
 ] }
 
 js-sys = "0.3.56"
-wasm-bindgen = { workspace = true, features = ["enable-interning"] }
+wasm-bindgen = { workspace = true }
 wasm-bindgen-futures = "0.4.29"
 tracing = { workspace = true }
 rustc-hash = { workspace = true }
