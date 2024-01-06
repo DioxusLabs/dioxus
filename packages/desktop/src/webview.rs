@@ -72,7 +72,7 @@ impl WebviewInstance {
 
             // Otherwise, try to serve an asset, either from the user or the filesystem
             match index_bytes {
-                Some(body) => return responder.respond(body),
+                Some(body) => responder.respond(body),
                 None => {
                     // we need to do this in the context of the dioxus runtime since the user gave us these closures
                     protocol::desktop_handler(

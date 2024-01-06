@@ -3,7 +3,6 @@ use dioxus_desktop::wry::http;
 use dioxus_desktop::wry::http::Response;
 use dioxus_desktop::{use_asset_handler, AssetRequest};
 use http::{header::*, response::Builder as ResponseBuilder, status::StatusCode};
-use std::borrow::Cow;
 use std::{io::SeekFrom, path::PathBuf};
 use tokio::io::AsyncReadExt;
 use tokio::io::AsyncSeekExt;
