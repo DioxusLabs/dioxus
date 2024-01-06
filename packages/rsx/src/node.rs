@@ -122,11 +122,11 @@ impl ToTokens for BodyNode {
             BodyNode::Element(el) => el.to_tokens(tokens),
             BodyNode::Component(comp) => comp.to_tokens(tokens),
             BodyNode::Text(txt) => tokens.append_all(quote! {
-                __cx.text_node(#txt)
+                ::dioxus::core::DynamicNode::Text(::dioxus::core::VText::new(#txt.to_string()))
             }),
             BodyNode::RawExpr(exp) => tokens.append_all(quote! {
                 {
-                    let ___nodes = (#exp).into_dyn_node(__cx);
+                    let ___nodes = (#exp).into_dyn_node();
                     ___nodes
                 }
             }),
@@ -145,7 +145,7 @@ impl ToTokens for BodyNode {
                 // And then we can return them into the dyn loop
                 tokens.append_all(quote! {
                     {
-                        let ___nodes =(#expr).into_iter().map(|#pat| { #renderer }).into_dyn_node(__cx);
+                        let ___nodes = (#expr).into_iter().map(|#pat| { #renderer }).into_dyn_node();
                         ___nodes
                     }
                 })
@@ -154,7 +154,7 @@ impl ToTokens for BodyNode {
                 if is_if_chain_terminated(chain) {
                     tokens.append_all(quote! {
                         {
-                            let ___nodes = (#chain).into_dyn_node(__cx);
+                            let ___nodes = (#chain).into_dyn_node();
                             ___nodes
                         }
                     });
@@ -211,7 +211,7 @@ impl ToTokens for BodyNode {
 
                     tokens.append_all(quote! {
                         {
-                            let ___nodes = (#body).into_dyn_node(__cx);
+                            let ___nodes = (#body).into_dyn_node();
                             ___nodes
                         }
                     });

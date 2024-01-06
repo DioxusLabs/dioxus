@@ -2,6 +2,7 @@
 use async_trait::async_trait;
 use dioxus_core::prelude::consume_context;
 use dioxus_core::prelude::provide_context;
+use dioxus_core::ScopeId;
 use dioxus_html::prelude::{EvalError, EvalProvider, Evaluator};
 use std::{cell::RefCell, rc::Rc};
 
@@ -9,13 +10,13 @@ use crate::{query::Query, DesktopContext};
 
 /// Provides the DesktopEvalProvider through [`cx.provide_context`].
 pub fn init_eval() {
-    let desktop_ctx = consume_context::<DesktopContext>().unwrap();
+    let desktop_ctx = ScopeId::ROOT.consume_context::<DesktopContext>().unwrap();
     let provider: Rc<dyn EvalProvider> = Rc::new(DesktopEvalProvider { desktop_ctx });
-    provide_context(provider);
+    ScopeId::ROOT.provide_context(provider);
 }
 
-/// Reprents the desktop-target's provider of evaluators.
-pub struct DesktopEvalProvider {
+/// Represents the desktop-target's provider of evaluators.
+pub(crate) struct DesktopEvalProvider {
     desktop_ctx: DesktopContext,
 }
 
@@ -25,8 +26,8 @@ impl EvalProvider for DesktopEvalProvider {
     }
 }
 
-/// Reprents a desktop-target's JavaScript evaluator.
-pub struct DesktopEvaluator {
+/// Represents a desktop-target's JavaScript evaluator.
+pub(crate) struct DesktopEvaluator {
     query: Rc<RefCell<Query<serde_json::Value>>>,
 }
 

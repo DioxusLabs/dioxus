@@ -68,7 +68,7 @@ impl ToTokens for ElementAttrNamed {
                     let value = &self.attr.value;
                     let value = quote! { #value };
                     quote! {
-                        __cx.attr(
+                        ::dioxus::core::Attribute::new(
                             #attribute,
                             #value,
                             #ns,
@@ -79,7 +79,7 @@ impl ToTokens for ElementAttrNamed {
                 ElementAttrValue::EventTokens(tokens) => match &self.attr.name {
                     ElementAttrName::BuiltIn(name) => {
                         quote! {
-                            dioxus_elements::events::#name(__cx, #tokens)
+                            dioxus_elements::events::#name(#tokens)
                         }
                     }
                     ElementAttrName::Custom(_) => todo!(),

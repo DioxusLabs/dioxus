@@ -184,11 +184,11 @@ impl ToTokens for Element {
             .filter(|f| !matches!(f.attr.value, ElementAttrValue::EventTokens { .. }));
 
         tokens.append_all(quote! {
-            __cx.element(
+            ::dioxus::core::Element::new(
                 #name,
-                __cx.bump().alloc([ #(#listeners),* ]),
-                __cx.bump().alloc([ #(#attr),* ]),
-                __cx.bump().alloc([ #(#children),* ]),
+                vec![ #(#listeners),* ],
+                vec![ #(#attr),* ],
+                vec![ #(#children),* ],
                 #key,
             )
         });

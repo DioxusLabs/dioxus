@@ -16,7 +16,7 @@ To ignore this check, pass the \"",
 
 const INNER_FN_NAME: &str = "__dx_inner_comp";
 
-fn get_out_comp_fn(orig_comp_fn: &ItemFn, cx_pat: &Pat) -> ItemFn {
+fn get_out_comp_fn(orig_comp_fn: &ItemFn) -> ItemFn {
     let inner_comp_ident = Ident::new(INNER_FN_NAME, orig_comp_fn.sig.ident.span());
 
     let inner_comp_fn = ItemFn {
@@ -34,7 +34,7 @@ fn get_out_comp_fn(orig_comp_fn: &ItemFn, cx_pat: &Pat) -> ItemFn {
                 #[allow(clippy::inline_always)]
                 #[inline(always)]
                 #inner_comp_fn
-                #inner_comp_ident (#cx_pat)
+                #inner_comp_ident(__props)
             }
         },
         ..orig_comp_fn.clone()
@@ -88,14 +88,9 @@ impl DeserializerArgs<ComponentDeserializerOutput> for ComponentDeserializerArgs
 
 impl ComponentDeserializerArgs {
     fn deserialize_no_props(component_body: &ComponentBody) -> ComponentDeserializerOutput {
-        let ComponentBody {
-            item_fn,
-            cx_pat_type,
-            ..
-        } = component_body;
-        let cx_pat = &cx_pat_type.pat;
+        let ComponentBody { item_fn, .. } = component_body;
 
-        let comp_fn = get_out_comp_fn(item_fn, cx_pat);
+        let comp_fn = get_out_comp_fn(item_fn);
 
         ComponentDeserializerOutput {
             comp_fn,
@@ -106,12 +101,7 @@ impl ComponentDeserializerArgs {
     fn deserialize_with_props(
         component_body: &ComponentBody,
     ) -> Result<ComponentDeserializerOutput> {
-        let ComponentBody {
-            item_fn,
-            cx_pat_type,
-            ..
-        } = component_body;
-        let cx_pat = &cx_pat_type.pat;
+        let ComponentBody { item_fn, .. } = component_body;
 
         let comp_parsed = match parse2::<ComponentBody>(quote!(#item_fn)) {
             Ok(comp_body) => comp_body,
@@ -130,7 +120,7 @@ impl ComponentDeserializerArgs {
         let props_struct = inlined_props_output.props_struct;
         let props_fn = inlined_props_output.comp_fn;
 
-        let comp_fn = get_out_comp_fn(&props_fn, cx_pat);
+        let comp_fn = get_out_comp_fn(&props_fn);
 
         Ok(ComponentDeserializerOutput {
             comp_fn,

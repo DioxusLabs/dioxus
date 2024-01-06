@@ -225,11 +225,7 @@ fn get_props_docs(fn_ident: &Ident, inputs: Vec<&FnArg>) -> Vec<Attribute> {
 }
 
 fn get_function(component_body: &ComponentBody) -> ItemFn {
-    let ComponentBody {
-        item_fn,
-        cx_pat_type,
-        ..
-    } = component_body;
+    let ComponentBody { item_fn, .. } = component_body;
     let ItemFn {
         attrs: fn_attrs,
         vis,
@@ -246,7 +242,6 @@ fn get_function(component_body: &ComponentBody) -> ItemFn {
     } = sig;
     let Generics { where_clause, .. } = generics;
 
-    let cx_pat = &cx_pat_type.pat;
     let struct_ident = Ident::new(&format!("{fn_ident}Props"), fn_ident.span());
 
     // Skip first arg since that's the context
@@ -298,10 +293,10 @@ fn get_function(component_body: &ComponentBody) -> ItemFn {
     parse_quote! {
         #(#fn_attrs)*
         #(#props_docs)*
-        #asyncness #vis fn #fn_ident #fn_generics (#cx_pat: Scope<#scope_lifetime #struct_ident #generics_no_bounds>) #fn_output
+        #asyncness #vis fn #fn_ident #fn_generics (__props: #struct_ident #generics_no_bounds) #fn_output
         #where_clause
         {
-            let #struct_ident { #(#struct_field_names),* } = &#cx_pat.props;
+            let #struct_ident { #(#struct_field_names),* } = &__props;
             #fn_block
         }
     }

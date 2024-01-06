@@ -1,5 +1,4 @@
 use crate::component_body::ComponentBody;
-use dioxus_core::{Element, Scope};
 use quote::ToTokens;
 use syn::{parse_quote, Path};
 
@@ -35,23 +34,4 @@ where
     /// The [`ComponentBody::deserialize`] provides a cleaner way of calling this function.
     #[allow(unused_qualifications)]
     fn to_output(&self, component_body: &ComponentBody) -> syn::Result<TOutput>;
-}
-
-pub trait TypeHelper {
-    fn get_path() -> Path;
-    fn get_path_string() -> String {
-        Self::get_path().to_token_stream().to_string()
-    }
-}
-
-impl<'a> TypeHelper for Scope<'a> {
-    fn get_path() -> Path {
-        parse_quote!(::dioxus::core::Scope)
-    }
-}
-
-impl<'a> TypeHelper for Element<'a> {
-    fn get_path() -> Path {
-        parse_quote!(::dioxus::core::Element)
-    }
 }

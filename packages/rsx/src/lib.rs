@@ -69,7 +69,7 @@ impl CallBody {
         &self,
         template: Option<CallBody>,
         location: &'static str,
-    ) -> Option<Template<'static>> {
+    ) -> Option<Template> {
         let mut renderer: TemplateRenderer = TemplateRenderer {
             roots: &self.roots,
             location: None,
@@ -138,7 +138,6 @@ impl ToTokens for RenderCallBody {
 
         out_tokens.append_all(quote! {
             Some({
-                let __cx = cx;
                 #body
             })
         })
@@ -156,7 +155,7 @@ impl<'a> TemplateRenderer<'a> {
         &mut self,
         previous_call: Option<CallBody>,
         location: &'static str,
-    ) -> Option<Template<'static>> {
+    ) -> Option<Template> {
         let mut mapping = previous_call.map(|call| DynamicMapping::from(call.roots));
 
         let mut context = DynamicContext::default();
@@ -202,7 +201,7 @@ impl<'a> ToTokens for TemplateRenderer<'a> {
         };
 
         let key_tokens = match key {
-            Some(tok) => quote! { Some( __cx.raw_text(#tok) ) },
+            Some(tok) => quote! { Some( #tok.to_string() ) },
             None => quote! { None },
         };
 
@@ -257,9 +256,9 @@ impl<'a> ToTokens for TemplateRenderer<'a> {
             ::dioxus::core::VNode::new(
                 #key_tokens,
                 TEMPLATE,
-                dioxus::core::exports::bumpalo::collections::Vec::with_capacity_in(#root_count, __cx.bump()),
-                __cx.bump().alloc([ #( #node_printer ),* ]),
-                __cx.bump().alloc([ #( #dyn_attr_printer ),* ]),
+                Vec::with_capacity(#root_count),
+                vec![ #( #node_printer ),* ],
+                vec![ #( #dyn_attr_printer ),* ],
             )
         });
     }
@@ -360,7 +359,7 @@ impl<'a> DynamicContext<'a> {
         &mut self,
         root: &'a BodyNode,
         mapping: &mut Option<DynamicMapping>,
-    ) -> Option<TemplateNode<'static>> {
+    ) -> Option<TemplateNode> {
         match root {
             BodyNode::Element(el) => {
                 let element_name_rust = el.name.to_string();

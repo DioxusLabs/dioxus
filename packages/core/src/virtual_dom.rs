@@ -549,7 +549,9 @@ impl VirtualDom {
     pub fn rebuild(&mut self, to: &mut impl WriteMutations) {
         self.flush_templates(to);
         let _runtime = RuntimeGuard::new(self.runtime.clone());
-        match self.run_scope(ScopeId::ROOT) {
+        let new_nodes = self.run_scope(ScopeId::ROOT);
+        self.scopes[ScopeId::ROOT.0].last_rendered_node = Some(new_nodes.clone());
+        match new_nodes {
             // Rebuilding implies we append the created elements to the root
             RenderReturn::Ready(node) => {
                 let m = self.create_scope(ScopeId::ROOT, &node, to);

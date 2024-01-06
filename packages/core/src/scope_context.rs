@@ -9,6 +9,7 @@ use std::{
     cell::{Cell, RefCell},
     future::Future,
     rc::Rc,
+    sync::Arc,
 };
 
 /// A component's state separate from its props.
@@ -67,6 +68,26 @@ impl ScopeContext {
             .sender
             .unbounded_send(SchedulerMsg::Immediate(self.id))
             .expect("Scheduler to exist if scope exists");
+    }
+
+    /// Create a subscription that schedules a future render for the reference component
+    ///
+    /// ## Notice: you should prefer using [`Self::schedule_update_any`] and [`Self::scope_id`]
+    pub fn schedule_update(&self) -> Arc<dyn Fn() + Send + Sync + 'static> {
+        let (chan, id) = (self.tasks.sender.clone(), self.id);
+        Arc::new(move || drop(chan.unbounded_send(SchedulerMsg::Immediate(id))))
+    }
+
+    /// Schedule an update for any component given its [`ScopeId`].
+    ///
+    /// A component's [`ScopeId`] can be obtained from `use_hook` or the [`ScopeState::scope_id`] method.
+    ///
+    /// This method should be used when you want to schedule an update for a component
+    pub fn schedule_update_any(&self) -> Arc<dyn Fn(ScopeId) + Send + Sync> {
+        let chan = self.tasks.sender.clone();
+        Arc::new(move |id| {
+            chan.unbounded_send(SchedulerMsg::Immediate(id)).unwrap();
+        })
     }
 
     /// Return any context of type T if it exists on this scope
@@ -354,5 +375,12 @@ impl ScopeId {
     /// Mark the current scope as dirty, causing it to re-render
     pub fn needs_update(self) {
         with_scope(self, |cx| cx.needs_update());
+    }
+
+    /// Create a subscription that schedules a future render for the reference component. Unlike [`Self::needs_update`], this function will work outside of the dioxus runtime.
+    ///
+    /// ## Notice: you should prefer using [`dioxus_core::schedule_update_any`] and [`Self::scope_id`]
+    pub fn schedule_update(&self) -> Arc<dyn Fn() + Send + Sync + 'static> {
+        with_scope(*self, |cx| cx.schedule_update()).expect("to be in a dioxus runtime")
     }
 }

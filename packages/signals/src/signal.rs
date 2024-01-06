@@ -7,8 +7,9 @@ use std::{
 };
 
 use dioxus_core::{
+    once,
     prelude::{current_scope_id, has_context, provide_context, schedule_update_any},
-    ScopeId, ScopeState,
+    ScopeId,
 };
 use generational_box::{GenerationalRef, GenerationalRefMut};
 
@@ -47,11 +48,11 @@ use crate::{get_effect_stack, CopyValue, Effect, EffectStack};
 /// ```
 #[track_caller]
 #[must_use]
-pub fn use_signal<T: 'static>(cx: &ScopeState, f: impl FnOnce() -> T) -> Signal<T> {
+pub fn use_signal<T: 'static>(f: impl FnOnce() -> T) -> Signal<T> {
     #[cfg(debug_assertions)]
     let caller = std::panic::Location::caller();
 
-    *cx.use_hook(|| {
+    once(|| {
         Signal::new_with_caller(
             f(),
             #[cfg(debug_assertions)]
@@ -155,7 +156,7 @@ impl<T: 'static> Signal<T> {
             inner: CopyValue::new(SignalData {
                 subscribers: Default::default(),
                 effect_subscribers: Default::default(),
-                update_any: schedule_update_any().expect("in a virtual dom"),
+                update_any: schedule_update_any(),
                 value,
                 effect_stack: get_effect_stack(),
             }),
@@ -172,7 +173,7 @@ impl<T: 'static> Signal<T> {
                 SignalData {
                     subscribers: Default::default(),
                     effect_subscribers: Default::default(),
-                    update_any: schedule_update_any().expect("in a virtual dom"),
+                    update_any: schedule_update_any(),
                     value,
                     effect_stack: get_effect_stack(),
                 },
@@ -189,7 +190,7 @@ impl<T: 'static> Signal<T> {
                 SignalData {
                     subscribers: Default::default(),
                     effect_subscribers: Default::default(),
-                    update_any: schedule_update_any().expect("in a virtual dom"),
+                    update_any: schedule_update_any(),
                     value,
                     effect_stack: get_effect_stack(),
                 },

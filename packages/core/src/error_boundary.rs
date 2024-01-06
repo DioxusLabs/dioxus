@@ -37,11 +37,22 @@ impl Debug for ErrorBoundaryInner {
     }
 }
 
+/// A trait for any type that can be downcast to a concrete type and implements Debug. This is automatically implemented for all types that implement Any + Debug.
+pub trait AnyDebug: Any + Debug {
+    fn as_any(&self) -> &dyn Any;
+}
+
+impl<T: Any + Debug> AnyDebug for T {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
 #[derive(Debug)]
 /// An instance of an error captured by a descendant component.
 pub struct CapturedError {
     /// The error captured by the error boundary
-    pub error: Box<dyn Debug + 'static>,
+    pub error: Box<dyn AnyDebug + 'static>,
 
     /// The backtrace of the error
     pub backtrace: Backtrace,
@@ -65,8 +76,7 @@ impl CapturedError {
     /// Downcast the error type into a concrete error type
     pub fn downcast<T: 'static>(&self) -> Option<&T> {
         if TypeId::of::<T>() == self.error.type_id() {
-            let raw = self.error.as_ref() as *const _ as *const T;
-            Some(unsafe { &*raw })
+            self.error.as_any().downcast_ref::<T>()
         } else {
             None
         }
@@ -100,14 +110,9 @@ impl ErrorBoundary {
     }
 
     /// Push an error into this Error Boundary
-    pub fn insert_error(
-        &self,
-        scope: ScopeId,
-        error: Box<dyn Debug + 'static>,
-        backtrace: Backtrace,
-    ) {
+    pub fn insert_error(&self, scope: ScopeId, error: impl Debug + 'static, backtrace: Backtrace) {
         self.inner.error.replace(Some(CapturedError {
-            error,
+            error: Box::new(error),
             scope,
             backtrace,
         }));

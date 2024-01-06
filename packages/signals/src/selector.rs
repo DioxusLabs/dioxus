@@ -22,11 +22,8 @@ use crate::{get_effect_stack, signal::SignalData, CopyValue, Effect, ReadOnlySig
 /// }
 /// ```
 #[must_use = "Consider using `use_effect` to rerun a callback when dependencies change"]
-pub fn use_selector<R: PartialEq>(
-    cx: &ScopeState,
-    f: impl FnMut() -> R + 'static,
-) -> ReadOnlySignal<R> {
-    *cx.use_hook(|| selector(f))
+pub fn use_selector<R: PartialEq>(f: impl FnMut() -> R + 'static) -> ReadOnlySignal<R> {
+    once(|| selector(f))
 }
 
 /// Creates a new Selector with some local dependencies. The selector will be run immediately and whenever any signal it reads or any dependencies it tracks changes
@@ -47,15 +44,14 @@ pub fn use_selector<R: PartialEq>(
 /// ```
 #[must_use = "Consider using `use_effect` to rerun a callback when dependencies change"]
 pub fn use_selector_with_dependencies<R: PartialEq, D: Dependency>(
-    cx: &ScopeState,
     dependencies: D,
     mut f: impl FnMut(D::Out) -> R + 'static,
 ) -> ReadOnlySignal<R>
 where
     D::Out: 'static,
 {
-    let dependencies_signal = use_signal(cx, || dependencies.out());
-    let selector = *cx.use_hook(|| {
+    let dependencies_signal = use_signal(|| dependencies.out());
+    let selector = once(|| {
         selector(move || {
             let deref = &*dependencies_signal.read();
             f(deref.clone())
@@ -87,9 +83,9 @@ pub fn selector<R: PartialEq>(mut f: impl FnMut() -> R + 'static) -> ReadOnlySig
     state.inner.value.set(SignalData {
         subscribers: Default::default(),
         effect_subscribers: Default::default(),
-        update_any: schedule_update_any().expect("in a virtual dom"),
         value: f(),
         effect_stack: get_effect_stack(),
+        update_any: schedule_update_any(),
     });
     {
         get_effect_stack().effects.write().pop();

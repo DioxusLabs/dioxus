@@ -44,7 +44,7 @@ fn owner_in_scope(scope: ScopeId) -> Rc<Owner> {
         Some(rt) => rt,
         None => {
             let owner = Rc::new(current_store().owner());
-            provide_context_to_scope(scope, owner).expect("in a virtual dom")
+            scope.provide_context(owner).expect("in a virtual dom")
         }
     }
 }

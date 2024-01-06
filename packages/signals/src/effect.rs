@@ -38,21 +38,20 @@ pub(crate) fn get_effect_stack() -> EffectStack {
 
 /// Create a new effect. The effect will be run immediately and whenever any signal it reads changes.
 /// The signal will be owned by the current component and will be dropped when the component is dropped.
-pub fn use_effect(cx: &ScopeState, callback: impl FnMut() + 'static) {
-    cx.use_hook(|| Effect::new(callback));
+pub fn use_effect(callback: impl FnMut() + 'static) {
+    once(|| Effect::new(callback));
 }
 
 /// Create a new effect. The effect will be run immediately and whenever any signal it reads changes.
 /// The signal will be owned by the current component and will be dropped when the component is dropped.
 pub fn use_effect_with_dependencies<D: Dependency>(
-    cx: &ScopeState,
     dependencies: D,
     mut callback: impl FnMut(D::Out) + 'static,
 ) where
     D::Out: 'static,
 {
-    let dependencies_signal = use_signal(cx, || dependencies.out());
-    cx.use_hook(|| {
+    let dependencies_signal = use_signal(|| dependencies.out());
+    once(|| {
         Effect::new(move || {
             let deref = &*dependencies_signal.read();
             callback(deref.clone());

@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use futures_util::Future;
 
 use crate::{
@@ -112,4 +114,22 @@ pub fn parent_scope() -> Option<ScopeId> {
 /// Mark the current scope as dirty, causing it to re-render
 pub fn needs_update() {
     with_current_scope(|cx| cx.needs_update());
+}
+
+/// Schedule an update for the current component
+///
+/// Note: Unlike [`needs_update`], the function returned by this method will work outside of the dioxus runtime.
+///
+/// You should prefer [`schedule_update_any`] if you need to update multiple components.
+pub fn schedule_update() -> Arc<dyn Fn() + Send + Sync> {
+    with_current_scope(|cx| cx.schedule_update()).expect("to be in a dioxus runtime")
+}
+
+/// Schedule an update for any component given its [`ScopeId`].
+///
+/// A component's [`ScopeId`] can be obtained from the [`current_scope_id`] method.
+///
+/// Note: Unlike [`needs_update`], the function returned by this method will work outside of the dioxus runtime.
+pub fn schedule_update_any() -> Arc<dyn Fn(ScopeId) + Send + Sync> {
+    with_current_scope(|cx| cx.schedule_update_any()).expect("to be in a dioxus runtime")
 }

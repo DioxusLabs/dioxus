@@ -155,7 +155,7 @@ impl VirtualDom {
                 }
                 Element { .. } => {
                     #[cfg(not(debug_assertions))]
-                    let id = self.write_element_root(node, idx, &mut attrs, &mut nodes, &[]);
+                    let id = self.write_element_root(node, idx, &mut attrs, &mut nodes, &[], to);
                     #[cfg(debug_assertions)]
                     let id = self.write_element_root(
                         node,
