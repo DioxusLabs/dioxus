@@ -1,14 +1,17 @@
 use crate::{
     app::SharedContext,
-    assets::{AssetFuture, AssetHandlerRegistry},
+    assets::AssetHandlerRegistry,
     edits::EditQueue,
     ipc::{EventData, UserWindowEvent},
     query::QueryEngine,
     shortcut::{HotKey, ShortcutId, ShortcutRegistryError},
     webview::WebviewInstance,
-    AssetHandler, Config,
+    AssetRequest, Config,
 };
-use dioxus_core::{Mutations, VirtualDom};
+use dioxus_core::{
+    prelude::{current_scope_id, ScopeId},
+    Mutations, VirtualDom,
+};
 use dioxus_interpreter_js::binary_protocol::Channel;
 use rustc_hash::FxHashMap;
 use slab::Slab;
@@ -18,7 +21,7 @@ use tao::{
     event_loop::EventLoopWindowTarget,
     window::{Fullscreen as WryFullscreen, Window, WindowId},
 };
-use wry::WebView;
+use wry::{RequestAsyncResponder, WebView};
 
 #[cfg(target_os = "ios")]
 use tao::platform::ios::WindowExtIOS;
@@ -244,17 +247,30 @@ impl DesktopService {
     }
 
     /// Provide a callback to handle asset loading yourself.
+    /// If the ScopeId isn't provided, defaults to a global handler.
+    /// Note that the handler is namespaced by name, not ScopeId.
+    ///
+    /// When the component is dropped, the handler is removed.
     ///
     /// See [`use_asset_handle`](crate::use_asset_handle) for a convenient hook.
-    pub async fn register_asset_handler<F: AssetFuture>(&self, f: impl AssetHandler<F>) -> usize {
-        self.asset_handlers.register_handler(f).await
+    pub fn register_asset_handler(
+        &self,
+        name: String,
+        f: Box<dyn Fn(AssetRequest, RequestAsyncResponder) + 'static>,
+        scope: Option<ScopeId>,
+    ) {
+        self.asset_handlers.register_handler(
+            name,
+            f,
+            scope.unwrap_or(current_scope_id().unwrap_or(ScopeId(0))),
+        )
     }
 
     /// Removes an asset handler by its identifier.
     ///
     /// Returns `None` if the handler did not exist.
-    pub async fn remove_asset_handler(&self, id: usize) -> Option<()> {
-        self.asset_handlers.remove_handler(id).await
+    pub fn remove_asset_handler(&self, name: &str) -> Option<()> {
+        self.asset_handlers.remove_handler(name).map(|_| ())
     }
 
     /// Push an objc view to the window

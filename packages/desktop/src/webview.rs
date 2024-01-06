@@ -11,7 +11,7 @@ use crate::{
 use dioxus_core::VirtualDom;
 use futures_util::{pin_mut, FutureExt};
 use std::{rc::Rc, task::Waker};
-use wry::{WebContext, WebViewBuilder};
+use wry::{RequestAsyncResponder, WebContext, WebViewBuilder};
 
 pub struct WebviewInstance {
     pub dom: VirtualDom,
@@ -33,12 +33,6 @@ impl WebviewInstance {
             build_menu_bar(build_default_menu_bar(), &window);
         }
 
-        let window_id = window.id();
-        let file_handler = cfg.file_drop_handler.take();
-        let custom_head = cfg.custom_head.clone();
-        let index_file = cfg.custom_index.clone();
-        let root_name = cfg.root_name.clone();
-
         // We assume that if the icon is None in cfg, then the user just didnt set it
         if cfg.window.window.window_icon.is_none() {
             window.set_window_icon(Some(
@@ -53,52 +47,65 @@ impl WebviewInstance {
 
         let mut web_context = WebContext::new(cfg.data_dir.clone());
         let edit_queue = EditQueue::default();
+        let asset_handlers = AssetHandlerRegistry::new(dom.runtime());
         let headless = !cfg.window.window.visible;
-        let asset_handlers = AssetHandlerRegistry::new();
-        let asset_handlers_ref = asset_handlers.clone();
+
+        // Rust :(
+        let window_id = window.id();
+        let file_handler = cfg.file_drop_handler.take();
+        let custom_head = cfg.custom_head.clone();
+        let index_file = cfg.custom_index.clone();
+        let root_name = cfg.root_name.clone();
+        let asset_handlers_ = asset_handlers.clone();
+        let edit_queue_ = edit_queue.clone();
+        let proxy_ = shared.proxy.clone();
+
+        let request_handler = move |request, responder: RequestAsyncResponder| {
+            // Try to serve the index file first
+            let index_bytes = protocol::index_request(
+                &request,
+                custom_head.clone(),
+                index_file.clone(),
+                &root_name,
+                headless,
+            );
+
+            // Otherwise, try to serve an asset, either from the user or the filesystem
+            match index_bytes {
+                Some(body) => return responder.respond(body),
+                None => {
+                    // we need to do this in the context of the dioxus runtime since the user gave us these closures
+                    protocol::desktop_handler(
+                        request,
+                        asset_handlers_.clone(),
+                        &edit_queue_,
+                        responder,
+                    );
+                }
+            }
+        };
+
+        let ipc_handler = move |payload: String| {
+            // defer the event to the main thread
+            if let Ok(message) = serde_json::from_str(&payload) {
+                _ = proxy_.send_event(UserWindowEvent(EventData::Ipc(message), window_id));
+            }
+        };
+
+        let file_drop_handler = move |event| {
+            file_handler
+                .as_ref()
+                .map(|handler| handler(window_id, event))
+                .unwrap_or_default()
+        };
 
         let mut webview = WebViewBuilder::new(&window)
             .with_transparent(cfg.window.window.transparent)
             .with_url("dioxus://index.html/")
             .unwrap()
-            .with_ipc_handler({
-                let proxy = shared.proxy.clone();
-                move |payload: String| {
-                    // defer the event to the main thread
-                    if let Ok(message) = serde_json::from_str(&payload) {
-                        _ = proxy.send_event(UserWindowEvent(EventData::Ipc(message), window_id));
-                    }
-                }
-            })
-            .with_asynchronous_custom_protocol(String::from("dioxus"), {
-                let edit_queue = edit_queue.clone();
-                move |request, responder| {
-                    let custom_head = custom_head.clone();
-                    let index_file = index_file.clone();
-                    let root_name = root_name.clone();
-                    let asset_handlers_ref = asset_handlers_ref.clone();
-                    let edit_queue = edit_queue.clone();
-                    tokio::spawn(async move {
-                        protocol::desktop_handler(
-                            request,
-                            custom_head.clone(),
-                            index_file.clone(),
-                            &root_name,
-                            &asset_handlers_ref,
-                            &edit_queue,
-                            headless,
-                            responder,
-                        )
-                        .await;
-                    });
-                }
-            })
-            .with_file_drop_handler(move |event| {
-                file_handler
-                    .as_ref()
-                    .map(|handler| handler(window_id, event))
-                    .unwrap_or_default()
-            })
+            .with_ipc_handler(ipc_handler)
+            .with_asynchronous_custom_protocol(String::from("dioxus"), request_handler)
+            .with_file_drop_handler(file_drop_handler)
             .with_web_context(&mut web_context);
 
         #[cfg(windows)]

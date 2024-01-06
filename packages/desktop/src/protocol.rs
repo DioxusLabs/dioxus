@@ -1,8 +1,5 @@
 use crate::{assets::*, edits::EditQueue};
-use std::{
-    borrow::Cow,
-    path::{Path, PathBuf},
-};
+use std::path::{Path, PathBuf};
 use wry::{
     http::{status::StatusCode, Request, Response},
     RequestAsyncResponder, Result,
@@ -10,69 +7,6 @@ use wry::{
 
 static MINIFIED: &str = include_str!("./minified.js");
 static DEFAULT_INDEX: &str = include_str!("./index.html");
-
-// todo: clean this up a bit
-#[allow(clippy::too_many_arguments)]
-pub(super) async fn desktop_handler(
-    request: Request<Vec<u8>>,
-    custom_head: Option<String>,
-    custom_index: Option<String>,
-    root_name: &str,
-    asset_handlers: &AssetHandlerRegistry,
-    edit_queue: &EditQueue,
-    headless: bool,
-    responder: RequestAsyncResponder,
-) {
-    let request = AssetRequest::from(request);
-
-    // If the request is for the root, we'll serve the index.html file.
-    if request.uri().path() == "/" {
-        match build_index_file(custom_index, custom_head, root_name, headless) {
-            Ok(response) => return responder.respond(response),
-            Err(err) => return tracing::error!("error building response: {}", err),
-        }
-    }
-
-    // If the request is asking for edits (ie binary protocol streaming, do that)
-    if request.uri().path().trim_matches('/') == "edits" {
-        return edit_queue.handle_request(responder);
-    }
-
-    // If the user provided a custom asset handler, then call it and return the response if the request was handled.
-    // todo(jon): I dont want this function to be async - we can probably just use a drop handler on the responder
-    if let Some(response) = asset_handlers.try_handlers(&request).await {
-        return responder.respond(response);
-    }
-
-    // Else, try to serve a file from the filesystem.
-    match serve_from_fs(request) {
-        Ok(res) => responder.respond(res),
-        Err(e) => tracing::error!("Error serving request from filesystem {}", e),
-    }
-}
-
-fn serve_from_fs(request: AssetRequest) -> Result<AssetResponse> {
-    // If the path is relative, we'll try to serve it from the assets directory.
-    let mut asset = get_asset_root_or_default().join(&request.path);
-
-    // If we can't find it, make it absolute and try again
-    if !asset.exists() {
-        asset = PathBuf::from("/").join(request.path);
-    }
-
-    if asset.exists() {
-        let content_type = get_mime_from_path(&asset)?;
-        let asset = std::fs::read(asset)?;
-
-        Ok(Response::builder()
-            .header("Content-Type", content_type)
-            .body(Cow::from(asset))?)
-    } else {
-        Ok(Response::builder()
-            .status(StatusCode::NOT_FOUND)
-            .body(Cow::from(String::from("Not Found").into_bytes()))?)
-    }
-}
 
 /// Build the index.html file we use for bootstrapping a new app
 ///
@@ -83,12 +17,18 @@ fn serve_from_fs(request: AssetRequest) -> Result<AssetResponse> {
 /// mess with UI elements. We make this decision since other renderers like LiveView are very separate and can
 /// never properly bridge the gap. Eventually of course, the idea is to build a custom CSS/HTML renderer where you
 /// *do* have native control over elements, but that still won't work with liveview.
-fn build_index_file(
-    custom_index: Option<String>,
+pub(super) fn index_request(
+    request: &Request<Vec<u8>>,
     custom_head: Option<String>,
+    custom_index: Option<String>,
     root_name: &str,
     headless: bool,
-) -> std::result::Result<Response<Vec<u8>>, wry::http::Error> {
+) -> Option<Response<Vec<u8>>> {
+    // If the request is for the root, we'll serve the index.html file.
+    if request.uri().path() != "/" {
+        return None;
+    }
+
     // Load a custom index file if provided
     let mut index = custom_index.unwrap_or_else(|| DEFAULT_INDEX.to_string());
 
@@ -110,6 +50,68 @@ fn build_index_file(
         .header("Content-Type", "text/html")
         .header("Access-Control-Allow-Origin", "*")
         .body(index.into())
+        .ok()
+}
+
+/// Handle a request from the webview
+///
+/// - Tries to stream edits if they're requested.
+/// - If that doesn't match, tries a user provided asset handler
+/// - If that doesn't match, tries to serve a file from the filesystem
+pub(super) fn desktop_handler(
+    request: Request<Vec<u8>>,
+    asset_handlers: AssetHandlerRegistry,
+    edit_queue: &EditQueue,
+    responder: RequestAsyncResponder,
+) {
+    // If the request is asking for edits (ie binary protocol streaming, do that)
+    if request.uri().path().trim_matches('/') == "edits" {
+        return edit_queue.handle_request(responder);
+    }
+
+    // If the user provided a custom asset handler, then call it and return the response if the request was handled.
+    // The path is the first part of the URI, so we need to trim the leading slash.
+    let path = PathBuf::from(
+        urlencoding::decode(request.uri().path().trim_start_matches('/'))
+            .expect("expected URL to be UTF-8 encoded")
+            .as_ref(),
+    );
+
+    let Some(name) = path.parent() else {
+        return tracing::error!("Asset request has no root {path:?}");
+    };
+
+    if let Some(name) = name.to_str() {
+        if asset_handlers.has_handler(name) {
+            return asset_handlers.handle_request(name, request, responder);
+        }
+    }
+
+    // Else, try to serve a file from the filesystem.
+    match serve_from_fs(path) {
+        Ok(res) => responder.respond(res),
+        Err(e) => tracing::error!("Error serving request from filesystem {}", e),
+    }
+}
+
+fn serve_from_fs(path: PathBuf) -> Result<Response<Vec<u8>>> {
+    // If the path is relative, we'll try to serve it from the assets directory.
+    let mut asset = get_asset_root_or_default().join(&path);
+
+    // If we can't find it, make it absolute and try again
+    if !asset.exists() {
+        asset = PathBuf::from("/").join(path);
+    }
+
+    if !asset.exists() {
+        return Ok(Response::builder()
+            .status(StatusCode::NOT_FOUND)
+            .body(String::from("Not Found").into_bytes())?);
+    }
+
+    Ok(Response::builder()
+        .header("Content-Type", get_mime_from_path(&asset)?)
+        .body(std::fs::read(asset)?)?)
 }
 
 /// Construct the inline script that boots up the page and bridges the webview with rust code.

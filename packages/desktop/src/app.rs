@@ -320,6 +320,7 @@ impl<P: 'static> App<P> {
         let Some(view) = self.webviews.get_mut(&id) else {
             return;
         };
+        println!("poll_vdom");
 
         view.poll_vdom();
     }

@@ -38,7 +38,7 @@ pub use tao::window::WindowBuilder;
 pub use wry;
 
 // Public exports
-pub use assets::{AssetFuture, AssetHandler, AssetRequest, AssetResponse};
+pub use assets::AssetRequest;
 pub use cfg::{Config, WindowCloseBehaviour};
 pub use desktop_context::{
     window, DesktopContext, DesktopService, WryEventHandler, WryEventHandlerId,
@@ -46,3 +46,4 @@ pub use desktop_context::{
 pub use hooks::{use_asset_handler, use_global_shortcut, use_window, use_wry_event_handler};
 pub use menubar::build_default_menu_bar;
 pub use shortcut::{ShortcutHandle, ShortcutId, ShortcutRegistryError};
+pub use wry::RequestAsyncResponder;
