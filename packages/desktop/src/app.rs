@@ -333,7 +333,7 @@ pub fn hide_app_window(window: &wry::WebView) {
     {
         use tao::platform::windows::WindowExtWindows;
         window.set_visible(false);
-        window.set_skip_taskbar(true);
+        // window.set_skip_taskbar(true);
     }
 
     #[cfg(target_os = "linux")]

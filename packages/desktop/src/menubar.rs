@@ -16,7 +16,7 @@ mod impl_ {
     #[allow(unused)]
     pub fn build_menu_bar(menu: Menu, window: &Window) {
         #[cfg(target_os = "windows")]
-        menu.init_for_hwnd(window.raw_display_handle_rwh_05());
+        menu.init_for_hwnd(window.hwnd());
 
         // #[cfg(target_os = "linux")]
         // {
