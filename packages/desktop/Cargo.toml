@@ -52,7 +52,7 @@ muda = "0.11.3"
 
 [target.'cfg(any(target_os = "windows",target_os = "macos",target_os = "linux",target_os = "dragonfly", target_os = "freebsd", target_os = "netbsd", target_os = "openbsd"))'.dependencies]
 # This is only for debug mode, and it appears mobile does not support some packages this uses
-manganis-cli-support = { git = "https://github.com/DioxusLabs/collect-assets", features = [
+manganis-cli-support = { git = "https://github.com/DioxusLabs/collect-assets", optional = true, features = [
     "webp",
     "html",
 ] }
@@ -67,6 +67,12 @@ objc_id = "0.1.1"
 core-foundation = "0.9.3"
 objc = "0.2.7"
 
+[target."cfg(any(target_os = \"linux\", target_os = \"dragonfly\", target_os = \"freebsd\", target_os = \"openbsd\", target_os = \"netbsd\"))".dependencies]
+gtk = { version = "0.18", features = [ "v3_24" ] }
+webkit2gtk = { version = "=2.0", features = [ "v2_38" ] }
+percent-encoding = "2.1"
+
+
 [features]
 default = ["tokio_runtime", "hot-reload", "wry/objc-exception"]
 tokio_runtime = ["tokio"]
@@ -74,6 +80,7 @@ fullscreen = ["wry/fullscreen"]
 transparent = ["wry/transparent"]
 devtools = ["wry/devtools"]
 hot-reload = ["dioxus-hot-reload"]
+asset-collect = ["manganis-cli-support"]
 gnu = []
 
 [package.metadata.docs.rs]

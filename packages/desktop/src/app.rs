@@ -82,6 +82,8 @@ impl<P: 'static> App<P> {
         };
 
         // Copy over any assets we find
+        // todo - re-enable this when we have a faster way of copying assets
+        #[cfg(feature = "collect-assets")]
         crate::collect_assets::copy_assets();
 
         // Set the event converter
@@ -119,7 +121,6 @@ impl<P: 'static> App<P> {
         });
     }
 
-    //
     pub fn handle_new_window(&mut self) {
         for handler in self.shared.pending_webviews.borrow_mut().drain(..) {
             let id = handler.desktop_context.window.id();
@@ -320,7 +321,6 @@ impl<P: 'static> App<P> {
         let Some(view) = self.webviews.get_mut(&id) else {
             return;
         };
-        println!("poll_vdom");
 
         view.poll_vdom();
     }

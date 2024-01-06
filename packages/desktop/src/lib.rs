@@ -6,7 +6,6 @@
 mod app;
 mod assets;
 mod cfg;
-mod collect_assets;
 mod desktop_context;
 mod edits;
 mod element;
@@ -22,6 +21,9 @@ mod query;
 mod shortcut;
 mod waker;
 mod webview;
+
+#[cfg(feature = "collect-assets")]
+mod collect_assets;
 
 #[cfg(any(target_os = "ios", target_os = "android"))]
 mod mobile_shortcut;
