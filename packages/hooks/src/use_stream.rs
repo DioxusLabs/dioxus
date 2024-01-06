@@ -85,12 +85,6 @@ where
     state
 }
 
-pub enum StreamState<'a, T> {
-    Pending,
-    Complete(&'a T),
-    Regenerating(&'a T), // the old value
-}
-
 #[derive(Clone)]
 pub struct UseStream {
     update: Arc<dyn Fn()>,
