@@ -17,7 +17,7 @@ fn app(cx: Scope) -> Element {
             rows: "10",
             cols: "80",
             value: "{model}",
-            oninput: move |e| model.set(e.value.clone()),
+            oninput: move |e| model.set(e.value().clone()),
         }
     })
 }

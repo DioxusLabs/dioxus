@@ -15,6 +15,7 @@ keywords = ["dom", "ui", "gui", "react"]
 [dependencies]
 dioxus-autofmt = { workspace = true }
 dioxus-rsx = { workspace = true }
+dioxus-html = { workspace = true, features = ["html-to-rsx"]}
 html_parser.workspace = true
 proc-macro2 = "1.0.49"
 quote = "1.0.23"

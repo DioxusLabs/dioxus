@@ -1,7 +1,6 @@
 use std::{
     any::Any,
     fmt::{Display, Formatter},
-    rc::Rc,
 };
 
 use dioxus_core::{ElementId, Mutations, VirtualDom};
@@ -30,7 +29,7 @@ pub(crate) fn find_mount_events(mutations: &Mutations) -> Vec<ElementId> {
 // We need to queue the mounted events to give rink time to rendere and resolve the layout of elements after they are created
 pub(crate) fn create_mounted_events(
     vdom: &VirtualDom,
-    events: &mut Vec<(ElementId, &'static str, Rc<dyn Any>, bool)>,
+    events: &mut Vec<(ElementId, &'static str, Box<dyn Any>, bool)>,
     mount_events: impl Iterator<Item = (ElementId, NodeId)>,
 ) {
     let query: Query = vdom
@@ -42,11 +41,12 @@ pub(crate) fn create_mounted_events(
             query: query.clone(),
             id: node_id,
         };
-        events.push((id, "mounted", Rc::new(MountedData::new(element)), false));
+        events.push((id, "mounted", Box::new(MountedData::new(element)), false));
     }
 }
 
-struct TuiElement {
+#[derive(Clone)]
+pub(crate) struct TuiElement {
     query: Query,
     id: NodeId,
 }
@@ -82,8 +82,8 @@ impl RenderedElementBacking for TuiElement {
         })
     }
 
-    fn get_raw_element(&self) -> dioxus_html::MountedResult<&dyn std::any::Any> {
-        Ok(self)
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }
 

@@ -2,8 +2,7 @@ use crate::{
     any_props::AnyProps,
     any_props::VProps,
     bump_frame::BumpFrame,
-    innerlude::ErrorBoundary,
-    innerlude::{DynamicNode, EventHandler, VComponent, VText},
+    innerlude::{DynamicNode, EventHandler, VComponent, VNodeId, VText},
     lazynodes::LazyNodes,
     nodes::{IntoAttributeValue, IntoDynNode, RenderReturn},
     runtime::Runtime,
@@ -94,6 +93,7 @@ pub struct ScopeState {
     pub(crate) hook_idx: Cell<usize>,
 
     pub(crate) borrowed_props: RefCell<Vec<*const VComponent<'static>>>,
+    pub(crate) element_refs_to_drop: RefCell<Vec<VNodeId>>,
     pub(crate) attributes_to_drop_before_render: RefCell<Vec<*const Attribute<'static>>>,
 
     pub(crate) props: Option<Box<dyn AnyProps<'static>>>,
@@ -406,7 +406,7 @@ impl<'src> ScopeState {
 
     /// Convert any item that implements [`IntoDynNode`] into a [`DynamicNode`] using the internal [`Bump`] allocator
     pub fn make_node<'c, I>(&'src self, into: impl IntoDynNode<'src, I> + 'c) -> DynamicNode {
-        into.into_vnode(self)
+        into.into_dyn_node(self)
     }
 
     /// Create a new [`Attribute`] from a name, value, namespace, and volatile bool
@@ -466,7 +466,7 @@ impl<'src> ScopeState {
             render_fn: component as *const (),
             static_props: P::IS_STATIC,
             props: RefCell::new(Some(extended)),
-            scope: Cell::new(None),
+            scope: Default::default(),
         })
     }
 
@@ -515,19 +515,6 @@ impl<'src> ScopeState {
         let boxed: BumpBox<'src, dyn AnyValue> =
             unsafe { BumpBox::from_raw(self.bump().alloc(value)) };
         AttributeValue::Any(RefCell::new(Some(boxed)))
-    }
-
-    /// Inject an error into the nearest error boundary and quit rendering
-    ///
-    /// The error doesn't need to implement Error or any specific traits since the boundary
-    /// itself will downcast the error into a trait object.
-    pub fn throw(&self, error: impl Debug + 'static) -> Option<()> {
-        if let Some(cx) = self.consume_context::<Rc<ErrorBoundary>>() {
-            cx.insert_error(self.scope_id(), Box::new(error));
-        }
-
-        // Always return none during a throw
-        None
     }
 
     /// Mark this component as suspended and then return None

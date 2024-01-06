@@ -628,3 +628,9 @@ impl<T, S: Storage<SignalData<T>> + 'static> Deref for ReadOnlySignal<T, S> {
         reference_to_closure as &Self::Target
     }
 }
+
+impl<T> From<Signal<T>> for ReadOnlySignal<T> {
+    fn from(signal: Signal<T>) -> Self {
+        Self::new(signal)
+    }
+}

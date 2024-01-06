@@ -2,19 +2,24 @@ use crate::{
     config::{CrateConfig, ExecutableType},
     error::{Error, Result},
     tools::Tool,
-    DioxusConfig,
 };
 use cargo_metadata::{diagnostic::Diagnostic, Message};
 use indicatif::{ProgressBar, ProgressStyle};
+use lazy_static::lazy_static;
+use manganis_cli_support::AssetManifestExt;
 use serde::Serialize;
 use std::{
     fs::{copy, create_dir_all, File},
-    io::Read,
+    io::{Read, Write},
     panic,
     path::PathBuf,
     time::Duration,
 };
 use wasm_bindgen_cli_support::Bindgen;
+
+lazy_static! {
+    static ref PROGRESS_BARS: indicatif::MultiProgress = indicatif::MultiProgress::new();
+}
 
 #[derive(Serialize, Debug, Clone)]
 pub struct BuildResult {
@@ -22,11 +27,10 @@ pub struct BuildResult {
     pub elapsed_time: u128,
 }
 
-#[allow(unused)]
-pub fn build(config: &CrateConfig, quiet: bool) -> Result<BuildResult> {
+pub fn build(config: &CrateConfig, _: bool, skip_assets: bool) -> Result<BuildResult> {
     // [1] Build the project with cargo, generating a wasm32-unknown-unknown target (is there a more specific, better target to leverage?)
     // [2] Generate the appropriate build folders
-    // [3] Wasm-bindgen the .wasm fiile, and move it into the {builddir}/modules/xxxx/xxxx_bg.wasm
+    // [3] Wasm-bindgen the .wasm file, and move it into the {builddir}/modules/xxxx/xxxx_bg.wasm
     // [4] Wasm-opt the .wasm file with whatever optimizations need to be done
     // [5][OPTIONAL] Builds the Tailwind CSS file using the Tailwind standalone binary
     // [6] Link up the html page to the wasm module
@@ -40,6 +44,8 @@ pub fn build(config: &CrateConfig, quiet: bool) -> Result<BuildResult> {
         dioxus_config,
         ..
     } = config;
+
+    let _gaurd = WebAssetConfigDropGuard::new();
 
     // start to build the assets
     let ignore_files = build_assets(config)?;
@@ -60,8 +66,8 @@ pub fn build(config: &CrateConfig, quiet: bool) -> Result<BuildResult> {
             .output()?;
     }
 
-    let cmd = subprocess::Exec::cmd("cargo");
-    let cmd = cmd
+    let cmd = subprocess::Exec::cmd("cargo")
+        .env("CARGO_TARGET_DIR", target_dir)
         .cwd(crate_dir)
         .arg("build")
         .arg("--target")
@@ -92,6 +98,8 @@ pub fn build(config: &CrateConfig, quiet: bool) -> Result<BuildResult> {
     } else {
         cmd
     };
+
+    let cmd = cmd.args(&config.cargo_args);
 
     let cmd = match executable {
         ExecutableType::Binary(name) => cmd.arg("--bin").arg(name),
@@ -250,19 +258,28 @@ pub fn build(config: &CrateConfig, quiet: bool) -> Result<BuildResult> {
         }
     }
 
+    if !skip_assets {
+        process_assets(config)?;
+    }
+
     Ok(BuildResult {
         warnings: warning_messages,
         elapsed_time: t_start.elapsed().as_millis(),
     })
 }
 
-pub fn build_desktop(config: &CrateConfig, _is_serve: bool) -> Result<BuildResult> {
+pub fn build_desktop(
+    config: &CrateConfig,
+    _is_serve: bool,
+    skip_assets: bool,
+) -> Result<BuildResult> {
     log::info!("🚅 Running build [Desktop] command...");
 
     let t_start = std::time::Instant::now();
     let ignore_files = build_assets(config)?;
 
     let mut cmd = subprocess::Exec::cmd("cargo")
+        .env("CARGO_TARGET_DIR", &config.target_dir)
         .cwd(&config.crate_dir)
         .arg("build")
         .arg("--message-format=json");
@@ -286,6 +303,14 @@ pub fn build_desktop(config: &CrateConfig, _is_serve: bool) -> Result<BuildResul
         cmd = cmd.arg("--features").arg(features_str);
     }
 
+    if let Some(target) = &config.target {
+        cmd = cmd.arg("--target").arg(target);
+    }
+
+    let target_platform = config.target.as_deref().unwrap_or("");
+
+    cmd = cmd.args(&config.cargo_args);
+
     let cmd = match &config.executable {
         crate::ExecutableType::Binary(name) => cmd.arg("--bin").arg(name),
         crate::ExecutableType::Lib(name) => cmd.arg("--lib").arg(name),
@@ -303,12 +328,17 @@ pub fn build_desktop(config: &CrateConfig, _is_serve: bool) -> Result<BuildResul
     let mut res_path = match &config.executable {
         crate::ExecutableType::Binary(name) | crate::ExecutableType::Lib(name) => {
             file_name = name.clone();
-            config.target_dir.join(release_type).join(name)
+            config
+                .target_dir
+                .join(target_platform)
+                .join(release_type)
+                .join(name)
         }
         crate::ExecutableType::Example(name) => {
             file_name = name.clone();
             config
                 .target_dir
+                .join(target_platform)
                 .join(release_type)
                 .join("examples")
                 .join(name)
@@ -360,6 +390,13 @@ pub fn build_desktop(config: &CrateConfig, _is_serve: bool) -> Result<BuildResul
         }
     }
 
+    if !skip_assets {
+        // Collect assets
+        process_assets(config)?;
+        // Create the __assets_head.html file for bundling
+        create_assets_head(config)?;
+    }
+
     log::info!(
         "🚩 Build completed: [./{}]",
         config
@@ -379,25 +416,25 @@ pub fn build_desktop(config: &CrateConfig, _is_serve: bool) -> Result<BuildResul
     })
 }
 
+fn create_assets_head(config: &CrateConfig) -> Result<()> {
+    let manifest = config.asset_manifest();
+    let mut file = File::create(config.out_dir.join("__assets_head.html"))?;
+    file.write_all(manifest.head().as_bytes())?;
+    Ok(())
+}
+
 fn prettier_build(cmd: subprocess::Exec) -> anyhow::Result<Vec<Diagnostic>> {
     let mut warning_messages: Vec<Diagnostic> = vec![];
 
-    let pb = ProgressBar::new_spinner();
+    let mut pb = ProgressBar::new_spinner();
     pb.enable_steady_tick(Duration::from_millis(200));
+    pb = PROGRESS_BARS.add(pb);
     pb.set_style(
         ProgressStyle::with_template("{spinner:.dim.bold} {wide_msg}")
             .unwrap()
             .tick_chars("/|\\- "),
     );
     pb.set_message("💼 Waiting to start build the project...");
-
-    struct StopSpinOnDrop(ProgressBar);
-
-    impl Drop for StopSpinOnDrop {
-        fn drop(&mut self) {
-            self.0.finish_and_clear();
-        }
-    }
 
     let stdout = cmd.detached().stream_stdout()?;
     let reader = std::io::BufReader::new(stdout);
@@ -434,13 +471,17 @@ fn prettier_build(cmd: subprocess::Exec) -> anyhow::Result<Vec<Diagnostic>> {
                     std::process::exit(1);
                 }
             }
-            _ => (), // Unknown message
+            _ => {
+                // Unknown message
+            }
         }
     }
     Ok(warning_messages)
 }
 
-pub fn gen_page(config: &DioxusConfig, serve: bool) -> String {
+pub fn gen_page(config: &CrateConfig, serve: bool, skip_assets: bool) -> String {
+    let _gaurd = WebAssetConfigDropGuard::new();
+
     let crate_root = crate::cargo::crate_root().unwrap();
     let custom_html_file = crate_root.join("index.html");
     let mut html = if custom_html_file.is_file() {
@@ -455,7 +496,7 @@ pub fn gen_page(config: &DioxusConfig, serve: bool) -> String {
         String::from(include_str!("./assets/index.html"))
     };
 
-    let resources = config.web.resource.clone();
+    let resources = config.dioxus_config.web.resource.clone();
 
     let mut style_list = resources.style.unwrap_or_default();
     let mut script_list = resources.script.unwrap_or_default();
@@ -475,6 +516,7 @@ pub fn gen_page(config: &DioxusConfig, serve: bool) -> String {
         ))
     }
     if config
+        .dioxus_config
         .application
         .tools
         .clone()
@@ -482,6 +524,10 @@ pub fn gen_page(config: &DioxusConfig, serve: bool) -> String {
         .contains_key("tailwindcss")
     {
         style_str.push_str("<link rel=\"stylesheet\" href=\"/{base_path}/tailwind.css\">\n");
+    }
+    if !skip_assets {
+        let manifest = config.asset_manifest();
+        style_str.push_str(&manifest.head());
     }
 
     replace_or_insert_before("{style_include}", &style_str, "</head", &mut html);
@@ -503,11 +549,11 @@ pub fn gen_page(config: &DioxusConfig, serve: bool) -> String {
         );
     }
 
-    let base_path = match &config.web.app.base_path {
+    let base_path = match &config.dioxus_config.web.app.base_path {
         Some(path) => path,
         None => ".",
     };
-    let app_name = &config.application.name;
+    let app_name = &config.dioxus_config.application.name;
     // Check if a script already exists
     if html.contains("{app_name}") && html.contains("{base_path}") {
         html = html.replace("{app_name}", app_name);
@@ -532,6 +578,7 @@ pub fn gen_page(config: &DioxusConfig, serve: bool) -> String {
     }
 
     let title = config
+        .dioxus_config
         .web
         .app
         .title
@@ -700,4 +747,43 @@ fn build_assets(config: &CrateConfig) -> Result<Vec<PathBuf>> {
     // SASS END
 
     Ok(result)
+}
+
+/// Process any assets collected from the binary
+fn process_assets(config: &CrateConfig) -> anyhow::Result<()> {
+    let manifest = config.asset_manifest();
+
+    let static_asset_output_dir = PathBuf::from(
+        config
+            .dioxus_config
+            .web
+            .app
+            .base_path
+            .clone()
+            .unwrap_or_default(),
+    );
+    let static_asset_output_dir = config.out_dir.join(static_asset_output_dir);
+
+    manifest.copy_static_assets_to(static_asset_output_dir)?;
+
+    Ok(())
+}
+
+pub(crate) struct WebAssetConfigDropGuard;
+
+impl WebAssetConfigDropGuard {
+    pub fn new() -> Self {
+        // Set up the collect asset config
+        manganis_cli_support::Config::default()
+            .with_assets_serve_location("/")
+            .save();
+        Self {}
+    }
+}
+
+impl Drop for WebAssetConfigDropGuard {
+    fn drop(&mut self) {
+        // Reset the config
+        manganis_cli_support::Config::default().save();
+    }
 }

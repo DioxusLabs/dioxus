@@ -99,9 +99,8 @@ where
         // Create the new future
         let return_value = future(dependencies.out());
 
-        if let Some(task) = return_value.apply(state.cleanup.clone(), cx) {
-            state.task.set(Some(task));
-        }
+        let task = return_value.apply(state.cleanup.clone(), cx);
+        state.task.set(Some(task));
     }
 }
 
@@ -109,15 +108,15 @@ type UseEffectCleanup = Rc<RefCell<Option<Box<dyn FnOnce()>>>>;
 
 /// Something that can be returned from a `use_effect` hook.
 pub trait UseEffectReturn<T> {
-    fn apply(self, oncleanup: UseEffectCleanup, cx: &ScopeState) -> Option<TaskId>;
+    fn apply(self, oncleanup: UseEffectCleanup, cx: &ScopeState) -> TaskId;
 }
 
 impl<T> UseEffectReturn<()> for T
 where
     T: Future<Output = ()> + 'static,
 {
-    fn apply(self, _: UseEffectCleanup, cx: &ScopeState) -> Option<TaskId> {
-        Some(cx.push_future(self))
+    fn apply(self, _: UseEffectCleanup, cx: &ScopeState) -> TaskId {
+        cx.push_future(self)
     }
 }
 
@@ -128,12 +127,11 @@ where
     T: Future<Output = F> + 'static,
     F: FnOnce() + 'static,
 {
-    fn apply(self, oncleanup: UseEffectCleanup, cx: &ScopeState) -> Option<TaskId> {
-        let task = cx.push_future(async move {
+    fn apply(self, oncleanup: UseEffectCleanup, cx: &ScopeState) -> TaskId {
+        cx.push_future(async move {
             let cleanup = self.await;
             *oncleanup.borrow_mut() = Some(Box::new(cleanup) as Box<dyn FnOnce()>);
-        });
-        Some(task)
+        })
     }
 }
 

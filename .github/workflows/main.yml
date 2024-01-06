@@ -39,6 +39,7 @@ jobs:
     steps:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - uses: ilammy/setup-nasm@v1
       - run: sudo apt-get update
       - run: sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev
       - uses: actions/checkout@v4
@@ -51,6 +52,7 @@ jobs:
     steps:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - uses: ilammy/setup-nasm@v1
       - run: sudo apt-get update
       - run: sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev
       - uses: davidB/rust-cargo-make@v1
@@ -66,6 +68,7 @@ jobs:
     steps:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - uses: ilammy/setup-nasm@v1
       - run: rustup component add rustfmt
       - uses: actions/checkout@v4
       - run: cargo fmt --all -- --check
@@ -77,6 +80,7 @@ jobs:
     steps:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - uses: ilammy/setup-nasm@v1
       - run: sudo apt-get update
       - run: sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev
       - run: rustup component add clippy
@@ -124,6 +128,8 @@ jobs:
             }
 
     steps:
+      - uses: actions/checkout@v4
+      - uses: ilammy/setup-nasm@v1
       - name: install stable
         uses: dtolnay/rust-toolchain@master
         with:

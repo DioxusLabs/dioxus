@@ -33,7 +33,7 @@ rsx! {
     }
 
     // No children, minimal props
-    img { class: "mb-6 mx-auto h-24", src: "artemis-assets/images/friends.png", alt: "" }
+    img { class: "mb-6 mx-auto h-24", src: "artemis-assets/images/friends.png" }
 
     // One level compression
     div {

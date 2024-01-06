@@ -540,7 +540,9 @@ impl<S: AnyStorage> Owner<S> {
             #[cfg(any(debug_assertions, feature = "debug_ownership"))]
             created_at: std::panic::Location::caller(),
             _marker: PhantomData,
-        }
+        };
+        self.owned.borrow_mut().push(location);
+        key
     }
 }
 
