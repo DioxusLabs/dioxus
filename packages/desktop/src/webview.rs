@@ -103,12 +103,13 @@ impl WebviewInstance {
             .with_file_drop_handler(file_drop_handler)
             .with_web_context(&mut web_context);
 
-        #[cfg(windows)]
-        {
-            // Windows has a platform specific settings to disable the browser shortcut keys
-            use wry::WebViewBuilderExtWindows;
-            webview = webview.with_browser_accelerator_keys(false);
-        }
+        // This was removed from wry, I'm not sure what replaced it
+        // #[cfg(windows)]
+        // {
+        //     // Windows has a platform specific settings to disable the browser shortcut keys
+        //     use wry::WebViewBuilderExtWindows;
+        //     webview = webview.with_browser_accelerator_keys(false);
+        // }
 
         if let Some(color) = cfg.background_color {
             webview = webview.with_background_color(color);
