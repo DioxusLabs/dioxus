@@ -2,7 +2,7 @@
 
 use dioxus::prelude::Props;
 use dioxus_core::{MountedAttribute, *};
-use std::{cell::Cell, cfg, collections::HashSet};
+use std::{cfg, collections::HashSet};
 
 fn random_ns() -> Option<&'static str> {
     let namespace = rand::random::<u8>() % 2;
