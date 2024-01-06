@@ -66,7 +66,9 @@ hot_reload = [
     "web-sys/WebSocket",
     "web-sys/Location",
 ]
-eval = []
+eval = [
+    "dioxus-html/eval",
+]
 
 [dev-dependencies]
 dioxus = { workspace = true }

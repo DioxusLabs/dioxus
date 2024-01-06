@@ -1,15 +1,23 @@
+use crate::dioxus_elements::SerializedMouseData;
 use dioxus::prelude::*;
 use dioxus_core::ElementId;
+use dioxus_elements::SerializedHtmlEventConverter;
 use std::rc::Rc;
 
 #[test]
 fn miri_rollover() {
+    set_event_converter(Box::new(SerializedHtmlEventConverter));
     let mut dom = VirtualDom::new(App);
 
     _ = dom.rebuild();
 
     for _ in 0..3 {
-        dom.handle_event("click", Rc::new(MouseData::default()), ElementId(2), true);
+        dom.handle_event(
+            "click",
+            Rc::new(PlatformEventData::new(Box::<SerializedMouseData>::default())),
+            ElementId(2),
+            true,
+        );
         dom.process_events();
         _ = dom.render_immediate();
     }

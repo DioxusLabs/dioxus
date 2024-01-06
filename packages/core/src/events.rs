@@ -28,6 +28,27 @@ pub struct Event<T: 'static + ?Sized> {
 }
 
 impl<T> Event<T> {
+    /// Map the event data to a new type
+    ///
+    /// # Example
+    ///
+    /// ```rust, ignore
+    /// rsx! {
+    ///    button {
+    ///       onclick: move |evt: Event<FormData>| {
+    ///          let data = evt.map(|data| data.value());
+    ///          assert_eq!(data.inner(), "hello world");
+    ///       }
+    ///    }
+    /// }
+    /// ```
+    pub fn map<U: 'static, F: FnOnce(&T) -> U>(&self, f: F) -> Event<U> {
+        Event {
+            data: Rc::new(f(&self.data)),
+            propagates: self.propagates.clone(),
+        }
+    }
+
     /// Prevent this event from continuing to bubble up the tree to parent elements.
     ///
     /// # Example
