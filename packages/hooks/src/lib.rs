@@ -81,6 +81,9 @@ pub use use_coroutine::*;
 mod use_future;
 pub use use_future::*;
 
+mod use_stream;
+pub use use_stream::*;
+
 mod use_effect;
 pub use use_effect::*;
 
