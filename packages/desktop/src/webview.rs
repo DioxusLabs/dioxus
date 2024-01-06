@@ -106,7 +106,7 @@ impl WebviewInstance {
         #[cfg(windows)]
         {
             // Windows has a platform specific settings to disable the browser shortcut keys
-            use wry::webview::WebViewBuilderExtWindows;
+            use wry::WebViewBuilderExtWindows;
             webview = webview.with_browser_accelerator_keys(false);
         }
 
