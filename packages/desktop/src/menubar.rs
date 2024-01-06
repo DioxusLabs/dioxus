@@ -13,8 +13,11 @@ pub fn build_menu_bar(menu: Menu, window: &Window) {
     menu.init_for_hwnd(window);
 
     #[cfg(target_os = "linux")]
-    menu.init_for_gtk_window(window, None);
-    // menu.init_for_gtk_window(window, Some(&vertical_gtk_box));
+    {
+        use tao::platform::unix::WindowExtUnix;
+        menu.init_for_gtk_window(window, None);
+        // menu.init_for_gtk_window(window, Some(&vertical_gtk_box));
+    }
 
     #[cfg(target_os = "macos")]
     menu.init_for_nsapp();

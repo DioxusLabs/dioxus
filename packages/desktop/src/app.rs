@@ -331,14 +331,14 @@ impl<P: 'static> App<P> {
 pub fn hide_app_window(webview: &wry::WebView) {
     #[cfg(target_os = "windows")]
     {
-        use wry::application::platform::windows::WindowExtWindows;
+        use tao::platform::windows::WindowExtWindows;
         window.set_visible(false);
         window.set_skip_taskbar(true);
     }
 
     #[cfg(target_os = "linux")]
     {
-        use wry::application::platform::unix::WindowExtUnix;
+        use tao::platform::unix::WindowExtUnix;
         window.set_visible(false);
     }
 
