@@ -289,6 +289,10 @@ pub async fn load_plugin(
 
     // If the application has these directories they might be seperate from the crate root
     if let Some(out_dir) = config.application.out_dir.as_ref() {
+        if !out_dir.is_dir() {
+            tokio::fs::create_dir(out_dir).await?;
+        }
+
         ctx_pointer = ctx_pointer.preopened_dir(
             Dir::open_ambient_dir(out_dir, wasmtime_wasi::sync::ambient_authority()).unwrap(),
             DirPerms::all(),
@@ -298,6 +302,10 @@ pub async fn load_plugin(
     }
 
     if let Some(asset_dir) = config.application.asset_dir.as_ref() {
+        if !asset_dir.is_dir() {
+            tokio::fs::create_dir(asset_dir).await?;
+        }
+
         ctx_pointer = ctx_pointer.preopened_dir(
             Dir::open_ambient_dir(asset_dir, wasmtime_wasi::sync::ambient_authority()).unwrap(),
             DirPerms::all(),
