@@ -5,7 +5,7 @@
 
 mod app;
 mod assets;
-mod cfg;
+mod config;
 mod desktop_context;
 mod edits;
 mod element;
@@ -15,7 +15,6 @@ mod events;
 mod file_upload;
 mod hooks;
 mod ipc;
-mod menubar;
 mod protocol;
 mod query;
 mod shortcut;
@@ -25,8 +24,13 @@ mod webview;
 #[cfg(feature = "collect-assets")]
 mod collect_assets;
 
+// mobile shortcut is only supported on mobile platforms
 #[cfg(any(target_os = "ios", target_os = "android"))]
 mod mobile_shortcut;
+
+// menu bar is only supported on desktop platforms
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+mod menubar;
 
 // The main entrypoint for this crate
 pub use launch::*;
@@ -41,7 +45,7 @@ pub use wry;
 
 // Public exports
 pub use assets::AssetRequest;
-pub use cfg::{Config, WindowCloseBehaviour};
+pub use config::{Config, WindowCloseBehaviour};
 pub use desktop_context::{
     window, DesktopContext, DesktopService, WryEventHandler, WryEventHandlerId,
 };

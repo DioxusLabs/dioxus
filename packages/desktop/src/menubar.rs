@@ -1,6 +1,12 @@
 use muda::{Menu, PredefinedMenuItem, Submenu};
 use tao::window::Window;
 
+pub fn build_menu(window: &Window, default_menu_bar: bool) {
+    if default_menu_bar {
+        build_menu_bar(build_default_menu_bar(), window)
+    }
+}
+
 #[allow(unused)]
 pub fn build_menu_bar(menu: Menu, window: &Window) {
     #[cfg(target_os = "windows")]

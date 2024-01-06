@@ -1,5 +1,5 @@
 use crate::{
-    cfg::{Config, WindowCloseBehaviour},
+    config::{Config, WindowCloseBehaviour},
     desktop_context::WindowEventHandlers,
     element::DesktopElement,
     file_upload::FileDialogRequest,

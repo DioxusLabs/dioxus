@@ -28,10 +28,8 @@ impl WebviewInstance {
         let window = cfg.window.clone().build(&shared.target).unwrap();
 
         // TODO: allow users to specify their own menubars, again :/
-        if cfg.enable_default_menu_bar {
-            use crate::menubar::*;
-            build_menu_bar(build_default_menu_bar(), &window);
-        }
+        #[cfg(not(any(target_os = "android", target_os = "ios")))]
+        crate::menubar::build_menu(&window, cfg.enable_default_menu_bar);
 
         // We assume that if the icon is None in cfg, then the user just didnt set it
         if cfg.window.window.window_icon.is_none() {
