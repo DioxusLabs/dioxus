@@ -1,4 +1,4 @@
-use wasm_bindgen::JsCast;use crate::dom::UiEvent;
+use crate::dom::UiEvent;
 use crate::dom::WebsysDom;
 use dioxus_core::prelude::*;
 use dioxus_core::WriteMutations;
@@ -9,6 +9,7 @@ use dioxus_html::PlatformEventData;
 use dioxus_interpreter_js::get_node;
 use dioxus_interpreter_js::minimal_bindings;
 use dioxus_interpreter_js::save_template;
+use wasm_bindgen::JsCast;
 use wasm_bindgen::JsValue;
 
 impl WebsysDom {

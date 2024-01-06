@@ -244,7 +244,7 @@ pub async fn run_with_props<T: Clone + 'static>(
     loop {
         tracing::trace!("waiting for work");
 
-        // if virtualdom has nothing, wait for it to have something before requesting idle time
+        // if virtual dom has nothing, wait for it to have something before requesting idle time
         // if there is work then this future resolves immediately.
         let (mut res, template) = {
             let work = dom.wait_for_work().fuse();
