@@ -382,7 +382,7 @@ impl VComponent {
     /// fn(Scope<Props>) -> Element;
     /// async fn(Scope<Props<'_>>) -> Element;
     /// ```
-    pub fn new<P>(&self, component: fn(P) -> Element, props: P, fn_name: &'static str) -> Self
+    pub fn new<P>(component: fn(P) -> Element, props: P, fn_name: &'static str) -> Self
     where
         // The properties must be valid until the next bump frame
         P: Properties,
