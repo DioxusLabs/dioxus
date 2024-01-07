@@ -168,6 +168,12 @@ impl<T> Clone for EventHandler<T> {
     }
 }
 
+impl<T> PartialEq for EventHandler<T> {
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.callback, &other.callback)
+    }
+}
+
 impl<T> Default for EventHandler<T> {
     fn default() -> Self {
         Self {
