@@ -615,13 +615,8 @@ Finally, call `.build()` to create the instance of `{name}`.
             }
 
             let can_memoize = match are_there_generics {
-                true => quote! { false  },
+                true => quote! { false },
                 false => quote! { self == other },
-            };
-
-            let is_static = match are_there_generics {
-                true => quote! { false  },
-                false => quote! { true },
             };
 
             Ok(quote! {
@@ -657,7 +652,6 @@ Finally, call `.build()` to create the instance of `{name}`.
                 #b_generics_where_extras_predicates
                 {
                     type Builder = #builder_name #generics_with_empty;
-                    const IS_STATIC: bool = #is_static;
                     fn builder() -> Self::Builder {
                         #name::builder()
                     }
