@@ -78,11 +78,9 @@ impl HostToml for PluginRuntimeState {
         Ok(self.clone_handle(&key))
     }
 
-    /// Only is called when [`Resource`] detects the [`Toml`] instance is not being called
-    /// iirc
     fn drop(&mut self, toml: Resource<Toml>) -> wasmtime::Result<()> {
+        // Probably don't need this how it's being used atm but good to check
         if toml.owned() {
-            // Probably don't need this how it's being used atm but probably good to check
             self.tomls.remove(toml.rep() as usize);
         }
         Ok(())
@@ -147,7 +145,7 @@ impl ImportHost for PluginRuntimeState {
             match PLUGINS_CONFIG.lock().await.watcher.watch_path.as_ref() {
                 Some(paths) => paths
                     .iter()
-                    .map(|f| f.to_str().unwrap_or_default().to_string())
+                    .filter_map(|f| f.to_str().map(ToString::to_string))
                     .collect(),
                 None => vec![],
             },

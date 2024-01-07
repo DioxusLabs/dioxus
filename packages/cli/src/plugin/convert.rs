@@ -1,6 +1,6 @@
 use super::interface::{plugins::main::toml::*, PluginRuntimeState};
 use async_trait::async_trait;
-use ext_toml::value::Map;
+use ext_toml::value::Table;
 use ext_toml::Value;
 use toml as ext_toml;
 use wasmtime::component::Resource;
@@ -176,10 +176,13 @@ impl Convert<ext_toml::value::Offset> for Offset {
     fn convert(self) -> ext_toml::value::Offset {
         match self {
             Offset::Z => ext_toml::value::Offset::Z,
-            Offset::Custom((hours, minutes)) => ext_toml::value::Offset::Custom { hours, minutes },
+            Offset::Custom((hours, minutes)) => ext_toml::value::Offset::Custom {
+                minutes: (minutes as i16) + (hours * 80) as i16,
+            },
         }
     }
 }
+
 impl Convert<Date> for ext_toml::value::Date {
     fn convert(self) -> Date {
         let ext_toml::value::Date { year, month, day } = self;
@@ -187,11 +190,14 @@ impl Convert<Date> for ext_toml::value::Date {
     }
 }
 
+// This is a bit ridiculous
 impl Convert<Offset> for ext_toml::value::Offset {
     fn convert(self) -> Offset {
         match self {
             ext_toml::value::Offset::Z => Offset::Z,
-            ext_toml::value::Offset::Custom { hours, minutes } => Offset::Custom((hours, minutes)),
+            ext_toml::value::Offset::Custom { minutes } => {
+                Offset::Custom(((minutes / 60) as i8, (minutes % 60) as u8))
+            }
         }
     }
 }
@@ -213,7 +219,7 @@ impl ConvertWithState<Value> for TomlValue {
                 Value::Array(new_array)
             }
             TomlValue::Table(t) => {
-                let mut table = Map::new();
+                let mut table = Table::new();
                 for (key, value) in t {
                     let converted = state.get_toml(value).convert_with_state(state).await;
                     table.insert(key, converted);

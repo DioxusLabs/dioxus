@@ -4,7 +4,7 @@ use std::{
     collections::HashMap,
     path::{Path, PathBuf},
 };
-use toml::value::Map;
+use toml::value::Table;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DioxusConfig {
@@ -601,5 +601,5 @@ pub struct PluginConfigInfo {
 }
 
 fn default_plugin_config() -> toml::Value {
-    toml::Value::Table(Map::new())
+    toml::Value::Table(Table::new())
 }
