@@ -661,7 +661,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                     fn builder() -> Self::Builder {
                         #name::builder()
                     }
-                    unsafe fn memoize(&self, other: &Self) -> bool {
+                    fn memoize(&self, other: &Self) -> bool {
                         #can_memoize
                     }
                 }

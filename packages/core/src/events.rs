@@ -156,7 +156,16 @@ impl<T: std::fmt::Debug> std::fmt::Debug for Event<T> {
 /// ```
 pub struct EventHandler<T = ()> {
     pub(crate) origin: ScopeId,
-    pub(super) callback: RefCell<Option<ExternalListenerCallback<T>>>,
+    pub(super) callback: Rc<RefCell<Option<ExternalListenerCallback<T>>>>,
+}
+
+impl<T> Clone for EventHandler<T> {
+    fn clone(&self) -> Self {
+        Self {
+            origin: self.origin,
+            callback: self.callback.clone(),
+        }
+    }
 }
 
 impl<T> Default for EventHandler<T> {
@@ -173,9 +182,9 @@ type ExternalListenerCallback<T> = Box<dyn FnMut(T)>;
 impl<T> EventHandler<T> {
     /// Create a new [`EventHandler`] from an [`FnMut`]
     pub fn new(mut f: impl FnMut(T) + 'static) -> EventHandler<T> {
-        let callback = RefCell::new(Some(Box::new(move |event: T| {
+        let callback = Rc::new(RefCell::new(Some(Box::new(move |event: T| {
             f(event);
-        }) as Box<dyn FnMut(T)>));
+        }) as Box<dyn FnMut(T)>)));
         EventHandler {
             callback,
             origin: current_scope_id().expect("to be in a dioxus runtime"),
