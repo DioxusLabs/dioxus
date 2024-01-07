@@ -220,7 +220,7 @@ impl ToTokens for ContentField {
                 #s.to_string()
             }),
             ContentField::OnHandlerRaw(e) => tokens.append_all(quote! {
-                ::dioxus::core::Attribute::EventHandler(EventHandler::new(#e))
+                EventHandler::new(#e)
             }),
         }
     }
