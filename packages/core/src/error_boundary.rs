@@ -287,8 +287,8 @@ fn default_handler(error: CapturedError) -> Element {
     Some(VNode::new(
         None,
         TEMPLATE,
-        Vec::with_capacity(1usize),
-        vec![error.to_string().into_dyn_node()],
+        Box::new([Default::default(); 1]),
+        Box::new([error.to_string().into_dyn_node()]),
         Default::default(),
     ))
 }
@@ -460,8 +460,8 @@ pub fn ErrorBoundary(props: ErrorBoundaryProps) -> Element {
             VNode::new(
                 None,
                 TEMPLATE,
-                Vec::with_capacity(1usize),
-                vec![(props.children).into_dyn_node()],
+                Box::new([Default::default(); 1]),
+                Box::new([(props.children).into_dyn_node()]),
                 Default::default(),
             )
         }),

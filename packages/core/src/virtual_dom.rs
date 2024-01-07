@@ -317,9 +317,9 @@ impl VirtualDom {
     ///
     /// Whenever the Runtime "works", it will re-render this scope
     pub fn mark_dirty(&mut self, id: ScopeId) {
-        if let Some(scope) = self.get_scope(id) {
-            let height = scope.context().height();
-            tracing::trace!("Marking scope {:?} ({}) as dirty", id, scope.context().name);
+        if let Some(context) = self.runtime.get_context(id) {
+            let height = context.height();
+            tracing::trace!("Marking scope {:?} ({}) as dirty", id, context.name);
             self.dirty_scopes.insert(DirtyScope { height, id });
         }
     }
@@ -504,7 +504,7 @@ impl VirtualDom {
     /// Replace a template at runtime. This will re-render all components that use this template.
     /// This is the primitive that enables hot-reloading.
     ///
-    /// The caller must ensure that the template refrences the same dynamic attributes and nodes as the original template.
+    /// The caller must ensure that the template references the same dynamic attributes and nodes as the original template.
     ///
     /// This will only replace the the parent template, not any nested templates.
     pub fn replace_template(&mut self, template: Template) {
@@ -619,9 +619,7 @@ impl VirtualDom {
         loop {
             // Next, diff any dirty scopes
             // We choose not to poll the deadline since we complete pretty quickly anyways
-            if let Some(dirty) = self.dirty_scopes.iter().next().cloned() {
-                self.dirty_scopes.remove(&dirty);
-
+            while let Some(dirty) = self.dirty_scopes.pop_first() {
                 // If the scope doesn't exist for whatever reason, then we should skip it
                 if !self.scopes.contains(dirty.id.0) {
                     continue;
@@ -633,11 +631,6 @@ impl VirtualDom {
                     let new_nodes = self.run_scope(dirty.id);
                     self.diff_scope(dirty.id, new_nodes, to);
                 }
-            }
-
-            // If there's more work, then just continue, plenty of work to do
-            if !self.dirty_scopes.is_empty() {
-                continue;
             }
 
             // Poll the suspense leaves in the meantime

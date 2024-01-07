@@ -4,6 +4,7 @@ use crate::Properties;
 use crate::{arena::ElementId, Element, Event, ScopeId};
 use std::ops::Deref;
 use std::rc::Rc;
+use std::vec;
 use std::{
     any::{Any, TypeId},
     cell::{Cell, RefCell},
@@ -53,16 +54,16 @@ pub struct VNodeInner {
 
     /// The IDs for the roots of this template - to be used when moving the template around and removing it from
     /// the actual Dom
-    pub root_ids: RefCell<Vec<ElementId>>,
+    pub root_ids: RefCell<Box<[ElementId]>>,
 
     /// The static nodes and static descriptor of the template
     pub template: Cell<Template>,
 
     /// The dynamic parts of the template
-    pub dynamic_nodes: Vec<DynamicNode>,
+    pub dynamic_nodes: Box<[DynamicNode]>,
 
     /// The dynamic parts of the template
-    pub dynamic_attrs: Vec<Attribute>,
+    pub dynamic_attrs: Box<[Attribute]>,
 }
 
 /// A reference to a template along with any context needed to hydrate it
@@ -93,8 +94,8 @@ impl VNode {
             key: None,
             parent: Default::default(),
             root_ids: Default::default(),
-            dynamic_nodes: Vec::new(),
-            dynamic_attrs: Vec::new(),
+            dynamic_nodes: Box::new([]),
+            dynamic_attrs: Box::new([]),
             template: Cell::new(Template {
                 name: "dioxus-empty",
                 roots: &[],
@@ -108,9 +109,9 @@ impl VNode {
     pub fn new(
         key: Option<String>,
         template: Template,
-        root_ids: Vec<ElementId>,
-        dynamic_nodes: Vec<DynamicNode>,
-        dynamic_attrs: Vec<Attribute>,
+        root_ids: Box<[ElementId]>,
+        dynamic_nodes: Box<[DynamicNode]>,
+        dynamic_attrs: Box<[Attribute]>,
     ) -> Self {
         Self(Rc::new(VNodeInner {
             key,

@@ -149,9 +149,9 @@ impl VirtualDom {
         // Make sure the roots get transferred over while we're here
         {
             let mut right = right_template.root_ids.borrow_mut();
-            right.clear();
-            for &element in left_template.root_ids.borrow().iter() {
-                right.push(element);
+            let left = left_template.root_ids.borrow();
+            for (from, into) in left.iter().zip(right.iter_mut()) {
+                *into = *from;
             }
         }
     }

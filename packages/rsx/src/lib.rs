@@ -256,9 +256,9 @@ impl<'a> ToTokens for TemplateRenderer<'a> {
             ::dioxus::core::VNode::new(
                 #key_tokens,
                 TEMPLATE,
-                Vec::with_capacity(#root_count),
-                vec![ #( #node_printer ),* ],
-                vec![ #( #dyn_attr_printer ),* ],
+                Box::new([Default::default();#root_count]),
+                Box::new([ #( #node_printer ),* ]),
+                Box::new([ #( #dyn_attr_printer ),* ]),
             )
         });
     }

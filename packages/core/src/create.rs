@@ -76,7 +76,7 @@ impl VirtualDom {
 
     /// Create this template and write its mutations
     pub(crate) fn create(&mut self, node: &VNode, to: &mut impl WriteMutations) -> usize {
-        // check for a overriden template
+        // check for a overridden template
         #[cfg(debug_assertions)]
         {
             let (path, byte_index) = node.template.get().name.rsplit_once(':').unwrap();
@@ -86,14 +86,14 @@ impl VirtualDom {
                 .and_then(|map| map.get(&byte_index.parse().unwrap()))
             {
                 node.template.set(*template);
-            }
-        }
 
-        // Initialize the root nodes slice
-        {
-            let mut nodes_mut = node.root_ids.borrow_mut();
-            let len = node.template.get().roots.len();
-            nodes_mut.resize(len, ElementId::default());
+                // Initialize the root nodes slice if it was changed
+                let mut nodes_mut = node.root_ids.borrow_mut();
+                let len = node.template.get().roots.len();
+                if nodes_mut.len() != len {
+                    *nodes_mut = vec![ElementId::default(); len].into_boxed_slice();
+                };
+            }
         };
 
         // The best renderers will have templates prehydrated and registered
