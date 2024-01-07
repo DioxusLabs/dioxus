@@ -104,7 +104,6 @@ impl_event! {
     onmouseup
 }
 
-
 impl MouseData {
     /// Create a new instance of MouseData
     pub fn new(inner: impl HasMouseData + 'static) -> Self {
