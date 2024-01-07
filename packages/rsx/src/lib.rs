@@ -201,7 +201,7 @@ impl<'a> ToTokens for TemplateRenderer<'a> {
         };
 
         let key_tokens = match key {
-            Some(tok) => quote! { Some( #tok.to_string() ) },
+            Some(tok) => quote! { Some( #tok ) },
             None => quote! { None },
         };
 

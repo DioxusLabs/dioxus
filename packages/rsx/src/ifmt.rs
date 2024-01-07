@@ -65,6 +65,41 @@ impl IfmtInput {
                 }
             })
     }
+
+    /// Try to convert this into a single _.to_string() call if possible
+    ///
+    /// Using "{single_expression}" is pretty common, but you don't need to go through the whole format! machinery for that, so we optimize it here.
+    fn try_to_string(&self) -> Option<TokenStream> {
+        let mut single_dynamic = None;
+        for segment in &self.segments {
+            match segment {
+                Segment::Literal(literal) => {
+                    if !literal.is_empty() {
+                        return None;
+                    }
+                }
+                Segment::Formatted(FormattedSegment {
+                    segment,
+                    format_args,
+                }) => {
+                    if format_args.is_empty() {
+                        match single_dynamic {
+                            Some(current_string) => {
+                                single_dynamic =
+                                    Some(quote!(#current_string + &segment.to_string()));
+                            }
+                            None => {
+                                single_dynamic = Some(quote!(#segment.to_string()));
+                            }
+                        }
+                    } else {
+                        return None;
+                    }
+                }
+            }
+        }
+        single_dynamic
+    }
 }
 
 impl FromStr for IfmtInput {
@@ -141,6 +176,12 @@ impl FromStr for IfmtInput {
 
 impl ToTokens for IfmtInput {
     fn to_tokens(&self, tokens: &mut TokenStream) {
+        // Try to turn it into a single _.to_string() call
+        if let Some(single_dynamic) = self.try_to_string() {
+            tokens.extend(single_dynamic);
+            return;
+        }
+
         // build format_literal
         let mut format_literal = String::new();
         let mut expr_counter = 0;
@@ -201,7 +242,7 @@ impl ToTokens for IfmtInput {
             .map(|ident| quote!(#ident = #ident));
 
         quote! {
-            format_args!(
+            format!(
                 #format_literal
                 #(, #positional_args)*
                 #(, #named_args)*

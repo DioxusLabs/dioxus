@@ -155,7 +155,7 @@ impl ToTokens for ElementAttrValue {
 impl ElementAttrValue {
     fn to_str_expr(&self) -> Option<TokenStream2> {
         match self {
-            ElementAttrValue::AttrLiteral(lit) => Some(quote!(#lit.to_string())),
+            ElementAttrValue::AttrLiteral(lit) => Some(quote!(#lit)),
             ElementAttrValue::AttrOptionalExpr { value, .. } => value.to_str_expr(),
             ElementAttrValue::AttrExpr(expr) => Some(quote!(#expr.to_string())),
             _ => None,

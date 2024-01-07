@@ -122,7 +122,7 @@ impl ToTokens for BodyNode {
             BodyNode::Element(el) => el.to_tokens(tokens),
             BodyNode::Component(comp) => comp.to_tokens(tokens),
             BodyNode::Text(txt) => tokens.append_all(quote! {
-                ::dioxus::core::DynamicNode::Text(::dioxus::core::VText::new(#txt.to_string()))
+                ::dioxus::core::DynamicNode::Text(::dioxus::core::VText::new(#txt))
             }),
             BodyNode::RawExpr(exp) => tokens.append_all(quote! {
                 {
