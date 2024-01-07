@@ -1,7 +1,7 @@
 package plugins:main;
 
 interface definitions {
-  use types.{platform, plugin-info, compile-event, runtime-event, response-event};
+  use types.{platform, plugin-info, command-event, runtime-event, response-event};
   use toml.{toml, toml-value};
 
   /// Get the default layout for the plugin to put
@@ -19,18 +19,22 @@ interface definitions {
   metadata: func() -> plugin-info;
 
   /// Called right before the event given
-  /// These are the compile-time functions like `Build`, `Translate`, etc
-  before-compile-event: func(event: compile-event) -> result;
+  /// This is called when commands like `Build`, `Translate`, etc 
+  /// are called from the CLI
+  before-command-event: func(event: command-event) -> result;
   /// Called right before the event given
   /// These are the runtime-functions like `HotReload` and `Serve`
   before-runtime-event: func(event: runtime-event) -> result<response-event>;
-  
+
   /// Called right after the event given
-  after-compile-event: func(event: compile-event) -> result;
+  /// This is called when commands like `Build`, `Translate`, etc 
+  /// are called from the CLI
+  after-command-event: func(event: command-event) -> result;
   /// Called right after the event given
   after-runtime-event: func(event: runtime-event) -> result<response-event>;
   
-  /// Gives a list of the paths that have been changed
+  /// Gives a list of paths that have changed,
+  /// you can add to the watched list of paths with `watch_path`
   on-watched-paths-change: func(path: list<string>) -> result<response-event>;
 
   
@@ -113,7 +117,7 @@ interface types {
     default-platform: platform,
   }
 
-  enum compile-event {
+  enum command-event {
     build,
     bundle,
     translate,
@@ -136,16 +140,18 @@ interface types {
 interface imports {
   use types.{project-info};
 
+  /// This is used to find out the name of your plugin as well
+  /// as the version of your plugin. The name should be 
   get-project-info: func() -> project-info;
 
   /// Add path to list of watched paths
   watch-path: func(path: string);
 
   /// Try to remove a path from list of watched paths
-  /// returns false if path not in list
+  /// returns an error if path not in list
   remove-watched-path: func(path: string) -> result;
 
-  /// Get list of watched paths
+  /// Get list of currently watched paths
   watched-paths: func() -> list<string>;
 
   /// Set data in a map, is saved between sessions in the lock file
@@ -154,6 +160,7 @@ interface imports {
   /// Grab data from map, returns none if key not in map
   get-data: func(key: string) -> option<list<u8>>;
 
+  /// Sends the input string to whatever logger is currently being used
   log: func(info: string);
 
 }

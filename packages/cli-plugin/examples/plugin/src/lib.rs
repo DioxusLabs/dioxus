@@ -3,9 +3,9 @@ use std::{fs::File, io::Write, path::PathBuf};
 use dioxus_cli_plugin::*;
 use exports::plugins::main::definitions::Guest;
 use plugins::main::{
-    imports::{log, watched_paths},
+    imports::{log, set_data, watched_paths},
     toml::{Toml, TomlValue},
-    types::{CompileEvent, PluginInfo, ResponseEvent, RuntimeEvent},
+    types::{CommandEvent, PluginInfo, ResponseEvent, RuntimeEvent},
 };
 use railwind::parse_to_string;
 use regex::Regex;
@@ -108,6 +108,7 @@ impl Guest for Plugin {
 
     fn register() -> Result<(), ()> {
         log("Registered Tailwind Plugin Successfully!");
+        set_data("Tailwind output", b"that/dir/over/there");
         Ok(())
     }
 
@@ -118,14 +119,14 @@ impl Guest for Plugin {
         }
     }
 
-    fn before_compile_event(_event: CompileEvent) -> Result<(), ()> {
+    fn before_command_event(_event: CommandEvent) -> Result<(), ()> {
         Ok(())
     }
     fn before_runtime_event(_event: RuntimeEvent) -> Result<ResponseEvent, ()> {
         Ok(ResponseEvent::None)
     }
 
-    fn after_compile_event(_event: CompileEvent) -> Result<(), ()> {
+    fn after_command_event(_event: CommandEvent) -> Result<(), ()> {
         gen_tailwind()?;
         Ok(())
     }

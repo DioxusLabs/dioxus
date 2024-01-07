@@ -4,8 +4,8 @@ use std::{fs::create_dir_all, str::FromStr};
 use tauri_bundler::{BundleSettings, PackageSettings, SettingsBuilder};
 
 use crate::plugin::{
-    interface::plugins::main::types::CompileEvent::Bundle as BundleEvent, plugins_after_compile,
-    plugins_before_compile,
+    interface::plugins::main::types::CommandEvent::Bundle as BundleEvent, plugins_after_command,
+    plugins_before_command,
 };
 
 use super::*;
@@ -69,7 +69,7 @@ impl Bundle {
     pub async fn bundle(self, bin: Option<PathBuf>) -> Result<()> {
         let mut crate_config = crate::CrateConfig::new(bin)?;
 
-        plugins_before_compile(BundleEvent).await;
+        plugins_before_command(BundleEvent).await;
 
         // change the release state.
         crate_config.with_release(self.build.release);
@@ -168,7 +168,7 @@ impl Bundle {
     panic!("Failed to bundle project: {}", err);
   });
 
-        plugins_after_compile(BundleEvent).await;
+        plugins_after_command(BundleEvent).await;
 
         Ok(())
     }

@@ -2,8 +2,8 @@ use super::*;
 use crate::{
     cfg::Platform,
     plugin::{
-        interface::plugins::main::types::CompileEvent::Build as BuildEvent, plugins_after_compile,
-        plugins_before_compile,
+        interface::plugins::main::types::CommandEvent::Build as BuildEvent, plugins_after_command,
+        plugins_before_command,
     },
 };
 
@@ -40,7 +40,7 @@ impl Build {
             .platform
             .unwrap_or(crate_config.dioxus_config.application.default_platform);
 
-        plugins_before_compile(BuildEvent).await;
+        plugins_before_command(BuildEvent).await;
 
         match platform {
             Platform::Web => {
@@ -51,7 +51,7 @@ impl Build {
             }
         }
 
-        plugins_after_compile(BuildEvent).await;
+        plugins_after_command(BuildEvent).await;
 
         let temp = gen_page(&crate_config.dioxus_config, false);
 

@@ -5,7 +5,7 @@ use exports::plugins::main::definitions::Guest;
 use plugins::main::{
     imports::{get_project_info, log},
     toml::{Toml, TomlValue},
-    types::{CompileEvent, PluginInfo, ResponseEvent, RuntimeEvent},
+    types::{CommandEvent, PluginInfo, ResponseEvent, RuntimeEvent},
 };
 
 struct CSSMinifer;
@@ -85,7 +85,7 @@ impl Guest for CSSMinifer {
 
     #[doc = " Called right before the event given"]
     #[doc = " These are the compile-time functions like `Build`, `Translate`, etc"]
-    fn before_compile_event(event: CompileEvent) -> Result<(), ()> {
+    fn before_command_event(event: CommandEvent) -> Result<(), ()> {
         Ok(())
     }
 
@@ -96,7 +96,7 @@ impl Guest for CSSMinifer {
     }
 
     #[doc = " Called right after the event given"]
-    fn after_compile_event(event: CompileEvent) -> Result<(), ()> {
+    fn after_command_event(event: CommandEvent) -> Result<(), ()> {
         minify_css()?;
         Ok(())
     }
