@@ -18,28 +18,13 @@ pub trait RenderedElementBacking: std::any::Any {
 
     /// Get the bounding rectangle of the element relative to the viewport (this does not include the scroll position)
     #[allow(clippy::type_complexity)]
-    fn get_client_rect(&self) -> Pin<Box<dyn Future<Output = MountedResult<Rect<f64, f64>>>>> {
-        Box::pin(async { Err(MountedError::NotSupported) })
-    }
+    fn get_client_rect(&self) -> Pin<Box<dyn Future<Output = Rect<f64, f64>>>>;
 
     /// Scroll to make the element visible
-    fn scroll_to(
-        &self,
-        _behavior: ScrollBehavior,
-    ) -> Pin<Box<dyn Future<Output = MountedResult<()>>>> {
-        Box::pin(async { Err(MountedError::NotSupported) })
-    }
+    fn scroll_to(&self, _behavior: ScrollBehavior) -> Pin<Box<dyn Future<Output = ()>>>;
 
     /// Set the focus on the element
-    fn set_focus(&self, _focus: bool) -> Pin<Box<dyn Future<Output = MountedResult<()>>>> {
-        Box::pin(async { Err(MountedError::NotSupported) })
-    }
-}
-
-impl RenderedElementBacking for () {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
+    fn set_focus(&self, _focus: bool) -> Pin<Box<dyn Future<Output = ()>>>;
 }
 
 /// The way that scrolling should be performed
@@ -69,26 +54,24 @@ impl<E: RenderedElementBacking> From<E> for MountedData {
 impl MountedData {
     /// Create a new MountedData
     pub fn new(registry: impl RenderedElementBacking + 'static) -> Self {
+        println!("MountedData::new");
         Self {
             inner: Box::new(registry),
         }
     }
 
     /// Get the bounding rectangle of the element relative to the viewport (this does not include the scroll position)
-    pub async fn get_client_rect(&self) -> MountedResult<Rect<f64, f64>> {
+    pub async fn get_client_rect(&self) -> Rect<f64, f64> {
         self.inner.get_client_rect().await
     }
 
     /// Scroll to make the element visible
-    pub fn scroll_to(
-        &self,
-        behavior: ScrollBehavior,
-    ) -> Pin<Box<dyn Future<Output = MountedResult<()>>>> {
+    pub fn scroll_to(&self, behavior: ScrollBehavior) -> Pin<Box<dyn Future<Output = ()>>> {
         self.inner.scroll_to(behavior)
     }
 
     /// Set the focus on the element
-    pub fn set_focus(&self, focus: bool) -> Pin<Box<dyn Future<Output = MountedResult<()>>>> {
+    pub fn set_focus(&self, focus: bool) -> Pin<Box<dyn Future<Output = ()>>> {
         self.inner.set_focus(focus)
     }
 
@@ -108,30 +91,3 @@ impl_event! [
     /// mounted
     onmounted
 ];
-
-/// The MountedResult type for the MountedData
-pub type MountedResult<T> = Result<T, MountedError>;
-
-#[derive(Debug)]
-/// The error type for the MountedData
-pub enum MountedError {
-    /// The renderer does not support the requested operation
-    NotSupported,
-    /// The element was not found
-    OperationFailed(Box<dyn std::error::Error>),
-}
-
-impl Display for MountedError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            MountedError::NotSupported => {
-                write!(f, "The renderer does not support the requested operation")
-            }
-            MountedError::OperationFailed(e) => {
-                write!(f, "The operation failed: {}", e)
-            }
-        }
-    }
-}
-
-impl std::error::Error for MountedError {}

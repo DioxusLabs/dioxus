@@ -5,13 +5,11 @@ use dioxus_router::prelude::*;
 fn main() {
     env_logger::init();
 
-    let cfg = Config::new().with_window(
-        WindowBuilder::new()
-            .with_inner_size(LogicalSize::new(600, 1000))
-            .with_resizable(false),
-    );
+    let window_cfg = WindowBuilder::new()
+        .with_inner_size(LogicalSize::new(600, 1000))
+        .with_resizable(false);
 
-    dioxus_desktop::launch_cfg(App, cfg)
+    Config::new().with_window(window_cfg).launch(App);
 }
 
 #[component]
@@ -41,9 +39,7 @@ fn Footer(cx: Scope) -> Element {
         div {
             Outlet::<Route> { }
 
-            p {
-                "----"
-            }
+            p { "----" }
 
             nav {
                 ul {

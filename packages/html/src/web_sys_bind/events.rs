@@ -421,15 +421,13 @@ impl From<&web_sys::Element> for MountedData {
 impl crate::RenderedElementBacking for web_sys::Element {
     fn get_client_rect(
         &self,
-    ) -> std::pin::Pin<
-        Box<dyn std::future::Future<Output = crate::MountedResult<euclid::Rect<f64, f64>>>>,
-    > {
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = euclid::Rect<f64, f64>>>> {
         let rect = self.get_bounding_client_rect();
-        let result = Ok(euclid::Rect::new(
+        let result = euclid::Rect::new(
             euclid::Point2D::new(rect.left(), rect.top()),
             euclid::Size2D::new(rect.width(), rect.height()),
-        ));
-        Box::pin(async { result })
+        );
+        Box::pin(async move { result })
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
@@ -439,7 +437,7 @@ impl crate::RenderedElementBacking for web_sys::Element {
     fn scroll_to(
         &self,
         behavior: crate::ScrollBehavior,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = crate::MountedResult<()>>>> {
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()>>> {
         match behavior {
             crate::ScrollBehavior::Instant => self.scroll_into_view_with_scroll_into_view_options(
                 web_sys::ScrollIntoViewOptions::new().behavior(web_sys::ScrollBehavior::Instant),
@@ -449,21 +447,13 @@ impl crate::RenderedElementBacking for web_sys::Element {
             ),
         }
 
-        Box::pin(async { Ok(()) })
+        Box::pin(async {})
     }
 
-    fn set_focus(
-        &self,
-        focus: bool,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = crate::MountedResult<()>>>> {
-        let result = self
-            .dyn_ref::<web_sys::HtmlElement>()
-            .ok_or_else(|| crate::MountedError::OperationFailed(Box::new(FocusError(self.into()))))
-            .and_then(|e| {
-                (if focus { e.focus() } else { e.blur() })
-                    .map_err(|err| crate::MountedError::OperationFailed(Box::new(FocusError(err))))
-            });
-        Box::pin(async { result })
+    fn set_focus(&self, focus: bool) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()>>> {
+        let e = self.dyn_ref::<web_sys::HtmlElement>().unwrap();
+        (if focus { e.focus() } else { e.blur() });
+        Box::pin(async { () })
     }
 }
 

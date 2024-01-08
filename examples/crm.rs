@@ -11,8 +11,10 @@ fn main() {
 enum Route {
     #[route("/")]
     ClientList {},
+
     #[route("/new")]
     ClientAdd {},
+
     #[route("/settings")]
     Settings {},
 }

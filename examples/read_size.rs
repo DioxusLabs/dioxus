@@ -2,12 +2,10 @@
 use std::rc::Rc;
 
 use dioxus::{html::geometry::euclid::Rect, prelude::*};
+use dioxus_signals::use_signal;
 
 fn main() {
-    dioxus_desktop::launch_cfg(
-        app,
-        dioxus_desktop::Config::default().with_custom_head(
-            r#"
+    const CUSTOM_HEAD: &str = r#"
 <style type="text/css">
     html, body {
         height: 100%;
@@ -19,41 +17,38 @@ fn main() {
         width: 100%;
     }
 </style>
-"#
-            .to_owned(),
-        ),
+"#;
+
+    dioxus_desktop::launch_cfg(
+        app,
+        dioxus_desktop::Config::default().with_custom_head(CUSTOM_HEAD.to_owned()),
     );
 }
 
 fn app(cx: Scope) -> Element {
-    let div_element: &UseRef<Option<Rc<MountedData>>> = use_ref(cx, || None);
+    let element = use_signal(cx, || None as Option<Rc<MountedData>>);
+    let dimensions = use_signal(cx, || Rect::zero());
 
-    let dimentions = use_ref(cx, Rect::zero);
+    let read_dimensions = move |_| async move {
+        let client_rect: Rect<f64, f64> = element().as_ref().unwrap().get_client_rect().await;
+
+        dimensions.set(client_rect);
+    };
 
     cx.render(rsx!(
         div {
             width: "50%",
             height: "50%",
             background_color: "red",
-            onmounted: move |cx| {
-                div_element.set(Some(cx.inner().clone()));
+            onmounted: move |event| {
+                println!("Mounted.....");
+                element.set(Some(event.inner().clone()))
             },
-            "This element is {dimentions.read():?}"
+            "This element is {dimensions:?}"
         }
 
         button {
-            onclick: move |_| {
-                to_owned![div_element, dimentions];
-                async move {
-                    let read = div_element.read();
-                    let client_rect = read.as_ref().map(|el| el.get_client_rect());
-                    if let Some(client_rect) = client_rect {
-                        if let Ok(rect) = client_rect.await {
-                            dimentions.set(rect);
-                        }
-                    }
-                }
-            },
+            onclick: read_dimensions,
             "Read dimentions"
         }
     ))

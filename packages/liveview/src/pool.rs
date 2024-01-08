@@ -195,7 +195,7 @@ pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), Li
                                     } else {
                                         vdom.handle_event(
                                             &evt.name,
-                                            evt.data.into_any(),
+                                            Rc::new(evt.data.into_any()),
                                             evt.element,
                                             evt.bubbles,
                                         );

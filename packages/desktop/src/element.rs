@@ -1,5 +1,5 @@
 use dioxus_core::ElementId;
-use dioxus_html::{geometry::euclid::Rect, MountedResult, RenderedElementBacking};
+use dioxus_html::{geometry::euclid::Rect, RenderedElementBacking};
 
 use crate::{desktop_context::DesktopContext, query::QueryEngine};
 
@@ -25,12 +25,10 @@ impl RenderedElementBacking for DesktopElement {
     fn get_client_rect(
         &self,
     ) -> std::pin::Pin<
-        Box<
-            dyn futures_util::Future<
-                Output = dioxus_html::MountedResult<dioxus_html::geometry::euclid::Rect<f64, f64>>,
-            >,
-        >,
+        Box<dyn futures_util::Future<Output = dioxus_html::geometry::euclid::Rect<f64, f64>>>,
     > {
+        println!("Get_client_rect");
+
         let script = format!("return window.interpreter.getClientRect({});", self.id.0);
 
         let fut = self
@@ -38,22 +36,24 @@ impl RenderedElementBacking for DesktopElement {
             .new_query::<Option<Rect<f64, f64>>>(&script, self.webview.clone())
             .resolve();
         Box::pin(async move {
-            match fut.await {
-                Ok(Some(rect)) => Ok(rect),
-                Ok(None) => MountedResult::Err(dioxus_html::MountedError::OperationFailed(
-                    Box::new(DesktopQueryError::FailedToQuery),
-                )),
-                Err(err) => {
-                    MountedResult::Err(dioxus_html::MountedError::OperationFailed(Box::new(err)))
-                }
-            }
+            let rect = fut.await.unwrap().unwrap();
+            rect
+            // match fut.await {
+            //     Ok(Some(rect)) => Ok(rect),
+            //     Ok(None) => MountedResult::Err(dioxus_html::MountedError::OperationFailed(
+            //         Box::new(DesktopQueryError::FailedToQuery),
+            //     )),
+            //     Err(err) => {
+            //         MountedResult::Err(dioxus_html::MountedError::OperationFailed(Box::new(err)))
+            //     }
+            // }
         })
     }
 
     fn scroll_to(
         &self,
         behavior: dioxus_html::ScrollBehavior,
-    ) -> std::pin::Pin<Box<dyn futures_util::Future<Output = dioxus_html::MountedResult<()>>>> {
+    ) -> std::pin::Pin<Box<dyn futures_util::Future<Output = ()>>> {
         let script = format!(
             "return window.interpreter.scrollTo({}, {});",
             self.id.0,
@@ -65,22 +65,29 @@ impl RenderedElementBacking for DesktopElement {
             .new_query::<bool>(&script, self.webview.clone())
             .resolve();
         Box::pin(async move {
-            match fut.await {
-                Ok(true) => Ok(()),
-                Ok(false) => MountedResult::Err(dioxus_html::MountedError::OperationFailed(
-                    Box::new(DesktopQueryError::FailedToQuery),
-                )),
-                Err(err) => {
-                    MountedResult::Err(dioxus_html::MountedError::OperationFailed(Box::new(err)))
-                }
-            }
+            fut.await.unwrap();
+            // match fut.await {
+            //     Ok(true) => Ok(()),
+            //     Ok(false) => MountedResult::Err(dioxus_html::MountedError::OperationFailed(
+            //         Box::new(DesktopQueryError::FailedToQuery),
+            //     )),
+            //     Err(err) => {
+            //         MountedResult::Err(dioxus_html::MountedError::OperationFailed(Box::new(err)))
+            //     }
+            // }
+            // match fut.await {
+            //     Ok(true) => Ok(()),
+            //     Ok(false) => MountedResult::Err(dioxus_html::MountedError::OperationFailed(
+            //         Box::new(DesktopQueryError::FailedToQuery),
+            //     )),
+            //     Err(err) => {
+            //         MountedResult::Err(dioxus_html::MountedError::OperationFailed(Box::new(err)))
+            //     }
+            // }
         })
     }
 
-    fn set_focus(
-        &self,
-        focus: bool,
-    ) -> std::pin::Pin<Box<dyn futures_util::Future<Output = dioxus_html::MountedResult<()>>>> {
+    fn set_focus(&self, focus: bool) -> std::pin::Pin<Box<dyn futures_util::Future<Output = ()>>> {
         let script = format!(
             "return window.interpreter.setFocus({}, {});",
             self.id.0, focus
@@ -92,15 +99,16 @@ impl RenderedElementBacking for DesktopElement {
             .resolve();
 
         Box::pin(async move {
-            match fut.await {
-                Ok(true) => Ok(()),
-                Ok(false) => MountedResult::Err(dioxus_html::MountedError::OperationFailed(
-                    Box::new(DesktopQueryError::FailedToQuery),
-                )),
-                Err(err) => {
-                    MountedResult::Err(dioxus_html::MountedError::OperationFailed(Box::new(err)))
-                }
-            }
+            fut.await.unwrap();
+            // match fut.await {
+            //     Ok(true) => Ok(()),
+            //     Ok(false) => MountedResult::Err(dioxus_html::MountedError::OperationFailed(
+            //         Box::new(DesktopQueryError::FailedToQuery),
+            //     )),
+            //     Err(err) => {
+            //         MountedResult::Err(dioxus_html::MountedError::OperationFailed(Box::new(err)))
+            //     }
+            // }
         })
     }
 }

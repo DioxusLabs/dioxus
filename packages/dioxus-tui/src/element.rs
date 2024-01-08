@@ -6,7 +6,7 @@ use std::{
 use dioxus_core::{ElementId, Mutations, VirtualDom};
 use dioxus_html::{
     geometry::euclid::{Point2D, Rect, Size2D},
-    MountedData, MountedError, RenderedElementBacking,
+    MountedData, RenderedElementBacking,
 };
 
 use dioxus_native_core::NodeId;
@@ -61,29 +61,49 @@ impl RenderedElementBacking for TuiElement {
     fn get_client_rect(
         &self,
     ) -> std::pin::Pin<
-        Box<
-            dyn futures::Future<
-                Output = dioxus_html::MountedResult<dioxus_html::geometry::euclid::Rect<f64, f64>>,
-            >,
-        >,
+        Box<dyn futures::Future<Output = dioxus_html::geometry::euclid::Rect<f64, f64>>>,
     > {
-        let layout = self.element().layout();
+        let layout = self.element().layout().unwrap();
         Box::pin(async move {
-            match layout {
-                Some(layout) => {
-                    let x = layout.location.x as f64;
-                    let y = layout.location.y as f64;
-                    let width = layout.size.width as f64;
-                    let height = layout.size.height as f64;
-                    Ok(Rect::new(Point2D::new(x, y), Size2D::new(width, height)))
-                }
-                None => Err(MountedError::OperationFailed(Box::new(TuiElementNotFound))),
-            }
+            // match layout {
+            //     Some(layout) => {
+            let x = layout.location.x as f64;
+            let y = layout.location.y as f64;
+            let width = layout.size.width as f64;
+            let height = layout.size.height as f64;
+            Rect::new(Point2D::new(x, y), Size2D::new(width, height))
+            //     }
+            //     None => Err(MountedError::OperationFailed(Box::new(TuiElementNotFound))),
+            // }
+            // match layout {
+            //     Some(layout) => {
+            //         let x = layout.location.x as f64;
+            //         let y = layout.location.y as f64;
+            //         let width = layout.size.width as f64;
+            //         let height = layout.size.height as f64;
+            //         Ok(Rect::new(Point2D::new(x, y), Size2D::new(width, height)))
+            //     }
+            //     None => Err(MountedError::OperationFailed(Box::new(TuiElementNotFound))),
+            // }
         })
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
         self
+    }
+
+    fn scroll_to(
+        &self,
+        _behavior: dioxus_html::prelude::ScrollBehavior,
+    ) -> std::pin::Pin<Box<dyn futures::prelude::Future<Output = ()>>> {
+        todo!()
+    }
+
+    fn set_focus(
+        &self,
+        _focus: bool,
+    ) -> std::pin::Pin<Box<dyn futures::prelude::Future<Output = ()>>> {
+        todo!()
     }
 }
 

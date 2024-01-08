@@ -245,15 +245,16 @@ impl<P: 'static> App<P> {
         let query = view.desktop_context.query.clone();
 
         // check for a mounted event placeholder and replace it with a desktop specific element
-        let as_any = match data {
+        let as_any: PlatformEventData = match data {
             dioxus_html::EventData::Mounted => {
                 let element = DesktopElement::new(element, view.desktop_context.clone(), query);
-                Rc::new(PlatformEventData::new(Box::new(element)))
+                PlatformEventData::new(Box::new(element))
             }
             _ => data.into_any(),
         };
 
-        view.dom.handle_event(&name, as_any, element, bubbles);
+        view.dom
+            .handle_event(&name, Rc::new(as_any), element, bubbles);
         view.desktop_context.send_edits(view.dom.render_immediate());
     }
 

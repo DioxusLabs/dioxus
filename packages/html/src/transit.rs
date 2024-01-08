@@ -165,58 +165,26 @@ pub enum EventData {
 }
 
 impl EventData {
-    pub fn into_any(self) -> Rc<dyn Any> {
+    pub fn into_any(self) -> PlatformEventData {
         match self {
-            EventData::Mouse(data) => {
-                Rc::new(PlatformEventData::new(Box::new(data))) as Rc<dyn Any>
-            }
-            EventData::Clipboard(data) => {
-                Rc::new(PlatformEventData::new(Box::new(data))) as Rc<dyn Any>
-            }
-            EventData::Composition(data) => {
-                Rc::new(PlatformEventData::new(Box::new(data))) as Rc<dyn Any>
-            }
-            EventData::Keyboard(data) => {
-                Rc::new(PlatformEventData::new(Box::new(data))) as Rc<dyn Any>
-            }
-            EventData::Focus(data) => {
-                Rc::new(PlatformEventData::new(Box::new(data))) as Rc<dyn Any>
-            }
-            EventData::Form(data) => Rc::new(PlatformEventData::new(Box::new(data))) as Rc<dyn Any>,
-            EventData::Drag(data) => Rc::new(PlatformEventData::new(Box::new(data))) as Rc<dyn Any>,
-            EventData::Pointer(data) => {
-                Rc::new(PlatformEventData::new(Box::new(data))) as Rc<dyn Any>
-            }
-            EventData::Selection(data) => {
-                Rc::new(PlatformEventData::new(Box::new(data))) as Rc<dyn Any>
-            }
-            EventData::Touch(data) => {
-                Rc::new(PlatformEventData::new(Box::new(data))) as Rc<dyn Any>
-            }
-            EventData::Scroll(data) => {
-                Rc::new(PlatformEventData::new(Box::new(data))) as Rc<dyn Any>
-            }
-            EventData::Wheel(data) => {
-                Rc::new(PlatformEventData::new(Box::new(data))) as Rc<dyn Any>
-            }
-            EventData::Media(data) => {
-                Rc::new(PlatformEventData::new(Box::new(data))) as Rc<dyn Any>
-            }
-            EventData::Animation(data) => {
-                Rc::new(PlatformEventData::new(Box::new(data))) as Rc<dyn Any>
-            }
-            EventData::Transition(data) => {
-                Rc::new(PlatformEventData::new(Box::new(data))) as Rc<dyn Any>
-            }
-            EventData::Toggle(data) => {
-                Rc::new(PlatformEventData::new(Box::new(data))) as Rc<dyn Any>
-            }
-            EventData::Image(data) => {
-                Rc::new(PlatformEventData::new(Box::new(data))) as Rc<dyn Any>
-            }
-            EventData::Mounted => {
-                Rc::new(PlatformEventData::new(Box::new(MountedData::new(())))) as Rc<dyn Any>
-            }
+            EventData::Mouse(data) => PlatformEventData::new(Box::new(data)),
+            EventData::Clipboard(data) => PlatformEventData::new(Box::new(data)),
+            EventData::Composition(data) => PlatformEventData::new(Box::new(data)),
+            EventData::Keyboard(data) => PlatformEventData::new(Box::new(data)),
+            EventData::Focus(data) => PlatformEventData::new(Box::new(data)),
+            EventData::Form(data) => PlatformEventData::new(Box::new(data)),
+            EventData::Drag(data) => PlatformEventData::new(Box::new(data)),
+            EventData::Pointer(data) => PlatformEventData::new(Box::new(data)),
+            EventData::Selection(data) => PlatformEventData::new(Box::new(data)),
+            EventData::Touch(data) => PlatformEventData::new(Box::new(data)),
+            EventData::Scroll(data) => PlatformEventData::new(Box::new(data)),
+            EventData::Wheel(data) => PlatformEventData::new(Box::new(data)),
+            EventData::Media(data) => PlatformEventData::new(Box::new(data)),
+            EventData::Animation(data) => PlatformEventData::new(Box::new(data)),
+            EventData::Transition(data) => PlatformEventData::new(Box::new(data)),
+            EventData::Toggle(data) => PlatformEventData::new(Box::new(data)),
+            EventData::Image(data) => PlatformEventData::new(Box::new(data)),
+            EventData::Mounted => panic!("Mounted events cannot be serialized"),
         }
     }
 }
@@ -338,7 +306,7 @@ impl HtmlEventConverter for SerializedHtmlEventConverter {
     }
 
     fn convert_mounted_data(&self, _: &PlatformEventData) -> MountedData {
-        MountedData::from(())
+        panic!()
     }
 
     fn convert_mouse_data(&self, event: &PlatformEventData) -> MouseData {

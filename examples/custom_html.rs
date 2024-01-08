@@ -4,16 +4,9 @@
 use dioxus::prelude::*;
 use dioxus_desktop::Config;
 
-fn main() {
-    dioxus_desktop::launch_cfg(
-        app,
-        Config::new().with_custom_head("<style>body { background-color: red; }</style>".into()),
-    );
+const CUSTOM_HEAD: &str = r#"<style>body { background-color: red; }</style>"#;
 
-    dioxus_desktop::launch_cfg(
-        app,
-        Config::new().with_custom_index(
-            r#"
+const CUSTOM_INDEX: &str = r#"
 <!DOCTYPE html>
 <html>
   <head>
@@ -25,16 +18,22 @@ fn main() {
     <div id="main"></div>
   </body>
 </html>
-        "#
-            .into(),
-        ),
-    );
+        "#;
+
+fn main() {
+    Config::new()
+        .with_custom_head(CUSTOM_HEAD.into())
+        .launch(app);
+
+    Config::new()
+        .with_custom_index(String::from(CUSTOM_INDEX))
+        .launch(app);
 }
 
 fn app(cx: Scope) -> Element {
-    cx.render(rsx! {
+    render! {
         div {
             h1 {"hello world!"}
         }
-    })
+    }
 }
