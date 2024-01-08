@@ -143,8 +143,6 @@ interface types {
   /// a runtime event, when the project calls the plugins during runtime the 
   /// most 'destructive' event is going to be called. E.g. two plugins return 
   /// a reload event and a rebuild event, the rebuild event would take precedence
-  /// 
-  /// Rebuild > Reload > Refresh > None
   variant response-event {
     none,
     reload,
