@@ -1,4 +1,4 @@
-use dioxus_html::input_data::keyboard_types::Key;
+use dioxus_html::{input_data::keyboard_types::Key, HasKeyboardData};
 use dioxus_native_core::{
     custom_element::CustomElement,
     real_dom::{NodeImmutable, RealDom},

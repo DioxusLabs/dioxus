@@ -56,7 +56,6 @@ fn app(cx: Scope) -> Element {
             width: "100%",
             height: "100%",
             flex_direction: "column",
-
             div {
                 width: "100%",
                 height: "50%",
@@ -71,7 +70,7 @@ fn app(cx: Scope) -> Element {
                     onmouseenter: move |m| q1_color.set([get_brightness(m.inner()), 0, 0]),
                     onmousedown: move |m| q1_color.set([get_brightness(m.inner()), 0, 0]),
                     onmouseup: move |m| q1_color.set([get_brightness(m.inner()), 0, 0]),
-                    onwheel: move |w| q1_color.set([q1_color[0] + (10.0*w.delta().strip_units().y) as i32, 0, 0]),
+                    onwheel: move |w| q1_color.set([q1_color[0] + (10.0 * w.delta().strip_units().y) as i32, 0, 0]),
                     onmouseleave: move |_| q1_color.set([200; 3]),
                     onmousemove: update_data,
                     "click me"
@@ -85,7 +84,7 @@ fn app(cx: Scope) -> Element {
                     onmouseenter: move |m| q2_color.set([get_brightness(m.inner()); 3]),
                     onmousedown: move |m| q2_color.set([get_brightness(m.inner()); 3]),
                     onmouseup: move |m| q2_color.set([get_brightness(m.inner()); 3]),
-                    onwheel: move |w| q2_color.set([q2_color[0] + (10.0*w.delta().strip_units().y) as i32;3]),
+                    onwheel: move |w| q2_color.set([q2_color[0] + (10.0 * w.delta().strip_units().y) as i32; 3]),
                     onmouseleave: move |_| q2_color.set([200; 3]),
                     onmousemove: update_data,
                     "click me"
@@ -105,7 +104,7 @@ fn app(cx: Scope) -> Element {
                     onmouseenter: move |m| q3_color.set([0, get_brightness(m.inner()), 0]),
                     onmousedown: move |m| q3_color.set([0, get_brightness(m.inner()), 0]),
                     onmouseup: move |m| q3_color.set([0, get_brightness(m.inner()), 0]),
-                    onwheel: move |w| q3_color.set([0, q3_color[1] + (10.0*w.delta().strip_units().y) as i32, 0]),
+                    onwheel: move |w| q3_color.set([0, q3_color[1] + (10.0 * w.delta().strip_units().y) as i32, 0]),
                     onmouseleave: move |_| q3_color.set([200; 3]),
                     onmousemove: update_data,
                     "click me"
@@ -119,16 +118,16 @@ fn app(cx: Scope) -> Element {
                     onmouseenter: move |m| q4_color.set([0, 0, get_brightness(m.inner())]),
                     onmousedown: move |m| q4_color.set([0, 0, get_brightness(m.inner())]),
                     onmouseup: move |m| q4_color.set([0, 0, get_brightness(m.inner())]),
-                    onwheel: move |w| q4_color.set([0, 0, q4_color[2] + (10.0*w.delta().strip_units().y) as i32]),
+                    onwheel: move |w| q4_color.set([0, 0, q4_color[2] + (10.0 * w.delta().strip_units().y) as i32]),
                     onmouseleave: move |_| q4_color.set([200; 3]),
                     onmousemove: update_data,
                     "click me"
                 }
-            },
-            div {"Page coordinates: {page_coordinates}"},
-            div {"Element coordinates: {element_coordinates}"},
-            div {"Buttons: {buttons}"},
-            div {"Modifiers: {modifiers}"},
+            }
+            div { "Page coordinates: {page_coordinates}" }
+            div { "Element coordinates: {element_coordinates}" }
+            div { "Buttons: {buttons}" }
+            div { "Modifiers: {modifiers}" }
         }
     })
 }

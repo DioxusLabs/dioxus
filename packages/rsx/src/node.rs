@@ -126,7 +126,7 @@ impl ToTokens for BodyNode {
             }),
             BodyNode::RawExpr(exp) => tokens.append_all(quote! {
                 {
-                    let ___nodes = (#exp).into_vnode(__cx);
+                    let ___nodes = (#exp).into_dyn_node(__cx);
                     ___nodes
                 }
             }),
@@ -145,7 +145,7 @@ impl ToTokens for BodyNode {
                 // And then we can return them into the dyn loop
                 tokens.append_all(quote! {
                     {
-                        let ___nodes =(#expr).into_iter().map(|#pat| { #renderer }).into_vnode(__cx);
+                        let ___nodes =(#expr).into_iter().map(|#pat| { #renderer }).into_dyn_node(__cx);
                         ___nodes
                     }
                 })
@@ -154,7 +154,7 @@ impl ToTokens for BodyNode {
                 if is_if_chain_terminated(chain) {
                     tokens.append_all(quote! {
                         {
-                            let ___nodes = (#chain).into_vnode(__cx);
+                            let ___nodes = (#chain).into_dyn_node(__cx);
                             ___nodes
                         }
                     });
@@ -211,7 +211,7 @@ impl ToTokens for BodyNode {
 
                     tokens.append_all(quote! {
                         {
-                            let ___nodes = (#body).into_vnode(__cx);
+                            let ___nodes = (#body).into_dyn_node(__cx);
                             ___nodes
                         }
                     });
@@ -260,7 +260,7 @@ impl Parse for ForLoop {
     }
 }
 
-fn is_if_chain_terminated(chain: &ExprIf) -> bool {
+pub(crate) fn is_if_chain_terminated(chain: &ExprIf) -> bool {
     let mut current = chain;
     loop {
         if let Some((_, else_block)) = &current.else_branch {

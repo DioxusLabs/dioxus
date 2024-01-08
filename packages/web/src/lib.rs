@@ -55,7 +55,10 @@
 //     - Do the VDOM work during the idlecallback
 //     - Do DOM work in the next requestAnimationFrame callback
 
+use std::rc::Rc;
+
 pub use crate::cfg::Config;
+#[cfg(feature = "file_engine")]
 pub use crate::file_engine::WebFileEngineExt;
 use dioxus_core::{Element, Scope, VirtualDom};
 use futures_util::{
@@ -68,6 +71,8 @@ mod cfg;
 mod dom;
 #[cfg(feature = "eval")]
 mod eval;
+mod event;
+pub use event::*;
 #[cfg(feature = "file_engine")]
 mod file_engine;
 #[cfg(all(feature = "hot_reload", debug_assertions))]
@@ -215,14 +220,16 @@ pub async fn run_with_props<T: 'static>(root: fn(Scope<T>) -> Element, root_prop
             // todo: we need to split rebuild and initialize into two phases
             // it's a waste to produce edits just to get the vdom loaded
 
-            let templates = dom.rebuild().templates;
-            websys_dom.load_templates(&templates);
-
+            {
+                let mutations = dom.rebuild();
+                web_sys::console::log_1(&format!("mutations: {:#?}", mutations).into());
+                let templates = mutations.templates;
+                websys_dom.load_templates(&templates);
+                websys_dom.interpreter.flush();
+            }
             if let Err(err) = websys_dom.rehydrate(&dom) {
-                tracing::error!(
-                    "Rehydration failed {:?}. Rebuild DOM into element from scratch",
-                    &err
-                );
+                tracing::error!("Rehydration failed. {:?}", err);
+                tracing::error!("Rebuild DOM into element from scratch");
                 websys_dom.root.set_text_content(None);
 
                 let edits = dom.rebuild();
@@ -251,13 +258,6 @@ pub async fn run_with_props<T: 'static>(root: fn(Scope<T>) -> Element, root_prop
             pin_mut!(work);
 
             #[cfg(all(feature = "hot_reload", debug_assertions))]
-            // futures_util::select! {
-            //     _ = work => (None, None),
-            //     new_template = hotreload_rx.next() => {
-            //         (None, new_template)
-            //     }
-            //     evt = rx.next() =>
-            // }
             match select(work, select(hotreload_rx.next(), rx.next())).await {
                 Either::Left((_, _)) => (None, None),
                 Either::Right((Either::Left((new_template, _)), _)) => (None, new_template),
@@ -277,7 +277,12 @@ pub async fn run_with_props<T: 'static>(root: fn(Scope<T>) -> Element, root_prop
         // Dequeue all of the events from the channel in send order
         // todo: we should re-order these if possible
         while let Some(evt) = res {
-            dom.handle_event(evt.name.as_str(), evt.data, evt.element, evt.bubbles);
+            dom.handle_event(
+                evt.name.as_str(),
+                Rc::new(evt.data),
+                evt.element,
+                evt.bubbles,
+            );
             res = rx.try_next().transpose().unwrap().ok();
         }
 

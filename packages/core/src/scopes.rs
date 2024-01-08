@@ -2,13 +2,13 @@ use crate::{
     any_props::AnyProps,
     any_props::VProps,
     bump_frame::BumpFrame,
-    innerlude::ErrorBoundary,
-    innerlude::{DynamicNode, EventHandler, VComponent, VText},
+    innerlude::{DynamicNode, EventHandler, VComponent, VNodeId, VText},
     lazynodes::LazyNodes,
     nodes::{IntoAttributeValue, IntoDynNode, RenderReturn},
     runtime::Runtime,
     scope_context::ScopeContext,
-    AnyValue, Attribute, AttributeValue, Element, Event, Properties, TaskId,
+    AnyValue, Attribute, AttributeType, AttributeValue, Element, Event, MountedAttribute,
+    Properties, TaskId,
 };
 use bumpalo::{boxed::Box as BumpBox, Bump};
 use std::{
@@ -94,6 +94,7 @@ pub struct ScopeState {
     pub(crate) hook_idx: Cell<usize>,
 
     pub(crate) borrowed_props: RefCell<Vec<*const VComponent<'static>>>,
+    pub(crate) element_refs_to_drop: RefCell<Vec<VNodeId>>,
     pub(crate) attributes_to_drop_before_render: RefCell<Vec<*const Attribute<'static>>>,
 
     pub(crate) props: Option<Box<dyn AnyProps<'static>>>,
@@ -350,20 +351,22 @@ impl<'src> ScopeState {
 
         let mut listeners = self.attributes_to_drop_before_render.borrow_mut();
         for attr in element.dynamic_attrs {
-            match attr.value {
-                // We need to drop listeners before the next render because they may borrow data from the borrowed props which will be dropped
-                AttributeValue::Listener(_) => {
-                    let unbounded = unsafe { std::mem::transmute(attr as *const Attribute) };
-                    listeners.push(unbounded);
-                }
-                // We need to drop any values manually to make sure that their drop implementation is called before the next render
-                AttributeValue::Any(_) => {
-                    let unbounded = unsafe { std::mem::transmute(attr as *const Attribute) };
-                    self.previous_frame().add_attribute_to_drop(unbounded);
-                }
+            attr.ty.for_each(|attr| {
+                match attr.value {
+                    // We need to drop listeners before the next render because they may borrow data from the borrowed props which will be dropped
+                    AttributeValue::Listener(_) => {
+                        let unbounded = unsafe { std::mem::transmute(attr as *const Attribute) };
+                        listeners.push(unbounded);
+                    }
+                    // We need to drop any values manually to make sure that their drop implementation is called before the next render
+                    AttributeValue::Any(_) => {
+                        let unbounded = unsafe { std::mem::transmute(attr as *const Attribute) };
+                        self.previous_frame().add_attribute_to_drop(unbounded);
+                    }
 
-                _ => (),
-            }
+                    _ => (),
+                }
+            })
         }
 
         let mut props = self.borrowed_props.borrow_mut();
@@ -406,7 +409,7 @@ impl<'src> ScopeState {
 
     /// Convert any item that implements [`IntoDynNode`] into a [`DynamicNode`] using the internal [`Bump`] allocator
     pub fn make_node<'c, I>(&'src self, into: impl IntoDynNode<'src, I> + 'c) -> DynamicNode {
-        into.into_vnode(self)
+        into.into_dyn_node(self)
     }
 
     /// Create a new [`Attribute`] from a name, value, namespace, and volatile bool
@@ -419,13 +422,15 @@ impl<'src> ScopeState {
         value: impl IntoAttributeValue<'src>,
         namespace: Option<&'static str>,
         volatile: bool,
-    ) -> Attribute<'src> {
-        Attribute {
-            name,
-            namespace,
-            volatile,
+    ) -> MountedAttribute<'src> {
+        MountedAttribute {
+            ty: AttributeType::Single(Attribute {
+                name,
+                namespace,
+                volatile,
+                value: value.into_value(self.bump()),
+            }),
             mounted_element: Default::default(),
-            value: value.into_value(self.bump()),
         }
     }
 
@@ -451,7 +456,7 @@ impl<'src> ScopeState {
     ) -> DynamicNode<'src>
     where
         // The properties must be valid until the next bump frame
-        P: Properties + 'src,
+        P: Properties<'src> + 'src,
         // The current bump allocator frame must outlive the child's borrowed props
         'src: 'child,
     {
@@ -466,7 +471,7 @@ impl<'src> ScopeState {
             render_fn: component as *const (),
             static_props: P::IS_STATIC,
             props: RefCell::new(Some(extended)),
-            scope: Cell::new(None),
+            scope: Default::default(),
         })
     }
 
@@ -515,19 +520,6 @@ impl<'src> ScopeState {
         let boxed: BumpBox<'src, dyn AnyValue> =
             unsafe { BumpBox::from_raw(self.bump().alloc(value)) };
         AttributeValue::Any(RefCell::new(Some(boxed)))
-    }
-
-    /// Inject an error into the nearest error boundary and quit rendering
-    ///
-    /// The error doesn't need to implement Error or any specific traits since the boundary
-    /// itself will downcast the error into a trait object.
-    pub fn throw(&self, error: impl Debug + 'static) -> Option<()> {
-        if let Some(cx) = self.consume_context::<Rc<ErrorBoundary>>() {
-            cx.insert_error(self.scope_id(), Box::new(error));
-        }
-
-        // Always return none during a throw
-        None
     }
 
     /// Mark this component as suspended and then return None

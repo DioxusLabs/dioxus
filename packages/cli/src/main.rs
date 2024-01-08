@@ -63,7 +63,7 @@ async fn main() -> anyhow::Result<()> {
             .map_err(|e| anyhow!("🚫 Translation of HTML into RSX failed: {}", e)),
 
         Build(opts) if bin.is_ok() => opts
-            .build(Some(bin.unwrap().clone()))
+            .build(Some(bin.unwrap().clone()), None)
             .map_err(|e| anyhow!("🚫 Building project failed: {}", e)),
 
         Clean(opts) if bin.is_ok() => opts
