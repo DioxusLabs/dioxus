@@ -32,9 +32,7 @@ async fn effects_rerun() {
             });
             signal += 1;
 
-            render! {
-                div {}
-            }
+            render! { div {} }
         },
         counter.clone(),
     );

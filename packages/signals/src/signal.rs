@@ -536,8 +536,8 @@ pub struct ReadOnlySignal<T: 'static, S: Storage<SignalData<T>> = UnsyncStorage>
     inner: Signal<T, S>,
 }
 
-impl<T: 'static> From<Signal<T>> for ReadOnlySignal<T> {
-    fn from(inner: Signal<T>) -> Self {
+impl<T: 'static, S: Storage<SignalData<T>>> From<Signal<T, S>> for ReadOnlySignal<T, S> {
+    fn from(inner: Signal<T, S>) -> Self {
         Self { inner }
     }
 }
@@ -632,11 +632,5 @@ impl<T, S: Storage<SignalData<T>> + 'static> Deref for ReadOnlySignal<T, S> {
 
         // Cast the closure to a trait object.
         reference_to_closure as &Self::Target
-    }
-}
-
-impl<T> From<Signal<T>> for ReadOnlySignal<T> {
-    fn from(signal: Signal<T>) -> Self {
-        Self::new(signal)
     }
 }
