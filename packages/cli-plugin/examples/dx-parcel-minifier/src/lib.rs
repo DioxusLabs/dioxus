@@ -55,19 +55,12 @@ fn minify_css() -> Result<ResponseEvent, ()> {
 }
 
 impl Guest for CSSMinifer {
-    #[doc = " Get the default layout for the plugin to put"]
-    #[doc = " into `Dioxus.toml`"]
     fn get_default_config() -> Toml {
         Toml::new(TomlValue::Integer(0))
     }
-
-    #[doc = " Take config from `Dioxus.toml` and apply"]
-    #[doc = " to the plugin, returns false if couldn\\'t apply"]
     fn apply_config(_config: Toml) -> Result<(), ()> {
         Ok(())
     }
-
-    #[doc = " Initialize the plugin. This will be called once after the plugin is added"]
     fn register() -> Result<(), ()> {
         if !get_project_info().has_output_directory {
             log("No output directory detected, minifier won't find anything!");
@@ -75,7 +68,6 @@ impl Guest for CSSMinifer {
         Ok(())
     }
 
-    #[doc = " Get the metadata of the plugin"]
     fn metadata() -> PluginInfo {
         PluginInfo {
             name: "DX Parcel Minifier".to_string(),
@@ -83,30 +75,19 @@ impl Guest for CSSMinifer {
         }
     }
 
-    #[doc = " Called right before the event given"]
-    #[doc = " These are the compile-time functions like `Build`, `Translate`, etc"]
     fn before_command_event(_event: CommandEvent) -> Result<(), ()> {
         Ok(())
     }
-
-    #[doc = " Called right before the event given"]
-    #[doc = " These are the runtime-functions like `HotReload` and `Serve`"]
     fn before_runtime_event(_event: RuntimeEvent) -> Result<ResponseEvent, ()> {
         Ok(ResponseEvent::None)
     }
-
-    #[doc = " Called right after the event given"]
     fn after_command_event(_event: CommandEvent) -> Result<(), ()> {
         minify_css()?;
         Ok(())
     }
-
-    #[doc = " Called right after the event given"]
     fn after_runtime_event(_event: RuntimeEvent) -> Result<ResponseEvent, ()> {
         minify_css()
     }
-
-    #[doc = " Gives a list of the paths that have been changed"]
     fn on_watched_paths_change(
         _path: wit_bindgen::rt::vec::Vec<wit_bindgen::rt::string::String>,
     ) -> Result<ResponseEvent, ()> {

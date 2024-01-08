@@ -8,37 +8,36 @@ interface definitions {
   use types.{platform, plugin-info, command-event, runtime-event, response-event};
   use toml.{toml, toml-value};
 
-  /// Get the default layout for the plugin to put
-  /// into `Dioxus.toml`
+  /// Returns the plugin's default configuration as a TOML value. 
+  /// The host application merges this with its `Dioxus.toml`.
   get-default-config: func() -> toml;
 
-  /// Take config from `Dioxus.toml` and apply
-  /// to the plugin, returns false if couldn't apply
+  /// Applies the resolved configuration value for this plugin from the main configuration file. 
+  /// Plugins should validate the passed config and store relevant values as these could be changed from the default. 
+  /// Return an Error if the config is invalid.
   apply-config: func(config: toml) -> result;
   
-  /// Initialize the plugin. This will be called once after the plugin is added
+  /// Performs one-time initialization when the plugin is first loaded. 
+  /// Return an Error to fail registration.
   register: func() -> result;
 
   /// Get the metadata of the plugin
   metadata: func() -> plugin-info;
 
-  /// Called right before the event given
-  /// This is called when commands like `Build`, `Translate`, etc 
-  /// are called from the CLI
+  /// Called before build commands like build, bundle, etc
   before-command-event: func(event: command-event) -> result;
-  /// Called right before the event given
-  /// These are the runtime-functions like `HotReload` and `Serve`
+  /// Called before runtime events like when a served application is being hot-reloaded
+  /// or being rebuilt, and the plugin can perform additional steps inbetween
   before-runtime-event: func(event: runtime-event) -> result<response-event>;
 
-  /// Called right after the event given
-  /// This is called when commands like `Build`, `Translate`, etc 
-  /// are called from the CLI
+  /// Called after build commands like build, bundle, etc
   after-command-event: func(event: command-event) -> result;
-  /// Called right after the event given
+  /// Called after runtime events like when a served application is being hot-reloaded
+  /// or being rebuilt, and the plugin can perform additional steps inbetween
   after-runtime-event: func(event: runtime-event) -> result<response-event>;
   
-  /// Gives a list of paths that have changed,
-  /// you can add to the watched list of paths with `watch_path`
+  /// Notifies the plugin when watched file(s) change.
+  /// Plugins can watch additional paths with `watch_path`
   on-watched-paths-change: func(path: list<string>) -> result<response-event>;
 
   
@@ -52,6 +51,7 @@ interface definitions {
 }
 
 interface toml {
+  /// The handle for a `TomlValue`
   resource toml {
     /// Creates a value in table and returns the handle
     constructor(value: toml-value);
@@ -107,12 +107,14 @@ interface types {
     desktop,
   }
 
+  /// General information given to the host project about the plugin
   record plugin-info {
     name: string,
     version: string,
     // perms?
   }
 
+  /// General information about the host project
   record project-info {
     // Is true when there is a `/dist` folder available
     has-output-directory: bool,
@@ -121,6 +123,8 @@ interface types {
     default-platform: platform,
   }
 
+  /// Command events are used to notify the plugin when the project is 
+  /// being built, served, translated, or bundled. 
   enum command-event {
     build,
     bundle,
@@ -128,11 +132,19 @@ interface types {
     serve,
   }
 
+  /// When the project is being served, the plugin can be called with a
+  /// `RuntimeEvent` to affect the project at runtime using a `ResponseEvent`
   enum runtime-event {
     rebuild,
     hot-reload
   }
 
+  /// A `ResponseEvent` object is only ever returned from a plugin call with
+  /// a runtime event, when the project calls the plugins during runtime the 
+  /// most 'destructive' event is going to be called. E.g. two plugins return 
+  /// a reload event and a rebuild event, the rebuild event would take precedence
+  /// 
+  /// Rebuild > Reload > Refresh > None
   variant response-event {
     none,
     reload,
@@ -144,8 +156,9 @@ interface types {
 interface imports {
   use types.{project-info};
 
-  /// This is used to find out the name of your plugin as well
-  /// as the version of your plugin. The name should be 
+  /// Returns whether the project has 'output' and 'asset' 
+  /// directories written in the `Dioxus.toml`, and the 
+  /// default platform for the project
   get-project-info: func() -> project-info;
 
   /// Add path to list of watched paths
