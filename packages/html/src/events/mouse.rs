@@ -78,6 +78,8 @@ impl_event! {
     #[deprecated(since = "0.5.0", note = "use ondoubleclick instead")]
     ondblclick
 
+//     ondoubleclick: "ondblclick"
+
     /// onmousedown
     onmousedown
 
@@ -102,7 +104,6 @@ impl_event! {
     onmouseup
 }
 
-/// ondoubleclick
 #[inline]
 pub fn ondoubleclick<'a, E: crate::EventReturn<T>, T>(
     _cx: &'a ::dioxus_core::ScopeState,

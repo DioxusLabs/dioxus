@@ -12,7 +12,12 @@ fn events_propagate() {
     _ = dom.rebuild();
 
     // Top-level click is registered
-    dom.handle_event("click", Rc::new(PlatformEventData::new(Box::<SerializedMouseData>::default())), ElementId(1), true);
+    dom.handle_event(
+        "click",
+        Rc::new(PlatformEventData::new(Box::<SerializedMouseData>::default())),
+        ElementId(1),
+        true,
+    );
     assert_eq!(*CLICKS.lock().unwrap(), 1);
 
     // break reference....
@@ -22,7 +27,12 @@ fn events_propagate() {
     }
 
     // Lower click is registered
-    dom.handle_event("click", Rc::new(PlatformEventData::new(Box::<SerializedMouseData>::default())), ElementId(2), true);
+    dom.handle_event(
+        "click",
+        Rc::new(PlatformEventData::new(Box::<SerializedMouseData>::default())),
+        ElementId(2),
+        true,
+    );
     assert_eq!(*CLICKS.lock().unwrap(), 3);
 
     // break reference....
@@ -32,7 +42,12 @@ fn events_propagate() {
     }
 
     // Stop propagation occurs
-    dom.handle_event("click", Rc::new(PlatformEventData::new(Box::<SerializedMouseData>::default())), ElementId(2), true);
+    dom.handle_event(
+        "click",
+        Rc::new(PlatformEventData::new(Box::<SerializedMouseData>::default())),
+        ElementId(2),
+        true,
+    );
     assert_eq!(*CLICKS.lock().unwrap(), 3);
 }
 

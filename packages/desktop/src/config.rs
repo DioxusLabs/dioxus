@@ -1,14 +1,12 @@
 use std::borrow::Cow;
 use std::path::PathBuf;
 
-use wry::application::window::Icon;
+use dioxus_core::prelude::Component;
+use tao::window::{Icon, WindowBuilder, WindowId};
 use wry::{
-    application::window::{Window, WindowBuilder},
     http::{Request as HttpRequest, Response as HttpResponse},
-    webview::FileDropEvent,
+    FileDropEvent,
 };
-
-// pub(crate) type DynEventHandlerFn = dyn Fn(&mut EventLoop<()>, &mut WebView);
 
 /// The behaviour of the application when the last window is closed.
 #[derive(Copy, Clone, Eq, PartialEq)]
@@ -38,7 +36,7 @@ pub struct Config {
     pub(crate) enable_default_menu_bar: bool,
 }
 
-type DropHandler = Box<dyn Fn(&Window, FileDropEvent) -> bool>;
+type DropHandler = Box<dyn Fn(WindowId, FileDropEvent) -> bool>;
 
 pub(crate) type WryProtocol = (
     String,
@@ -67,6 +65,20 @@ impl Config {
             last_window_close_behaviour: WindowCloseBehaviour::LastWindowExitsApp,
             enable_default_menu_bar: true,
         }
+    }
+
+    /// Launch a Dioxus app using the given component and config
+    ///
+    /// See the [`crate::launch::launch`] function for more details.
+    pub fn launch(self, root: Component<()>) {
+        crate::launch::launch_cfg(root, self)
+    }
+
+    /// Launch a Dioxus app using the given component, config, and props
+    ///
+    /// See the [`crate::launch::launch_with_props`] function for more details.
+    pub fn launch_with_props<P: 'static>(self, root: Component<P>, props: P) {
+        crate::launch::launch_with_props(root, props, self)
     }
 
     /// Set whether the default menu bar should be enabled.
@@ -120,7 +132,7 @@ impl Config {
     /// Set a file drop handler
     pub fn with_file_drop_handler(
         mut self,
-        handler: impl Fn(&Window, FileDropEvent) -> bool + 'static,
+        handler: impl Fn(WindowId, FileDropEvent) -> bool + 'static,
     ) -> Self {
         self.file_drop_handler = Some(Box::new(handler));
         self
