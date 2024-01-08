@@ -136,6 +136,7 @@ impl Bundle {
         }
 
         // Add all assets from collect assets to the bundle
+        #[cfg(feature = "collect-assets")]
         {
             let config = manganis_cli_support::Config::current();
             let location = config.assets_serve_location().to_string();

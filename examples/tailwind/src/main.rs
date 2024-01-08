@@ -2,7 +2,7 @@
 
 use dioxus::prelude::*;
 
-const _STYLE: &str = mg!(file("./public/tailwind.css"));
+const _STYLE: &str = manganis::mg!(file("./public/tailwind.css"));
 
 fn main() {
     #[cfg(not(target_arch = "wasm32"))]
