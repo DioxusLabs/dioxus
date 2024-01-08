@@ -24,11 +24,10 @@ fn app(cx: Scope<AppProps>) -> Element {
 
     let mut count = use_state(cx, || 0);
     let text = use_state(cx, || "...".to_string());
+    let eval = use_eval(cx);
 
     cx.render(rsx! {
-        div {
-            "Server state: {state}"
-        }
+        div { "Server state: {state}" }
         h1 { "High-Five counter: {count}" }
         button { onclick: move |_| count += 1, "Up high!" }
         button { onclick: move |_| count -= 1, "Down low!" }

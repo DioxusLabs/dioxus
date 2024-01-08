@@ -11,13 +11,10 @@ keywords = ["dom", "ui", "gui", "react"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-dioxus-rsx = { workspace = true }
 proc-macro2 = { version = "1.0.6", features = ["span-locations"] }
 quote = "1.0"
 syn = { version = "1.0.11", features = ["full", "extra-traits", "visit"] }
-serde = { version = "1.0.136", features = ["derive"] }
 owo-colors = { version = "3.5.0", features = ["supports-colors"] }
-prettyplease = { workspace = true }
 
 [dev-dependencies]
 indoc = "2.0.3"

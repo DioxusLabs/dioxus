@@ -37,6 +37,7 @@ use std::{
 ///    }
 /// }
 /// ```
+#[must_use]
 pub fn use_tracked_state<T: 'static>(cx: &ScopeState, init: impl FnOnce() -> T) -> &Tracked<T> {
     cx.use_hook(|| {
         let init = init();
@@ -160,6 +161,7 @@ impl<I> Drop for Tracker<I> {
     }
 }
 
+#[must_use = "Consider using the `use_effect` hook to rerun an effect whenever the tracked state changes if you don't need the result of the computation"]
 pub fn use_selector<I: 'static, O: Clone + PartialEq + 'static>(
     cx: &ScopeState,
     tracked: &Tracked<I>,

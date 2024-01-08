@@ -1,3 +1,7 @@
+#![doc = include_str!("../README.md")]
+#![doc(html_logo_url = "https://avatars.githubusercontent.com/u/79236386")]
+#![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
+
 pub use dioxus_core as core;
 
 #[cfg(feature = "hooks")]
@@ -18,6 +22,9 @@ pub use dioxus_rsx as rsx;
 pub use dioxus_core_macro as core_macro;
 
 pub mod prelude {
+    pub use manganis;
+    pub use manganis::mg;
+
     #[cfg(feature = "hooks")]
     pub use crate::hooks::*;
 

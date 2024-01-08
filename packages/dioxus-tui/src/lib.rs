@@ -1,4 +1,9 @@
+#![doc = include_str!("../README.md")]
+#![doc(html_logo_url = "https://avatars.githubusercontent.com/u/79236386")]
+#![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
+
 mod element;
+mod events;
 
 use std::{
     any::Any,
@@ -8,6 +13,7 @@ use std::{
 };
 
 use dioxus_core::{Component, ElementId, VirtualDom};
+use dioxus_html::PlatformEventData;
 use dioxus_native_core::dioxus::{DioxusState, NodeImmutableDioxusExt};
 use dioxus_native_core::prelude::*;
 
@@ -24,6 +30,8 @@ pub fn launch_cfg(app: Component<()>, cfg: Config) {
 }
 
 pub fn launch_cfg_with_props<Props: 'static>(app: Component<Props>, props: Props, cfg: Config) {
+    dioxus_html::set_event_converter(Box::new(events::SerializedHtmlEventConverter));
+
     render(cfg, |rdom, taffy, event_tx| {
         let dioxus_state = {
             let mut rdom = rdom.write().unwrap();
@@ -81,7 +89,7 @@ struct DioxusRenderer {
     vdom: VirtualDom,
     dioxus_state: Rc<RwLock<DioxusState>>,
     // Events that are queued up to be sent to the vdom next time the vdom is polled
-    queued_events: Vec<(ElementId, &'static str, Rc<dyn Any>, bool)>,
+    queued_events: Vec<(ElementId, &'static str, Box<dyn Any>, bool)>,
     #[cfg(all(feature = "hot-reload", debug_assertions))]
     hot_reload_rx: tokio::sync::mpsc::UnboundedReceiver<dioxus_hot_reload::HotReloadMsg>,
 }
@@ -122,15 +130,19 @@ impl Driver for DioxusRenderer {
         let id = { rdom.read().unwrap().get(id).unwrap().mounted_id() };
         if let Some(id) = id {
             let inner_value = value.deref().clone();
+            let boxed_event = Box::new(inner_value);
+            let platform_event = PlatformEventData::new(boxed_event);
             self.vdom
-                .handle_event(event, inner_value.into_any(), id, bubbles);
+                .handle_event(event, Rc::new(platform_event), id, bubbles);
         }
     }
 
     fn poll_async(&mut self) -> std::pin::Pin<Box<dyn futures::Future<Output = ()> + '_>> {
         // Add any queued events
         for (id, event, value, bubbles) in self.queued_events.drain(..) {
-            self.vdom.handle_event(event, value, id, bubbles);
+            let platform_event = PlatformEventData::new(value);
+            self.vdom
+                .handle_event(event, Rc::new(platform_event), id, bubbles);
         }
 
         #[cfg(all(feature = "hot-reload", debug_assertions))]

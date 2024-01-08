@@ -1,6 +1,12 @@
+#![doc = include_str!("../README.md")]
+#![doc(html_logo_url = "https://avatars.githubusercontent.com/u/79236386")]
+#![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
+
 use convert_case::{Case, Casing};
+use dioxus_html::{map_html_attribute_to_rsx, map_html_element_to_rsx};
 use dioxus_rsx::{
-    BodyNode, CallBody, Component, Element, ElementAttr, ElementAttrNamed, ElementName, IfmtInput,
+    AttributeType, BodyNode, CallBody, Component, Element, ElementAttr, ElementAttrNamed,
+    ElementName, IfmtInput,
 };
 pub use html_parser::{Dom, Node};
 use proc_macro2::{Ident, Span};
@@ -20,49 +26,76 @@ pub fn rsx_node_from_html(node: &Node) -> Option<BodyNode> {
     match node {
         Node::Text(text) => Some(BodyNode::Text(ifmt_from_text(text))),
         Node::Element(el) => {
-            let el_name = el.name.to_case(Case::Snake);
-            let el_name = ElementName::Ident(Ident::new(el_name.as_str(), Span::call_site()));
+            let el_name = if let Some(name) = map_html_element_to_rsx(&el.name) {
+                ElementName::Ident(Ident::new(name, Span::call_site()))
+            } else {
+                // if we don't recognize it and it has a dash, we assume it's a web component
+                if el.name.contains('-') {
+                    ElementName::Custom(LitStr::new(&el.name, Span::call_site()))
+                } else {
+                    // otherwise, it might be an element that isn't supported yet
+                    ElementName::Ident(Ident::new(&el.name.to_case(Case::Snake), Span::call_site()))
+                }
+            };
 
             let mut attributes: Vec<_> = el
                 .attributes
                 .iter()
                 .map(|(name, value)| {
-                    let ident = if matches!(name.as_str(), "for" | "async" | "type" | "as") {
-                        Ident::new_raw(name.as_str(), Span::call_site())
+                    let value = ifmt_from_text(value.as_deref().unwrap_or("false"));
+                    let attr = if let Some(name) = map_html_attribute_to_rsx(name) {
+                        let ident = if let Some(name) = name.strip_prefix("r#") {
+                            Ident::new_raw(name, Span::call_site())
+                        } else {
+                            Ident::new(name, Span::call_site())
+                        };
+                        ElementAttr {
+                            value: dioxus_rsx::ElementAttrValue::AttrLiteral(value),
+                            name: dioxus_rsx::ElementAttrName::BuiltIn(ident),
+                        }
                     } else {
-                        let new_name = name.to_case(Case::Snake);
-                        Ident::new(new_name.as_str(), Span::call_site())
+                        // If we don't recognize the attribute, we assume it's a custom attribute
+                        ElementAttr {
+                            value: dioxus_rsx::ElementAttrValue::AttrLiteral(value),
+                            name: dioxus_rsx::ElementAttrName::Custom(LitStr::new(
+                                name,
+                                Span::call_site(),
+                            )),
+                        }
                     };
 
-                    ElementAttrNamed {
+                    AttributeType::Named(ElementAttrNamed {
                         el_name: el_name.clone(),
-                        attr: ElementAttr::AttrText {
-                            value: ifmt_from_text(value.as_deref().unwrap_or("false")),
-                            name: ident,
-                        },
-                    }
+                        attr,
+                    })
                 })
                 .collect();
 
             let class = el.classes.join(" ");
             if !class.is_empty() {
-                attributes.push(ElementAttrNamed {
+                attributes.push(AttributeType::Named(ElementAttrNamed {
                     el_name: el_name.clone(),
-                    attr: ElementAttr::AttrText {
-                        name: Ident::new("class", Span::call_site()),
-                        value: ifmt_from_text(&class),
+                    attr: ElementAttr {
+                        name: dioxus_rsx::ElementAttrName::BuiltIn(Ident::new(
+                            "class",
+                            Span::call_site(),
+                        )),
+                        value: dioxus_rsx::ElementAttrValue::AttrLiteral(ifmt_from_text(&class)),
                     },
-                });
+                }));
             }
 
             if let Some(id) = &el.id {
-                attributes.push(ElementAttrNamed {
+                attributes.push(AttributeType::Named(ElementAttrNamed {
                     el_name: el_name.clone(),
-                    attr: ElementAttr::AttrText {
-                        name: Ident::new("id", Span::call_site()),
-                        value: ifmt_from_text(id),
+                    attr: ElementAttr {
+                        name: dioxus_rsx::ElementAttrName::BuiltIn(Ident::new(
+                            "id",
+                            Span::call_site(),
+                        )),
+                        value: dioxus_rsx::ElementAttrValue::AttrLiteral(ifmt_from_text(id)),
                     },
-                });
+                }));
             }
 
             let children = el.children.iter().filter_map(rsx_node_from_html).collect();
@@ -71,6 +104,7 @@ pub fn rsx_node_from_html(node: &Node) -> Option<BodyNode> {
                 name: el_name,
                 children,
                 attributes,
+                merged_attributes: Default::default(),
                 key: None,
                 brace: Default::default(),
             }))

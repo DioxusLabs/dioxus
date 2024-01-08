@@ -33,6 +33,7 @@ type EvalCreator = Rc<dyn Fn(&str) -> Result<UseEval, EvalError>>;
 /// parts is practically asking for a hacker to find an XSS vulnerability in
 /// it. **This applies especially to web targets, where the JavaScript context
 /// has access to most, if not all of your application data.**
+#[must_use]
 pub fn use_eval(cx: &ScopeState) -> &EvalCreator {
     &*cx.use_hook(|| {
         let eval_provider = cx
@@ -45,6 +46,15 @@ pub fn use_eval(cx: &ScopeState) -> &EvalCreator {
                 .map(UseEval::new)
         }) as Rc<dyn Fn(&str) -> Result<UseEval, EvalError>>
     })
+}
+
+pub fn eval(script: &str) -> Result<UseEval, EvalError> {
+    let eval_provider = dioxus_core::prelude::consume_context::<Rc<dyn EvalProvider>>()
+        .expect("evaluator not provided");
+
+    eval_provider
+        .new_evaluator(script.to_string())
+        .map(UseEval::new)
 }
 
 /// A wrapper around the target platform's evaluator.

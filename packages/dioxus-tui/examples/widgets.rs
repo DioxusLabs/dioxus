@@ -18,7 +18,7 @@ fn app(cx: Scope) -> Element {
             justify_content: "center",
 
             input {
-                oninput: |data| if &data.value == "good"{
+                oninput: |data| if &data.value()== "good"{
                     bg_green.set(true);
                 } else{
                     bg_green.set(false);
@@ -30,7 +30,7 @@ fn app(cx: Scope) -> Element {
                 checked: "true",
             }
             input {
-                oninput: |data| if &data.value == "hello world"{
+                oninput: |data| if &data.value()== "hello world"{
                     bg_green.set(true);
                 } else{
                     bg_green.set(false);
@@ -41,7 +41,7 @@ fn app(cx: Scope) -> Element {
             }
             input {
                 oninput: |data| {
-                    if (data.value.parse::<f32>().unwrap() - 40.0).abs() < 5.0 {
+                    if (data.value().parse::<f32>().unwrap() - 40.0).abs() < 5.0 {
                         bg_green.set(true);
                     } else{
                         bg_green.set(false);
@@ -55,7 +55,7 @@ fn app(cx: Scope) -> Element {
             }
             input {
                 oninput: |data| {
-                    if data.value == "10"{
+                    if data.value()== "10"{
                         bg_green.set(true);
                     } else{
                         bg_green.set(false);
@@ -68,7 +68,7 @@ fn app(cx: Scope) -> Element {
             }
             input {
                 oninput: |data| {
-                    if data.value == "hello world"{
+                    if data.value()== "hello world"{
                         bg_green.set(true);
                     } else{
                         bg_green.set(false);

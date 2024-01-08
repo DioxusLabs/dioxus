@@ -159,8 +159,9 @@ So... Dioxus is great, but why won't it work for me?
 
 
 ## Contributing
+- Check out the website [section on contributing](https://dioxuslabs.com/learn/0.4/contributing).
 - Report issues on our [issue tracker](https://github.com/dioxuslabs/dioxus/issues).
-- Join the discord and ask questions!
+- [Join](https://discord.gg/XgGxMSkvUM) the discord and ask questions!
 
 
 <a href="https://github.com/dioxuslabs/dioxus/graphs/contributors">

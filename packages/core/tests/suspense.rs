@@ -11,7 +11,7 @@ fn it_works() {
             let mut dom = VirtualDom::new(app);
             _ = dom.rebuild();
             dom.wait_for_suspense().await;
-            let out = dioxus_ssr::pre_render(&dom);
+            let out = dioxus_ssr::render(&dom);
 
             assert_eq!(out, "<div>Waiting for... child</div>");
 
@@ -36,7 +36,7 @@ fn suspended_child(cx: Scope) -> Element {
         cx.spawn(async move {
             val += 1;
         });
-        return cx.suspend()?;
+        cx.suspend()?;
     }
 
     render!("child")
