@@ -536,6 +536,12 @@ pub struct ReadOnlySignal<T: 'static, S: Storage<SignalData<T>> = UnsyncStorage>
     inner: Signal<T, S>,
 }
 
+impl<T: 'static> From<Signal<T>> for ReadOnlySignal<T> {
+    fn from(inner: Signal<T>) -> Self {
+        Self { inner }
+    }
+}
+
 impl<T: 'static> ReadOnlySignal<T> {
     /// Create a new read-only signal.
     #[track_caller]

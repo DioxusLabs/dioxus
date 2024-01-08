@@ -18,3 +18,5 @@ pub use dependency::*;
 mod map;
 pub use generational_box::{Storage, SyncStorage, UnsyncStorage};
 pub use map::*;
+mod comparer;
+pub use comparer::*;
