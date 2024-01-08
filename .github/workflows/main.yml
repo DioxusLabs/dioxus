@@ -147,7 +147,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: ./app
+        working-directory: ./playwright-tests
     steps:
       # Do our best to cache the toolchain and node install steps
       - uses: actions/checkout@v4
