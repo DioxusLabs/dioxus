@@ -4,6 +4,7 @@
 /dist
 Cargo.lock
 .DS_Store
+/examples/assets/test_video.mp4
 
 .vscode/*
 !.vscode/settings.json

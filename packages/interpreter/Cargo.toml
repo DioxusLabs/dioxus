@@ -14,13 +14,14 @@ keywords = ["dom", "ui", "gui", "react", "wasm"]
 wasm-bindgen = { workspace = true, optional = true }
 js-sys = { version = "0.3.56", optional = true }
 web-sys = { version = "0.3.56", optional = true, features = ["Element", "Node"] }
-sledgehammer_bindgen = { version = "0.2.1", optional = true }
+sledgehammer_bindgen = { version = "0.3.1", default-features = false, optional = true }
 sledgehammer_utils = { version = "0.2", optional = true }
 serde = { version = "1.0", features = ["derive"], optional = true }
 
 [features]
 default = []
 serialize = ["serde"]
-web = ["wasm-bindgen", "js-sys", "web-sys"]
-sledgehammer = ["wasm-bindgen", "js-sys", "web-sys", "sledgehammer_bindgen", "sledgehammer_utils"]
+sledgehammer = ["sledgehammer_bindgen", "sledgehammer_utils"]
+web = ["sledgehammer", "wasm-bindgen", "js-sys", "web-sys", "sledgehammer_bindgen/web"]
+binary-protocol = ["sledgehammer", "wasm-bindgen"]
 minimal_bindings = []

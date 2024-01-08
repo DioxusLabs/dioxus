@@ -22,15 +22,9 @@ fn app(cx: Scope) -> Element {
     use_context_provider(cx, ApplicationData::default);
 
     render! {
-        div {
-            ReadsFirst {}
-        }
-        div {
-            ReadsSecond {}
-        }
-        div {
-            ReadsManySignals {}
-        }
+        div { ReadsFirst {} }
+        div { ReadsSecond {} }
+        div { ReadsManySignals {} }
     }
 }
 
@@ -107,16 +101,14 @@ fn ReadsManySignals(cx: Scope) -> Element {
         }
         button {
             onclick: move |_| {
-                if let Some(first) = data.many_signals.read().get(0) {
+                if let Some(first) = data.many_signals.read().first() {
                     *first.write() += 1;
                 }
             },
             "Increase First Item"
         }
         for signal in data.many_signals {
-            Child {
-                count: signal,
-            }
+            Child { count: signal }
         }
     }
 }

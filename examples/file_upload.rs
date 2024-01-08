@@ -16,7 +16,7 @@ fn App(cx: Scope) -> Element {
                 r#type: "checkbox",
                 checked: "{enable_directory_upload}",
                 oninput: move |evt| {
-                    enable_directory_upload.set(evt.value.parse().unwrap());
+                    enable_directory_upload.set(evt.value().parse().unwrap());
                 },
             },
             "Enable directory upload"
@@ -30,7 +30,7 @@ fn App(cx: Scope) -> Element {
             onchange: |evt| {
                 to_owned![files_uploaded];
                 async move {
-                    if let Some(file_engine) = &evt.files {
+                    if let Some(file_engine) = &evt.files() {
                         let files = file_engine.files();
                         for file_name in files {
                             sleep(std::time::Duration::from_secs(1)).await;

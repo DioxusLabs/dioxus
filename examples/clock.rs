@@ -10,7 +10,7 @@ fn app(cx: Scope) -> Element {
 
     use_future!(cx, || async move {
         loop {
-            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
             count += 1;
             println!("current: {count}");
         }

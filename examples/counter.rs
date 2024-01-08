@@ -22,7 +22,7 @@ fn app(cx: Scope) -> Element {
                     input {
                         value: "{counter}",
                         oninput: move |e| {
-                            if let Ok(value) = e.value.parse::<usize>() {
+                            if let Ok(value) = e.value().parse::<usize>() {
                                 counters.make_mut()[i] = value;
                             }
                         }

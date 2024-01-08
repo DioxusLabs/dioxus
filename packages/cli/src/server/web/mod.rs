@@ -11,6 +11,7 @@ use axum::{
     body::{Full, HttpBody},
     extract::{ws::Message, Extension, TypedHeader, WebSocketUpgrade},
     http::{
+        self,
         header::{HeaderName, HeaderValue},
         Method, Response, StatusCode,
     },
@@ -49,7 +50,12 @@ struct WsReloadState {
     update: broadcast::Sender<()>,
 }
 
-pub async fn startup(port: u16, config: CrateConfig, start_browser: bool) -> Result<()> {
+pub async fn startup(
+    port: u16,
+    config: CrateConfig,
+    start_browser: bool,
+    skip_assets: bool,
+) -> Result<()> {
     // ctrl-c shutdown checker
     let _crate_config = config.clone();
     let _ = ctrlc::set_handler(move || {
@@ -81,7 +87,15 @@ pub async fn startup(port: u16, config: CrateConfig, start_browser: bool) -> Res
         false => None,
     };
 
-    serve(ip, port, config, start_browser, hot_reload_state).await?;
+    serve(
+        ip,
+        port,
+        config,
+        start_browser,
+        skip_assets,
+        hot_reload_state,
+    )
+    .await?;
 
     Ok(())
 }
@@ -92,9 +106,10 @@ pub async fn serve(
     port: u16,
     config: CrateConfig,
     start_browser: bool,
+    skip_assets: bool,
     hot_reload_state: Option<HotReloadState>,
 ) -> Result<()> {
-    let first_build_result = crate::builder::build(&config, true)?;
+    let first_build_result = crate::builder::build(&config, false, skip_assets)?;
 
     log::info!("🚀 Starting development server...");
 
@@ -107,7 +122,7 @@ pub async fn serve(
         {
             let config = config.clone();
             let reload_tx = reload_tx.clone();
-            move || build(&config, &reload_tx)
+            move || build(&config, &reload_tx, skip_assets)
         },
         &config,
         Some(WebServerInfo {
@@ -264,7 +279,7 @@ async fn setup_router(
         .override_response_header(HeaderName::from_static("cross-origin-opener-policy"), coop)
         .and_then(
             move |response: Response<ServeFileSystemResponseBody>| async move {
-                let response = if file_service_config.dioxus_config.web.watcher.index_on_404
+                let mut response = if file_service_config.dioxus_config.web.watcher.index_on_404
                     && response.status() == StatusCode::NOT_FOUND
                 {
                     let body = Full::from(
@@ -287,6 +302,13 @@ async fn setup_router(
                 } else {
                     response.map(|body| body.boxed())
                 };
+                let headers = response.headers_mut();
+                headers.insert(
+                    http::header::CACHE_CONTROL,
+                    HeaderValue::from_static("no-cache"),
+                );
+                headers.insert(http::header::PRAGMA, HeaderValue::from_static("no-cache"));
+                headers.insert(http::header::EXPIRES, HeaderValue::from_static("0"));
                 Ok(response)
             },
         )
@@ -421,12 +443,12 @@ async fn ws_handler(
     })
 }
 
-fn build(config: &CrateConfig, reload_tx: &Sender<()>) -> Result<BuildResult> {
-    let result = builder::build(config, true)?;
+fn build(config: &CrateConfig, reload_tx: &Sender<()>, skip_assets: bool) -> Result<BuildResult> {
+    let result = builder::build(config, true, skip_assets)?;
     // change the websocket reload state to true;
     // the page will auto-reload.
     if config.dioxus_config.web.watcher.reload_html {
-        let _ = Serve::regen_dev_page(config);
+        let _ = Serve::regen_dev_page(config, skip_assets);
     }
     let _ = reload_tx.send(());
     Ok(result)

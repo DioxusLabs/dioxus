@@ -3,6 +3,7 @@ use dioxus_html::{geometry::euclid::Rect, MountedResult, RenderedElementBacking}
 
 use crate::{desktop_context::DesktopContext, query::QueryEngine};
 
+#[derive(Clone)]
 /// A mounted element passed to onmounted events
 pub struct DesktopElement {
     id: ElementId,
@@ -17,8 +18,8 @@ impl DesktopElement {
 }
 
 impl RenderedElementBacking for DesktopElement {
-    fn get_raw_element(&self) -> dioxus_html::MountedResult<&dyn std::any::Any> {
-        Ok(self)
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 
     fn get_client_rect(
@@ -30,7 +31,7 @@ impl RenderedElementBacking for DesktopElement {
             >,
         >,
     > {
-        let script = format!("return window.interpreter.GetClientRect({});", self.id.0);
+        let script = format!("return window.interpreter.getClientRect({});", self.id.0);
 
         let fut = self
             .query
@@ -54,7 +55,7 @@ impl RenderedElementBacking for DesktopElement {
         behavior: dioxus_html::ScrollBehavior,
     ) -> std::pin::Pin<Box<dyn futures_util::Future<Output = dioxus_html::MountedResult<()>>>> {
         let script = format!(
-            "return window.interpreter.ScrollTo({}, {});",
+            "return window.interpreter.scrollTo({}, {});",
             self.id.0,
             serde_json::to_string(&behavior).expect("Failed to serialize ScrollBehavior")
         );
@@ -81,7 +82,7 @@ impl RenderedElementBacking for DesktopElement {
         focus: bool,
     ) -> std::pin::Pin<Box<dyn futures_util::Future<Output = dioxus_html::MountedResult<()>>>> {
         let script = format!(
-            "return window.interpreter.SetFocus({}, {});",
+            "return window.interpreter.setFocus({}, {});",
             self.id.0, focus
         );
 
