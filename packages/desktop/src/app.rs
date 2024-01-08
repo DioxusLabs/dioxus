@@ -12,8 +12,8 @@ use crate::{
 use crossbeam_channel::Receiver;
 use dioxus_core::{Component, ElementId, VirtualDom};
 use dioxus_html::{
-    native_bind::NativeFileEngine, FileEngine, HasFileData, HasFormData, HtmlEvent, MountedData,
-    PlatformEventData, SerializedHtmlEventConverter,
+    native_bind::NativeFileEngine, FileEngine, HasFileData, HasFormData, HtmlEvent,
+    PlatformEventData,
 };
 use std::{
     cell::{Cell, RefCell},
