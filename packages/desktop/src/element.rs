@@ -116,18 +116,3 @@ impl RenderedElementBacking for DesktopElement {
         })
     }
 }
-
-#[derive(Debug)]
-enum DesktopQueryError {
-    FailedToQuery,
-}
-
-impl std::fmt::Display for DesktopQueryError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            DesktopQueryError::FailedToQuery => write!(f, "Failed to query the element"),
-        }
-    }
-}
-
-impl std::error::Error for DesktopQueryError {}

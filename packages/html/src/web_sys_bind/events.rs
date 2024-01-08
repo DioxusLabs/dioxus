@@ -452,7 +452,11 @@ impl crate::RenderedElementBacking for web_sys::Element {
 
     fn set_focus(&self, focus: bool) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()>>> {
         let e = self.dyn_ref::<web_sys::HtmlElement>().unwrap();
-        (if focus { e.focus() } else { e.blur() });
+        if focus {
+            _ = e.focus();
+        } else {
+            _ = e.blur();
+        };
         Box::pin(async { () })
     }
 
