@@ -1,4 +1,5 @@
 #![allow(non_snake_case)]
+use dioxus::html::HasFileData;
 use dioxus::prelude::*;
 use tokio::time::sleep;
 
@@ -48,7 +49,7 @@ fn App(cx: Scope) -> Element {
             ondrop: move |evt| {
                 to_owned![files_uploaded];
                 async move {
-                    if let Some(file_engine) = &evt.files {
+                    if let Some(file_engine) = &evt.files() {
                         let files = file_engine.files();
                         for file_name in &files {
                             if let Some(file) = file_engine.read_file_to_string(file_name).await{

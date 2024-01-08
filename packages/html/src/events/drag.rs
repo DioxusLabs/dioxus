@@ -8,8 +8,6 @@ use keyboard_types::Modifiers;
 
 use crate::HasMouseData;
 
-use std::fmt::Debug;
-
 pub type DragEvent = Event<DragData>;
 
 /// The DragEvent interface is a DOM event that represents a drag and drop interaction. The user initiates a drag by
