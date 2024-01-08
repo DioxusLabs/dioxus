@@ -173,6 +173,7 @@ jobs:
 
   matrix_test:
     runs-on: ${{ matrix.platform.os }}
+    if: github.event.pull_request.draft == false
     env:
       RUST_CARGO_COMMAND: ${{ matrix.platform.cross == true && 'cross' || 'cargo' }}
     strategy:
