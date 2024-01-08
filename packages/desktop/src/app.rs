@@ -63,7 +63,7 @@ impl<P: 'static> App<P> {
     pub fn new(cfg: Config, props: P, root: Component<P>) -> (EventLoop<UserWindowEvent>, Self) {
         let event_loop = EventLoopBuilder::<UserWindowEvent>::with_user_event().build();
 
-        let mut app = Self {
+        let app = Self {
             root,
             window_behavior: cfg.last_window_close_behaviour,
             is_visible_before_start: true,
@@ -109,7 +109,7 @@ impl<P: 'static> App<P> {
     }
 
     #[cfg(all(feature = "hot-reload", debug_assertions))]
-    pub fn connect_hotreload(&mut self) {
+    pub fn connect_hotreload(&self) {
         dioxus_hot_reload::connect({
             let proxy = self.shared.proxy.clone();
             move |template| {

@@ -44,12 +44,12 @@ members = [
     "examples/PWA-example",
     "examples/query_segments_demo",
     "examples/openid_connect_demo",
+    "examples/mobile_demo",
     # Playwright tests
     "playwright-tests/liveview",
     "playwright-tests/web",
     "playwright-tests/fullstack",
 ]
-exclude = ["examples/mobile_demo"]
 
 [workspace.package]
 version = "0.4.3"
