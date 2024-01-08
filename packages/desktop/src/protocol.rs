@@ -25,7 +25,7 @@ use crate::desktop_context::EditQueue;
 static MINIFIED: &str = include_str!("./minified.js");
 
 fn module_loader(root_name: &str, headless: bool) -> String {
-    let js = INTERPRETER_JS.replace(
+    let _js = INTERPRETER_JS.replace(
         "/*POST_HANDLE_EDITS*/",
         r#"// Prevent file inputs from opening the file dialog on click
     let inputs = document.querySelectorAll("input");
@@ -212,6 +212,7 @@ pub fn use_asset_handler<F: AssetFuture>(
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(super) async fn desktop_handler(
     request: Request<Vec<u8>>,
     custom_head: Option<String>,

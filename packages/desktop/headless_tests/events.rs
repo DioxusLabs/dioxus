@@ -230,13 +230,8 @@ fn app(cx: Scope) -> Element {
                     assert!(event.data.modifiers().is_empty());
                     assert!(event.data.held_buttons().is_empty());
                     assert_eq!(event.data.trigger_button(), Some(dioxus_html::input_data::MouseButton::Primary));
-                    received_events.modify(|x| *x + 1)
+                    received_events.modify(|x| *x + 1);
                 },
-                    assert_eq!(
-                        event.data.trigger_button(),
-                        Some(dioxus_html::input_data::MouseButton::Primary),
-                    );
-                    recieved_events.modify(|x| *x + 1)
                 }
             }
             div {
@@ -354,5 +349,5 @@ fn app(cx: Scope) -> Element {
                 }
             }
         }
-    })
+    )
 }

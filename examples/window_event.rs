@@ -12,6 +12,8 @@ fn main() {
 }
 
 fn app(cx: Scope) -> Element {
+    // Just trying to please the cargo gods
+    #[allow(deprecated)]
     let window = dioxus_desktop::use_window(cx);
 
     // if you want to make window fullscreen, you need close the resizable.
@@ -23,14 +25,14 @@ fn app(cx: Scope) -> Element {
     let decorations = use_state(cx, || false);
 
     cx.render(rsx!(
-        link { href:"https://unpkg.com/tailwindcss@^2/dist/tailwind.min.css", rel:"stylesheet" }
-        header {
-            class: "text-gray-400 bg-gray-900 body-font",
-            onmousedown: move |_| window.drag(),
-            div {
-                class: "container mx-auto flex flex-wrap p-5 flex-col md:flex-row items-center",
+        link {
+            href: "https://unpkg.com/tailwindcss@^2/dist/tailwind.min.css",
+            rel: "stylesheet"
+        }
+        header { class: "text-gray-400 bg-gray-900 body-font", onmousedown: move |_| window.drag(),
+            div { class: "container mx-auto flex flex-wrap p-5 flex-col md:flex-row items-center",
                 a { class: "flex title-font font-medium items-center text-white mb-4 md:mb-0",
-                    span { class: "ml-3 text-xl", "Dioxus"}
+                    span { class: "ml-3 text-xl", "Dioxus" }
                 }
                 nav { class: "md:ml-auto flex flex-wrap items-center text-base justify-center" }
                 button {
@@ -43,7 +45,6 @@ fn app(cx: Scope) -> Element {
                     class: "inline-flex items-center bg-gray-800 border-0 py-1 px-3 focus:outline-none hover:bg-gray-700 rounded text-base mt-4 md:mt-0",
                     onmousedown: |evt| evt.stop_propagation(),
                     onclick: move |_| {
-
                         window.set_fullscreen(!**fullscreen);
                         window.set_resizable(**fullscreen);
                         fullscreen.modify(|f| !*f);
@@ -59,10 +60,8 @@ fn app(cx: Scope) -> Element {
             }
         }
         br {}
-        div {
-            class: "container mx-auto",
-            div {
-                class: "grid grid-cols-5",
+        div { class: "container mx-auto",
+            div { class: "grid grid-cols-5",
                 div {
                     button {
                         class: "inline-flex items-center text-white bg-green-500 border-0 py-1 px-3 hover:bg-green-700 rounded",

@@ -46,8 +46,7 @@ fn parse_and_save_css(paths: Vec<PathBuf>) -> Result<ResponseEvent, ()> {
 
     let classes: Vec<_> = paths
         .iter()
-        .map(|f| get_classes(f, &rsx_regex))
-        .flatten()
+        .flat_map(|f| get_classes(f, &rsx_regex))
         .map(|f| f.strip_prefix("class:").unwrap().trim().replace('"', ""))
         .collect();
 
@@ -67,8 +66,13 @@ fn parse_and_save_css(paths: Vec<PathBuf>) -> Result<ResponseEvent, ()> {
     );
 
     let tailwind_output = "assets/tailwind.css";
-    let mut file = File::create(tailwind_output).unwrap();
-    file.write(parsed.as_bytes()).unwrap();
+    let mut file = File::create(tailwind_output).map_err(std::mem::drop)?;
+    let written = file.write(parsed.as_bytes()).map_err(std::mem::drop)?;
+
+    if written != parsed.len() {
+        log("Could not write all the bytes to the tailwind file!");
+        return Err(());
+    }
 
     for warning in warnings.iter() {
         log(&warning.to_string())

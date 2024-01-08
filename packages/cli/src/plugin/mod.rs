@@ -181,7 +181,7 @@ pub async fn plugins_watched_paths_changed(
 
     let paths: Vec<String> = paths
         .iter()
-        .filter_map(|f| match f.strip_prefix(&crate_dir) {
+        .filter_map(|f| match f.strip_prefix(crate_dir) {
             Ok(val) => val.to_str().map(|f| f.to_string()),
             Err(_) => {
                 log::warn!(

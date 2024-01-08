@@ -146,6 +146,8 @@ impl std::ops::Deref for DesktopService {
 }
 
 impl DesktopService {
+    // TODO Maybe turn this into a builder pattern?
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
         webview: WebView,
         proxy: ProxyType,

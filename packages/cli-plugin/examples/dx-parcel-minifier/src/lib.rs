@@ -1,4 +1,4 @@
-use std::{fs, path::PathBuf};
+use std::fs;
 
 use dioxus_cli_plugin::*;
 use exports::plugins::main::definitions::Guest;
@@ -63,7 +63,7 @@ impl Guest for CSSMinifer {
 
     #[doc = " Take config from `Dioxus.toml` and apply"]
     #[doc = " to the plugin, returns false if couldn\\'t apply"]
-    fn apply_config(config: Toml) -> Result<(), ()> {
+    fn apply_config(_config: Toml) -> Result<(), ()> {
         Ok(())
     }
 
@@ -85,30 +85,30 @@ impl Guest for CSSMinifer {
 
     #[doc = " Called right before the event given"]
     #[doc = " These are the compile-time functions like `Build`, `Translate`, etc"]
-    fn before_command_event(event: CommandEvent) -> Result<(), ()> {
+    fn before_command_event(_event: CommandEvent) -> Result<(), ()> {
         Ok(())
     }
 
     #[doc = " Called right before the event given"]
     #[doc = " These are the runtime-functions like `HotReload` and `Serve`"]
-    fn before_runtime_event(event: RuntimeEvent) -> Result<ResponseEvent, ()> {
+    fn before_runtime_event(_event: RuntimeEvent) -> Result<ResponseEvent, ()> {
         Ok(ResponseEvent::None)
     }
 
     #[doc = " Called right after the event given"]
-    fn after_command_event(event: CommandEvent) -> Result<(), ()> {
+    fn after_command_event(_event: CommandEvent) -> Result<(), ()> {
         minify_css()?;
         Ok(())
     }
 
     #[doc = " Called right after the event given"]
-    fn after_runtime_event(event: RuntimeEvent) -> Result<ResponseEvent, ()> {
+    fn after_runtime_event(_event: RuntimeEvent) -> Result<ResponseEvent, ()> {
         minify_css()
     }
 
     #[doc = " Gives a list of the paths that have been changed"]
     fn on_watched_paths_change(
-        path: wit_bindgen::rt::vec::Vec<wit_bindgen::rt::string::String>,
+        _path: wit_bindgen::rt::vec::Vec<wit_bindgen::rt::string::String>,
     ) -> Result<ResponseEvent, ()> {
         minify_css()
     }

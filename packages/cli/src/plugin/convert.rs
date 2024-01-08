@@ -28,10 +28,9 @@ impl Convert<toml_edit::Offset> for toml::value::Offset {
     fn convert(self) -> toml_edit::Offset {
         match self {
             ext_toml::value::Offset::Z => toml_edit::Offset::Z,
-            // Todo make an issue to make these the same
-            ext_toml::value::Offset::Custom { minutes, .. } => toml_edit::Offset::Custom {
-                minutes: minutes as i16,
-            },
+            ext_toml::value::Offset::Custom { minutes, .. } => {
+                toml_edit::Offset::Custom { minutes }
+            }
         }
     }
 }

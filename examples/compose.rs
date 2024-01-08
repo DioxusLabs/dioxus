@@ -8,6 +8,8 @@ fn main() {
 }
 
 fn app(cx: Scope) -> Element {
+    let window = dioxus_desktop::window();
+
     let emails_sent = use_ref(cx, Vec::new);
 
     let tx = use_coroutine(cx, |mut rx: UnboundedReceiver<String>| {
@@ -62,10 +64,7 @@ fn compose(cx: Scope<ComposeProps>) -> Element {
                 "Click to send"
             }
 
-            input {
-                oninput: move |e| user_input.set(e.value.clone()),
-                value: "{user_input}"
-            }
+            input { oninput: move |e| user_input.set(e.value.clone()), value: "{user_input}" }
         }
     })
 }

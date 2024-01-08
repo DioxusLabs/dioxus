@@ -5,7 +5,6 @@ use tao::event_loop::{EventLoopProxy, EventLoopWindowTarget};
 pub use wry;
 pub use wry::application as tao;
 use wry::application::window::Window;
-use wry::http::Response;
 use wry::webview::{WebContext, WebView, WebViewBuilder};
 
 pub(crate) fn build(
@@ -101,7 +100,7 @@ pub(crate) fn build(
     // .with_web_context(&mut web_context);
 
     for (name, handler) in cfg.protocols.drain(..) {
-        webview = webview.with_custom_protocol(name, move |r| handler(r))
+        webview = webview.with_custom_protocol(name, handler)
     }
 
     if cfg.disable_context_menu {

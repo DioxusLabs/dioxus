@@ -1,7 +1,7 @@
 use dioxus_cli::{
     crate_root,
     plugin::{convert::ConvertWithState, load_plugin},
-    CrateConfig, DioxusConfig, DioxusLock, Error,
+    DioxusConfig, DioxusLock,
 };
 
 #[tokio::test]

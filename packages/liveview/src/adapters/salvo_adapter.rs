@@ -1,5 +1,5 @@
 use futures_util::{SinkExt, StreamExt};
-use salvo::ws::{Message, WebSocket};
+use salvo::websocket::{Message, WebSocket};
 
 use crate::{LiveViewError, LiveViewSocket};
 
