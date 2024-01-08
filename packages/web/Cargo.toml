@@ -42,7 +42,7 @@ features = [
     "HtmlFormElement",
     "Text",
     "Window",
-    "console",
+    "DataTransfer",
 ]
 
 [features]

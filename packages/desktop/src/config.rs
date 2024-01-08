@@ -134,7 +134,7 @@ impl Config {
         self
     }
 
-    /// Set a file drop handler
+    /// Set a file drop handler. If this is enabled, html drag events will be disabled.
     pub fn with_file_drop_handler(
         mut self,
         handler: impl Fn(WindowId, FileDropEvent) -> bool + 'static,

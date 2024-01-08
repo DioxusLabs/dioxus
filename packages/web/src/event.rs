@@ -1,12 +1,16 @@
 use std::{any::Any, collections::HashMap};
 
 use dioxus_html::{
-    prelude::FormValue, FileEngine, FormData, HasFormData, HasImageData, HtmlEventConverter,
-    ImageData, MountedData, PlatformEventData, ScrollData,
+    point_interaction::{
+        InteractionElementOffset, InteractionLocation, ModifiersInteraction, PointerInteraction,
+    },
+    prelude::FormValue,
+    DragData, FileEngine, FormData, HasDragData, HasFileData, HasFormData, HasImageData,
+    HasMouseData, HtmlEventConverter, ImageData, MountedData, PlatformEventData, ScrollData,
 };
 use js_sys::Array;
 use wasm_bindgen::{prelude::wasm_bindgen, JsCast, JsValue};
-use web_sys::{Document, Element, Event};
+use web_sys::{Document, Element, Event, MouseEvent};
 
 pub(crate) struct WebEventConverter;
 
@@ -44,7 +48,11 @@ impl HtmlEventConverter for WebEventConverter {
 
     #[inline(always)]
     fn convert_drag_data(&self, event: &dioxus_html::PlatformEventData) -> dioxus_html::DragData {
-        downcast_event(event).raw.clone().into()
+        let event = downcast_event(event);
+        DragData::new(WebDragData::new(
+            event.element.clone(),
+            event.raw.clone().unchecked_into(),
+        ))
     }
 
     #[inline(always)]
@@ -180,8 +188,10 @@ impl WebEventExt<web_sys::CompositionEvent> for dioxus_html::CompositionData {
 
 impl WebEventExt<web_sys::MouseEvent> for dioxus_html::DragData {
     fn web_event(&self) -> &web_sys::MouseEvent {
-        self.downcast::<web_sys::MouseEvent>()
+        &self
+            .downcast::<WebDragData>()
             .expect("event should be a WebMouseEvent")
+            .raw
     }
 }
 
@@ -403,6 +413,12 @@ impl HasFormData for WebFormData {
         values
     }
 
+    fn as_any(&self) -> &dyn Any {
+        &self.raw as &dyn Any
+    }
+}
+
+impl HasFileData for WebFormData {
     fn files(&self) -> Option<std::sync::Arc<dyn FileEngine>> {
         #[cfg(not(feature = "file_engine"))]
         let files = None;
@@ -421,9 +437,89 @@ impl HasFormData for WebFormData {
 
         files
     }
+}
 
-    fn as_any(&self) -> &dyn Any {
-        &self.raw as &dyn Any
+struct WebDragData {
+    element: Element,
+    raw: MouseEvent,
+}
+
+impl WebDragData {
+    fn new(element: Element, raw: MouseEvent) -> Self {
+        Self { element, raw }
+    }
+}
+
+impl HasDragData for WebDragData {
+    fn as_any(&self) -> &dyn std::any::Any {
+        &self.raw as &dyn std::any::Any
+    }
+}
+
+impl HasMouseData for WebDragData {
+    fn as_any(&self) -> &dyn std::any::Any {
+        &self.raw as &dyn std::any::Any
+    }
+}
+
+impl PointerInteraction for WebDragData {
+    fn trigger_button(&self) -> Option<dioxus_html::input_data::MouseButton> {
+        self.raw.trigger_button()
+    }
+
+    fn held_buttons(&self) -> dioxus_html::input_data::MouseButtonSet {
+        self.raw.held_buttons()
+    }
+}
+
+impl ModifiersInteraction for WebDragData {
+    fn modifiers(&self) -> dioxus_html::prelude::Modifiers {
+        self.raw.modifiers()
+    }
+}
+
+impl InteractionElementOffset for WebDragData {
+    fn coordinates(&self) -> dioxus_html::geometry::Coordinates {
+        self.raw.coordinates()
+    }
+
+    fn element_coordinates(&self) -> dioxus_html::geometry::ElementPoint {
+        self.raw.element_coordinates()
+    }
+}
+
+impl InteractionLocation for WebDragData {
+    fn client_coordinates(&self) -> dioxus_html::geometry::ClientPoint {
+        self.raw.client_coordinates()
+    }
+
+    fn screen_coordinates(&self) -> dioxus_html::geometry::ScreenPoint {
+        self.raw.screen_coordinates()
+    }
+
+    fn page_coordinates(&self) -> dioxus_html::geometry::PagePoint {
+        self.raw.page_coordinates()
+    }
+}
+
+impl HasFileData for WebDragData {
+    fn files(&self) -> Option<std::sync::Arc<dyn FileEngine>> {
+        #[cfg(not(feature = "file_engine"))]
+        let files = None;
+        #[cfg(feature = "file_engine")]
+        let files = self
+            .element
+            .dyn_ref()
+            .and_then(|input: &web_sys::HtmlInputElement| {
+                input.files().and_then(|files| {
+                    #[allow(clippy::arc_with_non_send_sync)]
+                    crate::file_engine::WebFileEngine::new(files).map(|f| {
+                        std::sync::Arc::new(f) as std::sync::Arc<dyn dioxus_html::FileEngine>
+                    })
+                })
+            });
+
+        files
     }
 }
 

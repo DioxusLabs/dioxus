@@ -34,6 +34,7 @@ features = [
     "TouchList",
     "TouchEvent",
     "MouseEvent",
+    "DragEvent",
     "InputEvent",
     "ClipboardEvent",
     "KeyboardEvent",

@@ -1,9 +1,10 @@
 use std::any::Any;
 use std::path::PathBuf;
 
-use crate::FileEngine;
 use tokio::fs::File;
 use tokio::io::AsyncReadExt;
+
+use crate::file_data::FileEngine;
 
 pub struct NativeFileEngine {
     files: Vec<PathBuf>,

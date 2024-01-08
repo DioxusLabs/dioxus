@@ -22,6 +22,8 @@ pub use elements::HtmlCtx;
 #[cfg(feature = "html-to-rsx")]
 pub use elements::{map_html_attribute_to_rsx, map_html_element_to_rsx};
 pub mod events;
+pub(crate) mod file_data;
+pub use file_data::*;
 pub mod geometry;
 mod global_attributes;
 pub mod input_data;

@@ -88,21 +88,17 @@ impl WebviewInstance {
             }
         };
 
-        let file_drop_handler = move |event| {
-            file_handler
-                .as_ref()
-                .map(|handler| handler(window_id, event))
-                .unwrap_or_default()
-        };
-
         let mut webview = WebViewBuilder::new(&window)
             .with_transparent(cfg.window.window.transparent)
             .with_url("dioxus://index.html/")
             .unwrap()
             .with_ipc_handler(ipc_handler)
             .with_asynchronous_custom_protocol(String::from("dioxus"), request_handler)
-            .with_file_drop_handler(file_drop_handler)
             .with_web_context(&mut web_context);
+
+        if let Some(handler) = file_handler {
+            webview = webview.with_file_drop_handler(move |evt| handler(window_id, evt))
+        }
 
         // This was removed from wry, I'm not sure what replaced it
         // #[cfg(windows)]

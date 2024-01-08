@@ -3,6 +3,7 @@ use crate::events::{
     AnimationData, CompositionData, KeyboardData, MouseData, PointerData, TouchData,
     TransitionData, WheelData,
 };
+use crate::file_data::{FileEngine, HasFileData};
 use crate::geometry::{ClientPoint, ElementPoint, PagePoint, ScreenPoint};
 use crate::input_data::{decode_key_location, decode_mouse_button_set, MouseButton};
 use crate::prelude::*;
@@ -103,8 +104,6 @@ impl ModifiersInteraction for KeyboardEvent {
     }
 }
 
-impl HasDragData for MouseEvent {}
-
 impl InteractionLocation for MouseEvent {
     fn client_coordinates(&self) -> ClientPoint {
         ClientPoint::new(self.client_x().into(), self.client_y().into())
@@ -157,6 +156,14 @@ impl PointerInteraction for MouseEvent {
 }
 
 impl HasMouseData for MouseEvent {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+}
+
+impl HasFileData for MouseEvent {}
+
+impl HasDragData for MouseEvent {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
@@ -510,5 +517,25 @@ impl HasSelectionData for web_sys::Event {
 impl HasMediaData for web_sys::Event {
     fn as_any(&self) -> &dyn std::any::Any {
         self
+    }
+}
+
+impl HasFileData for web_sys::Event {
+    fn files(&self) -> Option<std::sync::Arc<dyn FileEngine>> {
+        #[cfg(not(feature = "file_engine"))]
+        let files = None;
+        #[cfg(feature = "file_engine")]
+        let files = element
+            .dyn_ref()
+            .and_then(|input: &web_sys::HtmlInputElement| {
+                input.files().and_then(|files| {
+                    #[allow(clippy::arc_with_non_send_sync)]
+                    crate::file_engine::WebFileEngine::new(files).map(|f| {
+                        std::sync::Arc::new(f) as std::sync::Arc<dyn dioxus_html::FileEngine>
+                    })
+                })
+            });
+
+        files
     }
 }

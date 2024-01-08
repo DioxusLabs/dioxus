@@ -3,8 +3,8 @@ use crossterm::event::{
     MouseEventKind,
 };
 use dioxus_html::{
-    HasFormData, HasKeyboardData, HasWheelData, SerializedFocusData, SerializedKeyboardData,
-    SerializedMouseData, SerializedWheelData,
+    HasFileData, HasFormData, HasKeyboardData, HasWheelData, SerializedFocusData,
+    SerializedKeyboardData, SerializedMouseData, SerializedWheelData,
 };
 use dioxus_native_core::prelude::*;
 use dioxus_native_core::real_dom::NodeImmutable;
@@ -85,6 +85,8 @@ impl HasFormData for FormData {
         self
     }
 }
+
+impl HasFileData for FormData {}
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Files {
