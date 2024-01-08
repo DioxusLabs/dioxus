@@ -31,16 +31,17 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  SCCACHE_GHA_ENABLED: "true"
+  RUSTC_WRAPPER: "sccache"
+
 jobs:
   check:
     if: github.event.pull_request.draft == false
     name: Check
     runs-on: ubuntu-latest
-    env:
-      CARGO_TERM_COLOR: always
-      CARGO_INCREMENTAL: 0
-      SCCACHE_GHA_ENABLED: "true"
-      RUSTC_WRAPPER: "sccache"
     steps:
       - run: sudo apt-get update
       - run: sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev
@@ -54,11 +55,6 @@ jobs:
     if: github.event.pull_request.draft == false
     name: Test Suite
     runs-on: ubuntu-latest
-    env:
-      CARGO_TERM_COLOR: always
-      CARGO_INCREMENTAL: 0
-      SCCACHE_GHA_ENABLED: "true"
-      RUSTC_WRAPPER: "sccache"
     steps:
       - run: sudo apt-get update
       - run: sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
@@ -75,11 +71,6 @@ jobs:
     if: github.event.pull_request.draft == false
     name: Rustfmt
     runs-on: ubuntu-latest
-    env:
-      CARGO_TERM_COLOR: always
-      CARGO_INCREMENTAL: 0
-      SCCACHE_GHA_ENABLED: "true"
-      RUSTC_WRAPPER: "sccache"
     steps:
       - uses: dtolnay/rust-toolchain@stable
       - uses: mozilla-actions/sccache-action@v0.0.3
@@ -92,11 +83,6 @@ jobs:
     if: github.event.pull_request.draft == false
     name: Clippy
     runs-on: ubuntu-latest
-    env:
-      CARGO_TERM_COLOR: always
-      CARGO_INCREMENTAL: 0
-      SCCACHE_GHA_ENABLED: "true"
-      RUSTC_WRAPPER: "sccache"
     steps:
       - run: sudo apt-get update
       - run: sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev
@@ -186,10 +172,6 @@ jobs:
   matrix_test:
     runs-on: ${{ matrix.platform.os }}
     env:
-      CARGO_TERM_COLOR: always
-      CARGO_INCREMENTAL: 0
-      SCCACHE_GHA_ENABLED: "true"
-      RUSTC_WRAPPER: "sccache"
       RUST_CARGO_COMMAND: ${{ matrix.platform.cross == true && 'cross' || 'cargo' }}
     strategy:
       matrix:
