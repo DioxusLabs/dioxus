@@ -133,9 +133,6 @@ jobs:
     if: github.event.pull_request.draft == false
     name: Playwright Tests
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./playwright-tests
     steps:
       # Do our best to cache the toolchain and node install steps
       - uses: ilammy/setup-nasm@v1
@@ -148,6 +145,7 @@ jobs:
           toolchain: stable
           targets: x86_64-unknown-linux-gnu,wasm32-unknown-unknown
       - uses: mozilla-actions/sccache-action@v0.0.3
+      - run: cd playwright-tests
       - name: Install dependencies
         run: npm ci
       - name: Install Playwright
