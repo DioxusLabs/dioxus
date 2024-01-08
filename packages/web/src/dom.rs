@@ -1,33 +1,36 @@
 //! Implementation of a renderer for Dioxus on the web.
 //!
-//! Oustanding todos:
-//! - Removing event listeners (delegation)
+//! Outstanding todos:
 //! - Passive event listeners
 //! - no-op event listener patch for safari
 //! - tests to ensure dyn_into works for various event types.
-//! - Partial delegation?>
+//! - Partial delegation?
 
 use dioxus_core::{
     BorrowedAttributeValue, ElementId, Mutation, Template, TemplateAttribute, TemplateNode,
 };
 use dioxus_html::{event_bubbles, CompositionData, FormData, FormValue, MountedData};
 use dioxus_interpreter_js::{get_node, minimal_bindings, save_template, Channel};
+use dioxus_html::{event_bubbles, MountedData, PlatformEventData};
+use dioxus_interpreter_js::get_node;
+use dioxus_interpreter_js::{minimal_bindings, save_template, Channel};
 use futures_channel::mpsc;
-use js_sys::Array;
 use rustc_hash::FxHashMap;
 use std::{any::Any, collections::HashMap, rc::Rc};
 use wasm_bindgen::{closure::Closure, prelude::wasm_bindgen, JsCast, JsValue};
+use wasm_bindgen::{closure::Closure, JsCast, JsValue};
 use web_sys::{Document, Element, Event};
 
-use crate::Config;
+use crate::{load_document, virtual_event_from_websys_event, Config, WebEventConverter};
 
 pub struct WebsysDom {
     document: Document,
     #[allow(dead_code)]
     pub(crate) root: Element,
-    templates: FxHashMap<String, u32>,
-    max_template_id: u32,
+    templates: FxHashMap<String, u16>,
+    max_template_id: u16,
     pub(crate) interpreter: Channel,
+    #[cfg(feature = "mounted")]
     event_channel: mpsc::UnboundedSender<UiEvent>,
 }
 
@@ -35,7 +38,7 @@ pub struct UiEvent {
     pub name: String,
     pub bubbles: bool,
     pub element: ElementId,
-    pub data: Rc<dyn Any>,
+    pub data: PlatformEventData,
 }
 
 impl WebsysDom {
@@ -45,7 +48,16 @@ impl WebsysDom {
         let document = load_document();
         let root = match document.get_element_by_id(&cfg.rootname) {
             Some(root) => root,
-            None => document.create_element("body").ok().unwrap(),
+            None => {
+                web_sys::console::error_1(
+                    &format!(
+                        "element '#{}' not found. mounting to the body.",
+                        cfg.rootname
+                    )
+                    .into(),
+                );
+                document.create_element("body").ok().unwrap()
+            }
         };
         let interpreter = Channel::default();
 
@@ -90,10 +102,11 @@ impl WebsysDom {
             }
         }));
 
-        dioxus_interpreter_js::initilize(
+        dioxus_interpreter_js::initialize(
             root.clone().unchecked_into(),
             handler.as_ref().unchecked_ref(),
         );
+        dioxus_html::set_event_converter(Box::new(WebEventConverter));
         handler.forget();
         Self {
             document,
@@ -101,6 +114,7 @@ impl WebsysDom {
             interpreter,
             templates: FxHashMap::default(),
             max_template_id: 0,
+            #[cfg(feature = "mounted")]
             event_channel,
         }
     }
@@ -171,11 +185,12 @@ impl WebsysDom {
     pub fn apply_edits(&mut self, mut edits: Vec<Mutation>) {
         use Mutation::*;
         let i = &mut self.interpreter;
+        #[cfg(feature = "mounted")]
         // we need to apply the mount events last, so we collect them here
         let mut to_mount = Vec::new();
         for edit in &edits {
             match edit {
-                AppendChildren { id, m } => i.append_children(id.0 as u32, *m as u32),
+                AppendChildren { id, m } => i.append_children(id.0 as u32, *m as u16),
                 AssignId { path, id } => {
                     i.assign_id(path.as_ptr() as u32, path.len() as u8, id.0 as u32)
                 }
@@ -186,15 +201,15 @@ impl WebsysDom {
                 }
                 LoadTemplate { name, index, id } => {
                     if let Some(tmpl_id) = self.templates.get(*name) {
-                        i.load_template(*tmpl_id, *index as u32, id.0 as u32)
+                        i.load_template(*tmpl_id, *index as u16, id.0 as u32)
                     }
                 }
-                ReplaceWith { id, m } => i.replace_with(id.0 as u32, *m as u32),
+                ReplaceWith { id, m } => i.replace_with(id.0 as u32, *m as u16),
                 ReplacePlaceholder { path, m } => {
-                    i.replace_placeholder(path.as_ptr() as u32, path.len() as u8, *m as u32)
+                    i.replace_placeholder(path.as_ptr() as u32, path.len() as u8, *m as u16)
                 }
-                InsertAfter { id, m } => i.insert_after(id.0 as u32, *m as u32),
-                InsertBefore { id, m } => i.insert_before(id.0 as u32, *m as u32),
+                InsertAfter { id, m } => i.insert_after(id.0 as u32, *m as u16),
+                InsertBefore { id, m } => i.insert_before(id.0 as u32, *m as u16),
                 SetAttribute {
                     name,
                     value,
@@ -226,6 +241,7 @@ impl WebsysDom {
                     match *name {
                         // mounted events are fired immediately after the element is mounted.
                         "mounted" => {
+                            #[cfg(feature = "mounted")]
                             to_mount.push(*id);
                         }
                         _ => {
@@ -246,6 +262,7 @@ impl WebsysDom {
         edits.clear();
         i.flush();
 
+        #[cfg(feature = "mounted")]
         for id in to_mount {
             let node = get_node(id.0 as u32);
             if let Some(element) = node.dyn_ref::<Element>() {
@@ -426,13 +443,23 @@ fn read_input_to_data(target: Element) -> Rc<FormData> {
                     values.set(name, formData.get(name));
                     break;
             }
+            self.send_mount_event(id);
         }
-
-        return values;
     }
-"#)]
-extern "C" {
-    fn get_form_data(form: &web_sys::HtmlFormElement) -> js_sys::Map;
+
+    pub(crate) fn send_mount_event(&self, id: ElementId) {
+        let node = get_node(id.0 as u32);
+        if let Some(element) = node.dyn_ref::<Element>() {
+            let data: MountedData = element.into();
+            let data = Box::new(data);
+            let _ = self.event_channel.unbounded_send(UiEvent {
+                name: "mounted".to_string(),
+                bubbles: false,
+                element: id,
+                data: PlatformEventData::new(data),
+            });
+        }
+    }
 }
 
 fn walk_event_for_id(event: &web_sys::Event) -> Option<(ElementId, web_sys::Element)> {

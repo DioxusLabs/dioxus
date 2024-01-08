@@ -36,6 +36,8 @@ jobs:
           toolchain: ${{ matrix.platform.toolchain }}
           targets: ${{ matrix.platform.target }}
 
+      - uses: ilammy/setup-nasm@v1
+
       # Setup the Github Actions Cache for the CLI package
       - name: Setup cache
         uses: Swatinem/rust-cache@v2

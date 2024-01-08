@@ -30,7 +30,8 @@ pub fn Fragment<'a>(cx: Scope<'a, FragmentProps<'a>>) -> Element {
     let children = cx.props.0.as_ref()?;
     Some(VNode {
         key: children.key,
-        parent: children.parent,
+        parent: children.parent.clone(),
+        stable_id: children.stable_id.clone(),
         template: children.template.clone(),
         root_ids: children.root_ids.clone(),
         dynamic_nodes: children.dynamic_nodes,
@@ -91,10 +92,10 @@ impl<'a, const A: bool> FragmentBuilder<'a, A> {
 ///     })
 /// }
 /// ```
-impl<'a> Properties for FragmentProps<'a> {
+impl<'a> Properties<'_> for FragmentProps<'a> {
     type Builder = FragmentBuilder<'a, false>;
     const IS_STATIC: bool = false;
-    fn builder() -> Self::Builder {
+    fn builder(_cx: &ScopeState) -> Self::Builder {
         FragmentBuilder(None)
     }
     unsafe fn memoize(&self, _other: &Self) -> bool {

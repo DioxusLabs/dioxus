@@ -14,74 +14,77 @@ pub(crate) struct FileDialogRequest {
     pub bubbles: bool,
 }
 
-#[cfg(not(any(
-    target_os = "windows",
-    target_os = "macos",
-    target_os = "linux",
-    target_os = "dragonfly",
-    target_os = "freebsd",
-    target_os = "netbsd",
-    target_os = "openbsd"
-)))]
-pub(crate) fn get_file_event(_request: &FileDialogRequest) -> Vec<PathBuf> {
-    vec![]
-}
+#[allow(unused)]
+impl FileDialogRequest {
+    #[cfg(not(any(
+        target_os = "windows",
+        target_os = "macos",
+        target_os = "linux",
+        target_os = "dragonfly",
+        target_os = "freebsd",
+        target_os = "netbsd",
+        target_os = "openbsd"
+    )))]
+    pub(crate) fn get_file_event(&self) -> Vec<PathBuf> {
+        vec![]
+    }
 
-#[cfg(any(
-    target_os = "windows",
-    target_os = "macos",
-    target_os = "linux",
-    target_os = "dragonfly",
-    target_os = "freebsd",
-    target_os = "netbsd",
-    target_os = "openbsd"
-))]
-pub(crate) fn get_file_event(request: &FileDialogRequest) -> Vec<PathBuf> {
-    fn get_file_event_for_folder(
-        request: &FileDialogRequest,
-        dialog: rfd::FileDialog,
-    ) -> Vec<PathBuf> {
-        if request.multiple {
-            dialog.pick_folders().into_iter().flatten().collect()
-        } else {
-            dialog.pick_folder().into_iter().collect()
+    #[cfg(any(
+        target_os = "windows",
+        target_os = "macos",
+        target_os = "linux",
+        target_os = "dragonfly",
+        target_os = "freebsd",
+        target_os = "netbsd",
+        target_os = "openbsd"
+    ))]
+    pub(crate) fn get_file_event(&self) -> Vec<PathBuf> {
+        fn get_file_event_for_folder(
+            request: &FileDialogRequest,
+            dialog: rfd::FileDialog,
+        ) -> Vec<PathBuf> {
+            if request.multiple {
+                dialog.pick_folders().into_iter().flatten().collect()
+            } else {
+                dialog.pick_folder().into_iter().collect()
+            }
         }
-    }
 
-    fn get_file_event_for_file(
-        request: &FileDialogRequest,
-        mut dialog: rfd::FileDialog,
-    ) -> Vec<PathBuf> {
-        let filters: Vec<_> = request
-            .accept
-            .as_deref()
-            .unwrap_or_default()
-            .split(',')
-            .filter_map(|s| Filters::from_str(s).ok())
-            .collect();
+        fn get_file_event_for_file(
+            request: &FileDialogRequest,
+            mut dialog: rfd::FileDialog,
+        ) -> Vec<PathBuf> {
+            let filters: Vec<_> = request
+                .accept
+                .as_deref()
+                .unwrap_or_default()
+                .split(',')
+                .filter_map(|s| Filters::from_str(s).ok())
+                .collect();
 
-        let file_extensions: Vec<_> = filters
-            .iter()
-            .flat_map(|f| f.as_extensions().into_iter())
-            .collect();
+            let file_extensions: Vec<_> = filters
+                .iter()
+                .flat_map(|f| f.as_extensions().into_iter())
+                .collect();
 
-        dialog = dialog.add_filter("name", file_extensions.as_slice());
+            dialog = dialog.add_filter("name", file_extensions.as_slice());
 
-        let files: Vec<_> = if request.multiple {
-            dialog.pick_files().into_iter().flatten().collect()
+            let files: Vec<_> = if request.multiple {
+                dialog.pick_files().into_iter().flatten().collect()
+            } else {
+                dialog.pick_file().into_iter().collect()
+            };
+
+            files
+        }
+
+        let dialog = rfd::FileDialog::new();
+
+        if self.directory {
+            get_file_event_for_folder(self, dialog)
         } else {
-            dialog.pick_file().into_iter().collect()
-        };
-
-        files
-    }
-
-    let dialog = rfd::FileDialog::new();
-
-    if request.directory {
-        get_file_event_for_folder(request, dialog)
-    } else {
-        get_file_event_for_file(request, dialog)
+            get_file_event_for_file(self, dialog)
+        }
     }
 }
 

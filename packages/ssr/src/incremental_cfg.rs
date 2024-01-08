@@ -67,6 +67,7 @@ pub struct IncrementalRendererConfig {
     memory_cache_limit: usize,
     invalidate_after: Option<Duration>,
     map_path: Option<PathMapFn>,
+    clear_cache: bool,
 }
 
 impl Default for IncrementalRendererConfig {
@@ -83,7 +84,14 @@ impl IncrementalRendererConfig {
             memory_cache_limit: 10000,
             invalidate_after: None,
             map_path: None,
+            clear_cache: true,
         }
+    }
+
+    /// Clear the cache on startup (default: true)
+    pub fn clear_cache(mut self, clear_cache: bool) -> Self {
+        self.clear_cache = clear_cache;
+        self
     }
 
     /// Set a mapping from the route to the file path. This will override the default mapping configured with `static_dir`.
@@ -114,7 +122,7 @@ impl IncrementalRendererConfig {
     /// Build the incremental renderer.
     pub fn build(self) -> IncrementalRenderer {
         let static_dir = self.static_dir.clone();
-        IncrementalRenderer {
+        let mut renderer = IncrementalRenderer {
             static_dir: self.static_dir.clone(),
             memory_cache: NonZeroUsize::new(self.memory_cache_limit)
                 .map(|limit| lru::LruCache::with_hasher(limit, Default::default())),
@@ -129,6 +137,12 @@ impl IncrementalRendererConfig {
                     path
                 })
             }),
+        };
+
+        if self.clear_cache {
+            renderer.invalidate_all();
         }
+
+        renderer
     }
 }

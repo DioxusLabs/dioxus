@@ -10,14 +10,8 @@ mod sledgehammer_bindings;
 #[cfg(feature = "sledgehammer")]
 pub use sledgehammer_bindings::*;
 
-#[cfg(feature = "web")]
-mod bindings;
-
-#[cfg(feature = "web")]
-pub use bindings::Interpreter;
-
 // Common bindings for minimal usage.
-#[cfg(feature = "minimal_bindings")]
+#[cfg(all(feature = "minimal_bindings", feature = "web"))]
 pub mod minimal_bindings {
     use wasm_bindgen::{prelude::wasm_bindgen, JsValue};
     #[wasm_bindgen(module = "/src/common.js")]

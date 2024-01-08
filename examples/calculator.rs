@@ -6,13 +6,13 @@ This calculator version uses React-style state management. All state is held as 
 use dioxus::events::*;
 use dioxus::html::input_data::keyboard_types::Key;
 use dioxus::prelude::*;
-use dioxus_desktop::{Config, WindowBuilder};
+use dioxus_desktop::{Config, LogicalSize, WindowBuilder};
 
 fn main() {
     let config = Config::new().with_window(
         WindowBuilder::default()
             .with_title("Calculator")
-            .with_inner_size(dioxus_desktop::LogicalSize::new(300.0, 500.0)),
+            .with_inner_size(LogicalSize::new(300.0, 500.0)),
     );
 
     dioxus_desktop::launch_cfg(app, config);
@@ -62,6 +62,7 @@ fn app(cx: Scope) -> Element {
         div { id: "wrapper",
             div { class: "app",
                 div { class: "calculator",
+                    tabindex: "0",
                     onkeydown: handle_key_down_event,
                     div { class: "calculator-display", val.to_string() }
                     div { class: "calculator-keypad",

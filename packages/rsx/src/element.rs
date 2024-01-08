@@ -8,7 +8,7 @@ use syn::{
     parse::{Parse, ParseBuffer, ParseStream},
     punctuated::Punctuated,
     spanned::Spanned,
-    Error, Expr, Ident, LitStr, Result, Token,
+    Expr, Ident, LitStr, Result, Token,
 };
 
 // =======================================
@@ -18,7 +18,8 @@ use syn::{
 pub struct Element {
     pub name: ElementName,
     pub key: Option<IfmtInput>,
-    pub attributes: Vec<ElementAttrNamed>,
+    pub attributes: Vec<AttributeType>,
+    pub merged_attributes: Vec<AttributeType>,
     pub children: Vec<BodyNode>,
     pub brace: syn::token::Brace,
 }
@@ -31,10 +32,9 @@ impl Parse for Element {
         let content: ParseBuffer;
         let brace = syn::braced!(content in stream);
 
-        let mut attributes: Vec<ElementAttrNamed> = vec![];
+        let mut attributes: Vec<AttributeType> = vec![];
         let mut children: Vec<BodyNode> = vec![];
         let mut key = None;
-        let mut _el_ref = None;
 
         // parse fields with commas
         // break when we don't get this pattern anymore
@@ -42,6 +42,22 @@ impl Parse for Element {
         // "def": 456,
         // abc: 123,
         loop {
+            if content.peek(Token![..]) {
+                content.parse::<Token![..]>()?;
+                let expr = content.parse::<Expr>()?;
+                let span = expr.span();
+                attributes.push(attribute::AttributeType::Spread(expr));
+
+                if content.is_empty() {
+                    break;
+                }
+
+                if content.parse::<Token![,]>().is_err() {
+                    missing_trailing_comma!(span);
+                }
+                continue;
+            }
+
             // Parse the raw literal fields
             if content.peek(LitStr) && content.peek2(Token![:]) && !content.peek3(Token![:]) {
                 let name = content.parse::<LitStr>()?;
@@ -49,19 +65,14 @@ impl Parse for Element {
 
                 content.parse::<Token![:]>()?;
 
-                if content.peek(LitStr) {
-                    let value = content.parse()?;
-                    attributes.push(ElementAttrNamed {
-                        el_name: el_name.clone(),
-                        attr: ElementAttr::CustomAttrText { name, value },
-                    });
-                } else {
-                    let value = content.parse::<Expr>()?;
-                    attributes.push(ElementAttrNamed {
-                        el_name: el_name.clone(),
-                        attr: ElementAttr::CustomAttrExpression { name, value },
-                    });
-                }
+                let value = content.parse::<ElementAttrValue>()?;
+                attributes.push(attribute::AttributeType::Named(ElementAttrNamed {
+                    el_name: el_name.clone(),
+                    attr: ElementAttr {
+                        name: ElementAttrName::Custom(name),
+                        value,
+                    },
+                }));
 
                 if content.is_empty() {
                     break;
@@ -84,41 +95,27 @@ impl Parse for Element {
                 let span = content.span();
 
                 if name_str.starts_with("on") {
-                    attributes.push(ElementAttrNamed {
+                    attributes.push(attribute::AttributeType::Named(ElementAttrNamed {
                         el_name: el_name.clone(),
-                        attr: ElementAttr::EventTokens {
-                            name,
-                            tokens: content.parse()?,
+                        attr: ElementAttr {
+                            name: ElementAttrName::BuiltIn(name),
+                            value: ElementAttrValue::EventTokens(content.parse()?),
                         },
-                    });
+                    }));
                 } else {
                     match name_str.as_str() {
                         "key" => {
                             key = Some(content.parse()?);
                         }
-                        "classes" => todo!("custom class list not supported yet"),
-                        // "namespace" => todo!("custom namespace not supported yet"),
-                        "node_ref" => {
-                            _el_ref = Some(content.parse::<Expr>()?);
-                        }
                         _ => {
-                            if content.peek(LitStr) {
-                                attributes.push(ElementAttrNamed {
-                                    el_name: el_name.clone(),
-                                    attr: ElementAttr::AttrText {
-                                        name,
-                                        value: content.parse()?,
-                                    },
-                                });
-                            } else {
-                                attributes.push(ElementAttrNamed {
-                                    el_name: el_name.clone(),
-                                    attr: ElementAttr::AttrExpression {
-                                        name,
-                                        value: content.parse()?,
-                                    },
-                                });
-                            }
+                            let value = content.parse::<ElementAttrValue>()?;
+                            attributes.push(attribute::AttributeType::Named(ElementAttrNamed {
+                                el_name: el_name.clone(),
+                                attr: ElementAttr {
+                                    name: ElementAttrName::BuiltIn(name),
+                                    value,
+                                },
+                            }));
                         }
                     }
                 }
@@ -127,7 +124,6 @@ impl Parse for Element {
                     break;
                 }
 
-                // todo: add a message saying you need to include commas between fields
                 if content.parse::<Token![,]>().is_err() {
                     missing_trailing_comma!(span);
                 }
@@ -135,6 +131,37 @@ impl Parse for Element {
             }
 
             break;
+        }
+
+        // Deduplicate any attributes that can be combined
+        // For example, if there are two `class` attributes, combine them into one
+        let mut merged_attributes: Vec<AttributeType> = Vec::new();
+        for attr in &attributes {
+            if let Some(old_attr_index) = merged_attributes.iter().position(|a| {
+                matches!((a, attr), (
+                                AttributeType::Named(ElementAttrNamed {
+                                    attr: ElementAttr {
+                                        name: ElementAttrName::BuiltIn(old_name),
+                                        ..
+                                    },
+                                    ..
+                                }),
+                                AttributeType::Named(ElementAttrNamed {
+                                    attr: ElementAttr {
+                                        name: ElementAttrName::BuiltIn(new_name),
+                                        ..
+                                    },
+                                    ..
+                                }),
+                            ) if old_name == new_name)
+            }) {
+                let old_attr = &mut merged_attributes[old_attr_index];
+                if let Some(combined) = old_attr.try_combine(attr) {
+                    *old_attr = combined;
+                }
+            } else {
+                merged_attributes.push(attr.clone());
+            }
         }
 
         while !content.is_empty() {
@@ -158,6 +185,7 @@ impl Parse for Element {
             key,
             name: el_name,
             attributes,
+            merged_attributes,
             children,
             brace,
         })
@@ -174,15 +202,31 @@ impl ToTokens for Element {
             None => quote! { None },
         };
 
-        let listeners = self
-            .attributes
-            .iter()
-            .filter(|f| matches!(f.attr, ElementAttr::EventTokens { .. }));
+        let listeners = self.merged_attributes.iter().filter(|f| {
+            matches!(
+                f,
+                AttributeType::Named(ElementAttrNamed {
+                    attr: ElementAttr {
+                        value: ElementAttrValue::EventTokens { .. },
+                        ..
+                    },
+                    ..
+                })
+            )
+        });
 
-        let attr = self
-            .attributes
-            .iter()
-            .filter(|f| !matches!(f.attr, ElementAttr::EventTokens { .. }));
+        let attr = self.merged_attributes.iter().filter(|f| {
+            !matches!(
+                f,
+                AttributeType::Named(ElementAttrNamed {
+                    attr: ElementAttr {
+                        value: ElementAttrValue::EventTokens { .. },
+                        ..
+                    },
+                    ..
+                })
+            )
+        });
 
         tokens.append_all(quote! {
             __cx.element(
@@ -264,136 +308,3 @@ impl ToTokens for ElementName {
         }
     }
 }
-
-#[derive(PartialEq, Eq, Clone, Debug, Hash)]
-pub enum ElementAttr {
-    /// `attribute: "value"`
-    AttrText { name: Ident, value: IfmtInput },
-
-    /// `attribute: true`
-    AttrExpression { name: Ident, value: Expr },
-
-    /// `"attribute": "value"`
-    CustomAttrText { name: LitStr, value: IfmtInput },
-
-    /// `"attribute": true`
-    CustomAttrExpression { name: LitStr, value: Expr },
-
-    // /// onclick: move |_| {}
-    // EventClosure { name: Ident, closure: ExprClosure },
-    /// onclick: {}
-    EventTokens { name: Ident, tokens: Expr },
-}
-
-impl ElementAttr {
-    pub fn start(&self) -> Span {
-        match self {
-            ElementAttr::AttrText { name, .. } => name.span(),
-            ElementAttr::AttrExpression { name, .. } => name.span(),
-            ElementAttr::CustomAttrText { name, .. } => name.span(),
-            ElementAttr::CustomAttrExpression { name, .. } => name.span(),
-            ElementAttr::EventTokens { name, .. } => name.span(),
-        }
-    }
-
-    pub fn is_expr(&self) -> bool {
-        matches!(
-            self,
-            ElementAttr::AttrExpression { .. }
-                | ElementAttr::CustomAttrExpression { .. }
-                | ElementAttr::EventTokens { .. }
-        )
-    }
-}
-
-#[derive(PartialEq, Eq, Clone, Debug, Hash)]
-pub struct ElementAttrNamed {
-    pub el_name: ElementName,
-    pub attr: ElementAttr,
-}
-
-impl ToTokens for ElementAttrNamed {
-    fn to_tokens(&self, tokens: &mut TokenStream2) {
-        let ElementAttrNamed { el_name, attr } = self;
-
-        let ns = |name| match el_name {
-            ElementName::Ident(i) => quote! { dioxus_elements::#i::#name.1 },
-            ElementName::Custom(_) => quote! { None },
-        };
-        let volitile = |name| match el_name {
-            ElementName::Ident(_) => quote! { #el_name::#name.2 },
-            ElementName::Custom(_) => quote! { false },
-        };
-        let attribute = |name: &Ident| match el_name {
-            ElementName::Ident(_) => quote! { #el_name::#name.0 },
-            ElementName::Custom(_) => {
-                let as_string = name.to_string();
-                quote!(#as_string)
-            }
-        };
-
-        let attribute = match attr {
-            ElementAttr::AttrText { name, value } => {
-                let ns = ns(name);
-                let volitile = volitile(name);
-                let attribute = attribute(name);
-                quote! {
-                    __cx.attr(
-                        #attribute,
-                        #value,
-                        #ns,
-                        #volitile
-                    )
-                }
-            }
-            ElementAttr::AttrExpression { name, value } => {
-                let ns = ns(name);
-                let volitile = volitile(name);
-                let attribute = attribute(name);
-                quote! {
-                    __cx.attr(
-                        #attribute,
-                        #value,
-                        #ns,
-                        #volitile
-                    )
-                }
-            }
-            ElementAttr::CustomAttrText { name, value } => {
-                quote! {
-                    __cx.attr(
-                        #name,
-                        #value,
-                        None,
-                        false
-                    )
-                }
-            }
-            ElementAttr::CustomAttrExpression { name, value } => {
-                quote! {
-                    __cx.attr(
-                        #name,
-                        #value,
-                        None,
-                        false
-                    )
-                }
-            }
-            ElementAttr::EventTokens { name, tokens } => {
-                quote! {
-                    dioxus_elements::events::#name(__cx, #tokens)
-                }
-            }
-        };
-
-        tokens.append_all(attribute);
-    }
-}
-
-// ::dioxus::core::Attribute {
-//     name: stringify!(#name),
-//     namespace: None,
-//     volatile: false,
-//     mounted_node: Default::default(),
-//     value: ::dioxus::core::AttributeValue::Text(#value),
-// }

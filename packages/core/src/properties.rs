@@ -32,7 +32,7 @@ use crate::innerlude::*;
 ///     data: &'a str
 /// }
 /// ```
-pub trait Properties: Sized {
+pub trait Properties<'a>: Sized {
     /// The type of the builder for this component.
     /// Used to create "in-progress" versions of the props.
     type Builder;
@@ -41,7 +41,7 @@ pub trait Properties: Sized {
     const IS_STATIC: bool;
 
     /// Create a builder for this component.
-    fn builder() -> Self::Builder;
+    fn builder(cx: &'a ScopeState) -> Self::Builder;
 
     /// Memoization can only happen if the props are valid for the 'static lifetime
     ///
@@ -51,10 +51,10 @@ pub trait Properties: Sized {
     unsafe fn memoize(&self, other: &Self) -> bool;
 }
 
-impl Properties for () {
+impl Properties<'_> for () {
     type Builder = EmptyBuilder;
     const IS_STATIC: bool = true;
-    fn builder() -> Self::Builder {
+    fn builder(_cx: &ScopeState) -> Self::Builder {
         EmptyBuilder {}
     }
     unsafe fn memoize(&self, _other: &Self) -> bool {
@@ -70,8 +70,11 @@ impl EmptyBuilder {
 
 /// This utility function launches the builder method so rsx! and html! macros can use the typed-builder pattern
 /// to initialize a component's props.
-pub fn fc_to_builder<'a, T: Properties + 'a>(_: fn(Scope<'a, T>) -> Element<'a>) -> T::Builder {
-    T::builder()
+pub fn fc_to_builder<'a, T: Properties<'a> + 'a>(
+    cx: &'a ScopeState,
+    _: fn(Scope<'a, T>) -> Element<'a>,
+) -> T::Builder {
+    T::builder(cx)
 }
 
 #[cfg(not(miri))]

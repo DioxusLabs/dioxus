@@ -1,4 +1,6 @@
 use crate::{cfg::Platform, error::Result};
+use manganis_cli_support::AssetManifest;
+use manganis_cli_support::AssetManifestExt;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
@@ -211,6 +213,8 @@ pub struct CrateConfig {
     pub verbose: bool,
     pub custom_profile: Option<String>,
     pub features: Option<Vec<String>>,
+    pub target: Option<String>,
+    pub cargo_args: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -278,6 +282,8 @@ impl CrateConfig {
         let verbose = false;
         let custom_profile = None;
         let features = None;
+        let target = None;
+        let cargo_args = vec![];
 
         Ok(Self {
             out_dir,
@@ -294,7 +300,16 @@ impl CrateConfig {
             custom_profile,
             features,
             verbose,
+            target,
+            cargo_args,
         })
+    }
+
+    pub fn asset_manifest(&self) -> AssetManifest {
+        AssetManifest::load_from_path(
+            self.crate_dir.join("Cargo.toml"),
+            self.workspace_dir.join("Cargo.lock"),
+        )
     }
 
     pub fn as_example(&mut self, example_name: String) -> &mut Self {
@@ -329,6 +344,16 @@ impl CrateConfig {
 
     pub fn set_features(&mut self, features: Vec<String>) -> &mut Self {
         self.features = Some(features);
+        self
+    }
+
+    pub fn set_target(&mut self, target: String) -> &mut Self {
+        self.target = Some(target);
+        self
+    }
+
+    pub fn set_cargo_args(&mut self, cargo_args: Vec<String>) -> &mut Self {
+        self.cargo_args = cargo_args;
         self
     }
 }
