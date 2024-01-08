@@ -1,8 +1,9 @@
+use crate::assets::WebAssetConfigDropGuard;
 #[cfg(feature = "plugin")]
 use crate::plugin::PluginManager;
 use crate::server::fullstack::FullstackServerEnvGuard;
 use crate::server::fullstack::FullstackWebEnvGuard;
-use crate::{cfg::Platform, WebAssetConfigDropGuard};
+use dioxus_cli_config::Platform;
 
 use super::*;
 
@@ -16,7 +17,7 @@ pub struct Build {
 
 impl Build {
     pub fn build(self, bin: Option<PathBuf>, target_dir: Option<&std::path::Path>) -> Result<()> {
-        let mut crate_config = crate::CrateConfig::new(bin)?;
+        let mut crate_config = dioxus_cli_config::CrateConfig::new(bin)?;
         if let Some(target_dir) = target_dir {
             crate_config.target_dir = target_dir.to_path_buf();
         }
@@ -96,14 +97,7 @@ impl Build {
         let mut file = std::fs::File::create(
             crate_config
                 .crate_dir
-                .join(
-                    crate_config
-                        .dioxus_config
-                        .application
-                        .out_dir
-                        .clone()
-                        .unwrap_or_else(|| PathBuf::from("dist")),
-                )
+                .join(crate_config.dioxus_config.application.out_dir.clone())
                 .join("index.html"),
         )?;
         file.write_all(temp.as_bytes())?;

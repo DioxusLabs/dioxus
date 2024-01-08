@@ -4,6 +4,7 @@ members = [
     "packages/dioxus",
     "packages/core",
     "packages/cli",
+    "packages/cli-config",
     "packages/core-macro",
     "packages/router-macro",
     "packages/extension",
@@ -79,6 +80,7 @@ dioxus-native-core = { path = "packages/native-core", version = "0.4.0" }
 dioxus-native-core-macro = { path = "packages/native-core-macro", version = "0.4.0" }
 rsx-rosetta = { path = "packages/rsx-rosetta", version = "0.4.0" }
 dioxus-signals = { path = "packages/signals" }
+dioxus-cli-config = { path = "packages/cli-config", version = "0.4.1" }
 generational-box = { path = "packages/generational-box", version = "0.4.3" }
 dioxus-hot-reload = { path = "packages/hot-reload", version = "0.4.0" }
 dioxus-fullstack = { path = "packages/fullstack", version = "0.4.1"  }

@@ -27,6 +27,7 @@ gloo-utils = { version = "0.1.6", optional = true }
 dioxus-liveview = { workspace = true, optional = true }
 dioxus-ssr = { workspace = true, optional = true }
 tokio = { workspace = true, features = ["full"], optional = true }
+dioxus-cli-config.workspace = true
 
 [features]
 default = ["web"]

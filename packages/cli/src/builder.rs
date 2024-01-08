@@ -1,16 +1,18 @@
 use crate::{
-    config::{CrateConfig, ExecutableType},
+    assets::{asset_manifest, create_assets_head, process_assets, WebAssetConfigDropGuard},
     error::{Error, Result},
     tools::Tool,
 };
 use cargo_metadata::{diagnostic::Diagnostic, Message};
+use dioxus_cli_config::crate_root;
+use dioxus_cli_config::CrateConfig;
+use dioxus_cli_config::ExecutableType;
 use indicatif::{ProgressBar, ProgressStyle};
 use lazy_static::lazy_static;
-use manganis_cli_support::AssetManifestExt;
 use serde::Serialize;
 use std::{
     fs::{copy, create_dir_all, File},
-    io::{Read, Write},
+    io::Read,
     panic,
     path::PathBuf,
     time::Duration,
@@ -51,6 +53,7 @@ pub fn build(config: &CrateConfig, _: bool, skip_assets: bool) -> Result<BuildRe
     let ignore_files = build_assets(config)?;
 
     let t_start = std::time::Instant::now();
+    let _guard = dioxus_cli_config::__private::save_config(config);
 
     // [1] Build the .wasm module
     log::info!("🚅 Running build command...");
@@ -152,7 +155,7 @@ pub fn build(config: &CrateConfig, _: bool, skip_assets: bool) -> Result<BuildRe
     }
 
     // check binaryen:wasm-opt tool
-    let dioxus_tools = dioxus_config.application.tools.clone().unwrap_or_default();
+    let dioxus_tools = dioxus_config.application.tools.clone();
     if dioxus_tools.contains_key("binaryen") {
         let info = dioxus_tools.get("binaryen").unwrap();
         let binaryen = crate::tools::Tool::Binaryen;
@@ -277,6 +280,7 @@ pub fn build_desktop(
 
     let t_start = std::time::Instant::now();
     let ignore_files = build_assets(config)?;
+    let _guard = dioxus_cli_config::__private::save_config(config);
 
     let mut cmd = subprocess::Exec::cmd("cargo")
         .env("CARGO_TARGET_DIR", &config.target_dir)
@@ -312,9 +316,9 @@ pub fn build_desktop(
     cmd = cmd.args(&config.cargo_args);
 
     let cmd = match &config.executable {
-        crate::ExecutableType::Binary(name) => cmd.arg("--bin").arg(name),
-        crate::ExecutableType::Lib(name) => cmd.arg("--lib").arg(name),
-        crate::ExecutableType::Example(name) => cmd.arg("--example").arg(name),
+        ExecutableType::Binary(name) => cmd.arg("--bin").arg(name),
+        ExecutableType::Lib(name) => cmd.arg("--lib").arg(name),
+        ExecutableType::Example(name) => cmd.arg("--example").arg(name),
     };
 
     let warning_messages = prettier_build(cmd)?;
@@ -326,7 +330,7 @@ pub fn build_desktop(
 
     let file_name: String;
     let mut res_path = match &config.executable {
-        crate::ExecutableType::Binary(name) | crate::ExecutableType::Lib(name) => {
+        ExecutableType::Binary(name) | ExecutableType::Lib(name) => {
             file_name = name.clone();
             config
                 .target_dir
@@ -334,7 +338,7 @@ pub fn build_desktop(
                 .join(release_type)
                 .join(name)
         }
-        crate::ExecutableType::Example(name) => {
+        ExecutableType::Example(name) => {
             file_name = name.clone();
             config
                 .target_dir
@@ -399,13 +403,7 @@ pub fn build_desktop(
 
     log::info!(
         "🚩 Build completed: [./{}]",
-        config
-            .dioxus_config
-            .application
-            .out_dir
-            .clone()
-            .unwrap_or_else(|| PathBuf::from("dist"))
-            .display()
+        config.dioxus_config.application.out_dir.clone().display()
     );
 
     println!("build desktop done");
@@ -414,13 +412,6 @@ pub fn build_desktop(
         warnings: warning_messages,
         elapsed_time: t_start.elapsed().as_millis(),
     })
-}
-
-fn create_assets_head(config: &CrateConfig) -> Result<()> {
-    let manifest = config.asset_manifest();
-    let mut file = File::create(config.out_dir.join("__assets_head.html"))?;
-    file.write_all(manifest.head().as_bytes())?;
-    Ok(())
 }
 
 fn prettier_build(cmd: subprocess::Exec) -> anyhow::Result<Vec<Diagnostic>> {
@@ -482,7 +473,7 @@ fn prettier_build(cmd: subprocess::Exec) -> anyhow::Result<Vec<Diagnostic>> {
 pub fn gen_page(config: &CrateConfig, serve: bool, skip_assets: bool) -> String {
     let _gaurd = WebAssetConfigDropGuard::new();
 
-    let crate_root = crate::cargo::crate_root().unwrap();
+    let crate_root = crate_root().unwrap();
     let custom_html_file = crate_root.join("index.html");
     let mut html = if custom_html_file.is_file() {
         let mut buf = String::new();
@@ -502,8 +493,8 @@ pub fn gen_page(config: &CrateConfig, serve: bool, skip_assets: bool) -> String 
     let mut script_list = resources.script.unwrap_or_default();
 
     if serve {
-        let mut dev_style = resources.dev.style.clone().unwrap_or_default();
-        let mut dev_script = resources.dev.script.unwrap_or_default();
+        let mut dev_style = resources.dev.style.clone();
+        let mut dev_script = resources.dev.script.clone();
         style_list.append(&mut dev_style);
         script_list.append(&mut dev_script);
     }
@@ -520,13 +511,12 @@ pub fn gen_page(config: &CrateConfig, serve: bool, skip_assets: bool) -> String 
         .application
         .tools
         .clone()
-        .unwrap_or_default()
         .contains_key("tailwindcss")
     {
         style_str.push_str("<link rel=\"stylesheet\" href=\"/{base_path}/tailwind.css\">\n");
     }
     if !skip_assets {
-        let manifest = config.asset_manifest();
+        let manifest = asset_manifest(config);
         style_str.push_str(&manifest.head());
     }
 
@@ -577,13 +567,7 @@ pub fn gen_page(config: &CrateConfig, serve: bool, skip_assets: bool) -> String 
         );
     }
 
-    let title = config
-        .dioxus_config
-        .web
-        .app
-        .title
-        .clone()
-        .unwrap_or_else(|| "dioxus | ⛺".into());
+    let title = config.dioxus_config.web.app.title.clone();
 
     replace_or_insert_before("{app_title}", &title, "</title", &mut html);
 
@@ -610,7 +594,7 @@ fn build_assets(config: &CrateConfig) -> Result<Vec<PathBuf>> {
     let mut result = vec![];
 
     let dioxus_config = &config.dioxus_config;
-    let dioxus_tools = dioxus_config.application.tools.clone().unwrap_or_default();
+    let dioxus_tools = dioxus_config.application.tools.clone();
 
     // check sass tool state
     let sass = Tool::Sass;
@@ -747,43 +731,4 @@ fn build_assets(config: &CrateConfig) -> Result<Vec<PathBuf>> {
     // SASS END
 
     Ok(result)
-}
-
-/// Process any assets collected from the binary
-fn process_assets(config: &CrateConfig) -> anyhow::Result<()> {
-    let manifest = config.asset_manifest();
-
-    let static_asset_output_dir = PathBuf::from(
-        config
-            .dioxus_config
-            .web
-            .app
-            .base_path
-            .clone()
-            .unwrap_or_default(),
-    );
-    let static_asset_output_dir = config.out_dir.join(static_asset_output_dir);
-
-    manifest.copy_static_assets_to(static_asset_output_dir)?;
-
-    Ok(())
-}
-
-pub(crate) struct WebAssetConfigDropGuard;
-
-impl WebAssetConfigDropGuard {
-    pub fn new() -> Self {
-        // Set up the collect asset config
-        manganis_cli_support::Config::default()
-            .with_assets_serve_location("/")
-            .save();
-        Self {}
-    }
-}
-
-impl Drop for WebAssetConfigDropGuard {
-    fn drop(&mut self) {
-        // Reset the config
-        manganis_cli_support::Config::default().save();
-    }
 }
