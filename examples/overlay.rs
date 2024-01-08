@@ -1,13 +1,11 @@
 use dioxus::prelude::*;
-use dioxus_desktop::{tao::dpi::PhysicalPosition, use_window, LogicalSize, WindowBuilder};
+use dioxus_desktop::{tao::dpi::PhysicalPosition, LogicalSize, WindowBuilder};
 
 fn main() {
     dioxus_desktop::launch_cfg(app, make_config());
 }
 
 fn app(cx: Scope) -> Element {
-    let window = use_window(cx);
-
     cx.render(rsx! {
         div {
             width: "100%",
@@ -19,7 +17,7 @@ fn app(cx: Scope) -> Element {
                 width: "100%",
                 height: "10px",
                 background_color: "black",
-                onmousedown: move |_| window.drag(),
+                onmousedown: move |_| dioxus_desktop::window().drag(),
             }
 
             "This is an overlay!"

@@ -12,44 +12,45 @@ keywords = ["dom", "ui", "gui", "react"]
 [dependencies]
 dioxus-core = { workspace = true }
 dioxus-rsx = { workspace = true, features = ["hot_reload"], optional = true }
+dioxus-html-internal-macro = { workspace = true }
 serde = { version = "1", features = ["derive"], optional = true }
 serde_repr = { version = "0.1", optional = true }
 wasm-bindgen = { workspace = true, optional = true }
 euclid = "0.22.7"
-enumset = "1.0.11"
+enumset = "1.1.2"
 keyboard-types = "0.7"
 async-trait = "0.1.58"
 serde-value = { version = "0.7.0", optional = true }
 tokio = { workspace = true, features = ["fs", "io-util"], optional = true }
-rfd = { version = "0.11.3", optional = true }
-serde_json = { version = "1" }
+rfd = { version = "0.12", optional = true }
+async-channel = "1.8.0"
+serde_json = { version = "1", optional = true }
 
 [dependencies.web-sys]
 optional = true
 version = "0.3.56"
 features = [
-     "TouchEvent",
-     "MouseEvent",
-     "InputEvent",
-     "ClipboardEvent",
-     "KeyboardEvent",
-     "TouchEvent",
-     "WheelEvent",
-     "AnimationEvent",
-     "TransitionEvent",
-     "PointerEvent",
-     "FocusEvent",
-     "CompositionEvent",
-     "ClipboardEvent",
+    "Touch",
+    "TouchList",
+    "TouchEvent",
+    "MouseEvent",
+    "InputEvent",
+    "ClipboardEvent",
+    "KeyboardEvent",
+    "WheelEvent",
+    "AnimationEvent",
+    "TransitionEvent",
+    "PointerEvent",
+    "FocusEvent",
+    "CompositionEvent",
 ]
 
 [dev-dependencies]
 serde_json = "1"
 
 [features]
-default = ["mounted"]
+default = ["serialize", "mounted", "eval"]
 serialize = [
-    "serde",
     "serde_repr",
     "euclid/serde",
     "keyboard-types/serde",
@@ -64,6 +65,11 @@ mounted = [
     "web-sys?/ScrollBehavior",
     "web-sys?/HtmlElement",
 ]
+eval = [
+    "serde",
+    "serde_json"
+]
 wasm-bind = ["web-sys", "wasm-bindgen"]
 native-bind = ["tokio"]
 hot-reload-context = ["dioxus-rsx"]
+html-to-rsx = []

@@ -22,8 +22,6 @@ mod atoms {
     pub use atom::*;
     pub use atomfamily::*;
     pub use atomref::*;
-    pub use selector::*;
-    pub use selectorfamily::*;
 }
 
 pub mod hooks {

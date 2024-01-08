@@ -282,7 +282,7 @@ impl Route {
                 }
             }
             if let Some(query) = &self.query {
-                if &query.ident == name {
+                if query.contains_ident(name) {
                     from_route = true
                 }
             }

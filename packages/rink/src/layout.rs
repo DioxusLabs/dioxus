@@ -92,10 +92,10 @@ impl State for TaffyLayout {
                     attribute, value, ..
                 } in attributes
                 {
-                    if let Some(text) = value.as_text() {
+                    if value.as_custom().is_none() {
                         apply_layout_attributes_cfg(
                             &attribute.name,
-                            text,
+                            &value.to_string(),
                             &mut style,
                             &LayoutConfigeration {
                                 border_widths: BorderWidths {

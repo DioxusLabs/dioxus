@@ -26,6 +26,7 @@ macro_rules! debug_location {
 }
 
 pub mod error {
+    #[cfg(debug_assertions)]
     fn locations_display(locations: &[&'static std::panic::Location<'static>]) -> String {
         locations
             .iter()

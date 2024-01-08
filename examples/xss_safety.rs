@@ -20,7 +20,7 @@ fn app(cx: Scope) -> Element {
             input {
                 value: "{contents}",
                 r#type: "text",
-                oninput: move |e| contents.set(e.value.clone()),
+                oninput: move |e| contents.set(e.value()),
             }
         }
     })

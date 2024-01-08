@@ -1,4 +1,4 @@
-use crate::{BuildResult, CrateConfig, Result};
+use crate::{cfg::ConfigOptsServe, BuildResult, CrateConfig, Result};
 
 use cargo_metadata::diagnostic::Diagnostic;
 use dioxus_core::Template;
@@ -14,6 +14,7 @@ use tokio::sync::broadcast::{self};
 mod output;
 use output::*;
 pub mod desktop;
+pub mod fullstack;
 pub mod web;
 
 /// Sets up a file watcher
@@ -53,6 +54,16 @@ async fn setup_file_watcher<F: Fn() -> Result<BuildResult> + Send + 'static>(
                         if path.extension().and_then(|p| p.to_str()) != Some("rs") {
                             needs_full_rebuild = true;
                             break;
+                        }
+
+                        // Workaround for notify and vscode-like editor:
+                        // when edit & save a file in vscode, there will be two notifications,
+                        // the first one is a file with empty content.
+                        // filter the empty file notification to avoid false rebuild during hot-reload
+                        if let Ok(metadata) = fs::metadata(path) {
+                            if metadata.len() == 0 {
+                                continue;
+                            }
                         }
 
                         match rsx_file_map.update_rsx(path, &config.crate_dir) {
@@ -129,6 +140,13 @@ async fn setup_file_watcher<F: Fn() -> Result<BuildResult> + Send + 'static>(
         }
     }
     Ok(watcher)
+}
+
+pub(crate) trait Platform {
+    fn start(config: &CrateConfig, serve: &ConfigOptsServe) -> Result<Self>
+    where
+        Self: Sized;
+    fn rebuild(&mut self, config: &CrateConfig) -> Result<BuildResult>;
 }
 
 #[derive(Clone)]
