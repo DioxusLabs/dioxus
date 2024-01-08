@@ -79,6 +79,25 @@ macro_rules! impl_attribute_match {
     };
 }
 
+#[cfg(feature = "html-to-rsx")]
+macro_rules! impl_html_to_rsx_attribute_match {
+    (
+        $attr:ident $fil:ident $name:literal
+    ) => {
+        if $attr == $name {
+            return Some(stringify!($fil));
+        }
+    };
+
+    (
+        $attr:ident $fil:ident $_:tt
+    ) => {
+        if $attr == stringify!($fil) {
+            return Some(stringify!($fil));
+        }
+    };
+}
+
 macro_rules! impl_element {
     (
         $(#[$attr:meta])*
@@ -314,6 +333,38 @@ macro_rules! builder_constructors {
                 )*
                 None
             }
+        }
+
+        #[cfg(feature = "html-to-rsx")]
+        pub fn map_html_attribute_to_rsx(html: &str) -> Option<&'static str> {
+            $(
+                $(
+                    impl_html_to_rsx_attribute_match!(
+                        html $fil $extra
+                    );
+                )*
+            )*
+
+            if let Some(name) = crate::map_html_global_attributes_to_rsx(html) {
+                return Some(name);
+            }
+
+            if let Some(name) = crate::map_html_svg_attributes_to_rsx(html) {
+                return Some(name);
+            }
+
+            None
+        }
+
+        #[cfg(feature = "html-to-rsx")]
+        pub fn map_html_element_to_rsx(html: &str) -> Option<&'static str> {
+            $(
+                if html == stringify!($name) {
+                    return Some(stringify!($name));
+                }
+            )*
+
+            None
         }
 
         $(
@@ -998,9 +1049,8 @@ builder_constructors! {
         src: Uri DEFAULT,
         text: String DEFAULT,
 
-        // r#async: Bool,
-        // r#type: String, // TODO could be an enum
-        r#type: String "type",
+        r#async: Bool "async",
+        r#type: String "type", // TODO could be an enum
         r#script: String "script",
     };
 

@@ -13,62 +13,50 @@ use crate::{
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct ElementId(pub usize);
 
-pub(crate) struct ElementRef {
+/// An Element that can be bubbled to's unique identifier.
+///
+/// `BubbleId` is a `usize` that is unique across the entire VirtualDOM - but not unique across time. If a component is
+/// unmounted, then the `BubbleId` will be reused for a new component.
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+pub struct VNodeId(pub usize);
+
+#[derive(Debug, Clone, Copy)]
+pub struct ElementRef {
     // the pathway of the real element inside the template
-    pub path: ElementPath,
+    pub(crate) path: ElementPath,
 
     // The actual template
-    pub template: Option<NonNull<VNode<'static>>>,
+    pub(crate) template: VNodeId,
 
     // The scope the element belongs to
-    pub scope: ScopeId,
+    pub(crate) scope: ScopeId,
 }
 
 #[derive(Clone, Copy, Debug)]
-pub enum ElementPath {
-    Deep(&'static [u8]),
-    Root(usize),
-}
-
-impl ElementRef {
-    pub(crate) fn none() -> Self {
-        Self {
-            template: None,
-            path: ElementPath::Root(0),
-            scope: ScopeId::ROOT,
-        }
-    }
+pub struct ElementPath {
+    pub(crate) path: &'static [u8],
 }
 
 impl VirtualDom {
-    pub(crate) fn next_element(&mut self, template: &VNode, path: &'static [u8]) -> ElementId {
-        self.next_reference(template, ElementPath::Deep(path))
+    pub(crate) fn next_element(&mut self) -> ElementId {
+        ElementId(self.elements.insert(None))
     }
 
-    pub(crate) fn next_root(&mut self, template: &VNode, path: usize) -> ElementId {
-        self.next_reference(template, ElementPath::Root(path))
-    }
+    pub(crate) fn next_vnode_ref(&mut self, vnode: &VNode) -> VNodeId {
+        let new_id = VNodeId(self.element_refs.insert(Some(unsafe {
+            std::mem::transmute::<NonNull<VNode>, _>(vnode.into())
+        })));
 
-    pub(crate) fn next_null(&mut self) -> ElementId {
-        let entry = self.elements.vacant_entry();
-        let id = entry.key();
+        // Set this id to be dropped when the scope is rerun
+        if let Some(scope) = self.runtime.current_scope_id() {
+            self.scopes[scope.0]
+                .element_refs_to_drop
+                .borrow_mut()
+                .push(new_id);
+        }
 
-        entry.insert(ElementRef::none());
-        ElementId(id)
-    }
-
-    fn next_reference(&mut self, template: &VNode, path: ElementPath) -> ElementId {
-        let entry = self.elements.vacant_entry();
-        let id = entry.key();
-        let scope = self.runtime.current_scope_id().unwrap_or(ScopeId::ROOT);
-
-        entry.insert(ElementRef {
-            // We know this is non-null because it comes from a reference
-            template: Some(unsafe { NonNull::new_unchecked(template as *const _ as *mut _) }),
-            path,
-            scope,
-        });
-        ElementId(id)
+        new_id
     }
 
     pub(crate) fn reclaim(&mut self, el: ElementId) {
@@ -76,7 +64,7 @@ impl VirtualDom {
             .unwrap_or_else(|| panic!("cannot reclaim {:?}", el));
     }
 
-    pub(crate) fn try_reclaim(&mut self, el: ElementId) -> Option<ElementRef> {
+    pub(crate) fn try_reclaim(&mut self, el: ElementId) -> Option<()> {
         if el.0 == 0 {
             panic!(
                 "Cannot reclaim the root element - {:#?}",
@@ -84,12 +72,12 @@ impl VirtualDom {
             );
         }
 
-        self.elements.try_remove(el.0)
+        self.elements.try_remove(el.0).map(|_| ())
     }
 
-    pub(crate) fn update_template(&mut self, el: ElementId, node: &VNode) {
-        let node: *const VNode = node as *const _;
-        self.elements[el.0].template = unsafe { std::mem::transmute(node) };
+    pub(crate) fn set_template(&mut self, id: VNodeId, vnode: &VNode) {
+        self.element_refs[id.0] =
+            Some(unsafe { std::mem::transmute::<NonNull<VNode>, _>(vnode.into()) });
     }
 
     // Drop a scope and all its children
@@ -100,6 +88,15 @@ impl VirtualDom {
             height: self.scopes[id.0].height(),
             id,
         });
+
+        // Remove all VNode ids from the scope
+        for id in self.scopes[id.0]
+            .element_refs_to_drop
+            .borrow_mut()
+            .drain(..)
+        {
+            self.element_refs.try_remove(id.0);
+        }
 
         self.ensure_drop_safety(id);
 
@@ -145,14 +142,25 @@ impl VirtualDom {
     }
 
     /// Descend through the tree, removing any borrowed props and listeners
-    pub(crate) fn ensure_drop_safety(&self, scope_id: ScopeId) {
+    pub(crate) fn ensure_drop_safety(&mut self, scope_id: ScopeId) {
         let scope = &self.scopes[scope_id.0];
+
+        {
+            // Drop all element refs that could be invalidated when the component was rerun
+            let mut element_refs = self.scopes[scope_id.0].element_refs_to_drop.borrow_mut();
+            let element_refs_slab = &mut self.element_refs;
+            for element_ref in element_refs.drain(..) {
+                if let Some(element_ref) = element_refs_slab.get_mut(element_ref.0) {
+                    *element_ref = None;
+                }
+            }
+        }
 
         // make sure we drop all borrowed props manually to guarantee that their drop implementation is called before we
         // run the hooks (which hold an &mut Reference)
         // recursively call ensure_drop_safety on all children
-        let mut props = scope.borrowed_props.borrow_mut();
-        props.drain(..).for_each(|comp| {
+        let props = { scope.borrowed_props.borrow_mut().clone() };
+        for comp in props {
             let comp = unsafe { &*comp };
             match comp.scope.get() {
                 Some(child) if child != scope_id => self.ensure_drop_safety(child),
@@ -161,7 +169,9 @@ impl VirtualDom {
             if let Ok(mut props) = comp.props.try_borrow_mut() {
                 *props = None;
             }
-        });
+        }
+        let scope = &self.scopes[scope_id.0];
+        scope.borrowed_props.borrow_mut().clear();
 
         // Now that all the references are gone, we can safely drop our own references in our listeners.
         let mut listeners = scope.attributes_to_drop_before_render.borrow_mut();
@@ -176,18 +186,12 @@ impl VirtualDom {
 
 impl ElementPath {
     pub(crate) fn is_decendant(&self, small: &&[u8]) -> bool {
-        match *self {
-            ElementPath::Deep(big) => small.len() <= big.len() && *small == &big[..small.len()],
-            ElementPath::Root(r) => small.len() == 1 && small[0] == r as u8,
-        }
+        small.len() <= self.path.len() && *small == &self.path[..small.len()]
     }
 }
 
 impl PartialEq<&[u8]> for ElementPath {
     fn eq(&self, other: &&[u8]) -> bool {
-        match *self {
-            ElementPath::Deep(deep) => deep.eq(*other),
-            ElementPath::Root(r) => other.len() == 1 && other[0] == r as u8,
-        }
+        self.path.eq(*other)
     }
 }

@@ -83,6 +83,12 @@ impl Bundle {
             crate_config.set_profile(self.build.profile.unwrap());
         }
 
+        if let Some(target) = &self.build.target {
+            crate_config.set_target(target.to_string());
+        }
+
+        crate_config.set_cargo_args(self.build.cargo_args);
+
         // build the desktop app
         build_desktop(&crate_config, false)?;
 
@@ -155,6 +161,11 @@ impl Bundle {
                     .collect(),
             );
         }
+
+        if let Some(target) = &self.build.target {
+            settings = settings.target(target.to_string());
+        }
+
         let settings = settings.build();
 
         // on macos we need to set CI=true (https://github.com/tauri-apps/tauri/issues/2567)
@@ -162,14 +173,13 @@ impl Bundle {
         std::env::set_var("CI", "true");
 
         tauri_bundler::bundle::bundle_project(settings.unwrap()).unwrap_or_else(|err|{
-    #[cfg(target_os = "macos")]
-    panic!("Failed to bundle project: {}\nMake sure you have automation enabled in your terminal (https://github.com/tauri-apps/tauri/issues/3055#issuecomment-1624389208) and full disk access enabled for your terminal (https://github.com/tauri-apps/tauri/issues/3055#issuecomment-1624389208)", err);
-    #[cfg(not(target_os = "macos"))]
-    panic!("Failed to bundle project: {}", err);
-  });
+          #[cfg(target_os = "macos")]
+          panic!("Failed to bundle project: {}\nMake sure you have automation enabled in your terminal (https://github.com/tauri-apps/tauri/issues/3055#issuecomment-1624389208) and full disk access enabled for your terminal (https://github.com/tauri-apps/tauri/issues/3055#issuecomment-1624389208)", err);
+          #[cfg(not(target_os = "macos"))]
+          panic!("Failed to bundle project: {}", err);
+        });
 
         plugins_after_command(BundleEvent).await;
-
         Ok(())
     }
 }

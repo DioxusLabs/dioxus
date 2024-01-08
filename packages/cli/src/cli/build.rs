@@ -40,6 +40,12 @@ impl Build {
             .platform
             .unwrap_or(crate_config.dioxus_config.application.default_platform);
 
+        if let Some(target) = self.build.target {
+            crate_config.set_target(target);
+        }
+
+        crate_config.set_cargo_args(self.build.cargo_args);
+
         plugins_before_command(BuildEvent).await;
 
         match platform {

@@ -58,8 +58,11 @@ impl ToTokens for ComponentDeserializerOutput {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         let comp_fn = &self.comp_fn;
         let props_struct = &self.props_struct;
+        let fn_ident = &comp_fn.sig.ident;
 
+        let doc = format!("Properties for the [`{fn_ident}`] component.");
         tokens.append_all(quote! {
+            #[doc = #doc]
             #props_struct
             #[allow(non_snake_case)]
             #comp_fn
