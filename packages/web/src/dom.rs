@@ -9,9 +9,9 @@
 use dioxus_core::{
     BorrowedAttributeValue, ElementId, Mutation, Template, TemplateAttribute, TemplateNode,
 };
-use dioxus_html::{event_bubbles, MountedData, PlatformEventData};
-use dioxus_interpreter_js::get_node;
-use dioxus_interpreter_js::{minimal_bindings, save_template, Channel};
+use dioxus_html::PlatformEventData;
+use dioxus_html::{event_bubbles, MountedData};
+use dioxus_interpreter_js::{get_node, minimal_bindings, save_template, Channel};
 use futures_channel::mpsc;
 use rustc_hash::FxHashMap;
 use wasm_bindgen::{closure::Closure, JsCast, JsValue};

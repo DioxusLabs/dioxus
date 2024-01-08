@@ -4,6 +4,20 @@ use dioxus_core::Event;
 
 pub type FormEvent = Event<FormData>;
 
+/// A form value that may either be a list of values or a single value
+#[cfg_attr(
+    feature = "serialize",
+    derive(serde::Serialize, serde::Deserialize),
+    // this will serialize Text(String) -> String and VecText(Vec<String>) to Vec<String>
+    serde(untagged)
+)]
+#[derive(Debug, Clone, PartialEq)]
+pub enum FormValue {
+    Text(String),
+    VecText(Vec<String>),
+}
+
+/* DOMEvent:  Send + SyncTarget relatedTarget */
 pub struct FormData {
     inner: Box<dyn HasFormData>,
 }
@@ -43,7 +57,7 @@ impl FormData {
     }
 
     /// Get the values of the form event
-    pub fn values(&self) -> HashMap<String, Vec<String>> {
+    pub fn values(&self) -> HashMap<String, FormValue> {
         self.inner.values()
     }
 
@@ -64,7 +78,7 @@ pub trait HasFormData: std::any::Any {
         Default::default()
     }
 
-    fn values(&self) -> HashMap<String, Vec<String>> {
+    fn values(&self) -> HashMap<String, FormValue> {
         Default::default()
     }
 
@@ -76,13 +90,37 @@ pub trait HasFormData: std::any::Any {
     fn as_any(&self) -> &dyn std::any::Any;
 }
 
+impl FormData {
+    #[cfg(feature = "serialize")]
+    /// Parse the values into a struct with one field per value
+    pub fn parsed_values<T>(&self) -> Result<T, serde_json::Error>
+    where
+        T: serde::de::DeserializeOwned,
+    {
+        use serde::Serialize;
+
+        fn convert_hashmap_to_json<K, V>(hashmap: &HashMap<K, V>) -> serde_json::Result<String>
+        where
+            K: Serialize + std::hash::Hash + Eq,
+            V: Serialize,
+        {
+            serde_json::to_string(hashmap)
+        }
+
+        let parsed_json =
+            convert_hashmap_to_json(&self.values()).expect("Failed to parse values to JSON");
+
+        serde_json::from_str(&parsed_json)
+    }
+}
+
 #[cfg(feature = "serialize")]
 /// A serialized form data object
 #[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Clone)]
 pub struct SerializedFormData {
     value: String,
-    values: HashMap<String, Vec<String>>,
-    files: Option<std::sync::Arc<SerializedFileEngine>>,
+    values: HashMap<String, FormValue>,
+    files: Option<SerializedFileEngine>,
 }
 
 #[cfg(feature = "serialize")]
@@ -90,8 +128,8 @@ impl SerializedFormData {
     /// Create a new serialized form data object
     pub fn new(
         value: String,
-        values: HashMap<String, Vec<String>>,
-        files: Option<std::sync::Arc<SerializedFileEngine>>,
+        values: HashMap<String, FormValue>,
+        files: Option<SerializedFileEngine>,
     ) -> Self {
         Self {
             value,
@@ -114,9 +152,9 @@ impl SerializedFormData {
                         resolved_files.insert(file, bytes.unwrap_or_default());
                     }
 
-                    Some(std::sync::Arc::new(SerializedFileEngine {
+                    Some(SerializedFileEngine {
                         files: resolved_files,
-                    }))
+                    })
                 }
                 None => None,
             },
@@ -138,14 +176,14 @@ impl HasFormData for SerializedFormData {
         self.value.clone()
     }
 
-    fn values(&self) -> HashMap<String, Vec<String>> {
+    fn values(&self) -> HashMap<String, FormValue> {
         self.values.clone()
     }
 
     fn files(&self) -> Option<std::sync::Arc<dyn FileEngine>> {
         self.files
             .as_ref()
-            .map(|files| std::sync::Arc::clone(files) as std::sync::Arc<dyn FileEngine>)
+            .map(|files| std::sync::Arc::new(files.clone()) as _)
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
