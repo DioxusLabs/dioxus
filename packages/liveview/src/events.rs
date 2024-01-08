@@ -80,7 +80,7 @@ impl HtmlEventConverter for SerializedHtmlEventConverter {
     }
 
     fn convert_mounted_data(&self, event: &PlatformEventData) -> MountedData {
-        event.downcast::<LiveviewElement>().cloned().unwrap().into()
+        MountedData::new(event.downcast::<LiveviewElement>().cloned().unwrap())
     }
 
     fn convert_mouse_data(&self, event: &PlatformEventData) -> MouseData {

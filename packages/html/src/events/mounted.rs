@@ -12,12 +12,13 @@ use std::{
 ///
 /// Different platforms will have different implementations and different levels of support for this trait. Renderers that do not support specific features will return `None` for those queries.
 // we can not use async_trait here because it does not create a trait that is object safe
-pub trait RenderedElementBacking: std::any::Any {
+pub trait RenderedElementBacking {
+    fn id(&self) -> usize;
+
     /// return self as Any
     fn as_any(&self) -> &dyn std::any::Any;
 
     /// Get the bounding rectangle of the element relative to the viewport (this does not include the scroll position)
-    #[allow(clippy::type_complexity)]
     fn get_client_rect(&self) -> Pin<Box<dyn Future<Output = Rect<f64, f64>>>>;
 
     /// Scroll to make the element visible
@@ -43,12 +44,6 @@ pub enum ScrollBehavior {
 /// Different platforms will have different implementations and different levels of support for this trait. Renderers that do not support specific features will return `None` for those queries.
 pub struct MountedData {
     inner: Box<dyn RenderedElementBacking>,
-}
-
-impl<E: RenderedElementBacking> From<E> for MountedData {
-    fn from(e: E) -> Self {
-        Self { inner: Box::new(e) }
-    }
 }
 
 impl MountedData {
@@ -82,7 +77,6 @@ impl MountedData {
 }
 
 use dioxus_core::Event;
-
 pub type MountedEvent = Event<MountedData>;
 
 impl_event! [

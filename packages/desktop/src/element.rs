@@ -18,6 +18,10 @@ impl DesktopElement {
 }
 
 impl RenderedElementBacking for DesktopElement {
+    fn id(&self) -> usize {
+        self.id.0
+    }
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }

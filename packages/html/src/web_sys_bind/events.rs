@@ -455,6 +455,10 @@ impl crate::RenderedElementBacking for web_sys::Element {
         (if focus { e.focus() } else { e.blur() });
         Box::pin(async { () })
     }
+
+    fn id(&self) -> usize {
+        todo!()
+    }
 }
 
 #[derive(Debug)]

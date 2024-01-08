@@ -105,6 +105,10 @@ impl RenderedElementBacking for TuiElement {
     ) -> std::pin::Pin<Box<dyn futures::prelude::Future<Output = ()>>> {
         todo!()
     }
+
+    fn id(&self) -> usize {
+        self.id.uindex()
+    }
 }
 
 #[derive(Debug)]

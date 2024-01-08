@@ -41,7 +41,6 @@ fn app(cx: Scope) -> Element {
             height: "50%",
             background_color: "red",
             onmounted: move |event| {
-                println!("Mounted.....");
                 element.set(Some(event.inner().clone()))
             },
             "This element is {dimensions:?}"
