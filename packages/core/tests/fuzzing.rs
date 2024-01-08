@@ -1,7 +1,7 @@
 #![cfg(not(miri))]
 
 use dioxus::prelude::Props;
-use dioxus_core::*;
+use dioxus_core::{MountedAttribute, *};
 use std::{cfg, collections::HashSet};
 
 fn random_ns() -> Option<&'static str> {
@@ -206,7 +206,7 @@ fn create_random_dynamic_node(cx: &ScopeState, depth: usize) -> DynamicNode {
     }
 }
 
-fn create_random_dynamic_attr(cx: &ScopeState) -> Attribute {
+fn create_random_dynamic_attr(cx: &ScopeState) -> MountedAttribute {
     let value = match rand::random::<u8>() % 7 {
         0 => AttributeValue::Text(Box::leak(
             format!("{}", rand::random::<usize>()).into_boxed_str(),
@@ -218,7 +218,7 @@ fn create_random_dynamic_attr(cx: &ScopeState) -> Attribute {
         5 => AttributeValue::None,
         6 => {
             let value = cx.listener(|e: Event<String>| println!("{:?}", e));
-            return Attribute::new("ondata", value, None, false);
+            return Attribute::new("ondata", value, None, false).into();
         }
         _ => unreachable!(),
     };
@@ -228,6 +228,7 @@ fn create_random_dynamic_attr(cx: &ScopeState) -> Attribute {
         random_ns(),
         rand::random(),
     )
+    .into()
 }
 
 static mut TEMPLATE_COUNT: usize = 0;

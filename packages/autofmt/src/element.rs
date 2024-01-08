@@ -166,7 +166,7 @@ impl Writer<'_> {
 
     fn write_attributes(
         &mut self,
-        attributes: &[ElementAttrNamed],
+        attributes: &[AttributeType],
         key: &Option<IfmtInput>,
         sameline: bool,
     ) -> Result {
@@ -188,7 +188,7 @@ impl Writer<'_> {
         while let Some(attr) = attr_iter.next() {
             self.out.indent_level += 1;
             if !sameline {
-                self.write_comments(attr.attr.start())?;
+                self.write_comments(attr.start())?;
             }
             self.out.indent_level -= 1;
 
@@ -289,10 +289,24 @@ impl Writer<'_> {
         Ok(())
     }
 
-    fn write_attribute(&mut self, attr: &ElementAttrNamed) -> Result {
+    fn write_attribute(&mut self, attr: &AttributeType) -> Result {
+        match attr {
+            AttributeType::Named(attr) => self.write_named_attribute(attr),
+            AttributeType::Spread(attr) => self.write_spread_attribute(attr),
+        }
+    }
+
+    fn write_named_attribute(&mut self, attr: &ElementAttrNamed) -> Result {
         self.write_attribute_name(&attr.attr.name)?;
         write!(self.out, ": ")?;
         self.write_attribute_value(&attr.attr.value)?;
+
+        Ok(())
+    }
+
+    fn write_spread_attribute(&mut self, attr: &Expr) -> Result {
+        write!(self.out, "..")?;
+        write!(self.out, "{}", prettyplease::unparse_expr(attr))?;
 
         Ok(())
     }

@@ -2,8 +2,8 @@ use crate::{
     any_props::AnyProps,
     arena::ElementId,
     innerlude::{
-        BorrowedAttributeValue, DirtyScope, ElementPath, ElementRef, VComponent, VPlaceholder,
-        VText,
+        AttributeType, BorrowedAttributeValue, DirtyScope, ElementPath, ElementRef, VComponent,
+        VPlaceholder, VText,
     },
     mutations::Mutation,
     nodes::RenderReturn,
@@ -126,14 +126,54 @@ impl<'b> VirtualDom {
             .dynamic_attrs
             .iter()
             .zip(right_template.dynamic_attrs.iter())
-            .for_each(|(left_attr, right_attr)| {
+            .enumerate()
+            .for_each(|(idx, (left_attr, right_attr))| {
                 // Move over the ID from the old to the new
-                let mounted_element = left_attr.mounted_element.get();
-                right_attr.mounted_element.set(mounted_element);
+                let mounted_id = left_attr.mounted_element.get();
+                right_attr.mounted_element.set(mounted_id);
 
-                // If the attributes are different (or volatile), we need to update them
-                if left_attr.value != right_attr.value || left_attr.volatile {
-                    self.update_attribute(right_attr, left_attr);
+                match (&left_attr.ty, &right_attr.ty) {
+                    (AttributeType::Single(left), AttributeType::Single(right)) => {
+                        self.diff_attribute(left, right, mounted_id)
+                    }
+                    (AttributeType::Many(left), AttributeType::Many(right)) => {
+                        let mut left_iter = left.iter().peekable();
+                        let mut right_iter = right.iter().peekable();
+
+                        loop {
+                            match (left_iter.peek(), right_iter.peek()) {
+                                (Some(left), Some(right)) => {
+                                    // check which name is greater
+                                    match left.name.cmp(right.name) {
+                                        std::cmp::Ordering::Less => self.remove_attribute(
+                                            left.name,
+                                            left.namespace,
+                                            mounted_id,
+                                        ),
+                                        std::cmp::Ordering::Greater => self.write_attribute(
+                                            right_template,
+                                            right,
+                                            idx,
+                                            mounted_id,
+                                        ),
+                                        std::cmp::Ordering::Equal => {
+                                            self.diff_attribute(left, right, mounted_id)
+                                        }
+                                    }
+                                }
+                                (Some(_), None) => {
+                                    let left = left_iter.next().unwrap();
+                                    self.remove_attribute(left.name, left.namespace, mounted_id)
+                                }
+                                (None, Some(_)) => {
+                                    let right = right_iter.next().unwrap();
+                                    self.write_attribute(right_template, right, idx, mounted_id)
+                                }
+                                (None, None) => break,
+                            }
+                        }
+                    }
+                    _ => unreachable!("The macro should never generate this case"),
                 }
             });
 
@@ -164,6 +204,18 @@ impl<'b> VirtualDom {
         }
     }
 
+    fn diff_attribute(
+        &mut self,
+        left_attr: &'b Attribute<'b>,
+        right_attr: &'b Attribute<'b>,
+        id: ElementId,
+    ) {
+        // If the attributes are different (or volatile), we need to update them
+        if left_attr.value != right_attr.value || left_attr.volatile {
+            self.update_attribute(right_attr, left_attr, id);
+        }
+    }
+
     fn diff_dynamic_node(
         &mut self,
         left_node: &'b DynamicNode<'b>,
@@ -184,12 +236,29 @@ impl<'b> VirtualDom {
         };
     }
 
-    fn update_attribute(&mut self, right_attr: &'b Attribute<'b>, left_attr: &'b Attribute) {
+    fn remove_attribute(&mut self, name: &'b str, ns: Option<&'static str>, id: ElementId) {
+        let name = unsafe { std::mem::transmute(name) };
+        let value: BorrowedAttributeValue<'b> = BorrowedAttributeValue::None;
+        let value = unsafe { std::mem::transmute(value) };
+        self.mutations.push(Mutation::SetAttribute {
+            id,
+            ns,
+            name,
+            value,
+        });
+    }
+
+    fn update_attribute(
+        &mut self,
+        right_attr: &'b Attribute<'b>,
+        left_attr: &'b Attribute<'b>,
+        id: ElementId,
+    ) {
         let name = unsafe { std::mem::transmute(left_attr.name) };
         let value: BorrowedAttributeValue<'b> = (&right_attr.value).into();
         let value = unsafe { std::mem::transmute(value) };
         self.mutations.push(Mutation::SetAttribute {
-            id: left_attr.mounted_element.get(),
+            id,
             ns: right_attr.namespace,
             name,
             value,

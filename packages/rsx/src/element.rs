@@ -8,7 +8,7 @@ use syn::{
     parse::{Parse, ParseBuffer, ParseStream},
     punctuated::Punctuated,
     spanned::Spanned,
-    Ident, LitStr, Result, Token,
+    Expr, Ident, LitStr, Result, Token,
 };
 
 // =======================================
@@ -18,8 +18,8 @@ use syn::{
 pub struct Element {
     pub name: ElementName,
     pub key: Option<IfmtInput>,
-    pub attributes: Vec<ElementAttrNamed>,
-    pub merged_attributes: Vec<ElementAttrNamed>,
+    pub attributes: Vec<AttributeType>,
+    pub merged_attributes: Vec<AttributeType>,
     pub children: Vec<BodyNode>,
     pub brace: syn::token::Brace,
 }
@@ -32,7 +32,7 @@ impl Parse for Element {
         let content: ParseBuffer;
         let brace = syn::braced!(content in stream);
 
-        let mut attributes: Vec<ElementAttrNamed> = vec![];
+        let mut attributes: Vec<AttributeType> = vec![];
         let mut children: Vec<BodyNode> = vec![];
         let mut key = None;
 
@@ -42,6 +42,22 @@ impl Parse for Element {
         // "def": 456,
         // abc: 123,
         loop {
+            if content.peek(Token![..]) {
+                content.parse::<Token![..]>()?;
+                let expr = content.parse::<Expr>()?;
+                let span = expr.span();
+                attributes.push(attribute::AttributeType::Spread(expr));
+
+                if content.is_empty() {
+                    break;
+                }
+
+                if content.parse::<Token![,]>().is_err() {
+                    missing_trailing_comma!(span);
+                }
+                continue;
+            }
+
             // Parse the raw literal fields
             if content.peek(LitStr) && content.peek2(Token![:]) && !content.peek3(Token![:]) {
                 let name = content.parse::<LitStr>()?;
@@ -50,13 +66,13 @@ impl Parse for Element {
                 content.parse::<Token![:]>()?;
 
                 let value = content.parse::<ElementAttrValue>()?;
-                attributes.push(ElementAttrNamed {
+                attributes.push(attribute::AttributeType::Named(ElementAttrNamed {
                     el_name: el_name.clone(),
                     attr: ElementAttr {
                         name: ElementAttrName::Custom(name),
                         value,
                     },
-                });
+                }));
 
                 if content.is_empty() {
                     break;
@@ -79,13 +95,13 @@ impl Parse for Element {
                 let span = content.span();
 
                 if name_str.starts_with("on") {
-                    attributes.push(ElementAttrNamed {
+                    attributes.push(attribute::AttributeType::Named(ElementAttrNamed {
                         el_name: el_name.clone(),
                         attr: ElementAttr {
                             name: ElementAttrName::BuiltIn(name),
                             value: ElementAttrValue::EventTokens(content.parse()?),
                         },
-                    });
+                    }));
                 } else {
                     match name_str.as_str() {
                         "key" => {
@@ -93,13 +109,13 @@ impl Parse for Element {
                         }
                         _ => {
                             let value = content.parse::<ElementAttrValue>()?;
-                            attributes.push(ElementAttrNamed {
+                            attributes.push(attribute::AttributeType::Named(ElementAttrNamed {
                                 el_name: el_name.clone(),
                                 attr: ElementAttr {
                                     name: ElementAttrName::BuiltIn(name),
                                     value,
                                 },
-                            });
+                            }));
                         }
                     }
                 }
@@ -108,7 +124,6 @@ impl Parse for Element {
                     break;
                 }
 
-                // todo: add a message saying you need to include commas between fields
                 if content.parse::<Token![,]>().is_err() {
                     missing_trailing_comma!(span);
                 }
@@ -120,12 +135,26 @@ impl Parse for Element {
 
         // Deduplicate any attributes that can be combined
         // For example, if there are two `class` attributes, combine them into one
-        let mut merged_attributes: Vec<ElementAttrNamed> = Vec::new();
+        let mut merged_attributes: Vec<AttributeType> = Vec::new();
         for attr in &attributes {
-            if let Some(old_attr_index) = merged_attributes
-                .iter()
-                .position(|a| a.attr.name == attr.attr.name)
-            {
+            if let Some(old_attr_index) = merged_attributes.iter().position(|a| {
+                matches!((a, attr), (
+                                AttributeType::Named(ElementAttrNamed {
+                                    attr: ElementAttr {
+                                        name: ElementAttrName::BuiltIn(old_name),
+                                        ..
+                                    },
+                                    ..
+                                }),
+                                AttributeType::Named(ElementAttrNamed {
+                                    attr: ElementAttr {
+                                        name: ElementAttrName::BuiltIn(new_name),
+                                        ..
+                                    },
+                                    ..
+                                }),
+                            ) if old_name == new_name)
+            }) {
                 let old_attr = &mut merged_attributes[old_attr_index];
                 if let Some(combined) = old_attr.try_combine(attr) {
                     *old_attr = combined;
@@ -173,15 +202,31 @@ impl ToTokens for Element {
             None => quote! { None },
         };
 
-        let listeners = self
-            .merged_attributes
-            .iter()
-            .filter(|f| matches!(f.attr.value, ElementAttrValue::EventTokens { .. }));
+        let listeners = self.merged_attributes.iter().filter(|f| {
+            matches!(
+                f,
+                AttributeType::Named(ElementAttrNamed {
+                    attr: ElementAttr {
+                        value: ElementAttrValue::EventTokens { .. },
+                        ..
+                    },
+                    ..
+                })
+            )
+        });
 
-        let attr = self
-            .merged_attributes
-            .iter()
-            .filter(|f| !matches!(f.attr.value, ElementAttrValue::EventTokens { .. }));
+        let attr = self.merged_attributes.iter().filter(|f| {
+            !matches!(
+                f,
+                AttributeType::Named(ElementAttrNamed {
+                    attr: ElementAttr {
+                        value: ElementAttrValue::EventTokens { .. },
+                        ..
+                    },
+                    ..
+                })
+            )
+        });
 
         tokens.append_all(quote! {
             __cx.element(

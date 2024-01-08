@@ -1,6 +1,7 @@
 use crate::any_props::AnyProps;
 use crate::innerlude::{
-    BorrowedAttributeValue, ElementPath, ElementRef, VComponent, VPlaceholder, VText,
+    AttributeType, BorrowedAttributeValue, ElementPath, ElementRef, MountedAttribute, VComponent,
+    VPlaceholder, VText,
 };
 use crate::mutations::Mutation;
 use crate::mutations::Mutation::*;
@@ -314,7 +315,7 @@ impl<'b> VirtualDom {
             let id = self.assign_static_node_as_dynamic(path, root);
 
             loop {
-                self.write_attribute(node, attr_id, &node.dynamic_attrs[attr_id], id);
+                self.write_attribute_type(node, &node.dynamic_attrs[attr_id], attr_id, id);
 
                 // Only push the dynamic attributes forward if they match the current path (same element)
                 match attrs.next_if(|(_, p)| *p == path) {
@@ -325,25 +326,41 @@ impl<'b> VirtualDom {
         }
     }
 
-    fn write_attribute(
+    fn write_attribute_type(
         &mut self,
-        template: &'b VNode<'b>,
+        vnode: &'b VNode<'b>,
+        attribute: &'b MountedAttribute<'b>,
         idx: usize,
-        attribute: &'b crate::Attribute<'b>,
         id: ElementId,
     ) {
         // Make sure we set the attribute's associated id
         attribute.mounted_element.set(id);
+        match &attribute.ty {
+            AttributeType::Single(attribute) => self.write_attribute(vnode, attribute, idx, id),
+            AttributeType::Many(attribute) => {
+                for attribute in *attribute {
+                    self.write_attribute(vnode, attribute, idx, id);
+                }
+            }
+        }
+    }
 
+    pub(crate) fn write_attribute(
+        &mut self,
+        vnode: &'b VNode<'b>,
+        attribute: &'b crate::Attribute<'b>,
+        idx: usize,
+        id: ElementId,
+    ) {
         // Safety: we promise not to re-alias this text later on after committing it to the mutation
         let unbounded_name: &str = unsafe { std::mem::transmute(attribute.name) };
 
         match &attribute.value {
             AttributeValue::Listener(_) => {
-                let path = &template.template.get().attr_paths[idx];
+                let path = &vnode.template.get().attr_paths[idx];
                 let element_ref = ElementRef {
                     path: ElementPath { path },
-                    template: template.stable_id().unwrap(),
+                    template: vnode.stable_id().unwrap(),
                     scope: self.runtime.current_scope_id().unwrap_or(ScopeId(0)),
                 };
                 self.elements[id.0] = Some(element_ref);

@@ -46,10 +46,17 @@ pub use render_template::*;
 #[cfg(feature = "eval")]
 pub mod eval;
 
+pub mod extensions {
+    pub use crate::elements::extensions::*;
+    pub use crate::global_attributes::{GlobalAttributesExtension, SvgAttributesExtension};
+}
+
 pub mod prelude {
+    pub use crate::elements::extensions::*;
     #[cfg(feature = "eval")]
     pub use crate::eval::*;
     pub use crate::events::*;
+    pub use crate::global_attributes::{GlobalAttributesExtension, SvgAttributesExtension};
     pub use crate::point_interaction::*;
     pub use keyboard_types::{self, Code, Key, Location, Modifiers};
 }
