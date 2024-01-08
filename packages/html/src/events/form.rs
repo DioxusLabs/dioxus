@@ -1,4 +1,6 @@
-use std::{any::Any, collections::HashMap, fmt::Debug};
+use crate::file_data::FileEngine;
+use crate::file_data::HasFileData;
+use std::{collections::HashMap, fmt::Debug};
 
 use dioxus_core::Event;
 
@@ -116,7 +118,7 @@ impl FormData {
 pub struct SerializedFormData {
     value: String,
     values: HashMap<String, FormValue>,
-    files: Option<SerializedFileEngine>,
+    files: Option<crate::file_data::SerializedFileEngine>,
 }
 
 #[cfg(feature = "serialize")]
@@ -125,7 +127,7 @@ impl SerializedFormData {
     pub fn new(
         value: String,
         values: HashMap<String, FormValue>,
-        files: Option<SerializedFileEngine>,
+        files: Option<crate::file_data::SerializedFileEngine>,
     ) -> Self {
         Self {
             value,
@@ -148,7 +150,7 @@ impl SerializedFormData {
                         resolved_files.insert(file, bytes.unwrap_or_default());
                     }
 
-                    Some(SerializedFileEngine {
+                    Some(crate::file_data::SerializedFileEngine {
                         files: resolved_files,
                     })
                 }

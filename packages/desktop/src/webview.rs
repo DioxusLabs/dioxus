@@ -94,11 +94,10 @@ impl WebviewInstance {
             .unwrap()
             .with_ipc_handler(ipc_handler)
             .with_asynchronous_custom_protocol(String::from("dioxus"), request_handler)
-            .with_file_drop_handler(file_drop_handler)
             .with_web_context(&mut web_context);
 
         if let Some(handler) = file_handler {
-            webview = webview.with_file_drop_handler(handler)
+            webview = webview.with_file_drop_handler(move |evt| handler(window_id, evt))
         }
 
         // This was removed from wry, I'm not sure what replaced it

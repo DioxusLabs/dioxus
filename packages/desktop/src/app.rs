@@ -12,7 +12,7 @@ use crate::{
 use crossbeam_channel::Receiver;
 use dioxus_core::{Component, ElementId, VirtualDom};
 use dioxus_html::{
-    native_bind::NativeFileEngine, FileEngine, HasFormData, HtmlEvent, MountedData,
+    native_bind::NativeFileEngine, FileEngine, HasFileData, HasFormData, HtmlEvent, MountedData,
     PlatformEventData, SerializedHtmlEventConverter,
 };
 use std::{
@@ -280,11 +280,13 @@ impl<P: 'static> App<P> {
             files: Arc<NativeFileEngine>,
         }
 
-        impl HasFormData for DesktopFileUploadForm {
+        impl HasFileData for DesktopFileUploadForm {
             fn files(&self) -> Option<Arc<dyn FileEngine>> {
                 Some(self.files.clone())
             }
+        }
 
+        impl HasFormData for DesktopFileUploadForm {
             fn as_any(&self) -> &dyn std::any::Any {
                 self
             }
