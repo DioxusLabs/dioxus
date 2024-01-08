@@ -78,19 +78,21 @@ pub fn selector<R: PartialEq>(mut f: impl FnMut() -> R + 'static) -> ReadOnlySig
     let effect = Effect {
         source: current_scope_id().expect("in a virtual dom"),
         callback: CopyValue::invalid(),
+        effect_stack: get_effect_stack(),
     };
 
     {
-        get_effect_stack().effects.borrow_mut().push(effect);
+        get_effect_stack().effects.write().push(effect);
     }
     state.inner.value.set(SignalData {
         subscribers: Default::default(),
         effect_subscribers: Default::default(),
         update_any: schedule_update_any().expect("in a virtual dom"),
         value: f(),
+        effect_stack: get_effect_stack(),
     });
     {
-        get_effect_stack().effects.borrow_mut().pop();
+        get_effect_stack().effects.write().pop();
     }
 
     effect.callback.value.set(Box::new(move || {

@@ -139,7 +139,6 @@ Missing Features
 Missing examples
 - Shared state
 - Root-less element groups
-- Spread props
 - Custom elements
 - Component Children: Pass children into child components
 - Render To string: Render a mounted virtualdom to a string

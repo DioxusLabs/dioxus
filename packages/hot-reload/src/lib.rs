@@ -1,4 +1,7 @@
-use std::io::{BufRead, BufReader};
+use std::{
+    io::{BufRead, BufReader},
+    path::PathBuf,
+};
 
 use dioxus_core::Template;
 #[cfg(feature = "file_watcher")]
@@ -6,9 +9,9 @@ pub use dioxus_html::HtmlCtx;
 use interprocess_docfix::local_socket::LocalSocketStream;
 use serde::{Deserialize, Serialize};
 
-#[cfg(feature = "file_watcher")]
+#[cfg(feature = "custom_file_watcher")]
 mod file_watcher;
-#[cfg(feature = "file_watcher")]
+#[cfg(feature = "custom_file_watcher")]
 pub use file_watcher::*;
 
 /// A message the hot reloading server sends to the client
@@ -24,7 +27,8 @@ pub enum HotReloadMsg {
 /// Connect to the hot reloading listener. The callback provided will be called every time a template change is detected
 pub fn connect(mut f: impl FnMut(HotReloadMsg) + Send + 'static) {
     std::thread::spawn(move || {
-        if let Ok(socket) = LocalSocketStream::connect("@dioxusin") {
+        let path = PathBuf::from("./").join("target").join("dioxusin");
+        if let Ok(socket) = LocalSocketStream::connect(path) {
             let mut buf_reader = BufReader::new(socket);
             loop {
                 let mut buf = String::new();

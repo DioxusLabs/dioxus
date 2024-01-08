@@ -17,7 +17,7 @@ proc-macro2 = "^1.0.63"
 quote = "^1.0.26"
 syn = { version = "2", features = ["full"] }
 convert_case = "^0.6.0"
-server_fn_macro = "^0.4.6"
+server_fn_macro = "^0.5.2"
 
 [lib]
 proc-macro = true

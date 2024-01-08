@@ -7,7 +7,7 @@ This example shows how an app might be styled with TailwindCSS.
 1. Install the Dioxus CLI:
 
 ```bash
-cargo install --git https://github.com/DioxusLabs/cli
+cargo install dioxus-cli
 ```
 
 2. Install npm: https://docs.npmjs.com/downloading-and-installing-node-js-and-npm

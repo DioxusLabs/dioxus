@@ -14,29 +14,35 @@ use dioxus_router::prelude::*;
 #[derive(Routable, Clone)]
 #[rustfmt::skip]
 enum Route {
-    // segments that start with ?: are query segments
-    #[route("/blog?:query_params")]
+    // segments that start with ?:.. are query segments that capture the entire query
+    #[route("/blog?:..query_params")]
     BlogPost {
         // You must include query segments in child variants
-        query_params: BlogQuerySegments,
+        query_params: ManualBlogQuerySegments,
+    },
+    // segments that follow the ?:field&:other_field syntax are query segments that follow the standard url query syntax
+    #[route("/autoblog?:name&:surname")]
+    AutomaticBlogPost {
+        name: String,
+        surname: String,
     },
 }
 
 #[derive(Debug, Clone, PartialEq)]
-struct BlogQuerySegments {
+struct ManualBlogQuerySegments {
     name: String,
     surname: String,
 }
 
 /// The display impl needs to display the query in a way that can be parsed:
-impl Display for BlogQuerySegments {
+impl Display for ManualBlogQuerySegments {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "name={}&surname={}", self.name, self.surname)
     }
 }
 
 /// The query segment is anything that implements <https://docs.rs/dioxus-router/latest/dioxus_router/routable/trait.FromQuery.html>. You can implement that trait for a struct if you want to parse multiple query parameters.
-impl FromQuery for BlogQuerySegments {
+impl FromQuery for ManualBlogQuerySegments {
     fn from_query(query: &str) -> Self {
         let mut name = None;
         let mut surname = None;
@@ -57,10 +63,18 @@ impl FromQuery for BlogQuerySegments {
 }
 
 #[component]
-fn BlogPost(cx: Scope, query_params: BlogQuerySegments) -> Element {
+fn BlogPost(cx: Scope, query_params: ManualBlogQuerySegments) -> Element {
     render! {
         div{"This is your blogpost with a query segment:"}
         div{format!("{:?}", query_params)}
+    }
+}
+
+#[component]
+fn AutomaticBlogPost(cx: Scope, name: String, surname: String) -> Element {
+    render! {
+        div{"This is your blogpost with a query segment:"}
+        div{format!("name={}&surname={}", name, surname)}
     }
 }
 

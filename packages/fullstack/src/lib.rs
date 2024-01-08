@@ -14,6 +14,7 @@ pub mod router;
 mod adapters;
 #[cfg(feature = "ssr")]
 pub use adapters::*;
+mod collect_assets;
 mod hooks;
 #[cfg(all(debug_assertions, feature = "hot-reload", feature = "ssr"))]
 mod hot_reload;
@@ -40,6 +41,8 @@ pub mod prelude {
     #[cfg(not(feature = "ssr"))]
     pub use crate::html_storage::deserialize::get_root_props_from_document;
     pub use crate::launch::LaunchBuilder;
+    #[cfg(feature = "ssr")]
+    pub use crate::layer::{Layer, Service};
     #[cfg(all(feature = "ssr", feature = "router"))]
     pub use crate::render::pre_cache_static_routes_with_props;
     #[cfg(feature = "ssr")]
@@ -64,3 +67,10 @@ pub mod prelude {
 
     pub use hooks::{server_cached::server_cached, server_future::use_server_future};
 }
+
+// Warn users about overlapping features
+#[cfg(all(feature = "ssr", feature = "web"))]
+compile_error!("The `ssr` feature (enabled by `warp`, `axum`, or `salvo`) and `web` feature are overlapping. Please choose one or the other.");
+
+#[cfg(all(feature = "ssr", feature = "desktop"))]
+compile_error!("The `ssr` feature (enabled by `warp`, `axum`, or `salvo`) and `desktop` feature are overlapping. Please choose one or the other.");

@@ -1,6 +1,6 @@
 use std::{num::ParseFloatError, str::FromStr};
 
-use tui::style::{Color, Modifier, Style};
+use ratatui::style::{Color, Modifier, Style};
 
 use crate::RenderingMode;
 
@@ -442,6 +442,7 @@ impl RinkStyle {
 impl From<RinkStyle> for Style {
     fn from(val: RinkStyle) -> Self {
         Style {
+            underline_color: None,
             fg: val.fg.map(|c| c.color),
             bg: val.bg.map(|c| c.color),
             add_modifier: val.add_modifier,
