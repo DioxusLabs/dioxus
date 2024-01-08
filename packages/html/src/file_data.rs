@@ -1,4 +1,4 @@
-use std::{any::Any, collections::HashMap};
+use std::any::Any;
 
 pub trait HasFileData: std::any::Any {
     fn files(&self) -> Option<std::sync::Arc<dyn FileEngine>> {
@@ -10,7 +10,7 @@ pub trait HasFileData: std::any::Any {
 /// A file engine that serializes files to bytes
 #[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Clone)]
 pub struct SerializedFileEngine {
-    pub files: HashMap<String, Vec<u8>>,
+    pub files: std::collections::HashMap<String, Vec<u8>>,
 }
 
 #[cfg(feature = "serialize")]
