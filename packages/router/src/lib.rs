@@ -53,6 +53,8 @@ pub mod hooks {
     pub use use_navigator::*;
 }
 
+pub use hooks::router;
+
 /// A collection of useful items most applications might need.
 pub mod prelude {
     pub use crate::components::*;

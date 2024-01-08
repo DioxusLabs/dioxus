@@ -1,5 +1,5 @@
 use crate::{
-    innerlude::{ErrorBoundary, Scheduler, SchedulerMsg},
+    innerlude::{Scheduler, SchedulerMsg},
     runtime::{with_current_scope, with_runtime},
     Element, ScopeId, TaskId,
 };
@@ -7,7 +7,6 @@ use rustc_hash::FxHashSet;
 use std::{
     any::Any,
     cell::{Cell, RefCell},
-    fmt::Debug,
     future::Future,
     rc::Rc,
     sync::Arc,
@@ -230,17 +229,7 @@ impl ScopeContext {
     /// This is good for tasks that need to be run after the component has been dropped.
     pub fn spawn_forever(&self, fut: impl Future<Output = ()> + 'static) -> TaskId {
         // The root scope will never be unmounted so we can just add the task at the top of the app
-        let id = self.tasks.spawn(ScopeId::ROOT, fut);
-
-        // wake up the scheduler if it is sleeping
-        self.tasks
-            .sender
-            .unbounded_send(SchedulerMsg::TaskNotified(id))
-            .expect("Scheduler should exist");
-
-        self.spawned_tasks.borrow_mut().insert(id);
-
-        id
+        self.tasks.spawn(ScopeId::ROOT, fut)
     }
 
     /// Informs the scheduler that this task is no longer needed and should be removed.
@@ -248,19 +237,6 @@ impl ScopeContext {
     /// This drops the task immediately.
     pub fn remove_future(&self, id: TaskId) {
         self.tasks.remove(id);
-    }
-
-    /// Inject an error into the nearest error boundary and quit rendering
-    ///
-    /// The error doesn't need to implement Error or any specific traits since the boundary
-    /// itself will downcast the error into a trait object.
-    pub fn throw(&self, error: impl Debug + 'static) -> Option<()> {
-        if let Some(cx) = self.consume_context::<Rc<ErrorBoundary>>() {
-            cx.insert_error(self.scope_id(), Box::new(error));
-        }
-
-        // Always return none during a throw
-        None
     }
 
     /// Mark this component as suspended and then return None
@@ -332,11 +308,6 @@ pub fn suspend() -> Option<Element<'static>> {
     None
 }
 
-/// Throw an error into the nearest error boundary
-pub fn throw(error: impl Debug + 'static) -> Option<()> {
-    with_current_scope(|cx| cx.throw(error)).flatten()
-}
-
 /// Pushes the future onto the poll queue to be polled after the component renders.
 pub fn push_future(fut: impl Future<Output = ()> + 'static) -> Option<TaskId> {
     with_current_scope(|cx| cx.push_future(fut))
@@ -347,11 +318,16 @@ pub fn spawn(fut: impl Future<Output = ()> + 'static) {
     with_current_scope(|cx| cx.spawn(fut));
 }
 
+/// Spawn a future on a component given its [`ScopeId`].
+pub fn spawn_at(fut: impl Future<Output = ()> + 'static, scope_id: ScopeId) -> Option<TaskId> {
+    with_runtime(|rt| rt.get_context(scope_id).unwrap().push_future(fut))
+}
+
 /// Spawn a future that Dioxus won't clean up when this component is unmounted
 ///
 /// This is good for tasks that need to be run after the component has been dropped.
 pub fn spawn_forever(fut: impl Future<Output = ()> + 'static) -> Option<TaskId> {
-    with_current_scope(|cx| cx.spawn_forever(fut))
+    spawn_at(fut, ScopeId(0))
 }
 
 /// Informs the scheduler that this task is no longer needed and should be removed.

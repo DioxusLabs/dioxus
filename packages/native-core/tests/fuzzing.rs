@@ -3,7 +3,6 @@ use dioxus_core::*;
 use dioxus_native_core::prelude::*;
 use dioxus_native_core_macro::partial_derive_state;
 use shipyard::Component;
-use std::cell::Cell;
 
 fn random_ns() -> Option<&'static str> {
     let namespace = rand::random::<u8>() % 2;
@@ -178,28 +177,43 @@ fn create_random_dynamic_node(cx: &ScopeState, depth: usize) -> DynamicNode {
     let range = if depth > 3 { 1 } else { 3 };
     match rand::random::<u8>() % range {
         0 => DynamicNode::Placeholder(Default::default()),
-        1 => cx.make_node((0..(rand::random::<u8>() % 5)).map(|_| VNode {
-            key: None,
-            parent: Default::default(),
-            template: Cell::new(Template {
-                name: concat!(file!(), ":", line!(), ":", column!(), ":0"),
-                roots: &[TemplateNode::Dynamic { id: 0 }],
-                node_paths: &[&[0]],
-                attr_paths: &[],
-            }),
-            root_ids: dioxus::core::exports::bumpalo::collections::Vec::new_in(cx.bump()).into(),
-            dynamic_nodes: cx.bump().alloc([cx.component(
-                create_random_element,
-                DepthProps { depth, root: false },
-                "create_random_element",
-            )]),
-            dynamic_attrs: &[],
+        1 => cx.make_node((0..(rand::random::<u8>() % 5)).map(|_| {
+            VNode::new(
+                None,
+                Template {
+                    name: concat!(file!(), ":", line!(), ":", column!(), ":0"),
+                    roots: &[TemplateNode::Dynamic { id: 0 }],
+                    node_paths: &[&[0]],
+                    attr_paths: &[],
+                },
+                dioxus::core::exports::bumpalo::collections::Vec::new_in(cx.bump()),
+                cx.bump().alloc([cx.component(
+                    create_random_element,
+                    DepthProps { depth, root: false },
+                    "create_random_element",
+                )]),
+                &[],
+            )
         })),
         2 => cx.component(
             create_random_element,
             DepthProps { depth, root: false },
             "create_random_element",
         ),
+        _ => unreachable!(),
+    }
+}
+
+fn create_random_dynamic_mounted_attr(cx: &ScopeState) -> MountedAttribute {
+    match rand::random::<u8>() % 2 {
+        0 => MountedAttribute::from(
+            &*cx.bump().alloc(
+                (0..(rand::random::<u8>() % 3) as usize)
+                    .map(|_| create_random_dynamic_attr(cx))
+                    .collect::<Vec<_>>(),
+            ),
+        ),
+        1 => MountedAttribute::from(create_random_dynamic_attr(cx)),
         _ => unreachable!(),
     }
 }
@@ -214,7 +228,6 @@ fn create_random_dynamic_attr(cx: &ScopeState) -> Attribute {
         3 => AttributeValue::Bool(rand::random()),
         4 => cx.any_value(rand::random::<usize>()),
         5 => AttributeValue::None,
-        // Listener(RefCell<Option<ListenerCb<'a>>>),
         _ => unreachable!(),
     };
     Attribute::new(
@@ -253,13 +266,11 @@ fn create_random_element(cx: Scope<DepthProps>) -> Element {
                 .into_boxed_str(),
             ));
             println!("{template:#?}");
-            let node = VNode {
-                key: None,
-                parent: None,
-                template: Cell::new(template),
-                root_ids: dioxus::core::exports::bumpalo::collections::Vec::new_in(cx.bump())
-                    .into(),
-                dynamic_nodes: {
+            let node = VNode::new(
+                None,
+                template,
+                dioxus::core::exports::bumpalo::collections::Vec::new_in(cx.bump()),
+                {
                     let dynamic_nodes: Vec<_> = dynamic_node_types
                         .iter()
                         .map(|ty| match ty {
@@ -273,12 +284,14 @@ fn create_random_element(cx: Scope<DepthProps>) -> Element {
                         .collect();
                     cx.bump().alloc(dynamic_nodes)
                 },
-                dynamic_attrs: cx.bump().alloc(
-                    (0..template.attr_paths.len())
-                        .map(|_| create_random_dynamic_attr(cx))
-                        .collect::<Vec<_>>(),
-                ),
-            };
+                cx.bump()
+                    .alloc(
+                        (0..template.attr_paths.len())
+                            .map(|_| create_random_dynamic_mounted_attr(cx))
+                            .collect::<Vec<_>>(),
+                    )
+                    .as_slice(),
+            );
             Some(node)
         }
         _ => None,

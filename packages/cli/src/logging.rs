@@ -28,7 +28,19 @@ pub fn set_up_logging() {
                 message = message,
             ));
         })
-        .level(log::LevelFilter::Info)
+        .level(match std::env::var("DIOXUS_LOG") {
+            Ok(level) => match level.to_lowercase().as_str() {
+                "error" => log::LevelFilter::Error,
+                "warn" => log::LevelFilter::Warn,
+                "info" => log::LevelFilter::Info,
+                "debug" => log::LevelFilter::Debug,
+                "trace" => log::LevelFilter::Trace,
+                _ => {
+                    panic!("Invalid log level: {}", level)
+                }
+            },
+            Err(_) => log::LevelFilter::Info,
+        })
         .chain(std::io::stdout())
         .apply()
         .unwrap();

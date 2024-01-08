@@ -4,6 +4,7 @@
 //! Tests for the lifecycle of components.
 use dioxus::core::{ElementId, Mutation::*};
 use dioxus::prelude::*;
+use dioxus_html::SerializedHtmlEventConverter;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
@@ -39,6 +40,7 @@ fn manual_diffing() {
 
 #[test]
 fn events_generate() {
+    set_event_converter(Box::new(SerializedHtmlEventConverter));
     fn app(cx: Scope) -> Element {
         let count = cx.use_hook(|| 0);
 
@@ -56,7 +58,12 @@ fn events_generate() {
     let mut dom = VirtualDom::new(app);
     _ = dom.rebuild();
 
-    dom.handle_event("click", Rc::new(MouseData::default()), ElementId(1), true);
+    dom.handle_event(
+        "click",
+        Rc::new(PlatformEventData::new(Box::<SerializedMouseData>::default())),
+        ElementId(1),
+        true,
+    );
 
     dom.mark_dirty(ScopeId::ROOT);
     let edits = dom.render_immediate();

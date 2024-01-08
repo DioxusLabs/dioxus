@@ -1,7 +1,7 @@
 use crate::rt::CopyValue;
 use crate::signal::{ReadOnlySignal, Signal, Write};
-
-use std::cell::{Ref, RefMut};
+use generational_box::GenerationalRef;
+use generational_box::GenerationalRefMut;
 
 use std::{
     fmt::{Debug, Display},
@@ -38,8 +38,8 @@ macro_rules! read_impls {
 
         impl<T: 'static> $ty<Vec<T>> {
             /// Read a value from the inner vector.
-            pub fn get(&self, index: usize) -> Option<Ref<'_, T>> {
-                Ref::filter_map(self.read(), |v| v.get(index)).ok()
+            pub fn get(&self, index: usize) -> Option<GenerationalRef<T>> {
+                GenerationalRef::filter_map(self.read(), |v| v.get(index))
             }
         }
 
@@ -52,9 +52,9 @@ macro_rules! read_impls {
                 self.with(|v| v.clone()).unwrap()
             }
 
-            /// Attemps to read the inner value of the Option.
-            pub fn as_ref(&self) -> Option<Ref<'_, T>> {
-                Ref::filter_map(self.read(), |v| v.as_ref()).ok()
+            /// Attempts to read the inner value of the Option.
+            pub fn as_ref(&self) -> Option<GenerationalRef<T>> {
+                GenerationalRef::filter_map(self.read(), |v| v.as_ref())
             }
         }
     };
@@ -182,19 +182,19 @@ macro_rules! write_impls {
             }
 
             /// Gets the value out of the Option, or inserts the given value if the Option is empty.
-            pub fn get_or_insert(&self, default: T) -> Ref<'_, T> {
+            pub fn get_or_insert(&self, default: T) -> GenerationalRef<T> {
                 self.get_or_insert_with(|| default)
             }
 
             /// Gets the value out of the Option, or inserts the value returned by the given function if the Option is empty.
-            pub fn get_or_insert_with(&self, default: impl FnOnce() -> T) -> Ref<'_, T> {
+            pub fn get_or_insert_with(&self, default: impl FnOnce() -> T) -> GenerationalRef<T> {
                 let borrow = self.read();
                 if borrow.is_none() {
                     drop(borrow);
                     self.with_mut(|v| *v = Some(default()));
-                    Ref::map(self.read(), |v| v.as_ref().unwrap())
+                    GenerationalRef::map(self.read(), |v| v.as_ref().unwrap())
                 } else {
-                    Ref::map(borrow, |v| v.as_ref().unwrap())
+                    GenerationalRef::map(borrow, |v| v.as_ref().unwrap())
                 }
             }
         }
@@ -238,15 +238,15 @@ impl<T: Clone + 'static> IntoIterator for CopyValue<Vec<T>> {
 
 impl<T: 'static> CopyValue<Vec<T>> {
     /// Write to an element in the inner vector.
-    pub fn get_mut(&self, index: usize) -> Option<RefMut<'_, T>> {
-        RefMut::filter_map(self.write(), |v| v.get_mut(index)).ok()
+    pub fn get_mut(&self, index: usize) -> Option<GenerationalRefMut<T>> {
+        GenerationalRefMut::filter_map(self.write(), |v| v.get_mut(index))
     }
 }
 
 impl<T: 'static> CopyValue<Option<T>> {
     /// Deref the inner value mutably.
-    pub fn as_mut(&self) -> Option<RefMut<'_, T>> {
-        RefMut::filter_map(self.write(), |v| v.as_mut()).ok()
+    pub fn as_mut(&self) -> Option<GenerationalRefMut<T>> {
+        GenerationalRefMut::filter_map(self.write(), |v| v.as_mut())
     }
 }
 
@@ -281,14 +281,14 @@ impl<T: Clone + 'static> IntoIterator for Signal<Vec<T>> {
 
 impl<T: 'static> Signal<Vec<T>> {
     /// Returns a reference to an element or `None` if out of bounds.
-    pub fn get_mut(&self, index: usize) -> Option<Write<'_, T, Vec<T>>> {
+    pub fn get_mut(&self, index: usize) -> Option<Write<T, Vec<T>>> {
         Write::filter_map(self.write(), |v| v.get_mut(index))
     }
 }
 
 impl<T: 'static> Signal<Option<T>> {
     /// Returns a reference to an element or `None` if out of bounds.
-    pub fn as_mut(&self) -> Option<Write<'_, T, Option<T>>> {
+    pub fn as_mut(&self) -> Option<Write<T, Option<T>>> {
         Write::filter_map(self.write(), |v| v.as_mut())
     }
 }

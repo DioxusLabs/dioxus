@@ -1,7 +1,7 @@
 use dioxus::prelude::*;
+use dioxus_desktop::tao::event::Event as WryEvent;
 use dioxus_desktop::tao::event::WindowEvent;
 use dioxus_desktop::use_wry_event_handler;
-use dioxus_desktop::wry::application::event::Event as WryEvent;
 use dioxus_desktop::{Config, WindowCloseBehaviour};
 
 fn main() {
