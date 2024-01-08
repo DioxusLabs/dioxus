@@ -525,26 +525,27 @@ impl HasFileData for WebDragData {
 
 // web-sys does not expose the keys api for form data, so we need to manually bind to it
 #[wasm_bindgen(inline_js = r#"
-    export function get_form_data(form) {
-        let values = new Map();
-        const formData = new FormData(form);
+export function get_form_data(form) {
+    let values = new Map();
+    const formData = new FormData(form);
 
-        for (let name of formData.keys()) {
-            const fieldType = target.elements[name].type;
+    for (let name of formData.keys()) {
+        const fieldType = target.elements[name].type;
 
-            switch (fieldType) {
-                case "select-multiple":
-                    contents.values[name] = formData.getAll(name);
-                    break;
+        switch (fieldType) {
+            case "select-multiple":
+                contents.values[name] = formData.getAll(name);
+                break;
 
-                // add cases for fieldTypes that can hold multiple values here
-                default:
-                    contents.values[name] = formData.get(name);
-                    break;
+            // add cases for fieldTypes that can hold multiple values here
+            default:
+                contents.values[name] = formData.get(name);
+                break;
         }
-
-        return values;
     }
+
+    return values;
+}
 "#)]
 extern "C" {
     fn get_form_data(form: &web_sys::HtmlFormElement) -> js_sys::Map;
