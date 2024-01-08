@@ -4,6 +4,7 @@
 
 pub const DIOXUS_CLI_VERSION: &str = "0.4.1";
 
+mod assets;
 pub mod builder;
 pub mod server;
 pub mod tools;

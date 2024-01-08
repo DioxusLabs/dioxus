@@ -1,8 +1,8 @@
+use crate::assets::WebAssetConfigDropGuard;
 #[cfg(feature = "plugin")]
 use crate::plugin::PluginManager;
 use crate::server::fullstack::FullstackServerEnvGuard;
 use crate::server::fullstack::FullstackWebEnvGuard;
-use crate::WebAssetConfigDropGuard;
 use dioxus_cli_config::Platform;
 
 use super::*;

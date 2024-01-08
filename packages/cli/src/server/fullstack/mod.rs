@@ -1,6 +1,9 @@
+use dioxus_cli_config::CrateConfig;
+
 use crate::{
+    assets::WebAssetConfigDropGuard,
     cfg::{ConfigOptsBuild, ConfigOptsServe},
-    CrateConfig, Result, WebAssetConfigDropGuard,
+    Result,
 };
 
 use super::{desktop, Platform};
@@ -86,7 +89,7 @@ fn build_web(serve: ConfigOptsServe, target_directory: &std::path::Path) -> Resu
         }
         None => web_config.features = Some(vec![web_feature]),
     };
-    web_config.platform = Some(crate::cfg::Platform::Web);
+    web_config.platform = Some(dioxus_cli_config::Platform::Web);
 
     let _gaurd = FullstackWebEnvGuard::new(&web_config);
     crate::cli::build::Build { build: web_config }.build(None, Some(target_directory))

@@ -1,19 +1,18 @@
 use crate::{
+    assets::{asset_manifest, create_assets_head, process_assets, WebAssetConfigDropGuard},
     error::{Error, Result},
     tools::Tool,
 };
 use cargo_metadata::{diagnostic::Diagnostic, Message};
 use dioxus_cli_config::crate_root;
 use dioxus_cli_config::CrateConfig;
-use dioxus_cli_config::DioxusConfig;
 use dioxus_cli_config::ExecutableType;
 use indicatif::{ProgressBar, ProgressStyle};
 use lazy_static::lazy_static;
-use manganis_cli_support::AssetManifestExt;
 use serde::Serialize;
 use std::{
     fs::{copy, create_dir_all, File},
-    io::{Read, Write},
+    io::Read,
     panic,
     path::PathBuf,
     time::Duration,
@@ -415,13 +414,6 @@ pub fn build_desktop(
     })
 }
 
-fn create_assets_head(config: &CrateConfig) -> Result<()> {
-    let manifest = config.asset_manifest();
-    let mut file = File::create(config.out_dir.join("__assets_head.html"))?;
-    file.write_all(manifest.head().as_bytes())?;
-    Ok(())
-}
-
 fn prettier_build(cmd: subprocess::Exec) -> anyhow::Result<Vec<Diagnostic>> {
     let mut warning_messages: Vec<Diagnostic> = vec![];
 
@@ -478,10 +470,10 @@ fn prettier_build(cmd: subprocess::Exec) -> anyhow::Result<Vec<Diagnostic>> {
     Ok(warning_messages)
 }
 
-pub fn gen_page(config: &DioxusConfig, serve: bool, skip_assets: bool) -> String {
+pub fn gen_page(config: &CrateConfig, serve: bool, skip_assets: bool) -> String {
     let _gaurd = WebAssetConfigDropGuard::new();
 
-    let crate_root = crate::cargo::crate_root().unwrap();
+    let crate_root = crate_root().unwrap();
     let custom_html_file = crate_root.join("index.html");
     let mut html = if custom_html_file.is_file() {
         let mut buf = String::new();
@@ -514,11 +506,17 @@ pub fn gen_page(config: &DioxusConfig, serve: bool, skip_assets: bool) -> String
             &style.to_str().unwrap(),
         ))
     }
-    if config.application.tools.clone().contains_key("tailwindcss") {
+    if config
+        .dioxus_config
+        .application
+        .tools
+        .clone()
+        .contains_key("tailwindcss")
+    {
         style_str.push_str("<link rel=\"stylesheet\" href=\"/{base_path}/tailwind.css\">\n");
     }
     if !skip_assets {
-        let manifest = config.asset_manifest();
+        let manifest = asset_manifest(config);
         style_str.push_str(&manifest.head());
     }
 
@@ -569,7 +567,7 @@ pub fn gen_page(config: &DioxusConfig, serve: bool, skip_assets: bool) -> String
         );
     }
 
-    let title = config.web.app.title.clone();
+    let title = config.dioxus_config.web.app.title.clone();
 
     replace_or_insert_before("{app_title}", &title, "</title", &mut html);
 
@@ -733,43 +731,4 @@ fn build_assets(config: &CrateConfig) -> Result<Vec<PathBuf>> {
     // SASS END
 
     Ok(result)
-}
-
-/// Process any assets collected from the binary
-fn process_assets(config: &CrateConfig) -> anyhow::Result<()> {
-    let manifest = config.asset_manifest();
-
-    let static_asset_output_dir = PathBuf::from(
-        config
-            .dioxus_config
-            .web
-            .app
-            .base_path
-            .clone()
-            .unwrap_or_default(),
-    );
-    let static_asset_output_dir = config.out_dir.join(static_asset_output_dir);
-
-    manifest.copy_static_assets_to(static_asset_output_dir)?;
-
-    Ok(())
-}
-
-pub(crate) struct WebAssetConfigDropGuard;
-
-impl WebAssetConfigDropGuard {
-    pub fn new() -> Self {
-        // Set up the collect asset config
-        manganis_cli_support::Config::default()
-            .with_assets_serve_location("/")
-            .save();
-        Self {}
-    }
-}
-
-impl Drop for WebAssetConfigDropGuard {
-    fn drop(&mut self) {
-        // Reset the config
-        manganis_cli_support::Config::default().save();
-    }
 }

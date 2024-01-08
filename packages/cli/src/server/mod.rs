@@ -1,5 +1,4 @@
 use crate::{cfg::ConfigOptsServe, BuildResult, Result};
-use crate::{BuildResult, Result};
 use dioxus_cli_config::CrateConfig;
 
 use cargo_metadata::diagnostic::Diagnostic;
