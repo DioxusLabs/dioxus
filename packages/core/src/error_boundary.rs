@@ -6,7 +6,7 @@ use crate::{
 use std::{
     any::{Any, TypeId},
     backtrace::Backtrace,
-    cell::RefCell,
+    cell::{Cell, RefCell},
     error::Error,
     fmt::{Debug, Display},
     rc::Rc,
@@ -334,10 +334,10 @@ where
         }
     }
 }
-impl<'a> Properties for ErrorBoundaryProps<'a> {
+impl<'a> Properties<'a> for ErrorBoundaryProps<'a> {
     type Builder = ErrorBoundaryPropsBuilder<'a, ((), ())>;
     const IS_STATIC: bool = false;
-    fn builder() -> Self::Builder {
+    fn builder(_: &'a ScopeState) -> Self::Builder {
         ErrorBoundaryProps::builder()
     }
     unsafe fn memoize(&self, _: &Self) -> bool {
@@ -472,8 +472,8 @@ pub fn ErrorBoundary<'a>(cx: Scope<'a, ErrorBoundaryProps<'a>>) -> Element {
                 attr_paths: &[],
             };
             VNode {
-                parent: Default::default(),
-                stable_id: Default::default(),
+                parent: Cell::new(None),
+                stable_id: Cell::new(None),
                 key: None,
                 template: std::cell::Cell::new(TEMPLATE),
                 root_ids: bumpalo::collections::Vec::with_capacity_in(1usize, __cx.bump()).into(),

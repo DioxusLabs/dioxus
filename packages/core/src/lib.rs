@@ -76,11 +76,11 @@ pub(crate) mod innerlude {
 }
 
 pub use crate::innerlude::{
-    fc_to_builder, vdom_is_rendering, AnyValue, Attribute, AttributeValue, BorrowedAttributeValue,
-    CapturedError, Component, DynamicNode, Element, ElementId, Event, Fragment, IntoDynNode,
-    LazyNodes, Mutation, Mutations, Properties, RenderReturn, Scope, ScopeId, ScopeState, Scoped,
-    TaskId, Template, TemplateAttribute, TemplateNode, VComponent, VNode, VPlaceholder, VText,
-    VirtualDom,
+    fc_to_builder, vdom_is_rendering, AnyValue, Attribute, AttributeType, AttributeValue,
+    BorrowedAttributeValue, CapturedError, Component, DynamicNode, Element, ElementId, Event,
+    Fragment, HasAttributes, IntoDynNode, LazyNodes, MountedAttribute, Mutation, Mutations,
+    Properties, RenderReturn, Scope, ScopeId, ScopeState, Scoped, TaskId, Template,
+    TemplateAttribute, TemplateNode, VComponent, VNode, VPlaceholder, VText, VirtualDom,
 };
 
 /// The purpose of this module is to alleviate imports of many common types
@@ -91,10 +91,10 @@ pub mod prelude {
         consume_context, consume_context_from_scope, current_scope_id, fc_to_builder, has_context,
         provide_context, provide_context_to_scope, provide_root_context, push_future,
         remove_future, schedule_update_any, spawn, spawn_forever, suspend, use_error_boundary,
-        AnyValue, Component, Element, ErrorBoundary, Event, EventHandler, Fragment,
-        IntoAttributeValue, IntoDynNode, LazyNodes, Properties, Runtime, RuntimeGuard, Scope,
-        ScopeId, ScopeState, Scoped, TaskId, Template, TemplateAttribute, TemplateNode, Throw,
-        VNode, VirtualDom,
+        AnyValue, Attribute, AttributeType, Component, Element, ErrorBoundary, Event, EventHandler,
+        Fragment, HasAttributes, IntoAttributeValue, IntoDynNode, LazyNodes, MountedAttribute,
+        Properties, Runtime, RuntimeGuard, Scope, ScopeId, ScopeState, Scoped, TaskId, Template,
+        TemplateAttribute, TemplateNode, Throw, VNode, VirtualDom,
     };
 }
 

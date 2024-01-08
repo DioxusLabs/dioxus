@@ -139,7 +139,7 @@ async fn format_file(
 ///
 /// Doesn't do mod-descending, so it will still try to format unreachable files. TODO.
 async fn autoformat_project(check: bool) -> Result<()> {
-    let crate_config = crate::CrateConfig::new(None)?;
+    let crate_config = dioxus_cli_config::CrateConfig::new(None)?;
 
     let files_to_format = get_project_files(&crate_config);
 

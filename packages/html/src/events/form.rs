@@ -1,9 +1,25 @@
-use std::{any::Any, collections::HashMap, fmt::Debug};
+use crate::file_data::FileEngine;
+use crate::file_data::HasFileData;
+use std::{collections::HashMap, fmt::Debug};
 
 use dioxus_core::Event;
 
 pub type FormEvent = Event<FormData>;
 
+/// A form value that may either be a list of values or a single value
+#[cfg_attr(
+    feature = "serialize",
+    derive(serde::Serialize, serde::Deserialize),
+    // this will serialize Text(String) -> String and VecText(Vec<String>) to Vec<String>
+    serde(untagged)
+)]
+#[derive(Debug, Clone, PartialEq)]
+pub enum FormValue {
+    Text(String),
+    VecText(Vec<String>),
+}
+
+/* DOMEvent:  Send + SyncTarget relatedTarget */
 pub struct FormData {
     inner: Box<dyn HasFormData>,
 }
@@ -43,7 +59,7 @@ impl FormData {
     }
 
     /// Get the values of the form event
-    pub fn values(&self) -> HashMap<String, Vec<String>> {
+    pub fn values(&self) -> HashMap<String, FormValue> {
         self.inner.values()
     }
 
@@ -59,21 +75,41 @@ impl FormData {
 }
 
 /// An object that has all the data for a form event
-pub trait HasFormData: std::any::Any {
+pub trait HasFormData: HasFileData + std::any::Any {
     fn value(&self) -> String {
         Default::default()
     }
 
-    fn values(&self) -> HashMap<String, Vec<String>> {
+    fn values(&self) -> HashMap<String, FormValue> {
         Default::default()
-    }
-
-    fn files(&self) -> Option<std::sync::Arc<dyn FileEngine>> {
-        None
     }
 
     /// return self as Any
     fn as_any(&self) -> &dyn std::any::Any;
+}
+
+impl FormData {
+    #[cfg(feature = "serialize")]
+    /// Parse the values into a struct with one field per value
+    pub fn parsed_values<T>(&self) -> Result<T, serde_json::Error>
+    where
+        T: serde::de::DeserializeOwned,
+    {
+        use serde::Serialize;
+
+        fn convert_hashmap_to_json<K, V>(hashmap: &HashMap<K, V>) -> serde_json::Result<String>
+        where
+            K: Serialize + std::hash::Hash + Eq,
+            V: Serialize,
+        {
+            serde_json::to_string(hashmap)
+        }
+
+        let parsed_json =
+            convert_hashmap_to_json(&self.values()).expect("Failed to parse values to JSON");
+
+        serde_json::from_str(&parsed_json)
+    }
 }
 
 #[cfg(feature = "serialize")]
@@ -81,8 +117,8 @@ pub trait HasFormData: std::any::Any {
 #[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Clone)]
 pub struct SerializedFormData {
     value: String,
-    values: HashMap<String, Vec<String>>,
-    files: Option<std::sync::Arc<SerializedFileEngine>>,
+    values: HashMap<String, FormValue>,
+    files: Option<crate::file_data::SerializedFileEngine>,
 }
 
 #[cfg(feature = "serialize")]
@@ -90,8 +126,8 @@ impl SerializedFormData {
     /// Create a new serialized form data object
     pub fn new(
         value: String,
-        values: HashMap<String, Vec<String>>,
-        files: Option<std::sync::Arc<SerializedFileEngine>>,
+        values: HashMap<String, FormValue>,
+        files: Option<crate::file_data::SerializedFileEngine>,
     ) -> Self {
         Self {
             value,
@@ -114,9 +150,9 @@ impl SerializedFormData {
                         resolved_files.insert(file, bytes.unwrap_or_default());
                     }
 
-                    Some(std::sync::Arc::new(SerializedFileEngine {
+                    Some(crate::file_data::SerializedFileEngine {
                         files: resolved_files,
-                    }))
+                    })
                 }
                 None => None,
             },
@@ -138,18 +174,21 @@ impl HasFormData for SerializedFormData {
         self.value.clone()
     }
 
-    fn values(&self) -> HashMap<String, Vec<String>> {
+    fn values(&self) -> HashMap<String, FormValue> {
         self.values.clone()
-    }
-
-    fn files(&self) -> Option<std::sync::Arc<dyn FileEngine>> {
-        self.files
-            .as_ref()
-            .map(|files| std::sync::Arc::clone(files) as std::sync::Arc<dyn FileEngine>)
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
         self
+    }
+}
+
+#[cfg(feature = "serialize")]
+impl HasFileData for SerializedFormData {
+    fn files(&self) -> Option<std::sync::Arc<dyn FileEngine>> {
+        self.files
+            .as_ref()
+            .map(|files| std::sync::Arc::new(files.clone()) as _)
     }
 }
 
@@ -168,52 +207,6 @@ impl<'de> serde::Deserialize<'de> for FormData {
             inner: Box::new(data),
         })
     }
-}
-
-#[cfg(feature = "serialize")]
-/// A file engine that serializes files to bytes
-#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Clone)]
-pub struct SerializedFileEngine {
-    files: HashMap<String, Vec<u8>>,
-}
-
-#[cfg(feature = "serialize")]
-#[async_trait::async_trait(?Send)]
-impl FileEngine for SerializedFileEngine {
-    fn files(&self) -> Vec<String> {
-        self.files.keys().cloned().collect()
-    }
-
-    async fn read_file(&self, file: &str) -> Option<Vec<u8>> {
-        self.files.get(file).cloned()
-    }
-
-    async fn read_file_to_string(&self, file: &str) -> Option<String> {
-        self.read_file(file)
-            .await
-            .map(|bytes| String::from_utf8_lossy(&bytes).to_string())
-    }
-
-    async fn get_native_file(&self, file: &str) -> Option<Box<dyn Any>> {
-        self.read_file(file)
-            .await
-            .map(|val| Box::new(val) as Box<dyn Any>)
-    }
-}
-
-#[async_trait::async_trait(?Send)]
-pub trait FileEngine {
-    // get a list of file names
-    fn files(&self) -> Vec<String>;
-
-    // read a file to bytes
-    async fn read_file(&self, file: &str) -> Option<Vec<u8>>;
-
-    // read a file to string
-    async fn read_file_to_string(&self, file: &str) -> Option<String>;
-
-    // returns a file in platform's native representation
-    async fn get_native_file(&self, file: &str) -> Option<Box<dyn Any>>;
 }
 
 impl_event! {

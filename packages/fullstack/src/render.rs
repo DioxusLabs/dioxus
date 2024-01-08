@@ -65,7 +65,7 @@ impl SsrRendererPool {
                             }
                             if let Err(err) = renderer.render_to(&mut to, &vdom) {
                                 let _ = tx.send(Err(
-                                    dioxus_router::prelude::IncrementalRendererError::RenderError(
+                                    dioxus_ssr::incremental::IncrementalRendererError::RenderError(
                                         err,
                                     ),
                                 ));
@@ -236,7 +236,9 @@ impl<P: Clone + Serialize + Send + Sync + 'static> dioxus_ssr::incremental::Wrap
         to: &mut R,
     ) -> Result<(), dioxus_ssr::incremental::IncrementalRendererError> {
         // serialize the props
-        crate::html_storage::serialize::encode_props_in_element(&self.cfg.props, to)?;
+        crate::html_storage::serialize::encode_props_in_element(&self.cfg.props, to).map_err(
+            |err| dioxus_ssr::incremental::IncrementalRendererError::Other(Box::new(err)),
+        )?;
         // serialize the server state
         crate::html_storage::serialize::encode_in_element(
             &*self.server_context.html_data().map_err(|_| {
@@ -258,7 +260,8 @@ impl<P: Clone + Serialize + Send + Sync + 'static> dioxus_ssr::incremental::Wrap
                 }))
             })?,
             to,
-        )?;
+        )
+        .map_err(|err| dioxus_ssr::incremental::IncrementalRendererError::Other(Box::new(err)))?;
 
         #[cfg(all(debug_assertions, feature = "hot-reload"))]
         {

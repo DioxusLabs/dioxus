@@ -6,23 +6,30 @@ macro_rules! impl_event {
         $data:ty;
         $(
             $( #[$attr:meta] )*
-            $name:ident
+            $name:ident $(: $js_name:literal)?
         )*
     ) => {
         $(
             $( #[$attr] )*
             #[inline]
-            pub fn $name<'a, E: crate::EventReturn<T>, T>(_cx: &'a ::dioxus_core::ScopeState, mut _f: impl FnMut(::dioxus_core::Event<$data>) -> E + 'a) -> ::dioxus_core::Attribute<'a> {
+            pub fn $name<'a, E: crate::EventReturn<T>, T>(_cx: &'a ::dioxus_core::ScopeState, mut _f: impl FnMut(::dioxus_core::Event<$data>) -> E + 'a) -> ::dioxus_core::MountedAttribute<'a> {
                 ::dioxus_core::Attribute::new(
-                    stringify!($name),
+                    impl_event!(@name $name $($js_name)?),
                     _cx.listener(move |e: ::dioxus_core::Event<crate::PlatformEventData>| {
                         _f(e.map(|e|e.into())).spawn(_cx);
                     }),
                     None,
                     false,
-                )
+                ).into()
             }
         )*
+    };
+
+    (@name $name:ident $js_name:literal) => {
+        $js_name
+    };
+    (@name $name:ident) => {
+        stringify!($name)
     };
 }
 

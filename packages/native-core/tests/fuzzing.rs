@@ -204,6 +204,20 @@ fn create_random_dynamic_node(cx: &ScopeState, depth: usize) -> DynamicNode {
     }
 }
 
+fn create_random_dynamic_mounted_attr(cx: &ScopeState) -> MountedAttribute {
+    match rand::random::<u8>() % 2 {
+        0 => MountedAttribute::from(
+            &*cx.bump().alloc(
+                (0..(rand::random::<u8>() % 3) as usize)
+                    .map(|_| create_random_dynamic_attr(cx))
+                    .collect::<Vec<_>>(),
+            ),
+        ),
+        1 => MountedAttribute::from(create_random_dynamic_attr(cx)),
+        _ => unreachable!(),
+    }
+}
+
 fn create_random_dynamic_attr(cx: &ScopeState) -> Attribute {
     let value = match rand::random::<u8>() % 6 {
         0 => AttributeValue::Text(Box::leak(
@@ -214,7 +228,6 @@ fn create_random_dynamic_attr(cx: &ScopeState) -> Attribute {
         3 => AttributeValue::Bool(rand::random()),
         4 => cx.any_value(rand::random::<usize>()),
         5 => AttributeValue::None,
-        // Listener(RefCell<Option<ListenerCb<'a>>>),
         _ => unreachable!(),
     };
     Attribute::new(
@@ -271,11 +284,13 @@ fn create_random_element(cx: Scope<DepthProps>) -> Element {
                         .collect();
                     cx.bump().alloc(dynamic_nodes)
                 },
-                cx.bump().alloc(
-                    (0..template.attr_paths.len())
-                        .map(|_| create_random_dynamic_attr(cx))
-                        .collect::<Vec<_>>(),
-                ),
+                cx.bump()
+                    .alloc(
+                        (0..template.attr_paths.len())
+                            .map(|_| create_random_dynamic_mounted_attr(cx))
+                            .collect::<Vec<_>>(),
+                    )
+                    .as_slice(),
             );
             Some(node)
         }

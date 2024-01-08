@@ -6,7 +6,7 @@ class InterpreterConfig {
 
 // this handler is only provided on the desktop and liveview implementations since this
 // method is not used by the web implementation
-function handler(event, name, bubbles, config) {
+async function handler(event, name, bubbles, config) {
   let target = event.target;
   if (target != null) {
     let preventDefaultRequests = null;
@@ -61,7 +61,7 @@ function handler(event, name, bubbles, config) {
       event.preventDefault();
     }
 
-    let contents = serialize_event(event);
+    let contents = await serialize_event(event);
 
     // TODO: this should be liveview only
     if (
@@ -109,8 +109,18 @@ function handler(event, name, bubbles, config) {
       const formData = new FormData(target);
 
       for (let name of formData.keys()) {
-        let value = formData.getAll(name);
-        contents.values[name] = value;
+        const fieldType = target.elements[name].type;
+
+        switch (fieldType) {
+          case "select-multiple":
+            contents.values[name] = formData.getAll(name);
+            break;
+
+          // add cases for fieldTypes that can hold multiple values here
+          default:
+            contents.values[name] = formData.get(name);
+            break;
+        }
       }
     }
 
@@ -321,7 +331,7 @@ function get_mouse_data(event) {
   };
 }
 
-function serialize_event(event) {
+async function serialize_event(event) {
   switch (event.type) {
     case "copy":
     case "cut":
@@ -407,7 +417,12 @@ function serialize_event(event) {
     case "dragover":
     case "dragstart":
     case "drop": {
-      return { mouse: get_mouse_data(event) };
+      let files = null;
+      if (event.dataTransfer && event.dataTransfer.files) {
+        files = await serializeFileList(event.dataTransfer.files);
+      }
+
+      return { mouse: get_mouse_data(event), files };
     }
     case "click":
     case "contextmenu":

@@ -15,7 +15,7 @@ pub(crate) fn serde_from_bytes<T: DeserializeOwned>(string: &[u8]) -> Option<T> 
         }
     };
 
-    match postcard::from_bytes(&decompressed) {
+    match ciborium::from_reader(std::io::Cursor::new(decompressed)) {
         Ok(data) => Some(data),
         Err(err) => {
             tracing::error!("Failed to deserialize: {}", err);

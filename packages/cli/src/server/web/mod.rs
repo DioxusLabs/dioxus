@@ -5,7 +5,7 @@ use crate::{
         output::{print_console_info, PrettierOptions, WebServerInfo},
         setup_file_watcher, HotReloadState,
     },
-    BuildResult, CrateConfig, Result, WebHttpsConfig,
+    BuildResult, Result,
 };
 use axum::{
     body::{Full, HttpBody},
@@ -20,6 +20,8 @@ use axum::{
     Router,
 };
 use axum_server::tls_rustls::RustlsConfig;
+use dioxus_cli_config::CrateConfig;
+use dioxus_cli_config::WebHttpsConfig;
 
 use dioxus_html::HtmlCtx;
 use dioxus_rsx::hot_reload::*;
@@ -277,12 +279,7 @@ async fn setup_router(
         .override_response_header(HeaderName::from_static("cross-origin-opener-policy"), coop)
         .and_then(
             move |response: Response<ServeFileSystemResponseBody>| async move {
-                let mut response = if file_service_config
-                    .dioxus_config
-                    .web
-                    .watcher
-                    .index_on_404
-                    .unwrap_or(false)
+                let mut response = if file_service_config.dioxus_config.web.watcher.index_on_404
                     && response.status() == StatusCode::NOT_FOUND
                 {
                     let body = Full::from(
@@ -321,7 +318,7 @@ async fn setup_router(
     let mut router = Router::new().route("/_dioxus/ws", get(ws_handler));
 
     // Setup proxy
-    for proxy_config in config.dioxus_config.web.proxy.unwrap_or_default() {
+    for proxy_config in config.dioxus_config.web.proxy {
         router = proxy::add_proxy(router, &proxy_config)?;
     }
 
@@ -334,6 +331,18 @@ async fn setup_router(
             )
         },
     ));
+
+    router = if let Some(base_path) = config.dioxus_config.web.app.base_path.clone() {
+        let base_path = format!("/{}", base_path.trim_matches('/'));
+        Router::new()
+            .nest(&base_path, axum::routing::any_service(router))
+            .fallback(get(move || {
+                let base_path = base_path.clone();
+                async move { format!("Outside of the base path: {}", base_path) }
+            }))
+    } else {
+        router
+    };
 
     // Setup routes
     router = router
@@ -438,13 +447,7 @@ fn build(config: &CrateConfig, reload_tx: &Sender<()>, skip_assets: bool) -> Res
     let result = builder::build(config, true, skip_assets)?;
     // change the websocket reload state to true;
     // the page will auto-reload.
-    if config
-        .dioxus_config
-        .web
-        .watcher
-        .reload_html
-        .unwrap_or(false)
-    {
+    if config.dioxus_config.web.watcher.reload_html {
         let _ = Serve::regen_dev_page(config, skip_assets);
     }
     let _ = reload_tx.send(());

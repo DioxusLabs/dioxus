@@ -1,4 +1,5 @@
-use crate::{Result, WebProxyConfig};
+use crate::Result;
+use dioxus_cli_config::WebProxyConfig;
 
 use anyhow::Context;
 use axum::{http::StatusCode, routing::any, Router};

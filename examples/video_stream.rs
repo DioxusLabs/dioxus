@@ -3,7 +3,6 @@ use dioxus_desktop::wry::http;
 use dioxus_desktop::wry::http::Response;
 use dioxus_desktop::{use_asset_handler, AssetRequest};
 use http::{header::*, response::Builder as ResponseBuilder, status::StatusCode};
-use std::borrow::Cow;
 use std::{io::SeekFrom, path::PathBuf};
 use tokio::io::AsyncReadExt;
 use tokio::io::AsyncSeekExt;
@@ -31,28 +30,33 @@ fn main() {
 }
 
 fn app(cx: Scope) -> Element {
-    use_asset_handler(cx, move |request: &AssetRequest| {
-        let request = request.clone();
-        async move {
+    use_asset_handler(cx, "videos", move |request, responder| {
+        // Using dioxus::spawn works, but is slower than a dedicated thread
+        tokio::task::spawn(async move {
             let video_file = PathBuf::from(VIDEO_PATH);
             let mut file = tokio::fs::File::open(&video_file).await.unwrap();
-            let response: Option<Response<Cow<'static, [u8]>>> =
-                match get_stream_response(&mut file, &request).await {
-                    Ok(response) => Some(response.map(Cow::Owned)),
-                    Err(err) => {
-                        eprintln!("Error: {}", err);
-                        None
-                    }
-                };
-            response
-        }
+
+            match get_stream_response(&mut file, &request).await {
+                Ok(response) => responder.respond(response),
+                Err(err) => eprintln!("Error: {}", err),
+            }
+        });
     });
 
     render! {
-        div { video { src: "test_video.mp4", autoplay: true, controls: true, width: 640, height: 480 } }
+        div {
+            video {
+                src: "/videos/test_video.mp4",
+                autoplay: true,
+                controls: true,
+                width: 640,
+                height: 480
+            }
+        }
     }
 }
 
+/// This was taken from wry's example
 async fn get_stream_response(
     asset: &mut (impl tokio::io::AsyncSeek + tokio::io::AsyncRead + Unpin + Send + Sync),
     request: &AssetRequest,

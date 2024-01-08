@@ -1,5 +1,4 @@
-use clap::ValueEnum;
-use serde::Serialize;
+use dioxus_cli_config::Platform;
 
 use super::*;
 
@@ -152,19 +151,6 @@ pub struct ConfigOptsServe {
     /// Extra arguments passed to cargo build
     #[clap(last = true)]
     pub cargo_args: Vec<String>,
-}
-
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Serialize, Deserialize, Debug)]
-pub enum Platform {
-    #[clap(name = "web")]
-    #[serde(rename = "web")]
-    Web,
-    #[clap(name = "desktop")]
-    #[serde(rename = "desktop")]
-    Desktop,
-    #[clap(name = "fullstack")]
-    #[serde(rename = "fullstack")]
-    Fullstack,
 }
 
 /// Config options for the bundling system.

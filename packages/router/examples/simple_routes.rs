@@ -54,8 +54,7 @@ fn main() {
 #[cfg(feature = "liveview")]
 #[component]
 fn Root(cx: Scope) -> Element {
-    let history = LiveviewHistory::new(cx);
-    render! { Router::<Route> { config: || RouterConfig::default().history(history) } }
+    render! { Router::<Route> {} }
 }
 
 #[cfg(not(feature = "liveview"))]
