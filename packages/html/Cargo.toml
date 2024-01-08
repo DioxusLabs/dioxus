@@ -24,7 +24,7 @@ serde-value = "0.7.0"
 tokio = { workspace = true, features = ["fs", "io-util"], optional = true }
 rfd = { version = "0.12", optional = true }
 async-channel = "1.8.0"
-serde_json = { version = "1" }
+serde_json = { version = "1", optional = true }
 
 [dependencies.web-sys]
 optional = true

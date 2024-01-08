@@ -18,8 +18,8 @@ use dioxus_html::input_data::keyboard_types::{Code, Key, Location, Modifiers};
 use dioxus_html::input_data::{
     MouseButton as DioxusMouseButton, MouseButtonSet as DioxusMouseButtons,
 };
+use dioxus_html::FormValue;
 use dioxus_html::{event_bubbles, prelude::*};
-use dioxus_html::{FocusData, FormValue, KeyboardData, MouseData, WheelData};
 use std::any::Any;
 use std::collections::HashMap;
 use std::{
@@ -77,7 +77,7 @@ impl HasFormData for FormData {
         self.value.clone()
     }
 
-    fn values(&self) -> HashMap<String, Vec<String>> {
+    fn values(&self) -> HashMap<String, FormValue> {
         self.values.clone()
     }
 

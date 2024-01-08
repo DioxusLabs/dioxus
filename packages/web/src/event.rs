@@ -1,11 +1,11 @@
 use std::{any::Any, collections::HashMap};
 
 use dioxus_html::{
-    FileEngine, FormData, HasFormData, HasImageData, HtmlEventConverter, ImageData, MountedData,
-    PlatformEventData, ScrollData,
+    prelude::FormValue, FileEngine, FormData, HasFormData, HasImageData, HtmlEventConverter,
+    ImageData, MountedData, PlatformEventData, ScrollData,
 };
 use js_sys::Array;
-use wasm_bindgen::{prelude::wasm_bindgen, JsCast};
+use wasm_bindgen::{prelude::wasm_bindgen, JsCast, JsValue};
 use web_sys::{Document, Element, Event};
 
 pub(crate) struct WebEventConverter;
@@ -378,7 +378,7 @@ impl HasFormData for WebFormData {
         .expect("only an InputElement or TextAreaElement or an element with contenteditable=true can have an oninput event listener")
     }
 
-    fn values(&self) -> HashMap<String, Vec<String>> {
+    fn values(&self) -> HashMap<String, FormValue> {
         let mut values = std::collections::HashMap::new();
 
         // try to fill in form values
@@ -388,10 +388,12 @@ impl HasFormData for WebFormData {
                 if let Ok(array) = value.dyn_into::<Array>() {
                     if let Some(name) = array.get(0).as_string() {
                         if let Ok(item_values) = array.get(1).dyn_into::<Array>() {
-                            let item_values =
+                            let item_values: Vec<String> =
                                 item_values.iter().filter_map(|v| v.as_string()).collect();
 
-                            values.insert(name, item_values);
+                            values.insert(name, FormValue::VecText(item_values));
+                        } else if let Ok(item_value) = array.get(1).dyn_into::<JsValue>() {
+                            values.insert(name, FormValue::Text(item_value.as_string().unwrap()));
                         }
                     }
                 }
@@ -432,7 +434,17 @@ impl HasFormData for WebFormData {
         const formData = new FormData(form);
 
         for (let name of formData.keys()) {
-            values.set(name, formData.getAll(name));
+            const fieldType = target.elements[name].type;
+
+            switch (fieldType) {
+                case "select-multiple":
+                    contents.values[name] = formData.getAll(name);
+                    break;
+
+                // add cases for fieldTypes that can hold multiple values here
+                default:
+                    contents.values[name] = formData.get(name);
+                    break;
         }
 
         return values;

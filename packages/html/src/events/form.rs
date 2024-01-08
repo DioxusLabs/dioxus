@@ -1,4 +1,4 @@
-use std::{any::Any, collections::HashMap, fmt::Debug};
+use std::{any::Any, collections::HashMap, fmt::Debug, sync::Arc};
 
 use dioxus_core::Event;
 use serde::{Deserialize, Serialize};
@@ -14,20 +14,13 @@ pub enum FormValue {
 }
 
 /* DOMEvent:  Send + SyncTarget relatedTarget */
-#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Clone)]
 pub struct FormData {
     inner: Box<dyn HasFormData>,
-    pub values: HashMap<String, FormValue>,
 }
 
 impl<E: HasFormData> From<E> for FormData {
     fn from(e: E) -> Self {
-        // todo: fix this?
-        Self {
-            inner: Box::new(e),
-            values: Default::default(),
-        }
+        Self { inner: Box::new(e) }
     }
 }
 
@@ -51,7 +44,6 @@ impl FormData {
     pub fn new(event: impl HasFormData + 'static) -> Self {
         Self {
             inner: Box::new(event),
-            values: Default::default(),
         }
     }
 
@@ -61,7 +53,7 @@ impl FormData {
     }
 
     /// Get the values of the form event
-    pub fn values(&self) -> HashMap<String, Vec<String>> {
+    pub fn values(&self) -> HashMap<String, FormValue> {
         self.inner.values()
     }
 
@@ -82,7 +74,7 @@ pub trait HasFormData: std::any::Any {
         Default::default()
     }
 
-    fn values(&self) -> HashMap<String, Vec<String>> {
+    fn values(&self) -> HashMap<String, FormValue> {
         Default::default()
     }
 
@@ -109,7 +101,7 @@ impl FormData {
         T: serde::de::DeserializeOwned,
     {
         let parsed_json =
-            convert_hashmap_to_json(&self.values).expect("Failed to parse values to JSON");
+            convert_hashmap_to_json(&self.values()).expect("Failed to parse values to JSON");
 
         serde_json::from_str(&parsed_json)
     }
@@ -120,8 +112,8 @@ impl FormData {
 #[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Clone)]
 pub struct SerializedFormData {
     value: String,
-    values: HashMap<String, Vec<String>>,
-    files: Option<std::sync::Arc<SerializedFileEngine>>,
+    values: HashMap<String, FormValue>,
+    files: Option<SerializedFileEngine>,
 }
 
 #[cfg(feature = "serialize")]
@@ -129,8 +121,8 @@ impl SerializedFormData {
     /// Create a new serialized form data object
     pub fn new(
         value: String,
-        values: HashMap<String, Vec<String>>,
-        files: Option<std::sync::Arc<SerializedFileEngine>>,
+        values: HashMap<String, FormValue>,
+        files: Option<SerializedFileEngine>,
     ) -> Self {
         Self {
             value,
@@ -153,9 +145,9 @@ impl SerializedFormData {
                         resolved_files.insert(file, bytes.unwrap_or_default());
                     }
 
-                    Some(std::sync::Arc::new(SerializedFileEngine {
+                    Some(SerializedFileEngine {
                         files: resolved_files,
-                    }))
+                    })
                 }
                 None => None,
             },
@@ -177,14 +169,14 @@ impl HasFormData for SerializedFormData {
         self.value.clone()
     }
 
-    fn values(&self) -> HashMap<String, Vec<String>> {
+    fn values(&self) -> HashMap<String, FormValue> {
         self.values.clone()
     }
 
     fn files(&self) -> Option<std::sync::Arc<dyn FileEngine>> {
         self.files
             .as_ref()
-            .map(|files| std::sync::Arc::clone(files) as std::sync::Arc<dyn FileEngine>)
+            .map(|files| Arc::new(files.clone()) as _)
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
@@ -237,36 +229,6 @@ impl FileEngine for SerializedFileEngine {
         self.read_file(file)
             .await
             .map(|val| Box::new(val) as Box<dyn Any>)
-    }
-}
-
-#[cfg(feature = "serialize")]
-fn deserialize_file_engine<'de, D>(
-    deserializer: D,
-) -> Result<Option<std::sync::Arc<dyn FileEngine>>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    let Ok(file_engine) = SerializedFileEngine::deserialize(deserializer) else {
-        return Ok(None);
-    };
-
-    let file_engine = std::sync::Arc::new(file_engine);
-    Ok(Some(file_engine))
-}
-
-impl PartialEq for FormData {
-    fn eq(&self, other: &Self) -> bool {
-        self.value == other.value && self.values == other.values
-    }
-}
-
-impl Debug for FormData {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("FormEvent")
-            .field("value", &self.value)
-            .field("values", &self.values)
-            .finish()
     }
 }
 
