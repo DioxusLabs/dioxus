@@ -20,7 +20,7 @@ euclid = "0.22.7"
 enumset = "1.1.2"
 keyboard-types = "0.7"
 async-trait = "0.1.58"
-serde-value = "0.7.0"
+serde-value = { version = "0.7.0", optional = true }
 tokio = { workspace = true, features = ["fs", "io-util"], optional = true }
 rfd = { version = "0.12", optional = true }
 async-channel = "1.8.0"
@@ -56,14 +56,15 @@ serialize = [
     "euclid/serde",
     "keyboard-types/serde",
     "dioxus-core/serialize",
+    "serde-value",
 ]
 mounted = [
-    "web-sys/Element",
-    "web-sys/DomRect",
-    "web-sys/ScrollIntoViewOptions",
-    "web-sys/ScrollLogicalPosition",
-    "web-sys/ScrollBehavior",
-    "web-sys/HtmlElement",
+    "web-sys?/Element",
+    "web-sys?/DomRect",
+    "web-sys?/ScrollIntoViewOptions",
+    "web-sys?/ScrollLogicalPosition",
+    "web-sys?/ScrollBehavior",
+    "web-sys?/HtmlElement",
 ]
 eval = [
     "serde",

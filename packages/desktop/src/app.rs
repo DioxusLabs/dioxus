@@ -87,7 +87,7 @@ impl<P: 'static> App<P> {
         crate::collect_assets::copy_assets();
 
         // Set the event converter
-        dioxus_html::set_event_converter(Box::new(SerializedHtmlEventConverter));
+        dioxus_html::set_event_converter(Box::new(crate::events::SerializedHtmlEventConverter));
 
         // Allow hotreloading to work - but only in debug mode
         #[cfg(all(feature = "hot-reload", debug_assertions))]
@@ -248,7 +248,7 @@ impl<P: 'static> App<P> {
         let as_any = match data {
             dioxus_html::EventData::Mounted => {
                 let element = DesktopElement::new(element, view.desktop_context.clone(), query);
-                Rc::new(PlatformEventData::new(Box::new(MountedData::new(element))))
+                Rc::new(PlatformEventData::new(Box::new(element)))
             }
             _ => data.into_any(),
         };

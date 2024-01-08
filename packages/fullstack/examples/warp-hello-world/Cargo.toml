@@ -10,7 +10,6 @@ publish = false
 dioxus-web = { workspace = true, features=["hydrate"], optional = true }
 dioxus = { workspace = true }
 dioxus-fullstack = { workspace = true }
-tokio = { workspace = true, features = ["full"], optional = true }
 serde = "1.0.159"
 warp = { version = "0.3.3", optional = true }
 execute = "0.2.12"
@@ -22,5 +21,5 @@ tracing-subscriber = "0.3.17"
 
 [features]
 default = []
-ssr = ["warp", "tokio", "dioxus-fullstack/warp"]
+ssr = ["warp", "dioxus-fullstack/warp"]
 web = ["dioxus-web"]
