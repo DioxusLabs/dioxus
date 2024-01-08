@@ -126,7 +126,7 @@ jobs:
         with:
           toolchain: ${{ env.rust_nightly }}
           components: miri
-      - uses: Swatinem/rust-cache@v2
+      - uses: mozilla-actions/sccache-action@v0.0.3
       - name: miri
         # Many of tests in tokio/tests and doctests use #[tokio::test] or
         # #[tokio::main] that calls epoll_create1 that Miri does not support.
