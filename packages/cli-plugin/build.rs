@@ -28,7 +28,8 @@ macro_rules! export_plugin {{
             }},
         }});
     }};
-}}"#,
+}}
+"#,
         wit_source
     );
 
