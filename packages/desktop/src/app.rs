@@ -13,7 +13,7 @@ use crossbeam_channel::Receiver;
 use dioxus_core::{Component, ElementId, VirtualDom};
 use dioxus_html::{
     native_bind::NativeFileEngine, FileEngine, HasFormData, HtmlEvent, MountedData,
-    PlatformEventData, SerializedHtmlEventConverter,
+    PlatformEventData,
 };
 use std::{
     cell::{Cell, RefCell},
@@ -87,7 +87,7 @@ impl<P: 'static> App<P> {
         crate::collect_assets::copy_assets();
 
         // Set the event converter
-        dioxus_html::set_event_converter(Box::new(SerializedHtmlEventConverter));
+        dioxus_html::set_event_converter(Box::new(crate::events::SerializedHtmlEventConverter));
 
         // Allow hotreloading to work - but only in debug mode
         #[cfg(all(feature = "hot-reload", debug_assertions))]
