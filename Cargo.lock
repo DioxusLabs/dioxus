@@ -138,24 +138,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e999941b234f3131b00bc13c22d06e8c5ff726d1b6318ac7eb276997bbb4fef0"
 
 [[package]]
-name = "android_log-sys"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "85965b6739a430150bdd138e2374a98af0c3ee0d030b3bb7fc3bddff58d0102e"
-
-[[package]]
-name = "android_logger"
-version = "0.9.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2ec2333c185d826313162cee39d3fcc6a84ba08114a839bebf53b961e7e75773"
-dependencies = [
- "android_log-sys",
- "env_logger 0.7.1",
- "lazy_static",
- "log",
-]
-
-[[package]]
 name = "android_system_properties"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1313,7 +1295,7 @@ dependencies = [
  "clap 4.4.14",
  "console",
  "dialoguer",
- "env_logger 0.10.1",
+ "env_logger",
  "fs-err",
  "git2",
  "gix-config",
@@ -2435,7 +2417,7 @@ dependencies = [
  "dioxus-hot-reload",
  "dioxus-html",
  "dioxus-rsx",
- "env_logger 0.10.1",
+ "env_logger",
  "futures-util",
  "rand 0.8.5",
  "thiserror",
@@ -2640,7 +2622,7 @@ dependencies = [
  "dioxus-router",
  "dioxus-signals",
  "dioxus-ssr",
- "env_logger 0.10.1",
+ "env_logger",
  "fermi",
  "futures-util",
  "http-range",
@@ -3329,29 +3311,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.48",
-]
-
-[[package]]
-name = "env_logger"
-version = "0.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "44533bbbb3bb3c1fa17d9f2e4e38bbbaf8396ba82193c4cb1b6445d711445d36"
-dependencies = [
- "log",
- "regex",
-]
-
-[[package]]
-name = "env_logger"
-version = "0.9.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a12e6657c4c97ebab115a42dcee77225f7f482cdd841cf7088c657a42e9e00e7"
-dependencies = [
- "atty",
- "humantime",
- "log",
- "regex",
- "termcolor",
 ]
 
 [[package]]
@@ -5641,20 +5600,6 @@ dependencies = [
 
 [[package]]
 name = "jni"
-version = "0.19.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c6df18c2e3db7e453d3c6ac5b3e9d5182664d28788126d39b91f2d1e22b017ec"
-dependencies = [
- "cesu8",
- "combine",
- "jni-sys",
- "log",
- "thiserror",
- "walkdir",
-]
-
-[[package]]
-name = "jni"
 version = "0.21.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1a87aa2bb7d2af34197c04845522473242e1aa17c12f4935d5856491a7fb8c97"
@@ -6462,22 +6407,6 @@ dependencies = [
  "quote",
  "regex",
  "syn 1.0.109",
-]
-
-[[package]]
-name = "mobile-demo"
-version = "0.1.0"
-dependencies = [
- "android_logger",
- "anyhow",
- "core-foundation",
- "dioxus",
- "dioxus-desktop",
- "env_logger 0.9.3",
- "jni 0.19.0",
- "log",
- "paste",
- "wry",
 ]
 
 [[package]]
@@ -7814,7 +7743,7 @@ version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "865724d4dbe39d9f3dd3b52b88d859d66bcb2d6a0acfd5ea68a65fb66d4bdc1c"
 dependencies = [
- "env_logger 0.10.1",
+ "env_logger",
  "log",
 ]
 
@@ -10235,7 +10164,7 @@ dependencies = [
  "gtk",
  "image",
  "instant",
- "jni 0.21.1",
+ "jni",
  "lazy_static",
  "libc",
  "log",
@@ -11627,7 +11556,7 @@ checksum = "82b2391658b02c27719fc5a0a73d6e696285138e8b12fba9d4baa70451023c71"
 dependencies = [
  "core-foundation",
  "home",
- "jni 0.21.1",
+ "jni",
  "log",
  "ndk-context",
  "objc",
@@ -12098,7 +12027,7 @@ dependencies = [
  "html5ever",
  "http 0.2.11",
  "javascriptcore-rs",
- "jni 0.21.1",
+ "jni",
  "kuchikiki",
  "libc",
  "log",
