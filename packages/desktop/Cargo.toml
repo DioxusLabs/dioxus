@@ -53,10 +53,7 @@ tao = { version = "0.24.0", features = ["rwh_05"] }
 
 [target.'cfg(any(target_os = "windows",target_os = "macos",target_os = "linux",target_os = "dragonfly", target_os = "freebsd", target_os = "netbsd", target_os = "openbsd"))'.dependencies]
 # This is only for debug mode, and it appears mobile does not support some packages this uses
-manganis-cli-support = { git = "https://github.com/DioxusLabs/collect-assets", optional = true, features = [
-    "webp",
-    "html",
-] }
+manganis-cli-support = { workspace = true, optional = true, features = ["webp", "html"] }
 rfd = "0.12"
 global-hotkey = "0.4.1"
 muda = "0.11.3"
@@ -76,7 +73,7 @@ fullscreen = ["wry/fullscreen"]
 transparent = ["wry/transparent"]
 devtools = ["wry/devtools"]
 hot-reload = ["dioxus-hot-reload"]
-asset-collect = ["manganis-cli-support"]
+collect-assets = ["manganis-cli-support"]
 gnu = []
 
 [package.metadata.docs.rs]

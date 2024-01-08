@@ -76,7 +76,8 @@ toml_edit = "0.19.11"
 tauri-bundler = { version = "=1.4.*", features = ["native-tls-vendored"] }
 tauri-utils = "=1.5.*"
 
-manganis-cli-support = { git = "https://github.com/DioxusLabs/collect-assets", features = ["webp", "html"] }
+# todo: don't make this optional
+manganis-cli-support = { workspace = true, features = ["webp", "html"] }
 
 dioxus-autofmt = { workspace = true }
 dioxus-check = { workspace = true }

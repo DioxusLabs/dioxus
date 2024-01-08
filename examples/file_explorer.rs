@@ -18,7 +18,7 @@ fn main() {
     );
 }
 
-const _STYLE: &str = mg!(file("./examples/assets/fileexplorer.css"));
+const _STYLE: &str = manganis::mg!(file("./examples/assets/fileexplorer.css"));
 
 fn app(cx: Scope) -> Element {
     let files = use_ref(cx, Files::new);

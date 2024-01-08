@@ -7,7 +7,7 @@ fn main() {
     dioxus_desktop::launch(app);
 }
 
-const _STYLE: &str = mg!(file("./examples/assets/todomvc.css"));
+const _STYLE: &str = manganis::mg!(file("./examples/assets/todomvc.css"));
 
 #[derive(PartialEq, Eq, Clone, Copy)]
 pub enum FilterState {

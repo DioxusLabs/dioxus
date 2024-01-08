@@ -98,6 +98,12 @@ thiserror = "1.0.40"
 prettyplease = { package = "prettier-please", version = "0.2", features = [
     "verbatim",
 ] }
+manganis-cli-support = { git = "https://github.com/DioxusLabs/collect-assets", rev = "94ea6f7", features = [
+    "webp",
+    "html",
+] }
+manganis = { git = "https://github.com/DioxusLabs/collect-assets", rev = "94ea6f7" }
+
 
 # This is a "virtual package"
 # It is not meant to be published, but is used so "cargo run --example XYZ" works properly
@@ -136,8 +142,7 @@ reqwest = { version = "0.11.9", features = ["json"] }
 env_logger = "0.10.0"
 simple_logger = "4.0.0"
 thiserror = { workspace = true }
-
-
-[dependencies]
+manganis = { workspace = true }
 tracing-subscriber = "0.3.17"
 http-range = "0.1.5"
+

@@ -16,7 +16,6 @@ dioxus-html = { workspace = true, optional = true }
 dioxus-core-macro = { workspace = true, optional = true }
 dioxus-hooks = { workspace = true, optional = true }
 dioxus-rsx = { workspace = true, optional = true }
-manganis = { git = "https://github.com/DioxusLabs/collect-assets" }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 dioxus-hot-reload = { workspace = true, optional = true }
@@ -37,8 +36,6 @@ criterion = "0.3.5"
 thiserror = { workspace = true }
 env_logger = "0.10.0"
 tokio = { workspace = true, features = ["full"] }
-# dioxus-edit-stream = { workspace = true }
-
 
 [[bench]]
 name = "jsframework"
