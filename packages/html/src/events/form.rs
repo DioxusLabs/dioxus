@@ -1,13 +1,17 @@
-use std::{any::Any, collections::HashMap, fmt::Debug, sync::Arc};
+use std::{any::Any, collections::HashMap, fmt::Debug};
 
 use dioxus_core::Event;
-use serde::{Deserialize, Serialize};
 
 pub type FormEvent = Event<FormData>;
 
 /// A form value that may either be a list of values or a single value
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-#[serde(untagged)] // this will serialize Text(String) -> String and VecText(Vec<String>) to Vec<String>
+#[cfg_attr(
+    feature = "serialize",
+    derive(serde::Serialize, serde::Deserialize),
+    // this will serialize Text(String) -> String and VecText(Vec<String>) to Vec<String>
+    serde(untagged)
+)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum FormValue {
     Text(String),
     VecText(Vec<String>),
@@ -86,20 +90,23 @@ pub trait HasFormData: std::any::Any {
     fn as_any(&self) -> &dyn std::any::Any;
 }
 
-fn convert_hashmap_to_json<K, V>(hashmap: &HashMap<K, V>) -> serde_json::Result<String>
-where
-    K: Serialize + std::hash::Hash + Eq,
-    V: Serialize,
-{
-    serde_json::to_string(hashmap)
-}
-
 impl FormData {
+    #[cfg(feature = "serialize")]
     /// Parse the values into a struct with one field per value
     pub fn parsed_values<T>(&self) -> Result<T, serde_json::Error>
     where
         T: serde::de::DeserializeOwned,
     {
+        use serde::Serialize;
+
+        fn convert_hashmap_to_json<K, V>(hashmap: &HashMap<K, V>) -> serde_json::Result<String>
+        where
+            K: Serialize + std::hash::Hash + Eq,
+            V: Serialize,
+        {
+            serde_json::to_string(hashmap)
+        }
+
         let parsed_json =
             convert_hashmap_to_json(&self.values()).expect("Failed to parse values to JSON");
 
@@ -176,7 +183,7 @@ impl HasFormData for SerializedFormData {
     fn files(&self) -> Option<std::sync::Arc<dyn FileEngine>> {
         self.files
             .as_ref()
-            .map(|files| Arc::new(files.clone()) as _)
+            .map(|files| std::sync::Arc::new(files.clone()) as _)
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
