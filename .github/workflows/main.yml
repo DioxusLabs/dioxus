@@ -159,7 +159,7 @@ jobs:
         with:
           toolchain: stable
           targets: x86_64-unknown-linux-gnu,wasm32-unknown-unknown
-      - uses: Swatinem/rust-cache@v2
+      - uses: mozilla-actions/sccache-action@v0.0.3
       - name: Install dependencies
         run: npm ci
       - name: Install Playwright
