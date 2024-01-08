@@ -13,6 +13,9 @@ pub enum Platform {
     #[cfg_attr(feature = "cli", clap(name = "desktop"))]
     #[serde(rename = "desktop")]
     Desktop,
+    #[cfg_attr(feature = "cli", clap(name = "fullstack"))]
+    #[serde(rename = "fullstack")]
+    Fullstack,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
