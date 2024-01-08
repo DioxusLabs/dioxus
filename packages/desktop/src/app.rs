@@ -12,8 +12,7 @@ use crate::{
 use crossbeam_channel::Receiver;
 use dioxus_core::{Component, ElementId, VirtualDom};
 use dioxus_html::{
-    native_bind::NativeFileEngine, FileEngine, HasFormData, HtmlEvent, MountedData,
-    PlatformEventData,
+    native_bind::NativeFileEngine, FileEngine, HasFormData, HtmlEvent, PlatformEventData,
 };
 use std::{
     cell::{Cell, RefCell},
@@ -248,7 +247,7 @@ impl<P: 'static> App<P> {
         let as_any = match data {
             dioxus_html::EventData::Mounted => {
                 let element = DesktopElement::new(element, view.desktop_context.clone(), query);
-                Rc::new(PlatformEventData::new(Box::new(MountedData::new(element))))
+                Rc::new(PlatformEventData::new(Box::new(element)))
             }
             _ => data.into_any(),
         };
