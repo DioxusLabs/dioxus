@@ -13,13 +13,14 @@ jobs:
       - name: Clear cache
         uses: actions/github-script@v6
         with:
+          github-token: ${{ secrets.cache_controller }}
           script: |
             console.log("About to clear")
 
             while (true) {
               const caches = await github.rest.actions.getActionsCacheList({
                 owner: context.repo.owner,
-                repo: context.repo.repo,
+                repo: context.repo.repo
               })
               if (caches.data.actions_caches.length === 0) {
                 break
