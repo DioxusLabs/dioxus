@@ -264,7 +264,7 @@ async fn setup_router(
             move |response: Response<ServeFileSystemResponseBody>| async move {
                 let response = if file_service_config
                     .dioxus_config
-                    .watcher
+                    .web
                     .index_on_404
                     .unwrap_or(false)
                     && response.status() == StatusCode::NOT_FOUND

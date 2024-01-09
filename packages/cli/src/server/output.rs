@@ -49,7 +49,7 @@ pub fn print_console_info(
     } else {
         "Default"
     };
-    let url_rewrite = if config.dioxus_config.watcher.index_on_404.unwrap_or(false) {
+    let url_rewrite = if config.dioxus_config.web.index_on_404.unwrap_or(false) {
         "True"
     } else {
         "False"

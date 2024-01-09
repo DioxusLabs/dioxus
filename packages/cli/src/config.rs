@@ -92,15 +92,11 @@ impl Default for DioxusConfig {
                 default_platform: Platform::Web,
                 out_dir: Some(PathBuf::from("dist")),
                 asset_dir: Some(PathBuf::from("public")),
-
-                tools: None,
-
                 sub_package: None,
             },
             watcher: WatcherConfig {
                 watch_path: Some(vec![PathBuf::from("src"), PathBuf::from("examples")]),
                 reload_html: Some(false),
-                index_on_404: Some(true),
             },
             web: WebConfig {
                 app: WebAppConfig {
@@ -122,6 +118,7 @@ impl Default for DioxusConfig {
                     key_path: None,
                     cert_path: None,
                 },
+                index_on_404: Some(true),
             },
             bundle: BundleConfig {
                 identifier: Some(format!("io.github.{name}")),
@@ -139,9 +136,6 @@ pub struct ApplicationConfig {
     pub default_platform: Platform,
     pub out_dir: Option<PathBuf>,
     pub asset_dir: Option<PathBuf>,
-
-    pub tools: Option<HashMap<String, toml::Value>>,
-
     pub sub_package: Option<String>,
 }
 
@@ -152,6 +146,7 @@ pub struct WebConfig {
     pub resource: WebResourceConfig,
     #[serde(default)]
     pub https: WebHttpsConfig,
+    pub index_on_404: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -169,7 +164,6 @@ pub struct WebProxyConfig {
 pub struct WatcherConfig {
     pub watch_path: Option<Vec<PathBuf>>,
     pub reload_html: Option<bool>,
-    pub index_on_404: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
