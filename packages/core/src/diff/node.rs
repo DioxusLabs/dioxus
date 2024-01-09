@@ -213,6 +213,9 @@ impl VNode {
         // Clean up the roots, assuming we need to generate mutations for these
         // This is done last in order to preserve Node ID reclaim order (reclaim in reverse order of claim)
         self.reclaim_roots(mount, dom, to, gen_muts);
+
+        // Remove the mount information
+        dom.mounts.remove(mount.0);
     }
 
     fn reclaim_roots(
