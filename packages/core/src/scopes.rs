@@ -348,49 +348,8 @@ impl<'src> ScopeState {
     /// }
     /// ```
     pub fn render(&'src self, rsx: LazyNodes<'src, '_>) -> Element<'src> {
-        // <<<<<<< HEAD
-        //         let element = rsx.call(self);
-
-        //         let mut listeners = self.attributes_to_drop_before_render.borrow_mut();
-        //         for attr in element.dynamic_attrs {
-        //             attr.ty.for_each(|attr| {
-        //                 match attr.value {
-        //                     // We need to drop listeners before the next render because they may borrow data from the borrowed props which will be dropped
-        //                     AttributeValue::Listener(_) => {
-        //                         let unbounded = unsafe { std::mem::transmute(attr as *const Attribute) };
-        //                         listeners.push(unbounded);
-        //                     }
-        //                     // We need to drop any values manually to make sure that their drop implementation is called before the next render
-        //                     AttributeValue::Any(_) => {
-        //                         let unbounded = unsafe { std::mem::transmute(attr as *const Attribute) };
-        //                         self.previous_frame().add_attribute_to_drop(unbounded);
-        //                     }
-
-        //                     _ => (),
-        //                 }
-        //             })
-        //         }
-
-        //         let mut props = self.borrowed_props.borrow_mut();
-        //         let mut drop_props = self
-        //             .previous_frame()
-        //             .props_to_drop_before_reset
-        //             .borrow_mut();
-        //         for node in element.dynamic_nodes {
-        //             if let DynamicNode::Component(comp) = node {
-        //                 let unbounded = unsafe { std::mem::transmute(comp as *const VComponent) };
-        //                 if !comp.static_props {
-        //                     props.push(unbounded);
-        //                 }
-        //                 drop_props.push(unbounded);
-        //             }
-        //         }
-
-        //         Some(element)
-        // =======
         // Note: We can't do anything in this function related to safety because the user could always circumvent it by creating a VNode manually and return it without calling this function
         Some(rsx.call(self))
-        // >>>>>>> 9fe172e9 (Fix leak in render macro)
     }
 
     /// Create a [`crate::VNode`] from the component parts

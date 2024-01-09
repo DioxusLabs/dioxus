@@ -171,27 +171,16 @@ fn create_random_dynamic_node(cx: &ScopeState, depth: usize) -> DynamicNode {
     match rand::random::<u8>() % range {
         0 => DynamicNode::Placeholder(Default::default()),
         1 => cx.make_node((0..(rand::random::<u8>() % 5)).map(|_| {
-            // <<<<<<< HEAD
-            //             VNode::new(
-            //                 None,
-            //                 Template {
-            // =======
             cx.vnode(
                 None.into(),
                 Default::default(),
                 Cell::new(Template {
-                    // >>>>>>> 9fe172e9 (Fix leak in render macro)
                     name: concat!(file!(), ":", line!(), ":", column!(), ":0"),
                     roots: &[TemplateNode::Dynamic { id: 0 }],
                     node_paths: &[&[0]],
                     attr_paths: &[],
-                    // <<<<<<< HEAD
-                    //                 },
-                    //                 bumpalo::collections::Vec::new_in(cx.bump()),
-                    // =======
                 }),
                 bumpalo::collections::Vec::new_in(cx.bump()).into(),
-                // >>>>>>> 9fe172e9 (Fix leak in render macro)
                 cx.bump().alloc([cx.component(
                     create_random_element,
                     DepthProps { depth, root: false },
@@ -285,19 +274,12 @@ fn create_random_element(cx: Scope<DepthProps>) -> Element {
                 )
                 .into_boxed_str(),
             ));
-            // <<<<<<< HEAD
-            //             let node = VNode::new(
-            //                 None,
-            //                 template,
-            //                 bumpalo::collections::Vec::new_in(cx.bump()),
-            // =======
-            // println!("{template:#?}");
+            println!("{template:#?}");
             let node = cx.vnode(
                 None.into(),
                 None,
                 Cell::new(template),
                 bumpalo::collections::Vec::new_in(cx.bump()).into(),
-                // >>>>>>> 9fe172e9 (Fix leak in render macro)
                 {
                     let dynamic_nodes: Vec<_> = dynamic_node_types
                         .iter()

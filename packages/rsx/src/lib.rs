@@ -254,18 +254,12 @@ impl<'a> ToTokens for TemplateRenderer<'a> {
                 node_paths: &[ #(#node_paths),* ],
                 attr_paths: &[ #(#attr_paths),* ],
             };
-// <<<<<<< HEAD
-//             ::dioxus::core::VNode::new(
-//                 #key_tokens,
-//                 TEMPLATE,
-//                 dioxus::core::exports::bumpalo::collections::Vec::with_capacity_in(#root_count, __cx.bump()),
-// =======
+
             __cx.vnode(
                 None.into(),
                 #key_tokens,
                 std::cell::Cell::new(TEMPLATE),
                 dioxus::core::exports::bumpalo::collections::Vec::with_capacity_in(#root_count, __cx.bump()).into(),
-// >>>>>>> 9fe172e9 (Fix leak in render macro)
                 __cx.bump().alloc([ #( #node_printer ),* ]),
                 __cx.bump().alloc([ #( #dyn_attr_printer ),* ]),
             )
