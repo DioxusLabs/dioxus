@@ -240,7 +240,6 @@ impl<'a> ToTokens for TemplateRenderer<'a> {
 
         // Render and release the mutable borrow on context
         let roots = quote! { #( #root_printer ),* };
-        let root_count = self.roots.len();
         let node_printer = &context.dynamic_nodes;
         let dyn_attr_printer = &context.dynamic_attributes;
         let node_paths = context.node_paths.iter().map(|it| quote!(&[#(#it),*]));
@@ -256,7 +255,6 @@ impl<'a> ToTokens for TemplateRenderer<'a> {
             ::dioxus::core::VNode::new(
                 #key_tokens,
                 TEMPLATE,
-                Box::new([Default::default();#root_count]),
                 Box::new([ #( #node_printer ),* ]),
                 Box::new([ #( #dyn_attr_printer ),* ]),
             )

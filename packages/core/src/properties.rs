@@ -57,6 +57,7 @@ impl Properties for () {
         true
     }
 }
+
 // We allow components to use the () generic parameter if they have no props. This impl enables the "build" method
 // that the macros use to anonymously complete prop construction.
 pub struct EmptyBuilder;

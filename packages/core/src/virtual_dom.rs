@@ -271,7 +271,7 @@ impl VirtualDom {
         };
 
         let root = dom.new_scope(
-            BoxedAnyProps::new(VProps::new(root, |_, _| unreachable!(), root_props, "root")),
+            BoxedAnyProps::new(VProps::new(root, |_, _| true, root_props, "root")),
             "app",
         );
 
