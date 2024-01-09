@@ -2,8 +2,11 @@
 /playwright-tests/web/dist
 /playwright-tests/fullstack/dist
 /dist
-Cargo.lock
 .DS_Store
+/examples/assets/test_video.mp4
+
+# new recommendation to keep the lockfile in for CI and reproducible builds
+# Cargo.lock
 
 .vscode/*
 !.vscode/settings.json

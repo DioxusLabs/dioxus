@@ -28,14 +28,14 @@ use crate::innerlude::*;
 #[allow(non_upper_case_globals, non_snake_case)]
 pub fn Fragment<'a>(cx: Scope<'a, FragmentProps<'a>>) -> Element {
     let children = cx.props.0.as_ref()?;
-    Some(VNode {
-        key: children.key,
-        parent: children.parent,
-        template: children.template.clone(),
-        root_ids: children.root_ids.clone(),
-        dynamic_nodes: children.dynamic_nodes,
-        dynamic_attrs: children.dynamic_attrs,
-    })
+    Some(cx.vnode(
+        children.parent.clone(),
+        children.key,
+        children.template.clone(),
+        children.root_ids.clone(),
+        children.dynamic_nodes,
+        children.dynamic_attrs,
+    ))
 }
 
 pub struct FragmentProps<'a>(Element<'a>);
@@ -91,10 +91,10 @@ impl<'a, const A: bool> FragmentBuilder<'a, A> {
 ///     })
 /// }
 /// ```
-impl<'a> Properties for FragmentProps<'a> {
+impl<'a> Properties<'_> for FragmentProps<'a> {
     type Builder = FragmentBuilder<'a, false>;
     const IS_STATIC: bool = false;
-    fn builder() -> Self::Builder {
+    fn builder(_cx: &ScopeState) -> Self::Builder {
         FragmentBuilder(None)
     }
     unsafe fn memoize(&self, _other: &Self) -> bool {

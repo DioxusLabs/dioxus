@@ -1,3 +1,4 @@
+use crate::innerlude::{ElementRef, VNodeId};
 use crate::{
     any_props::AnyProps, arena::ElementId, Element, Event, LazyNodes, ScopeId, ScopeState,
 };
@@ -39,6 +40,7 @@ impl<'a> Default for RenderReturn<'a> {
 ///
 /// The dynamic parts of the template are stored separately from the static parts. This allows faster diffing by skipping
 /// static parts of the template.
+#[non_exhaustive]
 #[derive(Debug, Clone)]
 pub struct VNode<'a> {
     /// The key given to the root of this template.
@@ -47,7 +49,10 @@ pub struct VNode<'a> {
     pub key: Option<&'a str>,
 
     /// When rendered, this template will be linked to its parent manually
-    pub parent: Option<ElementId>,
+    pub(crate) parent: Cell<Option<ElementRef>>,
+
+    /// The bubble id assigned to the child that we need to update and drop when diffing happens
+    pub(crate) stable_id: Cell<Option<VNodeId>>,
 
     /// The static nodes and static descriptor of the template
     pub template: Cell<Template<'static>>,
@@ -60,25 +65,49 @@ pub struct VNode<'a> {
     pub dynamic_nodes: &'a [DynamicNode<'a>],
 
     /// The dynamic parts of the template
-    pub dynamic_attrs: &'a [Attribute<'a>],
+    pub dynamic_attrs: &'a [MountedAttribute<'a>],
 }
 
 impl<'a> VNode<'a> {
     /// Create a template with no nodes that will be skipped over during diffing
     pub fn empty(cx: &'a ScopeState) -> Element<'a> {
-        Some(VNode {
-            key: None,
-            parent: None,
-            root_ids: RefCell::new(bumpalo::collections::Vec::new_in(cx.bump())),
-            dynamic_nodes: &[],
-            dynamic_attrs: &[],
-            template: Cell::new(Template {
+        Some(cx.vnode(
+            Cell::new(None),
+            None,
+            Cell::new(Template {
                 name: "dioxus-empty",
                 roots: &[],
                 node_paths: &[],
                 attr_paths: &[],
             }),
-        })
+            RefCell::new(bumpalo::collections::Vec::new_in(cx.bump())),
+            &[],
+            &[],
+        ))
+    }
+
+    /// Create a new VNode
+    pub fn new(
+        key: Option<&'a str>,
+        template: Template<'static>,
+        root_ids: bumpalo::collections::Vec<'a, ElementId>,
+        dynamic_nodes: &'a [DynamicNode<'a>],
+        dynamic_attrs: &'a [MountedAttribute<'a>],
+    ) -> Self {
+        Self {
+            key,
+            parent: Cell::new(None),
+            stable_id: Cell::new(None),
+            template: Cell::new(template),
+            root_ids: RefCell::new(root_ids),
+            dynamic_nodes,
+            dynamic_attrs,
+        }
+    }
+
+    /// Get the stable id of this node used for bubbling events
+    pub(crate) fn stable_id(&self) -> Option<VNodeId> {
+        self.stable_id.get()
     }
 
     /// Load a dynamic root at the given index
@@ -319,7 +348,7 @@ pub struct VComponent<'a> {
 
     /// The function pointer of the component, known at compile time
     ///
-    /// It is possible that components get folded at comppile time, so these shouldn't be really used as a key
+    /// It is possible that components get folded at compile time, so these shouldn't be really used as a key
     pub(crate) render_fn: *const (),
 
     pub(crate) props: RefCell<Option<Box<dyn AnyProps<'a> + 'a>>>,
@@ -372,6 +401,8 @@ impl<'a> VText<'a> {
 pub struct VPlaceholder {
     /// The ID of this node in the real DOM
     pub(crate) id: Cell<Option<ElementId>>,
+    /// The parent of this node
+    pub(crate) parent: Cell<Option<ElementRef>>,
 }
 
 impl VPlaceholder {
@@ -414,6 +445,51 @@ pub enum TemplateAttribute<'a> {
     },
 }
 
+/// An attribute with information about its position in the DOM and the element it was mounted to
+#[derive(Debug)]
+pub struct MountedAttribute<'a> {
+    pub(crate) ty: AttributeType<'a>,
+
+    /// The element in the DOM that this attribute belongs to
+    pub(crate) mounted_element: Cell<ElementId>,
+}
+
+impl<'a> From<Attribute<'a>> for MountedAttribute<'a> {
+    fn from(attr: Attribute<'a>) -> Self {
+        Self {
+            ty: AttributeType::Single(attr),
+            mounted_element: Default::default(),
+        }
+    }
+}
+
+impl<'a> From<&'a [Attribute<'a>]> for MountedAttribute<'a> {
+    fn from(attr: &'a [Attribute<'a>]) -> Self {
+        Self {
+            ty: AttributeType::Many(attr),
+            mounted_element: Default::default(),
+        }
+    }
+}
+
+impl<'a> From<&'a Vec<Attribute<'a>>> for MountedAttribute<'a> {
+    fn from(attr: &'a Vec<Attribute<'a>>) -> Self {
+        attr.as_slice().into()
+    }
+}
+
+impl<'a> MountedAttribute<'a> {
+    /// Get the type of this attribute
+    pub fn attribute_type(&self) -> &AttributeType<'a> {
+        &self.ty
+    }
+
+    /// Get the element that this attribute is mounted to
+    pub fn mounted_element(&self) -> ElementId {
+        self.mounted_element.get()
+    }
+}
+
 /// An attribute on a DOM node, such as `id="my-thing"` or `href="https://example.com"`
 #[derive(Debug)]
 pub struct Attribute<'a> {
@@ -430,9 +506,6 @@ pub struct Attribute<'a> {
 
     /// An indication of we should always try and set the attribute. Used in controlled components to ensure changes are propagated
     pub volatile: bool,
-
-    /// The element in the DOM that this attribute belongs to
-    pub(crate) mounted_element: Cell<ElementId>,
 }
 
 impl<'a> Attribute<'a> {
@@ -448,13 +521,40 @@ impl<'a> Attribute<'a> {
             value,
             namespace,
             volatile,
-            mounted_element: Cell::new(ElementId::default()),
+        }
+    }
+}
+
+/// The type of an attribute
+#[derive(Debug)]
+pub enum AttributeType<'a> {
+    /// A single attribute
+    Single(Attribute<'a>),
+    /// Many different attributes sorted by name
+    Many(&'a [Attribute<'a>]),
+}
+
+impl<'a> AttributeType<'a> {
+    /// Call the given function on each attribute
+    pub fn for_each<'b, F>(&'b self, mut f: F)
+    where
+        F: FnMut(&'b Attribute<'a>),
+    {
+        match self {
+            Self::Single(attr) => f(attr),
+            Self::Many(attrs) => attrs.iter().for_each(f),
         }
     }
 
-    /// Get the element that this attribute is mounted to
-    pub fn mounted_element(&self) -> ElementId {
-        self.mounted_element.get()
+    /// Try to call the given function on each attribute
+    pub fn try_for_each<'b, F, E>(&'b self, mut f: F) -> Result<(), E>
+    where
+        F: FnMut(&'b Attribute<'a>) -> Result<(), E>,
+    {
+        match self {
+            Self::Single(attr) => f(attr),
+            Self::Many(attrs) => attrs.iter().try_for_each(f),
+        }
     }
 }
 
@@ -651,52 +751,52 @@ pub trait IntoDynNode<'a, A = ()> {
     /// Consume this item along with a scopestate and produce a DynamicNode
     ///
     /// You can use the bump alloactor of the scopestate to creat the dynamic node
-    fn into_vnode(self, cx: &'a ScopeState) -> DynamicNode<'a>;
+    fn into_dyn_node(self, cx: &'a ScopeState) -> DynamicNode<'a>;
 }
 
 impl<'a> IntoDynNode<'a> for () {
-    fn into_vnode(self, _cx: &'a ScopeState) -> DynamicNode<'a> {
+    fn into_dyn_node(self, _cx: &'a ScopeState) -> DynamicNode<'a> {
         DynamicNode::default()
     }
 }
 impl<'a> IntoDynNode<'a> for VNode<'a> {
-    fn into_vnode(self, _cx: &'a ScopeState) -> DynamicNode<'a> {
+    fn into_dyn_node(self, _cx: &'a ScopeState) -> DynamicNode<'a> {
         DynamicNode::Fragment(_cx.bump().alloc([self]))
     }
 }
 
 impl<'a> IntoDynNode<'a> for DynamicNode<'a> {
-    fn into_vnode(self, _cx: &'a ScopeState) -> DynamicNode<'a> {
+    fn into_dyn_node(self, _cx: &'a ScopeState) -> DynamicNode<'a> {
         self
     }
 }
 
 impl<'a, T: IntoDynNode<'a>> IntoDynNode<'a> for Option<T> {
-    fn into_vnode(self, _cx: &'a ScopeState) -> DynamicNode<'a> {
+    fn into_dyn_node(self, _cx: &'a ScopeState) -> DynamicNode<'a> {
         match self {
-            Some(val) => val.into_vnode(_cx),
+            Some(val) => val.into_dyn_node(_cx),
             None => DynamicNode::default(),
         }
     }
 }
 
 impl<'a> IntoDynNode<'a> for &Element<'a> {
-    fn into_vnode(self, _cx: &'a ScopeState) -> DynamicNode<'a> {
+    fn into_dyn_node(self, _cx: &'a ScopeState) -> DynamicNode<'a> {
         match self.as_ref() {
-            Some(val) => val.clone().into_vnode(_cx),
+            Some(val) => val.clone().into_dyn_node(_cx),
             _ => DynamicNode::default(),
         }
     }
 }
 
 impl<'a, 'b> IntoDynNode<'a> for LazyNodes<'a, 'b> {
-    fn into_vnode(self, cx: &'a ScopeState) -> DynamicNode<'a> {
+    fn into_dyn_node(self, cx: &'a ScopeState) -> DynamicNode<'a> {
         DynamicNode::Fragment(cx.bump().alloc([cx.render(self).unwrap()]))
     }
 }
 
 impl<'a, 'b> IntoDynNode<'b> for &'a str {
-    fn into_vnode(self, cx: &'b ScopeState) -> DynamicNode<'b> {
+    fn into_dyn_node(self, cx: &'b ScopeState) -> DynamicNode<'b> {
         DynamicNode::Text(VText {
             value: cx.bump().alloc_str(self),
             id: Default::default(),
@@ -705,7 +805,7 @@ impl<'a, 'b> IntoDynNode<'b> for &'a str {
 }
 
 impl IntoDynNode<'_> for String {
-    fn into_vnode(self, cx: &ScopeState) -> DynamicNode {
+    fn into_dyn_node(self, cx: &ScopeState) -> DynamicNode {
         DynamicNode::Text(VText {
             value: cx.bump().alloc_str(&self),
             id: Default::default(),
@@ -714,42 +814,43 @@ impl IntoDynNode<'_> for String {
 }
 
 impl<'b> IntoDynNode<'b> for Arguments<'_> {
-    fn into_vnode(self, cx: &'b ScopeState) -> DynamicNode<'b> {
+    fn into_dyn_node(self, cx: &'b ScopeState) -> DynamicNode<'b> {
         cx.text_node(self)
     }
 }
 
 impl<'a> IntoDynNode<'a> for &'a VNode<'a> {
-    fn into_vnode(self, _cx: &'a ScopeState) -> DynamicNode<'a> {
-        DynamicNode::Fragment(_cx.bump().alloc([VNode {
-            parent: self.parent,
-            template: self.template.clone(),
-            root_ids: self.root_ids.clone(),
-            key: self.key,
-            dynamic_nodes: self.dynamic_nodes,
-            dynamic_attrs: self.dynamic_attrs,
-        }]))
+    fn into_dyn_node(self, cx: &'a ScopeState) -> DynamicNode<'a> {
+        let vnode = cx.vnode(
+            self.parent.clone(),
+            self.key,
+            self.template.clone(),
+            self.root_ids.clone(),
+            self.dynamic_nodes,
+            self.dynamic_attrs,
+        );
+        DynamicNode::Fragment(cx.bump().alloc([vnode]))
     }
 }
 
-pub trait IntoTemplate<'a> {
-    fn into_template(self, _cx: &'a ScopeState) -> VNode<'a>;
+pub trait IntoVNode<'a> {
+    fn into_vnode(self, _cx: &'a ScopeState) -> VNode<'a>;
 }
-impl<'a> IntoTemplate<'a> for VNode<'a> {
-    fn into_template(self, _cx: &'a ScopeState) -> VNode<'a> {
+impl<'a> IntoVNode<'a> for VNode<'a> {
+    fn into_vnode(self, _cx: &'a ScopeState) -> VNode<'a> {
         self
     }
 }
-impl<'a> IntoTemplate<'a> for Element<'a> {
-    fn into_template(self, cx: &'a ScopeState) -> VNode<'a> {
+impl<'a> IntoVNode<'a> for Element<'a> {
+    fn into_vnode(self, cx: &'a ScopeState) -> VNode<'a> {
         match self {
-            Some(val) => val.into_template(cx),
+            Some(val) => val.into_vnode(cx),
             _ => VNode::empty(cx).unwrap(),
         }
     }
 }
-impl<'a, 'b> IntoTemplate<'a> for LazyNodes<'a, 'b> {
-    fn into_template(self, cx: &'a ScopeState) -> VNode<'a> {
+impl<'a, 'b> IntoVNode<'a> for LazyNodes<'a, 'b> {
+    fn into_vnode(self, cx: &'a ScopeState) -> VNode<'a> {
         cx.render(self).unwrap()
     }
 }
@@ -759,12 +860,12 @@ pub struct FromNodeIterator;
 impl<'a, T, I> IntoDynNode<'a, FromNodeIterator> for T
 where
     T: Iterator<Item = I>,
-    I: IntoTemplate<'a>,
+    I: IntoVNode<'a>,
 {
-    fn into_vnode(self, cx: &'a ScopeState) -> DynamicNode<'a> {
+    fn into_dyn_node(self, cx: &'a ScopeState) -> DynamicNode<'a> {
         let mut nodes = bumpalo::collections::Vec::new_in(cx.bump());
 
-        nodes.extend(self.into_iter().map(|node| node.into_template(cx)));
+        nodes.extend(self.into_iter().map(|node| node.into_vnode(cx)));
 
         match nodes.into_bump_slice() {
             children if children.is_empty() => DynamicNode::default(),
@@ -837,4 +938,16 @@ impl<'a, T: IntoAttributeValue<'a>> IntoAttributeValue<'a> for Option<T> {
             None => AttributeValue::None,
         }
     }
+}
+
+/// A trait for anything that has a dynamic list of attributes
+pub trait HasAttributes<'a> {
+    /// Push an attribute onto the list of attributes
+    fn push_attribute(
+        self,
+        name: &'a str,
+        ns: Option<&'static str>,
+        attr: impl IntoAttributeValue<'a>,
+        volatile: bool,
+    ) -> Self;
 }

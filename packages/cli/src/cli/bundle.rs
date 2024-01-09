@@ -1,4 +1,5 @@
 use core::panic;
+use dioxus_cli_config::ExecutableType;
 use std::{fs::create_dir_all, str::FromStr};
 
 use tauri_bundler::{BundleSettings, PackageSettings, SettingsBuilder};
@@ -62,7 +63,7 @@ impl From<PackageType> for tauri_bundler::PackageType {
 
 impl Bundle {
     pub fn bundle(self, bin: Option<PathBuf>) -> Result<()> {
-        let mut crate_config = crate::CrateConfig::new(bin)?;
+        let mut crate_config = dioxus_cli_config::CrateConfig::new(bin)?;
 
         // change the release state.
         crate_config.with_release(self.build.release);
@@ -76,16 +77,22 @@ impl Bundle {
             crate_config.set_profile(self.build.profile.unwrap());
         }
 
+        if let Some(target) = &self.build.target {
+            crate_config.set_target(target.to_string());
+        }
+
+        crate_config.set_cargo_args(self.build.cargo_args);
+
         // build the desktop app
-        build_desktop(&crate_config, false)?;
+        build_desktop(&crate_config, false, false)?;
 
         // copy the binary to the out dir
         let package = crate_config.manifest.package.unwrap();
 
         let mut name: PathBuf = match &crate_config.executable {
-            crate::ExecutableType::Binary(name)
-            | crate::ExecutableType::Lib(name)
-            | crate::ExecutableType::Example(name) => name,
+            ExecutableType::Binary(name)
+            | ExecutableType::Lib(name)
+            | ExecutableType::Example(name) => name,
         }
         .into();
         if cfg!(windows) {
@@ -128,6 +135,20 @@ impl Bundle {
             }
         }
 
+        // Add all assets from collect assets to the bundle
+        #[cfg(feature = "collect-assets")]
+        {
+            let config = manganis_cli_support::Config::current();
+            let location = config.assets_serve_location().to_string();
+            let location = format!("./{}", location);
+            println!("Adding assets from {} to bundle", location);
+            if let Some(resources) = &mut bundle_settings.resources {
+                resources.push(location);
+            } else {
+                bundle_settings.resources = Some(vec![location]);
+            }
+        }
+
         let mut settings = SettingsBuilder::new()
             .project_out_directory(crate_config.out_dir)
             .package_settings(PackageSettings {
@@ -148,6 +169,11 @@ impl Bundle {
                     .collect(),
             );
         }
+
+        if let Some(target) = &self.build.target {
+            settings = settings.target(target.to_string());
+        }
+
         let settings = settings.build();
 
         // on macos we need to set CI=true (https://github.com/tauri-apps/tauri/issues/2567)
@@ -156,9 +182,9 @@ impl Bundle {
 
         tauri_bundler::bundle::bundle_project(settings.unwrap()).unwrap_or_else(|err|{
             #[cfg(target_os = "macos")]
-            panic!("Failed to bundle project: {}\nMake sure you have automation enabled in your terminal (https://github.com/tauri-apps/tauri/issues/3055#issuecomment-1624389208) and full disk access enabled for your terminal (https://github.com/tauri-apps/tauri/issues/3055#issuecomment-1624389208)", err);
+            panic!("Failed to bundle project: {:#?}\nMake sure you have automation enabled in your terminal (https://github.com/tauri-apps/tauri/issues/3055#issuecomment-1624389208) and full disk access enabled for your terminal (https://github.com/tauri-apps/tauri/issues/3055#issuecomment-1624389208)", err);
             #[cfg(not(target_os = "macos"))]
-            panic!("Failed to bundle project: {}", err);
+            panic!("Failed to bundle project: {:#?}", err);
         });
 
         Ok(())

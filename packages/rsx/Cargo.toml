@@ -14,7 +14,7 @@ keywords = ["dom", "ui", "gui", "react"]
 
 [dependencies]
 proc-macro2 = { version = "1.0", features = ["span-locations"] }
-dioxus-core = { workspace = true}
+dioxus-core = { workspace = true, optional = true }
 syn = { version = "2.0", features = ["full", "extra-traits"] }
 quote = { version = "1.0" }
 serde = { version = "1.0", features = ["derive"], optional = true }
@@ -23,5 +23,7 @@ krates = { version = "0.12.6", optional = true }
 tracing.workspace = true
 
 [features]
-hot_reload = ["krates", "internment"]
+default = ["html"]
+hot_reload = ["krates", "internment", "dioxus-core"]
 serde = ["dep:serde"]
+html = []

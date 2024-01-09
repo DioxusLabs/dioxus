@@ -1,3 +1,4 @@
+use dioxus_cli_config::DioxusConfig;
 use std::path::PathBuf;
 
 use anyhow::anyhow;
@@ -42,34 +43,36 @@ async fn main() -> anyhow::Result<()> {
 
     set_up_logging();
 
-    let bin = get_bin(args.bin)?;
+    let bin = get_bin(args.bin);
 
-    let _dioxus_config = DioxusConfig::load(Some(bin.clone()))
+    if let Ok(bin) = &bin {
+        let _dioxus_config = DioxusConfig::load(Some(bin.clone()))
         .map_err(|e| anyhow!("Failed to load Dioxus config because: {e}"))?
         .unwrap_or_else(|| {
             log::warn!("You appear to be creating a Dioxus project from scratch; we will use the default config");
             DioxusConfig::default()
         });
 
-    #[cfg(feature = "plugin")]
-    PluginManager::init(_dioxus_config.plugin)
-        .map_err(|e| anyhow!("🚫 Plugin system initialization failed: {e}"))?;
+        #[cfg(feature = "plugin")]
+        PluginManager::init(_dioxus_config.plugin)
+            .map_err(|e| anyhow!("🚫 Plugin system initialization failed: {e}"))?;
+    }
 
     match args.action {
         Translate(opts) => opts
             .translate()
             .map_err(|e| anyhow!("🚫 Translation of HTML into RSX failed: {}", e)),
 
-        Build(opts) => opts
-            .build(Some(bin.clone()))
+        Build(opts) if bin.is_ok() => opts
+            .build(Some(bin.unwrap().clone()), None)
             .map_err(|e| anyhow!("🚫 Building project failed: {}", e)),
 
-        Clean(opts) => opts
-            .clean(Some(bin.clone()))
+        Clean(opts) if bin.is_ok() => opts
+            .clean(Some(bin.unwrap().clone()))
             .map_err(|e| anyhow!("🚫 Cleaning project failed: {}", e)),
 
-        Serve(opts) => opts
-            .serve(Some(bin.clone()))
+        Serve(opts) if bin.is_ok() => opts
+            .serve(Some(bin.unwrap().clone()))
             .await
             .map_err(|e| anyhow!("🚫 Serving project failed: {}", e)),
 
@@ -81,8 +84,8 @@ async fn main() -> anyhow::Result<()> {
             .config()
             .map_err(|e| anyhow!("🚫 Configuring new project failed: {}", e)),
 
-        Bundle(opts) => opts
-            .bundle(Some(bin.clone()))
+        Bundle(opts) if bin.is_ok() => opts
+            .bundle(Some(bin.unwrap().clone()))
             .map_err(|e| anyhow!("🚫 Bundling project failed: {}", e)),
 
         #[cfg(feature = "plugin")]
@@ -107,5 +110,6 @@ async fn main() -> anyhow::Result<()> {
 
             Ok(())
         }
+        _ => Err(anyhow::anyhow!(bin.unwrap_err())),
     }
 }

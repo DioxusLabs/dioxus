@@ -1,19 +1,18 @@
-use crate::{BuildResult, CrateConfig, Result};
+use crate::{cfg::ConfigOptsServe, BuildResult, Result};
+use dioxus_cli_config::CrateConfig;
 
 use cargo_metadata::diagnostic::Diagnostic;
 use dioxus_core::Template;
 use dioxus_html::HtmlCtx;
 use dioxus_rsx::hot_reload::*;
 use notify::{RecommendedWatcher, Watcher};
-use std::{
-    path::PathBuf,
-    sync::{Arc, Mutex},
-};
+use std::sync::{Arc, Mutex};
 use tokio::sync::broadcast::{self};
 
 mod output;
 use output::*;
 pub mod desktop;
+pub mod fullstack;
 pub mod web;
 
 /// Sets up a file watcher
@@ -26,13 +25,7 @@ async fn setup_file_watcher<F: Fn() -> Result<BuildResult> + Send + 'static>(
     let mut last_update_time = chrono::Local::now().timestamp();
 
     // file watcher: check file change
-    let allow_watch_path = config
-        .dioxus_config
-        .web
-        .watcher
-        .watch_path
-        .clone()
-        .unwrap_or_else(|| vec![PathBuf::from("src"), PathBuf::from("examples")]);
+    let allow_watch_path = config.dioxus_config.web.watcher.watch_path.clone();
 
     let watcher_config = config.clone();
     let mut watcher = notify::recommended_watcher(move |info: notify::Result<notify::Event>| {
@@ -139,6 +132,13 @@ async fn setup_file_watcher<F: Fn() -> Result<BuildResult> + Send + 'static>(
         }
     }
     Ok(watcher)
+}
+
+pub(crate) trait Platform {
+    fn start(config: &CrateConfig, serve: &ConfigOptsServe) -> Result<Self>
+    where
+        Self: Sized;
+    fn rebuild(&mut self, config: &CrateConfig) -> Result<BuildResult>;
 }
 
 #[derive(Clone)]

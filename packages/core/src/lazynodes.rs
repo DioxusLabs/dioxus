@@ -18,13 +18,13 @@ use crate::{innerlude::VNode, ScopeState};
 
 /// A concrete type provider for closures that build [`VNode`] structures.
 ///
-/// This struct wraps lazy structs that build [`VNode`] trees Normally, we cannot perform a blanket implementation over
+/// This struct wraps lazy structs that build [`VNode`] trees. Normally, we cannot perform a blanket implementation over
 /// closures, but if we wrap the closure in a concrete type, we can use it for different branches in matching.
 ///
 ///
 /// ```rust, ignore
 /// LazyNodes::new(|f| {
-///        static TEMPLATE: dioxus::core::Template = dioxus::core::Template {
+///     static TEMPLATE: dioxus::core::Template = dioxus::core::Template {
 ///         name: "main.rs:5:5:20", // Source location of the template for hot reloading
 ///         roots: &[
 ///             dioxus::core::TemplateNode::Element {
@@ -37,19 +37,19 @@ use crate::{innerlude::VNode, ScopeState};
 ///         node_paths: &[],
 ///         attr_paths: &[],
 ///     };
-///     dioxus::core::VNode {
-///         parent: None,
-///         key: None,
-///         template: std::cell::Cell::new(TEMPLATE),
-///         root_ids: dioxus::core::exports::bumpalo::collections::Vec::with_capacity_in(
+///     f.vnode(
+///         None,
+///         None,
+///         std::cell::Cell::new(TEMPLATE),
+///         dioxus::core::exports::bumpalo::collections::Vec::with_capacity_in(
 ///                 1usize,
 ///                 f.bump(),
 ///             )
 ///             .into(),
-///         dynamic_nodes: f.bump().alloc([]),
-///         dynamic_attrs: f.bump().alloc([]),
-///     })
-/// }
+///         f.bump().alloc([]),
+///         f.bump().alloc([]),
+///     )
+/// })
 /// ```
 ///
 /// Find more information about how to construct [`VNode`] at <https://dioxuslabs.com/learn/0.4/contributing/walkthrough_readme#the-rsx-macro>

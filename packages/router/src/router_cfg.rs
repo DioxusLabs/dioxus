@@ -53,10 +53,15 @@ where
 {
     pub(crate) fn get_history(self) -> Box<dyn HistoryProvider<R>> {
         self.history.unwrap_or_else(|| {
-            #[cfg(all(target_arch = "wasm32", feature = "web"))]
+            #[cfg(all(not(feature = "liveview"), target_arch = "wasm32", feature = "web"))]
             let history = Box::<WebHistory<R>>::default();
-            #[cfg(not(all(target_arch = "wasm32", feature = "web")))]
+            #[cfg(all(
+                not(feature = "liveview"),
+                any(not(target_arch = "wasm32"), not(feature = "web"))
+            ))]
             let history = Box::<MemoryHistory<R>>::default();
+            #[cfg(feature = "liveview")]
+            let history = Box::<LiveviewHistory<R>>::default();
             history
         })
     }
@@ -83,9 +88,17 @@ where
 {
     pub(crate) fn take_history(&mut self) -> Box<dyn AnyHistoryProvider> {
         self.history.take().unwrap_or_else(|| {
+            // If we are on wasm32 and the web feature is enabled, use the web history.
             #[cfg(all(target_arch = "wasm32", feature = "web"))]
             let history = Box::<AnyHistoryProviderImplWrapper<R, WebHistory<R>>>::default();
-            #[cfg(not(all(target_arch = "wasm32", feature = "web")))]
+            // If we are not on wasm32 and the liveview feature is enabled, use the liveview history.
+            #[cfg(all(feature = "liveview", not(target_arch = "wasm32")))]
+            let history = Box::<AnyHistoryProviderImplWrapper<R, LiveviewHistory<R>>>::default();
+            // If neither of the above are true, use the memory history.
+            #[cfg(all(
+                not(all(target_arch = "wasm32", feature = "web")),
+                not(all(feature = "liveview", not(target_arch = "wasm32"))),
+            ))]
             let history = Box::<AnyHistoryProviderImplWrapper<R, MemoryHistory<R>>>::default();
             history
         })

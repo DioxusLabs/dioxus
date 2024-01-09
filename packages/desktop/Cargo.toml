@@ -11,15 +11,25 @@ keywords = ["dom", "ui", "gui", "react"]
 
 [dependencies]
 dioxus-core = { workspace = true, features = ["serialize"] }
-dioxus-html = { workspace = true, features = ["serialize", "native-bind"] }
-dioxus-interpreter-js = { workspace = true }
+dioxus-html = { workspace = true, features = [
+    "serialize",
+    "native-bind",
+    "mounted",
+    "eval",
+] }
+dioxus-interpreter-js = { workspace = true, features = ["binary-protocol"] }
 dioxus-hot-reload = { workspace = true, optional = true }
+dioxus-cli-config = { workspace = true }
 
 serde = "1.0.136"
 serde_json = "1.0.79"
 thiserror = { workspace = true }
-wry = { version = "0.28.0", default-features = false, features = ["protocol", "file-drop"] }
 tracing = { workspace = true }
+wry = { version = "0.35.0", default-features = false, features = [
+    "os-webview",
+    "protocol",
+    "file-drop",
+] }
 futures-channel = { workspace = true }
 tokio = { workspace = true, features = [
     "sync",
@@ -33,14 +43,20 @@ webbrowser = "0.8.0"
 infer = "0.11.0"
 dunce = "1.0.2"
 slab = { workspace = true }
+rustc-hash = { workspace = true }
 
 futures-util = { workspace = true }
 urlencoding = "2.1.2"
 async-trait = "0.1.68"
-
+crossbeam-channel = "0.5.8"
+tao = { version = "0.24.0", features = ["rwh_05"] }
 
 [target.'cfg(any(target_os = "windows",target_os = "macos",target_os = "linux",target_os = "dragonfly", target_os = "freebsd", target_os = "netbsd", target_os = "openbsd"))'.dependencies]
-rfd = "0.11.3"
+# This is only for debug mode, and it appears mobile does not support some packages this uses
+manganis-cli-support = { workspace = true, optional = true, features = ["webp", "html"] }
+rfd = "0.12"
+global-hotkey = "0.4.1"
+muda = "0.11.3"
 
 [target.'cfg(target_os = "ios")'.dependencies]
 objc = "0.2.7"
@@ -56,14 +72,13 @@ tokio_runtime = ["tokio"]
 fullscreen = ["wry/fullscreen"]
 transparent = ["wry/transparent"]
 devtools = ["wry/devtools"]
-tray = ["wry/tray"]
-dox = ["wry/dox"]
 hot-reload = ["dioxus-hot-reload"]
+collect-assets = ["manganis-cli-support"]
 gnu = []
 
 [package.metadata.docs.rs]
 default-features = false
-features = [ "dox", "tokio_runtime", "hot-reload" ]
+features = ["tokio_runtime", "hot-reload"]
 
 [dev-dependencies]
 dioxus-core-macro = { workspace = true }
@@ -71,6 +86,10 @@ dioxus-hooks = { workspace = true }
 dioxus = { workspace = true }
 exitcode = "1.1.2"
 scraper = "0.16.0"
+
+[build-dependencies]
+dioxus-interpreter-js = { workspace = true, features = ["binary-protocol"] }
+minify-js = "0.5.6"
 
 # These tests need to be run on the main thread, so they cannot use rust's test harness.
 [[test]]

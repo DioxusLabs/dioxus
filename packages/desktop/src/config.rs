@@ -1,15 +1,12 @@
 use std::borrow::Cow;
 use std::path::PathBuf;
 
-use wry::application::window::Icon;
+use dioxus_core::prelude::Component;
+use tao::window::{Icon, WindowBuilder, WindowId};
 use wry::{
-    application::window::{Window, WindowBuilder},
     http::{Request as HttpRequest, Response as HttpResponse},
-    webview::FileDropEvent,
-    Result as WryResult,
+    FileDropEvent,
 };
-
-// pub(crate) type DynEventHandlerFn = dyn Fn(&mut EventLoop<()>, &mut WebView);
 
 /// The behaviour of the application when the last window is closed.
 #[derive(Copy, Clone, Eq, PartialEq)]
@@ -36,20 +33,26 @@ pub struct Config {
     pub(crate) root_name: String,
     pub(crate) background_color: Option<(u8, u8, u8, u8)>,
     pub(crate) last_window_close_behaviour: WindowCloseBehaviour,
+    pub(crate) enable_default_menu_bar: bool,
 }
 
-type DropHandler = Box<dyn Fn(&Window, FileDropEvent) -> bool>;
+type DropHandler = Box<dyn Fn(WindowId, FileDropEvent) -> bool>;
 
 pub(crate) type WryProtocol = (
     String,
-    Box<dyn Fn(&HttpRequest<Vec<u8>>) -> WryResult<HttpResponse<Cow<'static, [u8]>>> + 'static>,
+    Box<dyn Fn(HttpRequest<Vec<u8>>) -> HttpResponse<Cow<'static, [u8]>> + 'static>,
 );
 
 impl Config {
     /// Initializes a new `WindowBuilder` with default values.
     #[inline]
     pub fn new() -> Self {
-        let window = WindowBuilder::new().with_title("Dioxus app");
+        let window = WindowBuilder::new().with_title(
+            dioxus_cli_config::CURRENT_CONFIG
+                .as_ref()
+                .map(|c| c.dioxus_config.application.name.clone())
+                .unwrap_or("Dioxus App".to_string()),
+        );
 
         Self {
             // event_handler: None,
@@ -65,7 +68,30 @@ impl Config {
             root_name: "main".to_string(),
             background_color: None,
             last_window_close_behaviour: WindowCloseBehaviour::LastWindowExitsApp,
+            enable_default_menu_bar: true,
         }
+    }
+
+    /// Launch a Dioxus app using the given component and config
+    ///
+    /// See the [`crate::launch::launch`] function for more details.
+    pub fn launch(self, root: Component<()>) {
+        crate::launch::launch_cfg(root, self)
+    }
+
+    /// Launch a Dioxus app using the given component, config, and props
+    ///
+    /// See the [`crate::launch::launch_with_props`] function for more details.
+    pub fn launch_with_props<P: 'static>(self, root: Component<P>, props: P) {
+        crate::launch::launch_with_props(root, props, self)
+    }
+
+    /// Set whether the default menu bar should be enabled.
+    ///
+    /// > Note: `enable` is `true` by default. To disable the default menu bar pass `false`.
+    pub fn with_default_menu_bar(mut self, enable: bool) -> Self {
+        self.enable_default_menu_bar = enable;
+        self
     }
 
     /// set the directory from which assets will be searched in release mode
@@ -108,10 +134,10 @@ impl Config {
         self
     }
 
-    /// Set a file drop handler
+    /// Set a file drop handler. If this is enabled, html drag events will be disabled.
     pub fn with_file_drop_handler(
         mut self,
-        handler: impl Fn(&Window, FileDropEvent) -> bool + 'static,
+        handler: impl Fn(WindowId, FileDropEvent) -> bool + 'static,
     ) -> Self {
         self.file_drop_handler = Some(Box::new(handler));
         self
@@ -120,7 +146,7 @@ impl Config {
     /// Set a custom protocol
     pub fn with_custom_protocol<F>(mut self, name: String, handler: F) -> Self
     where
-        F: Fn(&HttpRequest<Vec<u8>>) -> WryResult<HttpResponse<Cow<'static, [u8]>>> + 'static,
+        F: Fn(HttpRequest<Vec<u8>>) -> HttpResponse<Cow<'static, [u8]>> + 'static,
     {
         self.protocols.push((name, Box::new(handler)));
         self

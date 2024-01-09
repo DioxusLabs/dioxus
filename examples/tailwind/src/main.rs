@@ -2,21 +2,23 @@
 
 use dioxus::prelude::*;
 
+const _STYLE: &str = manganis::mg!(file("./public/tailwind.css"));
+
 fn main() {
     #[cfg(not(target_arch = "wasm32"))]
-    dioxus_desktop::launch_cfg(
-        app,
-        dioxus_desktop::Config::new()
-            .with_custom_head(r#"<link rel="stylesheet" href="public/tailwind.css">"#.to_string()),
-    );
+    dioxus_desktop::launch(app);
     #[cfg(target_arch = "wasm32")]
     dioxus_web::launch(app);
 }
 
 pub fn app(cx: Scope) -> Element {
+    let grey_background = true;
     cx.render(rsx!(
         div {
-            header { class: "text-gray-400 bg-gray-900 body-font",
+            header {
+                class: "text-gray-400 body-font",
+                // you can use optional attributes to optionally apply a tailwind class
+                class: if grey_background { "bg-gray-900" },
                 div { class: "container mx-auto flex flex-wrap p-5 flex-col md:flex-row items-center",
                     a { class: "flex title-font font-medium items-center text-white mb-4 md:mb-0",
                         StacksIcon {}

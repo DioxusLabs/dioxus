@@ -36,8 +36,6 @@ criterion = "0.3.5"
 thiserror = { workspace = true }
 env_logger = "0.10.0"
 tokio = { workspace = true, features = ["full"] }
-# dioxus-edit-stream = { workspace = true }
-
 
 [[bench]]
 name = "jsframework"

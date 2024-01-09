@@ -83,7 +83,7 @@ fn Grid(cx: Scope<GridProps>) -> Element {
                                     let alpha = y as f32*100.0/size as f32 + counts.read()[x*size + y] as f32;
                                     let key = format!("{}-{}", x, y);
                                     rsx! {
-                                        Box{
+                                        Box {
                                             x: x,
                                             y: y,
                                             alpha: 100.0,

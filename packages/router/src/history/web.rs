@@ -13,6 +13,16 @@ use super::{
     HistoryProvider,
 };
 
+#[allow(dead_code)]
+fn base_path() -> Option<&'static str> {
+    let base_path = dioxus_cli_config::CURRENT_CONFIG
+        .as_ref()
+        .ok()
+        .and_then(|c| c.dioxus_config.web.app.base_path.as_deref());
+    tracing::trace!("Using base_path from Dioxus.toml: {:?}", base_path);
+    base_path
+}
+
 #[cfg(not(feature = "serde"))]
 #[allow(clippy::extra_unused_type_parameters)]
 fn update_scroll<R>(window: &Window, history: &History) {
@@ -160,6 +170,10 @@ impl<R: Routable> WebHistory<R> {
                 .expect("`history` can set scroll restoration");
         }
 
+        let prefix = prefix
+            .or_else(|| base_path().map(|s| s.to_string()))
+            .map(|prefix| format!("/{}", prefix.trim_matches('/')));
+
         Self {
             do_scroll_restoration,
             history,
@@ -198,6 +212,16 @@ where
         let location = self.window.location();
         let path = location.pathname().unwrap_or_else(|_| "/".into())
             + &location.search().unwrap_or("".into());
+        let path = match self.prefix {
+            None => path,
+            Some(ref prefix) => {
+                if path.starts_with(prefix) {
+                    path[prefix.len()..].to_string()
+                } else {
+                    path
+                }
+            }
+        };
         R::from_str(&path).unwrap_or_else(|err| panic!("{}", err))
     }
 

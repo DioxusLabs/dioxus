@@ -1,6 +1,9 @@
 use std::collections::HashMap;
 
-use dioxus_html::{input_data::keyboard_types::Key, KeyboardData, MouseData};
+use dioxus_html::{
+    input_data::keyboard_types::Key, prelude::*, HasKeyboardData, SerializedKeyboardData,
+    SerializedMouseData,
+};
 use dioxus_native_core::{
     custom_element::CustomElement,
     node::{OwnedAttributeDiscription, OwnedAttributeValue},
@@ -12,7 +15,8 @@ use dioxus_native_core::{
 use shipyard::UniqueView;
 
 use super::{RinkWidget, WidgetContext};
-use crate::{query::get_layout, Event, EventData, FormData, Query};
+use crate::hooks::FormData;
+use crate::{query::get_layout, Event, EventData, Query};
 
 #[derive(Debug)]
 pub(crate) struct Slider {
@@ -209,7 +213,7 @@ impl Slider {
         }
     }
 
-    fn handle_keydown(&mut self, mut root: NodeMut, data: &KeyboardData) {
+    fn handle_keydown(&mut self, mut root: NodeMut, data: &SerializedKeyboardData) {
         let key = data.key();
 
         let step = self.step();
@@ -231,7 +235,7 @@ impl Slider {
         self.write_value(rdom, id);
     }
 
-    fn handle_mousemove(&mut self, mut root: NodeMut, data: &MouseData) {
+    fn handle_mousemove(&mut self, mut root: NodeMut, data: &SerializedMouseData) {
         if !data.held_buttons().is_empty() {
             let id = root.id();
             let rdom = root.real_dom_mut();

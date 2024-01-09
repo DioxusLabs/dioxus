@@ -1,8 +1,8 @@
 #![cfg(not(miri))]
 
 use dioxus::prelude::Props;
-use dioxus_core::*;
-use std::{cell::Cell, collections::HashSet};
+use dioxus_core::{MountedAttribute, *};
+use std::{cell::Cell, cfg, collections::HashSet};
 
 fn random_ns() -> Option<&'static str> {
     let namespace = rand::random::<u8>() % 2;
@@ -170,22 +170,24 @@ fn create_random_dynamic_node(cx: &ScopeState, depth: usize) -> DynamicNode {
     let range = if depth > 5 { 1 } else { 4 };
     match rand::random::<u8>() % range {
         0 => DynamicNode::Placeholder(Default::default()),
-        1 => cx.make_node((0..(rand::random::<u8>() % 5)).map(|_| VNode {
-            key: None,
-            parent: Default::default(),
-            template: Cell::new(Template {
-                name: concat!(file!(), ":", line!(), ":", column!(), ":0"),
-                roots: &[TemplateNode::Dynamic { id: 0 }],
-                node_paths: &[&[0]],
-                attr_paths: &[],
-            }),
-            root_ids: bumpalo::collections::Vec::new_in(cx.bump()).into(),
-            dynamic_nodes: cx.bump().alloc([cx.component(
-                create_random_element,
-                DepthProps { depth, root: false },
-                "create_random_element",
-            )]),
-            dynamic_attrs: &[],
+        1 => cx.make_node((0..(rand::random::<u8>() % 5)).map(|_| {
+            cx.vnode(
+                None.into(),
+                Default::default(),
+                Cell::new(Template {
+                    name: concat!(file!(), ":", line!(), ":", column!(), ":0"),
+                    roots: &[TemplateNode::Dynamic { id: 0 }],
+                    node_paths: &[&[0]],
+                    attr_paths: &[],
+                }),
+                bumpalo::collections::Vec::new_in(cx.bump()).into(),
+                cx.bump().alloc([cx.component(
+                    create_random_element,
+                    DepthProps { depth, root: false },
+                    "create_random_element",
+                )]),
+                &[],
+            )
         })),
         2 => cx.component(
             create_random_element,
@@ -205,7 +207,7 @@ fn create_random_dynamic_node(cx: &ScopeState, depth: usize) -> DynamicNode {
     }
 }
 
-fn create_random_dynamic_attr(cx: &ScopeState) -> Attribute {
+fn create_random_dynamic_attr(cx: &ScopeState) -> MountedAttribute {
     let value = match rand::random::<u8>() % 7 {
         0 => AttributeValue::Text(Box::leak(
             format!("{}", rand::random::<usize>()).into_boxed_str(),
@@ -217,7 +219,7 @@ fn create_random_dynamic_attr(cx: &ScopeState) -> Attribute {
         5 => AttributeValue::None,
         6 => {
             let value = cx.listener(|e: Event<String>| println!("{:?}", e));
-            return Attribute::new("ondata", value, None, false);
+            return Attribute::new("ondata", value, None, false).into();
         }
         _ => unreachable!(),
     };
@@ -227,6 +229,7 @@ fn create_random_dynamic_attr(cx: &ScopeState) -> Attribute {
         random_ns(),
         rand::random(),
     )
+    .into()
 }
 
 static mut TEMPLATE_COUNT: usize = 0;
@@ -271,13 +274,13 @@ fn create_random_element(cx: Scope<DepthProps>) -> Element {
                 )
                 .into_boxed_str(),
             ));
-            // println!("{template:#?}");
-            let node = VNode {
-                key: None,
-                parent: None,
-                template: Cell::new(template),
-                root_ids: bumpalo::collections::Vec::new_in(cx.bump()).into(),
-                dynamic_nodes: {
+            println!("{template:#?}");
+            let node = cx.vnode(
+                None.into(),
+                None,
+                Cell::new(template),
+                bumpalo::collections::Vec::new_in(cx.bump()).into(),
+                {
                     let dynamic_nodes: Vec<_> = dynamic_node_types
                         .iter()
                         .map(|ty| match ty {
@@ -291,12 +294,12 @@ fn create_random_element(cx: Scope<DepthProps>) -> Element {
                         .collect();
                     cx.bump().alloc(dynamic_nodes)
                 },
-                dynamic_attrs: cx.bump().alloc(
+                cx.bump().alloc(
                     (0..template.attr_paths.len())
                         .map(|_| create_random_dynamic_attr(cx))
                         .collect::<Vec<_>>(),
                 ),
-            };
+            );
             Some(node)
         }
         _ => None,
@@ -306,10 +309,10 @@ fn create_random_element(cx: Scope<DepthProps>) -> Element {
 }
 
 // test for panics when creating random nodes and templates
-#[cfg(not(miri))]
 #[test]
 fn create() {
-    for _ in 0..1000 {
+    let repeat_count = if cfg!(miri) { 100 } else { 1000 };
+    for _ in 0..repeat_count {
         let mut vdom =
             VirtualDom::new_with_props(create_random_element, DepthProps { depth: 0, root: true });
         let _ = vdom.rebuild();
@@ -318,10 +321,10 @@ fn create() {
 
 // test for panics when diffing random nodes
 // This test will change the template every render which is not very realistic, but it helps stress the system
-#[cfg(not(miri))]
 #[test]
 fn diff() {
-    for _ in 0..100000 {
+    let repeat_count = if cfg!(miri) { 100 } else { 1000 };
+    for _ in 0..repeat_count {
         let mut vdom =
             VirtualDom::new_with_props(create_random_element, DepthProps { depth: 0, root: true });
         let _ = vdom.rebuild();

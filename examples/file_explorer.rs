@@ -18,13 +18,14 @@ fn main() {
     );
 }
 
+const _STYLE: &str = manganis::mg!(file("./examples/assets/fileexplorer.css"));
+
 fn app(cx: Scope) -> Element {
     let files = use_ref(cx, Files::new);
 
     cx.render(rsx! {
         div {
             link { href:"https://fonts.googleapis.com/icon?family=Material+Icons", rel:"stylesheet", }
-            style { include_str!("./assets/fileexplorer.css") }
             header {
                 i { class: "material-icons icon-menu", "menu" }
                 h1 { "Files: ", files.read().current() }

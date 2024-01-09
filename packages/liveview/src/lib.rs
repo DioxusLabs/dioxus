@@ -18,6 +18,11 @@ pub mod adapters {
 
     #[cfg(feature = "salvo")]
     pub use salvo_adapter::*;
+
+    #[cfg(feature = "rocket")]
+    pub mod rocket_adapter;
+    #[cfg(feature = "rocket")]
+    pub use rocket_adapter::*;
 }
 
 pub use adapters::*;
@@ -28,6 +33,7 @@ mod query;
 use futures_util::{SinkExt, StreamExt};
 pub use pool::*;
 mod eval;
+mod events;
 
 pub trait WebsocketTx: SinkExt<String, Error = LiveViewError> {}
 impl<T> WebsocketTx for T where T: SinkExt<String, Error = LiveViewError> {}
@@ -41,58 +47,7 @@ pub enum LiveViewError {
     SendingFailed,
 }
 
-use once_cell::sync::Lazy;
-
-static INTERPRETER_JS: Lazy<String> = Lazy::new(|| {
-    let interpreter = dioxus_interpreter_js::INTERPRETER_JS;
-    let serialize_file_uploads = r#"if (
-      target.tagName === "INPUT" &&
-      (event.type === "change" || event.type === "input")
-    ) {
-      const type = target.getAttribute("type");
-      if (type === "file") {
-        async function read_files() {
-          const files = target.files;
-          const file_contents = {};
-
-          for (let i = 0; i < files.length; i++) {
-            const file = files[i];
-
-            file_contents[file.name] = Array.from(
-              new Uint8Array(await file.arrayBuffer())
-            );
-          }
-          let file_engine = {
-            files: file_contents,
-          };
-          contents.files = file_engine;
-
-          if (realId === null) {
-            return;
-          }
-          const message = serializeIpcMessage("user_event", {
-            name: name,
-            element: parseInt(realId),
-            data: contents,
-            bubbles,
-          });
-          window.ipc.postMessage(message);
-        }
-        read_files();
-        return;
-      }
-    }"#;
-
-    let interpreter = interpreter.replace("/*POST_EVENT_SERIALIZATION*/", serialize_file_uploads);
-    interpreter.replace("import { setAttributeInner } from \"./common.js\";", "")
-});
-
-static COMMON_JS: Lazy<String> = Lazy::new(|| {
-    let common = dioxus_interpreter_js::COMMON_JS;
-    common.replace("export", "")
-});
-
-static MAIN_JS: &str = include_str!("./main.js");
+static MINIFIED: &str = include_str!("./minified.js");
 
 /// This script that gets injected into your app connects this page to the websocket endpoint
 ///
@@ -130,8 +85,6 @@ pub fn interpreter_glue(url_or_path: &str) -> String {
         "return path;"
     };
 
-    let js = &*INTERPRETER_JS;
-    let common = &*COMMON_JS;
     format!(
         r#"
 <script>
@@ -140,10 +93,7 @@ pub fn interpreter_glue(url_or_path: &str) -> String {
     }}
     
     var WS_ADDR = __dioxusGetWsUrl("{url_or_path}");
-    {js}
-    {common}
-    {MAIN_JS}
-    main();
+    {MINIFIED}
 </script>
     "#
     )

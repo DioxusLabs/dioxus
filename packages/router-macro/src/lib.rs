@@ -36,7 +36,7 @@ mod segment;
 /// 1. Static Segments: "/static"
 /// 2. Dynamic Segments: "/:dynamic" (where dynamic has a type that is FromStr in all child Variants)
 /// 3. Catch all Segments: "/:..segments" (where segments has a type that is FromSegments in all child Variants)
-/// 4. Query Segments: "/?:query" (where query has a type that is FromQuery in all child Variants)
+/// 4. Query Segments: "/?:..query" (where query has a type that is FromQuery in all child Variants) or "/?:query&:other_query" (where query and other_query has a type that is FromQueryArgument in all child Variants)
 ///
 /// Routes are matched:
 /// 1. By there specificity this order: Query Routes ("/?:query"), Static Routes ("/route"), Dynamic Routes ("/:route"), Catch All Routes ("/:..route")

@@ -14,6 +14,7 @@ pub mod router;
 mod adapters;
 #[cfg(feature = "ssr")]
 pub use adapters::*;
+mod collect_assets;
 mod hooks;
 #[cfg(all(debug_assertions, feature = "hot-reload", feature = "ssr"))]
 mod hot_reload;

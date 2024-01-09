@@ -10,9 +10,8 @@ publish = false
 dioxus-web = { workspace = true, features=["hydrate"], optional = true }
 dioxus = { workspace = true }
 dioxus-fullstack = { workspace = true }
-tokio = { workspace = true, features = ["full"], optional = true }
 serde = "1.0.159"
-salvo = { version = "0.37.9", optional = true }
+salvo = { version = "0.63.0", optional = true }
 execute = "0.2.12"
 reqwest = "0.11.18"
 simple_logger = "4.2.0"
@@ -22,5 +21,5 @@ tracing-subscriber = "0.3.17"
 
 [features]
 default = []
-ssr = ["salvo", "tokio", "dioxus-fullstack/salvo"]
+ssr = ["salvo", "dioxus-fullstack/salvo"]
 web = ["dioxus-web"]

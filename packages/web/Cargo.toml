@@ -13,8 +13,8 @@ keywords = ["dom", "ui", "gui", "react", "wasm"]
 dioxus-core = { workspace = true, features = ["serialize"] }
 dioxus-html = { workspace = true, features = ["wasm-bind"] }
 dioxus-interpreter-js = { workspace = true, features = [
-    "sledgehammer",
     "minimal_bindings",
+    "web",
 ] }
 
 js-sys = "0.3.56"
@@ -42,6 +42,8 @@ features = [
     "HtmlFormElement",
     "Text",
     "Window",
+    "DataTransfer",
+    "console"
 ]
 
 [features]
@@ -49,7 +51,6 @@ default = ["panic_hook", "mounted", "file_engine", "hot_reload", "eval"]
 panic_hook = ["console_error_panic_hook"]
 hydrate = [
     "web-sys/Comment",
-    "web-sys/console",
 ]
 mounted = [
     "web-sys/Element",
@@ -65,7 +66,9 @@ hot_reload = [
     "web-sys/WebSocket",
     "web-sys/Location",
 ]
-eval = []
+eval = [
+    "dioxus-html/eval",
+]
 
 [dev-dependencies]
 dioxus = { workspace = true }

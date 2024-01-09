@@ -1,10 +1,14 @@
+use crate::server::Platform;
 use crate::{
+    cfg::ConfigOptsServe,
     server::{
         output::{print_console_info, PrettierOptions},
         setup_file_watcher,
     },
-    BuildResult, CrateConfig, Result,
+    BuildResult, Result,
 };
+use dioxus_cli_config::CrateConfig;
+use dioxus_cli_config::ExecutableType;
 
 use dioxus_hot_reload::HotReloadMsg;
 use dioxus_html::HtmlCtx;
@@ -21,7 +25,14 @@ use plugin::PluginManager;
 
 use super::HotReloadState;
 
-pub async fn startup(config: CrateConfig) -> Result<()> {
+pub async fn startup(config: CrateConfig, serve: &ConfigOptsServe) -> Result<()> {
+    startup_with_platform::<DesktopPlatform>(config, serve).await
+}
+
+pub(crate) async fn startup_with_platform<P: Platform + Send + 'static>(
+    config: CrateConfig,
+    serve_cfg: &ConfigOptsServe,
+) -> Result<()> {
     // ctrl-c shutdown checker
     let _crate_config = config.clone();
     let _ = ctrlc::set_handler(move || {
@@ -51,15 +62,18 @@ pub async fn startup(config: CrateConfig) -> Result<()> {
         false => None,
     };
 
-    serve(config, hot_reload_state).await?;
+    serve::<P>(config, serve_cfg, hot_reload_state).await?;
 
     Ok(())
 }
 
 /// Start the server without hot reload
-pub async fn serve(config: CrateConfig, hot_reload_state: Option<HotReloadState>) -> Result<()> {
-    let (child, first_build_result) = start_desktop(&config)?;
-    let currently_running_child: RwLock<Child> = RwLock::new(child);
+async fn serve<P: Platform + Send + 'static>(
+    config: CrateConfig,
+    serve: &ConfigOptsServe,
+    hot_reload_state: Option<HotReloadState>,
+) -> Result<()> {
+    let platform = RwLock::new(P::start(&config, serve)?);
 
     log::info!("🚀 Starting development server...");
 
@@ -68,15 +82,7 @@ pub async fn serve(config: CrateConfig, hot_reload_state: Option<HotReloadState>
     let _watcher = setup_file_watcher(
         {
             let config = config.clone();
-
-            move || {
-                let mut current_child = currently_running_child.write().unwrap();
-                log::trace!("Killing old process");
-                current_child.kill()?;
-                let (child, result) = start_desktop(&config)?;
-                *current_child = child;
-                Ok(result)
-            }
+            move || platform.write().unwrap().rebuild(&config)
         },
         &config,
         None,
@@ -84,19 +90,9 @@ pub async fn serve(config: CrateConfig, hot_reload_state: Option<HotReloadState>
     )
     .await?;
 
-    // Print serve info
-    print_console_info(
-        &config,
-        PrettierOptions {
-            changed: vec![],
-            warnings: first_build_result.warnings,
-            elapsed_time: first_build_result.elapsed_time,
-        },
-        None,
-    );
-
     match hot_reload_state {
         Some(hot_reload_state) => {
+            // The open interprocess sockets
             start_desktop_hot_reload(hot_reload_state).await?;
         }
         None => {
@@ -154,7 +150,11 @@ async fn start_desktop_hot_reload(hot_reload_state: HotReloadState) -> Result<()
                                 println!("Connected to hot reloading 🚀");
                             }
                             Err(err) => {
-                                if err.kind() != std::io::ErrorKind::WouldBlock {
+                                let error_string = err.to_string();
+                                // Filter out any error messages about a operation that may block and an error message that triggers on some operating systems that says "Waiting for a process to open the other end of the pipe" without WouldBlock being set
+                                let display_error = err.kind() != std::io::ErrorKind::WouldBlock
+                                    && !error_string.contains("Waiting for a process");
+                                if display_error {
                                     println!("Error connecting to hot reloading: {} (Hot reloading is a feature of the dioxus-cli. If you are not using the CLI, this error can be ignored)", err);
                                 }
                             }
@@ -188,7 +188,7 @@ async fn start_desktop_hot_reload(hot_reload_state: HotReloadState) -> Result<()
 }
 
 fn clear_paths(file_socket_path: &std::path::Path) {
-    if cfg!(target_os = "macos") {
+    if cfg!(unix) {
         // On unix, if you force quit the application, it can leave the file socket open
         // This will cause the local socket listener to fail to open
         // We check if the file socket is already open from an old session and then delete it
@@ -213,23 +213,70 @@ fn send_msg(msg: HotReloadMsg, channel: &mut impl std::io::Write) -> bool {
     }
 }
 
-pub fn start_desktop(config: &CrateConfig) -> Result<(Child, BuildResult)> {
+fn start_desktop(config: &CrateConfig, skip_assets: bool) -> Result<(RAIIChild, BuildResult)> {
     // Run the desktop application
-    log::trace!("Building application");
-    let result = crate::builder::build_desktop(config, true)?;
+    let result = crate::builder::build_desktop(config, true, skip_assets)?;
 
     match &config.executable {
-        crate::ExecutableType::Binary(name)
-        | crate::ExecutableType::Lib(name)
-        | crate::ExecutableType::Example(name) => {
+        ExecutableType::Binary(name)
+        | ExecutableType::Lib(name)
+        | ExecutableType::Example(name) => {
             let mut file = config.out_dir.join(name);
             if cfg!(windows) {
                 file.set_extension("exe");
             }
-            log::trace!("Running application from {:?}", file);
-            let child = Command::new(file.to_str().unwrap()).spawn()?;
+            let active = "DIOXUS_ACTIVE";
+            let child = RAIIChild(
+                Command::new(file.to_str().unwrap())
+                    .env(active, "true")
+                    .spawn()?,
+            );
 
             Ok((child, result))
         }
+    }
+}
+
+pub(crate) struct DesktopPlatform {
+    currently_running_child: RAIIChild,
+    skip_assets: bool,
+}
+
+impl Platform for DesktopPlatform {
+    fn start(config: &CrateConfig, serve: &ConfigOptsServe) -> Result<Self> {
+        let (child, first_build_result) = start_desktop(config, serve.skip_assets)?;
+
+        log::info!("🚀 Starting development server...");
+
+        // Print serve info
+        print_console_info(
+            config,
+            PrettierOptions {
+                changed: vec![],
+                warnings: first_build_result.warnings,
+                elapsed_time: first_build_result.elapsed_time,
+            },
+            None,
+        );
+
+        Ok(Self {
+            currently_running_child: child,
+            skip_assets: serve.skip_assets,
+        })
+    }
+
+    fn rebuild(&mut self, config: &CrateConfig) -> Result<BuildResult> {
+        self.currently_running_child.0.kill()?;
+        let (child, result) = start_desktop(config, self.skip_assets)?;
+        self.currently_running_child = child;
+        Ok(result)
+    }
+}
+
+struct RAIIChild(Child);
+
+impl Drop for RAIIChild {
+    fn drop(&mut self) {
+        let _ = self.0.kill();
     }
 }

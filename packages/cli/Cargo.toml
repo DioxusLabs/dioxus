@@ -14,6 +14,7 @@ clap = { version = "4.2", features = ["derive"] }
 thiserror = { workspace = true }
 wasm-bindgen-cli-support = "0.2"
 colored = "2.0.0"
+dioxus-cli-config = { workspace = true, features = ["cli"] }
 
 # features
 log = "0.4.14"
@@ -30,7 +31,7 @@ cargo_metadata = "0.15.0"
 tokio = { version = "1.16.1", features = ["fs", "sync", "rt", "macros"] }
 atty = "0.2.14"
 chrono = "0.4.19"
-anyhow = "1.0.53"
+anyhow = "1"
 hyper = "0.14.17"
 hyper-rustls = "0.23.2"
 indicatif = "0.17.5"
@@ -72,8 +73,11 @@ cargo-generate = "0.18"
 toml_edit = "0.19.11"
 
 # bundling
-tauri-bundler = { version = "=1.3.0", features = ["native-tls-vendored"] }
-tauri-utils = "=1.4.*"
+tauri-bundler = { version = "=1.4.*", features = ["native-tls-vendored"] }
+tauri-utils = "=1.5.*"
+
+# todo: don't make this optional
+manganis-cli-support = { workspace = true, features = ["webp", "html"] }
 
 dioxus-autofmt = { workspace = true }
 dioxus-check = { workspace = true }
@@ -83,6 +87,7 @@ dioxus-html = { workspace = true, features = ["hot-reload-context"] }
 dioxus-core = { workspace = true, features = ["serialize"] }
 dioxus-hot-reload = { workspace = true }
 interprocess-docfix = { version = "1.2.2" }
+gitignore = "1.0.8"
 
 [features]
 default = []

@@ -10,6 +10,8 @@ fn basic_syntax_is_a_template(cx: Scope) -> Element {
         div { key: "12345",
             class: "asd",
             class: "{asd}",
+            class: if true { "{asd}" },
+            class: if false { "{asd}" },
             onclick: move |_| {},
             div { "{var}" }
             div {
@@ -24,6 +26,7 @@ fn basic_syntax_is_a_template(cx: Scope) -> Element {
         }
     })
 }
+
 #[test]
 fn dual_stream() {
     let mut dom = VirtualDom::new(basic_syntax_is_a_template);
@@ -36,7 +39,7 @@ fn dual_stream() {
             LoadTemplate { name: "template", index: 0, id: ElementId(1) },
             SetAttribute {
                 name: "class",
-                value: (&*bump.alloc("123".into_value(&bump))).into(),
+                value: (&*bump.alloc("asd 123 123".into_value(&bump))).into(),
                 id: ElementId(1),
                 ns: None,
             },

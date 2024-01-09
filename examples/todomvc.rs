@@ -7,6 +7,8 @@ fn main() {
     dioxus_desktop::launch(app);
 }
 
+const _STYLE: &str = manganis::mg!(file("./examples/assets/todomvc.css"));
+
 #[derive(PartialEq, Eq, Clone, Copy)]
 pub enum FilterState {
     All,
@@ -47,12 +49,8 @@ pub fn app(cx: Scope<()>) -> Element {
 
     cx.render(rsx! {
         section { class: "todoapp",
-            style { include_str!("./assets/todomvc.css") }
-            TodoHeader {
-                todos: todos,
-            }
-            section {
-                class: "main",
+            TodoHeader { todos: todos }
+            section { class: "main",
                 if !todos.is_empty() {
                     rsx! {
                         input {
@@ -103,31 +101,34 @@ pub fn TodoHeader<'a>(cx: Scope<'a, TodoHeaderProps<'a>>) -> Element {
 
     cx.render(rsx! {
         header { class: "header",
-        h1 {"todos"}
-        input {
-            class: "new-todo",
-            placeholder: "What needs to be done?",
-            value: "{draft}",
-            autofocus: "true",
-            oninput: move |evt| {
-                draft.set(evt.value.clone());
-            },
-            onkeydown: move |evt| {
-                if evt.key() == Key::Enter && !draft.is_empty() {
-                    cx.props.todos.make_mut().insert(
-                        **todo_id,
-                        TodoItem {
-                            id: **todo_id,
-                            checked: false,
-                            contents: draft.to_string(),
-                        },
-                    );
-                    *todo_id.make_mut() += 1;
-                    draft.set("".to_string());
+            h1 { "todos" }
+            input {
+                class: "new-todo",
+                placeholder: "What needs to be done?",
+                value: "{draft}",
+                autofocus: "true",
+                oninput: move |evt| {
+                    draft.set(evt.value().clone());
+                },
+                onkeydown: move |evt| {
+                    if evt.key() == Key::Enter && !draft.is_empty() {
+                        cx.props
+                            .todos
+                            .make_mut()
+                            .insert(
+                                **todo_id,
+                                TodoItem {
+                                    id: **todo_id,
+                                    checked: false,
+                                    contents: draft.to_string(),
+                                },
+                            );
+                        *todo_id.make_mut() += 1;
+                        draft.set("".to_string());
+                    }
                 }
             }
         }
-    }
     })
 }
 
@@ -146,8 +147,7 @@ pub fn TodoEntry<'a>(cx: Scope<'a, TodoEntryProps<'a>>) -> Element {
     let editing = if **is_editing { "editing" } else { "" };
 
     cx.render(rsx!{
-        li {
-            class: "{completed} {editing}",
+        li { class: "{completed} {editing}",
             div { class: "view",
                 input {
                     class: "toggle",
@@ -155,26 +155,28 @@ pub fn TodoEntry<'a>(cx: Scope<'a, TodoEntryProps<'a>>) -> Element {
                     id: "cbg-{todo.id}",
                     checked: "{todo.checked}",
                     oninput: move |evt| {
-                        cx.props.todos.make_mut()[&cx.props.id].checked = evt.value.parse().unwrap();
+                        cx.props.todos.make_mut()[&cx.props.id].checked = evt.value().parse().unwrap();
                     }
                 }
                 label {
                     r#for: "cbg-{todo.id}",
-                    ondblclick: move |_| is_editing.set(true),
+                    ondoubleclick: move |_| is_editing.set(true),
                     prevent_default: "onclick",
                     "{todo.contents}"
                 }
                 button {
                     class: "destroy",
-                    onclick: move |_| { cx.props.todos.make_mut().remove(&todo.id); },
-                    prevent_default: "onclick",
+                    onclick: move |_| {
+                        cx.props.todos.make_mut().remove(&todo.id);
+                    },
+                    prevent_default: "onclick"
                 }
             }
             is_editing.then(|| rsx!{
                 input {
                     class: "edit",
                     value: "{todo.contents}",
-                    oninput: move |evt| cx.props.todos.make_mut()[&cx.props.id].contents = evt.value.clone(),
+                    oninput: move |evt| cx.props.todos.make_mut()[&cx.props.id].contents = evt.value(),
                     autofocus: "true",
                     onfocusout: move |_| is_editing.set(false),
                     onkeydown: move |evt| {
@@ -213,15 +215,15 @@ pub fn ListFooter<'a>(cx: Scope<'a, ListFooterProps<'a>>) -> Element {
     cx.render(rsx! {
         footer { class: "footer",
             span { class: "todo-count",
-                strong {"{active_todo_count} "}
-                span {"{active_todo_text} left"}
+                strong { "{active_todo_count} " }
+                span { "{active_todo_text} left" }
             }
             ul { class: "filters",
-                for (state, state_text, url) in [
-                    (FilterState::All, "All", "#/"),
-                    (FilterState::Active, "Active", "#/active"),
-                    (FilterState::Completed, "Completed", "#/completed"),
-                ] {
+                for (state , state_text , url) in [
+    (FilterState::All, "All", "#/"),
+    (FilterState::Active, "Active", "#/active"),
+    (FilterState::Completed, "Completed", "#/completed"),
+] {
                     li {
                         a {
                             href: url,
@@ -250,8 +252,14 @@ pub fn PageFooter(cx: Scope) -> Element {
     cx.render(rsx! {
         footer { class: "info",
             p { "Double-click to edit a todo" }
-            p { "Created by ", a { href: "http://github.com/jkelleyrtp/", "jkelleyrtp" }}
-            p { "Part of ", a { href: "http://todomvc.com", "TodoMVC" }}
+            p {
+                "Created by "
+                a { href: "http://github.com/jkelleyrtp/", "jkelleyrtp" }
+            }
+            p {
+                "Part of "
+                a { href: "http://todomvc.com", "TodoMVC" }
+            }
         }
     })
 }

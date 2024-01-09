@@ -10,7 +10,7 @@ fn app(cx: Scope) -> Element {
             p {
                 "This should show an image:"
             }
-            img { src: "examples/assets/logo.png" }
+            img { src: manganis::mg!(image("examples/assets/logo.png").format(ImageType::Avif)).to_string() }
         }
     })
 }
