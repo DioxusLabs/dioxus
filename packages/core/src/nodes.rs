@@ -2,12 +2,13 @@ use crate::any_props::{BoxedAnyProps, VProps};
 use crate::innerlude::{ElementRef, EventHandler};
 use crate::Properties;
 use crate::{arena::ElementId, Element, Event, ScopeId};
+use std::cell::RefCell;
 use std::ops::Deref;
 use std::rc::Rc;
 use std::vec;
 use std::{
     any::{Any, TypeId},
-    cell::{Cell, RefCell},
+    cell::Cell,
     fmt::{Arguments, Debug},
 };
 
@@ -27,15 +28,42 @@ pub enum RenderReturn {
 
     /// The component aborted rendering early. It might've thrown an error.
     ///
-    /// In its place we've produced a placeholder to locate its spot in the dom when
-    /// it recovers.
-    Aborted(VPlaceholder),
+    /// In its place we've produced a placeholder to locate its spot in the dom when it recovers.
+    Aborted(VNode),
 }
 
 impl Default for RenderReturn {
     fn default() -> Self {
-        RenderReturn::Aborted(VPlaceholder::default())
+        RenderReturn::Aborted(VNode::placeholder())
     }
+}
+
+impl Deref for RenderReturn {
+    type Target = VNode;
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            RenderReturn::Ready(node) | RenderReturn::Aborted(node) => node,
+        }
+    }
+}
+
+/// The information about the
+#[derive(Debug)]
+pub(crate) struct VNodeMount {
+    /// The parent of this node
+    pub parent: Option<ElementRef>,
+
+    /// The IDs for the roots of this template - to be used when moving the template around and removing it from
+    /// the actual Dom
+    pub root_ids: Box<[ElementId]>,
+
+    /// The element in the DOM that each attribute is mounted to
+    pub(crate) mounted_attributes: Box<[ElementId]>,
+
+    /// For components: This is the ScopeId the component is mounted to
+    /// For other dynamic nodes: This is element in the DOM that each dynamic node is mounted to
+    pub(crate) mounted_dynamic_nodes: Box<[usize]>,
 }
 
 /// A reference to a template along with any context needed to hydrate it
@@ -48,13 +76,6 @@ pub struct VNodeInner {
     ///
     /// In fragments, this is the key of the first child. In other cases, it is the key of the root.
     pub key: Option<String>,
-
-    /// When rendered, this template will be linked to its parent manually
-    pub(crate) parent: RefCell<Option<ElementRef>>,
-
-    /// The IDs for the roots of this template - to be used when moving the template around and removing it from
-    /// the actual Dom
-    pub root_ids: RefCell<Box<[ElementId]>>,
 
     /// The static nodes and static descriptor of the template
     pub template: Cell<Template>,
@@ -70,12 +91,26 @@ pub struct VNodeInner {
 ///
 /// The dynamic parts of the template are stored separately from the static parts. This allows faster diffing by skipping
 /// static parts of the template.
-#[derive(Clone, Debug)]
-pub struct VNode(Rc<VNodeInner>);
+#[derive(Debug)]
+pub struct VNode {
+    vnode: Rc<VNodeInner>,
+
+    /// The mount information for this template
+    pub(crate) mount: Rc<RefCell<Option<VNodeMount>>>,
+}
+
+impl Clone for VNode {
+    fn clone(&self) -> Self {
+        Self {
+            vnode: self.vnode.clone(),
+            mount: Default::default(),
+        }
+    }
+}
 
 impl PartialEq for VNode {
     fn eq(&self, other: &Self) -> bool {
-        Rc::ptr_eq(&self.0, &other.0)
+        Rc::ptr_eq(&self.vnode, &other.vnode)
     }
 }
 
@@ -83,44 +118,78 @@ impl Deref for VNode {
     type Target = VNodeInner;
 
     fn deref(&self) -> &Self::Target {
-        &self.0
+        &self.vnode
     }
 }
 
 impl VNode {
+    /// Clone the element while retaining the mounted parent of the node
+    pub(crate) fn clone_with_parent(&self) -> Self {
+        Self {
+            vnode: self.vnode.clone(),
+            mount: self.mount.clone(),
+        }
+    }
+
+    /// Try to get the parent of this node
+    ///
+    /// This will fail if the VNode is not mounted
+    pub(crate) fn parent(&self) -> Option<ElementRef> {
+        self.mount.borrow().as_ref()?.parent.clone()
+    }
+
     /// Create a template with no nodes that will be skipped over during diffing
     pub fn empty() -> Element {
-        Some(Self(Rc::new(VNodeInner {
-            key: None,
-            parent: Default::default(),
-            root_ids: Default::default(),
-            dynamic_nodes: Box::new([]),
-            dynamic_attrs: Box::new([]),
-            template: Cell::new(Template {
-                name: "dioxus-empty",
-                roots: &[],
-                node_paths: &[],
-                attr_paths: &[],
+        Some(Self {
+            vnode: Rc::new(VNodeInner {
+                key: None,
+                dynamic_nodes: Box::new([]),
+                dynamic_attrs: Box::new([]),
+                template: Cell::new(Template {
+                    name: "dioxus-empty",
+                    roots: &[],
+                    node_paths: &[],
+                    attr_paths: &[],
+                }),
             }),
-        })))
+            mount: Default::default(),
+        })
+    }
+
+    /// Create a template with a single placeholder node
+    pub fn placeholder() -> Self {
+        Self {
+            vnode: Rc::new(VNodeInner {
+                key: None,
+                dynamic_nodes: Box::new([DynamicNode::Placeholder(Default::default())]),
+                dynamic_attrs: Box::new([]),
+                template: Cell::new(Template {
+                    name: "dioxus-placeholder",
+                    roots: &[TemplateNode::Dynamic { id: 0 }],
+                    node_paths: &[&[]],
+                    attr_paths: &[],
+                }),
+            }),
+            mount: Default::default(),
+        }
     }
 
     /// Create a new VNode
     pub fn new(
         key: Option<String>,
         template: Template,
-        root_ids: Box<[ElementId]>,
         dynamic_nodes: Box<[DynamicNode]>,
         dynamic_attrs: Box<[Attribute]>,
     ) -> Self {
-        Self(Rc::new(VNodeInner {
-            key,
-            parent: Default::default(),
-            template: Cell::new(template),
-            root_ids: RefCell::new(root_ids),
-            dynamic_nodes,
-            dynamic_attrs,
-        }))
+        Self {
+            vnode: Rc::new(VNodeInner {
+                key,
+                template: Cell::new(template),
+                dynamic_nodes,
+                dynamic_attrs,
+            }),
+            mount: Default::default(),
+        }
     }
 
     /// Load a dynamic root at the given index
@@ -275,7 +344,7 @@ pub enum TemplateNode {
         )]
         namespace: Option<&'static str>,
 
-        /// A list of possibly dynamic attribues for this element
+        /// A list of possibly dynamic attributes for this element
         ///
         /// An attribute on a DOM node, such as `id="my-thing"` or `href="https://example.com"`.
         #[cfg_attr(feature = "serialize", serde(deserialize_with = "deserialize_leaky"))]
@@ -305,6 +374,17 @@ pub enum TemplateNode {
         /// The index of the dynamic node in the VNode's dynamic_nodes list
         id: usize,
     },
+}
+
+impl TemplateNode {
+    /// Try to load the dynamic node at the given index
+    pub fn dynamic_id(&self) -> Option<usize> {
+        use TemplateNode::*;
+        match self {
+            Dynamic { id } | DynamicText { id } => Some(*id),
+            _ => None,
+        }
+    }
 }
 
 /// A node created at runtime
@@ -357,9 +437,6 @@ pub struct VComponent {
     /// The name of this component
     pub name: &'static str,
 
-    /// The assigned Scope for this component
-    pub(crate) scope: Cell<Option<ScopeId>>,
-
     /// The function pointer of the component, known at compile time
     ///
     /// It is possible that components get folded at compile time, so these shouldn't be really used as a key
@@ -394,13 +471,7 @@ impl VComponent {
             name: fn_name,
             render_fn: component as *const (),
             props: BoxedAnyProps::new(vcomp),
-            scope: Default::default(),
         }
-    }
-
-    /// Get the scope that this component is mounted to
-    pub fn mounted_scope(&self) -> Option<ScopeId> {
-        self.scope.get()
     }
 }
 
@@ -408,33 +479,21 @@ impl std::fmt::Debug for VComponent {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("VComponent")
             .field("name", &self.name)
-            .field("scope", &self.scope)
             .finish()
     }
 }
 
-/// An instance of some text, mounted to the DOM
+/// A text node
 #[derive(Clone, Debug)]
 pub struct VText {
     /// The actual text itself
     pub value: String,
-
-    /// The ID of this node in the real DOM
-    pub(crate) id: Cell<Option<ElementId>>,
 }
 
 impl VText {
     /// Create a new VText
     pub fn new(value: String) -> Self {
-        Self {
-            value,
-            id: Default::default(),
-        }
-    }
-
-    /// Get the mounted ID of this node
-    pub fn mounted_element(&self) -> Option<ElementId> {
-        self.id.get()
+        Self { value }
     }
 }
 
@@ -446,19 +505,8 @@ impl From<Arguments<'_>> for VText {
 
 /// A placeholder node, used by suspense and fragments
 #[derive(Clone, Debug, Default)]
-pub struct VPlaceholder {
-    /// The ID of this node in the real DOM
-    pub(crate) id: Cell<Option<ElementId>>,
-    /// The parent of this node
-    pub(crate) parent: RefCell<Option<ElementRef>>,
-}
-
-impl VPlaceholder {
-    /// Get the mounted ID of this node
-    pub fn mounted_element(&self) -> Option<ElementId> {
-        self.id.get()
-    }
-}
+#[non_exhaustive]
+pub struct VPlaceholder {}
 
 /// An attribute of the TemplateNode, created at compile time
 #[derive(Debug, PartialEq, Hash, Eq, PartialOrd, Ord)]
@@ -509,9 +557,6 @@ pub struct Attribute {
 
     /// An indication of we should always try and set the attribute. Used in controlled components to ensure changes are propagated
     pub volatile: bool,
-
-    /// The element in the DOM that this attribute belongs to
-    pub(crate) mounted_element: Cell<ElementId>,
 }
 
 impl Attribute {
@@ -529,14 +574,8 @@ impl Attribute {
             name,
             namespace,
             volatile,
-            mounted_element: Default::default(),
             value: value.into_value(),
         }
-    }
-
-    /// Get the element that this attribute is mounted to
-    pub fn mounted_element(&self) -> ElementId {
-        self.mounted_element.get()
     }
 }
 
@@ -688,17 +727,13 @@ impl IntoDynNode for &str {
     fn into_dyn_node(self) -> DynamicNode {
         DynamicNode::Text(VText {
             value: self.to_string(),
-            id: Default::default(),
         })
     }
 }
 
 impl IntoDynNode for String {
     fn into_dyn_node(self) -> DynamicNode {
-        DynamicNode::Text(VText {
-            value: self,
-            id: Default::default(),
-        })
+        DynamicNode::Text(VText { value: self })
     }
 }
 
@@ -706,7 +741,6 @@ impl IntoDynNode for Arguments<'_> {
     fn into_dyn_node(self) -> DynamicNode {
         DynamicNode::Text(VText {
             value: self.to_string(),
-            id: Default::default(),
         })
     }
 }

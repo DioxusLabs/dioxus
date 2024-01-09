@@ -5,7 +5,6 @@
 
 mod any_props;
 mod arena;
-mod create;
 mod diff;
 mod dirty_scope;
 mod error_boundary;

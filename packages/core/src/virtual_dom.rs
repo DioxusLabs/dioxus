@@ -184,7 +184,7 @@ pub struct VirtualDom {
 
     pub(crate) dirty_scopes: BTreeSet<DirtyScope>,
 
-    // Maps a template path to a map of byteindexes to templates
+    // Maps a template path to a map of byte indexes to templates
     pub(crate) templates: FxHashMap<TemplateId, FxHashMap<usize, Template>>,
 
     // Templates changes that are queued for the next render
@@ -324,7 +324,7 @@ impl VirtualDom {
         }
     }
 
-    /// Call a listener inside the VirtualDom with data from outside the VirtualDom. **The ElementId passed in must be the id of an dynamic element, not a static node or a text node.**
+    /// Call a listener inside the VirtualDom with data from outside the VirtualDom. **The ElementId passed in must be the id of an element with a listener, not a static node or a text node.**
     ///
     /// This method will identify the appropriate element. The data must match up with the listener declared. Note that
     /// this method does not give any indication as to the success of the listener call. If the listener is not found,
@@ -417,7 +417,8 @@ impl VirtualDom {
                     }
                 }
 
-                parent_node = el_ref.parent.borrow().clone();
+                let mount = el_ref.mount.borrow();
+                parent_node = mount.as_ref().unwrap().parent.clone();
             }
         } else {
             // Otherwise, we just call the listener on the target element
@@ -551,20 +552,11 @@ impl VirtualDom {
         let _runtime = RuntimeGuard::new(self.runtime.clone());
         let new_nodes = self.run_scope(ScopeId::ROOT);
         self.scopes[ScopeId::ROOT.0].last_rendered_node = Some(new_nodes.clone());
-        match new_nodes {
-            // Rebuilding implies we append the created elements to the root
-            RenderReturn::Ready(node) => {
-                let m = self.create_scope(ScopeId::ROOT, &node, to);
-                to.append_children(ElementId(0), m);
-            }
-            // If an error occurs, we should try to render the default error component and context where the error occured
-            RenderReturn::Aborted(placeholder) => {
-                tracing::debug!("Ran into suspended or aborted scope during rebuild");
-                let id = self.next_element();
-                placeholder.id.set(Some(id));
-                to.create_placeholder(id);
-            }
-        }
+        let (RenderReturn::Ready(mut node) | RenderReturn::Aborted(mut node)) = new_nodes;
+
+        // Rebuilding implies we append the created elements to the root
+        let m = self.create_scope(to, ScopeId::ROOT, &mut node, None);
+        to.append_children(ElementId(0), m);
     }
 
     /// Render whatever the VirtualDom has ready as fast as possible without requiring an executor to progress
@@ -629,7 +621,8 @@ impl VirtualDom {
                     let _runtime = RuntimeGuard::new(self.runtime.clone());
                     // Run the scope and get the mutations
                     let new_nodes = self.run_scope(dirty.id);
-                    self.diff_scope(dirty.id, new_nodes, to);
+
+                    self.diff_scope(to, dirty.id, new_nodes);
                 }
             }
 
