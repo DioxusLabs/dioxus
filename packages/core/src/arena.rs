@@ -23,21 +23,12 @@ impl Default for MountId {
 }
 
 impl MountId {
-    pub(crate) fn new(id: usize) -> Self {
-        debug_assert_ne!(id, usize::MAX);
-        Self(id)
-    }
-
     pub(crate) fn as_usize(self) -> Option<usize> {
         if self.0 == usize::MAX {
             None
         } else {
             Some(self.0)
         }
-    }
-
-    pub(crate) fn is_none(self) -> bool {
-        self.0 == usize::MAX
     }
 }
 

@@ -20,6 +20,9 @@ impl VNode {
         dom: &mut VirtualDom,
         to: &mut impl WriteMutations,
     ) {
+        // The node we are diffing from should always be mounted
+        debug_assert!(dom.mounts.get(self.mount.get().0).is_some());
+
         // If hot reloading is enabled, we need to make sure we're using the latest template
         #[cfg(debug_assertions)]
         {
@@ -44,7 +47,7 @@ impl VNode {
         let mount = &mut dom.mounts[mount_id.0];
 
         // Update the reference to the node for bubbling events
-        mount.node = new.clone_with_parent();
+        mount.node = new.clone_mounted();
 
         // If the templates are the same, we don't need to do anything, except copy over the mount information
         if self == new {
@@ -216,6 +219,8 @@ impl VNode {
 
         // Remove the mount information
         dom.mounts.remove(mount.0);
+
+        tracing::trace!(?self, "removed node");
     }
 
     fn reclaim_roots(
@@ -419,6 +424,19 @@ impl VNode {
         // Just in case, let's create the template using instructions anyways
         dom.register_template(to, template);
 
+        // Initialize the mount information for this template
+        let entry = dom.mounts.vacant_entry();
+        let mount = MountId(entry.key());
+        self.mount.set(mount);
+        tracing::info!(?self, ?mount, "creating template");
+        entry.insert(VNodeMount {
+            node: self.clone_mounted(),
+            parent,
+            root_ids: vec![ElementId(0); template.roots.len()].into_boxed_slice(),
+            mounted_attributes: vec![ElementId(0); template.attr_paths.len()].into_boxed_slice(),
+            mounted_dynamic_nodes: vec![0; template.node_paths.len()].into_boxed_slice(),
+        });
+
         // Walk the roots, creating nodes and assigning IDs
         // nodes in an iterator of ((dynamic_node_index, sorted_index), path)
         // todo: adjust dynamic nodes to be in the order of roots and then leaves (ie BFS)
@@ -450,18 +468,6 @@ impl VNode {
                     .peekable(),
             )
         };
-
-        // Initialize the mount information for this template
-        let entry = dom.mounts.vacant_entry();
-        let mount = MountId(entry.key());
-        self.mount.set(mount);
-        entry.insert(VNodeMount {
-            node: self.clone_with_parent(),
-            parent,
-            root_ids: vec![ElementId(0); template.roots.len()].into_boxed_slice(),
-            mounted_attributes: vec![ElementId(0); template.attr_paths.len()].into_boxed_slice(),
-            mounted_dynamic_nodes: vec![0; template.node_paths.len()].into_boxed_slice(),
-        });
 
         template
             .roots
@@ -672,6 +678,10 @@ impl VNode {
             AttributeValue::Listener(_) => {
                 // If this is a listener, we need to create an element reference for it so that when we receive an event, we can find the element
                 let path = &self.template.get().attr_paths[idx];
+
+                // The mount information should always be in the VDOM at this point
+                debug_assert!(dom.mounts.get(mount.0).is_some());
+
                 let element_ref = ElementRef {
                     path: ElementPath { path },
                     mount,

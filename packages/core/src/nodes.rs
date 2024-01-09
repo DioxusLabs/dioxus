@@ -20,8 +20,7 @@ pub type TemplateId = &'static str;
 ///
 /// Dioxus will do its best to immediately resolve any async components into a regular Element, but as an implementor
 /// you might need to handle the case where there's no node immediately ready.
-#[derive(Clone)]
-pub enum RenderReturn {
+pub(crate) enum RenderReturn {
     /// A currently-available element
     Ready(VNode),
 
@@ -29,6 +28,15 @@ pub enum RenderReturn {
     ///
     /// In its place we've produced a placeholder to locate its spot in the dom when it recovers.
     Aborted(VNode),
+}
+
+impl Clone for RenderReturn {
+    fn clone(&self) -> Self {
+        match self {
+            RenderReturn::Ready(node) => RenderReturn::Ready(node.clone_mounted()),
+            RenderReturn::Aborted(node) => RenderReturn::Aborted(node.clone_mounted()),
+        }
+    }
 }
 
 impl Default for RenderReturn {
@@ -125,8 +133,8 @@ impl Deref for VNode {
 }
 
 impl VNode {
-    /// Clone the element while retaining the mounted parent of the node
-    pub(crate) fn clone_with_parent(&self) -> Self {
+    /// Clone the element while retaining the mount information of the node
+    pub(crate) fn clone_mounted(&self) -> Self {
         Self {
             vnode: self.vnode.clone(),
             mount: self.mount.clone(),

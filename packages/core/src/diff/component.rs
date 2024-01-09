@@ -22,9 +22,6 @@ impl VirtualDom {
         let new = &new_nodes;
         let old = scope_state.last_rendered_node.take().unwrap();
 
-        use RenderReturn::{Aborted, Ready};
-
-        let (Ready(old) | Aborted(old), Ready(new) | Aborted(new)) = (&old, new);
         old.diff_node(new, self, to);
 
         let scope_state = &mut self.scopes[scope.0];
@@ -40,11 +37,17 @@ impl VirtualDom {
         &mut self,
         to: &mut impl WriteMutations,
         scope: ScopeId,
-        new_node: &VNode,
+        new_node: &RenderReturn,
         parent: Option<ElementRef>,
     ) -> usize {
         self.runtime.scope_stack.borrow_mut().push(scope);
+
+        // Create the node
         let nodes = new_node.create(self, to, parent);
+
+        // Then set the new node as the last rendered node
+        self.scopes[scope.0].last_rendered_node = Some(new_node.clone());
+
         self.runtime.scope_stack.borrow_mut().pop();
         nodes
     }
@@ -133,8 +136,6 @@ impl VNode {
             .id;
 
         let new = dom.run_scope(scope);
-
-        dom.scopes[scope.0].last_rendered_node = Some(new.clone());
 
         dom.create_scope(to, scope, &new, parent)
     }
