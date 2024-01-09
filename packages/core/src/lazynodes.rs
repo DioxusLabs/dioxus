@@ -24,7 +24,7 @@ use crate::{innerlude::VNode, ScopeState};
 ///
 /// ```rust, ignore
 /// LazyNodes::new(|f| {
-///        static TEMPLATE: dioxus::core::Template = dioxus::core::Template {
+///     static TEMPLATE: dioxus::core::Template = dioxus::core::Template {
 ///         name: "main.rs:5:5:20", // Source location of the template for hot reloading
 ///         roots: &[
 ///             dioxus::core::TemplateNode::Element {
@@ -37,19 +37,19 @@ use crate::{innerlude::VNode, ScopeState};
 ///         node_paths: &[],
 ///         attr_paths: &[],
 ///     };
-///     dioxus::core::VNode {
-///         parent: None,
-///         key: None,
-///         template: std::cell::Cell::new(TEMPLATE),
-///         root_ids: dioxus::core::exports::bumpalo::collections::Vec::with_capacity_in(
+///     f.vnode(
+///         None,
+///         None,
+///         std::cell::Cell::new(TEMPLATE),
+///         dioxus::core::exports::bumpalo::collections::Vec::with_capacity_in(
 ///                 1usize,
 ///                 f.bump(),
 ///             )
 ///             .into(),
-///         dynamic_nodes: f.bump().alloc([]),
-///         dynamic_attrs: f.bump().alloc([]),
-///     })
-/// }
+///         f.bump().alloc([]),
+///         f.bump().alloc([]),
+///     )
+/// })
 /// ```
 ///
 /// Find more information about how to construct [`VNode`] at <https://dioxuslabs.com/learn/0.4/contributing/walkthrough_readme#the-rsx-macro>
