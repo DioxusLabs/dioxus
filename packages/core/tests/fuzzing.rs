@@ -2,7 +2,7 @@
 
 use dioxus::prelude::Props;
 use dioxus_core::{MountedAttribute, *};
-use std::{cfg, collections::HashSet};
+use std::{cell::Cell, cfg, collections::HashSet};
 
 fn random_ns() -> Option<&'static str> {
     let namespace = rand::random::<u8>() % 2;
@@ -177,7 +177,7 @@ fn create_random_dynamic_node(cx: &ScopeState, depth: usize) -> DynamicNode {
             //                 Template {
             // =======
             cx.vnode(
-                None,
+                None.into(),
                 Default::default(),
                 Cell::new(Template {
                     // >>>>>>> 9fe172e9 (Fix leak in render macro)
@@ -293,7 +293,7 @@ fn create_random_element(cx: Scope<DepthProps>) -> Element {
             // =======
             // println!("{template:#?}");
             let node = cx.vnode(
-                None,
+                None.into(),
                 None,
                 Cell::new(template),
                 bumpalo::collections::Vec::new_in(cx.bump()).into(),

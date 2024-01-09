@@ -261,7 +261,7 @@ impl<'a> ToTokens for TemplateRenderer<'a> {
 //                 dioxus::core::exports::bumpalo::collections::Vec::with_capacity_in(#root_count, __cx.bump()),
 // =======
             __cx.vnode(
-                None,
+                None.into(),
                 #key_tokens,
                 std::cell::Cell::new(TEMPLATE),
                 dioxus::core::exports::bumpalo::collections::Vec::with_capacity_in(#root_count, __cx.bump()).into(),
