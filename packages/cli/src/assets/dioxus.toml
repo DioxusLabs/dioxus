@@ -16,9 +16,11 @@ asset_dir = "public"
 
 [watcher]
 
-index_on_404 = true
-
 watch_path = ["src", "examples"]
+
+[web]
+
+index_on_404 = true
 
 [web.app]
 
