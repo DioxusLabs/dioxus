@@ -75,6 +75,12 @@ jobs:
       - uses: davidB/rust-cargo-make@v1
       - uses: browser-actions/setup-firefox@latest
       - uses: jetli/wasm-pack-action@v0.4.0
+      - run: sudo rm -rf /usr/share/dotnet
+      - run: sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+      - run: |
+          df -h
+          sudo rm -rf ${GITHUB_WORKSPACE}/.git
+          df -h
       - run: cargo make tests
 
   fmt:
