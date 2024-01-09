@@ -122,8 +122,8 @@ impl VNode {
 
     pub(super) fn create_component_node(
         &self,
-        _mount: MountId,
-        _idx: usize,
+        mount: MountId,
+        idx: usize,
         component: &VComponent,
         parent: Option<ElementRef>,
         dom: &mut VirtualDom,
@@ -134,6 +134,9 @@ impl VNode {
             .new_scope(component.props.clone(), component.name)
             .context()
             .id;
+
+        // Store the scope id for the next render
+        dom.mounts[mount.0].mounted_dynamic_nodes[idx] = scope.0;
 
         let new = dom.run_scope(scope);
 

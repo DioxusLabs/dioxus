@@ -34,9 +34,8 @@ impl VirtualDom {
     pub(crate) fn run_scope(&mut self, scope_id: ScopeId) -> RenderReturn {
         self.runtime.scope_stack.borrow_mut().push(scope_id);
 
+        let scope = &self.scopes[scope_id.0];
         let new_nodes = {
-            let scope = &self.scopes[scope_id.0];
-
             let context = scope.context();
             context.suspended.set(false);
             context.hook_index.set(0);
@@ -44,11 +43,9 @@ impl VirtualDom {
             // safety: due to how we traverse the tree, we know that the scope is not currently aliased
             let props: &dyn AnyProps = &*scope.props;
 
-            let _span = tracing::trace_span!("render", scope = %scope.context().name);
-            props.render()
+            let span = tracing::trace_span!("render", scope = %scope.context().name);
+            span.in_scope(|| props.render())
         };
-
-        let scope = &mut self.scopes[scope_id.0];
 
         let context = scope.context();
 
