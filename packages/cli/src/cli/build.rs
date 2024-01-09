@@ -74,7 +74,7 @@ impl Build {
         )?;
         file.write_all(temp.as_bytes())?;
 
-        plugins_after_compile(BuildEvent).await;
+        plugins_after_command(BuildEvent).await;
 
         Ok(())
     }
