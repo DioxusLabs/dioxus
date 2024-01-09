@@ -67,7 +67,7 @@ impl Writer<'_> {
         }
 
         // multiline handlers bump everything down
-        if attr_len > 1000 {
+        if attr_len > 1000 || self.out.indent.split_line_attributes() {
             opt_level = ShortOptimization::NoOpt;
         }
 
@@ -158,7 +158,7 @@ impl Writer<'_> {
 
         while let Some(field) = field_iter.next() {
             if !sameline {
-                self.out.indented_tabbed_line()?;
+                self.out.indented_tabbed_line().unwrap();
             }
 
             let name = &field.name;
@@ -206,7 +206,7 @@ impl Writer<'_> {
 
         if let Some(exp) = manual_props {
             if !sameline {
-                self.out.indented_tabbed_line()?;
+                self.out.indented_tabbed_line().unwrap();
             }
             self.write_manual_props(exp)?;
         }

@@ -2,13 +2,13 @@ use crate::{
     any_props::AnyProps,
     any_props::VProps,
     bump_frame::BumpFrame,
-    innerlude::{DynamicNode, EventHandler, VComponent, VNodeId, VText},
+    innerlude::{DynamicNode, ElementRef, EventHandler, VComponent, VNodeId, VText},
     lazynodes::LazyNodes,
     nodes::{IntoAttributeValue, IntoDynNode, RenderReturn},
     runtime::Runtime,
     scope_context::ScopeContext,
-    AnyValue, Attribute, AttributeType, AttributeValue, Element, Event, MountedAttribute,
-    Properties, TaskId,
+    AnyValue, Attribute, AttributeType, AttributeValue, Element, ElementId, Event,
+    MountedAttribute, Properties, TaskId, Template, VNode,
 };
 use bumpalo::{boxed::Box as BumpBox, Bump};
 use std::{
@@ -102,6 +102,7 @@ pub struct ScopeState {
 
 impl Drop for ScopeState {
     fn drop(&mut self) {
+        self.drop_listeners();
         self.runtime.remove_context(self.context_id);
     }
 }
@@ -345,19 +346,37 @@ impl<'src> ScopeState {
     ///     // Actually build the tree and allocate it
     ///     cx.render(lazy_tree)
     /// }
-    ///```
+    /// ```
     pub fn render(&'src self, rsx: LazyNodes<'src, '_>) -> Element<'src> {
-        let element = rsx.call(self);
+        // Note: We can't do anything in this function related to safety because the user could always circumvent it by creating a VNode manually and return it without calling this function
+        Some(rsx.call(self))
+    }
 
+    /// Create a [`crate::VNode`] from the component parts
+    pub fn vnode(
+        &'src self,
+        parent: Cell<Option<ElementRef>>,
+        key: Option<&'src str>,
+        template: Cell<Template<'static>>,
+        root_ids: RefCell<bumpalo::collections::Vec<'src, ElementId>>,
+        dynamic_nodes: &'src [DynamicNode<'src>],
+        dynamic_attrs: &'src [MountedAttribute<'src>],
+    ) -> VNode<'src> {
         let mut listeners = self.attributes_to_drop_before_render.borrow_mut();
-        for attr in element.dynamic_attrs {
-            attr.ty.for_each(|attr| {
+        for attr in dynamic_attrs {
+            let attrs = match attr.ty {
+                AttributeType::Single(ref attr) => std::slice::from_ref(attr),
+                AttributeType::Many(attrs) => attrs,
+            };
+
+            for attr in attrs {
                 match attr.value {
                     // We need to drop listeners before the next render because they may borrow data from the borrowed props which will be dropped
                     AttributeValue::Listener(_) => {
                         let unbounded = unsafe { std::mem::transmute(attr as *const Attribute) };
                         listeners.push(unbounded);
                     }
+
                     // We need to drop any values manually to make sure that their drop implementation is called before the next render
                     AttributeValue::Any(_) => {
                         let unbounded = unsafe { std::mem::transmute(attr as *const Attribute) };
@@ -366,7 +385,7 @@ impl<'src> ScopeState {
 
                     _ => (),
                 }
-            })
+            }
         }
 
         let mut props = self.borrowed_props.borrow_mut();
@@ -374,7 +393,7 @@ impl<'src> ScopeState {
             .previous_frame()
             .props_to_drop_before_reset
             .borrow_mut();
-        for node in element.dynamic_nodes {
+        for node in dynamic_nodes {
             if let DynamicNode::Component(comp) = node {
                 let unbounded = unsafe { std::mem::transmute(comp as *const VComponent) };
                 if !comp.static_props {
@@ -384,7 +403,15 @@ impl<'src> ScopeState {
             }
         }
 
-        Some(element)
+        VNode {
+            stable_id: Default::default(),
+            key,
+            parent,
+            template,
+            root_ids,
+            dynamic_nodes,
+            dynamic_attrs,
+        }
     }
 
     /// Create a dynamic text node using [`Arguments`] and the [`ScopeState`]'s internal [`Bump`] allocator

@@ -15,6 +15,7 @@ pub fn format_rsx(raw: String, use_tabs: bool, indent_size: usize) -> String {
                 IndentType::Spaces
             },
             indent_size,
+            false,
         ),
     );
     block.unwrap()
@@ -32,6 +33,7 @@ pub fn format_selection(raw: String, use_tabs: bool, indent_size: usize) -> Stri
                 IndentType::Spaces
             },
             indent_size,
+            false,
         ),
     );
     block.unwrap()
@@ -67,6 +69,7 @@ pub fn format_file(contents: String, use_tabs: bool, indent_size: usize) -> Form
                 IndentType::Spaces
             },
             indent_size,
+            false,
         ),
     );
     let out = dioxus_autofmt::apply_formats(&contents, _edits.clone());

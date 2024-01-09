@@ -2,7 +2,7 @@
 
 use dioxus::prelude::Props;
 use dioxus_core::{MountedAttribute, *};
-use std::{cfg, collections::HashSet};
+use std::{cell::Cell, cfg, collections::HashSet};
 
 fn random_ns() -> Option<&'static str> {
     let namespace = rand::random::<u8>() % 2;
@@ -171,15 +171,16 @@ fn create_random_dynamic_node(cx: &ScopeState, depth: usize) -> DynamicNode {
     match rand::random::<u8>() % range {
         0 => DynamicNode::Placeholder(Default::default()),
         1 => cx.make_node((0..(rand::random::<u8>() % 5)).map(|_| {
-            VNode::new(
-                None,
-                Template {
+            cx.vnode(
+                None.into(),
+                Default::default(),
+                Cell::new(Template {
                     name: concat!(file!(), ":", line!(), ":", column!(), ":0"),
                     roots: &[TemplateNode::Dynamic { id: 0 }],
                     node_paths: &[&[0]],
                     attr_paths: &[],
-                },
-                bumpalo::collections::Vec::new_in(cx.bump()),
+                }),
+                bumpalo::collections::Vec::new_in(cx.bump()).into(),
                 cx.bump().alloc([cx.component(
                     create_random_element,
                     DepthProps { depth, root: false },
@@ -273,10 +274,12 @@ fn create_random_element(cx: Scope<DepthProps>) -> Element {
                 )
                 .into_boxed_str(),
             ));
-            let node = VNode::new(
+            println!("{template:#?}");
+            let node = cx.vnode(
+                None.into(),
                 None,
-                template,
-                bumpalo::collections::Vec::new_in(cx.bump()),
+                Cell::new(template),
+                bumpalo::collections::Vec::new_in(cx.bump()).into(),
                 {
                     let dynamic_nodes: Vec<_> = dynamic_node_types
                         .iter()

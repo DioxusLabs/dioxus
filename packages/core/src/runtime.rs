@@ -133,6 +133,7 @@ impl Runtime {
 ///     }
 /// }
 ///
+/// # #[allow(non_snake_case)]
 /// fn Component(cx: Scope<ComponentProps>) -> Element {
 ///     cx.use_hook(|| RuntimeGuard::new(cx.props.runtime.clone()));
 ///
