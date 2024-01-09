@@ -1,22 +1,13 @@
-use std::{
-    cell::RefMut,
-    ops::{Deref, DerefMut},
-};
+use std::ops::Deref;
 
 use crate::{
     any_props::AnyProps,
-    arena::ElementId,
-    innerlude::{
-        DirtyScope, ElementPath, ElementRef, VComponent, VNodeMount, VText, WriteMutations,
-    },
+    innerlude::{DirtyScope, ElementRef, VComponent, VNodeMount, WriteMutations},
     nodes::RenderReturn,
-    nodes::{DynamicNode, VNode},
+    nodes::VNode,
     scopes::ScopeId,
     virtual_dom::VirtualDom,
-    TemplateNode,
 };
-
-use DynamicNode::*;
 
 impl VirtualDom {
     pub(crate) fn diff_scope(
@@ -127,8 +118,8 @@ impl VNode {
 
     pub(super) fn create_component_node(
         &self,
-        mount: &mut VNodeMount,
-        idx: usize,
+        _mount: &mut VNodeMount,
+        _idx: usize,
         component: &VComponent,
         parent: Option<ElementRef>,
         dom: &mut VirtualDom,
@@ -140,7 +131,7 @@ impl VNode {
             .context()
             .id;
 
-        let mut new = dom.run_scope(scope);
+        let new = dom.run_scope(scope);
 
         dom.scopes[scope.0].last_rendered_node = Some(new.clone());
 

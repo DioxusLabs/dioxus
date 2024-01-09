@@ -1,7 +1,7 @@
 use crate::any_props::{BoxedAnyProps, VProps};
 use crate::innerlude::{ElementRef, EventHandler};
 use crate::Properties;
-use crate::{arena::ElementId, Element, Event, ScopeId};
+use crate::{arena::ElementId, Element, Event};
 use std::cell::RefCell;
 use std::ops::Deref;
 use std::rc::Rc;

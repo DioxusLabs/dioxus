@@ -1,16 +1,12 @@
-use crate::{Attribute, AttributeValue, DynamicNode::*, VPlaceholder};
+use crate::{Attribute, AttributeValue, DynamicNode::*};
 use crate::{VNode, VirtualDom, WriteMutations};
 use core::iter::Peekable;
 use std::cell::Ref;
-use std::{
-    cell::RefMut,
-    ops::{Deref, DerefMut},
-};
+use std::cell::RefMut;
 
 use crate::{
-    any_props::AnyProps,
     arena::ElementId,
-    innerlude::{DirtyScope, ElementPath, ElementRef, VComponent, VNodeMount, VText},
+    innerlude::{ElementPath, ElementRef, VComponent, VNodeMount, VText},
     nodes::DynamicNode,
     nodes::RenderReturn,
     scopes::ScopeId,
@@ -168,7 +164,7 @@ impl VNode {
                         let child = children.first().unwrap();
                         child.find_first_element(dom)
                     }
-                    Component(comp) => {
+                    Component(_comp) => {
                         let scope = ScopeId(mount.mounted_dynamic_nodes[*id]);
                         match dom.get_scope(scope).unwrap().root_node() {
                             RenderReturn::Ready(child) => child.find_first_element(dom),
@@ -190,7 +186,7 @@ impl VNode {
                 match &self.dynamic_nodes[*id] {
                     Placeholder(_) | Text(_) => ElementId(mount.mounted_dynamic_nodes[*id]),
                     Fragment(t) => t.last().unwrap().find_last_element(dom),
-                    Component(comp) => {
+                    Component(_comp) => {
                         let scope = ScopeId(mount.mounted_dynamic_nodes[*id]);
                         match dom.get_scope(scope).unwrap().root_node() {
                             RenderReturn::Ready(node) => node.find_last_element(dom),
@@ -304,7 +300,7 @@ impl VNode {
         gen_muts: bool,
     ) {
         match node {
-            Component(comp) => {
+            Component(_comp) => {
                 let scope_id = ScopeId(mount.mounted_dynamic_nodes[idx]);
                 dom.remove_component_node(to, scope_id, gen_muts);
             }
@@ -314,7 +310,7 @@ impl VNode {
             }
             Fragment(nodes) => nodes
                 .iter()
-                .for_each(|node| self.remove_node(dom, to, gen_muts)),
+                .for_each(|_node| self.remove_node(dom, to, gen_muts)),
         };
     }
 
@@ -341,12 +337,12 @@ impl VNode {
         &self,
         mount: &VNodeMount,
         dom: &mut VirtualDom,
-        to: &mut impl WriteMutations,
+        _to: &mut impl WriteMutations,
     ) {
-        let mut id = None;
+        let id = None;
 
         for (idx, path) in self.template.get().attr_paths.iter().enumerate() {
-            let attr = &self.dynamic_attrs[idx];
+            let _attr = &self.dynamic_attrs[idx];
 
             // We clean up the roots in the next step, so don't worry about them here
             if path.len() <= 1 {
@@ -426,7 +422,7 @@ impl VNode {
                 for (idx, (old_component, new_component)) in components.into_iter().enumerate() {
                     let scope_id = ScopeId(self.assert_mounted().mounted_dynamic_nodes[idx]);
                     self.diff_vcomponent(
-                        &mut *mount,
+                        &mut mount,
                         idx,
                         old_component,
                         new_component,
@@ -736,7 +732,7 @@ impl VNode {
                 to.create_event_listener(&attribute.name[2..], id);
             }
             _ => {
-                to.set_attribute(&attribute.name, attribute.namespace, &attribute.value, id);
+                to.set_attribute(attribute.name, attribute.namespace, &attribute.value, id);
             }
         }
     }

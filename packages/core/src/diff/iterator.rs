@@ -55,12 +55,9 @@ impl VirtualDom {
 
         match old.len().cmp(&new.len()) {
             Ordering::Greater => self.remove_nodes(to, &old[new.len()..]),
-            Ordering::Less => self.create_and_insert_after(
-                to,
-                &new[old.len()..],
-                &mut old.last().unwrap(),
-                parent,
-            ),
+            Ordering::Less => {
+                self.create_and_insert_after(to, &new[old.len()..], old.last().unwrap(), parent)
+            }
             Ordering::Equal => {}
         }
 
@@ -144,16 +141,16 @@ impl VirtualDom {
             // we need to find the right "foothold" though - we shouldn't use the "append" at all
             if left_offset == 0 {
                 // insert at the beginning of the old list
-                let mut foothold = &old[old.len() - right_offset];
-                self.create_and_insert_before(to, new_middle, &mut foothold, parent);
+                let foothold = &old[old.len() - right_offset];
+                self.create_and_insert_before(to, new_middle, foothold, parent);
             } else if right_offset == 0 {
                 // insert at the end  the old list
-                let mut foothold = old.last().unwrap();
-                self.create_and_insert_after(to, new_middle, &mut foothold, parent);
+                let foothold = old.last().unwrap();
+                self.create_and_insert_after(to, new_middle, foothold, parent);
             } else {
                 // inserting in the middle
-                let mut foothold = &old[left_offset - 1];
-                self.create_and_insert_after(to, new_middle, &mut foothold, parent);
+                let foothold = &old[left_offset - 1];
+                self.create_and_insert_after(to, new_middle, foothold, parent);
             }
         } else {
             self.diff_keyed_middle(to, old_middle, new_middle, parent);
@@ -186,7 +183,7 @@ impl VirtualDom {
         // If that was all of the old children, then create and append the remaining
         // new children and we're finished.
         if left_offset == old.len() {
-            self.create_and_insert_after(to, &new[left_offset..], &mut old.last().unwrap(), parent);
+            self.create_and_insert_after(to, &new[left_offset..], old.last().unwrap(), parent);
             return None;
         }
 

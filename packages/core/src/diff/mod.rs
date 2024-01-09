@@ -1,22 +1,11 @@
-use std::{
-    cell::RefMut,
-    ops::{Deref, DerefMut},
-};
-
 use crate::{
-    any_props::AnyProps,
     arena::ElementId,
-    innerlude::{
-        DirtyScope, ElementPath, ElementRef, VComponent, VNodeMount, VText, WriteMutations,
-    },
-    nodes::RenderReturn,
-    nodes::{DynamicNode, VNode},
+    innerlude::{ElementRef, VNodeMount, WriteMutations},
+    nodes::VNode,
     scopes::ScopeId,
     virtual_dom::VirtualDom,
     Template, TemplateNode,
 };
-
-use DynamicNode::*;
 
 mod component;
 mod iterator;
@@ -105,7 +94,7 @@ impl VirtualDom {
         gen_muts: bool,
     ) {
         // Remove the component from the dom
-        if let Some(mut node) = self.scopes[scope.0].last_rendered_node.take() {
+        if let Some(node) = self.scopes[scope.0].last_rendered_node.take() {
             node.remove_node(self, to, gen_muts)
         };
 
