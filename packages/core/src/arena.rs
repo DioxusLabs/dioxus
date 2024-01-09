@@ -1,4 +1,5 @@
-use crate::ScopeState;use std::ptr::NonNull;
+use crate::ScopeState;
+use std::ptr::NonNull;
 
 use crate::{
     innerlude::DirtyScope, nodes::RenderReturn, nodes::VNode, virtual_dom::VirtualDom,

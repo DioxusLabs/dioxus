@@ -139,9 +139,7 @@ impl ToTokens for RenderCallBody {
         out_tokens.append_all(quote! {
             Some({
                 let __cx = cx;
-                let __element = { #body };
-                cx.link_node(&__element);
-                __element
+                #body
             })
         })
     }
@@ -256,10 +254,18 @@ impl<'a> ToTokens for TemplateRenderer<'a> {
                 node_paths: &[ #(#node_paths),* ],
                 attr_paths: &[ #(#attr_paths),* ],
             };
-            ::dioxus::core::VNode::new(
+// <<<<<<< HEAD
+//             ::dioxus::core::VNode::new(
+//                 #key_tokens,
+//                 TEMPLATE,
+//                 dioxus::core::exports::bumpalo::collections::Vec::with_capacity_in(#root_count, __cx.bump()),
+// =======
+            __cx.vnode(
+                None,
                 #key_tokens,
-                TEMPLATE,
-                dioxus::core::exports::bumpalo::collections::Vec::with_capacity_in(#root_count, __cx.bump()),
+                std::cell::Cell::new(TEMPLATE),
+                dioxus::core::exports::bumpalo::collections::Vec::with_capacity_in(#root_count, __cx.bump()).into(),
+// >>>>>>> 9fe172e9 (Fix leak in render macro)
                 __cx.bump().alloc([ #( #node_printer ),* ]),
                 __cx.bump().alloc([ #( #dyn_attr_printer ),* ]),
             )

@@ -40,6 +40,7 @@ impl<'a> Default for RenderReturn<'a> {
 ///
 /// The dynamic parts of the template are stored separately from the static parts. This allows faster diffing by skipping
 /// static parts of the template.
+#[non_exhaustive]
 #[derive(Debug, Clone)]
 pub struct VNode<'a> {
     /// The key given to the root of this template.
@@ -70,20 +71,19 @@ pub struct VNode<'a> {
 impl<'a> VNode<'a> {
     /// Create a template with no nodes that will be skipped over during diffing
     pub fn empty(cx: &'a ScopeState) -> Element<'a> {
-        Some(VNode {
-            key: None,
-            parent: Default::default(),
-            stable_id: Default::default(),
-            root_ids: RefCell::new(bumpalo::collections::Vec::new_in(cx.bump())),
-            dynamic_nodes: &[],
-            dynamic_attrs: &[],
-            template: Cell::new(Template {
+        Some(cx.vnode(
+            Cell::new(None),
+            None,
+            Cell::new(Template {
                 name: "dioxus-empty",
                 roots: &[],
                 node_paths: &[],
                 attr_paths: &[],
             }),
-        })
+            RefCell::new(bumpalo::collections::Vec::new_in(cx.bump())),
+            &[],
+            &[],
+        ))
     }
 
     /// Create a new VNode
@@ -820,16 +820,16 @@ impl<'b> IntoDynNode<'b> for Arguments<'_> {
 }
 
 impl<'a> IntoDynNode<'a> for &'a VNode<'a> {
-    fn into_dyn_node(self, _cx: &'a ScopeState) -> DynamicNode<'a> {
-        DynamicNode::Fragment(_cx.bump().alloc([VNode {
-            parent: self.parent.clone(),
-            stable_id: self.stable_id.clone(),
-            template: self.template.clone(),
-            root_ids: self.root_ids.clone(),
-            key: self.key,
-            dynamic_nodes: self.dynamic_nodes,
-            dynamic_attrs: self.dynamic_attrs,
-        }]))
+    fn into_dyn_node(self, cx: &'a ScopeState) -> DynamicNode<'a> {
+        let vnode = cx.vnode(
+            self.parent.clone(),
+            self.key,
+            self.template.clone(),
+            self.root_ids.clone(),
+            self.dynamic_nodes,
+            self.dynamic_attrs,
+        );
+        DynamicNode::Fragment(cx.bump().alloc([vnode]))
     }
 }
 

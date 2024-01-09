@@ -178,15 +178,27 @@ fn create_random_dynamic_node(cx: &ScopeState, depth: usize) -> DynamicNode {
     match rand::random::<u8>() % range {
         0 => DynamicNode::Placeholder(Default::default()),
         1 => cx.make_node((0..(rand::random::<u8>() % 5)).map(|_| {
-            VNode::new(
+            // <<<<<<< HEAD
+            //             VNode::new(
+            //                 None,
+            //                 Template {
+            // =======
+            cx.vnode(
                 None,
-                Template {
+                Default::default(),
+                Cell::new(Template {
+                    // >>>>>>> 9fe172e9 (Fix leak in render macro)
                     name: concat!(file!(), ":", line!(), ":", column!(), ":0"),
                     roots: &[TemplateNode::Dynamic { id: 0 }],
                     node_paths: &[&[0]],
                     attr_paths: &[],
-                },
-                dioxus::core::exports::bumpalo::collections::Vec::new_in(cx.bump()),
+                    // <<<<<<< HEAD
+                    //                 },
+                    //                 dioxus::core::exports::bumpalo::collections::Vec::new_in(cx.bump()),
+                    // =======
+                }),
+                dioxus::core::exports::bumpalo::collections::Vec::new_in(cx.bump()).into(),
+                // >>>>>>> 9fe172e9 (Fix leak in render macro)
                 cx.bump().alloc([cx.component(
                     create_random_element,
                     DepthProps { depth, root: false },
@@ -266,10 +278,18 @@ fn create_random_element(cx: Scope<DepthProps>) -> Element {
                 .into_boxed_str(),
             ));
             println!("{template:#?}");
-            let node = VNode::new(
+            // <<<<<<< HEAD
+            //             let node = VNode::new(
+            //                 None,
+            //                 template,
+            //                 dioxus::core::exports::bumpalo::collections::Vec::new_in(cx.bump()),
+            // =======
+            let node = cx.vnode(
                 None,
-                template,
-                dioxus::core::exports::bumpalo::collections::Vec::new_in(cx.bump()),
+                None,
+                Cell::new(template),
+                dioxus::core::exports::bumpalo::collections::Vec::new_in(cx.bump()).into(),
+                // >>>>>>> 9fe172e9 (Fix leak in render macro)
                 {
                     let dynamic_nodes: Vec<_> = dynamic_node_types
                         .iter()
@@ -284,13 +304,21 @@ fn create_random_element(cx: Scope<DepthProps>) -> Element {
                         .collect();
                     cx.bump().alloc(dynamic_nodes)
                 },
-                cx.bump()
-                    .alloc(
-                        (0..template.attr_paths.len())
-                            .map(|_| create_random_dynamic_mounted_attr(cx))
-                            .collect::<Vec<_>>(),
-                    )
-                    .as_slice(),
+                // <<<<<<< HEAD
+                //                 cx.bump()
+                //                     .alloc(
+                //                         (0..template.attr_paths.len())
+                //                             .map(|_| create_random_dynamic_mounted_attr(cx))
+                //                             .collect::<Vec<_>>(),
+                //                     )
+                //                     .as_slice(),
+                // =======
+                cx.bump().alloc(
+                    (0..template.attr_paths.len())
+                        .map(|_| create_random_dynamic_attr(cx))
+                        .collect::<Vec<_>>(),
+                ),
+                // >>>>>>> 9fe172e9 (Fix leak in render macro)
             );
             Some(node)
         }
