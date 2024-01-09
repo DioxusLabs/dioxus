@@ -864,12 +864,6 @@ impl VNode {
 }
 
 impl VNodeMount {
-    fn mount_attribute(&mut self, attribute_index: usize, dom: &mut VirtualDom) -> ElementId {
-        let id = dom.next_element();
-        self.mounted_attributes[attribute_index] = id;
-        id
-    }
-
     fn mount_node(&mut self, node_index: usize, dom: &mut VirtualDom) -> ElementId {
         let id = dom.next_element();
         self.mounted_dynamic_nodes[node_index] = id.0;

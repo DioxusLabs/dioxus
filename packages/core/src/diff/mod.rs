@@ -1,3 +1,5 @@
+#![allow(clippy::too_many_arguments)]
+
 use crate::{
     arena::ElementId,
     innerlude::{ElementRef, VNodeMount, WriteMutations},

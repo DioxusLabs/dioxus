@@ -552,10 +552,9 @@ impl VirtualDom {
         let _runtime = RuntimeGuard::new(self.runtime.clone());
         let new_nodes = self.run_scope(ScopeId::ROOT);
         self.scopes[ScopeId::ROOT.0].last_rendered_node = Some(new_nodes.clone());
-        let (RenderReturn::Ready(mut node) | RenderReturn::Aborted(mut node)) = new_nodes;
 
         // Rebuilding implies we append the created elements to the root
-        let m = self.create_scope(to, ScopeId::ROOT, &mut node, None);
+        let m = self.create_scope(to, ScopeId::ROOT, &new_nodes, None);
         to.append_children(ElementId(0), m);
     }
 
