@@ -16,7 +16,7 @@ use wasmtime_wasi::Dir;
 use self::convert::ConvertWithState;
 use self::interface::plugins::main::toml::Toml;
 use self::interface::plugins::main::types::{
-    CompileEvent, PluginInfo, ResponseEvent, RuntimeEvent,
+    CommandEvent, PluginInfo, ResponseEvent, RuntimeEvent,
 };
 
 pub mod convert;
@@ -138,11 +138,11 @@ macro_rules! call_plugins {
     }};
 }
 
-pub async fn plugins_before_compile(compile_event: CompileEvent) {
-    call_plugins!(before_compile_event compile_event);
+pub async fn plugins_before_command(compile_event: CommandEvent) {
+    call_plugins!(before_command_event compile_event);
 }
-pub async fn plugins_after_compile(compile_event: CompileEvent) {
-    call_plugins!(after_compile_event compile_event);
+pub async fn plugins_after_command(compile_event: CommandEvent) {
+    call_plugins!(after_command_event compile_event);
 }
 pub async fn plugins_before_runtime(runtime_event: RuntimeEvent) -> ResponseEvent {
     call_plugins!(before_runtime_event runtime_event).fold_changes()
@@ -181,7 +181,7 @@ pub async fn plugins_watched_paths_changed(
 
     let paths: Vec<String> = paths
         .iter()
-        .filter_map(|f| match f.strip_prefix(&crate_dir) {
+        .filter_map(|f| match f.strip_prefix(crate_dir) {
             Ok(val) => val.to_str().map(|f| f.to_string()),
             Err(_) => {
                 log::warn!(
@@ -204,7 +204,8 @@ async fn load_plugins(
     dioxus_lock: &DioxusLock,
 ) -> wasmtime::Result<Vec<CliPlugin>> {
     let mut sorted_plugins: Vec<&PluginConfigInfo> = config.plugins.plugins.values().collect();
-    sorted_plugins.sort_by_key(|f| f.priority.unwrap_or(0));
+    // Have some leeway to have some plugins execute before the default priority plugins
+    sorted_plugins.sort_by_key(|f| f.priority.unwrap_or(10));
     let mut plugins = Vec::with_capacity(sorted_plugins.len());
 
     for plugin in sorted_plugins.into_iter() {
@@ -289,6 +290,10 @@ pub async fn load_plugin(
 
     // If the application has these directories they might be seperate from the crate root
     if let Some(out_dir) = config.application.out_dir.as_ref() {
+        if !out_dir.is_dir() {
+            tokio::fs::create_dir(out_dir).await?;
+        }
+
         ctx_pointer = ctx_pointer.preopened_dir(
             Dir::open_ambient_dir(out_dir, wasmtime_wasi::sync::ambient_authority()).unwrap(),
             DirPerms::all(),
@@ -298,6 +303,10 @@ pub async fn load_plugin(
     }
 
     if let Some(asset_dir) = config.application.asset_dir.as_ref() {
+        if !asset_dir.is_dir() {
+            tokio::fs::create_dir(asset_dir).await?;
+        }
+
         ctx_pointer = ctx_pointer.preopened_dir(
             Dir::open_ambient_dir(asset_dir, wasmtime_wasi::sync::ambient_authority()).unwrap(),
             DirPerms::all(),
@@ -329,7 +338,12 @@ pub async fn load_plugin(
 
     // TODO find a way to get name before it's loaded?
     if let Some(existing) = dioxus_lock.plugins.get(&metadata.name) {
-        store.data_mut().map = existing.map.clone();
+        store.data_mut().map = existing
+            .map
+            .clone()
+            .into_iter()
+            .map(|(a, b)| (a, b.0))
+            .collect();
     }
 
     Ok(CliPlugin {
@@ -385,22 +399,22 @@ impl CliPlugin {
             .call_register(&mut self.store)
             .await
     }
-    pub async fn before_compile_event(
+    pub async fn before_command_event(
         &mut self,
-        event: CompileEvent,
+        event: CommandEvent,
     ) -> wasmtime::Result<Result<(), ()>> {
         self.bindings
             .plugins_main_definitions()
-            .call_before_compile_event(&mut self.store, event)
+            .call_before_command_event(&mut self.store, event)
             .await
     }
-    pub async fn after_compile_event(
+    pub async fn after_command_event(
         &mut self,
-        event: CompileEvent,
+        event: CommandEvent,
     ) -> wasmtime::Result<Result<(), ()>> {
         self.bindings
             .plugins_main_definitions()
-            .call_after_compile_event(&mut self.store, event)
+            .call_after_command_event(&mut self.store, event)
             .await
     }
     pub async fn before_runtime_event(

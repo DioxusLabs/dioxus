@@ -23,5 +23,7 @@ krates = { version = "0.12.6", optional = true }
 tracing.workspace = true
 
 [features]
+default = ["html"]
 hot_reload = ["krates", "internment"]
 serde = ["dep:serde"]
+html = []

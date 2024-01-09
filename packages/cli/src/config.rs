@@ -4,7 +4,7 @@ use std::{
     collections::HashMap,
     path::{Path, PathBuf},
 };
-use toml::value::Map;
+use toml::value::Table;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DioxusConfig {
@@ -203,6 +203,8 @@ pub struct CrateConfig {
     pub verbose: bool,
     pub custom_profile: Option<String>,
     pub features: Option<Vec<String>>,
+    pub target: Option<String>,
+    pub cargo_args: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -270,6 +272,8 @@ impl CrateConfig {
         let verbose = false;
         let custom_profile = None;
         let features = None;
+        let target = None;
+        let cargo_args = vec![];
 
         Ok(Self {
             out_dir,
@@ -286,6 +290,8 @@ impl CrateConfig {
             custom_profile,
             features,
             verbose,
+            target,
+            cargo_args,
         })
     }
 
@@ -321,6 +327,16 @@ impl CrateConfig {
 
     pub fn set_features(&mut self, features: Vec<String>) -> &mut Self {
         self.features = Some(features);
+        self
+    }
+
+    pub fn set_target(&mut self, target: String) -> &mut Self {
+        self.target = Some(target);
+        self
+    }
+
+    pub fn set_cargo_args(&mut self, cargo_args: Vec<String>) -> &mut Self {
+        self.cargo_args = cargo_args;
         self
     }
 }
@@ -595,5 +611,5 @@ pub struct PluginConfigInfo {
 }
 
 fn default_plugin_config() -> toml::Value {
-    toml::Value::Table(Map::new())
+    toml::Value::Table(Table::new())
 }

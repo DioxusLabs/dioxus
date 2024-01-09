@@ -4,8 +4,8 @@ use std::{fs::create_dir_all, str::FromStr};
 use tauri_bundler::{BundleSettings, PackageSettings, SettingsBuilder};
 
 use crate::plugin::{
-    interface::plugins::main::types::CompileEvent::Bundle as BundleEvent, plugins_after_compile,
-    plugins_before_compile,
+    interface::plugins::main::types::CommandEvent::Bundle as BundleEvent, plugins_after_command,
+    plugins_before_command,
 };
 
 use super::*;
@@ -69,7 +69,7 @@ impl Bundle {
     pub async fn bundle(self, bin: Option<PathBuf>) -> Result<()> {
         let mut crate_config = crate::CrateConfig::new(bin)?;
 
-        plugins_before_compile(BundleEvent).await;
+        plugins_before_command(BundleEvent).await;
 
         // change the release state.
         crate_config.with_release(self.build.release);
@@ -82,6 +82,12 @@ impl Bundle {
         if self.build.profile.is_some() {
             crate_config.set_profile(self.build.profile.unwrap());
         }
+
+        if let Some(target) = &self.build.target {
+            crate_config.set_target(target.to_string());
+        }
+
+        crate_config.set_cargo_args(self.build.cargo_args);
 
         // build the desktop app
         build_desktop(&crate_config, false)?;
@@ -155,6 +161,11 @@ impl Bundle {
                     .collect(),
             );
         }
+
+        if let Some(target) = &self.build.target {
+            settings = settings.target(target.to_string());
+        }
+
         let settings = settings.build();
 
         // on macos we need to set CI=true (https://github.com/tauri-apps/tauri/issues/2567)
@@ -162,14 +173,13 @@ impl Bundle {
         std::env::set_var("CI", "true");
 
         tauri_bundler::bundle::bundle_project(settings.unwrap()).unwrap_or_else(|err|{
-    #[cfg(target_os = "macos")]
-    panic!("Failed to bundle project: {}\nMake sure you have automation enabled in your terminal (https://github.com/tauri-apps/tauri/issues/3055#issuecomment-1624389208) and full disk access enabled for your terminal (https://github.com/tauri-apps/tauri/issues/3055#issuecomment-1624389208)", err);
-    #[cfg(not(target_os = "macos"))]
-    panic!("Failed to bundle project: {}", err);
-  });
+          #[cfg(target_os = "macos")]
+          panic!("Failed to bundle project: {}\nMake sure you have automation enabled in your terminal (https://github.com/tauri-apps/tauri/issues/3055#issuecomment-1624389208) and full disk access enabled for your terminal (https://github.com/tauri-apps/tauri/issues/3055#issuecomment-1624389208)", err);
+          #[cfg(not(target_os = "macos"))]
+          panic!("Failed to bundle project: {}", err);
+        });
 
-        plugins_after_compile(BundleEvent).await;
-
+        plugins_after_command(BundleEvent).await;
         Ok(())
     }
 }

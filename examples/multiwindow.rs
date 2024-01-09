@@ -5,14 +5,12 @@ fn main() {
 }
 
 fn app(cx: Scope) -> Element {
-    let window = dioxus_desktop::use_window(cx);
-
     cx.render(rsx! {
         div {
             button {
                 onclick: move |_| {
                     let dom = VirtualDom::new(popup);
-                    window.new_window(dom, Default::default());
+                    dioxus_desktop::window().new_window(dom, Default::default());
                 },
                 "New Window"
             }

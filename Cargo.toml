@@ -5,7 +5,8 @@ members = [
     "packages/core",
     "packages/cli",
     "packages/cli-plugin",
-    "packages/cli-plugin/examples/plugin",
+    "packages/cli-plugin/examples/tailwind",
+    "packages/cli-plugin/examples/dx-parcel-minifier",
     "packages/core-macro",
     "packages/router-macro",
     "packages/extension",
@@ -135,3 +136,8 @@ fern = { version = "0.6.0", features = ["colored"] }
 env_logger = "0.10.0"
 simple_logger = "4.0.0"
 thiserror = { workspace = true }
+
+
+[dependencies]
+tracing-subscriber = "0.3.17"
+http-range = "0.1.5"

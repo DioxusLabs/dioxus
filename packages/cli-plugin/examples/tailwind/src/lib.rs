@@ -3,9 +3,9 @@ use std::{fs::File, io::Write, path::PathBuf};
 use dioxus_cli_plugin::*;
 use exports::plugins::main::definitions::Guest;
 use plugins::main::{
-    imports::{log, watched_paths},
+    imports::{log, set_data, watched_paths},
     toml::{Toml, TomlValue},
-    types::{CompileEvent, PluginInfo, ResponseEvent, RuntimeEvent},
+    types::{CommandEvent, PluginInfo, ResponseEvent, RuntimeEvent},
 };
 use railwind::parse_to_string;
 use regex::Regex;
@@ -46,8 +46,7 @@ fn parse_and_save_css(paths: Vec<PathBuf>) -> Result<ResponseEvent, ()> {
 
     let classes: Vec<_> = paths
         .iter()
-        .map(|f| get_classes(f, &rsx_regex))
-        .flatten()
+        .flat_map(|f| get_classes(f, &rsx_regex))
         .map(|f| f.strip_prefix("class:").unwrap().trim().replace('"', ""))
         .collect();
 
@@ -67,8 +66,13 @@ fn parse_and_save_css(paths: Vec<PathBuf>) -> Result<ResponseEvent, ()> {
     );
 
     let tailwind_output = "assets/tailwind.css";
-    let mut file = File::create(tailwind_output).unwrap();
-    file.write(parsed.as_bytes()).unwrap();
+    let mut file = File::create(tailwind_output).map_err(std::mem::drop)?;
+    let written = file.write(parsed.as_bytes()).map_err(std::mem::drop)?;
+
+    if written != parsed.len() {
+        log("Could not write all the bytes to the tailwind file!");
+        return Err(());
+    }
 
     for warning in warnings.iter() {
         log(&warning.to_string())
@@ -108,6 +112,7 @@ impl Guest for Plugin {
 
     fn register() -> Result<(), ()> {
         log("Registered Tailwind Plugin Successfully!");
+        set_data("Tailwind output", b"that/dir/over/there");
         Ok(())
     }
 
@@ -118,14 +123,14 @@ impl Guest for Plugin {
         }
     }
 
-    fn before_compile_event(_event: CompileEvent) -> Result<(), ()> {
+    fn before_command_event(_event: CommandEvent) -> Result<(), ()> {
         Ok(())
     }
     fn before_runtime_event(_event: RuntimeEvent) -> Result<ResponseEvent, ()> {
         Ok(ResponseEvent::None)
     }
 
-    fn after_compile_event(_event: CompileEvent) -> Result<(), ()> {
+    fn after_command_event(_event: CommandEvent) -> Result<(), ()> {
         gen_tailwind()?;
         Ok(())
     }

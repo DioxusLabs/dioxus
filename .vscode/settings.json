@@ -4,4 +4,5 @@
     "editor.formatOnSave": false
   },
   "rust-analyzer.checkOnSave.allTargets": false,
+  "search.useParentIgnoreFiles": true,
 }

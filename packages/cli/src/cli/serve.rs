@@ -1,7 +1,7 @@
-use crate::plugin::{plugins_after_compile, plugins_before_compile};
+use crate::plugin::{plugins_after_command, plugins_before_command};
 
 use super::*;
-use crate::plugin::interface::plugins::main::types::CompileEvent::Serve as ServeEvent;
+use crate::plugin::interface::plugins::main::types::CommandEvent::Serve as ServeEvent;
 use std::{fs::create_dir_all, io::Write, path::PathBuf};
 
 /// Run the WASM project on dev-server
@@ -37,12 +37,18 @@ impl Serve {
         // Subdirectories don't work with the server
         crate_config.dioxus_config.web.app.base_path = None;
 
+        if let Some(target) = self.serve.target {
+            crate_config.set_target(target);
+        }
+
+        crate_config.set_cargo_args(self.serve.cargo_args);
+
         let platform = self
             .serve
             .platform
             .unwrap_or(crate_config.dioxus_config.application.default_platform);
 
-        plugins_before_compile(ServeEvent).await;
+        plugins_before_command(ServeEvent).await;
 
         match platform {
             cfg::Platform::Web => {
@@ -58,7 +64,7 @@ impl Serve {
             }
         }
 
-        plugins_after_compile(ServeEvent).await;
+        plugins_after_command(ServeEvent).await;
 
         Ok(())
     }

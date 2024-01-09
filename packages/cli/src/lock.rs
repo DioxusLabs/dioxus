@@ -3,6 +3,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use base64::Engine;
 use serde::{Deserialize, Serialize};
 
 use crate::plugin::CliPlugin;
@@ -65,7 +66,15 @@ impl DioxusLock {
                 if !state.initialized {
                     continue;
                 }
-                state.map = plugin.store.data().map.clone();
+
+                state.map = plugin
+                    .store
+                    .data()
+                    .map
+                    .clone()
+                    .into_iter()
+                    .map(|(a, b)| (a, PluginData(b)))
+                    .collect();
             }
         }
 
@@ -127,7 +136,14 @@ impl DioxusLock {
             }
         }
 
-        state.map = plugin.store.data().map.clone();
+        state.map = plugin
+            .store
+            .data()
+            .map
+            .clone()
+            .into_iter()
+            .map(|(a, b)| (a, PluginData(b)))
+            .collect();
 
         self.save(None)?;
 
@@ -153,9 +169,34 @@ fn acquire_dioxus_lock(crate_dir: &Path) -> Option<PathBuf> {
     None
 }
 
+#[derive(Clone, Debug)]
+pub struct PluginData(pub Vec<u8>);
+
+impl Serialize for PluginData {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let encoded = base64::engine::general_purpose::STANDARD.encode(&self.0);
+        serializer.serialize_str(&encoded)
+    }
+}
+
+impl<'de> Deserialize<'de> for PluginData {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let bytes = String::deserialize(deserializer)?;
+        let decoded = base64::engine::general_purpose::STANDARD
+            .decode(bytes)
+            .expect("Message not encoded properly!");
+        Ok(Self(decoded))
+    }
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct PluginLockState {
     pub initialized: bool,
-    // TODO Make this serialize as a block of chars instead of an array of numbers
-    pub map: HashMap<String, Vec<u8>>,
+    pub map: HashMap<String, PluginData>,
 }

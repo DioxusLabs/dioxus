@@ -1,12 +1,21 @@
 use dioxus_cli::{
+    crate_root,
     plugin::{convert::ConvertWithState, load_plugin},
-    DioxusLock,
+    DioxusConfig, DioxusLock,
 };
 
 #[tokio::test]
 async fn load_plugin_works() -> dioxus_cli::Result<()> {
     let dioxus_lock = DioxusLock::load()?;
-    let mut plugin = load_plugin("../cli-plugin/examples/output.wasm", &dioxus_lock).await?;
+    let config = DioxusConfig::default();
+    let crate_dir = crate_root()?;
+    let mut plugin = load_plugin(
+        "../cli-plugin/examples/output.wasm",
+        &config,
+        &crate_dir,
+        &dioxus_lock,
+    )
+    .await?;
 
     // let CliPlugin {
     //     bindings,
