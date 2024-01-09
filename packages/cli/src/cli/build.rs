@@ -51,8 +51,6 @@ impl Build {
             }
         }
 
-        plugins_after_compile(BuildEvent).await;
-
         let temp = gen_page(&crate_config.dioxus_config, false);
 
         let mut file = std::fs::File::create(
@@ -69,6 +67,8 @@ impl Build {
                 .join("index.html"),
         )?;
         file.write_all(temp.as_bytes())?;
+
+        plugins_after_compile(BuildEvent).await;
 
         Ok(())
     }
