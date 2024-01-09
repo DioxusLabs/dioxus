@@ -236,7 +236,7 @@ impl VNode {
                 self.remove_dynamic_node(mount, dom, to, idx, dynamic_node, gen_muts);
             } else {
                 let mount = &dom.mounts[mount.0];
-                let id = ElementId(mount.mounted_dynamic_nodes[idx]);
+                let id = mount.root_ids[idx];
                 if gen_muts {
                     to.remove_node(id);
                 }
