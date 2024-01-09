@@ -1,7 +1,7 @@
 use crate::{
     innerlude::{ElementRef, WriteMutations},
     nodes::VNode,
-    VirtualDom,
+    DynamicNode, ScopeId, TemplateNode, VirtualDom,
 };
 
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -422,5 +422,48 @@ impl VirtualDom {
         let m = self.create_children(to, new, parent);
         let id = after.find_last_element(self);
         to.insert_nodes_after(id, m);
+    }
+}
+
+impl VNode {
+    /// Push all the real nodes on the stack
+    pub(crate) fn push_all_real_nodes(
+        &self,
+        dom: &VirtualDom,
+        to: &mut impl WriteMutations,
+    ) -> usize {
+        let template = self.template.get();
+
+        let mount = self.assert_mounted();
+
+        template
+            .roots
+            .iter()
+            .enumerate()
+            .map(|(root_idx, _)| match &self.template.get().roots[root_idx] {
+                TemplateNode::Dynamic { id: idx } => match &self.dynamic_nodes[*idx] {
+                    DynamicNode::Placeholder(_) | DynamicNode::Text(_) => {
+                        to.push_root(mount.root_ids[root_idx]);
+                        1
+                    }
+                    DynamicNode::Fragment(nodes) => {
+                        let mut accumulated = 0;
+                        for node in nodes {
+                            accumulated += node.push_all_real_nodes(dom, to);
+                        }
+                        accumulated
+                    }
+                    DynamicNode::Component(_) => {
+                        let scope = ScopeId(mount.mounted_dynamic_nodes[*idx]);
+                        let node = dom.get_scope(scope).unwrap().root_node();
+                        node.push_all_real_nodes(dom, to)
+                    }
+                },
+                _ => {
+                    to.push_root(mount.root_ids[root_idx]);
+                    1
+                }
+            })
+            .sum()
     }
 }

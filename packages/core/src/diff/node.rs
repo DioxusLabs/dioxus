@@ -78,48 +78,6 @@ impl VNode {
             });
     }
 
-    /// Push all the real nodes on the stack
-    pub(crate) fn push_all_real_nodes(
-        &self,
-        dom: &VirtualDom,
-        to: &mut impl WriteMutations,
-    ) -> usize {
-        let template = self.template.get();
-
-        let mount = self.assert_mounted();
-
-        template
-            .roots
-            .iter()
-            .enumerate()
-            .map(|(root_idx, _)| match &self.template.get().roots[root_idx] {
-                Dynamic { id: idx } => match &self.dynamic_nodes[*idx] {
-                    Placeholder(_) | Text(_) => {
-                        to.push_root(mount.root_ids[root_idx]);
-                        1
-                    }
-                    Fragment(nodes) => {
-                        let mut accumulated = 0;
-                        for node in nodes {
-                            accumulated += node.push_all_real_nodes(dom, to);
-                        }
-                        accumulated
-                    }
-
-                    Component(_) => {
-                        let scope = ScopeId(mount.mounted_dynamic_nodes[*idx]);
-                        let node = dom.get_scope(scope).unwrap().root_node();
-                        node.push_all_real_nodes(dom, to)
-                    }
-                },
-                _ => {
-                    to.push_root(mount.root_ids[root_idx]);
-                    1
-                }
-            })
-            .sum()
-    }
-
     fn diff_dynamic_node(
         &self,
         mount: &mut VNodeMount,
@@ -314,7 +272,7 @@ impl VNode {
         };
     }
 
-    fn assert_mounted(&self) -> Ref<'_, VNodeMount> {
+    pub(super) fn assert_mounted(&self) -> Ref<'_, VNodeMount> {
         Ref::map(self.mount.borrow(), |mount| {
             mount.as_ref().expect("to be mounted")
         })
@@ -549,7 +507,7 @@ impl VNode {
         // Simply just load the template root, no modifications needed
         self.load_template_root(mount, idx, dom, to);
 
-        // Text producs just one node on the stack
+        // Text produces just one node on the stack
         1
     }
 
