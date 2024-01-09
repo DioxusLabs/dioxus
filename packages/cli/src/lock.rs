@@ -28,7 +28,7 @@ impl DioxusLock {
         let crate_dir = crate_dir.as_path();
 
         let Some(dioxus_conf_file) = acquire_dioxus_lock(crate_dir) else {
-            return Ok(Self::new(crate_dir.join("Dioxus.lock")));
+            return Ok(Self::new(crate_dir.join(".dioxus/Dioxus.lock")));
         };
 
         let dioxus_conf_file = dioxus_conf_file.as_path();
@@ -135,7 +135,9 @@ impl DioxusLock {
     }
 }
 
-fn acquire_dioxus_lock(dir: &Path) -> Option<PathBuf> {
+fn acquire_dioxus_lock(crate_dir: &Path) -> Option<PathBuf> {
+    let dir = crate_dir.join(".dioxus");
+
     // prefer uppercase
     let uppercase_conf = dir.join("Dioxus.lock");
     if uppercase_conf.is_file() {
