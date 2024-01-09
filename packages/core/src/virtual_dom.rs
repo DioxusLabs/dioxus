@@ -369,7 +369,7 @@ impl VirtualDom {
         |           <-- no, broke early
         */
         let parent_path = match self.elements.get(element.0) {
-            Some(Some(el)) => el.clone(),
+            Some(Some(el)) => *el,
             _ => return,
         };
         let mut parent_node = Some(parent_path);

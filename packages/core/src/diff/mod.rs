@@ -22,7 +22,7 @@ impl VirtualDom {
     ) -> usize {
         nodes
             .into_iter()
-            .map(|child| child.create(self, to, parent.clone()))
+            .map(|child| child.create(self, to, parent))
             .sum()
     }
 

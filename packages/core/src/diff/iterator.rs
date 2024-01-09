@@ -116,7 +116,7 @@ impl VirtualDom {
         //
         // `shared_prefix_count` is the count of how many nodes at the start of
         // `new` and `old` share the same keys.
-        let (left_offset, right_offset) = match self.diff_keyed_ends(to, old, new, parent.clone()) {
+        let (left_offset, right_offset) = match self.diff_keyed_ends(to, old, new, parent) {
             Some(count) => count,
             None => return,
         };
@@ -340,7 +340,7 @@ impl VirtualDom {
                 let new_idx = idx + last + 1;
                 let old_index = new_index_to_old_index[new_idx];
                 if old_index == u32::MAX as usize {
-                    nodes_created += new_node.create(self, to, parent.clone());
+                    nodes_created += new_node.create(self, to, parent);
                 } else {
                     old[old_index].diff_node(new_node, self, to);
                     nodes_created += new_node.push_all_real_nodes(self, to);
@@ -363,7 +363,7 @@ impl VirtualDom {
                     let new_idx = idx + next + 1;
                     let old_index = new_index_to_old_index[new_idx];
                     if old_index == u32::MAX as usize {
-                        nodes_created += new_node.create(self, to, parent.clone());
+                        nodes_created += new_node.create(self, to, parent);
                     } else {
                         old[old_index].diff_node(new_node, self, to);
                         nodes_created += new_node.push_all_real_nodes(self, to);
@@ -386,7 +386,7 @@ impl VirtualDom {
             for (idx, new_node) in new[..first_lis].iter().enumerate() {
                 let old_index = new_index_to_old_index[idx];
                 if old_index == u32::MAX as usize {
-                    nodes_created += new_node.create(self, to, parent.clone());
+                    nodes_created += new_node.create(self, to, parent);
                 } else {
                     old[old_index].diff_node(new_node, self, to);
                     nodes_created += new_node.push_all_real_nodes(self, to);
