@@ -1,4 +1,4 @@
-use crate::{innerlude::DirtyScope, nodes::VNode, virtual_dom::VirtualDom, ScopeId};
+use crate::{innerlude::DirtyScope, virtual_dom::VirtualDom, ScopeId};
 
 /// An Element's unique identifier.
 ///
@@ -13,16 +13,41 @@ pub struct ElementId(pub usize);
 /// `BubbleId` is a `usize` that is unique across the entire VirtualDOM - but not unique across time. If a component is
 /// unmounted, then the `BubbleId` will be reused for a new component.
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
-pub struct VNodeId(pub usize);
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub(crate) struct MountId(pub(crate) usize);
 
-#[derive(Debug, Clone)]
+impl Default for MountId {
+    fn default() -> Self {
+        Self(usize::MAX)
+    }
+}
+
+impl MountId {
+    pub(crate) fn new(id: usize) -> Self {
+        debug_assert_ne!(id, usize::MAX);
+        Self(id)
+    }
+
+    pub(crate) fn as_usize(self) -> Option<usize> {
+        if self.0 == usize::MAX {
+            None
+        } else {
+            Some(self.0)
+        }
+    }
+
+    pub(crate) fn is_none(self) -> bool {
+        self.0 == usize::MAX
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
 pub struct ElementRef {
     // the pathway of the real element inside the template
     pub(crate) path: ElementPath,
 
     // The actual element
-    pub(crate) element: VNode,
+    pub(crate) mount: MountId,
 }
 
 #[derive(Clone, Copy, Debug)]

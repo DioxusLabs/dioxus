@@ -6,7 +6,7 @@ use crate::{
     any_props::{BoxedAnyProps, VProps},
     arena::ElementId,
     innerlude::{
-        DirtyScope, ElementRef, ErrorBoundary, NoOpMutations, Scheduler, SchedulerMsg,
+        DirtyScope, ElementRef, ErrorBoundary, NoOpMutations, Scheduler, SchedulerMsg, VNodeMount,
         WriteMutations,
     },
     nodes::RenderReturn,
@@ -180,7 +180,8 @@ use std::{any::Any, cell::Cell, collections::BTreeSet, future::Future, rc::Rc};
 /// }
 /// ```
 pub struct VirtualDom {
-    pub(crate) scopes: Slab<Box<ScopeState>>,
+    // TODO: I don't think we need the box here anymore?
+    pub(crate) scopes: Slab<ScopeState>,
 
     pub(crate) dirty_scopes: BTreeSet<DirtyScope>,
 
@@ -192,6 +193,9 @@ pub struct VirtualDom {
 
     // The element ids that are used in the renderer
     pub(crate) elements: Slab<Option<ElementRef>>,
+
+    // Once nodes are mounted, the information about where they are mounted is stored here
+    pub(crate) mounts: Slab<VNodeMount>,
 
     pub(crate) runtime: Rc<Runtime>,
 
@@ -267,6 +271,7 @@ impl VirtualDom {
             templates: Default::default(),
             queued_templates: Default::default(),
             elements: Default::default(),
+            mounts: Default::default(),
             suspended_scopes: Default::default(),
         };
 
@@ -289,7 +294,7 @@ impl VirtualDom {
     ///
     /// This is useful for inserting or removing contexts from a scope, or rendering out its root node
     pub(crate) fn get_scope(&self, id: ScopeId) -> Option<&ScopeState> {
-        self.scopes.get(id.0).map(|s| &**s)
+        self.scopes.get(id.0)
     }
 
     /// Get the single scope at the top of the VirtualDom tree that will always be around
@@ -381,7 +386,7 @@ impl VirtualDom {
             while let Some(path) = parent_node {
                 let mut listeners = vec![];
 
-                let el_ref = &path.element;
+                let el_ref = &self.mounts[path.mount.0].node;
                 let node_template = el_ref.template.get();
                 let target_path = path.path;
 
@@ -417,13 +422,13 @@ impl VirtualDom {
                     }
                 }
 
-                let mount = el_ref.mount.borrow();
-                parent_node = mount.as_ref().unwrap().parent.clone();
+                let mount = el_ref.mount.get().as_usize();
+                parent_node = mount.and_then(|id| self.mounts.get(id).and_then(|el| el.parent));
             }
         } else {
             // Otherwise, we just call the listener on the target element
             if let Some(path) = parent_node {
-                let el_ref = &path.element;
+                let el_ref = &self.mounts[path.mount.0].node;
                 let node_template = el_ref.template.get();
                 let target_path = path.path;
 

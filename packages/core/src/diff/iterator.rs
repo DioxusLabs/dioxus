@@ -434,7 +434,7 @@ impl VNode {
     ) -> usize {
         let template = self.template.get();
 
-        let mount = self.assert_mounted();
+        let mount = dom.mounts.get(self.mount.get().0).unwrap();
 
         template
             .roots

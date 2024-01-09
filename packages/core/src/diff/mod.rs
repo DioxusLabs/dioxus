@@ -2,7 +2,7 @@
 
 use crate::{
     arena::ElementId,
-    innerlude::{ElementRef, VNodeMount, WriteMutations},
+    innerlude::{ElementRef, MountId, WriteMutations},
     nodes::VNode,
     scopes::ScopeId,
     virtual_dom::VirtualDom,
@@ -49,7 +49,7 @@ impl VirtualDom {
     fn nodes_to_placeholder(
         &mut self,
         to: &mut impl WriteMutations,
-        mount: &mut VNodeMount,
+        mount: MountId,
         dyn_node_idx: usize,
         old_nodes: &[VNode],
     ) {
@@ -57,7 +57,7 @@ impl VirtualDom {
         let placeholder = self.next_element();
 
         // Set the id of the placeholder
-        mount.mounted_dynamic_nodes[dyn_node_idx] = placeholder.0;
+        self.mounts[mount.0].mounted_dynamic_nodes[dyn_node_idx] = placeholder.0;
 
         to.create_placeholder(placeholder);
 

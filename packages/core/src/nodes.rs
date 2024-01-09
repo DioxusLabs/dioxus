@@ -1,8 +1,7 @@
 use crate::any_props::{BoxedAnyProps, VProps};
-use crate::innerlude::{ElementRef, EventHandler};
+use crate::innerlude::{ElementRef, EventHandler, MountId};
 use crate::Properties;
 use crate::{arena::ElementId, Element, Event};
-use std::cell::RefCell;
 use std::ops::Deref;
 use std::rc::Rc;
 use std::vec;
@@ -54,6 +53,9 @@ pub(crate) struct VNodeMount {
     /// The parent of this node
     pub parent: Option<ElementRef>,
 
+    /// A back link to the original node
+    pub node: VNode,
+
     /// The IDs for the roots of this template - to be used when moving the template around and removing it from
     /// the actual Dom
     pub root_ids: Box<[ElementId]>,
@@ -96,7 +98,7 @@ pub struct VNode {
     vnode: Rc<VNodeInner>,
 
     /// The mount information for this template
-    pub(crate) mount: Rc<RefCell<Option<VNodeMount>>>,
+    pub(crate) mount: Cell<MountId>,
 }
 
 impl Clone for VNode {
@@ -129,13 +131,6 @@ impl VNode {
             vnode: self.vnode.clone(),
             mount: self.mount.clone(),
         }
-    }
-
-    /// Try to get the parent of this node
-    ///
-    /// This will fail if the VNode is not mounted
-    pub(crate) fn parent(&self) -> Option<ElementRef> {
-        self.mount.borrow().as_ref()?.parent.clone()
     }
 
     /// Create a template with no nodes that will be skipped over during diffing

@@ -2,7 +2,7 @@ use std::ops::Deref;
 
 use crate::{
     any_props::AnyProps,
-    innerlude::{DirtyScope, ElementRef, VComponent, VNodeMount, WriteMutations},
+    innerlude::{DirtyScope, ElementRef, MountId, VComponent, WriteMutations},
     nodes::RenderReturn,
     nodes::VNode,
     scopes::ScopeId,
@@ -53,7 +53,7 @@ impl VirtualDom {
 impl VNode {
     pub(crate) fn diff_vcomponent(
         &self,
-        mount: &mut VNodeMount,
+        mount: MountId,
         idx: usize,
         new: &VComponent,
         old: &VComponent,
@@ -97,16 +97,17 @@ impl VNode {
             id: scope_id,
         });
     }
+
     fn replace_vcomponent(
         &self,
-        mount: &mut VNodeMount,
+        mount: MountId,
         idx: usize,
         new: &VComponent,
         parent: Option<ElementRef>,
         dom: &mut VirtualDom,
         to: &mut impl WriteMutations,
     ) {
-        let scope = ScopeId(mount.mounted_dynamic_nodes[idx]);
+        let scope = ScopeId(dom.mounts[mount.0].mounted_dynamic_nodes[idx]);
 
         let _m = self.create_component_node(mount, idx, new, parent, dom, to);
 
@@ -118,7 +119,7 @@ impl VNode {
 
     pub(super) fn create_component_node(
         &self,
-        _mount: &mut VNodeMount,
+        _mount: MountId,
         _idx: usize,
         component: &VComponent,
         parent: Option<ElementRef>,
