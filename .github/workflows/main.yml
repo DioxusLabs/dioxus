@@ -53,6 +53,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
+          save-if: ${{ github.ref == 'refs/heads/master' }}
       - uses: ilammy/setup-nasm@v1
       - run: cargo check --all --examples --tests
 
@@ -68,6 +69,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
+          save-if: ${{ github.ref == 'refs/heads/master' }}
       - uses: ilammy/setup-nasm@v1
       - uses: davidB/rust-cargo-make@v1
       - uses: browser-actions/setup-firefox@latest
@@ -87,6 +89,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
+          save-if: ${{ github.ref == 'refs/heads/master' }}
       - run: cargo fmt --all -- --check
 
   clippy:
@@ -104,6 +107,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
+          save-if: ${{ github.ref == 'refs/heads/master' }}
       - run: cargo clippy --workspace --examples --tests -- -D warnings
 
   miri:
@@ -131,6 +135,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
+          save-if: ${{ github.ref == 'refs/heads/master' }}
       - name: miri
         # Many of tests in tokio/tests and doctests use #[tokio::test] or
         # #[tokio::main] that calls epoll_create1 that Miri does not support.
@@ -161,6 +166,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
+          save-if: ${{ github.ref == 'refs/heads/master' }}
 
       - name: Install dependencies
         run: npm ci
@@ -296,6 +302,7 @@ jobs:
           # Useful if additional crates are used for CI tooling.
           # default: "false"
           cache-all-crates: "true"
+          # save-if: ${{ github.ref == 'refs/heads/master' }}
 
           # Determiners whether the cache should be saved.
           # If `false`, the cache is only restored.
@@ -304,7 +311,7 @@ jobs:
           # default: "true"
           # save-if: ""
           # To only cache runs from `master`:
-          # save-if: ${{ github.ref == 'refs/heads/master' }}
+          save-if: ${{ github.ref == 'refs/heads/master' }}
 
           # Specifies what to use as the backend providing cache
           # Can be set to either "github" or "buildjet"
