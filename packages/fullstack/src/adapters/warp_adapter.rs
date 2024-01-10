@@ -187,9 +187,6 @@ pub fn serve_dioxus_application<P: Clone + serde::Serialize + Send + Sync + 'sta
     // Serve the dist folder and the index.html file
     let serve_dir = warp::fs::dir(cfg.assets_path);
 
-    // Copy over any assets we find
-    crate::collect_assets::copy_assets();
-
     connect_hot_reload()
         // First register the server functions
         .or(register_server_fns(server_fn_route))

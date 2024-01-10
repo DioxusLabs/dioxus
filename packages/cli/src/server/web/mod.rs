@@ -111,6 +111,9 @@ pub async fn serve(
 ) -> Result<()> {
     let first_build_result = crate::builder::build(&config, false, skip_assets)?;
 
+    // generate dev-index page
+    Serve::regen_dev_page(&config, first_build_result.assets.as_ref())?;
+
     log::info!("🚀 Starting development server...");
 
     // WS Reload Watching
@@ -448,7 +451,7 @@ fn build(config: &CrateConfig, reload_tx: &Sender<()>, skip_assets: bool) -> Res
     // change the websocket reload state to true;
     // the page will auto-reload.
     if config.dioxus_config.web.watcher.reload_html {
-        let _ = Serve::regen_dev_page(config, skip_assets);
+        let _ = Serve::regen_dev_page(config, result.assets.as_ref());
     }
     let _ = reload_tx.send(());
     Ok(result)

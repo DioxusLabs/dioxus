@@ -12,17 +12,14 @@ pub fn asset_manifest(crate_config: &CrateConfig) -> AssetManifest {
 }
 
 /// Create a head file that contains all of the imports for assets that the user project uses
-pub fn create_assets_head(config: &CrateConfig) -> Result<()> {
-    let manifest = asset_manifest(config);
+pub fn create_assets_head(config: &CrateConfig, manifest: &AssetManifest) -> Result<()> {
     let mut file = File::create(config.out_dir.join("__assets_head.html"))?;
     file.write_all(manifest.head().as_bytes())?;
     Ok(())
 }
 
 /// Process any assets collected from the binary
-pub(crate) fn process_assets(config: &CrateConfig) -> anyhow::Result<()> {
-    let manifest = asset_manifest(config);
-
+pub(crate) fn process_assets(config: &CrateConfig, manifest: &AssetManifest) -> anyhow::Result<()> {
     let static_asset_output_dir = PathBuf::from(
         config
             .dioxus_config

@@ -98,11 +98,13 @@ thiserror = "1.0.40"
 prettyplease = { package = "prettier-please", version = "0.2", features = [
     "verbatim",
 ] }
-manganis-cli-support = { git = "https://github.com/DioxusLabs/collect-assets", rev = "94ea6f7", features = [
-    "webp",
-    "html",
-] }
-manganis = { git = "https://github.com/DioxusLabs/collect-assets", rev = "94ea6f7" }
+# manganis-cli-support = { git = "https://github.com/DioxusLabs/collect-assets", rev = "94ea6f7", features = [
+#     "webp",
+#     "html",
+# ] }
+# manganis = { git = "https://github.com/DioxusLabs/collect-assets", rev = "94ea6f7" }
+manganis-cli-support = { path = "/Users/evanalmloff/Desktop/Github/assets/cli-support" }
+manganis = { path = "/Users/evanalmloff/Desktop/Github/assets" }
 
 
 # This is a "virtual package"

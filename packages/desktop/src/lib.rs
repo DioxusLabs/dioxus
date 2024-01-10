@@ -22,9 +22,6 @@ mod shortcut;
 mod waker;
 mod webview;
 
-#[cfg(feature = "collect-assets")]
-mod collect_assets;
-
 // mobile shortcut is only supported on mobile platforms
 #[cfg(any(target_os = "ios", target_os = "android"))]
 mod mobile_shortcut;
