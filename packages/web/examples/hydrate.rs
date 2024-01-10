@@ -38,7 +38,7 @@ fn main() {
     tracing_wasm::set_as_global_default();
 
     let mut dom = VirtualDom::new(app);
-    let _ = dom.rebuild();
+    let _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     let pre = dioxus_ssr::pre_render(&dom);
     tracing::trace!("{}", pre);

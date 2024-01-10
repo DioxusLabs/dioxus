@@ -9,7 +9,7 @@ fn miri_rollover() {
     set_event_converter(Box::new(SerializedHtmlEventConverter));
     let mut dom = VirtualDom::new(App);
 
-    _ = dom.rebuild();
+    _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     for _ in 0..3 {
         dom.handle_event(

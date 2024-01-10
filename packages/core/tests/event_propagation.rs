@@ -9,7 +9,7 @@ fn events_propagate() {
     set_event_converter(Box::new(dioxus_html::SerializedHtmlEventConverter));
 
     let mut dom = VirtualDom::new(app);
-    _ = dom.rebuild();
+    _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     // Top-level click is registered
     dom.handle_event(

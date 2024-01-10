@@ -42,7 +42,7 @@ fn create_rows(c: &mut Criterion) {
 
     c.bench_function("create rows", |b| {
         let mut dom = VirtualDom::new(app);
-        let _ = dom.rebuild();
+        let _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
 
         b.iter(|| {
             let g = dom.rebuild();

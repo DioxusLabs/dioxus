@@ -14,6 +14,7 @@ pub mod eval;
 pub mod renderer;
 pub mod template;
 
+use dioxus_core::NoOpMutations;
 use dioxus_core::{Element, VirtualDom};
 
 pub use crate::renderer::Renderer;
@@ -28,7 +29,7 @@ pub fn render_element(element: Element) -> String {
 
     let mut dom = VirtualDom::new_with_props(lazy_app, element);
     dom.in_runtime(crate::eval::init_eval);
-    _ = dom.rebuild(&mut NoOpMutations);
+    dom.rebuild(&mut NoOpMutations);
 
     Renderer::new().render(&dom)
 }

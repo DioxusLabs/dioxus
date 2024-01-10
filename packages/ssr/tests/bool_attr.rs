@@ -2,7 +2,7 @@ use dioxus::prelude::*;
 
 #[test]
 fn static_boolean_attributs() {
-    fn app(cx: Scope) -> Element {
+    fn app(_: ()) -> Element {
         render! {
             div { hidden: "false" }
             div { hidden: "true" }
@@ -10,7 +10,7 @@ fn static_boolean_attributs() {
     }
 
     let mut dom = VirtualDom::new(app);
-    _ = dom.rebuild();
+    _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     assert_eq!(
         dioxus_ssr::render(&dom),
@@ -20,7 +20,7 @@ fn static_boolean_attributs() {
 
 #[test]
 fn dynamic_boolean_attributs() {
-    fn app(cx: Scope) -> Element {
+    fn app(_: ()) -> Element {
         render! {
             div { hidden: false }
             div { hidden: true }
@@ -28,7 +28,7 @@ fn dynamic_boolean_attributs() {
     }
 
     let mut dom = VirtualDom::new(app);
-    _ = dom.rebuild();
+    _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     assert_eq!(
         dioxus_ssr::render(&dom),

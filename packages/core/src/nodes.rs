@@ -1,7 +1,7 @@
 use crate::any_props::{BoxedAnyProps, VProps};
-use crate::innerlude::{ElementRef, EventHandler, MountId};
-use crate::Properties;
+use crate::innerlude::{ElementRef, EventHandler, MountId, ScopeState};
 use crate::{arena::ElementId, Element, Event};
+use crate::{Properties, VirtualDom};
 use std::ops::Deref;
 use std::rc::Rc;
 use std::vec;
@@ -20,7 +20,7 @@ pub type TemplateId = &'static str;
 ///
 /// Dioxus will do its best to immediately resolve any async components into a regular Element, but as an implementor
 /// you might need to handle the case where there's no node immediately ready.
-pub(crate) enum RenderReturn {
+pub enum RenderReturn {
     /// A currently-available element
     Ready(VNode),
 
@@ -475,6 +475,24 @@ impl VComponent {
             render_fn: component as *const (),
             props: BoxedAnyProps::new(vcomp),
         }
+    }
+
+    /// Get the scope this node is mounted to if it's mounted
+    ///
+    /// This is useful for rendering nodes outside of the VirtualDom, such as in SSR
+    ///
+    /// Returns [`None`] if the node is not mounted
+    pub fn mounted_scope<'a>(
+        &self,
+        dynamic_node_index: usize,
+        vnode: &VNode,
+        dom: &'a VirtualDom,
+    ) -> Option<&'a ScopeState> {
+        let mount = vnode.mount.get().as_usize()?;
+
+        let scope_id = dom.mounts.get(mount)?.mounted_dynamic_nodes[dynamic_node_index];
+
+        dom.scopes.get(scope_id)
     }
 }
 

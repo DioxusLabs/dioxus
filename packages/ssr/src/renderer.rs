@@ -1,5 +1,6 @@
 use super::cache::Segment;
 use crate::cache::StringCache;
+use dioxus_core::RenderReturn;
 
 use dioxus_core::Attribute;
 use dioxus_core::{prelude::*, AttributeValue, DynamicNode};
@@ -118,8 +119,7 @@ impl Renderer {
                         if self.skip_components {
                             write!(buf, "<{}><{}/>", node.name, node.name)?;
                         } else {
-                            let id = node.mounted_scope().unwrap();
-                            let scope = dom.get_scope(id).unwrap();
+                            let scope = node.mounted_scope(*idx, template, dom).unwrap();
                             let node = scope.root_node();
                             match node {
                                 RenderReturn::Ready(node) => {
@@ -227,7 +227,7 @@ impl Renderer {
 fn to_string_works() {
     use dioxus::prelude::*;
 
-    fn app(cx: Scope) -> Element {
+    fn app(_: ()) -> Element {
         let dynamic = 123;
         let dyn2 = "</diiiiiiiiv>"; // this should be escaped
 
@@ -240,13 +240,13 @@ fn to_string_works() {
                 div {}
                 div { "nest 2" }
                 "{dyn2}"
-                (0..5).map(|i| rsx! { div { "finalize {i}" } })
+                (0..5).map(|i| render! { div { "finalize {i}" } })
             }
         }
     }
 
     let mut dom = VirtualDom::new(app);
-    _ = dom.rebuild();
+    _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     let mut renderer = Renderer::new();
     let out = renderer.render(&dom);
@@ -285,7 +285,7 @@ fn to_string_works() {
 fn empty_for_loop_works() {
     use dioxus::prelude::*;
 
-    fn app(cx: Scope) -> Element {
+    fn app(_: ()) -> Element {
         render! {
             div { class: "asdasdasd",
                 for _ in (0..5) {
@@ -296,7 +296,7 @@ fn empty_for_loop_works() {
     }
 
     let mut dom = VirtualDom::new(app);
-    _ = dom.rebuild();
+    _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     let mut renderer = Renderer::new();
     let out = renderer.render(&dom);
@@ -328,35 +328,12 @@ fn empty_for_loop_works() {
 fn empty_render_works() {
     use dioxus::prelude::*;
 
-    fn app(cx: Scope) -> Element {
+    fn app(_: ()) -> Element {
         render! {}
     }
 
     let mut dom = VirtualDom::new(app);
-    _ = dom.rebuild();
-
-    let mut renderer = Renderer::new();
-    let out = renderer.render(&dom);
-
-    for item in renderer.template_cache.iter() {
-        if item.1.segments.len() > 5 {
-            assert_eq!(item.1.segments, vec![]);
-        }
-    }
-    assert_eq!(out, "");
-}
-
-#[test]
-fn empty_rsx_works() {
-    use dioxus::prelude::*;
-
-    fn app(_: Scope) -> Element {
-        rsx! {};
-        None
-    }
-
-    let mut dom = VirtualDom::new(app);
-    _ = dom.rebuild();
+    _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     let mut renderer = Renderer::new();
     let out = renderer.render(&dom);
@@ -415,7 +392,7 @@ pub(crate) fn truthy(value: &AttributeValue) -> bool {
 
 pub(crate) fn write_attribute(buf: &mut impl Write, attr: &Attribute) -> std::fmt::Result {
     let name = &attr.name;
-    match attr.value {
+    match &attr.value {
         AttributeValue::Text(value) => write!(buf, " {name}=\"{value}\""),
         AttributeValue::Bool(value) => write!(buf, " {name}={value}"),
         AttributeValue::Int(value) => write!(buf, " {name}={value}"),

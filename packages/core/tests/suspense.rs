@@ -9,7 +9,7 @@ fn it_works() {
         .unwrap()
         .block_on(async {
             let mut dom = VirtualDom::new(app);
-            _ = dom.rebuild();
+            _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
             dom.wait_for_suspense().await;
             let out = dioxus_ssr::render(&dom);
 

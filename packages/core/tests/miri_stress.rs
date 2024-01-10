@@ -59,7 +59,7 @@ fn test_memory_leak() {
 
     let mut dom = VirtualDom::new(app);
 
-    _ = dom.rebuild();
+    _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     for _ in 0..5 {
         dom.mark_dirty(ScopeId::ROOT);
@@ -95,7 +95,7 @@ fn memo_works_properly() {
 
     let mut dom = VirtualDom::new(app);
 
-    _ = dom.rebuild();
+    _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
     // todo!()
     // dom.hard_diff(ScopeId::ROOT);
     // dom.hard_diff(ScopeId::ROOT);
@@ -127,7 +127,7 @@ fn free_works_on_root_hooks() {
 
     let ptr = Rc::new("asdasd".to_string());
     let mut dom = VirtualDom::new_with_props(app, AppProps { inner: ptr.clone() });
-    let _ = dom.rebuild();
+    let _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     // ptr gets cloned into props and then into the hook
     assert_eq!(Rc::strong_count(&ptr), 4);
@@ -204,7 +204,7 @@ fn supports_async() {
 
     rt.block_on(async {
         let mut dom = VirtualDom::new(app);
-        let _ = dom.rebuild();
+        let _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
 
         for _ in 0..10 {
             dom.wait_for_work().await;

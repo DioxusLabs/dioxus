@@ -27,10 +27,10 @@ impl ScopeId {
     pub const ROOT: ScopeId = ScopeId(0);
 }
 
-/// A component's state separate from its props.
+/// A component's rendered state.
 ///
-/// This struct exists to provide a common interface for all scopes without relying on generics.
-pub(crate) struct ScopeState {
+/// This state erases the type of the component's props. It is used to store the state of a component in the runtime.
+pub struct ScopeState {
     pub(crate) runtime: Rc<Runtime>,
     pub(crate) context_id: ScopeId,
 

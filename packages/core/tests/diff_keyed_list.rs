@@ -62,7 +62,7 @@ fn keyed_diffing_out_of_order_adds() {
         cx.render(rsx!(order.iter().map(|i| rsx!(div { key: "{i}" }))))
     });
 
-    _ = dom.rebuild();
+    _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     dom.mark_dirty(ScopeId::ROOT);
     assert_eq!(
@@ -88,7 +88,7 @@ fn keyed_diffing_out_of_order_adds_3() {
         cx.render(rsx!(order.iter().map(|i| rsx!(div { key: "{i}" }))))
     });
 
-    _ = dom.rebuild();
+    _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     dom.mark_dirty(ScopeId::ROOT);
     assert_eq!(
@@ -114,7 +114,7 @@ fn keyed_diffing_out_of_order_adds_4() {
         cx.render(rsx!(order.iter().map(|i| rsx!(div { key: "{i}" }))))
     });
 
-    _ = dom.rebuild();
+    _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     dom.mark_dirty(ScopeId::ROOT);
     assert_eq!(
@@ -140,7 +140,7 @@ fn keyed_diffing_out_of_order_adds_5() {
         cx.render(rsx!(order.iter().map(|i| rsx!(div { key: "{i}" }))))
     });
 
-    _ = dom.rebuild();
+    _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     dom.mark_dirty(ScopeId::ROOT);
     assert_eq!(
@@ -165,7 +165,7 @@ fn keyed_diffing_additions() {
         cx.render(rsx!(order.iter().map(|i| rsx!(div { key: "{i}" }))))
     });
 
-    _ = dom.rebuild();
+    _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     dom.mark_dirty(ScopeId::ROOT);
     assert_eq!(
@@ -190,7 +190,7 @@ fn keyed_diffing_additions_and_moves_on_ends() {
         cx.render(rsx!(order.iter().map(|i| rsx!(div { key: "{i}" }))))
     });
 
-    _ = dom.rebuild();
+    _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     dom.mark_dirty(ScopeId::ROOT);
     assert_eq!(
@@ -219,7 +219,7 @@ fn keyed_diffing_additions_and_moves_in_middle() {
         cx.render(rsx!(order.iter().map(|i| rsx!(div { key: "{i}" }))))
     });
 
-    _ = dom.rebuild();
+    _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     // LIS: 4, 5, 6
     dom.mark_dirty(ScopeId::ROOT);
@@ -253,7 +253,7 @@ fn controlled_keyed_diffing_out_of_order() {
         cx.render(rsx!(order.iter().map(|i| rsx!(div { key: "{i}" }))))
     });
 
-    _ = dom.rebuild();
+    _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     // LIS: 5, 6
     dom.mark_dirty(ScopeId::ROOT);
@@ -287,7 +287,7 @@ fn controlled_keyed_diffing_out_of_order_max_test() {
         cx.render(rsx!(order.iter().map(|i| rsx!(div { key: "{i}" }))))
     });
 
-    _ = dom.rebuild();
+    _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     dom.mark_dirty(ScopeId::ROOT);
     assert_eq!(
@@ -316,7 +316,7 @@ fn remove_list() {
         cx.render(rsx!(order.iter().map(|i| rsx!(div { key: "{i}" }))))
     });
 
-    _ = dom.rebuild();
+    _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     dom.mark_dirty(ScopeId::ROOT);
     assert_eq!(
@@ -341,7 +341,7 @@ fn no_common_keys() {
         cx.render(rsx!(order.iter().map(|i| rsx!(div { key: "{i}" }))))
     });
 
-    _ = dom.rebuild();
+    _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     dom.mark_dirty(ScopeId::ROOT);
     assert_eq!(

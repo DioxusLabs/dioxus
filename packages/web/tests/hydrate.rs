@@ -49,7 +49,7 @@ fn rehydrates() {
     }
 
     let mut dom = VirtualDom::new(app);
-    let _ = dom.rebuild();
+    let _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
     let out = dioxus_ssr::render(&dom);
 
     window()

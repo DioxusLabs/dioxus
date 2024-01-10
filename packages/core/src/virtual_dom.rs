@@ -293,7 +293,7 @@ impl VirtualDom {
     /// Get the state for any scope given its ID
     ///
     /// This is useful for inserting or removing contexts from a scope, or rendering out its root node
-    pub(crate) fn get_scope(&self, id: ScopeId) -> Option<&ScopeState> {
+    pub fn get_scope(&self, id: ScopeId) -> Option<&ScopeState> {
         self.scopes.get(id.0)
     }
 

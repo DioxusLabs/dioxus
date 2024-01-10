@@ -4,10 +4,10 @@ use rand::prelude::*;
 fn main() {
     let mut dom = VirtualDom::new(app);
 
-    _ = dom.rebuild();
+    _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     for _ in 0..1000 {
-        _ = dom.rebuild();
+        _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
     }
 }
 
