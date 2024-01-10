@@ -72,11 +72,11 @@ impl VNode {
 
         // copy out the box for both
         let old_scope = &mut dom.scopes[scope_id.0];
-        let old_props = old_scope.props.deref();
+        let old_props: &dyn AnyProps = old_scope.props.deref();
         let new_props: &dyn AnyProps = new.props.deref();
 
         // If the props are static, then we try to memoize by setting the new with the old
-        // The target scopestate still has the reference to the old props, so there's no need to update anything
+        // The target ScopeState still has the reference to the old props, so there's no need to update anything
         // This also implicitly drops the new props since they're not used
         if old_props.memoize(new_props.props()) {
             tracing::trace!(

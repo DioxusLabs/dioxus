@@ -63,8 +63,8 @@ impl<P> VProps<P> {
 
 impl<P: Clone + 'static> AnyProps for VProps<P> {
     fn memoize(&self, other: &dyn Any) -> bool {
-        match other.downcast_ref::<Self>() {
-            Some(other) => (self.memo)(&self.props, &other.props),
+        match other.downcast_ref::<P>() {
+            Some(other) => (self.memo)(&self.props, other),
             None => false,
         }
     }
