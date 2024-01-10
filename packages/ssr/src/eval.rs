@@ -1,12 +1,12 @@
 use async_trait::async_trait;
-use dioxus_core::ScopeState;
+use dioxus_core::ScopeId;
 use dioxus_html::prelude::{EvalError, EvalProvider, Evaluator};
 use std::rc::Rc;
 
 /// Provides the SSREvalProvider through [`cx.provide_context`].
-pub fn init_eval(cx: &ScopeState) {
+pub fn init_eval() {
     let provider: Rc<dyn EvalProvider> = Rc::new(SSREvalProvider {});
-    cx.provide_context(provider);
+    ScopeId::ROOT.provide_context(provider);
 }
 
 /// Reprents the ssr-target's provider of evaluators.

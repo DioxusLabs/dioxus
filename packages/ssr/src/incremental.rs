@@ -3,7 +3,7 @@
 #![allow(non_snake_case)]
 
 use crate::fs_cache::ValidCachedPath;
-use dioxus_core::{Element, Scope, VirtualDom};
+use dioxus_core::{Element, VirtualDom};
 use rustc_hash::FxHasher;
 use std::{
     future::Future,
@@ -69,10 +69,10 @@ impl IncrementalRenderer {
         self.invalidate_after.is_some()
     }
 
-    async fn render_and_cache<'a, P: 'static, R: WrapBody + Send + Sync>(
+    async fn render_and_cache<'a, P: Clone + 'static, R: WrapBody + Send + Sync>(
         &'a mut self,
         route: String,
-        comp: fn(Scope<P>) -> Element,
+        comp: fn(P) -> Element,
         props: P,
         output: &'a mut (impl AsyncWrite + Unpin + Send),
         rebuild_with: impl FnOnce(&mut VirtualDom) -> Pin<Box<dyn Future<Output = ()> + '_>>,
@@ -81,7 +81,7 @@ impl IncrementalRenderer {
         let mut html_buffer = WriteBuffer { buffer: Vec::new() };
         {
             let mut vdom = VirtualDom::new_with_props(comp, props);
-            crate::eval::init_eval(vdom.base_scope());
+            vdom.in_runtime(crate::eval::init_eval);
             rebuild_with(&mut vdom).await;
 
             renderer.render_before_body(&mut *html_buffer)?;
@@ -168,10 +168,10 @@ impl IncrementalRenderer {
     }
 
     /// Render a route or get it from cache.
-    pub async fn render<P: 'static, R: WrapBody + Send + Sync>(
+    pub async fn render<P: Clone + 'static, R: WrapBody + Send + Sync>(
         &mut self,
         route: String,
-        component: fn(Scope<P>) -> Element,
+        component: fn(P) -> Element,
         props: P,
         output: &mut (impl AsyncWrite + Unpin + std::marker::Send),
         rebuild_with: impl FnOnce(&mut VirtualDom) -> Pin<Box<dyn Future<Output = ()> + '_>>,

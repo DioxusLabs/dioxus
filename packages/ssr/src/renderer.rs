@@ -2,7 +2,7 @@ use super::cache::Segment;
 use crate::cache::StringCache;
 
 use dioxus_core::Attribute;
-use dioxus_core::{prelude::*, AttributeValue, DynamicNode, RenderReturn};
+use dioxus_core::{prelude::*, AttributeValue, DynamicNode};
 use std::collections::HashMap;
 use std::fmt::Write;
 use std::sync::Arc;
@@ -141,7 +141,7 @@ impl Renderer {
                         write!(
                             buf,
                             "{}",
-                            askama_escape::escape(text.value, askama_escape::Html)
+                            askama_escape::escape(&text.value, askama_escape::Html)
                         )?;
 
                         if self.pre_render {
@@ -149,7 +149,7 @@ impl Renderer {
                         }
                     }
                     DynamicNode::Fragment(nodes) => {
-                        for child in *nodes {
+                        for child in nodes {
                             self.render_template(buf, dom, child)?;
                         }
                     }
