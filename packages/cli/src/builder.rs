@@ -9,7 +9,7 @@ use dioxus_cli_config::CrateConfig;
 use dioxus_cli_config::ExecutableType;
 use indicatif::{ProgressBar, ProgressStyle};
 use lazy_static::lazy_static;
-use serde::Serialize;
+use manganis_cli_support::{AssetManifest, ManganisSupportGuard};
 use std::{
     fs::{copy, create_dir_all, File},
     io::Read,
@@ -23,10 +23,11 @@ lazy_static! {
     static ref PROGRESS_BARS: indicatif::MultiProgress = indicatif::MultiProgress::new();
 }
 
-#[derive(Serialize, Debug, Clone)]
+#[derive(Debug, Clone)]
 pub struct BuildResult {
     pub warnings: Vec<Diagnostic>,
     pub elapsed_time: u128,
+    pub assets: Option<AssetManifest>,
 }
 
 pub fn build(config: &CrateConfig, _: bool, skip_assets: bool) -> Result<BuildResult> {
@@ -47,7 +48,8 @@ pub fn build(config: &CrateConfig, _: bool, skip_assets: bool) -> Result<BuildRe
         ..
     } = config;
 
-    let _gaurd = WebAssetConfigDropGuard::new();
+    let _guard = WebAssetConfigDropGuard::new();
+    let _manganis_support = ManganisSupportGuard::default();
 
     // start to build the assets
     let ignore_files = build_assets(config)?;
@@ -261,13 +263,18 @@ pub fn build(config: &CrateConfig, _: bool, skip_assets: bool) -> Result<BuildRe
         }
     }
 
-    if !skip_assets {
-        process_assets(config)?;
-    }
+    let assets = if !skip_assets {
+        let assets = asset_manifest(config);
+        process_assets(config, &assets)?;
+        Some(assets)
+    } else {
+        None
+    };
 
     Ok(BuildResult {
         warnings: warning_messages,
         elapsed_time: t_start.elapsed().as_millis(),
+        assets,
     })
 }
 
@@ -281,6 +288,7 @@ pub fn build_desktop(
     let t_start = std::time::Instant::now();
     let ignore_files = build_assets(config)?;
     let _guard = dioxus_cli_config::__private::save_config(config);
+    let _manganis_support = ManganisSupportGuard::default();
 
     let mut cmd = subprocess::Exec::cmd("cargo")
         .env("CARGO_TARGET_DIR", &config.target_dir)
@@ -394,12 +402,16 @@ pub fn build_desktop(
         }
     }
 
-    if !skip_assets {
+    let assets = if !skip_assets {
+        let assets = asset_manifest(config);
         // Collect assets
-        process_assets(config)?;
+        process_assets(config, &assets)?;
         // Create the __assets_head.html file for bundling
-        create_assets_head(config)?;
-    }
+        create_assets_head(config, &assets)?;
+        Some(assets)
+    } else {
+        None
+    };
 
     log::info!(
         "🚩 Build completed: [./{}]",
@@ -411,6 +423,7 @@ pub fn build_desktop(
     Ok(BuildResult {
         warnings: warning_messages,
         elapsed_time: t_start.elapsed().as_millis(),
+        assets,
     })
 }
 
@@ -470,7 +483,7 @@ fn prettier_build(cmd: subprocess::Exec) -> anyhow::Result<Vec<Diagnostic>> {
     Ok(warning_messages)
 }
 
-pub fn gen_page(config: &CrateConfig, serve: bool, skip_assets: bool) -> String {
+pub fn gen_page(config: &CrateConfig, manifest: Option<&AssetManifest>, serve: bool) -> String {
     let _gaurd = WebAssetConfigDropGuard::new();
 
     let crate_root = crate_root().unwrap();
@@ -515,8 +528,7 @@ pub fn gen_page(config: &CrateConfig, serve: bool, skip_assets: bool) -> String 
     {
         style_str.push_str("<link rel=\"stylesheet\" href=\"/{base_path}/tailwind.css\">\n");
     }
-    if !skip_assets {
-        let manifest = asset_manifest(config);
+    if let Some(manifest) = manifest {
         style_str.push_str(&manifest.head());
     }
 

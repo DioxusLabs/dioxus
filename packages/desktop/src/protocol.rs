@@ -167,7 +167,7 @@ fn module_loader(root_id: &str, headless: bool) -> String {
     )
 }
 
-/// Get the assset directory, following tauri/cargo-bundles directory discovery approach
+/// Get the asset directory, following tauri/cargo-bundles directory discovery approach
 ///
 /// Defaults to the current directory if no asset directory is found, which is useful for development when the app
 /// isn't bundled.

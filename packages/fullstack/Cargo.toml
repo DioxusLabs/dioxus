@@ -67,9 +67,6 @@ dioxus-hot-reload = { workspace = true }
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 web-sys = { version = "0.3.61", features = ["Window", "Document", "Element", "HtmlDocument", "Storage", "console"] }
 
-[target.'cfg(any(target_os = "windows",target_os = "macos",target_os = "linux",target_os = "dragonfly", target_os = "freebsd", target_os = "netbsd", target_os = "openbsd"))'.dependencies]
-# This is only for debug mode, and it appears mobile does not support some packages this uses
-manganis-cli-support = { workspace = true, features = ["webp", "html"] }
 
 [features]
 default = ["hot-reload"]

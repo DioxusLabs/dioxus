@@ -52,12 +52,10 @@ impl Build {
         // #[cfg(feature = "plugin")]
         // let _ = PluginManager::on_build_start(&crate_config, &platform);
 
-        match platform {
-            Platform::Web => {
-                crate::builder::build(&crate_config, false, self.build.skip_assets)?;
-            }
+        let build_result = match platform {
+            Platform::Web => crate::builder::build(&crate_config, false, self.build.skip_assets)?,
             Platform::Desktop => {
-                crate::builder::build_desktop(&crate_config, false, self.build.skip_assets)?;
+                crate::builder::build_desktop(&crate_config, false, self.build.skip_assets)?
             }
             Platform::Fullstack => {
                 // Fullstack mode must be built with web configs on the desktop (server) binary as well as the web binary
@@ -87,12 +85,12 @@ impl Build {
                     };
                     let _gaurd =
                         FullstackServerEnvGuard::new(self.build.force_debug, self.build.release);
-                    crate::builder::build_desktop(&desktop_config, false, self.build.skip_assets)?;
+                    crate::builder::build_desktop(&desktop_config, false, self.build.skip_assets)?
                 }
             }
-        }
+        };
 
-        let temp = gen_page(&crate_config, false, self.build.skip_assets);
+        let temp = gen_page(&crate_config, build_result.assets.as_ref(), false);
 
         let mut file = std::fs::File::create(
             crate_config

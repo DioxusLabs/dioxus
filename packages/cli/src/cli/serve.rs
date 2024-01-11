@@ -1,4 +1,5 @@
 use dioxus_cli_config::Platform;
+use manganis_cli_support::AssetManifest;
 
 use super::*;
 use std::{fs::create_dir_all, io::Write, path::PathBuf};
@@ -47,9 +48,6 @@ impl Serve {
 
         match platform {
             Platform::Web => {
-                // generate dev-index page
-                Serve::regen_dev_page(&crate_config, self.serve.skip_assets)?;
-
                 // start the develop server
                 server::web::startup(
                     self.serve.port,
@@ -69,8 +67,11 @@ impl Serve {
         Ok(())
     }
 
-    pub fn regen_dev_page(crate_config: &CrateConfig, skip_assets: bool) -> Result<()> {
-        let serve_html = gen_page(crate_config, true, skip_assets);
+    pub fn regen_dev_page(
+        crate_config: &CrateConfig,
+        manifest: Option<&AssetManifest>,
+    ) -> anyhow::Result<()> {
+        let serve_html = gen_page(crate_config, manifest, true);
 
         let dist_path = crate_config
             .crate_dir

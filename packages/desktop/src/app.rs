@@ -81,11 +81,6 @@ impl<P: 'static> App<P> {
             }),
         };
 
-        // Copy over any assets we find
-        // todo - re-enable this when we have a faster way of copying assets
-        #[cfg(feature = "collect-assets")]
-        crate::collect_assets::copy_assets();
-
         // Set the event converter
         dioxus_html::set_event_converter(Box::new(crate::events::SerializedHtmlEventConverter));
 
