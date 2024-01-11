@@ -24,8 +24,11 @@ fn app(cx: Scope) -> Element {
                 start();
                 *count.write() += 1;
             },
-            // format is needed as {count} does not seemed to work in `if` within content
-            if **started { format!("Current score: {}", count.write()) } else { "Start".to_string() }
+            if **started {
+                "Current score: {count.read()}"
+            } else {
+                "Start"
+            }
         }
     })
 }

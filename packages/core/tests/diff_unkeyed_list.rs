@@ -9,9 +9,9 @@ fn list_creates_one_by_one() {
 
         cx.render(rsx! {
             div {
-                (0..gen).map(|i| rsx! {
+                for i in 0..gen {
                     div { "{i}" }
-                })
+                }
             }
         })
     });
@@ -78,9 +78,9 @@ fn removes_one_by_one() {
 
         cx.render(rsx! {
             div {
-                (0..gen).map(|i| rsx! {
+                for i in 0..gen {
                     div { "{i}" }
-                })
+                }
             }
         })
     });
@@ -153,10 +153,10 @@ fn list_shrink_multiroot() {
     let mut dom = VirtualDom::new(|cx| {
         cx.render(rsx! {
             div {
-                (0..cx.generation()).map(|i| rsx! {
+                for i in 0..cx.generation() {
                     div { "{i}" }
                     div { "{i}" }
-                })
+                }
             }
         })
     });
@@ -214,10 +214,10 @@ fn removes_one_by_one_multiroot() {
 
         cx.render(rsx! {
             div {
-                (0..gen).map(|i| rsx! {
+                {(0..gen).map(|i| rsx! {
                     div { "{i}" }
                     div { "{i}" }
-                })
+                })}
             }
         })
     });
@@ -276,9 +276,9 @@ fn removes_one_by_one_multiroot() {
 fn two_equal_fragments_are_equal_static() {
     let mut dom = VirtualDom::new(|cx| {
         cx.render(rsx! {
-            (0..5).map(|_| rsx! {
+            for _ in 0..5 {
                 div { "hello" }
-            })
+            }
         })
     });
 
@@ -290,9 +290,9 @@ fn two_equal_fragments_are_equal_static() {
 fn two_equal_fragments_are_equal() {
     let mut dom = VirtualDom::new(|cx| {
         cx.render(rsx! {
-            (0..5).map(|i| rsx! {
+            for i in 0..5 {
                 div { "hello {i}" }
-            })
+            }
         })
     });
 
@@ -311,7 +311,9 @@ fn remove_many() {
         };
 
         cx.render(rsx! {
-            (0..num).map(|i| rsx! { div { "hello {i}" } })
+            for i in 0..num {
+                div { "hello {i}" }
+            }
         })
     });
 

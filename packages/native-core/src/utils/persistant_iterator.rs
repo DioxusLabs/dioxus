@@ -306,15 +306,10 @@ fn persist_removes() {
             _ => unreachable!(),
         };
         render!(
-            div{
-                (0..children).map(|i|{
-                    rsx!{
-                        p{
-                            key: "{i}",
-                            "{i}"
-                        }
-                    }
-                })
+            div {
+                for i in 0..children {
+                    p { key: "{i}", "{i}" }
+                }
             }
         )
     }
@@ -387,15 +382,10 @@ fn persist_instertions_before() {
             _ => unreachable!(),
         };
         render!(
-            div{
-                (0..children).map(|i|{
-                    rsx!{
-                        p{
-                            key: "{i}",
-                            "{i}"
-                        }
-                    }
-                })
+            div {
+                for i in 0..children {
+                    p { key: "{i}", "{i}" }
+                }
             }
         )
     }
@@ -446,14 +436,9 @@ fn persist_instertions_after() {
         };
         render!(
             div{
-                (0..children).map(|i|{
-                    rsx!{
-                        p{
-                            key: "{i}",
-                            "{i}"
-                        }
-                    }
-                })
+                for i in 0..children {
+                    p { key: "{i}", "{i}" }
+                }
             }
         )
     }

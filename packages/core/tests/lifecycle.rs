@@ -51,7 +51,7 @@ fn events_generate() {
                     "Click me!"
                 }
             }),
-            _ => cx.render(rsx!(())),
+            _ => None,
         }
     };
 

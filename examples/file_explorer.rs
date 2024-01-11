@@ -28,12 +28,12 @@ fn app(cx: Scope) -> Element {
             link { href:"https://fonts.googleapis.com/icon?family=Material+Icons", rel:"stylesheet", }
             header {
                 i { class: "material-icons icon-menu", "menu" }
-                h1 { "Files: ", files.read().current() }
+                h1 { "Files: ", {files.read().current()} }
                 span { }
                 i { class: "material-icons", onclick: move |_| files.write().go_up(), "logout" }
             }
             main {
-                files.read().path_names.iter().enumerate().map(|(dir_id, path)| {
+                {files.read().path_names.iter().enumerate().map(|(dir_id, path)| {
                     let path_end = path.split('/').last().unwrap_or(path.as_str());
                     let icon_type = if path_end.contains('.') {
                         "description"
@@ -52,15 +52,13 @@ fn app(cx: Scope) -> Element {
                             h1 { "{path_end}" }
                         }
                     )
-                }),
-                files.read().err.as_ref().map(|err| {
-                    rsx! (
-                        div {
-                            code { "{err}" }
-                            button { onclick: move |_| files.write().clear_err(), "x" }
-                        }
-                    )
-                })
+                })},
+                if let Some(err) = files.read().err.as_ref() {
+                    div {
+                        code { "{err}" }
+                        button { onclick: move |_| files.write().clear_err(), "x" }
+                    }
+                }
             }
         }
     })

@@ -23,9 +23,9 @@ fn lists() {
     assert_eq!(
         dioxus_ssr::render_lazy(rsx! {
             ul {
-                (0..5).map(|i| rsx! {
+                for i in 0..5 {
                     li { "item {i}" }
-                })
+                }
             }
         }),
         "<ul><li>item 0</li><li>item 1</li><li>item 2</li><li>item 3</li><li>item 4</li></ul>"
@@ -53,9 +53,9 @@ fn components() {
     assert_eq!(
         dioxus_ssr::render_lazy(rsx! {
             div {
-                (0..5).map(|name| rsx! {
+                for name in 0..5 {
                     MyComponent { name: name }
-                })
+                }
             }
         }),
         "<div><div>component 0</div><div>component 1</div><div>component 2</div><div>component 3</div><div>component 4</div></div>"
@@ -67,7 +67,9 @@ fn fragments() {
     assert_eq!(
         dioxus_ssr::render_lazy(rsx! {
             div {
-                (0..5).map(|_| rsx! (()))
+                for _ in 0..5 {
+                    {()}
+                }
             }
         }),
         "<div></div>"

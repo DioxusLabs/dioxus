@@ -15,7 +15,7 @@ fn test_memory_leak() {
         cx.spawn(async {});
 
         if val == 2 || val == 4 {
-            return cx.render(rsx!(()));
+            return None;
         }
 
         let name = cx.use_hook(|| String::from("numbers: "));
@@ -73,7 +73,7 @@ fn memo_works_properly() {
         let val = cx.generation();
 
         if val == 2 || val == 4 {
-            return cx.render(rsx!(()));
+            return None;
         }
 
         let name = cx.use_hook(|| String::from("asd"));

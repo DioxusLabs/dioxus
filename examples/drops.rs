@@ -14,9 +14,9 @@ fn app(cx: Scope) -> Element {
     }
 
     render! {
-        (0..count).map(|_| rsx!{
+        {(0..count).map(|_| rsx!{
             drop_child {}
-        })
+        })}
     }
 }
 

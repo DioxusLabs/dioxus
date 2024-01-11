@@ -25,7 +25,7 @@ async fn it_works() {
             });
         });
 
-        cx.render(rsx!(()))
+        None
     }
 
     let mut dom = VirtualDom::new(app);

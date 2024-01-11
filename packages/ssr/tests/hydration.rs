@@ -70,7 +70,7 @@ fn text_nodes() {
     fn app(cx: Scope) -> Element {
         let dynamic_text = "hello";
         render! {
-            div { dynamic_text }
+            div { {dynamic_text} }
         }
     }
 
@@ -124,7 +124,7 @@ fn components_hydrate() {
     fn Child2(cx: Scope) -> Element {
         let dyn_text = "hello";
         render! {
-            div { dyn_text }
+            div { {dyn_text} }
         }
     }
 
@@ -159,11 +159,7 @@ fn components_hydrate() {
     fn Child4(cx: Scope) -> Element {
         render! {
             for _ in 0..2 {
-                render! {
-                    render! {
-                        "{1}"
-                    }
-                }
+                {render! { "{1}" }}
             }
         }
     }

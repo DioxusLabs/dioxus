@@ -41,7 +41,7 @@ fn component_swap() {
         cx.render(rsx! {
             h1 {
                 "NavBar"
-                (0..3).map(|_| rsx!(nav_link {}))
+                {(0..3).map(|_| rsx!(nav_link {}))}
             }
         })
     }

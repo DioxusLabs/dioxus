@@ -58,13 +58,13 @@ fn app(cx: Scope) -> Element {
     };
 
     cx.render(rsx!(
-        style { include_str!("./assets/calculator.css") }
+        style { {include_str!("./assets/calculator.css")} }
         div { id: "wrapper",
             div { class: "app",
                 div { class: "calculator",
                     tabindex: "0",
                     onkeydown: handle_key_down_event,
-                    div { class: "calculator-display", val.to_string() }
+                    div { class: "calculator-display", "{val}" }
                     div { class: "calculator-keypad",
                         div { class: "input-keys",
                             div { class: "function-keys",
@@ -103,14 +103,14 @@ fn app(cx: Scope) -> Element {
                             div { class: "digit-keys",
                                 button { class: "calculator-key key-0", onclick: move |_| input_digit(0), "0" }
                                 button { class: "calculator-key key-dot", onclick: move |_| val.make_mut().push('.'), "●" }
-                                (1..10).map(|k| rsx!{
+                                for k in 1..10 {
                                     button {
                                         class: "calculator-key {k}",
                                         name: "key-{k}",
                                         onclick: move |_| input_digit(k),
                                         "{k}"
                                     }
-                                }),
+                                }
                             }
                         }
                         div { class: "operator-keys",

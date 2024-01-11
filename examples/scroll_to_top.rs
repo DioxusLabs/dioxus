@@ -23,7 +23,7 @@ fn app(cx: Scope) -> Element {
             button {
                 onclick: move |_| {
                     if let Some(header) = header_element.read().as_ref() {
-                        header.scroll_to(ScrollBehavior::Smooth);
+                        _ = header.scroll_to(ScrollBehavior::Smooth);
                     }
                 },
                 "Scroll to top"

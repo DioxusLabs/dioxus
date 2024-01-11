@@ -84,7 +84,7 @@ fn create() {
 fn create_list() {
     let mut dom = VirtualDom::new(|cx| {
         cx.render(rsx! {
-            (0..3).map(|f| rsx!( div { "hello" } ))
+            {(0..3).map(|f| rsx!( div { "hello" } ))}
         })
     });
 
@@ -148,7 +148,7 @@ fn create_components() {
     fn Child<'a>(cx: Scope<'a, ChildProps<'a>>) -> Element {
         cx.render(rsx! {
             h1 {}
-            div { &cx.props.children }
+            div { {&cx.props.children} }
             p {}
         })
     }
@@ -163,10 +163,10 @@ fn anchors() {
     let mut dom = VirtualDom::new(|cx| {
         cx.render(rsx! {
             if true {
-                rsx!( div { "hello" } )
+                div { "hello" }
             }
             if false {
-                rsx!( div { "goodbye" } )
+                div { "goodbye" }
             }
         })
     });

@@ -66,9 +66,9 @@ fn app(cx: Scope) -> Element {
             }
             table {
                 tbody {
-                    items.read().iter().enumerate().map(|(id, item)| {
-                        let is_in_danger = if (*selected).map(|s| s == id).unwrap_or(false) {"danger"} else {""};
-                        rsx!(tr { class: "{is_in_danger}",
+                    for (id, item) in items.read().iter().enumerate() {
+                        tr {
+                            class: if (*selected).map(|s| s == id).unwrap_or(false) { "danger" },
                             td { class:"col-md-1" }
                             td { class:"col-md-1", "{item.key}" }
                             td { class:"col-md-1", onclick: move |_| selected.set(Some(id)),
@@ -80,8 +80,9 @@ fn app(cx: Scope) -> Element {
                                 }
                             }
                             td { class: "col-md-6" }
-                        })
-                    })
+                        }
+                    }
+
                 }
              }
             span { class: "preloadicon glyphicon glyphicon-remove", aria_hidden: "true" }
