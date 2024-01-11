@@ -99,6 +99,27 @@ impl Parse for Element {
                 let span = content.span();
 
                 if name_str.starts_with("on") {
+                    // check for any duplicate event listeners
+                    if attributes.iter().any(|f| {
+                        if let AttributeType::Named(ElementAttrNamed {
+                            attr:
+                                ElementAttr {
+                                    name: ElementAttrName::BuiltIn(n),
+                                    value: ElementAttrValue::EventTokens(_),
+                                },
+                            ..
+                        }) = f
+                        {
+                            n == &name_str
+                        } else {
+                            false
+                        }
+                    }) {
+                        return Err(syn::Error::new(
+                            name.span(),
+                            format!("Duplicate event listener `{}`", name),
+                        ));
+                    }
                     attributes.push(attribute::AttributeType::Named(ElementAttrNamed {
                         el_name: el_name.clone(),
                         attr: ElementAttr {
