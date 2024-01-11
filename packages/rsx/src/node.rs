@@ -98,7 +98,6 @@ impl Parse for BodyNode {
             // Input::<InputProps<'_, i32> {}
             // crate::Input::<InputProps<'_, i32> {}
             if body_stream.peek(token::Brace) {
-                Component::validate_component_path(&path)?;
                 return Ok(BodyNode::Component(stream.parse()?));
             }
         }

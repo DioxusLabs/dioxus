@@ -232,8 +232,48 @@ impl<'a> Writer<'a> {
     }
 
     fn write_if_chain(&mut self, ifchain: &IfChain) -> std::fmt::Result {
-        todo!()
-        // self.write_raw_expr(ifchain.span())
+        // Recurse in place by setting the next chain
+        let mut branch = Some(ifchain);
+
+        while let Some(chain) = branch {
+            let IfChain {
+                if_token,
+                cond,
+                then_branch,
+                else_if_branch,
+                else_branch,
+            } = chain;
+
+            write!(
+                self.out,
+                "{} {} {{",
+                if_token.to_token_stream(),
+                prettyplease::unparse_expr(cond)
+            )?;
+
+            self.write_body_indented(then_branch)?;
+
+            if let Some(else_if_branch) = else_if_branch {
+                // write the closing bracket and else
+                self.out.tabbed_line()?;
+                write!(self.out, "}} else ")?;
+
+                branch = Some(else_if_branch);
+            } else if let Some(else_branch) = else_branch {
+                self.out.tabbed_line()?;
+                write!(self.out, "}} else {{")?;
+
+                self.write_body_indented(else_branch)?;
+                branch = None;
+            } else {
+                branch = None;
+            }
+        }
+
+        self.out.tabbed_line()?;
+        write!(self.out, "}}")?;
+
+        Ok(())
     }
 }
 
