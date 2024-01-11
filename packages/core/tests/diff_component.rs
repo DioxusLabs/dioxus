@@ -37,21 +37,21 @@ fn component_swap() {
         }
     }
 
-    fn nav_bar(cx: Scope) -> Element {
+    fn nav_bar() -> Element {
         render! {
             h1 { "NavBar", (0..3).map(|_| render!(nav_link {})) }
         }
     }
 
-    fn nav_link(cx: Scope) -> Element {
+    fn nav_link() -> Element {
         render!( h1 { "nav_link" } )
     }
 
-    fn dash_board(cx: Scope) -> Element {
+    fn dash_board() -> Element {
         render!( div { "dashboard" } )
     }
 
-    fn dash_results(cx: Scope) -> Element {
+    fn dash_results() -> Element {
         render!( div { "results" } )
     }
 

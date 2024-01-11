@@ -38,22 +38,22 @@ fn test_memory_leak() {
         )
     }
 
-    #[derive(Props)]
-    struct BorrowedProps<'a> {
-        name: &'a str,
+    #[derive(Props, Clone, PartialEq)]
+    struct BorrowedProps {
+        name: String,
     }
 
-    fn BorrowedChild<'a>(cx: Scope<'a, BorrowedProps<'a>>) -> Element {
+    fn BorrowedChild(cx: BorrowedProps) -> Element {
         render! {
             div {
-                "goodbye {cx.props.name}"
+                "goodbye {cx.name}"
                 Child {}
                 Child {}
             }
         }
     }
 
-    fn Child(cx: Scope) -> Element {
+    fn Child() -> Element {
         render!( div { "goodbye world" } )
     }
 
@@ -117,12 +117,12 @@ fn free_works_on_root_hooks() {
     }
 
     fn app(cx: Scope<AppProps>) -> Element {
-        let name: &AppProps = cx.use_hook(|| cx.props.clone());
+        let name: &AppProps = cx.use_hook(|| cx.clone());
         render!(child_component { inner: name.inner.clone() })
     }
 
     fn child_component(cx: Scope<AppProps>) -> Element {
-        render!( div { "{cx.props.inner}" } )
+        render!( div { "{cx.inner}" } )
     }
 
     let ptr = Rc::new("asdasd".to_string());
@@ -143,8 +143,8 @@ fn supports_async() {
     use tokio::time::sleep;
 
     fn app() -> Element {
-        let colors = use_state(cx, || vec!["green", "blue", "red"]);
-        let padding = use_state(cx, || 10);
+        let colors = use_signal(|| vec!["green", "blue", "red"]);
+        let padding = use_signal(|| 10);
 
         use_effect(cx, colors, |colors| async move {
             sleep(Duration::from_millis(1000)).await;

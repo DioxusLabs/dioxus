@@ -75,7 +75,7 @@ fn fragments_across_components() {
         }
     }
 
-    fn demo_child(cx: Scope) -> Element {
+    fn demo_child() -> Element {
         let world = "world";
         render! { "hellO!", world }
     }

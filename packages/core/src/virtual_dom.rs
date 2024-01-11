@@ -36,7 +36,7 @@ use std::{any::Any, cell::Cell, collections::BTreeSet, future::Future, rc::Rc};
 ///
 /// fn App(cx: Scope<AppProps>) -> Element {
 ///     cx.render(rsx!(
-///         div {"hello, {cx.props.title}"}
+///         div {"hello, {cx.title}"}
 ///     ))
 /// }
 /// ```
@@ -58,25 +58,25 @@ use std::{any::Any, cell::Cell, collections::BTreeSet, future::Future, rc::Rc};
 /// fn App(cx: Scope<AppProps>) -> Element {
 ///     cx.render(rsx!(
 ///         NavBar { routes: ROUTES }
-///         Title { "{cx.props.title}" }
+///         Title { "{cx.title}" }
 ///         Footer {}
 ///     ))
 /// }
 ///
 /// #[component]
-/// fn NavBar(cx: Scope, routes: &'static str) -> Element {
+/// fn NavBar( routes: &'static str) -> Element {
 ///     cx.render(rsx! {
 ///         div { "Routes: {routes}" }
 ///     })
 /// }
 ///
 /// #[component]
-/// fn Footer(cx: Scope) -> Element {
+/// fn Footer() -> Element {
 ///     cx.render(rsx! { div { "Footer" } })
 /// }
 ///
 /// #[component]
-/// fn Title<'a>(cx: Scope<'a>, children: Element) -> Element {
+/// fn Title<'a>( children: Element) -> Element {
 ///     cx.render(rsx! {
 ///         div { id: "title", children }
 ///     })
@@ -218,7 +218,7 @@ impl VirtualDom {
     ///
     /// # Example
     /// ```rust, ignore
-    /// fn Example(cx: Scope) -> Element  {
+    /// fn Example() -> Element  {
     ///     cx.render(rsx!( div { "hello world" } ))
     /// }
     ///
@@ -248,7 +248,7 @@ impl VirtualDom {
     /// }
     ///
     /// fn Example(cx: Scope<SomeProps>) -> Element  {
-    ///     cx.render(rsx!{ div{ "hello {cx.props.name}" } })
+    ///     cx.render(rsx!{ div{ "hello {cx.name}" } })
     /// }
     ///
     /// let dom = VirtualDom::new(Example);

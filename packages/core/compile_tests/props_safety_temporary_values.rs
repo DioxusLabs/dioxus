@@ -17,8 +17,8 @@ struct Testing<'a> {
     borrowed: &'a Vec<u32>,
 }
 
-fn unsafe_child_component<'a>(cx: Scope<'a, Testing<'a>>) -> Element {
+fn unsafe_child_component<'a>(cx: Testing) -> Element {
     cx.render(rsx! {
-        div { "{cx.props.borrowed:?}" }
+        div { "{cx.borrowed:?}" }
     })
 }

@@ -23,7 +23,7 @@ fn attrs_cycle() {
     let bump = Bump::new();
 
     assert_eq!(
-        dom.rebuild_to_vec_to_vec().santize().edits,
+        dom.rebuild_to_vec().santize().edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(1,) },
             AppendChildren { m: 1, id: ElementId(0) },

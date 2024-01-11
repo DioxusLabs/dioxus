@@ -5,7 +5,6 @@ use dioxus_core::ElementId;
 /// Should push the text node onto the stack and modify it
 #[test]
 fn nested_passthru_creates() {
-    #[component]
     fn App() -> Element {
         render! {
             PassThru {
@@ -17,7 +16,7 @@ fn nested_passthru_creates() {
     }
 
     #[component]
-    fn PassThru<'a>(cx: Scope<'a>, children: Element) -> Element {
+    fn PassThru<'a>(children: Element) -> Element {
         render!(children)
     }
 
@@ -38,7 +37,6 @@ fn nested_passthru_creates() {
 /// Take note on how we don't spit out the template for child_comp since it's entirely dynamic
 #[test]
 fn nested_passthru_creates_add() {
-    #[component]
     fn App() -> Element {
         render! {
             ChildComp {
@@ -55,7 +53,7 @@ fn nested_passthru_creates_add() {
     }
 
     #[component]
-    fn ChildComp<'a>(cx: Scope, children: Element) -> Element {
+    fn ChildComp<'a>(children: Element) -> Element {
         render! {children}
     }
 
@@ -80,7 +78,6 @@ fn nested_passthru_creates_add() {
 /// note that the template is all dynamic roots - so it doesn't actually get cached as a template
 #[test]
 fn dynamic_node_as_root() {
-    #[component]
     fn App() -> Element {
         let a = 123;
         let b = 456;

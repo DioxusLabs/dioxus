@@ -67,8 +67,39 @@ impl EmptyBuilder {
 
 /// This utility function launches the builder method so rsx! and html! macros can use the typed-builder pattern
 /// to initialize a component's props.
-pub fn fc_to_builder<T: Properties>(_: fn(T) -> Element) -> T::Builder {
-    T::builder()
+pub fn fc_to_builder<F: HasProps<P>, P>(
+    _: F,
+) -> <<F as HasProps<P>>::Props as Properties>::Builder {
+    F::Props::builder()
+}
+
+/// A function pointer that can be used to create a component.
+pub trait HasProps<P> {
+    type Props: Properties;
+}
+
+impl<T: Properties, F: Fn(T) -> Element> HasProps<(T,)> for F {
+    type Props = T;
+}
+
+#[doc(hidden)]
+pub struct ZeroElementMarker;
+impl<F: Fn() -> Element> HasProps<ZeroElementMarker> for F {
+    type Props = ();
+}
+
+#[test]
+fn test_empty_builder() {
+    fn app() -> Element {
+        render!(div {})
+    }
+    fn app2(_: ()) -> Element {
+        render!(div {})
+    }
+    let builder = fc_to_builder(app);
+    builder.build();
+    let builder = fc_to_builder(app2);
+    builder.build();
 }
 
 #[cfg(not(miri))]

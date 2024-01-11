@@ -67,7 +67,7 @@ fn app() -> Element {
     }
 }
 
-fn problematic_child(cx: Scope) -> Element {
+fn problematic_child() -> Element {
     render! {
         button { onclick: move |evt| {
                 println!("bottom clicked");

@@ -2,7 +2,7 @@ use bumpalo::Bump;
 use dioxus::core::{ElementId, Mutation};
 use dioxus::prelude::*;
 
-fn basic_syntax_is_a_template(cx: Scope) -> Element {
+fn basic_syntax_is_a_template() -> Element {
     let asd = 123;
     let var = 123;
 

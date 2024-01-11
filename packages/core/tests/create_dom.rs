@@ -134,10 +134,10 @@ fn create_components() {
         children: Element,
     }
 
-    fn Child<'a>(cx: Scope<'a, ChildProps<'a>>) -> Element {
+    fn Child<'a>(cx: ChildProps) -> Element {
         render! {
             h1 {}
-            div { &cx.props.children }
+            div { &cx.children }
             p {}
         }
     }

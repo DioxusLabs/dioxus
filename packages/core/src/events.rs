@@ -145,10 +145,10 @@ impl<T: std::fmt::Debug> std::fmt::Debug for Event<T> {
 ///     onclick: EventHandler<'a, MouseEvent>,
 /// }
 ///
-/// fn MyComponent(cx: Scope<'a, MyProps<'a>>) -> Element {
+/// fn MyComponent(cx: MyProps) -> Element {
 ///     cx.render(rsx!{
 ///         button {
-///             onclick: move |evt| cx.props.onclick.call(evt),
+///             onclick: move |evt| cx.onclick.call(evt),
 ///         }
 ///     })
 /// }

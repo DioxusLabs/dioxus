@@ -28,11 +28,10 @@ fn app() -> Element {
     )
 }
 
-fn suspended_child(cx: Scope) -> Element {
-    let val = use_state(cx, || 0);
+fn suspended_child() -> Element {
+    let mut val = use_signal(|| 0);
 
-    if **val < 3 {
-        let mut val = val.clone();
+    if *val() < 3 {
         cx.spawn(async move {
             val += 1;
         });

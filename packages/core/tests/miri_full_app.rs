@@ -25,7 +25,7 @@ fn miri_rollover() {
 
 #[component]
 fn App() -> Element {
-    let mut idx = use_state(cx, || 0);
+    let mut idx = use_signal(|| 0);
     let onhover = |_| println!("go!");
 
     render! {
@@ -48,6 +48,6 @@ fn App() -> Element {
 }
 
 #[component]
-fn ChildExample<'a>(cx: Scope<'a>, i: i32, onhover: EventHandler<'a, MouseEvent>) -> Element {
+fn ChildExample<'a>(i: i32, onhover: EventHandler<'a, MouseEvent>) -> Element {
     render! { li { onmouseover: move |e| onhover.call(e), "{i}" } }
 }

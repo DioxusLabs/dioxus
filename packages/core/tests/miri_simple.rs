@@ -2,7 +2,6 @@ use dioxus::prelude::*;
 
 #[test]
 fn app_drops() {
-    #[component]
     fn App() -> Element {
         render! { div {} }
     }
@@ -16,7 +15,6 @@ fn app_drops() {
 
 #[test]
 fn hooks_drop() {
-    #[component]
     fn App() -> Element {
         cx.use_hook(|| String::from("asd"));
         cx.use_hook(|| String::from("asd"));
@@ -35,7 +33,6 @@ fn hooks_drop() {
 
 #[test]
 fn contexts_drop() {
-    #[component]
     fn App() -> Element {
         cx.provide_context(String::from("asd"));
 
@@ -45,7 +42,7 @@ fn contexts_drop() {
     }
 
     #[component]
-    fn ChildComp(cx: Scope) -> Element {
+    fn ChildComp() -> Element {
         let el = cx.consume_context::<String>().unwrap();
 
         render! { div { "hello {el}" } }
@@ -60,7 +57,6 @@ fn contexts_drop() {
 
 #[test]
 fn tasks_drop() {
-    #[component]
     fn App() -> Element {
         cx.spawn(async {
             // tokio::time::sleep(std::time::Duration::from_millis(100000)).await;
@@ -81,7 +77,7 @@ fn root_props_drop() {
     struct RootProps(String);
 
     let mut dom = VirtualDom::new_with_props(
-        |cx| render!( div { "{cx.props.0}" } ),
+        |cx| render!( div { "{cx.0}" } ),
         RootProps("asdasd".to_string()),
     );
 
@@ -92,7 +88,6 @@ fn root_props_drop() {
 
 #[test]
 fn diffing_drops_old() {
-    #[component]
     fn App() -> Element {
         render! {
             div {
@@ -106,12 +101,12 @@ fn diffing_drops_old() {
     }
 
     #[component]
-    fn ChildComp1(cx: Scope, name: String) -> Element {
+    fn ChildComp1(name: String) -> Element {
         render! {"Hello {name}"}
     }
 
     #[component]
-    fn ChildComp2(cx: Scope, name: String) -> Element {
+    fn ChildComp2(name: String) -> Element {
         render! {"Goodbye {name}"}
     }
 

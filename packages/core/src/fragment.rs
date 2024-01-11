@@ -80,7 +80,7 @@ impl<const A: bool> FragmentBuilder<A> {
 ///     cx.render(rsx!{
 ///         div {
 ///             h1 {"Title card"}
-///             {cx.props.children}
+///             {cx.children}
 ///         }
 ///     })
 /// }

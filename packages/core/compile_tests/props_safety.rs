@@ -17,8 +17,8 @@ struct Testing<'a> {
     borrowed: &'a RefCell<Vec<Element>>,
 }
 
-fn unsafe_child_component<'a>(cx: Scope<'a, Testing<'a>>) -> Element {
-    let Testing { borrowed } = cx.props;
+fn unsafe_child_component<'a>(cx: Testing) -> Element {
+    let Testing { borrowed } = cx;
     let borrowed_temporary_data =
         cx.use_hook(|| String::from("This data is only valid for the lifetime of the child"));
 

@@ -9,11 +9,11 @@ fn state_shares() {
         render!(child_1 {})
     }
 
-    fn child_1(cx: Scope) -> Element {
+    fn child_1() -> Element {
         render!(child_2 {})
     }
 
-    fn child_2(cx: Scope) -> Element {
+    fn child_2() -> Element {
         let value = cx.consume_context::<i32>().unwrap();
         render!("Value is {value}")
     }

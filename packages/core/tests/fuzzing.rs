@@ -238,10 +238,10 @@ struct BorrowedDepthProps<'a> {
     inner: DepthProps,
 }
 
-fn create_random_element_borrowed<'a>(cx: Scope<'a, BorrowedDepthProps<'a>>) -> Element {
-    println!("{}", cx.props.borrow);
+fn create_random_element_borrowed<'a>(cx: BorrowedDepthProps) -> Element {
+    println!("{}", cx.borrow);
     let bump = cx.bump();
-    let allocated = bump.alloc(Scoped { scope: cx, props: &cx.props.inner });
+    let allocated = bump.alloc(Scoped { scope: cx, props: &cx.inner });
     create_random_element(allocated)
 }
 
@@ -255,7 +255,7 @@ fn create_random_element(cx: Scope<DepthProps>) -> Element {
     if rand::random::<usize>() % 10 == 0 {
         cx.needs_update();
     }
-    let range = if cx.props.root { 2 } else { 3 };
+    let range = if cx.root { 2 } else { 3 };
     let node = match rand::random::<usize>() % range {
         0 | 1 => {
             let (template, dynamic_node_types) = create_random_template(Box::leak(
@@ -283,9 +283,7 @@ fn create_random_element(cx: Scope<DepthProps>) -> Element {
                             DynamicNodeType::Text => DynamicNode::Text(VText::new(Box::leak(
                                 format!("{}", rand::random::<usize>()).into_boxed_str(),
                             ))),
-                            DynamicNodeType::Other => {
-                                create_random_dynamic_node(cx, cx.props.depth + 1)
-                            }
+                            DynamicNodeType::Other => create_random_dynamic_node(cx, cx.depth + 1),
                         })
                         .collect();
                     cx.bump().alloc(dynamic_nodes)

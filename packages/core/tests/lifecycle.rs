@@ -17,7 +17,7 @@ fn manual_diffing() {
     }
 
     fn app(cx: Scope<AppProps>) -> Element {
-        let val = cx.props.value.lock().unwrap();
+        let val = cx.value.lock().unwrap();
         render! { div { "{val}" } }
     };
 
@@ -96,7 +96,7 @@ fn events_generate() {
 //         })
 //     };
 
-//     fn Child(cx: Scope) -> Element {
+//     fn Child() -> Element {
 //         println!("Running child");
 //         render_without_templates! {
 //             h1 {}
