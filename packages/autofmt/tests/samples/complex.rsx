@@ -6,7 +6,7 @@ rsx! {
             show_user_menu.set(!show_user_menu.get());
             evt.cancel_bubble();
         },
-        onclick: move |evt| show_user_menu.set(!show_user_menu.get()),
+        onmousedown: move |evt| show_user_menu.set(!show_user_menu.get()),
         span { class: "inline-block mr-4", icons::icon_14 {} }
         span { "Settings" }
     }
