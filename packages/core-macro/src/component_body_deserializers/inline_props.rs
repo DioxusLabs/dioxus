@@ -47,7 +47,7 @@ fn get_props_struct(component_body: &ComponentBody) -> ItemStruct {
     } = sig;
 
     // Skip first arg since that's the context
-    let struct_fields = inputs.iter().skip(0).map(move |f| {
+    let struct_fields = inputs.iter().map(move |f| {
         match f {
             FnArg::Receiver(_) => unreachable!(), // Unreachable because of ComponentBody parsing
             FnArg::Typed(pt) => {
@@ -245,7 +245,7 @@ fn get_function(component_body: &ComponentBody) -> ItemFn {
     let struct_ident = Ident::new(&format!("{fn_ident}Props"), fn_ident.span());
 
     // Skip first arg since that's the context
-    let struct_field_names = inputs.iter().skip(0).filter_map(|f| match f {
+    let struct_field_names = inputs.iter().filter_map(|f| match f {
         FnArg::Receiver(_) => unreachable!(), // ComponentBody prohibits receiver parameters.
         FnArg::Typed(pt) => Some(&pt.pat),
     });
@@ -256,7 +256,7 @@ fn get_function(component_body: &ComponentBody) -> ItemFn {
         None
     };
 
-    let (scope_lifetime, fn_generics) = if let Some(lt) = first_lifetime {
+    let (_scope_lifetime, fn_generics) = if let Some(lt) = first_lifetime {
         (quote! { #lt, }, generics.clone())
     } else {
         let lifetime: LifetimeParam = parse_quote! { 'a };
