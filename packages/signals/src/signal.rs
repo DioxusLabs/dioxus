@@ -85,7 +85,7 @@ fn current_unsubscriber() -> Unsubscriber {
                 scope: current_scope_id().expect("in a virtual dom"),
                 subscribers: Default::default(),
             };
-            provide_context(owner).expect("in a virtual dom")
+            provide_context(owner)
         }
     }
 }

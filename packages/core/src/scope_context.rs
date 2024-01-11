@@ -338,8 +338,8 @@ impl ScopeId {
     }
 
     /// Provide context to the current scope
-    pub fn provide_context<T: 'static + Clone>(self, value: T) -> Option<T> {
-        with_scope(self, |cx| cx.provide_context(value))
+    pub fn provide_context<T: 'static + Clone>(self, value: T) -> T {
+        with_scope(self, |cx| cx.provide_context(value)).expect("to be in a dioxus runtime")
     }
 
     /// Suspends the current component

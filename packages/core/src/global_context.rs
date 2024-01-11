@@ -38,8 +38,8 @@ pub fn has_context<T: 'static + Clone>() -> Option<T> {
 }
 
 /// Provide context to the current scope
-pub fn provide_context<T: 'static + Clone>(value: T) -> Option<T> {
-    with_current_scope(|cx| cx.provide_context(value))
+pub fn provide_context<T: 'static + Clone>(value: T) -> T {
+    with_current_scope(|cx| cx.provide_context(value)).expect("to be in a dioxus runtime")
 }
 
 /// Provide a context to the root scope
