@@ -78,7 +78,7 @@ use std::{
 /// #[component]
 /// fn Title<'a>(cx: Scope<'a>, children: Element<'a>) -> Element {
 ///     cx.render(rsx! {
-///         div { id: "title", children }
+///         div { id: "title", {children} }
 ///     })
 /// }
 /// ```

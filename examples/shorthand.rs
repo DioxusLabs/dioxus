@@ -11,8 +11,11 @@ fn app(cx: Scope) -> Element {
     let class = "class";
     let id = "id";
 
+    // todo: i'd like it for children to be inferred
+    let children = render! { "Child" };
+
     render! {
-        div { class, id }
+        div { class, id, {children} }
         Component { a, b, c }
         Component { a, ..ComponentProps { a: 1, b: 2, c: 3 } }
     }

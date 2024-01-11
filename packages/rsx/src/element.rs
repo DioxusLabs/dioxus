@@ -137,6 +137,12 @@ impl Parse for Element {
             {
                 let name = content.parse::<Ident>()?;
                 let name_ = name.clone();
+
+                // If the shorthand field is children, these are actually children!
+                if name == "children" {
+                    panic!("children must be wrapped in braces");
+                };
+
                 let value = ElementAttrValue::Shorthand(name.clone());
                 attributes.push(attribute::AttributeType::Named(ElementAttrNamed {
                     el_name: el_name.clone(),
