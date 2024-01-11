@@ -35,11 +35,13 @@ fn main() {
     dioxus_desktop::launch_cfg(app, cfg);
 }
 
+const STYLE: &str = include_str!("./assets/calculator.css");
+
 fn app(cx: Scope) -> Element {
     let state = use_ref(cx, Calculator::new);
 
     cx.render(rsx! {
-        style { {include_str!("./assets/calculator.css")} }
+        style { {STYLE} }
         div { id: "wrapper",
             div { class: "app",
                 div { class: "calculator", onkeypress: move |evt| state.write().handle_keydown(evt),

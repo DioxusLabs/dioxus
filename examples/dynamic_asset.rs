@@ -17,11 +17,9 @@ fn app(cx: Scope) -> Element {
         response.respond(Response::new(include_bytes!("./assets/logo.png").to_vec()));
     });
 
-    cx.render(rsx! {
+    render! {
         div {
-            img {
-                src: "/logos/logo.png"
-            }
+            img { src: "/logos/logo.png" }
         }
-    })
+    }
 }

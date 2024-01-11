@@ -22,9 +22,7 @@ fn DemoC(cx: Scope, x: i32) -> Element {
 
     result.throw()?;
 
-    cx.render(rsx! {
-        h1 {
-            "{x}"
-        }
-    })
+    render! {
+        h1 { "{x}" }
+    }
 }

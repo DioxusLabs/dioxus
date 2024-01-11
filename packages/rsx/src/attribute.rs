@@ -109,17 +109,25 @@ impl ToTokens for ElementAttrNamed {
         };
 
         let attribute = {
+            let value = &self.attr.value;
+            let is_shorthand_event = match &attr.value {
+                ElementAttrValue::Shorthand(s) => s.to_string().starts_with("on"),
+                _ => false,
+            };
+
             match &attr.value {
                 ElementAttrValue::AttrLiteral(_)
                 | ElementAttrValue::AttrExpr(_)
                 | ElementAttrValue::Shorthand(_)
-                | ElementAttrValue::AttrOptionalExpr { .. } => {
+                | ElementAttrValue::AttrOptionalExpr { .. }
+                    if !is_shorthand_event =>
+                {
                     let name = &self.attr.name;
                     let ns = ns(name);
                     let volitile = volitile(name);
                     let attribute = attribute(name);
-                    let value = &self.attr.value;
                     let value = quote! { #value };
+
                     quote! {
                         __cx.attr(
                             #attribute,
@@ -131,12 +139,13 @@ impl ToTokens for ElementAttrNamed {
                 }
                 ElementAttrValue::EventTokens(tokens) => match &self.attr.name {
                     ElementAttrName::BuiltIn(name) => {
-                        quote! {
-                            dioxus_elements::events::#name(__cx, #tokens)
-                        }
+                        quote! { dioxus_elements::events::#name(__cx, #tokens) }
                     }
                     ElementAttrName::Custom(_) => todo!(),
                 },
+                _ => {
+                    quote! { dioxus_elements::events::#value(__cx, #value) }
+                }
             }
         };
 

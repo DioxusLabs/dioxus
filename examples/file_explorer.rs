@@ -35,18 +35,17 @@ fn app(cx: Scope) -> Element {
             main {
                 {files.read().path_names.iter().enumerate().map(|(dir_id, path)| {
                     let path_end = path.split('/').last().unwrap_or(path.as_str());
-                    let icon_type = if path_end.contains('.') {
-                        "description"
-                    } else {
-                        "folder"
-                    };
                     rsx! (
                         div {
                             class: "folder",
                             key: "{path}",
                             i { class: "material-icons",
                                 onclick: move |_| files.write().enter_dir(dir_id),
-                                "{icon_type}"
+                                if path_end.contains('.') {
+                                    "description"
+                                } else {
+                                    "folder"
+                                }
                                 p { class: "cooltip", "0 folders / 0 files" }
                             }
                             h1 { "{path_end}" }

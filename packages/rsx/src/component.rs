@@ -241,6 +241,9 @@ impl ContentField {
 impl ToTokens for ContentField {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         match self {
+            ContentField::Shorthand(i) if i.to_string().starts_with("on") => {
+                tokens.append_all(quote! { __cx.event_handler(#i) })
+            }
             ContentField::Shorthand(i) => tokens.append_all(quote! { #i }),
             ContentField::ManExpr(e) => e.to_tokens(tokens),
             ContentField::Formatted(s) => tokens.append_all(quote! { __cx.raw_text(#s) }),
