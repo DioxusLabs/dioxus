@@ -142,14 +142,12 @@ impl Parse for Element {
                 if name == "children" {
                     return Err(syn::Error::new(
                         name.span(),
-                        format!(
-                            r#"Shorthand element children are not supported.
+                        r#"Shorthand element children are not supported.
 To pass children into elements, wrap them in curly braces.
 Like so:
     div {{ {{children}} }}
 
 "#,
-                        ),
                     ));
                 };
 
