@@ -7,7 +7,7 @@ use dioxus_core::ElementId;
 #[test]
 fn empty_fragment_creates_nothing() {
     fn app(cx: Scope) -> Element {
-        cx.render(rsx!({ () }))
+        cx.render(rsx!({}))
     }
 
     let mut vdom = VirtualDom::new(app);

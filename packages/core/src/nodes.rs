@@ -868,7 +868,7 @@ where
         nodes.extend(self.into_iter().map(|node| node.into_vnode(cx)));
 
         match nodes.into_bump_slice() {
-            children if children.is_empty() => DynamicNode::default(),
+            [] => DynamicNode::default(),
             children => DynamicNode::Fragment(children),
         }
     }

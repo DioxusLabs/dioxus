@@ -53,20 +53,15 @@ impl Parse for Component {
             if content.peek(Token![..]) {
                 content.parse::<Token![..]>()?;
                 manual_props = Some(content.parse()?);
-            } else
-            //
-            // Fields
+            } else if
             // Named fields
-            if content.peek(Ident) && content.peek2(Token![:]) && !content.peek3(Token![:]) {
-                fields.push(content.parse()?);
-            } else
-            //
+            (content.peek(Ident) && content.peek2(Token![:]) && !content.peek3(Token![:]))
             // shorthand struct initialization
-            // Not a div {}, mod::Component {}, or web-component {}
-            if content.peek(Ident)
-                && !content.peek2(Brace)
-                && !content.peek2(Token![:])
-                && !content.peek2(Token![-])
+                // Not a div {}, mod::Component {}, or web-component {}
+                || (content.peek(Ident)
+                    && !content.peek2(Brace)
+                    && !content.peek2(Token![:])
+                    && !content.peek2(Token![-]))
             {
                 fields.push(content.parse()?);
             } else {

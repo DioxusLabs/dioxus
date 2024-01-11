@@ -117,7 +117,7 @@ impl ScopeContext {
         }
 
         let mut search_parent = self.parent_id;
-        match with_runtime(|runtime: &crate::runtime::Runtime| {
+        let cur_runtime = with_runtime(|runtime: &crate::runtime::Runtime| {
             while let Some(parent_id) = search_parent {
                 let parent = runtime.get_context(parent_id).unwrap();
                 tracing::trace!(
@@ -135,9 +135,9 @@ impl ScopeContext {
                 search_parent = parent.parent_id;
             }
             None
-        })
-        .flatten()
-        {
+        });
+
+        match cur_runtime.flatten() {
             Some(ctx) => Some(ctx),
             None => {
                 tracing::trace!(

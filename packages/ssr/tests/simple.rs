@@ -68,7 +68,7 @@ fn fragments() {
         dioxus_ssr::render_lazy(rsx! {
             div {
                 for _ in 0..5 {
-                    {()}
+                    {}
                 }
             }
         }),
