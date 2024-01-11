@@ -55,23 +55,14 @@ impl Parse for Component {
                 manual_props = Some(content.parse()?);
             } else if
             // Named fields
-            content.peek(Ident) && content.peek2(Token![:]) && !content.peek3(Token![:]) {
-                fields.push(content.parse()?);
-            } else if
+            (content.peek(Ident) && content.peek2(Token![:]) && !content.peek3(Token![:]))
             // shorthand struct initialization
-            // Not a div {}, mod::Component {}, or web-component {}
-            content.peek(Ident)
-                && !content.peek2(Brace)
-                && !content.peek2(Token![:])
-                && !content.peek2(Token![-])
+                // Not a div {}, mod::Component {}, or web-component {}
+                || (content.peek(Ident)
+                    && !content.peek2(Brace)
+                    && !content.peek2(Token![:])
+                    && !content.peek2(Token![-]))
             {
-                let name = content.fork().parse::<Ident>().unwrap().to_string();
-
-                // If the shorthand field is children, these are actually children!
-                if name == "children" {
-                    panic!("children must be wrapped in braces");
-                };
-
                 fields.push(content.parse()?);
             } else {
                 children.push(content.parse()?);

@@ -15,17 +15,18 @@ fn app(cx: Scope) -> Element {
     let children = render! { "Child" };
 
     render! {
-        div { class, id, {children} }
-        Component { a, b, c }
-        Component { a, ..ComponentProps { a: 1, b: 2, c: 3 } }
+        div { class, id, {&children} }
+        Component { a, b, c, children }
+        Component { a, ..ComponentProps { a: 1, b: 2, c: 3, children: None } }
     }
 }
 
 #[component]
-fn Component(cx: Scope, a: i32, b: i32, c: i32) -> Element {
+fn Component<'a>(cx: Scope<'a>, a: i32, b: i32, c: i32, children: Element<'a>) -> Element {
     render! {
         div { "{a}" }
         div { "{b}" }
         div { "{c}" }
+        div { {children} }
     }
 }
