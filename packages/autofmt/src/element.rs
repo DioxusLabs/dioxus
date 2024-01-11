@@ -237,6 +237,9 @@ impl Writer<'_> {
             ElementAttrValue::AttrLiteral(value) => {
                 write!(self.out, "{value}", value = ifmt_to_string(value))?;
             }
+            ElementAttrValue::Shorthand(value) => {
+                write!(self.out, "{value}",)?;
+            }
             ElementAttrValue::AttrExpr(value) => {
                 let out = prettyplease::unparse_expr(value);
                 let mut lines = out.split('\n').peekable();

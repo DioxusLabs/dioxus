@@ -668,9 +668,9 @@ fn diff_template() {
             p {
                 "hello world"
             }
-            (0..10).map(|i| rsx!{"{i}"}),
-            (0..10).map(|i| rsx!{"{i}"}),
-            (0..11).map(|i| rsx!{"{i}"}),
+            {(0..10).map(|i| rsx!{"{i}"})},
+            {(0..10).map(|i| rsx!{"{i}"})},
+            {(0..11).map(|i| rsx!{"{i}"})},
             Comp{}
         }
     };
@@ -714,9 +714,9 @@ fn diff_template() {
             "height2": "100px",
             width: 100,
             Comp{}
-            (0..11).map(|i| rsx!{"{i}"}),
-            (0..10).map(|i| rsx!{"{i}"}),
-            (0..10).map(|i| rsx!{"{i}"}),
+            {(0..11).map(|i| rsx!{"{i}"})},
+            {(0..10).map(|i| rsx!{"{i}"})},
+            {(0..10).map(|i| rsx!{"{i}"})},
             p {
                 "hello world"
             }

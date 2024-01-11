@@ -15,7 +15,7 @@ fn test_memory_leak() {
         cx.spawn(async {});
 
         if val == 2 || val == 4 {
-            return None;
+            return render!({ () });
         }
 
         let name = cx.use_hook(|| String::from("numbers: "));

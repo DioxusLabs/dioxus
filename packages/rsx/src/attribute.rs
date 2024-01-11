@@ -20,6 +20,13 @@ impl AttributeType {
         }
     }
 
+    pub fn matches_attr_name(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Named(a), Self::Named(b)) => a.attr.name == b.attr.name,
+            _ => false,
+        }
+    }
+
     pub(crate) fn try_combine(&self, other: &Self) -> Option<Self> {
         match (self, other) {
             (Self::Named(a), Self::Named(b)) => a.try_combine(b).map(Self::Named),
@@ -105,6 +112,7 @@ impl ToTokens for ElementAttrNamed {
             match &attr.value {
                 ElementAttrValue::AttrLiteral(_)
                 | ElementAttrValue::AttrExpr(_)
+                | ElementAttrValue::Shorthand(_)
                 | ElementAttrValue::AttrOptionalExpr { .. } => {
                     let name = &self.attr.name;
                     let ns = ns(name);
@@ -144,6 +152,8 @@ pub struct ElementAttr {
 
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub enum ElementAttrValue {
+    /// attribute,
+    Shorthand(Ident),
     /// attribute: "value"
     AttrLiteral(IfmtInput),
     /// attribute: if bool { "value" }
@@ -159,7 +169,7 @@ pub enum ElementAttrValue {
 
 impl Parse for ElementAttrValue {
     fn parse(input: ParseStream) -> syn::Result<Self> {
-        Ok(if input.peek(Token![if]) {
+        let element_attr_value = if input.peek(Token![if]) {
             let if_expr = input.parse::<ExprIf>()?;
             if is_if_chain_terminated(&if_expr) {
                 ElementAttrValue::AttrExpr(Expr::If(if_expr))
@@ -180,13 +190,16 @@ impl Parse for ElementAttrValue {
         } else {
             let value = input.parse::<Expr>()?;
             ElementAttrValue::AttrExpr(value)
-        })
+        };
+
+        Ok(element_attr_value)
     }
 }
 
 impl ToTokens for ElementAttrValue {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         match self {
+            ElementAttrValue::Shorthand(i) => tokens.append_all(quote! { #i }),
             ElementAttrValue::AttrLiteral(lit) => tokens.append_all(quote! { #lit }),
             ElementAttrValue::AttrOptionalExpr { condition, value } => {
                 tokens.append_all(quote! { if #condition { Some(#value) } else { None } })

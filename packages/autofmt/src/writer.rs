@@ -142,6 +142,7 @@ impl<'a> Writer<'a> {
             }
             ElementAttrValue::AttrLiteral(lit) => ifmt_to_string(lit).len(),
             ElementAttrValue::AttrExpr(expr) => expr.span().line_length(),
+            ElementAttrValue::Shorthand(expr) => expr.span().line_length(),
             ElementAttrValue::EventTokens(tokens) => {
                 let location = Location::new(tokens.span().start());
 

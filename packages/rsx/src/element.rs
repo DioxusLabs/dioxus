@@ -8,6 +8,7 @@ use syn::{
     parse::{Parse, ParseBuffer, ParseStream},
     punctuated::Punctuated,
     spanned::Spanned,
+    token::Brace,
     Expr, Ident, LitStr, Result, Token,
 };
 
@@ -59,6 +60,7 @@ impl Parse for Element {
             }
 
             // Parse the raw literal fields
+            // "def": 456,
             if content.peek(LitStr) && content.peek2(Token![:]) && !content.peek3(Token![:]) {
                 let name = content.parse::<LitStr>()?;
                 let ident = name.clone();
@@ -84,6 +86,8 @@ impl Parse for Element {
                 continue;
             }
 
+            // Parse
+            // abc: 123,
             if content.peek(Ident) && content.peek2(Token![:]) && !content.peek3(Token![:]) {
                 let name = content.parse::<Ident>()?;
 
@@ -102,22 +106,17 @@ impl Parse for Element {
                             value: ElementAttrValue::EventTokens(content.parse()?),
                         },
                     }));
+                } else if name_str == "key" {
+                    key = Some(content.parse()?);
                 } else {
-                    match name_str.as_str() {
-                        "key" => {
-                            key = Some(content.parse()?);
-                        }
-                        _ => {
-                            let value = content.parse::<ElementAttrValue>()?;
-                            attributes.push(attribute::AttributeType::Named(ElementAttrNamed {
-                                el_name: el_name.clone(),
-                                attr: ElementAttr {
-                                    name: ElementAttrName::BuiltIn(name),
-                                    value,
-                                },
-                            }));
-                        }
-                    }
+                    let value = content.parse::<ElementAttrValue>()?;
+                    attributes.push(attribute::AttributeType::Named(ElementAttrNamed {
+                        el_name: el_name.clone(),
+                        attr: ElementAttr {
+                            name: ElementAttrName::BuiltIn(name),
+                            value,
+                        },
+                    }));
                 }
 
                 if content.is_empty() {
@@ -130,6 +129,33 @@ impl Parse for Element {
                 continue;
             }
 
+            // Parse shorthand fields
+            if content.peek(Ident)
+                && !content.peek2(Brace)
+                && !content.peek2(Token![:])
+                && !content.peek2(Token![-])
+            {
+                let name = content.parse::<Ident>()?;
+                let name_ = name.clone();
+                let value = ElementAttrValue::Shorthand(name.clone());
+                attributes.push(attribute::AttributeType::Named(ElementAttrNamed {
+                    el_name: el_name.clone(),
+                    attr: ElementAttr {
+                        name: ElementAttrName::BuiltIn(name),
+                        value,
+                    },
+                }));
+
+                if content.is_empty() {
+                    break;
+                }
+
+                if content.parse::<Token![,]>().is_err() {
+                    missing_trailing_comma!(name_.span());
+                }
+                continue;
+            }
+
             break;
         }
 
@@ -137,31 +163,21 @@ impl Parse for Element {
         // For example, if there are two `class` attributes, combine them into one
         let mut merged_attributes: Vec<AttributeType> = Vec::new();
         for attr in &attributes {
-            if let Some(old_attr_index) = merged_attributes.iter().position(|a| {
-                matches!((a, attr), (
-                                AttributeType::Named(ElementAttrNamed {
-                                    attr: ElementAttr {
-                                        name: ElementAttrName::BuiltIn(old_name),
-                                        ..
-                                    },
-                                    ..
-                                }),
-                                AttributeType::Named(ElementAttrNamed {
-                                    attr: ElementAttr {
-                                        name: ElementAttrName::BuiltIn(new_name),
-                                        ..
-                                    },
-                                    ..
-                                }),
-                            ) if old_name == new_name)
-            }) {
+            let attr_index = merged_attributes
+                .iter()
+                .position(|a| a.matches_attr_name(attr));
+
+            if let Some(old_attr_index) = attr_index {
                 let old_attr = &mut merged_attributes[old_attr_index];
+
                 if let Some(combined) = old_attr.try_combine(attr) {
                     *old_attr = combined;
                 }
-            } else {
-                merged_attributes.push(attr.clone());
+
+                continue;
             }
+
+            merged_attributes.push(attr.clone());
         }
 
         while !content.is_empty() {
