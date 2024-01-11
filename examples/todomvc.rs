@@ -7,8 +7,6 @@ fn main() {
     dioxus_desktop::launch(app);
 }
 
-const _STYLE: &str = manganis::mg!(file("./examples/assets/todomvc.css"));
-
 #[derive(PartialEq, Eq, Clone, Copy)]
 pub enum FilterState {
     All,
@@ -49,6 +47,7 @@ pub fn app(cx: Scope<()>) -> Element {
 
     cx.render(rsx! {
         section { class: "todoapp",
+            style { {include_str!("./assets/todomvc.css")} }
             TodoHeader { todos: todos }
             section { class: "main",
                 if !todos.is_empty() {
