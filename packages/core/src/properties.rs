@@ -4,9 +4,7 @@ use crate::innerlude::*;
 /// on how to memoize the props and some additional optimizations that can be made. We strongly encourage using the
 /// derive macro to implement the `Properties` trait automatically as guarantee that your memoization strategy is safe.
 ///
-/// If your props are 'static, then Dioxus will require that they also be PartialEq for the derived memoize strategy. However,
-/// if your props borrow data, then the memoization strategy will simply default to "false" and the PartialEq will be ignored.
-/// This tends to be useful when props borrow something that simply cannot be compared (IE a reference to a closure);
+/// If your props are 'static, then Dioxus will require that they also be PartialEq for the derived memoize strategy.
 ///
 /// By default, the memoization strategy is very conservative, but can be tuned to be more aggressive manually. However,
 /// this is only safe if the props are 'static - otherwise you might borrow references after-free.
@@ -18,18 +16,9 @@ use crate::innerlude::*;
 ///
 /// For props that are 'static:
 /// ```rust, ignore
-/// #[derive(Props, PartialEq)]
+/// #[derive(Props, PartialEq, Clone)]
 /// struct MyProps {
 ///     data: String
-/// }
-/// ```
-///
-/// For props that borrow:
-///
-/// ```rust, ignore
-/// #[derive(Props)]
-/// struct MyProps<'a >{
-///     data: &'a str
 /// }
 /// ```
 pub trait Properties: Clone + Sized + 'static {
@@ -76,7 +65,53 @@ where
     F::Props::builder()
 }
 
-/// A function pointer that can be used to create a component.
+/// Every component used in rsx must implement the `ComponentFunction` trait. This trait tells dioxus how your component should be rendered.
+///
+/// Dioxus automatically implements this trait for any function that either takes no arguments or a single props argument and returns an Element.
+///
+/// ## Example
+///
+/// For components that take no props:
+///
+/// ```rust
+/// fn app() -> Element {
+///     render! {
+///         div {}
+///     }
+/// }
+/// ```
+///
+/// For props that take a props struct:
+///
+/// ```rust
+/// #[derive(Props, PartialEq, Clone)]
+/// struct MyProps {
+///    data: String
+/// }
+///
+/// fn app(props: MyProps) -> Element {
+///     render! {
+///         div {
+///             "{props.data}"
+///         }
+///     }
+/// }
+/// ```
+///
+/// Or you can use the #[component] macro to automatically implement create the props struct:
+///
+/// ```rust
+/// #[component]
+/// fn app(data: String) -> Element {
+///     render! {
+///         div {
+///             "{data}"
+///         }
+///     }
+/// }
+/// ```
+///
+/// > Note: If you get an error about the `ComponentFunction` trait not being implemented: make sure your props implements the `Properties` trait or if you would like to declare your props inline, make sure you use the #[component] macro on your function.
 pub trait ComponentFunction<P> {
     type Props: 'static;
 
