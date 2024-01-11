@@ -1,6 +1,5 @@
 use crate::component_body::ComponentBody;
 use quote::ToTokens;
-use syn::{parse_quote, Path};
 
 /// The output produced by a deserializer.
 ///

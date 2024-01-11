@@ -6,7 +6,7 @@ use dioxus_core::ElementId;
 
 #[test]
 fn empty_fragment_creates_nothing() {
-    fn app(cx: Scope) -> Element {
+    fn app() -> Element {
         render!(())
     }
 
@@ -66,7 +66,7 @@ fn fragments_nested() {
 
 #[test]
 fn fragments_across_components() {
-    fn app(cx: Scope) -> Element {
+    fn app() -> Element {
         render! {
             demo_child {}
             demo_child {}
@@ -88,7 +88,7 @@ fn fragments_across_components() {
 
 #[test]
 fn list_fragments() {
-    fn app(cx: Scope) -> Element {
+    fn app() -> Element {
         render!(
             h1 { "hello" }
             (0..6).map(|f| render!( span { "{f}" }))

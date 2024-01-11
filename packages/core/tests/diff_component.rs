@@ -7,7 +7,7 @@ use dioxus::prelude::*;
 /// different pointers
 #[test]
 fn component_swap() {
-    fn app(cx: Scope) -> Element {
+    fn app() -> Element {
         let render_phase = cx.use_hook(|| 0);
 
         *render_phase += 1;

@@ -1,7 +1,7 @@
 error[E0521]: borrowed data escapes outside of function
   --> compile_tests/props_safety.rs:8:5
    |
-5  |   fn app(cx: Scope) -> Element {
+5  |   fn app() -> Element {
    |          --
    |          |
    |          `cx` is a reference that is only valid in the function body

@@ -24,7 +24,7 @@ fn miri_rollover() {
 }
 
 #[component]
-fn App(cx: Scope) -> Element {
+fn App() -> Element {
     let mut idx = use_state(cx, || 0);
     let onhover = |_| println!("go!");
 

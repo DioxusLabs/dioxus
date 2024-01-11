@@ -76,8 +76,8 @@ use wry::{application::window::WindowId, webview::WebContext};
 ///     })
 /// }
 /// ```
-pub fn launch(root: Component) {
-    launch_with_props(root, (), Config::default())
+pub fn launch(root: fn() -> Element) {
+    launch_with_props(|root| root(), root, Config::default())
 }
 
 /// Launch the WebView and run the event loop, with configuration.

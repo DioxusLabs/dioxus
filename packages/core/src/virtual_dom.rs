@@ -88,7 +88,7 @@ use std::{any::Any, cell::Cell, collections::BTreeSet, future::Future, rc::Rc};
 ///
 /// ```rust
 /// # use dioxus::prelude::*;
-/// # fn App(cx: Scope) -> Element { cx.render(rsx! { div {} }) }
+/// # fn App() -> Element { cx.render(rsx! { div {} }) }
 ///
 /// let mut vdom = VirtualDom::new(App);
 /// let edits = vdom.rebuild();
@@ -127,7 +127,7 @@ use std::{any::Any, cell::Cell, collections::BTreeSet, future::Future, rc::Rc};
 /// Putting everything together, you can build an event loop around Dioxus by using the methods outlined above.
 /// ```rust, ignore
 /// #[component]
-/// fn App(cx: Scope) -> Element {
+/// fn App() -> Element {
 ///     cx.render(rsx! {
 ///         div { "Hello World" }
 ///     })
@@ -226,8 +226,8 @@ impl VirtualDom {
     /// ```
     ///
     /// Note: the VirtualDom is not progressed, you must either "run_with_deadline" or use "rebuild" to progress it.
-    pub fn new(app: fn(()) -> Element) -> Self {
-        Self::new_with_props(app, ())
+    pub fn new(app: fn() -> Element) -> Self {
+        Self::new_with_props(|app| app(), app)
     }
 
     /// Create a new VirtualDom with the given properties for the root component.
@@ -563,7 +563,6 @@ impl VirtualDom {
         to.append_children(ElementId(0), m);
     }
 
-    #[cfg(features = "internal-testing")]
     /// [`VirtualDom::rebuild`] to a vector of mutations for testing purposes
     pub fn rebuild_to_vec(&mut self) -> MutationsVec {
         let mut mutations = MutationsVec::default();
@@ -590,7 +589,6 @@ impl VirtualDom {
         }
     }
 
-    #[cfg(features = "internal-testing")]
     /// [`Self::render_immediate`] to a vector of mutations for testing purposes
     pub fn render_immediate_to_vec(&mut self) -> MutationsVec {
         let mut mutations = MutationsVec::default();
@@ -662,7 +660,6 @@ impl VirtualDom {
         }
     }
 
-    #[cfg(features = "internal-testing")]
     /// [`Self::render_with_deadline`] to a vector of mutations for testing purposes
     pub async fn render_with_deadline_to_vec(
         &mut self,

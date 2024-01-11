@@ -8,7 +8,7 @@ async fn it_works() {
 
     static POLL_COUNT: AtomicUsize = AtomicUsize::new(0);
 
-    fn app(cx: Scope) -> Element {
+    fn app() -> Element {
         cx.use_hook(|| {
             cx.spawn(async {
                 for x in 0..10 {

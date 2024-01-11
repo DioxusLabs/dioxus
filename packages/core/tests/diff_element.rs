@@ -4,7 +4,7 @@ use dioxus_core::ElementId;
 
 #[test]
 fn text_diff() {
-    fn app(cx: Scope) -> Element {
+    fn app() -> Element {
         let gen = generation();
         render!( h1 { "hello {gen}" } )
     }
@@ -33,7 +33,7 @@ fn text_diff() {
 
 #[test]
 fn element_swap() {
-    fn app(cx: Scope) -> Element {
+    fn app() -> Element {
         let gen = generation();
 
         match gen % 2 {

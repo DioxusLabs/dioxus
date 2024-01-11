@@ -38,7 +38,7 @@ First, start with your app:
 use dioxus::prelude::*;
 
 // First, declare a root component
-fn app(cx: Scope) -> Element {
+fn app() -> Element {
     cx.render(rsx!{
         div { "hello world" }
     })

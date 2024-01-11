@@ -8,7 +8,7 @@ fn catches_panic() {
     _ = dom.rebuild_to_vec(&mut dioxus_core::NoOpMutations);
 }
 
-fn app(cx: Scope) -> Element {
+fn app() -> Element {
     render! {
         div {
             h1 { "Title" }

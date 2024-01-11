@@ -9,7 +9,7 @@ use dioxus::prelude::*;
 /// When miri runs, it'll let us know if we leaked or aliased.
 #[test]
 fn test_memory_leak() {
-    fn app(cx: Scope) -> Element {
+    fn app() -> Element {
         let val = generation();
 
         cx.spawn(async {});
@@ -69,7 +69,7 @@ fn test_memory_leak() {
 
 #[test]
 fn memo_works_properly() {
-    fn app(cx: Scope) -> Element {
+    fn app() -> Element {
         let val = generation();
 
         if val == 2 || val == 4 {
@@ -142,7 +142,7 @@ fn supports_async() {
     use std::time::Duration;
     use tokio::time::sleep;
 
-    fn app(cx: Scope) -> Element {
+    fn app() -> Element {
         let colors = use_state(cx, || vec!["green", "blue", "red"]);
         let padding = use_state(cx, || 10);
 

@@ -2,7 +2,7 @@ use dioxus::prelude::*;
 
 fn main() {}
 
-fn app(cx: Scope) -> Element {
+fn app() -> Element {
     let count: &RefCell<Vec<Element>> = cx.use_hook(|| RefCell::new(Vec::new()));
 
     render! {

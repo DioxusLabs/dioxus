@@ -105,8 +105,12 @@ mod rehydrate;
 ///     render!(div {"hello world"})
 /// }
 /// ```
-pub fn launch(root_component: fn(()) -> Element) {
-    launch_with_props(root_component, (), Config::default());
+pub fn launch(root_component: fn() -> Element) {
+    launch_with_props(
+        |root_component| root_component(),
+        root_component,
+        Config::default(),
+    );
 }
 
 /// Launch your app and run the event loop, with configuration.

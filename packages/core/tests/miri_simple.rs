@@ -3,7 +3,7 @@ use dioxus::prelude::*;
 #[test]
 fn app_drops() {
     #[component]
-    fn App(cx: Scope) -> Element {
+    fn App() -> Element {
         render! { div {} }
     }
 
@@ -17,7 +17,7 @@ fn app_drops() {
 #[test]
 fn hooks_drop() {
     #[component]
-    fn App(cx: Scope) -> Element {
+    fn App() -> Element {
         cx.use_hook(|| String::from("asd"));
         cx.use_hook(|| String::from("asd"));
         cx.use_hook(|| String::from("asd"));
@@ -36,7 +36,7 @@ fn hooks_drop() {
 #[test]
 fn contexts_drop() {
     #[component]
-    fn App(cx: Scope) -> Element {
+    fn App() -> Element {
         cx.provide_context(String::from("asd"));
 
         render! {
@@ -61,7 +61,7 @@ fn contexts_drop() {
 #[test]
 fn tasks_drop() {
     #[component]
-    fn App(cx: Scope) -> Element {
+    fn App() -> Element {
         cx.spawn(async {
             // tokio::time::sleep(std::time::Duration::from_millis(100000)).await;
         });
@@ -93,7 +93,7 @@ fn root_props_drop() {
 #[test]
 fn diffing_drops_old() {
     #[component]
-    fn App(cx: Scope) -> Element {
+    fn App() -> Element {
         render! {
             div {
                 match generation() % 2 {

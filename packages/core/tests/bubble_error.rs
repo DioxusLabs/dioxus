@@ -2,7 +2,7 @@
 
 use dioxus::prelude::*;
 
-fn app(cx: Scope) -> Element {
+fn app() -> Element {
     let raw = match generation() % 2 {
         0 => "123.123",
         1 => "123.123.123",

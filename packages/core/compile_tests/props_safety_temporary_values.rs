@@ -2,7 +2,7 @@ use dioxus::prelude::*;
 
 fn main() {}
 
-fn app(cx: Scope) -> Element {
+fn app() -> Element {
     let count = vec![1, 2, 3];
 
     render! {

@@ -6,7 +6,7 @@ use dioxus_core::ElementId;
 #[test]
 fn nested_passthru_creates() {
     #[component]
-    fn App(cx: Scope) -> Element {
+    fn App() -> Element {
         render! {
             PassThru {
                 PassThru {
@@ -39,7 +39,7 @@ fn nested_passthru_creates() {
 #[test]
 fn nested_passthru_creates_add() {
     #[component]
-    fn App(cx: Scope) -> Element {
+    fn App() -> Element {
         render! {
             ChildComp {
                 "1"
@@ -81,7 +81,7 @@ fn nested_passthru_creates_add() {
 #[test]
 fn dynamic_node_as_root() {
     #[component]
-    fn App(cx: Scope) -> Element {
+    fn App() -> Element {
         let a = 123;
         let b = 456;
         render! { "{a}", "{b}" }

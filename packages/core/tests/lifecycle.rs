@@ -41,7 +41,7 @@ fn manual_diffing() {
 #[test]
 fn events_generate() {
     set_event_converter(Box::new(SerializedHtmlEventConverter));
-    fn app(cx: Scope) -> Element {
+    fn app() -> Element {
         let count = cx.use_hook(|| 0);
 
         match *count {
@@ -79,7 +79,7 @@ fn events_generate() {
 
 // #[test]
 // fn components_generate() {
-//     fn app(cx: Scope) -> Element {
+//     fn app() -> Element {
 //         let render_phase = cx.use_hook(|| 0);
 //         *render_phase += 1;
 

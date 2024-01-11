@@ -115,7 +115,7 @@ impl Runtime {
 ///     let virtual_dom = VirtualDom::new(app);
 /// }
 ///
-/// fn app(cx: Scope) -> Element {
+/// fn app() -> Element {
 ///     render!{ Component { runtime: Runtime::current().unwrap() } }
 /// }
 ///

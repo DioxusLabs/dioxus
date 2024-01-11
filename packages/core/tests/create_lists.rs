@@ -8,7 +8,7 @@ use dioxus_core::ElementId;
 // In Dioxus, we memoize the render! body and simplify it down to a few template loads
 //
 // Also note that the IDs increase linearly. This lets us drive a vec on the renderer for O(1) re-indexing
-fn app(cx: Scope) -> Element {
+fn app() -> Element {
     render! {
         div {
             (0..3).map(|i| render! {

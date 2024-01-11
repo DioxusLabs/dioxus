@@ -51,7 +51,7 @@ fn events_propagate() {
     assert_eq!(*CLICKS.lock().unwrap(), 3);
 }
 
-fn app(cx: Scope) -> Element {
+fn app() -> Element {
     render! {
         div { onclick: move |_| {
                 println!("top clicked");

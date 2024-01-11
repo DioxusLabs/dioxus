@@ -3,7 +3,7 @@ use dioxus::prelude::*;
 
 #[test]
 fn state_shares() {
-    fn app(cx: Scope) -> Element {
+    fn app() -> Element {
         cx.provide_context(generation() as i32);
 
         render!(child_1 {})

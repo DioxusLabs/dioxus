@@ -19,7 +19,7 @@ fn it_works() {
         });
 }
 
-fn app(cx: Scope) -> Element {
+fn app() -> Element {
     render!(
         div {
             "Waiting for... "
