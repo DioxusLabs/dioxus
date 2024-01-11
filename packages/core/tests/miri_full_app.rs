@@ -7,7 +7,7 @@ use std::rc::Rc;
 #[test]
 fn miri_rollover() {
     set_event_converter(Box::new(SerializedHtmlEventConverter));
-    let mut dom = VirtualDom::new(App);
+    let mut dom = VirtualDom::new(app);
 
     _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
 
@@ -23,7 +23,7 @@ fn miri_rollover() {
     }
 }
 
-fn App() -> Element {
+fn app() -> Element {
     let mut idx = use_signal(|| 0);
     let onhover = |_| println!("go!");
 

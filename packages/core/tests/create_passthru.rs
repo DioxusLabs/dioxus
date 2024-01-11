@@ -5,7 +5,7 @@ use dioxus_core::ElementId;
 /// Should push the text node onto the stack and modify it
 #[test]
 fn nested_passthru_creates() {
-    fn App() -> Element {
+    fn app() -> Element {
         render! {
             PassThru {
                 PassThru {
@@ -20,7 +20,7 @@ fn nested_passthru_creates() {
         render!(children)
     }
 
-    let mut dom = VirtualDom::new(App);
+    let mut dom = VirtualDom::new(app);
     let edits = dom.rebuild_to_vec().santize();
 
     assert_eq!(
@@ -37,7 +37,7 @@ fn nested_passthru_creates() {
 /// Take note on how we don't spit out the template for child_comp since it's entirely dynamic
 #[test]
 fn nested_passthru_creates_add() {
-    fn App() -> Element {
+    fn app() -> Element {
         render! {
             ChildComp {
                 "1"
@@ -57,7 +57,7 @@ fn nested_passthru_creates_add() {
         render! {children}
     }
 
-    let mut dom = VirtualDom::new(App);
+    let mut dom = VirtualDom::new(app);
 
     assert_eq!(
         dom.rebuild_to_vec().santize().edits,
@@ -78,13 +78,13 @@ fn nested_passthru_creates_add() {
 /// note that the template is all dynamic roots - so it doesn't actually get cached as a template
 #[test]
 fn dynamic_node_as_root() {
-    fn App() -> Element {
+    fn app() -> Element {
         let a = 123;
         let b = 456;
         render! { "{a}", "{b}" }
     }
 
-    let mut dom = VirtualDom::new(App);
+    let mut dom = VirtualDom::new(app);
     let edits = dom.rebuild_to_vec().santize();
 
     // Since the roots were all dynamic, they should not cause any template muations

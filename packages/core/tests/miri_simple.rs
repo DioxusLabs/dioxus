@@ -2,11 +2,11 @@ use dioxus::prelude::*;
 
 #[test]
 fn app_drops() {
-    fn App() -> Element {
+    fn app() -> Element {
         render! { div {} }
     }
 
-    let mut dom = VirtualDom::new(App);
+    let mut dom = VirtualDom::new(app);
 
     _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
     dom.mark_dirty(ScopeId::ROOT);
@@ -15,7 +15,7 @@ fn app_drops() {
 
 #[test]
 fn hooks_drop() {
-    fn App() -> Element {
+    fn app() -> Element {
         once(|| String::from("asd"));
         once(|| String::from("asd"));
         once(|| String::from("asd"));
@@ -24,7 +24,7 @@ fn hooks_drop() {
         render! { div {} }
     }
 
-    let mut dom = VirtualDom::new(App);
+    let mut dom = VirtualDom::new(app);
 
     _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
     dom.mark_dirty(ScopeId::ROOT);
@@ -33,7 +33,7 @@ fn hooks_drop() {
 
 #[test]
 fn contexts_drop() {
-    fn App() -> Element {
+    fn app() -> Element {
         provide_context(String::from("asd"));
 
         render! {
@@ -47,7 +47,7 @@ fn contexts_drop() {
         render! { div { "hello {el}" } }
     }
 
-    let mut dom = VirtualDom::new(App);
+    let mut dom = VirtualDom::new(app);
 
     _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
     dom.mark_dirty(ScopeId::ROOT);
@@ -56,7 +56,7 @@ fn contexts_drop() {
 
 #[test]
 fn tasks_drop() {
-    fn App() -> Element {
+    fn app() -> Element {
         spawn(async {
             // tokio::time::sleep(std::time::Duration::from_millis(100000)).await;
         });
@@ -64,7 +64,7 @@ fn tasks_drop() {
         render! { div {} }
     }
 
-    let mut dom = VirtualDom::new(App);
+    let mut dom = VirtualDom::new(app);
 
     _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
     dom.mark_dirty(ScopeId::ROOT);
@@ -88,7 +88,7 @@ fn root_props_drop() {
 
 #[test]
 fn diffing_drops_old() {
-    fn App() -> Element {
+    fn app() -> Element {
         render! {
             div {
                 match generation() % 2 {
@@ -110,7 +110,7 @@ fn diffing_drops_old() {
         render! {"Goodbye {name}"}
     }
 
-    let mut dom = VirtualDom::new(App);
+    let mut dom = VirtualDom::new(app);
     _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
     dom.mark_dirty(ScopeId::ROOT);
 

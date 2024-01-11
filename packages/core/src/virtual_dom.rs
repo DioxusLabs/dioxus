@@ -34,7 +34,7 @@ use std::{any::Any, cell::Cell, collections::BTreeSet, future::Future, rc::Rc};
 ///     title: String
 /// }
 ///
-/// fn App(cx: AppProps) -> Element {
+/// fn app(cx: AppProps) -> Element {
 ///     cx.render(rsx!(
 ///         div {"hello, {cx.title}"}
 ///     ))
@@ -55,7 +55,7 @@ use std::{any::Any, cell::Cell, collections::BTreeSet, future::Future, rc::Rc};
 /// static ROUTES: &str = "";
 ///
 /// #[component]
-/// fn App(cx: AppProps) -> Element {
+/// fn app(cx: AppProps) -> Element {
 ///     cx.render(rsx!(
 ///         NavBar { routes: ROUTES }
 ///         Title { "{cx.title}" }
@@ -88,9 +88,9 @@ use std::{any::Any, cell::Cell, collections::BTreeSet, future::Future, rc::Rc};
 ///
 /// ```rust
 /// # use dioxus::prelude::*;
-/// # fn App() -> Element { cx.render(rsx! { div {} }) }
+/// # fn app() -> Element { cx.render(rsx! { div {} }) }
 ///
-/// let mut vdom = VirtualDom::new(App);
+/// let mut vdom = VirtualDom::new(app);
 /// let edits = vdom.rebuild();
 /// ```
 ///
@@ -127,13 +127,13 @@ use std::{any::Any, cell::Cell, collections::BTreeSet, future::Future, rc::Rc};
 /// Putting everything together, you can build an event loop around Dioxus by using the methods outlined above.
 /// ```rust, ignore
 /// #[component]
-/// fn App() -> Element {
+/// fn app() -> Element {
 ///     cx.render(rsx! {
 ///         div { "Hello World" }
 ///     })
 /// }
 ///
-/// let dom = VirtualDom::new(App);
+/// let dom = VirtualDom::new(app);
 ///
 /// real_dom.apply(dom.rebuild());
 ///
@@ -464,7 +464,7 @@ impl VirtualDom {
     /// # Example
     ///
     /// ```rust, ignore
-    /// let dom = VirtualDom::new(App);
+    /// let dom = VirtualDom::new(app);
     /// let sender = dom.get_scheduler_channel();
     /// ```
     pub async fn wait_for_work(&mut self) {
@@ -545,7 +545,7 @@ impl VirtualDom {
     ///
     /// # Example
     /// ```rust, ignore
-    /// static App: Component = |cx|  cx.render(rsx!{ "hello world" });
+    /// static app: Component = |cx|  cx.render(rsx!{ "hello world" });
     ///
     /// let mut dom = VirtualDom::new();
     /// let edits = dom.rebuild();

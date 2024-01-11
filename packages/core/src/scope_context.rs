@@ -158,7 +158,7 @@ impl ScopeContext {
     /// ```rust, ignore
     /// struct SharedState(&'static str);
     ///
-    /// static App: Component = |cx| {
+    /// static app: Component = |cx| {
     ///     cx.use_hook(|| cx.provide_context(SharedState("world")));
     ///     render!(Child {})
     /// }
