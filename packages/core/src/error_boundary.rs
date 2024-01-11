@@ -1,6 +1,8 @@
 use crate::{
     global_context::{consume_context, current_scope_id},
-    Element, IntoDynNode, Properties, ScopeId, Template, TemplateAttribute, TemplateNode, VNode,
+    innerlude::provide_context,
+    once, Element, IntoDynNode, Properties, ScopeId, Template, TemplateAttribute, TemplateNode,
+    VNode,
 };
 use std::{
     any::{Any, TypeId},
@@ -13,8 +15,7 @@ use std::{
 
 /// Provide an error boundary to catch errors from child components
 pub fn use_error_boundary() -> ErrorBoundary {
-    // use_hook(|| cx.provide_context(ErrorBoundary::new()))
-    todo!()
+    once(|| provide_context(ErrorBoundary::new()))
 }
 
 /// A boundary that will capture any errors from child components
