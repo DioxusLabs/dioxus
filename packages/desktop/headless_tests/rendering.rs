@@ -89,7 +89,7 @@ fn check_html_renders(cx: Scope) -> Element {
                 h1 {
                     "text"
                 }
-                dyn_element
+                {dyn_element}
             }
         }
     }

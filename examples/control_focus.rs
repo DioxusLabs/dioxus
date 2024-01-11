@@ -15,8 +15,8 @@ fn app(cx: Scope) -> Element {
         if *running.current() {
             loop {
                 tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-                if let Some(element) = elements.read().get(focused) {
-                    element.set_focus(true);
+                if let Some(element) = elements.with(|f| f.get(focused).cloned()) {
+                    _ = element.set_focus(true).await;
                 } else {
                     focused = 0;
                 }

@@ -39,9 +39,9 @@ fn App(cx: Scope) -> Element {
             }
             button { onclick: move |_| idx -= 1, "-" }
             ul {
-                (0..**idx).map(|i| rsx! {
+                {(0..**idx).map(|i| rsx! {
                     ChildExample { i: i, onhover: onhover }
-                })
+                })}
             }
         }
     })

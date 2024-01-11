@@ -76,7 +76,11 @@ fn app(cx: Scope) -> Element {
 
                 "Hover, click, type or scroll to see the info down below"
             }
-            div { events.read().iter().map(|event| rsx!( div { "{event:?}" } )) }
+            div {
+                for event in events.read().iter() {
+                    div { "{event:?}" }
+                }
+            }
         }
     ))
 }

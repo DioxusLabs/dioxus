@@ -17,10 +17,12 @@ fn app(cx: Scope) -> Element {
     cx.render(rsx! (
         table {
             tbody {
-                (0..10_000_usize).map(|f| {
-                    let label = Label::new(&mut rng);
-                    rsx!( table_row { row_id: f, label: label } )
-                })
+                for f in 0..10_000_usize {
+                    table_row {
+                        row_id: f,
+                        label: Label::new(&mut rng)
+                    }
+                }
             }
         }
     ))

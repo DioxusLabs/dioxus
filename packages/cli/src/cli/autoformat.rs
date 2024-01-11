@@ -267,10 +267,10 @@ async fn test_auto_fmt() {
     let test_rsx = r#"
                     //
 
-                    rsx! {
+
 
                         div {}
-                    }
+
 
                     //
                     //

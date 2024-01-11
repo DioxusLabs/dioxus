@@ -97,7 +97,7 @@ pub fn Die<'a>(cx: Scope<'a, DieProps<'a>>) -> Element {
           fill: "{fill}",
         }
 
-        dots
+        {dots}
       }
     })
 }

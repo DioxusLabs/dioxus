@@ -11,12 +11,12 @@ use dioxus_core::ElementId;
 fn app(cx: Scope) -> Element {
     cx.render(rsx! {
         div {
-            (0..3).map(|i| rsx! {
+            for i in 0..3 {
                 div {
                     h1 { "hello world! "}
                     p { "{i}" }
                 }
-            })
+            }
         }
     })
 }

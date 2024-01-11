@@ -1,11 +1,11 @@
-use dioxus_rsx::{AttributeType, BodyNode, ElementAttrValue, ForLoop};
+use dioxus_rsx::{AttributeType, BodyNode, ElementAttrValue, ForLoop, IfChain};
 use proc_macro2::{LineColumn, Span};
 use quote::ToTokens;
 use std::{
     collections::{HashMap, VecDeque},
     fmt::{Result, Write},
 };
-use syn::{spanned::Spanned, Expr, ExprIf};
+use syn::{spanned::Spanned, Expr};
 
 use crate::buffer::Buffer;
 use crate::ifmt_to_string;
@@ -142,6 +142,7 @@ impl<'a> Writer<'a> {
             }
             ElementAttrValue::AttrLiteral(lit) => ifmt_to_string(lit).len(),
             ElementAttrValue::AttrExpr(expr) => expr.span().line_length(),
+            ElementAttrValue::Shorthand(expr) => expr.span().line_length(),
             ElementAttrValue::EventTokens(tokens) => {
                 let location = Location::new(tokens.span().start());
 
@@ -231,8 +232,49 @@ impl<'a> Writer<'a> {
         Ok(())
     }
 
-    fn write_if_chain(&mut self, ifchain: &ExprIf) -> std::fmt::Result {
-        self.write_raw_expr(ifchain.span())
+    fn write_if_chain(&mut self, ifchain: &IfChain) -> std::fmt::Result {
+        // Recurse in place by setting the next chain
+        let mut branch = Some(ifchain);
+
+        while let Some(chain) = branch {
+            let IfChain {
+                if_token,
+                cond,
+                then_branch,
+                else_if_branch,
+                else_branch,
+            } = chain;
+
+            write!(
+                self.out,
+                "{} {} {{",
+                if_token.to_token_stream(),
+                prettyplease::unparse_expr(cond)
+            )?;
+
+            self.write_body_indented(then_branch)?;
+
+            if let Some(else_if_branch) = else_if_branch {
+                // write the closing bracket and else
+                self.out.tabbed_line()?;
+                write!(self.out, "}} else ")?;
+
+                branch = Some(else_if_branch);
+            } else if let Some(else_branch) = else_branch {
+                self.out.tabbed_line()?;
+                write!(self.out, "}} else {{")?;
+
+                self.write_body_indented(else_branch)?;
+                branch = None;
+            } else {
+                branch = None;
+            }
+        }
+
+        self.out.tabbed_line()?;
+        write!(self.out, "}}")?;
+
+        Ok(())
     }
 }
 

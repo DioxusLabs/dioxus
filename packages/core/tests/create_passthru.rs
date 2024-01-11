@@ -20,7 +20,7 @@ fn nested_passthru_creates() {
 
     #[component]
     fn PassThru<'a>(cx: Scope<'a>, children: Element<'a>) -> Element {
-        cx.render(rsx!(children))
+        cx.render(rsx!({ children }))
     }
 
     let mut dom = VirtualDom::new(App);
@@ -60,7 +60,7 @@ fn nested_passthru_creates_add() {
 
     #[component]
     fn ChildComp<'a>(cx: Scope, children: Element<'a>) -> Element {
-        cx.render(rsx! { children })
+        cx.render(rsx! { {children} })
     }
 
     let mut dom = VirtualDom::new(App);

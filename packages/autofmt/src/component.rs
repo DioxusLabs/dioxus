@@ -182,6 +182,9 @@ impl Writer<'_> {
                         s.source.as_ref().unwrap().to_token_stream()
                     )?;
                 }
+                ContentField::Shorthand(e) => {
+                    write!(self.out, "{}", e.to_token_stream())?;
+                }
                 ContentField::OnHandlerRaw(exp) => {
                     let out = prettyplease::unparse_expr(exp);
                     let mut lines = out.split('\n').peekable();
@@ -223,6 +226,7 @@ impl Writer<'_> {
             .iter()
             .map(|field| match &field.content {
                 ContentField::Formatted(s) => ifmt_to_string(s).len() ,
+                ContentField::Shorthand(e) => e.to_token_stream().to_string().len(),
                 ContentField::OnHandlerRaw(exp) | ContentField::ManExpr(exp) => {
                     let formatted = prettyplease::unparse_expr(exp);
                     let len = if formatted.contains('\n') {

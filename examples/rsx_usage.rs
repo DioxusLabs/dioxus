@@ -61,7 +61,7 @@ fn App(cx: Scope) -> Element {
             h1 {"Some text"}
             h1 {"Some text with {formatting}"}
             h1 {"Formatting basic expressions {formatting_tuple.0} and {formatting_tuple.1}"}
-            h1 {"Formatting without interpolation " formatting_tuple.0 "and" formatting_tuple.1 }
+            h1 {"Formatting without interpolation " {formatting_tuple.0} "and" {formatting_tuple.1} }
             h2 {
                 "Multiple"
                 "Text"
@@ -94,10 +94,10 @@ fn App(cx: Scope) -> Element {
             }
 
             // Expressions can be used in element position too:
-            rsx!(p { "More templating!" }),
+            {rsx!(p { "More templating!" })},
 
             // Iterators
-            (0..10).map(|i| rsx!(li { "{i}" })),
+            {(0..10).map(|i| rsx!(li { "{i}" }))},
 
             // Iterators within expressions
             {
@@ -117,24 +117,25 @@ fn App(cx: Scope) -> Element {
             // Conditional rendering
             // Dioxus conditional rendering is based around None/Some. We have no special syntax for conditionals.
             // You can convert a bool condition to rsx! with .then and .or
-            true.then(|| rsx!(div {})),
+            {true.then(|| rsx!(div {}))},
 
             // Alternatively, you can use the "if" syntax - but both branches must be resolve to Element
             if false {
-                rsx!(h1 {"Top text"})
+                h1 {"Top text"}
             } else {
-                rsx!(h1 {"Bottom text"})
+                h1 {"Bottom text"}
             }
 
             // Using optionals for diverging branches
-            if true {
+            // Note that since this is wrapped in curlies, it's interpreted as an expression
+            {if true {
                 Some(rsx!(h1 {"Top text"}))
             } else {
                 None
-            }
+            }}
 
             // returning "None" without a diverging branch is a bit noisy... but rare in practice
-            None as Option<()>,
+            {None as Option<()>},
 
             // can also just use empty fragments
             Fragment {}
@@ -169,13 +170,13 @@ fn App(cx: Scope) -> Element {
 
             // Can pass in props directly as an expression
             {
-                let props = TallerProps {a: "hello", children: cx.render(rsx!(()))};
+                let props = TallerProps {a: "hello", children: None };
                 rsx!(Taller { ..props })
             }
 
             // Spreading can also be overridden manually
             Taller {
-                ..TallerProps { a: "ballin!", children: cx.render(rsx!(()) )},
+                ..TallerProps { a: "ballin!", children: None },
                 a: "not ballin!"
             }
 
@@ -204,16 +205,16 @@ fn App(cx: Scope) -> Element {
 
             // helper functions
             // Anything that implements IntoVnode can be dropped directly into Rsx
-            helper(cx, "hello world!")
+            {helper(cx, "hello world!")}
 
             // Strings can be supplied directly
-            String::from("Hello world!")
+            {String::from("Hello world!")}
 
             // So can format_args
-            format_args!("Hello {}!", "world")
+            {format_args!("Hello {}!", "world")}
 
             // Or we can shell out to a helper function
-            format_dollars(10, 50)
+            {format_dollars(10, 50)}
         }
     })
 }
@@ -269,7 +270,7 @@ pub struct TallerProps<'a> {
 #[component]
 pub fn Taller<'a>(cx: Scope<'a, TallerProps<'a>>) -> Element {
     cx.render(rsx! {
-        &cx.props.children
+        {&cx.props.children}
     })
 }
 

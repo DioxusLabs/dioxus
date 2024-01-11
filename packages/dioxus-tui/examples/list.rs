@@ -19,9 +19,9 @@ fn app(cx: Scope) -> Element {
             ul {
                 flex_direction: "column",
                 padding_left: "3px",
-                (0..10).map(|i| rsx!(
+                for i in 0..10 {
                     "> hello {i}"
-                ))
+                }
             }
         }
     })

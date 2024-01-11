@@ -242,7 +242,9 @@ fn to_string_works() {
                 div {}
                 div { "nest 2" }
                 "{dyn2}"
-                (0..5).map(|i| rsx! { div { "finalize {i}" } })
+                for i in (0..5) {
+                    div { "finalize {i}" }
+                }
             }
         }
     }

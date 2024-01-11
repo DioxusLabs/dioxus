@@ -19,6 +19,7 @@ use syn::{
     ext::IdentExt,
     parse::{Parse, ParseBuffer, ParseStream},
     spanned::Spanned,
+    token::Brace,
     AngleBracketedGenericArguments, Error, Expr, Ident, LitStr, PathArguments, Result, Token,
 };
 
@@ -32,8 +33,85 @@ pub struct Component {
     pub brace: syn::token::Brace,
 }
 
+impl Parse for Component {
+    fn parse(stream: ParseStream) -> Result<Self> {
+        let mut name = stream.parse::<syn::Path>()?;
+        Component::validate_component_path(&name)?;
+
+        // extract the path arguments from the path into prop_gen_args
+        let prop_gen_args = normalize_path(&mut name);
+
+        let content: ParseBuffer;
+        let brace = syn::braced!(content in stream);
+
+        let mut fields = Vec::new();
+        let mut children = Vec::new();
+        let mut manual_props = None;
+
+        while !content.is_empty() {
+            // if we splat into a component then we're merging properties
+            if content.peek(Token![..]) {
+                content.parse::<Token![..]>()?;
+                manual_props = Some(content.parse()?);
+            } else if
+            // Named fields
+            (content.peek(Ident) && content.peek2(Token![:]) && !content.peek3(Token![:]))
+            // shorthand struct initialization
+                // Not a div {}, mod::Component {}, or web-component {}
+                || (content.peek(Ident)
+                    && !content.peek2(Brace)
+                    && !content.peek2(Token![:])
+                    && !content.peek2(Token![-]))
+            {
+                fields.push(content.parse()?);
+            } else {
+                children.push(content.parse()?);
+            }
+
+            if content.peek(Token![,]) {
+                let _ = content.parse::<Token![,]>();
+            }
+        }
+
+        Ok(Self {
+            name,
+            prop_gen_args,
+            fields,
+            children,
+            manual_props,
+            brace,
+        })
+    }
+}
+
+impl ToTokens for Component {
+    fn to_tokens(&self, tokens: &mut TokenStream2) {
+        let Self {
+            name,
+            prop_gen_args,
+            ..
+        } = self;
+
+        let builder = self
+            .manual_props
+            .as_ref()
+            .map(|props| self.collect_manual_props(props))
+            .unwrap_or_else(|| self.collect_props());
+
+        let fn_name = self.fn_name();
+
+        tokens.append_all(quote! {
+            __cx.component(
+                #name #prop_gen_args,
+                #builder,
+                #fn_name
+            )
+        })
+    }
+}
+
 impl Component {
-    pub fn validate_component_path(path: &syn::Path) -> Result<()> {
+    fn validate_component_path(path: &syn::Path) -> Result<()> {
         // ensure path segments doesn't have PathArguments, only the last
         // segment is allowed to have one.
         if path
@@ -67,134 +145,53 @@ impl Component {
             _ => None,
         }
     }
-}
 
-impl Parse for Component {
-    fn parse(stream: ParseStream) -> Result<Self> {
-        let mut name = stream.parse::<syn::Path>()?;
-        Component::validate_component_path(&name)?;
-
-        // extract the path arguments from the path into prop_gen_args
-        let prop_gen_args = name.segments.last_mut().and_then(|seg| {
-            if let PathArguments::AngleBracketed(args) = seg.arguments.clone() {
-                seg.arguments = PathArguments::None;
-                Some(args)
-            } else {
-                None
+    fn collect_manual_props(&self, manual_props: &Expr) -> TokenStream2 {
+        let mut toks = quote! { let mut __manual_props = #manual_props; };
+        for field in &self.fields {
+            if field.name == "key" {
+                continue;
             }
-        });
+            let ComponentField { name, content } = field;
+            toks.append_all(quote! { __manual_props.#name = #content; });
+        }
+        toks.append_all(quote! { __manual_props });
+        quote! {{ #toks }}
+    }
 
-        let content: ParseBuffer;
+    fn collect_props(&self) -> TokenStream2 {
+        let name = &self.name;
 
-        // if we see a `{` then we have a block
-        // else parse as a function-like call
-        let brace = syn::braced!(content in stream);
-
-        let mut fields = Vec::new();
-        let mut children = Vec::new();
-        let mut manual_props = None;
-
-        while !content.is_empty() {
-            // if we splat into a component then we're merging properties
-            if content.peek(Token![..]) {
-                content.parse::<Token![..]>()?;
-                manual_props = Some(content.parse::<Expr>()?);
-            } else if content.peek(Ident) && content.peek2(Token![:]) && !content.peek3(Token![:]) {
-                fields.push(content.parse::<ComponentField>()?);
-            } else {
-                children.push(content.parse::<BodyNode>()?);
-            }
-
-            if content.peek(Token![,]) {
-                let _ = content.parse::<Token![,]>();
+        let mut toks = match &self.prop_gen_args {
+            Some(gen_args) => quote! { fc_to_builder(__cx, #name #gen_args) },
+            None => quote! { fc_to_builder(__cx, #name) },
+        };
+        for field in &self.fields {
+            match field.name.to_string().as_str() {
+                "key" => {}
+                _ => toks.append_all(quote! {#field}),
             }
         }
+        if !self.children.is_empty() {
+            let renderer: TemplateRenderer = TemplateRenderer {
+                roots: &self.children,
+                location: None,
+            };
 
-        Ok(Self {
-            name,
-            prop_gen_args,
-            fields,
-            children,
-            manual_props,
-            brace,
-        })
+            toks.append_all(quote! {
+                .children(
+                    Some({ #renderer })
+                )
+            });
+        }
+        toks.append_all(quote! {
+            .build()
+        });
+        toks
     }
-}
 
-impl ToTokens for Component {
-    fn to_tokens(&self, tokens: &mut TokenStream2) {
-        let name = &self.name;
-        let prop_gen_args = &self.prop_gen_args;
-
-        let builder = match &self.manual_props {
-            Some(manual_props) => {
-                let mut toks = quote! {
-                    let mut __manual_props = #manual_props;
-                };
-                for field in &self.fields {
-                    if field.name == "key" {
-                        // skip keys
-                    } else {
-                        let name = &field.name;
-                        let val = &field.content;
-                        toks.append_all(quote! {
-                            __manual_props.#name = #val;
-                        });
-                    }
-                }
-                toks.append_all(quote! {
-                    __manual_props
-                });
-                quote! {{
-                    #toks
-                }}
-            }
-            None => {
-                let mut toks = match prop_gen_args {
-                    Some(gen_args) => quote! { fc_to_builder(__cx, #name #gen_args) },
-                    None => quote! { fc_to_builder(__cx, #name) },
-                };
-                for field in &self.fields {
-                    match field.name.to_string().as_str() {
-                        "key" => {}
-                        _ => toks.append_all(quote! {#field}),
-                    }
-                }
-
-                if !self.children.is_empty() {
-                    let renderer: TemplateRenderer = TemplateRenderer {
-                        roots: &self.children,
-                        location: None,
-                    };
-
-                    toks.append_all(quote! {
-                        .children(
-                            Some({ #renderer })
-                        )
-                    });
-                }
-
-                toks.append_all(quote! {
-                    .build()
-                });
-                toks
-            }
-        };
-
-        let fn_name = self.name.segments.last().unwrap().ident.to_string();
-
-        let gen_name = match &self.prop_gen_args {
-            Some(gen) => quote! { #name #gen },
-            None => quote! { #name },
-        };
-
-        tokens.append_all(quote! {
-            __cx.component(
-                #gen_name,
-                #builder,
-                #fn_name
-            )
-        })
+    fn fn_name(&self) -> String {
+        self.name.segments.last().unwrap().ident.to_string()
     }
 }
 
@@ -207,21 +204,50 @@ pub struct ComponentField {
 
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub enum ContentField {
+    Shorthand(Ident),
     ManExpr(Expr),
     Formatted(IfmtInput),
     OnHandlerRaw(Expr),
 }
 
+impl ContentField {
+    fn new_from_name(name: &Ident, input: ParseStream) -> Result<Self> {
+        if name.to_string().starts_with("on") {
+            return Ok(ContentField::OnHandlerRaw(input.parse()?));
+        }
+
+        if *name == "key" {
+            return Ok(ContentField::Formatted(input.parse()?));
+        }
+
+        if input.peek(LitStr) {
+            let forked = input.fork();
+            let t: LitStr = forked.parse()?;
+
+            // the string literal must either be the end of the input or a followed by a comma
+            let res =
+                match (forked.is_empty() || forked.peek(Token![,])) && is_literal_foramtted(&t) {
+                    true => ContentField::Formatted(input.parse()?),
+                    false => ContentField::ManExpr(input.parse()?),
+                };
+
+            return Ok(res);
+        }
+
+        Ok(ContentField::ManExpr(input.parse()?))
+    }
+}
+
 impl ToTokens for ContentField {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         match self {
+            ContentField::Shorthand(i) if i.to_string().starts_with("on") => {
+                tokens.append_all(quote! { __cx.event_handler(#i) })
+            }
+            ContentField::Shorthand(i) => tokens.append_all(quote! { #i }),
             ContentField::ManExpr(e) => e.to_tokens(tokens),
-            ContentField::Formatted(s) => tokens.append_all(quote! {
-                __cx.raw_text(#s)
-            }),
-            ContentField::OnHandlerRaw(e) => tokens.append_all(quote! {
-                __cx.event_handler(#e)
-            }),
+            ContentField::Formatted(s) => tokens.append_all(quote! { __cx.raw_text(#s) }),
+            ContentField::OnHandlerRaw(e) => tokens.append_all(quote! { __cx.event_handler(#e) }),
         }
     }
 }
@@ -229,30 +255,21 @@ impl ToTokens for ContentField {
 impl Parse for ComponentField {
     fn parse(input: ParseStream) -> Result<Self> {
         let name = Ident::parse_any(input)?;
-        input.parse::<Token![:]>()?;
 
-        let content = {
-            if name.to_string().starts_with("on") {
-                ContentField::OnHandlerRaw(input.parse()?)
-            } else if name == "key" {
-                let content = ContentField::Formatted(input.parse()?);
-                return Ok(Self { name, content });
-            } else if input.peek(LitStr) {
-                let forked = input.fork();
-                let t: LitStr = forked.parse()?;
-                // the string literal must either be the end of the input or a followed by a comma
-                if (forked.is_empty() || forked.peek(Token![,])) && is_literal_foramtted(&t) {
-                    ContentField::Formatted(input.parse()?)
-                } else {
-                    ContentField::ManExpr(input.parse()?)
-                }
-            } else {
-                ContentField::ManExpr(input.parse()?)
-            }
+        // if the next token is not a colon, then it's a shorthand field
+        if input.parse::<Token![:]>().is_err() {
+            return Ok(Self {
+                content: ContentField::Shorthand(name.clone()),
+                name,
+            });
         };
+
+        let content = ContentField::new_from_name(&name, input)?;
+
         if input.peek(LitStr) || input.peek(Ident) {
             missing_trailing_comma!(content.span());
         }
+
         Ok(Self { name, content })
     }
 }
@@ -260,9 +277,7 @@ impl Parse for ComponentField {
 impl ToTokens for ComponentField {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         let ComponentField { name, content, .. } = self;
-        tokens.append_all(quote! {
-            .#name(#content)
-        })
+        tokens.append_all(quote! { .#name(#content) })
     }
 }
 
@@ -280,4 +295,15 @@ fn is_literal_foramtted(lit: &LitStr) -> bool {
     }
 
     false
+}
+
+fn normalize_path(name: &mut syn::Path) -> Option<AngleBracketedGenericArguments> {
+    let seg = name.segments.last_mut()?;
+    match seg.arguments.clone() {
+        PathArguments::AngleBracketed(args) => {
+            seg.arguments = PathArguments::None;
+            Some(args)
+        }
+        _ => None,
+    }
 }

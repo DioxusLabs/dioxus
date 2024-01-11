@@ -20,7 +20,7 @@ fn app(cx: Scope) -> Element {
     cx.render(rsx!(
         div {
             h1 {"Select an option"}
-            h3 { "The radio is... ", state.is_playing(), "!" }
+            h3 { "The radio is... ", {state.is_playing()}, "!" }
             button { onclick: move |_| state.make_mut().reduce(PlayerAction::Pause),
                 "Pause"
             }
