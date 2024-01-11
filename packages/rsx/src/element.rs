@@ -140,7 +140,17 @@ impl Parse for Element {
 
                 // If the shorthand field is children, these are actually children!
                 if name == "children" {
-                    panic!("children must be wrapped in braces");
+                    return Err(syn::Error::new(
+                        name.span(),
+                        format!(
+                            r#"Shorthand element children are not supported.
+To pass children into elements, wrap them in curly braces.
+Like so:
+    div {{ {{children}} }}
+
+"#,
+                        ),
+                    ));
                 };
 
                 let value = ElementAttrValue::Shorthand(name.clone());
