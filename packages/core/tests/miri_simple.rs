@@ -8,7 +8,7 @@ fn app_drops() {
 
     let mut dom = VirtualDom::new(App);
 
-    _ = dom.rebuild_to_vec(&mut dioxus_core::NoOpMutations);
+    _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
     dom.mark_dirty(ScopeId::ROOT);
     _ = dom.render_immediate_to_vec();
 }
@@ -26,7 +26,7 @@ fn hooks_drop() {
 
     let mut dom = VirtualDom::new(App);
 
-    _ = dom.rebuild_to_vec(&mut dioxus_core::NoOpMutations);
+    _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
     dom.mark_dirty(ScopeId::ROOT);
     _ = dom.render_immediate_to_vec();
 }
@@ -41,7 +41,6 @@ fn contexts_drop() {
         }
     }
 
-    #[component]
     fn ChildComp() -> Element {
         let el = cx.consume_context::<String>().unwrap();
 
@@ -50,7 +49,7 @@ fn contexts_drop() {
 
     let mut dom = VirtualDom::new(App);
 
-    _ = dom.rebuild_to_vec(&mut dioxus_core::NoOpMutations);
+    _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
     dom.mark_dirty(ScopeId::ROOT);
     _ = dom.render_immediate_to_vec();
 }
@@ -67,13 +66,14 @@ fn tasks_drop() {
 
     let mut dom = VirtualDom::new(App);
 
-    _ = dom.rebuild_to_vec(&mut dioxus_core::NoOpMutations);
+    _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
     dom.mark_dirty(ScopeId::ROOT);
     _ = dom.render_immediate_to_vec();
 }
 
 #[test]
 fn root_props_drop() {
+    #[derive(Clone)]
     struct RootProps(String);
 
     let mut dom = VirtualDom::new_with_props(
@@ -81,7 +81,7 @@ fn root_props_drop() {
         RootProps("asdasd".to_string()),
     );
 
-    _ = dom.rebuild_to_vec(&mut dioxus_core::NoOpMutations);
+    _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
     dom.mark_dirty(ScopeId::ROOT);
     _ = dom.render_immediate_to_vec();
 }
@@ -111,7 +111,7 @@ fn diffing_drops_old() {
     }
 
     let mut dom = VirtualDom::new(App);
-    _ = dom.rebuild_to_vec(&mut dioxus_core::NoOpMutations);
+    _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
     dom.mark_dirty(ScopeId::ROOT);
 
     _ = dom.render_immediate_to_vec();

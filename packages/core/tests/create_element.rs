@@ -3,7 +3,7 @@ use dioxus::prelude::*;
 
 #[test]
 fn multiroot() {
-    let mut dom = VirtualDom::new(|cx| {
+    let mut dom = VirtualDom::new(|| {
         render! {
             div { "Hello a" }
             div { "Hello b" }

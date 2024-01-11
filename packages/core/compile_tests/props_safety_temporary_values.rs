@@ -5,11 +5,7 @@ fn main() {}
 fn app() -> Element {
     let count = vec![1, 2, 3];
 
-    render! {
-        unsafe_child_component {
-            borrowed: &count
-        }
-    }
+    render! { unsafe_child_component { borrowed: &count } }
 }
 
 #[derive(Props)]
@@ -18,7 +14,5 @@ struct Testing<'a> {
 }
 
 fn unsafe_child_component<'a>(cx: Testing) -> Element {
-    cx.render(rsx! {
-        div { "{cx.borrowed:?}" }
-    })
+    render! { div { "{cx.borrowed:?}" } }
 }

@@ -5,11 +5,7 @@ fn main() {}
 fn app() -> Element {
     let count: &RefCell<Vec<Element>> = cx.use_hook(|| RefCell::new(Vec::new()));
 
-    render! {
-        unsafe_child_component {
-            borrowed: count
-        }
-    }
+    render! { unsafe_child_component { borrowed: count } }
 }
 
 #[derive(Props)]
@@ -26,7 +22,5 @@ fn unsafe_child_component<'a>(cx: Testing) -> Element {
         .borrow_mut()
         .push(render! {"{borrowed_temporary_data}"});
 
-    cx.render(rsx! {
-        div { "Hello, world!" }
-    })
+    render! { div { "Hello, world!" } }
 }

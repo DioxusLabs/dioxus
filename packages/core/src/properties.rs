@@ -102,10 +102,10 @@ impl<F: Fn() -> Element> HasProps<ZeroElementMarker> for F {
 #[test]
 fn test_empty_builder() {
     fn app() -> Element {
-        render!(div {})
+        todo!()
     }
     fn app2(_: ()) -> Element {
-        render!(div {})
+        todo!()
     }
     let builder = fc_to_builder(app);
     builder.build();

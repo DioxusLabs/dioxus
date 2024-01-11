@@ -24,7 +24,7 @@ fn empty_fragment_creates_nothing() {
 
 #[test]
 fn root_fragments_work() {
-    let mut vdom = VirtualDom::new(|cx| {
+    let mut vdom = VirtualDom::new(|| {
         render!(
             div { "hello" }
             div { "goodbye" }
@@ -39,7 +39,7 @@ fn root_fragments_work() {
 
 #[test]
 fn fragments_nested() {
-    let mut vdom = VirtualDom::new(|cx| {
+    let mut vdom = VirtualDom::new(|| {
         render!(
             div { "hello" }
             div { "goodbye" }

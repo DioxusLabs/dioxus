@@ -59,7 +59,7 @@ fn test_memory_leak() {
 
     let mut dom = VirtualDom::new(app);
 
-    _ = dom.rebuild_to_vec(&mut dioxus_core::NoOpMutations);
+    _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     for _ in 0..5 {
         dom.mark_dirty(ScopeId::ROOT);
@@ -84,7 +84,7 @@ fn memo_works_properly() {
         )
     }
 
-    #[derive(PartialEq, Props)]
+    #[derive(PartialEq, Clone, Props)]
     struct ChildProps {
         na: String,
     }
@@ -95,7 +95,7 @@ fn memo_works_properly() {
 
     let mut dom = VirtualDom::new(app);
 
-    _ = dom.rebuild_to_vec(&mut dioxus_core::NoOpMutations);
+    _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
     // todo!()
     // dom.hard_diff(ScopeId::ROOT);
     // dom.hard_diff(ScopeId::ROOT);
@@ -121,13 +121,13 @@ fn free_works_on_root_hooks() {
         render!(child_component { inner: name.inner.clone() })
     }
 
-    fn child_component(cx: Scope<AppProps>) -> Element {
-        render!( div { "{cx.inner}" } )
+    fn child_component(props: AppProps) -> Element {
+        render!( div { "{props.inner}" } )
     }
 
     let ptr = Rc::new("asdasd".to_string());
     let mut dom = VirtualDom::new_with_props(app, AppProps { inner: ptr.clone() });
-    let _ = dom.rebuild_to_vec(&mut dioxus_core::NoOpMutations);
+    let _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     // ptr gets cloned into props and then into the hook
     assert_eq!(Rc::strong_count(&ptr), 4);
@@ -162,6 +162,7 @@ fn supports_async() {
             });
         });
 
+        let colors = colors();
         let big = colors[0];
         let mid = colors[1];
         let small = colors[2];
@@ -184,7 +185,7 @@ fn supports_async() {
 
     rt.block_on(async {
         let mut dom = VirtualDom::new(app);
-        let _ = dom.rebuild_to_vec(&mut dioxus_core::NoOpMutations);
+        let _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
 
         for _ in 0..10 {
             dom.wait_for_work().await;

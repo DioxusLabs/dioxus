@@ -53,7 +53,7 @@ fn nested_passthru_creates_add() {
     }
 
     #[component]
-    fn ChildComp<'a>(children: Element) -> Element {
+    fn ChildComp(children: Element) -> Element {
         render! {children}
     }
 

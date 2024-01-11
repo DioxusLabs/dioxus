@@ -4,7 +4,7 @@ use dioxus::prelude::*;
 #[test]
 fn state_shares() {
     fn app() -> Element {
-        cx.provide_context(generation().unwrap() as i32);
+        cx.provide_context(generation() as i32);
 
         render!(child_1 {})
     }
@@ -29,11 +29,15 @@ fn state_shares() {
 
     dom.mark_dirty(ScopeId::ROOT);
     _ = dom.render_immediate_to_vec();
-    assert_eq!(dom.base_scope().consume_context::<i32>().unwrap(), 1);
+    dom.in_runtime(|| {
+        assert_eq!(ScopeId::ROOT.consume_context::<i32>().unwrap(), 1);
+    });
 
     dom.mark_dirty(ScopeId::ROOT);
     _ = dom.render_immediate_to_vec();
-    assert_eq!(dom.base_scope().consume_context::<i32>().unwrap(), 2);
+    dom.in_runtime(|| {
+        assert_eq!(ScopeId::ROOT.consume_context::<i32>().unwrap(), 2);
+    });
 
     dom.mark_dirty(ScopeId(2));
     assert_eq!(

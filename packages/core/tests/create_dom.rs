@@ -11,7 +11,7 @@ use dioxus_core::ElementId;
 
 #[test]
 fn test_original_diff() {
-    let mut dom = VirtualDom::new(|cx| {
+    let mut dom = VirtualDom::new(|| {
         render! {
             div { div { "Hello, world!" } }
         }
@@ -31,7 +31,7 @@ fn test_original_diff() {
 
 #[test]
 fn create() {
-    let mut dom = VirtualDom::new(|cx| {
+    let mut dom = VirtualDom::new(|| {
         render! {
             div {
                 div {
@@ -94,7 +94,7 @@ fn create_list() {
 
 #[test]
 fn create_simple() {
-    let mut dom = VirtualDom::new(|cx| {
+    let mut dom = VirtualDom::new(|| {
         render! {
             div {}
             div {}
@@ -121,7 +121,7 @@ fn create_simple() {
 }
 #[test]
 fn create_components() {
-    let mut dom = VirtualDom::new(|cx| {
+    let mut dom = VirtualDom::new(|| {
         render! {
             Child { "abc1" }
             Child { "abc2" }
@@ -149,7 +149,7 @@ fn create_components() {
 
 #[test]
 fn anchors() {
-    let mut dom = VirtualDom::new(|cx| {
+    let mut dom = VirtualDom::new(|| {
         render! {
             if true {
                 render!( div { "hello" } )

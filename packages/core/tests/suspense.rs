@@ -9,7 +9,7 @@ fn it_works() {
         .unwrap()
         .block_on(async {
             let mut dom = VirtualDom::new(app);
-            _ = dom.rebuild_to_vec(&mut dioxus_core::NoOpMutations);
+            _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
             dom.wait_for_suspense().await;
             let out = dioxus_ssr::render(&dom);
 
@@ -32,10 +32,10 @@ fn suspended_child() -> Element {
     let mut val = use_signal(|| 0);
 
     if *val() < 3 {
-        cx.spawn(async move {
+        spawn(async move {
             val += 1;
         });
-        cx.suspend()?;
+        suspend()?;
     }
 
     render!("child")

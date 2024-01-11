@@ -16,7 +16,7 @@ fn manual_diffing() {
         value: Shared<&'static str>,
     }
 
-    fn app(cx: Scope<AppProps>) -> Element {
+    fn app(cx: AppProps) -> Element {
         let val = cx.value.lock().unwrap();
         render! { div { "{val}" } }
     };
@@ -24,7 +24,7 @@ fn manual_diffing() {
     let value = Arc::new(Mutex::new("Hello"));
     let mut dom = VirtualDom::new_with_props(app, AppProps { value: value.clone() });
 
-    let _ = dom.rebuild_to_vec(&mut dioxus_core::NoOpMutations);
+    let _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     *value.lock().unwrap() = "goodbye";
 
@@ -56,7 +56,7 @@ fn events_generate() {
     };
 
     let mut dom = VirtualDom::new(app);
-    _ = dom.rebuild_to_vec(&mut dioxus_core::NoOpMutations);
+    _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     dom.handle_event(
         "click",

@@ -4,7 +4,7 @@ use pretty_assertions::assert_eq;
 
 #[test]
 fn list_creates_one_by_one() {
-    let mut dom = VirtualDom::new(|cx| {
+    let mut dom = VirtualDom::new(|| {
         let gen = generation();
 
         render! {
@@ -73,7 +73,7 @@ fn list_creates_one_by_one() {
 
 #[test]
 fn removes_one_by_one() {
-    let mut dom = VirtualDom::new(|cx| {
+    let mut dom = VirtualDom::new(|| {
         let gen = 3 - generation() % 4;
 
         render! {
@@ -150,7 +150,7 @@ fn removes_one_by_one() {
 
 #[test]
 fn list_shrink_multiroot() {
-    let mut dom = VirtualDom::new(|cx| {
+    let mut dom = VirtualDom::new(|| {
         render! {
             div {
                 (0..generation()).map(|i| render! {
@@ -209,7 +209,7 @@ fn list_shrink_multiroot() {
 
 #[test]
 fn removes_one_by_one_multiroot() {
-    let mut dom = VirtualDom::new(|cx| {
+    let mut dom = VirtualDom::new(|| {
         let gen = 3 - generation() % 4;
 
         render! {
@@ -274,7 +274,7 @@ fn removes_one_by_one_multiroot() {
 
 #[test]
 fn two_equal_fragments_are_equal_static() {
-    let mut dom = VirtualDom::new(|cx| {
+    let mut dom = VirtualDom::new(|| {
         render! {
             (0..5).map(|_| render! {
                 div { "hello" }
@@ -282,13 +282,13 @@ fn two_equal_fragments_are_equal_static() {
         }
     });
 
-    _ = dom.rebuild_to_vec(&mut dioxus_core::NoOpMutations);
+    _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
     assert!(dom.render_immediate_to_vec().edits.is_empty());
 }
 
 #[test]
 fn two_equal_fragments_are_equal() {
-    let mut dom = VirtualDom::new(|cx| {
+    let mut dom = VirtualDom::new(|| {
         render! {
             (0..5).map(|i| render! {
                 div { "hello {i}" }
@@ -296,13 +296,13 @@ fn two_equal_fragments_are_equal() {
         }
     });
 
-    _ = dom.rebuild_to_vec(&mut dioxus_core::NoOpMutations);
+    _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
     assert!(dom.render_immediate_to_vec().edits.is_empty());
 }
 
 #[test]
 fn remove_many() {
-    let mut dom = VirtualDom::new(|cx| {
+    let mut dom = VirtualDom::new(|| {
         let num = match generation() % 3 {
             0 => 0,
             1 => 1,
