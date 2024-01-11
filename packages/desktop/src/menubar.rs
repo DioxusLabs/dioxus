@@ -2,10 +2,10 @@ use tao::window::Window;
 
 #[allow(unused)]
 pub fn build_menu(window: &Window, default_menu_bar: bool) {
-    if default_menu_bar {
-        #[cfg(not(any(target_os = "ios", target_os = "android")))]
-        impl_::build_menu_bar(impl_::build_default_menu_bar(), window)
-    }
+    // if default_menu_bar {
+    //     #[cfg(not(any(target_os = "ios", target_os = "android")))]
+    //     impl_::build_menu_bar(impl_::build_default_menu_bar(), window)
+    // }
 }
 
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
