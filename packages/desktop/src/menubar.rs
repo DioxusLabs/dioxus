@@ -36,7 +36,7 @@ mod impl_ {
         #[cfg(target_os = "linux")]
         {
             use tao::platform::unix::WindowExtUnix;
-            menu.init_for_gtk_window(window, window.default_vbox())
+            menu.init_for_gtk_window(window.gtk_window(), window.default_vbox())
                 .unwrap();
         }
 
