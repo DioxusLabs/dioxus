@@ -194,7 +194,7 @@ impl Parse for ComponentBody {
             ));
         }
 
-        let has_extra_args = item_fn.sig.inputs.len() > 1;
+        let has_extra_args = !item_fn.sig.inputs.is_empty();
 
         Ok(Self {
             item_fn,
