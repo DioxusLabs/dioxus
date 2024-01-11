@@ -131,7 +131,7 @@ impl Runtime {
 ///     }
 /// }
 ///
-/// fn Component(cx: Scope<ComponentProps>) -> Element {
+/// fn Component(cx: ComponentProps) -> Element {
 ///     cx.use_hook(|| RuntimeGuard::new(cx.runtime.clone()));
 ///
 ///     render! { div {} }

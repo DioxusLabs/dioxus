@@ -383,4 +383,9 @@ impl ScopeId {
     pub fn schedule_update(&self) -> Arc<dyn Fn() + Send + Sync + 'static> {
         with_scope(*self, |cx| cx.schedule_update()).expect("to be in a dioxus runtime")
     }
+
+    /// Get the height of the current scope
+    pub fn height(self) -> u32 {
+        with_scope(self, |cx| cx.height()).expect("to be in a dioxus runtime")
+    }
 }

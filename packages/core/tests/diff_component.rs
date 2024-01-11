@@ -8,11 +8,11 @@ use dioxus::prelude::*;
 #[test]
 fn component_swap() {
     fn app() -> Element {
-        let render_phase = cx.use_hook(|| 0);
+        let mut render_phase = use_signal(|| 0);
 
-        *render_phase += 1;
+        render_phase += 1;
 
-        match *render_phase {
+        match *render_phase() {
             0 => render! {
                 nav_bar {}
                 dash_board {}

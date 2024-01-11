@@ -2,10 +2,8 @@
 //!
 //! This tests to ensure we clean it up
 
-use bumpalo::Bump;
 use dioxus::core::{ElementId, Mutation::*};
 use dioxus::prelude::*;
-use dioxus_core::BorrowedAttributeValue;
 
 #[test]
 fn attrs_cycle() {
@@ -19,8 +17,6 @@ fn attrs_cycle() {
             _ => unreachable!(),
         }
     });
-
-    let bump = Bump::new();
 
     assert_eq!(
         dom.rebuild_to_vec().santize().edits,
@@ -59,13 +55,13 @@ fn attrs_cycle() {
             AssignId { path: &[0], id: ElementId(3) },
             SetAttribute {
                 name: "class",
-                value: BorrowedAttributeValue::Text("3"),
+                value: dioxus_core::AttributeValue::Text("3".to_string()),
                 id: ElementId(3),
                 ns: None
             },
             SetAttribute {
                 name: "id",
-                value: BorrowedAttributeValue::Text("3"),
+                value: dioxus_core::AttributeValue::Text("3".to_string()),
                 id: ElementId(3),
                 ns: None
             },

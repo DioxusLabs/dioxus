@@ -1,4 +1,3 @@
-use bumpalo::Bump;
 use dioxus::core::{ElementId, Mutation};
 use dioxus::prelude::*;
 
@@ -32,7 +31,6 @@ fn basic_syntax_is_a_template() -> Element {
 #[test]
 fn dual_stream() {
     let mut dom = VirtualDom::new(basic_syntax_is_a_template);
-    let bump = Bump::new();
     let edits = dom.rebuild_to_vec().santize();
 
     use Mutation::*;

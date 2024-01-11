@@ -76,7 +76,7 @@ impl<const A: bool> FragmentBuilder<A> {
 ///     children: Element
 /// }
 ///
-/// fn CustomCard(cx: Scope<CardProps>) -> Element {
+/// fn CustomCard(cx: CardProps) -> Element {
 ///     cx.render(rsx!{
 ///         div {
 ///             h1 {"Title card"}

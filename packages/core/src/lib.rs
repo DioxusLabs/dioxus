@@ -50,7 +50,7 @@ pub(crate) mod innerlude {
     /// ## Rust-Style
     ///
     /// ```rust, ignore
-    /// fn example(cx: Scope<Props>) -> Element {
+    /// fn example(cx: Props) -> Element {
     ///     // ...
     /// }
     ///
@@ -60,7 +60,7 @@ pub(crate) mod innerlude {
     /// ```
     /// ## React-Style
     /// ```rust, ignore
-    /// fn Example(cx: Scope<Props>) -> Element {
+    /// fn Example(cx: Props) -> Element {
     ///     // ...
     /// }
     ///

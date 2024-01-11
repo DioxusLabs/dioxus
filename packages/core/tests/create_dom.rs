@@ -75,7 +75,7 @@ fn create() {
 
 #[test]
 fn create_list() {
-    let mut dom = VirtualDom::new(|cx| render! {(0..3).map(|f| render!( div { "hello" } ))}));
+    let mut dom = VirtualDom::new(|| render! {(0..3).map(|f| render!( div { "hello" } ))});
 
     let _edits = dom.rebuild_to_vec().santize();
 
@@ -129,12 +129,12 @@ fn create_components() {
         }
     });
 
-    #[derive(Props)]
-    struct ChildProps<'a> {
+    #[derive(Props, Clone, PartialEq)]
+    struct ChildProps {
         children: Element,
     }
 
-    fn Child<'a>(cx: ChildProps) -> Element {
+    fn Child(cx: ChildProps) -> Element {
         render! {
             h1 {}
             div { &cx.children }

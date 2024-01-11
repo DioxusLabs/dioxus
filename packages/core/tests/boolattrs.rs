@@ -1,11 +1,9 @@
-use bumpalo::Bump;
 use dioxus::core::{ElementId, Mutation::*};
 use dioxus::prelude::*;
 
 #[test]
 fn bool_test() {
-    let mut app = VirtualDom::new(|cx| render!(div { hidden: false })));
-    let bump = Bump::new();
+    let mut app = VirtualDom::new(|| render!(div { hidden: false }));
 
     assert_eq!(
         app.rebuild_to_vec().santize().edits,

@@ -12,6 +12,7 @@ type Shared<T> = Arc<Mutex<T>>;
 
 #[test]
 fn manual_diffing() {
+    #[derive(Clone)]
     struct AppProps {
         value: Shared<&'static str>,
     }
@@ -42,11 +43,11 @@ fn manual_diffing() {
 fn events_generate() {
     set_event_converter(Box::new(SerializedHtmlEventConverter));
     fn app() -> Element {
-        let count = cx.use_hook(|| 0);
+        let mut count = use_signal(|| 0);
 
-        match *count {
+        match *count() {
             0 => render! {
-                div { onclick: move |_| *count += 1,
+                div { onclick: move |_| count += 1,
                     div { "nested" }
                     "Click me!"
                 }
@@ -80,7 +81,7 @@ fn events_generate() {
 // #[test]
 // fn components_generate() {
 //     fn app() -> Element {
-//         let render_phase = cx.use_hook(|| 0);
+//         let render_phase = once(|| 0);
 //         *render_phase += 1;
 
 //         match *render_phase {

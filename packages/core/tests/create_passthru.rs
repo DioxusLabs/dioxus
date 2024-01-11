@@ -16,7 +16,7 @@ fn nested_passthru_creates() {
     }
 
     #[component]
-    fn PassThru<'a>(children: Element) -> Element {
+    fn PassThru(children: Element) -> Element {
         render!(children)
     }
 

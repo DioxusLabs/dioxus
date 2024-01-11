@@ -4,7 +4,7 @@ use dioxus::prelude::*;
 #[test]
 fn state_shares() {
     fn app() -> Element {
-        cx.provide_context(generation() as i32);
+        provide_context(generation() as i32);
 
         render!(child_1 {})
     }
@@ -14,7 +14,7 @@ fn state_shares() {
     }
 
     fn child_2() -> Element {
-        let value = cx.consume_context::<i32>().unwrap();
+        let value = consume_context::<i32>().unwrap();
         render!("Value is {value}")
     }
 

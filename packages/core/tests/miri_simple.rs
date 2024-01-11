@@ -16,10 +16,10 @@ fn app_drops() {
 #[test]
 fn hooks_drop() {
     fn App() -> Element {
-        cx.use_hook(|| String::from("asd"));
-        cx.use_hook(|| String::from("asd"));
-        cx.use_hook(|| String::from("asd"));
-        cx.use_hook(|| String::from("asd"));
+        once(|| String::from("asd"));
+        once(|| String::from("asd"));
+        once(|| String::from("asd"));
+        once(|| String::from("asd"));
 
         render! { div {} }
     }
@@ -34,7 +34,7 @@ fn hooks_drop() {
 #[test]
 fn contexts_drop() {
     fn App() -> Element {
-        cx.provide_context(String::from("asd"));
+        provide_context(String::from("asd"));
 
         render! {
             div { ChildComp {} }
@@ -42,7 +42,7 @@ fn contexts_drop() {
     }
 
     fn ChildComp() -> Element {
-        let el = cx.consume_context::<String>().unwrap();
+        let el = consume_context::<String>().unwrap();
 
         render! { div { "hello {el}" } }
     }
@@ -57,7 +57,7 @@ fn contexts_drop() {
 #[test]
 fn tasks_drop() {
     fn App() -> Element {
-        cx.spawn(async {
+        spawn(async {
             // tokio::time::sleep(std::time::Duration::from_millis(100000)).await;
         });
 

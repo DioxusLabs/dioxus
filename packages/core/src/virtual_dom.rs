@@ -34,7 +34,7 @@ use std::{any::Any, cell::Cell, collections::BTreeSet, future::Future, rc::Rc};
 ///     title: String
 /// }
 ///
-/// fn App(cx: Scope<AppProps>) -> Element {
+/// fn App(cx: AppProps) -> Element {
 ///     cx.render(rsx!(
 ///         div {"hello, {cx.title}"}
 ///     ))
@@ -55,7 +55,7 @@ use std::{any::Any, cell::Cell, collections::BTreeSet, future::Future, rc::Rc};
 /// static ROUTES: &str = "";
 ///
 /// #[component]
-/// fn App(cx: Scope<AppProps>) -> Element {
+/// fn App(cx: AppProps) -> Element {
 ///     cx.render(rsx!(
 ///         NavBar { routes: ROUTES }
 ///         Title { "{cx.title}" }
@@ -247,7 +247,7 @@ impl VirtualDom {
     ///     name: &'static str
     /// }
     ///
-    /// fn Example(cx: Scope<SomeProps>) -> Element  {
+    /// fn Example(cx: SomeProps) -> Element  {
     ///     cx.render(rsx!{ div{ "hello {cx.name}" } })
     /// }
     ///

@@ -4,7 +4,7 @@ use dioxus::prelude::*;
 /// As we clean up old templates, the ID for the node should cycle
 #[test]
 fn cycling_elements() {
-    let mut dom = VirtualDom::new(|cx| match generation() % 2 {
+    let mut dom = VirtualDom::new(|| match generation() % 2 {
         0 => render! { div { "wasd" } },
         1 => render! { div { "abcd" } },
         _ => unreachable!(),

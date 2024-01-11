@@ -461,7 +461,7 @@ impl VComponent {
     /// async fn(Scope<'_>) -> Element;
     ///
     /// // With explicit props
-    /// fn(Scope<Props>) -> Element;
+    /// fn(Props) -> Element;
     /// async fn(Scope<Props<'_>>) -> Element;
     /// ```
     pub fn new<F: HasProps<P> + 'static, P: 'static>(
@@ -649,7 +649,7 @@ impl AttributeValue {
     }
 
     /// Create a new [`AttributeValue`] with a value that implements [`AnyValue`]
-    pub fn any_value<T: AnyValue>(&self, value: T) -> AttributeValue {
+    pub fn any_value<T: AnyValue>(value: T) -> AttributeValue {
         AttributeValue::Any(Box::new(value))
     }
 }

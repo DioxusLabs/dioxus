@@ -19,7 +19,7 @@ fn app() -> Element {
     }
 }
 
-fn NoneChild(_) -> Element {
+fn NoneChild() -> Element {
     None
 }
 

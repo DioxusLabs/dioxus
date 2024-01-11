@@ -9,15 +9,15 @@ async fn it_works() {
     static POLL_COUNT: AtomicUsize = AtomicUsize::new(0);
 
     fn app() -> Element {
-        cx.use_hook(|| {
-            cx.spawn(async {
+        once(|| {
+            spawn(async {
                 for x in 0..10 {
                     tokio::time::sleep(Duration::from_micros(50)).await;
                     POLL_COUNT.fetch_add(x, std::sync::atomic::Ordering::Relaxed);
                 }
             });
 
-            cx.spawn(async {
+            spawn(async {
                 for x in 0..10 {
                     tokio::time::sleep(Duration::from_micros(25)).await;
                     POLL_COUNT.fetch_add(x * 2, std::sync::atomic::Ordering::Relaxed);

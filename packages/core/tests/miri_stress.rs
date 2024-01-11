@@ -12,13 +12,13 @@ fn test_memory_leak() {
     fn app() -> Element {
         let val = generation();
 
-        cx.spawn(async {});
+        spawn(async {});
 
         if val == 2 || val == 4 {
             return render!(());
         }
 
-        let name = cx.use_hook(|| String::from("numbers: "));
+        let mut name = once(|| String::from("numbers: "));
 
         name.push_str("123 ");
 
@@ -30,11 +30,11 @@ fn test_memory_leak() {
             Child {}
             Child {}
             Child {}
-            BorrowedChild { name: name }
-            BorrowedChild { name: name }
-            BorrowedChild { name: name }
-            BorrowedChild { name: name }
-            BorrowedChild { name: name }
+            BorrowedChild { name: name.clone() }
+            BorrowedChild { name: name.clone() }
+            BorrowedChild { name: name.clone() }
+            BorrowedChild { name: name.clone() }
+            BorrowedChild { name: name.clone() }
         )
     }
 
@@ -76,7 +76,7 @@ fn memo_works_properly() {
             return render!(());
         }
 
-        let name = cx.use_hook(|| String::from("asd"));
+        let name = once(|| String::from("asd"));
 
         render!(
             div { "Hello, world! {name}" }
@@ -89,7 +89,7 @@ fn memo_works_properly() {
         na: String,
     }
 
-    fn Child(cx: Scope<ChildProps>) -> Element {
+    fn Child(cx: ChildProps) -> Element {
         render!( div { "goodbye world" } )
     }
 
@@ -116,8 +116,8 @@ fn free_works_on_root_hooks() {
         inner: Rc<String>,
     }
 
-    fn app(cx: Scope<AppProps>) -> Element {
-        let name: &AppProps = cx.use_hook(|| cx.clone());
+    fn app(cx: AppProps) -> Element {
+        let name: AppProps = once(|| cx.clone());
         render!(child_component { inner: name.inner.clone() })
     }
 
@@ -146,20 +146,24 @@ fn supports_async() {
         let colors = use_signal(|| vec!["green", "blue", "red"]);
         let padding = use_signal(|| 10);
 
-        use_effect(cx, colors, |colors| async move {
-            sleep(Duration::from_millis(1000)).await;
-            colors.with_mut(|colors| colors.reverse());
+        once(|| {
+            spawn(async move {
+                sleep(Duration::from_millis(1000)).await;
+                colors.with_mut(|colors| colors.reverse());
+            })
         });
 
-        use_effect(cx, padding, |padding| async move {
-            sleep(Duration::from_millis(10)).await;
-            padding.with_mut(|padding| {
-                if *padding < 65 {
-                    *padding += 1;
-                } else {
-                    *padding = 5;
-                }
-            });
+        once(|| {
+            spawn(async move {
+                sleep(Duration::from_millis(10)).await;
+                padding.with_mut(|padding| {
+                    if *padding < 65 {
+                        *padding += 1;
+                    } else {
+                        *padding = 5;
+                    }
+                });
+            })
         });
 
         let colors = colors();

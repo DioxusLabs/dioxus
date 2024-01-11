@@ -1,8 +1,8 @@
 #![cfg(not(miri))]
 
-use dioxus::prelude::Props;
-use dioxus_core::*;
-use std::{cfg, collections::HashSet};
+use dioxus::prelude::*;
+use dioxus_core::{prelude::EventHandler, AttributeValue, DynamicNode, VComponent, *};
+use std::{cfg, collections::HashSet, default::Default};
 
 fn random_ns() -> Option<&'static str> {
     let namespace = rand::random::<u8>() % 2;
@@ -38,7 +38,7 @@ fn create_random_template_node(
     template_idx: &mut usize,
     attr_idx: &mut usize,
     depth: usize,
-) -> TemplateNode<'static> {
+) -> TemplateNode {
     match rand::random::<u8>() % 4 {
         0 => {
             let attrs = {
@@ -94,7 +94,7 @@ fn create_random_template_node(
 }
 
 fn generate_paths(
-    node: &TemplateNode<'static>,
+    node: &TemplateNode,
     current_path: &[u8],
     node_paths: &mut Vec<Vec<u8>>,
     attr_paths: &mut Vec<Vec<u8>>,
@@ -166,58 +166,48 @@ fn create_random_template(name: &'static str) -> (Template, Vec<DynamicNodeType>
     )
 }
 
-fn create_random_dynamic_node(cx: &ScopeState, depth: usize) -> DynamicNode {
-    let range = if depth > 5 { 1 } else { 4 };
+fn create_random_dynamic_node(depth: usize) -> DynamicNode {
+    let range = if depth > 5 { 1 } else { 3 };
     match rand::random::<u8>() % range {
         0 => DynamicNode::Placeholder(Default::default()),
-        1 => cx.make_node((0..(rand::random::<u8>() % 5)).map(|_| {
-            VNode::new(
-                None,
-                Template {
-                    name: concat!(file!(), ":", line!(), ":", column!(), ":0"),
-                    roots: &[TemplateNode::Dynamic { id: 0 }],
-                    node_paths: &[&[0]],
-                    attr_paths: &[],
-                },
-                bumpalo::collections::Vec::new_in(cx.bump()),
-                cx.bump().alloc([cx.component(
-                    create_random_element,
-                    DepthProps { depth, root: false },
-                    "create_random_element",
-                )]),
-                &[],
-            )
-        })),
-        2 => cx.component(
+        1 => (0..(rand::random::<u8>() % 5))
+            .map(|_| {
+                VNode::new(
+                    None,
+                    Template {
+                        name: concat!(file!(), ":", line!(), ":", column!(), ":0"),
+                        roots: &[TemplateNode::Dynamic { id: 0 }],
+                        node_paths: &[&[0]],
+                        attr_paths: &[],
+                    },
+                    Box::new([DynamicNode::Component(VComponent::new(
+                        create_random_element,
+                        DepthProps { depth, root: false },
+                        "create_random_element",
+                    ))]),
+                    Box::new([]),
+                )
+            })
+            .into_dyn_node(),
+        2 => DynamicNode::Component(VComponent::new(
             create_random_element,
             DepthProps { depth, root: false },
             "create_random_element",
-        ),
-        3 => {
-            let data = String::from("borrowed data");
-            let bumpped = cx.bump().alloc(data);
-            cx.component(
-                create_random_element_borrowed,
-                BorrowedDepthProps { borrow: &*bumpped, inner: DepthProps { depth, root: false } },
-                "create_random_element_borrowed",
-            )
-        }
+        )),
         _ => unreachable!(),
     }
 }
 
-fn create_random_dynamic_attr(cx: &ScopeState) -> Attribute {
+fn create_random_dynamic_attr() -> Attribute {
     let value = match rand::random::<u8>() % 7 {
-        0 => AttributeValue::Text(Box::leak(
-            format!("{}", rand::random::<usize>()).into_boxed_str(),
-        )),
+        0 => AttributeValue::Text(format!("{}", rand::random::<usize>())),
         1 => AttributeValue::Float(rand::random()),
         2 => AttributeValue::Int(rand::random()),
         3 => AttributeValue::Bool(rand::random()),
-        4 => cx.any_value(rand::random::<usize>()),
+        4 => AttributeValue::any_value(rand::random::<usize>()),
         5 => AttributeValue::None,
         6 => {
-            let value = cx.listener(|e: Event<String>| println!("{:?}", e));
+            let value = AttributeValue::listener(|e: Event<String>| println!("{:?}", e));
             return Attribute::new("ondata", value, None, false);
         }
         _ => unreachable!(),
@@ -232,28 +222,15 @@ fn create_random_dynamic_attr(cx: &ScopeState) -> Attribute {
 
 static mut TEMPLATE_COUNT: usize = 0;
 
-#[derive(Props)]
-struct BorrowedDepthProps<'a> {
-    borrow: &'a str,
-    inner: DepthProps,
-}
-
-fn create_random_element_borrowed<'a>(cx: BorrowedDepthProps) -> Element {
-    println!("{}", cx.borrow);
-    let bump = cx.bump();
-    let allocated = bump.alloc(Scoped { scope: cx, props: &cx.inner });
-    create_random_element(allocated)
-}
-
-#[derive(PartialEq, Props)]
+#[derive(PartialEq, Props, Clone)]
 struct DepthProps {
     depth: usize,
     root: bool,
 }
 
-fn create_random_element(cx: Scope<DepthProps>) -> Element {
+fn create_random_element(cx: DepthProps) -> Element {
     if rand::random::<usize>() % 10 == 0 {
-        cx.needs_update();
+        needs_update();
     }
     let range = if cx.root { 2 } else { 3 };
     let node = match rand::random::<usize>() % range {
@@ -275,24 +252,18 @@ fn create_random_element(cx: Scope<DepthProps>) -> Element {
             let node = VNode::new(
                 None,
                 template,
-                bumpalo::collections::Vec::new_in(cx.bump()),
-                {
-                    let dynamic_nodes: Vec<_> = dynamic_node_types
-                        .iter()
-                        .map(|ty| match ty {
-                            DynamicNodeType::Text => DynamicNode::Text(VText::new(Box::leak(
-                                format!("{}", rand::random::<usize>()).into_boxed_str(),
-                            ))),
-                            DynamicNodeType::Other => create_random_dynamic_node(cx, cx.depth + 1),
-                        })
-                        .collect();
-                    cx.bump().alloc(dynamic_nodes)
-                },
-                cx.bump().alloc(
-                    (0..template.attr_paths.len())
-                        .map(|_| create_random_dynamic_attr(cx))
-                        .collect::<Vec<_>>(),
-                ),
+                dynamic_node_types
+                    .iter()
+                    .map(|ty| match ty {
+                        DynamicNodeType::Text => {
+                            DynamicNode::Text(VText::new(format!("{}", rand::random::<usize>())))
+                        }
+                        DynamicNodeType::Other => create_random_dynamic_node(cx.depth + 1),
+                    })
+                    .collect(),
+                (0..template.attr_paths.len())
+                    .map(|_| create_random_dynamic_attr())
+                    .collect(),
             );
             Some(node)
         }
