@@ -55,7 +55,6 @@ impl Config {
         );
 
         Self {
-            // event_handler: None,
             window,
             protocols: Vec::new(),
             file_drop_handler: None,
