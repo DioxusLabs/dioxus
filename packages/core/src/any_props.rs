@@ -1,5 +1,5 @@
-use crate::{nodes::RenderReturn, Element};
-use std::{any::Any, ops::Deref, panic::AssertUnwindSafe};
+use crate::{nodes::RenderReturn, properties::HasProps};
+use std::{any::Any, ops::Deref, panic::AssertUnwindSafe, rc::Rc};
 
 /// A boxed version of AnyProps that can be cloned
 pub(crate) struct BoxedAnyProps {
@@ -38,22 +38,22 @@ pub(crate) trait AnyProps {
     fn duplicate(&self) -> Box<dyn AnyProps>;
 }
 
-pub(crate) struct VProps<P> {
-    pub render_fn: fn(P) -> Element,
+pub(crate) struct VProps<P: 'static, Phantom: 'static> {
+    pub render_fn: Rc<dyn HasProps<Phantom, Props = P>>,
     pub memo: fn(&P, &P) -> bool,
     pub props: P,
     pub name: &'static str,
 }
 
-impl<P> VProps<P> {
+impl<P: 'static, Phantom: 'static> VProps<P, Phantom> {
     pub(crate) fn new(
-        render_fn: fn(P) -> Element,
+        render_fn: impl HasProps<Phantom, Props = P> + 'static,
         memo: fn(&P, &P) -> bool,
         props: P,
         name: &'static str,
     ) -> Self {
         Self {
-            render_fn,
+            render_fn: Rc::new(render_fn),
             memo,
             props,
             name,
@@ -61,7 +61,7 @@ impl<P> VProps<P> {
     }
 }
 
-impl<P: Clone + 'static> AnyProps for VProps<P> {
+impl<P: Clone + 'static, Phantom> AnyProps for VProps<P, Phantom> {
     fn memoize(&self, other: &dyn Any) -> bool {
         match other.downcast_ref::<P>() {
             Some(other) => (self.memo)(&self.props, other),
@@ -76,7 +76,7 @@ impl<P: Clone + 'static> AnyProps for VProps<P> {
     fn render(&self) -> RenderReturn {
         let res = std::panic::catch_unwind(AssertUnwindSafe(move || {
             // Call the render function directly
-            (self.render_fn)(self.props.clone())
+            self.render_fn.call(self.props.clone())
         }));
 
         match res {
@@ -92,7 +92,7 @@ impl<P: Clone + 'static> AnyProps for VProps<P> {
 
     fn duplicate(&self) -> Box<dyn AnyProps> {
         Box::new(Self {
-            render_fn: self.render_fn,
+            render_fn: self.render_fn.clone(),
             memo: self.memo,
             props: self.props.clone(),
             name: self.name,

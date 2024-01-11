@@ -1,5 +1,6 @@
 use crate::any_props::{BoxedAnyProps, VProps};
 use crate::innerlude::{ElementRef, EventHandler, MountId, ScopeState};
+use crate::properties::HasProps;
 use crate::{arena::ElementId, Element, Event};
 use crate::{Properties, VirtualDom};
 use std::ops::Deref;
@@ -443,7 +444,7 @@ pub struct VComponent {
     /// The function pointer of the component, known at compile time
     ///
     /// It is possible that components get folded at compile time, so these shouldn't be really used as a key
-    pub(crate) render_fn: *const (),
+    pub(crate) render_fn: TypeId,
 
     pub(crate) props: BoxedAnyProps,
 }
@@ -463,16 +464,21 @@ impl VComponent {
     /// fn(Scope<Props>) -> Element;
     /// async fn(Scope<Props<'_>>) -> Element;
     /// ```
-    pub fn new<P>(component: fn(P) -> Element, props: P, fn_name: &'static str) -> Self
+    pub fn new<F: HasProps<P> + 'static, P: 'static>(
+        component: F,
+        props: F::Props,
+        fn_name: &'static str,
+    ) -> Self
     where
         // The properties must be valid until the next bump frame
-        P: Properties,
+        F::Props: Properties + 'static,
     {
-        let vcomp = VProps::new(component, P::memoize, props, fn_name);
+        let render_fn_id = TypeId::of::<F>();
+        let vcomp = VProps::new(component, F::Props::memoize, props, fn_name);
 
         VComponent {
             name: fn_name,
-            render_fn: component as *const (),
+            render_fn: render_fn_id,
             props: BoxedAnyProps::new(vcomp),
         }
     }

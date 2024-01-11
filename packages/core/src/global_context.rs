@@ -102,8 +102,8 @@ pub fn once<State: Clone + 'static>(initializer: impl FnOnce() -> State) -> Stat
 /// Get the current render since the inception of this component
 ///
 /// This can be used as a helpful diagnostic when debugging hooks/renders, etc
-pub fn generation() -> Option<usize> {
-    with_current_scope(|cx| Some(cx.generation())).expect("to be in a dioxus runtime")
+pub fn generation() -> usize {
+    with_current_scope(|cx| cx.generation()).expect("to be in a dioxus runtime")
 }
 
 /// Get the parent of the current scope if it exists
