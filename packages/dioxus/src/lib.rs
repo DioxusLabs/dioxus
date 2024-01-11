@@ -7,6 +7,9 @@ pub use dioxus_core as core;
 #[cfg(feature = "hooks")]
 pub use dioxus_hooks as hooks;
 
+#[cfg(feature = "signals")]
+pub use dioxus_signals as signals;
+
 pub mod events {
     #[cfg(feature = "html")]
     pub use dioxus_html::prelude::*;
@@ -27,6 +30,9 @@ pub mod prelude {
 
     #[cfg(feature = "hooks")]
     pub use crate::hooks::*;
+
+    #[cfg(feature = "signals")]
+    pub use dioxus_signals::*;
 
     pub use dioxus_core::prelude::*;
 
