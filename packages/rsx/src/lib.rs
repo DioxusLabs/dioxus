@@ -576,7 +576,7 @@ fn create_template() {
             p {
                 "hello world"
             }
-            (0..10).map(|i| rsx!{"{i}"})
+            {(0..10).map(|i| rsx!{"{i}"})}
         }
     };
 
