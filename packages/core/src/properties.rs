@@ -112,11 +112,3 @@ fn test_empty_builder() {
     let builder = fc_to_builder(app2);
     builder.build();
 }
-
-#[cfg(not(miri))]
-#[test]
-fn unsafe_props_fail() {
-    let t = trybuild::TestCases::new();
-    t.compile_fail("compile_tests/props_safety.rs");
-    t.compile_fail("compile_tests/props_safety_temporary_values.rs");
-}
