@@ -131,10 +131,10 @@ impl VNode {
                     }
                     Component(_comp) => {
                         let scope = ScopeId(mount.mounted_dynamic_nodes[*id]);
-                        match dom.get_scope(scope).unwrap().root_node() {
-                            RenderReturn::Ready(child) => child.find_first_element(dom),
-                            _ => todo!("cannot handle nonstandard nodes"),
-                        }
+                        dom.get_scope(scope)
+                            .unwrap()
+                            .root_node()
+                            .find_first_element(dom)
                     }
                 }
             }
@@ -153,10 +153,10 @@ impl VNode {
                     Fragment(t) => t.last().unwrap().find_last_element(dom),
                     Component(_comp) => {
                         let scope = ScopeId(mount.mounted_dynamic_nodes[*id]);
-                        match dom.get_scope(scope).unwrap().root_node() {
-                            RenderReturn::Ready(node) => node.find_last_element(dom),
-                            _ => todo!("cannot handle nonstandard nodes"),
-                        }
+                        dom.get_scope(scope)
+                            .unwrap()
+                            .root_node()
+                            .find_last_element(dom)
                     }
                 }
             }

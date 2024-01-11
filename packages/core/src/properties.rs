@@ -139,10 +139,10 @@ impl<F: Fn() -> Element> ComponentFunction<ZeroElementMarker> for F {
 #[test]
 fn test_empty_builder() {
     fn app() -> Element {
-        todo!()
+        unimplemented!()
     }
     fn app2(_: ()) -> Element {
-        todo!()
+        unimplemented!()
     }
     let builder = fc_to_builder(app);
     builder.build();
