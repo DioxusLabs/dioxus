@@ -1,4 +1,4 @@
-use crate::{nodes::RenderReturn, properties::HasProps};
+use crate::{nodes::RenderReturn, properties::ComponentFunction};
 use std::{any::Any, ops::Deref, panic::AssertUnwindSafe, rc::Rc};
 
 /// A boxed version of AnyProps that can be cloned
@@ -39,7 +39,7 @@ pub(crate) trait AnyProps {
 }
 
 pub(crate) struct VProps<P: 'static, Phantom: 'static> {
-    pub render_fn: Rc<dyn HasProps<Phantom, Props = P>>,
+    pub render_fn: Rc<dyn ComponentFunction<Phantom, Props = P>>,
     pub memo: fn(&P, &P) -> bool,
     pub props: P,
     pub name: &'static str,
@@ -47,7 +47,7 @@ pub(crate) struct VProps<P: 'static, Phantom: 'static> {
 
 impl<P: 'static, Phantom: 'static> VProps<P, Phantom> {
     pub(crate) fn new(
-        render_fn: impl HasProps<Phantom, Props = P> + 'static,
+        render_fn: impl ComponentFunction<Phantom, Props = P> + 'static,
         memo: fn(&P, &P) -> bool,
         props: P,
         name: &'static str,

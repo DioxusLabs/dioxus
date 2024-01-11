@@ -67,7 +67,9 @@ impl EmptyBuilder {
 
 /// This utility function launches the builder method so rsx! and html! macros can use the typed-builder pattern
 /// to initialize a component's props.
-pub fn fc_to_builder<F: HasProps<P>, P>(_: F) -> <<F as HasProps<P>>::Props as Properties>::Builder
+pub fn fc_to_builder<F: ComponentFunction<P>, P>(
+    _: F,
+) -> <<F as ComponentFunction<P>>::Props as Properties>::Builder
 where
     F::Props: Properties,
 {
@@ -75,13 +77,13 @@ where
 }
 
 /// A function pointer that can be used to create a component.
-pub trait HasProps<P> {
+pub trait ComponentFunction<P> {
     type Props: 'static;
 
     fn call(&self, props: Self::Props) -> Element;
 }
 
-impl<T: 'static, F: Fn(T) -> Element> HasProps<(T,)> for F {
+impl<T: 'static, F: Fn(T) -> Element> ComponentFunction<(T,)> for F {
     type Props = T;
 
     fn call(&self, props: T) -> Element {
@@ -91,7 +93,7 @@ impl<T: 'static, F: Fn(T) -> Element> HasProps<(T,)> for F {
 
 #[doc(hidden)]
 pub struct ZeroElementMarker;
-impl<F: Fn() -> Element> HasProps<ZeroElementMarker> for F {
+impl<F: Fn() -> Element> ComponentFunction<ZeroElementMarker> for F {
     type Props = ();
 
     fn call(&self, _: ()) -> Element {

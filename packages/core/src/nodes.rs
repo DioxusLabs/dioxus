@@ -1,6 +1,6 @@
 use crate::any_props::{BoxedAnyProps, VProps};
 use crate::innerlude::{ElementRef, EventHandler, MountId, ScopeState};
-use crate::properties::HasProps;
+use crate::properties::ComponentFunction;
 use crate::{arena::ElementId, Element, Event};
 use crate::{Properties, VirtualDom};
 use std::ops::Deref;
@@ -464,7 +464,7 @@ impl VComponent {
     /// fn(Props) -> Element;
     /// async fn(Scope<Props<'_>>) -> Element;
     /// ```
-    pub fn new<F: HasProps<P> + 'static, P: 'static>(
+    pub fn new<F: ComponentFunction<P> + 'static, P: 'static>(
         component: F,
         props: F::Props,
         fn_name: &'static str,
