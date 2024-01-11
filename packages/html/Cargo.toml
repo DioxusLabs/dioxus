@@ -52,6 +52,8 @@ serde_json = "1"
 [features]
 default = ["serialize", "mounted", "eval"]
 serialize = [
+    "serde",
+    "serde_json",
     "serde_repr",
     "euclid/serde",
     "keyboard-types/serde",

@@ -401,13 +401,6 @@ impl VirtualDom {
                                 }
                             }
                         });
-
-                        // Break if this is the exact target element.
-                        // This means we won't call two listeners with the same name on the same element. This should be
-                        // documented, or be rejected from the rsx! macro outright
-                        if target_path == this_path {
-                            break;
-                        }
                     }
                 }
 
