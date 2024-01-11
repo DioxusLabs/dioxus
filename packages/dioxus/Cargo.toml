@@ -16,13 +16,15 @@ dioxus-html = { workspace = true, optional = true }
 dioxus-core-macro = { workspace = true, optional = true }
 dioxus-hooks = { workspace = true, optional = true }
 dioxus-rsx = { workspace = true, optional = true }
+dioxus-signals = { workspace = true, optional = true }
 manganis = { git = "https://github.com/DioxusLabs/collect-assets" }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 dioxus-hot-reload = { workspace = true, optional = true }
 
 [features]
-default = ["macro", "hooks", "html", "hot-reload"]
+default = ["macro", "html", "hot-reload", "signals"]
+signals = ["dioxus-signals"]
 macro = ["dioxus-core-macro", "dioxus-rsx"]
 html = ["dioxus-html"]
 hooks = ["dioxus-hooks"]
