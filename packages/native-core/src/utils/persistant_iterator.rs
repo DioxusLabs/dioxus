@@ -300,7 +300,7 @@ fn persist_removes() {
     use dioxus::prelude::*;
     #[allow(non_snake_case)]
     fn Base(cx: Scope) -> Element {
-        let children = match cx.generation() % 2 {
+        let children = match generation() % 2 {
             0 => 3,
             1 => 2,
             _ => unreachable!(),
@@ -381,7 +381,7 @@ fn persist_instertions_before() {
     use dioxus::prelude::*;
     #[allow(non_snake_case)]
     fn Base(cx: Scope) -> Element {
-        let children = match cx.generation() % 2 {
+        let children = match generation() % 2 {
             0 => 3,
             1 => 2,
             _ => unreachable!(),
@@ -439,7 +439,7 @@ fn persist_instertions_after() {
     use dioxus::prelude::*;
     #[allow(non_snake_case)]
     fn Base(cx: Scope) -> Element {
-        let children = match cx.generation() % 2 {
+        let children = match generation() % 2 {
             0 => 3,
             1 => 2,
             _ => unreachable!(),

@@ -10,19 +10,19 @@ use dioxus::prelude::*;
 #[test]
 fn test_memory_leak() {
     fn app(cx: Scope) -> Element {
-        let val = cx.generation();
+        let val = generation();
 
         cx.spawn(async {});
 
         if val == 2 || val == 4 {
-            return cx.render(rsx!(()));
+            return render!(());
         }
 
         let name = cx.use_hook(|| String::from("numbers: "));
 
         name.push_str("123 ");
 
-        cx.render(rsx!(
+        render!(
             div { "Hello, world!" }
             Child {}
             Child {}
@@ -35,7 +35,7 @@ fn test_memory_leak() {
             BorrowedChild { name: name }
             BorrowedChild { name: name }
             BorrowedChild { name: name }
-        ))
+        )
     }
 
     #[derive(Props)]
@@ -44,44 +44,44 @@ fn test_memory_leak() {
     }
 
     fn BorrowedChild<'a>(cx: Scope<'a, BorrowedProps<'a>>) -> Element {
-        cx.render(rsx! {
+        render! {
             div {
                 "goodbye {cx.props.name}"
                 Child {}
                 Child {}
             }
-        })
+        }
     }
 
     fn Child(cx: Scope) -> Element {
-        render!(div { "goodbye world" })
+        render!( div { "goodbye world" } )
     }
 
     let mut dom = VirtualDom::new(app);
 
-    _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
+    _ = dom.rebuild_to_vec(&mut dioxus_core::NoOpMutations);
 
     for _ in 0..5 {
         dom.mark_dirty(ScopeId::ROOT);
-        _ = dom.render_immediate();
+        _ = dom.render_immediate_to_vec();
     }
 }
 
 #[test]
 fn memo_works_properly() {
     fn app(cx: Scope) -> Element {
-        let val = cx.generation();
+        let val = generation();
 
         if val == 2 || val == 4 {
-            return cx.render(rsx!(()));
+            return render!(());
         }
 
         let name = cx.use_hook(|| String::from("asd"));
 
-        cx.render(rsx!(
+        render!(
             div { "Hello, world! {name}" }
             Child { na: "asdfg".to_string() }
-        ))
+        )
     }
 
     #[derive(PartialEq, Props)]
@@ -90,12 +90,12 @@ fn memo_works_properly() {
     }
 
     fn Child(cx: Scope<ChildProps>) -> Element {
-        render!(div { "goodbye world" })
+        render!( div { "goodbye world" } )
     }
 
     let mut dom = VirtualDom::new(app);
 
-    _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
+    _ = dom.rebuild_to_vec(&mut dioxus_core::NoOpMutations);
     // todo!()
     // dom.hard_diff(ScopeId::ROOT);
     // dom.hard_diff(ScopeId::ROOT);
@@ -122,12 +122,12 @@ fn free_works_on_root_hooks() {
     }
 
     fn child_component(cx: Scope<AppProps>) -> Element {
-        render!(div { "{cx.props.inner}" })
+        render!( div { "{cx.props.inner}" } )
     }
 
     let ptr = Rc::new("asdasd".to_string());
     let mut dom = VirtualDom::new_with_props(app, AppProps { inner: ptr.clone() });
-    let _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
+    let _ = dom.rebuild_to_vec(&mut dioxus_core::NoOpMutations);
 
     // ptr gets cloned into props and then into the hook
     assert_eq!(Rc::strong_count(&ptr), 4);
@@ -166,35 +166,15 @@ fn supports_async() {
         let mid = colors[1];
         let small = colors[2];
 
-        cx.render(rsx! {
-            div {
-                background: "{big}",
-                height: "stretch",
-                width: "stretch",
-                padding: "50",
-                label {
-                    "hello",
+        render! {
+            div { background: "{big}", height: "stretch", width: "stretch", padding: "50",
+                label { "hello" }
+                div { background: "{mid}", height: "auto", width: "stretch", padding: "{padding}",
+                    label { "World" }
+                    div { background: "{small}", height: "auto", width: "stretch", padding: "20", label { "ddddddd" } }
                 }
-                div {
-                    background: "{mid}",
-                    height: "auto",
-                    width: "stretch",
-                    padding: "{padding}",
-                    label {
-                        "World",
-                    }
-                    div {
-                        background: "{small}",
-                        height: "auto",
-                        width: "stretch",
-                        padding: "20",
-                        label {
-                            "ddddddd",
-                        }
-                    }
-                },
             }
-        })
+        }
     }
 
     let rt = tokio::runtime::Builder::new_current_thread()
@@ -204,11 +184,11 @@ fn supports_async() {
 
     rt.block_on(async {
         let mut dom = VirtualDom::new(app);
-        let _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
+        let _ = dom.rebuild_to_vec(&mut dioxus_core::NoOpMutations);
 
         for _ in 0..10 {
             dom.wait_for_work().await;
-            let _edits = dom.render_immediate();
+            let _edits = dom.render_immediate_to_vec();
         }
     });
 }

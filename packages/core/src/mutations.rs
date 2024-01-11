@@ -326,6 +326,7 @@ pub enum Mutation {
 }
 
 /// A static list of mutations that can be applied to the DOM. Note: this list does not contain any `Any` attribute values
+#[derive(Debug, PartialEq, Default)]
 pub struct MutationsVec {
     /// The list of Scopes that were diffed, created, and removed during the Diff process.
     pub dirty_scopes: FxHashSet<ScopeId>,

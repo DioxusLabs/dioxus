@@ -22,7 +22,7 @@ fn reading_subscribes() {
             let mut signal = use_signal(cx, || 0);
 
             println!("Parent: {:?}", cx.scope_id());
-            if cx.generation() == 1 {
+            if generation() == 1 {
                 signal += 1;
             }
 

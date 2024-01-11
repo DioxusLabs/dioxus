@@ -25,12 +25,12 @@ async fn it_works() {
             });
         });
 
-        cx.render(rsx!(()))
+        render!(())
     }
 
     let mut dom = VirtualDom::new(app);
 
-    let _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
+    let _ = dom.rebuild_to_vec(&mut dioxus_core::NoOpMutations);
 
     tokio::select! {
         _ = dom.wait_for_work() => {}

@@ -13,7 +13,7 @@ use crate::{
     nodes::{Template, TemplateId},
     runtime::{Runtime, RuntimeGuard},
     scopes::{ScopeId, ScopeState},
-    AttributeValue, Element, Event,
+    AttributeValue, Element, Event, MutationsVec,
 };
 use futures_util::{pin_mut, StreamExt};
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -300,7 +300,7 @@ impl VirtualDom {
     /// Get the single scope at the top of the VirtualDom tree that will always be around
     ///
     /// This scope has a ScopeId of 0 and is the root of the tree
-    pub(crate) fn base_scope(&self) -> &ScopeState {
+    pub fn base_scope(&self) -> &ScopeState {
         self.get_scope(ScopeId::ROOT).unwrap()
     }
 
@@ -563,6 +563,14 @@ impl VirtualDom {
         to.append_children(ElementId(0), m);
     }
 
+    #[cfg(features = "internal-testing")]
+    /// [`VirtualDom::rebuild`] to a vector of mutations for testing purposes
+    pub fn rebuild_to_vec(&mut self) -> MutationsVec {
+        let mut mutations = MutationsVec::default();
+        self.rebuild(&mut mutations);
+        mutations
+    }
+
     /// Render whatever the VirtualDom has ready as fast as possible without requiring an executor to progress
     /// suspended subtrees.
     pub fn render_immediate(&mut self, to: &mut impl WriteMutations) {
@@ -580,6 +588,14 @@ impl VirtualDom {
             std::task::Poll::Ready(mutations) => mutations,
             std::task::Poll::Pending => panic!("render_immediate should never return pending"),
         }
+    }
+
+    #[cfg(features = "internal-testing")]
+    /// [`Self::render_immediate`] to a vector of mutations for testing purposes
+    pub fn render_immediate_to_vec(&mut self) -> MutationsVec {
+        let mut mutations = MutationsVec::default();
+        self.render_immediate(&mut mutations);
+        mutations
     }
 
     /// Render the virtual dom, waiting for all suspense to be finished
@@ -644,6 +660,17 @@ impl VirtualDom {
                 return;
             }
         }
+    }
+
+    #[cfg(features = "internal-testing")]
+    /// [`Self::render_with_deadline`] to a vector of mutations for testing purposes
+    pub async fn render_with_deadline_to_vec(
+        &mut self,
+        deadline: impl Future<Output = ()>,
+    ) -> MutationsVec {
+        let mut mutations = MutationsVec::default();
+        self.render_with_deadline(deadline, &mut mutations).await;
+        mutations
     }
 
     /// Get the current runtime

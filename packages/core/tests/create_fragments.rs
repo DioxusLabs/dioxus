@@ -7,11 +7,11 @@ use dioxus_core::ElementId;
 #[test]
 fn empty_fragment_creates_nothing() {
     fn app(cx: Scope) -> Element {
-        cx.render(rsx!(()))
+        render!(())
     }
 
     let mut vdom = VirtualDom::new(app);
-    let edits = vdom.rebuild();
+    let edits = vdom.rebuild_to_vec();
 
     assert_eq!(
         edits.edits,
@@ -25,14 +25,14 @@ fn empty_fragment_creates_nothing() {
 #[test]
 fn root_fragments_work() {
     let mut vdom = VirtualDom::new(|cx| {
-        cx.render(rsx!(
+        render!(
             div { "hello" }
             div { "goodbye" }
-        ))
+        )
     });
 
     assert_eq!(
-        vdom.rebuild().edits.last().unwrap(),
+        vdom.rebuild_to_vec().edits.last().unwrap(),
         &AppendChildren { id: ElementId(0), m: 2 }
     );
 }
@@ -40,26 +40,26 @@ fn root_fragments_work() {
 #[test]
 fn fragments_nested() {
     let mut vdom = VirtualDom::new(|cx| {
-        cx.render(rsx!(
+        render!(
             div { "hello" }
             div { "goodbye" }
-            rsx! {
+            render! {
                 div { "hello" }
                 div { "goodbye" }
-                rsx! {
+                render! {
                     div { "hello" }
                     div { "goodbye" }
-                    rsx! {
+                    render! {
                         div { "hello" }
                         div { "goodbye" }
                     }
                 }
             }
-        ))
+        )
     });
 
     assert_eq!(
-        vdom.rebuild().edits.last().unwrap(),
+        vdom.rebuild_to_vec().edits.last().unwrap(),
         &AppendChildren { id: ElementId(0), m: 8 }
     );
 }
@@ -67,24 +67,21 @@ fn fragments_nested() {
 #[test]
 fn fragments_across_components() {
     fn app(cx: Scope) -> Element {
-        cx.render(rsx! {
+        render! {
             demo_child {}
             demo_child {}
             demo_child {}
             demo_child {}
-        })
+        }
     }
 
     fn demo_child(cx: Scope) -> Element {
         let world = "world";
-        cx.render(rsx! {
-            "hellO!"
-            world
-        })
+        render! { "hellO!", world }
     }
 
     assert_eq!(
-        VirtualDom::new(app).rebuild().edits.last().unwrap(),
+        VirtualDom::new(app).rebuild_to_vec().edits.last().unwrap(),
         &AppendChildren { id: ElementId(0), m: 8 }
     );
 }
@@ -92,13 +89,13 @@ fn fragments_across_components() {
 #[test]
 fn list_fragments() {
     fn app(cx: Scope) -> Element {
-        cx.render(rsx!(
-            h1 {"hello"}
-            (0..6).map(|f| rsx!( span { "{f}" }))
-        ))
+        render!(
+            h1 { "hello" }
+            (0..6).map(|f| render!( span { "{f}" }))
+        )
     }
     assert_eq!(
-        VirtualDom::new(app).rebuild().edits.last().unwrap(),
+        VirtualDom::new(app).rebuild_to_vec().edits.last().unwrap(),
         &AppendChildren { id: ElementId(0), m: 7 }
     );
 }

@@ -18,21 +18,21 @@ fn manual_diffing() {
 
     fn app(cx: Scope<AppProps>) -> Element {
         let val = cx.props.value.lock().unwrap();
-        cx.render(rsx! { div { "{val}" } })
+        render! { div { "{val}" } }
     };
 
     let value = Arc::new(Mutex::new("Hello"));
     let mut dom = VirtualDom::new_with_props(app, AppProps { value: value.clone() });
 
-    let _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
+    let _ = dom.rebuild_to_vec(&mut dioxus_core::NoOpMutations);
 
     *value.lock().unwrap() = "goodbye";
 
     assert_eq!(
-        dom.rebuild().santize().edits,
+        dom.rebuild_to_vec().santize().edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(3) },
-            HydrateText { path: &[0], value: "goodbye", id: ElementId(4) },
+            HydrateText { path: &[0], value: "goodbye".to_string(), id: ElementId(4) },
             AppendChildren { m: 1, id: ElementId(0) }
         ]
     );
@@ -45,18 +45,18 @@ fn events_generate() {
         let count = cx.use_hook(|| 0);
 
         match *count {
-            0 => cx.render(rsx! {
+            0 => render! {
                 div { onclick: move |_| *count += 1,
                     div { "nested" }
                     "Click me!"
                 }
-            }),
-            _ => cx.render(rsx!(())),
+            },
+            _ => render!(()),
         }
     };
 
     let mut dom = VirtualDom::new(app);
-    _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
+    _ = dom.rebuild_to_vec(&mut dioxus_core::NoOpMutations);
 
     dom.handle_event(
         "click",
@@ -66,7 +66,7 @@ fn events_generate() {
     );
 
     dom.mark_dirty(ScopeId::ROOT);
-    let edits = dom.render_immediate();
+    let edits = dom.render_immediate_to_vec();
 
     assert_eq!(
         edits.edits,
@@ -83,7 +83,7 @@ fn events_generate() {
 //         let render_phase = cx.use_hook(|| 0);
 //         *render_phase += 1;
 
-//         cx.render(match *render_phase {
+//         match *render_phase {
 //             1 => rsx_without_templates!("Text0"),
 //             2 => rsx_without_templates!(div {}),
 //             3 => rsx_without_templates!("Text2"),
@@ -98,13 +98,13 @@ fn events_generate() {
 
 //     fn Child(cx: Scope) -> Element {
 //         println!("Running child");
-//         cx.render(rsx_without_templates! {
+//         render_without_templates! {
 //             h1 {}
 //         })
 //     }
 
 //     let mut dom = VirtualDom::new(app);
-//     let edits = dom.rebuild();
+//     let edits = dom.rebuild_to_vec();
 //     assert_eq!(
 //         edits.edits,
 //         [

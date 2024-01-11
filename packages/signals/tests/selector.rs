@@ -65,10 +65,10 @@ fn memos_prevents_component_rerun() {
         |cx| {
             let mut signal = use_signal(cx, || 0);
 
-            if cx.generation() == 1 {
+            if generation() == 1 {
                 *signal.write() = 0;
             }
-            if cx.generation() == 2 {
+            if generation() == 2 {
                 println!("Writing to signal");
                 *signal.write() = 1;
             }
@@ -108,7 +108,7 @@ fn memos_prevents_component_rerun() {
                 signal.value()
             })
         });
-        match cx.generation() {
+        match generation() {
             0 => {
                 assert_eq!(memo.value(), 0);
             }

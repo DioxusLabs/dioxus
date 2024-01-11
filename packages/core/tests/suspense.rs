@@ -9,7 +9,7 @@ fn it_works() {
         .unwrap()
         .block_on(async {
             let mut dom = VirtualDom::new(app);
-            _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
+            _ = dom.rebuild_to_vec(&mut dioxus_core::NoOpMutations);
             dom.wait_for_suspense().await;
             let out = dioxus_ssr::render(&dom);
 
@@ -20,12 +20,12 @@ fn it_works() {
 }
 
 fn app(cx: Scope) -> Element {
-    cx.render(rsx!(
+    render!(
         div {
             "Waiting for... "
             suspended_child {}
         }
-    ))
+    )
 }
 
 fn suspended_child(cx: Scope) -> Element {

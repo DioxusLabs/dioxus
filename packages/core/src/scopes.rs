@@ -10,7 +10,7 @@ use std::{cell::Ref, fmt::Debug, rc::Rc};
 /// time for any logic that relies on these IDs to properly update.
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
-pub struct ScopeId(pub(crate) usize);
+pub struct ScopeId(pub usize);
 
 impl ScopeId {
     /// The root ScopeId.

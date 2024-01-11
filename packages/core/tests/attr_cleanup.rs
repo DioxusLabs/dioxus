@@ -10,16 +10,12 @@ use dioxus_core::BorrowedAttributeValue;
 #[test]
 fn attrs_cycle() {
     let mut dom = VirtualDom::new(|cx| {
-        let id = cx.generation();
-        match cx.generation() % 2 {
-            0 => cx.render(rsx! {
-                div {}
-            }),
-            1 => cx.render(rsx! {
-                div {
-                    h1 { class: "{id}", id: "{id}" }
-                }
-            }),
+        let id = generation();
+        match generation() % 2 {
+            0 => render! { div {} },
+            1 => render! {
+                div { h1 { class: "{id}", id: "{id}" } }
+            },
             _ => unreachable!(),
         }
     });
@@ -27,7 +23,7 @@ fn attrs_cycle() {
     let bump = Bump::new();
 
     assert_eq!(
-        dom.rebuild().santize().edits,
+        dom.rebuild_to_vec_to_vec().santize().edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(1,) },
             AppendChildren { m: 1, id: ElementId(0) },
@@ -36,7 +32,7 @@ fn attrs_cycle() {
 
     dom.mark_dirty(ScopeId::ROOT);
     assert_eq!(
-        dom.render_immediate().santize().edits,
+        dom.render_immediate_to_vec().santize().edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(2,) },
             AssignId { path: &[0,], id: ElementId(3,) },
@@ -58,7 +54,7 @@ fn attrs_cycle() {
 
     dom.mark_dirty(ScopeId::ROOT);
     assert_eq!(
-        dom.render_immediate().santize().edits,
+        dom.render_immediate_to_vec().santize().edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(1) },
             ReplaceWith { id: ElementId(2), m: 1 }
@@ -67,7 +63,7 @@ fn attrs_cycle() {
 
     dom.mark_dirty(ScopeId::ROOT);
     assert_eq!(
-        dom.render_immediate().santize().edits,
+        dom.render_immediate_to_vec().santize().edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(2) },
             AssignId { path: &[0], id: ElementId(3) },
@@ -90,7 +86,7 @@ fn attrs_cycle() {
     // we take the node taken by attributes since we reused it
     dom.mark_dirty(ScopeId::ROOT);
     assert_eq!(
-        dom.render_immediate().santize().edits,
+        dom.render_immediate_to_vec().santize().edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(1) },
             ReplaceWith { id: ElementId(2), m: 1 }

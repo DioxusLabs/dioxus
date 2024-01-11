@@ -311,7 +311,7 @@ fn create() {
     for _ in 0..repeat_count {
         let mut vdom =
             VirtualDom::new_with_props(create_random_element, DepthProps { depth: 0, root: true });
-        let _ = vdom.rebuild();
+        let _ = vdom.rebuild_to_vec();
     }
 }
 
@@ -323,7 +323,7 @@ fn diff() {
     for _ in 0..repeat_count {
         let mut vdom =
             VirtualDom::new_with_props(create_random_element, DepthProps { depth: 0, root: true });
-        let _ = vdom.rebuild();
+        let _ = vdom.rebuild_to_vec();
         // A list of all elements that have had event listeners
         // This is intentionally never cleared, so that we can test that calling event listeners that are removed doesn't cause a panic
         let mut event_listeners = HashSet::new();
@@ -338,7 +338,7 @@ fn diff() {
                 );
             }
             {
-                let muts = vdom.render_immediate();
+                let muts = vdom.render_immediate_to_vec();
                 for mut_ in muts.edits {
                     if let Mutation::NewEventListener { name, id } = mut_ {
                         println!("new event listener on {:?} for {:?}", id, name);

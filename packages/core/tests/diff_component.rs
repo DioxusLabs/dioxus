@@ -12,55 +12,52 @@ fn component_swap() {
 
         *render_phase += 1;
 
-        cx.render(match *render_phase {
-            0 => rsx! {
+        match *render_phase {
+            0 => render! {
                 nav_bar {}
                 dash_board {}
             },
-            1 => rsx! {
+            1 => render! {
                 nav_bar {}
                 dash_results {}
             },
-            2 => rsx! {
+            2 => render! {
                 nav_bar {}
                 dash_board {}
             },
-            3 => rsx! {
+            3 => render! {
                 nav_bar {}
                 dash_results {}
             },
-            4 => rsx! {
+            4 => render! {
                 nav_bar {}
                 dash_board {}
             },
-            _ => rsx!("blah"),
-        })
+            _ => render!("blah"),
+        }
     }
 
     fn nav_bar(cx: Scope) -> Element {
-        cx.render(rsx! {
-            h1 {
-                "NavBar"
-                (0..3).map(|_| rsx!(nav_link {}))
-            }
-        })
+        render! {
+            h1 { "NavBar", (0..3).map(|_| render!(nav_link {})) }
+        }
     }
 
     fn nav_link(cx: Scope) -> Element {
-        cx.render(rsx!( h1 { "nav_link" } ))
+        render!( h1 { "nav_link" } )
     }
 
     fn dash_board(cx: Scope) -> Element {
-        cx.render(rsx!( div { "dashboard" } ))
+        render!( div { "dashboard" } )
     }
 
     fn dash_results(cx: Scope) -> Element {
-        cx.render(rsx!( div { "results" } ))
+        render!( div { "results" } )
     }
 
     let mut dom = VirtualDom::new(app);
     {
-        let edits = dom.rebuild().santize();
+        let edits = dom.rebuild_to_vec().santize();
         assert_eq!(
             edits.edits,
             [
@@ -77,7 +74,7 @@ fn component_swap() {
 
     dom.mark_dirty(ScopeId::ROOT);
     assert_eq!(
-        dom.render_immediate().santize().edits,
+        dom.render_immediate_to_vec().santize().edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(6) },
             ReplaceWith { id: ElementId(5), m: 1 }
@@ -86,7 +83,7 @@ fn component_swap() {
 
     dom.mark_dirty(ScopeId::ROOT);
     assert_eq!(
-        dom.render_immediate().santize().edits,
+        dom.render_immediate_to_vec().santize().edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(5) },
             ReplaceWith { id: ElementId(6), m: 1 }
@@ -95,7 +92,7 @@ fn component_swap() {
 
     dom.mark_dirty(ScopeId::ROOT);
     assert_eq!(
-        dom.render_immediate().santize().edits,
+        dom.render_immediate_to_vec().santize().edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(6) },
             ReplaceWith { id: ElementId(5), m: 1 }

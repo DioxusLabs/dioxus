@@ -5,18 +5,18 @@ use dioxus::prelude::*;
 #[test]
 fn catches_panic() {
     let mut dom = VirtualDom::new(app);
-    _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
+    _ = dom.rebuild_to_vec(&mut dioxus_core::NoOpMutations);
 }
 
 fn app(cx: Scope) -> Element {
-    cx.render(rsx! {
+    render! {
         div {
             h1 { "Title" }
 
             NoneChild {}
             ThrowChild {}
         }
-    })
+    }
 }
 
 fn NoneChild(_cx: Scope) -> Element {
@@ -28,7 +28,5 @@ fn ThrowChild(cx: Scope) -> Element {
 
     let _g: i32 = "123123".parse().throw()?;
 
-    cx.render(rsx! {
-        div {}
-    })
+    render! { div {} }
 }

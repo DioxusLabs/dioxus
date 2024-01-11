@@ -9,7 +9,7 @@ fn events_propagate() {
     set_event_converter(Box::new(dioxus_html::SerializedHtmlEventConverter));
 
     let mut dom = VirtualDom::new(app);
-    _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
+    _ = dom.rebuild_to_vec(&mut dioxus_core::NoOpMutations);
 
     // Top-level click is registered
     dom.handle_event(
@@ -23,7 +23,7 @@ fn events_propagate() {
     // break reference....
     for _ in 0..5 {
         dom.mark_dirty(ScopeId(0));
-        _ = dom.render_immediate();
+        _ = dom.render_immediate_to_vec();
     }
 
     // Lower click is registered
@@ -38,7 +38,7 @@ fn events_propagate() {
     // break reference....
     for _ in 0..5 {
         dom.mark_dirty(ScopeId(0));
-        _ = dom.render_immediate();
+        _ = dom.render_immediate_to_vec();
     }
 
     // Stop propagation occurs

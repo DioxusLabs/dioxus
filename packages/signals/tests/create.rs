@@ -56,7 +56,7 @@ fn deref_signal() {
 #[test]
 fn drop_signals() {
     let mut dom = VirtualDom::new(|cx| {
-        let generation = cx.generation();
+        let generation = generation();
 
         let count = if generation % 2 == 0 { 10 } else { 0 };
         render! {
