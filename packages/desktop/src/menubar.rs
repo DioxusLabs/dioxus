@@ -4,15 +4,12 @@ use tao::window::Window;
 
 #[allow(unused)]
 pub fn build_menu(window: &Window, default_menu_bar: bool) -> Option<Box<dyn Any>> {
-    #[allow(unused_mut)]
-    let mut menu = None;
-
     #[cfg(not(any(target_os = "ios", target_os = "android")))]
     {
-        menu = Some(Box::new(impl_::build_menu_bar(default_menu_bar, window)) as Box<dyn Any>);
+        return Some(Box::new(impl_::build_menu_bar(default_menu_bar, window)) as Box<dyn Any>);
     }
 
-    menu
+    None
 }
 
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
