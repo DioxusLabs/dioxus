@@ -11,7 +11,7 @@ use crate::{
 use dioxus_core::VirtualDom;
 use dioxus_html::prelude::EvalProvider;
 use futures_util::{pin_mut, FutureExt};
-use std::{rc::Rc, task::Waker};
+use std::{any::Any, rc::Rc, task::Waker};
 use wry::{RequestAsyncResponder, WebContext, WebViewBuilder};
 
 pub struct WebviewInstance {
@@ -22,15 +22,18 @@ pub struct WebviewInstance {
     // Wry assumes the webcontext is alive for the lifetime of the webview.
     // We need to keep the webcontext alive, otherwise the webview will crash
     _web_context: WebContext,
+
+    // Same with the menu.
+    // Currently it's a box<dyn any> because 1) we don't touch it and 2) we support a number of platforms
+    // like ios where muda does not give us a menu type. It sucks but alas.
+    //
+    // This would be a good thing for someone looking to contribute to fix.
+    _menu: Option<Box<dyn Any>>,
 }
 
 impl WebviewInstance {
     pub fn new(mut cfg: Config, dom: VirtualDom, shared: Rc<SharedContext>) -> WebviewInstance {
         let window = cfg.window.clone().build(&shared.target).unwrap();
-
-        // TODO: allow users to specify their own menubars, again :/
-        #[cfg(not(any(target_os = "android", target_os = "ios")))]
-        crate::menubar::build_menu(&window, cfg.enable_default_menu_bar);
 
         // We assume that if the icon is None in cfg, then the user just didnt set it
         if cfg.window.window.window_icon.is_none() {
@@ -100,14 +103,6 @@ impl WebviewInstance {
             webview = webview.with_file_drop_handler(move |evt| handler(window_id, evt))
         }
 
-        // This was removed from wry, I'm not sure what replaced it
-        // #[cfg(windows)]
-        // {
-        //     // Windows has a platform specific settings to disable the browser shortcut keys
-        //     use wry::WebViewBuilderExtWindows;
-        //     webview = webview.with_browser_accelerator_keys(false);
-        // }
-
         if let Some(color) = cfg.background_color {
             webview = webview.with_background_color(color);
         }
@@ -136,8 +131,17 @@ impl WebviewInstance {
             webview = webview.with_devtools(true);
         }
 
+        let webview = webview.build().unwrap();
+
+        // TODO: allow users to specify their own menubars, again :/
+        let menu = if cfg!(not(any(target_os = "android", target_os = "ios"))) {
+            crate::menubar::build_menu(&window, cfg.enable_default_menu_bar)
+        } else {
+            None
+        };
+
         let desktop_context = Rc::from(DesktopService::new(
-            webview.build().unwrap(),
+            webview,
             window,
             shared.clone(),
             edit_queue,
@@ -160,15 +164,17 @@ impl WebviewInstance {
 
         // Also set up its eval provider
         // It's important that we provide as dyn EvalProvider - using the concrete type has
-        // a different TypeId.
+        // a different TypeId and can not be downcasted as dyn EvalProvider
         let provider: Rc<dyn EvalProvider> =
             Rc::new(DesktopEvalProvider::new(desktop_context.clone()));
+
         // dom.base_scope().provide_context(provider);
 
         WebviewInstance {
             waker: tao_waker(shared.proxy.clone(), desktop_context.window.id()),
             desktop_context,
             dom,
+            _menu: menu,
             _web_context: web_context,
         }
     }
