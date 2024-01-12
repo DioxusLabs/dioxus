@@ -3,21 +3,42 @@ use std::{fs::File, io::Write, path::PathBuf};
 use dioxus_cli_plugin::*;
 use exports::plugins::main::definitions::Guest;
 use plugins::main::{
-    imports::{log, set_data, watched_paths},
+    imports::{get_data, log, set_data, watched_paths},
     toml::{Toml, TomlValue},
     types::{CommandEvent, PluginInfo, ResponseEvent, RuntimeEvent},
 };
 use railwind::parse_to_string;
 use regex::Regex;
 
+const PREFLIGHT: &'static str = include_str!("./tailwind_preflight.css");
+const PREFLIGHT_LEN: usize = PREFLIGHT.len();
+
 struct Plugin;
 
-fn get_classes(path: &PathBuf, regex: &Regex) -> Vec<String> {
-    let file = std::fs::read_to_string(path).unwrap();
-    regex
+fn get_classes_regex(path: &PathBuf, regex: &Regex) -> Option<Vec<String>> {
+    let file = std::fs::read_to_string(path).ok()?;
+    let classes = regex
         .captures_iter(&file)
         .filter_map(|f| f.get(0).map(|f| f.as_str().to_string()))
-        .collect()
+        .collect();
+    Some(classes)
+}
+
+fn get_classes_naive(path: &PathBuf, regex: &Regex) -> Option<Vec<String>> {
+    let file = std::fs::read_to_string(path).ok()?;
+    // Go through the entire file and return everything that is surrounded by quote and split at whitespace.
+    let classes = regex
+        .captures_iter(&file)
+        .map(|f| {
+            f.get(0)
+                .unwrap()
+                .as_str()
+                .split_whitespace()
+                .map(ToString::to_string)
+        })
+        .flatten()
+        .collect();
+    Some(classes)
 }
 
 fn get_parsable_files(path: &PathBuf) -> Option<Vec<PathBuf>> {
@@ -42,13 +63,26 @@ fn parse_and_save_css(paths: Vec<PathBuf>) -> Result<ResponseEvent, ()> {
 
     let paths: Vec<PathBuf> = paths.into_iter().map(PathBuf::from).collect();
 
+    // Matches on rsx "class:" attributes
     let rsx_regex = Regex::new(r#"class:\s*(?:\"([^\"]+)\"|\'([^\']+)\')"#).unwrap();
 
-    let classes: Vec<_> = paths
-        .iter()
-        .flat_map(|f| get_classes(f, &rsx_regex))
-        .map(|f| f.strip_prefix("class:").unwrap().trim().replace('"', ""))
-        .collect();
+    // Matches on anything in quotes, useful for components that piece together classes at runtime
+    let naive_regex = Regex::new(r#"([\"'])(?:\\\1|.)*?\1"#).unwrap();
+
+    let classes: Vec<_> = if get_data("naive_check").unwrap() == vec![1] {
+        paths
+            .iter()
+            .flat_map(|f| get_classes_regex(f, &rsx_regex))
+            .flatten()
+            .map(|f| f.strip_prefix("class:").unwrap().trim().replace('"', ""))
+            .collect()
+    } else {
+        paths
+            .iter()
+            .flat_map(|f| get_classes_naive(f, &naive_regex))
+            .flatten()
+            .collect()
+    };
 
     // If it's empty then nothing will change
     if classes.is_empty() {
@@ -96,12 +130,31 @@ fn gen_tailwind() -> Result<ResponseEvent, ()> {
 }
 
 impl Guest for Plugin {
-    fn apply_config(_config: Toml) -> Result<(), ()> {
+    fn apply_config(config: Toml) -> Result<(), ()> {
+        let value = config.get();
+        let TomlValue::Table(table) = value else {
+            return Err(());
+        };
+
+        let Some((_, naive_check)) = table.into_iter().find(|f| &f.0 == "naive_check") else {
+            return Err(());
+        };
+
+        let check_value = naive_check.get();
+        let TomlValue::Boolean(naive_check) = check_value else {
+            return Err(());
+        };
+
+        set_data("naive_check", &[naive_check as u8]);
+
         Ok(())
     }
 
     fn get_default_config() -> Toml {
-        Toml::new(TomlValue::Integer(0))
+        let val = Toml::new(TomlValue::Boolean(false));
+        let table_vec = vec![("naive_check".into(), val)];
+        let table = Toml::new(TomlValue::Table(table_vec));
+        table
     }
 
     fn on_watched_paths_change(
@@ -111,8 +164,9 @@ impl Guest for Plugin {
     }
 
     fn register() -> Result<(), ()> {
+        set_data("naive_check", &[0]);
         log("Registered Tailwind Plugin Successfully!");
-        set_data("Tailwind output", b"that/dir/over/there");
+
         Ok(())
     }
 
