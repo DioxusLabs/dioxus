@@ -7,7 +7,6 @@ use cargo_metadata::{diagnostic::Diagnostic, Message};
 use indicatif::{ProgressBar, ProgressStyle};
 use serde::Serialize;
 use std::{
-    ffi::OsStr,
     fs::{copy, create_dir_all, File},
     io::Read,
     panic,

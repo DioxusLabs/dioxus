@@ -11,6 +11,7 @@ use cargo_metadata::diagnostic::Diagnostic;
 use dioxus_core::Template;
 use dioxus_html::HtmlCtx;
 use dioxus_rsx::hot_reload::*;
+use futures::executor::block_on;
 use notify::{RecommendedWatcher, Watcher};
 use std::{
     path::PathBuf,
@@ -60,12 +61,11 @@ async fn setup_file_watcher<F: Fn() -> Result<BuildResult> + Sync + Send + 'stat
         }
 
         let mut needs_full_rebuild = false;
-        let change =
-            futures::executor::block_on(plugins_watched_paths_changed(&e.paths, &config.crate_dir));
+        let change = block_on(plugins_watched_paths_changed(&e.paths, &config.crate_dir));
         handle_change(change, &reload_tx, &mut needs_full_rebuild);
 
         if let Some(hot_reload) = &hot_reload {
-            let change = futures::executor::block_on(plugins_before_runtime(HotReload));
+            let change = block_on(plugins_before_runtime(HotReload));
             handle_change(change, &reload_tx, &mut needs_full_rebuild);
 
             // find changes to the rsx in the file
@@ -121,7 +121,7 @@ async fn setup_file_watcher<F: Fn() -> Result<BuildResult> + Sync + Send + 'stat
                 }
             }
 
-            let change = futures::executor::block_on(plugins_after_runtime(HotReload));
+            let change = block_on(plugins_after_runtime(HotReload));
             handle_change(change, &reload_tx, &mut needs_full_rebuild);
         } else {
             needs_full_rebuild = true;
@@ -129,7 +129,7 @@ async fn setup_file_watcher<F: Fn() -> Result<BuildResult> + Sync + Send + 'stat
 
         if needs_full_rebuild {
             // Can be ignored, going to rebuild anyway
-            let _change = futures::executor::block_on(plugins_before_runtime(Rebuild));
+            let _change = block_on(plugins_before_runtime(Rebuild));
 
             match build_with() {
                 Ok(res) => {
@@ -149,7 +149,7 @@ async fn setup_file_watcher<F: Fn() -> Result<BuildResult> + Sync + Send + 'stat
                 Err(e) => log::error!("{}", e),
             }
 
-            let change = futures::executor::block_on(plugins_after_runtime(Rebuild));
+            let change = block_on(plugins_after_runtime(Rebuild));
             // Todo handle plugins requesting rebuild here
             handle_change(change, &reload_tx, &mut needs_full_rebuild);
         }
