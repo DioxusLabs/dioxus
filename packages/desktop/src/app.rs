@@ -196,15 +196,9 @@ impl<P: 'static + Clone> App<P> {
     }
 
     pub fn handle_initialize_msg(&mut self, id: WindowId) {
-        // view.dom
-        //     .rebuild(&mut *view.desktop_context.mutation_state.borrow_mut());
-        // send_edits(&view.desktop_context);
-
-        println!("initialize message received, sending edits to {id:?}");
-
         let view = self.webviews.get_mut(&id).unwrap();
         view.dom
-            .render_immediate(&mut *view.desktop_context.mutation_state.borrow_mut());
+            .rebuild(&mut *view.desktop_context.mutation_state.borrow_mut());
         view.desktop_context.send_edits();
         view.desktop_context
             .window
