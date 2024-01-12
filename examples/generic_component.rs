@@ -7,9 +7,9 @@ fn main() {
 }
 
 fn app(cx: Scope) -> Element {
-    cx.render(rsx! { generic_child {
-        data: 0i32
-    } })
+    render! {
+        generic_child { data: 0 }
+    }
 }
 
 #[derive(PartialEq, Props)]
@@ -18,9 +18,7 @@ struct GenericChildProps<T: Display + PartialEq> {
 }
 
 fn generic_child<T: Display + PartialEq>(cx: Scope<GenericChildProps<T>>) -> Element {
-    let data = &cx.props.data;
-
-    cx.render(rsx! { div {
-        "{data}"
-    } })
+    render! {
+        div { "{&cx.props.data}" }
+    }
 }

@@ -95,6 +95,16 @@ impl Runtime {
         self.scope_stack.borrow().last().copied()
     }
 
+    /// Call this function with the current scope set to the given scope
+    ///
+    /// Useful in a limited number of scenarios, not public.
+    pub(crate) fn with_scope<O>(&self, id: ScopeId, f: impl FnOnce() -> O) -> O {
+        self.scope_stack.borrow_mut().push(id);
+        let o = f();
+        self.scope_stack.borrow_mut().pop();
+        o
+    }
+
     /// Get the context for any scope given its ID
     ///
     /// This is useful for inserting or removing contexts from a scope, or rendering out its root node
@@ -144,6 +154,17 @@ impl RuntimeGuard {
     pub fn new(runtime: Rc<Runtime>) -> Self {
         push_runtime(runtime.clone());
         Self(runtime)
+    }
+
+    /// Run a function with a given runtime and scope in context
+    pub fn with<O>(runtime: Rc<Runtime>, scope: Option<ScopeId>, f: impl FnOnce() -> O) -> O {
+        let guard = Self::new(runtime.clone());
+        let o = match scope {
+            Some(scope) => Runtime::with_scope(&runtime, scope, f),
+            None => f(),
+        };
+        drop(guard);
+        o
     }
 }
 

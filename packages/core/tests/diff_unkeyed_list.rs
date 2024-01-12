@@ -9,9 +9,9 @@ fn list_creates_one_by_one() {
 
         render! {
             div {
-                (0..gen).map(|i| render! {
+                for i in 0..gen {
                     div { "{i}" }
-                })
+                }
             }
         }
     });
@@ -78,9 +78,9 @@ fn removes_one_by_one() {
 
         render! {
             div {
-                (0..gen).map(|i| render! {
+                for i in 0..gen {
                     div { "{i}" }
-                })
+                }
             }
         }
     });
@@ -153,10 +153,10 @@ fn list_shrink_multiroot() {
     let mut dom = VirtualDom::new(|| {
         render! {
             div {
-                (0..generation()).map(|i| render! {
+                for i in 0..cx.generation() {
                     div { "{i}" }
                     div { "{i}" }
-                })
+                }
             }
         }
     });
@@ -214,10 +214,10 @@ fn removes_one_by_one_multiroot() {
 
         render! {
             div {
-                (0..gen).map(|i| render! {
+                {(0..gen).map(|i| rsx! {
                     div { "{i}" }
                     div { "{i}" }
-                })
+                })}
             }
         }
     });
@@ -276,9 +276,9 @@ fn removes_one_by_one_multiroot() {
 fn two_equal_fragments_are_equal_static() {
     let mut dom = VirtualDom::new(|| {
         render! {
-            (0..5).map(|_| render! {
+            for _ in 0..5 {
                 div { "hello" }
-            })
+            }
         }
     });
 
@@ -290,9 +290,9 @@ fn two_equal_fragments_are_equal_static() {
 fn two_equal_fragments_are_equal() {
     let mut dom = VirtualDom::new(|| {
         render! {
-            (0..5).map(|i| render! {
+            for i in 0..5 {
                 div { "hello {i}" }
-            })
+            }
         }
     });
 
@@ -310,7 +310,11 @@ fn remove_many() {
             _ => unreachable!(),
         };
 
-        render! {(0..num).map(|i| render! { div { "hello {i}" } })}
+        render! {
+            for i in 0..num {
+                div { "hello {i}" }
+            }
+        }
     });
 
     {

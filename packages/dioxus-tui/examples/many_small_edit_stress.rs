@@ -71,32 +71,28 @@ fn Grid(cx: Scope<GridProps>) -> Element {
             width: "100%",
             height: "100%",
             flex_direction: "column",
-            (0..size).map(|x|
-                    {
-                    rsx! {
-                        div{
-                            width: "100%",
-                            height: "100%",
-                            flex_direction: "row",
-                            (0..size).map(|y|
-                                {
-                                    let alpha = y as f32*100.0/size as f32 + counts.read()[x*size + y] as f32;
-                                    let key = format!("{}-{}", x, y);
-                                    rsx! {
-                                        Box{
-                                            x: x,
-                                            y: y,
-                                            alpha: 100.0,
-                                            hue: alpha,
-                                            key: "{key}",
-                                        }
-                                    }
+            for x in 0..size {
+                div{
+                    width: "100%",
+                    height: "100%",
+                    flex_direction: "row",
+                    for y in 0..size {
+                        {
+                            let alpha = y as f32*100.0/size as f32 + counts.read()[x*size + y] as f32;
+                            let key = format!("{}-{}", x, y);
+                            rsx! {
+                                Box {
+                                    x: x,
+                                    y: y,
+                                    alpha: 100.0,
+                                    hue: alpha,
+                                    key: "{key}",
                                 }
-                            )
+                            }
                         }
                     }
                 }
-            )
+            }
         }
     }
 }

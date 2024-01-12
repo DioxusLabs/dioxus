@@ -31,7 +31,7 @@ fn app(cx: Scope) -> Element {
 
         // We can do boolean operations on the current signal value
         if count.value() > 5 {
-            rsx!{ h2 { "High five!" } }
+            h2 { "High five!" }
         }
 
         // We can cleanly map signals with iterators
@@ -41,9 +41,9 @@ fn app(cx: Scope) -> Element {
 
         // We can also use the signal value as a slice
         if let [ref first, .., ref last] = saved_values.read().as_slice() {
-            rsx! { li { "First and last: {first}, {last}" } }
+            li { "First and last: {first}, {last}" }
         } else {
-            rsx! { "No saved values" }
+            "No saved values"
         }
     })
 }

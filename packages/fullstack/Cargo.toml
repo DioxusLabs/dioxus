@@ -16,18 +16,14 @@ dioxus_server_macro = { workspace = true }
 
 # warp
 warp = { version = "0.3.5", features = ["compression-gzip"], optional = true }
-http-body = { version = "0.4.5", optional = true }
-http-body-util = "0.1.0-rc.2"
 
 # axum
-axum = { version = "0.6.1", features = ["ws", "macros"], optional = true }
+axum = { version = "0.6.1", features = ["ws", "macros"], default-features = false, optional = true }
 tower-http = { version = "0.4.0", optional = true, features = ["fs", "compression-gzip"] }
-tower = { version = "0.4.13", features = ["util"], optional = true }
-axum-macros = "0.3.7"
 
 # salvo
 salvo = { version = "0.63.0", optional = true, features = ["serve-static", "websocket", "compression"] }
-serde = "1.0.159"
+http-body-util = { version = "0.1.0-rc.2", optional = true }
 
 # Dioxus + SSR
 dioxus = { workspace = true }
@@ -45,24 +41,25 @@ dioxus-desktop = { workspace = true, optional = true }
 dioxus-router = { workspace = true, optional = true }
 
 tracing = { workspace = true }
-tracing-futures = { workspace = true }
+tracing-futures = { workspace = true, optional = true }
 once_cell = "1.17.1"
-thiserror = { workspace = true }
-tokio = { workspace = true, features = ["full"], optional = true }
+tokio = { workspace = true, features = ["rt", "sync", "rt-multi-thread"], optional = true }
 tokio-util = { version = "0.7.8", features = ["rt"], optional = true }
-object-pool = "0.5.4"
-anymap = "0.12.1"
+anymap = { version = "0.12.1", optional = true }
 
+serde = "1.0.159"
 serde_json = { version = "1.0.95", optional = true }
 tokio-stream = { version = "0.1.12", features = ["sync"], optional = true }
-futures-util = { workspace = true, optional = true }
-postcard = { version = "1.0.4", features = ["use-std"] }
+futures-util = { workspace = true, default-features = false, optional = true }
+ciborium = "0.2.1"
 base64 = "0.21.0"
 
-pin-project = "1.1.2"
+pin-project = { version = "1.1.2", optional = true }
+thiserror = { workspace = true, optional = true }
 async-trait = "0.1.71"
 bytes = "1.4.0"
-tower-layer = "0.3.2"
+tower = { version = "0.4.13", features = ["util"], optional = true }
+tower-layer = { version = "0.3.2", optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 dioxus-hot-reload = { workspace = true }
@@ -70,22 +67,16 @@ dioxus-hot-reload = { workspace = true }
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 web-sys = { version = "0.3.61", features = ["Window", "Document", "Element", "HtmlDocument", "Storage", "console"] }
 
-[target.'cfg(any(target_os = "windows",target_os = "macos",target_os = "linux",target_os = "dragonfly", target_os = "freebsd", target_os = "netbsd", target_os = "openbsd"))'.dependencies]
-# This is only for debug mode, and it appears mobile does not support some packages this uses
-manganis-cli-support = { git = "https://github.com/DioxusLabs/collect-assets", features = ["webp", "html"] }
 
 [features]
-default = ["hot-reload", "default-tls"]
+default = ["hot-reload"]
 router = ["dioxus-router"]
 hot-reload = ["serde_json", "futures-util"]
 web = ["dioxus-web"]
 desktop = ["dioxus-desktop"]
 warp = ["dep:warp", "ssr"]
 axum = ["dep:axum", "tower-http", "ssr"]
-salvo = ["dep:salvo", "ssr"]
-ssr = ["server_fn/ssr", "dioxus_server_macro/ssr", "tokio", "tokio-util", "dioxus-ssr", "tower", "hyper", "http", "http-body", "dioxus-router/ssr", "tokio-stream"]
+salvo = ["dep:salvo", "ssr", "http-body-util"]
+ssr = ["server_fn/ssr", "dioxus_server_macro/ssr", "tokio", "tokio-util", "tokio-stream", "dioxus-ssr", "tower", "hyper", "http", "dioxus-router?/ssr", "tower-layer", "anymap", "tracing-futures", "pin-project", "thiserror"]
 default-tls = ["server_fn/default-tls"]
 rustls = ["server_fn/rustls"]
-
-[dev-dependencies]
-dioxus-fullstack = { path = ".", features = ["router"] }

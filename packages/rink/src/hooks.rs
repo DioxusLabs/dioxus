@@ -3,8 +3,8 @@ use crossterm::event::{
     MouseEventKind,
 };
 use dioxus_html::{
-    HasFormData, HasKeyboardData, HasWheelData, SerializedFocusData, SerializedKeyboardData,
-    SerializedMouseData, SerializedWheelData,
+    HasFileData, HasFormData, HasKeyboardData, HasWheelData, SerializedFocusData,
+    SerializedKeyboardData, SerializedMouseData, SerializedWheelData,
 };
 use dioxus_native_core::prelude::*;
 use dioxus_native_core::real_dom::NodeImmutable;
@@ -18,6 +18,7 @@ use dioxus_html::input_data::keyboard_types::{Code, Key, Location, Modifiers};
 use dioxus_html::input_data::{
     MouseButton as DioxusMouseButton, MouseButtonSet as DioxusMouseButtons,
 };
+use dioxus_html::FormValue;
 use dioxus_html::{event_bubbles, prelude::*};
 use std::any::Any;
 use std::collections::HashMap;
@@ -66,7 +67,7 @@ impl EventData {
 pub struct FormData {
     pub(crate) value: String,
 
-    pub(crate) values: HashMap<String, Vec<String>>,
+    pub values: HashMap<String, FormValue>,
 
     pub(crate) files: Option<Files>,
 }
@@ -76,7 +77,7 @@ impl HasFormData for FormData {
         self.value.clone()
     }
 
-    fn values(&self) -> HashMap<String, Vec<String>> {
+    fn values(&self) -> HashMap<String, FormValue> {
         self.values.clone()
     }
 
@@ -84,6 +85,8 @@ impl HasFormData for FormData {
         self
     }
 }
+
+impl HasFileData for FormData {}
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Files {

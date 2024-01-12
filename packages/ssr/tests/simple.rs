@@ -24,7 +24,7 @@ fn lists() {
             ul {
                 (0..5).map(|i| render! {
                     li { "item {i}" }
-                })
+                }
             }
         }),
         "<ul><li>item 0</li><li>item 1</li><li>item 2</li><li>item 3</li><li>item 4</li></ul>"
@@ -58,7 +58,7 @@ fn components() {
             div {
                 (0..5).map(|name| render! {
                     MyComponent { name: name }
-                })
+                }
             }
         }),
         "<div><div>component 0</div><div>component 1</div><div>component 2</div><div>component 3</div><div>component 4</div></div>"

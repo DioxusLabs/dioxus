@@ -218,6 +218,7 @@ fn create_random_dynamic_attr() -> Attribute {
         random_ns(),
         rand::random(),
     )
+    .into()
 }
 
 static mut TEMPLATE_COUNT: usize = 0;
@@ -249,7 +250,9 @@ fn create_random_element(cx: DepthProps) -> Element {
                 )
                 .into_boxed_str(),
             ));
-            let node = VNode::new(
+            println!("{template:#?}");
+            let node = cx.vnode(
+                None.into(),
                 None,
                 template,
                 dynamic_node_types

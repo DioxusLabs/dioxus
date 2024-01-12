@@ -38,9 +38,9 @@ fn app() -> Element {
             }
             button { onclick: move |_| idx -= 1, "-" }
             ul {
-                (0..*idx()).map(|i| render! {
+                {(0..**idx).map(|i| rsx! {
                     ChildExample { i: i, onhover: onhover }
-                })
+                })}
             }
         }
     }

@@ -62,7 +62,7 @@ fn ClientList(cx: Scope) -> Element {
         Link { to: Route::ClientAdd {}, class: "pure-button pure-button-primary", "Add Client" }
         Link { to: Route::Settings {}, class: "pure-button", "Settings" }
 
-        clients.read().iter().map(|client| rsx! {
+        for client in clients.read().iter() {
             div {
                 class: "client",
                 style: "margin-bottom: 50px",
@@ -70,7 +70,7 @@ fn ClientList(cx: Scope) -> Element {
                 p { "Name: {client.first_name} {client.last_name}" }
                 p { "Description: {client.description}" }
             }
-        })
+        }
     })
 }
 

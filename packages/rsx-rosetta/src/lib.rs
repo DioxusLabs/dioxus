@@ -5,7 +5,8 @@
 use convert_case::{Case, Casing};
 use dioxus_html::{map_html_attribute_to_rsx, map_html_element_to_rsx};
 use dioxus_rsx::{
-    BodyNode, CallBody, Component, Element, ElementAttr, ElementAttrNamed, ElementName, IfmtInput,
+    AttributeType, BodyNode, CallBody, Component, Element, ElementAttr, ElementAttrNamed,
+    ElementName, IfmtInput,
 };
 pub use html_parser::{Dom, Node};
 use proc_macro2::{Ident, Span};
@@ -63,16 +64,16 @@ pub fn rsx_node_from_html(node: &Node) -> Option<BodyNode> {
                         }
                     };
 
-                    ElementAttrNamed {
+                    AttributeType::Named(ElementAttrNamed {
                         el_name: el_name.clone(),
                         attr,
-                    }
+                    })
                 })
                 .collect();
 
             let class = el.classes.join(" ");
             if !class.is_empty() {
-                attributes.push(ElementAttrNamed {
+                attributes.push(AttributeType::Named(ElementAttrNamed {
                     el_name: el_name.clone(),
                     attr: ElementAttr {
                         name: dioxus_rsx::ElementAttrName::BuiltIn(Ident::new(
@@ -81,11 +82,11 @@ pub fn rsx_node_from_html(node: &Node) -> Option<BodyNode> {
                         )),
                         value: dioxus_rsx::ElementAttrValue::AttrLiteral(ifmt_from_text(&class)),
                     },
-                });
+                }));
             }
 
             if let Some(id) = &el.id {
-                attributes.push(ElementAttrNamed {
+                attributes.push(AttributeType::Named(ElementAttrNamed {
                     el_name: el_name.clone(),
                     attr: ElementAttr {
                         name: dioxus_rsx::ElementAttrName::BuiltIn(Ident::new(
@@ -94,7 +95,7 @@ pub fn rsx_node_from_html(node: &Node) -> Option<BodyNode> {
                         )),
                         value: dioxus_rsx::ElementAttrValue::AttrLiteral(ifmt_from_text(id)),
                     },
-                });
+                }));
             }
 
             let children = el.children.iter().filter_map(rsx_node_from_html).collect();

@@ -15,7 +15,7 @@ fn test_memory_leak() {
         spawn(async {});
 
         if val == 2 || val == 4 {
-            return render!(());
+            return render!({});
         }
 
         let mut name = once(|| String::from("numbers: "));
@@ -73,7 +73,7 @@ fn memo_works_properly() {
         let val = generation();
 
         if val == 2 || val == 4 {
-            return render!(());
+            return None;
         }
 
         let name = once(|| String::from("asd"));

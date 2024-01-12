@@ -241,9 +241,6 @@ impl DioxusRouterExt for Router {
     }
 
     fn serve_static_assets(mut self, assets_path: impl Into<std::path::PathBuf>) -> Self {
-        // Copy over any assets we find
-        crate::collect_assets::copy_assets();
-
         let assets_path = assets_path.into();
 
         // Serve all files in dist folder except index.html

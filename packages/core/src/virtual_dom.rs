@@ -78,7 +78,7 @@ use std::{any::Any, cell::Cell, collections::BTreeSet, future::Future, rc::Rc};
 /// #[component]
 /// fn Title<'a>( children: Element) -> Element {
 ///     cx.render(rsx! {
-///         div { id: "title", children }
+///         div { id: "title", {children} }
 ///     })
 /// }
 /// ```
@@ -394,17 +394,14 @@ impl VirtualDom {
                     let this_path = node_template.attr_paths[idx];
 
                     // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
-                    if attr.name.trim_start_matches("on") == name
-                        && target_path.is_decendant(&this_path)
-                    {
-                        listeners.push(&attr.value);
-
-                        // Break if this is the exact target element.
-                        // This means we won't call two listeners with the same name on the same element. This should be
-                        // documented, or be rejected from the rsx! macro outright
-                        if target_path == this_path {
-                            break;
-                        }
+                    if target_path.is_decendant(&this_path) {
+                        attr.ty.for_each(|attribute| {
+                            if attribute.name.trim_start_matches("on") == name {
+                                if let AttributeValue::Listener(listener) = &attribute.value {
+                                    listeners.push(listener);
+                                }
+                            }
+                        });
                     }
                 }
 
@@ -416,38 +413,67 @@ impl VirtualDom {
                         listener.call(uievent.clone());
                         self.runtime.rendering.set(true);
 
+                        // let origin: ScopeId = path.scope;
+                        // self.runtime.scope_stack.borrow_mut().push(origin);
+                        // self.runtime.rendering.set(false);
+                        // if let Some(cb) = listener.borrow_mut().as_deref_mut() {
+                        // cb(uievent.clone());
+                        // }
+                        // self.runtime.scope_stack.borrow_mut().pop();
+                        // self.runtime.rendering.set(true);
+
                         if !uievent.propagates.get() {
                             return;
                         }
                     }
-                }
 
-                let mount = el_ref.mount.get().as_usize();
-                parent_node = mount.and_then(|id| self.mounts.get(id).and_then(|el| el.parent));
-            }
-        } else {
-            // Otherwise, we just call the listener on the target element
-            if let Some(path) = parent_node {
-                let el_ref = &self.mounts[path.mount.0].node;
-                let node_template = el_ref.template.get();
-                let target_path = path.path;
-
-                for (idx, attr) in el_ref.dynamic_attrs.iter().enumerate() {
-                    let this_path = node_template.attr_paths[idx];
-
-                    // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
-                    // Only call the listener if this is the exact target element.
-                    if attr.name.trim_start_matches("on") == name && target_path == this_path {
-                        if let AttributeValue::Listener(listener) = &attr.value {
-                            self.runtime.rendering.set(false);
-                            listener.call(uievent.clone());
-                            self.runtime.rendering.set(true);
-
-                            break;
-                        }
-                    }
+                    let mount = el_ref.mount.get().as_usize();
+                    parent_node = mount.and_then(|id| self.mounts.get(id).and_then(|el| el.parent));
                 }
             }
+
+            // else {
+            //     // Otherwise, we just call the listener on the target element
+            //     if let Some(path) = parent_node {
+            //         let el_ref = &self.mounts[path.mount.0].node;
+            //         let node_template = el_ref.template.get();
+            //         let target_path = path.path;
+
+            //         for (idx, attr) in el_ref.dynamic_attrs.iter().enumerate() {
+            //             let this_path = node_template.attr_paths[idx];
+
+            //             // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
+            //             // Only call the listener if this is the exact target element.
+            //             if attr.name.trim_start_matches("on") == name && target_path == this_path {
+            //                 if let AttributeValue::Listener(listener) = &attr.value {
+            //                     self.runtime.rendering.set(false);
+            //                     listener.call(uievent.clone());
+            //                     self.runtime.rendering.set(true);
+
+            //             // if target_path == this_path {
+            //             //     let mut should_stop = false;
+            //             //     attr.ty.for_each(|attribute| {
+            //             //         if attribute.name.trim_start_matches("on") == name {
+            //             //             if let AttributeValue::Listener(listener) = &attribute.value {
+            //             //                 let origin = path.scope;
+            //             //                 self.runtime.scope_stack.borrow_mut().push(origin);
+            //             //                 self.runtime.rendering.set(false);
+            //             //                 if let Some(cb) = listener.borrow_mut().as_deref_mut() {
+            //             //                     cb(uievent.clone());
+            //             //                 }
+            //             //                 self.runtime.scope_stack.borrow_mut().pop();
+            //             //                 self.runtime.rendering.set(true);
+
+            //                             should_stop = true;
+            //                         }
+            //                     }
+            //                 // });
+            //                 if should_stop {
+            //                     return;
+            //                 }
+            //             }
+            //         }
+            //     }
         }
     }
 

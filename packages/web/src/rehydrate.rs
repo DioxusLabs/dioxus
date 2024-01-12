@@ -1,4 +1,5 @@
 use crate::dom::WebsysDom;
+use dioxus_core::AttributeValue;
 use dioxus_core::{DynamicNode, ElementId, ScopeState, TemplateNode, VNode, VirtualDom};
 
 #[derive(Debug)]
@@ -81,12 +82,15 @@ impl WebsysDom {
                     if let dioxus_core::TemplateAttribute::Dynamic { id } = attr {
                         let attribute = &vnode.dynamic_attrs[*id];
                         let id = attribute.mounted_element();
-                        mounted_id = Some(id);
-                        if let dioxus_core::AttributeValue::Listener(_) = attribute.value {
-                            if attribute.name == "onmounted" {
-                                to_mount.push(id);
+                        attribute.attribute_type().for_each(|attribute| {
+                            let value = &attribute.value;
+                            mounted_id = Some(id);
+                            if let AttributeValue::Listener(_) = value {
+                                if attribute.name == "onmounted" {
+                                    to_mount.push(id);
+                                }
                             }
-                        }
+                        });
                     }
                 }
                 if let Some(id) = mounted_id {

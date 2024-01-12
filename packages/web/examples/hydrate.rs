@@ -12,11 +12,11 @@ fn app(cx: Scope) -> Element {
             "asd"
             Bapp {}
         }
-        (0..10).map(|f| rsx!{
+        {(0..10).map(|f| rsx!{
             div {
                 "thing {f}"
             }
-        })
+        })}
     })
 }
 

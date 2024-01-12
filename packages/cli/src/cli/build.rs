@@ -1,8 +1,9 @@
+use crate::assets::WebAssetConfigDropGuard;
 #[cfg(feature = "plugin")]
 use crate::plugin::PluginManager;
 use crate::server::fullstack::FullstackServerEnvGuard;
 use crate::server::fullstack::FullstackWebEnvGuard;
-use crate::{cfg::Platform, WebAssetConfigDropGuard};
+use dioxus_cli_config::Platform;
 
 use super::*;
 
@@ -16,7 +17,7 @@ pub struct Build {
 
 impl Build {
     pub fn build(self, bin: Option<PathBuf>, target_dir: Option<&std::path::Path>) -> Result<()> {
-        let mut crate_config = crate::CrateConfig::new(bin)?;
+        let mut crate_config = dioxus_cli_config::CrateConfig::new(bin)?;
         if let Some(target_dir) = target_dir {
             crate_config.target_dir = target_dir.to_path_buf();
         }
@@ -51,12 +52,10 @@ impl Build {
         // #[cfg(feature = "plugin")]
         // let _ = PluginManager::on_build_start(&crate_config, &platform);
 
-        match platform {
-            Platform::Web => {
-                crate::builder::build(&crate_config, false, self.build.skip_assets)?;
-            }
+        let build_result = match platform {
+            Platform::Web => crate::builder::build(&crate_config, false, self.build.skip_assets)?,
             Platform::Desktop => {
-                crate::builder::build_desktop(&crate_config, false, self.build.skip_assets)?;
+                crate::builder::build_desktop(&crate_config, false, self.build.skip_assets)?
             }
             Platform::Fullstack => {
                 // Fullstack mode must be built with web configs on the desktop (server) binary as well as the web binary
@@ -86,24 +85,17 @@ impl Build {
                     };
                     let _gaurd =
                         FullstackServerEnvGuard::new(self.build.force_debug, self.build.release);
-                    crate::builder::build_desktop(&desktop_config, false, self.build.skip_assets)?;
+                    crate::builder::build_desktop(&desktop_config, false, self.build.skip_assets)?
                 }
             }
-        }
+        };
 
-        let temp = gen_page(&crate_config, false, self.build.skip_assets);
+        let temp = gen_page(&crate_config, build_result.assets.as_ref(), false);
 
         let mut file = std::fs::File::create(
             crate_config
                 .crate_dir
-                .join(
-                    crate_config
-                        .dioxus_config
-                        .application
-                        .out_dir
-                        .clone()
-                        .unwrap_or_else(|| PathBuf::from("dist")),
-                )
+                .join(crate_config.dioxus_config.application.out_dir.clone())
                 .join("index.html"),
         )?;
         file.write_all(temp.as_bytes())?;

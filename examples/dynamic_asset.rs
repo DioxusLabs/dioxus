@@ -1,29 +1,25 @@
 use dioxus::prelude::*;
-use dioxus_desktop::wry::http::Response;
-use dioxus_desktop::{use_asset_handler, AssetRequest};
-use std::path::Path;
+use dioxus_desktop::{use_asset_handler, wry::http::Response};
 
 fn main() {
     dioxus_desktop::launch(app);
 }
 
 fn app(cx: Scope) -> Element {
-    use_asset_handler(cx, |request: &AssetRequest| {
-        let path = request.path().to_path_buf();
-        async move {
-            if path != Path::new("logo.png") {
-                return None;
-            }
-            let image_data: &[u8] = include_bytes!("./assets/logo.png");
-            Some(Response::new(image_data.into()))
+    use_asset_handler(cx, "logos", |request, response| {
+        // Note that the "logos" prefix is stripped from the URI
+        //
+        // However, the asset is absolute to its "virtual folder" - meaning it starts with a leading slash
+        if request.uri().path() != "/logo.png" {
+            return;
         }
+
+        response.respond(Response::new(include_bytes!("./assets/logo.png").to_vec()));
     });
 
-    cx.render(rsx! {
+    render! {
         div {
-            img {
-                src: "logo.png"
-            }
+            img { src: "/logos/logo.png" }
         }
-    })
+    }
 }

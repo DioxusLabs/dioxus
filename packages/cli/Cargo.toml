@@ -14,6 +14,7 @@ clap = { version = "4.2", features = ["derive"] }
 thiserror = { workspace = true }
 wasm-bindgen-cli-support = "0.2"
 colored = "2.0.0"
+dioxus-cli-config = { workspace = true, features = ["cli"] }
 
 # features
 log = "0.4.14"
@@ -72,10 +73,10 @@ cargo-generate = "0.18"
 toml_edit = "0.19.11"
 
 # bundling
-tauri-bundler = { version = "=1.3.0", features = ["native-tls-vendored"] }
-tauri-utils = "=1.4.*"
+tauri-bundler = { version = "=1.4.*", features = ["native-tls-vendored"] }
+tauri-utils = "=1.5.*"
 
-manganis-cli-support= { git = "https://github.com/DioxusLabs/collect-assets", features = ["webp", "html"] }
+manganis-cli-support = { workspace = true, features = ["webp", "html"] }
 
 dioxus-autofmt = { workspace = true }
 dioxus-check = { workspace = true }

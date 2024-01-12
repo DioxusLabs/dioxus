@@ -39,9 +39,9 @@ fn ChildWithRef(cx: Scope) -> Element {
     cx.render(rsx! {
         div {
             ul {
-                names.read().iter().map(|f| rsx!{
-                    li { "hello: {f}" }
-                })
+                for name in names.read().iter() {
+                    li { "hello: {name}" }
+                }
             }
             button {
                 onclick: move |_| {

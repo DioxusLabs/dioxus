@@ -77,7 +77,7 @@ pub fn GoBackButton<'a>(cx: Scope<'a, HistoryButtonProps<'a>>) -> Element {
             disabled: "{disabled}",
             prevent_default: "onclick",
             onclick: move |_| router.go_back(),
-            children
+            {children}
         }
     }
 }
@@ -149,7 +149,7 @@ pub fn GoForwardButton<'a>(cx: Scope<'a, HistoryButtonProps<'a>>) -> Element {
             disabled: "{disabled}",
             prevent_default: "onclick",
             onclick: move |_| router.go_forward(),
-            children
+            {children}
         }
     }
 }

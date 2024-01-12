@@ -66,7 +66,7 @@ impl FromQuery for ManualBlogQuerySegments {
 fn BlogPost(cx: Scope, query_params: ManualBlogQuerySegments) -> Element {
     render! {
         div{"This is your blogpost with a query segment:"}
-        div{format!("{:?}", query_params)}
+        div{ "{query_params:?}" }
     }
 }
 
@@ -74,7 +74,7 @@ fn BlogPost(cx: Scope, query_params: ManualBlogQuerySegments) -> Element {
 fn AutomaticBlogPost(cx: Scope, name: String, surname: String) -> Element {
     render! {
         div{"This is your blogpost with a query segment:"}
-        div{format!("name={}&surname={}", name, surname)}
+        div{ "name={name}&surname={surname}" }
     }
 }
 
