@@ -213,7 +213,7 @@ impl ToTokens for BodyNode {
 
                 tokens.append_all(quote! {
                     {
-                        let ___nodes = (#body).into_dyn_node(__cx);
+                        let ___nodes = (#body).into_dyn_node();
                         ___nodes
                     }
                 });

@@ -40,7 +40,7 @@ pub fn impl_my_derive(ast: &syn::DeriveInput) -> Result<TokenStream, Error> {
                     #builder_creation
                     #conversion_helper
                     #( #fields )*
-                    #( #extends )*
+                    // #( #extends )*
                     #( #required_fields )*
                     #build_method
                 }
@@ -703,7 +703,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                 impl #impl_generics #name #ty_generics #where_clause {
                     #[doc = #builder_method_doc]
                     #[allow(dead_code, clippy::type_complexity)]
-                    #vis fn builder(_cx: & #extend_lifetime ::dioxus::prelude::ScopeState) -> #builder_name #generics_with_empty {
+                    #vis fn builder() -> #builder_name #generics_with_empty {
                         #builder_name {
                             fields: #empties_tuple,
                             _phantom: ::core::default::Default::default(),

@@ -163,8 +163,8 @@ impl Component {
         let name = &self.name;
 
         let mut toks = match &self.prop_gen_args {
-            Some(gen_args) => quote! { fc_to_builder(__cx, #name #gen_args) },
-            None => quote! { fc_to_builder(__cx, #name) },
+            Some(gen_args) => quote! { fc_to_builder(#name #gen_args) },
+            None => quote! { fc_to_builder(#name) },
         };
         for field in &self.fields {
             match field.name.to_string().as_str() {
