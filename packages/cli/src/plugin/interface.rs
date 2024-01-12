@@ -19,11 +19,17 @@ pub struct PluginRuntimeState {
 
 impl PluginRuntimeState {
     pub fn get_toml(&mut self, value: Resource<Toml>) -> TomlValue {
-        self.tomls.get(value.rep() as usize).unwrap().clone()
+        self.tomls
+            .get(value.rep() as usize)
+            .expect("Resource gaurantees existence")
+            .clone()
     }
 
     pub fn set_toml(&mut self, key: Resource<Toml>, value: TomlValue) {
-        *self.tomls.get_mut(key.rep() as usize).unwrap() = value;
+        *self
+            .tomls
+            .get_mut(key.rep() as usize)
+            .expect("Resource gaurantees existence") = value;
     }
 
     pub fn insert_toml(&mut self, value: TomlValue) -> usize {
@@ -80,8 +86,10 @@ impl HostToml for PluginRuntimeState {
 
     fn drop(&mut self, toml: Resource<Toml>) -> wasmtime::Result<()> {
         // Probably don't need this how it's being used atm but good to check
-        if toml.owned() {
+        if self.tomls.contains(toml.rep() as usize) {
             self.tomls.remove(toml.rep() as usize);
+        } else {
+            log::warn!("Tried to drop a dropped resource!");
         }
         Ok(())
     }

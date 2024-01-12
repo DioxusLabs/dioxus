@@ -62,8 +62,8 @@ ctrlc = "3.2.3"
 open = "5.0.1"
 cargo-generate = "0.18"
 toml_edit = "0.21.0"
-wasmtime = { version = "15.0.0", features = ['component-model'] }
-wasmtime-wasi = { version = "15.0.0", features = ['preview2'] }
+wasmtime = { version = "16.0.0", features = ['component-model'] }
+wasmtime-wasi = { version = "16.0.0", features = ['preview2'] }
 slab = "0.4.9"
 # toml = "0.8.8"
 async-trait = "0.1.73"

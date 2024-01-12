@@ -69,10 +69,12 @@ impl Plugin {
                     // Add the plugin to the lock file
                     dioxus_lock.add_plugin(&mut plugin).await?;
 
-                    let Ok(config) = plugin.get_default_config().await else {
+                    let res = plugin.get_default_config().await;
+                    let Ok(config) = res else {
                         log::warn!(
-                            "Couldn't get default config from plugin: {}",
-                            plugin.metadata.name
+                            "Couldn't get default config from plugin: {} : {}",
+                            plugin.metadata.name,
+                            res.unwrap_err()
                         );
                         return Ok(());
                     };
