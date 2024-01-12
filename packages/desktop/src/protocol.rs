@@ -53,6 +53,47 @@ pub(super) fn index_request(
         .ok()
 }
 
+// let assets_head = {
+//         #[cfg(all(
+//             debug_assertions,
+//             any(
+//                 target_os = "windows",
+//                 target_os = "macos",
+//                 target_os = "linux",
+//                 target_os = "dragonfly",
+//                 target_os = "freebsd",
+//                 target_os = "netbsd",
+//                 target_os = "openbsd"
+//             )
+//         ))]
+//         {
+//             None
+//         }
+//         #[cfg(not(all(
+//             debug_assertions,
+//             any(
+//                 target_os = "windows",
+//                 target_os = "macos",
+//                 target_os = "linux",
+//                 target_os = "dragonfly",
+//                 target_os = "freebsd",
+//                 target_os = "netbsd",
+//                 target_os = "openbsd"
+//             )
+//         )))]
+//         {
+//             let head = crate::protocol::get_asset_root_or_default();
+//             let head = head.join("dist/__assets_head.html");
+//             match std::fs::read_to_string(&head) {
+//                 Ok(s) => Some(s),
+//                 Err(err) => {
+//                     tracing::error!("Failed to read {head:?}: {err}");
+//                     None
+//                 }
+//             }
+//         }
+//     };
+
 /// Handle a request from the webview
 ///
 /// - Tries to stream edits if they're requested.
@@ -66,6 +107,7 @@ pub(super) fn desktop_handler(
 ) {
     // If the request is asking for edits (ie binary protocol streaming, do that)
     if request.uri().path().trim_matches('/') == "edits" {
+        println!("Handling edits from handler");
         return edit_queue.handle_request(responder);
     }
 

@@ -82,7 +82,7 @@ impl Config {
     /// Launch a Dioxus app using the given component, config, and props
     ///
     /// See the [`crate::launch::launch_with_props`] function for more details.
-    pub fn launch_with_props<P: 'static>(self, root: Component<P>, props: P) {
+    pub fn launch_with_props<P: 'static + Clone>(self, root: Component<P>, props: P) {
         crate::launch::launch_with_props(root, props, self)
     }
 

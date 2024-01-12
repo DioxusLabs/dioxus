@@ -9,8 +9,9 @@ use crate::{
     AssetRequest, Config,
 };
 use dioxus_core::{
+    once,
     prelude::{current_scope_id, ScopeId},
-    Mutations, VirtualDom,
+    VirtualDom,
 };
 use dioxus_interpreter_js::binary_protocol::Channel;
 use dioxus_interpreter_js::MutationState;
@@ -64,10 +65,6 @@ pub struct DesktopService {
     pub(super) query: QueryEngine,
     pub(crate) edit_queue: EditQueue,
     pub(crate) mutation_state: RefCell<MutationState>,
-
-    pub(crate) templates: RefCell<FxHashMap<String, u16>>,
-    pub(crate) max_template_count: AtomicU16,
-    pub(crate) channel: RefCell<Channel>,
     pub(crate) asset_handlers: AssetHandlerRegistry,
 
     #[cfg(target_os = "ios")]
@@ -99,24 +96,17 @@ impl DesktopService {
             mutation_state: Default::default(),
             asset_handlers,
             query: Default::default(),
-            templates: Default::default(),
-            max_template_count: Default::default(),
-            channel: Default::default(),
             #[cfg(target_os = "ios")]
             views: Default::default(),
         }
     }
 
     /// Send a list of mutations to the webview
-    pub(crate) fn send_edits(&self, edits: Mutations) {
-        if let Some(bytes) = crate::edits::apply_edits(
-            edits,
-            &mut self.channel.borrow_mut(),
-            &mut self.templates.borrow_mut(),
-            &self.max_template_count,
-        ) {
-            self.edit_queue.add_edits(bytes)
-        }
+    pub(crate) fn send_edits(&self) {
+        let mut mutations = self.mutation_state.borrow_mut();
+        let serialized_edits = mutations.export_memory();
+        dbg!(serialized_edits.len());
+        self.edit_queue.add_edits(serialized_edits);
     }
 
     /// Create a new window using the props and window builder
@@ -402,7 +392,7 @@ pub fn use_wry_event_handler(
         let id = desktop.create_wry_event_handler(handler);
 
         WryEventHandler {
-            handlers: desktop.event_handlers.clone(),
+            handlers: desktop.shared.event_handlers.clone(),
             id,
         }
     })

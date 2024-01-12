@@ -59,7 +59,7 @@ pub struct SharedContext {
     pub(crate) target: EventLoopWindowTarget<UserWindowEvent>,
 }
 
-impl<P: 'static> App<P> {
+impl<P: 'static + Clone> App<P> {
     pub fn new(cfg: Config, props: P, root: Component<P>) -> (EventLoop<UserWindowEvent>, Self) {
         let event_loop = EventLoopBuilder::<UserWindowEvent>::with_user_event().build();
 
@@ -196,8 +196,16 @@ impl<P: 'static> App<P> {
     }
 
     pub fn handle_initialize_msg(&mut self, id: WindowId) {
+        // view.dom
+        //     .rebuild(&mut *view.desktop_context.mutation_state.borrow_mut());
+        // send_edits(&view.desktop_context);
+
+        println!("initialize message received, sending edits to {id:?}");
+
         let view = self.webviews.get_mut(&id).unwrap();
-        view.desktop_context.send_edits(view.dom.rebuild());
+        view.dom
+            .render_immediate(&mut *view.desktop_context.mutation_state.borrow_mut());
+        view.desktop_context.send_edits();
         view.desktop_context
             .window
             .set_visible(self.is_visible_before_start);
@@ -249,7 +257,9 @@ impl<P: 'static> App<P> {
         };
 
         view.dom.handle_event(&name, as_any, element, bubbles);
-        view.desktop_context.send_edits(view.dom.render_immediate());
+        view.dom
+            .render_immediate(&mut *view.desktop_context.mutation_state.borrow_mut());
+        view.desktop_context.send_edits();
     }
 
     #[cfg(all(feature = "hot-reload", debug_assertions))]
@@ -306,7 +316,9 @@ impl<P: 'static> App<P> {
             view.dom.handle_event(event_name, data, id, event_bubbles);
         }
 
-        view.desktop_context.send_edits(view.dom.render_immediate());
+        view.dom
+            .render_immediate(&mut *view.desktop_context.mutation_state.borrow_mut());
+        view.desktop_context.send_edits();
     }
 
     /// Poll the virtualdom until it's pending

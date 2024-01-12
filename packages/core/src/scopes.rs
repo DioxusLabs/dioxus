@@ -41,7 +41,6 @@ pub struct ScopeState {
 
 impl Drop for ScopeState {
     fn drop(&mut self) {
-        self.drop_listeners();
         self.runtime.remove_context(self.context_id);
     }
 }

@@ -253,8 +253,7 @@ impl<'a> ToTokens for TemplateRenderer<'a> {
                 attr_paths: &[ #(#attr_paths),* ],
             };
 
-            __cx.vnode(
-                None.into(),
+            ::dioxus::core::VNode::new(
                 #key_tokens,
                 TEMPLATE,
                 Box::new([ #( #node_printer ),* ]),

@@ -1,4 +1,4 @@
-use std::{cell::RefCell, collections::HashMap, str::FromStr};
+use std::{cell::RefCell, collections::HashMap, rc::Rc, str::FromStr};
 
 use dioxus_html::input_data::keyboard_types::Modifiers;
 use slab::Slab;
@@ -84,7 +84,7 @@ impl ShortcutRegistry {
             HotkeyError::HotKeyParseError(shortcut) => {
                 ShortcutRegistryError::InvalidShortcut(shortcut)
             }
-            err => ShortcutRegistryError::Other(Box::new(err)),
+            err => ShortcutRegistryError::Other(Rc::new(err)),
         })?;
 
         let mut shortcut = Shortcut {

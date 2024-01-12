@@ -145,7 +145,7 @@ impl WebviewInstance {
         ));
 
         // Provide the desktop context to the virtualdom
-        dom.base_scope().provide_context(desktop_context.clone());
+        // dom.base_scope().provide_context(desktop_context.clone());
 
         // let query = dom.in_runtime(|| {
         //     let query = ScopeId::ROOT.provide_context(desktop_context.clone());
@@ -163,7 +163,7 @@ impl WebviewInstance {
         // a different TypeId.
         let provider: Rc<dyn EvalProvider> =
             Rc::new(DesktopEvalProvider::new(desktop_context.clone()));
-        dom.base_scope().provide_context(provider);
+        // dom.base_scope().provide_context(provider);
 
         WebviewInstance {
             waker: tao_waker(shared.proxy.clone(), desktop_context.window.id()),
@@ -190,7 +190,11 @@ impl WebviewInstance {
                 }
             }
 
-            self.desktop_context.send_edits(self.dom.render_immediate());
+            // self.desktop_context.send_edits(self.dom.render_immediate());
+
+            self.dom
+                .render_immediate(&mut *self.desktop_context.mutation_state.borrow_mut());
+            self.desktop_context.send_edits();
         }
     }
 }

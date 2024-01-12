@@ -568,51 +568,6 @@ pub enum TemplateAttribute {
     },
 }
 
-/// An attribute with information about its position in the DOM and the element it was mounted to
-#[derive(Debug)]
-pub struct MountedAttribute<'a> {
-    pub(crate) ty: AttributeType<'a>,
-
-    /// The element in the DOM that this attribute belongs to
-    pub(crate) mounted_element: Cell<ElementId>,
-}
-
-impl<'a> From<Attribute<'a>> for MountedAttribute<'a> {
-    fn from(attr: Attribute<'a>) -> Self {
-        Self {
-            ty: AttributeType::Single(attr),
-            mounted_element: Default::default(),
-        }
-    }
-}
-
-impl<'a> From<&'a [Attribute<'a>]> for MountedAttribute<'a> {
-    fn from(attr: &'a [Attribute<'a>]) -> Self {
-        Self {
-            ty: AttributeType::Many(attr),
-            mounted_element: Default::default(),
-        }
-    }
-}
-
-impl<'a> From<&'a Vec<Attribute<'a>>> for MountedAttribute<'a> {
-    fn from(attr: &'a Vec<Attribute<'a>>) -> Self {
-        attr.as_slice().into()
-    }
-}
-
-impl<'a> MountedAttribute<'a> {
-    /// Get the type of this attribute
-    pub fn attribute_type(&self) -> &AttributeType<'a> {
-        &self.ty
-    }
-
-    /// Get the element that this attribute is mounted to
-    pub fn mounted_element(&self) -> ElementId {
-        self.mounted_element.get()
-    }
-}
-
 /// An attribute on a DOM node, such as `id="my-thing"` or `href="https://example.com"`
 #[derive(Debug)]
 pub struct Attribute {
@@ -928,7 +883,7 @@ pub trait HasAttributes<'a> {
         self,
         name: &'a str,
         ns: Option<&'static str>,
-        attr: impl IntoAttributeValue<'a>,
+        attr: impl IntoAttributeValue,
         volatile: bool,
     ) -> Self;
 }

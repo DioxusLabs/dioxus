@@ -1,7 +1,6 @@
 #![allow(non_upper_case_globals)]
 
 use dioxus_core::prelude::IntoAttributeValue;
-use dioxus_core::HasAttributes;
 use dioxus_html_internal_macro::impl_extension_attributes;
 #[cfg(feature = "hot-reload-context")]
 use dioxus_rsx::HotReloadingContext;
@@ -386,9 +385,9 @@ macro_rules! builder_constructors {
 
         pub(crate) mod extensions {
             use super::*;
-            $(
-                impl_extension_attributes![ELEMENT $name { $($fil,)* }];
-            )*
+            // $(
+                // impl_extension_attributes![ELEMENT $name { $($fil,)* }];
+            // )*
         }
     };
 }

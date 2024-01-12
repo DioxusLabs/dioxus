@@ -76,7 +76,7 @@ pub fn launch_cfg(root: Component, config_builder: Config) {
 ///     })
 /// }
 /// ```
-pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) {
+pub fn launch_with_props<P: 'static + Clone>(root: Component<P>, props: P, cfg: Config) {
     #[cfg(feature = "tokio")]
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
@@ -94,7 +94,7 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
 ///
 /// This will block the main thread, and *must* be spawned on the main thread. This function does not assume any runtime
 /// and is equivalent to calling launch_with_props with the tokio feature disabled.
-pub fn launch_with_props_blocking<P: 'static>(root: Component<P>, props: P, cfg: Config) {
+pub fn launch_with_props_blocking<P: 'static + Clone>(root: Component<P>, props: P, cfg: Config) {
     let (event_loop, mut app) = App::new(cfg, props, root);
 
     event_loop.run(move |window_event, _, control_flow| {
