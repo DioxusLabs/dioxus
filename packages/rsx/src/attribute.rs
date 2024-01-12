@@ -146,7 +146,7 @@ impl ToTokens for ElementAttrNamed {
                     ElementAttrName::Custom(_) => todo!(),
                 },
                 _ => {
-                    quote! { dioxus_elements::events::#value(__cx, #value) }
+                    quote! { dioxus_elements::events::#value(#value) }
                 }
             }
         };

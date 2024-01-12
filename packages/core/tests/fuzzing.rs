@@ -250,9 +250,7 @@ fn create_random_element(cx: DepthProps) -> Element {
                 )
                 .into_boxed_str(),
             ));
-            println!("{template:#?}");
             let node = cx.vnode(
-                None.into(),
                 None,
                 template,
                 dynamic_node_types
