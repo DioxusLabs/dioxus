@@ -216,13 +216,27 @@ fn app(cx: Scope) -> Element {
         r#"new FocusEvent("focusout",{bubbles: true})"#,
     );
 
-    if **received_events == 12 {
+    if **received_events == 13 {
         println!("all events recieved");
         desktop_context.close();
     }
 
     render! {
         div {
+            div {
+                width: "100px",
+                height: "100px",
+                onmounted: move |evt| {
+                    to_owned![received_events];
+                    async move {
+                        let rect = evt.get_client_rect().await.unwrap();
+                        println!("rect: {:?}", rect);
+                        assert_eq!(rect.width(), 100.0);
+                        assert_eq!(rect.height(), 100.0);
+                        received_events.modify(|x| *x + 1)
+                    }
+                }
+            }
             button {
                 id: "button",
                 onclick: move |event| {
