@@ -446,8 +446,8 @@ impl CliPlugin {
             .await
     }
 
-    pub fn clone_handle(&self, handle: &Resource<Toml>) -> Resource<Toml> {
-        self.store.data().clone_handle(handle)
+    pub fn clone_handle(&mut self, handle: &Resource<Toml>) -> Resource<Toml> {
+        self.store.data_mut().clone_handle(handle)
     }
 
     pub async fn get(&mut self, value: Resource<Toml>) -> toml::Value {

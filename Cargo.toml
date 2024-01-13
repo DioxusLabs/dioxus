@@ -6,6 +6,7 @@ members = [
     "packages/cli",
     "packages/cli-plugin",
     "packages/cli-plugin/examples/tailwind",
+    "packages/cli-plugin/examples/test-plugin",
     "packages/cli-plugin/examples/dx-parcel-minifier",
     "packages/core-macro",
     "packages/router-macro",

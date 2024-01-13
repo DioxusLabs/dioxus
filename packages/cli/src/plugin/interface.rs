@@ -18,7 +18,7 @@ pub struct PluginRuntimeState {
 }
 
 impl PluginRuntimeState {
-    pub fn get_toml(&mut self, value: Resource<Toml>) -> TomlValue {
+    pub fn get_toml(&self, value: Resource<Toml>) -> TomlValue {
         self.tomls
             .get(value.rep() as usize)
             .expect("Resource gaurantees existence")
@@ -40,10 +40,9 @@ impl PluginRuntimeState {
         Resource::new_own(self.insert_toml(value) as u32)
     }
 
-    // Get reference so we know that a table is being kept up with
-    // Probably redundant, but will probably be better if need borrow checking later
-    pub fn clone_handle(&self, handle: &Resource<Toml>) -> Resource<Toml> {
-        Resource::new_own(handle.rep())
+    pub fn clone_handle(&mut self, handle: &Resource<Toml>) -> Resource<Toml> {
+        let new_toml = self.get_toml(Resource::new_own(handle.rep()));
+        self.new_toml(new_toml)
     }
 }
 
