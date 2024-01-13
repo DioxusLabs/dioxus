@@ -11,29 +11,15 @@ fn app(cx: Scope) -> Element {
             "hello axum! {num}"
             button { onclick: move |_| num += 1, "Increment" }
         }
-        svg {
-            circle { cx: 50, cy: 50, r: 40, stroke: "green", fill: "yellow" }
-        }
-        div {
-            class: "raw-attribute-div",
-            "raw-attribute": "raw-attribute-value",
-        }
-        div {
-            class: "hidden-attribute-div",
-            hidden: true,
-        }
+        svg { circle { cx: 50, cy: 50, r: 40, stroke: "green", fill: "yellow" } }
+        div { class: "raw-attribute-div", "raw-attribute": "raw-attribute-value" }
+        div { class: "hidden-attribute-div", hidden: true }
         div {
             class: "dangerous-inner-html-div",
-            dangerous_inner_html: "<p>hello dangerous inner html</p>",
+            dangerous_inner_html: "<p>hello dangerous inner html</p>"
         }
-        input {
-            value: "hello input",
-        }
-        div {
-            class: "style-div",
-            color: "red",
-            "colored text"
-        }
+        input { value: "hello input" }
+        div { class: "style-div", color: "red", "colored text" }
     })
 }
 

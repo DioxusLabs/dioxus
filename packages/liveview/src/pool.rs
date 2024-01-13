@@ -6,7 +6,7 @@ use crate::{
     LiveViewError,
 };
 use dioxus_core::{prelude::*, BorrowedAttributeValue, Mutations};
-use dioxus_html::{event_bubbles, EventData, HtmlEvent, MountedData, PlatformEventData};
+use dioxus_html::{event_bubbles, EventData, HtmlEvent, PlatformEventData};
 use dioxus_interpreter_js::binary_protocol::Channel;
 use futures_util::{pin_mut, SinkExt, StreamExt};
 use rustc_hash::FxHashMap;
@@ -188,7 +188,7 @@ pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), Li
                                         let element = LiveviewElement::new(evt.element, query_engine.clone());
                                         vdom.handle_event(
                                             &evt.name,
-                                            Rc::new(PlatformEventData::new(Box::new(MountedData::new(element)))),
+                                            Rc::new(PlatformEventData::new(Box::new(element))),
                                             evt.element,
                                             evt.bubbles,
                                         );
