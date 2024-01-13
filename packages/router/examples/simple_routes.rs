@@ -54,8 +54,7 @@ fn main() {
 #[cfg(feature = "liveview")]
 #[component]
 fn Root(cx: Scope) -> Element {
-    let history = LiveviewHistory::new(cx);
-    render! { Router::<Route> { config: || RouterConfig::default().history(history) } }
+    render! { Router::<Route> {} }
 }
 
 #[cfg(not(feature = "liveview"))]
@@ -104,7 +103,7 @@ fn Route1(cx: Scope, user_id: usize, dynamic: usize, query: String, extra: Strin
 fn Route2(cx: Scope, user_id: usize) -> Element {
     render! {
         pre { "Route2{{\n\tuser_id:{user_id}\n}}" }
-        (0..*user_id).map(|i| rsx!{ p { "{i}" } }),
+        {(0..*user_id).map(|i| rsx!{ p { "{i}" } })},
         p { "Footer" }
         Link {
             to: Route::Route3 {

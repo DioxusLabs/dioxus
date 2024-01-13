@@ -22,8 +22,10 @@ fn app(cx: Scope) -> Element {
 
             button {
                 onclick: move |_| {
-                    if let Some(header) = header_element.read().as_ref() {
-                        header.scroll_to(ScrollBehavior::Smooth);
+                    if let Some(header) = header_element.read().as_ref().cloned() {
+                        cx.spawn(async move {
+                            let _ = header.scroll_to(ScrollBehavior::Smooth).await;
+                        });
                     }
                 },
                 "Scroll to top"

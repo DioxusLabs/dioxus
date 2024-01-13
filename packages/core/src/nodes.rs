@@ -875,3 +875,15 @@ impl<T: IntoAttributeValue> IntoAttributeValue for Option<T> {
         }
     }
 }
+
+/// A trait for anything that has a dynamic list of attributes
+pub trait HasAttributes<'a> {
+    /// Push an attribute onto the list of attributes
+    fn push_attribute(
+        self,
+        name: &'a str,
+        ns: Option<&'static str>,
+        attr: impl IntoAttributeValue,
+        volatile: bool,
+    ) -> Self;
+}

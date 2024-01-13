@@ -41,7 +41,7 @@ pub fn LogOut(cx: Scope<ClientProps>) -> Element {
                         }
                         Err(error) => {
                             rsx! {
-                                div { format!{"Failed to load disconnection url: {:?}", error} }
+                                div { "Failed to load disconnection url: {error:?}" }
                             }
                         }
                     },
@@ -143,9 +143,9 @@ pub fn LoadClient(cx: Scope) -> Element {
                 }
             }
             Err(error) => {
+                log::info! {"Failed to load client: {:?}", error};
                 rsx! {
-                    div { format!{"Failed to load client: {:?}", error} }
-                    log::info!{"Failed to load client: {:?}", error},
+                    div { "Failed to load client: {error:?}" }
                     Outlet::<Route> {}
                 }
             }
@@ -184,7 +184,7 @@ pub fn AuthHeader(cx: Scope) -> Element {
                                 Ok(email) => {
                                     rsx! {
                                         div {
-                                            div { email }
+                                            div { {email} }
                                             LogOut { client_id: client_props.client_id, client: client_props.client }
                                             Outlet::<Route> {}
                                         }
@@ -207,7 +207,7 @@ pub fn AuthHeader(cx: Scope) -> Element {
                                         log::info!("Other issue with token");
                                         rsx! {
                                             div {
-                                                div { error.to_string() }
+                                                div { "{error}" }
                                                 Outlet::<Route> {}
                                             }
                                         }

@@ -39,7 +39,7 @@ fn component_swap() {
 
     fn nav_bar() -> Element {
         render! {
-            h1 { "NavBar", (0..3).map(|_| render!(nav_link {})) }
+            h1 { "NavBar", {(0..3).map(|_| render!(nav_link {}))} }
         }
     }
 

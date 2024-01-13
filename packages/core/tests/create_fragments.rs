@@ -43,19 +43,19 @@ fn fragments_nested() {
         render!(
             div { "hello" }
             div { "goodbye" }
-            render! {
+            {render! {
                 div { "hello" }
                 div { "goodbye" }
-                render! {
+                {render! {
                     div { "hello" }
                     div { "goodbye" }
-                    render! {
+                    {render! {
                         div { "hello" }
                         div { "goodbye" }
-                    }
-                }
-            }
-        )
+                    }}
+                }}
+            }}
+        ))
     });
 
     assert_eq!(
@@ -77,7 +77,10 @@ fn fragments_across_components() {
 
     fn demo_child() -> Element {
         let world = "world";
-        render! { "hellO!", world }
+        render! {
+            "hellO!"
+            {world}
+        }
     }
 
     assert_eq!(
@@ -91,7 +94,7 @@ fn list_fragments() {
     fn app() -> Element {
         render!(
             h1 { "hello" }
-            (0..6).map(|f| render!( span { "{f}" }))
+            {(0..6).map(|f| render!( span { "{f}" }))}
         )
     }
     assert_eq!(

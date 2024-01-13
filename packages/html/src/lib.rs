@@ -22,6 +22,8 @@ pub use elements::HtmlCtx;
 #[cfg(feature = "html-to-rsx")]
 pub use elements::{map_html_attribute_to_rsx, map_html_element_to_rsx};
 pub mod events;
+pub(crate) mod file_data;
+pub use file_data::*;
 pub mod geometry;
 mod global_attributes;
 pub mod input_data;
@@ -46,10 +48,17 @@ pub use render_template::*;
 #[cfg(feature = "eval")]
 pub mod eval;
 
+pub mod extensions {
+    pub use crate::elements::extensions::*;
+    // pub use crate::global_attributes::{GlobalAttributesExtension, SvgAttributesExtension};
+}
+
 pub mod prelude {
+    pub use crate::elements::extensions::*;
     #[cfg(feature = "eval")]
     pub use crate::eval::*;
     pub use crate::events::*;
+    // pub use crate::global_attributes::{GlobalAttributesExtension, SvgAttributesExtension};
     pub use crate::point_interaction::*;
     pub use keyboard_types::{self, Code, Key, Location, Modifiers};
 }

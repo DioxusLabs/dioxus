@@ -58,11 +58,11 @@ fn app() -> Element {
                 *CLICKS.lock().unwrap() += 1;
             },
 
-            vec![
+            {vec![
                 render! {
                     problematic_child {}
                 }
-            ].into_iter()
+            ].into_iter()}
         }
     }
 }

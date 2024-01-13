@@ -132,6 +132,15 @@ where
     }
 }
 
+impl<R: Routable> Default for LiveviewHistory<R>
+where
+    <R as FromStr>::Err: std::fmt::Display,
+{
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<R: Routable> LiveviewHistory<R>
 where
     <R as FromStr>::Err: std::fmt::Display,
@@ -141,10 +150,9 @@ where
     ///
     /// # Panics
     ///
-    /// Panics if not in a Liveview context.
-    pub fn new(cx: &ScopeState) -> Self {
+    /// Panics if the function is not called in a dioxus runtime with a Liveview context.
+    pub fn new() -> Self {
         Self::new_with_initial_path(
-            cx,
             "/".parse().unwrap_or_else(|err| {
                 panic!("index route does not exist:\n{}\n use LiveviewHistory::new_with_initial_path to set a custom path", err)
             }),
@@ -156,17 +164,16 @@ where
     ///
     /// # Panics
     ///
-    /// Panics if not in a Liveview context.
-    pub fn new_with_initial_path(cx: &ScopeState, initial_path: R) -> Self {
+    /// Panics if the function is not called in a dioxus runtime with a Liveview context.
+    pub fn new_with_initial_path(initial_path: R) -> Self {
         let (action_tx, action_rx) = tokio::sync::mpsc::unbounded_channel::<Action<R>>();
         let action_rx = Arc::new(Mutex::new(action_rx));
         let timeline = Arc::new(Mutex::new(Timeline::new(initial_path)));
         let updater_callback: Arc<RwLock<Arc<dyn Fn() + Send + Sync>>> =
             Arc::new(RwLock::new(Arc::new(|| {})));
 
-        let eval_provider = cx
-            .consume_context::<Rc<dyn EvalProvider>>()
-            .expect("evaluator not provided");
+        let eval_provider =
+            consume_context::<Rc<dyn EvalProvider>>().expect("evaluator not provided");
 
         let create_eval = Rc::new(move |script: &str| {
             eval_provider
@@ -175,7 +182,7 @@ where
         }) as Rc<dyn Fn(&str) -> Result<UseEval, EvalError>>;
 
         // Listen to server actions
-        cx.push_future({
+        push_future({
             let timeline = timeline.clone();
             let action_rx = action_rx.clone();
             let create_eval = create_eval.clone();
@@ -235,7 +242,7 @@ where
         });
 
         // Listen to browser actions
-        cx.push_future({
+        push_future({
             let updater = updater_callback.clone();
             let timeline = timeline.clone();
             let create_eval = create_eval.clone();
@@ -256,15 +263,16 @@ where
                         Option<State>,
                         Option<Session<R>>,
                         usize,
-                    )>(init_eval).expect("serializable state");
+                    )>(init_eval)
+                    .expect("serializable state");
                     let Ok(route) = R::from_str(&route.to_string()) else {
                         return;
                     };
                     let mut timeline = timeline.lock().expect("unpoisoned mutex");
                     let state = timeline.init(route.clone(), state, session, depth);
                     let state = serde_json::to_string(&state).expect("serializable state");
-                    let session = serde_json::to_string(&timeline.session())
-                        .expect("serializable session");
+                    let session =
+                        serde_json::to_string(&timeline.session()).expect("serializable session");
 
                     // Call the updater callback
                     (updater.read().unwrap())();
@@ -288,22 +296,24 @@ where
                         Ok(event) => event,
                         Err(_) => continue,
                     };
-                    let (route, state) = serde_json::from_value::<(String, Option<State>)>(event).expect("serializable state");
+                    let (route, state) = serde_json::from_value::<(String, Option<State>)>(event)
+                        .expect("serializable state");
                     let Ok(route) = R::from_str(&route.to_string()) else {
                         return;
                     };
                     let mut timeline = timeline.lock().expect("unpoisoned mutex");
                     let state = timeline.update(route.clone(), state);
                     let state = serde_json::to_string(&state).expect("serializable state");
-                    let session = serde_json::to_string(&timeline.session())
-                        .expect("serializable session");
+                    let session =
+                        serde_json::to_string(&timeline.session()).expect("serializable session");
 
                     let _ = create_eval(&format!(
                         r#"
                         // this does not trigger a PopState event
                         history.replaceState({state}, "", "{route}");
                         sessionStorage.setItem("liveview", '{session}');
-                    "#));
+                    "#
+                    ));
 
                     // Call the updater callback
                     (updater.read().unwrap())();

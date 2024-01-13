@@ -17,7 +17,7 @@ fn nested_passthru_creates() {
 
     #[component]
     fn PassThru(children: Element) -> Element {
-        render!(children)
+        render!({ children })
     }
 
     let mut dom = VirtualDom::new(app);
@@ -54,7 +54,7 @@ fn nested_passthru_creates_add() {
 
     #[component]
     fn ChildComp(children: Element) -> Element {
-        render! {children}
+        render! {{children}}
     }
 
     let mut dom = VirtualDom::new(app);

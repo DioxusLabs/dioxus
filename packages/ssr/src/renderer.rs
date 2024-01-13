@@ -92,27 +92,29 @@ impl Renderer {
             match segment {
                 Segment::Attr(idx) => {
                     let attr = &template.dynamic_attrs[*idx];
-                    if attr.name == "dangerous_inner_html" {
-                        inner_html = Some(attr);
-                    } else if attr.namespace == Some("style") {
-                        accumulated_dynamic_styles.push(attr);
-                    } else if BOOL_ATTRS.contains(&attr.name) {
-                        if truthy(&attr.value) {
-                            write!(buf, " {}=", attr.name)?;
-                            write_value(buf, &attr.value)?;
+                    attr.attribute_type().try_for_each(|attr| {
+                        if attr.name == "dangerous_inner_html" {
+                            inner_html = Some(attr);
+                        } else if attr.namespace == Some("style") {
+                            accumulated_dynamic_styles.push(attr);
+                        } else if BOOL_ATTRS.contains(&attr.name) {
+                            if truthy(&attr.value) {
+                                write_attribute(buf, attr)?;
+                            }
+                        } else {
+                            write_attribute(buf, attr)?;
                         }
-                    } else {
-                        write_attribute(buf, attr)?;
-                    }
 
-                    if self.pre_render {
-                        if let AttributeValue::Listener(_) = &attr.value {
-                            // The onmounted event doesn't need a DOM listener
-                            if attr.name != "onmounted" {
-                                accumulated_listeners.push(attr.name);
+                        if self.pre_render {
+                            if let AttributeValue::Listener(_) = &attr.value {
+                                // The onmounted event doesn't need a DOM listener
+                                if attr.name != "onmounted" {
+                                    accumulated_listeners.push(attr.name);
+                                }
                             }
                         }
-                    }
+                        Ok(())
+                    })?;
                 }
                 Segment::Node(idx) => match &template.dynamic_nodes[*idx] {
                     DynamicNode::Component(node) => {
@@ -240,7 +242,9 @@ fn to_string_works() {
                 div {}
                 div { "nest 2" }
                 "{dyn2}"
-                (0..5).map(|i| render! { div { "finalize {i}" } })
+                for i in (0..5) {
+                    div { "finalize {i}" }
+                }
             }
         }
     }
@@ -397,16 +401,6 @@ pub(crate) fn write_attribute(buf: &mut impl Write, attr: &Attribute) -> std::fm
         AttributeValue::Bool(value) => write!(buf, " {name}={value}"),
         AttributeValue::Int(value) => write!(buf, " {name}={value}"),
         AttributeValue::Float(value) => write!(buf, " {name}={value}"),
-        _ => Ok(()),
-    }
-}
-
-pub(crate) fn write_value(buf: &mut impl Write, value: &AttributeValue) -> std::fmt::Result {
-    match value {
-        AttributeValue::Text(value) => write!(buf, "\"{}\"", value),
-        AttributeValue::Bool(value) => write!(buf, "{}", value),
-        AttributeValue::Int(value) => write!(buf, "{}", value),
-        AttributeValue::Float(value) => write!(buf, "{}", value),
         _ => Ok(()),
     }
 }

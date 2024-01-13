@@ -4,13 +4,65 @@ use super::*;
 
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{quote, ToTokens, TokenStreamExt};
-use syn::{parse_quote, Expr, ExprIf, Ident, LitStr};
+use syn::{parse_quote, spanned::Spanned, Expr, ExprIf, Ident, LitStr};
 
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
+pub enum AttributeType {
+    Named(ElementAttrNamed),
+    Spread(Expr),
+}
+
+impl AttributeType {
+    pub fn start(&self) -> Span {
+        match self {
+            AttributeType::Named(n) => n.attr.start(),
+            AttributeType::Spread(e) => e.span(),
+        }
+    }
+
+    pub fn matches_attr_name(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Named(a), Self::Named(b)) => a.attr.name == b.attr.name,
+            _ => false,
+        }
+    }
+
+    pub(crate) fn try_combine(&self, other: &Self) -> Option<Self> {
+        match (self, other) {
+            (Self::Named(a), Self::Named(b)) => a.try_combine(b).map(Self::Named),
+            _ => None,
+        }
+    }
+}
+
+impl ToTokens for AttributeType {
+    fn to_tokens(&self, tokens: &mut TokenStream2) {
+        match self {
+            AttributeType::Named(n) => tokens.append_all(quote! { #n }),
+            AttributeType::Spread(e) => tokens.append_all(quote! { (&#e).into() }),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct ElementAttrNamed {
     pub el_name: ElementName,
     pub attr: ElementAttr,
 }
+
+impl Hash for ElementAttrNamed {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.attr.name.hash(state);
+    }
+}
+
+impl PartialEq for ElementAttrNamed {
+    fn eq(&self, other: &Self) -> bool {
+        self.attr == other.attr
+    }
+}
+
+impl Eq for ElementAttrNamed {}
 
 impl ElementAttrNamed {
     pub(crate) fn try_combine(&self, other: &Self) -> Option<Self> {
@@ -57,16 +109,25 @@ impl ToTokens for ElementAttrNamed {
         };
 
         let attribute = {
+            let value = &self.attr.value;
+            let is_shorthand_event = match &attr.value {
+                ElementAttrValue::Shorthand(s) => s.to_string().starts_with("on"),
+                _ => false,
+            };
+
             match &attr.value {
                 ElementAttrValue::AttrLiteral(_)
                 | ElementAttrValue::AttrExpr(_)
-                | ElementAttrValue::AttrOptionalExpr { .. } => {
+                | ElementAttrValue::Shorthand(_)
+                | ElementAttrValue::AttrOptionalExpr { .. }
+                    if !is_shorthand_event =>
+                {
                     let name = &self.attr.name;
                     let ns = ns(name);
                     let volitile = volitile(name);
                     let attribute = attribute(name);
-                    let value = &self.attr.value;
                     let value = quote! { #value };
+
                     quote! {
                         ::dioxus::core::Attribute::new(
                             #attribute,
@@ -84,6 +145,9 @@ impl ToTokens for ElementAttrNamed {
                     }
                     ElementAttrName::Custom(_) => todo!(),
                 },
+                _ => {
+                    quote! { dioxus_elements::events::#value(#value) }
+                }
             }
         };
 
@@ -99,6 +163,8 @@ pub struct ElementAttr {
 
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub enum ElementAttrValue {
+    /// attribute,
+    Shorthand(Ident),
     /// attribute: "value"
     AttrLiteral(IfmtInput),
     /// attribute: if bool { "value" }
@@ -114,7 +180,7 @@ pub enum ElementAttrValue {
 
 impl Parse for ElementAttrValue {
     fn parse(input: ParseStream) -> syn::Result<Self> {
-        Ok(if input.peek(Token![if]) {
+        let element_attr_value = if input.peek(Token![if]) {
             let if_expr = input.parse::<ExprIf>()?;
             if is_if_chain_terminated(&if_expr) {
                 ElementAttrValue::AttrExpr(Expr::If(if_expr))
@@ -135,13 +201,16 @@ impl Parse for ElementAttrValue {
         } else {
             let value = input.parse::<Expr>()?;
             ElementAttrValue::AttrExpr(value)
-        })
+        };
+
+        Ok(element_attr_value)
     }
 }
 
 impl ToTokens for ElementAttrValue {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         match self {
+            ElementAttrValue::Shorthand(i) => tokens.append_all(quote! { #i }),
             ElementAttrValue::AttrLiteral(lit) => tokens.append_all(quote! { #lit }),
             ElementAttrValue::AttrOptionalExpr { condition, value } => {
                 tokens.append_all(quote! { if #condition { Some(#value) } else { None } })

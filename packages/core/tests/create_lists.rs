@@ -11,12 +11,12 @@ use dioxus_core::ElementId;
 fn app() -> Element {
     render! {
         div {
-            (0..3).map(|i| render! {
+            for i in 0..3 {
                 div {
                     h1 { "hello world! "}
                     p { "{i}" }
                 }
-            })
+            }
         }
     }
 }

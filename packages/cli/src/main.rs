@@ -1,3 +1,4 @@
+use dioxus_cli_config::DioxusConfig;
 use std::path::PathBuf;
 
 use anyhow::anyhow;
@@ -48,7 +49,7 @@ async fn main() -> anyhow::Result<()> {
         let _dioxus_config = DioxusConfig::load(Some(bin.clone()))
         .map_err(|e| anyhow!("Failed to load Dioxus config because: {e}"))?
         .unwrap_or_else(|| {
-            log::warn!("You appear to be creating a Dioxus project from scratch; we will use the default config");
+            log::info!("You appear to be creating a Dioxus project from scratch; we will use the default config");
             DioxusConfig::default()
         });
 

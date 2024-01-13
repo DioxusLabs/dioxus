@@ -21,7 +21,7 @@ use dioxus::events::*;
 use dioxus::html::input_data::keyboard_types::Key;
 use dioxus::html::MouseEvent;
 use dioxus::prelude::*;
-use dioxus_desktop::wry::application::dpi::LogicalSize;
+use dioxus_desktop::tao::dpi::LogicalSize;
 use dioxus_desktop::{Config, WindowBuilder};
 
 fn main() {
@@ -35,15 +35,17 @@ fn main() {
     dioxus_desktop::launch_cfg(app, cfg);
 }
 
+const STYLE: &str = include_str!("./assets/calculator.css");
+
 fn app(cx: Scope) -> Element {
     let state = use_ref(cx, Calculator::new);
 
     cx.render(rsx! {
-        style { include_str!("./assets/calculator.css") }
+        style { {STYLE} }
         div { id: "wrapper",
             div { class: "app",
                 div { class: "calculator", onkeypress: move |evt| state.write().handle_keydown(evt),
-                    div { class: "calculator-display", state.read().formatted_display() }
+                    div { class: "calculator-display", {state.read().formatted_display()} }
                     div { class: "calculator-keypad",
                         div { class: "input-keys",
                             div { class: "function-keys",
@@ -74,14 +76,14 @@ fn app(cx: Scope) -> Element {
                                     onclick: move |_|  state.write().input_dot(),
                                     "●"
                                 }
-                                (1..10).map(move |k| rsx!{
+                                for k in 1..10 {
                                     CalculatorKey {
                                         key: "{k}",
                                         name: "key-{k}",
                                         onclick: move |_| state.write().input_digit(k),
                                         "{k}"
                                     }
-                                })
+                                }
                             }
                         }
                         div { class: "operator-keys",
@@ -130,7 +132,7 @@ fn CalculatorKey<'a>(cx: Scope<'a, CalculatorKeyProps<'a>>) -> Element {
         button {
             class: "calculator-key {cx.props.name}",
             onclick: move |e| cx.props.onclick.call(e),
-            &cx.props.children
+            {&cx.props.children}
         }
     })
 }

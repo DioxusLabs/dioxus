@@ -7,7 +7,7 @@ use crate::{
 use std::{
     any::{Any, TypeId},
     backtrace::Backtrace,
-    cell::RefCell,
+    cell::{Cell, RefCell},
     error::Error,
     fmt::{Debug, Display},
     rc::Rc,

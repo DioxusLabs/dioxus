@@ -7,8 +7,6 @@ fn main() {
     dioxus_desktop::launch(app);
 }
 
-const _STYLE: &str = mg!(file("./examples/assets/todomvc.css"));
-
 #[derive(PartialEq, Eq, Clone, Copy)]
 pub enum FilterState {
     All,
@@ -49,33 +47,34 @@ pub fn app(cx: Scope<()>) -> Element {
 
     cx.render(rsx! {
         section { class: "todoapp",
+            style { {include_str!("./assets/todomvc.css")} }
             TodoHeader { todos: todos }
             section { class: "main",
                 if !todos.is_empty() {
-                    rsx! {
-                        input {
-                            id: "toggle-all",
-                            class: "toggle-all",
-                            r#type: "checkbox",
-                            onchange: move |_| {
-                                let check = active_todo_count != 0;
-                                for (_, item) in todos.make_mut().iter_mut() {
-                                    item.checked = check;
-                                }
-                            },
-                            checked: if active_todo_count == 0 { "true" } else { "false" },
-                        }
-                        label { r#for: "toggle-all" }
+                    input {
+                        id: "toggle-all",
+                        class: "toggle-all",
+                        r#type: "checkbox",
+                        onchange: move |_| {
+                            let check = active_todo_count != 0;
+                            for (_, item) in todos.make_mut().iter_mut() {
+                                item.checked = check;
+                            }
+                        },
+                        checked: if active_todo_count == 0 { "true" } else { "false" },
                     }
+                    label { r#for: "toggle-all" }
                 }
                 ul { class: "todo-list",
-                    filtered_todos.iter().map(|id| rsx!(TodoEntry {
-                        key: "{id}",
-                        id: *id,
-                        todos: todos,
-                    }))
+                    for id in filtered_todos.iter() {
+                        TodoEntry {
+                            key: "{id}",
+                            id: *id,
+                            todos: todos,
+                        }
+                    }
                 }
-                (!todos.is_empty()).then(|| rsx!(
+                if !todos.is_empty() {
                     ListFooter {
                         active_todo_count: active_todo_count,
                         active_todo_text: active_todo_text,
@@ -83,7 +82,7 @@ pub fn app(cx: Scope<()>) -> Element {
                         todos: todos,
                         filter: filter,
                     }
-                ))
+                }
             }
         }
         PageFooter {}
@@ -172,7 +171,7 @@ pub fn TodoEntry<'a>(cx: Scope<'a, TodoEntryProps<'a>>) -> Element {
                     prevent_default: "onclick"
                 }
             }
-            is_editing.then(|| rsx!{
+            if **is_editing {
                 input {
                     class: "edit",
                     value: "{todo.contents}",
@@ -186,7 +185,7 @@ pub fn TodoEntry<'a>(cx: Scope<'a, TodoEntryProps<'a>>) -> Element {
                         }
                     },
                 }
-            })
+            }
         }
     })
 }
@@ -220,29 +219,27 @@ pub fn ListFooter<'a>(cx: Scope<'a, ListFooterProps<'a>>) -> Element {
             }
             ul { class: "filters",
                 for (state , state_text , url) in [
-    (FilterState::All, "All", "#/"),
-    (FilterState::Active, "Active", "#/active"),
-    (FilterState::Completed, "Completed", "#/completed"),
-] {
+                    (FilterState::All, "All", "#/"),
+                    (FilterState::Active, "Active", "#/active"),
+                    (FilterState::Completed, "Completed", "#/completed"),
+                ] {
                     li {
                         a {
                             href: url,
                             class: selected(state),
                             onclick: move |_| cx.props.filter.set(state),
                             prevent_default: "onclick",
-                            state_text
+                            {state_text}
                         }
                     }
                 }
             }
             if cx.props.show_clear_completed {
-                cx.render(rsx! {
-                    button {
-                        class: "clear-completed",
-                        onclick: move |_| cx.props.todos.make_mut().retain(|_, todo| !todo.checked),
-                        "Clear completed"
-                    }
-                })
+                button {
+                    class: "clear-completed",
+                    onclick: move |_| cx.props.todos.make_mut().retain(|_, todo| !todo.checked),
+                    "Clear completed"
+                }
             }
         }
     })

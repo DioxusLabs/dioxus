@@ -1,3 +1,5 @@
+use std::cell::Cell;
+
 use dioxus::prelude::Props;
 use dioxus_core::*;
 use dioxus_native_core::prelude::*;
@@ -178,15 +180,16 @@ fn create_random_dynamic_node(cx: &ScopeState, depth: usize) -> DynamicNode {
     match rand::random::<u8>() % range {
         0 => DynamicNode::Placeholder(Default::default()),
         1 => cx.make_node((0..(rand::random::<u8>() % 5)).map(|_| {
-            VNode::new(
-                None,
-                Template {
+            cx.vnode(
+                None.into(),
+                Default::default(),
+                Cell::new(Template {
                     name: concat!(file!(), ":", line!(), ":", column!(), ":0"),
                     roots: &[TemplateNode::Dynamic { id: 0 }],
                     node_paths: &[&[0]],
                     attr_paths: &[],
-                },
-                dioxus::core::exports::bumpalo::collections::Vec::new_in(cx.bump()),
+                }),
+                dioxus::core::exports::bumpalo::collections::Vec::new_in(cx.bump()).into(),
                 cx.bump().alloc([cx.component(
                     create_random_element,
                     DepthProps { depth, root: false },
@@ -214,9 +217,9 @@ fn create_random_dynamic_attr(cx: &ScopeState) -> Attribute {
         3 => AttributeValue::Bool(rand::random()),
         4 => cx.any_value(rand::random::<usize>()),
         5 => AttributeValue::None,
-        // Listener(RefCell<Option<ListenerCb<'a>>>),
         _ => unreachable!(),
     };
+
     Attribute::new(
         Box::leak(format!("attr{}", rand::random::<usize>()).into_boxed_str()),
         value,
@@ -253,10 +256,11 @@ fn create_random_element(cx: Scope<DepthProps>) -> Element {
                 .into_boxed_str(),
             ));
             println!("{template:#?}");
-            let node = VNode::new(
+            let node = cx.vnode(
+                None.into(),
                 None,
-                template,
-                dioxus::core::exports::bumpalo::collections::Vec::new_in(cx.bump()),
+                Cell::new(template),
+                dioxus::core::exports::bumpalo::collections::Vec::new_in(cx.bump()).into(),
                 {
                     let dynamic_nodes: Vec<_> = dynamic_node_types
                         .iter()
@@ -271,11 +275,13 @@ fn create_random_element(cx: Scope<DepthProps>) -> Element {
                         .collect();
                     cx.bump().alloc(dynamic_nodes)
                 },
-                cx.bump().alloc(
-                    (0..template.attr_paths.len())
-                        .map(|_| create_random_dynamic_attr(cx))
-                        .collect::<Vec<_>>(),
-                ),
+                cx.bump()
+                    .alloc(
+                        (0..template.attr_paths.len())
+                            .map(|_| create_random_dynamic_attr(cx).into())
+                            .collect::<Vec<_>>(),
+                    )
+                    .as_slice(),
             );
             Some(node)
         }

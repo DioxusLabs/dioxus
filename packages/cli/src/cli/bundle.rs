@@ -1,4 +1,5 @@
 use core::panic;
+use dioxus_cli_config::ExecutableType;
 use std::{fs::create_dir_all, str::FromStr};
 
 use tauri_bundler::{BundleSettings, PackageSettings, SettingsBuilder};
@@ -62,7 +63,7 @@ impl From<PackageType> for tauri_bundler::PackageType {
 
 impl Bundle {
     pub fn bundle(self, bin: Option<PathBuf>) -> Result<()> {
-        let mut crate_config = crate::CrateConfig::new(bin)?;
+        let mut crate_config = dioxus_cli_config::CrateConfig::new(bin)?;
 
         // change the release state.
         crate_config.with_release(self.build.release);
@@ -89,9 +90,9 @@ impl Bundle {
         let package = crate_config.manifest.package.unwrap();
 
         let mut name: PathBuf = match &crate_config.executable {
-            crate::ExecutableType::Binary(name)
-            | crate::ExecutableType::Lib(name)
-            | crate::ExecutableType::Example(name) => name,
+            ExecutableType::Binary(name)
+            | ExecutableType::Lib(name)
+            | ExecutableType::Example(name) => name,
         }
         .into();
         if cfg!(windows) {

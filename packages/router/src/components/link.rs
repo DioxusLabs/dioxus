@@ -167,7 +167,7 @@ impl Debug for LinkProps<'_> {
 ///                 new_tab: true,
 ///                 rel: "link_rel",
 ///                 to: Route::Index {},
-///    
+///
 ///                 "A fully configured link"
 ///             }
 ///         }
@@ -250,7 +250,7 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
             id: "{id}",
             rel: "{rel}",
             target: "{tag_target}",
-            children
+            {children}
         }
     }
 }

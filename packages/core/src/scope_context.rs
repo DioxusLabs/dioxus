@@ -114,7 +114,7 @@ impl ScopeContext {
         }
 
         let mut search_parent = self.parent_id;
-        let context = with_runtime(|runtime: &crate::runtime::Runtime| {
+        let cur_runtime = with_runtime(|runtime: &crate::runtime::Runtime| {
             while let Some(parent_id) = search_parent {
                 let parent = runtime.get_context(parent_id).unwrap();
                 tracing::trace!(
@@ -132,9 +132,9 @@ impl ScopeContext {
                 search_parent = parent.parent_id;
             }
             None
-        })
-        .flatten();
-        match context {
+        });
+
+        match cur_runtime.flatten() {
             Some(ctx) => Some(ctx),
             None => {
                 tracing::trace!(
@@ -388,4 +388,16 @@ impl ScopeId {
     pub fn height(self) -> u32 {
         with_scope(self, |cx| cx.height()).expect("to be in a dioxus runtime")
     }
+}
+
+/// Spawn a future on a component given its [`ScopeId`].
+pub fn spawn_at(fut: impl Future<Output = ()> + 'static, scope_id: ScopeId) -> Option<Task> {
+    with_runtime(|rt| rt.get_context(scope_id).unwrap().push_future(fut))
+}
+
+/// Spawn a future that Dioxus won't clean up when this component is unmounted
+///
+/// This is good for tasks that need to be run after the component has been dropped.
+pub fn spawn_forever(fut: impl Future<Output = ()> + 'static) -> Option<Task> {
+    spawn_at(fut, ScopeId(0))
 }

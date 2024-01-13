@@ -71,7 +71,7 @@ fn app(cx: Scope) -> Element {
 
                 "Hover, click, type or scroll to see the info down below"
             }
-            div { width: "80%", height: "50%", flex_direction: "column", events_rendered }
+            div { width: "80%", height: "50%", flex_direction: "column", {events_rendered} }
         }
     })
 }

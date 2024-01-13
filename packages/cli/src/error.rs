@@ -72,6 +72,24 @@ impl From<hyper::Error> for Error {
     }
 }
 
+impl From<dioxus_cli_config::LoadDioxusConfigError> for Error {
+    fn from(e: dioxus_cli_config::LoadDioxusConfigError) -> Self {
+        Self::RuntimeError(e.to_string())
+    }
+}
+
+impl From<dioxus_cli_config::CargoError> for Error {
+    fn from(e: dioxus_cli_config::CargoError) -> Self {
+        Self::CargoError(e.to_string())
+    }
+}
+
+impl From<dioxus_cli_config::CrateConfigError> for Error {
+    fn from(e: dioxus_cli_config::CrateConfigError) -> Self {
+        Self::RuntimeError(e.to_string())
+    }
+}
+
 #[macro_export]
 macro_rules! custom_error {
     ($msg:literal $(,)?) => {

@@ -8,6 +8,20 @@ rsx! {
     // Some ifchain
     if a > 10 {
         //
-        rsx! { div {} }
+        div {}
+    } else if a > 20 {
+        h1 {}
+    } else if a > 20 {
+        h1 {}
+    } else if a > 20 {
+        h1 {}
+    } else if a > 20 {
+        h1 {}
+    } else if a > 20 {
+        h1 {}
+    } else if a > 20 {
+        h1 {}
+    } else {
+        h3 {}
     }
 }

@@ -10,13 +10,10 @@ homepage = "https://dioxuslabs.com"
 keywords = ["dom", "ui", "gui", "react", "wasm"]
 
 [dependencies]
-anyhow = "1.0.66"
 dioxus = { workspace = true }
 dioxus-router-macro = { workspace = true }
 gloo = { version = "0.8.0", optional = true }
 tracing = { workspace = true }
-thiserror = { workspace = true }
-futures-util = { workspace = true }
 urlencoding = "2.1.3"
 serde = { version = "1", features = ["derive"], optional = true }
 serde_json = { version = "1.0.91", optional = true }
@@ -30,13 +27,14 @@ gloo-utils = { version = "0.1.6", optional = true }
 dioxus-liveview = { workspace = true, optional = true }
 dioxus-ssr = { workspace = true, optional = true }
 tokio = { workspace = true, features = ["full"], optional = true }
+dioxus-cli-config.workspace = true
 
 [features]
 default = ["web"]
 ssr = ["dioxus-ssr", "tokio"]
 liveview = ["dioxus-liveview", "tokio", "dep:serde", "serde_json"]
 wasm_test = []
-serde = ["dep:serde", "gloo-utils/serde"]
+serde = ["dep:serde", "gloo-utils?/serde"]
 web = ["gloo", "web-sys", "wasm-bindgen", "gloo-utils", "js-sys"]
 
 [dev-dependencies]

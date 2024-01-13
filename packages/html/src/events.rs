@@ -6,7 +6,7 @@ macro_rules! impl_event {
         $data:ty;
         $(
             $( #[$attr:meta] )*
-            $name:ident
+            $name:ident $(: $js_name:literal)?
         )*
     ) => {
         $(
@@ -20,9 +20,16 @@ macro_rules! impl_event {
                     }),
                     None,
                     false,
-                )
+                ).into()
             }
         )*
+    };
+
+    (@name $name:ident $js_name:literal) => {
+        $js_name
+    };
+    (@name $name:ident) => {
+        stringify!($name)
     };
 }
 

@@ -78,7 +78,7 @@ use std::{any::Any, cell::Cell, collections::BTreeSet, future::Future, rc::Rc};
 /// #[component]
 /// fn Title<'a>( children: Element) -> Element {
 ///     cx.render(rsx! {
-///         div { id: "title", children }
+///         div { id: "title", {children} }
 ///     })
 /// }
 /// ```
@@ -338,6 +338,7 @@ impl VirtualDom {
     /// It is up to the listeners themselves to mark nodes as dirty.
     ///
     /// If you have multiple events, you can call this method multiple times before calling "render_with_deadline"
+
     pub fn handle_event(
         &mut self,
         name: &str,

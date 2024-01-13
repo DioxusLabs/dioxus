@@ -32,12 +32,12 @@ fn app(cx: Scope) -> Element {
             }
 
             ul {
-                emails_sent.read().iter().map(|message| cx.render(rsx! {
+                for message in emails_sent.read().iter() {
                     li {
                         h3 { "email" }
                         span {"{message}"}
                     }
-                }))
+                }
             }
         }
     })

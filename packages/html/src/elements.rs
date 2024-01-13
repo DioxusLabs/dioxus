@@ -1,9 +1,13 @@
 #![allow(non_upper_case_globals)]
+
+use dioxus_core::prelude::IntoAttributeValue;
+use dioxus_html_internal_macro::impl_extension_attributes;
+#[cfg(feature = "hot-reload-context")]
+use dioxus_rsx::HotReloadingContext;
+
 #[cfg(feature = "hot-reload-context")]
 use crate::{map_global_attributes, map_svg_attributes};
 use crate::{GlobalAttributes, SvgAttributes};
-#[cfg(feature = "hot-reload-context")]
-use dioxus_rsx::HotReloadingContext;
 
 pub type AttributeDiscription = (&'static str, Option<&'static str>, bool);
 
@@ -378,6 +382,13 @@ macro_rules! builder_constructors {
                 }
             );
         )*
+
+        pub(crate) mod extensions {
+            use super::*;
+            // $(
+                // impl_extension_attributes![ELEMENT $name { $($fil,)* }];
+            // )*
+        }
     };
 }
 

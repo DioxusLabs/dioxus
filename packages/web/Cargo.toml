@@ -42,7 +42,8 @@ features = [
     "HtmlFormElement",
     "Text",
     "Window",
-    "console",
+    "DataTransfer",
+    "console"
 ]
 
 [features]
@@ -50,7 +51,6 @@ default = ["panic_hook", "mounted", "file_engine", "hot_reload", "eval"]
 panic_hook = ["console_error_panic_hook"]
 hydrate = [
     "web-sys/Comment",
-    "web-sys/console",
 ]
 mounted = [
     "web-sys/Element",

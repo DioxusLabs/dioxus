@@ -36,17 +36,17 @@ fn example(cx: Scope) -> Element {
             div { id: "asd",
                 "your neighborhood spiderman"
 
-                items.iter().cycle().take(5).map(|f| rsx!{
-                    div { "{f.a}" }
-                })
+                for item in items.iter().cycle().take(5) {
+                    div { "{item.a}" }
+                }
 
-                things_list.iter().map(|f| rsx!{
-                    div { "{f.a}" "{f.b}" }
-                })
+                for thing in things_list.iter() {
+                    div { "{thing.a}" "{thing.b}" }
+                }
 
-                mything_read.as_ref().map(|f| rsx! {
+                if let Some(f) = mything_read.as_ref() {
                     div { "{f}" }
-                })
+                }
             }
         }
     ))
