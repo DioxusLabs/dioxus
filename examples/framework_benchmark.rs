@@ -32,10 +32,10 @@ impl Label {
 }
 
 fn app() -> Element {
-    let items = use_ref(Vec::new);
-    let selected = use_state(|| None);
+    let items = use_signal(Vec::new);
+    let selected = use_signal(|| None);
 
-    cx.render(rsx! {
+    rsx! {
         div { class: "container",
             div { class: "jumbotron",
                 div { class: "row",
@@ -87,7 +87,7 @@ fn app() -> Element {
              }
             span { class: "preloadicon glyphicon glyphicon-remove", aria_hidden: "true" }
         }
-    })
+    }
 }
 
 #[derive(Props)]
@@ -98,7 +98,7 @@ struct ActionButtonProps<'a> {
 }
 
 fn ActionButton(props: ActionButtonProps) -> Element {
-    cx.render(rsx! {
+    rsx! {
         div {
             class: "col-sm-6 smallpad",
             button {
@@ -110,7 +110,7 @@ fn ActionButton(props: ActionButtonProps) -> Element {
                 "{cx.props.name}"
             }
         }
-    })
+    }
 }
 
 static ADJECTIVES: &[&str] = &[

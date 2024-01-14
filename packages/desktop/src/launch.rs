@@ -18,7 +18,7 @@ use tao::event::{Event, StartCause, WindowEvent};
 /// }
 ///
 /// fn app() -> Element {
-///     cx.render(rsx!{
+///     rsx!{
 ///         h1 {"hello world!"}
 ///     })
 /// }
@@ -42,7 +42,7 @@ pub fn launch(root: Component) {
 /// }
 ///
 /// fn app() -> Element {
-///     cx.render(rsx!{
+///     rsx!{
 ///         h1 {"hello world!"}
 ///     })
 /// }
@@ -71,7 +71,7 @@ pub fn launch_cfg(root: Component, config_builder: Config) {
 /// }
 ///
 /// fn app(cx: Scope<AppProps>) -> Element {
-///     cx.render(rsx!{
+///     rsx!{
 ///         h1 {"hello {cx.props.name}!"}
 ///     })
 /// }

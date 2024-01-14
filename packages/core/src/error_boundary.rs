@@ -143,7 +143,7 @@ impl ErrorBoundary {
 /// fn app( count: String) -> Element {
 ///     let id: i32 = count.parse().throw()?;
 ///
-///     cx.render(rsx! {
+///     rsx! {
 ///         div { "Count {}" }
 ///     })
 /// }
@@ -168,7 +168,7 @@ pub trait Throw<S = ()>: Sized {
     /// fn app( count: String) -> Element {
     ///     let id: i32 = count.parse().throw()?;
     ///
-    ///     cx.render(rsx! {
+    ///     rsx! {
     ///         div { "Count {}" }
     ///     })
     /// }
@@ -191,7 +191,7 @@ pub trait Throw<S = ()>: Sized {
     /// fn app( count: String) -> Element {
     ///     let id: i32 = count.parse().throw()?;
     ///
-    ///     cx.render(rsx! {
+    ///     rsx! {
     ///         div { "Count {}" }
     ///     })
     /// }

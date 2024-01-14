@@ -7,9 +7,9 @@ fn main() {
 }
 
 fn app() -> Element {
-    let val = use_state(|| 5);
+    let val = use_signal(|| 5);
 
-    cx.render(rsx! {
+    rsx! {
         div {
             user_select: "none",
             webkit_user_select: "none",
@@ -31,7 +31,7 @@ fn app() -> Element {
                 }
             }
         }
-    })
+    }
 }
 
 #[derive(Props)]
@@ -58,7 +58,7 @@ const UNHELD_COLOR: &str = "#ddd";
 
 // A six-sided die (D6) with dots.
 #[allow(non_snake_case)]
-pub fn Die(props: DieProps -> Element {
+pub fn Die(props: DieProps) -> Element {
     let &DieProps { value, keep, .. } = cx.props;
 
     let active_dots = &DOTS_FOR_VALUE[(value - 1) as usize];
@@ -81,7 +81,7 @@ pub fn Die(props: DieProps -> Element {
             }
         });
 
-    cx.render(rsx! {
+    rsx! {
       svg {
         onclick: move |e| cx.props.onclick.call(e),
         prevent_default: "onclick",
@@ -99,5 +99,5 @@ pub fn Die(props: DieProps -> Element {
 
         {dots}
       }
-    })
+    }
 }

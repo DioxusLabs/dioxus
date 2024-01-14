@@ -11,7 +11,7 @@ fn main() {
 }
 
 fn app() -> Element {
-    cx.render(rsx! {
+    rsx! {
         Button {
             a: "asd".to_string(),
             c: "asd".to_string(),
@@ -30,7 +30,7 @@ fn app() -> Element {
             c: "asd".to_string(),
             d: Some("asd".to_string()),
         }
-    })
+    }
 }
 
 type SthElse<T> = Option<T>;
@@ -52,7 +52,7 @@ struct ButtonProps {
 }
 
 fn Button(cx: Scope<ButtonProps>) -> Element {
-    cx.render(rsx! {
+    rsx! {
         button {
             "{cx.props.a} | "
             "{cx.props.b:?} | "
@@ -60,5 +60,5 @@ fn Button(cx: Scope<ButtonProps>) -> Element {
             "{cx.props.d:?} | "
             "{cx.props.e:?}"
         }
-    })
+    }
 }

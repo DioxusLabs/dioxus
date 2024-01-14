@@ -232,7 +232,7 @@ mod tests {
             indoc! {r#"
                 fn App() -> Element {
                     if you_are_happy && you_know_it {
-                        let something = use_state(|| "hands");
+                        let something = use_signal(|| "hands");
                         println!("clap your {something}")
                     }
                 }
@@ -243,7 +243,7 @@ mod tests {
             error: hook called conditionally: `use_state` (inside `if`)
               --> src/main.rs:3:25
               |
-            3 |         let something = use_state(|| "hands");
+            3 |         let something = use_signal(|| "hands");
               |                         ^^^^^^^^^
               |
               = note: `if you_are_happy && you_know_it { … }` is the conditional
@@ -261,7 +261,7 @@ mod tests {
                 fn App() -> Element {
                     match you_are_happy && you_know_it {
                         true => {
-                            let something = use_state(|| "hands");
+                            let something = use_signal(|| "hands");
                             println!("clap your {something}")
                         }
                         _ => {}
@@ -274,7 +274,7 @@ mod tests {
             error: hook called conditionally: `use_state` (inside `match`)
               --> src/main.rs:4:29
               |
-            4 |             let something = use_state(|| "hands");
+            4 |             let something = use_signal(|| "hands");
               |                             ^^^^^^^^^
               |
               = note: `match you_are_happy && you_know_it { … }` is the conditional
@@ -291,7 +291,7 @@ mod tests {
             indoc! {r#"
                 fn App() -> Element {
                     for i in 0..10 {
-                        let something = use_state(|| "hands");
+                        let something = use_signal(|| "hands");
                         println!("clap your {something}")
                     }
                 }
@@ -302,7 +302,7 @@ mod tests {
             error: hook called in a loop: `use_state` (inside `for` loop)
               --> src/main.rs:3:25
               |
-            3 |         let something = use_state(|| "hands");
+            3 |         let something = use_signal(|| "hands");
               |                         ^^^^^^^^^
               |
               = note: `for i in 0..10 { … }` is the loop
@@ -319,7 +319,7 @@ mod tests {
             indoc! {r#"
                 fn App() -> Element {
                     while check_thing() {
-                        let something = use_state(|| "hands");
+                        let something = use_signal(|| "hands");
                         println!("clap your {something}")
                     }
                 }
@@ -330,7 +330,7 @@ mod tests {
             error: hook called in a loop: `use_state` (inside `while` loop)
               --> src/main.rs:3:25
               |
-            3 |         let something = use_state(|| "hands");
+            3 |         let something = use_signal(|| "hands");
               |                         ^^^^^^^^^
               |
               = note: `while check_thing() { … }` is the loop
@@ -347,7 +347,7 @@ mod tests {
             indoc! {r#"
                 fn App() -> Element {
                     loop {
-                        let something = use_state(|| "hands");
+                        let something = use_signal(|| "hands");
                         println!("clap your {something}")
                     }
                 }
@@ -358,7 +358,7 @@ mod tests {
             error: hook called in a loop: `use_state` (inside `loop`)
               --> src/main.rs:3:25
               |
-            3 |         let something = use_state(|| "hands");
+            3 |         let something = use_signal(|| "hands");
               |                         ^^^^^^^^^
               |
               = note: `loop { … }` is the loop
@@ -375,7 +375,7 @@ mod tests {
             indoc! {r#"
                 fn App() -> Element {
                     let something = || {
-                        let something = use_state(|| "hands");
+                        let something = use_signal(|| "hands");
                         println!("clap your {something}")
                     };
                 }
@@ -386,7 +386,7 @@ mod tests {
             error: hook called in a closure: `use_state`
               --> src/main.rs:3:25
               |
-            3 |         let something = use_state(|| "hands");
+            3 |         let something = use_signal(|| "hands");
               |                         ^^^^^^^^^
         "#};
 
@@ -401,7 +401,7 @@ mod tests {
             indoc! {r#"
                 fn App() -> Element {
                     if you_are_happy && you_know_it {
-                        let something = use_state(|| {
+                        let something = use_signal(|| {
                             "hands"
                         });
                         println!("clap your {something}")
@@ -414,7 +414,7 @@ mod tests {
             error: hook called conditionally: `use_state` (inside `if`)
               --> src/main.rs:3:25
               |
-            3 |         let something = use_state(|| {
+            3 |         let something = use_signal(|| {
               |                         ^^^^^^^^^
             4 |             "hands"
             5 |         });

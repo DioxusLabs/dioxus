@@ -5,9 +5,9 @@ fn main() {
 }
 
 fn app() -> Element {
-    let radius = use_state(|| 0);
+    let radius = use_signal(|| 0);
 
-    cx.render(rsx! {
+    rsx! {
         div {
             width: "100%",
             height: "100%",
@@ -23,5 +23,5 @@ fn app() -> Element {
 
             "{radius}"
         }
-    })
+    }
 }

@@ -127,7 +127,7 @@ pub fn launch(root_component: fn() -> Element) {
 /// }
 ///
 /// fn app() -> Element {
-///     cx.render(rsx!{
+///     rsx!{
 ///         h1 {"hello world!"}
 ///     })
 /// }

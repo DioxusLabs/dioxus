@@ -33,7 +33,7 @@ use crate::{get_effect_stack, CopyValue, Effect, EffectStack};
 /// fn Child(state: Signal<u32>) -> Element {
 ///     let state = *state;
 ///
-///     use_future!( |()| async move {
+///     use_future( |()| async move {
 ///         // Because the signal is a Copy type, we can use it in an async block without cloning it.
 ///         *state.write() += 1;
 ///     });
@@ -117,7 +117,7 @@ pub(crate) struct SignalData<T> {
 /// fn Child(state: Signal<u32>) -> Element {
 ///     let state = *state;
 ///
-///     use_future!( |()| async move {
+///     use_future( |()| async move {
 ///         // Because the signal is a Copy type, we can use it in an async block without cloning it.
 ///         *state.write() += 1;
 ///     });

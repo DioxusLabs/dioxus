@@ -10,7 +10,7 @@ fn main() {
 }
 
 fn app() -> Element {
-    cx.render(rsx! {
+    rsx! {
         div {
             h1 { "Form" }
             form {
@@ -24,5 +24,5 @@ fn app() -> Element {
                 button { r#type: "submit", value: "Submit", "Submit the form" }
             }
         }
-    })
+    }
 }

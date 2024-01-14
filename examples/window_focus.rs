@@ -11,22 +11,19 @@ fn main() {
 }
 
 fn app() -> Element {
-    let focused = use_state(|| false);
+    let focused = use_signal(|| false);
 
-    use_wry_event_handler({
-        to_owned![focused];
-        move |event, _| {
-            if let WryEvent::WindowEvent {
-                event: WindowEvent::Focused(new_focused),
-                ..
-            } = event
-            {
-                focused.set(*new_focused);
-            }
+    use_wry_event_handler(move |event, _| {
+        if let WryEvent::WindowEvent {
+            event: WindowEvent::Focused(new_focused),
+            ..
+        } = event
+        {
+            focused.set(*new_focused);
         }
     });
 
-    cx.render(rsx! {
+    rsx! {
         div{
             width: "100%",
             height: "100%",
@@ -41,5 +38,5 @@ fn app() -> Element {
                 }
             }
         }
-    })
+    }
 }

@@ -8,10 +8,10 @@ fn main() {
 }
 
 fn App() -> Element {
-    let enable_directory_upload = use_state(|| false);
-    let files_uploaded: &UseRef<Vec<String>> = use_ref(Vec::new);
+    let enable_directory_upload = use_signal(|| false);
+    let files_uploaded: Signal<Vec<String>> = use_signal(Vec::new);
 
-    cx.render(rsx! {
+    rsx! {
         label {
             input {
                 r#type: "checkbox",
@@ -70,5 +70,5 @@ fn App() -> Element {
                 li { "{file}" }
             }
         }
-    })
+    }
 }

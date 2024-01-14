@@ -7,7 +7,7 @@ fn SaveClipboard() -> Element {
         }
     };
 
-    cx.render(rsx! {
+    rsx! {
         div { "hello world", "hello world", "hello world" }
     })
 }

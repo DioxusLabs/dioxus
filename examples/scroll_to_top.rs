@@ -5,14 +5,12 @@ fn main() {
 }
 
 fn app() -> Element {
-    let header_element = use_ref(|| None);
+    let header_element = use_signal(|| None);
 
-    cx.render(rsx!(
+    rsx! {
         div {
             h1 {
-                onmounted: move |cx| {
-                    header_element.set(Some(cx.inner().clone()));
-                },
+                onmounted: move |cx| header_element.set(Some(cx.inner().clone())),
                 "Scroll to top example"
             }
 
@@ -21,15 +19,13 @@ fn app() -> Element {
             }
 
             button {
-                onclick: move |_| {
+                onclick: async move |_| move {
                     if let Some(header) = header_element.read().as_ref().cloned() {
-                        cx.spawn(async move {
-                            let _ = header.scroll_to(ScrollBehavior::Smooth).await;
-                        });
+                        let _ = header.scroll_to(ScrollBehavior::Smooth).await;
                     }
                 },
                 "Scroll to top"
             }
         }
-    ))
+    }
 }

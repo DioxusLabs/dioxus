@@ -14,7 +14,7 @@ struct QuadrentProps {
 }
 
 fn Quadrant(cx: Scope<QuadrentProps>) -> Element {
-    cx.render(rsx! {
+    rsx! {
         div {
             border_width: "1px",
             width: "50%",
@@ -25,11 +25,11 @@ fn Quadrant(cx: Scope<QuadrentProps>) -> Element {
 
             "{cx.props.text}"
         }
-    })
+    }
 }
 
 fn app() -> Element {
-    cx.render(rsx! {
+    rsx! {
         div {
             width: "100%",
             height: "100%",
@@ -63,5 +63,5 @@ fn app() -> Element {
                 }
             }
         }
-    })
+    }
 }

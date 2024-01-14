@@ -5,15 +5,13 @@ fn main() {
 }
 
 #[component]
-fn App() -> Element {
-    cx.render(rsx! {
+fn App(_: ()) -> Element {
+    rsx! {
         ErrorBoundary {
             handle_error: |error: CapturedError| rsx! {"Found error {error}"},
-            DemoC {
-                x: 1
-            }
+            DemoC { x: 1 }
         }
-    })
+    }
 }
 
 #[component]

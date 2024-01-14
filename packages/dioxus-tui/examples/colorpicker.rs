@@ -9,12 +9,12 @@ fn main() {
 }
 
 fn app() -> Element {
-    let hue = use_state(|| 0.0);
-    let brightness = use_state(|| 0.0);
+    let hue = use_signal(|| 0.0);
+    let brightness = use_signal(|| 0.0);
     let tui_query: Query = cx.consume_context().unwrap();
     let mapping: DioxusElementToNodeId = cx.consume_context().unwrap();
     // disable templates so that every node has an id and can be queried
-    cx.render(rsx! {
+    rsx! {
         div {
             width: "100%",
             background_color: "hsl({hue}, 70%, {brightness}%)",
@@ -31,5 +31,5 @@ fn app() -> Element {
             },
             "hsl({hue}, 70%, {brightness}%)"
         }
-    })
+    }
 }

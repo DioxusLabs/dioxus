@@ -21,9 +21,9 @@ fn main() {
 }
 
 fn app() -> Element {
-    let val = use_state(|| 0);
+    let val = use_signal(|| 0);
 
-    cx.render(rsx! {
+    rsx! {
         div {
             h1 { "hello world. Count: {val}" }
             button {
@@ -31,5 +31,5 @@ fn app() -> Element {
                 "click to increment"
             }
         }
-    })
+    }
 }

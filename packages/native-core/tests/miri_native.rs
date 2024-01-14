@@ -97,8 +97,8 @@ fn native_core_is_okay() {
     use std::time::Duration;
 
     fn app() -> Element {
-        let colors = use_state(|| vec!["green", "blue", "red"]);
-        let padding = use_state(|| 10);
+        let colors = use_signal(|| vec!["green", "blue", "red"]);
+        let padding = use_signal(|| 10);
 
         use_effect(colors, |colors| async move {
             sleep(Duration::from_millis(1000)).await;
@@ -120,7 +120,7 @@ fn native_core_is_okay() {
         let _mid = colors[1];
         let _small = colors[2];
 
-        cx.render(rsx! {
+        rsx! {
             blabla {}
         })
     }

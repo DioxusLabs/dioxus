@@ -25,14 +25,7 @@ fn app() -> Element {
 }
 
 #[component]
-fn Component<'a>(
-    cx: Scope<'a>,
-    a: i32,
-    b: i32,
-    c: i32,
-    children: Element,
-    onclick: EventHandler<'a, ()>,
-) -> Element {
+fn Component(a: i32, b: i32, c: i32, children: Element, onclick: EventHandler<()>) -> Element {
     render! {
         div { "{a}" }
         div { "{b}" }

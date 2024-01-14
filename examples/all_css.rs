@@ -5,7 +5,7 @@ fn main() {
 }
 
 fn app() -> Element {
-    cx.render(rsx! {
+    rsx! {
         div {
             align_content: "a",
             align_items: "a",
@@ -409,5 +409,5 @@ fn app() -> Element {
 
             "This example isn't quite useful yet"
         }
-    })
+    }
 }

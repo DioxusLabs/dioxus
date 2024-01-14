@@ -11,9 +11,9 @@ fn main() {
 }
 
 fn app() -> Element {
-    cx.render(rsx!(
+    rsx!(
         div {
             h1 { "drag a file here and check your console" }
         }
-    ))
+    )
 }

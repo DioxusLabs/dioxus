@@ -11,7 +11,7 @@ fn main() {
 }
 
 fn app() -> Element {
-    cx.render(rsx! {
+    rsx! {
         div {
             onclick: move |_| println!("clicked! top"),
             "- div"
@@ -30,5 +30,5 @@ fn app() -> Element {
                 "Does not handle clicks - only propagate"
             }
         }
-    })
+    }
 }

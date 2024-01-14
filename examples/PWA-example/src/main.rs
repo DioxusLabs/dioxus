@@ -9,7 +9,7 @@ fn main() {
 }
 
 fn app() -> Element {
-    cx.render(rsx! (
+    rsx! (
         div {
             style: "text-align: center;",
             h1 { "🌗 Dioxus 🚀" }

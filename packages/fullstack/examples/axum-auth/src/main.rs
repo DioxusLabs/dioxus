@@ -75,10 +75,10 @@ fn main() {
 }
 //
 fn app() -> Element {
-    let user_name = use_state(|| "?".to_string());
-    let permissions = use_state(|| "?".to_string());
+    let user_name = use_signal(|| "?".to_string());
+    let permissions = use_signal(|| "?".to_string());
 
-    cx.render(rsx! {
+    rsx! {
         div {
             button {
                 onclick: move |_| {
@@ -117,7 +117,7 @@ fn app() -> Element {
             }
             "Permissions: {permissions}"
         }
-    })
+    }
 }
 
 #[server(GetUserName)]

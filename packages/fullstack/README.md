@@ -63,8 +63,8 @@ fn main() {
 }
 
 fn app() -> Element {
-    let meaning = use_state(|| None);
-    cx.render(rsx! {
+    let meaning = use_signal(|| None);
+    rsx! {
         button {
             onclick: move |_| {
                 to_owned![meaning];

@@ -6,14 +6,14 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 fn app() -> Element {
-    let mut num = use_state(|| 0);
+    let mut num = use_signal(|| 0);
 
-    cx.render(rsx! {
+    rsx! {
         div {
             "hello salvo! {num}"
             button { onclick: move |_| num += 1, "Increment" }
         }
-    })
+    }
 }
 
 #[tokio::main]

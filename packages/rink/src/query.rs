@@ -23,10 +23,10 @@ use crate::{get_abs_layout, layout_to_screen_space};
 /// }
 ///
 /// fn app() -> Element {
-///     let hue = use_state(|| 0.0);
-///     let brightness = use_state(|| 0.0);
+///     let hue = use_signal(|| 0.0);
+///     let brightness = use_signal(|| 0.0);
 ///     let tui_query: Query = cx.consume_context().unwrap();
-///     cx.render(rsx! {
+///     rsx! {
 ///         div{
 ///             width: "100%",
 ///             background_color: "hsl({hue}, 70%, {brightness}%)",

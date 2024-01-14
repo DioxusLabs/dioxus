@@ -15,9 +15,9 @@ fn main() {
 }
 
 fn app() -> Element {
-    let state = use_state(PlayerState::new);
+    let state = use_signal(PlayerState::new);
 
-    cx.render(rsx!(
+    rsx!(
         div {
             h1 {"Select an option"}
             h3 { "The radio is... ", {state.is_playing()}, "!" }
@@ -28,7 +28,7 @@ fn app() -> Element {
                 "Play"
             }
         }
-    ))
+    )
 }
 
 enum PlayerAction {

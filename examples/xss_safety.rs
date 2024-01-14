@@ -9,9 +9,9 @@ fn main() {
 }
 
 fn app() -> Element {
-    let contents = use_state(|| String::from("<script>alert(\"hello world\")</script>"));
+    let contents = use_signal(|| String::from("<script>alert(\"hello world\")</script>"));
 
-    cx.render(rsx! {
+    rsx! {
         div {
             h1 {"Dioxus is XSS-Safe"}
             h3 { "{contents}" }
@@ -21,5 +21,5 @@ fn app() -> Element {
                 oninput: move |e| contents.set(e.value()),
             }
         }
-    })
+    }
 }

@@ -14,7 +14,7 @@ use dioxus_core::prelude::*;
 /// fn Component() -> Element {
 ///   let id = use_const(|| ComplexData(100));
 ///
-///   cx.render(rsx! {
+///   rsx! {
 ///     div { "{id.0}" }
 ///   })
 /// }

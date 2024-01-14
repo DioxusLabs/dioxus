@@ -5,9 +5,9 @@ fn main() {
 }
 
 fn app() -> Element {
-    let level = use_state(|| 1.0);
+    let level = use_signal(|| 1.0);
 
-    cx.render(rsx! {
+    rsx! {
         input {
             r#type: "number",
             value: "{level}",
@@ -18,5 +18,5 @@ fn app() -> Element {
                 }
             }
         }
-    })
+    }
 }

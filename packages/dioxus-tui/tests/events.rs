@@ -33,7 +33,7 @@ fn key_down() {
     dioxus_tui::launch_cfg(app, dioxus_tui::Config::new().with_headless());
 
     fn app() -> Element {
-        let render_count = use_state(|| 0);
+        let render_count = use_signal(|| 0);
         let tui_ctx: TuiContext = cx.consume_context().unwrap();
         let render_count_handle = render_count.clone();
         cx.spawn(async move {
@@ -56,7 +56,7 @@ fn key_down() {
             kind: crossterm::event::KeyEventKind::Press,
             state: crossterm::event::KeyEventState::NONE,
         }));
-        cx.render(rsx! {
+        rsx! {
             div {
                 width: "100%",
                 height: "100%",
@@ -65,7 +65,7 @@ fn key_down() {
                     tui_ctx.quit();
                 }
             }
-        })
+        }
     }
 }
 
@@ -74,7 +74,7 @@ fn mouse_down() {
     dioxus_tui::launch_cfg(app, dioxus_tui::Config::new().with_headless());
 
     fn app() -> Element {
-        let render_count = use_state(|| 0);
+        let render_count = use_signal(|| 0);
         let tui_ctx: TuiContext = cx.consume_context().unwrap();
         let render_count_handle = render_count.clone();
         cx.spawn(async move {
@@ -90,7 +90,7 @@ fn mouse_down() {
             kind: crossterm::event::MouseEventKind::Down(MouseButton::Left),
             modifiers: KeyModifiers::NONE,
         }));
-        cx.render(rsx! {
+        rsx! {
             div {
                 width: "100%",
                 height: "100%",
@@ -101,7 +101,7 @@ fn mouse_down() {
                     tui_ctx.quit();
                 }
             }
-        })
+        }
     }
 }
 
@@ -110,7 +110,7 @@ fn mouse_up() {
     dioxus_tui::launch_cfg(app, dioxus_tui::Config::new().with_headless());
 
     fn app() -> Element {
-        let render_count = use_state(|| 0);
+        let render_count = use_signal(|| 0);
         let tui_ctx: TuiContext = cx.consume_context().unwrap();
         let render_count_handle = render_count.clone();
         cx.spawn(async move {
@@ -132,7 +132,7 @@ fn mouse_up() {
             kind: crossterm::event::MouseEventKind::Up(MouseButton::Left),
             modifiers: KeyModifiers::NONE,
         }));
-        cx.render(rsx! {
+        rsx! {
             div {
                 width: "100%",
                 height: "100%",
@@ -140,7 +140,7 @@ fn mouse_up() {
                     tui_ctx.quit();
                 }
             }
-        })
+        }
     }
 }
 
@@ -149,7 +149,7 @@ fn mouse_enter() {
     dioxus_tui::launch_cfg(app, dioxus_tui::Config::new().with_headless());
 
     fn app() -> Element {
-        let render_count = use_state(|| 0);
+        let render_count = use_signal(|| 0);
         let tui_ctx: TuiContext = cx.consume_context().unwrap();
         let render_count_handle = render_count.clone();
         cx.spawn(async move {
@@ -171,7 +171,7 @@ fn mouse_enter() {
             kind: crossterm::event::MouseEventKind::Moved,
             modifiers: KeyModifiers::NONE,
         }));
-        cx.render(rsx! {
+        rsx! {
             div {
                 width: "50%",
                 height: "50%",
@@ -179,7 +179,7 @@ fn mouse_enter() {
                     tui_ctx.quit();
                 }
             }
-        })
+        }
     }
 }
 
@@ -188,7 +188,7 @@ fn mouse_exit() {
     dioxus_tui::launch_cfg(app, dioxus_tui::Config::new().with_headless());
 
     fn app() -> Element {
-        let render_count = use_state(|| 0);
+        let render_count = use_signal(|| 0);
         let tui_ctx: TuiContext = cx.consume_context().unwrap();
         let render_count_handle = render_count.clone();
         cx.spawn(async move {
@@ -210,7 +210,7 @@ fn mouse_exit() {
             kind: crossterm::event::MouseEventKind::Moved,
             modifiers: KeyModifiers::NONE,
         }));
-        cx.render(rsx! {
+        rsx! {
             div {
                 width: "50%",
                 height: "50%",
@@ -218,7 +218,7 @@ fn mouse_exit() {
                     tui_ctx.quit();
                 }
             }
-        })
+        }
     }
 }
 
@@ -227,7 +227,7 @@ fn mouse_move() {
     dioxus_tui::launch_cfg(app, dioxus_tui::Config::new().with_headless());
 
     fn app() -> Element {
-        let render_count = use_state(|| 0);
+        let render_count = use_signal(|| 0);
         let tui_ctx: TuiContext = cx.consume_context().unwrap();
         let render_count_handle = render_count.clone();
         cx.spawn(async move {
@@ -249,7 +249,7 @@ fn mouse_move() {
             kind: crossterm::event::MouseEventKind::Moved,
             modifiers: KeyModifiers::NONE,
         }));
-        cx.render(rsx! {
+        rsx! {
             div {
                 width: "100%",
                 height: "100%",
@@ -257,7 +257,7 @@ fn mouse_move() {
                     tui_ctx.quit();
                 }
             }
-        })
+        }
     }
 }
 
@@ -266,7 +266,7 @@ fn wheel() {
     dioxus_tui::launch_cfg(app, dioxus_tui::Config::new().with_headless());
 
     fn app() -> Element {
-        let render_count = use_state(|| 0);
+        let render_count = use_signal(|| 0);
         let tui_ctx: TuiContext = cx.consume_context().unwrap();
         let render_count_handle = render_count.clone();
         cx.spawn(async move {
@@ -288,7 +288,7 @@ fn wheel() {
             kind: crossterm::event::MouseEventKind::ScrollDown,
             modifiers: KeyModifiers::NONE,
         }));
-        cx.render(rsx! {
+        rsx! {
             div {
                 width: "100%",
                 height: "100%",
@@ -297,7 +297,7 @@ fn wheel() {
                     tui_ctx.quit();
                 }
             }
-        })
+        }
     }
 }
 
@@ -306,7 +306,7 @@ fn click() {
     dioxus_tui::launch_cfg(app, dioxus_tui::Config::new().with_headless());
 
     fn app() -> Element {
-        let render_count = use_state(|| 0);
+        let render_count = use_signal(|| 0);
         let tui_ctx: TuiContext = cx.consume_context().unwrap();
         let render_count_handle = render_count.clone();
         cx.spawn(async move {
@@ -328,7 +328,7 @@ fn click() {
             kind: crossterm::event::MouseEventKind::Up(MouseButton::Left),
             modifiers: KeyModifiers::NONE,
         }));
-        cx.render(rsx! {
+        rsx! {
             div {
                 width: "100%",
                 height: "100%",
@@ -336,7 +336,7 @@ fn click() {
                     tui_ctx.quit();
                 }
             }
-        })
+        }
     }
 }
 
@@ -345,7 +345,7 @@ fn context_menu() {
     dioxus_tui::launch_cfg(app, dioxus_tui::Config::new().with_headless());
 
     fn app() -> Element {
-        let render_count = use_state(|| 0);
+        let render_count = use_signal(|| 0);
         let tui_ctx: TuiContext = cx.consume_context().unwrap();
         let render_count_handle = render_count.clone();
         cx.spawn(async move {
@@ -367,7 +367,7 @@ fn context_menu() {
             kind: crossterm::event::MouseEventKind::Up(MouseButton::Right),
             modifiers: KeyModifiers::NONE,
         }));
-        cx.render(rsx! {
+        rsx! {
             div {
                 width: "100%",
                 height: "100%",
@@ -375,6 +375,6 @@ fn context_menu() {
                     tui_ctx.quit();
                 }
             }
-        })
+        }
     }
 }

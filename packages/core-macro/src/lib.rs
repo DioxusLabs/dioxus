@@ -66,7 +66,7 @@ pub fn render(s: TokenStream) -> TokenStream {
 /// ```rust,ignore
 /// #[inline_props]
 /// fn app(bob: String) -> Element {
-///     cx.render(rsx!("hello, {bob}"))
+///     rsx!("hello, {bob}"))
 /// }
 ///
 /// // is equivalent to
@@ -77,7 +77,7 @@ pub fn render(s: TokenStream) -> TokenStream {
 /// }
 ///
 /// fn app(cx: Scope<AppProps>) -> Element {
-///     cx.render(rsx!("hello, {bob}"))
+///     rsx!("hello, {bob}"))
 /// }
 /// ```
 #[proc_macro_attribute]

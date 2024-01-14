@@ -10,7 +10,7 @@ fn main() {
 fn app() -> Element {
     let count = use_signal(|| 10);
 
-    use_future((), |_| async move {
+    use_future(|_| async move {
         let mut stream = some_stream();
 
         while let Some(second) = stream.next().await {
@@ -18,9 +18,9 @@ fn app() -> Element {
         }
     });
 
-    cx.render(rsx! {
+    rsx! {
         h1 { "High-Five counter: {count}" }
-    })
+    }
 }
 
 fn some_stream() -> std::pin::Pin<Box<dyn Stream<Item = i32>>> {

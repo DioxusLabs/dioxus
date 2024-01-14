@@ -5,7 +5,7 @@ fn main() {
 }
 
 fn app() -> Element {
-    cx.render(rsx! {
+    rsx! {
         div {
             width: "100%",
             height: "100%",
@@ -78,5 +78,5 @@ fn app() -> Element {
                 "asd"
             }
         }
-    })
+    }
 }

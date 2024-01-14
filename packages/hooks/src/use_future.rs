@@ -26,7 +26,7 @@ where
     F: Future<Output = T> + 'static,
     D: UseFutureDep,
 {
-    let val = use_state(|| None);
+    let val = use_signal(|| None);
 
     let state = cx.use_hook(move || UseFuture {
         update: cx.schedule_update(),
@@ -260,7 +260,7 @@ mod tests {
 
         async fn app(cx: Scope<'_, MyProps>) -> Element {
             // should only ever run once
-            let fut = use_future((), |_| async move {});
+            let fut = use_future(|_| async move {});
 
             // runs when a is changed
             let fut = use_future((&cx.props.a,), |(a,)| async move {});
@@ -268,14 +268,14 @@ mod tests {
             // runs when a or b is changed
             let fut = use_future((&cx.props.a, &cx.props.b), |(a, b)| async move { 123 });
 
-            let a = use_future!(|| async move {
+            let a = use_future(|| async move {
                 // do the thing!
             });
 
             let b = &123;
             let c = &123;
 
-            let a = use_future!(|b, c| async move {
+            let a = use_future(|b, c| async move {
                 let a = b + c;
                 let blah = "asd";
             });

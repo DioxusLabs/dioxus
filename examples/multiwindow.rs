@@ -5,7 +5,7 @@ fn main() {
 }
 
 fn app() -> Element {
-    cx.render(rsx! {
+    rsx! {
         div {
             button {
                 onclick: move |_| {
@@ -15,11 +15,11 @@ fn app() -> Element {
                 "New Window"
             }
         }
-    })
+    }
 }
 
 fn popup() -> Element {
-    cx.render(rsx! {
+    rsx! {
         div { "This is a popup!" }
-    })
+    }
 }

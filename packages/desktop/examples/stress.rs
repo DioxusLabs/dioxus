@@ -1,8 +1,8 @@
 use dioxus::prelude::*;
 
 fn app() -> Element {
-    let state = use_state(|| 0);
-    use_future((), |_| {
+    let state = use_signal(|| 0);
+    use_future(|_| {
         to_owned![state];
         async move {
             loop {
@@ -12,7 +12,7 @@ fn app() -> Element {
         }
     });
 
-    cx.render(rsx! {
+    rsx! {
         button {
             onclick: move |_| {
                 state.set(0);
@@ -24,7 +24,7 @@ fn app() -> Element {
                 "hello desktop! {state}"
             }
         }
-    })
+    }
 }
 
 fn main() {

@@ -41,7 +41,7 @@ const RECT_STYLE: &str = r#"
     "#;
 
 fn app() -> Element {
-    let events = use_ref(std::collections::VecDeque::new);
+    let events = use_signal(std::collections::VecDeque::new);
 
     let log_event = move |event: Event| {
         let mut events = events.write();
@@ -52,7 +52,7 @@ fn app() -> Element {
         events.push_back(event);
     };
 
-    cx.render(rsx! (
+    rsx! {
         div { style: "{CONTAINER_STYLE}",
             div {
                 style: "{RECT_STYLE}",
@@ -82,5 +82,5 @@ fn app() -> Element {
                 }
             }
         }
-    ))
+    }
 }

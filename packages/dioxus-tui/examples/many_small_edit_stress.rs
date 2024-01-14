@@ -19,7 +19,7 @@ struct BoxProps {
 }
 #[allow(non_snake_case)]
 fn Box(cx: Scope<BoxProps>) -> Element {
-    let count = use_state(|| 0);
+    let count = use_signal(|| 0);
 
     let x = cx.props.x * 2;
     let y = cx.props.y * 2;
@@ -28,7 +28,7 @@ fn Box(cx: Scope<BoxProps>) -> Element {
     let count = count.get();
     let alpha = cx.props.alpha + (count % 100) as f32;
 
-    cx.render(rsx! {
+    rsx! {
         div {
             left: "{x}%",
             top: "{y}%",
@@ -38,7 +38,7 @@ fn Box(cx: Scope<BoxProps>) -> Element {
             align_items: "center",
             p{"{display_hue:03}"}
         }
-    })
+    }
 }
 
 #[derive(Props, PartialEq)]
@@ -48,8 +48,8 @@ struct GridProps {
 #[allow(non_snake_case)]
 fn Grid(cx: Scope<GridProps>) -> Element {
     let size = cx.props.size;
-    let count = use_state(|| 0);
-    let counts = use_ref(|| vec![0; size * size]);
+    let count = use_signal(|| 0);
+    let counts = use_signal(|| vec![0; size * size]);
 
     let ctx: TuiContext = cx.consume_context().unwrap();
     if *count.get() + 1 >= (size * size) {
@@ -98,7 +98,7 @@ fn Grid(cx: Scope<GridProps>) -> Element {
 }
 
 fn app(cx: Scope<usize>) -> Element {
-    cx.render(rsx! {
+    rsx! {
         div{
             width: "100%",
             height: "100%",
@@ -106,5 +106,5 @@ fn app(cx: Scope<usize>) -> Element {
                 size: *cx.props,
             }
         }
-    })
+    }
 }

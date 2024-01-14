@@ -13,22 +13,22 @@ fn app() -> Element {
     use_init_atom_root(cx);
     let name = use_read(&NAME);
 
-    cx.render(rsx! {
+    rsx! {
         div { "hello {name}!" }
         Child {}
         ChildWithRef {}
-    })
+    }
 }
 
 fn Child() -> Element {
     let set_name = use_set(&NAME);
 
-    cx.render(rsx! {
+    rsx! {
         button {
             onclick: move |_| set_name("dioxus".to_string()),
             "reset name"
         }
-    })
+    }
 }
 
 static NAMES: AtomRef<Vec<String>> = AtomRef(|_| vec!["world".to_string()]);
@@ -36,7 +36,7 @@ static NAMES: AtomRef<Vec<String>> = AtomRef(|_| vec!["world".to_string()]);
 fn ChildWithRef() -> Element {
     let names = use_atom_ref(&NAMES);
 
-    cx.render(rsx! {
+    rsx! {
         div {
             ul {
                 for name in names.read().iter() {
@@ -53,5 +53,5 @@ fn ChildWithRef() -> Element {
                 "Add name"
             }
         }
-    })
+    }
 }

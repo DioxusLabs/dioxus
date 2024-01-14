@@ -6,9 +6,9 @@ use warp::ws::Ws;
 use warp::Filter;
 
 fn app() -> Element {
-    let mut num = use_state(|| 0);
+    let mut num = use_signal(|| 0);
 
-    cx.render(rsx! {
+    rsx! {
         div {
             "hello warp! {num}"
             button {
@@ -16,7 +16,7 @@ fn app() -> Element {
                 "Increment"
             }
         }
-    })
+    }
 }
 
 #[tokio::main]

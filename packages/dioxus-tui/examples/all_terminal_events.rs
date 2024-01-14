@@ -27,7 +27,7 @@ enum Event {
 const MAX_EVENTS: usize = 8;
 
 fn app() -> Element {
-    let events = use_ref(Vec::new);
+    let events = use_signal(Vec::new);
 
     let events_lock = events.read();
     let first_index = events_lock.len().saturating_sub(MAX_EVENTS);
@@ -44,7 +44,7 @@ fn app() -> Element {
         events.write().push(event);
     };
 
-    cx.render(rsx! {
+    rsx! {
         div { width: "100%", height: "100%", flex_direction: "column",
             div {
                 width: "80%",
@@ -73,5 +73,5 @@ fn app() -> Element {
             }
             div { width: "80%", height: "50%", flex_direction: "column", {events_rendered} }
         }
-    })
+    }
 }

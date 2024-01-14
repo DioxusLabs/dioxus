@@ -12,7 +12,7 @@ fn app() -> Element {
 
     // Signals can be used in async functions without an explicit clone since they're 'static and Copy
     // Signals are backed by a runtime that is designed to deeply integrate with Dioxus apps
-    use_future!(|| async move {
+    use_future(|| async move {
         loop {
             if running.value() {
                 count += 1;
@@ -21,7 +21,7 @@ fn app() -> Element {
         }
     });
 
-    cx.render(rsx! {
+    rsx! {
         h1 { "High-Five counter: {count}" }
         button { onclick: move |_| count += 1, "Up high!" }
         button { onclick: move |_| count -= 1, "Down low!" }
@@ -45,5 +45,5 @@ fn app() -> Element {
         } else {
             "No saved values"
         }
-    })
+    }
 }

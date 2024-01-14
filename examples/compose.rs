@@ -8,7 +8,7 @@ fn main() {
 }
 
 fn app() -> Element {
-    let emails_sent = use_ref(Vec::new);
+    let emails_sent = use_signal(Vec::new);
 
     let tx = use_coroutine(|mut rx: UnboundedReceiver<String>| {
         to_owned![emails_sent];
@@ -19,7 +19,7 @@ fn app() -> Element {
         }
     });
 
-    cx.render(rsx! {
+    rsx! {
         div {
             h1 { "This is your email" }
 
@@ -40,7 +40,7 @@ fn app() -> Element {
                 }
             }
         }
-    })
+    }
 }
 
 struct ComposeProps {
@@ -48,9 +48,9 @@ struct ComposeProps {
 }
 
 fn compose(cx: Scope<ComposeProps>) -> Element {
-    let user_input = use_state(String::new);
+    let user_input = use_signal(String::new);
 
-    cx.render(rsx! {
+    rsx! {
         div {
             h1 { "Compose a new email" }
 
@@ -64,5 +64,5 @@ fn compose(cx: Scope<ComposeProps>) -> Element {
 
             input { oninput: move |e| user_input.set(e.value()), value: "{user_input}" }
         }
-    })
+    }
 }

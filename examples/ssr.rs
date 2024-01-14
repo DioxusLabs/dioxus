@@ -31,7 +31,7 @@ fn main() {
 }
 
 fn app() -> Element {
-    cx.render(rsx!(
+    rsx!(
         div {
             h1 { "Title" }
             p { "Body" }

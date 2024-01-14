@@ -7,7 +7,7 @@ fn main() {
 
 #[component]
 fn App() -> Element {
-    cx.render(rsx! (
+    rsx! (
         div {
             p {
                 a { href: "http://dioxuslabs.com/", "Default link - links outside of your app" }
@@ -24,7 +24,7 @@ fn App() -> Element {
         div {
             Router::<Route> {}
         }
-    ))
+    )
 }
 
 #[derive(Routable, Clone)]

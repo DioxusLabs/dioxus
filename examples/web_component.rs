@@ -5,9 +5,9 @@ fn main() {
 }
 
 fn app() -> Element {
-    cx.render(rsx! {
+    rsx! {
         web-component {
             "my-prop": "5%",
         }
-    })
+    }
 }

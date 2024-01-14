@@ -5,7 +5,7 @@ fn main() {
 }
 
 fn app() -> Element {
-    cx.render(rsx!(
+    rsx!(
         div {
             // Use Map directly to lazily pull elements
             {(0..10).map(|f| rsx! { "{f}" })},
@@ -30,5 +30,5 @@ fn app() -> Element {
                 "hello world!"
             }
         }
-    ))
+    )
 }

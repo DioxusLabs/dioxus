@@ -22,7 +22,7 @@ fn app() -> Element {
         std::thread::sleep(std::time::Duration::from_millis(2_000));
     });
 
-    cx.render(rsx! {
+    rsx! {
         div { "Hello, world!" }
-    })
+    }
 }

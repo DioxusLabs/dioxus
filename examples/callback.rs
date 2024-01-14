@@ -5,7 +5,7 @@ fn main() {
 }
 
 fn app() -> Element {
-    let login = use_callback!(move |_| async move {
+    let onclick = use_callback!(move |_| async move {
         let res = reqwest::get("https://dog.ceo/api/breeds/list/all")
             .await
             .unwrap()
@@ -16,7 +16,7 @@ fn app() -> Element {
         println!("{res:#?}, ");
     });
 
-    cx.render(rsx! {
-        button { onclick: login, "Click me!" }
-    })
+    rsx! {
+        button { onclick, "Click me!" }
+    }
 }

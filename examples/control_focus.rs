@@ -7,10 +7,10 @@ fn main() {
 }
 
 fn app() -> Element {
-    let elements: &UseRef<Vec<Rc<MountedData>>> = use_ref(Vec::new);
-    let running = use_state(|| true);
+    let elements = use_signal(Vec::<Rc<MountedData>>::new);
+    let running = use_signal(|| true);
 
-    use_future!(|(elements, running)| async move {
+    use_future(|| async move {
         let mut focused = 0;
         if *running.current() {
             loop {
@@ -25,7 +25,7 @@ fn app() -> Element {
         }
     });
 
-    cx.render(rsx!(
+    rsx! {
         div {
             h1 { "Input Roulette" }
             for i in 0..100 {
@@ -40,5 +40,5 @@ fn app() -> Element {
                 }
             }
         }
-    ))
+    }
 }

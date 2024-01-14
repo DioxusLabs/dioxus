@@ -17,7 +17,7 @@ use std::{
 /// that initialized the hook will be marked as "dirty".
 ///
 /// ```rust, no_run
-/// let val = use_ref(|| HashMap::<u32, String>::new());
+/// let val = use_signal(|| HashMap::<u32, String>::new());
 ///
 /// // using `write` will give us a `RefMut` to the inner value, which we can call methods on
 /// // This marks the component as "dirty"
@@ -68,7 +68,7 @@ use std::{
 ///
 /// ```rust, no_run
 /// let items = val.read().iter().map(|(k, v)| {
-///     cx.render(rsx!{ key: "{k}", "{v}" })
+///     rsx!{ key: "{k}", "{v}" })
 /// });
 ///
 /// // collect into a Vec
@@ -83,7 +83,7 @@ use std::{
 /// by simply calling `to_owned` or `clone`.
 ///
 /// ```rust, no_run
-/// let val = use_ref(|| HashMap::<u32, String>::new());
+/// let val = use_signal(|| HashMap::<u32, String>::new());
 ///
 /// cx.spawn({
 ///     let val = val.clone();
@@ -98,9 +98,9 @@ use std::{
 /// `to_owned!` macro to make it easier to write the above code.
 ///
 /// ```rust, no_run
-/// let val1 = use_ref(|| HashMap::<u32, String>::new());
-/// let val2 = use_ref(|| HashMap::<u32, String>::new());
-/// let val3 = use_ref(|| HashMap::<u32, String>::new());
+/// let val1 = use_signal(|| HashMap::<u32, String>::new());
+/// let val2 = use_signal(|| HashMap::<u32, String>::new());
+/// let val3 = use_signal(|| HashMap::<u32, String>::new());
 ///
 /// cx.spawn({
 ///     to_owned![val1, val2, val3];
@@ -111,7 +111,7 @@ use std::{
 /// })
 /// ```
 #[must_use]
-pub fn use_ref<T: 'static>(nitialize_refcell: impl FnOnce() -> T) -> &UseRef<T> {
+pub fn use_ref<T: 'static>(nitialize_refcell: impl FnOnce() -> T) -> Signal<T> {
     let hook = cx.use_hook(|| UseRef {
         update: cx.schedule_update(),
         value: Rc::new(RefCell::new(initialize_refcell())),
@@ -196,7 +196,7 @@ impl<T> UseRef<T> {
     /// This method just does it for you automatically.
     ///
     /// ```rust, no_run
-    /// let val = use_ref(|| HashMap::<u32, String>::new());
+    /// let val = use_signal(|| HashMap::<u32, String>::new());
     ///
     ///
     /// // use reborrowing
@@ -216,7 +216,7 @@ impl<T> UseRef<T> {
     /// This method just does it for you automatically.
     ///
     /// ```rust, no_run
-    /// let val = use_ref(|| HashMap::<u32, String>::new());
+    /// let val = use_signal(|| HashMap::<u32, String>::new());
     ///
     ///
     /// // use reborrowing

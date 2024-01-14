@@ -117,7 +117,7 @@ fn Route2(user_id: usize) -> Element {
 #[component]
 fn Route3(dynamic: String) -> Element {
     let current_route = use_route()?;
-    let current_route_str = use_ref(String::new);
+    let current_route_str = use_signal(String::new);
     let parsed = Route::from_str(&current_route_str.read());
 
     let site_map = Route::SITE_MAP

@@ -27,7 +27,7 @@ pub struct Client {
 type ClientContext = Vec<Client>;
 
 #[component]
-fn App() -> Element {
+fn App(props: ()) -> Element {
     use_shared_state_provider::<ClientContext>(Default::default);
 
     render! {
@@ -56,7 +56,7 @@ fn App() -> Element {
 fn ClientList() -> Element {
     let clients = use_shared_state::<ClientContext>().unwrap();
 
-    cx.render(rsx! {
+    rsx! {
         h2 { "List of Clients" }
 
         Link { to: Route::ClientAdd {}, class: "pure-button pure-button-primary", "Add Client" }
@@ -71,17 +71,17 @@ fn ClientList() -> Element {
                 p { "Description: {client.description}" }
             }
         }
-    })
+    }
 }
 
 #[component]
-fn ClientAdd() -> Element {
+fn ClientAdd(props: ()) -> Element {
     let clients = use_shared_state::<ClientContext>().unwrap();
-    let first_name = use_state(String::new);
-    let last_name = use_state(String::new);
-    let description = use_state(String::new);
+    let first_name = use_signal(String::new);
+    let last_name = use_signal(String::new);
+    let description = use_signal(String::new);
 
-    cx.render(rsx! {
+    rsx! {
         h2 { "Add new Client" }
 
         form {
@@ -138,14 +138,14 @@ fn ClientAdd() -> Element {
                 }
             }
         }
-    })
+    }
 }
 
 #[component]
-fn Settings() -> Element {
+fn Settings(props: ()) -> Element {
     let clients = use_shared_state::<ClientContext>().unwrap();
 
-    cx.render(rsx! {
+    rsx! {
         h2 { "Settings" }
 
         button {
@@ -158,5 +158,5 @@ fn Settings() -> Element {
         }
 
         Link { to: Route::ClientList {}, class: "pure-button", "Go back" }
-    })
+    }
 }

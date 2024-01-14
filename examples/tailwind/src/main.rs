@@ -13,7 +13,7 @@ fn main() {
 
 pub fn app() -> Element {
     let grey_background = true;
-    cx.render(rsx!(
+    rsx!(
         div {
             header {
                 class: "text-gray-400 body-font",
@@ -79,7 +79,7 @@ pub fn app() -> Element {
 }
 
 pub fn StacksIcon() -> Element {
-    cx.render(rsx!(
+    rsx!(
         svg {
             fill: "none",
             stroke: "currentColor",
@@ -94,7 +94,7 @@ pub fn StacksIcon() -> Element {
 }
 
 pub fn RightArrowIcon() -> Element {
-    cx.render(rsx!(
+    rsx!(
         svg {
             fill: "none",
             stroke: "currentColor",

@@ -21,9 +21,9 @@ fn main() {
 const _STYLE: &str = manganis::mg!(file("./examples/assets/fileexplorer.css"));
 
 fn app() -> Element {
-    let files = use_ref(Files::new);
+    let files = use_signal(Files::new);
 
-    cx.render(rsx! {
+    rsx! {
         div {
             link { href:"https://fonts.googleapis.com/icon?family=Material+Icons", rel:"stylesheet", }
             header {
@@ -60,7 +60,7 @@ fn app() -> Element {
                 }
             }
         }
-    })
+    }
 }
 
 struct Files {

@@ -21,7 +21,7 @@ fn app() -> Element {
 }
 
 #[component]
-fn Component(props: Props -> Element {
+fn Component(props: Props) -> Element {
     render! {
         audio { ..cx.props.attributes, "1: {cx.props.extra_data}\n2: {cx.props.extra_data2}" }
     }

@@ -39,7 +39,7 @@ use dioxus::prelude::*;
 
 // First, declare a root component
 fn app() -> Element {
-    cx.render(rsx!{
+    rsx!{
         div { "hello world" }
     })
 }

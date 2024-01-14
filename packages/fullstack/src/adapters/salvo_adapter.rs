@@ -25,9 +25,9 @@
 //! }
 //!
 //! fn app() -> Element {
-//!     let text = use_state(|| "...".to_string());
+//!     let text = use_signal(|| "...".to_string());
 //!
-//!     cx.render(rsx! {
+//!     rsx! {
 //!         button {
 //!             onclick: move |_| {
 //!                 to_owned![text];

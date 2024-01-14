@@ -6,10 +6,10 @@ fn main() {
 }
 
 fn app() -> Element {
-    let bg_green = use_state(|| false);
+    let bg_green = use_signal(|| false);
 
     let color = if *bg_green.get() { "green" } else { "red" };
-    cx.render(rsx! {
+    rsx! {
         div{
             width: "100%",
             background_color: "{color}",
@@ -89,5 +89,5 @@ fn app() -> Element {
                 height: "10%",
             }
         }
-    })
+    }
 }

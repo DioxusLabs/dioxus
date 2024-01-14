@@ -167,7 +167,7 @@ impl State for Border {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     fn app() -> Element {
-        let count = use_state(|| 0);
+        let count = use_signal(|| 0);
 
         use_future((count,), |(count,)| async move {
             loop {
@@ -176,7 +176,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         });
 
-        cx.render(rsx! {
+        rsx! {
             div{
                 color: "red",
                 "{count}",
@@ -186,7 +186,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     fn Comp() -> Element {
-        cx.render(rsx! {
+        rsx! {
             div{
                 border: "",
                 "hello world"
@@ -245,5 +245,5 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     println!("{indent}{id:?} {color:?} {size:?} {border:?} {node_type:?}");
                 });
             }
-        })
+        }
 }

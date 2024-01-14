@@ -35,7 +35,7 @@ pub fn use_selector<R: PartialEq>(f: impl FnMut() -> R + 'static) -> ReadOnlySig
 /// use dioxus_signals::*;
 ///
 /// fn App() -> Element {
-///     let mut local_state = use_state(|| 0);
+///     let mut local_state = use_signal(|| 0);
 ///     let double = use_selector_with_dependencies((local_state.get(),), move |(local_state,)| local_state * 2);
 ///     local_state.set(1);
 ///

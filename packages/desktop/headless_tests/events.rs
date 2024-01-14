@@ -52,7 +52,7 @@ fn mock_event(id: &'static str, value: &'static str) {
 #[allow(deprecated)]
 fn app() -> Element {
     let desktop_context: DesktopContext = cx.consume_context().unwrap();
-    let received_events = use_state(|| 0);
+    let received_events = use_signal(|| 0);
 
     // button
     mock_event(

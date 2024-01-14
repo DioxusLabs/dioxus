@@ -6,8 +6,8 @@ fn main() {
 }
 
 fn app() -> Element {
-    let count = use_ref(|| 0);
-    let started = use_state(|| false);
+    let count = use_signal(|| 0);
+    let started = use_signal(|| false);
 
     let start = move || {
         if !*started.get() {
@@ -18,7 +18,7 @@ fn app() -> Element {
         started.set(true); // this cannot be done inside condition or infinite loop
     };
 
-    cx.render(rsx! {
+    rsx! {
         button {
             onclick: move |_event| {
                 start();
@@ -30,5 +30,5 @@ fn app() -> Element {
                 "Start"
             }
         }
-    })
+    }
 }

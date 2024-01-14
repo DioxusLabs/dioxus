@@ -167,7 +167,7 @@ pub fn use_selector<I: 'static, O: Clone + PartialEq + 'static>
     init: impl FnMut(&I) -> O + 'static,
 ) -> O {
     let selector = cx.use_hook(|| tracked.compute(init));
-    selector.use_state(cx)
+    selector.use_signal(cx)
 }
 
 /// Selector state is state that is derived from tracked state
@@ -188,7 +188,7 @@ impl<T, I> PartialEq for Selector<T, I> {
 
 impl<T: Clone + PartialEq, I> Selector<T, I> {
     /// Read the Selector state and subscribe to updates
-    pub fn use_state(&self, ) -> T {
+    pub fn use_signal(&self, ) -> T {
         cx.use_hook(|| {
             let id = cx.scope_id();
             self.subscribers.borrow_mut().insert(id);

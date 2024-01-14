@@ -35,7 +35,7 @@ use std::{any::Any, cell::Cell, collections::BTreeSet, future::Future, rc::Rc};
 /// }
 ///
 /// fn app(cx: AppProps) -> Element {
-///     cx.render(rsx!(
+///     rsx!(
 ///         div {"hello, {cx.title}"}
 ///     ))
 /// }
@@ -56,7 +56,7 @@ use std::{any::Any, cell::Cell, collections::BTreeSet, future::Future, rc::Rc};
 ///
 /// #[component]
 /// fn app(cx: AppProps) -> Element {
-///     cx.render(rsx!(
+///     rsx!(
 ///         NavBar { routes: ROUTES }
 ///         Title { "{cx.title}" }
 ///         Footer {}
@@ -65,19 +65,19 @@ use std::{any::Any, cell::Cell, collections::BTreeSet, future::Future, rc::Rc};
 ///
 /// #[component]
 /// fn NavBar( routes: &'static str) -> Element {
-///     cx.render(rsx! {
+///     rsx! {
 ///         div { "Routes: {routes}" }
 ///     })
 /// }
 ///
 /// #[component]
 /// fn Footer() -> Element {
-///     cx.render(rsx! { div { "Footer" } })
+///     rsx! { div { "Footer" } })
 /// }
 ///
 /// #[component]
 /// fn Title<'a>( children: Element) -> Element {
-///     cx.render(rsx! {
+///     rsx! {
 ///         div { id: "title", {children} }
 ///     })
 /// }
@@ -88,7 +88,7 @@ use std::{any::Any, cell::Cell, collections::BTreeSet, future::Future, rc::Rc};
 ///
 /// ```rust
 /// # use dioxus::prelude::*;
-/// # fn app() -> Element { cx.render(rsx! { div {} }) }
+/// # fn app() -> Element { rsx! { div {} }) }
 ///
 /// let mut vdom = VirtualDom::new(app);
 /// let edits = vdom.rebuild();
@@ -128,7 +128,7 @@ use std::{any::Any, cell::Cell, collections::BTreeSet, future::Future, rc::Rc};
 /// ```rust, ignore
 /// #[component]
 /// fn app() -> Element {
-///     cx.render(rsx! {
+///     rsx! {
 ///         div { "Hello World" }
 ///     })
 /// }
@@ -219,7 +219,7 @@ impl VirtualDom {
     /// # Example
     /// ```rust, ignore
     /// fn Example() -> Element  {
-    ///     cx.render(rsx!( div { "hello world" } ))
+    ///     rsx!( div { "hello world" } ))
     /// }
     ///
     /// let dom = VirtualDom::new(Example);
@@ -248,7 +248,7 @@ impl VirtualDom {
     /// }
     ///
     /// fn Example(cx: SomeProps) -> Element  {
-    ///     cx.render(rsx!{ div{ "hello {cx.name}" } })
+    ///     rsx!{ div{ "hello {cx.name}" } })
     /// }
     ///
     /// let dom = VirtualDom::new(Example);
@@ -546,7 +546,7 @@ impl VirtualDom {
     ///
     /// # Example
     /// ```rust, ignore
-    /// static app: Component = |cx|  cx.render(rsx!{ "hello world" });
+    /// static app: Component = |cx|  rsx!{ "hello world" });
     ///
     /// let mut dom = VirtualDom::new();
     /// let edits = dom.rebuild();

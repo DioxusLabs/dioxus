@@ -8,7 +8,7 @@ fn main() {
 }
 
 fn app() -> Element {
-    let counters = use_state(|| vec![0, 0, 0]);
+    let counters = use_signal(|| vec![0, 0, 0]);
     let sum: usize = counters.iter().copied().sum();
 
     render! {

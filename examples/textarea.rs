@@ -7,11 +7,11 @@ fn main() {
 }
 
 fn app() -> Element {
-    let model = use_state(|| String::from("asd"));
+    let model = use_signal(|| String::from("asd"));
 
     println!("{model}");
 
-    cx.render(rsx! {
+    rsx! {
         textarea {
             class: "border",
             rows: "10",
@@ -19,5 +19,5 @@ fn app() -> Element {
             value: "{model}",
             oninput: move |e| model.set(e.value().clone()),
         }
-    })
+    }
 }

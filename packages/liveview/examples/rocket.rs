@@ -8,14 +8,14 @@ use rocket::{Config, Rocket, State};
 use rocket_ws::{Channel, WebSocket};
 
 fn app() -> Element {
-    let mut num = use_state(|| 0);
+    let mut num = use_signal(|| 0);
 
-    cx.render(rsx! {
+    rsx! {
         div {
             "hello Rocket! {num}"
             button { onclick: move |_| num += 1, "Increment" }
         }
-    })
+    }
 }
 
 fn index_page_with_glue(glue: &str) -> RawHtml<String> {
@@ -57,7 +57,7 @@ fn ws(ws: WebSocket, pool: &State<LiveViewPool>) -> Channel<'static> {
                 .await;
             Ok(())
         })
-    })
+    }
 }
 
 #[tokio::main]

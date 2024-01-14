@@ -3,12 +3,12 @@
 use dioxus::prelude::*;
 
 fn app() -> Element {
-    let mut num = use_state(|| 0);
-    let eval_result = use_state(String::new);
+    let mut num = use_signal(|| 0);
+    let eval_result = use_signal(String::new);
 
     let eval_provider = dioxus_html::prelude::use_eval(cx);
 
-    cx.render(rsx! {
+    rsx! {
         div {
             "hello axum! {num}"
             button {

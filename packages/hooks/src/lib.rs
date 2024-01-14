@@ -18,7 +18,7 @@
 /// # }
 /// # fn Component(cx: Scope<Props>) -> Element {
 ///
-/// let (data) = use_ref(|| {});
+/// let (data) = use_signal(|| {});
 ///
 /// let handle_thing = move |_| {
 ///     to_owned![data, cx.props.prop];

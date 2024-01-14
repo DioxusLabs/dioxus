@@ -19,9 +19,9 @@ use std::{
 ///
 /// ```ignore
 /// const Example: Component = |cx| {
-///     let count = use_state(|| 0);
+///     let count = use_signal(|| 0);
 ///
-///     cx.render(rsx! {
+///     rsx! {
 ///         div {
 ///             h1 { "Count: {count}" }
 ///             button { onclick: move |_| *count.modify() += 1, "Increment" }
@@ -92,7 +92,7 @@ impl<T: 'static> UseState<T> {
     ///
     /// ```rust, ignore
     /// fn component() -> Element {
-    ///     let count = use_state(|| 0);
+    ///     let count = use_signal(|| 0);
     ///     cx.spawn({
     ///         let set_count = count.to_owned();
     ///         async move {
@@ -119,7 +119,7 @@ impl<T: 'static> UseState<T> {
     ///
     /// ```rust, ignore
     /// fn component() -> Element {
-    ///     let value = use_state(|| 0);
+    ///     let value = use_signal(|| 0);
     ///
     ///     rsx!{
     ///         Component {
@@ -144,7 +144,7 @@ impl<T: 'static> UseState<T> {
     /// # use dioxus_core::prelude::*;
     /// # use dioxus_hooks::*;
     /// fn component() -> Element {
-    ///     let value = use_state(|| 0);
+    ///     let value = use_signal(|| 0);
     ///
     ///     // to increment the value
     ///     value.modify(|v| v + 1);
@@ -185,7 +185,7 @@ impl<T: 'static> UseState<T> {
     /// # use dioxus_core::prelude::*;
     /// # use dioxus_hooks::*;
     /// fn component() -> Element {
-    ///     let value = use_state(|| 0);
+    ///     let value = use_signal(|| 0);
     ///
     ///     let as_rc = value.get();
     ///     assert_eq!(as_rc.as_ref(), &0);
@@ -207,7 +207,7 @@ impl<T: 'static> UseState<T> {
     ///
     /// ```rust, ignore
     /// fn component() -> Element {
-    ///     let count = use_state(|| 0);
+    ///     let count = use_signal(|| 0);
     ///     cx.spawn({
     ///         let count = count.to_owned();
     ///         async move {
@@ -237,7 +237,7 @@ impl<T: Clone> UseState<T> {
     /// # Examples
     ///
     /// ```rust, ignore
-    /// let val = use_state(|| 0);
+    /// let val = use_signal(|| 0);
     ///
     /// val.with_mut(|v| *v = 1);
     /// ```
@@ -269,7 +269,7 @@ impl<T: Clone> UseState<T> {
     /// # Examples
     ///
     /// ```rust, ignore
-    /// let val = use_state(|| 0);
+    /// let val = use_signal(|| 0);
     ///
     /// *val.make_mut() += 1;
     /// ```
@@ -493,7 +493,7 @@ impl<T: Div<Output = T> + Copy> std::ops::DivAssign<T> for UseState<T> {
 fn api_makes_sense() {
     #[allow(unused)]
     fn app() -> Element {
-        let val = use_state(|| 0);
+        let val = use_signal(|| 0);
 
         val.set(0);
         val.modify(|v| v + 1);

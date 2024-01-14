@@ -16,7 +16,7 @@ pub fn use_on_unmount<D: FnOnce() + 'static>(cx: &dioxus_core::ScopeState, destr
 /// use dioxus::prelude::*;
 ///
 /// fn app() -> Element {
-///     let state = use_state(|| true);
+///     let state = use_signal(|| true);
 ///     render! {
 ///         for _ in 0..100 {
 ///             h1 {
@@ -38,7 +38,7 @@ pub fn use_on_unmount<D: FnOnce() + 'static>(cx: &dioxus_core::ScopeState, destr
 /// }
 ///
 /// fn child_component() -> Element {
-///     let original_scroll_position = use_state(|| 0.0);
+///     let original_scroll_position = use_signal(|| 0.0);
 ///     use_effect((), move |_| {
 ///         to_owned![original_scroll_position];
 ///         async move {

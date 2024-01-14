@@ -8,7 +8,7 @@ wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 #[test]
 fn makes_tree() {
     fn app() -> Element {
-        cx.render(rsx! {
+        rsx! {
             div {
                 div {
                     h1 {}
@@ -29,7 +29,7 @@ fn makes_tree() {
 #[wasm_bindgen_test]
 fn rehydrates() {
     fn app() -> Element {
-        cx.render(rsx! {
+        rsx! {
             div {
                 div {
                     h1 { "h1" }

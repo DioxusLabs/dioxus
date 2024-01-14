@@ -19,7 +19,7 @@ fn main() {
 }
 
 fn app() -> Element {
-    let val = use_state(|| String::from("0"));
+    let val = use_signal(|| String::from("0"));
 
     let input_digit = move |num: u8| {
         if val.get() == "0" {
@@ -57,7 +57,7 @@ fn app() -> Element {
         _ => {}
     };
 
-    cx.render(rsx!(
+    rsx! {
         style { {include_str!("./assets/calculator.css")} }
         div { id: "wrapper",
             div { class: "app",
@@ -128,8 +128,7 @@ fn app() -> Element {
                 }
             }
         }
-
-    ))
+    }
 }
 
 fn calc_val(val: &str) -> f64 {

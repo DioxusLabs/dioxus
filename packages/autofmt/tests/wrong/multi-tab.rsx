@@ -1,3 +1,3 @@
 fn app() -> Element {
-	cx.render(rsx! { div { "hello world" } })
+	rsx! { div { "hello world" } })
 }

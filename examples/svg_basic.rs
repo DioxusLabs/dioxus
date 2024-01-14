@@ -1,7 +1,7 @@
 use dioxus::prelude::*;
 
 fn app() -> Element {
-    cx.render(rsx!( svg {
+    rsx!( svg {
         width: "200",
         height: "250",
         xmlns: "http://www.w3.org/2000/svg",
@@ -73,7 +73,7 @@ fn app() -> Element {
             "stroke-linecap": "square",
             "stroke-width": "square",
         }
-    }))
+    }
 }
 
 fn main() {

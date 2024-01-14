@@ -22,11 +22,11 @@ fn app(cx: Scope<AppProps>) -> Element {
     let state =
         use_server_future((), |()| async move { get_server_data().await.unwrap() })?.value();
 
-    let mut count = use_state(|| 0);
-    let text = use_state(|| "...".to_string());
+    let mut count = use_signal(|| 0);
+    let text = use_signal(|| "...".to_string());
     let eval = use_eval(cx);
 
-    cx.render(rsx! {
+    rsx! {
         div { "Server state: {state}" }
         h1 { "High-Five counter: {count}" }
         button { onclick: move |_| count += 1, "Up high!" }
@@ -45,7 +45,7 @@ fn app(cx: Scope<AppProps>) -> Element {
             "Run a server function!"
         }
         "Server said: {text}"
-    })
+    }
 }
 
 #[server]

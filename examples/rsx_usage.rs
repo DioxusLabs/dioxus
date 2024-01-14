@@ -54,7 +54,7 @@ fn App() -> Element {
     let formatting_tuple = ("a", "b");
     let lazy_fmt = format_args!("lazily formatted text");
     let asd = 123;
-    cx.render(rsx! {
+    rsx! {
         div {
             // Elements
             div {}
@@ -216,7 +216,7 @@ fn App() -> Element {
             // Or we can shell out to a helper function
             {format_dollars(10, 50)}
         }
-    })
+    }
 }
 
 fn format_dollars(dollars: u32, cents: u32) -> String {
@@ -224,9 +224,9 @@ fn format_dollars(dollars: u32, cents: u32) -> String {
 }
 
 fn helper<'a>(cx: &'a ScopeState, text: &'a str) -> Element {
-    cx.render(rsx! {
+    rsx! {
         p { "{text}" }
-    })
+    }
 }
 
 // no_case_check disables PascalCase checking if you *really* want a snake_case component.
@@ -234,9 +234,9 @@ fn helper<'a>(cx: &'a ScopeState, text: &'a str) -> Element {
 // something like Clippy.
 #[component(no_case_check)]
 fn lowercase_helper() -> Element {
-    cx.render(rsx! {
+    rsx! {
         "asd"
-    })
+    }
 }
 
 mod baller {
@@ -246,7 +246,7 @@ mod baller {
 
     #[component]
     /// This component totally balls
-    pub fn Baller(_cx: Scope<BallerProps>) -> Element {
+    pub fn Baller(props: BallerProps) -> Element {
         todo!()
     }
 
@@ -255,7 +255,7 @@ mod baller {
     // something like Clippy.
     #[component(no_case_check)]
     pub fn lowercase_component() -> Element {
-        cx.render(rsx! { "look ma, no uppercase" })
+        rsx! { "look ma, no uppercase" }
     }
 }
 
@@ -268,10 +268,10 @@ pub struct TallerProps<'a> {
 
 /// Documention for this component is visible within the rsx macro
 #[component]
-pub fn Taller(props: TallerProps -> Element {
-    cx.render(rsx! {
+pub fn Taller(props: TallerProps) -> Element {
+    rsx! {
         {&cx.props.children}
-    })
+    }
 }
 
 #[derive(Props, PartialEq, Eq)]
@@ -291,9 +291,9 @@ where
 
 #[component]
 fn WithInline<'a>(cx: Scope<'a>, text: &'a str) -> Element {
-    cx.render(rsx! {
+    rsx! {
         p { "{text}" }
-    })
+    }
 }
 
 #[component]
@@ -301,7 +301,7 @@ fn Label<T>(text: T) -> Element
 where
     T: Display,
 {
-    cx.render(rsx! {
+    rsx! {
         p { "{text}" }
-    })
+    }
 }

@@ -27,7 +27,7 @@ use crate::UseFutureDep;
 /// # use dioxus::prelude::*;
 /// #[component]
 /// fn Profile(id: usize) -> Element {
-///     let name = use_state(|| None);
+///     let name = use_signal(|| None);
 ///
 ///     // Only fetch the user data when the id changes.
 ///     use_effect((id,), |(id,)| {

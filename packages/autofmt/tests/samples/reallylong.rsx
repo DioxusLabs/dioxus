@@ -1,5 +1,5 @@
 pub static Icon3: Component<()> = |cx| {
-    cx.render(rsx! {
+    rsx! {
         svg {
             class: "w-6 h-6",
             stroke_linecap: "round",

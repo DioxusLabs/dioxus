@@ -13,14 +13,14 @@ fn main() {
 }
 
 fn example() -> Element {
-    let items = use_state(|| {
+    let items = use_signal(|| {
         vec![Thing {
             a: "asd".to_string(),
             b: 10,
         }]
     });
 
-    let things = use_ref(|| {
+    let things = use_signal(|| {
         vec![Thing {
             a: "asd".to_string(),
             b: 10,
@@ -28,10 +28,10 @@ fn example() -> Element {
     });
     let things_list = things.read();
 
-    let mything = use_ref(|| Some(String::from("asd")));
+    let mything = use_signal(|| Some(String::from("asd")));
     let mything_read = mything.read();
 
-    cx.render(rsx!(
+    rsx!(
         div {
             div { id: "asd",
                 "your neighborhood spiderman"

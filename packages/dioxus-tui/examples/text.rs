@@ -5,9 +5,9 @@ fn main() {
 }
 
 fn app() -> Element {
-    let alpha = use_state(|| 100);
+    let alpha = use_signal(|| 100);
 
-    cx.render(rsx! {
+    rsx! {
         div {
             width: "100%",
             height: "100%",
@@ -109,5 +109,5 @@ fn app() -> Element {
                 }
             }
         }
-    })
+    }
 }

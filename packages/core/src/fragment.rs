@@ -63,7 +63,7 @@ impl<const A: bool> FragmentBuilder<A> {
 ///
 /// ```rust, ignore
 /// fn app() -> Element {
-///     cx.render(rsx!{
+///     rsx!{
 ///         CustomCard {
 ///             h1 {}
 ///             p {}
@@ -77,7 +77,7 @@ impl<const A: bool> FragmentBuilder<A> {
 /// }
 ///
 /// fn CustomCard(cx: CardProps) -> Element {
-///     cx.render(rsx!{
+///     rsx!{
 ///         div {
 ///             h1 {"Title card"}
 ///             {cx.children}

@@ -18,11 +18,11 @@ fn app() -> Element {
     // window.set_fullscreen(true);
     // window.set_resizable(false);
 
-    let fullscreen = use_state(|| false);
-    let always_on_top = use_state(|| false);
-    let decorations = use_state(|| false);
+    let fullscreen = use_signal(|| false);
+    let always_on_top = use_signal(|| false);
+    let decorations = use_signal(|| false);
 
-    cx.render(rsx!(
+    rsx!(
         link { href:"https://unpkg.com/tailwindcss@^2/dist/tailwind.min.css", rel:"stylesheet" }
         header {
             class: "text-gray-400 bg-gray-900 body-font",
@@ -95,5 +95,5 @@ fn app() -> Element {
                 }
             }
         }
-    ))
+    )
 }

@@ -5,7 +5,7 @@ fn main() {
 }
 
 fn app() -> Element {
-    let future = use_future((), |_| async move {
+    let future = use_future(|_| async move {
         let eval = eval(
             r#"
                 dioxus.send("Hi from JS!");
@@ -23,11 +23,11 @@ fn app() -> Element {
     });
 
     match future.value() {
-        Some(v) => cx.render(rsx!(
+        Some(v) => rsx!(
             p { "{v}" }
-        )),
-        _ => cx.render(rsx!(
+        ),
+        _ => rsx!(
             p { "hello" }
-        )),
+        ),
     }
 }

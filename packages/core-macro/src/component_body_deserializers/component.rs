@@ -27,6 +27,11 @@ fn get_out_comp_fn(orig_comp_fn: &ItemFn) -> ItemFn {
         ..orig_comp_fn.clone()
     };
 
+    let props_ident = match orig_comp_fn.sig.inputs.is_empty() {
+        true => quote! {},
+        false => quote! { __props },
+    };
+
     ItemFn {
         block: parse_quote! {
             {
@@ -34,7 +39,7 @@ fn get_out_comp_fn(orig_comp_fn: &ItemFn) -> ItemFn {
                 #[allow(clippy::inline_always)]
                 #[inline(always)]
                 #inner_comp_fn
-                #inner_comp_ident(__props)
+                #inner_comp_ident(#props_ident)
             }
         },
         ..orig_comp_fn.clone()

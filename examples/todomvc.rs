@@ -22,8 +22,8 @@ pub struct TodoItem {
 }
 
 pub fn app(cx: Scope<()>) -> Element {
-    let todos = use_state(im_rc::HashMap::<u32, TodoItem>::default);
-    let filter = use_state(|| FilterState::All);
+    let todos = use_signal(im_rc::HashMap::<u32, TodoItem>::default);
+    let filter = use_signal(|| FilterState::All);
 
     // Filter the todos based on the filter state
     let mut filtered_todos = todos
@@ -45,7 +45,7 @@ pub fn app(cx: Scope<()>) -> Element {
 
     let show_clear_completed = todos.values().any(|todo| todo.checked);
 
-    cx.render(rsx! {
+    rsx! {
         section { class: "todoapp",
             style { {include_str!("./assets/todomvc.css")} }
             TodoHeader { todos: todos }
@@ -86,7 +86,7 @@ pub fn app(cx: Scope<()>) -> Element {
             }
         }
         PageFooter {}
-    })
+    }
 }
 
 #[derive(Props)]
@@ -94,11 +94,11 @@ pub struct TodoHeaderProps<'a> {
     todos: &'a UseState<im_rc::HashMap<u32, TodoItem>>,
 }
 
-pub fn TodoHeader(props: TodoHeaderProps -> Element {
-    let draft = use_state(|| "".to_string());
-    let todo_id = use_state(|| 0);
+pub fn TodoHeader(props: TodoHeaderProps) -> Element {
+    let draft = use_signal(|| "".to_string());
+    let todo_id = use_signal(|| 0);
 
-    cx.render(rsx! {
+    rsx! {
         header { class: "header",
             h1 { "todos" }
             input {
@@ -128,7 +128,7 @@ pub fn TodoHeader(props: TodoHeaderProps -> Element {
                 }
             }
         }
-    })
+    }
 }
 
 #[derive(Props)]
@@ -137,15 +137,15 @@ pub struct TodoEntryProps<'a> {
     id: u32,
 }
 
-pub fn TodoEntry(props: TodoEntryProps -> Element {
-    let is_editing = use_state(|| false);
+pub fn TodoEntry(props: TodoEntryProps) -> Element {
+    let is_editing = use_signal(|| false);
 
     let todos = cx.props.todos.get();
     let todo = &todos[&cx.props.id];
     let completed = if todo.checked { "completed" } else { "" };
     let editing = if **is_editing { "editing" } else { "" };
 
-    cx.render(rsx!{
+    rsx! {
         li { class: "{completed} {editing}",
             div { class: "view",
                 input {
@@ -187,7 +187,7 @@ pub fn TodoEntry(props: TodoEntryProps -> Element {
                 }
             }
         }
-    })
+    }
 }
 
 #[derive(Props)]
@@ -199,7 +199,7 @@ pub struct ListFooterProps<'a> {
     filter: &'a UseState<FilterState>,
 }
 
-pub fn ListFooter(props: ListFooterProps -> Element {
+pub fn ListFooter(props: ListFooterProps) -> Element {
     let active_todo_count = cx.props.active_todo_count;
     let active_todo_text = cx.props.active_todo_text;
 
@@ -211,7 +211,7 @@ pub fn ListFooter(props: ListFooterProps -> Element {
         }
     };
 
-    cx.render(rsx! {
+    rsx! {
         footer { class: "footer",
             span { class: "todo-count",
                 strong { "{active_todo_count} " }
@@ -242,11 +242,11 @@ pub fn ListFooter(props: ListFooterProps -> Element {
                 }
             }
         }
-    })
+    }
 }
 
 pub fn PageFooter() -> Element {
-    cx.render(rsx! {
+    rsx! {
         footer { class: "info",
             p { "Double-click to edit a todo" }
             p {
@@ -258,5 +258,5 @@ pub fn PageFooter() -> Element {
                 a { href: "http://todomvc.com", "TodoMVC" }
             }
         }
-    })
+    }
 }

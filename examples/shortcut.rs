@@ -6,12 +6,12 @@ fn main() {
 }
 
 fn app() -> Element {
-    let toggled = use_state(|| false);
+    let toggled = use_signal(|| false);
 
     use_global_shortcut("ctrl+s", {
         to_owned![toggled];
         move || toggled.modify(|t| !*t)
     });
 
-    cx.render(rsx!("toggle: {toggled.get()}"))
+    rsx!("toggle: {toggled.get()}")
 }

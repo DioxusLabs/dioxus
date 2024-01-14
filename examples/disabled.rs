@@ -5,9 +5,9 @@ fn main() {
 }
 
 fn app() -> Element {
-    let disabled = use_state(|| false);
+    let disabled = use_signal(|| false);
 
-    cx.render(rsx! {
+    rsx! {
         div {
             button {
                 onclick: move |_| disabled.set(!disabled),
@@ -21,5 +21,5 @@ fn app() -> Element {
                 "lower button"
             }
         }
-    })
+    }
 }

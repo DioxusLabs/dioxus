@@ -56,9 +56,9 @@ Dioxus 是一个可移植的、高性能的、符合人体工程学的框架，�
 
 ```rust
 fn app() -> Element {
-    let mut count = use_state(|| 0);
+    let mut count = use_signal(|| 0);
 
-    cx.render(rsx! {
+    rsx! {
         h1 { "High-Five counter: {count}" }
         button { onclick: move |_| count += 1, "Up high!" }
         button { onclick: move |_| count -= 1, "Down low!" }

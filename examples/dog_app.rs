@@ -11,10 +11,10 @@ struct ListBreeds {
 }
 
 #[component]
-fn AppRoot(cx: Scope<'_>) -> Element {
-    let breed = use_state(|| "deerhound".to_string());
+fn AppRoot(_: ()) -> Element {
+    let breed = use_signal(|| "deerhound".to_string());
 
-    let breeds = use_future!(|| async move {
+    let breeds = use_future(|| async move {
         reqwest::get("https://dog.ceo/api/breeds/list/all")
             .await
             .unwrap()
@@ -23,7 +23,7 @@ fn AppRoot(cx: Scope<'_>) -> Element {
     });
 
     match breeds.value()? {
-        Ok(breed_list) => cx.render(rsx! {
+        Ok(breed_list) => rsx! {
             div { height: "500px",
                 h1 { "Select a dog breed!" }
                 div { display: "flex",
@@ -40,8 +40,8 @@ fn AppRoot(cx: Scope<'_>) -> Element {
                     div { flex: "50%", BreedPic { breed: breed.to_string() } }
                 }
             }
-        }),
-        Err(_e) => cx.render(rsx! { div { "Error fetching breeds" } }),
+        },
+        Err(_e) => rsx! { div { "Error fetching breeds" } },
     }
 }
 
@@ -52,7 +52,7 @@ struct DogApi {
 
 #[component]
 fn BreedPic(breed: String) -> Element {
-    let fut = use_future!(|breed| async move {
+    let fut = use_future(|breed| async move {
         reqwest::get(format!("https://dog.ceo/api/breed/{breed}/images/random"))
             .await
             .unwrap()

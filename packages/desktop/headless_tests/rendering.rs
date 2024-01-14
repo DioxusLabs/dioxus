@@ -29,7 +29,7 @@ fn main() {
 fn use_inner_html(d: &'static str) -> Option<String> {
     let eval_provider = use_eval(cx);
 
-    let value: &UseRef<Option<String>> = use_ref(|| None);
+    let value: Signal<Option<String>> = use_signal(|| None);
     use_effect((), |_| {
         to_owned![value, eval_provider];
         async move {

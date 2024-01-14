@@ -26,11 +26,11 @@ fn main() {
 }
 
 fn app() -> Element {
-    let div_element: &UseRef<Option<Rc<MountedData>>> = use_ref(|| None);
+    let div_element: Signal<Option<Rc<MountedData>>> = use_signal(|| None);
 
-    let dimentions = use_ref(Rect::zero);
+    let dimentions = use_signal(Rect::zero);
 
-    cx.render(rsx!(
+    rsx!(
         div {
             width: "50%",
             height: "50%",
@@ -56,5 +56,5 @@ fn app() -> Element {
             },
             "Read dimentions"
         }
-    ))
+    )
 }

@@ -38,9 +38,9 @@ fn main() {
 const STYLE: &str = include_str!("./assets/calculator.css");
 
 fn app() -> Element {
-    let state = use_ref(Calculator::new);
+    let state = use_signal(Calculator::new);
 
-    cx.render(rsx! {
+    rsx! {
         style { {STYLE} }
         div { id: "wrapper",
             div { class: "app",
@@ -117,24 +117,25 @@ fn app() -> Element {
                 }
             }
         }
-    })
+    }
 }
 
 #[derive(Props)]
 struct CalculatorKeyProps {
+    #[props(into)]
     name: String,
     onclick: EventHandler<MouseEvent>,
     children: Element,
 }
 
 fn CalculatorKey(props: CalculatorKeyProps) -> Element {
-    cx.render(rsx! {
+    rsx! {
         button {
             class: "calculator-key {cx.props.name}",
             onclick: move |e| cx.props.onclick.call(e),
             {&cx.props.children}
         }
-    })
+    }
 }
 
 struct Calculator {

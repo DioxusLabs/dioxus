@@ -13,15 +13,15 @@ struct ButtonProps {
 
 #[allow(non_snake_case)]
 fn Button(cx: Scope<ButtonProps>) -> Element {
-    let toggle = use_state(|| false);
-    let hovered = use_state(|| false);
+    let toggle = use_signal(|| false);
+    let hovered = use_signal(|| false);
 
     let hue = cx.props.color_offset % 255;
     let saturation = if *toggle.get() { 50 } else { 25 } + if *hovered.get() { 50 } else { 25 };
     let brightness = saturation / 2;
     let color = format!("hsl({hue}, {saturation}, {brightness})");
 
-    cx.render(rsx! {
+    rsx! {
         div{
             width: "100%",
             height: "100%",
@@ -47,11 +47,11 @@ fn Button(cx: Scope<ButtonProps>) -> Element {
             flex_direction: "column",
             p{ "tabindex: {cx.props.layer}" }
         }
-    })
+    }
 }
 
 fn app() -> Element {
-    cx.render(rsx! {
+    rsx! {
         div {
             display: "flex",
             flex_direction: "column",
@@ -80,5 +80,5 @@ fn app() -> Element {
                 }
             }
         }
-    })
+    }
 }

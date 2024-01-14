@@ -295,7 +295,7 @@ mod tests {
     fn test_hook_correctly_used_inside_component() {
         let contents = indoc! {r#"
             fn App() -> Element {
-                let count = use_state(|| 0);
+                let count = use_signal(|| 0);
                 rsx! {
                     p { "Hello World: {count}" }
                 }
@@ -311,7 +311,7 @@ mod tests {
     fn test_hook_correctly_used_inside_hook_fn() {
         let contents = indoc! {r#"
             fn use_thing() -> UseState<i32> {
-                use_state(|| 0)
+                use_signal(|| 0)
             }
         "#};
 
@@ -325,7 +325,7 @@ mod tests {
         let contents = indoc! {r#"
             fn App() -> Element {
                 let use_thing = || {
-                    use_state(|| 0)
+                    use_signal(|| 0)
                 };
                 let count = use_thing();
                 rsx! {
@@ -344,7 +344,7 @@ mod tests {
         let contents = indoc! {r#"
             fn App() -> Element {
                 if you_are_happy && you_know_it {
-                    let something = use_state(|| "hands");
+                    let something = use_signal(|| "hands");
                     println!("clap your {something}")
                 }
             }
@@ -357,7 +357,7 @@ mod tests {
             vec![Issue::HookInsideConditional(
                 HookInfo::new(
                     Span::new_from_str(
-                        r#"use_state(|| "hands")"#,
+                        r#"use_signal(|| "hands")"#,
                         LineColumn { line: 3, column: 24 },
                     ),
                     Span::new_from_str(
@@ -368,7 +368,7 @@ mod tests {
                 ),
                 ConditionalInfo::If(IfInfo::new(
                     Span::new_from_str(
-                        "if you_are_happy && you_know_it {\n        let something = use_state(|| \"hands\");\n        println!(\"clap your {something}\")\n    }",
+                        "if you_are_happy && you_know_it {\n        let something = use_signal(|| \"hands\");\n        println!(\"clap your {something}\")\n    }",
                         LineColumn { line: 2, column: 4 },
                     ),
                     Span::new_from_str(
@@ -386,7 +386,7 @@ mod tests {
             fn App() -> Element {
                 match you_are_happy && you_know_it {
                     true => {
-                        let something = use_state(|| "hands");
+                        let something = use_signal(|| "hands");
                         println!("clap your {something}")
                     }
                     false => {}
@@ -400,13 +400,13 @@ mod tests {
             report.issues,
             vec![Issue::HookInsideConditional(
                 HookInfo::new(
-                    Span::new_from_str(r#"use_state(|| "hands")"#, LineColumn { line: 4, column: 28 }),
+                    Span::new_from_str(r#"use_signal(|| "hands")"#, LineColumn { line: 4, column: 28 }),
                     Span::new_from_str(r#"use_state"#, LineColumn { line: 4, column: 28 }),
                     "use_state".to_string()
                 ),
                 ConditionalInfo::Match(MatchInfo::new(
                     Span::new_from_str(
-                        "match you_are_happy && you_know_it {\n        true => {\n            let something = use_state(|| \"hands\");\n            println!(\"clap your {something}\")\n        }\n        false => {}\n    }",
+                        "match you_are_happy && you_know_it {\n        true => {\n            let something = use_signal(|| \"hands\");\n            println!(\"clap your {something}\")\n        }\n        false => {}\n    }",
                         LineColumn { line: 2, column: 4 },
                     ),
                     Span::new_from_str("match you_are_happy && you_know_it", LineColumn { line: 2, column: 4 })
@@ -420,7 +420,7 @@ mod tests {
         let contents = indoc! {r#"
             fn App() -> Element {
                 for _name in &names {
-                    let is_selected = use_state(|| false);
+                    let is_selected = use_signal(|| false);
                     println!("selected: {is_selected}");
                 }
             }
@@ -433,7 +433,7 @@ mod tests {
             vec![Issue::HookInsideLoop(
                 HookInfo::new(
                     Span::new_from_str(
-                        "use_state(|| false)",
+                        "use_signal(|| false)",
                         LineColumn { line: 3, column: 26 },
                     ),
                     Span::new_from_str(
@@ -444,7 +444,7 @@ mod tests {
                 ),
                 AnyLoopInfo::For(ForInfo::new(
                     Span::new_from_str(
-                        "for _name in &names {\n        let is_selected = use_state(|| false);\n        println!(\"selected: {is_selected}\");\n    }",
+                        "for _name in &names {\n        let is_selected = use_signal(|| false);\n        println!(\"selected: {is_selected}\");\n    }",
                         LineColumn { line: 2, column: 4 },
                     ),
                     Span::new_from_str(
@@ -461,7 +461,7 @@ mod tests {
         let contents = indoc! {r#"
             fn App() -> Element {
                 while true {
-                    let something = use_state(|| "hands");
+                    let something = use_signal(|| "hands");
                     println!("clap your {something}")
                 }
             }
@@ -474,7 +474,7 @@ mod tests {
             vec![Issue::HookInsideLoop(
                 HookInfo::new(
                     Span::new_from_str(
-                        r#"use_state(|| "hands")"#,
+                        r#"use_signal(|| "hands")"#,
                         LineColumn { line: 3, column: 24 },
                     ),
                     Span::new_from_str(
@@ -485,7 +485,7 @@ mod tests {
                 ),
                 AnyLoopInfo::While(WhileInfo::new(
                     Span::new_from_str(
-                        "while true {\n        let something = use_state(|| \"hands\");\n        println!(\"clap your {something}\")\n    }",
+                        "while true {\n        let something = use_signal(|| \"hands\");\n        println!(\"clap your {something}\")\n    }",
                         LineColumn { line: 2, column: 4 },
                     ),
                     Span::new_from_str(
@@ -502,7 +502,7 @@ mod tests {
         let contents = indoc! {r#"
             fn App() -> Element {
                 loop {
-                    let something = use_state(|| "hands");
+                    let something = use_signal(|| "hands");
                     println!("clap your {something}")
                 }
             }
@@ -515,7 +515,7 @@ mod tests {
             vec![Issue::HookInsideLoop(
                 HookInfo::new(
                     Span::new_from_str(
-                        r#"use_state(|| "hands")"#,
+                        r#"use_signal(|| "hands")"#,
                         LineColumn { line: 3, column: 24 },
                     ),
                     Span::new_from_str(
@@ -525,7 +525,7 @@ mod tests {
                     "use_state".to_string()
                 ),
                 AnyLoopInfo::Loop(LoopInfo::new(Span::new_from_str(
-                    "loop {\n        let something = use_state(|| \"hands\");\n        println!(\"clap your {something}\")\n    }",
+                    "loop {\n        let something = use_signal(|| \"hands\");\n        println!(\"clap your {something}\")\n    }",
                     LineColumn { line: 2, column: 4 },
                 )))
             )],
@@ -536,7 +536,7 @@ mod tests {
     fn test_conditional_okay() {
         let contents = indoc! {r#"
             fn App() -> Element {
-                let something = use_state(|| "hands");
+                let something = use_signal(|| "hands");
                 if you_are_happy && you_know_it {
                     println!("clap your {something}")
                 }
@@ -553,7 +553,7 @@ mod tests {
         let contents = indoc! {r#"
             fn App() -> Element {
                 let _a = || {
-                    let b = use_state(|| 0);
+                    let b = use_signal(|| 0);
                     b.get()
                 };
             }
@@ -566,7 +566,7 @@ mod tests {
             vec![Issue::HookInsideClosure(
                 HookInfo::new(
                     Span::new_from_str(
-                        "use_state(|| 0)",
+                        "use_signal(|| 0)",
                         LineColumn {
                             line: 3,
                             column: 16
@@ -582,7 +582,7 @@ mod tests {
                     "use_state".to_string()
                 ),
                 ClosureInfo::new(Span::new_from_str(
-                    "|| {\n        let b = use_state(|| 0);\n        b.get()\n    }",
+                    "|| {\n        let b = use_signal(|| 0);\n        b.get()\n    }",
                     LineColumn {
                         line: 2,
                         column: 13
@@ -596,7 +596,7 @@ mod tests {
     fn test_hook_outside_component() {
         let contents = indoc! {r#"
             fn not_component_or_hook() {
-                let _a = use_state(|| 0);
+                let _a = use_signal(|| 0);
             }
         "#};
 
@@ -606,7 +606,7 @@ mod tests {
             report.issues,
             vec![Issue::HookOutsideComponent(HookInfo::new(
                 Span::new_from_str(
-                    "use_state(|| 0)",
+                    "use_signal(|| 0)",
                     LineColumn {
                         line: 2,
                         column: 13
@@ -628,7 +628,7 @@ mod tests {
     fn test_hook_inside_hook() {
         let contents = indoc! {r#"
             fn use_thing() {
-                let _a = use_state(|| 0);
+                let _a = use_signal(|| 0);
             }
         "#};
 

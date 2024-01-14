@@ -4,9 +4,9 @@ use axum::{extract::ws::WebSocketUpgrade, response::Html, routing::get, Router};
 use dioxus::prelude::*;
 
 fn app() -> Element {
-    let mut num = use_state(|| 0);
+    let mut num = use_signal(|| 0);
 
-    cx.render(rsx! {
+    rsx! {
         div {
             "hello axum! {num}"
             button { onclick: move |_| num += 1, "Increment" }

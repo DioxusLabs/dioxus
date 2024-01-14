@@ -50,7 +50,7 @@ fn main() {
 // It's not required, but highly recommended. For example, UpperCamelCase components will not generate a warning.
 #[component]
 fn App() -> Element {
-    cx.render(rsx!("hello world!"))
+    rsx!("hello world!"))
 }
 ```
 
@@ -101,7 +101,7 @@ render nodes in match statements.
 fn Example() -> Element {
 
     // both of these are equivalent
-    cx.render(rsx!("hello world"))
+    rsx!("hello world"))
 
     render!("hello world!")
 }
@@ -114,7 +114,7 @@ elements:
 #[component]
 fn App() -> Element {
     let name = "dave";
-    cx.render(rsx!(
+    rsx!(
         h1 { "Hello, {name}!" }
         div {
             class: "my-class",
@@ -142,7 +142,7 @@ In Dioxus, all properties are memoized by default!
 ```rust, ignore
 #[component]
 fn App() -> Element {
-    cx.render(rsx!(
+    rsx!(
         Header {
             title: "My App",
             color: "red",
@@ -164,7 +164,7 @@ struct HeaderProps {
 
 #[component]
 fn Header(cx: Scope<HeaderProps>) -> Element {
-    cx.render(rsx!(
+    rsx!(
         div {
             background_color: "{cx.props.color}"
             h1 { "{cx.props.title}" }
@@ -179,7 +179,7 @@ struct from function arguments:
 ```rust, ignore
 #[component]
 fn Header(title: String, color: String) -> Element {
-    cx.render(rsx!(
+    rsx!(
         div {
             background_color: "{color}"
             h1 { "{title}" }
@@ -202,7 +202,7 @@ struct HeaderProps<'a> {
 
 #[component]
 fn Header(props: HeaderProps -> Element {
-    cx.render(rsx!(
+    rsx!(
         div {
             background_color: "{cx.props.color}"
             h1 { "{cx.props.title}" }
@@ -244,7 +244,7 @@ use hooks to define the state and modify it from within listeners.
 ```rust, ignore
 #[component]
 fn App() -> Element {
-    let name = use_state(|| "world");
+    let name = use_signal(|| "world");
 
     render!("hello {name}!")
 }
@@ -293,9 +293,9 @@ fn main() {
 
 #[component]
 fn App() -> Element {
-    let count = use_state(|| 0);
+    let count = use_signal(|| 0);
 
-    cx.render(rsx!(
+    rsx!(
         div { "Count: {count}" }
         button { onclick: move |_| count.set(count + 1), "Increment" }
         button { onclick: move |_| count.set(count - 1), "Decrement" }

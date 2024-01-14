@@ -35,9 +35,9 @@ const FIELDS: &[(&str, &str)] = &[
 ];
 
 fn app() -> Element {
-    cx.render(rsx! {
+    rsx! {
         div { margin_left: "30px",
-            {select_example(cx)},
+            {select_example()},
             div {
                 // handling inputs on divs will catch all input events below
                 // so the value of our input event will be either huey, dewey, louie, or true/false (because of the checkboxe)
@@ -133,36 +133,35 @@ fn app() -> Element {
                 }
             }
         }
-    })
+    }
 }
 
 fn select_example() -> Element {
-    cx.render(rsx! {
-    div {
-        select {
-            id: "selection",
-            name: "selection",
-            multiple: true,
-            oninput: move |evt| {
-                println!("{evt:?}");
-            },
-            option {
-                value : "Option 1",
-                label : "Option 1",
+    rsx! {
+        div {
+            select {
+                id: "selection",
+                name: "selection",
+                multiple: true,
+                oninput: move |evt| println!("{evt:?}"),
+                option {
+                    value: "Option 1",
+                    label: "Option 1",
+                }
+                option {
+                    value: "Option 2",
+                    label: "Option 2",
+                    selected: true,
+                },
+                option {
+                    value: "Option 3",
+                    label: "Option 3",
+                }
             }
-            option {
-                value : "Option 2",
-                label : "Option 2",
-                selected : true,
-            },
-            option {
-                value : "Option 3",
-                label : "Option 3",
+            label {
+                r#for: "selection",
+                "select element"
             }
         }
-        label {
-            r#for: "selection",
-            "select element"
-        }
-    }})
+    }
 }

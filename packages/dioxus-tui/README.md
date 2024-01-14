@@ -43,7 +43,7 @@ Leverage React-like patterns, CSS, HTML, and Rust to build beautiful, portable, 
 
 ```rust
 fn app() -> Element {
-    cx.render(rsx!{
+    rsx!{
         div {
             width: "100%",
             height: "10px",

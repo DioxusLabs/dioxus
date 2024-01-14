@@ -16,7 +16,7 @@ This is moderately efficient because the fields of the map are moved, but the da
 However, if you used similar approach with Dioxus:
 
 ```rust
-let (map, set_map) = use_state(|| HashMap::new());
+let (map, set_map) = use_signal(|| HashMap::new());
 set_map({
     let mut newmap = map.clone();
     newmap.set(key, value);
@@ -38,9 +38,9 @@ Here's a fully-functional todo app using the use_map API:
 ```rust
 static TodoList: Component = |cx| {
     let todos = use_map(|| HashMap::new());
-    let input = use_ref(|| None);
+    let input = use_signal(|| None);
 
-    cx.render(rsx!{
+    rsx!{
         div {
             button {
                 "Add todo"

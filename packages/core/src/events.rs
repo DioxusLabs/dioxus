@@ -146,7 +146,7 @@ impl<T: std::fmt::Debug> std::fmt::Debug for Event<T> {
 /// }
 ///
 /// fn MyComponent(cx: MyProps) -> Element {
-///     cx.render(rsx!{
+///     rsx!{
 ///         button {
 ///             onclick: move |evt| cx.onclick.call(evt),
 ///         }

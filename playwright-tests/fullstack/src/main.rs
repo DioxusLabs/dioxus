@@ -55,10 +55,10 @@ struct AppProps {
 
 #[allow(unused)]
 fn app(cx: Scope<AppProps>) -> Element {
-    let mut count = use_state(|| cx.props.count);
-    let text = use_state(|| "...".to_string());
+    let mut count = use_signal(|| cx.props.count);
+    let text = use_signal(|| "...".to_string());
 
-    cx.render(rsx! {
+    rsx! {
         h1 { "hello axum! {count}" }
         button {
             class: "increment-button",

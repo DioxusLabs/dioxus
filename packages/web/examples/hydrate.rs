@@ -3,7 +3,7 @@ use dioxus_web::Config;
 use web_sys::window;
 
 fn app() -> Element {
-    cx.render(rsx! {
+    rsx! {
         div { h1 { "thing 1" } }
         div { h2 { "thing 2" } }
         div {
@@ -17,12 +17,12 @@ fn app() -> Element {
                 "thing {f}"
             }
         })}
-    })
+    }
 }
 
 #[allow(non_snake_case)]
 fn Bapp() -> Element {
-    cx.render(rsx! {
+    rsx! {
         div { h1 { "thing 1" } }
         div { h2 { "thing 2" } }
         div {
@@ -30,7 +30,7 @@ fn Bapp() -> Element {
             "asd"
             "asd"
         }
-    })
+    }
 }
 
 fn main() {

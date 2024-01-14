@@ -23,20 +23,20 @@ fn app() -> Element {
         127 * b
     }
 
-    let q1_color = use_state(|| [200; 3]);
-    let q2_color = use_state(|| [200; 3]);
-    let q3_color = use_state(|| [200; 3]);
-    let q4_color = use_state(|| [200; 3]);
+    let q1_color = use_signal(|| [200; 3]);
+    let q2_color = use_signal(|| [200; 3]);
+    let q3_color = use_signal(|| [200; 3]);
+    let q4_color = use_signal(|| [200; 3]);
 
     let q1_color_str = to_str(q1_color);
     let q2_color_str = to_str(q2_color);
     let q3_color_str = to_str(q3_color);
     let q4_color_str = to_str(q4_color);
 
-    let page_coordinates = use_state(|| "".to_string());
-    let element_coordinates = use_state(|| "".to_string());
-    let buttons = use_state(|| "".to_string());
-    let modifiers = use_state(|| "".to_string());
+    let page_coordinates = use_signal(|| "".to_string());
+    let element_coordinates = use_signal(|| "".to_string());
+    let buttons = use_signal(|| "".to_string());
+    let modifiers = use_signal(|| "".to_string());
 
     let update_data = move |event: Event<MouseData>| {
         let mouse_data = event.inner();
@@ -51,7 +51,7 @@ fn app() -> Element {
         modifiers.set(format!("{:?}", mouse_data.modifiers()));
     };
 
-    cx.render(rsx! {
+    rsx! {
         div {
             width: "100%",
             height: "100%",
@@ -129,5 +129,5 @@ fn app() -> Element {
             div { "Buttons: {buttons}" }
             div { "Modifiers: {modifiers}" }
         }
-    })
+    }
 }

@@ -17,7 +17,7 @@ use openidconnect::{url::Url, OAuth2TokenResponse, TokenResponse};
 pub fn LogOut(cx: Scope<ClientProps>) -> Element {
     let fermi_auth_token = use_atom_ref(&FERMI_AUTH_TOKEN);
     let fermi_auth_token_read = fermi_auth_token.read().clone();
-    let log_out_url_state = use_state(|| None::<Option<Result<Url, crate::errors::Error>>>);
+    let log_out_url_state = use_signal(|| None::<Option<Result<Url, crate::errors::Error>>>);
     cx.render(match fermi_auth_token_read {
         Some(fermi_auth_token_read) => match fermi_auth_token_read.id_token.clone() {
             Some(id_token) => match log_out_url_state.get() {
@@ -129,7 +129,7 @@ pub fn RefreshToken(cx: Scope<ClientProps>) -> Element {
 
 #[component]
 pub fn LoadClient() -> Element {
-    let init_client_future = use_future((), |_| async move { init_oidc_client().await });
+    let init_client_future = use_future(|_| async move { init_oidc_client().await });
     let fermi_client: &UseAtomRef<ClientState> = use_atom_ref(&FERMI_CLIENT);
     cx.render(match init_client_future.value() {
         Some(client_props) => match client_props {

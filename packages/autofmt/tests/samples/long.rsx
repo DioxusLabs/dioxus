@@ -32,7 +32,7 @@ pub fn Explainer<'a>(
         std::mem::swap(&mut left, &mut right);
     }
 
-    cx.render(rsx! {
+    rsx! {
         div { class: "flex flex-wrap items-center dark:text-white py-16 border-t font-light",
             {left},
             {right}

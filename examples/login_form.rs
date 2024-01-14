@@ -29,7 +29,7 @@ fn app() -> Element {
         }
     };
 
-    cx.render(rsx! {
+    rsx! {
         h1 { "Login" }
         form { onsubmit: onsubmit,
             input { r#type: "text", id: "username", name: "username" }
@@ -40,5 +40,5 @@ fn app() -> Element {
             br {}
             button { "Login" }
         }
-    })
+    }
 }

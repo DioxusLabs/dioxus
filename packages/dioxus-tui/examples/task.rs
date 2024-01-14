@@ -5,9 +5,9 @@ fn main() {
 }
 
 fn app() -> Element {
-    let count = use_state(|| 0);
+    let count = use_signal(|| 0);
 
-    use_future((), move |_| {
+    use_future(move |_| {
         let count = count.to_owned();
         let update = cx.schedule_update();
         async move {
@@ -19,7 +19,7 @@ fn app() -> Element {
         }
     });
 
-    cx.render(rsx! {
+    rsx! {
         div { width: "100%",
             div { width: "50%", height: "5px", background_color: "blue", justify_content: "center", align_items: "center",
                 "Hello {count}!"
@@ -28,5 +28,5 @@ fn app() -> Element {
                 "Hello {count}!"
             }
         }
-    })
+    }
 }
