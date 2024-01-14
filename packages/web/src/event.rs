@@ -410,6 +410,12 @@ impl HasFormData for WebFormData {
             }
         }
 
+        // try to fill in select element values
+        if let Some(select) = self.element.dyn_ref::<web_sys::HtmlSelectElement>() {
+            let options = get_select_data(select);
+            values.insert("options".to_string(), FormValue::VecText(options));
+        }
+
         values
     }
 
@@ -530,16 +536,17 @@ export function get_form_data(form) {
     const formData = new FormData(form);
 
     for (let name of formData.keys()) {
-        const fieldType = target.elements[name].type;
+        const fieldType = form.elements[name].type;
+        console.log(fieldType);
 
         switch (fieldType) {
             case "select-multiple":
-                contents.values[name] = formData.getAll(name);
+                values.set(name, formData.getAll(name));
                 break;
 
             // add cases for fieldTypes that can hold multiple values here
             default:
-                contents.values[name] = formData.get(name);
+                values.set(name, formData.get(name));
                 break;
         }
     }
@@ -549,4 +556,22 @@ export function get_form_data(form) {
 "#)]
 extern "C" {
     fn get_form_data(form: &web_sys::HtmlFormElement) -> js_sys::Map;
+}
+
+// web-sys does not expose the keys api for select data, so we need to manually bind to it
+#[wasm_bindgen(inline_js = r#"
+export function get_select_data(select) {
+    let values = [];
+    for (let i = 0; i < select.options.length; i++) {
+      let option = select.options[i];
+      if (option.selected) {
+        values.push(option.value.toString());
+      }
+    }
+
+    return values;
+}
+"#)]
+extern "C" {
+    fn get_select_data(select: &web_sys::HtmlSelectElement) -> Vec<String>;
 }
