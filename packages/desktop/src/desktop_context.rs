@@ -105,7 +105,6 @@ impl DesktopService {
     pub(crate) fn send_edits(&self) {
         let mut mutations = self.mutation_state.borrow_mut();
         let serialized_edits = mutations.export_memory();
-        dbg!(serialized_edits.len());
         self.edit_queue.add_edits(serialized_edits);
     }
 
