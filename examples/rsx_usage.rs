@@ -49,7 +49,7 @@ use baller::Baller;
 use dioxus::prelude::*;
 
 #[component]
-fn App(cx: Scope) -> Element {
+fn App() -> Element {
     let formatting = "formatting!";
     let formatting_tuple = ("a", "b");
     let lazy_fmt = format_args!("lazily formatted text");
@@ -205,7 +205,7 @@ fn App(cx: Scope) -> Element {
 
             // helper functions
             // Anything that implements IntoVnode can be dropped directly into Rsx
-            {helper(cx, "hello world!")}
+            {helper("hello world!")}
 
             // Strings can be supplied directly
             {String::from("Hello world!")}
@@ -223,7 +223,7 @@ fn format_dollars(dollars: u32, cents: u32) -> String {
     format!("${dollars}.{cents:02}")
 }
 
-fn helper<'a>(cx: &'a ScopeState, text: &'a str) -> Element<'a> {
+fn helper<'a>(cx: &'a ScopeState, text: &'a str) -> Element {
     cx.render(rsx! {
         p { "{text}" }
     })
@@ -233,7 +233,7 @@ fn helper<'a>(cx: &'a ScopeState, text: &'a str) -> Element<'a> {
 // This will likely be deprecated/removed in a future update that will introduce a more polished linting system,
 // something like Clippy.
 #[component(no_case_check)]
-fn lowercase_helper(cx: Scope) -> Element {
+fn lowercase_helper() -> Element {
     cx.render(rsx! {
         "asd"
     })
@@ -254,7 +254,7 @@ mod baller {
     // This will likely be deprecated/removed in a future update that will introduce a more polished linting system,
     // something like Clippy.
     #[component(no_case_check)]
-    pub fn lowercase_component(cx: Scope) -> Element {
+    pub fn lowercase_component() -> Element {
         cx.render(rsx! { "look ma, no uppercase" })
     }
 }
@@ -263,12 +263,12 @@ mod baller {
 pub struct TallerProps<'a> {
     /// Fields are documented and accessible in rsx!
     a: &'static str,
-    children: Element<'a>,
+    children: Element,
 }
 
 /// Documention for this component is visible within the rsx macro
 #[component]
-pub fn Taller<'a>(cx: Scope<'a, TallerProps<'a>>) -> Element {
+pub fn Taller(props: TallerProps -> Element {
     cx.render(rsx! {
         {&cx.props.children}
     })
@@ -297,7 +297,7 @@ fn WithInline<'a>(cx: Scope<'a>, text: &'a str) -> Element {
 }
 
 #[component]
-fn Label<T>(cx: Scope, text: T) -> Element
+fn Label<T>(text: T) -> Element
 where
     T: Display,
 {

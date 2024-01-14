@@ -10,10 +10,10 @@ fn main() {
     dioxus_desktop::launch_cfg(app, cfg);
 }
 
-fn app(cx: Scope) -> Element {
-    let focused = use_state(cx, || false);
+fn app() -> Element {
+    let focused = use_state(|| false);
 
-    use_wry_event_handler(cx, {
+    use_wry_event_handler({
         to_owned![focused];
         move |event, _| {
             if let WryEvent::WindowEvent {

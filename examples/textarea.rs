@@ -6,8 +6,8 @@ fn main() {
     dioxus_desktop::launch(app);
 }
 
-fn app(cx: Scope) -> Element {
-    let model = use_state(cx, || String::from("asd"));
+fn app() -> Element {
+    let model = use_state(|| String::from("asd"));
 
     println!("{model}");
 

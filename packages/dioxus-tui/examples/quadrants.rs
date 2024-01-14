@@ -28,7 +28,7 @@ fn Quadrant(cx: Scope<QuadrentProps>) -> Element {
     })
 }
 
-fn app(cx: Scope) -> Element {
+fn app() -> Element {
     cx.render(rsx! {
         div {
             width: "100%",

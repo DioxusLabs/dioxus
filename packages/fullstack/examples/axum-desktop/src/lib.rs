@@ -2,9 +2,9 @@
 use dioxus::prelude::*;
 use dioxus_fullstack::prelude::*;
 
-pub fn app(cx: Scope) -> Element {
-    let mut count = use_state(cx, || 0);
-    let text = use_state(cx, || "...".to_string());
+pub fn app() -> Element {
+    let mut count = use_state(|| 0);
+    let text = use_state(|| "...".to_string());
 
     cx.render(rsx! {
         h1 { "High-Five counter: {count}" }

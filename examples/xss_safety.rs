@@ -8,10 +8,8 @@ fn main() {
     dioxus_desktop::launch(app);
 }
 
-fn app(cx: Scope) -> Element {
-    let contents = use_state(cx, || {
-        String::from("<script>alert(\"hello world\")</script>")
-    });
+fn app() -> Element {
+    let contents = use_state(|| String::from("<script>alert(\"hello world\")</script>"));
 
     cx.render(rsx! {
         div {

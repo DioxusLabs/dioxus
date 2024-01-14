@@ -22,9 +22,9 @@ use crate::{get_abs_layout, layout_to_screen_space};
 ///     dioxus_tui::launch(app);
 /// }
 ///
-/// fn app(cx: Scope) -> Element {
-///     let hue = use_state(cx, || 0.0);
-///     let brightness = use_state(cx, || 0.0);
+/// fn app() -> Element {
+///     let hue = use_state(|| 0.0);
+///     let brightness = use_state(|| 0.0);
 ///     let tui_query: Query = cx.consume_context().unwrap();
 ///     cx.render(rsx! {
 ///         div{

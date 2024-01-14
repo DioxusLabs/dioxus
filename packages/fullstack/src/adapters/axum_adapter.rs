@@ -29,8 +29,8 @@
 //!      }
 //! }
 //!
-//! fn app(cx: Scope) -> Element {
-//!     let text = use_state(cx, || "...".to_string());
+//! fn app() -> Element {
+//!     let text = use_state(|| "...".to_string());
 //!
 //!     cx.render(rsx! {
 //!         button {
@@ -182,7 +182,7 @@ pub trait DioxusRouterExt<S> {
     ///         .unwrap();
     /// }
     ///
-    /// fn app(cx: Scope) -> Element {
+    /// fn app() -> Element {
     ///     todo!()
     /// }
     /// ```
@@ -211,7 +211,7 @@ pub trait DioxusRouterExt<S> {
     ///         .unwrap();
     /// }
     ///
-    /// fn app(cx: Scope) -> Element {
+    /// fn app() -> Element {
     ///     todo!()
     /// }
     /// ```
@@ -379,7 +379,7 @@ fn apply_request_parts_to_response<B>(
 /// use dioxus::prelude::*;
 /// use dioxus_fullstack::{axum_adapter::render_handler_with_context, prelude::*};
 ///
-/// fn app(cx: Scope) -> Element {
+/// fn app() -> Element {
 ///     render! {
 ///         "hello!"
 ///     }

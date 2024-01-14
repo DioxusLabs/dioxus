@@ -4,8 +4,8 @@ fn main() {
     dioxus_desktop::launch(app);
 }
 
-fn app(cx: Scope) -> Element {
-    let header_element = use_ref(cx, || None);
+fn app() -> Element {
+    let header_element = use_ref(|| None);
 
     cx.render(rsx!(
         div {

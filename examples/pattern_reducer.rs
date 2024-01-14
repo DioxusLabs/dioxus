@@ -14,8 +14,8 @@ fn main() {
     dioxus_desktop::launch(app);
 }
 
-fn app(cx: Scope) -> Element {
-    let state = use_state(cx, PlayerState::new);
+fn app() -> Element {
+    let state = use_state(PlayerState::new);
 
     cx.render(rsx!(
         div {

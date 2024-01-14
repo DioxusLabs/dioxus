@@ -22,8 +22,8 @@ pub struct TodoItem {
 }
 
 pub fn app(cx: Scope<()>) -> Element {
-    let todos = use_state(cx, im_rc::HashMap::<u32, TodoItem>::default);
-    let filter = use_state(cx, || FilterState::All);
+    let todos = use_state(im_rc::HashMap::<u32, TodoItem>::default);
+    let filter = use_state(|| FilterState::All);
 
     // Filter the todos based on the filter state
     let mut filtered_todos = todos
@@ -94,9 +94,9 @@ pub struct TodoHeaderProps<'a> {
     todos: &'a UseState<im_rc::HashMap<u32, TodoItem>>,
 }
 
-pub fn TodoHeader<'a>(cx: Scope<'a, TodoHeaderProps<'a>>) -> Element {
-    let draft = use_state(cx, || "".to_string());
-    let todo_id = use_state(cx, || 0);
+pub fn TodoHeader(props: TodoHeaderProps -> Element {
+    let draft = use_state(|| "".to_string());
+    let todo_id = use_state(|| 0);
 
     cx.render(rsx! {
         header { class: "header",
@@ -137,8 +137,8 @@ pub struct TodoEntryProps<'a> {
     id: u32,
 }
 
-pub fn TodoEntry<'a>(cx: Scope<'a, TodoEntryProps<'a>>) -> Element {
-    let is_editing = use_state(cx, || false);
+pub fn TodoEntry(props: TodoEntryProps -> Element {
+    let is_editing = use_state(|| false);
 
     let todos = cx.props.todos.get();
     let todo = &todos[&cx.props.id];
@@ -199,7 +199,7 @@ pub struct ListFooterProps<'a> {
     filter: &'a UseState<FilterState>,
 }
 
-pub fn ListFooter<'a>(cx: Scope<'a, ListFooterProps<'a>>) -> Element {
+pub fn ListFooter(props: ListFooterProps -> Element {
     let active_todo_count = cx.props.active_todo_count;
     let active_todo_text = cx.props.active_todo_text;
 
@@ -245,7 +245,7 @@ pub fn ListFooter<'a>(cx: Scope<'a, ListFooterProps<'a>>) -> Element {
     })
 }
 
-pub fn PageFooter(cx: Scope) -> Element {
+pub fn PageFooter() -> Element {
     cx.render(rsx! {
         footer { class: "info",
             p { "Double-click to edit a todo" }

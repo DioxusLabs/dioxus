@@ -14,7 +14,7 @@ fn create_signals_global() {
         }
     });
 
-    fn Child(cx: Scope) -> Element {
+    fn Child() -> Element {
         let signal = create_without_cx();
 
         render! {
@@ -39,7 +39,7 @@ fn deref_signal() {
         }
     });
 
-    fn Child(cx: Scope) -> Element {
+    fn Child() -> Element {
         let signal = Signal::new("hello world".to_string());
 
         // You can call signals like functions to get a Ref of their value.
@@ -66,7 +66,7 @@ fn drop_signals() {
         }
     });
 
-    fn Child(cx: Scope) -> Element {
+    fn Child() -> Element {
         let signal = create_without_cx();
 
         render! {

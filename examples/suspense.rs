@@ -31,7 +31,7 @@ struct DogApi {
     message: String,
 }
 
-fn app(cx: Scope) -> Element {
+fn app() -> Element {
     cx.render(rsx! {
         div {
             h1 {"Dogs are very important"}
@@ -52,8 +52,8 @@ fn app(cx: Scope) -> Element {
 /// This component will re-render when the future has finished
 /// Suspense is achieved my moving the future into only the component that
 /// actually renders the data.
-fn Doggo(cx: Scope) -> Element {
-    let fut = use_future(cx, (), |_| async move {
+fn Doggo() -> Element {
+    let fut = use_future((), |_| async move {
         reqwest::get("https://dog.ceo/api/breeds/image/random/")
             .await
             .unwrap()

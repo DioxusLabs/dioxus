@@ -63,7 +63,7 @@ impl FromQuery for ManualBlogQuerySegments {
 }
 
 #[component]
-fn BlogPost(cx: Scope, query_params: ManualBlogQuerySegments) -> Element {
+fn BlogPost(query_params: ManualBlogQuerySegments) -> Element {
     render! {
         div{"This is your blogpost with a query segment:"}
         div{ "{query_params:?}" }
@@ -71,7 +71,7 @@ fn BlogPost(cx: Scope, query_params: ManualBlogQuerySegments) -> Element {
 }
 
 #[component]
-fn AutomaticBlogPost(cx: Scope, name: String, surname: String) -> Element {
+fn AutomaticBlogPost(name: String, surname: String) -> Element {
     render! {
         div{"This is your blogpost with a query segment:"}
         div{ "name={name}&surname={surname}" }
@@ -79,7 +79,7 @@ fn AutomaticBlogPost(cx: Scope, name: String, surname: String) -> Element {
 }
 
 #[component]
-fn App(cx: Scope) -> Element {
+fn App() -> Element {
     render! { Router::<Route>{} }
 }
 

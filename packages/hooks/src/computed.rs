@@ -1,6 +1,6 @@
 //! Tracked and computed state in Dioxus
 
-use dioxus_core::{ScopeId, ScopeState};
+use dioxus_core::{ScopeId};
 use slab::Slab;
 use std::{
     cell::{RefCell, RefMut},
@@ -18,8 +18,8 @@ use std::{
 /// use dioxus::prelude::*;
 ///
 /// #[component]
-/// fn Parent(cx: Scope) -> Element {
-///    let count = use_tracked_state(cx, || 0);
+/// fn Parent() -> Element {
+///    let count = use_tracked_state(|| 0);
 ///
 ///    render! {
 ///        Child {
@@ -29,8 +29,8 @@ use std::{
 /// }
 ///
 /// #[component]
-/// fn Child(cx: Scope, count: Tracked<usize>) -> Element {
-///    let less_than_five = use_selector(cx, count, |count| *count < 5);
+/// fn Child(count: Tracked<usize>) -> Element {
+///    let less_than_five = use_selector(count, |count| *count < 5);
 ///
 ///    render! {
 ///        "{less_than_five}"
@@ -38,10 +38,10 @@ use std::{
 /// }
 /// ```
 #[must_use]
-pub fn use_tracked_state<T: 'static>(cx: &ScopeState, init: impl FnOnce() -> T) -> &Tracked<T> {
+pub fn use_tracked_state<T: 'static>(nit: impl FnOnce() -> T) -> &Tracked<T> {
     cx.use_hook(|| {
         let init = init();
-        Tracked::new(cx, init)
+        Tracked::new(init)
     })
 }
 
@@ -63,7 +63,7 @@ impl<I: PartialEq> PartialEq for Tracked<I> {
 
 impl<I> Tracked<I> {
     /// Create a new tracked state
-    pub fn new(cx: &ScopeState, state: I) -> Self {
+    pub fn new(, state: I) -> Self {
         let subscribers = std::rc::Rc::new(std::cell::RefCell::new(Slab::new()));
         Self {
             state: Rc::new(RefCell::new(state)),
@@ -162,8 +162,7 @@ impl<I> Drop for Tracker<I> {
 }
 
 #[must_use = "Consider using the `use_effect` hook to rerun an effect whenever the tracked state changes if you don't need the result of the computation"]
-pub fn use_selector<I: 'static, O: Clone + PartialEq + 'static>(
-    cx: &ScopeState,
+pub fn use_selector<I: 'static, O: Clone + PartialEq + 'static>
     tracked: &Tracked<I>,
     init: impl FnMut(&I) -> O + 'static,
 ) -> O {
@@ -189,7 +188,7 @@ impl<T, I> PartialEq for Selector<T, I> {
 
 impl<T: Clone + PartialEq, I> Selector<T, I> {
     /// Read the Selector state and subscribe to updates
-    pub fn use_state(&self, cx: &ScopeState) -> T {
+    pub fn use_state(&self, ) -> T {
         cx.use_hook(|| {
             let id = cx.scope_id();
             self.subscribers.borrow_mut().insert(id);

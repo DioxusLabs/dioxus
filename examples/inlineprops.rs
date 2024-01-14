@@ -5,22 +5,22 @@
 use dioxus::prelude::*;
 
 #[component]
-fn Thing1<T>(cx: Scope, _a: T) -> Element {
+fn Thing1<T>(_a: T) -> Element {
     cx.render(rsx! { "" })
 }
 
 #[component]
-fn Thing2(cx: Scope, _a: u32) -> Element<'a> {
+fn Thing2(_a: u32) -> Element {
     cx.render(rsx! { "" })
 }
 
 #[component]
-fn Thing3<'a, T>(cx: Scope<'a>, _a: &'a T) -> Element<'a> {
+fn Thing3<'a, T>(cx: Scope<'a>, _a: &'a T) -> Element {
     cx.render(rsx! { "" })
 }
 
 #[component]
-fn Thing4<'a>(cx: Scope<'a>, _a: &'a u32) -> Element<'a> {
+fn Thing4<'a>(cx: Scope<'a>, _a: &'a u32) -> Element {
     cx.render(rsx! { "" })
 }
 
@@ -29,8 +29,8 @@ fn main() {
 }
 
 #[component]
-fn App(cx: Scope) -> Element {
-    let state = use_state(cx, || 1);
+fn App() -> Element {
+    let state = use_state(|| 1);
 
     cx.render(rsx! {
         div {

@@ -36,7 +36,7 @@ async fn setup_file_watcher<F: Fn() -> Result<BuildResult> + Send + 'static>(
                 if let Some(hot_reload) = &hot_reload {
                     // find changes to the rsx in the file
                     let mut rsx_file_map = hot_reload.file_map.lock().unwrap();
-                    let mut messages: Vec<Template<'static>> = Vec::new();
+                    let mut messages: Vec<Template> = Vec::new();
 
                     // In hot reload mode, we only need to rebuild if non-rsx code is changed
                     needs_full_rebuild = false;
@@ -143,6 +143,6 @@ pub(crate) trait Platform {
 
 #[derive(Clone)]
 pub struct HotReloadState {
-    pub messages: broadcast::Sender<Template<'static>>,
+    pub messages: broadcast::Sender<Template>,
     pub file_map: Arc<Mutex<FileMap<HtmlCtx>>>,
 }

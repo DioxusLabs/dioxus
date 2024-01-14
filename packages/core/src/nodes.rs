@@ -1,6 +1,9 @@
-use crate::any_props::{BoxedAnyProps, VProps};
-use crate::innerlude::{ElementRef, EventHandler, MountId, ScopeState};
+use crate::innerlude::{ElementRef, EventHandler, MountId};
 use crate::properties::ComponentFunction;
+use crate::{
+    any_props::{BoxedAnyProps, VProps},
+    innerlude::ScopeState,
+};
 use crate::{arena::ElementId, Element, Event};
 use crate::{Properties, VirtualDom};
 use std::ops::Deref;
@@ -16,7 +19,7 @@ pub type TemplateId = &'static str;
 
 /// The actual state of the component's most recent computation
 ///
-/// Because Dioxus accepts components in the form of `async fn(Scope) -> Result<VNode>`, we need to support both
+/// Because Dioxus accepts components in the form of `async fn() -> Result<VNode>`, we need to support both
 /// sync and async versions.
 ///
 /// Dioxus will do its best to immediately resolve any async components into a regular Element, but as an implementor
@@ -457,7 +460,7 @@ impl VComponent {
     ///
     /// ```rust, ignore
     /// // Without explicit props
-    /// fn(Scope) -> Element;
+    /// fn() -> Element;
     /// async fn(Scope<'_>) -> Element;
     ///
     /// // With explicit props

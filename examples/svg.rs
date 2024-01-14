@@ -6,8 +6,8 @@ fn main() {
     dioxus_desktop::launch(app);
 }
 
-fn app(cx: Scope) -> Element {
-    let val = use_state(cx, || 5);
+fn app() -> Element {
+    let val = use_state(|| 5);
 
     cx.render(rsx! {
         div {
@@ -58,7 +58,7 @@ const UNHELD_COLOR: &str = "#ddd";
 
 // A six-sided die (D6) with dots.
 #[allow(non_snake_case)]
-pub fn Die<'a>(cx: Scope<'a, DieProps<'a>>) -> Element {
+pub fn Die(props: DieProps -> Element {
     let &DieProps { value, keep, .. } = cx.props;
 
     let active_dots = &DOTS_FOR_VALUE[(value - 1) as usize];

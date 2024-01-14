@@ -96,16 +96,16 @@ fn native_core_is_okay() {
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
 
-    fn app(cx: Scope) -> Element {
-        let colors = use_state(cx, || vec!["green", "blue", "red"]);
-        let padding = use_state(cx, || 10);
+    fn app() -> Element {
+        let colors = use_state(|| vec!["green", "blue", "red"]);
+        let padding = use_state(|| 10);
 
-        use_effect(cx, colors, |colors| async move {
+        use_effect(colors, |colors| async move {
             sleep(Duration::from_millis(1000)).await;
             colors.with_mut(|colors| colors.reverse());
         });
 
-        use_effect(cx, padding, |padding| async move {
+        use_effect(padding, |padding| async move {
             sleep(Duration::from_millis(10)).await;
             padding.with_mut(|padding| {
                 if *padding < 65 {

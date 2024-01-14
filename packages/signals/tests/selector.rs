@@ -23,7 +23,7 @@ fn memos_rerun() {
             let counter = cx.props;
             counter.borrow_mut().component += 1;
 
-            let mut signal = use_signal(cx, || 0);
+            let mut signal = use_signal(|| 0);
             let memo = cx.use_hook(move || {
                 to_owned![counter];
                 selector(move || {
@@ -63,7 +63,7 @@ fn memos_prevents_component_rerun() {
     let counter = Rc::new(RefCell::new(RunCounter::default()));
     let mut dom = VirtualDom::new_with_props(
         |cx| {
-            let mut signal = use_signal(cx, || 0);
+            let mut signal = use_signal(|| 0);
 
             if generation() == 1 {
                 *signal.write() = 0;

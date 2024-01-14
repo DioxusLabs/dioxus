@@ -79,7 +79,7 @@ fn main() {
     dioxus_mobile::launch(app);
 }
 
-fn app(cx: Scope) -> Element {
+fn app() -> Element {
     cx.render(rsx!{
         div {
             "hello world!"

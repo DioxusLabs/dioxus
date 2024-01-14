@@ -1,5 +1,5 @@
 use dioxus::prelude::*;
 
-pub fn Home(cx: Scope) -> Element {
+pub fn Home() -> Element {
     render! { div { "Hello world" } }
 }

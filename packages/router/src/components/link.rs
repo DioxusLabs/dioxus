@@ -22,6 +22,16 @@ pub enum IntoRoutable {
     Route(Rc<dyn Any>),
 }
 
+impl PartialEq for IntoRoutable {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (IntoRoutable::FromStr(a), IntoRoutable::FromStr(b)) => a == b,
+            (IntoRoutable::Route(a), IntoRoutable::Route(b)) => Rc::ptr_eq(a, b),
+            _ => false,
+        }
+    }
+}
+
 impl<R: Routable> From<R> for IntoRoutable {
     fn from(value: R) -> Self {
         IntoRoutable::Route(Rc::new(value) as Rc<dyn Any>)
@@ -68,26 +78,26 @@ impl From<&Url> for IntoRoutable {
 }
 
 /// The properties for a [`Link`].
-#[derive(Props)]
-pub struct LinkProps<'a> {
+#[derive(Props, Clone, PartialEq)]
+pub struct LinkProps {
     /// A class to apply to the generate HTML anchor tag if the `target` route is active.
-    pub active_class: Option<&'a str>,
+    pub active_class: Option<String>,
     /// The children to render within the generated HTML anchor tag.
-    pub children: Element<'a>,
+    pub children: Element,
     /// The class attribute for the generated HTML anchor tag.
     ///
     /// If `active_class` is [`Some`] and the `target` route is active, `active_class` will be
     /// appended at the end of `class`.
-    pub class: Option<&'a str>,
+    pub class: Option<String>,
     /// The id attribute for the generated HTML anchor tag.
-    pub id: Option<&'a str>,
+    pub id: Option<String>,
     /// When [`true`], the `target` route will be opened in a new tab.
     ///
     /// This does not change whether the [`Link`] is active or not.
     #[props(default)]
     pub new_tab: bool,
     /// The onclick event handler.
-    pub onclick: Option<EventHandler<'a, MouseEvent>>,
+    pub onclick: Option<EventHandler<MouseEvent>>,
     #[props(default)]
     /// Whether the default behavior should be executed if an `onclick` handler is provided.
     ///
@@ -98,14 +108,14 @@ pub struct LinkProps<'a> {
     pub onclick_only: bool,
     /// The rel attribute for the generated HTML anchor tag.
     ///
-    /// For external `target`s, this defaults to `noopener noreferrer`.
-    pub rel: Option<&'a str>,
+    /// For external `a`s, this defaults to `noopener noreferrer`.
+    pub rel: Option<String>,
     /// The navigation target. Roughly equivalent to the href attribute of an HTML anchor tag.
     #[props(into)]
     pub to: IntoRoutable,
 }
 
-impl Debug for LinkProps<'_> {
+impl Debug for LinkProps {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("LinkProps")
             .field("active_class", &self.active_class)
@@ -150,14 +160,14 @@ impl Debug for LinkProps<'_> {
 /// }
 ///
 /// #[component]
-/// fn App(cx: Scope) -> Element {
+/// fn App() -> Element {
 ///     render! {
 ///         Router::<Route> {}
 ///     }
 /// }
 ///
 /// #[component]
-/// fn Index(cx: Scope) -> Element {
+/// fn Index() -> Element {
 ///     render! {
 ///         render! {
 ///             Link {
@@ -182,7 +192,7 @@ impl Debug for LinkProps<'_> {
 /// # );
 /// ```
 #[allow(non_snake_case)]
-pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
+pub fn Link(props: LinkProps) -> Element {
     let LinkProps {
         active_class,
         children,
@@ -194,10 +204,10 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
         rel,
         to,
         ..
-    } = cx.props;
+    } = props;
 
     // hook up to router
-    let router = match use_router_internal(cx) {
+    let router = match use_router_internal() {
         Some(r) => r,
         #[allow(unreachable_code)]
         None => {
@@ -210,7 +220,7 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
     };
 
     let current_url = router.current_route_string();
-    let href = match to {
+    let href = match &to {
         IntoRoutable::FromStr(url) => url.to_string(),
         IntoRoutable::Route(route) => router.any_route_to_string(&**route),
     };
@@ -227,16 +237,17 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
     let is_router_nav = !is_external && !new_tab;
     let prevent_default = is_router_nav.then_some("onclick").unwrap_or_default();
     let rel = rel
-        .or_else(|| is_external.then_some("noopener noreferrer"))
+        .or_else(|| is_external.then_some("noopener noreferrer".to_string()))
         .unwrap_or_default();
 
     let do_default = onclick.is_none() || !onclick_only;
+
     let action = move |event| {
         if do_default && is_router_nav {
             router.push_any(router.resolve_into_routable(to.clone()));
         }
 
-        if let Some(handler) = onclick {
+        if let Some(handler) = onclick.clone() {
             handler.call(event);
         }
     };

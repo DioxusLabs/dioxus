@@ -4,8 +4,8 @@ fn main() {
     dioxus_desktop::launch(app);
 }
 
-fn app(cx: Scope) -> Element {
-    let disabled = use_state(cx, || false);
+fn app() -> Element {
+    let disabled = use_state(|| false);
 
     cx.render(rsx! {
         div {

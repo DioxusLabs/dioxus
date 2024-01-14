@@ -19,7 +19,7 @@ use std::{
 ///
 /// ```ignore
 /// const Example: Component = |cx| {
-///     let count = use_state(cx, || 0);
+///     let count = use_state(|| 0);
 ///
 ///     cx.render(rsx! {
 ///         div {
@@ -31,8 +31,7 @@ use std::{
 /// }
 /// ```
 #[must_use]
-pub fn use_state<T: 'static>(
-    cx: &ScopeState,
+pub fn use_state<T: 'static>
     initial_state_fn: impl FnOnce() -> T,
 ) -> &UseState<T> {
     let hook = cx.use_hook(move || {
@@ -92,8 +91,8 @@ impl<T: 'static> UseState<T> {
     /// An async context might need to know the current value:
     ///
     /// ```rust, ignore
-    /// fn component(cx: Scope) -> Element {
-    ///     let count = use_state(cx, || 0);
+    /// fn component() -> Element {
+    ///     let count = use_state(|| 0);
     ///     cx.spawn({
     ///         let set_count = count.to_owned();
     ///         async move {
@@ -119,8 +118,8 @@ impl<T: 'static> UseState<T> {
     /// A component might require an `Rc<dyn Fn(T)>` as an input to set a value.
     ///
     /// ```rust, ignore
-    /// fn component(cx: Scope) -> Element {
-    ///     let value = use_state(cx, || 0);
+    /// fn component() -> Element {
+    ///     let value = use_state(|| 0);
     ///
     ///     rsx!{
     ///         Component {
@@ -144,8 +143,8 @@ impl<T: 'static> UseState<T> {
     /// ```rust, ignore
     /// # use dioxus_core::prelude::*;
     /// # use dioxus_hooks::*;
-    /// fn component(cx: Scope) -> Element {
-    ///     let value = use_state(cx, || 0);
+    /// fn component() -> Element {
+    ///     let value = use_state(|| 0);
     ///
     ///     // to increment the value
     ///     value.modify(|v| v + 1);
@@ -185,8 +184,8 @@ impl<T: 'static> UseState<T> {
     /// ```rust, ignore
     /// # use dioxus_core::prelude::*;
     /// # use dioxus_hooks::*;
-    /// fn component(cx: Scope) -> Element {
-    ///     let value = use_state(cx, || 0);
+    /// fn component() -> Element {
+    ///     let value = use_state(|| 0);
     ///
     ///     let as_rc = value.get();
     ///     assert_eq!(as_rc.as_ref(), &0);
@@ -207,8 +206,8 @@ impl<T: 'static> UseState<T> {
     /// Mark the component that create this [`UseState`] as dirty, forcing it to re-render.
     ///
     /// ```rust, ignore
-    /// fn component(cx: Scope) -> Element {
-    ///     let count = use_state(cx, || 0);
+    /// fn component() -> Element {
+    ///     let count = use_state(|| 0);
     ///     cx.spawn({
     ///         let count = count.to_owned();
     ///         async move {
@@ -238,7 +237,7 @@ impl<T: Clone> UseState<T> {
     /// # Examples
     ///
     /// ```rust, ignore
-    /// let val = use_state(cx, || 0);
+    /// let val = use_state(|| 0);
     ///
     /// val.with_mut(|v| *v = 1);
     /// ```
@@ -270,7 +269,7 @@ impl<T: Clone> UseState<T> {
     /// # Examples
     ///
     /// ```rust, ignore
-    /// let val = use_state(cx, || 0);
+    /// let val = use_state(|| 0);
     ///
     /// *val.make_mut() += 1;
     /// ```
@@ -493,8 +492,8 @@ impl<T: Div<Output = T> + Copy> std::ops::DivAssign<T> for UseState<T> {
 #[test]
 fn api_makes_sense() {
     #[allow(unused)]
-    fn app(cx: Scope) -> Element {
-        let val = use_state(cx, || 0);
+    fn app() -> Element {
+        let val = use_state(|| 0);
 
         val.set(0);
         val.modify(|v| v + 1);

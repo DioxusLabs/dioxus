@@ -11,7 +11,7 @@ fn main() {
     dioxus_web::launch(app);
 }
 
-pub fn app(cx: Scope) -> Element {
+pub fn app() -> Element {
     let grey_background = true;
     cx.render(rsx!(
         div {
@@ -78,7 +78,7 @@ pub fn app(cx: Scope) -> Element {
     ))
 }
 
-pub fn StacksIcon(cx: Scope) -> Element {
+pub fn StacksIcon() -> Element {
     cx.render(rsx!(
         svg {
             fill: "none",
@@ -93,7 +93,7 @@ pub fn StacksIcon(cx: Scope) -> Element {
     ))
 }
 
-pub fn RightArrowIcon(cx: Scope) -> Element {
+pub fn RightArrowIcon() -> Element {
     cx.render(rsx!(
         svg {
             fill: "none",

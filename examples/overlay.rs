@@ -5,7 +5,7 @@ fn main() {
     dioxus_desktop::launch_cfg(app, make_config());
 }
 
-fn app(cx: Scope) -> Element {
+fn app() -> Element {
     cx.render(rsx! {
         div {
             width: "100%",

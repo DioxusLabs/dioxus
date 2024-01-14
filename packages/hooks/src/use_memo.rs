@@ -13,8 +13,8 @@ use crate::UseFutureDep;
 /// # use dioxus::prelude::*;
 ///
 /// #[component]
-/// fn Calculator(cx: Scope, number: usize) -> Element {
-///     let bigger_number = use_memo(cx, (number,), |(number,)| {
+/// fn Calculator(number: usize) -> Element {
+///     let bigger_number = use_memo((number,), |(number,)| {
 ///         // This will only be calculated when `number` has changed.
 ///         number * 100
 ///     });
@@ -24,12 +24,12 @@ use crate::UseFutureDep;
 /// }
 ///
 /// #[component]
-/// fn App(cx: Scope) -> Element {
+/// fn App() -> Element {
 ///     render!(Calculator { number: 0 })
 /// }
 /// ```
 #[must_use = "Consider using `use_effect` to run rerun a callback when dependencies change"]
-pub fn use_memo<T, D>(cx: &ScopeState, dependencies: D, callback: impl FnOnce(D::Out) -> T) -> &T
+pub fn use_memo<T, D>(, dependencies: D, callback: impl FnOnce(D::Out) -> T) -> &T
 where
     T: 'static,
     D: UseFutureDep,

@@ -4,7 +4,7 @@ fn main() {
     dioxus_desktop::launch(app);
 }
 
-fn app(cx: Scope) -> Element {
+fn app() -> Element {
     let count = if cx.generation() % 2 == 0 { 10 } else { 0 };
 
     println!("Generation: {}", cx.generation());
@@ -20,7 +20,7 @@ fn app(cx: Scope) -> Element {
     }
 }
 
-fn drop_child(cx: Scope) -> Element {
+fn drop_child() -> Element {
     cx.use_hook(|| Drops);
     render! {
         div{}

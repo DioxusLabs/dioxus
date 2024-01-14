@@ -26,11 +26,11 @@ fn main() {
     check_app_exits(check_html_renders);
 }
 
-fn use_inner_html(cx: &ScopeState, id: &'static str) -> Option<String> {
+fn use_inner_html(d: &'static str) -> Option<String> {
     let eval_provider = use_eval(cx);
 
-    let value: &UseRef<Option<String>> = use_ref(cx, || None);
-    use_effect(cx, (), |_| {
+    let value: &UseRef<Option<String>> = use_ref(|| None);
+    use_effect((), |_| {
         to_owned![value, eval_provider];
         async move {
             tokio::time::sleep(std::time::Duration::from_millis(100)).await;
@@ -51,8 +51,8 @@ fn use_inner_html(cx: &ScopeState, id: &'static str) -> Option<String> {
 
 const EXPECTED_HTML: &str = r#"<div id="5" style="width: 100px; height: 100px; color: rgb(0, 0, 0);"><input type="checkbox"><h1>text</h1><div><p>hello world</p></div></div>"#;
 
-fn check_html_renders(cx: Scope) -> Element {
-    let inner_html = use_inner_html(cx, "main_div");
+fn check_html_renders() -> Element {
+    let inner_html = use_inner_html("main_div");
 
     let desktop_context: DesktopContext = cx.consume_context().unwrap();
 

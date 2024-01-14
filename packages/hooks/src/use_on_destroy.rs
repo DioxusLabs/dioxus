@@ -4,7 +4,7 @@ This is deprecated because of the introduction of `use_on_create` which is bette
 The reason why `use_on_create` is not `use_on_mount` is because of potential confusion with `dioxus::events::onmounted`."
 )]
 pub fn use_on_unmount<D: FnOnce() + 'static>(cx: &dioxus_core::ScopeState, destroy: D) {
-    use_on_destroy(cx, destroy);
+    use_on_destroy(destroy);
 }
 
 /// Creates a callback that will be run before the component is removed.
@@ -15,8 +15,8 @@ pub fn use_on_unmount<D: FnOnce() + 'static>(cx: &dioxus_core::ScopeState, destr
 /// ```rust
 /// use dioxus::prelude::*;
 ///
-/// fn app(cx: Scope) -> Element {
-///     let state = use_state(cx, || true);
+/// fn app() -> Element {
+///     let state = use_state(|| true);
 ///     render! {
 ///         for _ in 0..100 {
 ///             h1 {
@@ -37,9 +37,9 @@ pub fn use_on_unmount<D: FnOnce() + 'static>(cx: &dioxus_core::ScopeState, destr
 ///     }
 /// }
 ///
-/// fn child_component(cx: Scope) -> Element {
-///     let original_scroll_position = use_state(cx, || 0.0);
-///     use_effect(cx, (), move |_| {
+/// fn child_component() -> Element {
+///     let original_scroll_position = use_state(|| 0.0);
+///     use_effect((), move |_| {
 ///         to_owned![original_scroll_position];
 ///         async move {
 ///             let window = web_sys::window().unwrap();
@@ -50,7 +50,7 @@ pub fn use_on_unmount<D: FnOnce() + 'static>(cx: &dioxus_core::ScopeState, destr
 ///         }
 ///     });
 ///
-///     use_on_destroy(cx, {
+///     use_on_destroy({
 ///         to_owned![original_scroll_position];
 ///         /// restore scroll to the top of the page
 ///         move || {

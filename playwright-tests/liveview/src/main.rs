@@ -3,8 +3,8 @@
 use axum::{extract::ws::WebSocketUpgrade, response::Html, routing::get, Router};
 use dioxus::prelude::*;
 
-fn app(cx: Scope) -> Element {
-    let mut num = use_state(cx, || 0);
+fn app() -> Element {
+    let mut num = use_state(|| 0);
 
     cx.render(rsx! {
         div {

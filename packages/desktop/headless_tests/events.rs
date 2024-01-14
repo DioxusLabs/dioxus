@@ -28,10 +28,10 @@ pub fn main() {
     check_app_exits(app);
 }
 
-fn mock_event(cx: &ScopeState, id: &'static str, value: &'static str) {
+fn mock_event(id: &'static str, value: &'static str) {
     let eval_provider = use_eval(cx).clone();
 
-    use_effect(cx, (), move |_| async move {
+    use_effect(move |_| async move {
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
         let js = format!(
             r#"
@@ -50,13 +50,12 @@ fn mock_event(cx: &ScopeState, id: &'static str, value: &'static str) {
 }
 
 #[allow(deprecated)]
-fn app(cx: Scope) -> Element {
+fn app() -> Element {
     let desktop_context: DesktopContext = cx.consume_context().unwrap();
-    let received_events = use_state(cx, || 0);
+    let received_events = use_state(|| 0);
 
     // button
     mock_event(
-        cx,
         "button",
         r#"new MouseEvent("click", {
         view: window,
@@ -67,7 +66,6 @@ fn app(cx: Scope) -> Element {
     );
     // mouse_move_div
     mock_event(
-        cx,
         "mouse_move_div",
         r#"new MouseEvent("mousemove", {
         view: window,
@@ -78,7 +76,6 @@ fn app(cx: Scope) -> Element {
     );
     // mouse_click_div
     mock_event(
-        cx,
         "mouse_click_div",
         r#"new MouseEvent("click", {
         view: window,
@@ -90,7 +87,6 @@ fn app(cx: Scope) -> Element {
     );
     // mouse_dblclick_div
     mock_event(
-        cx,
         "mouse_dblclick_div",
         r#"new MouseEvent("dblclick", {
         view: window,
@@ -102,7 +98,6 @@ fn app(cx: Scope) -> Element {
     );
     // mouse_down_div
     mock_event(
-        cx,
         "mouse_down_div",
         r#"new MouseEvent("mousedown", {
         view: window,
@@ -114,7 +109,6 @@ fn app(cx: Scope) -> Element {
     );
     // mouse_up_div
     mock_event(
-        cx,
         "mouse_up_div",
         r#"new MouseEvent("mouseup", {
         view: window,
@@ -126,7 +120,6 @@ fn app(cx: Scope) -> Element {
     );
     // wheel_div
     mock_event(
-        cx,
         "wheel_div",
         r#"new WheelEvent("wheel", {
         view: window,
@@ -139,7 +132,6 @@ fn app(cx: Scope) -> Element {
     );
     // key_down_div
     mock_event(
-        cx,
         "key_down_div",
         r#"new KeyboardEvent("keydown", {
         key: "a",
@@ -161,7 +153,6 @@ fn app(cx: Scope) -> Element {
     );
     // key_up_div
     mock_event(
-        cx,
         "key_up_div",
         r#"new KeyboardEvent("keyup", {
         key: "a",
@@ -183,7 +174,6 @@ fn app(cx: Scope) -> Element {
     );
     // key_press_div
     mock_event(
-        cx,
         "key_press_div",
         r#"new KeyboardEvent("keypress", {
         key: "a",
@@ -205,13 +195,11 @@ fn app(cx: Scope) -> Element {
     );
     // focus_in_div
     mock_event(
-        cx,
         "focus_in_div",
         r#"new FocusEvent("focusin", {bubbles: true})"#,
     );
     // focus_out_div
     mock_event(
-        cx,
         "focus_out_div",
         r#"new FocusEvent("focusout",{bubbles: true})"#,
     );

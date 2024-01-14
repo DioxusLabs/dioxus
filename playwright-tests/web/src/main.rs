@@ -2,9 +2,9 @@
 
 use dioxus::prelude::*;
 
-fn app(cx: Scope) -> Element {
-    let mut num = use_state(cx, || 0);
-    let eval_result = use_state(cx, String::new);
+fn app() -> Element {
+    let mut num = use_state(|| 0);
+    let eval_result = use_state(String::new);
 
     let eval_provider = dioxus_html::prelude::use_eval(cx);
 

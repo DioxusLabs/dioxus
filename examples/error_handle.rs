@@ -5,7 +5,7 @@ fn main() {
 }
 
 #[component]
-fn App(cx: Scope) -> Element {
+fn App() -> Element {
     cx.render(rsx! {
         ErrorBoundary {
             handle_error: |error: CapturedError| rsx! {"Found error {error}"},
@@ -17,7 +17,7 @@ fn App(cx: Scope) -> Element {
 }
 
 #[component]
-fn DemoC(cx: Scope, x: i32) -> Element {
+fn DemoC(x: i32) -> Element {
     let result = Err("Error");
 
     result.throw()?;

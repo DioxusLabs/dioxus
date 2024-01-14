@@ -50,7 +50,7 @@ enum Route {
 }
 
 #[component]
-fn Blog(cx: Scope) -> Element {
+fn Blog() -> Element {
     render! {
         Link { to: Route::Home {}, "Go to counter" }
         table {
@@ -68,9 +68,9 @@ fn Blog(cx: Scope) -> Element {
 }
 
 #[component]
-fn Home(cx: Scope) -> Element {
-    let mut count = use_state(cx, || 0);
-    let text = use_state(cx, || "...".to_string());
+fn Home() -> Element {
+    let mut count = use_state(|| 0);
+    let text = use_state(|| "...".to_string());
 
     cx.render(rsx! {
         Link {

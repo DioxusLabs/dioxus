@@ -1,3 +1,4 @@
+use std::cell::{RefCell, RefMut};
 use std::{
     any::Any,
     collections::HashSet,
@@ -42,7 +43,7 @@ pub struct RouterContext {
     subscriber_update: Arc<dyn Fn(ScopeId)>,
     routing_callback: Option<AnyRoutingCallback>,
 
-    failure_external_navigation: fn(Scope) -> Element,
+    failure_external_navigation: fn() -> Element,
 
     any_route_to_string: fn(&dyn Any) -> String,
 }
@@ -287,12 +288,12 @@ impl RouterContext {
         self.update_subscribers();
     }
 
-    pub(crate) fn render_error<'a>(&self, cx: Scope<'a>) -> Element<'a> {
+    pub(crate) fn render_error(&self) -> Element {
         self.state
             .borrow()
             .unresolved_error
             .as_ref()
-            .and_then(|_| (self.failure_external_navigation)(cx))
+            .and_then(|_| (self.failure_external_navigation)())
     }
 
     fn change_route(&self) -> Option<ExternalNavigationFailure> {

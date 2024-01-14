@@ -25,7 +25,7 @@ macro_rules! use_callback {
     };
 }
 
-pub fn use_callback<T, R, F>(cx: &ScopeState, make: impl FnOnce() -> R) -> impl FnMut(T) + '_
+pub fn use_callback<T, R, F>(, make: impl FnOnce() -> R) -> impl FnMut(T) + '_
 where
     R: FnMut(T) -> F + 'static,
     F: Future<Output = ()> + 'static,
@@ -35,14 +35,14 @@ where
     move |evt| cx.spawn(hook(evt))
 }
 
-fn _it_works(cx: &ScopeState) {
-    let _p = use_callback(cx, || {
+fn _it_works() {
+    let _p = use_callback(|| {
         |()| async {
             //
         }
     });
 
-    // let p = use_callback!(cx, || |evt| async {
+    // let p = use_callback!(|| |evt| async {
     //     //
     // });
 }

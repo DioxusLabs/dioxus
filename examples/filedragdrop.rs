@@ -10,7 +10,7 @@ fn main() {
     dioxus_desktop::launch_with_props(app, (), cfg);
 }
 
-fn app(cx: Scope) -> Element {
+fn app() -> Element {
     cx.render(rsx!(
         div {
             h1 { "drag a file here and check your console" }

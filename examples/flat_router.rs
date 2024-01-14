@@ -15,7 +15,7 @@ fn main() {
 }
 
 #[component]
-fn App(cx: Scope) -> Element {
+fn App() -> Element {
     render! {
         Router::<Route> {}
     }
@@ -36,7 +36,7 @@ enum Route {
 }
 
 #[component]
-fn Footer(cx: Scope) -> Element {
+fn Footer() -> Element {
     render! {
         div {
             Outlet::<Route> { }
@@ -58,21 +58,21 @@ fn Footer(cx: Scope) -> Element {
 }
 
 #[component]
-fn Home(cx: Scope) -> Element {
+fn Home() -> Element {
     render!("Home")
 }
 
 #[component]
-fn Games(cx: Scope) -> Element {
+fn Games() -> Element {
     render!("Games")
 }
 
 #[component]
-fn Play(cx: Scope) -> Element {
+fn Play() -> Element {
     render!("Play")
 }
 
 #[component]
-fn Settings(cx: Scope) -> Element {
+fn Settings() -> Element {
     render!("Settings")
 }

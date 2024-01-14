@@ -1,9 +1,9 @@
 use crate::{
     any_props::{AnyProps, BoxedAnyProps},
-    innerlude::DirtyScope,
+    innerlude::{DirtyScope, ScopeState},
     nodes::RenderReturn,
     scope_context::ScopeContext,
-    scopes::{ScopeId, ScopeState},
+    scopes::ScopeId,
     virtual_dom::VirtualDom,
 };
 

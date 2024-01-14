@@ -8,7 +8,7 @@ fn main() {
     dioxus_tui::launch(app);
 }
 
-fn app(cx: Scope) -> Element {
+fn app() -> Element {
     fn to_str(c: &[i32; 3]) -> String {
         let mut result = String::new();
         result += "#";
@@ -23,20 +23,20 @@ fn app(cx: Scope) -> Element {
         127 * b
     }
 
-    let q1_color = use_state(cx, || [200; 3]);
-    let q2_color = use_state(cx, || [200; 3]);
-    let q3_color = use_state(cx, || [200; 3]);
-    let q4_color = use_state(cx, || [200; 3]);
+    let q1_color = use_state(|| [200; 3]);
+    let q2_color = use_state(|| [200; 3]);
+    let q3_color = use_state(|| [200; 3]);
+    let q4_color = use_state(|| [200; 3]);
 
     let q1_color_str = to_str(q1_color);
     let q2_color_str = to_str(q2_color);
     let q3_color_str = to_str(q3_color);
     let q4_color_str = to_str(q4_color);
 
-    let page_coordinates = use_state(cx, || "".to_string());
-    let element_coordinates = use_state(cx, || "".to_string());
-    let buttons = use_state(cx, || "".to_string());
-    let modifiers = use_state(cx, || "".to_string());
+    let page_coordinates = use_state(|| "".to_string());
+    let element_coordinates = use_state(|| "".to_string());
+    let buttons = use_state(|| "".to_string());
+    let modifiers = use_state(|| "".to_string());
 
     let update_data = move |event: Event<MouseData>| {
         let mouse_data = event.inner();

@@ -589,7 +589,7 @@ impl RouteEnum {
                     #(#site_map,)*
                 ];
 
-                fn render<'a>(&self, cx: &'a dioxus::prelude::ScopeState, level: usize) -> dioxus::prelude::Element<'a> {
+                fn render<'a>(&self, cx: &'a dioxus::prelude::ScopeState, level: usize) -> dioxus::prelude::Element {
                     let myself = self.clone();
                     match (level, myself) {
                         #(#matches)*

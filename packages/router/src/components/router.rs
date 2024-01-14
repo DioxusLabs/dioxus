@@ -61,6 +61,15 @@ where
     config: RouterConfigFactory<R>,
 }
 
+impl<T: Routable> Clone for RouterProps<T>
+where
+    <T as FromStr>::Err: std::fmt::Display,
+{
+    fn clone(&self) -> Self {
+        todo!()
+    }
+}
+
 #[cfg(not(feature = "serde"))]
 impl<R: Routable> Default for RouterProps<R>
 where
@@ -111,26 +120,27 @@ where
 
 #[cfg(not(feature = "serde"))]
 /// A component that renders the current route.
-pub fn Router<R: Routable + Clone>(cx: Scope<RouterProps<R>>) -> Element
+pub fn Router<R: Routable + Clone>(props: RouterProps<R>) -> Element
 where
     <R as FromStr>::Err: std::fmt::Display,
 {
     use crate::prelude::{outlet::OutletContext, RouterContext};
 
-    use_context_provider(cx, || {
-        RouterContext::new(
-            (cx.props
-                .config
-                .config
-                .take()
-                .expect("use_context_provider ran twice"))(),
-            cx.schedule_update_any(),
-        )
-    });
-    use_context_provider(cx, || OutletContext::<R> {
-        current_level: 0,
-        _marker: std::marker::PhantomData,
-    });
+    todo!();
+    // use_context_provider(|| {
+    //     RouterContext::new(
+    //         (props
+    //             .config
+    //             .config
+    //             .take()
+    //             .expect("use_context_provider ran twice"))(),
+    //         schedule_update_any(),
+    //     )
+    // });
+    // use_context_provider(|| OutletContext::<R> {
+    //     current_level: 0,
+    //     _marker: std::marker::PhantomData,
+    // });
 
     render! {
         Outlet::<R> {}
@@ -144,7 +154,7 @@ where
     <R as FromStr>::Err: std::fmt::Display,
     R: serde::Serialize + serde::de::DeserializeOwned,
 {
-    use_context_provider(cx, || {
+    use_context_provider(|| {
         RouterContext::new(
             (cx.props
                 .config
@@ -154,7 +164,7 @@ where
             cx.schedule_update_any(),
         )
     });
-    use_context_provider(cx, || OutletContext::<R> {
+    use_context_provider(|| OutletContext::<R> {
         current_level: 0,
         _marker: std::marker::PhantomData,
     });

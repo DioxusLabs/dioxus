@@ -5,10 +5,10 @@ fn main() {
     dioxus_desktop::launch(app);
 }
 
-fn app(cx: Scope) -> Element {
-    let mut count = use_signal(cx, || 0);
+fn app() -> Element {
+    let mut count = use_signal(|| 0);
 
-    use_future!(cx, || async move {
+    use_future!(|| async move {
         loop {
             tokio::time::sleep(std::time::Duration::from_millis(10)).await;
             count += 1;

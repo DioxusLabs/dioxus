@@ -49,7 +49,7 @@ where
     }
 }
 
-fn default_external_navigation_handler() -> fn(Scope) -> Element {
+fn default_external_navigation_handler() -> fn() -> Element {
     dioxus_router::prelude::FailureExternalNavigation
 }
 
@@ -62,7 +62,7 @@ where
 {
     #[serde(skip)]
     #[serde(default = "default_external_navigation_handler")]
-    failure_external_navigation: fn(Scope) -> Element,
+    failure_external_navigation: fn() -> Element,
     scroll_restoration: bool,
     #[serde(skip)]
     phantom: std::marker::PhantomData<R>,

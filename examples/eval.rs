@@ -4,8 +4,8 @@ fn main() {
     dioxus_desktop::launch(app);
 }
 
-fn app(cx: Scope) -> Element {
-    let future = use_future(cx, (), |_| async move {
+fn app() -> Element {
+    let future = use_future((), |_| async move {
         let eval = eval(
             r#"
                 dioxus.send("Hi from JS!");

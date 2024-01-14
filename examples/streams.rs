@@ -7,10 +7,10 @@ fn main() {
     dioxus_desktop::launch(app);
 }
 
-fn app(cx: Scope) -> Element {
-    let count = use_signal(cx, || 10);
+fn app() -> Element {
+    let count = use_signal(|| 10);
 
-    use_future(cx, (), |_| async move {
+    use_future((), |_| async move {
         let mut stream = some_stream();
 
         while let Some(second) = stream.next().await {

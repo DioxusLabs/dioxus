@@ -29,7 +29,7 @@ impl CallbackApi {
 }
 
 #[must_use]
-pub fn use_atom_context(cx: &ScopeState) -> &CallbackApi {
+pub fn use_atom_context() -> &CallbackApi {
     todo!()
 }
 

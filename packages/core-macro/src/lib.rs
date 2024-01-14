@@ -65,7 +65,7 @@ pub fn render(s: TokenStream) -> TokenStream {
 /// # Example
 /// ```rust,ignore
 /// #[inline_props]
-/// fn app(cx: Scope, bob: String) -> Element {
+/// fn app(bob: String) -> Element {
 ///     cx.render(rsx!("hello, {bob}"))
 /// }
 ///
@@ -128,17 +128,17 @@ pub(crate) const COMPONENT_ARG_CASE_CHECK_OFF: &str = "no_case_check";
 /// * Without props:
 /// ```rust,ignore
 /// #[component]
-/// fn GreetBob(cx: Scope) -> Element {
+/// fn GreetBob() -> Element {
 ///     render! { "hello, bob" }
 /// }
 ///
 /// // is equivalent to
 ///
 /// #[allow(non_snake_case)]
-/// fn GreetBob(cx: Scope) -> Element {
+/// fn GreetBob() -> Element {
 ///     #[warn(non_snake_case)]
 ///     #[inline(always)]
-///     fn __dx_inner_comp(cx: Scope) -> Element {
+///     fn __dx_inner_comp() -> Element {
 ///         render! { "hello, bob" }
 ///     }
 ///     // There's no function call overhead since __dx_inner_comp has the #[inline(always)] attribute,
@@ -149,7 +149,7 @@ pub(crate) const COMPONENT_ARG_CASE_CHECK_OFF: &str = "no_case_check";
 /// * With props:
 /// ```rust,ignore
 /// #[component(no_case_check)]
-/// fn GreetPerson(cx: Scope, person: String) -> Element {
+/// fn GreetPerson(person: String) -> Element {
 ///     render! { "hello, {person}" }
 /// }
 ///
@@ -162,10 +162,10 @@ pub(crate) const COMPONENT_ARG_CASE_CHECK_OFF: &str = "no_case_check";
 /// }
 ///
 /// #[allow(non_snake_case)]
-/// fn GreetPerson<'a>(cx: Scope<'a, GreetPersonProps>) -> Element {
+/// fn GreetPerson(props: GreetPersonProps>) -> Element {
 ///     #[warn(non_snake_case)]
 ///     #[inline(always)]
-///     fn __dx_inner_comp<'a>(cx: Scope<'a, GreetPersonProps>e) -> Element {
+///     fn __dx_inner_comp(props: GreetPersonProps>e) -> Element {
 ///         let GreetPersonProps { person } = &cx.props;
 ///         {
 ///             render! { "hello, {person}" }

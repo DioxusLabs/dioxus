@@ -99,6 +99,10 @@ pub fn once<State: Clone + 'static>(initializer: impl FnOnce() -> State) -> Stat
     with_current_scope(|cx| cx.use_hook(initializer)).expect("to be in a dioxus runtime")
 }
 
+pub fn use_hook<State: Clone + 'static>(initializer: impl FnOnce() -> State) -> State {
+    once(initializer)
+}
+
 /// Get the current render since the inception of this component
 ///
 /// This can be used as a helpful diagnostic when debugging hooks/renders, etc

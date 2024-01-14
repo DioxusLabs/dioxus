@@ -4,8 +4,8 @@ fn main() {
     dioxus_tui::launch(app);
 }
 
-fn app(cx: Scope) -> Element {
-    let radius = use_state(cx, || 0);
+fn app() -> Element {
+    let radius = use_state(|| 0);
 
     cx.render(rsx! {
         div {

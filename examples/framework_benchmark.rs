@@ -31,9 +31,9 @@ impl Label {
     }
 }
 
-fn app(cx: Scope) -> Element {
-    let items = use_ref(cx, Vec::new);
-    let selected = use_state(cx, || None);
+fn app() -> Element {
+    let items = use_ref(Vec::new);
+    let selected = use_state(|| None);
 
     cx.render(rsx! {
         div { class: "container",
@@ -97,7 +97,7 @@ struct ActionButtonProps<'a> {
     onclick: EventHandler<'a>,
 }
 
-fn ActionButton<'a>(cx: Scope<'a, ActionButtonProps<'a>>) -> Element {
+fn ActionButton(props: ActionButtonProps) -> Element {
     cx.render(rsx! {
         div {
             class: "col-sm-6 smallpad",

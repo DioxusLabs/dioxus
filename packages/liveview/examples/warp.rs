@@ -5,8 +5,8 @@ use std::net::SocketAddr;
 use warp::ws::Ws;
 use warp::Filter;
 
-fn app(cx: Scope) -> Element {
-    let mut num = use_state(cx, || 0);
+fn app() -> Element {
+    let mut num = use_state(|| 0);
 
     cx.render(rsx! {
         div {

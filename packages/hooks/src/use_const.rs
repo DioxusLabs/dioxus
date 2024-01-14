@@ -11,8 +11,8 @@ use dioxus_core::prelude::*;
 /// ```rust, ignore
 /// struct ComplexData(i32);
 ///
-/// fn Component(cx: Scope) -> Element {
-///   let id = use_const(cx, || ComplexData(100));
+/// fn Component() -> Element {
+///   let id = use_const(|| ComplexData(100));
 ///
 ///   cx.render(rsx! {
 ///     div { "{id.0}" }
@@ -20,8 +20,7 @@ use dioxus_core::prelude::*;
 /// }
 /// ```
 #[must_use]
-pub fn use_const<T: 'static>(
-    cx: &ScopeState,
+pub fn use_const<T: 'static>
     initial_state_fn: impl FnOnce() -> T,
 ) -> &UseConst<T> {
     cx.use_hook(|| UseConst {
@@ -64,8 +63,8 @@ impl<T> std::ops::Deref for UseConst<T> {
 fn use_const_makes_sense() {
     #[allow(unused)]
 
-    fn app(cx: Scope) -> Element {
-        let const_val = use_const(cx, || vec![0, 1, 2, 3]);
+    fn app() -> Element {
+        let const_val = use_const(|| vec![0, 1, 2, 3]);
 
         assert!(const_val[0] == 0);
 

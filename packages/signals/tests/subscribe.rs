@@ -19,7 +19,7 @@ fn reading_subscribes() {
     let counter = Rc::new(RefCell::new(RunCounter::default()));
     let mut dom = VirtualDom::new_with_props(
         |cx| {
-            let mut signal = use_signal(cx, || 0);
+            let mut signal = use_signal(|| 0);
 
             println!("Parent: {:?}", cx.scope_id());
             if generation() == 1 {

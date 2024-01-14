@@ -14,7 +14,7 @@ use crate::prelude::*;
 /// # use dioxus_router::prelude::*;
 /// # use dioxus::prelude::*;
 /// # #[component]
-/// # fn Index(cx: Scope) -> Element {
+/// # fn Index() -> Element {
 /// #     todo!()
 /// # }
 /// #[derive(Clone, Routable)]
@@ -25,7 +25,7 @@ use crate::prelude::*;
 /// let cfg = RouterConfig::default().history(WebHistory::<Route>::default());
 /// ```
 pub struct RouterConfig<R: Routable> {
-    pub(crate) failure_external_navigation: fn(Scope) -> Element,
+    pub(crate) failure_external_navigation: fn() -> Element,
     pub(crate) history: Option<Box<dyn AnyHistoryProvider>>,
     pub(crate) on_update: Option<RoutingCallback<R>>,
 }
@@ -146,7 +146,7 @@ where
     /// A component to render when an external navigation fails.
     ///
     /// Defaults to a router-internal component called [`FailureExternalNavigation`]
-    pub fn failure_external_navigation(self, component: fn(Scope) -> Element) -> Self {
+    pub fn failure_external_navigation(self, component: fn() -> Element) -> Self {
         Self {
             failure_external_navigation: component,
             ..self

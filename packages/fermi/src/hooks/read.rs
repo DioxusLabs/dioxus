@@ -1,14 +1,14 @@
 use crate::{use_atom_root, AtomId, AtomRoot, Readable};
-use dioxus_core::{ScopeId, ScopeState};
+use dioxus_core::ScopeId;
 use std::rc::Rc;
 
 #[must_use]
-pub fn use_read<V: 'static>(cx: &ScopeState, f: impl Readable<V>) -> &V {
-    use_read_rc(cx, f).as_ref()
+pub fn use_read<V: 'static>(f: impl Readable<V>) -> &V {
+    use_read_rc(f).as_ref()
 }
 
 #[must_use]
-pub fn use_read_rc<V: 'static>(cx: &ScopeState, f: impl Readable<V>) -> &Rc<V> {
+pub fn use_read_rc<V: 'static>(f: impl Readable<V>) -> &Rc<V> {
     let root = use_atom_root(cx);
 
     struct UseReadInner<V> {

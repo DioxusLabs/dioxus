@@ -4,8 +4,8 @@ fn main() {
     dioxus_desktop::launch(app);
 }
 
-fn app(cx: Scope) -> Element {
-    let login = use_callback!(cx, move |_| async move {
+fn app() -> Element {
+    let login = use_callback!(move |_| async move {
         let res = reqwest::get("https://dog.ceo/api/breeds/list/all")
             .await
             .unwrap()

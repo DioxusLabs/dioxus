@@ -9,10 +9,10 @@ fn main() {
     dioxus_desktop::launch(app);
 }
 
-fn app(cx: Scope) -> Element {
-    let count = use_state(cx, || 0);
+fn app() -> Element {
+    let count = use_state(|| 0);
 
-    use_future(cx, (), move |_| {
+    use_future((), move |_| {
         let mut count = count.clone();
         async move {
             loop {

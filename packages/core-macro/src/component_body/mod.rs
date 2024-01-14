@@ -66,11 +66,11 @@
 //! use dioxus::prelude::*;
 //!
 //! #[name_changer(CoolName)]
-//! pub fn LameName(cx: Scope) -> Element {
+//! pub fn LameName() -> Element {
 //!     render! { "I want a cool name!" }
 //! }
 //!
-//! pub fn App(cx: Scope) -> Element {
+//! pub fn App() -> Element {
 //!     render! { CoolName {} } // Renders: "I want a cool name!"
 //! }
 //! ```

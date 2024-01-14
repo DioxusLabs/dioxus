@@ -14,12 +14,12 @@ struct ApplicationData {
     many_signals: Signal<Vec<Signal<i32>>>,
 }
 
-fn use_app_data(cx: Scope) -> ApplicationData {
+fn use_app_data() -> ApplicationData {
     *use_context(cx).unwrap()
 }
 
-fn app(cx: Scope) -> Element {
-    use_context_provider(cx, ApplicationData::default);
+fn app() -> Element {
+    use_context_provider(ApplicationData::default);
 
     render! {
         div { ReadsFirst {} }
@@ -28,7 +28,7 @@ fn app(cx: Scope) -> Element {
     }
 }
 
-fn ReadsFirst(cx: Scope) -> Element {
+fn ReadsFirst() -> Element {
     println!("running first");
     let data = use_app_data(cx);
 
@@ -55,7 +55,7 @@ fn ReadsFirst(cx: Scope) -> Element {
     }
 }
 
-fn ReadsSecond(cx: Scope) -> Element {
+fn ReadsSecond() -> Element {
     println!("running second");
     let data = use_app_data(cx);
 
@@ -82,7 +82,7 @@ fn ReadsSecond(cx: Scope) -> Element {
     }
 }
 
-fn ReadsManySignals(cx: Scope) -> Element {
+fn ReadsManySignals() -> Element {
     println!("running many signals");
     let data = use_app_data(cx);
 

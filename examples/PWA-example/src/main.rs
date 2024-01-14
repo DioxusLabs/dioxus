@@ -8,7 +8,7 @@ fn main() {
     dioxus_web::launch(app);
 }
 
-fn app(cx: Scope) -> Element {
+fn app() -> Element {
     cx.render(rsx! (
         div {
             style: "text-align: center;",

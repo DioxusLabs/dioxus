@@ -12,9 +12,9 @@ struct ListBreeds {
 
 #[component]
 fn AppRoot(cx: Scope<'_>) -> Element {
-    let breed = use_state(cx, || "deerhound".to_string());
+    let breed = use_state(|| "deerhound".to_string());
 
-    let breeds = use_future!(cx, || async move {
+    let breeds = use_future!(|| async move {
         reqwest::get("https://dog.ceo/api/breeds/list/all")
             .await
             .unwrap()
@@ -51,8 +51,8 @@ struct DogApi {
 }
 
 #[component]
-fn BreedPic(cx: Scope, breed: String) -> Element {
-    let fut = use_future!(cx, |breed| async move {
+fn BreedPic(breed: String) -> Element {
+    let fut = use_future!(|breed| async move {
         reqwest::get(format!("https://dog.ceo/api/breed/{breed}/images/random"))
             .await
             .unwrap()

@@ -42,7 +42,7 @@
 Leverage React-like patterns, CSS, HTML, and Rust to build beautiful, portable, terminal user interfaces with Dioxus.
 
 ```rust
-fn app(cx: Scope) -> Element {
+fn app() -> Element {
     cx.render(rsx!{
         div {
             width: "100%",

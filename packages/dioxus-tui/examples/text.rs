@@ -4,8 +4,8 @@ fn main() {
     dioxus_tui::launch(app);
 }
 
-fn app(cx: Scope) -> Element {
-    let alpha = use_state(cx, || 100);
+fn app() -> Element {
+    let alpha = use_state(|| 100);
 
     cx.render(rsx! {
         div {

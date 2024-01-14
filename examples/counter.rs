@@ -7,8 +7,8 @@ fn main() {
     dioxus_desktop::launch(app);
 }
 
-fn app(cx: Scope) -> Element {
-    let counters = use_state(cx, || vec![0, 0, 0]);
+fn app() -> Element {
+    let counters = use_state(|| vec![0, 0, 0]);
     let sum: usize = counters.iter().copied().sum();
 
     render! {

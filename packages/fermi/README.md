@@ -41,8 +41,8 @@ static NAME: Atom<&str> = Atom(|_| "Dioxus");
 From anywhere in our app, we can read the value of our atom:
 
 ```rust, ignore
-fn NameCard(cx: Scope) -> Element {
-    let name = use_read(cx, &NAME);
+fn NameCard() -> Element {
+    let name = use_read(&NAME);
     cx.render(rsx!{ h1 { "Hello, {name}"} })
 }
 ```
@@ -50,8 +50,8 @@ fn NameCard(cx: Scope) -> Element {
 We can also set the value of our atom, also from anywhere in our app:
 
 ```rust, ignore
-fn NameCard(cx: Scope) -> Element {
-    let set_name = use_set(cx, &NAME);
+fn NameCard() -> Element {
+    let set_name = use_set(&NAME);
     cx.render(rsx!{
         button {
             onclick: move |_| set_name("Fermi"),
@@ -66,8 +66,8 @@ If needed, we can update the atom's value, based on itself:
 ```rust, ignore
 static COUNT: Atom<i32> = Atom(|_| 0);
 
-fn Counter(cx: Scope) -> Element {
-    let mut count = use_atom_state(cx, &COUNT);
+fn Counter() -> Element {
+    let mut count = use_atom_state(&COUNT);
 
     cx.render(rsx!{
         p {

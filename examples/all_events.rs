@@ -40,8 +40,8 @@ const RECT_STYLE: &str = r#"
         text-aligh: center;
     "#;
 
-fn app(cx: Scope) -> Element {
-    let events = use_ref(cx, std::collections::VecDeque::new);
+fn app() -> Element {
+    let events = use_ref(std::collections::VecDeque::new);
 
     let log_event = move |event: Event| {
         let mut events = events.write();

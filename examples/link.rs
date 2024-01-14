@@ -6,7 +6,7 @@ fn main() {
 }
 
 #[component]
-fn App(cx: Scope) -> Element {
+fn App() -> Element {
     cx.render(rsx! (
         div {
             p {
@@ -38,7 +38,7 @@ enum Route {
 }
 
 #[component]
-fn Header(cx: Scope) -> Element {
+fn Header() -> Element {
     render! {
         h1 { "Your app here" }
         ul {
@@ -50,11 +50,11 @@ fn Header(cx: Scope) -> Element {
 }
 
 #[component]
-fn Home(cx: Scope) -> Element {
+fn Home() -> Element {
     render!(h1 { "Home" })
 }
 
 #[component]
-fn Settings(cx: Scope) -> Element {
+fn Settings() -> Element {
     render!(h1 { "Settings" })
 }

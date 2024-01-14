@@ -47,14 +47,14 @@ enum Route {
 }
 
 #[component]
-fn App(cx: Scope) -> Element {
+fn App() -> Element {
     render! {
         Router::<Route> { }
     }
 }
 
 #[component]
-fn Index(cx: Scope) -> Element {
+fn Index() -> Element {
     render! {
         h1 { "Index" }
         Link {
@@ -65,7 +65,7 @@ fn Index(cx: Scope) -> Element {
 }
 
 #[component]
-fn Blog(cx: Scope) -> Element {
+fn Blog() -> Element {
     render! {
         h1 { "Blog" }
         Outlet::<Route> { }
@@ -73,7 +73,7 @@ fn Blog(cx: Scope) -> Element {
 }
 
 #[component]
-fn BlogList(cx: Scope) -> Element {
+fn BlogList() -> Element {
     render! {
         h2 { "List of blog posts" }
         Link {
@@ -88,7 +88,7 @@ fn BlogList(cx: Scope) -> Element {
 }
 
 #[component]
-fn BlogPost(cx: Scope, blog_id: usize) -> Element {
+fn BlogPost(blog_id: usize) -> Element {
     render! {
         h2 { "Blog Post" }
     }

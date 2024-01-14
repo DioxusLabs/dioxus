@@ -22,7 +22,7 @@ fn effects_rerun() {
             let counter = cx.props;
             counter.borrow_mut().component += 1;
 
-            let mut signal = use_signal(cx, || 0);
+            let mut signal = use_signal(|| 0);
             cx.use_hook(move || {
                 to_owned![counter];
                 Effect::new(move || {

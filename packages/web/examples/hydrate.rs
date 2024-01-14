@@ -2,7 +2,7 @@ use dioxus::prelude::*;
 use dioxus_web::Config;
 use web_sys::window;
 
-fn app(cx: Scope) -> Element {
+fn app() -> Element {
     cx.render(rsx! {
         div { h1 { "thing 1" } }
         div { h2 { "thing 2" } }
@@ -21,7 +21,7 @@ fn app(cx: Scope) -> Element {
 }
 
 #[allow(non_snake_case)]
-fn Bapp(cx: Scope) -> Element {
+fn Bapp() -> Element {
     cx.render(rsx! {
         div { h1 { "thing 1" } }
         div { h2 { "thing 2" } }

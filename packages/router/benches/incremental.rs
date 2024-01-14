@@ -135,7 +135,7 @@ criterion_group!(benches, criterion_benchmark);
 criterion_main!(benches);
 
 #[component]
-fn Blog(cx: Scope) -> Element {
+fn Blog() -> Element {
     render! {
         div {
             "Blog"
@@ -144,7 +144,7 @@ fn Blog(cx: Scope) -> Element {
 }
 
 #[component]
-fn Post(cx: Scope, id: usize) -> Element {
+fn Post(id: usize) -> Element {
     render! {
         for _ in 0..*id {
             div {
@@ -155,7 +155,7 @@ fn Post(cx: Scope, id: usize) -> Element {
 }
 
 #[component]
-fn PostHome(cx: Scope) -> Element {
+fn PostHome() -> Element {
     render! {
         div {
             "Post"
@@ -164,7 +164,7 @@ fn PostHome(cx: Scope) -> Element {
 }
 
 #[component]
-fn Home(cx: Scope) -> Element {
+fn Home() -> Element {
     render! {
         div {
             "Home"
@@ -190,7 +190,7 @@ enum Route {
 }
 
 #[component]
-fn RenderPath(cx: Scope, path: Route) -> Element {
+fn RenderPath(path: Route) -> Element {
     let path = path.clone();
     render! {
         Router::<Route> {

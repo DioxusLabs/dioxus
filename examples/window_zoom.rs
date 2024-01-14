@@ -4,8 +4,8 @@ fn main() {
     dioxus_desktop::launch(app);
 }
 
-fn app(cx: Scope) -> Element {
-    let level = use_state(cx, || 1.0);
+fn app() -> Element {
+    let level = use_state(|| 1.0);
 
     cx.render(rsx! {
         input {

@@ -53,18 +53,18 @@ fn main() {
 
 #[cfg(feature = "liveview")]
 #[component]
-fn Root(cx: Scope) -> Element {
+fn Root() -> Element {
     render! { Router::<Route> {} }
 }
 
 #[cfg(not(feature = "liveview"))]
 #[component]
-fn Root(cx: Scope) -> Element {
+fn Root() -> Element {
     render! { Router::<Route> {} }
 }
 
 #[component]
-fn UserFrame(cx: Scope, user_id: usize) -> Element {
+fn UserFrame(user_id: usize) -> Element {
     render! {
         pre { "UserFrame{{\n\tuser_id:{user_id}\n}}" }
         div { background_color: "rgba(0,0,0,50%)",
@@ -75,7 +75,7 @@ fn UserFrame(cx: Scope, user_id: usize) -> Element {
 }
 
 #[component]
-fn Route1(cx: Scope, user_id: usize, dynamic: usize, query: String, extra: String) -> Element {
+fn Route1(user_id: usize, dynamic: usize, query: String, extra: String) -> Element {
     render! {
         pre {
             "Route1{{\n\tuser_id:{user_id},\n\tdynamic:{dynamic},\n\tquery:{query},\n\textra:{extra}\n}}"
@@ -100,7 +100,7 @@ fn Route1(cx: Scope, user_id: usize, dynamic: usize, query: String, extra: Strin
 }
 
 #[component]
-fn Route2(cx: Scope, user_id: usize) -> Element {
+fn Route2(user_id: usize) -> Element {
     render! {
         pre { "Route2{{\n\tuser_id:{user_id}\n}}" }
         {(0..*user_id).map(|i| rsx!{ p { "{i}" } })},
@@ -115,9 +115,9 @@ fn Route2(cx: Scope, user_id: usize) -> Element {
 }
 
 #[component]
-fn Route3(cx: Scope, dynamic: String) -> Element {
-    let current_route = use_route(cx)?;
-    let current_route_str = use_ref(cx, String::new);
+fn Route3(dynamic: String) -> Element {
+    let current_route = use_route()?;
+    let current_route_str = use_ref(String::new);
     let parsed = Route::from_str(&current_route_str.read());
 
     let site_map = Route::SITE_MAP
@@ -125,7 +125,7 @@ fn Route3(cx: Scope, dynamic: String) -> Element {
         .flat_map(|seg| seg.flatten().into_iter())
         .collect::<Vec<_>>();
 
-    let navigator = use_navigator(cx);
+    let navigator = use_navigator();
 
     render! {
         input {

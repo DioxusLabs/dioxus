@@ -1,8 +1,8 @@
 use dioxus::prelude::*;
 
-fn app(cx: Scope) -> Element {
-    let state = use_state(cx, || 0);
-    use_future(cx, (), |_| {
+fn app() -> Element {
+    let state = use_state(|| 0);
+    use_future((), |_| {
         to_owned![state];
         async move {
             loop {

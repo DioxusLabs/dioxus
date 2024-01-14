@@ -5,8 +5,8 @@ pub fn Explainer<'a>(
     cx: Scope<'a>,
     invert: bool,
     title: &'static str,
-    content: Element<'a>,
-    flasher: Element<'a>,
+    content: Element,
+    flasher: Element,
 ) -> Element {
     // pt-5 sm:pt-24 lg:pt-24
 

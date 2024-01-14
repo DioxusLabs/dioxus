@@ -1,5 +1,3 @@
-use dioxus::prelude::ScopeState;
-
 use crate::prelude::*;
 use crate::utils::use_router_internal::use_router_internal;
 
@@ -26,7 +24,7 @@ use crate::utils::use_router_internal::use_router_internal;
 /// }
 ///
 /// #[component]
-/// fn App(cx: Scope) -> Element {
+/// fn App() -> Element {
 ///     render! {
 ///         h1 { "App" }
 ///         Router::<Route> {}
@@ -34,7 +32,7 @@ use crate::utils::use_router_internal::use_router_internal;
 /// }
 ///
 /// #[component]
-/// fn Index(cx: Scope) -> Element {
+/// fn Index() -> Element {
 ///     let path: Route = use_route(&cx).unwrap();
 ///     render! {
 ///         h2 { "Current Path" }
@@ -47,8 +45,8 @@ use crate::utils::use_router_internal::use_router_internal;
 /// # assert_eq!(dioxus_ssr::render(&vdom), "<h1>App</h1><h2>Current Path</h2><p>/</p>")
 /// ```
 #[must_use]
-pub fn use_route<R: Routable + Clone>(cx: &ScopeState) -> Option<R> {
-    match use_router_internal(cx) {
+pub fn use_route<R: Routable + Clone>() -> Option<R> {
+    match use_router_internal() {
         Some(r) => Some(r.current()),
         None => {
             #[cfg(debug_assertions)]

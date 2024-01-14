@@ -7,7 +7,7 @@ wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 
 #[test]
 fn makes_tree() {
-    fn app(cx: Scope) -> Element {
+    fn app() -> Element {
         cx.render(rsx! {
             div {
                 div {
@@ -28,7 +28,7 @@ fn makes_tree() {
 
 #[wasm_bindgen_test]
 fn rehydrates() {
-    fn app(cx: Scope) -> Element {
+    fn app() -> Element {
         cx.render(rsx! {
             div {
                 div {

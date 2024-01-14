@@ -7,10 +7,10 @@ fn main() {
     dioxus_desktop::launch(app);
 }
 
-fn app(cx: Scope) -> Element {
-    let emails_sent = use_ref(cx, Vec::new);
+fn app() -> Element {
+    let emails_sent = use_ref(Vec::new);
 
-    let tx = use_coroutine(cx, |mut rx: UnboundedReceiver<String>| {
+    let tx = use_coroutine(|mut rx: UnboundedReceiver<String>| {
         to_owned![emails_sent];
         async move {
             while let Some(message) = rx.next().await {
@@ -48,7 +48,7 @@ struct ComposeProps {
 }
 
 fn compose(cx: Scope<ComposeProps>) -> Element {
-    let user_input = use_state(cx, String::new);
+    let user_input = use_state(String::new);
 
     cx.render(rsx! {
         div {

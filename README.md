@@ -55,8 +55,8 @@
 Dioxus is a portable, performant, and ergonomic framework for building cross-platform user interfaces in Rust.
 
 ```rust
-fn app(cx: Scope) -> Element {
-    let mut count = use_state(cx, || 0);
+fn app() -> Element {
+    let mut count = use_state(|| 0);
 
     cx.render(rsx! {
         h1 { "High-Five counter: {count}" }

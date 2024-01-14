@@ -7,7 +7,7 @@ fn main() {
     dioxus_desktop::launch(app);
 }
 
-fn app(cx: Scope) -> Element {
+fn app() -> Element {
     let onsubmit = move |evt: FormEvent| async move {
         let resp = reqwest::Client::new()
             .post("http://localhost:8080/login")

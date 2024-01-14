@@ -24,8 +24,8 @@
 //!     }
 //! }
 //!
-//! fn app(cx: Scope) -> Element {
-//!     let text = use_state(cx, || "...".to_string());
+//! fn app() -> Element {
+//!     let text = use_state(|| "...".to_string());
 //!
 //!     cx.render(rsx! {
 //!         button {
@@ -199,7 +199,7 @@ pub trait DioxusRouterExt {
     ///         .await;
     /// }
     ///
-    /// fn app(cx: Scope) -> Element {todo!()}
+    /// fn app() -> Element {todo!()}
     /// ```
     fn serve_dioxus_application<P: Clone + serde::Serialize + Send + Sync + 'static>(
         self,

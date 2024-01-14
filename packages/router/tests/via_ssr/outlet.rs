@@ -48,14 +48,14 @@ fn prepare(path: impl Into<String>) -> VirtualDom {
     }
 
     #[component]
-    fn RootIndex(cx: Scope) -> Element {
+    fn RootIndex() -> Element {
         render! {
             h2 { "Root Index" }
         }
     }
 
     #[component]
-    fn Fixed(cx: Scope) -> Element {
+    fn Fixed() -> Element {
         render! {
             h2 { "Fixed" }
             Outlet::<Route> { }
@@ -63,21 +63,21 @@ fn prepare(path: impl Into<String>) -> VirtualDom {
     }
 
     #[component]
-    fn FixedIndex(cx: Scope) -> Element {
+    fn FixedIndex() -> Element {
         render! {
             h3 { "Fixed - Index" }
         }
     }
 
     #[component]
-    fn FixedFixed(cx: Scope) -> Element {
+    fn FixedFixed() -> Element {
         render! {
             h3 { "Fixed - Fixed"}
         }
     }
 
     #[component]
-    fn Parameter(cx: Scope, id: u8) -> Element {
+    fn Parameter(id: u8) -> Element {
         render! {
             h2 { "Parameter {id}" }
             Outlet::<Route> { }
@@ -85,14 +85,14 @@ fn prepare(path: impl Into<String>) -> VirtualDom {
     }
 
     #[component]
-    fn ParameterIndex(cx: Scope, id: u8) -> Element {
+    fn ParameterIndex(id: u8) -> Element {
         render! {
             h3 { "Parameter - Index" }
         }
     }
 
     #[component]
-    fn ParameterFixed(cx: Scope, id: u8) -> Element {
+    fn ParameterFixed(id: u8) -> Element {
         render! {
             h3 { "Parameter - Fixed" }
         }

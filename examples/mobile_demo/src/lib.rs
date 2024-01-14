@@ -59,7 +59,7 @@ pub fn main() -> Result<()> {
     Ok(())
 }
 
-fn app(cx: Scope) -> Element {
+fn app() -> Element {
     let items = cx.use_hook(|| vec![1, 2, 3]);
 
     log::debug!("Hello from the app");

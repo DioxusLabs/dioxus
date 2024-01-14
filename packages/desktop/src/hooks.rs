@@ -6,7 +6,7 @@ use tao::{event::Event, event_loop::EventLoopWindowTarget};
 use wry::RequestAsyncResponder;
 
 // /// Get an imperative handle to the current window
-// pub fn use_window(cx: &ScopeState) -> &DesktopContext {
+// pub fn use_window() -> &DesktopContext {
 //     cx.use_hook(|| cx.consume_context::<DesktopContext>())
 //         .as_ref()
 //         .unwrap()
@@ -14,7 +14,7 @@ use wry::RequestAsyncResponder;
 
 // /// Get a closure that executes any JavaScript in the WebView context.
 // pub fn use_wry_event_handler(
-//     cx: &ScopeState,
+//     ,
 //     handler: impl FnMut(&Event<UserWindowEvent>, &EventLoopWindowTarget<UserWindowEvent>) + 'static,
 // ) -> &WryEventHandler {
 //     cx.use_hook(move || {
@@ -34,7 +34,7 @@ use wry::RequestAsyncResponder;
 // /// The callback takes a path as requested by the web view, and it should return `Some(response)`
 // /// if you want to load the asset, and `None` if you want to fallback on the default behavior.
 // pub fn use_asset_handler(
-//     cx: &ScopeState,
+//     ,
 //     name: &str,
 //     handler: impl Fn(AssetRequest, RequestAsyncResponder) + 'static,
 // ) {
@@ -59,7 +59,7 @@ use wry::RequestAsyncResponder;
 
 // /// Get a closure that executes any JavaScript in the WebView context.
 // pub fn use_global_shortcut(
-//     cx: &ScopeState,
+//     ,
 //     accelerator: impl IntoAccelerator,
 //     handler: impl FnMut() + 'static,
 // ) -> &Result<ShortcutHandle, ShortcutRegistryError> {

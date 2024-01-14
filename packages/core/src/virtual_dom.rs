@@ -6,13 +6,13 @@ use crate::{
     any_props::{BoxedAnyProps, VProps},
     arena::ElementId,
     innerlude::{
-        DirtyScope, ElementRef, ErrorBoundary, NoOpMutations, Scheduler, SchedulerMsg, VNodeMount,
-        WriteMutations,
+        DirtyScope, ElementRef, ErrorBoundary, NoOpMutations, Scheduler, SchedulerMsg, ScopeState,
+        VNodeMount, WriteMutations,
     },
     nodes::RenderReturn,
     nodes::{Template, TemplateId},
     runtime::{Runtime, RuntimeGuard},
-    scopes::{ScopeId, ScopeState},
+    scopes::ScopeId,
     AttributeValue, Element, Event, MutationsVec,
 };
 use futures_util::{pin_mut, StreamExt};

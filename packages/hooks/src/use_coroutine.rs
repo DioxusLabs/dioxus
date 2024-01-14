@@ -46,7 +46,7 @@ use std::future::Future;
 ///     Stop,
 /// }
 ///
-/// let chat_client = use_coroutine(cx, |mut rx: UnboundedReceiver<Action>| async move {
+/// let chat_client = use_coroutine(|mut rx: UnboundedReceiver<Action>| async move {
 ///     while let Some(action) = rx.next().await {
 ///         match action {
 ///             Action::Start => {}
@@ -63,7 +63,7 @@ use std::future::Future;
 ///     }
 /// })
 /// ```
-pub fn use_coroutine<M, G, F>(cx: &ScopeState, init: G) -> &Coroutine<M>
+pub fn use_coroutine<M, G, F>(nit: G) -> &Coroutine<M>
 where
     M: 'static,
     G: FnOnce(UnboundedReceiver<M>) -> F,
@@ -80,7 +80,7 @@ where
 ///
 /// See the docs for [`use_coroutine`] for more details.
 #[must_use]
-pub fn use_coroutine_handle<M: 'static>(cx: &ScopeState) -> Option<&Coroutine<M>> {
+pub fn use_coroutine_handle<M: 'static>() -> Option<&Coroutine<M>> {
     cx.use_hook(|| cx.consume_context::<Coroutine<M>>())
         .as_ref()
 }
@@ -128,16 +128,16 @@ mod tests {
     use futures_channel::mpsc::unbounded;
     use futures_util::StreamExt;
 
-    fn app(cx: Scope, name: String) -> Element {
-        let task = use_coroutine(cx, |mut rx: UnboundedReceiver<i32>| async move {
+    fn app(name: String) -> Element {
+        let task = use_coroutine(|mut rx: UnboundedReceiver<i32>| async move {
             while let Some(msg) = rx.next().await {
                 println!("got message: {msg}");
             }
         });
 
-        let task2 = use_coroutine(cx, view_task);
+        let task2 = use_coroutine(view_task);
 
-        let task3 = use_coroutine(cx, |rx| complex_task(rx, 10));
+        let task3 = use_coroutine(|rx| complex_task(rx, 10));
 
         todo!()
     }

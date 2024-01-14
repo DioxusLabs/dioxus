@@ -25,10 +25,10 @@ fn main() {
     );
 }
 
-fn app(cx: Scope) -> Element {
-    let div_element: &UseRef<Option<Rc<MountedData>>> = use_ref(cx, || None);
+fn app() -> Element {
+    let div_element: &UseRef<Option<Rc<MountedData>>> = use_ref(|| None);
 
-    let dimentions = use_ref(cx, Rect::zero);
+    let dimentions = use_ref(Rect::zero);
 
     cx.render(rsx!(
         div {

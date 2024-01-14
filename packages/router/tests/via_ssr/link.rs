@@ -56,7 +56,7 @@ fn href_internal() {
     }
 
     #[component]
-    fn Root(cx: Scope) -> Element {
+    fn Root() -> Element {
         render! {
             Link {
                 to: Route::Test {},
@@ -94,7 +94,7 @@ fn href_external() {
     }
 
     #[component]
-    fn Root(cx: Scope) -> Element {
+    fn Root() -> Element {
         render! {
             Link {
                 to: "https://dioxuslabs.com/",
@@ -132,7 +132,7 @@ fn with_class() {
     }
 
     #[component]
-    fn Root(cx: Scope) -> Element {
+    fn Root() -> Element {
         render! {
             Link {
                 to: Route::Test {},
@@ -164,7 +164,7 @@ fn with_active_class_active() {
     }
 
     #[component]
-    fn Root(cx: Scope) -> Element {
+    fn Root() -> Element {
         render! {
             Link {
                 to: Route::Root {},
@@ -204,7 +204,7 @@ fn with_active_class_inactive() {
     }
 
     #[component]
-    fn Root(cx: Scope) -> Element {
+    fn Root() -> Element {
         render! {
             Link {
                 to: Route::Test {},
@@ -244,7 +244,7 @@ fn with_id() {
     }
 
     #[component]
-    fn Root(cx: Scope) -> Element {
+    fn Root() -> Element {
         render! {
             Link {
                 to: Route::Test {},
@@ -283,7 +283,7 @@ fn with_new_tab() {
     }
 
     #[component]
-    fn Root(cx: Scope) -> Element {
+    fn Root() -> Element {
         render! {
             Link {
                 to: Route::Test {},
@@ -315,7 +315,7 @@ fn with_new_tab_external() {
     }
 
     #[component]
-    fn Root(cx: Scope) -> Element {
+    fn Root() -> Element {
         render! {
             Link {
                 to: "https://dioxuslabs.com/",
@@ -354,7 +354,7 @@ fn with_rel() {
     }
 
     #[component]
-    fn Root(cx: Scope) -> Element {
+    fn Root() -> Element {
         render! {
             Link {
                 to: Route::Test {},

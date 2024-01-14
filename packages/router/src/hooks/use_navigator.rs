@@ -1,4 +1,4 @@
-use dioxus::prelude::ScopeState;
+use dioxus::prelude::{consume_context, use_hook};
 
 use crate::prelude::{Navigator, RouterContext};
 
@@ -18,14 +18,14 @@ use crate::prelude::{Navigator, RouterContext};
 /// }
 ///
 /// #[component]
-/// fn App(cx: Scope) -> Element {
+/// fn App() -> Element {
 ///     render! {
 ///         Router::<Route> {}
 ///     }
 /// }
 ///
 /// #[component]
-/// fn Index(cx: Scope) -> Element {
+/// fn Index() -> Element {
 ///     let navigator = use_navigator(&cx);
 ///
 ///     render! {
@@ -37,7 +37,7 @@ use crate::prelude::{Navigator, RouterContext};
 /// }
 ///
 /// #[component]
-/// fn Dynamic(cx: Scope, id: usize) -> Element {
+/// fn Dynamic(id: usize) -> Element {
 ///     render! {
 ///         p {
 ///             "Current ID: {id}"
@@ -49,10 +49,9 @@ use crate::prelude::{Navigator, RouterContext};
 /// # let _ = vdom.rebuild();
 /// ```
 #[must_use]
-pub fn use_navigator(cx: &ScopeState) -> &Navigator {
-    &*cx.use_hook(|| {
-        let router = cx
-            .consume_context::<RouterContext>()
+pub fn use_navigator() -> Navigator {
+    use_hook(|| {
+        let router = consume_context::<RouterContext>()
             .expect("Must be called in a descendant of a Router component");
 
         Navigator(router)

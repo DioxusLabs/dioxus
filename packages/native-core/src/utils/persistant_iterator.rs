@@ -201,7 +201,7 @@ fn traverse() {
     use crate::prelude::*;
     use dioxus::prelude::*;
     #[allow(non_snake_case)]
-    fn Base(cx: Scope) -> Element {
+    fn Base() -> Element {
         render!(
             div{
                 div{
@@ -299,7 +299,7 @@ fn persist_removes() {
     use crate::prelude::*;
     use dioxus::prelude::*;
     #[allow(non_snake_case)]
-    fn Base(cx: Scope) -> Element {
+    fn Base() -> Element {
         let children = match generation() % 2 {
             0 => 3,
             1 => 2,
@@ -375,7 +375,7 @@ fn persist_instertions_before() {
     use crate::prelude::*;
     use dioxus::prelude::*;
     #[allow(non_snake_case)]
-    fn Base(cx: Scope) -> Element {
+    fn Base() -> Element {
         let children = match generation() % 2 {
             0 => 3,
             1 => 2,
@@ -428,7 +428,7 @@ fn persist_instertions_after() {
     use crate::prelude::*;
     use dioxus::prelude::*;
     #[allow(non_snake_case)]
-    fn Base(cx: Scope) -> Element {
+    fn Base() -> Element {
         let children = match generation() % 2 {
             0 => 3,
             1 => 2,

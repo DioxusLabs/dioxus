@@ -27,8 +27,8 @@ impl CoolData {
 
 #[component]
 #[rustfmt::skip]
-pub fn App(cx: Scope) -> Element {
-    use_shared_state_provider(cx, || CoolData::new(HashMap::from([
+pub fn App() -> Element {
+    use_shared_state_provider(|| CoolData::new(HashMap::from([
         (0, "Hello, World!".to_string()),
         (1, "Dioxus is amazing!".to_string())
     ])));
@@ -50,8 +50,8 @@ pub fn App(cx: Scope) -> Element {
 }
 
 #[component]
-fn DataEditor(cx: Scope, id: usize) -> Element {
-    let data = use_shared_state::<CoolData>(cx)?;
+fn DataEditor(id: usize) -> Element {
+    let data = use_shared_state::<CoolData>()?;
 
     render! {
         p {
@@ -61,8 +61,8 @@ fn DataEditor(cx: Scope, id: usize) -> Element {
 }
 
 #[component]
-fn DataView(cx: Scope, id: usize) -> Element {
-    let data = use_shared_state::<CoolData>(cx)?;
+fn DataView(id: usize) -> Element {
+    let data = use_shared_state::<CoolData>()?;
 
     render! {
         input {

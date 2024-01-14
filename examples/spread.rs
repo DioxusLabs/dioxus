@@ -8,7 +8,7 @@ fn main() {
     println!("{}", html);
 }
 
-fn app(cx: Scope) -> Element {
+fn app() -> Element {
     render! {
         Component {
             width: "10px",
@@ -21,7 +21,7 @@ fn app(cx: Scope) -> Element {
 }
 
 #[component]
-fn Component<'a>(cx: Scope<'a, Props<'a>>) -> Element<'a> {
+fn Component(props: Props -> Element {
     render! {
         audio { ..cx.props.attributes, "1: {cx.props.extra_data}\n2: {cx.props.extra_data2}" }
     }

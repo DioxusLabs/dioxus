@@ -4,7 +4,7 @@ fn main() {
     dioxus_desktop::launch(app);
 }
 
-fn app(cx: Scope) -> Element {
+fn app() -> Element {
     cx.render(rsx! {
         web-component {
             "my-prop": "5%",

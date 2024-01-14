@@ -4,7 +4,7 @@ fn main() {
     dioxus_tui::launch(app);
 }
 
-fn app(cx: Scope) -> Element {
+fn app() -> Element {
     cx.render(rsx! {
         div {
             width: "100%",

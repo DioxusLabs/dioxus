@@ -5,8 +5,8 @@ fn main() {
     dioxus_tui::launch_cfg(app, Config::new());
 }
 
-fn app(cx: Scope) -> Element {
-    let bg_green = use_state(cx, || false);
+fn app() -> Element {
+    let bg_green = use_state(|| false);
 
     let color = if *bg_green.get() { "green" } else { "red" };
     cx.render(rsx! {

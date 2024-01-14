@@ -17,8 +17,7 @@ use crate::{use_state, UseState};
 /// will be canceled before the new one is started.
 ///
 /// - dependencies: a tuple of references to values that are PartialEq + Clone
-pub fn use_future<T, F, D>(
-    cx: &ScopeState,
+pub fn use_future<T, F, D>
     dependencies: D,
     future: impl FnOnce(D::Out) -> F,
 ) -> &UseFuture<T>
@@ -27,7 +26,7 @@ where
     F: Future<Output = T> + 'static,
     D: UseFutureDep,
 {
-    let val = use_state(cx, || None);
+    let val = use_state(|| None);
 
     let state = cx.use_hook(move || UseFuture {
         update: cx.schedule_update(),
@@ -95,7 +94,7 @@ impl<T> UseFuture<T> {
     }
 
     /// Forcefully cancel a future
-    pub fn cancel(&self, cx: &ScopeState) {
+    pub fn cancel(&self, ) {
         if let Some(task) = self.task.take() {
             cx.remove_future(task);
         }
@@ -261,22 +260,22 @@ mod tests {
 
         async fn app(cx: Scope<'_, MyProps>) -> Element {
             // should only ever run once
-            let fut = use_future(cx, (), |_| async move {});
+            let fut = use_future((), |_| async move {});
 
             // runs when a is changed
-            let fut = use_future(cx, (&cx.props.a,), |(a,)| async move {});
+            let fut = use_future((&cx.props.a,), |(a,)| async move {});
 
             // runs when a or b is changed
-            let fut = use_future(cx, (&cx.props.a, &cx.props.b), |(a, b)| async move { 123 });
+            let fut = use_future((&cx.props.a, &cx.props.b), |(a, b)| async move { 123 });
 
-            let a = use_future!(cx, || async move {
+            let a = use_future!(|| async move {
                 // do the thing!
             });
 
             let b = &123;
             let c = &123;
 
-            let a = use_future!(cx, |b, c| async move {
+            let a = use_future!(|b, c| async move {
                 let a = b + c;
                 let blah = "asd";
             });

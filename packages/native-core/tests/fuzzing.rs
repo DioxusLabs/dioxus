@@ -134,7 +134,7 @@ enum DynamicNodeType {
     Other,
 }
 
-fn create_random_template(name: &'static str) -> (Template<'static>, Vec<DynamicNodeType>) {
+fn create_random_template(name: &'static str) -> (Template, Vec<DynamicNodeType>) {
     let mut dynamic_node_type = Vec::new();
     let mut template_idx = 0;
     let mut attr_idx = 0;
@@ -175,7 +175,7 @@ fn create_random_template(name: &'static str) -> (Template<'static>, Vec<Dynamic
     )
 }
 
-fn create_random_dynamic_node(cx: &ScopeState, depth: usize) -> DynamicNode {
+fn create_random_dynamic_node(, depth: usize) -> DynamicNode {
     let range = if depth > 3 { 1 } else { 3 };
     match rand::random::<u8>() % range {
         0 => DynamicNode::Placeholder(Default::default()),
@@ -207,7 +207,7 @@ fn create_random_dynamic_node(cx: &ScopeState, depth: usize) -> DynamicNode {
     }
 }
 
-fn create_random_dynamic_attr(cx: &ScopeState) -> Attribute {
+fn create_random_dynamic_attr() -> Attribute {
     let value = match rand::random::<u8>() % 6 {
         0 => AttributeValue::Text(Box::leak(
             format!("{}", rand::random::<usize>()).into_boxed_str(),
@@ -269,7 +269,7 @@ fn create_random_element(cx: Scope<DepthProps>) -> Element {
                                 format!("{}", rand::random::<usize>()).into_boxed_str(),
                             ))),
                             DynamicNodeType::Other => {
-                                create_random_dynamic_node(cx, cx.props.depth + 1)
+                                create_random_dynamic_node(cx.props.depth + 1)
                             }
                         })
                         .collect();

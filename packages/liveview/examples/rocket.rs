@@ -7,8 +7,8 @@ use rocket::response::content::RawHtml;
 use rocket::{Config, Rocket, State};
 use rocket_ws::{Channel, WebSocket};
 
-fn app(cx: Scope) -> Element {
-    let mut num = use_state(cx, || 0);
+fn app() -> Element {
+    let mut num = use_state(|| 0);
 
     cx.render(rsx! {
         div {

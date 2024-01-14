@@ -17,10 +17,10 @@ struct AppProps {
 
 fn app(cx: Scope<AppProps>) -> Element {
     let state =
-        use_server_future(cx, (), |()| async move { get_server_data().await.unwrap() })?.value();
+        use_server_future((), |()| async move { get_server_data().await.unwrap() })?.value();
 
-    let mut count = use_state(cx, || 0);
-    let text = use_state(cx, || "...".to_string());
+    let mut count = use_state(|| 0);
+    let text = use_state(|| "...".to_string());
 
     cx.render(rsx! {
         div {

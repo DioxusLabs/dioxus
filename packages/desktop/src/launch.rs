@@ -17,7 +17,7 @@ use tao::event::{Event, StartCause, WindowEvent};
 ///     dioxus_desktop::launch(app);
 /// }
 ///
-/// fn app(cx: Scope) -> Element {
+/// fn app() -> Element {
 ///     cx.render(rsx!{
 ///         h1 {"hello world!"}
 ///     })
@@ -41,7 +41,7 @@ pub fn launch(root: Component) {
 ///     dioxus_desktop::launch_cfg(app, Config::default().with_window(WindowBuilder::new().with_title("My App")));
 /// }
 ///
-/// fn app(cx: Scope) -> Element {
+/// fn app() -> Element {
 ///     cx.render(rsx!{
 ///         h1 {"hello world!"}
 ///     })

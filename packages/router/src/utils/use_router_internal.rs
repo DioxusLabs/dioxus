@@ -1,4 +1,4 @@
-use dioxus::prelude::{ScopeId, ScopeState};
+use dioxus::prelude::ScopeId;
 
 use crate::prelude::*;
 
@@ -10,16 +10,18 @@ use crate::prelude::*;
 /// # Return values
 /// - [`None`], when the current component isn't a descendant of a [`Link`] component.
 /// - Otherwise [`Some`].
-pub(crate) fn use_router_internal(cx: &ScopeState) -> &Option<RouterContext> {
-    let inner = cx.use_hook(|| {
-        let router = cx.consume_context::<RouterContext>()?;
+pub(crate) fn use_router_internal() -> Option<RouterContext> {
+    todo!()
 
-        let id = cx.scope_id();
-        router.subscribe(id);
+    // let inner = cx.use_hook(|| {
+    //     let router = cx.consume_context::<RouterContext>()?;
 
-        Some(Subscription { router, id })
-    });
-    cx.use_hook(|| inner.as_ref().map(|s| s.router.clone()))
+    //     let id = cx.scope_id();
+    //     router.subscribe(id);
+
+    //     Some(Subscription { router, id })
+    // });
+    // cx.use_hook(|| inner.as_ref().map(|s| s.router.clone()))
 }
 
 struct Subscription {

@@ -9,10 +9,9 @@ use tokio::sync::{
 #[derive(Clone)]
 pub struct HotReloadState {
     // The cache of all templates that have been modified since the last time we checked
-    pub(crate) templates:
-        Arc<RwLock<std::collections::HashSet<dioxus::prelude::Template<'static>>>>,
+    pub(crate) templates: Arc<RwLock<std::collections::HashSet<dioxus::prelude::Template>>>,
     // The channel to send messages to the hot reload thread
-    pub(crate) message_receiver: Receiver<Option<Template<'static>>>,
+    pub(crate) message_receiver: Receiver<Option<Template>>,
 }
 
 impl Default for HotReloadState {

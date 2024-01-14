@@ -12,12 +12,12 @@ use crate::{get_effect_stack, signal::SignalData, CopyValue, Effect, ReadOnlySig
 /// use dioxus::prelude::*;
 /// use dioxus_signals::*;
 ///
-/// fn App(cx: Scope) -> Element {
-///     let mut count = use_signal(cx, || 0);
-///     let double = use_selector(cx, move || count * 2);
+/// fn App() -> Element {
+///     let mut count = use_signal(|| 0);
+///     let double = use_selector(move || count * 2);
 ///     count += 1;
 ///     assert_eq!(double.value(), count * 2);
-///  
+///
 ///     render! { "{double}" }
 /// }
 /// ```
@@ -34,11 +34,11 @@ pub fn use_selector<R: PartialEq>(f: impl FnMut() -> R + 'static) -> ReadOnlySig
 /// use dioxus::prelude::*;
 /// use dioxus_signals::*;
 ///
-/// fn App(cx: Scope) -> Element {
-///     let mut local_state = use_state(cx, || 0);
-///     let double = use_selector_with_dependencies(cx, (local_state.get(),), move |(local_state,)| local_state * 2);
+/// fn App() -> Element {
+///     let mut local_state = use_state(|| 0);
+///     let double = use_selector_with_dependencies((local_state.get(),), move |(local_state,)| local_state * 2);
 ///     local_state.set(1);
-///  
+///
 ///     render! { "{double}" }
 /// }
 /// ```

@@ -13,12 +13,12 @@ enum Route {
 }
 
 #[component]
-fn Homepage(cx: Scope) -> Element {
+fn Homepage() -> Element {
     render! { h1 { "Welcome home" } }
 }
 
 #[component]
-fn Blog(cx: Scope, id: String) -> Element {
+fn Blog(id: String) -> Element {
     render! {
         h1 { "How to make: " }
         p { "{id}" }
@@ -26,7 +26,7 @@ fn Blog(cx: Scope, id: String) -> Element {
 }
 
 #[component]
-fn Nav(cx: Scope) -> Element {
+fn Nav() -> Element {
     render! {
         nav {
             li { Link { to: Route::Homepage { }, "Go home" } }

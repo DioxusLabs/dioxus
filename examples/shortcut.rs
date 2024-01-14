@@ -5,10 +5,10 @@ fn main() {
     dioxus_desktop::launch(app);
 }
 
-fn app(cx: Scope) -> Element {
-    let toggled = use_state(cx, || false);
+fn app() -> Element {
+    let toggled = use_state(|| false);
 
-    use_global_shortcut(cx, "ctrl+s", {
+    use_global_shortcut("ctrl+s", {
         to_owned![toggled];
         move || toggled.modify(|t| !*t)
     });

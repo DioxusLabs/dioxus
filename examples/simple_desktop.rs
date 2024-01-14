@@ -13,7 +13,7 @@ fn main() {
 }
 
 #[component]
-fn App(cx: Scope) -> Element {
+fn App() -> Element {
     render! {
         Router::<Route> {}
     }
@@ -38,7 +38,7 @@ enum Route {
 }
 
 #[component]
-fn NavBar(cx: Scope) -> Element {
+fn NavBar() -> Element {
     render! {
         h1 { "Your app here" }
         ul {
@@ -53,19 +53,19 @@ fn NavBar(cx: Scope) -> Element {
 }
 
 #[component]
-fn Home(cx: Scope) -> Element {
+fn Home() -> Element {
     log::debug!("rendering home {:?}", cx.scope_id());
     render! { h1 { "Home" } }
 }
 
 #[component]
-fn BlogList(cx: Scope) -> Element {
+fn BlogList() -> Element {
     log::debug!("rendering blog list {:?}", cx.scope_id());
     render! { div { "Blog List" } }
 }
 
 #[component]
-fn BlogPost(cx: Scope, post: String) -> Element {
+fn BlogPost(post: String) -> Element {
     log::debug!("rendering blog post {}", post);
 
     render! {
@@ -77,6 +77,6 @@ fn BlogPost(cx: Scope, post: String) -> Element {
 }
 
 #[component]
-fn Oranges(cx: Scope) -> Element {
+fn Oranges() -> Element {
     render!("Oranges are not apples!")
 }

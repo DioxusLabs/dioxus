@@ -55,8 +55,8 @@ struct AppProps {
 
 #[allow(unused)]
 fn app(cx: Scope<AppProps>) -> Element {
-    let mut count = use_state(cx, || cx.props.count);
-    let text = use_state(cx, || "...".to_string());
+    let mut count = use_state(|| cx.props.count);
+    let text = use_state(|| "...".to_string());
 
     cx.render(rsx! {
         h1 { "hello axum! {count}" }

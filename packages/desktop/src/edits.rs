@@ -125,7 +125,7 @@ impl EditQueue {
 // }
 
 // pub fn add_template(
-//     template: &Template<'static>,
+//     template: &Template,
 //     channel: &mut Channel,
 //     templates: &mut FxHashMap<String, u16>,
 //     max_template_count: &AtomicU16,

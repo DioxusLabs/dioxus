@@ -1,5 +1,5 @@
 use crate::{use_atom_root, AtomId, AtomRef, AtomRoot, Readable};
-use dioxus_core::{ScopeId, ScopeState};
+use dioxus_core::ScopeId;
 use std::{
     cell::{Ref, RefCell, RefMut},
     rc::Rc,
@@ -101,14 +101,14 @@ impl<T: 'static> UseAtomRef<T> {
     /// Example:
     /// ```ignore
     /// static ATOM_DATA: AtomRef<Collection> = |_| Default::default();
-    /// fn App(cx: Scope) {
+    /// fn App() {
     ///     use_init_atom_root(cx);
-    ///     let atom_data = use_atom_ref(cx, ATOM_DATA);
+    ///     let atom_data = use_atom_ref(ATOM_DATA);
     ///     atom_data.unsubscribe(cx);
     ///     atom_data.write().update();
     /// }
     /// ```
-    pub fn unsubscribe(&self, cx: &ScopeState) {
+    pub fn unsubscribe(&self) {
         self.root.unsubscribe(self.ptr, cx.scope_id());
     }
 

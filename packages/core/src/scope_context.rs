@@ -254,7 +254,7 @@ impl ScopeContext {
     /// use dioxus_core::ScopeState;
     ///
     /// // prints a greeting on the initial render
-    /// pub fn use_hello_world(cx: &ScopeState) {
+    /// pub fn use_hello_world() {
     ///     cx.use_hook(|| println!("Hello, world!"));
     /// }
     /// ```

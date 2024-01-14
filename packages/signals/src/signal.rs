@@ -21,8 +21,8 @@ use crate::{get_effect_stack, CopyValue, Effect, EffectStack};
 /// use dioxus::prelude::*;
 /// use dioxus_signals::*;
 ///
-/// fn App(cx: Scope) -> Element {
-///     let mut count = use_signal(cx, || 0);
+/// fn App() -> Element {
+///     let mut count = use_signal(|| 0);
 ///
 ///     // Because signals have automatic dependency tracking, if you never read them in a component, that component will not be re-rended when the signal is updated.
 ///     // The app component will never be rerendered in this example.
@@ -30,10 +30,10 @@ use crate::{get_effect_stack, CopyValue, Effect, EffectStack};
 /// }
 ///
 /// #[component]
-/// fn Child(cx: Scope, state: Signal<u32>) -> Element {
+/// fn Child(state: Signal<u32>) -> Element {
 ///     let state = *state;
 ///
-///     use_future!(cx,  |()| async move {
+///     use_future!( |()| async move {
 ///         // Because the signal is a Copy type, we can use it in an async block without cloning it.
 ///         *state.write() += 1;
 ///     });
@@ -105,8 +105,8 @@ pub(crate) struct SignalData<T> {
 /// use dioxus_signals::*;
 ///
 /// #[component]
-/// fn App(cx: Scope) -> Element {
-///     let mut count = use_signal(cx, || 0);
+/// fn App() -> Element {
+///     let mut count = use_signal(|| 0);
 ///
 ///     // Because signals have automatic dependency tracking, if you never read them in a component, that component will not be re-rended when the signal is updated.
 ///     // The app component will never be rerendered in this example.
@@ -114,10 +114,10 @@ pub(crate) struct SignalData<T> {
 /// }
 ///
 /// #[component]
-/// fn Child(cx: Scope, state: Signal<u32>) -> Element {
+/// fn Child(state: Signal<u32>) -> Element {
 ///     let state = *state;
 ///
-///     use_future!(cx,  |()| async move {
+///     use_future!( |()| async move {
 ///         // Because the signal is a Copy type, we can use it in an async block without cloning it.
 ///         *state.write() += 1;
 ///     });

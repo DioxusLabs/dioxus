@@ -29,8 +29,8 @@ fn main() {
     dioxus_desktop::launch(app);
 }
 
-fn app(cx: Scope) -> Element {
-    use_asset_handler(cx, "videos", move |request, responder| {
+fn app() -> Element {
+    use_asset_handler("videos", move |request, responder| {
         // Using dioxus::spawn works, but is slower than a dedicated thread
         tokio::task::spawn(async move {
             let video_file = PathBuf::from(VIDEO_PATH);

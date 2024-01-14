@@ -5,14 +5,14 @@ fn main() {
     dioxus_desktop::launch(app);
 }
 
-fn app(cx: Scope) -> Element {
-    let running = dioxus_signals::use_signal(cx, || true);
-    let mut count = dioxus_signals::use_signal(cx, || 0);
-    let saved_values = dioxus_signals::use_signal(cx, || vec![0.to_string()]);
+fn app() -> Element {
+    let running = dioxus_signals::use_signal(|| true);
+    let mut count = dioxus_signals::use_signal(|| 0);
+    let saved_values = dioxus_signals::use_signal(|| vec![0.to_string()]);
 
     // Signals can be used in async functions without an explicit clone since they're 'static and Copy
     // Signals are backed by a runtime that is designed to deeply integrate with Dioxus apps
-    use_future!(cx, || async move {
+    use_future!(|| async move {
         loop {
             if running.value() {
                 count += 1;

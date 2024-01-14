@@ -20,8 +20,8 @@
 //!     }
 //! }
 //!
-//! fn app(cx: Scope) -> Element {
-//!     let text = use_state(cx, || "...".to_string());
+//! fn app() -> Element {
+//!     let text = use_state(|| "...".to_string());
 //!
 //!     cx.render(rsx! {
 //!         button {
@@ -175,7 +175,7 @@ pub fn register_server_fns(server_fn_route: &'static str) -> BoxedFilter<(impl R
 ///     warp::serve(routes).run(([127, 0, 0, 1], 8080)).await;
 /// }
 ///
-/// fn app(cx: Scope) -> Element {
+/// fn app() -> Element {
 ///     todo!()
 /// }
 /// ```

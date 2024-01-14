@@ -1,5 +1,5 @@
 use crate::{AtomId, AtomRoot, Writable};
-use dioxus_core::{ScopeId, ScopeState};
+use dioxus_core::ScopeId;
 use std::{
     cell::RefMut,
     fmt::{Debug, Display},
@@ -18,8 +18,8 @@ use std::{
 /// ```ignore
 /// static COUNT: Atom<u32> = |_| 0;
 ///
-/// fn Example(cx: Scope) -> Element {
-///     let mut count = use_atom_state(cx, &COUNT);
+/// fn Example() -> Element {
+///     let mut count = use_atom_state(&COUNT);
 ///
 ///     cx.render(rsx! {
 ///         div {
@@ -31,7 +31,7 @@ use std::{
 /// }
 /// ```
 #[must_use]
-pub fn use_atom_state<T: 'static>(cx: &ScopeState, f: impl Writable<T>) -> &AtomState<T> {
+pub fn use_atom_state<T: 'static>(f: impl Writable<T>) -> &AtomState<T> {
     let root = crate::use_atom_root(cx);
 
     let inner = cx.use_hook(|| AtomState {
@@ -74,8 +74,8 @@ impl<T: 'static> AtomState<T> {
     /// An async context might need to know the current value:
     ///
     /// ```rust, ignore
-    /// fn component(cx: Scope) -> Element {
-    ///     let count = use_state(cx, || 0);
+    /// fn component() -> Element {
+    ///     let count = use_state(|| 0);
     ///     cx.spawn({
     ///         let set_count = count.to_owned();
     ///         async move {
@@ -103,8 +103,8 @@ impl<T: 'static> AtomState<T> {
     /// A component might require an `Rc<dyn Fn(T)>` as an input to set a value.
     ///
     /// ```rust, ignore
-    /// fn component(cx: Scope) -> Element {
-    ///     let value = use_state(cx, || 0);
+    /// fn component() -> Element {
+    ///     let value = use_state(|| 0);
     ///
     ///     rsx!{
     ///         Component {
@@ -130,8 +130,8 @@ impl<T: 'static> AtomState<T> {
     /// ```rust, ignore
     /// # use dioxus_core::prelude::*;
     /// # use dioxus_hooks::*;
-    /// fn component(cx: Scope) -> Element {
-    ///     let value = use_state(cx, || 0);
+    /// fn component() -> Element {
+    ///     let value = use_state(|| 0);
     ///
     ///     // to increment the value
     ///     value.modify(|v| v + 1);
@@ -170,8 +170,8 @@ impl<T: 'static> AtomState<T> {
     /// ```rust, ignore
     /// # use dioxus_core::prelude::*;
     /// # use dioxus_hooks::*;
-    /// fn component(cx: Scope) -> Element {
-    ///     let value = use_state(cx, || 0);
+    /// fn component() -> Element {
+    ///     let value = use_state(|| 0);
     ///
     ///     let as_rc = value.get();
     ///     assert_eq!(as_rc.as_ref(), &0);
@@ -192,8 +192,8 @@ impl<T: 'static> AtomState<T> {
     /// Mark all consumers of this atom to re-render
     ///
     /// ```rust, ignore
-    /// fn component(cx: Scope) -> Element {
-    ///     let count = use_state(cx, || 0);
+    /// fn component() -> Element {
+    ///     let count = use_state(|| 0);
     ///     cx.spawn({
     ///         let count = count.to_owned();
     ///         async move {
@@ -223,7 +223,7 @@ impl<T: Clone> AtomState<T> {
     /// # Examples
     ///
     /// ```ignore
-    /// let val = use_state(cx, || 0);
+    /// let val = use_state(|| 0);
     ///
     /// val.with_mut(|v| *v = 1);
     /// ```
@@ -246,7 +246,7 @@ impl<T: Clone> AtomState<T> {
     /// # Examples
     ///
     /// ```ignore
-    /// let val = use_state(cx, || 0);
+    /// let val = use_state(|| 0);
     ///
     /// *val.make_mut() += 1;
     /// ```

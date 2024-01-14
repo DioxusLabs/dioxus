@@ -11,8 +11,8 @@ use dioxus::prelude::*;
 use dioxus_signals::*;
 
 #[component]
-fn App(cx: Scope) -> Element {
-    let signal = use_signal(cx, || "hello world".to_string());
+fn App() -> Element {
+    let signal = use_signal(|| "hello world".to_string());
 
     spawn(async move {
         // signal is Copy even though String is not copy
@@ -34,9 +34,9 @@ use dioxus::prelude::*;
 use dioxus_signals::*;
 
 #[component]
-fn App(cx: Scope) -> Element {
+fn App() -> Element {
     // Because signal is never read in this component, this component will not rerun when the signal changes
-    let signal = use_signal(cx, || 0);
+    let signal = use_signal(|| 0);
 
     render! {
         button {
@@ -74,17 +74,17 @@ use dioxus::prelude::*;
 use dioxus_signals::*;
 
 #[component]
-fn App(cx: Scope) -> Element {
+fn App() -> Element {
     // Because signal is never read in this component, this component will not rerun when the signal changes
-    use_context_provider(cx, || Signal::new(0));
-    
+    use_context_provider(|| Signal::new(0));
+
     render! {
         Child {}
     }
 }
 
 #[component]
-fn Child(cx: Scope) -> Element {
+fn Child() -> Element {
     let signal: Signal<i32> = *use_context(cx).unwrap();
     // This component does read from the signal, so when the signal changes it will rerun
     render! {
@@ -104,9 +104,9 @@ use dioxus::prelude::*;
 use dioxus_signals::*;
 
 #[component]
-fn App(cx: Scope) -> Element {
-    let signal = use_signal(cx, || 0);
-    let doubled = use_selector(cx, || signal * 2);
+fn App() -> Element {
+    let signal = use_signal(|| 0);
+    let doubled = use_selector(|| signal * 2);
 
     render! {
         button {
@@ -120,7 +120,7 @@ fn App(cx: Scope) -> Element {
 }
 
 #[component]
-fn Child(cx: Scope, signal: ReadOnlySignal<usize>) -> Element {
+fn Child(signal: ReadOnlySignal<usize>) -> Element {
     render! {
         "{signal}"
     }

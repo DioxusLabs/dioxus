@@ -30,7 +30,7 @@ fn main() {
     println!("{file}");
 }
 
-fn app(cx: Scope) -> Element {
+fn app() -> Element {
     cx.render(rsx!(
         div {
             h1 { "Title" }

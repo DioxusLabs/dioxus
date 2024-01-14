@@ -31,7 +31,7 @@ fn main() {
     );
 }
 
-fn app(cx: Scope) -> Element {
+fn app() -> Element {
     cx.render(rsx! {
         div {
             h1 {"hello world!"}

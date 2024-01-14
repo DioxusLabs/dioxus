@@ -27,8 +27,8 @@ pub struct Client {
 type ClientContext = Vec<Client>;
 
 #[component]
-fn App(cx: Scope) -> Element {
-    use_shared_state_provider::<ClientContext>(cx, Default::default);
+fn App() -> Element {
+    use_shared_state_provider::<ClientContext>(Default::default);
 
     render! {
         link {
@@ -53,8 +53,8 @@ fn App(cx: Scope) -> Element {
 }
 
 #[component]
-fn ClientList(cx: Scope) -> Element {
-    let clients = use_shared_state::<ClientContext>(cx).unwrap();
+fn ClientList() -> Element {
+    let clients = use_shared_state::<ClientContext>().unwrap();
 
     cx.render(rsx! {
         h2 { "List of Clients" }
@@ -75,11 +75,11 @@ fn ClientList(cx: Scope) -> Element {
 }
 
 #[component]
-fn ClientAdd(cx: Scope) -> Element {
-    let clients = use_shared_state::<ClientContext>(cx).unwrap();
-    let first_name = use_state(cx, String::new);
-    let last_name = use_state(cx, String::new);
-    let description = use_state(cx, String::new);
+fn ClientAdd() -> Element {
+    let clients = use_shared_state::<ClientContext>().unwrap();
+    let first_name = use_state(String::new);
+    let last_name = use_state(String::new);
+    let description = use_state(String::new);
 
     cx.render(rsx! {
         h2 { "Add new Client" }
@@ -142,8 +142,8 @@ fn ClientAdd(cx: Scope) -> Element {
 }
 
 #[component]
-fn Settings(cx: Scope) -> Element {
-    let clients = use_shared_state::<ClientContext>(cx).unwrap();
+fn Settings() -> Element {
+    let clients = use_shared_state::<ClientContext>().unwrap();
 
     cx.render(rsx! {
         h2 { "Settings" }

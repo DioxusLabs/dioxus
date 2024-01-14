@@ -4,7 +4,7 @@ fn main() {
     dioxus_desktop::launch(app);
 }
 
-fn app(cx: Scope) -> Element {
+fn app() -> Element {
     let a = 123;
     let b = 456;
     let c = 789;
@@ -30,7 +30,7 @@ fn Component<'a>(
     a: i32,
     b: i32,
     c: i32,
-    children: Element<'a>,
+    children: Element,
     onclick: EventHandler<'a, ()>,
 ) -> Element {
     render! {

@@ -6,9 +6,9 @@ fn main() {
 }
 
 #[component]
-fn App(cx: Scope) -> Element {
-    let signal = use_signal(cx, || 0);
-    let doubled = use_selector(cx, move || signal * 2);
+fn App() -> Element {
+    let signal = use_signal(|| 0);
+    let doubled = use_selector(move || signal * 2);
 
     render! {
         button {
@@ -22,7 +22,7 @@ fn App(cx: Scope) -> Element {
 }
 
 #[component]
-fn Child(cx: Scope, signal: ReadOnlySignal<usize>) -> Element {
+fn Child(signal: ReadOnlySignal<usize>) -> Element {
     render! {
         "{signal}"
     }

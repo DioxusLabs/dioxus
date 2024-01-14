@@ -34,7 +34,7 @@ const FIELDS: &[(&str, &str)] = &[
     ("week", ""),  // degrades to text most of the time
 ];
 
-fn app(cx: Scope) -> Element {
+fn app() -> Element {
     cx.render(rsx! {
         div { margin_left: "30px",
             {select_example(cx)},
@@ -136,7 +136,7 @@ fn app(cx: Scope) -> Element {
     })
 }
 
-fn select_example(cx: Scope) -> Element {
+fn select_example() -> Element {
     cx.render(rsx! {
     div {
         select {

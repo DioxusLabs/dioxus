@@ -5,8 +5,8 @@ use salvo::prelude::*;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-fn app(cx: Scope) -> Element {
-    let mut num = use_state(cx, || 0);
+fn app() -> Element {
+    let mut num = use_state(|| 0);
 
     cx.render(rsx! {
         div {

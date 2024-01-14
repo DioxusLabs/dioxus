@@ -7,9 +7,9 @@ fn main() {
     dioxus_desktop::launch(App);
 }
 
-fn App(cx: Scope) -> Element {
-    let enable_directory_upload = use_state(cx, || false);
-    let files_uploaded: &UseRef<Vec<String>> = use_ref(cx, Vec::new);
+fn App() -> Element {
+    let enable_directory_upload = use_state(|| false);
+    let files_uploaded: &UseRef<Vec<String>> = use_ref(Vec::new);
 
     cx.render(rsx! {
         label {

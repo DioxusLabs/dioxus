@@ -20,8 +20,8 @@ fn main() {
 
 const _STYLE: &str = manganis::mg!(file("./examples/assets/fileexplorer.css"));
 
-fn app(cx: Scope) -> Element {
-    let files = use_ref(cx, Files::new);
+fn app() -> Element {
+    let files = use_ref(Files::new);
 
     cx.render(rsx! {
         div {

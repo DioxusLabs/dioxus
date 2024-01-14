@@ -115,7 +115,7 @@ macro_rules! test_state{
         #[test]
         fn state_reduce_initally_called_minimally() {
             #[allow(non_snake_case)]
-            fn Base(cx: Scope) -> Element {
+            fn Base() -> Element {
                 render!{
                     div {
                         div{

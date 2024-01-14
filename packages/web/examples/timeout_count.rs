@@ -5,9 +5,9 @@ fn main() {
     dioxus_web::launch(app);
 }
 
-fn app(cx: Scope) -> Element {
-    let count = use_ref(cx, || 0);
-    let started = use_state(cx, || false);
+fn app() -> Element {
+    let count = use_ref(|| 0);
+    let started = use_state(|| false);
 
     let start = move || {
         if !*started.get() {

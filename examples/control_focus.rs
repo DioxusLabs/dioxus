@@ -6,11 +6,11 @@ fn main() {
     dioxus_desktop::launch(app);
 }
 
-fn app(cx: Scope) -> Element {
-    let elements: &UseRef<Vec<Rc<MountedData>>> = use_ref(cx, Vec::new);
-    let running = use_state(cx, || true);
+fn app() -> Element {
+    let elements: &UseRef<Vec<Rc<MountedData>>> = use_ref(Vec::new);
+    let running = use_state(|| true);
 
-    use_future!(cx, |(elements, running)| async move {
+    use_future!(|(elements, running)| async move {
         let mut focused = 0;
         if *running.current() {
             loop {

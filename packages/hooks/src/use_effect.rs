@@ -26,11 +26,11 @@ use crate::UseFutureDep;
 /// ```rust, no_run
 /// # use dioxus::prelude::*;
 /// #[component]
-/// fn Profile(cx: Scope, id: usize) -> Element {
-///     let name = use_state(cx, || None);
+/// fn Profile(id: usize) -> Element {
+///     let name = use_state(|| None);
 ///
 ///     // Only fetch the user data when the id changes.
-///     use_effect(cx, (id,), |(id,)| {
+///     use_effect((id,), |(id,)| {
 ///         to_owned![name];
 ///         async move {
 ///             let user = fetch_user(id).await;
@@ -39,7 +39,7 @@ use crate::UseFutureDep;
 ///     });
 ///
 ///     // Only fetch the user data when the id changes.
-///     use_effect(cx, (id,), |(id,)| {
+///     use_effect((id,), |(id,)| {
 ///         to_owned![name];
 ///         async move {
 ///             let user = fetch_user(id).await;
@@ -56,11 +56,11 @@ use crate::UseFutureDep;
 /// }
 ///
 /// #[component]
-/// fn App(cx: Scope) -> Element {
+/// fn App() -> Element {
 ///     render!(Profile { id: 0 })
 /// }
 /// ```
-pub fn use_effect<T, R, D>(cx: &ScopeState, dependencies: D, future: impl FnOnce(D::Out) -> R)
+pub fn use_effect<T, R, D>(, dependencies: D, future: impl FnOnce(D::Out) -> R)
 where
     D: UseFutureDep,
     R: UseEffectReturn<T>,
@@ -108,14 +108,14 @@ type UseEffectCleanup = Rc<RefCell<Option<Box<dyn FnOnce()>>>>;
 
 /// Something that can be returned from a `use_effect` hook.
 pub trait UseEffectReturn<T> {
-    fn apply(self, oncleanup: UseEffectCleanup, cx: &ScopeState) -> Task;
+    fn apply(self, oncleanup: UseEffectCleanup, ) -> Task;
 }
 
 impl<T> UseEffectReturn<()> for T
 where
     T: Future<Output = ()> + 'static,
 {
-    fn apply(self, _: UseEffectCleanup, cx: &ScopeState) -> Task {
+    fn apply(self, _: UseEffectCleanup, ) -> Task {
         cx.push_future(self)
     }
 }
@@ -127,7 +127,7 @@ where
     T: Future<Output = F> + 'static,
     F: FnOnce() + 'static,
 {
-    fn apply(self, oncleanup: UseEffectCleanup, cx: &ScopeState) -> Task {
+    fn apply(self, oncleanup: UseEffectCleanup, ) -> Task {
         cx.push_future(async move {
             let cleanup = self.await;
             *oncleanup.borrow_mut() = Some(Box::new(cleanup) as Box<dyn FnOnce()>);
@@ -154,17 +154,17 @@ mod tests {
 
         fn app(cx: Scope<MyProps>) -> Element {
             // should only ever run once
-            use_effect(cx, (), |_| async move {
+            use_effect((), |_| async move {
                 //
             });
 
             // runs when a is changed
-            use_effect(cx, (&cx.props.a,), |(a,)| async move {
+            use_effect((&cx.props.a,), |(a,)| async move {
                 //
             });
 
             // runs when a or b is changed
-            use_effect(cx, (&cx.props.a, &cx.props.b), |(a, b)| async move {
+            use_effect((&cx.props.a, &cx.props.b), |(a, b)| async move {
                 //
             });
 

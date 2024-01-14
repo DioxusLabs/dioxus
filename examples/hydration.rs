@@ -20,8 +20,8 @@ fn main() {
     dioxus_desktop::launch_cfg(app, Config::new().with_prerendered(content));
 }
 
-fn app(cx: Scope) -> Element {
-    let val = use_state(cx, || 0);
+fn app() -> Element {
+    let val = use_state(|| 0);
 
     cx.render(rsx! {
         div {

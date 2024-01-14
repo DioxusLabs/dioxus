@@ -4,7 +4,7 @@ fn main() {
     dioxus_desktop::launch(app);
 }
 
-fn app(cx: Scope) -> Element {
+fn app() -> Element {
     cx.render(rsx! {
         div {
             button {
@@ -18,7 +18,7 @@ fn app(cx: Scope) -> Element {
     })
 }
 
-fn popup(cx: Scope) -> Element {
+fn popup() -> Element {
     cx.render(rsx! {
         div { "This is a popup!" }
     })

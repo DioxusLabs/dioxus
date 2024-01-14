@@ -49,7 +49,7 @@ fn main() {
 // The #[component] attribute streamlines component creation.
 // It's not required, but highly recommended. For example, UpperCamelCase components will not generate a warning.
 #[component]
-fn App(cx: Scope) -> Element {
+fn App() -> Element {
     cx.render(rsx!("hello world!"))
 }
 ```
@@ -98,7 +98,7 @@ render nodes in match statements.
 
 ```rust, ignore
 #[component[
-fn Example(cx: Scope) -> Element {
+fn Example() -> Element {
 
     // both of these are equivalent
     cx.render(rsx!("hello world"))
@@ -112,7 +112,7 @@ elements:
 
 ```rust, ignore
 #[component]
-fn App(cx: Scope) -> Element {
+fn App() -> Element {
     let name = "dave";
     cx.render(rsx!(
         h1 { "Hello, {name}!" }
@@ -141,7 +141,7 @@ In Dioxus, all properties are memoized by default!
 
 ```rust, ignore
 #[component]
-fn App(cx: Scope) -> Element {
+fn App() -> Element {
     cx.render(rsx!(
         Header {
             title: "My App",
@@ -178,7 +178,7 @@ struct from function arguments:
 
 ```rust, ignore
 #[component]
-fn Header(cx: Scope, title: String, color: String) -> Element {
+fn Header(title: String, color: String) -> Element {
     cx.render(rsx!(
         div {
             background_color: "{color}"
@@ -201,7 +201,7 @@ struct HeaderProps<'a> {
 }
 
 #[component]
-fn Header<'a>(cx: Scope<'a, HeaderProps<'a>>) -> Element {
+fn Header(props: HeaderProps -> Element {
     cx.render(rsx!(
         div {
             background_color: "{cx.props.color}"
@@ -243,8 +243,8 @@ use hooks to define the state and modify it from within listeners.
 
 ```rust, ignore
 #[component]
-fn App(cx: Scope) -> Element {
-    let name = use_state(cx, || "world");
+fn App() -> Element {
+    let name = use_state(|| "world");
 
     render!("hello {name}!")
 }
@@ -264,8 +264,8 @@ order. If that order is wrong, then the hook will pick the wrong state and panic
 Most hooks you'll write are simply compositions of other hooks:
 
 ```rust, ignore
-fn use_username(cx: &ScopeState, id: Uuid) -> bool {
-    let users = use_context::<Users>(cx);
+fn use_username(d: Uuid) -> bool {
+    let users = use_context::<Users>();
     users.get(&id).map(|user| user.logged_in).ok_or(false)
 }
 ```
@@ -273,7 +273,7 @@ fn use_username(cx: &ScopeState, id: Uuid) -> bool {
 To create entirely new foundational hooks, we can use the `use_hook` method on `ScopeState`.
 
 ```rust, ignore
-fn use_mut_string(cx: &ScopeState) -> &mut String {
+fn use_mut_string() -> &mut String {
     cx.use_hook(|_| "Hello".to_string())
 }
 ```
@@ -292,8 +292,8 @@ fn main() {
 }
 
 #[component]
-fn App(cx: Scope) -> Element {
-    let count = use_state(cx, || 0);
+fn App() -> Element {
+    let count = use_state(|| 0);
 
     cx.render(rsx!(
         div { "Count: {count}" }

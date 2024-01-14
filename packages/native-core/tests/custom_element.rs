@@ -256,10 +256,10 @@ impl CustomElement for CustomElementWithNoSlot {
 
 #[test]
 fn custom_elements_work() {
-    fn app(cx: Scope) -> Element {
-        let count = use_state(cx, || 0);
+    fn app() -> Element {
+        let count = use_state(|| 0);
 
-        use_future!(cx, |count| async move {
+        use_future!(|count| async move {
             count.with_mut(|count| *count += 1);
         });
 
@@ -333,7 +333,7 @@ fn custom_elements_work() {
 #[test]
 #[should_panic]
 fn slotless_custom_element_cant_have_children() {
-    fn app(cx: Scope) -> Element {
+    fn app() -> Element {
         cx.render(rsx! {
             customelementnoslot {
                 testing132 {}
@@ -362,7 +362,7 @@ fn slotless_custom_element_cant_have_children() {
 
 #[test]
 fn slotless_custom_element() {
-    fn app(cx: Scope) -> Element {
+    fn app() -> Element {
         cx.render(rsx! {
             customelementnoslot {
             }

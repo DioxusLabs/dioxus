@@ -166,10 +166,10 @@ impl State for Border {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    fn app(cx: Scope) -> Element {
-        let count = use_state(cx, || 0);
+    fn app() -> Element {
+        let count = use_state(|| 0);
 
-        use_future(cx, (count,), |(count,)| async move {
+        use_future((count,), |(count,)| async move {
             loop {
                 tokio::time::sleep(std::time::Duration::from_secs(1)).await;
                 count.set(*count + 1);
@@ -185,7 +185,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         })
     }
 
-    fn Comp(cx: Scope) -> Element {
+    fn Comp() -> Element {
         cx.render(rsx! {
             div{
                 border: "",

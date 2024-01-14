@@ -66,7 +66,7 @@ struct BoxProps {
 }
 #[allow(non_snake_case)]
 fn Box(cx: Scope<BoxProps>) -> Element {
-    let count = use_state(cx, || 0);
+    let count = use_state(|| 0);
 
     let x = cx.props.x * 2;
     let y = cx.props.y * 2;
@@ -96,8 +96,8 @@ struct GridProps {
 #[allow(non_snake_case)]
 fn Grid(cx: Scope<GridProps>) -> Element {
     let size = cx.props.size;
-    let count = use_state(cx, || 0);
-    let counts = use_ref(cx, || vec![0; size * size]);
+    let count = use_state(|| 0);
+    let counts = use_ref(|| vec![0; size * size]);
 
     let ctx: TuiContext = cx.consume_context().unwrap();
     if *count.get() + cx.props.update_count >= (size * size) {

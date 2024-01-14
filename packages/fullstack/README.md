@@ -62,8 +62,8 @@ fn main() {
     }
 }
 
-fn app(cx: Scope) -> Element {
-    let meaning = use_state(cx, || None);
+fn app() -> Element {
+    let meaning = use_state(|| None);
     cx.render(rsx! {
         button {
             onclick: move |_| {

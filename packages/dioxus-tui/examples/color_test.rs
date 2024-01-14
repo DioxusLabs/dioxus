@@ -7,7 +7,7 @@ fn main() {
     );
 }
 
-fn app(cx: Scope) -> Element {
+fn app() -> Element {
     let steps = 50;
     cx.render(rsx! {
         div{
