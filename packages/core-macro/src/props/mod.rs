@@ -40,7 +40,7 @@ pub fn impl_my_derive(ast: &syn::DeriveInput) -> Result<TokenStream, Error> {
                     #builder_creation
                     #conversion_helper
                     #( #fields )*
-                    // #( #extends )*
+                    #( #extends )*
                     #( #required_fields )*
                     #build_method
                 }
@@ -497,8 +497,7 @@ mod struct_info {
     use syn::parse::Error;
     use syn::punctuated::Punctuated;
     use syn::spanned::Spanned;
-    use syn::visit::Visit;
-    use syn::{parse_quote, Expr, Ident};
+    use syn::{Expr, Ident};
 
     use super::field_info::{FieldBuilderAttr, FieldInfo};
     use super::util::{
@@ -530,37 +529,6 @@ mod struct_info {
             self.fields
                 .iter()
                 .filter(|f| !f.builder_attr.extends.is_empty())
-        }
-
-        fn extend_lifetime(&self) -> syn::Result<Option<syn::Lifetime>> {
-            let first_extend = self.extend_fields().next();
-
-            match first_extend {
-                Some(f) => {
-                    struct VisitFirstLifetime(Option<syn::Lifetime>);
-
-                    impl Visit<'_> for VisitFirstLifetime {
-                        fn visit_lifetime(&mut self, lifetime: &'_ syn::Lifetime) {
-                            if self.0.is_none() {
-                                self.0 = Some(lifetime.clone());
-                            }
-                        }
-                    }
-
-                    let name = f.name;
-                    let mut visitor = VisitFirstLifetime(None);
-
-                    visitor.visit_type(f.ty);
-
-                    visitor.0.ok_or_else(|| {
-                        syn::Error::new_spanned(
-                            name,
-                            "Unable to find lifetime for extended field. Please specify it manually",
-                        )
-                    }).map(Some)
-                }
-                None => Ok(None),
-            }
         }
 
         pub fn new(
@@ -607,16 +575,8 @@ mod struct_info {
             // Therefore, we will generate code that shortcircuits the "comparison" in memoization
             let are_there_generics = !self.generics.params.is_empty();
 
-            let extend_lifetime = self.extend_lifetime()?;
-
             let generics = self.generics.clone();
-            let (_, ty_generics, where_clause) = generics.split_for_impl();
-            let impl_generics = self.modify_generics(|g| {
-                if extend_lifetime.is_none() {
-                    g.params.insert(0, parse_quote!('__bump));
-                }
-            });
-            let (impl_generics, _, _) = impl_generics.split_for_impl();
+            let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
             let (_, b_initial_generics, _) = self.generics.split_for_impl();
             let all_fields_param = syn::GenericParam::Type(
                 syn::Ident::new("TypedBuilderFields", proc_macro2::Span::call_site()).into(),
@@ -699,12 +659,23 @@ Finally, call `.build()` to create the instance of `{name}`.
                 false => quote! { self == other },
             };
 
+            let extend_fields = self.extend_fields().map(|f| {
+                let name = f.name;
+                let ty = f.ty;
+                quote!(#name: #ty)
+            });
+            let extend_fields_value = self.extend_fields().map(|f| {
+                let name = f.name;
+                quote!(#name: Vec::new())
+            });
+
             Ok(quote! {
                 impl #impl_generics #name #ty_generics #where_clause {
                     #[doc = #builder_method_doc]
                     #[allow(dead_code, clippy::type_complexity)]
                     #vis fn builder() -> #builder_name #generics_with_empty {
                         #builder_name {
+                            #(#extend_fields_value,)*
                             fields: #empties_tuple,
                             _phantom: ::core::default::Default::default(),
                         }
@@ -715,11 +686,12 @@ Finally, call `.build()` to create the instance of `{name}`.
                 #builder_type_doc
                 #[allow(dead_code, non_camel_case_types, non_snake_case)]
                 #vis struct #builder_name #b_generics {
+                    #(#extend_fields,)*
                     fields: #all_fields_param,
                     _phantom: (#( #phantom_generics ),*),
                 }
 
-                impl #impl_generics ::dioxus::prelude::Properties<#extend_lifetime> for #name #ty_generics
+                impl #impl_generics ::dioxus::prelude::Properties for #name #ty_generics
                 #b_generics_where_extras_predicates
                 {
                     type Builder = #builder_name #generics_with_empty;
@@ -776,7 +748,6 @@ Finally, call `.build()` to create the instance of `{name}`.
             });
             let reconstructing = self.included_fields().map(|f| f.name);
 
-            // Add the bump lifetime to the generics
             let mut ty_generics: Vec<syn::GenericArgument> = self
                 .generics
                 .params
@@ -840,11 +811,6 @@ Finally, call `.build()` to create the instance of `{name}`.
                 quote!(#name: self.#name)
             });
 
-            let extend_lifetime = self.extend_lifetime()?.ok_or(Error::new_spanned(
-                field_name,
-                "Unable to find lifetime for extended field. Please specify it manually",
-            ))?;
-
             let extends_impl = field.builder_attr.extends.iter().map(|path| {
                 let name_str = path_to_single_string(path).unwrap();
                 let camel_name = name_str.to_case(Case::UpperCamel);
@@ -854,18 +820,18 @@ Finally, call `.build()` to create the instance of `{name}`.
                 );
                 quote! {
                     #[allow(dead_code, non_camel_case_types, missing_docs)]
-                    impl #impl_generics dioxus_elements::extensions::#marker_name < #extend_lifetime > for #builder_name < #( #ty_generics ),* > #where_clause {}
+                    impl #impl_generics dioxus_elements::extensions::#marker_name for #builder_name < #( #ty_generics ),* > #where_clause {}
                 }
             });
 
             Ok(quote! {
                 #[allow(dead_code, non_camel_case_types, missing_docs)]
-                impl #impl_generics ::dioxus::prelude::HasAttributes<#extend_lifetime> for #builder_name < #( #ty_generics ),* > #where_clause {
+                impl #impl_generics ::dioxus::prelude::HasAttributes for #builder_name < #( #ty_generics ),* > #where_clause {
                     fn push_attribute(
                         mut self,
-                        name: &#extend_lifetime str,
+                        name: &'static str,
                         ns: Option<&'static str>,
-                        attr: impl ::dioxus::prelude::IntoAttributeValue<#extend_lifetime>,
+                        attr: impl ::dioxus::prelude::IntoAttributeValue,
                         volatile: bool
                     ) -> Self {
                         let ( #(#descructuring,)* ) = self.fields;
@@ -874,7 +840,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                                 name,
                                 {
                                     use ::dioxus::prelude::IntoAttributeValue;
-                                    attr.into_value(self.bump)
+                                    attr.into_value()
                                 },
                                 ns,
                                 volatile,
@@ -882,7 +848,6 @@ Finally, call `.build()` to create the instance of `{name}`.
                         );
                         #builder_name {
                             #(#forward_extended_fields,)*
-                            bump: self.bump,
                             fields: ( #(#reconstructing,)* ),
                             _phantom: self._phantom,
                         }
@@ -1007,11 +972,6 @@ Finally, call `.build()` to create the instance of `{name}`.
                 let name = f.name;
                 quote!(#name: self.#name)
             });
-            let forward_bump = if self.extend_fields().next().is_some() {
-                quote!(bump: self.bump,)
-            } else {
-                quote!()
-            };
 
             Ok(quote! {
                 #[allow(dead_code, non_camel_case_types, missing_docs)]
@@ -1023,7 +983,6 @@ Finally, call `.build()` to create the instance of `{name}`.
                         let ( #(#descructuring,)* ) = self.fields;
                         #builder_name {
                             #(#forward_extended_fields,)*
-                            #forward_bump
                             fields: ( #(#reconstructing,)* ),
                             _phantom: self._phantom,
                         }

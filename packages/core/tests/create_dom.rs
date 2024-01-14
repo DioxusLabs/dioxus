@@ -75,7 +75,7 @@ fn create() {
 
 #[test]
 fn create_list() {
-    let mut dom = VirtualDom::new(|| render! {(0..3).map(|f| render!( div { "hello" } ))});
+    let mut dom = VirtualDom::new(|| render! {{(0..3).map(|f| render!( div { "hello" } ))}});
 
     let _edits = dom.rebuild_to_vec().santize();
 
@@ -137,7 +137,7 @@ fn create_components() {
     fn Child(cx: ChildProps) -> Element {
         render! {
             h1 {}
-            div { &cx.children }
+            div { {cx.children} }
             p {}
         }
     }
@@ -152,10 +152,10 @@ fn anchors() {
     let mut dom = VirtualDom::new(|| {
         render! {
             if true {
-                render!( div { "hello" } )
+                 div { "hello" }
             }
             if false {
-                render!( div { "goodbye" } )
+                div { "goodbye" }
             }
         }
     });

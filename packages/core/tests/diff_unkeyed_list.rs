@@ -153,7 +153,7 @@ fn list_shrink_multiroot() {
     let mut dom = VirtualDom::new(|| {
         render! {
             div {
-                for i in 0..cx.generation() {
+                for i in 0..generation() {
                     div { "{i}" }
                     div { "{i}" }
                 }

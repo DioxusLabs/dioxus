@@ -25,7 +25,7 @@ async fn it_works() {
             });
         });
 
-        render!(())
+        render!({ () })
     }
 
     let mut dom = VirtualDom::new(app);

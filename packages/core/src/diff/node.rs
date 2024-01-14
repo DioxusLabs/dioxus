@@ -7,7 +7,6 @@ use crate::{
     arena::ElementId,
     innerlude::{ElementPath, ElementRef, VComponent, VNodeMount, VText},
     nodes::DynamicNode,
-    nodes::RenderReturn,
     scopes::ScopeId,
     TemplateNode,
     TemplateNode::*,
@@ -61,16 +60,7 @@ impl VNode {
 
         // If the templates are the same, we can diff the attributes and children
         // Start with the attributes
-        self.dynamic_attrs
-            .iter()
-            .zip(new.dynamic_attrs.iter())
-            .enumerate()
-            .for_each(|(idx, (old_attr, new_attr))| {
-                // If the attributes are different (or volatile), we need to update them
-                if old_attr.value != new_attr.value || new_attr.volatile {
-                    self.update_attribute(mount, idx, new_attr, to);
-                }
-            });
+        self.diff_attributes(new, dom, to);
 
         // Now diff the dynamic nodes
         self.dynamic_nodes
@@ -317,17 +307,108 @@ impl VNode {
         }
     }
 
-    pub(super) fn update_attribute(
+    pub(super) fn diff_attributes(
         &self,
-        mount: &VNodeMount,
-        idx: usize,
-        new_attr: &Attribute,
+        new: &VNode,
+        dom: &mut VirtualDom,
         to: &mut impl WriteMutations,
     ) {
-        let name = &new_attr.name;
-        let value = &new_attr.value;
-        let id = mount.mounted_attributes[idx];
-        to.set_attribute(name, new_attr.namespace, value, id);
+        let mount_id = self.mount.get();
+        for (idx, (old_attrs, new_attrs)) in self
+            .dynamic_attrs
+            .iter()
+            .zip(new.dynamic_attrs.iter())
+            .enumerate()
+        {
+            let mut old_attributes_iter = old_attrs.iter().peekable();
+            let mut new_attributes_iter = new_attrs.iter().peekable();
+            let attribute_id = dom.mounts[mount_id.0].mounted_attributes[idx];
+            let path = self.template.get().attr_paths[idx];
+
+            loop {
+                match (old_attributes_iter.peek(), new_attributes_iter.peek()) {
+                    (Some(old_attribute), Some(new_attribute)) => {
+                        // check which name is greater
+                        match old_attribute.name.cmp(new_attribute.name) {
+                            // The two attributes are the same, so diff them
+                            std::cmp::Ordering::Equal => {
+                                let old = old_attributes_iter.next().unwrap();
+                                let new = new_attributes_iter.next().unwrap();
+                                if old.value != new.value {
+                                    self.write_attribute(
+                                        path,
+                                        new,
+                                        attribute_id,
+                                        mount_id,
+                                        dom,
+                                        to,
+                                    );
+                                }
+                            }
+                            // In a sorted list, if the old attribute name is first, then the new attribute is missing
+                            std::cmp::Ordering::Less => {
+                                let old = old_attributes_iter.next().unwrap();
+                                self.remove_attribute(old, attribute_id, to)
+                            }
+                            // In a sorted list, if the new attribute name is first, then the old attribute is missing
+                            std::cmp::Ordering::Greater => {
+                                let new = new_attributes_iter.next().unwrap();
+                                self.write_attribute(path, new, attribute_id, mount_id, dom, to);
+                            }
+                        }
+                    }
+                    (Some(_), None) => {
+                        let left = old_attributes_iter.next().unwrap();
+                        self.remove_attribute(left, attribute_id, to)
+                    }
+                    (None, Some(_)) => {
+                        let right = new_attributes_iter.next().unwrap();
+                        self.write_attribute(path, right, attribute_id, mount_id, dom, to)
+                    }
+                    (None, None) => break,
+                }
+            }
+        }
+    }
+
+    fn remove_attribute(&self, attribute: &Attribute, id: ElementId, to: &mut impl WriteMutations) {
+        match &attribute.value {
+            AttributeValue::Listener(_) => {
+                to.remove_event_listener(&attribute.name[2..], id);
+            }
+            _ => {
+                to.set_attribute(
+                    attribute.name,
+                    attribute.namespace,
+                    &AttributeValue::None,
+                    id,
+                );
+            }
+        }
+    }
+
+    fn write_attribute(
+        &self,
+        path: &'static [u8],
+        attribute: &Attribute,
+        id: ElementId,
+        mount: MountId,
+        dom: &mut VirtualDom,
+        to: &mut impl WriteMutations,
+    ) {
+        match &attribute.value {
+            AttributeValue::Listener(_) => {
+                let element_ref = ElementRef {
+                    path: ElementPath { path },
+                    mount,
+                };
+                dom.elements[id.0] = Some(element_ref);
+                to.create_event_listener(&attribute.name[2..], id);
+            }
+            _ => {
+                to.set_attribute(attribute.name, attribute.namespace, &attribute.value, id);
+            }
+        }
     }
 
     /// Lightly diff the two templates, checking only their roots.
@@ -650,47 +731,15 @@ impl VNode {
             let id = self.assign_static_node_as_dynamic(path, root, dom, to);
 
             loop {
-                self.write_attribute(mount, attr_id, id, dom, to);
+                for attr in &*self.dynamic_attrs[attr_id] {
+                    self.write_attribute(path, attr, id, mount, dom, to);
+                }
 
                 // Only push the dynamic attributes forward if they match the current path (same element)
                 match attrs.next_if(|(_, p)| *p == path) {
                     Some((next_attr_id, _)) => attr_id = next_attr_id,
                     None => break,
                 }
-            }
-        }
-    }
-
-    fn write_attribute(
-        &self,
-        mount: MountId,
-        idx: usize,
-        id: ElementId,
-        dom: &mut VirtualDom,
-        to: &mut impl WriteMutations,
-    ) {
-        // Make sure we set the attribute's associated id
-        dom.mounts[mount.0].mounted_attributes[idx] = id;
-
-        let attribute = &self.dynamic_attrs[idx];
-
-        match &attribute.value {
-            AttributeValue::Listener(_) => {
-                // If this is a listener, we need to create an element reference for it so that when we receive an event, we can find the element
-                let path = &self.template.get().attr_paths[idx];
-
-                // The mount information should always be in the VDOM at this point
-                debug_assert!(dom.mounts.get(mount.0).is_some());
-
-                let element_ref = ElementRef {
-                    path: ElementPath { path },
-                    mount,
-                };
-                dom.elements[id.0] = Some(element_ref);
-                to.create_event_listener(&attribute.name[2..], id);
-            }
-            _ => {
-                to.set_attribute(attribute.name, attribute.namespace, &attribute.value, id);
             }
         }
     }

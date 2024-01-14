@@ -1,7 +1,7 @@
 #![cfg(not(miri))]
 
 use dioxus::prelude::*;
-use dioxus_core::{prelude::EventHandler, AttributeValue, DynamicNode, VComponent, *};
+use dioxus_core::{prelude::EventHandler, AttributeValue, DynamicNode, VComponent, VNode, *};
 use std::{cfg, collections::HashSet, default::Default};
 
 fn random_ns() -> Option<&'static str> {
@@ -250,7 +250,7 @@ fn create_random_element(cx: DepthProps) -> Element {
                 )
                 .into_boxed_str(),
             ));
-            let node = cx.vnode(
+            let node = VNode::new(
                 None,
                 template,
                 dynamic_node_types
@@ -263,7 +263,7 @@ fn create_random_element(cx: DepthProps) -> Element {
                     })
                     .collect(),
                 (0..template.attr_paths.len())
-                    .map(|_| create_random_dynamic_attr())
+                    .map(|_| Box::new([create_random_dynamic_attr()]) as Box<[Attribute]>)
                     .collect(),
             );
             Some(node)

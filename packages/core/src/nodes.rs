@@ -6,6 +6,7 @@ use crate::{
 };
 use crate::{arena::ElementId, Element, Event};
 use crate::{Properties, VirtualDom};
+use core::panic;
 use std::ops::Deref;
 use std::rc::Rc;
 use std::vec;
@@ -94,11 +95,34 @@ pub struct VNodeInner {
     /// The static nodes and static descriptor of the template
     pub template: Cell<Template>,
 
-    /// The dynamic parts of the template
+    /// The dynamic nodes in the template
     pub dynamic_nodes: Box<[DynamicNode]>,
 
-    /// The dynamic parts of the template
-    pub dynamic_attrs: Box<[Attribute]>,
+    /// The dynamic attribute slots in the template
+    ///
+    /// This is a list of positions in the template where dynamic attributes can be inserted.
+    ///
+    /// The inner list *must* be in the format [static named attributes, remaining dynamically named attributes].
+    ///
+    /// For example:
+    /// ```rust
+    /// div {
+    ///     class: "{class}",
+    ///     ..attrs,
+    ///     p {
+    ///         color: "{color}",
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// Would be represented as:
+    /// ```rust
+    /// [
+    ///     [class, every attribute in attrs sorted by name], // Slot 0 in the template
+    ///     [color], // Slot 1 in the template
+    /// ]
+    /// ```
+    pub dynamic_attrs: Box<[Box<[Attribute]>]>,
 }
 
 /// A reference to a template along with any context needed to hydrate it
@@ -186,7 +210,7 @@ impl VNode {
         key: Option<String>,
         template: Template,
         dynamic_nodes: Box<[DynamicNode]>,
-        dynamic_attrs: Box<[Attribute]>,
+        dynamic_attrs: Box<[Box<[Attribute]>]>,
     ) -> Self {
         Self {
             vnode: Rc::new(VNodeInner {
@@ -572,7 +596,7 @@ pub enum TemplateAttribute {
 }
 
 /// An attribute on a DOM node, such as `id="my-thing"` or `href="https://example.com"`
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Attribute {
     /// The name of the attribute.
     pub name: &'static str,
@@ -683,6 +707,19 @@ impl PartialEq for AttributeValue {
             (Self::Listener(_), Self::Listener(_)) => true,
             (Self::Any(l0), Self::Any(r0)) => l0.as_ref().any_cmp(r0.as_ref()),
             _ => false,
+        }
+    }
+}
+
+impl Clone for AttributeValue {
+    fn clone(&self) -> Self {
+        match self {
+            Self::Text(arg0) => Self::Text(arg0.clone()),
+            Self::Float(arg0) => Self::Float(*arg0),
+            Self::Int(arg0) => Self::Int(*arg0),
+            Self::Bool(arg0) => Self::Bool(*arg0),
+            Self::Listener(_) | Self::Any(_) => panic!("Cannot clone listener or any value"),
+            Self::None => Self::None,
         }
     }
 }
@@ -880,11 +917,11 @@ impl<T: IntoAttributeValue> IntoAttributeValue for Option<T> {
 }
 
 /// A trait for anything that has a dynamic list of attributes
-pub trait HasAttributes<'a> {
+pub trait HasAttributes {
     /// Push an attribute onto the list of attributes
     fn push_attribute(
         self,
-        name: &'a str,
+        name: &'static str,
         ns: Option<&'static str>,
         attr: impl IntoAttributeValue,
         volatile: bool,

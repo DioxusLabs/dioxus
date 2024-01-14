@@ -256,8 +256,8 @@ impl<'a> ToTokens for TemplateRenderer<'a> {
             ::dioxus::core::VNode::new(
                 #key_tokens,
                 TEMPLATE,
-                Box::new([ #( #node_printer ),* ]),
-                Box::new([ #( #dyn_attr_printer ),* ]),
+                Box::new([ #( #node_printer),* ]),
+                Box::new([ #( Box::new([ #( #dyn_attr_printer),* ]) ),* ]),
             )
         });
     }
@@ -352,7 +352,7 @@ impl DynamicMapping {
 #[derive(Default, Debug)]
 pub struct DynamicContext<'a> {
     dynamic_nodes: Vec<&'a BodyNode>,
-    dynamic_attributes: Vec<&'a AttributeType>,
+    dynamic_attributes: Vec<Vec<&'a AttributeType>>,
     current_path: Vec<u8>,
 
     node_paths: Vec<Vec<u8>>,
@@ -398,7 +398,7 @@ impl<'a> DynamicContext<'a> {
                                 Some(mapping) => mapping.get_attribute_idx(attr)?,
                                 None => self.dynamic_attributes.len(),
                             };
-                            self.dynamic_attributes.push(attr);
+                            self.dynamic_attributes.push(vec![attr]);
 
                             if self.attr_paths.len() <= idx {
                                 self.attr_paths.resize_with(idx + 1, Vec::new);
@@ -498,19 +498,29 @@ impl<'a> DynamicContext<'a> {
 
                                 // todo: we don't diff these so we never apply the volatile flag
                                 // volatile: dioxus_elements::#el_name::#name.2,
-                            }
+                            },
                         }
                     }
 
                     _ => {
-                        let ct = self.dynamic_attributes.len();
-                        self.dynamic_attributes.push(attr);
-                        self.attr_paths.push(self.current_path.clone());
-                        quote! { ::dioxus::core::TemplateAttribute::Dynamic { id: #ct } }
+                        // If this attribute is dynamic, but it already exists in the template, we can reuse the index
+                        if let Some(attribute_index) = self
+                            .attr_paths
+                            .iter()
+                            .position(|path| path == &self.current_path)
+                        {
+                            self.dynamic_attributes[attribute_index].push(attr);
+                            quote! {}
+                        } else {
+                            let ct = self.dynamic_attributes.len();
+                            self.dynamic_attributes.push(vec![attr]);
+                            self.attr_paths.push(self.current_path.clone());
+                            quote! { ::dioxus::core::TemplateAttribute::Dynamic { id: #ct }, }
+                        }
                     }
                 });
 
-                let attrs = quote! { #(#static_attrs),*};
+                let attrs = quote! { #(#static_attrs)* };
 
                 let children = el.children.iter().enumerate().map(|(idx, root)| {
                     self.current_path.push(idx as u8);

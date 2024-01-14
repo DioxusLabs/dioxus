@@ -391,20 +391,22 @@ impl VirtualDom {
                 let node_template = el_ref.template.get();
                 let target_path = path.path;
 
-                for (idx, attr) in el_ref.dynamic_attrs.iter().enumerate() {
+                for (idx, attrs) in el_ref.dynamic_attrs.iter().enumerate() {
                     let this_path = node_template.attr_paths[idx];
 
-                    // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
-                    if attr.name.trim_start_matches("on") == name
-                        && target_path.is_decendant(&this_path)
-                    {
-                        listeners.push(&attr.value);
+                    for attr in attrs.iter() {
+                        // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
+                        if attr.name.trim_start_matches("on") == name
+                            && target_path.is_decendant(&this_path)
+                        {
+                            listeners.push(&attr.value);
 
-                        // Break if this is the exact target element.
-                        // This means we won't call two listeners with the same name on the same element. This should be
-                        // documented, or be rejected from the rsx! macro outright
-                        if target_path == this_path {
-                            break;
+                            // Break if this is the exact target element.
+                            // This means we won't call two listeners with the same name on the same element. This should be
+                            // documented, or be rejected from the rsx! macro outright
+                            if target_path == this_path {
+                                break;
+                            }
                         }
                     }
                 }
@@ -436,15 +438,17 @@ impl VirtualDom {
                 for (idx, attr) in el_ref.dynamic_attrs.iter().enumerate() {
                     let this_path = node_template.attr_paths[idx];
 
-                    // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
-                    // Only call the listener if this is the exact target element.
-                    if attr.name.trim_start_matches("on") == name && target_path == this_path {
-                        if let AttributeValue::Listener(listener) = &attr.value {
-                            self.runtime.rendering.set(false);
-                            listener.call(uievent.clone());
-                            self.runtime.rendering.set(true);
+                    for attr in attr.iter() {
+                        // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
+                        // Only call the listener if this is the exact target element.
+                        if attr.name.trim_start_matches("on") == name && target_path == this_path {
+                            if let AttributeValue::Listener(listener) = &attr.value {
+                                self.runtime.rendering.set(false);
+                                listener.call(uievent.clone());
+                                self.runtime.rendering.set(true);
 
-                            break;
+                                break;
+                            }
                         }
                     }
                 }

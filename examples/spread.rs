@@ -1,8 +1,8 @@
-use dioxus::prelude::*;
+use dioxus::{core::NoOpMutations, prelude::*};
 
 fn main() {
     let mut dom = VirtualDom::new(app);
-    let _ = dom.rebuild();
+    let _ = dom.rebuild(&mut NoOpMutations);
     let html = dioxus_ssr::render(&dom);
 
     println!("{}", html);
@@ -23,14 +23,14 @@ fn app() -> Element {
 #[component]
 fn Component(props: Props) -> Element {
     render! {
-        audio { ..cx.props.attributes, "1: {cx.props.extra_data}\n2: {cx.props.extra_data2}" }
+        audio { ..props.attributes, "1: {props.extra_data}\n2: {props.extra_data2}" }
     }
 }
 
-#[derive(Props)]
-struct Props<'a> {
+#[derive(Props, PartialEq, Clone)]
+struct Props {
     #[props(extends = GlobalAttributes)]
-    attributes: Vec<Attribute<'a>>,
-    extra_data: &'a str,
-    extra_data2: &'a str,
+    attributes: Vec<Attribute>,
+    extra_data: String,
+    extra_data2: String,
 }
