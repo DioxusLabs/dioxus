@@ -40,7 +40,7 @@ fn create_random_template_node(
     template_idx: &mut usize,
     attr_idx: &mut usize,
     depth: usize,
-) -> TemplateNode<'static> {
+) -> TemplateNode {
     match rand::random::<u8>() % 4 {
         0 => {
             let attrs = {
@@ -96,7 +96,7 @@ fn create_random_template_node(
 }
 
 fn generate_paths(
-    node: &TemplateNode<'static>,
+    node: &TemplateNode,
     current_path: &[u8],
     node_paths: &mut Vec<Vec<u8>>,
     attr_paths: &mut Vec<Vec<u8>>,

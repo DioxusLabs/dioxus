@@ -74,7 +74,7 @@ pub(crate) mod innerlude {
 pub use crate::innerlude::{
     fc_to_builder, generation, once, schedule_update, schedule_update_any, vdom_is_rendering,
     AnyValue, Attribute, AttributeValue, CapturedError, Component, DynamicNode, Element, ElementId,
-    Event, Fragment, IntoDynNode, Mutation, MutationsVec, NoOpMutations, Properties, RenderReturn,
+    Event, Fragment, IntoDynNode, Mutation, Mutations, NoOpMutations, Properties, RenderReturn,
     ScopeId, Task, Template, TemplateAttribute, TemplateNode, VComponent, VNode, VNodeInner,
     VPlaceholder, VText, VirtualDom, WriteMutations,
 };

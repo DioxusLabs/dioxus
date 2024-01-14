@@ -4,7 +4,7 @@ use dioxus::prelude::*;
 
 /// Used by the launch macro
 #[doc(hidden)]
-pub fn RouteWithCfg<R>(cx: Scope<FullstackRouterConfig<R>>) -> Element
+pub fn RouteWithCfg<R>(props: FullstackRouterConfig<R>) -> Element
 where
     R: dioxus_router::prelude::Routable,
     <R as std::str::FromStr>::Err: std::fmt::Display,
@@ -14,7 +14,7 @@ where
     #[cfg(feature = "ssr")]
     let context = crate::prelude::server_context();
 
-    let cfg = *cx.props;
+    let cfg = props;
     render! {
         dioxus_router::prelude::Router::<R> {
             config: move || {

@@ -15,15 +15,11 @@ fn App() -> Element {
             onclick: move |_| *signal.write() += 1,
             "Increase"
         }
-        Child {
-            signal: doubled
-        }
+        Child { signal: doubled }
     }
 }
 
 #[component]
 fn Child(signal: ReadOnlySignal<usize>) -> Element {
-    render! {
-        "{signal}"
-    }
+    render! { "{signal}" }
 }

@@ -327,7 +327,7 @@ pub enum Mutation {
 
 /// A static list of mutations that can be applied to the DOM. Note: this list does not contain any `Any` attribute values
 #[derive(Debug, PartialEq, Default)]
-pub struct MutationsVec {
+pub struct Mutations {
     /// The list of Scopes that were diffed, created, and removed during the Diff process.
     pub dirty_scopes: FxHashSet<ScopeId>,
 
@@ -340,7 +340,7 @@ pub struct MutationsVec {
     pub edits: Vec<Mutation>,
 }
 
-impl MutationsVec {
+impl Mutations {
     /// Rewrites IDs to just be "template", so you can compare the mutations
     ///
     /// Used really only for testing
@@ -355,7 +355,7 @@ impl MutationsVec {
     }
 }
 
-impl WriteMutations for MutationsVec {
+impl WriteMutations for Mutations {
     fn register_template(&mut self, template: Template) {
         self.templates.push(template)
     }

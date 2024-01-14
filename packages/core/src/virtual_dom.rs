@@ -13,7 +13,7 @@ use crate::{
     nodes::{Template, TemplateId},
     runtime::{Runtime, RuntimeGuard},
     scopes::ScopeId,
-    AttributeValue, Element, Event, MutationsVec,
+    AttributeValue, Element, Event, Mutations,
 };
 use futures_util::{pin_mut, StreamExt};
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -565,8 +565,8 @@ impl VirtualDom {
     }
 
     /// [`VirtualDom::rebuild`] to a vector of mutations for testing purposes
-    pub fn rebuild_to_vec(&mut self) -> MutationsVec {
-        let mut mutations = MutationsVec::default();
+    pub fn rebuild_to_vec(&mut self) -> Mutations {
+        let mut mutations = Mutations::default();
         self.rebuild(&mut mutations);
         mutations
     }
@@ -591,8 +591,8 @@ impl VirtualDom {
     }
 
     /// [`Self::render_immediate`] to a vector of mutations for testing purposes
-    pub fn render_immediate_to_vec(&mut self) -> MutationsVec {
-        let mut mutations = MutationsVec::default();
+    pub fn render_immediate_to_vec(&mut self) -> Mutations {
+        let mut mutations = Mutations::default();
         self.render_immediate(&mut mutations);
         mutations
     }
@@ -665,8 +665,8 @@ impl VirtualDom {
     pub async fn render_with_deadline_to_vec(
         &mut self,
         deadline: impl Future<Output = ()>,
-    ) -> MutationsVec {
-        let mut mutations = MutationsVec::default();
+    ) -> Mutations {
+        let mut mutations = Mutations::default();
         self.render_with_deadline(deadline, &mut mutations).await;
         mutations
     }

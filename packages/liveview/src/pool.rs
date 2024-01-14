@@ -5,7 +5,7 @@ use crate::{
     query::{QueryEngine, QueryResult},
     LiveViewError,
 };
-use dioxus_core::{prelude::*, BorrowedAttributeValue, Mutations};
+use dioxus_core::{prelude::*, Attribute, AttributeValue, Mutations};
 use dioxus_html::{event_bubbles, EventData, HtmlEvent, MountedData, PlatformEventData};
 use dioxus_interpreter_js::binary_protocol::Channel;
 use futures_util::{pin_mut, SinkExt, StreamExt};
@@ -38,7 +38,7 @@ impl LiveViewPool {
     pub async fn launch(
         &self,
         ws: impl LiveViewSocket,
-        app: fn(Scope<()>) -> Element,
+        app: fn(()) -> Element,
     ) -> Result<(), LiveViewError> {
         self.launch_with_props(ws, app, ()).await
     }
@@ -46,7 +46,7 @@ impl LiveViewPool {
     pub async fn launch_with_props<T: Send + 'static>(
         &self,
         ws: impl LiveViewSocket,
-        app: fn(Scope<T>) -> Element,
+        app: fn(T) -> Element,
         props: T,
     ) -> Result<(), LiveViewError> {
         self.launch_virtualdom(ws, move || VirtualDom::new_with_props(app, props))
@@ -133,7 +133,7 @@ pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), Li
     let (query_tx, mut query_rx) = tokio::sync::mpsc::unbounded_channel();
     let query_engine = QueryEngine::new(query_tx);
     vdom.base_scope().provide_context(query_engine.clone());
-    init_eval(vdom.base_scope());
+    init_eval();
 
     // pin the futures so we can use select!
     pin_mut!(ws);
@@ -271,7 +271,7 @@ fn add_template(
     *max_template_count += 1
 }
 
-fn create_template_node(channel: &mut Channel, v: &'static TemplateNode<'static>) {
+fn create_template_node(channel: &mut Channel, v: &'static TemplateNode) {
     use TemplateNode::*;
     match v {
         Element {

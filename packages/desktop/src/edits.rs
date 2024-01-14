@@ -140,7 +140,7 @@ impl EditQueue {
 //     max_template_count.fetch_add(1, Ordering::Relaxed);
 // }
 
-// pub fn create_template_node(channel: &mut Channel, node: &'static TemplateNode<'static>) {
+// pub fn create_template_node(channel: &mut Channel, node: &'static TemplateNode) {
 //     use TemplateNode::*;
 //     match node {
 //         Element {
