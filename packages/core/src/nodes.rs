@@ -177,7 +177,7 @@ impl VNode {
                 dynamic_nodes: Box::new([]),
                 dynamic_attrs: Box::new([]),
                 template: Cell::new(Template {
-                    name: "dioxus-empty",
+                    name: "packages/core/nodes.rs:180:0:0",
                     roots: &[],
                     node_paths: &[],
                     attr_paths: &[],
@@ -195,7 +195,7 @@ impl VNode {
                 dynamic_nodes: Box::new([DynamicNode::Placeholder(Default::default())]),
                 dynamic_attrs: Box::new([]),
                 template: Cell::new(Template {
-                    name: "dioxus-placeholder",
+                    name: "packages/core/nodes.rs:198:0:0",
                     roots: &[TemplateNode::Dynamic { id: 0 }],
                     node_paths: &[&[]],
                     attr_paths: &[],

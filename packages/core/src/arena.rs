@@ -58,10 +58,7 @@ impl VirtualDom {
 
     pub(crate) fn try_reclaim(&mut self, el: ElementId) -> Option<()> {
         if el.0 == 0 {
-            panic!(
-                "Cannot reclaim the root element - {:#?}",
-                std::backtrace::Backtrace::force_capture()
-            );
+            panic!("Cannot reclaim the root element",);
         }
 
         self.elements.try_remove(el.0).map(|_| ())

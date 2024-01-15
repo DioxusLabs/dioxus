@@ -44,14 +44,9 @@ impl VNode {
             return self.light_diff_templates(new, dom, to);
         }
 
-        // Copy over the mount information
         let mount_id = self.mount.get();
-        new.mount.set(mount_id);
 
-        let mount = &mut dom.mounts[mount_id.0];
-
-        // Update the reference to the node for bubbling events
-        mount.node = new.clone_mounted();
+        self.move_mount_to(new, dom);
 
         // If the templates are the same, we don't need to do anything, except copy over the mount information
         if self == new {
@@ -70,6 +65,17 @@ impl VNode {
             .for_each(|(dyn_node_idx, (old, new))| {
                 self.diff_dynamic_node(mount_id, dyn_node_idx, old, new, dom, to)
             });
+    }
+
+    fn move_mount_to(&self, new: &VNode, dom: &mut VirtualDom) {
+        // Copy over the mount information
+        let mount_id = self.mount.get();
+        new.mount.set(mount_id);
+
+        let mount = &mut dom.mounts[mount_id.0];
+
+        // Update the reference to the node for bubbling events
+        mount.node = new.clone_mounted();
     }
 
     fn diff_dynamic_node(
@@ -481,6 +487,8 @@ impl VNode {
         match matching_components(self, new) {
             None => self.replace([new], parent, dom, to),
             Some(components) => {
+                self.move_mount_to(new, dom);
+
                 for (idx, (old_component, new_component)) in components.into_iter().enumerate() {
                     let mount = &dom.mounts[mount_id.0];
                     let scope_id = ScopeId(mount.mounted_dynamic_nodes[idx]);
