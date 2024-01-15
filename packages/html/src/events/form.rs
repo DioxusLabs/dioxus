@@ -18,9 +18,9 @@ pub enum FormValue {
     Text(String),
     VecText(Vec<String>),
 }
-impl Into<Vec<String>> for FormValue {
-    fn into(self) -> Vec<String> {
-        match self {
+impl From<FormValue> for Vec<String> {
+    fn from(value: FormValue) -> Self {
+        match value {
             FormValue::Text(s) => vec![s],
             FormValue::VecText(vec) => vec,
         }
