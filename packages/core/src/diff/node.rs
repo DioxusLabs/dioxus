@@ -179,17 +179,15 @@ impl VNode {
     ) {
         let m = dom.create_children(to, right, parent);
 
-        // TODO: Instead of *just* removing it, we can use the replace mutation
-        let first_element = self.find_first_element(dom);
-        to.insert_nodes_before(first_element, m);
-
-        self.remove_node(dom, to, true)
+        // Instead of *just* removing it, we can use the replace mutation
+        self.remove_node(dom, to, Some(m), true)
     }
 
     pub(crate) fn remove_node(
         &self,
         dom: &mut VirtualDom,
         to: &mut impl WriteMutations,
+        replace_with: Option<usize>,
         gen_muts: bool,
     ) {
         let mount = self.mount.get();
@@ -205,7 +203,7 @@ impl VNode {
 
         // Clean up the roots, assuming we need to generate mutations for these
         // This is done last in order to preserve Node ID reclaim order (reclaim in reverse order of claim)
-        self.reclaim_roots(mount, dom, to, gen_muts);
+        self.reclaim_roots(mount, dom, to, replace_with, gen_muts);
 
         // Remove the mount information
         dom.mounts.remove(mount.0);
@@ -218,17 +216,32 @@ impl VNode {
         mount: MountId,
         dom: &mut VirtualDom,
         to: &mut impl WriteMutations,
+        replace_with: Option<usize>,
         gen_muts: bool,
     ) {
-        for (idx, node) in self.template.get().roots.iter().enumerate() {
+        let roots = self.template.get().roots;
+        for (idx, node) in roots.iter().enumerate() {
+            let last_node = idx == roots.len() - 1;
             if let Some(id) = node.dynamic_id() {
                 let dynamic_node = &self.dynamic_nodes[id];
-                self.remove_dynamic_node(mount, dom, to, idx, dynamic_node, gen_muts);
+                self.remove_dynamic_node(
+                    mount,
+                    dom,
+                    to,
+                    idx,
+                    dynamic_node,
+                    replace_with.filter(|_| last_node),
+                    gen_muts,
+                );
             } else {
                 let mount = &dom.mounts[mount.0];
                 let id = mount.root_ids[idx];
                 if gen_muts {
-                    to.remove_node(id);
+                    if let (true, Some(replace_with)) = (last_node, replace_with) {
+                        to.replace_node_with(id, replace_with);
+                    } else {
+                        to.remove_node(id);
+                    }
                 }
                 dom.reclaim(id);
             }
@@ -246,7 +259,7 @@ impl VNode {
             let path_len = template.node_paths.get(idx).map(|path| path.len());
             // Roots are cleaned up automatically above and nodes with a empty path are placeholders
             if let Some(2..) = path_len {
-                self.remove_dynamic_node(mount, dom, to, idx, dyn_node, false)
+                self.remove_dynamic_node(mount, dom, to, idx, dyn_node, None, false)
             }
         }
     }
@@ -258,20 +271,28 @@ impl VNode {
         to: &mut impl WriteMutations,
         idx: usize,
         node: &DynamicNode,
+        replace_with: Option<usize>,
         gen_muts: bool,
     ) {
         match node {
             Component(_comp) => {
                 let scope_id = ScopeId(dom.mounts[mount.0].mounted_dynamic_nodes[idx]);
-                dom.remove_component_node(to, scope_id, gen_muts);
+                dom.remove_component_node(to, scope_id, replace_with, gen_muts);
             }
             Text(_) | Placeholder(_) => {
                 let id = ElementId(dom.mounts[mount.0].mounted_dynamic_nodes[idx]);
-                dom.remove_element_id(to, id, gen_muts)
+                if gen_muts {
+                    if let Some(replace_with) = replace_with {
+                        to.replace_node_with(id, replace_with);
+                    } else {
+                        to.remove_node(id);
+                    }
+                }
+                dom.reclaim(id)
             }
             Fragment(nodes) => nodes
                 .iter()
-                .for_each(|_node| self.remove_node(dom, to, gen_muts)),
+                .for_each(|_node| self.remove_node(dom, to, replace_with, gen_muts)),
         };
     }
 

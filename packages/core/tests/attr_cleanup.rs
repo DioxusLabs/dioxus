@@ -9,7 +9,7 @@ use dioxus::prelude::*;
 fn attrs_cycle() {
     let mut dom = VirtualDom::new(|| {
         let id = generation();
-        match generation() % 2 {
+        match id % 2 {
             0 => render! { div {} },
             1 => render! {
                 div { h1 { class: "{id}", id: "{id}" } }

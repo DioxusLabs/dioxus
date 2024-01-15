@@ -54,7 +54,7 @@ impl VirtualDom {
         debug_assert!(!old.is_empty());
 
         match old.len().cmp(&new.len()) {
-            Ordering::Greater => self.remove_nodes(to, &old[new.len()..]),
+            Ordering::Greater => self.remove_nodes(to, &old[new.len()..], None),
             Ordering::Less => {
                 self.create_and_insert_after(to, &new[old.len()..], old.last().unwrap(), parent)
             }
@@ -135,7 +135,7 @@ impl VirtualDom {
 
         if new_middle.is_empty() {
             // remove the old elements
-            self.remove_nodes(to, old_middle);
+            self.remove_nodes(to, old_middle, None);
         } else if old_middle.is_empty() {
             // there were no old elements, so just create the new elements
             // we need to find the right "foothold" though - we shouldn't use the "append" at all
@@ -190,7 +190,7 @@ impl VirtualDom {
         // And if that was all of the new children, then remove all of the remaining
         // old children and we're finished.
         if left_offset == new.len() {
-            self.remove_nodes(to, &old[left_offset..]);
+            self.remove_nodes(to, &old[left_offset..], None);
             return None;
         }
 
@@ -284,7 +284,7 @@ impl VirtualDom {
         // create the new children afresh.
         if shared_keys.is_empty() {
             if !old.is_empty() {
-                self.remove_nodes(to, &old[1..]);
+                self.remove_nodes(to, &old[1..], None);
                 old[0].replace(new, parent, self, to);
             } else {
                 // I think this is wrong - why are we appending?
@@ -301,7 +301,7 @@ impl VirtualDom {
         for child in old {
             let key = child.key.as_ref().unwrap();
             if !shared_keys.contains(&key) {
-                child.remove_node(self, to, true);
+                child.remove_node(self, to, None, true);
             }
         }
 

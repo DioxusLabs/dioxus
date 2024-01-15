@@ -112,12 +112,10 @@ impl VNode {
     ) {
         let scope = ScopeId(dom.mounts[mount.0].mounted_dynamic_nodes[idx]);
 
-        let _m = self.create_component_node(mount, idx, new, parent, dom, to);
+        let m = self.create_component_node(mount, idx, new, parent, dom, to);
 
-        // TODO: Instead of *just* removing it, we can use the replace mutation
-        dom.remove_component_node(to, scope, true);
-
-        todo!()
+        // Instead of *just* removing it, we can use the replace mutation
+        dom.remove_component_node(to, scope, Some(m), true);
     }
 
     pub(super) fn create_component_node(

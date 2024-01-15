@@ -26,13 +26,6 @@ impl VirtualDom {
             .sum()
     }
 
-    fn remove_element_id(&mut self, to: &mut impl WriteMutations, id: ElementId, gen_muts: bool) {
-        if gen_muts {
-            to.remove_node(id);
-        }
-        self.reclaim(id)
-    }
-
     /// Simply replace a placeholder with a list of nodes
     fn replace_placeholder<'a>(
         &mut self,
@@ -66,38 +59,40 @@ impl VirtualDom {
 
     /// Replace many nodes with a number of nodes on the stack
     fn replace_nodes(&mut self, to: &mut impl WriteMutations, nodes: &[VNode], m: usize) {
-        // We want to optimize the replace case to use one less mutation if possible
-        // Since mutations are done in reverse, the last node removed will be the first in the stack
-        // TODO: Instead of *just* removing it, we can use the replace mutation
-        let first_element = nodes[0].find_first_element(self);
-        to.insert_nodes_before(first_element, m);
-
         debug_assert!(
             !nodes.is_empty(),
             "replace_nodes must have at least one node"
         );
 
-        self.remove_nodes(to, nodes);
+        // We want to optimize the replace case to use one less mutation if possible
+        // Instead of *just* removing it, we can use the replace mutation
+        self.remove_nodes(to, nodes, Some(m));
     }
 
     /// Remove these nodes from the dom
     /// Wont generate mutations for the inner nodes
-    fn remove_nodes(&mut self, to: &mut impl WriteMutations, nodes: &[VNode]) {
-        nodes
-            .iter()
-            .rev()
-            .for_each(|node| node.remove_node(self, to, true));
+    fn remove_nodes(
+        &mut self,
+        to: &mut impl WriteMutations,
+        nodes: &[VNode],
+        replace_with: Option<usize>,
+    ) {
+        for (i, node) in nodes.iter().rev().enumerate() {
+            let last_node = i == nodes.len() - 1;
+            node.remove_node(self, to, replace_with.filter(|_| last_node), true);
+        }
     }
 
     pub(crate) fn remove_component_node(
         &mut self,
         to: &mut impl WriteMutations,
         scope: ScopeId,
+        replace_with: Option<usize>,
         gen_muts: bool,
     ) {
         // Remove the component from the dom
         if let Some(node) = self.scopes[scope.0].last_rendered_node.take() {
-            node.remove_node(self, to, gen_muts)
+            node.remove_node(self, to, replace_with, gen_muts)
         };
 
         // Now drop all the resources
