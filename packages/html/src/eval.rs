@@ -9,7 +9,7 @@ use std::rc::Rc;
 /// A struct that implements EvalProvider is sent through [`ScopeState`]'s provide_context function
 /// so that [`use_eval`] can provide a platform agnostic interface for evaluating JavaScript code.
 pub trait EvalProvider {
-    fn new_evaluator(&self, js: String) -> Result<Rc<dyn Evaluator>, EvalError>;
+    fn new_evaluator(&self, js: String) -> Result<Box<dyn Evaluator>, EvalError>;
 }
 
 /// The platform's evaluator.
@@ -18,7 +18,7 @@ pub trait Evaluator {
     /// Sends a message to the evaluated JavaScript.
     fn send(&self, data: serde_json::Value) -> Result<(), EvalError>;
     /// Receive any queued messages from the evaluated JavaScript.
-    async fn recv(&self) -> Result<serde_json::Value, EvalError>;
+    async fn recv(&mut self) -> Result<serde_json::Value, EvalError>;
     /// Gets the return value of the JavaScript
     async fn join(&self) -> Result<serde_json::Value, EvalError>;
 }
@@ -54,14 +54,13 @@ pub fn eval(script: &str) -> Result<UseEval, EvalError> {
 }
 
 /// A wrapper around the target platform's evaluator.
-#[derive(Clone)]
 pub struct UseEval {
-    evaluator: Rc<dyn Evaluator + 'static>,
+    evaluator: Box<dyn Evaluator + 'static>,
 }
 
 impl UseEval {
     /// Creates a new UseEval
-    pub fn new(evaluator: Rc<dyn Evaluator + 'static>) -> Self {
+    pub fn new(evaluator: Box<dyn Evaluator + 'static>) -> Self {
         Self { evaluator }
     }
 
@@ -71,7 +70,7 @@ impl UseEval {
     }
 
     /// Gets an UnboundedReceiver to receive messages from the evaluated JavaScript.
-    pub async fn recv(&self) -> Result<serde_json::Value, EvalError> {
+    pub async fn recv(&mut self) -> Result<serde_json::Value, EvalError> {
         self.evaluator.recv().await
     }
 

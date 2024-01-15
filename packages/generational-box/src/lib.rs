@@ -611,17 +611,9 @@ impl Drop for GenerationalRefMutBorrowInfo {
 }
 
 /// Handles recycling generational boxes that have been dropped. Your application should have one store or one store per thread.
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct Store {
     recycled: Rc<RefCell<Vec<MemoryLocation>>>,
-}
-
-impl Default for Store {
-    fn default() -> Self {
-        Self {
-            recycled: Default::default(),
-        }
-    }
 }
 
 impl Store {

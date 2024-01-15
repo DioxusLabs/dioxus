@@ -17,8 +17,11 @@ impl DesktopEvalProvider {
 }
 
 impl EvalProvider for DesktopEvalProvider {
-    fn new_evaluator(&self, js: String) -> Result<Rc<dyn Evaluator>, EvalError> {
-        Ok(Rc::new(DesktopEvaluator::new(self.desktop_ctx.clone(), js)))
+    fn new_evaluator(&self, js: String) -> Result<Box<dyn Evaluator>, EvalError> {
+        Ok(Box::new(DesktopEvaluator::new(
+            self.desktop_ctx.clone(),
+            js,
+        )))
     }
 }
 
@@ -58,7 +61,7 @@ impl Evaluator for DesktopEvaluator {
     }
 
     /// Gets an UnboundedReceiver to receive messages from the evaluated JavaScript.
-    async fn recv(&self) -> Result<serde_json::Value, EvalError> {
+    async fn recv(&mut self) -> Result<serde_json::Value, EvalError> {
         self.query
             .borrow_mut()
             .recv()

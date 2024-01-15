@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use dioxus_core::ScopeId;
 use dioxus_html::prelude::{EvalError, EvalProvider, Evaluator};
+use futures_util::StreamExt;
 use js_sys::Function;
 use serde_json::Value;
 use std::{cell::RefCell, rc::Rc, str::FromStr};
@@ -15,8 +16,8 @@ pub fn init_eval() {
 /// Represents the web-target's provider of evaluators.
 pub struct WebEvalProvider;
 impl EvalProvider for WebEvalProvider {
-    fn new_evaluator(&self, js: String) -> Result<Rc<dyn Evaluator>, EvalError> {
-        WebEvaluator::new(js).map(|eval| Rc::new(eval) as Rc<dyn Evaluator + 'static>)
+    fn new_evaluator(&self, js: String) -> Result<Box<dyn Evaluator>, EvalError> {
+        WebEvaluator::new(js).map(|eval| Box::new(eval) as Box<dyn Evaluator + 'static>)
     }
 }
 
@@ -31,19 +32,19 @@ const PROMISE_WRAPPER: &str = r#"
 /// Represents a web-target's JavaScript evaluator.
 pub struct WebEvaluator {
     dioxus: Dioxus,
-    channel_receiver: async_channel::Receiver<serde_json::Value>,
+    channel_receiver: futures_channel::mpsc::UnboundedReceiver<serde_json::Value>,
     result: RefCell<Option<serde_json::Value>>,
 }
 
 impl WebEvaluator {
     /// Creates a new evaluator for web-based targets.
     pub fn new(js: String) -> Result<Self, EvalError> {
-        let (channel_sender, channel_receiver) = async_channel::unbounded();
+        let (mut channel_sender, channel_receiver) = futures_channel::mpsc::unbounded();
 
         // This Rc cloning mess hurts but it seems to work..
         let recv_value = Closure::<dyn FnMut(JsValue)>::new(move |data| {
             match serde_wasm_bindgen::from_value::<serde_json::Value>(data) {
-                Ok(data) => _ = channel_sender.send_blocking(data),
+                Ok(data) => _ = channel_sender.start_send(data),
                 Err(e) => {
                     // Can't really do much here.
                     tracing::error!("failed to serialize JsValue to serde_json::Value (eval communication) - {}", e);
@@ -85,7 +86,7 @@ impl WebEvaluator {
 
         Ok(Self {
             dioxus,
-            channel_receiver,
+            channel_receiver: channel_receiver,
             result: RefCell::new(Some(result)),
         })
     }
@@ -110,11 +111,11 @@ impl Evaluator for WebEvaluator {
     }
 
     /// Gets an UnboundedReceiver to receive messages from the evaluated JavaScript.
-    async fn recv(&self) -> Result<serde_json::Value, EvalError> {
+    async fn recv(&mut self) -> Result<serde_json::Value, EvalError> {
         self.channel_receiver
-            .recv()
+            .next()
             .await
-            .map_err(|_| EvalError::Communication("failed to receive data from js".to_string()))
+            .ok_or_else(|| EvalError::Communication("failed to receive data from js".to_string()))
     }
 }
 

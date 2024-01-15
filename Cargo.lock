@@ -320,17 +320,6 @@ dependencies = [
 
 [[package]]
 name = "async-channel"
-version = "1.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "81953c529336010edd6d8e358f886d9581267795c61b19475b71314bffa46d35"
-dependencies = [
- "concurrent-queue",
- "event-listener 2.5.3",
- "futures-core",
-]
-
-[[package]]
-name = "async-channel"
 version = "2.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1ca33f4bc4ed1babef42cad36cc1f51fa88be00420404e5b1e80ab1b18f7678c"
@@ -1078,7 +1067,7 @@ version = "1.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6a37913e8dc4ddcc604f0c6d3bf2887c995153af3611de9e23c352b44c1b9118"
 dependencies = [
- "async-channel 2.1.1",
+ "async-channel",
  "async-lock 3.3.0",
  "async-task",
  "fastrand 2.0.1",
@@ -2671,13 +2660,13 @@ dependencies = [
 name = "dioxus-html"
 version = "0.4.3"
 dependencies = [
- "async-channel 1.9.0",
  "async-trait",
  "dioxus-core",
  "dioxus-html-internal-macro",
  "dioxus-rsx",
  "enumset",
  "euclid",
+ "futures-channel",
  "keyboard-types",
  "rfd",
  "serde",
@@ -2833,7 +2822,6 @@ dependencies = [
  "urlencoding",
  "wasm-bindgen",
  "wasm-bindgen-test",
- "wasm-logger",
  "web-sys",
 ]
 
@@ -2913,7 +2901,6 @@ dependencies = [
 name = "dioxus-web"
 version = "0.4.3"
 dependencies = [
- "async-channel 1.9.0",
  "async-trait",
  "console_error_panic_hook",
  "dioxus",
@@ -2936,7 +2923,6 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "wasm-bindgen-test",
- "wasm-logger",
  "web-sys",
 ]
 

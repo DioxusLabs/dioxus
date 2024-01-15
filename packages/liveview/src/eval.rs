@@ -20,8 +20,8 @@ pub struct DesktopEvalProvider {
 }
 
 impl EvalProvider for DesktopEvalProvider {
-    fn new_evaluator(&self, js: String) -> Result<Rc<dyn Evaluator>, EvalError> {
-        Ok(Rc::new(DesktopEvaluator::new(self.query.clone(), js)))
+    fn new_evaluator(&self, js: String) -> Result<Box<dyn Evaluator>, EvalError> {
+        Ok(Box::new(DesktopEvaluator::new(self.query.clone(), js)))
     }
 }
 
@@ -65,7 +65,7 @@ impl Evaluator for DesktopEvaluator {
     ///
     /// # Panics
     /// This will panic if the query is currently being awaited.
-    async fn recv(&self) -> Result<serde_json::Value, EvalError> {
+    async fn recv(&mut self) -> Result<serde_json::Value, EvalError> {
         self.query
             .borrow_mut()
             .recv()

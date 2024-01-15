@@ -62,4 +62,3 @@ dioxus-router = { path = ".", features = ["web"] }
 dioxus-web = { workspace = true }
 gloo = "0.8.0"
 wasm-bindgen-test = "0.3.33"
-wasm-logger = "0.2.0"
