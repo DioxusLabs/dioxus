@@ -26,15 +26,15 @@ fn app() -> Element {
             val.set(String::new());
         }
 
-        val.make_mut().push_str(num.to_string().as_str());
+        val.write().push_str(num.to_string().as_str());
     };
 
-    let input_operator = move |key: &str| val.make_mut().push_str(key);
+    let input_operator = move |key: &str| val.write().push_str(key);
 
     let handle_key_down_event = move |evt: KeyboardEvent| match evt.key() {
         Key::Backspace => {
-            if !val.len() != 0 {
-                val.make_mut().pop();
+            if !val().is_empty() {
+                val.write().pop();
             }
         }
         Key::Character(character) => match character.as_str() {
@@ -72,16 +72,16 @@ fn app() -> Element {
                                     class: "calculator-key key-clear",
                                     onclick: move |_| {
                                         val.set(String::new());
-                                        if !val.is_empty(){
+                                        if !val().is_empty(){
                                             val.set("0".into());
                                         }
                                     },
-                                    if val.is_empty() { "C" } else { "AC" }
+                                    if val().is_empty() { "C" } else { "AC" }
                                 }
                                 button {
                                     class: "calculator-key key-sign",
                                     onclick: move |_| {
-                                        let temp = calc_val(val.as_str());
+                                        let temp = calc_val(val().as_str());
                                         if temp > 0.0 {
                                             val.set(format!("-{temp}"));
                                         } else {
@@ -94,7 +94,7 @@ fn app() -> Element {
                                     class: "calculator-key key-percent",
                                     onclick: move |_| {
                                         val.set(
-                                            format!("{}", calc_val(val.as_str()) / 100.0)
+                                            format!("{}", calc_val(val().as_str()) / 100.0)
                                         );
                                     },
                                     "%"
@@ -102,7 +102,7 @@ fn app() -> Element {
                             }
                             div { class: "digit-keys",
                                 button { class: "calculator-key key-0", onclick: move |_| input_digit(0), "0" }
-                                button { class: "calculator-key key-dot", onclick: move |_| val.make_mut().push('.'), "●" }
+                                button { class: "calculator-key key-dot", onclick: move |_| val.write().push('.'), "●" }
                                 for k in 1..10 {
                                     button {
                                         class: "calculator-key {k}",
@@ -120,7 +120,7 @@ fn app() -> Element {
                             button { class: "calculator-key key-add", onclick: move |_| input_operator("+"), "+" }
                             button {
                                 class: "calculator-key key-equals",
-                                onclick: move |_| val.set(format!("{}", calc_val(val.as_str()))),
+                                onclick: move |_| val.set(format!("{}", calc_val(val().as_str()))),
                                 "="
                             }
                         }

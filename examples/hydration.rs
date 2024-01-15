@@ -13,23 +13,24 @@ use dioxus::prelude::*;
 use dioxus_desktop::Config;
 
 fn main() {
-    let mut vdom = VirtualDom::new(app);
-    let _ = vdom.rebuild();
-    let content = dioxus_ssr::pre_render(&vdom);
+    Config::new()
+        .with_prerendered({
+            // We build the dom a first time, then pre-render it to HTML
+            let pre_rendered_dom = VirtualDom::prebuilt(app);
 
-    dioxus_desktop::launch_cfg(app, Config::new().with_prerendered(content));
+            // We then launch the app with the pre-rendered HTML
+            dioxus_ssr::pre_render(&pre_rendered_dom)
+        })
+        .launch(app);
 }
 
 fn app() -> Element {
-    let val = use_signal(|| 0);
+    let mut val = use_signal(|| 0);
 
     rsx! {
         div {
             h1 { "hello world. Count: {val}" }
-            button {
-                onclick: move |_| *val.make_mut() += 1,
-                "click to increment"
-            }
+            button { onclick: move |_| val += 1, "click to increment" }
         }
     }
 }

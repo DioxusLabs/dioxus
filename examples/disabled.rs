@@ -9,17 +9,13 @@ fn app() -> Element {
 
     rsx! {
         div {
-            button {
-                onclick: move |_| disabled.set(!disabled),
+            button { onclick: move |_| disabled.toggle(),
                 "click to "
-                if disabled == true { "enable" } else { "disable" }
+                if *disabled() { "enable" } else { "disable" }
                 " the lower button"
             }
 
-            button {
-                disabled: "{disabled}",
-                "lower button"
-            }
+            button { disabled, "lower button" }
         }
     }
 }

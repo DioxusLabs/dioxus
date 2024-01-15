@@ -13,22 +13,22 @@ fn app() -> Element {
 
     render! {
         div {
-            button { onclick: move |_| counters.make_mut().push(0), "Add counter" }
-            button { onclick: move |_| { counters.make_mut().pop(); }, "Remove counter" }
+            button { onclick: move |_| counters.write().push(0), "Add counter" }
+            button { onclick: move |_| { counters.write().pop(); }, "Remove counter" }
             p { "Total: {sum}" }
             for (i, counter) in counters.iter().enumerate() {
                 li {
-                    button { onclick: move |_| counters.make_mut()[i] -= 1, "-1" }
+                    button { onclick: move |_| counters.write()[i] -= 1, "-1" }
                     input {
                         value: "{counter}",
                         oninput: move |e| {
                             if let Ok(value) = e.value().parse::<usize>() {
-                                counters.make_mut()[i] = value;
+                                counters.write()[i] = value;
                             }
                         }
                     }
-                    button { onclick: move |_| counters.make_mut()[i] += 1, "+1" }
-                    button { onclick: move |_| { counters.make_mut().remove(i); }, "x" }
+                    button { onclick: move |_| counters.write()[i] += 1, "+1" }
+                    button { onclick: move |_| { counters.write().remove(i); }, "x" }
                 }
             }
         }

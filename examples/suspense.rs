@@ -17,18 +17,13 @@ use dioxus::prelude::*;
 use dioxus_desktop::{Config, LogicalSize, WindowBuilder};
 
 fn main() {
-    let cfg = Config::new().with_window(
-        WindowBuilder::new()
-            .with_title("Doggo Fetcher")
-            .with_inner_size(LogicalSize::new(600.0, 800.0)),
-    );
-
-    dioxus_desktop::launch_cfg(app, cfg);
-}
-
-#[derive(serde::Deserialize)]
-struct DogApi {
-    message: String,
+    Config::new()
+        .with_window(
+            WindowBuilder::new()
+                .with_title("Doggo Fetcher")
+                .with_inner_size(LogicalSize::new(600.0, 800.0)),
+        )
+        .launch(app)
 }
 
 fn app() -> Element {
@@ -54,6 +49,11 @@ fn app() -> Element {
 /// actually renders the data.
 fn Doggo() -> Element {
     let fut = use_future(|_| async move {
+        #[derive(serde::Deserialize)]
+        struct DogApi {
+            message: String,
+        }
+
         reqwest::get("https://dog.ceo/api/breeds/image/random/")
             .await
             .unwrap()
@@ -61,7 +61,7 @@ fn Doggo() -> Element {
             .await
     });
 
-    cx.render(match fut.value() {
+    match fut.value() {
         Some(Ok(resp)) => rsx! {
             button {
                 onclick: move |_| fut.restart(),

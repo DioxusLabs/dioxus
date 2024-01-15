@@ -19,7 +19,7 @@ fn app() -> Element {
             }
 
             button {
-                onclick: async move |_| move {
+                onclick: move |_| async move {
                     if let Some(header) = header_element.read().as_ref().cloned() {
                         let _ = header.scroll_to(ScrollBehavior::Smooth).await;
                     }

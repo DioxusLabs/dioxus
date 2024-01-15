@@ -4,8 +4,7 @@ fn main() {
     dioxus_desktop::launch(App);
 }
 
-#[component]
-fn App(_: ()) -> Element {
+fn app() -> Element {
     rsx! {
         ErrorBoundary {
             handle_error: |error: CapturedError| rsx! {"Found error {error}"},

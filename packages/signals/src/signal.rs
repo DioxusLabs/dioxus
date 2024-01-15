@@ -7,8 +7,11 @@ use std::{
 };
 
 use dioxus_core::{
-    prelude::{current_scope_id, has_context, provide_context, schedule_update_any},
-    use_hook, ScopeId,
+    prelude::{
+        current_scope_id, has_context, provide_context, schedule_update_any, use_hook,
+        IntoAttributeValue,
+    },
+    ScopeId,
 };
 use generational_box::{GenerationalRef, GenerationalRefMut};
 
@@ -303,6 +306,15 @@ impl<T: 'static> Signal<T> {
     pub fn with_mut<O>(&self, f: impl FnOnce(&mut T) -> O) -> O {
         let mut write = self.write();
         f(&mut *write)
+    }
+}
+
+impl<T> IntoAttributeValue for Signal<T>
+where
+    T: Clone + IntoAttributeValue,
+{
+    fn into_value(self) -> dioxus_core::AttributeValue {
+        self.with(|f| f.clone().into_value())
     }
 }
 

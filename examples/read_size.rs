@@ -26,35 +26,31 @@ fn main() {
 }
 
 fn app() -> Element {
-    let div_element: Signal<Option<Rc<MountedData>>> = use_signal(|| None);
+    let div_element = use_signal(|| None as Option<Rc<MountedData>>);
+    let dimensions = use_signal(Rect::zero);
 
-    let dimentions = use_signal(Rect::zero);
+    let read_dims = move |_| async move {
+        let read = div_element.read();
+        let client_rect = read.as_ref().map(|el| el.get_client_rect());
+        if let Some(client_rect) = client_rect {
+            if let Ok(rect) = client_rect.await {
+                dimensions.set(rect);
+            }
+        }
+    };
 
     rsx!(
         div {
             width: "50%",
             height: "50%",
             background_color: "red",
-            onmounted: move |cx| {
-                div_element.set(Some(cx.inner().clone()));
-            },
-            "This element is {dimentions.read():?}"
+            onmounted: move |cx| div_element.set(Some(cx.inner().clone())),
+            "This element is {dimensions.read():?}"
         }
 
         button {
-            onclick: move |_| {
-                to_owned![div_element, dimentions];
-                async move {
-                    let read = div_element.read();
-                    let client_rect = read.as_ref().map(|el| el.get_client_rect());
-                    if let Some(client_rect) = client_rect {
-                        if let Ok(rect) = client_rect.await {
-                            dimentions.set(rect);
-                        }
-                    }
-                }
-            },
-            "Read dimentions"
+            onclick: read_dims,
+            "Read dimensions"
         }
     )
 }

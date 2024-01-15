@@ -11,7 +11,7 @@ fn app() -> Element {
         input {
             r#type: "number",
             value: "{level}",
-            oninput: |e| {
+            oninput: move |e| {
                 if let Ok(new_zoom) = e.value().parse::<f64>() {
                     level.set(new_zoom);
                     dioxus_desktop::window().webview.zoom(new_zoom);

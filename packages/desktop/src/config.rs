@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 use std::path::PathBuf;
 
-use dioxus_core::prelude::Component;
+use dioxus_core::prelude::{Component, Element};
 use tao::window::{Icon, WindowBuilder, WindowId};
 use wry::{
     http::{Request as HttpRequest, Response as HttpResponse},
@@ -74,8 +74,8 @@ impl Config {
     /// Launch a Dioxus app using the given component and config
     ///
     /// See the [`crate::launch::launch`] function for more details.
-    pub fn launch(self, root: Component<()>) {
-        crate::launch::launch_cfg(root, self)
+    pub fn launch(self, app: fn() -> Element) {
+        self.launch_with_props(|props| props(), app)
     }
 
     /// Launch a Dioxus app using the given component, config, and props

@@ -10,9 +10,9 @@ fn app() -> Element {
     let elements = use_signal(Vec::<Rc<MountedData>>::new);
     let running = use_signal(|| true);
 
-    use_future(|| async move {
+    use_future(move || async move {
         let mut focused = 0;
-        if *running.current() {
+        if *running() {
             loop {
                 tokio::time::sleep(std::time::Duration::from_millis(10)).await;
                 if let Some(element) = elements.with(|f| f.get(focused).cloned()) {

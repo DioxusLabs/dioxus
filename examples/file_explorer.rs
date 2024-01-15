@@ -12,20 +12,19 @@ use dioxus::prelude::*;
 use dioxus_desktop::{Config, WindowBuilder};
 
 fn main() {
-    dioxus_desktop::launch_cfg(
-        app,
-        Config::new().with_window(WindowBuilder::new().with_resizable(true)),
-    );
+    Config::new()
+        .with_window(WindowBuilder::new().with_resizable(true))
+        .launch(app)
 }
 
 const _STYLE: &str = manganis::mg!(file("./examples/assets/fileexplorer.css"));
 
-fn app() -> Element {
+fn app(_props: ()) -> Element {
     let files = use_signal(Files::new);
 
     rsx! {
         div {
-            link { href:"https://fonts.googleapis.com/icon?family=Material+Icons", rel:"stylesheet", }
+            link { href:"https://fonts.googleapis.com/icon?family=Material+Icons", rel:"stylesheet" }
             header {
                 i { class: "material-icons icon-menu", "menu" }
                 h1 { "Files: ", {files.read().current()} }

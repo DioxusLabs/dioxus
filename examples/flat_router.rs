@@ -5,20 +5,17 @@ use dioxus_router::prelude::*;
 fn main() {
     env_logger::init();
 
-    let cfg = Config::new().with_window(
-        WindowBuilder::new()
-            .with_inner_size(LogicalSize::new(600, 1000))
-            .with_resizable(false),
-    );
-
-    dioxus_desktop::launch_cfg(App, cfg)
-}
-
-#[component]
-fn App() -> Element {
-    render! {
-        Router::<Route> {}
-    }
+    Config::new()
+        .with_window(
+            WindowBuilder::new()
+                .with_inner_size(LogicalSize::new(600, 1000))
+                .with_resizable(false),
+        )
+        .launch(|| {
+            render! {
+                Router::<Route> {}
+            }
+        });
 }
 
 #[derive(Routable, Clone)]

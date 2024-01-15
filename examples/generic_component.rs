@@ -12,13 +12,13 @@ fn app() -> Element {
     }
 }
 
-#[derive(PartialEq, Props)]
-struct GenericChildProps<T: Display + PartialEq> {
+#[derive(PartialEq, Props, Clone)]
+struct GenericChildProps<T: Display + PartialEq + Clone + 'static> {
     data: T,
 }
 
-fn generic_child<T: Display + PartialEq>(cx: Scope<GenericChildProps<T>>) -> Element {
+fn generic_child<T: Display + PartialEq + Clone>(props: GenericChildProps<T>) -> Element {
     render! {
-        div { "{&cx.props.data}" }
+        div { "{&props.data}" }
     }
 }

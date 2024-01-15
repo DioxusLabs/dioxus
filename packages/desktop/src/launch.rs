@@ -23,8 +23,8 @@ use tao::event::{Event, StartCause, WindowEvent};
 ///     })
 /// }
 /// ```
-pub fn launch(root: fn() -> Element) {
-    launch_with_props(|root| root(), root, Config::default())
+pub fn launch(app: fn() -> Element) {
+    launch_with_props(|root| root(), app, Config::default())
 }
 
 /// Launch the WebView and run the event loop, with configuration.
@@ -47,8 +47,8 @@ pub fn launch(root: fn() -> Element) {
 ///     })
 /// }
 /// ```
-pub fn launch_cfg(root: Component, config_builder: Config) {
-    launch_with_props(root, (), config_builder)
+pub fn launch_cfg(app: fn() -> Element, config_builder: Config) {
+    launch_with_props(|props| props(), app, config_builder)
 }
 
 /// Launch the WebView and run the event loop, with configuration and root props.

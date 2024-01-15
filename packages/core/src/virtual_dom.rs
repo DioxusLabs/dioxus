@@ -230,6 +230,13 @@ impl VirtualDom {
         Self::new_with_props(|app| app(), app)
     }
 
+    /// Create a new virtualdom and build it immediately
+    pub fn prebuilt(app: fn() -> Element) -> Self {
+        let mut dom = Self::new(app);
+        dom.rebuild_in_place();
+        dom
+    }
+
     /// Create a new VirtualDom with the given properties for the root component.
     ///
     /// # Description
@@ -566,6 +573,14 @@ impl VirtualDom {
         let m = self.create_scope(to, ScopeId::ROOT, new_nodes, None);
 
         to.append_children(ElementId(0), m);
+    }
+
+    /// Rebuild the virtualdom without handling any of the mutations
+    ///
+    /// This is useful for testing purposes and in cases where you render the output of the virtualdom without
+    /// handling any of its mutations.
+    pub fn rebuild_in_place(&mut self) {
+        self.rebuild(&mut NoOpMutations);
     }
 
     /// [`VirtualDom::rebuild`] to a vector of mutations for testing purposes

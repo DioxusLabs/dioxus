@@ -241,12 +241,10 @@ fn lowercase_helper() -> Element {
 
 mod baller {
     use super::*;
-    #[derive(Props, PartialEq, Eq)]
-    pub struct BallerProps {}
 
     #[component]
     /// This component totally balls
-    pub fn Baller(props: BallerProps) -> Element {
+    pub fn Baller() -> Element {
         todo!()
     }
 
@@ -259,16 +257,13 @@ mod baller {
     }
 }
 
-#[derive(Props)]
-pub struct TallerProps<'a> {
+/// Documention for this component is visible within the rsx macro
+#[component]
+pub fn Taller(
     /// Fields are documented and accessible in rsx!
     a: &'static str,
     children: Element,
-}
-
-/// Documention for this component is visible within the rsx macro
-#[component]
-pub fn Taller(props: TallerProps) -> Element {
+) -> Element {
     rsx! {
         {&cx.props.children}
     }

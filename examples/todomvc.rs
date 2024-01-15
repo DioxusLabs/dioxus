@@ -21,7 +21,7 @@ pub struct TodoItem {
     pub contents: String,
 }
 
-pub fn app(_props: ()) -> Element {
+pub fn app() -> Element {
     let todos = use_signal(|| HashMap::<u32, TodoItem>::new());
     let filter = use_signal(|| FilterState::All);
 

@@ -2,7 +2,7 @@ use dioxus::prelude::*;
 use std::collections::HashMap;
 
 fn main() {
-    dioxus_desktop::launch(|cx| render!(AppRoot {}));
+    dioxus_desktop::launch(app);
 }
 
 #[derive(Debug, Clone, PartialEq, serde::Deserialize)]
@@ -10,8 +10,7 @@ struct ListBreeds {
     message: HashMap<String, Vec<String>>,
 }
 
-#[component]
-fn AppRoot(_: ()) -> Element {
+fn app() -> Element {
     let breed = use_signal(|| "deerhound".to_string());
 
     let breeds = use_future(|| async move {

@@ -2,6 +2,7 @@ use crate::{
     assets::*, ipc::UserWindowEvent, shortcut::IntoAccelerator, window, DesktopContext,
     ShortcutHandle, ShortcutRegistryError, WryEventHandler,
 };
+use dioxus_core::use_hook;
 use tao::{event::Event, event_loop::EventLoopWindowTarget};
 use wry::RequestAsyncResponder;
 
@@ -12,22 +13,21 @@ use wry::RequestAsyncResponder;
 //         .unwrap()
 // }
 
-// /// Get a closure that executes any JavaScript in the WebView context.
-// pub fn use_wry_event_handler(
-//     ,
-//     handler: impl FnMut(&Event<UserWindowEvent>, &EventLoopWindowTarget<UserWindowEvent>) + 'static,
-// ) -> &WryEventHandler {
-//     cx.use_hook(move || {
-//         let desktop = window();
+/// Get a closure that executes any JavaScript in the WebView context.
+pub fn use_wry_event_handler(
+    handler: impl FnMut(&Event<UserWindowEvent>, &EventLoopWindowTarget<UserWindowEvent>) + 'static,
+) -> WryEventHandler {
+    use_hook(move || {
+        let desktop = window();
 
-//         let id = desktop.create_wry_event_handler(handler);
+        let id = desktop.create_wry_event_handler(handler);
 
-//         WryEventHandler {
-//             handlers: desktop.shared.event_handlers.clone(),
-//             id,
-//         }
-//     })
-// }
+        WryEventHandler {
+            handlers: desktop.shared.event_handlers.clone(),
+            id,
+        }
+    })
+}
 
 // /// Provide a callback to handle asset loading yourself.
 // ///
