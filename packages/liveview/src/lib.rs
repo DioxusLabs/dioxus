@@ -25,6 +25,7 @@ pub mod adapters {
     pub use rocket_adapter::*;
 }
 
+#[allow(unused_imports)]
 pub use adapters::*;
 
 mod element;

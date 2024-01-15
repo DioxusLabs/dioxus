@@ -27,6 +27,11 @@ impl MutationState {
         bytes
     }
 
+    pub fn write_memory_into(&mut self, buffer: &mut Vec<u8>) {
+        buffer.extend(self.channel.export_memory());
+        self.channel.reset();
+    }
+
     pub fn channel(&mut self) -> &mut Channel {
         &mut self.channel
     }
@@ -167,7 +172,7 @@ impl WriteMutations for MutationState {
                 self.channel
                     .remove_attribute(id.0 as u32, name, ns.unwrap_or_default())
             }
-            _ => unreachable!(),
+            _ => unreachable!("Any attributes are not supported by the current renderer"),
         }
     }
 
