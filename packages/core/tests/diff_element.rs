@@ -1,6 +1,6 @@
 use dioxus::core::Mutation::*;
 use dioxus::prelude::*;
-use dioxus_core::ElementId;
+use dioxus_core::{ElementId, NoOpMutations};
 
 #[test]
 fn text_diff() {
@@ -10,7 +10,7 @@ fn text_diff() {
     }
 
     let mut vdom = VirtualDom::new(app);
-    _ = vdom.rebuild_to_vec();
+    vdom.rebuild(&mut NoOpMutations);
 
     vdom.mark_dirty(ScopeId::ROOT);
     assert_eq!(
@@ -44,7 +44,7 @@ fn element_swap() {
     }
 
     let mut vdom = VirtualDom::new(app);
-    _ = vdom.rebuild_to_vec();
+    vdom.rebuild(&mut NoOpMutations);
 
     vdom.mark_dirty(ScopeId::ROOT);
     assert_eq!(

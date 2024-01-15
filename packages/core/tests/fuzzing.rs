@@ -1,7 +1,9 @@
 #![cfg(not(miri))]
 
 use dioxus::prelude::*;
-use dioxus_core::{prelude::EventHandler, AttributeValue, DynamicNode, VComponent, VNode, *};
+use dioxus_core::{
+    prelude::EventHandler, AttributeValue, DynamicNode, NoOpMutations, VComponent, VNode, *,
+};
 use std::{cfg, collections::HashSet, default::Default};
 
 fn random_ns() -> Option<&'static str> {
@@ -281,7 +283,7 @@ fn create() {
     for _ in 0..repeat_count {
         let mut vdom =
             VirtualDom::new_with_props(create_random_element, DepthProps { depth: 0, root: true });
-        let _ = vdom.rebuild_to_vec();
+        vdom.rebuild(&mut NoOpMutations);
     }
 }
 
@@ -293,7 +295,7 @@ fn diff() {
     for _ in 0..repeat_count {
         let mut vdom =
             VirtualDom::new_with_props(create_random_element, DepthProps { depth: 0, root: true });
-        let _ = vdom.rebuild_to_vec();
+        vdom.rebuild(&mut NoOpMutations);
         // A list of all elements that have had event listeners
         // This is intentionally never cleared, so that we can test that calling event listeners that are removed doesn't cause a panic
         let mut event_listeners = HashSet::new();
