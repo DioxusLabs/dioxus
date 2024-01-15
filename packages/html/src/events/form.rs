@@ -18,6 +18,27 @@ pub enum FormValue {
     Text(String),
     VecText(Vec<String>),
 }
+impl Into<Vec<String>> for FormValue {
+    fn into(self) -> Vec<String> {
+        match self{
+            FormValue::Text(s) => vec![s],
+            FormValue::VecText(vec) => vec,
+        }
+    }
+}
+impl FormValue {
+    /// Convenient way to represent Value as slice
+    pub fn as_slice(&self) -> &[String] {
+        match self{
+            FormValue::Text(s) => std::slice::from_ref(s),
+            FormValue::VecText(vec) => vec.as_slice(),
+        }
+    }
+    /// Convert into Vec<String>
+    pub fn to_vec(self) -> Vec<String> {
+        self.into()
+    }
+}
 
 /* DOMEvent:  Send + SyncTarget relatedTarget */
 pub struct FormData {
