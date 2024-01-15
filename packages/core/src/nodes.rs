@@ -867,7 +867,20 @@ impl IntoVNode for VNode {
         self
     }
 }
+impl IntoVNode for &VNode {
+    fn into_vnode(self) -> VNode {
+        self.clone()
+    }
+}
 impl IntoVNode for Element {
+    fn into_vnode(self) -> VNode {
+        match self {
+            Some(val) => val.into_vnode(),
+            _ => VNode::empty().unwrap(),
+        }
+    }
+}
+impl IntoVNode for &Element {
     fn into_vnode(self) -> VNode {
         match self {
             Some(val) => val.into_vnode(),

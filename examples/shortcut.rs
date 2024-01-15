@@ -8,10 +8,7 @@ fn main() {
 fn app() -> Element {
     let toggled = use_signal(|| false);
 
-    use_global_shortcut("ctrl+s", {
-        to_owned![toggled];
-        move || toggled.modify(|t| !*t)
-    });
+    use_global_shortcut("ctrl+s", move || toggled.toggle());
 
-    rsx!("toggle: {toggled.get()}")
+    rsx!("toggle: {toggled}")
 }

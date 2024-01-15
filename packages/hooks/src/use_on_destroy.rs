@@ -1,9 +1,11 @@
+use dioxus_core::use_hook;
+
 #[deprecated(
     note = "Use `use_on_destroy` instead, which has the same functionality. \
 This is deprecated because of the introduction of `use_on_create` which is better mirrored by `use_on_destroy`. \
 The reason why `use_on_create` is not `use_on_mount` is because of potential confusion with `dioxus::events::onmounted`."
 )]
-pub fn use_on_unmount<D: FnOnce() + 'static>(cx: &dioxus_core::ScopeState, destroy: D) {
+pub fn use_on_unmount<D: FnOnce() + 'static>(destroy: D) {
     use_on_destroy(destroy);
 }
 
@@ -67,19 +69,34 @@ pub fn use_on_unmount<D: FnOnce() + 'static>(cx: &dioxus_core::ScopeState, destr
 ///     }
 /// }
 /// ```
-pub fn use_on_destroy<D: FnOnce() + 'static>(cx: &dioxus_core::ScopeState, destroy: D) {
-    cx.use_hook(|| LifeCycle {
+pub fn use_on_destroy<D: FnOnce() + 'static>(destroy: D) {
+    struct LifeCycle<D: FnOnce()> {
+        /// Wrap the closure in an option so that we can take it out on drop.
+        ondestroy: Option<D>,
+    }
+
+    /// On drop, we want to run the closure.
+    impl<D: FnOnce()> Drop for LifeCycle<D> {
+        fn drop(&mut self) {
+            if let Some(f) = self.ondestroy.take() {
+                f();
+            }
+        }
+    }
+
+    // We need to impl clone for the lifecycle, but we don't want the drop handler for the closure to be called twice.
+    impl<D: FnOnce()> Clone for LifeCycle<D> {
+        fn clone(&self) -> Self {
+            Self { ondestroy: None }
+        }
+    }
+
+    use_hook(|| LifeCycle {
         ondestroy: Some(destroy),
     });
 }
 
-struct LifeCycle<D: FnOnce()> {
-    ondestroy: Option<D>,
-}
-
-impl<D: FnOnce()> Drop for LifeCycle<D> {
-    fn drop(&mut self) {
-        let f = self.ondestroy.take().unwrap();
-        f();
-    }
+/// Creates a callback that will be run before the component is dropped
+pub fn use_on_drop<D: FnOnce() + 'static>(ondrop: D) {
+    use_on_destroy(ondrop);
 }

@@ -57,8 +57,8 @@ macro_rules! to_owned {
 
 // pub mod computed;
 
-// mod use_on_destroy;
-// pub use use_on_destroy::*;
+mod use_on_destroy;
+pub use use_on_destroy::*;
 
 // mod use_const;
 // pub use use_const::*;
