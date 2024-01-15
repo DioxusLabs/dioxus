@@ -107,7 +107,6 @@ pub(super) fn desktop_handler(
 ) {
     // If the request is asking for edits (ie binary protocol streaming, do that)
     if request.uri().path().trim_matches('/') == "edits" {
-        println!("Handling edits from handler");
         return edit_queue.handle_request(responder);
     }
 

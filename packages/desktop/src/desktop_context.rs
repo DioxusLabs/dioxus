@@ -9,9 +9,8 @@ use crate::{
     AssetRequest, Config,
 };
 use dioxus_core::{
-    once,
     prelude::{current_scope_id, ScopeId},
-    VirtualDom,
+    use_hook, VirtualDom,
 };
 use dioxus_interpreter_js::binary_protocol::Channel;
 use dioxus_interpreter_js::MutationState;
@@ -385,7 +384,7 @@ impl WryWindowEventHandlerInner {
 pub fn use_wry_event_handler(
     handler: impl FnMut(&Event<UserWindowEvent>, &EventLoopWindowTarget<UserWindowEvent>) + 'static,
 ) -> WryEventHandler {
-    once(move || {
+    use_hook(move || {
         let desktop = window();
 
         let id = desktop.create_wry_event_handler(handler);
