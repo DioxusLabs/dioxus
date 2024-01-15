@@ -407,7 +407,7 @@ impl HasFormData for WebFormData {
                     let _ = v.insert(FormValue::Text(new_value));
                 }
             }
-        };
+        }
 
         // try to fill in form values
         if let Some(form) = self.element.dyn_ref::<web_sys::HtmlFormElement>() {
