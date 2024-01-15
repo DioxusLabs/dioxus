@@ -6,13 +6,12 @@
 //! - tests to ensure dyn_into works for various event types.
 //! - Partial delegation?
 
-use dioxus_core::{ElementId, Mutation, Template, TemplateAttribute, TemplateNode};
-use dioxus_html::{event_bubbles, MountedData, PlatformEventData};
-use dioxus_interpreter_js::get_node;
-use dioxus_interpreter_js::{minimal_bindings, save_template, Channel};
+use dioxus_core::ElementId;
+use dioxus_html::PlatformEventData;
+use dioxus_interpreter_js::Channel;
 use futures_channel::mpsc;
 use rustc_hash::FxHashMap;
-use wasm_bindgen::{closure::Closure, JsCast, JsValue};
+use wasm_bindgen::{closure::Closure, JsCast};
 use web_sys::{Document, Element, Event};
 
 use crate::{load_document, virtual_event_from_websys_event, Config, WebEventConverter};

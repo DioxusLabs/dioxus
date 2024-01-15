@@ -1,5 +1,4 @@
 use async_trait::async_trait;
-use dioxus_core::prelude::provide_context;
 use dioxus_core::ScopeId;
 use dioxus_html::prelude::{EvalError, EvalProvider, Evaluator};
 use js_sys::Function;

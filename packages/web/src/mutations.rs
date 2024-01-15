@@ -2,7 +2,7 @@ use crate::dom::UiEvent;
 use crate::dom::WebsysDom;
 use dioxus_core::prelude::*;
 use dioxus_core::WriteMutations;
-use dioxus_core::{AttributeValue, ElementId, ScopeId};
+use dioxus_core::{AttributeValue, ElementId};
 use dioxus_html::event_bubbles;
 use dioxus_html::MountedData;
 use dioxus_html::PlatformEventData;
