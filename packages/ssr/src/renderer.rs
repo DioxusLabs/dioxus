@@ -228,7 +228,7 @@ impl Renderer {
 fn to_string_works() {
     use dioxus::prelude::*;
 
-    fn app(_: ()) -> Element {
+    fn app() -> Element {
         let dynamic = 123;
         let dyn2 = "</diiiiiiiiv>"; // this should be escaped
 
@@ -288,7 +288,7 @@ fn to_string_works() {
 fn empty_for_loop_works() {
     use dioxus::prelude::*;
 
-    fn app(_: ()) -> Element {
+    fn app() -> Element {
         render! {
             div { class: "asdasdasd",
                 for _ in (0..5) {
@@ -331,7 +331,7 @@ fn empty_for_loop_works() {
 fn empty_render_works() {
     use dioxus::prelude::*;
 
-    fn app(_: ()) -> Element {
+    fn app() -> Element {
         render! {}
     }
 

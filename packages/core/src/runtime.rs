@@ -130,7 +130,7 @@ impl Runtime {
 /// }
 ///
 /// // In a dynamic library
-/// #[derive(Props)]
+/// #[derive(Props, Clone)]
 /// struct ComponentProps {
 ///    runtime: std::rc::Rc<Runtime>,
 /// }

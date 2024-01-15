@@ -2,7 +2,7 @@ use dioxus::prelude::*;
 
 #[test]
 fn simple() {
-    fn App(_: ()) -> Element {
+    fn App() -> Element {
         render! { div { "hello!" } }
     }
 
@@ -22,8 +22,10 @@ fn lists() {
     assert_eq!(
         dioxus_ssr::render_element(render! {
             ul {
-                (0..5).map(|i| render! {
-                    li { "item {i}" }
+                {
+                    (0..5).map(|i| render! {
+                        li { "item {i}" }
+                    })
                 }
             }
         }),
@@ -56,8 +58,10 @@ fn components() {
     assert_eq!(
         dioxus_ssr::render_element(render! {
             div {
-                (0..5).map(|name| render! {
-                    MyComponent { name: name }
+                {
+                    (0..5).map(|name| render! {
+                        MyComponent { name: name }
+                    })
                 }
             }
         }),
@@ -70,7 +74,9 @@ fn fragments() {
     assert_eq!(
         dioxus_ssr::render_element(render! {
             div {
-                (0..5).map(|_| render! (()))
+                {
+                    (0..5).map(|_| render! ({}))
+                }
             }
         }),
         "<div></div>"

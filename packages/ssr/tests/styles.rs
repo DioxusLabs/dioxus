@@ -2,7 +2,7 @@ use dioxus::prelude::*;
 
 #[test]
 fn static_styles() {
-    fn app(_: ()) -> Element {
+    fn app() -> Element {
         render! { div { width: "100px" } }
     }
 

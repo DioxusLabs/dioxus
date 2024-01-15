@@ -2,7 +2,7 @@ use dioxus::prelude::*;
 
 #[test]
 fn static_inner_html() {
-    fn app(_: ()) -> Element {
+    fn app() -> Element {
         render! { div { dangerous_inner_html: "<div>1234</div>" } }
     }
 
@@ -14,7 +14,7 @@ fn static_inner_html() {
 
 #[test]
 fn dynamic_inner_html() {
-    fn app(_: ()) -> Element {
+    fn app() -> Element {
         let inner_html = "<div>1234</div>";
         render! { div { dangerous_inner_html: "{inner_html}" } }
     }

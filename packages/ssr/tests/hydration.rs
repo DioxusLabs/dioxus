@@ -2,7 +2,7 @@ use dioxus::prelude::*;
 
 #[test]
 fn root_ids() {
-    fn app(_: ()) -> Element {
+    fn app() -> Element {
         render! { div { width: "100px" } }
     }
 
@@ -17,7 +17,7 @@ fn root_ids() {
 
 #[test]
 fn dynamic_attributes() {
-    fn app(_: ()) -> Element {
+    fn app() -> Element {
         let dynamic = 123;
         render! {
             div { width: "100px", div { width: "{dynamic}px" } }
@@ -35,7 +35,7 @@ fn dynamic_attributes() {
 
 #[test]
 fn listeners() {
-    fn app(_: ()) -> Element {
+    fn app() -> Element {
         render! {
             div { width: "100px", div { onclick: |_| {} } }
         }
@@ -49,7 +49,7 @@ fn listeners() {
         r#"<div style="width:100px;" data-node-hydration="0"><div data-node-hydration="1,click:1"></div></div>"#
     );
 
-    fn app2(_: ()) -> Element {
+    fn app2() -> Element {
         let dynamic = 123;
         render! {
             div { width: "100px", div { width: "{dynamic}px", onclick: |_| {} } }
@@ -67,7 +67,7 @@ fn listeners() {
 
 #[test]
 fn text_nodes() {
-    fn app(_: ()) -> Element {
+    fn app() -> Element {
         let dynamic_text = "hello";
         render! {
             div { {dynamic_text} }
@@ -82,7 +82,7 @@ fn text_nodes() {
         r#"<div data-node-hydration="0"><!--node-id1-->hello<!--#--></div>"#
     );
 
-    fn app2(_: ()) -> Element {
+    fn app2() -> Element {
         let dynamic = 123;
         render! {
             div { "{dynamic}", "{1234}" }
@@ -101,11 +101,11 @@ fn text_nodes() {
 #[allow(non_snake_case)]
 #[test]
 fn components_hydrate() {
-    fn app(_: ()) -> Element {
+    fn app() -> Element {
         render! { Child {} }
     }
 
-    fn Child(_: ()) -> Element {
+    fn Child() -> Element {
         render! { div { "hello" } }
     }
 
@@ -117,11 +117,11 @@ fn components_hydrate() {
         r#"<div data-node-hydration="0">hello</div>"#
     );
 
-    fn app2(_: ()) -> Element {
+    fn app2() -> Element {
         render! { Child2 {} }
     }
 
-    fn Child2(_: ()) -> Element {
+    fn Child2() -> Element {
         let dyn_text = "hello";
         render! {
             div { {dyn_text} }
@@ -136,11 +136,11 @@ fn components_hydrate() {
         r#"<div data-node-hydration="0"><!--node-id1-->hello<!--#--></div>"#
     );
 
-    fn app3(_: ()) -> Element {
+    fn app3() -> Element {
         render! { Child3 {} }
     }
 
-    fn Child3(_: ()) -> Element {
+    fn Child3() -> Element {
         render! { div { width: "{1}" } }
     }
 
@@ -152,11 +152,11 @@ fn components_hydrate() {
         r#"<div style="width:1;" data-node-hydration="0"></div>"#
     );
 
-    fn app4(_: ()) -> Element {
+    fn app4() -> Element {
         render! { Child4 {} }
     }
 
-    fn Child4(_: ()) -> Element {
+    fn Child4() -> Element {
         render! {
             for _ in 0..2 {
                 {render! { "{1}" }}
@@ -177,7 +177,7 @@ fn components_hydrate() {
 fn hello_world_hydrates() {
     use dioxus_signals::use_signal;
 
-    fn app(_: ()) -> Element {
+    fn app() -> Element {
         let mut count = use_signal(|| 0);
 
         render! {

@@ -2,7 +2,7 @@ use dioxus::prelude::*;
 
 #[test]
 fn static_boolean_attributs() {
-    fn app(_: ()) -> Element {
+    fn app() -> Element {
         render! {
             div { hidden: "false" }
             div { hidden: "true" }
@@ -20,7 +20,7 @@ fn static_boolean_attributs() {
 
 #[test]
 fn dynamic_boolean_attributs() {
-    fn app(_: ()) -> Element {
+    fn app() -> Element {
         render! {
             div { hidden: false }
             div { hidden: true }
