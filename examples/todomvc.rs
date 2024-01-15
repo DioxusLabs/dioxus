@@ -1,7 +1,7 @@
 #![allow(non_snake_case)]
-
 use dioxus::prelude::*;
 use dioxus_elements::input_data::keyboard_types::Key;
+use std::collections::HashMap;
 
 fn main() {
     dioxus_desktop::launch(app);
@@ -21,67 +21,56 @@ pub struct TodoItem {
     pub contents: String,
 }
 
-pub fn app(cx: Scope<()>) -> Element {
-    let todos = use_signal(im_rc::HashMap::<u32, TodoItem>::default);
+pub fn app(_props: ()) -> Element {
+    let todos = use_signal(|| HashMap::<u32, TodoItem>::new());
     let filter = use_signal(|| FilterState::All);
 
-    // Filter the todos based on the filter state
-    let mut filtered_todos = todos
-        .iter()
-        .filter(|(_, item)| match **filter {
-            FilterState::All => true,
-            FilterState::Active => !item.checked,
-            FilterState::Completed => item.checked,
-        })
-        .map(|f| *f.0)
-        .collect::<Vec<_>>();
-    filtered_todos.sort_unstable();
+    let active_todo_count =
+        use_selector(move || todos().values().filter(|item| !item.checked).count());
 
-    let active_todo_count = todos.values().filter(|item| !item.checked).count();
-    let active_todo_text = match active_todo_count {
-        1 => "item",
-        _ => "items",
-    };
+    let filtered_todos = use_selector(move || {
+        let mut filtered_todos = todos()
+            .iter()
+            .filter(|(_, item)| match *filter() {
+                FilterState::All => true,
+                FilterState::Active => !item.checked,
+                FilterState::Completed => item.checked,
+            })
+            .map(|f| *f.0)
+            .collect::<Vec<_>>();
 
-    let show_clear_completed = todos.values().any(|todo| todo.checked);
+        filtered_todos.sort_unstable();
+
+        filtered_todos
+    });
 
     rsx! {
         section { class: "todoapp",
             style { {include_str!("./assets/todomvc.css")} }
-            TodoHeader { todos: todos }
+            TodoHeader { todos }
             section { class: "main",
-                if !todos.is_empty() {
+                if !todos().is_empty() {
                     input {
                         id: "toggle-all",
                         class: "toggle-all",
                         r#type: "checkbox",
                         onchange: move |_| {
-                            let check = active_todo_count != 0;
-                            for (_, item) in todos.make_mut().iter_mut() {
+                            let check = *active_todo_count() != 0;
+                            for (_, item) in todos.write().iter_mut() {
                                 item.checked = check;
                             }
                         },
-                        checked: if active_todo_count == 0 { "true" } else { "false" },
+                        checked: *active_todo_count() == 0,
                     }
                     label { r#for: "toggle-all" }
                 }
                 ul { class: "todo-list",
-                    for id in filtered_todos.iter() {
-                        TodoEntry {
-                            key: "{id}",
-                            id: *id,
-                            todos: todos,
-                        }
+                    for id in filtered_todos().iter().copied() {
+                        TodoEntry { key: "{id}", id, todos }
                     }
                 }
-                if !todos.is_empty() {
-                    ListFooter {
-                        active_todo_count: active_todo_count,
-                        active_todo_text: active_todo_text,
-                        show_clear_completed: show_clear_completed,
-                        todos: todos,
-                        filter: filter,
-                    }
+                if !todos().is_empty() {
+                    ListFooter { active_todo_count, todos, filter }
                 }
             }
         }
@@ -89,14 +78,24 @@ pub fn app(cx: Scope<()>) -> Element {
     }
 }
 
-#[derive(Props)]
-pub struct TodoHeaderProps<'a> {
-    todos: &'a UseState<im_rc::HashMap<u32, TodoItem>>,
-}
-
-pub fn TodoHeader(props: TodoHeaderProps) -> Element {
+#[component]
+pub fn TodoHeader(todos: Signal<HashMap<u32, TodoItem>>) -> Element {
     let draft = use_signal(|| "".to_string());
-    let todo_id = use_signal(|| 0);
+    let mut todo_id = use_signal(|| 0);
+
+    let onkeydown = move |evt: KeyboardEvent| {
+        if evt.key() == Key::Enter && !draft().is_empty() {
+            let id = *todo_id();
+            let todo = TodoItem {
+                id,
+                checked: false,
+                contents: draft.to_string(),
+            };
+            todos.write().insert(id, todo);
+            todo_id += 1;
+            draft.set("".to_string());
+        }
+    };
 
     rsx! {
         header { class: "header",
@@ -106,76 +105,46 @@ pub fn TodoHeader(props: TodoHeaderProps) -> Element {
                 placeholder: "What needs to be done?",
                 value: "{draft}",
                 autofocus: "true",
-                oninput: move |evt| {
-                    draft.set(evt.value().clone());
-                },
-                onkeydown: move |evt| {
-                    if evt.key() == Key::Enter && !draft.is_empty() {
-                        cx.props
-                            .todos
-                            .make_mut()
-                            .insert(
-                                **todo_id,
-                                TodoItem {
-                                    id: **todo_id,
-                                    checked: false,
-                                    contents: draft.to_string(),
-                                },
-                            );
-                        *todo_id.make_mut() += 1;
-                        draft.set("".to_string());
-                    }
-                }
+                oninput: move |evt| draft.set(evt.value().clone()),
+                onkeydown,
             }
         }
     }
 }
 
-#[derive(Props)]
-pub struct TodoEntryProps<'a> {
-    todos: &'a UseState<im_rc::HashMap<u32, TodoItem>>,
-    id: u32,
-}
-
-pub fn TodoEntry(props: TodoEntryProps) -> Element {
+#[component]
+pub fn TodoEntry(todos: Signal<HashMap<u32, TodoItem>>, id: u32) -> Element {
     let is_editing = use_signal(|| false);
-
-    let todos = cx.props.todos.get();
-    let todo = &todos[&cx.props.id];
-    let completed = if todo.checked { "completed" } else { "" };
-    let editing = if **is_editing { "editing" } else { "" };
+    let checked = use_selector(move || todos().get(&id).unwrap().checked);
+    let contents = use_selector(move || todos().get(&id).unwrap().contents.clone());
 
     rsx! {
-        li { class: "{completed} {editing}",
+        li { class: if *checked() { "completed" }, class: if *is_editing() { "editing"},
             div { class: "view",
                 input {
                     class: "toggle",
                     r#type: "checkbox",
-                    id: "cbg-{todo.id}",
-                    checked: "{todo.checked}",
-                    oninput: move |evt| {
-                        cx.props.todos.make_mut()[&cx.props.id].checked = evt.value().parse().unwrap();
-                    }
+                    id: "cbg-{id}",
+                    checked: "{checked}",
+                    oninput: move |evt| todos.write().get_mut(&id).unwrap().checked = evt.value().parse().unwrap(),
                 }
                 label {
-                    r#for: "cbg-{todo.id}",
+                    r#for: "cbg-{id}",
                     ondoubleclick: move |_| is_editing.set(true),
                     prevent_default: "onclick",
-                    "{todo.contents}"
+                    "{contents}"
                 }
                 button {
                     class: "destroy",
-                    onclick: move |_| {
-                        cx.props.todos.make_mut().remove(&todo.id);
-                    },
+                    onclick: move |_| { todos.write().remove(&id); },
                     prevent_default: "onclick"
                 }
             }
-            if **is_editing {
+            if *is_editing() {
                 input {
                     class: "edit",
-                    value: "{todo.contents}",
-                    oninput: move |evt| cx.props.todos.make_mut()[&cx.props.id].contents = evt.value(),
+                    value: "{contents}",
+                    oninput: move |evt| todos.write().get_mut(&id).unwrap().contents = evt.value(),
                     autofocus: "true",
                     onfocusout: move |_| is_editing.set(false),
                     onkeydown: move |evt| {
@@ -183,39 +152,32 @@ pub fn TodoEntry(props: TodoEntryProps) -> Element {
                             Key::Enter | Key::Escape | Key::Tab => is_editing.set(false),
                             _ => {}
                         }
-                    },
+                    }
                 }
             }
         }
     }
 }
 
-#[derive(Props)]
-pub struct ListFooterProps<'a> {
-    todos: &'a UseState<im_rc::HashMap<u32, TodoItem>>,
-    active_todo_count: usize,
-    active_todo_text: &'a str,
-    show_clear_completed: bool,
-    filter: &'a UseState<FilterState>,
-}
-
-pub fn ListFooter(props: ListFooterProps) -> Element {
-    let active_todo_count = cx.props.active_todo_count;
-    let active_todo_text = cx.props.active_todo_text;
-
-    let selected = |state| {
-        if *cx.props.filter == state {
-            "selected"
-        } else {
-            "false"
-        }
-    };
+#[component]
+pub fn ListFooter(
+    todos: Signal<HashMap<u32, TodoItem>>,
+    active_todo_count: ReadOnlySignal<usize>,
+    filter: Signal<FilterState>,
+) -> Element {
+    let show_clear_completed = use_selector(move || todos().values().any(|todo| todo.checked));
 
     rsx! {
         footer { class: "footer",
             span { class: "todo-count",
                 strong { "{active_todo_count} " }
-                span { "{active_todo_text} left" }
+                span {
+                    match *active_todo_count() {
+                        1 => "item",
+                        _ => "items",
+                    }
+                    " left"
+                }
             }
             ul { class: "filters",
                 for (state , state_text , url) in [
@@ -226,18 +188,18 @@ pub fn ListFooter(props: ListFooterProps) -> Element {
                     li {
                         a {
                             href: url,
-                            class: selected(state),
-                            onclick: move |_| cx.props.filter.set(state),
+                            class: if *filter() == state { "selected" },
+                            onclick: move |_| filter.set(state),
                             prevent_default: "onclick",
                             {state_text}
                         }
                     }
                 }
             }
-            if cx.props.show_clear_completed {
+            if *show_clear_completed() {
                 button {
                     class: "clear-completed",
-                    onclick: move |_| cx.props.todos.make_mut().retain(|_, todo| !todo.checked),
+                    onclick: move |_| todos.write().retain(|_, todo| !todo.checked),
                     "Clear completed"
                 }
             }

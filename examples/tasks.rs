@@ -12,7 +12,7 @@ fn main() {
 fn app() -> Element {
     let mut count = use_signal(|| 0);
 
-    use_future(move |_| async move {
+    use_future(move || async move {
         loop {
             tokio::time::sleep(Duration::from_millis(1000)).await;
             count += 1;
