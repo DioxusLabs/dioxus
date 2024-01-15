@@ -9,7 +9,7 @@ async fn it_works() {
     static POLL_COUNT: AtomicUsize = AtomicUsize::new(0);
 
     fn app() -> Element {
-        once(|| {
+        use_hook(|| {
             spawn(async {
                 for x in 0..10 {
                     tokio::time::sleep(Duration::from_micros(50)).await;

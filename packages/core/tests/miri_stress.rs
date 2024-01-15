@@ -18,7 +18,7 @@ fn test_memory_leak() {
             return render!({});
         }
 
-        let mut name = once(|| String::from("numbers: "));
+        let mut name = use_hook(|| String::from("numbers: "));
 
         name.push_str("123 ");
 
@@ -76,7 +76,7 @@ fn memo_works_properly() {
             return None;
         }
 
-        let name = once(|| String::from("asd"));
+        let name = use_hook(|| String::from("asd"));
 
         render!(
             div { "Hello, world! {name}" }
@@ -117,7 +117,7 @@ fn free_works_on_root_hooks() {
     }
 
     fn app(cx: AppProps) -> Element {
-        let name: AppProps = once(|| cx.clone());
+        let name: AppProps = use_hook(|| cx.clone());
         render!(child_component { inner: name.inner.clone() })
     }
 
@@ -146,14 +146,14 @@ fn supports_async() {
         let colors = use_signal(|| vec!["green", "blue", "red"]);
         let padding = use_signal(|| 10);
 
-        once(|| {
+        use_hook(|| {
             spawn(async move {
                 sleep(Duration::from_millis(1000)).await;
                 colors.with_mut(|colors| colors.reverse());
             })
         });
 
-        once(|| {
+        use_hook(|| {
             spawn(async move {
                 sleep(Duration::from_millis(10)).await;
                 padding.with_mut(|padding| {

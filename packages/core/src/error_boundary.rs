@@ -15,7 +15,7 @@ use std::{
 
 /// Provide an error boundary to catch errors from child components
 pub fn use_error_boundary() -> ErrorBoundary {
-    once(|| provide_context(ErrorBoundary::new()))
+    use_hook(|| provide_context(ErrorBoundary::new()))
 }
 
 /// A boundary that will capture any errors from child components

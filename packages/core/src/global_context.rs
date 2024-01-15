@@ -92,15 +92,11 @@ pub fn remove_future(id: Task) {
 ///
 /// // prints a greeting on the initial render
 /// pub fn use_hello_world() {
-///     once(|| println!("Hello, world!"));
+///     use_hook(|| println!("Hello, world!"));
 /// }
 /// ```
-pub fn once<State: Clone + 'static>(initializer: impl FnOnce() -> State) -> State {
-    with_current_scope(|cx| cx.use_hook(initializer)).expect("to be in a dioxus runtime")
-}
-
 pub fn use_hook<State: Clone + 'static>(initializer: impl FnOnce() -> State) -> State {
-    once(initializer)
+    with_current_scope(|cx| cx.use_hook(initializer)).expect("to be in a dioxus runtime")
 }
 
 /// Get the current render since the inception of this component

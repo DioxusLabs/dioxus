@@ -16,10 +16,10 @@ fn app_drops() {
 #[test]
 fn hooks_drop() {
     fn app() -> Element {
-        once(|| String::from("asd"));
-        once(|| String::from("asd"));
-        once(|| String::from("asd"));
-        once(|| String::from("asd"));
+        use_hook(|| String::from("asd"));
+        use_hook(|| String::from("asd"));
+        use_hook(|| String::from("asd"));
+        use_hook(|| String::from("asd"));
 
         render! { div {} }
     }

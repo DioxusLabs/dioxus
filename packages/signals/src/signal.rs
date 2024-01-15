@@ -52,7 +52,7 @@ pub fn use_signal<T: 'static>(f: impl FnOnce() -> T) -> Signal<T> {
     #[cfg(debug_assertions)]
     let caller = std::panic::Location::caller();
 
-    once(|| {
+    use_hook(|| {
         Signal::new_with_caller(
             f(),
             #[cfg(debug_assertions)]

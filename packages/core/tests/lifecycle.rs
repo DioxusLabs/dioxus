@@ -81,7 +81,7 @@ fn events_generate() {
 // #[test]
 // fn components_generate() {
 //     fn app() -> Element {
-//         let render_phase = once(|| 0);
+//         let render_phase = use_hook(|| 0);
 //         *render_phase += 1;
 
 //         match *render_phase {

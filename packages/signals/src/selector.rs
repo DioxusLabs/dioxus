@@ -23,7 +23,7 @@ use crate::{get_effect_stack, signal::SignalData, CopyValue, Effect, ReadOnlySig
 /// ```
 #[must_use = "Consider using `use_effect` to rerun a callback when dependencies change"]
 pub fn use_selector<R: PartialEq>(f: impl FnMut() -> R + 'static) -> ReadOnlySignal<R> {
-    once(|| selector(f))
+    use_hook(|| selector(f))
 }
 
 /// Creates a new Selector with some local dependencies. The selector will be run immediately and whenever any signal it reads or any dependencies it tracks changes
@@ -51,7 +51,7 @@ where
     D::Out: 'static,
 {
     let dependencies_signal = use_signal(|| dependencies.out());
-    let selector = once(|| {
+    let selector = use_hook(|| {
         selector(move || {
             let deref = &*dependencies_signal.read();
             f(deref.clone())
