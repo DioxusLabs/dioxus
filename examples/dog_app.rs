@@ -36,7 +36,7 @@ fn app() -> Element {
                             }
                         }
                     }
-                    div { flex: "50%", BreedPic { breed: breed.to_string() } }
+                    div { flex: "50%", BreedPic { breed } }
                 }
             }
         },
@@ -50,7 +50,7 @@ struct DogApi {
 }
 
 #[component]
-fn BreedPic(breed: String) -> Element {
+fn BreedPic(breed: Signal<String>) -> Element {
     let fut = use_future(|breed| async move {
         reqwest::get(format!("https://dog.ceo/api/breed/{breed}/images/random"))
             .await

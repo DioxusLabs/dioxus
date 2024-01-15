@@ -145,10 +145,7 @@ fn Settings() -> Element {
 
         button {
             class: "pure-button pure-button-primary red",
-            onclick: move |_| {
-                let mut clients = clients.write();
-                clients.clear();
-            },
+            onclick: move |_| clients.write().clear(),
             "Remove all Clients"
         }
 

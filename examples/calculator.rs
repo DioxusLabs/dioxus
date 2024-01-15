@@ -22,7 +22,7 @@ fn app() -> Element {
     let val = use_signal(|| String::from("0"));
 
     let input_digit = move |num: u8| {
-        if val.get() == "0" {
+        if *val() == "0" {
             val.set(String::new());
         }
 

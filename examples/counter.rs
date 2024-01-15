@@ -9,14 +9,14 @@ fn main() {
 
 fn app() -> Element {
     let counters = use_signal(|| vec![0, 0, 0]);
-    let sum: usize = counters.iter().copied().sum();
+    let sum = use_selector(move || counters.read().iter().copied().sum() as usize);
 
     render! {
         div {
             button { onclick: move |_| counters.write().push(0), "Add counter" }
             button { onclick: move |_| { counters.write().pop(); }, "Remove counter" }
             p { "Total: {sum}" }
-            for (i, counter) in counters.iter().enumerate() {
+            for (i, counter) in counters.read().iter().enumerate() {
                 li {
                     button { onclick: move |_| counters.write()[i] -= 1, "-1" }
                     input {

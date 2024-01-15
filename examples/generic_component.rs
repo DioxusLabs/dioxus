@@ -19,6 +19,6 @@ struct GenericChildProps<T: Display + PartialEq + Clone + 'static> {
 
 fn generic_child<T: Display + PartialEq + Clone>(props: GenericChildProps<T>) -> Element {
     render! {
-        div { "{&props.data}" }
+        div { "{props.data}" }
     }
 }

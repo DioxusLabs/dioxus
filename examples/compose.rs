@@ -2,52 +2,44 @@
 
 use dioxus::prelude::*;
 use futures_util::StreamExt;
+use tokio::sync::mpsc::UnboundedSender;
 
 fn main() {
     dioxus_desktop::launch(app);
 }
 
 fn app() -> Element {
-    let emails_sent = use_signal(Vec::new);
+    let emails_sent = use_signal(|| Vec::new() as Vec<String>);
 
-    let tx = use_coroutine(|mut rx: UnboundedReceiver<String>| {
-        to_owned![emails_sent];
-        async move {
-            while let Some(message) = rx.next().await {
-                emails_sent.write().push(message);
-            }
+    // Wait for responses to the compose channel, and then push them to the emails_sent signal.
+    let tx = use_coroutine(|mut rx: UnboundedReceiver<String>| async move {
+        while let Some(message) = rx.next().await {
+            emails_sent.write().push(message);
         }
     });
 
+    let open_compose_window = move |evt: MouseEvent| {
+        dioxus_desktop::window().new_window(
+            VirtualDom::new_with_props(compose, tx.clone()),
+            Default::default(),
+        )
+    };
+
     rsx! {
-        div {
-            h1 { "This is your email" }
-
-            button {
-                onclick: move |_| {
-                    let dom = VirtualDom::new_with_props(compose, ComposeProps { app_tx: tx.clone() });
-                    dioxus_desktop::window().new_window(dom, Default::default());
-                },
-                "Click to compose a new email"
-            }
-
-            ul {
-                for message in emails_sent.read().iter() {
-                    li {
-                        h3 { "email" }
-                        span {"{message}"}
-                    }
+        h1 { "This is your email" }
+        button { onclick: open_compose_window, "Click to compose a new email" }
+        ul {
+            for message in emails_sent.read().iter() {
+                li {
+                    h3 { "email" }
+                    span { "{message}" }
                 }
             }
         }
     }
 }
 
-struct ComposeProps {
-    app_tx: Coroutine<String>,
-}
-
-fn compose(cx: Scope<ComposeProps>) -> Element {
+fn compose(receiver: UnboundedSender<String>) -> Element {
     let user_input = use_signal(String::new);
 
     rsx! {
