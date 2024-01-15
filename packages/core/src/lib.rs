@@ -75,8 +75,8 @@ pub use crate::innerlude::{
     fc_to_builder, generation, schedule_update, schedule_update_any, use_hook, vdom_is_rendering,
     AnyValue, Attribute, AttributeValue, CapturedError, Component, DynamicNode, Element, ElementId,
     Event, Fragment, HasAttributes, IntoDynNode, Mutation, Mutations, NoOpMutations, Properties,
-    RenderReturn, ScopeId, Task, Template, TemplateAttribute, TemplateNode, VComponent, VNode,
-    VNodeInner, VPlaceholder, VText, VirtualDom, WriteMutations,
+    RenderReturn, ScopeId, ScopeState, Task, Template, TemplateAttribute, TemplateNode, VComponent,
+    VNode, VNodeInner, VPlaceholder, VText, VirtualDom, WriteMutations,
 };
 
 /// The purpose of this module is to alleviate imports of many common types
@@ -89,7 +89,7 @@ pub mod prelude {
         push_future, remove_future, schedule_update, schedule_update_any, spawn, spawn_forever,
         suspend, use_error_boundary, use_hook, AnyValue, Attribute, Component, Element,
         ErrorBoundary, Event, EventHandler, Fragment, HasAttributes, IntoAttributeValue,
-        IntoDynNode, Properties, Runtime, RuntimeGuard, ScopeId, Task, Template, TemplateAttribute,
-        TemplateNode, Throw, VNode, VNodeInner, VirtualDom,
+        IntoDynNode, Properties, Runtime, RuntimeGuard, ScopeId, ScopeState, Task, Template,
+        TemplateAttribute, TemplateNode, Throw, VNode, VNodeInner, VirtualDom,
     };
 }

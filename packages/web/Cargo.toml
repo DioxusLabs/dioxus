@@ -75,7 +75,7 @@ eval = [
 [dev-dependencies]
 dioxus = { workspace = true }
 wasm-bindgen-test = "0.3.29"
-dioxus-ssr = { workspace = true}
+dioxus-ssr = { workspace = true, default-features = false }
 gloo-timers = "0.2.3"
 gloo-dialogs = "0.1.1"
 dioxus-web = { path = ".", features = ["hydrate"] }

@@ -234,6 +234,47 @@ impl VNode {
             }
         }
     }
+
+    /// Get the mounted id for a dynamic node index
+    pub fn mounted_dynamic_node(
+        &self,
+        dynamic_node_idx: usize,
+        dom: &VirtualDom,
+    ) -> Option<ElementId> {
+        let mount = self.mount.get().as_usize()?;
+
+        match &self.dynamic_nodes[dynamic_node_idx] {
+            DynamicNode::Text(_) | DynamicNode::Placeholder(_) => dom
+                .mounts
+                .get(mount)?
+                .mounted_dynamic_nodes
+                .get(dynamic_node_idx)
+                .map(|id| ElementId(*id)),
+            _ => None,
+        }
+    }
+
+    /// Get the mounted id for a root node index
+    pub fn mounted_root(&self, root_idx: usize, dom: &VirtualDom) -> Option<ElementId> {
+        let mount = self.mount.get().as_usize()?;
+
+        dom.mounts.get(mount)?.root_ids.get(root_idx).copied()
+    }
+
+    /// Get the mounted id for a dynamic attribute index
+    pub fn mounted_dynamic_attribute(
+        &self,
+        dynamic_attribute_idx: usize,
+        dom: &VirtualDom,
+    ) -> Option<ElementId> {
+        let mount = self.mount.get().as_usize()?;
+
+        dom.mounts
+            .get(mount)?
+            .mounted_attributes
+            .get(dynamic_attribute_idx)
+            .copied()
+    }
 }
 
 /// A static layout of a UI tree that describes a set of dynamic and static nodes.

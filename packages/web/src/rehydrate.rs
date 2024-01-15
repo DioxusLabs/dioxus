@@ -36,10 +36,7 @@ impl WebsysDom {
         ids: &mut Vec<u32>,
         to_mount: &mut Vec<ElementId>,
     ) -> Result<(), RehydrationError> {
-        let vnode = match scope.root_node() {
-            dioxus_core::RenderReturn::Ready(ready) => ready,
-            _ => return Err(VNodeNotInitialized),
-        };
+        let vnode = scope.root_node();
         self.rehydrate_vnode(dom, vnode, ids, to_mount)
     }
 
@@ -57,7 +54,7 @@ impl WebsysDom {
                 root,
                 ids,
                 to_mount,
-                Some(*vnode.root_ids.borrow().get(i).ok_or(VNodeNotInitialized)?),
+                Some(vnode.mounted_root(i, dom).ok_or(VNodeNotInitialized)?),
             )?;
         }
         Ok(())
@@ -80,9 +77,11 @@ impl WebsysDom {
                 let mut mounted_id = root_id;
                 for attr in *attrs {
                     if let dioxus_core::TemplateAttribute::Dynamic { id } = attr {
-                        let attribute = &vnode.dynamic_attrs[*id];
-                        let id = attribute.mounted_element();
-                        attribute.attribute_type().for_each(|attribute| {
+                        let attributes = &*vnode.dynamic_attrs[*id];
+                        let id = vnode
+                            .mounted_dynamic_attribute(*id, dom)
+                            .ok_or(VNodeNotInitialized)?;
+                        for attribute in attributes {
                             let value = &attribute.value;
                             mounted_id = Some(id);
                             if let AttributeValue::Listener(_) = value {
@@ -90,7 +89,7 @@ impl WebsysDom {
                                     to_mount.push(id);
                                 }
                             }
-                        });
+                        }
                     }
                 }
                 if let Some(id) = mounted_id {
@@ -102,9 +101,15 @@ impl WebsysDom {
                     }
                 }
             }
-            TemplateNode::Dynamic { id } | TemplateNode::DynamicText { id } => {
-                self.rehydrate_dynamic_node(dom, &vnode.dynamic_nodes[*id], ids, to_mount)?;
-            }
+            TemplateNode::Dynamic { id } | TemplateNode::DynamicText { id } => self
+                .rehydrate_dynamic_node(
+                    dom,
+                    &vnode.dynamic_nodes[*id],
+                    *id,
+                    vnode,
+                    ids,
+                    to_mount,
+                )?,
             _ => {}
         }
         Ok(())
@@ -114,28 +119,29 @@ impl WebsysDom {
         &mut self,
         dom: &VirtualDom,
         dynamic: &DynamicNode,
+        dynamic_node_index: usize,
+        vnode: &VNode,
         ids: &mut Vec<u32>,
         to_mount: &mut Vec<ElementId>,
     ) -> Result<(), RehydrationError> {
         tracing::trace!("rehydrate dynamic node: {:?}", dynamic);
         match dynamic {
-            dioxus_core::DynamicNode::Text(text) => {
-                ids.push(text.mounted_element().ok_or(VNodeNotInitialized)?.0 as u32);
-            }
-            dioxus_core::DynamicNode::Placeholder(placeholder) => {
-                ids.push(placeholder.mounted_element().ok_or(VNodeNotInitialized)?.0 as u32);
+            dioxus_core::DynamicNode::Text(_) | dioxus_core::DynamicNode::Placeholder(_) => {
+                ids.push(
+                    vnode
+                        .mounted_dynamic_node(dynamic_node_index, dom)
+                        .ok_or(VNodeNotInitialized)?
+                        .0 as u32,
+                );
             }
             dioxus_core::DynamicNode::Component(comp) => {
-                let scope = comp.mounted_scope().ok_or(VNodeNotInitialized)?;
-                self.rehydrate_scope(
-                    dom.get_scope(scope).ok_or(VNodeNotInitialized)?,
-                    dom,
-                    ids,
-                    to_mount,
-                )?;
+                let scope = comp
+                    .mounted_scope(dynamic_node_index, vnode, dom)
+                    .ok_or(VNodeNotInitialized)?;
+                self.rehydrate_scope(scope, dom, ids, to_mount)?;
             }
             dioxus_core::DynamicNode::Fragment(fragment) => {
-                for vnode in *fragment {
+                for vnode in fragment {
                     self.rehydrate_vnode(dom, vnode, ids, to_mount)?;
                 }
             }

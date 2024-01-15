@@ -147,13 +147,13 @@ impl Runtime {
 ///     render! { div {} }
 /// }
 /// ```
-pub struct RuntimeGuard(Rc<Runtime>);
+pub struct RuntimeGuard(());
 
 impl RuntimeGuard {
     /// Create a new runtime guard that sets the current Dioxus runtime. The runtime will be reset when the guard is dropped
     pub fn new(runtime: Rc<Runtime>) -> Self {
-        push_runtime(runtime.clone());
-        Self(runtime)
+        push_runtime(runtime);
+        Self(())
     }
 
     /// Run a function with a given runtime and scope in context

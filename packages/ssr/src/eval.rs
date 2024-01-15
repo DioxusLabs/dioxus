@@ -12,8 +12,8 @@ pub fn init_eval() {
 /// Reprents the ssr-target's provider of evaluators.
 pub struct SSREvalProvider;
 impl EvalProvider for SSREvalProvider {
-    fn new_evaluator(&self, _: String) -> Result<Rc<dyn Evaluator>, EvalError> {
-        Ok(Rc::new(SSREvaluator) as Rc<dyn Evaluator + 'static>)
+    fn new_evaluator(&self, _: String) -> Result<Box<dyn Evaluator>, EvalError> {
+        Ok(Box::new(SSREvaluator) as Box<dyn Evaluator + 'static>)
     }
 }
 
@@ -35,7 +35,7 @@ impl Evaluator for SSREvaluator {
     }
 
     /// Gets an UnboundedReceiver to receive messages from the evaluated JavaScript.
-    async fn recv(&self) -> Result<serde_json::Value, EvalError> {
+    async fn recv(&mut self) -> Result<serde_json::Value, EvalError> {
         std::future::pending::<()>().await;
         unreachable!()
     }
