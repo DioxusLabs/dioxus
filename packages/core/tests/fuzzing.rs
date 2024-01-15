@@ -177,7 +177,7 @@ fn create_random_dynamic_node(depth: usize) -> DynamicNode {
                 VNode::new(
                     None,
                     Template {
-                        name: concat!(file!(), ":", line!(), ":", column!(), ":0"),
+                        name: create_template_location(),
                         roots: &[TemplateNode::Dynamic { id: 0 }],
                         node_paths: &[&[0]],
                         attr_paths: &[],
@@ -225,6 +225,23 @@ fn create_random_dynamic_attr() -> Attribute {
 
 static mut TEMPLATE_COUNT: usize = 0;
 
+fn create_template_location() -> &'static str {
+    Box::leak(
+        format!(
+            "{}{}",
+            concat!(file!(), ":", line!(), ":", column!(), ":"),
+            {
+                unsafe {
+                    let old = TEMPLATE_COUNT;
+                    TEMPLATE_COUNT += 1;
+                    old
+                }
+            }
+        )
+        .into_boxed_str(),
+    )
+}
+
 #[derive(PartialEq, Props, Clone)]
 struct DepthProps {
     depth: usize,
@@ -238,20 +255,7 @@ fn create_random_element(cx: DepthProps) -> Element {
     let range = if cx.root { 2 } else { 3 };
     let node = match rand::random::<usize>() % range {
         0 | 1 => {
-            let (template, dynamic_node_types) = create_random_template(Box::leak(
-                format!(
-                    "{}{}",
-                    concat!(file!(), ":", line!(), ":", column!(), ":"),
-                    {
-                        unsafe {
-                            let old = TEMPLATE_COUNT;
-                            TEMPLATE_COUNT += 1;
-                            old
-                        }
-                    }
-                )
-                .into_boxed_str(),
-            ));
+            let (template, dynamic_node_types) = create_random_template(create_template_location());
             let node = VNode::new(
                 None,
                 template,
@@ -310,14 +314,58 @@ fn diff() {
                 );
             }
             {
-                let muts = vdom.render_immediate_to_vec();
-                for mut_ in muts.edits {
-                    if let Mutation::NewEventListener { name, id } = mut_ {
-                        println!("new event listener on {:?} for {:?}", id, name);
-                        event_listeners.insert(id);
-                    }
-                }
+                vdom.render_immediate(&mut InsertEventListenerMutationHandler(
+                    &mut event_listeners,
+                ));
             }
         }
     }
+}
+
+struct InsertEventListenerMutationHandler<'a>(&'a mut HashSet<ElementId>);
+
+impl WriteMutations for InsertEventListenerMutationHandler<'_> {
+    fn register_template(&mut self, _: Template) {}
+
+    fn append_children(&mut self, _: ElementId, _: usize) {}
+
+    fn assign_node_id(&mut self, _: &'static [u8], _: ElementId) {}
+
+    fn create_placeholder(&mut self, _: ElementId) {}
+
+    fn create_text_node(&mut self, _: &str, _: ElementId) {}
+
+    fn hydrate_text_node(&mut self, _: &'static [u8], _: &str, _: ElementId) {}
+
+    fn load_template(&mut self, _: &'static str, _: usize, _: ElementId) {}
+
+    fn replace_node_with(&mut self, _: ElementId, _: usize) {}
+
+    fn replace_placeholder_with_nodes(&mut self, _: &'static [u8], _: usize) {}
+
+    fn insert_nodes_after(&mut self, _: ElementId, _: usize) {}
+
+    fn insert_nodes_before(&mut self, _: ElementId, _: usize) {}
+
+    fn set_attribute(
+        &mut self,
+        _: &'static str,
+        _: Option<&'static str>,
+        _: &AttributeValue,
+        _: ElementId,
+    ) {
+    }
+
+    fn set_node_text(&mut self, _: &str, _: ElementId) {}
+
+    fn create_event_listener(&mut self, name: &'static str, id: ElementId) {
+        println!("new event listener on {:?} for {:?}", id, name);
+        self.0.insert(id);
+    }
+
+    fn remove_event_listener(&mut self, _: &'static str, _: ElementId) {}
+
+    fn remove_node(&mut self, _: ElementId) {}
+
+    fn push_root(&mut self, _: ElementId) {}
 }

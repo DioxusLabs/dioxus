@@ -234,7 +234,7 @@ impl VNode {
                     mount,
                     dom,
                     to,
-                    idx,
+                    id,
                     dynamic_node,
                     replace_with.filter(|_| last_node),
                     gen_muts,
@@ -296,9 +296,11 @@ impl VNode {
                 }
                 dom.reclaim(id)
             }
-            Fragment(nodes) => nodes
-                .iter()
-                .for_each(|_node| self.remove_node(dom, to, replace_with, gen_muts)),
+            Fragment(nodes) => {
+                for node in nodes {
+                    node.remove_node(dom, to, replace_with, gen_muts)
+                }
+            }
         };
     }
 
@@ -315,7 +317,7 @@ impl VNode {
         dom: &mut VirtualDom,
         _to: &mut impl WriteMutations,
     ) {
-        let id = None;
+        let mut id = None;
 
         for (idx, path) in self.template.get().attr_paths.iter().enumerate() {
             let _attr = &self.dynamic_attrs[idx];
@@ -330,6 +332,7 @@ impl VNode {
             // only reclaim the new element if it's different from the previous one
             if id != Some(next_id) {
                 dom.reclaim(next_id);
+                id = Some(next_id);
             }
         }
     }
