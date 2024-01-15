@@ -23,16 +23,16 @@ impl Serve {
         crate_config.with_release(self.serve.release);
         crate_config.with_verbose(self.serve.verbose);
 
-        if self.serve.example.is_some() {
-            crate_config.as_example(self.serve.example.unwrap());
+        if let Some(example) = self.serve.example {
+            crate_config.as_example(example);
         }
 
-        if self.serve.profile.is_some() {
-            crate_config.set_profile(self.serve.profile.unwrap());
+        if let Some(profile) = self.serve.profile {
+            crate_config.set_profile(profile);
         }
 
-        if self.serve.features.is_some() {
-            crate_config.set_features(self.serve.features.unwrap());
+        if let Some(features) = self.serve.features {
+            crate_config.set_features(features);
         }
 
         if let Some(target) = self.serve.target {
