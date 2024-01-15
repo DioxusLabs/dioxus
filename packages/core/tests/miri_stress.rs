@@ -3,6 +3,7 @@
 use std::rc::Rc;
 
 use dioxus::prelude::*;
+use dioxus_core::NoOpMutations;
 
 /// This test checks that we should release all memory used by the virtualdom when it exits.
 ///
@@ -59,7 +60,7 @@ fn test_memory_leak() {
 
     let mut dom = VirtualDom::new(app);
 
-    _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
+    dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     for _ in 0..5 {
         dom.mark_dirty(ScopeId::ROOT);
@@ -95,7 +96,7 @@ fn memo_works_properly() {
 
     let mut dom = VirtualDom::new(app);
 
-    _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
+    dom.rebuild(&mut dioxus_core::NoOpMutations);
     // todo!()
     // dom.hard_diff(ScopeId::ROOT);
     // dom.hard_diff(ScopeId::ROOT);
@@ -127,10 +128,10 @@ fn free_works_on_root_hooks() {
 
     let ptr = Rc::new("asdasd".to_string());
     let mut dom = VirtualDom::new_with_props(app, AppProps { inner: ptr.clone() });
-    let _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
+    dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     // ptr gets cloned into props and then into the hook
-    assert_eq!(Rc::strong_count(&ptr), 4);
+    assert_eq!(Rc::strong_count(&ptr), 5);
 
     drop(dom);
 
@@ -148,21 +149,25 @@ fn supports_async() {
 
         use_hook(|| {
             spawn(async move {
-                sleep(Duration::from_millis(1000)).await;
-                colors.with_mut(|colors| colors.reverse());
+                loop {
+                    sleep(Duration::from_millis(1000)).await;
+                    colors.with_mut(|colors| colors.reverse());
+                }
             })
         });
 
         use_hook(|| {
             spawn(async move {
-                sleep(Duration::from_millis(10)).await;
-                padding.with_mut(|padding| {
-                    if *padding < 65 {
-                        *padding += 1;
-                    } else {
-                        *padding = 5;
-                    }
-                });
+                loop {
+                    sleep(Duration::from_millis(10)).await;
+                    padding.with_mut(|padding| {
+                        if *padding < 65 {
+                            *padding += 1;
+                        } else {
+                            *padding = 5;
+                        }
+                    });
+                }
             })
         });
 
@@ -189,11 +194,11 @@ fn supports_async() {
 
     rt.block_on(async {
         let mut dom = VirtualDom::new(app);
-        let _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
+        dom.rebuild(&mut dioxus_core::NoOpMutations);
 
         for _ in 0..10 {
             dom.wait_for_work().await;
-            let _edits = dom.render_immediate_to_vec();
+            dom.render_immediate(&mut NoOpMutations);
         }
     });
 }

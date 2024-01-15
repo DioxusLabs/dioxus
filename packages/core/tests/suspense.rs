@@ -1,7 +1,7 @@
 use dioxus::prelude::*;
 
 #[test]
-fn it_works() {
+fn suspense_resolves() {
     // wait just a moment, not enough time for the boundary to resolve
 
     tokio::runtime::Builder::new_current_thread()
@@ -9,7 +9,7 @@ fn it_works() {
         .unwrap()
         .block_on(async {
             let mut dom = VirtualDom::new(app);
-            _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
+            dom.rebuild(&mut dioxus_core::NoOpMutations);
             dom.wait_for_suspense().await;
             let out = dioxus_ssr::render(&dom);
 

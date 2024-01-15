@@ -80,146 +80,145 @@ impl Renderer {
             })
             .clone();
 
-        // let mut inner_html = None;
+        let mut inner_html = None;
 
-        // // We need to keep track of the dynamic styles so we can insert them into the right place
-        // let mut accumulated_dynamic_styles = Vec::new();
+        // We need to keep track of the dynamic styles so we can insert them into the right place
+        let mut accumulated_dynamic_styles = Vec::new();
 
-        // // We need to keep track of the listeners so we can insert them into the right place
-        // let mut accumulated_listeners = Vec::new();
+        // We need to keep track of the listeners so we can insert them into the right place
+        let mut accumulated_listeners = Vec::new();
 
-        // for segment in entry.segments.iter() {
-        //     match segment {
-        //         Segment::Attr(idx) => {
-        //             let attr = &template.dynamic_attrs[*idx];
-        //             attr.attribute_type().try_for_each(|attr| {
-        //                 if attr.name == "dangerous_inner_html" {
-        //                     inner_html = Some(attr);
-        //                 } else if attr.namespace == Some("style") {
-        //                     accumulated_dynamic_styles.push(attr);
-        //                 } else if BOOL_ATTRS.contains(&attr.name) {
-        //                     if truthy(&attr.value) {
-        //                         write_attribute(buf, attr)?;
-        //                     }
-        //                 } else {
-        //                     write_attribute(buf, attr)?;
-        //                 }
+        for segment in entry.segments.iter() {
+            match segment {
+                Segment::Attr(idx) => {
+                    let attrs = &*template.dynamic_attrs[*idx];
+                    for attr in attrs {
+                        if attr.name == "dangerous_inner_html" {
+                            inner_html = Some(attr);
+                        } else if attr.namespace == Some("style") {
+                            accumulated_dynamic_styles.push(attr);
+                        } else if BOOL_ATTRS.contains(&attr.name) {
+                            if truthy(&attr.value) {
+                                write_attribute(buf, attr)?;
+                            }
+                        } else {
+                            write_attribute(buf, attr)?;
+                        }
 
-        //                 if self.pre_render {
-        //                     if let AttributeValue::Listener(_) = &attr.value {
-        //                         // The onmounted event doesn't need a DOM listener
-        //                         if attr.name != "onmounted" {
-        //                             accumulated_listeners.push(attr.name);
-        //                         }
-        //                     }
-        //                 }
-        //                 Ok(())
-        //             })?;
-        //         }
-        //         Segment::Node(idx) => match &template.dynamic_nodes[*idx] {
-        //             DynamicNode::Component(node) => {
-        //                 if self.skip_components {
-        //                     write!(buf, "<{}><{}/>", node.name, node.name)?;
-        //                 } else {
-        //                     let scope = node.mounted_scope(*idx, template, dom).unwrap();
-        //                     let node = scope.root_node();
-        //                     match node {
-        //                         RenderReturn::Ready(node) => {
-        //                             self.render_template(buf, dom, node)?
-        //                         }
-        //                         _ => todo!(
-        //                             "generally, scopes should be sync, only if being traversed"
-        //                         ),
-        //                     }
-        //                 }
-        //             }
-        //             DynamicNode::Text(text) => {
-        //                 // in SSR, we are concerned that we can't hunt down the right text node since they might get merged
-        //                 if self.pre_render {
-        //                     write!(buf, "<!--node-id{}-->", self.dynamic_node_id)?;
-        //                     self.dynamic_node_id += 1;
-        //                 }
+                        if self.pre_render {
+                            if let AttributeValue::Listener(_) = &attr.value {
+                                // The onmounted event doesn't need a DOM listener
+                                if attr.name != "onmounted" {
+                                    accumulated_listeners.push(attr.name);
+                                }
+                            }
+                        }
+                    }
+                }
+                Segment::Node(idx) => match &template.dynamic_nodes[*idx] {
+                    DynamicNode::Component(node) => {
+                        if self.skip_components {
+                            write!(buf, "<{}><{}/>", node.name, node.name)?;
+                        } else {
+                            let scope = node.mounted_scope(*idx, template, dom).unwrap();
+                            let node = scope.root_node();
+                            match node {
+                                RenderReturn::Ready(node) => {
+                                    self.render_template(buf, dom, node)?
+                                }
+                                _ => todo!(
+                                    "generally, scopes should be sync, only if being traversed"
+                                ),
+                            }
+                        }
+                    }
+                    DynamicNode::Text(text) => {
+                        // in SSR, we are concerned that we can't hunt down the right text node since they might get merged
+                        if self.pre_render {
+                            write!(buf, "<!--node-id{}-->", self.dynamic_node_id)?;
+                            self.dynamic_node_id += 1;
+                        }
 
-        //                 write!(
-        //                     buf,
-        //                     "{}",
-        //                     askama_escape::escape(&text.value, askama_escape::Html)
-        //                 )?;
+                        write!(
+                            buf,
+                            "{}",
+                            askama_escape::escape(&text.value, askama_escape::Html)
+                        )?;
 
-        //                 if self.pre_render {
-        //                     write!(buf, "<!--#-->")?;
-        //                 }
-        //             }
-        //             DynamicNode::Fragment(nodes) => {
-        //                 for child in nodes {
-        //                     self.render_template(buf, dom, child)?;
-        //                 }
-        //             }
+                        if self.pre_render {
+                            write!(buf, "<!--#-->")?;
+                        }
+                    }
+                    DynamicNode::Fragment(nodes) => {
+                        for child in nodes {
+                            self.render_template(buf, dom, child)?;
+                        }
+                    }
 
-        //             DynamicNode::Placeholder(_) => {
-        //                 if self.pre_render {
-        //                     write!(
-        //                         buf,
-        //                         "<pre data-node-hydration={}></pre>",
-        //                         self.dynamic_node_id
-        //                     )?;
-        //                     self.dynamic_node_id += 1;
-        //                 }
-        //             }
-        //         },
+                    DynamicNode::Placeholder(_) => {
+                        if self.pre_render {
+                            write!(
+                                buf,
+                                "<pre data-node-hydration={}></pre>",
+                                self.dynamic_node_id
+                            )?;
+                            self.dynamic_node_id += 1;
+                        }
+                    }
+                },
 
-        //         Segment::PreRendered(contents) => write!(buf, "{contents}")?,
+                Segment::PreRendered(contents) => write!(buf, "{contents}")?,
 
-        //         Segment::StyleMarker { inside_style_tag } => {
-        //             if !accumulated_dynamic_styles.is_empty() {
-        //                 // if we are inside a style tag, we don't need to write the style attribute
-        //                 if !*inside_style_tag {
-        //                     write!(buf, " style=\"")?;
-        //                 }
-        //                 for attr in &accumulated_dynamic_styles {
-        //                     write!(buf, "{}:", attr.name)?;
-        //                     write_value_unquoted(buf, &attr.value)?;
-        //                     write!(buf, ";")?;
-        //                 }
-        //                 if !*inside_style_tag {
-        //                     write!(buf, "\"")?;
-        //                 }
+                Segment::StyleMarker { inside_style_tag } => {
+                    if !accumulated_dynamic_styles.is_empty() {
+                        // if we are inside a style tag, we don't need to write the style attribute
+                        if !*inside_style_tag {
+                            write!(buf, " style=\"")?;
+                        }
+                        for attr in &accumulated_dynamic_styles {
+                            write!(buf, "{}:", attr.name)?;
+                            write_value_unquoted(buf, &attr.value)?;
+                            write!(buf, ";")?;
+                        }
+                        if !*inside_style_tag {
+                            write!(buf, "\"")?;
+                        }
 
-        //                 // clear the accumulated styles
-        //                 accumulated_dynamic_styles.clear();
-        //             }
-        //         }
+                        // clear the accumulated styles
+                        accumulated_dynamic_styles.clear();
+                    }
+                }
 
-        //         Segment::InnerHtmlMarker => {
-        //             if let Some(inner_html) = inner_html.take() {
-        //                 let inner_html = &inner_html.value;
-        //                 match inner_html {
-        //                     AttributeValue::Text(value) => write!(buf, "{}", value)?,
-        //                     AttributeValue::Bool(value) => write!(buf, "{}", value)?,
-        //                     AttributeValue::Float(f) => write!(buf, "{}", f)?,
-        //                     AttributeValue::Int(i) => write!(buf, "{}", i)?,
-        //                     _ => {}
-        //                 }
-        //             }
-        //         }
+                Segment::InnerHtmlMarker => {
+                    if let Some(inner_html) = inner_html.take() {
+                        let inner_html = &inner_html.value;
+                        match inner_html {
+                            AttributeValue::Text(value) => write!(buf, "{}", value)?,
+                            AttributeValue::Bool(value) => write!(buf, "{}", value)?,
+                            AttributeValue::Float(f) => write!(buf, "{}", f)?,
+                            AttributeValue::Int(i) => write!(buf, "{}", i)?,
+                            _ => {}
+                        }
+                    }
+                }
 
-        //         Segment::AttributeNodeMarker => {
-        //             // first write the id
-        //             write!(buf, "{}", self.dynamic_node_id)?;
-        //             self.dynamic_node_id += 1;
-        //             // then write any listeners
-        //             for name in accumulated_listeners.drain(..) {
-        //                 write!(buf, ",{}:", &name[2..])?;
-        //                 write!(buf, "{}", dioxus_html::event_bubbles(name) as u8)?;
-        //             }
-        //         }
+                Segment::AttributeNodeMarker => {
+                    // first write the id
+                    write!(buf, "{}", self.dynamic_node_id)?;
+                    self.dynamic_node_id += 1;
+                    // then write any listeners
+                    for name in accumulated_listeners.drain(..) {
+                        write!(buf, ",{}:", &name[2..])?;
+                        write!(buf, "{}", dioxus_html::event_bubbles(name) as u8)?;
+                    }
+                }
 
-        //         Segment::RootNodeMarker => {
-        //             write!(buf, "{}", self.dynamic_node_id)?;
-        //             self.dynamic_node_id += 1
-        //         }
-        //     }
-        // }
+                Segment::RootNodeMarker => {
+                    write!(buf, "{}", self.dynamic_node_id)?;
+                    self.dynamic_node_id += 1
+                }
+            }
+        }
 
         Ok(())
     }

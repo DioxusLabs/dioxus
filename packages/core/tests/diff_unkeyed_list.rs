@@ -282,7 +282,7 @@ fn two_equal_fragments_are_equal_static() {
         }
     });
 
-    _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
+    dom.rebuild(&mut dioxus_core::NoOpMutations);
     assert!(dom.render_immediate_to_vec().edits.is_empty());
 }
 
@@ -296,7 +296,7 @@ fn two_equal_fragments_are_equal() {
         }
     });
 
-    _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
+    dom.rebuild(&mut dioxus_core::NoOpMutations);
     assert!(dom.render_immediate_to_vec().edits.is_empty());
 }
 

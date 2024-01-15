@@ -5,7 +5,7 @@ use dioxus::prelude::*;
 #[test]
 fn catches_panic() {
     let mut dom = VirtualDom::new(app);
-    _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
+    dom.rebuild(&mut dioxus_core::NoOpMutations);
 }
 
 fn app() -> Element {
