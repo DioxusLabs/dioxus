@@ -86,7 +86,7 @@ impl WebEvaluator {
 
         Ok(Self {
             dioxus,
-            channel_receiver: channel_receiver,
+            channel_receiver,
             result: RefCell::new(Some(result)),
         })
     }

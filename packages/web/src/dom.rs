@@ -25,6 +25,8 @@ pub struct WebsysDom {
     pub(crate) interpreter: Channel,
     #[cfg(feature = "mounted")]
     pub(crate) event_channel: mpsc::UnboundedSender<UiEvent>,
+    #[cfg(feature = "mounted")]
+    pub(crate) queued_mounted_events: Vec<ElementId>,
 }
 
 pub struct UiEvent {
@@ -109,6 +111,8 @@ impl WebsysDom {
             max_template_id: 0,
             #[cfg(feature = "mounted")]
             event_channel,
+            #[cfg(feature = "mounted")]
+            queued_mounted_events: Default::default(),
         }
     }
 

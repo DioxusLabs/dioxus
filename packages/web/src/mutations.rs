@@ -4,7 +4,6 @@ use dioxus_core::prelude::*;
 use dioxus_core::WriteMutations;
 use dioxus_core::{AttributeValue, ElementId};
 use dioxus_html::event_bubbles;
-use dioxus_html::MountedData;
 use dioxus_html::PlatformEventData;
 use dioxus_interpreter_js::get_node;
 use dioxus_interpreter_js::minimal_bindings;
@@ -58,22 +57,27 @@ impl WebsysDom {
     }
 
     pub fn flush_edits(&mut self) {
-        self.interpreter.flush()
+        self.interpreter.flush();
+        #[cfg(feature = "mounted")]
+        // Now that we've flushed the edits and the dom nodes exist, we can send the mounted events.
+        {
+            for id in self.queued_mounted_events.drain(..) {
+                let node = get_node(id.0 as u32);
+                if let Some(element) = node.dyn_ref::<web_sys::Element>() {
+                    let _ = self.event_channel.unbounded_send(UiEvent {
+                        name: "mounted".to_string(),
+                        bubbles: false,
+                        element: id,
+                        data: PlatformEventData::new(Box::new(element.clone())),
+                    });
+                }
+            }
+        }
     }
 
     #[cfg(feature = "mounted")]
-    pub(crate) fn send_mount_event(&self, id: ElementId) {
-        let node = get_node(id.0 as u32);
-        if let Some(element) = node.dyn_ref::<web_sys::Element>() {
-            let data: MountedData = element.into();
-            let data = Box::new(data);
-            let _ = self.event_channel.unbounded_send(UiEvent {
-                name: "mounted".to_string(),
-                bubbles: false,
-                element: id,
-                data: PlatformEventData::new(data),
-            });
-        }
+    pub(crate) fn send_mount_event(&mut self, id: ElementId) {
+        self.queued_mounted_events.push(id);
     }
 }
 
