@@ -97,7 +97,7 @@ fn ClientAdd() -> Element {
                     label { "for": "first_name", "First Name" }
                     input {
                         id: "first_name",
-                        "type": "text",
+                        r#type: "text",
                         placeholder: "First Name…",
                         required: "",
                         value: "{first_name}",
@@ -109,7 +109,7 @@ fn ClientAdd() -> Element {
                     label { "for": "last_name", "Last Name" }
                     input {
                         id: "last_name",
-                        "type": "text",
+                        r#type: "text",
                         placeholder: "Last Name…",
                         required: "",
                         value: "{last_name}",
@@ -128,7 +128,7 @@ fn ClientAdd() -> Element {
                 }
 
                 div { class: "pure-controls",
-                    button { "type": "submit", class: "pure-button pure-button-primary", "Save" }
+                    button { r#type: "submit", class: "pure-button pure-button-primary", "Save" }
                     Link { to: Route::ClientList {}, class: "pure-button pure-button-primary red", "Cancel" }
                 }
             }

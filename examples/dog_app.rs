@@ -29,10 +29,7 @@ fn app() -> Element {
                     ul { flex: "50%",
                         for cur_breed in breed_list.message.keys().take(10) {
                             li { key: "{cur_breed}",
-                                button {
-                                    onclick: move |_| breed.set(cur_breed.clone()),
-                                    "{cur_breed}"
-                                }
+                                button { onclick: move |_| breed.set(cur_breed.clone()), "{cur_breed}" }
                             }
                         }
                     }
