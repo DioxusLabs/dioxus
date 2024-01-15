@@ -39,6 +39,11 @@ impl VNode {
             }
         }
 
+        // If the templates are different by name, we need to replace the entire template
+        if self.templates_are_different(new) {
+            return self.light_diff_templates(new, dom, to);
+        }
+
         // Copy over the mount information
         let mount_id = self.mount.get();
         new.mount.set(mount_id);
@@ -51,11 +56,6 @@ impl VNode {
         // If the templates are the same, we don't need to do anything, except copy over the mount information
         if self == new {
             return;
-        }
-
-        // If the templates are different by name, we need to replace the entire template
-        if self.templates_are_different(new) {
-            return self.light_diff_templates(new, dom, to);
         }
 
         // If the templates are the same, we can diff the attributes and children
@@ -553,8 +553,8 @@ impl VNode {
                 .map(|(i, path)| ((i, i), path))
                 .peekable(),
         );
-        // If this is a debug build, we need to check that the paths are in the correct order because hot reloading can cause scrambled states
 
+        // If this is a debug build, we need to check that the paths are in the correct order because hot reloading can cause scrambled states
         #[cfg(debug_assertions)]
         let (attrs_sorted, nodes_sorted) =
             { (sort_bfs(template.attr_paths), sort_bfs(template.node_paths)) };
@@ -754,6 +754,7 @@ impl VNode {
             loop {
                 for attr in &*self.dynamic_attrs[attr_id] {
                     self.write_attribute(path, attr, id, mount, dom, to);
+                    dom.mounts[mount.0].mounted_attributes[attr_id] = id;
                 }
 
                 // Only push the dynamic attributes forward if they match the current path (same element)
