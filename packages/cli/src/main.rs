@@ -79,39 +79,37 @@ async fn main() -> anyhow::Result<()> {
             Ok(())
         }
         action => {
-            let bin = get_bin(args.bin);
-
-            if let Ok(bin) = &bin {
-                let _dioxus_config = DioxusConfig::load(Some(bin.clone()))
+            let bin = get_bin(args.bin)?;
+            let _dioxus_config = DioxusConfig::load(Some(bin.clone()))
                        .map_err(|e| anyhow!("Failed to load Dioxus config because: {e}"))?
                        .unwrap_or_else(|| {
                            log::info!("You appear to be creating a Dioxus project from scratch; we will use the default config");
                            DioxusConfig::default()
                     });
 
-                #[cfg(feature = "plugin")]
-                PluginManager::init(_dioxus_config.plugin)
-                    .map_err(|e| anyhow!("🚫 Plugin system initialization failed: {e}"))?;
-            }
+            #[cfg(feature = "plugin")]
+            PluginManager::init(_dioxus_config.plugin)
+                .map_err(|e| anyhow!("🚫 Plugin system initialization failed: {e}"))?;
+
             match action {
-                Build(opts) if bin.is_ok() => opts
-                    .build(Some(bin.unwrap().clone()), None)
+                Build(opts) => opts
+                    .build(Some(bin.clone()), None)
                     .map_err(|e| anyhow!("🚫 Building project failed: {}", e)),
 
-                Clean(opts) if bin.is_ok() => opts
-                    .clean(Some(bin.unwrap().clone()))
+                Clean(opts) => opts
+                    .clean(Some(bin.clone()))
                     .map_err(|e| anyhow!("🚫 Cleaning project failed: {}", e)),
 
-                Serve(opts) if bin.is_ok() => opts
-                    .serve(Some(bin.unwrap().clone()))
+                Serve(opts) => opts
+                    .serve(Some(bin.clone()))
                     .await
                     .map_err(|e| anyhow!("🚫 Serving project failed: {}", e)),
 
-                Bundle(opts) if bin.is_ok() => opts
-                    .bundle(Some(bin.unwrap().clone()))
+                Bundle(opts) => opts
+                    .bundle(Some(bin.clone()))
                     .map_err(|e| anyhow!("🚫 Bundling project failed: {}", e)),
 
-                _ => Err(anyhow::anyhow!(bin.unwrap_err())),
+                _ => Ok(()),
             }
         }
     }
