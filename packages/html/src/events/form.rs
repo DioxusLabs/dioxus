@@ -20,7 +20,7 @@ pub enum FormValue {
 }
 impl Into<Vec<String>> for FormValue {
     fn into(self) -> Vec<String> {
-        match self{
+        match self {
             FormValue::Text(s) => vec![s],
             FormValue::VecText(vec) => vec,
         }
@@ -29,7 +29,7 @@ impl Into<Vec<String>> for FormValue {
 impl FormValue {
     /// Convenient way to represent Value as slice
     pub fn as_slice(&self) -> &[String] {
-        match self{
+        match self {
             FormValue::Text(s) => std::slice::from_ref(s),
             FormValue::VecText(vec) => vec.as_slice(),
         }

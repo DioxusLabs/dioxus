@@ -395,12 +395,10 @@ impl HasFormData for WebFormData {
             match map.entry(key) {
                 std::collections::hash_map::Entry::Occupied(mut o) => {
                     let first_value = match o.get_mut() {
-                        FormValue::Text(data) => {
-                            std::mem::take(data)
-                        }
+                        FormValue::Text(data) => std::mem::take(data),
                         FormValue::VecText(vec) => {
                             vec.push(new_value);
-                            return
+                            return;
                         }
                     };
                     let _ = o.insert(FormValue::VecText(vec![first_value, new_value]));
@@ -418,11 +416,10 @@ impl HasFormData for WebFormData {
                 if let Ok(array) = value.dyn_into::<Array>() {
                     if let Some(name) = array.get(0).as_string() {
                         if let Ok(item_values) = array.get(1).dyn_into::<Array>() {
-                            item_values.iter()
+                            item_values
+                                .iter()
                                 .filter_map(|v| v.as_string())
-                                .for_each(|v| {
-                                    insert_value(&mut values, name.clone(), v)
-                                });
+                                .for_each(|v| insert_value(&mut values, name.clone(), v));
                         } else if let Ok(item_value) = array.get(1).dyn_into::<JsValue>() {
                             insert_value(&mut values, name, item_value.as_string().unwrap());
                         }
