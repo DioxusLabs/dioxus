@@ -7,9 +7,8 @@ use std::{
 };
 
 use dioxus_core::{
-    once,
     prelude::{current_scope_id, has_context, provide_context, schedule_update_any},
-    ScopeId,
+    use_hook, ScopeId,
 };
 use generational_box::{GenerationalRef, GenerationalRefMut};
 

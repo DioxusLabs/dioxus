@@ -1,7 +1,7 @@
 use crate::{
     global_context::{consume_context, current_scope_id},
     innerlude::provide_context,
-    once, Element, IntoDynNode, Properties, ScopeId, Template, TemplateAttribute, TemplateNode,
+    use_hook, Element, IntoDynNode, Properties, ScopeId, Template, TemplateAttribute, TemplateNode,
     VNode,
 };
 use std::{
