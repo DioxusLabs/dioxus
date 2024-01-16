@@ -1,5 +1,7 @@
+use crate::MappedSignal;
 use std::{
     cell::RefCell,
+    marker::PhantomData,
     mem::MaybeUninit,
     ops::{Deref, DerefMut},
     rc::Rc,
@@ -13,9 +15,12 @@ use dioxus_core::{
     },
     ScopeId,
 };
-use generational_box::{GenerationalRef, GenerationalRefMut};
+use generational_box::{
+    GenerationalBoxId, Mappable, MappableMut, Storage, SyncStorage, UnsyncStorage,
+};
+use parking_lot::RwLock;
 
-use crate::{get_effect_stack, CopyValue, Effect, EffectStack};
+use crate::{get_effect_ref, CopyValue, EffectStackRef, EFFECT_STACK};
 
 /// Creates a new Signal. Signals are a Copy state management solution with automatic dependency tracking.
 ///
@@ -50,11 +55,62 @@ use crate::{get_effect_stack, CopyValue, Effect, EffectStack};
 /// ```
 #[track_caller]
 #[must_use]
-pub fn use_signal<T: 'static>(f: impl FnOnce() -> T) -> Signal<T> {
+pub fn use_signal<T: 'static>(f: impl FnOnce() -> T) -> Signal<T, UnsyncStorage> {
     #[cfg(debug_assertions)]
     let caller = std::panic::Location::caller();
 
     use_hook(|| {
+        Signal::new_with_caller(
+            f(),
+            #[cfg(debug_assertions)]
+            caller,
+        )
+    })
+}
+
+/// Creates a new `Send + Sync`` Signal. Signals are a Copy state management solution with automatic dependency tracking.
+///
+/// ```rust
+/// use dioxus::prelude::*;
+/// use dioxus_signals::*;
+///
+/// fn App(cx: Scope) -> Element {
+///     let mut count = use_signal_sync(cx, || 0);
+///
+///     // Because signals have automatic dependency tracking, if you never read them in a component, that component will not be re-rended when the signal is updated.
+///     // The app component will never be rerendered in this example.
+///     render! { Child { state: count } }
+/// }
+///
+/// #[component]
+/// fn Child(cx: Scope, state: Signal<u32, SyncStorage>) -> Element {
+///     let state = *state;
+///
+///     use_future!(cx,  |()| async move {
+///         // This signal is Send + Sync, so we can use it in an another thread
+///         tokio::spawn(async move {
+///             // Because the signal is a Copy type, we can use it in an async block without cloning it.
+///             *state.write() += 1;
+///         }).await;
+///     });
+///
+///     render! {
+///         button {
+///             onclick: move |_| *state.write() += 1,
+///             "{state}"
+///         }
+///     }
+/// }
+/// ```
+#[must_use]
+#[track_caller]
+pub fn use_signal_sync<T: Send + Sync + 'static>(
+    cx: &ScopeState,
+    f: impl FnOnce() -> T,
+) -> Signal<T, SyncStorage> {
+    #[cfg(debug_assertions)]
+    let caller = std::panic::Location::caller();
+    *cx.use_hook(|| {
         Signal::new_with_caller(
             f(),
             #[cfg(debug_assertions)]
@@ -92,11 +148,17 @@ fn current_unsubscriber() -> Unsubscriber {
     }
 }
 
-pub(crate) struct SignalData<T> {
-    pub(crate) subscribers: Rc<RefCell<Vec<ScopeId>>>,
-    pub(crate) effect_subscribers: Rc<RefCell<Vec<Effect>>>,
-    pub(crate) update_any: Arc<dyn Fn(ScopeId)>,
-    pub(crate) effect_stack: EffectStack,
+#[derive(Default)]
+pub(crate) struct SignalSubscribers {
+    pub(crate) subscribers: Vec<ScopeId>,
+    pub(crate) effect_subscribers: Vec<GenerationalBoxId>,
+}
+
+/// The data stored for tracking in a signal.
+pub struct SignalData<T> {
+    pub(crate) subscribers: Arc<RwLock<SignalSubscribers>>,
+    pub(crate) update_any: Arc<dyn Fn(ScopeId) + Sync + Send>,
+    pub(crate) effect_ref: EffectStackRef,
     pub(crate) value: T,
 }
 
@@ -132,8 +194,8 @@ pub(crate) struct SignalData<T> {
 ///     }
 /// }
 /// ```
-pub struct Signal<T: 'static> {
-    pub(crate) inner: CopyValue<SignalData<T>>,
+pub struct Signal<T: 'static, S: Storage<SignalData<T>> = UnsyncStorage> {
+    pub(crate) inner: CopyValue<SignalData<T>, S>,
 }
 
 #[cfg(feature = "serde")]
@@ -154,13 +216,27 @@ impl<T: 'static> Signal<T> {
     /// Creates a new Signal. Signals are a Copy state management solution with automatic dependency tracking.
     #[track_caller]
     pub fn new(value: T) -> Self {
+        Self::new_maybe_sync(value)
+    }
+
+    /// Create a new signal with a custom owner scope. The signal will be dropped when the owner scope is dropped instead of the current scope.
+    #[track_caller]
+    pub fn new_in_scope(value: T, owner: ScopeId) -> Self {
+        Self::new_maybe_sync_in_scope(value, owner)
+    }
+}
+
+impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
+    /// Creates a new Signal. Signals are a Copy state management solution with automatic dependency tracking.
+    #[track_caller]
+    #[tracing::instrument(skip(value))]
+    pub fn new_maybe_sync(value: T) -> Self {
         Self {
-            inner: CopyValue::new(SignalData {
+            inner: CopyValue::<SignalData<T>, S>::new_maybe_sync(SignalData {
                 subscribers: Default::default(),
-                effect_subscribers: Default::default(),
                 update_any: schedule_update_any(),
                 value,
-                effect_stack: get_effect_stack(),
+                effect_ref: get_effect_ref(),
             }),
         }
     }
@@ -174,10 +250,9 @@ impl<T: 'static> Signal<T> {
             inner: CopyValue::new_with_caller(
                 SignalData {
                     subscribers: Default::default(),
-                    effect_subscribers: Default::default(),
                     update_any: schedule_update_any(),
                     value,
-                    effect_stack: get_effect_stack(),
+                    effect_ref: get_effect_ref(),
                 },
                 #[cfg(debug_assertions)]
                 caller,
@@ -186,15 +261,16 @@ impl<T: 'static> Signal<T> {
     }
 
     /// Create a new signal with a custom owner scope. The signal will be dropped when the owner scope is dropped instead of the current scope.
-    pub fn new_in_scope(value: T, owner: ScopeId) -> Self {
+    #[track_caller]
+    #[tracing::instrument(skip(value))]
+    pub fn new_maybe_sync_in_scope(value: T, owner: ScopeId) -> Self {
         Self {
-            inner: CopyValue::new_in_scope(
+            inner: CopyValue::<SignalData<T>, S>::new_maybe_sync_in_scope(
                 SignalData {
                     subscribers: Default::default(),
-                    effect_subscribers: Default::default(),
                     update_any: schedule_update_any(),
                     value,
-                    effect_stack: get_effect_stack(),
+                    effect_ref: get_effect_ref(),
                 },
                 owner,
             ),
@@ -210,12 +286,16 @@ impl<T: 'static> Signal<T> {
     ///
     /// If the signal has been dropped, this will panic.
     #[track_caller]
-    pub fn read<'a>(&'a self) -> GenerationalRef<'a, T> {
+    pub fn read(
+        &self,
+    ) -> <<S as Storage<SignalData<T>>>::Ref as Mappable<SignalData<T>>>::Mapped<T> {
         let inner = self.inner.read();
-        if let Some(effect) = inner.effect_stack.current() {
-            let mut effect_subscribers = inner.effect_subscribers.borrow_mut();
-            if !effect_subscribers.contains(&effect) {
-                effect_subscribers.push(effect);
+        if let Some(effect) = EFFECT_STACK.with(|stack| stack.current()) {
+            let subscribers = inner.subscribers.read();
+            if !subscribers.effect_subscribers.contains(&effect.inner.id()) {
+                drop(subscribers);
+                let mut subscribers = inner.subscribers.write();
+                subscribers.effect_subscribers.push(effect.inner.id());
             }
         } else if let Some(current_scope_id) = current_scope_id() {
             // only subscribe if the vdom is rendering
@@ -225,50 +305,61 @@ impl<T: 'static> Signal<T> {
                     self.inner.value,
                     current_scope_id
                 );
-                let mut subscribers = inner.subscribers.borrow_mut();
-                if !subscribers.contains(&current_scope_id) {
-                    subscribers.push(current_scope_id);
+                let subscribers = inner.subscribers.read();
+                if !subscribers.subscribers.contains(&current_scope_id) {
                     drop(subscribers);
+                    let mut subscribers = inner.subscribers.write();
+                    subscribers.subscribers.push(current_scope_id);
                     let unsubscriber = current_unsubscriber();
-                    inner.subscribers.borrow_mut().push(unsubscriber.scope);
+                    subscribers.subscribers.push(unsubscriber.scope);
                 }
             }
         }
-        GenerationalRef::map(inner, |v| &v.value)
+        S::Ref::map(inner, |v| &v.value)
     }
 
     /// Get the current value of the signal. **Unlike read, this will not subscribe the current scope to the signal which can cause parts of your UI to not update.**
     ///
     /// If the signal has been dropped, this will panic.
-    pub fn peek(&self) -> GenerationalRef<T> {
+    pub fn peek(
+        &self,
+    ) -> <<S as Storage<SignalData<T>>>::Ref as Mappable<SignalData<T>>>::Mapped<T> {
         let inner = self.inner.read();
-        GenerationalRef::map(inner, |v| &v.value)
+        S::Ref::map(inner, |v| &v.value)
     }
 
     /// Get a mutable reference to the signal's value.
     ///
     /// If the signal has been dropped, this will panic.
     #[track_caller]
-    pub fn write<'a>(&'a mut self) -> Write<'a, T> {
+    pub fn write<'a>(
+        &'a mut self,
+    ) -> Write<T, <<S as Storage<SignalData<T>>>::Mut as MappableMut<SignalData<T>>>::Mapped<T>, S>
+    {
         self.write_unchecked()
     }
 
     /// Write to the value through an immutable reference.
     ///
     /// This is public since it's useful in many scenarios, but we generally recommend mutation through [`Self::write`] instead.
-    pub fn write_unchecked(&self) -> Write<T> {
+    #[track_caller]
+    pub fn write_unchecked(
+        &self,
+    ) -> Write<T, <<S as Storage<SignalData<T>>>::Mut as MappableMut<SignalData<T>>>::Mapped<T>, S>
+    {
         let inner = self.inner.write();
-        let borrow = GenerationalRefMut::map(inner, |v| &mut v.value);
+        let borrow = S::Mut::map(inner, |v| &mut v.value);
         Write {
             write: borrow,
             signal: SignalSubscriberDrop { signal: *self },
+            phantom: std::marker::PhantomData,
         }
     }
 
     fn update_subscribers(&self) {
         {
             let inner = self.inner.read();
-            for &scope_id in &*inner.subscribers.borrow() {
+            for &scope_id in &*inner.subscribers.read().subscribers {
                 tracing::trace!(
                     "Write on {:?} triggered update on {:?}",
                     self.inner.value,
@@ -278,18 +369,19 @@ impl<T: 'static> Signal<T> {
             }
         }
 
+        let self_read = &self.inner.read();
         let subscribers = {
-            let self_read = self.inner.read();
-            let mut effects = self_read.effect_subscribers.borrow_mut();
+            let effects = &mut self_read.subscribers.write().effect_subscribers;
             std::mem::take(&mut *effects)
         };
+        let effect_ref = &self_read.effect_ref;
         for effect in subscribers {
             tracing::trace!(
                 "Write on {:?} triggered effect {:?}",
                 self.inner.value,
                 effect
             );
-            effect.try_run();
+            effect_ref.rerun_effect(effect);
         }
     }
 
@@ -322,6 +414,23 @@ impl<T: 'static> Signal<T> {
         let mut write = self.write();
         f(&mut *write)
     }
+
+    /// Map the signal to a new type.
+    pub fn map<O>(
+        self,
+        f: impl Fn(&T) -> &O + 'static,
+    ) -> MappedSignal<
+        <<<S as generational_box::Storage<SignalData<T>>>::Ref as generational_box::Mappable<
+            SignalData<T>,
+        >>::Mapped<T> as generational_box::Mappable<T>>::Mapped<O>,
+    > {
+        MappedSignal::new(self, f)
+    }
+
+    /// Get the generational id of the signal.
+    pub fn id(&self) -> generational_box::GenerationalBoxId {
+        self.inner.id()
+    }
 }
 
 impl<T> IntoAttributeValue for Signal<T>
@@ -333,7 +442,7 @@ where
     }
 }
 
-impl<T: Clone + 'static> Signal<T> {
+impl<T: Clone + 'static, S: Storage<SignalData<T>>> Signal<T, S> {
     /// Get the current value of the signal. This will subscribe the current scope to the signal.
     /// If the signal has been dropped, this will panic.
     #[track_caller]
@@ -342,14 +451,14 @@ impl<T: Clone + 'static> Signal<T> {
     }
 }
 
-impl Signal<bool> {
+impl<S: Storage<SignalData<bool>>> Signal<bool, S> {
     /// Invert the boolean value of the signal. This will trigger an update on all subscribers.
     pub fn toggle(&mut self) {
         self.set(!self.cloned());
     }
 }
 
-impl<T: 'static> PartialEq for Signal<T> {
+impl<T: 'static, S: Storage<SignalData<T>>> PartialEq for Signal<T, S> {
     fn eq(&self, other: &Self) -> bool {
         self.inner == other.inner
     }
@@ -358,7 +467,7 @@ impl<T: 'static> PartialEq for Signal<T> {
 /// Allow calling a signal with signal() syntax
 ///
 /// Currently only limited to copy types, though could probably specialize for string/arc/rc
-impl<T: Copy> Deref for Signal<T> {
+impl<T, S: Storage<SignalData<T>> + 'static> Deref for Signal<T, S> {
     type Target = dyn Fn() -> T;
 
     fn deref(&self) -> &Self::Target {
@@ -391,29 +500,36 @@ impl<T: Copy> Deref for Signal<T> {
     }
 }
 
-struct SignalSubscriberDrop<T: 'static> {
-    signal: Signal<T>,
+struct SignalSubscriberDrop<T: 'static, S: Storage<SignalData<T>>> {
+    signal: Signal<T, S>,
 }
 
-impl<T: 'static> Drop for SignalSubscriberDrop<T> {
+impl<T: 'static, S: Storage<SignalData<T>>> Drop for SignalSubscriberDrop<T, S> {
     fn drop(&mut self) {
         self.signal.update_subscribers();
     }
 }
 
 /// A mutable reference to a signal's value.
-pub struct Write<'a, T: 'static, I: 'static = T> {
-    write: GenerationalRefMut<'a, T>,
-    signal: SignalSubscriberDrop<I>,
+///
+/// T is the current type of the write
+/// B is the dynamicly checked type of the write (RefMut)
+/// S is the storage type of the signal
+/// I is the type of the original signal
+pub struct Write<T: 'static, B: MappableMut<T>, S: Storage<SignalData<I>>, I: 'static = T> {
+    write: B,
+    signal: SignalSubscriberDrop<I, S>,
+    phantom: std::marker::PhantomData<T>,
 }
 
-impl<'a, T: 'static, I: 'static> Write<'a, T, I> {
+impl<T: 'static, B: MappableMut<T>, S: Storage<SignalData<I>>, I: 'static> Write<T, B, S, I> {
     /// Map the mutable reference to the signal's value to a new type.
-    pub fn map<O>(myself: Self, f: impl FnOnce(&mut T) -> &mut O) -> Write<'a, O, I> {
-        let Self { write, signal } = myself;
+    pub fn map<O>(myself: Self, f: impl FnOnce(&mut T) -> &mut O) -> Write<O, B::Mapped<O>, S, I> {
+        let Self { write, signal, .. } = myself;
         Write {
-            write: GenerationalRefMut::map(write, f),
+            write: B::map(write, f),
             signal,
+            phantom: std::marker::PhantomData,
         }
     }
 
@@ -421,14 +537,20 @@ impl<'a, T: 'static, I: 'static> Write<'a, T, I> {
     pub fn filter_map<O>(
         myself: Self,
         f: impl FnOnce(&mut T) -> Option<&mut O>,
-    ) -> Option<Write<'a, O, I>> {
-        let Self { write, signal } = myself;
-        let write = GenerationalRefMut::filter_map(write, f);
-        write.map(|write| Write { write, signal })
+    ) -> Option<Write<O, B::Mapped<O>, S, I>> {
+        let Self { write, signal, .. } = myself;
+        let write = B::try_map(write, f);
+        write.map(|write| Write {
+            write,
+            signal,
+            phantom: PhantomData,
+        })
     }
 }
 
-impl<'a, T: 'static, I: 'static> Deref for Write<'a, T, I> {
+impl<T: 'static, B: MappableMut<T>, S: Storage<SignalData<I>>, I: 'static> Deref
+    for Write<T, B, S, I>
+{
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -436,20 +558,35 @@ impl<'a, T: 'static, I: 'static> Deref for Write<'a, T, I> {
     }
 }
 
-impl<'a, T, I> DerefMut for Write<'a, T, I> {
+impl<T, B: MappableMut<T>, S: Storage<SignalData<I>>, I> DerefMut for Write<T, B, S, I> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.write
     }
 }
 
 /// A signal that can only be read from.
-pub struct ReadOnlySignal<T: 'static> {
-    inner: Signal<T>,
+pub struct ReadOnlySignal<T: 'static, S: Storage<SignalData<T>> = UnsyncStorage> {
+    inner: Signal<T, S>,
+}
+
+impl<T: 'static, S: Storage<SignalData<T>>> From<Signal<T, S>> for ReadOnlySignal<T, S> {
+    fn from(inner: Signal<T, S>) -> Self {
+        Self { inner }
+    }
 }
 
 impl<T: 'static> ReadOnlySignal<T> {
     /// Create a new read-only signal.
+    #[track_caller]
     pub fn new(signal: Signal<T>) -> Self {
+        Self::new_maybe_sync(signal)
+    }
+}
+
+impl<T: 'static, S: Storage<SignalData<T>>> ReadOnlySignal<T, S> {
+    /// Create a new read-only signal that is maybe sync.
+    #[track_caller]
+    pub fn new_maybe_sync(signal: Signal<T, S>) -> Self {
         Self { inner: signal }
     }
 
@@ -458,18 +595,22 @@ impl<T: 'static> ReadOnlySignal<T> {
         self.inner.origin_scope()
     }
 
-    /// Get the current value of the signal. This will subscribe the current scope to the signal. If you would like to read the signal without subscribing to it, you can use [`Self::peek`] instead.
+    /// Get the current value of the signal. This will subscribe the current scope to the signal.
     ///
     /// If the signal has been dropped, this will panic.
     #[track_caller]
-    pub fn read(&self) -> GenerationalRef<T> {
+    pub fn read(
+        &self,
+    ) -> <<S as Storage<SignalData<T>>>::Ref as Mappable<SignalData<T>>>::Mapped<T> {
         self.inner.read()
     }
 
     /// Get the current value of the signal. **Unlike read, this will not subscribe the current scope to the signal which can cause parts of your UI to not update.**
     ///
     /// If the signal has been dropped, this will panic.
-    pub fn peek(&self) -> GenerationalRef<T> {
+    pub fn peek(
+        &self,
+    ) -> <<S as Storage<SignalData<T>>>::Ref as Mappable<SignalData<T>>>::Mapped<T> {
         self.inner.peek()
     }
 
@@ -480,20 +621,20 @@ impl<T: 'static> ReadOnlySignal<T> {
     }
 }
 
-impl<T: Clone + 'static> ReadOnlySignal<T> {
+impl<T: Clone + 'static, S: Storage<SignalData<T>>> ReadOnlySignal<T, S> {
     /// Get the current value of the signal. This will subscribe the current scope to the signal.
     pub fn value(&self) -> T {
         self.read().clone()
     }
 }
 
-impl<T: 'static> PartialEq for ReadOnlySignal<T> {
+impl<T: 'static, S: Storage<SignalData<T>>> PartialEq for ReadOnlySignal<T, S> {
     fn eq(&self, other: &Self) -> bool {
         self.inner == other.inner
     }
 }
 
-impl<T: Copy> Deref for ReadOnlySignal<T> {
+impl<T, S: Storage<SignalData<T>> + 'static> Deref for ReadOnlySignal<T, S> {
     type Target = dyn Fn() -> T;
 
     fn deref(&self) -> &Self::Target {
@@ -523,11 +664,5 @@ impl<T: Copy> Deref for ReadOnlySignal<T> {
 
         // Cast the closure to a trait object.
         reference_to_closure as &Self::Target
-    }
-}
-
-impl<T> From<Signal<T>> for ReadOnlySignal<T> {
-    fn from(signal: Signal<T>) -> Self {
-        Self::new(signal)
     }
 }

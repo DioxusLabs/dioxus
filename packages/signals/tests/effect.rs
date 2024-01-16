@@ -6,8 +6,8 @@ use dioxus::prelude::*;
 use dioxus_core::ElementId;
 use dioxus_signals::*;
 
-#[test]
-fn effects_rerun() {
+#[tokio::test]
+async fn effects_rerun() {
     simple_logger::SimpleLogger::new().init().unwrap();
 
     #[derive(Default)]
@@ -32,14 +32,14 @@ fn effects_rerun() {
             });
             signal += 1;
 
-            rsx! {
-                div {}
-            }
+            rsx! { div {} }
         },
         counter.clone(),
     );
 
     let _ = dom.rebuild().santize();
+    dom.render_with_deadline(tokio::time::sleep(std::time::Duration::from_millis(100)))
+        .await;
 
     let current_counter = counter.borrow();
     assert_eq!(current_counter.component, 1);

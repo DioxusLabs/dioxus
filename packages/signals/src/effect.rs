@@ -1,20 +1,29 @@
 use core::{self, fmt::Debug};
-use std::fmt::{self, Formatter};
-//
 use dioxus_core::prelude::*;
+use futures_channel::mpsc::UnboundedSender;
+use futures_util::StreamExt;
+use generational_box::GenerationalBoxId;
+use parking_lot::RwLock;
+use rustc_hash::FxHashMap;
+use std::fmt::{self, Formatter};
 
 use crate::use_signal;
 use crate::{dependency::Dependency, CopyValue};
 
-#[derive(Copy, Clone, PartialEq)]
+thread_local! {
+    pub(crate)static EFFECT_STACK: EffectStack = EffectStack::default();
+}
+
 pub(crate) struct EffectStack {
-    pub(crate) effects: CopyValue<Vec<Effect>>,
+    pub(crate) effects: RwLock<Vec<Effect>>,
+    pub(crate) effect_mapping: RwLock<FxHashMap<GenerationalBoxId, Effect>>,
 }
 
 impl Default for EffectStack {
     fn default() -> Self {
         Self {
-            effects: CopyValue::new_in_scope(Vec::new(), ScopeId::ROOT),
+            effects: RwLock::new(Vec::new()),
+            effect_mapping: RwLock::new(FxHashMap::default()),
         }
     }
 }
@@ -25,13 +34,41 @@ impl EffectStack {
     }
 }
 
-pub(crate) fn get_effect_stack() -> EffectStack {
+/// This is a thread safe reference to an effect stack running on another thread.
+#[derive(Clone)]
+pub(crate) struct EffectStackRef {
+    rerun_effect: UnboundedSender<GenerationalBoxId>,
+}
+
+impl EffectStackRef {
+    pub(crate) fn rerun_effect(&self, id: GenerationalBoxId) {
+        self.rerun_effect.unbounded_send(id).unwrap();
+    }
+}
+
+pub(crate) fn get_effect_ref() -> EffectStackRef {
     match try_consume_context() {
         Some(rt) => rt,
         None => {
-            let store = EffectStack::default();
-            provide_root_context(store);
-            store
+            let (sender, mut receiver) = futures_channel::mpsc::unbounded();
+            spawn_forever(async move {
+                while let Some(id) = receiver.next().await {
+                    EFFECT_STACK.with(|stack| {
+                        let effect_mapping = stack.effect_mapping.read();
+                        if let Some(effect) = effect_mapping.get(&id) {
+                            tracing::trace!("Rerunning effect: {:?}", id);
+                            effect.try_run();
+                        } else {
+                            tracing::trace!("Effect not found: {:?}", id);
+                        }
+                    });
+                }
+            });
+            let stack_ref = EffectStackRef {
+                rerun_effect: sender,
+            };
+            provide_root_context(stack_ref.clone());
+            stack_ref
         }
     }
 }
@@ -46,19 +83,44 @@ pub fn use_effect(callback: impl FnMut() + 'static) {
 #[derive(Copy, Clone, PartialEq)]
 pub struct Effect {
     pub(crate) source: ScopeId,
-    pub(crate) callback: CopyValue<Box<dyn FnMut()>>,
-    pub(crate) effect_stack: EffectStack,
+    pub(crate) inner: CopyValue<EffectInner>,
+}
+
+pub(crate) struct EffectInner {
+    pub(crate) callback: Box<dyn FnMut()>,
+    pub(crate) id: GenerationalBoxId,
+}
+
+impl EffectInner {
+    pub(crate) fn new(callback: Box<dyn FnMut()>) -> CopyValue<Self> {
+        let copy = CopyValue::invalid();
+        let inner = EffectInner {
+            callback: Box::new(callback),
+            id: copy.id(),
+        };
+        copy.set(inner);
+        copy
+    }
+}
+
+impl Drop for EffectInner {
+    fn drop(&mut self) {
+        EFFECT_STACK.with(|stack| {
+            tracing::trace!("Dropping effect: {:?}", self.id);
+            stack.effect_mapping.write().remove(&self.id);
+        });
+    }
 }
 
 impl Debug for Effect {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.write_fmt(format_args!("{:?}", self.callback.value))
+        f.write_fmt(format_args!("{:?}", self.inner.value))
     }
 }
 
 impl Effect {
     pub(crate) fn current() -> Option<Self> {
-        get_effect_stack().effects.read().last().copied()
+        EFFECT_STACK.with(|stack| stack.effects.read().last().copied())
     }
 
     /// Create a new effect. The effect will be run immediately and whenever any signal it reads changes.
@@ -67,9 +129,16 @@ impl Effect {
     pub fn new(callback: impl FnMut() + 'static) -> Self {
         let myself = Self {
             source: current_scope_id().expect("in a virtual dom"),
-            callback: CopyValue::new(Box::new(callback)),
-            effect_stack: get_effect_stack(),
+            inner: EffectInner::new(Box::new(callback)),
         };
+
+        EFFECT_STACK.with(|stack| {
+            stack
+                .effect_mapping
+                .write()
+                .insert(myself.inner.id(), myself);
+        });
+        tracing::trace!("Created effect: {:?}", myself);
 
         myself.try_run();
 
@@ -78,14 +147,24 @@ impl Effect {
 
     /// Run the effect callback immediately. Returns `true` if the effect was run. Returns `false` is the effect is dead.
     pub fn try_run(&self) {
-        if let Ok(mut callback) = self.callback.try_write() {
+        tracing::trace!("Running effect: {:?}", self);
+        if let Ok(mut inner) = self.inner.try_write() {
             {
-                self.effect_stack.effects.write().push(*self);
+                EFFECT_STACK.with(|stack| {
+                    stack.effects.write().push(*self);
+                });
             }
-            callback();
+            (inner.callback)();
             {
-                self.effect_stack.effects.write().pop();
+                EFFECT_STACK.with(|stack| {
+                    stack.effects.write().pop();
+                });
             }
         }
+    }
+
+    /// Get the id of this effect.
+    pub fn id(&self) -> GenerationalBoxId {
+        self.inner.id()
     }
 }

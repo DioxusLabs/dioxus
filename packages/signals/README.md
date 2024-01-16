@@ -114,7 +114,7 @@ fn App() -> Element {
             "Increase"
         }
         Child {
-            signal: signal
+            signal: doubled
         }
     }
 }

@@ -32,26 +32,33 @@ fn memos_rerun() {
                     signal.cloned()
                 })
             });
-            assert_eq!(memo.value(), 0);
+            let generation = use_signal(cx, || cx.generation());
+            generation.set(cx.generation());
+            dioxus_signals::use_effect(cx, move || {
+                if generation == 1 {
+                    assert_eq!(memo.value(), 0);
+                }
+                if generation == 3 {
+                    assert_eq!(memo.value(), 1);
+                }
+            });
             signal += 1;
-            assert_eq!(memo.value(), 1);
 
-            rsx! {
-                div {}
-            }
+            rsx! { div {} }
         },
         counter.clone(),
     );
 
     let _ = dom.rebuild().santize();
+    let _ = dom.render_immediate();
 
     let current_counter = counter.borrow();
     assert_eq!(current_counter.component, 1);
     assert_eq!(current_counter.effect, 2);
 }
 
-#[test]
-fn memos_prevents_component_rerun() {
+#[tokio::test]
+async fn memos_prevents_component_rerun() {
     let _ = simple_logger::SimpleLogger::new().init();
 
     #[derive(Default)]
@@ -73,12 +80,7 @@ fn memos_prevents_component_rerun() {
                 *signal.write() = 1;
             }
 
-            rsx! {
-                Child {
-                    signal: signal,
-                    counter: cx.props.clone(),
-                }
-            }
+            rsx! { Child { signal: signal, counter: cx.props.clone() } }
         },
         counter.clone(),
     );
@@ -118,13 +120,12 @@ fn memos_prevents_component_rerun() {
             _ => panic!("Unexpected generation"),
         }
 
-        rsx! {
-            div {}
-        }
+        rsx! { div {} }
     }
 
     let _ = dom.rebuild().santize();
     dom.mark_dirty(ScopeId::ROOT);
+    dom.render_immediate();
     dom.render_immediate();
 
     {
