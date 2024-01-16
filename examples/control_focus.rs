@@ -7,8 +7,8 @@ fn main() {
 }
 
 fn app() -> Element {
-    let elements = use_signal(Vec::<Rc<MountedData>>::new);
-    let running = use_signal(|| true);
+    let mut elements = use_signal(Vec::<Rc<MountedData>>::new);
+    let mut running = use_signal(|| true);
 
     use_future(move || async move {
         let mut focused = 0;

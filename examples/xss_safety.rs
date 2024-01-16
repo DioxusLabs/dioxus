@@ -9,7 +9,7 @@ fn main() {
 }
 
 fn app() -> Element {
-    let contents = use_signal(|| String::from("<script>alert(\"hello world\")</script>"));
+    let mut contents = use_signal(|| String::from("<script>alert(\"hello world\")</script>"));
 
     rsx! {
         div {

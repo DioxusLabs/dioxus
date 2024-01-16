@@ -25,8 +25,8 @@ where
     T: 'static,
     F: Future<Output = T> + 'static,
 {
-    let value = use_signal(|| None);
-    let state = use_signal(|| UseFutureState::Pending);
+    let mut value = use_signal(|| None);
+    let mut state = use_signal(|| UseFutureState::Pending);
 
     let task = use_signal(|| {
         // Create the user's task
@@ -84,7 +84,7 @@ impl<T> UseFuture<T> {
     }
 
     // Manually set the value in the future slot without starting the future over
-    pub fn set(&self, new_value: T) {
+    pub fn set(&mut self, new_value: T) {
         self.value.set(Some(new_value));
     }
 

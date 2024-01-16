@@ -5,7 +5,7 @@ fn main() {
 }
 
 fn app() -> Element {
-    let header_element = use_signal(|| None);
+    let mut header_element = use_signal(|| None);
 
     rsx! {
         div {

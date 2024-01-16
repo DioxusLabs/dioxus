@@ -30,7 +30,7 @@ fn Dice() -> Element {
         [Y, Y, Y, Y, Y, Y, N],
     ];
 
-    let value = use_signal(|| 5);
+    let mut value = use_signal(|| 5);
     let active_dots = use_selector(move || &DOTS_FOR_VALUE[(value() - 1) as usize]);
 
     rsx! {

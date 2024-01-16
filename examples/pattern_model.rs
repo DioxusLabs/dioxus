@@ -38,7 +38,7 @@ fn main() {
 const STYLE: &str = include_str!("./assets/calculator.css");
 
 fn app() -> Element {
-    let state = use_signal(Calculator::new);
+    let mut state = use_signal(Calculator::new);
 
     rsx! {
         style { {STYLE} }

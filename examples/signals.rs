@@ -6,9 +6,9 @@ fn main() {
 }
 
 fn app() -> Element {
-    let running = dioxus_signals::use_signal(|| true);
-    let mut count = dioxus_signals::use_signal(|| 0);
-    let saved_values = dioxus_signals::use_signal(|| vec![0.to_string()]);
+    let mut running = use_signal(|| true);
+    let mut count = use_signal(|| 0);
+    let mut saved_values = use_signal(|| vec![0.to_string()]);
 
     // Signals can be used in async functions without an explicit clone since they're 'static and Copy
     // Signals are backed by a runtime that is designed to deeply integrate with Dioxus apps

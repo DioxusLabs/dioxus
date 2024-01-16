@@ -7,9 +7,7 @@ fn main() {
 }
 
 fn app() -> Element {
-    let model = use_signal(|| String::from("asd"));
-
-    println!("{model}");
+    let mut model = use_signal(|| String::from("asd"));
 
     rsx! {
         textarea {

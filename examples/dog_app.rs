@@ -6,8 +6,8 @@ fn main() {
 }
 
 fn app() -> Element {
-    let breed = use_signal(|| "deerhound".to_string());
-    let breed_list = use_future(|| async move {
+    let mut breed = use_signal(|| "deerhound".to_string());
+    let mut breed_list = use_future(|| async move {
         let list = reqwest::get("https://dog.ceo/api/breeds/list/all")
             .await
             .unwrap()

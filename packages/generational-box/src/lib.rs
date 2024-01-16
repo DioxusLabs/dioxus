@@ -477,13 +477,13 @@ impl Display for AlreadyBorrowedError {
 impl std::error::Error for AlreadyBorrowedError {}
 
 /// A reference to a value in a generational box.
-pub struct GenerationalRef<T: 'static> {
-    inner: Ref<'static, T>,
+pub struct GenerationalRef<'a, T: 'static> {
+    inner: Ref<'a, T>,
     #[cfg(any(debug_assertions, feature = "debug_borrows"))]
     borrow: GenerationalRefBorrowInfo,
 }
 
-impl<T: 'static> GenerationalRef<T> {
+impl<'a, T: 'static> GenerationalRef<'a, T> {
     /// Map one ref type to another.
     pub fn map<U, F>(orig: GenerationalRef<T>, f: F) -> GenerationalRef<U>
     where
@@ -500,7 +500,7 @@ impl<T: 'static> GenerationalRef<T> {
     }
 
     /// Filter one ref type to another.
-    pub fn filter_map<U, F>(orig: GenerationalRef<T>, f: F) -> Option<GenerationalRef<U>>
+    pub fn filter_map<U, F>(orig: GenerationalRef<'a, T>, f: F) -> Option<GenerationalRef<'a, U>>
     where
         F: FnOnce(&T) -> Option<&U>,
     {
@@ -520,7 +520,7 @@ impl<T: 'static> GenerationalRef<T> {
     }
 }
 
-impl<T: 'static> Deref for GenerationalRef<T> {
+impl<T: 'static> Deref for GenerationalRef<'_, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -545,13 +545,13 @@ impl Drop for GenerationalRefBorrowInfo {
 }
 
 /// A mutable reference to a value in a generational box.
-pub struct GenerationalRefMut<T: 'static> {
-    inner: RefMut<'static, T>,
+pub struct GenerationalRefMut<'a, T: 'static> {
+    inner: RefMut<'a, T>,
     #[cfg(any(debug_assertions, feature = "debug_borrows"))]
     borrow: GenerationalRefMutBorrowInfo,
 }
 
-impl<T: 'static> GenerationalRefMut<T> {
+impl<'a, T: 'static> GenerationalRefMut<'a, T> {
     /// Map one ref type to another.
     pub fn map<U, F>(orig: GenerationalRefMut<T>, f: F) -> GenerationalRefMut<U>
     where
@@ -565,7 +565,10 @@ impl<T: 'static> GenerationalRefMut<T> {
     }
 
     /// Filter one ref type to another.
-    pub fn filter_map<U, F>(orig: GenerationalRefMut<T>, f: F) -> Option<GenerationalRefMut<U>>
+    pub fn filter_map<U, F>(
+        orig: GenerationalRefMut<'a, T>,
+        f: F,
+    ) -> Option<GenerationalRefMut<'a, U>>
     where
         F: FnOnce(&mut T) -> Option<&mut U>,
     {
@@ -584,7 +587,7 @@ impl<T: 'static> GenerationalRefMut<T> {
     }
 }
 
-impl<T: 'static> Deref for GenerationalRefMut<T> {
+impl<'a, T: 'static> Deref for GenerationalRefMut<'a, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -592,7 +595,7 @@ impl<T: 'static> Deref for GenerationalRefMut<T> {
     }
 }
 
-impl<T: 'static> DerefMut for GenerationalRefMut<T> {
+impl<'a, T: 'static> DerefMut for GenerationalRefMut<'a, T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.inner.deref_mut()
     }

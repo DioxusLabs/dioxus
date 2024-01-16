@@ -26,10 +26,10 @@ fn main() {
 }
 
 fn app() -> Element {
-    let div_element = use_signal(|| None as Option<Rc<MountedData>>);
-    let dimensions = use_signal(Rect::zero);
+    let mut div_element = use_signal(|| None as Option<Rc<MountedData>>);
+    let mut dimensions = use_signal(Rect::zero);
 
-    let read_dims = move |_| async move {
+    let mut read_dims = move |_| async move {
         let read = div_element.read();
         let client_rect = read.as_ref().map(|el| el.get_client_rect());
         if let Some(client_rect) = client_rect {

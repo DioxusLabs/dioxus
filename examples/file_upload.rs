@@ -8,8 +8,8 @@ fn main() {
 }
 
 fn App() -> Element {
-    let enable_directory_upload = use_signal(|| false);
-    let files_uploaded = use_signal(|| Vec::new() as Vec<String>);
+    let mut enable_directory_upload = use_signal(|| false);
+    let mut files_uploaded = use_signal(|| Vec::new() as Vec<String>);
 
     let upload_files = move |evt: FormEvent| async move {
         for file_name in evt.files().unwrap().files() {

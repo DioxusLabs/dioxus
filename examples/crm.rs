@@ -58,7 +58,7 @@ pub struct Client {
 
 #[component]
 fn ClientList() -> Element {
-    let clients = use_context::<Clients>();
+    let mut clients = use_context::<Clients>();
 
     rsx! {
         h2 { "List of Clients" }
@@ -75,9 +75,9 @@ fn ClientList() -> Element {
 
 #[component]
 fn ClientAdd() -> Element {
-    let first_name = use_signal(String::new);
-    let last_name = use_signal(String::new);
-    let description = use_signal(String::new);
+    let mut first_name = use_signal(String::new);
+    let mut last_name = use_signal(String::new);
+    let mut description = use_signal(String::new);
 
     let submit_client = move |_: FormEvent| {
         consume_context::<Clients>().write().push(Client {

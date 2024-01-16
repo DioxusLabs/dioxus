@@ -22,8 +22,8 @@ pub struct TodoItem {
 }
 
 pub fn app() -> Element {
-    let todos = use_signal(|| HashMap::<u32, TodoItem>::new());
-    let filter = use_signal(|| FilterState::All);
+    let mut todos = use_signal(|| HashMap::<u32, TodoItem>::new());
+    let mut filter = use_signal(|| FilterState::All);
 
     let active_todo_count =
         use_selector(move || todos.read().values().filter(|item| !item.checked).count());
@@ -56,17 +56,17 @@ pub fn app() -> Element {
                         class: "toggle-all",
                         r#type: "checkbox",
                         onchange: move |_| {
-                            let check = *active_todo_count() != 0;
+                            let check = active_todo_count() != 0;
                             for (_, item) in todos.write().iter_mut() {
                                 item.checked = check;
                             }
                         },
-                        checked: *active_todo_count() == 0,
+                        checked: active_todo_count() == 0,
                     }
                     label { r#for: "toggle-all" }
                 }
                 ul { class: "todo-list",
-                    for id in filtered_todos().iter().copied() {
+                    for id in filtered_todos.read().iter().copied() {
                         TodoEntry { key: "{id}", id, todos }
                     }
                 }
@@ -81,7 +81,8 @@ pub fn app() -> Element {
 
 #[component]
 pub fn TodoHeader(todos: Signal<HashMap<u32, TodoItem>>) -> Element {
-    let draft = use_signal(|| "".to_string());
+    let mut todos = todos;
+    let mut draft = use_signal(|| "".to_string());
     let mut todo_id = use_signal(|| 0);
 
     let onkeydown = move |evt: KeyboardEvent| {
@@ -115,7 +116,8 @@ pub fn TodoHeader(todos: Signal<HashMap<u32, TodoItem>>) -> Element {
 
 #[component]
 pub fn TodoEntry(todos: Signal<HashMap<u32, TodoItem>>, id: u32) -> Element {
-    let is_editing = use_signal(|| false);
+    let mut todos = todos;
+    let mut is_editing = use_signal(|| false);
     let checked = use_selector(move || todos.read().get(&id).unwrap().checked);
     let contents = use_selector(move || todos.read().get(&id).unwrap().contents.clone());
 
@@ -166,6 +168,8 @@ pub fn ListFooter(
     active_todo_count: ReadOnlySignal<usize>,
     filter: Signal<FilterState>,
 ) -> Element {
+    let mut todos = todos;
+    let mut filter = filter;
     let show_clear_completed = use_selector(move || todos.read().values().any(|todo| todo.checked));
 
     rsx! {
@@ -173,7 +177,7 @@ pub fn ListFooter(
             span { class: "todo-count",
                 strong { "{active_todo_count} " }
                 span {
-                    match *active_todo_count() {
+                    match active_todo_count() {
                         1 => "item",
                         _ => "items",
                     }
@@ -197,7 +201,7 @@ pub fn ListFooter(
                     }
                 }
             }
-            if *show_clear_completed() {
+            if show_clear_completed() {
                 button {
                     class: "clear-completed",
                     onclick: move |_| todos.write().retain(|_, todo| !todo.checked),

@@ -41,9 +41,9 @@ const RECT_STYLE: &str = r#"
     "#;
 
 fn app() -> Element {
-    let events = use_signal(std::collections::VecDeque::new);
+    let mut events = use_signal(std::collections::VecDeque::new);
 
-    let log_event = move |event: Event| {
+    let mut log_event = move |event: Event| {
         let mut events = events.write();
 
         if events.len() >= MAX_EVENTS {

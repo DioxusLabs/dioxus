@@ -20,7 +20,7 @@ fn main() {
 const _STYLE: &str = manganis::mg!(file("./examples/assets/fileexplorer.css"));
 
 fn app() -> Element {
-    let files = use_signal(Files::new);
+    let mut files = use_signal(Files::new);
 
     rsx! {
         div {

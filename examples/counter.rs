@@ -8,8 +8,8 @@ fn main() {
 }
 
 fn app() -> Element {
-    let counters = use_signal(|| vec![0, 0, 0]);
-    let sum = use_selector(move || counters.read().iter().copied().sum::<usize>());
+    let mut counters = use_signal(|| vec![0, 0, 0]);
+    let mut sum = use_selector(move || counters.read().iter().copied().sum::<usize>());
 
     render! {
         div {

@@ -5,7 +5,7 @@ fn main() {
 }
 
 fn app() -> Element {
-    let disabled = use_signal(|| false);
+    let mut disabled = use_signal(|| false);
 
     rsx! {
         div {

@@ -210,7 +210,7 @@ impl<T: 'static> Signal<T> {
     ///
     /// If the signal has been dropped, this will panic.
     #[track_caller]
-    pub fn read(&self) -> GenerationalRef<T> {
+    pub fn read<'a>(&'a self) -> GenerationalRef<'a, T> {
         let inner = self.inner.read();
         if let Some(effect) = inner.effect_stack.current() {
             let mut effect_subscribers = inner.effect_subscribers.borrow_mut();
@@ -245,17 +245,22 @@ impl<T: 'static> Signal<T> {
         GenerationalRef::map(inner, |v| &v.value)
     }
 
-    /// Get a mutable reference to the signal's value.
-    ///
-    /// If the signal has been dropped, this will panic.
-    #[track_caller]
-    pub fn write(&self) -> Write<T> {
+    /// Write to the value through an immutable reference.
+    pub fn write_unchecked(&self) -> Write<T> {
         let inner = self.inner.write();
         let borrow = GenerationalRefMut::map(inner, |v| &mut v.value);
         Write {
             write: borrow,
             signal: SignalSubscriberDrop { signal: *self },
         }
+    }
+
+    /// Get a mutable reference to the signal's value.
+    ///
+    /// If the signal has been dropped, this will panic.
+    #[track_caller]
+    pub fn write<'a>(&'a mut self) -> Write<'a, T> {
+        self.write_unchecked()
     }
 
     fn update_subscribers(&self) {
@@ -288,7 +293,7 @@ impl<T: 'static> Signal<T> {
 
     /// Set the value of the signal. This will trigger an update on all subscribers.
     #[track_caller]
-    pub fn set(&self, value: T) {
+    pub fn set(&mut self, value: T) {
         *self.write() = value;
     }
 
@@ -311,7 +316,7 @@ impl<T: 'static> Signal<T> {
     /// Run a closure with a mutable reference to the signal's value.
     /// If the signal has been dropped, this will panic.
     #[track_caller]
-    pub fn with_mut<O>(&self, f: impl FnOnce(&mut T) -> O) -> O {
+    pub fn with_mut<O>(&mut self, f: impl FnOnce(&mut T) -> O) -> O {
         let mut write = self.write();
         f(&mut *write)
     }
@@ -337,7 +342,7 @@ impl<T: Clone + 'static> Signal<T> {
 
 impl Signal<bool> {
     /// Invert the boolean value of the signal. This will trigger an update on all subscribers.
-    pub fn toggle(&self) {
+    pub fn toggle(&mut self) {
         self.set(!self.cloned());
     }
 }
@@ -351,7 +356,7 @@ impl<T: 'static> PartialEq for Signal<T> {
 /// Allow calling a signal with signal() syntax
 ///
 /// Currently only limited to copy types, though could probably specialize for string/arc/rc
-impl<T: Copy + Clone> Deref for Signal<T> {
+impl<T: Copy> Deref for Signal<T> {
     type Target = dyn Fn() -> T;
 
     fn deref(&self) -> &Self::Target {
@@ -360,10 +365,7 @@ impl<T: Copy + Clone> Deref for Signal<T> {
         // First we create a closure that captures something with the Same in memory layout as Self (MaybeUninit<Self>).
         let uninit_callable = MaybeUninit::<Self>::uninit();
         // Then move that value into the closure. We assume that the closure now has a in memory layout of Self.
-        let uninit_closure = move || {
-            let res = Self::read(unsafe { &*uninit_callable.as_ptr() });
-            res.clone()
-        };
+        let uninit_closure = move || Self::read(unsafe { &*uninit_callable.as_ptr() }).clone();
 
         // Check that the size of the closure is the same as the size of Self in case the compiler changed the layout of the closure.
         let size_of_closure = std::mem::size_of_val(&uninit_closure);
@@ -398,14 +400,14 @@ impl<T: 'static> Drop for SignalSubscriberDrop<T> {
 }
 
 /// A mutable reference to a signal's value.
-pub struct Write<T: 'static, I: 'static = T> {
-    write: GenerationalRefMut<T>,
+pub struct Write<'a, T: 'static, I: 'static = T> {
+    write: GenerationalRefMut<'a, T>,
     signal: SignalSubscriberDrop<I>,
 }
 
-impl<T: 'static, I: 'static> Write<T, I> {
+impl<'a, T: 'static, I: 'static> Write<'a, T, I> {
     /// Map the mutable reference to the signal's value to a new type.
-    pub fn map<O>(myself: Self, f: impl FnOnce(&mut T) -> &mut O) -> Write<O, I> {
+    pub fn map<O>(myself: Self, f: impl FnOnce(&mut T) -> &mut O) -> Write<'a, O, I> {
         let Self { write, signal } = myself;
         Write {
             write: GenerationalRefMut::map(write, f),
@@ -417,14 +419,14 @@ impl<T: 'static, I: 'static> Write<T, I> {
     pub fn filter_map<O>(
         myself: Self,
         f: impl FnOnce(&mut T) -> Option<&mut O>,
-    ) -> Option<Write<O, I>> {
+    ) -> Option<Write<'a, O, I>> {
         let Self { write, signal } = myself;
         let write = GenerationalRefMut::filter_map(write, f);
         write.map(|write| Write { write, signal })
     }
 }
 
-impl<T: 'static, I: 'static> Deref for Write<T, I> {
+impl<'a, T: 'static, I: 'static> Deref for Write<'a, T, I> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -432,7 +434,7 @@ impl<T: 'static, I: 'static> Deref for Write<T, I> {
     }
 }
 
-impl<T, I> DerefMut for Write<T, I> {
+impl<'a, T, I> DerefMut for Write<'a, T, I> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.write
     }
@@ -489,7 +491,7 @@ impl<T: 'static> PartialEq for ReadOnlySignal<T> {
     }
 }
 
-impl<T: Copy + Clone> Deref for ReadOnlySignal<T> {
+impl<T: Copy> Deref for ReadOnlySignal<T> {
     type Target = dyn Fn() -> T;
 
     fn deref(&self) -> &Self::Target {

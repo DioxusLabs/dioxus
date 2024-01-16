@@ -120,78 +120,81 @@ macro_rules! write_impls {
 
         impl<T: 'static> $ty<Vec<T>> {
             /// Pushes a new value to the end of the vector.
-            pub fn push(&self, value: T) {
+            pub fn push(&mut self, value: T) {
                 self.with_mut(|v| v.push(value))
             }
 
             /// Pops the last value from the vector.
-            pub fn pop(&self) -> Option<T> {
+            pub fn pop(&mut self) -> Option<T> {
                 self.with_mut(|v| v.pop())
             }
 
             /// Inserts a new value at the given index.
-            pub fn insert(&self, index: usize, value: T) {
+            pub fn insert(&mut self, index: usize, value: T) {
                 self.with_mut(|v| v.insert(index, value))
             }
 
             /// Removes the value at the given index.
-            pub fn remove(&self, index: usize) -> T {
+            pub fn remove(&mut self, index: usize) -> T {
                 self.with_mut(|v| v.remove(index))
             }
 
             /// Clears the vector, removing all values.
-            pub fn clear(&self) {
+            pub fn clear(&mut self) {
                 self.with_mut(|v| v.clear())
             }
 
             /// Extends the vector with the given iterator.
-            pub fn extend(&self, iter: impl IntoIterator<Item = T>) {
+            pub fn extend(&mut self, iter: impl IntoIterator<Item = T>) {
                 self.with_mut(|v| v.extend(iter))
             }
 
             /// Truncates the vector to the given length.
-            pub fn truncate(&self, len: usize) {
+            pub fn truncate(&mut self, len: usize) {
                 self.with_mut(|v| v.truncate(len))
             }
 
             /// Swaps two values in the vector.
-            pub fn swap_remove(&self, index: usize) -> T {
+            pub fn swap_remove(&mut self, index: usize) -> T {
                 self.with_mut(|v| v.swap_remove(index))
             }
 
             /// Retains only the values that match the given predicate.
-            pub fn retain(&self, f: impl FnMut(&T) -> bool) {
+            pub fn retain(&mut self, f: impl FnMut(&T) -> bool) {
                 self.with_mut(|v| v.retain(f))
             }
 
             /// Splits the vector into two at the given index.
-            pub fn split_off(&self, at: usize) -> Vec<T> {
+            pub fn split_off(&mut self, at: usize) -> Vec<T> {
                 self.with_mut(|v| v.split_off(at))
             }
         }
 
         impl<T: 'static> $ty<Option<T>> {
             /// Takes the value out of the Option.
-            pub fn take(&self) -> Option<T> {
+            pub fn take(&mut self) -> Option<T> {
                 self.with_mut(|v| v.take())
             }
 
             /// Replace the value in the Option.
-            pub fn replace(&self, value: T) -> Option<T> {
+            pub fn replace(&mut self, value: T) -> Option<T> {
                 self.with_mut(|v| v.replace(value))
             }
 
             /// Gets the value out of the Option, or inserts the given value if the Option is empty.
-            pub fn get_or_insert(&self, default: T) -> GenerationalRef<T> {
+            pub fn get_or_insert(&mut self, default: T) -> GenerationalRef<T> {
                 self.get_or_insert_with(|| default)
             }
 
             /// Gets the value out of the Option, or inserts the value returned by the given function if the Option is empty.
-            pub fn get_or_insert_with(&self, default: impl FnOnce() -> T) -> GenerationalRef<T> {
+            pub fn get_or_insert_with(
+                &mut self,
+                default: impl FnOnce() -> T,
+            ) -> GenerationalRef<T> {
                 let borrow = self.read();
                 if borrow.is_none() {
                     drop(borrow);
-                    self.with_mut(|v| *v = Some(default()));
+                    self.write_unchecked().replace(default());
                     GenerationalRef::map(self.read(), |v| v.as_ref().unwrap())
                 } else {
                     GenerationalRef::map(borrow, |v| v.as_ref().unwrap())
@@ -281,14 +284,14 @@ impl<T: Clone + 'static> IntoIterator for Signal<Vec<T>> {
 
 impl<T: 'static> Signal<Vec<T>> {
     /// Returns a reference to an element or `None` if out of bounds.
-    pub fn get_mut(&self, index: usize) -> Option<Write<T, Vec<T>>> {
+    pub fn get_mut(&mut self, index: usize) -> Option<Write<T, Vec<T>>> {
         Write::filter_map(self.write(), |v| v.get_mut(index))
     }
 }
 
 impl<T: 'static> Signal<Option<T>> {
     /// Returns a reference to an element or `None` if out of bounds.
-    pub fn as_mut(&self) -> Option<Write<T, Option<T>>> {
+    pub fn as_mut(&mut self) -> Option<Write<T, Option<T>>> {
         Write::filter_map(self.write(), |v| v.as_mut())
     }
 }

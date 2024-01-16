@@ -12,7 +12,7 @@ fn main() {
 }
 
 fn app() -> Element {
-    let state = use_signal(|| PlayerState { is_playing: false });
+    let mut state = use_signal(|| PlayerState { is_playing: false });
 
     rsx!(
         div {

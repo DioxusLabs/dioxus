@@ -6,7 +6,7 @@ fn main() {
 }
 
 fn app() -> Element {
-    let toggled = use_signal(|| false);
+    let mut toggled = use_signal(|| false);
 
     _ = use_global_shortcut("ctrl+s", move || toggled.toggle());
 

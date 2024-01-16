@@ -12,9 +12,9 @@ fn main() {
 }
 
 fn app() -> Element {
-    let fullscreen = use_signal(|| false);
-    let always_on_top = use_signal(|| false);
-    let decorations = use_signal(|| false);
+    let mut fullscreen = use_signal(|| false);
+    let mut always_on_top = use_signal(|| false);
+    let mut decorations = use_signal(|| false);
 
     rsx!(
         link { href:"https://unpkg.com/tailwindcss@^2/dist/tailwind.min.css", rel:"stylesheet" }

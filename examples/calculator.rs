@@ -19,9 +19,9 @@ fn main() {
 }
 
 fn app() -> Element {
-    let val = use_signal(|| String::from("0"));
+    let mut val = use_signal(|| String::from("0"));
 
-    let input_digit = move |num: u8| {
+    let mut input_digit = move |num: u8| {
         if val.cloned() == "0" {
             val.set(String::new());
         }
@@ -29,11 +29,11 @@ fn app() -> Element {
         val.write().push_str(num.to_string().as_str());
     };
 
-    let input_operator = move |key: &str| val.write().push_str(key);
+    let mut input_operator = move |key: &str| val.write().push_str(key);
 
-    let handle_key_down_event = move |evt: KeyboardEvent| match evt.key() {
+    let mut handle_key_down_event = move |evt: KeyboardEvent| match evt.key() {
         Key::Backspace => {
-            if !val().is_empty() {
+            if !val.cloned().is_empty() {
                 val.write().pop();
             }
         }
@@ -72,16 +72,16 @@ fn app() -> Element {
                                     class: "calculator-key key-clear",
                                     onclick: move |_| {
                                         val.set(String::new());
-                                        if !val().is_empty(){
+                                        if !val.cloned().is_empty(){
                                             val.set("0".into());
                                         }
                                     },
-                                    if val().is_empty() { "C" } else { "AC" }
+                                    if val.cloned().is_empty() { "C" } else { "AC" }
                                 }
                                 button {
                                     class: "calculator-key key-sign",
                                     onclick: move |_| {
-                                        let temp = calc_val(val().as_str());
+                                        let temp = calc_val(val.cloned().as_str());
                                         if temp > 0.0 {
                                             val.set(format!("-{temp}"));
                                         } else {
@@ -120,7 +120,7 @@ fn app() -> Element {
                             button { class: "calculator-key key-add", onclick: move |_| input_operator("+"), "+" }
                             button {
                                 class: "calculator-key key-equals",
-                                onclick: move |_| val.set(format!("{}", calc_val(val().as_str()))),
+                                onclick: move |_| val.set(format!("{}", calc_val(val.cloned().as_str()))),
                                 "="
                             }
                         }

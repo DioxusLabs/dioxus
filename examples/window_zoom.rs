@@ -5,7 +5,7 @@ fn main() {
 }
 
 fn app() -> Element {
-    let level = use_signal(|| 1.0);
+    let mut level = use_signal(|| 1.0);
 
     rsx! {
         input {
