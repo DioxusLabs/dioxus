@@ -142,7 +142,6 @@ impl<T: 'static, S: Storage<T>> CopyValue<T, S> {
 
     /// Try to read the value. If the value has been dropped, this will return None.
     #[track_caller]
-
     pub fn try_read(&self) -> Result<S::Ref, generational_box::BorrowError> {
         self.value.try_read()
     }
@@ -155,10 +154,14 @@ impl<T: 'static, S: Storage<T>> CopyValue<T, S> {
 
     /// Try to write the value. If the value has been dropped, this will return None.
     #[track_caller]
-    pub fn try_write(&self) -> Result<S::Mut, generational_box::BorrowMutError> {
+    pub fn try_write(&mut self) -> Result<S::Mut, generational_box::BorrowMutError> {
         self.value.try_write()
     }
 
+    /// Write the value without any lifetime hints. If the value has been dropped, this will panic.
+    ///
+    /// Note: This is completely safe because the value is stored in a generational box. The lifetime that normally is passed to the returned reference is only used as a hint to user to prevent runtime overlapping borrow panics.
+    #[track_caller]
     pub fn write_unchecked(&self) -> S::Mut {
         self.value.write()
     }
@@ -170,17 +173,20 @@ impl<T: 'static, S: Storage<T>> CopyValue<T, S> {
     }
 
     /// Set the value. If the value has been dropped, this will panic.
+    #[track_caller]
     pub fn set(&self, value: T) {
         self.value.set(value);
     }
 
     /// Run a function with a reference to the value. If the value has been dropped, this will panic.
+    #[track_caller]
     pub fn with<O>(&self, f: impl FnOnce(&T) -> O) -> O {
         let write = self.read();
         f(&*write)
     }
 
     /// Run a function with a mutable reference to the value. If the value has been dropped, this will panic.
+    #[track_caller]
     pub fn with_mut<O>(&self, f: impl FnOnce(&mut T) -> O) -> O {
         let mut write = self.write();
         f(&mut *write)
@@ -214,7 +220,7 @@ impl<T: Copy, S: Storage<T>> Deref for CopyValue<T, S> {
         // First we create a closure that captures something with the Same in memory layout as Self (MaybeUninit<Self>).
         let uninit_callable = MaybeUninit::<Self>::uninit();
         // Then move that value into the closure. We assume that the closure now has a in memory layout of Self.
-        let uninit_closure = move || Self::read(unsafe { &*uninit_callable.as_ptr() }).clone();
+        let uninit_closure = move || *Self::read(unsafe { &*uninit_callable.as_ptr() });
 
         // Check that the size of the closure is the same as the size of Self in case the compiler changed the layout of the closure.
         let size_of_closure = std::mem::size_of_val(&uninit_closure);

@@ -54,7 +54,7 @@ pub(crate) fn get_effect_ref() -> EffectStackRef {
                 while let Some(id) = receiver.next().await {
                     EFFECT_STACK.with(|stack| {
                         let effect_mapping = stack.effect_mapping.read();
-                        if let Some(effect) = effect_mapping.get(&id) {
+                        if let Some(mut effect) = effect_mapping.get(&id).copied() {
                             tracing::trace!("Rerunning effect: {:?}", id);
                             effect.try_run();
                         } else {
@@ -126,7 +126,7 @@ impl Effect {
     ///
     /// The signal will be owned by the current component and will be dropped when the component is dropped.
     pub fn new(callback: impl FnMut() + 'static) -> Self {
-        let myself = Self {
+        let mut myself = Self {
             source: current_scope_id().expect("in a virtual dom"),
             inner: EffectInner::new(Box::new(callback)),
         };
@@ -145,7 +145,7 @@ impl Effect {
     }
 
     /// Run the effect callback immediately. Returns `true` if the effect was run. Returns `false` is the effect is dead.
-    pub fn try_run(&self) {
+    pub fn try_run(&mut self) {
         tracing::trace!("Running effect: {:?}", self);
         if let Ok(mut inner) = self.inner.try_write() {
             {
