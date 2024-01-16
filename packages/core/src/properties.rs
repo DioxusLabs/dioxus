@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use crate::innerlude::*;
 
 /// Every "Props" used for a component must implement the `Properties` trait. This trait gives some hints to Dioxus
@@ -29,11 +31,7 @@ pub trait Properties: Clone + Sized + 'static {
     /// Create a builder for this component.
     fn builder() -> Self::Builder;
 
-    /// Memoization can only happen if the props are valid for the 'static lifetime
-    ///
-    /// # Safety
-    /// The user must know if their props are static, but if they make a mistake, UB happens
-    /// Therefore it's unsafe to memoize.
+    /// Compare two props to see if they are memoizable.
     fn memoize(&self, other: &Self) -> bool;
 }
 
@@ -56,98 +54,51 @@ impl EmptyBuilder {
 
 /// This utility function launches the builder method so rsx! and html! macros can use the typed-builder pattern
 /// to initialize a component's props.
-pub fn fc_to_builder<F: ComponentFunction<P>, P>(
-    _: F,
-) -> <<F as ComponentFunction<P>>::Props as Properties>::Builder
+pub fn fc_to_builder<P, M>(_: impl ComponentFn<P, M>) -> <P as Properties>::Builder
 where
-    F::Props: Properties,
+    P: Properties,
 {
-    F::Props::builder()
+    P::builder()
 }
 
-/// Every component used in rsx must implement the `ComponentFunction` trait. This trait tells dioxus how your component should be rendered.
-///
-/// Dioxus automatically implements this trait for any function that either takes no arguments or a single props argument and returns an Element.
-///
-/// ## Example
-///
-/// For components that take no props:
-///
-/// ```rust
-/// fn app() -> Element {
-///     rsx! {
-///         div {}
-///     }
-/// }
-/// ```
-///
-/// For props that take a props struct:
-///
-/// ```rust
-/// #[derive(Props, PartialEq, Clone)]
-/// struct MyProps {
-///    data: String
-/// }
-///
-/// fn app(props: MyProps) -> Element {
-///     rsx! {
-///         div {
-///             "{props.data}"
-///         }
-///     }
-/// }
-/// ```
-///
-/// Or you can use the #[component] macro to automatically implement create the props struct:
-///
-/// ```rust
-/// #[component]
-/// fn app(data: String) -> Element {
-///     rsx! {
-///         div {
-///             "{data}"
-///         }
-///     }
-/// }
-/// ```
-///
-/// > Note: If you get an error about the `ComponentFunction` trait not being implemented: make sure your props implements the `Properties` trait or if you would like to declare your props inline, make sure you use the #[component] macro on your function.
-pub trait ComponentFunction<P>: Clone + 'static {
-    /// The props type for this component.
-    type Props: 'static;
-
-    /// Run the component function with the given props.
-    fn call(&self, props: Self::Props) -> Element;
+/// Any component that implements the `ComponentFn` trait can be used as a component.
+pub trait ComponentFn<Props, Marker> {
+    /// Convert the component to a function that takes props and returns an element.
+    fn as_component(self: Rc<Self>) -> Component<Props>;
 }
 
-impl<T: 'static, F: Fn(T) -> Element + Clone + 'static> ComponentFunction<(T,)> for F {
-    type Props = T;
-
-    fn call(&self, props: T) -> Element {
-        self(props)
+/// Accept pre-formed component render functions as components
+impl<P> ComponentFn<P, ()> for Component<P> {
+    fn as_component(self: Rc<Self>) -> Component<P> {
+        self.as_ref().clone()
     }
 }
 
-#[doc(hidden)]
-pub struct ZeroElementMarker;
-impl<F: Fn() -> Element + Clone + 'static> ComponentFunction<ZeroElementMarker> for F {
-    type Props = ();
+/// Accept any callbacks that take props
+impl<F: Fn(P) -> Element + 'static, P> ComponentFn<P, ()> for F {
+    fn as_component(self: Rc<Self>) -> Component<P> {
+        self
+    }
+}
 
-    fn call(&self, _: ()) -> Element {
-        self()
+/// Accept any callbacks that take no props
+pub struct EmptyMarker;
+impl<F: Fn() -> Element + 'static> ComponentFn<(), EmptyMarker> for F {
+    fn as_component(self: Rc<Self>) -> Rc<dyn Fn(()) -> Element> {
+        Rc::new(move |_| self())
     }
 }
 
 #[test]
-fn test_empty_builder() {
-    fn app() -> Element {
-        unimplemented!()
+fn it_works_maybe() {
+    fn test(_: ()) -> Element {
+        todo!()
     }
-    fn app2(_: ()) -> Element {
-        unimplemented!()
+    fn test2() -> Element {
+        todo!()
     }
-    let builder = fc_to_builder(app);
-    builder.build();
-    let builder = fc_to_builder(app2);
-    builder.build();
+
+    let callable: Rc<dyn ComponentFn<(), ()>> = Rc::new(test) as Rc<dyn ComponentFn<_, _>>;
+    let callable2: Rc<dyn ComponentFn<(), EmptyMarker>> =
+        Rc::new(test2) as Rc<dyn ComponentFn<_, _>>;
 }

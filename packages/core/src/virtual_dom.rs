@@ -11,6 +11,7 @@ use crate::{
     },
     nodes::RenderReturn,
     nodes::{Template, TemplateId},
+    properties::ComponentFn,
     runtime::{Runtime, RuntimeGuard},
     scopes::ScopeId,
     AttributeValue, BoxedContext, Element, Event, Mutations,
@@ -227,7 +228,7 @@ impl VirtualDom {
     ///
     /// Note: the VirtualDom is not progressed, you must either "run_with_deadline" or use "rebuild" to progress it.
     pub fn new(app: fn() -> Element) -> Self {
-        Self::new_with_props(app, ())
+        Self::new_with_props(move || app(), ())
     }
 
     /// Create a new virtualdom and build it immediately
@@ -267,12 +268,8 @@ impl VirtualDom {
     /// let mut dom = VirtualDom::new_with_props(Example, SomeProps { name: "jane" });
     /// let mutations = dom.rebuild();
     /// ```
-    pub fn new_with_props<
-        F: crate::ComponentFunction<Phantom, Props = P>,
-        P: Clone + 'static,
-        Phantom: 'static,
-    >(
-        root: F,
+    pub fn new_with_props<P: Clone + 'static, M>(
+        root: impl ComponentFn<P, M>,
         root_props: P,
     ) -> Self {
         let (tx, rx) = futures_channel::mpsc::unbounded();
@@ -290,7 +287,12 @@ impl VirtualDom {
         };
 
         let root = dom.new_scope(
-            BoxedAnyProps::new(VProps::new(root, |_, _| true, root_props, "root")),
+            BoxedAnyProps::new(VProps::new(
+                Rc::new(root).as_component(),
+                |_, _| true,
+                root_props,
+                "root",
+            )),
             "app",
         );
 

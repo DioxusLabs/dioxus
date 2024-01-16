@@ -1,5 +1,5 @@
-use crate::{nodes::RenderReturn, properties::ComponentFunction};
-use std::{any::Any, marker::PhantomData, ops::Deref, panic::AssertUnwindSafe};
+use crate::{nodes::RenderReturn, Component};
+use std::{any::Any, ops::Deref, panic::AssertUnwindSafe};
 
 /// A boxed version of AnyProps that can be cloned
 pub(crate) struct BoxedAnyProps {
@@ -38,17 +38,16 @@ pub(crate) trait AnyProps {
     fn duplicate(&self) -> Box<dyn AnyProps>;
 }
 
-pub(crate) struct VProps<P: 'static, F: ComponentFunction<Phantom, Props = P>, Phantom: 'static> {
-    pub render_fn: F,
+pub(crate) struct VProps<P: 'static> {
+    pub render_fn: Component<P>,
     pub memo: fn(&P, &P) -> bool,
     pub props: P,
     pub name: &'static str,
-    phantom: PhantomData<Phantom>,
 }
 
-impl<P: 'static, F: ComponentFunction<Phantom, Props = P>, Phantom: 'static> VProps<P, F, Phantom> {
+impl<P: 'static> VProps<P> {
     pub(crate) fn new(
-        render_fn: F,
+        render_fn: Component<P>,
         memo: fn(&P, &P) -> bool,
         props: P,
         name: &'static str,
@@ -58,14 +57,11 @@ impl<P: 'static, F: ComponentFunction<Phantom, Props = P>, Phantom: 'static> VPr
             memo,
             props,
             name,
-            phantom: PhantomData,
         }
     }
 }
 
-impl<P: Clone + 'static, F: ComponentFunction<Phantom, Props = P>, Phantom> AnyProps
-    for VProps<P, F, Phantom>
-{
+impl<P: Clone + 'static> AnyProps for VProps<P> {
     fn memoize(&self, other: &dyn Any) -> bool {
         match other.downcast_ref::<P>() {
             Some(other) => (self.memo)(&self.props, other),
@@ -80,7 +76,7 @@ impl<P: Clone + 'static, F: ComponentFunction<Phantom, Props = P>, Phantom> AnyP
     fn render(&self) -> RenderReturn {
         let res = std::panic::catch_unwind(AssertUnwindSafe(move || {
             // Call the render function directly
-            self.render_fn.call(self.props.clone())
+            (self.render_fn)(self.props.clone())
         }));
 
         match res {
@@ -100,7 +96,6 @@ impl<P: Clone + 'static, F: ComponentFunction<Phantom, Props = P>, Phantom> AnyP
             memo: self.memo,
             props: self.props.clone(),
             name: self.name,
-            phantom: PhantomData,
         })
     }
 }

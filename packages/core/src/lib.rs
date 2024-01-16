@@ -70,12 +70,12 @@ pub(crate) mod innerlude {
     ///     Example {}
     /// )
     /// ```
-    pub type Component<P = ()> = fn(P) -> Element;
+    pub type Component<P = ()> = std::rc::Rc<dyn Fn(P) -> Element>;
 }
 
 pub use crate::innerlude::{
     fc_to_builder, generation, schedule_update, schedule_update_any, use_hook, vdom_is_rendering,
-    AnyValue, Attribute, AttributeValue, BoxedContext, CapturedError, Component, ComponentFunction,
+    AnyValue, Attribute, AttributeValue, BoxedContext, CapturedError, Component,
     CrossPlatformConfig, DynamicNode, Element, ElementId, Event, Fragment, HasAttributes,
     IntoDynNode, Mutation, Mutations, NoOpMutations, PlatformBuilder, Properties, RenderReturn,
     ScopeId, ScopeState, Task, Template, TemplateAttribute, TemplateNode, VComponent, VNode,
@@ -90,9 +90,9 @@ pub mod prelude {
         consume_context, consume_context_from_scope, current_scope_id, fc_to_builder, generation,
         has_context, needs_update, parent_scope, provide_context, provide_root_context,
         remove_future, schedule_update, schedule_update_any, spawn, spawn_forever, suspend,
-        try_consume_context, use_error_boundary, use_hook, AnyValue, Attribute, Component, Element,
-        ErrorBoundary, Event, EventHandler, Fragment, HasAttributes, IntoAttributeValue,
-        IntoDynNode, Properties, Runtime, RuntimeGuard, ScopeId, ScopeState, Task, Template,
-        TemplateAttribute, TemplateNode, Throw, VNode, VNodeInner, VirtualDom,
+        try_consume_context, use_error_boundary, use_hook, AnyValue, Attribute, Component,
+        ComponentFn, Element, ErrorBoundary, Event, EventHandler, Fragment, HasAttributes,
+        IntoAttributeValue, IntoDynNode, Properties, Runtime, RuntimeGuard, ScopeId, ScopeState,
+        Task, Template, TemplateAttribute, TemplateNode, Throw, VNode, VNodeInner, VirtualDom,
     };
 }

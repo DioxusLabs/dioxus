@@ -10,7 +10,7 @@ use crate::{
     webview::WebviewInstance,
 };
 use crossbeam_channel::Receiver;
-use dioxus_core::{ComponentFunction, CrossPlatformConfig, ElementId};
+use dioxus_core::{CrossPlatformConfig, ElementId};
 use dioxus_html::{
     native_bind::NativeFileEngine, FileEngine, HasFileData, HasFormData, HtmlEvent,
     PlatformEventData,
@@ -29,14 +29,10 @@ use tao::{
 };
 
 /// The single top-level object that manages all the running windows, assets, shortcuts, etc
-pub(crate) struct App<
-    Component: ComponentFunction<Phantom, Props = Props>,
-    Props: Clone + 'static,
-    Phantom: 'static,
-> {
+pub(crate) struct App<Props: Clone + 'static> {
     // move the props into a cell so we can pop it out later to create the first window
     // iOS panics if we create a window before the event loop is started, so we toss them into a cell
-    pub(crate) dioxus_config: Cell<Option<CrossPlatformConfig<Component, Props, Phantom>>>,
+    pub(crate) dioxus_config: Cell<Option<CrossPlatformConfig<Props>>>,
     pub(crate) cfg: Cell<Option<Config>>,
 
     // Stuff we need mutable access to
@@ -49,8 +45,6 @@ pub(crate) struct App<
     ///
     /// This includes stuff like the event handlers, shortcuts, etc as well as ways to modify *other* windows
     pub(crate) shared: Rc<SharedContext>,
-
-    phantom: PhantomData<Phantom>,
 }
 
 /// A bundle of state shared between all the windows, providing a way for us to communicate with running webview.
@@ -65,15 +59,10 @@ pub struct SharedContext {
     pub(crate) target: EventLoopWindowTarget<UserWindowEvent>,
 }
 
-impl<
-        Component: ComponentFunction<Phantom, Props = Props>,
-        Props: Clone + 'static,
-        Phantom: 'static,
-    > App<Component, Props, Phantom>
-{
+impl<Props: Clone + 'static> App<Props> {
     pub fn new(
         cfg: Config,
-        dioxus_config: CrossPlatformConfig<Component, Props, Phantom>,
+        dioxus_config: CrossPlatformConfig<Props>,
     ) -> (EventLoop<UserWindowEvent>, Self) {
         let event_loop = EventLoopBuilder::<UserWindowEvent>::with_user_event().build();
 
@@ -92,7 +81,6 @@ impl<
                 proxy: event_loop.create_proxy(),
                 target: event_loop.clone(),
             }),
-            phantom: PhantomData,
         };
 
         // Set the event converter

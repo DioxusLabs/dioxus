@@ -1,13 +1,14 @@
-use crate::innerlude::{ElementRef, EventHandler, MountId};
-use crate::properties::ComponentFunction;
 use crate::{
     any_props::{BoxedAnyProps, VProps},
     innerlude::ScopeState,
 };
 use crate::{arena::ElementId, Element, Event};
+use crate::{
+    innerlude::{ElementRef, EventHandler, MountId},
+    properties::ComponentFn,
+};
 use crate::{Properties, VirtualDom};
 use core::panic;
-use std::ops::Deref;
 use std::rc::Rc;
 use std::vec;
 use std::{
@@ -15,6 +16,7 @@ use std::{
     cell::Cell,
     fmt::{Arguments, Debug},
 };
+use std::{ffi::c_void, ops::Deref};
 
 pub type TemplateId = &'static str;
 
@@ -511,7 +513,7 @@ pub struct VComponent {
     /// The function pointer of the component, known at compile time
     ///
     /// It is possible that components get folded at compile time, so these shouldn't be really used as a key
-    pub(crate) render_fn: TypeId,
+    pub(crate) render_fn: *const c_void,
 
     pub(crate) props: BoxedAnyProps,
 }
@@ -531,22 +533,19 @@ impl VComponent {
     /// fn(Props) -> Element;
     /// async fn(Scope<Props<'_>>) -> Element;
     /// ```
-    pub fn new<F: ComponentFunction<P> + 'static, P: 'static>(
-        component: F,
-        props: F::Props,
-        fn_name: &'static str,
-    ) -> Self
+    pub fn new<P, M>(component: impl ComponentFn<P, M>, props: P, fn_name: &'static str) -> Self
     where
         // The properties must be valid until the next bump frame
-        F::Props: Properties + 'static,
+        P: Properties + 'static,
     {
-        let render_fn_id = TypeId::of::<F>();
-        let vcomp = VProps::new(component, F::Props::memoize, props, fn_name);
+        let component = Rc::new(component).as_component();
+        let render_fn = component.as_ref() as *const _ as *const c_void;
+        let vcomp = VProps::new(component, <P as Properties>::memoize, props, fn_name);
 
         VComponent {
             name: fn_name,
-            render_fn: render_fn_id,
             props: BoxedAnyProps::new(vcomp),
+            render_fn,
         }
     }
 

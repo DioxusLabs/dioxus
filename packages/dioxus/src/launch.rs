@@ -4,29 +4,19 @@ use std::any::Any;
 
 use crate::prelude::*;
 use dioxus_core::prelude::*;
-use dioxus_core::ComponentFunction;
 use dioxus_core::{BoxedContext, CrossPlatformConfig, PlatformBuilder};
 
 /// A builder for a fullstack app.
-pub struct LaunchBuilder<
-    Component: ComponentFunction<Phantom, Props = Props>,
-    Props: Clone + 'static,
-    Phantom: 'static,
-    Platform: PlatformBuilder<Props> = CurrentPlatform,
-> {
-    cross_platform_config: CrossPlatformConfig<Component, Props, Phantom>,
+pub struct LaunchBuilder<Props: Clone + 'static, Platform: PlatformBuilder<Props> = CurrentPlatform>
+{
+    cross_platform_config: CrossPlatformConfig<Props>,
     platform_config: Option<<Platform as PlatformBuilder<Props>>::Config>,
 }
 
 // Default platform builder
-impl<
-        Component: ComponentFunction<Phantom, Props = Props>,
-        Props: Clone + 'static,
-        Phantom: 'static,
-    > LaunchBuilder<Component, Props, Phantom>
-{
+impl<Props: Clone + 'static> LaunchBuilder<Props> {
     /// Create a new builder for your application. This will create a launch configuration for the current platform based on the features enabled on the `dioxus` crate.
-    pub fn new(component: Component) -> Self
+    pub fn new<M>(component: impl ComponentFn<Props, M>) -> Self
     where
         Props: Default,
     {
@@ -41,13 +31,7 @@ impl<
     }
 }
 
-impl<
-        Component: ComponentFunction<Phantom, Props = Props>,
-        Props: Clone + 'static,
-        Phantom: 'static,
-        Platform: PlatformBuilder<Props>,
-    > LaunchBuilder<Component, Props, Phantom, Platform>
-{
+impl<Props: Clone + 'static, Platform: PlatformBuilder<Props>> LaunchBuilder<Props, Platform> {
     /// Pass some props to your application.
     pub fn props(mut self, props: Props) -> Self {
         self.cross_platform_config.props = props;
@@ -84,12 +68,7 @@ impl<
 }
 
 #[cfg(feature = "web")]
-impl<
-        Component: ComponentFunction<Phantom, Props = Props>,
-        Props: Clone + 'static,
-        Phantom: 'static,
-    > LaunchBuilder<Component, Props, Phantom, dioxus_web::WebPlatform>
-{
+impl<Props: Clone + 'static> LaunchBuilder<Props, dioxus_web::WebPlatform> {
     /// Launch your web application.
     pub fn launch_web(self) {
         dioxus_web::WebPlatform::launch(
@@ -100,12 +79,7 @@ impl<
 }
 
 #[cfg(feature = "desktop")]
-impl<
-        Component: ComponentFunction<Phantom, Props = Props>,
-        Props: Clone + 'static,
-        Phantom: 'static,
-    > LaunchBuilder<Component, Props, Phantom, dioxus_desktop::DesktopPlatform>
-{
+impl<Props: Clone + 'static> LaunchBuilder<Props, dioxus_desktop::DesktopPlatform> {
     /// Launch your desktop application.
     pub fn launch_desktop(self) {
         dioxus_desktop::DesktopPlatform::launch(
@@ -123,42 +97,27 @@ type CurrentPlatform = dioxus_web::WebPlatform;
 type CurrentPlatform = ();
 
 /// Launch your application without any additional configuration. See [`LaunchBuilder`] for more options.
-pub fn launch<
-    Component: ComponentFunction<Phantom, Props = Props>,
-    Props: Clone + 'static,
-    Phantom: 'static,
->(
-    component: Component,
-) where
-    Props: Default,
+pub fn launch<Props, Marker>(component: impl ComponentFn<Props, Marker>)
+where
+    Props: Default + Clone + 'static,
 {
     LaunchBuilder::new(component).launch()
 }
 
 #[cfg(feature = "web")]
 /// Launch your web application without any additional configuration. See [`LaunchBuilder`] for more options.
-pub fn launch_web<
-    Component: ComponentFunction<Phantom, Props = Props>,
-    Props: Clone + 'static,
-    Phantom: 'static,
->(
-    component: Component,
-) where
-    Props: Default,
+pub fn launch_web<Props, Marker>(component: impl ComponentFn<Props, Marker>)
+where
+    Props: Default + Clone + 'static,
 {
     LaunchBuilder::new(component).launch_web()
 }
 
 #[cfg(feature = "desktop")]
 /// Launch your desktop application without any additional configuration. See [`LaunchBuilder`] for more options.
-pub fn launch_desktop<
-    Component: ComponentFunction<Phantom, Props = Props>,
-    Props: Clone + 'static,
-    Phantom: 'static,
->(
-    component: Component,
-) where
-    Props: Default,
+pub fn launch_desktop<Props, Marker>(component: impl ComponentFn<Props, Marker>)
+where
+    Props: Default + Clone + 'static,
 {
     LaunchBuilder::new(component).launch_desktop()
 }
