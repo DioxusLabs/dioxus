@@ -49,13 +49,11 @@ fn NavBar() -> Element {
 
 #[component]
 fn Home() -> Element {
-    println!("Home");
     rsx! { h1 { "Welcome to the Dioxus Blog!" } }
 }
 
 #[component]
 fn Blog() -> Element {
-    println!("Blog");
     rsx! {
         h1 { "Blog" }
         Outlet::<Route> {}
