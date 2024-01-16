@@ -33,13 +33,39 @@ impl AttributeType {
             _ => None,
         }
     }
-}
 
-impl ToTokens for AttributeType {
-    fn to_tokens(&self, tokens: &mut TokenStream2) {
-        match self {
-            AttributeType::Named(n) => tokens.append_all(quote! { Box::new([#n]) }),
-            AttributeType::Spread(e) => tokens.append_all(quote! { #e.into_boxed_slice() }),
+    pub(crate) fn merge_quote(vec: &[&Self]) -> TokenStream2 {
+        // split into spread and single attributes
+        let mut spread = vec![];
+        let mut single = vec![];
+        for attr in vec.iter() {
+            match attr {
+                AttributeType::Named(named) => single.push(named),
+                AttributeType::Spread(expr) => spread.push(expr),
+            }
+        }
+
+        // If all of them are single attributes, create a static slice
+        if spread.is_empty() {
+            quote! {
+                Box::new([
+                    #(#single),*
+                ])
+            }
+        } else {
+            // Otherwise start with the single attributes and append the spread attributes
+            quote! {
+                {
+                    let mut __attributes = vec![
+                        #(#single),*
+                    ];
+                    #(
+                        let mut __spread = #spread;
+                        __attributes.append(&mut __spread);
+                    )*
+                    __attributes.into_boxed_slice()
+                }
+            }
         }
     }
 }
