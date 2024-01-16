@@ -109,7 +109,7 @@ async fn main() -> anyhow::Result<()> {
                     .bundle(Some(bin.clone()))
                     .map_err(|e| anyhow!("🚫 Bundling project failed: {}", e)),
 
-                _ => Ok(()),
+                _ => unreachable!(),
             }
         }
     }
