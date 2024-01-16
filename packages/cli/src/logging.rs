@@ -25,7 +25,6 @@ pub fn set_up_logging() {
                     colors_line.get_color(&record.level()).to_fg_str()
                 ),
                 level = colors_level.color(record.level()),
-                message = message,
             ));
         })
         .level(match std::env::var("DIOXUS_LOG") {
