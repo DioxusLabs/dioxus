@@ -85,13 +85,6 @@ pub struct LinkProps {
     pub active_class: Option<String>,
     /// The children to render within the generated HTML anchor tag.
     pub children: Element,
-    /// The class attribute for the generated HTML anchor tag.
-    ///
-    /// If `active_class` is [`Some`] and the `target` route is active, `active_class` will be
-    /// appended at the end of `class`.
-    pub class: Option<String>,
-    /// The id attribute for the generated HTML anchor tag.
-    pub id: Option<String>,
     /// When [`true`], the `target` route will be opened in a new tab.
     ///
     /// This does not change whether the [`Link`] is active or not.
@@ -114,6 +107,8 @@ pub struct LinkProps {
     /// The navigation target. Roughly equivalent to the href attribute of an HTML anchor tag.
     #[props(into)]
     pub to: IntoRoutable,
+    #[props(extends = GlobalAttributes)]
+    attributes: Vec<Attribute>,
 }
 
 impl Debug for LinkProps {
@@ -121,8 +116,7 @@ impl Debug for LinkProps {
         f.debug_struct("LinkProps")
             .field("active_class", &self.active_class)
             .field("children", &self.children)
-            .field("class", &self.class)
-            .field("id", &self.id)
+            .field("attributes", &self.attributes)
             .field("new_tab", &self.new_tab)
             .field("onclick", &self.onclick.as_ref().map(|_| "onclick is set"))
             .field("onclick_only", &self.onclick_only)
@@ -197,8 +191,7 @@ pub fn Link(props: LinkProps) -> Element {
     let LinkProps {
         active_class,
         children,
-        class,
-        id,
+        attributes,
         new_tab,
         onclick,
         onclick_only,
@@ -226,12 +219,10 @@ pub fn Link(props: LinkProps) -> Element {
         IntoRoutable::Route(route) => router.any_route_to_string(&**route),
     };
     let parsed_route: NavigationTarget<Rc<dyn Any>> = router.resolve_into_routable(to.clone());
-    let ac = active_class
+    let class = active_class
         .and_then(|active_class| (href == current_url).then(|| format!(" {active_class}")))
         .unwrap_or_default();
 
-    let id = id.unwrap_or_default();
-    let class = format!("{}{ac}", class.unwrap_or_default());
     let tag_target = new_tab.then_some("_blank").unwrap_or_default();
 
     let is_external = matches!(parsed_route, NavigationTarget::External(_));
@@ -259,9 +250,9 @@ pub fn Link(props: LinkProps) -> Element {
             href: "{href}",
             prevent_default: "{prevent_default}",
             class: "{class}",
-            id: "{id}",
             rel: "{rel}",
             target: "{tag_target}",
+            ..attributes,
             {children}
         }
     }
