@@ -28,7 +28,7 @@ async fn main() {
             get(move |ws: WebSocketUpgrade| async move {
                 ws.on_upgrade(move |socket| async move {
                     _ = view
-                        .launch(dioxus_liveview::axum_socket(socket), Root)
+                        .launch(dioxus_liveview::axum_socket(socket), Route::Home {})
                         .await;
                 })
             }),
@@ -44,23 +44,7 @@ async fn main() {
 
 #[cfg(not(feature = "liveview"))]
 fn main() {
-    #[cfg(not(target_arch = "wasm32"))]
-    dioxus_desktop::launch(Root);
-
-    #[cfg(target_arch = "wasm32")]
-    dioxus_web::launch(root);
-}
-
-#[cfg(feature = "liveview")]
-#[component]
-fn Root() -> Element {
-    render! { Router::<Route> {} }
-}
-
-#[cfg(not(feature = "liveview"))]
-#[component]
-fn Root() -> Element {
-    render! { Router::<Route> {} }
+    launch(Route::Home {})
 }
 
 #[component]

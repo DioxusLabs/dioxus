@@ -9,21 +9,17 @@ fn main() {
 fn App() -> Element {
     rsx! (
         div {
-            p {
-                a { href: "http://dioxuslabs.com/", "Default link - links outside of your app" }
-            }
+            p { a { href: "http://dioxuslabs.com/", "Default link - links outside of your app" } }
             p {
                 a {
                     href: "http://dioxuslabs.com/",
                     prevent_default: "onclick",
                     onclick: |_| println!("Hello Dioxus"),
-                    "Custom event link - links inside of your app",
+                    "Custom event link - links inside of your app"
                 }
             }
         }
-        div {
-            Router::<Route> {}
-        }
+        div { Router::<Route> {} }
     )
 }
 
@@ -42,8 +38,12 @@ fn Header() -> Element {
     render! {
         h1 { "Your app here" }
         ul {
-            li { Link { to: Route::Home {}, "home" } }
-            li { Link { to: Route::Settings {}, "settings" } }
+            li {
+                Link { to: Route::Home {}, "home" }
+            }
+            li {
+                Link { to: Route::Settings {}, "settings" }
+            }
         }
         Outlet::<Route> {}
     }
@@ -51,10 +51,10 @@ fn Header() -> Element {
 
 #[component]
 fn Home() -> Element {
-    render!(h1 { "Home" })
+    render!( h1 { "Home" } )
 }
 
 #[component]
 fn Settings() -> Element {
-    render!(h1 { "Settings" })
+    render!( h1 { "Settings" } )
 }

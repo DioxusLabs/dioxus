@@ -1,13 +1,14 @@
 use dioxus_lib::prelude::*;
 
-use std::{cell::RefCell, str::FromStr};
+use std::{cell::RefCell, rc::Rc, str::FromStr};
 
 use crate::{prelude::Outlet, routable::Routable, router_cfg::RouterConfig};
 
 /// The config for [`Router`].
+#[derive(Clone)]
 pub struct RouterConfigFactory<R: Routable> {
     #[allow(clippy::type_complexity)]
-    config: RefCell<Option<Box<dyn FnOnce() -> RouterConfig<R>>>>,
+    config: Rc<RefCell<Option<Box<dyn FnOnce() -> RouterConfig<R>>>>>,
 }
 
 #[cfg(feature = "serde")]
@@ -34,7 +35,7 @@ where
 impl<R: Routable, F: FnOnce() -> RouterConfig<R> + 'static> From<F> for RouterConfigFactory<R> {
     fn from(value: F) -> Self {
         Self {
-            config: RefCell::new(Some(Box::new(value))),
+            config: Rc::new(RefCell::new(Some(Box::new(value)))),
         }
     }
 }
@@ -67,7 +68,9 @@ where
     <T as FromStr>::Err: std::fmt::Display,
 {
     fn clone(&self) -> Self {
-        todo!()
+        Self {
+            config: self.config.clone(),
+        }
     }
 }
 
@@ -127,21 +130,21 @@ where
 {
     use crate::prelude::{outlet::OutletContext, RouterContext};
 
-    todo!();
-    // use_context_provider(|| {
-    //     RouterContext::new(
-    //         (props
-    //             .config
-    //             .config
-    //             .take()
-    //             .expect("use_context_provider ran twice"))(),
-    //         schedule_update_any(),
-    //     )
-    // });
-    // use_context_provider(|| OutletContext::<R> {
-    //     current_level: 0,
-    //     _marker: std::marker::PhantomData,
-    // });
+    use_hook(|| {
+        provide_context(RouterContext::new(
+            (props
+                .config
+                .config
+                .take()
+                .expect("use_context_provider ran twice"))(),
+            schedule_update_any(),
+        ));
+
+        provide_context(OutletContext::<R> {
+            current_level: 0,
+            _marker: std::marker::PhantomData,
+        });
+    });
 
     render! { Outlet::<R> {} }
 }

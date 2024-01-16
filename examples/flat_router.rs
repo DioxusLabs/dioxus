@@ -5,17 +5,15 @@ use dioxus_router::prelude::*;
 fn main() {
     env_logger::init();
 
-    LaunchBuilder::new(|| {
-        render! { Router::<Route> {} }
-    })
-    .cfg(
-        Config::new().with_window(
-            WindowBuilder::new()
-                .with_inner_size(LogicalSize::new(600, 1000))
-                .with_resizable(false),
-        ),
-    )
-    .launch()
+    LaunchBuilder::new(Route::Home {})
+        .cfg(
+            Config::new().with_window(
+                WindowBuilder::new()
+                    .with_inner_size(LogicalSize::new(600, 1000))
+                    .with_resizable(false),
+            ),
+        )
+        .launch()
 }
 
 #[derive(Routable, Clone)]

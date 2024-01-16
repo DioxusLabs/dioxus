@@ -9,14 +9,7 @@ fn main() {
         .with_module_level("dioxus", log::LevelFilter::Trace)
         .init()
         .unwrap();
-    launch(App);
-}
-
-#[component]
-fn App() -> Element {
-    render! {
-        Router::<Route> {}
-    }
+    launch(Route::Home {});
 }
 
 #[derive(Routable, Clone)]
@@ -42,11 +35,36 @@ fn NavBar() -> Element {
     render! {
         h1 { "Your app here" }
         ul {
-            li { Link { to: Route::Home {}, "home" } }
-            li { Link { to: Route::BlogList {}, "blog" } }
-            li { Link { to: Route::BlogPost { post: "tim".into() }, "tims' blog" } }
-            li { Link { to: Route::BlogPost { post: "bill".into() }, "bills' blog" } }
-            li { Link { to: Route::BlogPost { post: "james".into() }, "james amazing' blog" } }
+            li {
+                Link { to: Route::Home {}, "home" }
+            }
+            li {
+                Link { to: Route::BlogList {}, "blog" }
+            }
+            li {
+                Link {
+                    to: Route::BlogPost {
+                        post: "tim".into(),
+                    },
+                    "tims' blog"
+                }
+            }
+            li {
+                Link {
+                    to: Route::BlogPost {
+                        post: "bill".into(),
+                    },
+                    "bills' blog"
+                }
+            }
+            li {
+                Link {
+                    to: Route::BlogPost {
+                        post: "james".into(),
+                    },
+                    "james amazing' blog"
+                }
+            }
         }
         Outlet::<Route> {}
     }
@@ -70,7 +88,7 @@ fn BlogPost(post: String) -> Element {
 
     render! {
         div {
-            h3 { "blog post: {post}"  }
+            h3 { "blog post: {post}" }
             Link { to: Route::BlogList {}, "back to blog list" }
         }
     }

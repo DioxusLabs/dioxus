@@ -2,10 +2,7 @@ use dioxus::prelude::*;
 use dioxus_router::prelude::*;
 
 fn main() {
-    #[cfg(target_arch = "wasm32")]
-    dioxus_web::launch(App);
-    #[cfg(not(target_arch = "wasm32"))]
-    launch(App);
+    launch(Route::Home {});
 }
 
 // ANCHOR: router
@@ -36,19 +33,16 @@ enum Route {
 // ANCHOR_END: router
 
 #[component]
-fn App() -> Element {
-    render! {
-        Router::<Route> {}
-    }
-}
-
-#[component]
 fn NavBar() -> Element {
     render! {
         nav {
             ul {
-                li { Link { to: Route::Home {}, "Home" } }
-                li { Link { to: Route::BlogList {}, "Blog" } }
+                li {
+                    Link { to: Route::Home {}, "Home" }
+                }
+                li {
+                    Link { to: Route::BlogList {}, "Blog" }
+                }
             }
         }
         Outlet::<Route> {}
@@ -57,9 +51,7 @@ fn NavBar() -> Element {
 
 #[component]
 fn Home() -> Element {
-    render! {
-        h1 { "Welcome to the Dioxus Blog!" }
-    }
+    render! { h1 { "Welcome to the Dioxus Blog!" } }
 }
 
 #[component]
@@ -77,13 +69,17 @@ fn BlogList() -> Element {
         ul {
             li {
                 Link {
-                    to: Route::BlogPost { name: "Blog post 1".into() },
+                    to: Route::BlogPost {
+                        name: "Blog post 1".into(),
+                    },
                     "Read the first blog post"
                 }
             }
             li {
                 Link {
-                    to: Route::BlogPost { name: "Blog post 2".into() },
+                    to: Route::BlogPost {
+                        name: "Blog post 2".into(),
+                    },
                     "Read the second blog post"
                 }
             }
@@ -93,9 +89,7 @@ fn BlogList() -> Element {
 
 #[component]
 fn BlogPost(name: String) -> Element {
-    render! {
-        h2 { "Blog Post: {name}"}
-    }
+    render! { h2 { "Blog Post: {name}" } }
 }
 
 #[component]
@@ -103,9 +97,6 @@ fn PageNotFound(route: Vec<String>) -> Element {
     render! {
         h1 { "Page not found" }
         p { "We are terribly sorry, but the page you requested doesn't exist." }
-        pre {
-            color: "red",
-            "log:\nattemped to navigate to: {route:?}"
-        }
+        pre { color: "red", "log:\nattemped to navigate to: {route:?}" }
     }
 }

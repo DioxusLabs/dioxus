@@ -29,14 +29,32 @@ fn Blog(id: String) -> Element {
 fn Nav() -> Element {
     render! {
         nav {
-            li { Link { to: Route::Homepage { }, "Go home" } }
-            li { Link { to: Route::Blog { id: "Brownies".to_string() }, "Learn Brownies" } }
-            li { Link { to: Route::Blog { id: "Cookies".to_string() }, "Learn Cookies"  } }
+            li {
+                Link { to: Route::Homepage {}, "Go home" }
+            }
+            li {
+                Link {
+                    to: Route::Blog {
+                        id: "Brownies".to_string(),
+                    },
+                    "Learn Brownies"
+                }
+            }
+            li {
+                Link {
+                    to: Route::Blog {
+                        id: "Cookies".to_string(),
+                    },
+                    "Learn Cookies"
+                }
+            }
         }
         div { Outlet::<Route> {} }
     }
 }
 
 fn main() {
-    launch(|| render!(Router::<Route> {}));
+    launch(Route::Blog {
+        id: "hello".to_string(),
+    });
 }

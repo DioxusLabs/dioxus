@@ -28,6 +28,7 @@ pub struct RouterConfig<R: Routable> {
     pub(crate) failure_external_navigation: fn() -> Element,
     pub(crate) history: Option<Box<dyn AnyHistoryProvider>>,
     pub(crate) on_update: Option<RoutingCallback<R>>,
+    pub(crate) initial_route: Option<R>,
 }
 
 #[cfg(feature = "serde")]
@@ -77,6 +78,7 @@ where
             failure_external_navigation: FailureExternalNavigation,
             history: None,
             on_update: None,
+            initial_route: None,
         }
     }
 }
@@ -88,18 +90,22 @@ where
 {
     pub(crate) fn take_history(&mut self) -> Box<dyn AnyHistoryProvider> {
         self.history.take().unwrap_or_else(|| {
+            #[allow(unused)]
+            let initial_route = self.initial_route.clone().unwrap_or("/".parse().unwrap_or_else(|err|
+                panic!("index route does not exist:\n{}\n use MemoryHistory::with_initial_path or RouterConfig::initial_route to set a custom path", err)
+            ));
             // If we are on wasm32 and the web feature is enabled, use the web history.
             #[cfg(all(target_arch = "wasm32", feature = "web"))]
-            let history = Box::<AnyHistoryProviderImplWrapper<R, WebHistory<R>>>::default();
+            let history = Box::<AnyHistoryProviderImplWrapper::<WebHistory::<R>>>::default();
             // If we are not on wasm32 and the liveview feature is enabled, use the liveview history.
             #[cfg(all(feature = "liveview", not(target_arch = "wasm32")))]
-            let history = Box::<AnyHistoryProviderImplWrapper<R, LiveviewHistory<R>>>::default();
+            let history = Box::new(AnyHistoryProviderImplWrapper::new(LiveviewHistory::new(initial_route)));
             // If neither of the above are true, use the memory history.
             #[cfg(all(
                 not(all(target_arch = "wasm32", feature = "web")),
                 not(all(feature = "liveview", not(target_arch = "wasm32"))),
             ))]
-            let history = Box::<AnyHistoryProviderImplWrapper<R, MemoryHistory<R>>>::default();
+            let history = Box::new(AnyHistoryProviderImplWrapper::new(MemoryHistory::with_initial_path(initial_route)));
             history
         })
     }
@@ -135,10 +141,18 @@ where
 
     /// The [`HistoryProvider`] the router should use.
     ///
-    /// Defaults to a default [`MemoryHistory`].
+    /// Defaults to a different history provider depending on the target platform.
     pub fn history(self, history: impl HistoryProvider<R> + 'static) -> Self {
         Self {
             history: Some(Box::new(AnyHistoryProviderImplWrapper::new(history))),
+            ..self
+        }
+    }
+
+    /// The initial route the router should use if no history provider is set.
+    pub fn initial_route(self, route: R) -> Self {
+        Self {
+            initial_route: Some(route),
             ..self
         }
     }
