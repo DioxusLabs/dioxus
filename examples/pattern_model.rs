@@ -44,38 +44,22 @@ fn app() -> Element {
         style { {STYLE} }
         div { id: "wrapper",
             div { class: "app",
-                div { class: "calculator", onkeypress: move |evt| state.write().handle_keydown(evt),
+                div {
+                    class: "calculator",
+                    onkeypress: move |evt| state.write().handle_keydown(evt),
                     div { class: "calculator-display", {state.read().formatted_display()} }
                     div { class: "calculator-keypad",
                         div { class: "input-keys",
                             div { class: "function-keys",
-                                CalculatorKey {
-                                    name: "key-clear",
-                                    onclick: move |_| state.write().clear_display(),
+                                CalculatorKey { name: "key-clear", onclick: move |_| state.write().clear_display(),
                                     if state.read().display_value == "0" { "C" } else { "AC" }
                                 }
-                                CalculatorKey {
-                                    name: "key-sign",
-                                    onclick: move |_| state.write().toggle_sign(),
-                                    "±"
-                                }
-                                CalculatorKey {
-                                    name: "key-percent",
-                                    onclick: move |_| state.write().toggle_percent(),
-                                    "%"
-                                }
+                                CalculatorKey { name: "key-sign", onclick: move |_| state.write().toggle_sign(), "±" }
+                                CalculatorKey { name: "key-percent", onclick: move |_| state.write().toggle_percent(), "%" }
                             }
                             div { class: "digit-keys",
-                                CalculatorKey {
-                                    name: "key-0",
-                                    onclick: move |_| state.write().input_digit(0),
-                                    "0"
-                                }
-                                CalculatorKey {
-                                    name: "key-dot",
-                                    onclick: move |_|  state.write().input_dot(),
-                                    "●"
-                                }
+                                CalculatorKey { name: "key-0", onclick: move |_| state.write().input_digit(0), "0" }
+                                CalculatorKey { name: "key-dot", onclick: move |_| state.write().input_dot(), "●" }
                                 for k in 1..10 {
                                     CalculatorKey {
                                         key: "{k}",
@@ -102,16 +86,8 @@ fn app() -> Element {
                                 onclick: move |_| state.write().set_operator(Operator::Sub),
                                 "−"
                             }
-                            CalculatorKey {
-                                name: "key-add",
-                                onclick: move |_| state.write().set_operator(Operator::Add),
-                                "+"
-                            }
-                            CalculatorKey {
-                                name: "key-equals",
-                                onclick: move |_| state.write().perform_operation(),
-                                "="
-                            }
+                            CalculatorKey { name: "key-add", onclick: move |_| state.write().set_operator(Operator::Add), "+" }
+                            CalculatorKey { name: "key-equals", onclick: move |_| state.write().perform_operation(), "=" }
                         }
                     }
                 }
@@ -121,17 +97,9 @@ fn app() -> Element {
 }
 
 #[component]
-fn CalculatorKey(
-    #[props(into)] name: String,
-    onclick: EventHandler<MouseEvent>,
-    children: Element,
-) -> Element {
+fn CalculatorKey(name: String, onclick: EventHandler<MouseEvent>, children: Element) -> Element {
     render! {
-        button {
-            class: "calculator-key {name}",
-            onclick: move |e| onclick.call(e),
-            {&children}
-        }
+        button { class: "calculator-key {name}", onclick: move |e| onclick.call(e), {&children} }
     }
 }
 

@@ -261,11 +261,8 @@ fn get_function(component_body: &ComponentBody) -> ItemFn {
             let mut pat = pat.clone();
 
             // rip off mutability, but still write it out eventually
-            match pat.as_mut() {
-                Pat::Ident(ref mut pat_ident) => {
-                    pat_ident.mutability = None;
-                }
-                _ => {}
+            if let Pat::Ident(ref mut pat_ident) = pat.as_mut() {
+                pat_ident.mutability = None;
             }
 
             Some(quote!(mut  #pat))

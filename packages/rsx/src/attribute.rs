@@ -211,7 +211,7 @@ impl ToTokens for ElementAttrValue {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         match self {
             ElementAttrValue::Shorthand(i) => tokens.append_all(quote! { #i }),
-            ElementAttrValue::AttrLiteral(lit) => tokens.append_all(quote! { #lit }),
+            ElementAttrValue::AttrLiteral(lit) => tokens.append_all(quote! { #lit.to_string() }),
             ElementAttrValue::AttrOptionalExpr { condition, value } => {
                 tokens.append_all(quote! { if #condition { Some(#value) } else { None } })
             }
@@ -224,7 +224,7 @@ impl ToTokens for ElementAttrValue {
 impl ElementAttrValue {
     fn to_str_expr(&self) -> Option<TokenStream2> {
         match self {
-            ElementAttrValue::AttrLiteral(lit) => Some(quote!(#lit)),
+            ElementAttrValue::AttrLiteral(lit) => Some(quote!(#lit.to_string())),
             ElementAttrValue::AttrOptionalExpr { value, .. } => value.to_str_expr(),
             ElementAttrValue::AttrExpr(expr) => Some(quote!(#expr.to_string())),
             _ => None,

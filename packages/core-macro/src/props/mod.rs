@@ -173,7 +173,7 @@ mod field_info {
     use quote::quote;
     use syn::spanned::Spanned;
     use syn::{parse::Error, punctuated::Punctuated};
-    use syn::{Expr, Path};
+    use syn::{parse_quote, Expr, Path};
 
     use super::util::{
         expr_to_single_string, ident_to_type, path_to_single_string, strip_raw_ident_prefix,
@@ -202,6 +202,15 @@ mod field_info {
                     builder_attr.default = Some(
                         syn::parse(quote!(::core::default::Default::default()).into()).unwrap(),
                     );
+                }
+
+                // String fields automatically use impl Display
+                if field.ty == parse_quote!(::std::string::String)
+                    || field.ty == parse_quote!(std::string::String)
+                    || field.ty == parse_quote!(string::String)
+                    || field.ty == parse_quote!(String)
+                {
+                    builder_attr.from_displayable = true;
                 }
 
                 // extended field is automatically empty
@@ -263,6 +272,7 @@ mod field_info {
         pub doc: Option<syn::Expr>,
         pub skip: bool,
         pub auto_into: bool,
+        pub from_displayable: bool,
         pub strip_option: bool,
         pub ignore_option: bool,
         pub extends: Vec<Path>,
@@ -412,6 +422,7 @@ mod field_info {
                             handle_fields!(
                                 "skip", skip, "skipped";
                                 "into", auto_into, "calling into() on the argument";
+                                "displayable", from_displayable, "calling to_string() on the argument";
                                 "strip_option", strip_option, "putting the argument in Some(...)";
                             )
                         }
@@ -441,6 +452,10 @@ mod field_info {
                             }
                             "auto_into" => {
                                 self.auto_into = false;
+                                Ok(())
+                            }
+                            "displayable" => {
+                                self.from_displayable = false;
                                 Ok(())
                             }
                             "optional" => {
@@ -953,6 +968,11 @@ Finally, call `.build()` to create the instance of `{name}`.
                     (
                         quote!(impl ::core::convert::Into<#arg_type>),
                         quote!(#field_name.into()),
+                    )
+                } else if field.builder_attr.from_displayable {
+                    (
+                        quote!(impl ::core::fmt::Display),
+                        quote!(#field_name.to_string()),
                     )
                 } else {
                     (quote!(#arg_type), quote!(#field_name))

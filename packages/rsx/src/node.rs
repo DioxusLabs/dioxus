@@ -144,7 +144,7 @@ impl ToTokens for BodyNode {
             }
             BodyNode::Component(comp) => comp.to_tokens(tokens),
             BodyNode::Text(txt) => tokens.append_all(quote! {
-                dioxus_core::DynamicNode::Text(dioxus_core::VText::new(#txt))
+                dioxus_core::DynamicNode::Text(dioxus_core::VText::new(#txt.to_string()))
             }),
             BodyNode::RawExpr(exp) => tokens.append_all(quote! {
                 {

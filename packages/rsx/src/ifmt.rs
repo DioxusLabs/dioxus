@@ -242,7 +242,7 @@ impl ToTokens for IfmtInput {
             .map(|ident| quote!(#ident = #ident));
 
         quote! {
-            format!(
+            ::std::format_args!(
                 #format_literal
                 #(, #positional_args)*
                 #(, #named_args)*

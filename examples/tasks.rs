@@ -22,10 +22,7 @@ fn app() -> Element {
     render! {
         div {
             h1 { "Current count: {count}" }
-            button {
-                onclick: move |_| count.set(0),
-                "Reset the count"
-            }
+            button { onclick: move |_| count.set(0), "Reset the count" }
         }
     }
 }

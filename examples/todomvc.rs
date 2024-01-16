@@ -120,7 +120,7 @@ pub fn TodoEntry(mut todos: Signal<HashMap<u32, TodoItem>>, id: u32) -> Element 
     let contents = use_selector(move || todos.read().get(&id).unwrap().contents.clone());
 
     render! {
-        li { class: if checked() { "completed" }, class: if is_editing() { "editing"},
+        li { class: if checked() { "completed" }, class: if is_editing() { "editing" },
             div { class: "view",
                 input {
                     class: "toggle",
