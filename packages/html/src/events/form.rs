@@ -1,5 +1,6 @@
 use crate::file_data::FileEngine;
 use crate::file_data::HasFileData;
+use std::ops::Deref;
 use std::{collections::HashMap, fmt::Debug};
 
 use dioxus_core::Event;
@@ -17,6 +18,37 @@ pub type FormEvent = Event<FormData>;
 pub enum FormValue {
     Text(String),
     VecText(Vec<String>),
+}
+
+impl From<FormValue> for Vec<String> {
+    fn from(value: FormValue) -> Self {
+        match value {
+            FormValue::Text(s) => vec![s],
+            FormValue::VecText(vec) => vec,
+        }
+    }
+}
+
+impl Deref for FormValue {
+    type Target = [String];
+
+    fn deref(&self) -> &Self::Target {
+        self.as_slice()
+    }
+}
+
+impl FormValue {
+    /// Convenient way to represent Value as slice
+    pub fn as_slice(&self) -> &[String] {
+        match self {
+            FormValue::Text(s) => std::slice::from_ref(s),
+            FormValue::VecText(vec) => vec.as_slice(),
+        }
+    }
+    /// Convert into Vec<String>
+    pub fn to_vec(self) -> Vec<String> {
+        self.into()
+    }
 }
 
 /* DOMEvent:  Send + SyncTarget relatedTarget */

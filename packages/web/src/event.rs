@@ -389,7 +389,25 @@ impl HasFormData for WebFormData {
     }
 
     fn values(&self) -> HashMap<String, FormValue> {
-        let mut values = std::collections::HashMap::new();
+        let mut values = HashMap::new();
+
+        fn insert_value(map: &mut HashMap<String, FormValue>, key: String, new_value: String) {
+            match map.entry(key) {
+                std::collections::hash_map::Entry::Occupied(mut o) => {
+                    let first_value = match o.get_mut() {
+                        FormValue::Text(data) => std::mem::take(data),
+                        FormValue::VecText(vec) => {
+                            vec.push(new_value);
+                            return;
+                        }
+                    };
+                    let _ = o.insert(FormValue::VecText(vec![first_value, new_value]));
+                }
+                std::collections::hash_map::Entry::Vacant(v) => {
+                    let _ = v.insert(FormValue::Text(new_value));
+                }
+            }
+        }
 
         // try to fill in form values
         if let Some(form) = self.element.dyn_ref::<web_sys::HtmlFormElement>() {
@@ -398,20 +416,18 @@ impl HasFormData for WebFormData {
                 if let Ok(array) = value.dyn_into::<Array>() {
                     if let Some(name) = array.get(0).as_string() {
                         if let Ok(item_values) = array.get(1).dyn_into::<Array>() {
-                            let item_values: Vec<String> =
-                                item_values.iter().filter_map(|v| v.as_string()).collect();
-
-                            values.insert(name, FormValue::VecText(item_values));
+                            item_values
+                                .iter()
+                                .filter_map(|v| v.as_string())
+                                .for_each(|v| insert_value(&mut values, name.clone(), v));
                         } else if let Ok(item_value) = array.get(1).dyn_into::<JsValue>() {
-                            values.insert(name, FormValue::Text(item_value.as_string().unwrap()));
+                            insert_value(&mut values, name, item_value.as_string().unwrap());
                         }
                     }
                 }
             }
-        }
-
-        // try to fill in select element values
-        if let Some(select) = self.element.dyn_ref::<web_sys::HtmlSelectElement>() {
+        } else if let Some(select) = self.element.dyn_ref::<web_sys::HtmlSelectElement>() {
+            // try to fill in select element values
             let options = get_select_data(select);
             values.insert("options".to_string(), FormValue::VecText(options));
         }
@@ -536,19 +552,7 @@ export function get_form_data(form) {
     const formData = new FormData(form);
 
     for (let name of formData.keys()) {
-        const fieldType = form.elements[name].type;
-        console.log(fieldType);
-
-        switch (fieldType) {
-            case "select-multiple":
-                values.set(name, formData.getAll(name));
-                break;
-
-            // add cases for fieldTypes that can hold multiple values here
-            default:
-                values.set(name, formData.get(name));
-                break;
-        }
+        values.set(name, formData.getAll(name));
     }
 
     return values;
