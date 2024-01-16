@@ -1,5 +1,5 @@
 use crate::{
-    innerlude::{Scheduler, SchedulerMsg},
+    innerlude::SchedulerMsg,
     runtime::{with_runtime, with_scope},
     Element, ScopeId, Task,
 };
@@ -31,7 +31,6 @@ pub(crate) struct ScopeContext {
     pub(crate) hooks: RefCell<Vec<Box<dyn Any>>>,
     pub(crate) hook_index: Cell<usize>,
 
-    pub(crate) tasks: Rc<Scheduler>,
     pub(crate) spawned_tasks: RefCell<FxHashSet<Task>>,
 }
 
@@ -41,7 +40,6 @@ impl ScopeContext {
         id: ScopeId,
         parent_id: Option<ScopeId>,
         height: u32,
-        tasks: Rc<Scheduler>,
     ) -> Self {
         Self {
             name,
@@ -51,7 +49,6 @@ impl ScopeContext {
             render_count: Cell::new(0),
             suspended: Cell::new(false),
             shared_contexts: RefCell::new(vec![]),
-            tasks,
             spawned_tasks: RefCell::new(FxHashSet::default()),
             hooks: RefCell::new(vec![]),
             hook_index: Cell::new(0),
@@ -62,10 +59,13 @@ impl ScopeContext {
         self.parent_id
     }
 
+    fn sender(&self) -> futures_channel::mpsc::UnboundedSender<SchedulerMsg> {
+        with_runtime(|rt| rt.sender.clone()).unwrap()
+    }
+
     /// Mark this scope as dirty, and schedule a render for it.
     pub fn needs_update(&self) {
-        self.tasks
-            .sender
+        self.sender()
             .unbounded_send(SchedulerMsg::Immediate(self.id))
             .expect("Scheduler to exist if scope exists");
     }
@@ -74,7 +74,7 @@ impl ScopeContext {
     ///
     /// ## Notice: you should prefer using [`Self::schedule_update_any`] and [`Self::scope_id`]
     pub fn schedule_update(&self) -> Arc<dyn Fn() + Send + Sync + 'static> {
-        let (chan, id) = (self.tasks.sender.clone(), self.id);
+        let (chan, id) = (self.sender(), self.id);
         Arc::new(move || drop(chan.unbounded_send(SchedulerMsg::Immediate(id))))
     }
 
@@ -84,7 +84,7 @@ impl ScopeContext {
     ///
     /// This method should be used when you want to schedule an update for a component
     pub fn schedule_update_any(&self) -> Arc<dyn Fn(ScopeId) + Send + Sync> {
-        let chan = self.tasks.sender.clone();
+        let chan = self.sender();
         Arc::new(move |id| {
             chan.unbounded_send(SchedulerMsg::Immediate(id)).unwrap();
         })
@@ -228,7 +228,7 @@ impl ScopeContext {
 
     /// Pushes the future onto the poll queue to be polled after the component renders.
     pub fn push_future(&self, fut: impl Future<Output = ()> + 'static) -> Task {
-        let id = self.tasks.spawn(self.id, fut);
+        let id = with_runtime(|rt| rt.spawn(self.id, fut)).expect("Runtime to exist");
         self.spawned_tasks.borrow_mut().insert(id);
         id
     }
@@ -243,14 +243,14 @@ impl ScopeContext {
     /// This is good for tasks that need to be run after the component has been dropped.
     pub fn spawn_forever(&self, fut: impl Future<Output = ()> + 'static) -> Task {
         // The root scope will never be unmounted so we can just add the task at the top of the app
-        self.tasks.spawn(ScopeId::ROOT, fut)
+        with_runtime(|rt| rt.spawn(ScopeId::ROOT, fut)).expect("Runtime to exist")
     }
 
     /// Informs the scheduler that this task is no longer needed and should be removed.
     ///
     /// This drops the task immediately.
     pub fn remove_future(&self, id: Task) {
-        self.tasks.remove(id);
+        with_runtime(|rt| rt.remove(id)).expect("Runtime to exist");
     }
 
     /// Mark this component as suspended and then return None
@@ -314,10 +314,13 @@ impl ScopeContext {
 
 impl Drop for ScopeContext {
     fn drop(&mut self) {
-        // Drop all spawned tasks
-        for id in self.spawned_tasks.borrow().iter() {
-            self.tasks.remove(*id);
-        }
+        with_runtime(|rt| {
+            // Drop all spawned tasks
+            for id in self.spawned_tasks.borrow().iter() {
+                rt.remove(*id);
+            }
+        })
+        .expect("Runtime to exist")
     }
 }
 

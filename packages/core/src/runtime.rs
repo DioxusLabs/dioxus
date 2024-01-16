@@ -1,6 +1,13 @@
 use std::cell::{Cell, Ref, RefCell};
 
-use crate::{innerlude::Scheduler, scope_context::ScopeContext, scopes::ScopeId};
+use slab::Slab;
+
+use crate::{
+    innerlude::{LocalTask, SchedulerMsg},
+    scope_context::ScopeContext,
+    scopes::ScopeId,
+    Task,
+};
 use std::rc::Rc;
 
 thread_local! {
@@ -52,23 +59,30 @@ where
 /// A global runtime that is shared across all scopes that provides the async runtime and context API
 pub struct Runtime {
     pub(crate) scope_contexts: RefCell<Vec<Option<ScopeContext>>>,
-    pub(crate) scheduler: Rc<Scheduler>,
 
     // We use this to track the current scope
     pub(crate) scope_stack: RefCell<Vec<ScopeId>>,
+
+    // We use this to track the current task
+    pub(crate) current_task: Cell<Option<Task>>,
+
     pub(crate) rendering: Cell<bool>,
+
+    /// Tasks created with cx.spawn
+    pub tasks: RefCell<Slab<LocalTask>>,
+
+    pub sender: futures_channel::mpsc::UnboundedSender<SchedulerMsg>,
 }
 
 impl Runtime {
-    pub(crate) fn new(scheduler: Rc<Scheduler>) -> Rc<Self> {
+    pub(crate) fn new(tx: futures_channel::mpsc::UnboundedSender<SchedulerMsg>) -> Rc<Self> {
         Rc::new(Self {
-            scheduler,
-
             scope_contexts: Default::default(),
-
             scope_stack: Default::default(),
-
+            current_task: Default::default(),
             rendering: Cell::new(true),
+            sender: tx,
+            tasks: Default::default(),
         })
     }
 

@@ -8,7 +8,7 @@ impl VirtualDom {
     /// queue
     pub(crate) fn handle_task_wakeup(&mut self, id: Task) {
         let _runtime = RuntimeGuard::new(self.runtime.clone());
-        let mut tasks = self.runtime.scheduler.tasks.borrow_mut();
+        let mut tasks = self.runtime.tasks.borrow_mut();
 
         let task = match tasks.get(id.0) {
             Some(task) => task,

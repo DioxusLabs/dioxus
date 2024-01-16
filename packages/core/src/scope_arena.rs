@@ -24,8 +24,7 @@ impl VirtualDom {
             last_rendered_node: Default::default(),
         });
 
-        let context =
-            ScopeContext::new(name, id, parent_id, height, self.runtime.scheduler.clone());
+        let context = ScopeContext::new(name, id, parent_id, height);
         self.runtime.create_context_at(id, context);
 
         scope

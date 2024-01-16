@@ -17,21 +17,3 @@ pub(crate) enum SchedulerMsg {
     /// A task has woken and needs to be progressed
     TaskNotified(Task),
 }
-
-use std::{cell::RefCell, rc::Rc};
-
-pub(crate) struct Scheduler {
-    pub sender: futures_channel::mpsc::UnboundedSender<SchedulerMsg>,
-
-    /// Tasks created with cx.spawn
-    pub tasks: RefCell<Slab<LocalTask>>,
-}
-
-impl Scheduler {
-    pub fn new(sender: futures_channel::mpsc::UnboundedSender<SchedulerMsg>) -> Rc<Self> {
-        Rc::new(Scheduler {
-            sender,
-            tasks: RefCell::new(Slab::new()),
-        })
-    }
-}

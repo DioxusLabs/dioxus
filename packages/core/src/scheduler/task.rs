@@ -1,7 +1,7 @@
 use futures_util::task::ArcWake;
 
-use super::{Scheduler, SchedulerMsg};
-use crate::innerlude::{push_future, remove_future};
+use super::SchedulerMsg;
+use crate::innerlude::{push_future, remove_future, Runtime};
 use crate::ScopeId;
 use std::cell::RefCell;
 use std::future::Future;
@@ -42,11 +42,12 @@ impl Task {
 /// the task itself is the waker
 pub(crate) struct LocalTask {
     pub scope: ScopeId,
+    pub parent: Option<Task>,
     pub task: RefCell<Pin<Box<dyn Future<Output = ()> + 'static>>>,
     pub waker: Waker,
 }
 
-impl Scheduler {
+impl Runtime {
     /// Start a new future on the same thread as the rest of the VirtualDom.
     ///
     /// This future will not contribute to suspense resolving, so you should primarily use this for reacting to changes
@@ -63,6 +64,7 @@ impl Scheduler {
         let task_id = Task(entry.key());
 
         let task = LocalTask {
+            parent: self.current_task(),
             task: RefCell::new(Box::pin(task)),
             scope,
             waker: futures_util::task::waker(Arc::new(LocalTaskHandle {
@@ -89,6 +91,11 @@ impl Scheduler {
     /// This does not abort the task, so you'll want to wrap it in an abort handle if that's important to you
     pub fn remove(&self, id: Task) -> Option<LocalTask> {
         self.tasks.borrow_mut().try_remove(id.0)
+    }
+
+    /// Get the currently running task
+    pub fn current_task(&self) -> Option<Task> {
+        self.current_task.get()
     }
 }
 

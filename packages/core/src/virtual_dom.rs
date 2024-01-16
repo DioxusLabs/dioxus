@@ -6,8 +6,8 @@ use crate::{
     any_props::{BoxedAnyProps, VProps},
     arena::ElementId,
     innerlude::{
-        DirtyScope, ElementRef, ErrorBoundary, NoOpMutations, Scheduler, SchedulerMsg, ScopeState,
-        VNodeMount, WriteMutations,
+        DirtyScope, ElementRef, ErrorBoundary, NoOpMutations, SchedulerMsg, ScopeState, VNodeMount,
+        WriteMutations,
     },
     nodes::RenderReturn,
     nodes::{Template, TemplateId},
@@ -269,10 +269,10 @@ impl VirtualDom {
     /// ```
     pub fn new_with_props<P: Clone + 'static>(root: fn(P) -> Element, root_props: P) -> Self {
         let (tx, rx) = futures_channel::mpsc::unbounded();
-        let scheduler = Scheduler::new(tx);
+
         let mut dom = Self {
             rx,
-            runtime: Runtime::new(scheduler),
+            runtime: Runtime::new(tx),
             scopes: Default::default(),
             dirty_scopes: Default::default(),
             templates: Default::default(),
