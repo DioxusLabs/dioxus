@@ -584,12 +584,12 @@ impl RouteEnum {
         }
 
         quote! {
-            impl dioxus_router::routable::Routable for #name where Self: Clone {
-                const SITE_MAP: &'static [dioxus_router::routable::SiteMapSegment] = &[
+            impl ::dioxus_router::routable::Routable for #name where Self: Clone {
+                const SITE_MAP: &'static [::dioxus_router::routable::SiteMapSegment] = &[
                     #(#site_map,)*
                 ];
 
-                fn render<'a>(&self, cx: &'a dioxus::prelude::ScopeState, level: usize) -> dioxus::prelude::Element {
+                fn render(&self, level: usize) -> ::dioxus::prelude::Element {
                     let myself = self.clone();
                     match (level, myself) {
                         #(#matches)*

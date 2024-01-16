@@ -48,7 +48,7 @@ fn app() -> Element {
 /// Suspense is achieved my moving the future into only the component that
 /// actually renders the data.
 fn Doggo() -> Element {
-    let fut = use_future(|_| async move {
+    let fut = use_future(|| async move {
         #[derive(serde::Deserialize)]
         struct DogApi {
             message: String,
@@ -61,7 +61,7 @@ fn Doggo() -> Element {
             .await
     });
 
-    match fut.value() {
+    match fut.value().read().as_ref() {
         Some(Ok(resp)) => rsx! {
             button {
                 onclick: move |_| fut.restart(),

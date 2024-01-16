@@ -13,7 +13,7 @@ fn main() {
     // Or we can render rsx! calls themselves
     println!(
         "{}",
-        dioxus_ssr::render_lazy(rsx! {
+        dioxus_ssr::render_element(rsx! {
             div {
                 h1 { "Hello, world!" }
             }

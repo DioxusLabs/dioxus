@@ -292,6 +292,14 @@ impl<T: 'static> Signal<T> {
         *self.write() = value;
     }
 
+    /// Set the value of the signal without triggering an update on subscribers.
+    ///
+    /// todo: we should make it so setting while rendering doesn't trigger an update s
+    pub fn set_untracked(&self, value: T) {
+        let mut inner = self.inner.write();
+        inner.value = value;
+    }
+
     /// Run a closure with a reference to the signal's value.
     /// If the signal has been dropped, this will panic.
     #[track_caller]

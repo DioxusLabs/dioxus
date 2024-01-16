@@ -22,7 +22,7 @@ dioxus-signals = { workspace = true, optional = true }
 dioxus-hot-reload = { workspace = true, optional = true }
 
 [features]
-default = ["macro", "html", "hot-reload", "signals"]
+default = ["macro", "html", "hot-reload", "signals", "hooks"]
 signals = ["dioxus-signals"]
 macro = ["dioxus-core-macro", "dioxus-rsx"]
 html = ["dioxus-html"]

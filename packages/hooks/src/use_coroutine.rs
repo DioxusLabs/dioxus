@@ -1,4 +1,6 @@
-use dioxus_core::{ScopeState, Task};
+use dioxus_core::prelude::{consume_context, provide_context, push_future, use_hook};
+use dioxus_core::Task;
+use dioxus_signals::{CopyValue, Signal};
 pub use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use std::future::Future;
 
@@ -63,102 +65,76 @@ use std::future::Future;
 ///     }
 /// })
 /// ```
-pub fn use_coroutine<M, G, F>(nit: G) -> &Coroutine<M>
+pub fn use_coroutine<M, G, F>(init: G) -> Coroutine<M>
 where
     M: 'static,
     G: FnOnce(UnboundedReceiver<M>) -> F,
     F: Future<Output = ()> + 'static,
 {
-    cx.use_hook(|| {
+    let coroutine = use_hook(|| {
+        provide_context(Coroutine {
+            needs_regen: Signal::new(true),
+            tx: CopyValue::new(None),
+            task: CopyValue::new(None),
+        })
+    });
+
+    // We do this here so we can capture data with FnOnce
+    // this might not be the best API
+    if *coroutine.needs_regen.read() {
         let (tx, rx) = futures_channel::mpsc::unbounded();
-        let task = cx.push_future(init(rx));
-        cx.provide_context(Coroutine { tx, task })
-    })
+        let task = push_future(init(rx)).unwrap();
+        coroutine.tx.set(Some(tx));
+        coroutine.task.set(Some(task));
+        coroutine.needs_regen.set_untracked(false);
+    }
+
+    coroutine
 }
 
 /// Get a handle to a coroutine higher in the tree
 ///
 /// See the docs for [`use_coroutine`] for more details.
 #[must_use]
-pub fn use_coroutine_handle<M: 'static>() -> Option<&Coroutine<M>> {
-    cx.use_hook(|| cx.consume_context::<Coroutine<M>>())
-        .as_ref()
+pub fn use_coroutine_handle<M: 'static>() -> Option<Coroutine<M>> {
+    use_hook(|| consume_context::<Coroutine<M>>())
 }
 
-pub struct Coroutine<T> {
-    tx: UnboundedSender<T>,
-    task: Task,
-}
-
-// for use in futures
-impl<T> Clone for Coroutine<T> {
-    fn clone(&self) -> Self {
-        Self {
-            tx: self.tx.clone(),
-            task: self.task,
-        }
-    }
+#[derive(PartialEq)]
+pub struct Coroutine<T: 'static> {
+    needs_regen: Signal<bool>,
+    tx: CopyValue<Option<UnboundedSender<T>>>,
+    task: CopyValue<Option<Task>>,
 }
 
 impl<T> Coroutine<T> {
-    /// Get the ID of this coroutine
-    #[must_use]
-    pub fn task_id(&self) -> Task {
-        self.task
+    /// Get the underlying task handle
+    pub fn task(&self) -> Task {
+        self.task.read().clone().unwrap()
     }
 
     /// Send a message to the coroutine
     pub fn send(&self, msg: T) {
-        let _ = self.tx.unbounded_send(msg);
+        let _ = self.tx.read().as_ref().unwrap().unbounded_send(msg);
+    }
+
+    /// Restart this coroutine
+    ///
+    /// Forces the component to re-render, which will re-invoke the coroutine.
+    pub fn restart(&self) {
+        self.needs_regen.set(true);
+        self.task().stop();
     }
 }
 
-impl<T> PartialEq for Coroutine<T> {
-    fn eq(&self, other: &Self) -> bool {
-        self.task == other.task
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    #![allow(unused)]
-
-    use super::*;
-    use dioxus_core::prelude::*;
-    use futures_channel::mpsc::unbounded;
-    use futures_util::StreamExt;
-
-    fn app(name: String) -> Element {
-        let task = use_coroutine(|mut rx: UnboundedReceiver<i32>| async move {
-            while let Some(msg) = rx.next().await {
-                println!("got message: {msg}");
-            }
-        });
-
-        let task2 = use_coroutine(view_task);
-
-        let task3 = use_coroutine(|rx| complex_task(rx, 10));
-
-        todo!()
-    }
-
-    async fn view_task(mut rx: UnboundedReceiver<i32>) {
-        while let Some(msg) = rx.next().await {
-            println!("got message: {msg}");
-        }
-    }
-
-    enum Actions {
-        CloseAll,
-        OpenAll,
-    }
-
-    async fn complex_task(mut rx: UnboundedReceiver<Actions>, name: i32) {
-        while let Some(msg) = rx.next().await {
-            match msg {
-                Actions::CloseAll => todo!(),
-                Actions::OpenAll => todo!(),
-            }
+// manual impl since deriving doesn't work with generics
+impl<T> Copy for Coroutine<T> {}
+impl<T> Clone for Coroutine<T> {
+    fn clone(&self) -> Self {
+        Self {
+            tx: self.tx,
+            task: self.task,
+            needs_regen: self.needs_regen,
         }
     }
 }

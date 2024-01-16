@@ -45,7 +45,7 @@ fn app() -> Element {
             height: "50%",
             background_color: "red",
             onmounted: move |cx| div_element.set(Some(cx.inner().clone())),
-            "This element is {dimensions.read():?}"
+            "This element is {*dimensions():?}"
         }
 
         button {

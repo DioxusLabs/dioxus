@@ -5,8 +5,8 @@ fn main() {
 }
 
 fn app() -> Element {
-    let future = use_future(|_| async move {
-        let eval = eval(
+    let future = use_future(|| async move {
+        let mut eval = eval(
             r#"
                 dioxus.send("Hi from JS!");
                 let msg = await dioxus.recv();
@@ -22,12 +22,8 @@ fn app() -> Element {
         res
     });
 
-    match future.value() {
-        Some(v) => rsx!(
-            p { "{v}" }
-        ),
-        _ => rsx!(
-            p { "hello" }
-        ),
+    match future.value().read().as_ref() {
+        Some(v) => rsx!( p { "{v}" } ),
+        _ => rsx!( p { "waiting.." } ),
     }
 }

@@ -22,7 +22,7 @@ fn app() -> Element {
         dioxus_desktop::window().new_window(
             VirtualDom::new_with_props(compose, tx.clone()),
             Default::default(),
-        )
+        );
     };
 
     rsx! {
@@ -39,7 +39,7 @@ fn app() -> Element {
     }
 }
 
-fn compose(receiver: UnboundedSender<String>) -> Element {
+fn compose(tx: UnboundedSender<String>) -> Element {
     let user_input = use_signal(String::new);
 
     rsx! {
@@ -48,7 +48,7 @@ fn compose(receiver: UnboundedSender<String>) -> Element {
 
             button {
                 onclick: move |_| {
-                    cx.props.app_tx.send(user_input.get().clone());
+                    tx.send(user_input.get().clone());
                     dioxus_desktop::window().close();
                 },
                 "Click to send"

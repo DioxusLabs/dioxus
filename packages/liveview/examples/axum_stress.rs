@@ -3,7 +3,7 @@ use dioxus::prelude::*;
 
 fn app() -> Element {
     let state = use_signal(|| 0);
-    use_future(|_| {
+    use_future(|| {
         to_owned![state];
         async move {
             loop {

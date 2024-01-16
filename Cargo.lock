@@ -2631,6 +2631,7 @@ dependencies = [
  "dioxus",
  "dioxus-core",
  "dioxus-debug-cell",
+ "dioxus-signals",
  "futures-channel",
  "futures-util",
  "slab",

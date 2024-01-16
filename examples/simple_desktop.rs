@@ -54,13 +54,13 @@ fn NavBar() -> Element {
 
 #[component]
 fn Home() -> Element {
-    log::debug!("rendering home {:?}", cx.scope_id());
+    log::debug!("rendering home {:?}", current_scope_id());
     render! { h1 { "Home" } }
 }
 
 #[component]
 fn BlogList() -> Element {
-    log::debug!("rendering blog list {:?}", cx.scope_id());
+    log::debug!("rendering blog list {:?}", current_scope_id());
     render! { div { "Blog List" } }
 }
 

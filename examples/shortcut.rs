@@ -8,7 +8,7 @@ fn main() {
 fn app() -> Element {
     let toggled = use_signal(|| false);
 
-    use_global_shortcut("ctrl+s", move || toggled.toggle());
+    _ = use_global_shortcut("ctrl+s", move || toggled.toggle());
 
     rsx!("toggle: {toggled}")
 }

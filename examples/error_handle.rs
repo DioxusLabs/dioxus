@@ -1,7 +1,7 @@
 use dioxus::{core::CapturedError, prelude::*};
 
 fn main() {
-    dioxus_desktop::launch(App);
+    dioxus_desktop::launch(app);
 }
 
 fn app() -> Element {
