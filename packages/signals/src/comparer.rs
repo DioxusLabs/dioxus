@@ -27,14 +27,14 @@ impl<R: Eq + Hash> Comparer<R> {
 
             if let Some(previous) = previous.take() {
                 if let Some(value) = subscribers.get(&previous) {
-                    value.set(false);
+                    *value.write_unchecked() = false;
                 }
             }
 
             let current = f();
 
             if let Some(value) = subscribers.get(&current) {
-                value.set(true);
+                *value.write_unchecked() = true;
             }
 
             *previous = Some(current);
@@ -59,14 +59,14 @@ impl<R: Eq + Hash, S: Storage<SignalData<bool>>> Comparer<R, S> {
 
             if let Some(previous) = previous.take() {
                 if let Some(value) = subscribers.get(&previous) {
-                    value.set(false);
+                    *value.write_unchecked() = false;
                 }
             }
 
             let current = f();
 
             if let Some(value) = subscribers.get(&current) {
-                value.set(true);
+                *value.write_unchecked() = true;
             }
 
             *previous = Some(current);
@@ -136,6 +136,6 @@ impl<R, S: Storage<SignalData<bool>>> Copy for Comparer<R, S> {}
 /// }
 /// ```
 #[must_use]
-pub fn use_comparer<R: Eq + Hash>(cx: &ScopeState, f: impl FnMut() -> R + 'static) -> Comparer<R> {
-    *cx.use_hook(move || Comparer::new(f))
+pub fn use_comparer<R: Eq + Hash>(f: impl FnMut() -> R + 'static) -> Comparer<R> {
+    use_hook(move || Comparer::new(f))
 }

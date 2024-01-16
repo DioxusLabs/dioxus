@@ -72,14 +72,13 @@ pub fn use_maybe_sync_selector<R: PartialEq, S: Storage<SignalData<R>>>(
 #[track_caller]
 #[must_use = "Consider using `use_effect` to rerun a callback when dependencies change"]
 pub fn use_selector_with_dependencies<R: PartialEq, D: Dependency>(
-    cx: &ScopeState,
     dependencies: D,
     f: impl FnMut(D::Out) -> R + 'static,
 ) -> ReadOnlySignal<R>
 where
     D::Out: 'static,
 {
-    use_maybe_sync_selector_with_dependencies(cx, dependencies, f)
+    use_maybe_sync_selector_with_dependencies(dependencies, f)
 }
 
 /// Creates a new Selector that may be sync with some local dependencies. The selector will be run immediately and whenever any signal it reads or any dependencies it tracks changes
@@ -105,15 +104,14 @@ pub fn use_maybe_sync_selector_with_dependencies<
     D: Dependency,
     S: Storage<SignalData<R>>,
 >(
-    cx: &ScopeState,
     dependencies: D,
     mut f: impl FnMut(D::Out) -> R + 'static,
 ) -> ReadOnlySignal<R, S>
 where
     D::Out: 'static,
 {
-    let dependencies_signal = use_signal(cx, || dependencies.out());
-    let selector = *cx.use_hook(|| {
+    let mut dependencies_signal = use_signal(|| dependencies.out());
+    let selector = use_hook(|| {
         maybe_sync_selector(move || {
             let deref = &*dependencies_signal.read();
             f(deref.clone())
@@ -141,7 +139,7 @@ pub fn selector<R: PartialEq>(f: impl FnMut() -> R + 'static) -> ReadOnlySignal<
 pub fn maybe_sync_selector<R: PartialEq, S: Storage<SignalData<R>>>(
     mut f: impl FnMut() -> R + 'static,
 ) -> ReadOnlySignal<R, S> {
-    let state = Signal::<R, S> {
+    let mut state = Signal::<R, S> {
         inner: CopyValue::invalid(),
     };
     let effect = Effect {
@@ -154,8 +152,7 @@ pub fn maybe_sync_selector<R: PartialEq, S: Storage<SignalData<R>>>(
     }
     state.inner.value.set(SignalData {
         subscribers: Default::default(),
-        effect_subscribers: Default::default(),
-        update_any: schedule_update_any().expect("in a virtual dom"),
+        update_any: schedule_update_any(),
         value: f(),
         effect_ref: get_effect_ref(),
     });

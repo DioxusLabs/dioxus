@@ -104,13 +104,10 @@ pub fn use_signal<T: 'static>(f: impl FnOnce() -> T) -> Signal<T, UnsyncStorage>
 /// ```
 #[must_use]
 #[track_caller]
-pub fn use_signal_sync<T: Send + Sync + 'static>(
-    cx: &ScopeState,
-    f: impl FnOnce() -> T,
-) -> Signal<T, SyncStorage> {
+pub fn use_signal_sync<T: Send + Sync + 'static>(f: impl FnOnce() -> T) -> Signal<T, SyncStorage> {
     #[cfg(debug_assertions)]
     let caller = std::panic::Location::caller();
-    *cx.use_hook(|| {
+    use_hook(|| {
         Signal::new_with_caller(
             f(),
             #[cfg(debug_assertions)]
@@ -467,7 +464,7 @@ impl<T: 'static, S: Storage<SignalData<T>>> PartialEq for Signal<T, S> {
 /// Allow calling a signal with signal() syntax
 ///
 /// Currently only limited to copy types, though could probably specialize for string/arc/rc
-impl<T, S: Storage<SignalData<T>> + 'static> Deref for Signal<T, S> {
+impl<T: Copy, S: Storage<SignalData<T>> + 'static> Deref for Signal<T, S> {
     type Target = dyn Fn() -> T;
 
     fn deref(&self) -> &Self::Target {
@@ -634,7 +631,7 @@ impl<T: 'static, S: Storage<SignalData<T>>> PartialEq for ReadOnlySignal<T, S> {
     }
 }
 
-impl<T, S: Storage<SignalData<T>> + 'static> Deref for ReadOnlySignal<T, S> {
+impl<T: Copy, S: Storage<SignalData<T>> + 'static> Deref for ReadOnlySignal<T, S> {
     type Target = dyn Fn() -> T;
 
     fn deref(&self) -> &Self::Target {

@@ -23,7 +23,7 @@ fn current_owner<S: Storage<T>, T>() -> Rc<Owner<S>> {
             Some(rt) => rt,
             None => {
                 let owner = Rc::new(S::owner());
-                provide_context(owner).expect("in a virtual dom")
+                provide_context(owner)
             }
         },
     }
@@ -34,7 +34,7 @@ fn owner_in_scope<S: Storage<T>, T>(scope: ScopeId) -> Rc<Owner<S>> {
         Some(rt) => rt,
         None => {
             let owner = Rc::new(S::owner());
-            provide_context_to_scope(scope, owner).expect("in a virtual dom")
+            scope.provide_context(owner)
         }
     }
 }
@@ -159,7 +159,7 @@ impl<T: 'static, S: Storage<T>> CopyValue<T, S> {
         self.value.try_write()
     }
 
-    pub fn write_unchecked(&self) -> GenerationalRefMut<T> {
+    pub fn write_unchecked(&self) -> S::Mut {
         self.value.write()
     }
 
@@ -205,7 +205,7 @@ impl<T: 'static, S: Storage<T>> PartialEq for CopyValue<T, S> {
     }
 }
 
-impl<T, S: Storage<T>> Deref for CopyValue<T, S> {
+impl<T: Copy, S: Storage<T>> Deref for CopyValue<T, S> {
     type Target = dyn Fn() -> T;
 
     fn deref(&self) -> &Self::Target {

@@ -7,8 +7,7 @@ use parking_lot::RwLock;
 use rustc_hash::FxHashMap;
 use std::fmt::{self, Formatter};
 
-use crate::use_signal;
-use crate::{dependency::Dependency, CopyValue};
+use crate::CopyValue;
 
 thread_local! {
     pub(crate)static EFFECT_STACK: EffectStack = EffectStack::default();

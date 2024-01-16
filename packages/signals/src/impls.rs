@@ -177,42 +177,6 @@ macro_rules! write_impls {
                 self.with_mut(|v| v.split_off(at))
             }
         }
-
-        impl<T: 'static> $ty<Option<T>> {
-            /// Takes the value out of the Option.
-            #[track_caller]
-            pub fn take(&mut self) -> Option<T> {
-                self.with_mut(|v| v.take())
-            }
-
-            /// Replace the value in the Option.
-            #[track_caller]
-            pub fn replace(&mut self, value: T) -> Option<T> {
-                self.with_mut(|v| v.replace(value))
-            }
-
-            /// Gets the value out of the Option, or inserts the given value if the Option is empty.
-            #[track_caller]
-            pub fn get_or_insert(&mut self, default: T) -> GenerationalRef<T> {
-                self.get_or_insert_with(|| default)
-            }
-
-            /// Gets the value out of the Option, or inserts the value returned by the given function if the Option is empty.
-            #[track_caller]
-            pub fn get_or_insert_with(
-                &mut self,
-                default: impl FnOnce() -> T,
-            ) -> GenerationalRef<T> {
-                let borrow = self.read();
-                if borrow.is_none() {
-                    drop(borrow);
-                    self.write_unchecked().replace(default());
-                    GenerationalRef::map(self.read(), |v| v.as_ref().unwrap())
-                } else {
-                    GenerationalRef::map(borrow, |v| v.as_ref().unwrap())
-                }
-            }
-        }
     };
 }
 
@@ -324,23 +288,23 @@ write_impls!(Signal, Storage<SignalData<T>>, Storage<SignalData<Vec<T>>>);
 
 impl<T: 'static, S: Storage<SignalData<Option<T>>>> Signal<Option<T>, S> {
     /// Takes the value out of the Option.
-    pub fn take(&self) -> Option<T> {
+    pub fn take(&mut self) -> Option<T> {
         self.with_mut(|v| v.take())
     }
 
     /// Replace the value in the Option.
-    pub fn replace(&self, value: T) -> Option<T> {
+    pub fn replace(&mut self, value: T) -> Option<T> {
         self.with_mut(|v| v.replace(value))
     }
 
     /// Gets the value out of the Option, or inserts the given value if the Option is empty.
-    pub fn get_or_insert(&self, default: T) -> <<S::Ref as Mappable<SignalData<Option<T>>>>::Mapped<Option<T>> as Mappable<Option<T>>>::Mapped<T>{
+    pub fn get_or_insert(&mut self, default: T) -> <<S::Ref as Mappable<SignalData<Option<T>>>>::Mapped<Option<T>> as Mappable<Option<T>>>::Mapped<T>{
         self.get_or_insert_with(|| default)
     }
 
     /// Gets the value out of the Option, or inserts the value returned by the given function if the Option is empty.
     pub fn get_or_insert_with(
-        &self,
+        &mut self,
         default: impl FnOnce() -> T,
     ) -><<S::Ref as Mappable<SignalData<Option<T>>>>::Mapped<Option<T>> as Mappable<Option<T>>>::Mapped<T>{
         let borrow = self.read();

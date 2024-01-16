@@ -2881,11 +2881,17 @@ dependencies = [
  "dioxus",
  "dioxus-core",
  "dioxus-desktop",
+ "futures-channel",
+ "futures-util",
  "generational-box",
+ "once_cell",
+ "parking_lot",
+ "rustc-hash",
  "serde",
  "simple_logger",
  "tokio",
  "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -3868,6 +3874,8 @@ dependencies = [
 name = "generational-box"
 version = "0.4.3"
 dependencies = [
+ "criterion 0.3.6",
+ "parking_lot",
  "rand 0.8.5",
 ]
 
