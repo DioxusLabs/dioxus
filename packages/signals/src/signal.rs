@@ -245,7 +245,17 @@ impl<T: 'static> Signal<T> {
         GenerationalRef::map(inner, |v| &v.value)
     }
 
+    /// Get a mutable reference to the signal's value.
+    ///
+    /// If the signal has been dropped, this will panic.
+    #[track_caller]
+    pub fn write<'a>(&'a mut self) -> Write<'a, T> {
+        self.write_unchecked()
+    }
+
     /// Write to the value through an immutable reference.
+    ///
+    /// This is public since it's useful in many scenarios, but we generally recommend mutation through [`Self::write`] instead.
     pub fn write_unchecked(&self) -> Write<T> {
         let inner = self.inner.write();
         let borrow = GenerationalRefMut::map(inner, |v| &mut v.value);
@@ -253,14 +263,6 @@ impl<T: 'static> Signal<T> {
             write: borrow,
             signal: SignalSubscriberDrop { signal: *self },
         }
-    }
-
-    /// Get a mutable reference to the signal's value.
-    ///
-    /// If the signal has been dropped, this will panic.
-    #[track_caller]
-    pub fn write<'a>(&'a mut self) -> Write<'a, T> {
-        self.write_unchecked()
     }
 
     fn update_subscribers(&self) {

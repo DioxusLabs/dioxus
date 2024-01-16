@@ -80,8 +80,7 @@ pub fn app() -> Element {
 }
 
 #[component]
-pub fn TodoHeader(todos: Signal<HashMap<u32, TodoItem>>) -> Element {
-    let mut todos = todos;
+pub fn TodoHeader(mut todos: Signal<HashMap<u32, TodoItem>>) -> Element {
     let mut draft = use_signal(|| "".to_string());
     let mut todo_id = use_signal(|| 0);
 
@@ -115,8 +114,7 @@ pub fn TodoHeader(todos: Signal<HashMap<u32, TodoItem>>) -> Element {
 }
 
 #[component]
-pub fn TodoEntry(todos: Signal<HashMap<u32, TodoItem>>, id: u32) -> Element {
-    let mut todos = todos;
+pub fn TodoEntry(mut todos: Signal<HashMap<u32, TodoItem>>, id: u32) -> Element {
     let mut is_editing = use_signal(|| false);
     let checked = use_selector(move || todos.read().get(&id).unwrap().checked);
     let contents = use_selector(move || todos.read().get(&id).unwrap().contents.clone());
@@ -164,12 +162,10 @@ pub fn TodoEntry(todos: Signal<HashMap<u32, TodoItem>>, id: u32) -> Element {
 
 #[component]
 pub fn ListFooter(
-    todos: Signal<HashMap<u32, TodoItem>>,
+    mut todos: Signal<HashMap<u32, TodoItem>>,
     active_todo_count: ReadOnlySignal<usize>,
-    filter: Signal<FilterState>,
+    mut filter: Signal<FilterState>,
 ) -> Element {
-    let mut todos = todos;
-    let mut filter = filter;
     let show_clear_completed = use_selector(move || todos.read().values().any(|todo| todo.checked));
 
     rsx! {

@@ -46,12 +46,20 @@ fn get_props_struct(component_body: &ComponentBody) -> ItemStruct {
         ..
     } = sig;
 
-    // Skip first arg since that's the context
     let struct_fields = inputs.iter().map(move |f| {
         match f {
             FnArg::Receiver(_) => unreachable!(), // Unreachable because of ComponentBody parsing
             FnArg::Typed(pt) => {
-                let arg_pat = &pt.pat; // Pattern (identifier)
+                let arg_pat = match pt.pat.as_ref() {
+                    // rip off mutability
+                    Pat::Ident(f) => {
+                        let mut f = f.clone();
+                        f.mutability = None;
+                        quote! { #f }
+                    }
+                    a => quote! { #a },
+                };
+
                 let arg_colon = &pt.colon_token;
                 let arg_ty = &pt.ty; // Type
                 let arg_attrs = &pt.attrs; // Attributes
@@ -247,7 +255,21 @@ fn get_function(component_body: &ComponentBody) -> ItemFn {
     // Skip first arg since that's the context
     let struct_field_names = inputs.iter().filter_map(|f| match f {
         FnArg::Receiver(_) => unreachable!(), // ComponentBody prohibits receiver parameters.
-        FnArg::Typed(pt) => Some(&pt.pat),
+        FnArg::Typed(pt) => {
+            let pat = &pt.pat;
+
+            let mut pat = pat.clone();
+
+            // rip off mutability, but still write it out eventually
+            match pat.as_mut() {
+                Pat::Ident(ref mut pat_ident) => {
+                    pat_ident.mutability = None;
+                }
+                _ => {}
+            }
+
+            Some(quote!(mut  #pat))
+        }
     });
 
     let first_lifetime = if let Some(GenericParam::Lifetime(lt)) = generics.params.first() {
@@ -293,7 +315,7 @@ fn get_function(component_body: &ComponentBody) -> ItemFn {
     parse_quote! {
         #(#fn_attrs)*
         #(#props_docs)*
-        #asyncness #vis fn #fn_ident #fn_generics (__props: #struct_ident #generics_no_bounds) #fn_output
+        #asyncness #vis fn #fn_ident #fn_generics (mut __props: #struct_ident #generics_no_bounds) #fn_output
         #where_clause
         {
             let #struct_ident { #(#struct_field_names),* } = __props;

@@ -57,7 +57,7 @@ pub struct HistoryButtonProps {
 #[component]
 pub fn GoBackButton(
     /// The props...
-    props: HistoryButtonProps,
+    mut props: HistoryButtonProps,
 ) -> Element {
     let HistoryButtonProps { children } = props;
 
@@ -127,7 +127,7 @@ pub fn GoBackButton(
 #[component]
 pub fn GoForwardButton(
     /// Props...
-    props: HistoryButtonProps,
+    mut props: HistoryButtonProps,
 ) -> Element {
     let HistoryButtonProps { children } = props;
 

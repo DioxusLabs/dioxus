@@ -17,7 +17,12 @@ fn app() -> Element {
             if running() {
                 count += 1;
             }
+
+            let val = running.read();
+
             tokio::time::sleep(Duration::from_millis(400)).await;
+
+            println!("Running: {}", *val);
         }
     });
 
