@@ -8,7 +8,6 @@ use std::{
     any::Any,
     cell::{Cell, RefCell},
     future::Future,
-    rc::Rc,
     sync::Arc,
 };
 
@@ -250,7 +249,7 @@ impl ScopeContext {
     ///
     /// This drops the task immediately.
     pub fn remove_future(&self, id: Task) {
-        with_runtime(|rt| rt.remove(id)).expect("Runtime to exist");
+        with_runtime(|rt| rt.remove_task(id)).expect("Runtime to exist");
     }
 
     /// Mark this component as suspended and then return None
@@ -314,10 +313,10 @@ impl ScopeContext {
 
 impl Drop for ScopeContext {
     fn drop(&mut self) {
+        // Drop all spawned tasks
         with_runtime(|rt| {
-            // Drop all spawned tasks
             for id in self.spawned_tasks.borrow().iter() {
-                rt.remove(*id);
+                rt.remove_task(*id);
             }
         })
         .expect("Runtime to exist")

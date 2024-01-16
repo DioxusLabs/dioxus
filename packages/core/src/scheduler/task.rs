@@ -89,7 +89,7 @@ impl Runtime {
     /// Drop the future with the given TaskId
     ///
     /// This does not abort the task, so you'll want to wrap it in an abort handle if that's important to you
-    pub fn remove(&self, id: Task) -> Option<LocalTask> {
+    pub(crate) fn remove_task(&self, id: Task) -> Option<LocalTask> {
         self.tasks.borrow_mut().try_remove(id.0)
     }
 
