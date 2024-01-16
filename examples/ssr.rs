@@ -9,10 +9,10 @@ fn main() {
     let mut vdom = VirtualDom::prebuilt(app);
     println!("{}", dioxus_ssr::render(&vdom));
 
-    // Or we can render render! calls themselves
+    // Or we can render rsx! calls themselves
     println!(
         "{}",
-        dioxus_ssr::render_element(render! {
+        dioxus_ssr::render_element(rsx! {
             div {
                 h1 { "Hello, world!" }
             }
@@ -30,7 +30,7 @@ fn main() {
 }
 
 fn app() -> Element {
-    render!(
+    rsx!(
         div {
             h1 { "Title" }
             p { "Body" }

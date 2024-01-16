@@ -2,7 +2,7 @@ use dioxus::prelude::*;
 
 #[component]
 pub fn NotFound(route: Vec<String>) -> Element {
-    render! {
+    rsx! {
         div{
             {route.join("")}
         }

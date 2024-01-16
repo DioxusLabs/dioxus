@@ -40,7 +40,7 @@ const STYLE: &str = include_str!("./assets/calculator.css");
 fn app() -> Element {
     let mut state = use_signal(Calculator::new);
 
-    render! {
+    rsx! {
         style { {STYLE} }
         div { id: "wrapper",
             div { class: "app",
@@ -98,7 +98,7 @@ fn app() -> Element {
 
 #[component]
 fn CalculatorKey(name: String, onclick: EventHandler<MouseEvent>, children: Element) -> Element {
-    render! {
+    rsx! {
         button { class: "calculator-key {name}", onclick: move |e| onclick.call(e), {&children} }
     }
 }

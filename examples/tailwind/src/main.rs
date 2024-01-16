@@ -10,7 +10,7 @@ fn main() {
 
 pub fn app() -> Element {
     let grey_background = true;
-    render!(
+    rsx!(
         div {
             header {
                 class: "text-gray-400 body-font",
@@ -73,7 +73,7 @@ pub fn app() -> Element {
 }
 
 pub fn StacksIcon() -> Element {
-    render!(
+    rsx!(
         svg {
             fill: "none",
             stroke: "currentColor",
@@ -88,7 +88,7 @@ pub fn StacksIcon() -> Element {
 }
 
 pub fn RightArrowIcon() -> Element {
-    render!(
+    rsx!(
         svg {
             fill: "none",
             stroke: "currentColor",

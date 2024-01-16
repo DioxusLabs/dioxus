@@ -140,7 +140,7 @@ impl Runtime {
 /// }
 ///
 /// fn app() -> Element {
-///     render!{ Component { runtime: Runtime::current().unwrap() } }
+///     rsx!{ Component { runtime: Runtime::current().unwrap() } }
 /// }
 ///
 /// // In a dynamic library
@@ -158,7 +158,7 @@ impl Runtime {
 /// fn Component(cx: ComponentProps) -> Element {
 ///     cx.use_hook(|| RuntimeGuard::new(cx.runtime.clone()));
 ///
-///     render! { div {} }
+///     rsx! { div {} }
 /// }
 /// ```
 pub struct RuntimeGuard(());

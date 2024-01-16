@@ -27,7 +27,7 @@ fn app() -> Element {
     let mut idx = use_signal(|| 0);
     let onhover = |_| println!("go!");
 
-    render! {
+    rsx! {
         div {
             button {
                 onclick: move |_| {
@@ -48,5 +48,5 @@ fn app() -> Element {
 
 #[component]
 fn ChildExample(i: i32, onhover: EventHandler<MouseEvent>) -> Element {
-    render! { li { onmouseover: move |e| onhover.call(e), "{i}" } }
+    rsx! { li { onmouseover: move |e| onhover.call(e), "{i}" } }
 }

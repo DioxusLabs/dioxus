@@ -3,7 +3,7 @@ use dioxus::prelude::*;
 #[test]
 fn simple() {
     fn App() -> Element {
-        render! { div { "hello!" } }
+        rsx! { div { "hello!" } }
     }
 
     let mut dom = VirtualDom::new(App);
@@ -12,7 +12,7 @@ fn simple() {
     assert_eq!(dioxus_ssr::render(&dom), "<div>hello!</div>");
 
     assert_eq!(
-        dioxus_ssr::render_element(render!( div {"hello!"} )),
+        dioxus_ssr::render_element(rsx!( div {"hello!"} )),
         "<div>hello!</div>"
     );
 }
@@ -20,10 +20,10 @@ fn simple() {
 #[test]
 fn lists() {
     assert_eq!(
-        dioxus_ssr::render_element(render! {
+        dioxus_ssr::render_element(rsx! {
             ul {
                 {
-                    (0..5).map(|i| render! {
+                    (0..5).map(|i| rsx! {
                         li { "item {i}" }
                     })
                 }
@@ -37,7 +37,7 @@ fn lists() {
 fn dynamic() {
     let dynamic = 123;
     assert_eq!(
-        dioxus_ssr::render_element(render! {
+        dioxus_ssr::render_element(rsx! {
             div { "Hello world 1 -->" "{dynamic}" "<-- Hello world 2" }
         }),
         "<div>Hello world 1 --&gt;123&lt;-- Hello world 2</div>"
@@ -52,14 +52,14 @@ fn components() {
     }
 
     fn MyComponent(MyComponentProps { name }: MyComponentProps) -> Element {
-        render! { div { "component {name}" } }
+        rsx! { div { "component {name}" } }
     }
 
     assert_eq!(
-        dioxus_ssr::render_element(render! {
+        dioxus_ssr::render_element(rsx! {
             div {
                 {
-                    (0..5).map(|name| render! {
+                    (0..5).map(|name| rsx! {
                         MyComponent { name: name }
                     })
                 }
@@ -72,10 +72,10 @@ fn components() {
 #[test]
 fn fragments() {
     assert_eq!(
-        dioxus_ssr::render_element(render! {
+        dioxus_ssr::render_element(rsx! {
             div {
                 {
-                    (0..5).map(|_| render! ({}))
+                    (0..5).map(|_| rsx! ({}))
                 }
             }
         }),

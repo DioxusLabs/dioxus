@@ -45,7 +45,7 @@ pub fn app() -> Element {
         filtered_todos
     });
 
-    render! {
+    rsx! {
         section { class: "todoapp",
             style { {include_str!("./assets/todomvc.css")} }
             TodoHeader { todos }
@@ -98,7 +98,7 @@ pub fn TodoHeader(mut todos: Signal<HashMap<u32, TodoItem>>) -> Element {
         }
     };
 
-    render! {
+    rsx! {
         header { class: "header",
             h1 { "todos" }
             input {
@@ -119,7 +119,7 @@ pub fn TodoEntry(mut todos: Signal<HashMap<u32, TodoItem>>, id: u32) -> Element 
     let checked = use_selector(move || todos.read().get(&id).unwrap().checked);
     let contents = use_selector(move || todos.read().get(&id).unwrap().contents.clone());
 
-    render! {
+    rsx! {
         li { class: if checked() { "completed" }, class: if is_editing() { "editing" },
             div { class: "view",
                 input {
@@ -168,7 +168,7 @@ pub fn ListFooter(
 ) -> Element {
     let show_clear_completed = use_selector(move || todos.read().values().any(|todo| todo.checked));
 
-    render! {
+    rsx! {
         footer { class: "footer",
             span { class: "todo-count",
                 strong { "{active_todo_count} " }
@@ -209,7 +209,7 @@ pub fn ListFooter(
 }
 
 pub fn PageFooter() -> Element {
-    render! {
+    rsx! {
         footer { class: "info",
             p { "Double-click to edit a todo" }
             p {

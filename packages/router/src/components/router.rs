@@ -146,7 +146,7 @@ where
         });
     });
 
-    render! { Outlet::<R> {} }
+    rsx! { Outlet::<R> {} }
 }
 
 #[cfg(feature = "serde")]
@@ -171,5 +171,5 @@ where
         _marker: std::marker::PhantomData,
     });
 
-    render! { Outlet::<R> {} }
+    rsx! { Outlet::<R> {} }
 }

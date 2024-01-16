@@ -202,7 +202,7 @@ fn traverse() {
     use dioxus::prelude::*;
     #[allow(non_snake_case)]
     fn Base() -> Element {
-        render!(
+        rsx!(
             div{
                 div{
                     "hello"
@@ -305,7 +305,7 @@ fn persist_removes() {
             1 => 2,
             _ => unreachable!(),
         };
-        render!(
+        rsx!(
             div {
                 for i in 0..children {
                     p { key: "{i}", "{i}" }
@@ -381,7 +381,7 @@ fn persist_instertions_before() {
             1 => 2,
             _ => unreachable!(),
         };
-        render!(
+        rsx!(
             div {
                 for i in 0..children {
                     p { key: "{i}", "{i}" }
@@ -434,7 +434,7 @@ fn persist_instertions_after() {
             1 => 2,
             _ => unreachable!(),
         };
-        render!(
+        rsx!(
             div{
                 for i in 0..children {
                     p { key: "{i}", "{i}" }

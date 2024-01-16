@@ -49,7 +49,7 @@ fn App() -> Element {
     if fermi_auth_request.read().is_none() {
         *fermi_auth_request.write() = Some(stored_auth_request);
     }
-    render! { Router::<Route> {} }
+    rsx! { Router::<Route> {} }
 }
 
 fn main() {

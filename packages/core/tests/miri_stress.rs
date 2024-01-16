@@ -16,14 +16,14 @@ fn test_memory_leak() {
         spawn(async {});
 
         if val == 2 || val == 4 {
-            return render!({});
+            return rsx!({});
         }
 
         let mut name = use_hook(|| String::from("numbers: "));
 
         name.push_str("123 ");
 
-        render!(
+        rsx!(
             div { "Hello, world!" }
             Child {}
             Child {}
@@ -45,7 +45,7 @@ fn test_memory_leak() {
     }
 
     fn BorrowedChild(cx: BorrowedProps) -> Element {
-        render! {
+        rsx! {
             div {
                 "goodbye {cx.name}"
                 Child {}
@@ -55,7 +55,7 @@ fn test_memory_leak() {
     }
 
     fn Child() -> Element {
-        render!( div { "goodbye world" } )
+        rsx!( div { "goodbye world" } )
     }
 
     let mut dom = VirtualDom::new(app);
@@ -79,7 +79,7 @@ fn memo_works_properly() {
 
         let name = use_hook(|| String::from("asd"));
 
-        render!(
+        rsx!(
             div { "Hello, world! {name}" }
             Child { na: "asdfg".to_string() }
         )
@@ -91,7 +91,7 @@ fn memo_works_properly() {
     }
 
     fn Child(cx: ChildProps) -> Element {
-        render!( div { "goodbye world" } )
+        rsx!( div { "goodbye world" } )
     }
 
     let mut dom = VirtualDom::new(app);
@@ -119,11 +119,11 @@ fn free_works_on_root_hooks() {
 
     fn app(cx: AppProps) -> Element {
         let name: AppProps = use_hook(|| cx.clone());
-        render!(child_component { inner: name.inner.clone() })
+        rsx!(child_component { inner: name.inner.clone() })
     }
 
     fn child_component(props: AppProps) -> Element {
-        render!( div { "{props.inner}" } )
+        rsx!( div { "{props.inner}" } )
     }
 
     let ptr = Rc::new("asdasd".to_string());
@@ -176,7 +176,7 @@ fn supports_async() {
         let mid = colors[1];
         let small = colors[2];
 
-        render! {
+        rsx! {
             div { background: "{big}", height: "stretch", width: "stretch", padding: "50",
                 label { "hello" }
                 div { background: "{mid}", height: "auto", width: "stretch", padding: "{padding}",

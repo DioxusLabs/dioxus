@@ -14,12 +14,12 @@ enum Route {
 
 #[component]
 fn Homepage() -> Element {
-    render! { h1 { "Welcome home" } }
+    rsx! { h1 { "Welcome home" } }
 }
 
 #[component]
 fn Blog(id: String) -> Element {
-    render! {
+    rsx! {
         h1 { "How to make: " }
         p { "{id}" }
     }
@@ -27,7 +27,7 @@ fn Blog(id: String) -> Element {
 
 #[component]
 fn Nav() -> Element {
-    render! {
+    rsx! {
         nav {
             li {
                 Link { to: Route::Homepage {}, "Go home" }

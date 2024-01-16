@@ -17,7 +17,7 @@ fn app() -> Element {
         response.respond(Response::new(include_bytes!("./assets/logo.png").to_vec()));
     });
 
-    render! {
+    rsx! {
         div {
             img { src: "/logos/logo.png" }
         }

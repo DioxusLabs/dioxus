@@ -5,20 +5,20 @@ fn main() {
 }
 
 fn app() -> Element {
-    render!(
+    rsx!(
         div {
             // Use Map directly to lazily pull elements
-            {(0..10).map(|f| render! { "{f}" })},
+            {(0..10).map(|f| rsx! { "{f}" })},
 
             // Collect into an intermediate collection if necessary, and call into_iter
             {["a", "b", "c", "d", "e", "f"]
                 .into_iter()
-                .map(|f| render! { "{f}" })
+                .map(|f| rsx! { "{f}" })
                 .collect::<Vec<_>>()
                 .into_iter()},
 
             // Use optionals
-            {Some(render! { "Some" })},
+            {Some(rsx! { "Some" })},
 
             // use a for loop where the body itself is RSX
             for name in 0..10 {

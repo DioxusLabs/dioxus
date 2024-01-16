@@ -11,7 +11,7 @@ fn app() -> Element {
     let mut counters = use_signal(|| vec![0, 0, 0]);
     let mut sum = use_selector(move || counters.read().iter().copied().sum::<usize>());
 
-    render! {
+    rsx! {
         div {
             button { onclick: move |_| counters.write().push(0), "Add counter" }
             button { onclick: move |_| { counters.write().pop(); }, "Remove counter" }

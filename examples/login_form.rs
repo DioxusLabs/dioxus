@@ -29,7 +29,7 @@ fn app() -> Element {
         }
     };
 
-    render! {
+    rsx! {
         h1 { "Login" }
         form { onsubmit,
             input { r#type: "text", id: "username", name: "username" }

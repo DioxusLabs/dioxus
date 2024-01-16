@@ -48,14 +48,14 @@ enum Route {
 
 #[component]
 fn App() -> Element {
-    render! {
+    rsx! {
         Router::<Route> { }
     }
 }
 
 #[component]
 fn Index() -> Element {
-    render! {
+    rsx! {
         h1 { "Index" }
         Link {
             to: Route::BlogList {},
@@ -66,7 +66,7 @@ fn Index() -> Element {
 
 #[component]
 fn Blog() -> Element {
-    render! {
+    rsx! {
         h1 { "Blog" }
         Outlet::<Route> { }
     }
@@ -74,7 +74,7 @@ fn Blog() -> Element {
 
 #[component]
 fn BlogList() -> Element {
-    render! {
+    rsx! {
         h2 { "List of blog posts" }
         Link {
             to: Route::BlogPost { blog_id: 0 },
@@ -89,7 +89,7 @@ fn BlogList() -> Element {
 
 #[component]
 fn BlogPost(blog_id: usize) -> Element {
-    render! {
+    rsx! {
         h2 { "Blog Post" }
     }
 }

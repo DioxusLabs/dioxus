@@ -31,7 +31,7 @@ use dioxus_lib::prelude::*;
 ///
 /// #[component]
 /// fn Index() -> Element {
-///     render! {
+///     rsx! {
 ///         div {
 ///             "Index"
 ///         }
@@ -40,7 +40,7 @@ use dioxus_lib::prelude::*;
 ///
 /// #[component]
 /// fn Wrapper() -> Element {
-///     render! {
+///     rsx! {
 ///         h1 { "App" }
 ///         Outlet::<Route> {} // The content of child routes will be rendered here
 ///     }
@@ -48,7 +48,7 @@ use dioxus_lib::prelude::*;
 ///
 /// #[component]
 /// fn Child() -> Element {
-///     render! {
+///     rsx! {
 ///         p {
 ///             "Child"
 ///         }
@@ -57,7 +57,7 @@ use dioxus_lib::prelude::*;
 ///
 /// # #[component]
 /// # fn App() -> Element {
-/// #     render! {
+/// #     rsx! {
 /// #         Router::<Route> {
 /// #             config: || RouterConfig::default().history(MemoryHistory::with_initial_path(Route::Child {}))
 /// #         }

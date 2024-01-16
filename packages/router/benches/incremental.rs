@@ -136,7 +136,7 @@ criterion_main!(benches);
 
 #[component]
 fn Blog() -> Element {
-    render! {
+    rsx! {
         div {
             "Blog"
         }
@@ -145,7 +145,7 @@ fn Blog() -> Element {
 
 #[component]
 fn Post(id: usize) -> Element {
-    render! {
+    rsx! {
         for _ in 0..*id {
             div {
                 "PostId: {id}"
@@ -156,7 +156,7 @@ fn Post(id: usize) -> Element {
 
 #[component]
 fn PostHome() -> Element {
-    render! {
+    rsx! {
         div {
             "Post"
         }
@@ -165,7 +165,7 @@ fn PostHome() -> Element {
 
 #[component]
 fn Home() -> Element {
-    render! {
+    rsx! {
         div {
             "Home"
         }
@@ -192,7 +192,7 @@ enum Route {
 #[component]
 fn RenderPath(path: Route) -> Element {
     let path = path.clone();
-    render! {
+    rsx! {
         Router::<Route> {
             config: || RouterConfig::default().history(MemoryHistory::with_initial_path(path))
         }

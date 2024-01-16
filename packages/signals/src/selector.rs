@@ -18,7 +18,7 @@ use crate::{get_effect_stack, signal::SignalData, CopyValue, Effect, ReadOnlySig
 ///     count += 1;
 ///     assert_eq!(double.value(), count * 2);
 ///
-///     render! { "{double}" }
+///     rsx! { "{double}" }
 /// }
 /// ```
 #[must_use = "Consider using `use_effect` to rerun a callback when dependencies change"]

@@ -19,14 +19,14 @@ pub fn use_on_unmount<D: FnOnce() + 'static>(destroy: D) {
 ///
 /// fn app() -> Element {
 ///     let state = use_signal(|| true);
-///     render! {
+///     rsx! {
 ///         for _ in 0..100 {
 ///             h1 {
 ///                 "spacer"
 ///             }
 ///         }
 ///         if **state {
-///             render! {
+///             rsx! {
 ///                 child_component {}
 ///             }
 ///         }
@@ -61,7 +61,7 @@ pub fn use_on_unmount<D: FnOnce() + 'static>(destroy: D) {
 ///         }
 ///     });
 ///
-///     render!{
+///     rsx!{
 ///         div {
 ///             id: "my_element",
 ///             "hello"

@@ -40,18 +40,19 @@ pub fn derive_typed_builder(input: TokenStream) -> TokenStream {
 /// The rsx! macro makes it easy for developers to write jsx-style markup in their components.
 #[proc_macro]
 pub fn rsx(tokens: TokenStream) -> TokenStream {
-    render(tokens)
-}
-
-/// The render! macro makes it easy for developers to write jsx-style markup in their components.
-///
-/// The render macro automatically renders rsx - making it unhygienic.
-#[proc_macro]
-pub fn render(s: TokenStream) -> TokenStream {
-    match syn::parse::<rsx::CallBody>(s) {
+    match syn::parse::<rsx::CallBody>(tokens) {
         Err(err) => err.to_compile_error().into(),
         Ok(body) => RenderCallBody(body).into_token_stream().into(),
     }
+}
+
+/// The rsx! macro makes it easy for developers to write jsx-style markup in their components.
+///
+/// The render macro automatically renders rsx - making it unhygienic.
+#[deprecated(note = "Use `rsx!` instead.")]
+#[proc_macro]
+pub fn render(tokens: TokenStream) -> TokenStream {
+    rsx(tokens)
 }
 
 /// Derive props for a component within the component definition.
@@ -129,7 +130,7 @@ pub(crate) const COMPONENT_ARG_CASE_CHECK_OFF: &str = "no_case_check";
 /// ```rust,ignore
 /// #[component]
 /// fn GreetBob() -> Element {
-///     render! { "hello, bob" }
+///     rsx! { "hello, bob" }
 /// }
 ///
 /// // is equivalent to
@@ -139,7 +140,7 @@ pub(crate) const COMPONENT_ARG_CASE_CHECK_OFF: &str = "no_case_check";
 ///     #[warn(non_snake_case)]
 ///     #[inline(always)]
 ///     fn __dx_inner_comp() -> Element {
-///         render! { "hello, bob" }
+///         rsx! { "hello, bob" }
 ///     }
 ///     // There's no function call overhead since __dx_inner_comp has the #[inline(always)] attribute,
 ///     // so don't worry about performance.
@@ -150,7 +151,7 @@ pub(crate) const COMPONENT_ARG_CASE_CHECK_OFF: &str = "no_case_check";
 /// ```rust,ignore
 /// #[component(no_case_check)]
 /// fn GreetPerson(person: String) -> Element {
-///     render! { "hello, {person}" }
+///     rsx! { "hello, {person}" }
 /// }
 ///
 /// // is equivalent to
@@ -168,7 +169,7 @@ pub(crate) const COMPONENT_ARG_CASE_CHECK_OFF: &str = "no_case_check";
 ///     fn __dx_inner_comp(props: GreetPersonProps>e) -> Element {
 ///         let GreetPersonProps { person } = &cx.props;
 ///         {
-///             render! { "hello, {person}" }
+///             rsx! { "hello, {person}" }
 ///         }
 ///     }
 ///

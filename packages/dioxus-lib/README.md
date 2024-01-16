@@ -103,7 +103,7 @@ fn Example() -> Element {
     // both of these are equivalent
     rsx!("hello world"))
 
-    render!("hello world!")
+    rsx!("hello world!")
 }
 ```
 
@@ -246,7 +246,7 @@ use hooks to define the state and modify it from within listeners.
 fn App() -> Element {
     let name = use_signal(|| "world");
 
-    render!("hello {name}!")
+    rsx!("hello {name}!")
 }
 ```
 

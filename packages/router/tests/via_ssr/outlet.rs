@@ -36,7 +36,7 @@ fn prepare(path: impl Into<String>) -> VirtualDom {
 
     #[component]
     fn App(cx: Scope<AppProps>) -> Element {
-        render! {
+        rsx! {
             h1 { "App" }
             Router::<Route> {
                 config: {
@@ -49,14 +49,14 @@ fn prepare(path: impl Into<String>) -> VirtualDom {
 
     #[component]
     fn RootIndex() -> Element {
-        render! {
+        rsx! {
             h2 { "Root Index" }
         }
     }
 
     #[component]
     fn Fixed() -> Element {
-        render! {
+        rsx! {
             h2 { "Fixed" }
             Outlet::<Route> { }
         }
@@ -64,21 +64,21 @@ fn prepare(path: impl Into<String>) -> VirtualDom {
 
     #[component]
     fn FixedIndex() -> Element {
-        render! {
+        rsx! {
             h3 { "Fixed - Index" }
         }
     }
 
     #[component]
     fn FixedFixed() -> Element {
-        render! {
+        rsx! {
             h3 { "Fixed - Fixed"}
         }
     }
 
     #[component]
     fn Parameter(id: u8) -> Element {
-        render! {
+        rsx! {
             h2 { "Parameter {id}" }
             Outlet::<Route> { }
         }
@@ -86,14 +86,14 @@ fn prepare(path: impl Into<String>) -> VirtualDom {
 
     #[component]
     fn ParameterIndex(id: u8) -> Element {
-        render! {
+        rsx! {
             h3 { "Parameter - Index" }
         }
     }
 
     #[component]
     fn ParameterFixed(id: u8) -> Element {
-        render! {
+        rsx! {
             h3 { "Parameter - Fixed" }
         }
     }

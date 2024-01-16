@@ -10,7 +10,7 @@ fn App() -> Element {
     let signal = use_signal(|| 0);
     let doubled = use_selector(move || signal * 2);
 
-    render! {
+    rsx! {
         button {
             onclick: move |_| *signal.write() += 1,
             "Increase"
@@ -21,5 +21,5 @@ fn App() -> Element {
 
 #[component]
 fn Child(signal: ReadOnlySignal<usize>) -> Element {
-    render! { "{signal}" }
+    rsx! { "{signal}" }
 }

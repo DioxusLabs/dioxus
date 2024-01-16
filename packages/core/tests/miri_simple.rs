@@ -3,7 +3,7 @@ use dioxus::prelude::*;
 #[test]
 fn app_drops() {
     fn app() -> Element {
-        render! { div {} }
+        rsx! { div {} }
     }
 
     let mut dom = VirtualDom::new(app);
@@ -21,7 +21,7 @@ fn hooks_drop() {
         use_hook(|| String::from("asd"));
         use_hook(|| String::from("asd"));
 
-        render! { div {} }
+        rsx! { div {} }
     }
 
     let mut dom = VirtualDom::new(app);
@@ -36,7 +36,7 @@ fn contexts_drop() {
     fn app() -> Element {
         provide_context(String::from("asd"));
 
-        render! {
+        rsx! {
             div { ChildComp {} }
         }
     }
@@ -44,7 +44,7 @@ fn contexts_drop() {
     fn ChildComp() -> Element {
         let el = consume_context::<String>().unwrap();
 
-        render! { div { "hello {el}" } }
+        rsx! { div { "hello {el}" } }
     }
 
     let mut dom = VirtualDom::new(app);
@@ -61,7 +61,7 @@ fn tasks_drop() {
             // tokio::time::sleep(std::time::Duration::from_millis(100000)).await;
         });
 
-        render! { div {} }
+        rsx! { div {} }
     }
 
     let mut dom = VirtualDom::new(app);
@@ -77,7 +77,7 @@ fn root_props_drop() {
     struct RootProps(String);
 
     let mut dom = VirtualDom::new_with_props(
-        |cx| render!( div { "{cx.0}" } ),
+        |cx| rsx!( div { "{cx.0}" } ),
         RootProps("asdasd".to_string()),
     );
 
@@ -89,11 +89,11 @@ fn root_props_drop() {
 #[test]
 fn diffing_drops_old() {
     fn app() -> Element {
-        render! {
+        rsx! {
             div {
                 match generation() % 2 {
-                    0 => render!( ChildComp1 { name: "asdasd".to_string() }),
-                    1 => render!( ChildComp2 { name: "asdasd".to_string() }),
+                    0 => rsx!( ChildComp1 { name: "asdasd".to_string() }),
+                    1 => rsx!( ChildComp2 { name: "asdasd".to_string() }),
                     _ => todo!()
                 }
             }
@@ -102,12 +102,12 @@ fn diffing_drops_old() {
 
     #[component]
     fn ChildComp1(name: String) -> Element {
-        render! {"Hello {name}"}
+        rsx! {"Hello {name}"}
     }
 
     #[component]
     fn ChildComp2(name: String) -> Element {
-        render! {"Goodbye {name}"}
+        rsx! {"Goodbye {name}"}
     }
 
     let mut dom = VirtualDom::new(app);

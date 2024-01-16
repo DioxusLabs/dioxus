@@ -19,7 +19,7 @@ use crate::prelude::{Navigator, RouterContext};
 ///
 /// #[component]
 /// fn App() -> Element {
-///     render! {
+///     rsx! {
 ///         Router::<Route> {}
 ///     }
 /// }
@@ -28,7 +28,7 @@ use crate::prelude::{Navigator, RouterContext};
 /// fn Index() -> Element {
 ///     let navigator = use_navigator(&cx);
 ///
-///     render! {
+///     rsx! {
 ///         button {
 ///             onclick: move |_| { navigator.push(Route::Dynamic { id: 1234 }); },
 ///             "Go to /1234"
@@ -38,7 +38,7 @@ use crate::prelude::{Navigator, RouterContext};
 ///
 /// #[component]
 /// fn Dynamic(id: usize) -> Element {
-///     render! {
+///     rsx! {
 ///         p {
 ///             "Current ID: {id}"
 ///         }

@@ -612,7 +612,7 @@ impl RouteEnum {
 
                 fn call(&self, props: Self::Props) -> dioxus_core::Element {
                     let initial_route = self.clone();
-                    render! {
+                    rsx! {
                         ::dioxus_router::prelude::Router::<#name> {
                             config: move || props.take().initial_route(initial_route)
                         }

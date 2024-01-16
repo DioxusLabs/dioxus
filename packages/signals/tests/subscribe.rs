@@ -28,7 +28,7 @@ fn reading_subscribes() {
 
             cx.props.borrow_mut().parent += 1;
 
-            render! {
+            rsx! {
                 for id in 0..10 {
                     Child {
                         signal: signal,
@@ -61,7 +61,7 @@ fn reading_subscribes() {
             .entry(cx.scope_id())
             .or_default() += 1;
 
-        render! {
+        rsx! {
             "{cx.props.signal}"
         }
     }

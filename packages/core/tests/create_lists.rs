@@ -5,11 +5,11 @@ use dioxus_core::ElementId;
 // A real-world usecase of templates at peak performance
 // In react, this would be a lot of node creation.
 //
-// In Dioxus, we memoize the render! body and simplify it down to a few template loads
+// In Dioxus, we memoize the rsx! body and simplify it down to a few template loads
 //
 // Also note that the IDs increase linearly. This lets us drive a vec on the renderer for O(1) re-indexing
 fn app() -> Element {
-    render! {
+    rsx! {
         div {
             for i in 0..3 {
                 div {

@@ -209,7 +209,7 @@ fn app() -> Element {
         desktop_context.close();
     }
 
-    render! {
+    rsx! {
         div {
             div {
                 width: "100px",

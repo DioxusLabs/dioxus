@@ -32,7 +32,7 @@ enum Route {
 
 #[component]
 fn NavBar() -> Element {
-    render! {
+    rsx! {
         h1 { "Your app here" }
         ul {
             li {
@@ -73,20 +73,20 @@ fn NavBar() -> Element {
 #[component]
 fn Home() -> Element {
     log::debug!("rendering home {:?}", current_scope_id());
-    render! { h1 { "Home" } }
+    rsx! { h1 { "Home" } }
 }
 
 #[component]
 fn BlogList() -> Element {
     log::debug!("rendering blog list {:?}", current_scope_id());
-    render! { div { "Blog List" } }
+    rsx! { div { "Blog List" } }
 }
 
 #[component]
 fn BlogPost(post: String) -> Element {
     log::debug!("rendering blog post {}", post);
 
-    render! {
+    rsx! {
         div {
             h3 { "blog post: {post}" }
             Link { to: Route::BlogList {}, "back to blog list" }
@@ -96,5 +96,5 @@ fn BlogPost(post: String) -> Element {
 
 #[component]
 fn Oranges() -> Element {
-    render!("Oranges are not apples!")
+    rsx!("Oranges are not apples!")
 }

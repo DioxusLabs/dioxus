@@ -9,7 +9,7 @@ fn main() {
 }
 
 fn app() -> Element {
-    render! (
+    rsx! (
         div { style: "text-align: center;",
             h1 { "🌗 Dioxus 🚀" }
             h3 { "Frontend that scales." }

@@ -31,7 +31,7 @@ where
     where
         <R as FromStr>::Err: std::fmt::Display,
     {
-        render! {
+        rsx! {
             h1 { "App" }
             Router::<R> {
                 config: || RouterConfig::default().history(MemoryHistory::default())
@@ -57,7 +57,7 @@ fn href_internal() {
 
     #[component]
     fn Root() -> Element {
-        render! {
+        rsx! {
             Link {
                 to: Route::Test {},
                 "Link"
@@ -95,7 +95,7 @@ fn href_external() {
 
     #[component]
     fn Root() -> Element {
-        render! {
+        rsx! {
             Link {
                 to: "https://dioxuslabs.com/",
                 "Link"
@@ -133,7 +133,7 @@ fn with_class() {
 
     #[component]
     fn Root() -> Element {
-        render! {
+        rsx! {
             Link {
                 to: Route::Test {},
                 class: "test_class",
@@ -165,7 +165,7 @@ fn with_active_class_active() {
 
     #[component]
     fn Root() -> Element {
-        render! {
+        rsx! {
             Link {
                 to: Route::Root {},
                 active_class: "active_class",
@@ -205,7 +205,7 @@ fn with_active_class_inactive() {
 
     #[component]
     fn Root() -> Element {
-        render! {
+        rsx! {
             Link {
                 to: Route::Test {},
                 active_class: "active_class",
@@ -245,7 +245,7 @@ fn with_id() {
 
     #[component]
     fn Root() -> Element {
-        render! {
+        rsx! {
             Link {
                 to: Route::Test {},
                 id: "test_id",
@@ -284,7 +284,7 @@ fn with_new_tab() {
 
     #[component]
     fn Root() -> Element {
-        render! {
+        rsx! {
             Link {
                 to: Route::Test {},
                 new_tab: true,
@@ -316,7 +316,7 @@ fn with_new_tab_external() {
 
     #[component]
     fn Root() -> Element {
-        render! {
+        rsx! {
             Link {
                 to: "https://dioxuslabs.com/",
                 new_tab: true,
@@ -355,7 +355,7 @@ fn with_rel() {
 
     #[component]
     fn Root() -> Element {
-        render! {
+        rsx! {
             Link {
                 to: Route::Test {},
                 rel: "test_rel",

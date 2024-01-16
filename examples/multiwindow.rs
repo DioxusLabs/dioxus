@@ -5,7 +5,7 @@ fn main() {
 }
 
 fn app() -> Element {
-    render! {
+    rsx! {
         div {
             button {
                 onclick: move |_| {
@@ -19,7 +19,7 @@ fn app() -> Element {
 }
 
 fn popup() -> Element {
-    render! {
+    rsx! {
         div { "This is a popup!" }
     }
 }

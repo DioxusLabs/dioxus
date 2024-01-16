@@ -116,7 +116,7 @@ macro_rules! test_state{
         fn state_reduce_initally_called_minimally() {
             #[allow(non_snake_case)]
             fn Base() -> Element {
-                render!{
+                rsx!{
                     div {
                         div{
                             div{

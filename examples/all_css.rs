@@ -5,7 +5,7 @@ fn main() {
 }
 
 fn app() -> Element {
-    render! {
+    rsx! {
         div {
             align_content: "a",
             align_items: "a",

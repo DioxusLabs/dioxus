@@ -380,7 +380,7 @@ fn apply_request_parts_to_response<B>(
 /// use dioxus_fullstack::{axum_adapter::render_handler_with_context, prelude::*};
 ///
 /// fn app() -> Element {
-///     render! {
+///     rsx! {
 ///         "hello!"
 ///     }
 /// }

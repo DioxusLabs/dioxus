@@ -7,7 +7,7 @@ fn list_creates_one_by_one() {
     let mut dom = VirtualDom::new(|| {
         let gen = generation();
 
-        render! {
+        rsx! {
             div {
                 for i in 0..gen {
                     div { "{i}" }
@@ -76,7 +76,7 @@ fn removes_one_by_one() {
     let mut dom = VirtualDom::new(|| {
         let gen = 3 - generation() % 4;
 
-        render! {
+        rsx! {
             div {
                 for i in 0..gen {
                     div { "{i}" }
@@ -151,7 +151,7 @@ fn removes_one_by_one() {
 #[test]
 fn list_shrink_multiroot() {
     let mut dom = VirtualDom::new(|| {
-        render! {
+        rsx! {
             div {
                 for i in 0..generation() {
                     div { "{i}" }
@@ -212,7 +212,7 @@ fn removes_one_by_one_multiroot() {
     let mut dom = VirtualDom::new(|| {
         let gen = 3 - generation() % 4;
 
-        render! {
+        rsx! {
             div {
                 {(0..gen).map(|i| rsx! {
                     div { "{i}" }
@@ -275,7 +275,7 @@ fn removes_one_by_one_multiroot() {
 #[test]
 fn two_equal_fragments_are_equal_static() {
     let mut dom = VirtualDom::new(|| {
-        render! {
+        rsx! {
             for _ in 0..5 {
                 div { "hello" }
             }
@@ -289,7 +289,7 @@ fn two_equal_fragments_are_equal_static() {
 #[test]
 fn two_equal_fragments_are_equal() {
     let mut dom = VirtualDom::new(|| {
-        render! {
+        rsx! {
             for i in 0..5 {
                 div { "hello {i}" }
             }
@@ -310,7 +310,7 @@ fn remove_many() {
             _ => unreachable!(),
         };
 
-        render! {
+        rsx! {
             for i in 0..num {
                 div { "hello {i}" }
             }

@@ -3,7 +3,7 @@ use dioxus::prelude::*;
 #[test]
 fn static_boolean_attributs() {
     fn app() -> Element {
-        render! {
+        rsx! {
             div { hidden: "false" }
             div { hidden: "true" }
         }
@@ -21,7 +21,7 @@ fn static_boolean_attributs() {
 #[test]
 fn dynamic_boolean_attributs() {
     fn app() -> Element {
-        render! {
+        rsx! {
             div { hidden: false }
             div { hidden: true }
         }

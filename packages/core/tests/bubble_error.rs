@@ -11,7 +11,7 @@ fn app() -> Element {
 
     let value = raw.parse::<f32>().unwrap_or(123.123);
 
-    render! { div { "hello {value}" } }
+    rsx! { div { "hello {value}" } }
 }
 
 #[test]

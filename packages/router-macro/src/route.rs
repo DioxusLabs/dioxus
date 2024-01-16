@@ -247,7 +247,7 @@ impl Route {
                 quote! {
                     #[allow(unused)]
                     (#last_index, Self::#name { #(#dynamic_segments,)* }) => {
-                        render! {
+                        rsx! {
                             #component {
                                 #(#dynamic_segments_from_route: #dynamic_segments_from_route,)*
                             }

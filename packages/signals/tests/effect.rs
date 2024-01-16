@@ -32,7 +32,7 @@ fn effects_rerun() {
             });
             signal += 1;
 
-            render! {
+            rsx! {
                 div {}
             }
         },

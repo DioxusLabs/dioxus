@@ -156,15 +156,15 @@ impl Debug for LinkProps {
 ///
 /// #[component]
 /// fn App() -> Element {
-///     render! {
+///     rsx! {
 ///         Router::<Route> {}
 ///     }
 /// }
 ///
 /// #[component]
 /// fn Index() -> Element {
-///     render! {
-///         render! {
+///     rsx! {
+///         rsx! {
 ///             Link {
 ///                 active_class: "active",
 ///                 class: "link_class",
@@ -244,7 +244,7 @@ pub fn Link(props: LinkProps) -> Element {
         }
     };
 
-    render! {
+    rsx! {
         a {
             onclick: action,
             href: "{href}",

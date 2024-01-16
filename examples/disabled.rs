@@ -7,7 +7,7 @@ fn main() {
 fn app() -> Element {
     let mut disabled = use_signal(|| false);
 
-    render! {
+    rsx! {
         div {
             button { onclick: move |_| disabled.toggle(),
                 "click to "

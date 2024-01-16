@@ -5,7 +5,7 @@ fn main() {
 }
 
 fn app() -> Element {
-    render! {
+    rsx! {
         div { "Hello, world!" }
     }
 }

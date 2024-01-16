@@ -28,7 +28,7 @@ use crate::{get_effect_stack, CopyValue, Effect, EffectStack};
 ///
 ///     // Because signals have automatic dependency tracking, if you never read them in a component, that component will not be re-rended when the signal is updated.
 ///     // The app component will never be rerendered in this example.
-///     render! { Child { state: count } }
+///     rsx! { Child { state: count } }
 /// }
 ///
 /// #[component]
@@ -40,7 +40,7 @@ use crate::{get_effect_stack, CopyValue, Effect, EffectStack};
 ///         *state.write() += 1;
 ///     });
 ///
-///     render! {
+///     rsx! {
 ///         button {
 ///             onclick: move |_| *state.write() += 1,
 ///             "{state}"
@@ -112,7 +112,7 @@ pub(crate) struct SignalData<T> {
 ///
 ///     // Because signals have automatic dependency tracking, if you never read them in a component, that component will not be re-rended when the signal is updated.
 ///     // The app component will never be rerendered in this example.
-///     render! { Child { state: count } }
+///     rsx! { Child { state: count } }
 /// }
 ///
 /// #[component]
@@ -124,7 +124,7 @@ pub(crate) struct SignalData<T> {
 ///         *state.write() += 1;
 ///     });
 ///
-///     render! {
+///     rsx! {
 ///         button {
 ///             onclick: move |_| *state.write() += 1,
 ///             "{state}"

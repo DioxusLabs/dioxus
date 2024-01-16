@@ -5,8 +5,8 @@ use dioxus::prelude::*;
 #[test]
 fn cycling_elements() {
     let mut dom = VirtualDom::new(|| match generation() % 2 {
-        0 => render! { div { "wasd" } },
-        1 => render! { div { "abcd" } },
+        0 => rsx! { div { "wasd" } },
+        1 => rsx! { div { "abcd" } },
         _ => unreachable!(),
     });
 

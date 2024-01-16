@@ -75,7 +75,7 @@ where
 ///
 /// ```rust
 /// fn app() -> Element {
-///     render! {
+///     rsx! {
 ///         div {}
 ///     }
 /// }
@@ -90,7 +90,7 @@ where
 /// }
 ///
 /// fn app(props: MyProps) -> Element {
-///     render! {
+///     rsx! {
 ///         div {
 ///             "{props.data}"
 ///         }
@@ -103,7 +103,7 @@ where
 /// ```rust
 /// #[component]
 /// fn app(data: String) -> Element {
-///     render! {
+///     rsx! {
 ///         div {
 ///             "{data}"
 ///         }

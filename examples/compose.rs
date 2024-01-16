@@ -27,7 +27,7 @@ fn app() -> Element {
         );
     };
 
-    render! {
+    rsx! {
         h1 { "This is your email" }
         button { onclick: open_compose_window, "Click to compose a new email" }
         ul {
@@ -44,7 +44,7 @@ fn app() -> Element {
 fn compose(send: Rc<dyn Fn(String)>) -> Element {
     let mut user_input = use_signal(String::new);
 
-    render! {
+    rsx! {
         div {
             h1 { "Compose a new email" }
 

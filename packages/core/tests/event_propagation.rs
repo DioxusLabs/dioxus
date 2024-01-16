@@ -52,14 +52,14 @@ fn events_propagate() {
 }
 
 fn app() -> Element {
-    render! {
+    rsx! {
         div { onclick: move |_| {
                 println!("top clicked");
                 *CLICKS.lock().unwrap() += 1;
             },
 
             {vec![
-                render! {
+                rsx! {
                     problematic_child {}
                 }
             ].into_iter()}
@@ -68,7 +68,7 @@ fn app() -> Element {
 }
 
 fn problematic_child() -> Element {
-    render! {
+    rsx! {
         button { onclick: move |evt| {
                 println!("bottom clicked");
                 let mut clicks = CLICKS.lock().unwrap();

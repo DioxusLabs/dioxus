@@ -17,7 +17,7 @@ fn keyed_diffing_out_of_order() {
             _ => unreachable!(),
         };
 
-        render!({ order.iter().map(|i| render!(div { key: "{i}" })) })
+        rsx!({ order.iter().map(|i| rsx!(div { key: "{i}" })) })
     });
 
     {
@@ -59,7 +59,7 @@ fn keyed_diffing_out_of_order_adds() {
             _ => unreachable!(),
         };
 
-        render!({ order.iter().map(|i| render!(div { key: "{i}" })) })
+        rsx!({ order.iter().map(|i| rsx!(div { key: "{i}" })) })
     });
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);
@@ -85,7 +85,7 @@ fn keyed_diffing_out_of_order_adds_3() {
             _ => unreachable!(),
         };
 
-        render!({ order.iter().map(|i| render!(div { key: "{i}" })) })
+        rsx!({ order.iter().map(|i| rsx!(div { key: "{i}" })) })
     });
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);
@@ -111,7 +111,7 @@ fn keyed_diffing_out_of_order_adds_4() {
             _ => unreachable!(),
         };
 
-        render!({ order.iter().map(|i| render!(div { key: "{i}" })) })
+        rsx!({ order.iter().map(|i| rsx!(div { key: "{i}" })) })
     });
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);
@@ -137,7 +137,7 @@ fn keyed_diffing_out_of_order_adds_5() {
             _ => unreachable!(),
         };
 
-        render!({ order.iter().map(|i| render!(div { key: "{i}" })) })
+        rsx!({ order.iter().map(|i| rsx!(div { key: "{i}" })) })
     });
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);
@@ -162,7 +162,7 @@ fn keyed_diffing_additions() {
             _ => unreachable!(),
         };
 
-        render!({ order.iter().map(|i| render!(div { key: "{i}" })) })
+        rsx!({ order.iter().map(|i| rsx!(div { key: "{i}" })) })
     });
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);
@@ -187,7 +187,7 @@ fn keyed_diffing_additions_and_moves_on_ends() {
             _ => unreachable!(),
         };
 
-        render!({ order.iter().map(|i| render!(div { key: "{i}" })) })
+        rsx!({ order.iter().map(|i| rsx!(div { key: "{i}" })) })
     });
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);
@@ -216,7 +216,7 @@ fn keyed_diffing_additions_and_moves_in_middle() {
             _ => unreachable!(),
         };
 
-        render!({ order.iter().map(|i| render!(div { key: "{i}" })) })
+        rsx!({ order.iter().map(|i| rsx!(div { key: "{i}" })) })
     });
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);
@@ -250,7 +250,7 @@ fn controlled_keyed_diffing_out_of_order() {
             _ => unreachable!(),
         };
 
-        render!({ order.iter().map(|i| render!(div { key: "{i}" })) })
+        rsx!({ order.iter().map(|i| rsx!(div { key: "{i}" })) })
     });
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);
@@ -284,7 +284,7 @@ fn controlled_keyed_diffing_out_of_order_max_test() {
             _ => unreachable!(),
         };
 
-        render!({ order.iter().map(|i| render!(div { key: "{i}" })) })
+        rsx!({ order.iter().map(|i| rsx!(div { key: "{i}" })) })
     });
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);
@@ -313,7 +313,7 @@ fn remove_list() {
             _ => unreachable!(),
         };
 
-        render!({ order.iter().map(|i| render!(div { key: "{i}" })) })
+        rsx!({ order.iter().map(|i| rsx!(div { key: "{i}" })) })
     });
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);
@@ -338,7 +338,7 @@ fn no_common_keys() {
             _ => unreachable!(),
         };
 
-        render!({ order.iter().map(|i| render!(div { key: "{i}" })) })
+        rsx!({ order.iter().map(|i| rsx!(div { key: "{i}" })) })
     });
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);

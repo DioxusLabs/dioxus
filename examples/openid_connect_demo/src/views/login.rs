@@ -21,14 +21,14 @@ pub fn Login(query_string: String) -> Element {
         (Some(client_props), Some(auth_token_read)) => {
             match (auth_token_read.id_token, auth_token_read.refresh_token) {
                 (Some(_id_token), Some(_refresh_token)) => {
-                    render! {
+                    rsx! {
                         div { "Sign in successful" }
                         Link { to: home_url, "Go back home" }
                     }
                 }
                 // If the refresh token is set but not the id_token, there was an error, we just go back home and reset their value
                 (None, Some(_)) | (Some(_), None) => {
-                    render! {
+                    rsx! {
                         div { "Error while attempting to log in" }
                         Link {
                             to: home_url,
@@ -70,17 +70,17 @@ pub fn Login(query_string: String) -> Element {
                             })
                         };
                         token_response_spawn();
-                        render!{ div {} }
+                        rsx!{ div {} }
                     }
                     None => {
-                        render! { div { "No code provided" } }
+                        rsx! { div { "No code provided" } }
                     }
                 }
                 }
             }
         }
         (_, _) => {
-            render! {{}}
+            rsx! {{}}
         }
     })
 }

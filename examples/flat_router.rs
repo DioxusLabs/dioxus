@@ -32,7 +32,7 @@ enum Route {
 
 #[component]
 fn Footer() -> Element {
-    render! {
+    rsx! {
         div {
             Outlet::<Route> {}
 
@@ -60,20 +60,20 @@ fn Footer() -> Element {
 
 #[component]
 fn Home() -> Element {
-    render!("Home")
+    rsx!("Home")
 }
 
 #[component]
 fn Games() -> Element {
-    render!("Games")
+    rsx!("Games")
 }
 
 #[component]
 fn Play() -> Element {
-    render!("Play")
+    rsx!("Play")
 }
 
 #[component]
 fn Settings() -> Element {
-    render!("Settings")
+    rsx!("Settings")
 }

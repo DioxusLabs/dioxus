@@ -105,7 +105,7 @@ impl<T> ProvidedStateInner<T> {
 /// # use dioxus::prelude::*;
 /// #
 /// # fn app() -> Element {
-/// #     render! {
+/// #     rsx! {
 /// #         Parent{}
 /// #     }
 /// # }
@@ -121,7 +121,7 @@ impl<T> ProvidedStateInner<T> {
 ///     use_shared_state_provider(|| Theme::Dark);
 ///     let theme = use_shared_state::<Theme>().unwrap();
 ///
-///     render! {
+///     rsx! {
 ///         button{
 ///             onclick: move |_| {
 ///                 let current_theme = *theme.read();
@@ -141,7 +141,7 @@ impl<T> ProvidedStateInner<T> {
 ///     let theme = use_shared_state::<Theme>().unwrap();
 ///     let current_theme = *theme.read();
 ///
-///     render! {
+///     rsx! {
 ///         match current_theme {
 ///             Theme::Dark => {
 ///                 "Dark mode"
@@ -331,7 +331,7 @@ impl<T> PartialEq for UseSharedState<T> {
 /// # use dioxus::prelude::*;
 /// #
 /// # fn app() -> Element {
-/// #     render! {
+/// #     rsx! {
 /// #         Parent{}
 /// #     }
 /// # }
@@ -347,7 +347,7 @@ impl<T> PartialEq for UseSharedState<T> {
 ///     use_shared_state_provider(|| Theme::Dark);
 ///     let theme = use_shared_state::<Theme>().unwrap();
 ///
-///     render! {
+///     rsx! {
 ///         button{
 ///             onclick: move |_| {
 ///                 let current_theme = *theme.read();

@@ -33,7 +33,7 @@ enum Route {
 
 #[component]
 fn Blog(id: i32) -> Element {
-    render! {
+    rsx! {
         Link { to: Route::Home {}, "Go to counter" }
         table {
             tbody {

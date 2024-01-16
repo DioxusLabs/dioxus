@@ -11,7 +11,7 @@ fn main() {
 }
 
 fn app() -> Element {
-    render! {
+    rsx! {
         Button {
             a: "asd".to_string(),
             c: "asd".to_string(),
@@ -52,7 +52,7 @@ struct ButtonProps {
 }
 
 fn Button(props: ButtonProps) -> Element {
-    render! {
+    rsx! {
         button {
             "{props.a} | "
             "{props.b:?} | "

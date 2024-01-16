@@ -63,7 +63,7 @@ fn app() -> Element {
 
     log::debug!("Hello from the app");
 
-    render! {
+    rsx! {
         div {
             h1 { "Hello, Mobile" }
             div {

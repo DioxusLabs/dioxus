@@ -22,7 +22,7 @@ const _STYLE: &str = manganis::mg!(file("./examples/assets/fileexplorer.css"));
 fn app() -> Element {
     let mut files = use_signal(Files::new);
 
-    render! {
+    rsx! {
         div {
             link { href:"https://fonts.googleapis.com/icon?family=Material+Icons", rel:"stylesheet" }
             header {
@@ -34,7 +34,7 @@ fn app() -> Element {
             main {
                 {files.read().path_names.iter().enumerate().map(|(dir_id, path)| {
                     let path_end = path.split('/').last().unwrap_or(path.as_str());
-                    render! (
+                    rsx! (
                         div {
                             class: "folder",
                             key: "{path}",

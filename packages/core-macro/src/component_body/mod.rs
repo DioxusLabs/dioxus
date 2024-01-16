@@ -67,11 +67,11 @@
 //!
 //! #[name_changer(CoolName)]
 //! pub fn LameName() -> Element {
-//!     render! { "I want a cool name!" }
+//!     rsx! { "I want a cool name!" }
 //! }
 //!
 //! pub fn App() -> Element {
-//!     render! { CoolName {} } // Renders: "I want a cool name!"
+//!     rsx! { CoolName {} } // Renders: "I want a cool name!"
 //! }
 //! ```
 //! ## Implementing a component body deserializer

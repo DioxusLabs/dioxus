@@ -49,7 +49,7 @@ fn main() {
 
 #[component]
 fn UserFrame(user_id: usize) -> Element {
-    render! {
+    rsx! {
         pre { "UserFrame{{\n\tuser_id:{user_id}\n}}" }
         div { background_color: "rgba(0,0,0,50%)",
             "children:"
@@ -60,7 +60,7 @@ fn UserFrame(user_id: usize) -> Element {
 
 #[component]
 fn Route1(user_id: usize, dynamic: usize, query: String, extra: String) -> Element {
-    render! {
+    rsx! {
         pre {
             "Route1{{\n\tuser_id:{user_id},\n\tdynamic:{dynamic},\n\tquery:{query},\n\textra:{extra}\n}}"
         }
@@ -85,7 +85,7 @@ fn Route1(user_id: usize, dynamic: usize, query: String, extra: String) -> Eleme
 
 #[component]
 fn Route2(user_id: usize) -> Element {
-    render! {
+    rsx! {
         pre { "Route2{{\n\tuser_id:{user_id}\n}}" }
         {(0..*user_id).map(|i| rsx!{ p { "{i}" } })},
         p { "Footer" }
@@ -111,7 +111,7 @@ fn Route3(dynamic: String) -> Element {
 
     let navigator = use_navigator();
 
-    render! {
+    rsx! {
         input {
             oninput: move |evt| {
                 *current_route_str.write() = evt.value();
@@ -146,7 +146,7 @@ fn Route3(dynamic: String) -> Element {
         match parsed {
             Ok(route) => {
                 if route != current_route {
-                    render! {
+                    rsx! {
                         Link {
                             to: route.clone(),
                             "{route}"
@@ -158,7 +158,7 @@ fn Route3(dynamic: String) -> Element {
                 }
             }
             Err(err) => {
-                render! {
+                rsx! {
                     pre {
                         color: "red",
                         "Invalid route:\n{err}"

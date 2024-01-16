@@ -11,7 +11,7 @@ fn app() -> Element {
     // Because signal is never read in this component, this component will not rerun when the signal changes
     use_context_provider(|| Signal::new(0));
 
-    render! {
+    rsx! {
         Child {}
     }
 }
@@ -19,7 +19,7 @@ fn app() -> Element {
 fn Child() -> Element {
     let signal: Signal<i32> = *use_context(cx).unwrap();
     // This component does read from the signal, so when the signal changes it will rerun
-    render! {
+    rsx! {
         "{signal}"
     }
 }

@@ -12,7 +12,7 @@ where
     use dioxus_router::prelude::RouterConfig;
 
     let cfg = props;
-    render! {
+    rsx! {
         dioxus_router::prelude::Router::<R> {
             config: move || {
                 RouterConfig::default()

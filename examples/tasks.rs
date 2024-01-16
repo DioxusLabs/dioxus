@@ -19,7 +19,7 @@ fn app() -> Element {
         }
     });
 
-    render! {
+    rsx! {
         div {
             h1 { "Current count: {count}" }
             button { onclick: move |_| count.set(0), "Reset the count" }

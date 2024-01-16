@@ -51,7 +51,7 @@ enum Route {
 
 #[component]
 fn Blog() -> Element {
-    render! {
+    rsx! {
         Link { to: Route::Home {}, "Go to counter" }
         table {
             tbody {

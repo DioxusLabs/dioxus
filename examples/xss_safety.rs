@@ -11,7 +11,7 @@ fn main() {
 fn app() -> Element {
     let mut contents = use_signal(|| String::from("<script>alert(\"hello world\")</script>"));
 
-    render! {
+    rsx! {
         div {
             h1 {"Dioxus is XSS-Safe"}
             h3 { "{contents}" }

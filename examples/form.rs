@@ -10,7 +10,7 @@ fn main() {
 }
 
 fn app() -> Element {
-    render! {
+    rsx! {
         div {
             h1 { "Form" }
             form {

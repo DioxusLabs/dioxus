@@ -66,7 +66,7 @@ fn Grid(cx: Scope<GridProps>) -> Element {
         });
     }
 
-    render! {
+    rsx! {
         div{
             width: "100%",
             height: "100%",

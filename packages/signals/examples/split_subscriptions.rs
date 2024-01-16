@@ -21,7 +21,7 @@ fn use_app_data() -> ApplicationData {
 fn app() -> Element {
     use_context_provider(ApplicationData::default);
 
-    render! {
+    rsx! {
         div { ReadsFirst {} }
         div { ReadsSecond {} }
         div { ReadsManySignals {} }
@@ -32,7 +32,7 @@ fn ReadsFirst() -> Element {
     println!("running first");
     let data = use_app_data(cx);
 
-    render! {
+    rsx! {
         button {
             onclick: move |_| {
                 *data.first_data.write() += 1;
@@ -59,7 +59,7 @@ fn ReadsSecond() -> Element {
     println!("running second");
     let data = use_app_data(cx);
 
-    render! {
+    rsx! {
         button {
             onclick: move |_| {
                 *data.second_data.write() += 1;
@@ -86,7 +86,7 @@ fn ReadsManySignals() -> Element {
     println!("running many signals");
     let data = use_app_data(cx);
 
-    render! {
+    rsx! {
         button {
             onclick: move |_| {
                 data.many_signals.write().push(Signal::new(0));
@@ -122,7 +122,7 @@ fn Child(cx: Scope<ChildProps>) -> Element {
     println!("running child");
     let count = cx.props.count;
 
-    render! {
+    rsx! {
         div {
             "Child: {count}"
             button {

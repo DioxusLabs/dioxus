@@ -19,7 +19,7 @@ use dioxus_core::{Element, VirtualDom};
 
 pub use crate::renderer::Renderer;
 
-/// A convenience function to render an `render!` call to a string
+/// A convenience function to render an `rsx!` call to a string
 ///
 /// For advanced rendering, create a new `SsrRender`.
 pub fn render_element(element: Element) -> String {

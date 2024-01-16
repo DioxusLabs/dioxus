@@ -21,7 +21,7 @@ use std::{
 /// fn Parent() -> Element {
 ///    let count = use_tracked_state(|| 0);
 ///
-///    render! {
+///    rsx! {
 ///        Child {
 ///            count: count.clone(),
 ///        }
@@ -32,7 +32,7 @@ use std::{
 /// fn Child(count: Tracked<usize>) -> Element {
 ///    let less_than_five = use_selector(count, |count| *count < 5);
 ///
-///    render! {
+///    rsx! {
 ///        "{less_than_five}"
 ///    }
 /// }

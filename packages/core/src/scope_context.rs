@@ -176,12 +176,12 @@ impl ScopeContext {
     ///
     /// static app: Component = |cx| {
     ///     cx.use_hook(|| cx.provide_context(SharedState("world")));
-    ///     render!(Child {})
+    ///     rsx!(Child {})
     /// }
     ///
     /// static Child: Component = |cx| {
     ///     let state = cx.consume_state::<SharedState>();
-    ///     render!(div { "hello {state.0}" })
+    ///     rsx!(div { "hello {state.0}" })
     /// }
     /// ```
     pub fn provide_context<T: 'static + Clone>(&self, value: T) -> T {

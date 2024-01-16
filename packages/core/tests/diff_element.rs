@@ -6,7 +6,7 @@ use dioxus_core::{ElementId, NoOpMutations};
 fn text_diff() {
     fn app() -> Element {
         let gen = generation();
-        render!( h1 { "hello {gen}" } )
+        rsx!( h1 { "hello {gen}" } )
     }
 
     let mut vdom = VirtualDom::new(app);
@@ -37,8 +37,8 @@ fn element_swap() {
         let gen = generation();
 
         match gen % 2 {
-            0 => render!( h1 { "hello 1" } ),
-            1 => render!( h2 { "hello 2" } ),
+            0 => rsx!( h1 { "hello 1" } ),
+            1 => rsx!( h2 { "hello 2" } ),
             _ => unreachable!(),
         }
     }

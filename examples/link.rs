@@ -7,7 +7,7 @@ fn main() {
 
 #[component]
 fn App() -> Element {
-    render! (
+    rsx! (
         div {
             p { a { href: "http://dioxuslabs.com/", "Default link - links outside of your app" } }
             p {
@@ -35,7 +35,7 @@ enum Route {
 
 #[component]
 fn Header() -> Element {
-    render! {
+    rsx! {
         h1 { "Your app here" }
         ul {
             li {
@@ -51,10 +51,10 @@ fn Header() -> Element {
 
 #[component]
 fn Home() -> Element {
-    render!( h1 { "Home" } )
+    rsx!( h1 { "Home" } )
 }
 
 #[component]
 fn Settings() -> Element {
-    render!( h1 { "Settings" } )
+    rsx!( h1 { "Settings" } )
 }

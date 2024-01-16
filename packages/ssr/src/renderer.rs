@@ -232,7 +232,7 @@ fn to_string_works() {
         let dynamic = 123;
         let dyn2 = "</diiiiiiiiv>"; // this should be escaped
 
-        render! {
+        rsx! {
             div { class: "asdasdasd", class: "asdasdasd", id: "id-{dynamic}",
                 "Hello world 1 -->"
                 "{dynamic}"
@@ -289,7 +289,7 @@ fn empty_for_loop_works() {
     use dioxus::prelude::*;
 
     fn app() -> Element {
-        render! {
+        rsx! {
             div { class: "asdasdasd",
                 for _ in (0..5) {
 
@@ -332,7 +332,7 @@ fn empty_render_works() {
     use dioxus::prelude::*;
 
     fn app() -> Element {
-        render! {}
+        rsx! {}
     }
 
     let mut dom = VirtualDom::new(app);

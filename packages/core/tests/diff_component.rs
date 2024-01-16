@@ -13,46 +13,46 @@ fn component_swap() {
         render_phase += 1;
 
         match *render_phase() {
-            0 => render! {
+            0 => rsx! {
                 nav_bar {}
                 dash_board {}
             },
-            1 => render! {
+            1 => rsx! {
                 nav_bar {}
                 dash_results {}
             },
-            2 => render! {
+            2 => rsx! {
                 nav_bar {}
                 dash_board {}
             },
-            3 => render! {
+            3 => rsx! {
                 nav_bar {}
                 dash_results {}
             },
-            4 => render! {
+            4 => rsx! {
                 nav_bar {}
                 dash_board {}
             },
-            _ => render!("blah"),
+            _ => rsx!("blah"),
         }
     }
 
     fn nav_bar() -> Element {
-        render! {
-            h1 { "NavBar", {(0..3).map(|_| render!(nav_link {}))} }
+        rsx! {
+            h1 { "NavBar", {(0..3).map(|_| rsx!(nav_link {}))} }
         }
     }
 
     fn nav_link() -> Element {
-        render!( h1 { "nav_link" } )
+        rsx!( h1 { "nav_link" } )
     }
 
     fn dash_board() -> Element {
-        render!( div { "dashboard" } )
+        rsx!( div { "dashboard" } )
     }
 
     fn dash_results() -> Element {
-        render!( div { "results" } )
+        rsx!( div { "results" } )
     }
 
     let mut dom = VirtualDom::new(app);

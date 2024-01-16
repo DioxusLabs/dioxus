@@ -18,14 +18,14 @@ use crate::UseFutureDep;
 ///         // This will only be calculated when `number` has changed.
 ///         number * 100
 ///     });
-///     render!(
+///     rsx!(
 ///         p { "{bigger_number}" }
 ///     )
 /// }
 ///
 /// #[component]
 /// fn App() -> Element {
-///     render!(Calculator { number: 0 })
+///     rsx!(Calculator { number: 0 })
 /// }
 /// ```
 #[must_use = "Consider using `use_effect` to run rerun a callback when dependencies change"]

@@ -25,7 +25,7 @@ use crate::utils::use_router_internal::use_router_internal;
 ///
 /// #[component]
 /// fn App() -> Element {
-///     render! {
+///     rsx! {
 ///         h1 { "App" }
 ///         Router::<Route> {}
 ///     }
@@ -34,7 +34,7 @@ use crate::utils::use_router_internal::use_router_internal;
 /// #[component]
 /// fn Index() -> Element {
 ///     let path: Route = use_route(&cx).unwrap();
-///     render! {
+///     rsx! {
 ///         h2 { "Current Path" }
 ///         p { "{path}" }
 ///     }

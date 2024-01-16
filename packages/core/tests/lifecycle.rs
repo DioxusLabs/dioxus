@@ -19,7 +19,7 @@ fn manual_diffing() {
 
     fn app(cx: AppProps) -> Element {
         let val = cx.value.lock().unwrap();
-        render! { div { "{val}" } }
+        rsx! { div { "{val}" } }
     };
 
     let value = Arc::new(Mutex::new("Hello"));
@@ -46,7 +46,7 @@ fn events_generate() {
         let mut count = use_signal(|| 0);
 
         match *count() {
-            0 => render! {
+            0 => rsx! {
                 div { onclick: move |_| count += 1,
                     div { "nested" }
                     "Click me!"

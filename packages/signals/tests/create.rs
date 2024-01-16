@@ -7,7 +7,7 @@ use dioxus_signals::*;
 #[test]
 fn create_signals_global() {
     let mut dom = VirtualDom::new(|cx| {
-        render! {
+        rsx! {
             for _ in 0..10 {
                 Child {}
             }
@@ -17,7 +17,7 @@ fn create_signals_global() {
     fn Child() -> Element {
         let signal = create_without_cx();
 
-        render! {
+        rsx! {
             "{signal}"
         }
     }
@@ -32,7 +32,7 @@ fn create_signals_global() {
 #[test]
 fn deref_signal() {
     let mut dom = VirtualDom::new(|cx| {
-        render! {
+        rsx! {
             for _ in 0..10 {
                 Child {}
             }
@@ -45,7 +45,7 @@ fn deref_signal() {
         // You can call signals like functions to get a Ref of their value.
         assert_eq!(&*signal(), "hello world");
 
-        render! {
+        rsx! {
             "hello world"
         }
     }
@@ -59,7 +59,7 @@ fn drop_signals() {
         let generation = generation();
 
         let count = if generation % 2 == 0 { 10 } else { 0 };
-        render! {
+        rsx! {
             for _ in 0..count {
                 Child {}
             }
@@ -69,7 +69,7 @@ fn drop_signals() {
     fn Child() -> Element {
         let signal = create_without_cx();
 
-        render! {
+        rsx! {
             "{signal}"
         }
     }

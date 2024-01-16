@@ -23,7 +23,7 @@ fn app() -> Element {
     });
     println!("Running app");
 
-    render! {
+    rsx! {
         button {
             onclick: move |_| {
                 local_state.set(local_state.get() + 1);

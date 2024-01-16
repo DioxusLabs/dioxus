@@ -8,7 +8,7 @@ pub fn FailureExternalNavigation() -> Element {
     #[allow(deprecated)]
     let router = use_router();
 
-    render! {
+    rsx! {
         h1 { "External Navigation Failure!" }
         p {
             "The application tried to programmatically navigate to an external page. This "

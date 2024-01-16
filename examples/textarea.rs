@@ -9,7 +9,7 @@ fn main() {
 fn app() -> Element {
     let mut model = use_signal(|| String::from("asd"));
 
-    render! {
+    rsx! {
         textarea {
             class: "border",
             rows: "10",

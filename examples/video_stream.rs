@@ -43,7 +43,7 @@ fn app() -> Element {
         });
     });
 
-    render! {
+    rsx! {
         div {
             video {
                 src: "/videos/test_video.mp4",

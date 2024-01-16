@@ -20,7 +20,7 @@ fn suspense_resolves() {
 }
 
 fn app() -> Element {
-    render!(
+    rsx!(
         div {
             "Waiting for... "
             suspended_child {}
@@ -38,5 +38,5 @@ fn suspended_child() -> Element {
         suspend()?;
     }
 
-    render!("child")
+    rsx!("child")
 }

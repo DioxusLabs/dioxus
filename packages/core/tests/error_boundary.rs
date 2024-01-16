@@ -9,7 +9,7 @@ fn catches_panic() {
 }
 
 fn app() -> Element {
-    render! {
+    rsx! {
         div {
             h1 { "Title" }
 
@@ -28,5 +28,5 @@ fn ThrowChild() -> Element {
 
     let _g: i32 = "123123".parse().throw()?;
 
-    render! { div {} }
+    rsx! { div {} }
 }

@@ -15,10 +15,10 @@ fn app() -> Element {
             .await;
 
         let Ok(breeds) = list else {
-            return render! { "error fetching breeds" };
+            return rsx! { "error fetching breeds" };
         };
 
-        render! {
+        rsx! {
             for cur_breed in breeds.message.keys().take(10).cloned() {
                 li { key: "{cur_breed}",
                     button { onclick: move |_| breed.set(cur_breed.clone()),
@@ -30,10 +30,10 @@ fn app() -> Element {
     });
 
     let Some(breed_list) = breed_list.value().cloned() else {
-        return render! { "loading breeds..." };
+        return rsx! { "loading breeds..." };
     };
 
-    render! {
+    rsx! {
         h1 { "Select a dog breed!" }
         div { height: "500px", display: "flex",
             ul { flex: "50%", {breed_list} }
@@ -53,13 +53,13 @@ fn BreedPic(breed: Signal<String>) -> Element {
     });
 
     match fut.value().read().as_ref() {
-        Some(Ok(resp)) => render! {
+        Some(Ok(resp)) => rsx! {
             div {
                 button { onclick: move |_| fut.restart(), "Click to fetch another doggo" }
                 img { max_width: "500px", max_height: "500px", src: "{resp.message}" }
             }
         },
-        _ => render! { "loading image..." },
+        _ => rsx! { "loading image..." },
     }
 }
 

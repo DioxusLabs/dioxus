@@ -36,7 +36,7 @@ fn memos_rerun() {
             signal += 1;
             assert_eq!(memo.value(), 1);
 
-            render! {
+            rsx! {
                 div {}
             }
         },
@@ -73,7 +73,7 @@ fn memos_prevents_component_rerun() {
                 *signal.write() = 1;
             }
 
-            render! {
+            rsx! {
                 Child {
                     signal: signal,
                     counter: cx.props.clone(),
@@ -118,7 +118,7 @@ fn memos_prevents_component_rerun() {
             _ => panic!("Unexpected generation"),
         }
 
-        render! {
+        rsx! {
             div {}
         }
     }

@@ -6,7 +6,7 @@ use dioxus_core::ElementId;
 #[test]
 fn nested_passthru_creates() {
     fn app() -> Element {
-        render! {
+        rsx! {
             PassThru {
                 PassThru {
                     PassThru { div { "hi" } }
@@ -17,7 +17,7 @@ fn nested_passthru_creates() {
 
     #[component]
     fn PassThru(children: Element) -> Element {
-        render!({ children })
+        rsx!({ children })
     }
 
     let mut dom = VirtualDom::new(app);
@@ -38,7 +38,7 @@ fn nested_passthru_creates() {
 #[test]
 fn nested_passthru_creates_add() {
     fn app() -> Element {
-        render! {
+        rsx! {
             ChildComp {
                 "1"
                 ChildComp {
@@ -54,7 +54,7 @@ fn nested_passthru_creates_add() {
 
     #[component]
     fn ChildComp(children: Element) -> Element {
-        render! {{children}}
+        rsx! {{children}}
     }
 
     let mut dom = VirtualDom::new(app);
@@ -81,7 +81,7 @@ fn dynamic_node_as_root() {
     fn app() -> Element {
         let a = 123;
         let b = 456;
-        render! { "{a}", "{b}" }
+        rsx! { "{a}", "{b}" }
     }
 
     let mut dom = VirtualDom::new(app);

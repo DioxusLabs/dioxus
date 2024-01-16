@@ -19,7 +19,7 @@ fn App() -> Element {
         print!("{signal}");
     });
 
-    render! {
+    rsx! {
         "{signal}"
     }
 }
@@ -38,7 +38,7 @@ fn App() -> Element {
     // Because signal is never read in this component, this component will not rerun when the signal changes
     let signal = use_signal(|| 0);
 
-    render! {
+    rsx! {
         button {
             onclick: move |_| {
                 *signal.write() += 1;
@@ -61,7 +61,7 @@ struct ChildProps {
 #[component]
 fn Child(cx: Scope<ChildProps>) -> Element {
     // This component does read from the signal, so when the signal changes it will rerun
-    render! {
+    rsx! {
         "{cx.props.signal}"
     }
 }
@@ -78,7 +78,7 @@ fn App() -> Element {
     // Because signal is never read in this component, this component will not rerun when the signal changes
     use_context_provider(|| Signal::new(0));
 
-    render! {
+    rsx! {
         Child {}
     }
 }
@@ -87,7 +87,7 @@ fn App() -> Element {
 fn Child() -> Element {
     let signal: Signal<i32> = *use_context(cx).unwrap();
     // This component does read from the signal, so when the signal changes it will rerun
-    render! {
+    rsx! {
         "{signal}"
     }
 }
@@ -108,7 +108,7 @@ fn App() -> Element {
     let signal = use_signal(|| 0);
     let doubled = use_selector(|| signal * 2);
 
-    render! {
+    rsx! {
         button {
             onclick: move |_| *signal.write() += 1,
             "Increase"
@@ -121,7 +121,7 @@ fn App() -> Element {
 
 #[component]
 fn Child(signal: ReadOnlySignal<usize>) -> Element {
-    render! {
+    rsx! {
         "{signal}"
     }
 }

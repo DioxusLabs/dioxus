@@ -12,7 +12,7 @@ use dioxus_core::ElementId;
 #[test]
 fn test_original_diff() {
     let mut dom = VirtualDom::new(|| {
-        render! {
+        rsx! {
             div { div { "Hello, world!" } }
         }
     });
@@ -32,7 +32,7 @@ fn test_original_diff() {
 #[test]
 fn create() {
     let mut dom = VirtualDom::new(|| {
-        render! {
+        rsx! {
             div {
                 div {
                     "Hello, world!"
@@ -75,7 +75,7 @@ fn create() {
 
 #[test]
 fn create_list() {
-    let mut dom = VirtualDom::new(|| render! {{(0..3).map(|f| render!( div { "hello" } ))}});
+    let mut dom = VirtualDom::new(|| rsx! {{(0..3).map(|f| rsx!( div { "hello" } ))}});
 
     let _edits = dom.rebuild_to_vec().santize();
 
@@ -95,7 +95,7 @@ fn create_list() {
 #[test]
 fn create_simple() {
     let mut dom = VirtualDom::new(|| {
-        render! {
+        rsx! {
             div {}
             div {}
             div {}
@@ -122,7 +122,7 @@ fn create_simple() {
 #[test]
 fn create_components() {
     let mut dom = VirtualDom::new(|| {
-        render! {
+        rsx! {
             Child { "abc1" }
             Child { "abc2" }
             Child { "abc3" }
@@ -135,7 +135,7 @@ fn create_components() {
     }
 
     fn Child(cx: ChildProps) -> Element {
-        render! {
+        rsx! {
             h1 {}
             div { {cx.children} }
             p {}
@@ -150,7 +150,7 @@ fn create_components() {
 #[test]
 fn anchors() {
     let mut dom = VirtualDom::new(|| {
-        render! {
+        rsx! {
             if true {
                  div { "hello" }
             }

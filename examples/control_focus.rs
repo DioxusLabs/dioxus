@@ -25,7 +25,7 @@ fn app() -> Element {
         }
     });
 
-    render! {
+    rsx! {
         div {
             h1 { "Input Roulette" }
             for i in 0..100 {

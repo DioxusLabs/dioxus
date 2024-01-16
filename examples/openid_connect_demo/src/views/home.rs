@@ -1,5 +1,5 @@
 use dioxus::prelude::*;
 
 pub fn Home() -> Element {
-    render! { div { "Hello world" } }
+    rsx! { div { "Hello world" } }
 }

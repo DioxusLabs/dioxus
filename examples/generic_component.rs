@@ -7,7 +7,7 @@ fn main() {
 }
 
 fn app() -> Element {
-    render! {
+    rsx! {
         generic_child { data: 0 }
     }
 }
@@ -18,7 +18,7 @@ struct GenericChildProps<T: Display + PartialEq + Clone + 'static> {
 }
 
 fn generic_child<T: Display + PartialEq + Clone>(props: GenericChildProps<T>) -> Element {
-    render! {
+    rsx! {
         div { "{props.data}" }
     }
 }

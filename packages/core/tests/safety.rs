@@ -5,7 +5,7 @@ use dioxus::prelude::*;
 /// Ensure no issues with not calling rebuild_to_vec
 #[test]
 fn root_node_isnt_null() {
-    let dom = VirtualDom::new(|| render!("Hello world!"));
+    let dom = VirtualDom::new(|| rsx!("Hello world!"));
 
     let scope = dom.base_scope();
 

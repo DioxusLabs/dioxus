@@ -16,7 +16,7 @@ fn app() -> Element {
         }
     });
 
-    render! {
+    rsx! {
         div { "High-Five counter: {count}" }
     }
 }

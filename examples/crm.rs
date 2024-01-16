@@ -14,7 +14,7 @@ type Clients = Signal<Vec<Client>>;
 fn app() -> Element {
     use_context_provider::<Clients>(|| Signal::new(vec![]));
 
-    render! {
+    rsx! {
         link {
             rel: "stylesheet",
             href: "https://unpkg.com/purecss@2.0.6/build/pure-min.css",
@@ -60,7 +60,7 @@ pub struct Client {
 fn ClientList() -> Element {
     let mut clients = use_context::<Clients>();
 
-    render! {
+    rsx! {
         h2 { "List of Clients" }
         Link { to: Route::ClientAdd {}, class: "pure-button pure-button-primary", "Add Client" }
         Link { to: Route::Settings {}, class: "pure-button", "Settings" }
@@ -88,7 +88,7 @@ fn ClientAdd() -> Element {
         dioxus_router::router().push(Route::ClientList {});
     };
 
-    render! {
+    rsx! {
         h2 { "Add new Client" }
         form { class: "pure-form pure-form-aligned", onsubmit: submit_client,
 
@@ -138,7 +138,7 @@ fn ClientAdd() -> Element {
 
 #[component]
 fn Settings() -> Element {
-    render! {
+    rsx! {
         h2 { "Settings" }
 
         button {

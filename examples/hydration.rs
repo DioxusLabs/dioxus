@@ -27,7 +27,7 @@ fn main() {
 fn app() -> Element {
     let mut val = use_signal(|| 0);
 
-    render! {
+    rsx! {
         div {
             h1 { "hello world. Count: {val}" }
             button { onclick: move |_| val += 1, "click to increment" }

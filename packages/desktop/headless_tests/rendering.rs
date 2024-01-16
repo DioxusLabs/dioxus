@@ -75,7 +75,7 @@ fn check_html_renders() -> Element {
         }
     };
 
-    render! {
+    rsx! {
         div {
             id: "main_div",
             div {

@@ -33,14 +33,14 @@ pub struct HistoryButtonProps {
 ///
 /// #[component]
 /// fn App() -> Element {
-///     render! {
+///     rsx! {
 ///         Router::<Route> {}
 ///     }
 /// }
 ///
 /// #[component]
 /// fn Index() -> Element {
-///     render! {
+///     rsx! {
 ///         GoBackButton {
 ///             "go back"
 ///         }
@@ -76,7 +76,7 @@ pub fn GoBackButton(
 
     let disabled = !router.can_go_back();
 
-    render! {
+    rsx! {
         button { disabled: "{disabled}", prevent_default: "onclick", onclick: move |_| router.go_back(), {children} }
     }
 }
@@ -103,14 +103,14 @@ pub fn GoBackButton(
 ///
 /// #[component]
 /// fn App() -> Element {
-///     render! {
+///     rsx! {
 ///         Router::<Route> {}
 ///     }
 /// }
 ///
 /// #[component]
 /// fn Index() -> Element {
-///     render! {
+///     rsx! {
 ///         GoForwardButton {
 ///             "go forward"
 ///         }
@@ -146,7 +146,7 @@ pub fn GoForwardButton(
 
     let disabled = !router.can_go_forward();
 
-    render! {
+    rsx! {
         button { disabled: "{disabled}", prevent_default: "onclick", onclick: move |_| router.go_forward(), {children} }
     }
 }

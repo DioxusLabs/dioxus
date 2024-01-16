@@ -5,7 +5,7 @@ fn basic_syntax_is_a_template() -> Element {
     let asd = 123;
     let var = 123;
 
-    render! {
+    rsx! {
         div { key: "12345", class: "asd", class: "{asd}", class: if true {
                 "{asd}"
             }, class: if false {
