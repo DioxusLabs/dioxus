@@ -5,7 +5,7 @@ fn main() {
     launch_desktop(Route::Home {});
 }
 
-#[derive(Routable, Clone)]
+#[derive(Routable, Clone, Debug, PartialEq)]
 #[rustfmt::skip]
 enum Route {
     #[layout(NavBar)]
@@ -15,7 +15,7 @@ enum Route {
             #[layout(Blog)]
                 #[route("/")]
                 BlogList {},
-                #[route("/blog/:name")]
+                #[route("/:name")]
                 BlogPost { name: String },
             #[end_layout]
         #[end_nest]
@@ -49,11 +49,13 @@ fn NavBar() -> Element {
 
 #[component]
 fn Home() -> Element {
+    println!("Home");
     rsx! { h1 { "Welcome to the Dioxus Blog!" } }
 }
 
 #[component]
 fn Blog() -> Element {
+    println!("Blog");
     rsx! {
         h1 { "Blog" }
         Outlet::<Route> {}
