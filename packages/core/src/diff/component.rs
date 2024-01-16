@@ -65,18 +65,10 @@ impl VNode {
         dom: &mut VirtualDom,
         to: &mut impl WriteMutations,
     ) {
-        println!(
-            "diffing vcomponent: {new:#?} vs {old:#?}",
-            new = new,
-            old = old
-        );
-
         // Replace components that have different render fns
         if old.render_fn != new.render_fn {
-            println!("render fns are different, replacing");
             return self.replace_vcomponent(mount, idx, new, parent, dom, to);
         }
-        println!("render fns are the same, continuing");
 
         // copy out the box for both
         let old_scope = &mut dom.scopes[scope_id.0];
