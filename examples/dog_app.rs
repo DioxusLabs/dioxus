@@ -7,32 +7,37 @@ fn main() {
 
 fn app() -> Element {
     let breed = use_signal(|| "deerhound".to_string());
-
     let breed_list = use_future(|| async move {
-        reqwest::get("https://dog.ceo/api/breeds/list/all")
+        let list = reqwest::get("https://dog.ceo/api/breeds/list/all")
             .await
             .unwrap()
             .json::<ListBreeds>()
-            .await
+            .await;
+
+        let Ok(breeds) = list else {
+            return rsx! { "error fetching breeds" };
+        };
+
+        rsx! {
+            for cur_breed in breeds.message.keys().take(10).cloned() {
+                li { key: "{cur_breed}",
+                    button { onclick: move |_| breed.set(cur_breed.clone()),
+                        "{cur_breed}"
+                    }
+                }
+            }
+        }
     });
 
     match breed_list.value().read().as_ref() {
-        Some(Ok(breeds)) => rsx! {
-            div { height: "500px",
-                h1 { "Select a dog breed!" }
-                div { display: "flex",
-                    ul { flex: "50%",
-                        for cur_breed in breeds.message.keys().take(10).cloned() {
-                            li { key: "{cur_breed}",
-                                button { onclick: move |_| breed.set(cur_breed.clone()), "{cur_breed}" }
-                            }
-                        }
-                    }
-                    div { flex: "50%", BreedPic { breed } }
-                }
+        Some(resp) => rsx! {
+            h1 { "Select a dog breed!" }
+            div { height: "500px", display: "flex",
+                ul { flex: "50%", {breed_list} }
+                div { flex: "50%", BreedPic { breed } }
             }
         },
-        _ => rsx! { div { "loading breeds" } },
+        _ => rsx! { "loading breeds..." },
     }
 }
 
@@ -53,7 +58,7 @@ fn BreedPic(breed: Signal<String>) -> Element {
                 img { max_width: "500px", max_height: "500px", src: "{resp.message}" }
             }
         },
-        _ => rsx! { div { "loading dog picture" } },
+        _ => rsx! { "loading image..." },
     }
 }
 

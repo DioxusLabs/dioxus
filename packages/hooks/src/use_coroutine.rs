@@ -1,4 +1,4 @@
-use dioxus_core::prelude::{consume_context, provide_context, push_future, use_hook};
+use dioxus_core::prelude::{consume_context, provide_context, spawn, use_hook};
 use dioxus_core::Task;
 use dioxus_signals::{CopyValue, Signal};
 pub use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
@@ -83,7 +83,7 @@ where
     // this might not be the best API
     if *coroutine.needs_regen.read() {
         let (tx, rx) = futures_channel::mpsc::unbounded();
-        let task = push_future(init(rx)).unwrap();
+        let task = spawn(init(rx));
         coroutine.tx.set(Some(tx));
         coroutine.task.set(Some(task));
         coroutine.needs_regen.set_untracked(false);

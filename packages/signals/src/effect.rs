@@ -26,7 +26,7 @@ impl EffectStack {
 }
 
 pub(crate) fn get_effect_stack() -> EffectStack {
-    match consume_context() {
+    match try_consume_context() {
         Some(rt) => rt,
         None => {
             let store = EffectStack::default();

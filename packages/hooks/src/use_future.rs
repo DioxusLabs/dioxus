@@ -3,7 +3,7 @@ use dioxus_core::{
     prelude::{spawn, use_hook},
     ScopeState, Task,
 };
-use dioxus_signals::{use_effect, use_signal, Signal};
+use dioxus_signals::{use_effect, use_signal, Effect, Signal};
 use futures_util::{future, pin_mut, FutureExt};
 use std::{any::Any, cell::Cell, future::Future, pin::Pin, rc::Rc, sync::Arc, task::Poll};
 
@@ -20,7 +20,7 @@ use std::{any::Any, cell::Cell, future::Future, pin::Pin, rc::Rc, sync::Arc, tas
 /// will be canceled before the new one is started.
 ///
 /// - dependencies: a tuple of references to values that are PartialEq + Clone
-pub fn use_future<T, F>(future: impl FnMut() -> F) -> UseFuture<T>
+pub fn use_future<T, F>(mut future: impl FnMut() -> F) -> UseFuture<T>
 where
     T: 'static,
     F: Future<Output = T> + 'static,
@@ -34,8 +34,8 @@ where
 
         // Spawn a wrapper task that polls the innner future and watch its dependencies
         let task = spawn(async move {
-            // move the future here and pin it so we can ppoll it
-            let mut fut = fut;
+            // move the future here and pin it so we can poll it
+            let fut = fut;
             pin_mut!(fut);
 
             let res = future::poll_fn(|cx| {
@@ -44,7 +44,7 @@ where
                 // Poll the inner future
                 let ready = fut.poll_unpin(cx);
 
-                // add any dependencies to the effect stack
+                // add any dependencies to the effect stack that we need to watch when restarting the future
 
                 ready
             })
@@ -85,15 +85,14 @@ impl<T> UseFuture<T> {
 
     // Manually set the value in the future slot without starting the future over
     pub fn set(&self, new_value: T) {
-        // self.state.set(Some(new_value));
+        self.value.set(Some(new_value));
     }
 
     /// Return any value, even old values if the future has not yet resolved.
     ///
     /// If the future has never completed, the returned value will be `None`.
     pub fn value(&self) -> Signal<Option<T>> {
-        todo!()
-        // self.state.current_val.as_ref().as_ref()
+        self.value
     }
 
     /// Get the ID of the future in Dioxus' internal scheduler

@@ -12,7 +12,7 @@ use generational_box::{
 use crate::Effect;
 
 fn current_store() -> Store {
-    match consume_context() {
+    match try_consume_context::<Store>() {
         Some(rt) => rt,
         None => {
             let store = Store::default();
