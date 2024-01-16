@@ -37,6 +37,21 @@ pub fn client(input: TokenStream) -> TokenStream {
 }
 
 #[proc_macro]
+pub fn web(input: TokenStream) -> TokenStream {
+    if cfg!(feature = "web") {
+        let input = TokenStream2::from(input);
+        quote! {
+            Some(#input)
+        }
+    } else {
+        quote! {
+            None
+        }
+    }
+    .into()
+}
+
+#[proc_macro]
 pub fn desktop(input: TokenStream) -> TokenStream {
     if cfg!(feature = "desktop") {
         let input = TokenStream2::from(input);
