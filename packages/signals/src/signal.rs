@@ -348,7 +348,10 @@ impl<T: 'static> PartialEq for Signal<T> {
     }
 }
 
-impl<T: Copy> Deref for Signal<T> {
+/// Allow calling a signal with signal() syntax
+///
+/// Currently only limited to copy types, though could probably specialize for string/arc/rc
+impl<T: Copy + Clone> Deref for Signal<T> {
     type Target = dyn Fn() -> T;
 
     fn deref(&self) -> &Self::Target {
@@ -486,7 +489,7 @@ impl<T: 'static> PartialEq for ReadOnlySignal<T> {
     }
 }
 
-impl<T: Copy> Deref for ReadOnlySignal<T> {
+impl<T: Copy + Clone> Deref for ReadOnlySignal<T> {
     type Target = dyn Fn() -> T;
 
     fn deref(&self) -> &Self::Target {

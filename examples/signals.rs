@@ -14,7 +14,7 @@ fn app() -> Element {
     // Signals are backed by a runtime that is designed to deeply integrate with Dioxus apps
     use_future(|| async move {
         loop {
-            if running.cloned() {
+            if running() {
                 count += 1;
             }
             tokio::time::sleep(Duration::from_millis(400)).await;
