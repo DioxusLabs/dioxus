@@ -243,54 +243,6 @@ Like so:
     }
 }
 
-impl ToTokens for Element {
-    fn to_tokens(&self, tokens: &mut TokenStream2) {
-        let name = &self.name;
-        let children = &self.children;
-
-        let key = match &self.key {
-            Some(ty) => quote! { Some(#ty) },
-            None => quote! { None },
-        };
-
-        let listeners = self.merged_attributes.iter().filter(|f| {
-            matches!(
-                f,
-                AttributeType::Named(ElementAttrNamed {
-                    attr: ElementAttr {
-                        value: ElementAttrValue::EventTokens { .. },
-                        ..
-                    },
-                    ..
-                })
-            )
-        });
-
-        let attr = self.merged_attributes.iter().filter(|f| {
-            !matches!(
-                f,
-                AttributeType::Named(ElementAttrNamed {
-                    attr: ElementAttr {
-                        value: ElementAttrValue::EventTokens { .. },
-                        ..
-                    },
-                    ..
-                })
-            )
-        });
-
-        tokens.append_all(quote! {
-            dioxus_core::Element::new(
-                #name,
-                vec![ #(#listeners),* ],
-                vec![ #(#attr),* ],
-                vec![ #(#children),* ],
-                #key,
-            )
-        });
-    }
-}
-
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub enum ElementName {
     Ident(Ident),

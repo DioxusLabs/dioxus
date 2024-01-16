@@ -9,7 +9,7 @@ fn main() {
 
 fn app() -> Element {
     render! {
-        Component {
+        spreadable_component {
             width: "10px",
             extra_data: "hello{1}",
             extra_data2: "hello{2}",
@@ -19,8 +19,7 @@ fn app() -> Element {
     }
 }
 
-#[component]
-fn Component(props: Props) -> Element {
+fn spreadable_component(props: Props) -> Element {
     render! {
         audio { ..props.attributes, "1: {props.extra_data}\n2: {props.extra_data2}" }
     }

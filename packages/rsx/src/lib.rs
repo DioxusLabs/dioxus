@@ -257,7 +257,7 @@ impl<'a> ToTokens for TemplateRenderer<'a> {
                 #key_tokens,
                 TEMPLATE,
                 Box::new([ #( #node_printer),* ]),
-                Box::new([ #( Box::new([ #( #dyn_attr_printer),* ]) ),* ]),
+                Box::new([ #( #(#dyn_attr_printer),* ),* ]),
             )
         });
     }

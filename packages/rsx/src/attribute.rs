@@ -38,8 +38,8 @@ impl AttributeType {
 impl ToTokens for AttributeType {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         match self {
-            AttributeType::Named(n) => tokens.append_all(quote! { #n }),
-            AttributeType::Spread(e) => tokens.append_all(quote! { (&#e).into() }),
+            AttributeType::Named(n) => tokens.append_all(quote! { Box::new([#n]) }),
+            AttributeType::Spread(e) => tokens.append_all(quote! { #e.into_boxed_slice() }),
         }
     }
 }

@@ -139,7 +139,9 @@ impl Parse for BodyNode {
 impl ToTokens for BodyNode {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         match &self {
-            BodyNode::Element(el) => el.to_tokens(tokens),
+            BodyNode::Element(_) => {
+                unimplemented!("Elements are statically created in the template")
+            }
             BodyNode::Component(comp) => comp.to_tokens(tokens),
             BodyNode::Text(txt) => tokens.append_all(quote! {
                 dioxus_core::DynamicNode::Text(dioxus_core::VText::new(#txt))
