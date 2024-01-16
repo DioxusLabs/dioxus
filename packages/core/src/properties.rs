@@ -112,7 +112,7 @@ where
 /// ```
 ///
 /// > Note: If you get an error about the `ComponentFunction` trait not being implemented: make sure your props implements the `Properties` trait or if you would like to declare your props inline, make sure you use the #[component] macro on your function.
-pub trait ComponentFunction<P> {
+pub trait ComponentFunction<P>: Clone + 'static {
     /// The props type for this component.
     type Props: 'static;
 
@@ -120,7 +120,7 @@ pub trait ComponentFunction<P> {
     fn call(&self, props: Self::Props) -> Element;
 }
 
-impl<T: 'static, F: Fn(T) -> Element> ComponentFunction<(T,)> for F {
+impl<T: 'static, F: Fn(T) -> Element + Clone + 'static> ComponentFunction<(T,)> for F {
     type Props = T;
 
     fn call(&self, props: T) -> Element {
@@ -130,7 +130,7 @@ impl<T: 'static, F: Fn(T) -> Element> ComponentFunction<(T,)> for F {
 
 #[doc(hidden)]
 pub struct ZeroElementMarker;
-impl<F: Fn() -> Element> ComponentFunction<ZeroElementMarker> for F {
+impl<F: Fn() -> Element + Clone + 'static> ComponentFunction<ZeroElementMarker> for F {
     type Props = ();
 
     fn call(&self, _: ()) -> Element {

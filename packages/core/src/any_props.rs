@@ -1,5 +1,5 @@
 use crate::{nodes::RenderReturn, properties::ComponentFunction};
-use std::{any::Any, ops::Deref, panic::AssertUnwindSafe, rc::Rc};
+use std::{any::Any, marker::PhantomData, ops::Deref, panic::AssertUnwindSafe};
 
 /// A boxed version of AnyProps that can be cloned
 pub(crate) struct BoxedAnyProps {
@@ -38,30 +38,34 @@ pub(crate) trait AnyProps {
     fn duplicate(&self) -> Box<dyn AnyProps>;
 }
 
-pub(crate) struct VProps<P: 'static, Phantom: 'static> {
-    pub render_fn: Rc<dyn ComponentFunction<Phantom, Props = P>>,
+pub(crate) struct VProps<P: 'static, F: ComponentFunction<Phantom, Props = P>, Phantom: 'static> {
+    pub render_fn: F,
     pub memo: fn(&P, &P) -> bool,
     pub props: P,
     pub name: &'static str,
+    phantom: PhantomData<Phantom>,
 }
 
-impl<P: 'static, Phantom: 'static> VProps<P, Phantom> {
+impl<P: 'static, F: ComponentFunction<Phantom, Props = P>, Phantom: 'static> VProps<P, F, Phantom> {
     pub(crate) fn new(
-        render_fn: impl ComponentFunction<Phantom, Props = P> + 'static,
+        render_fn: F,
         memo: fn(&P, &P) -> bool,
         props: P,
         name: &'static str,
     ) -> Self {
         Self {
-            render_fn: Rc::new(render_fn),
+            render_fn,
             memo,
             props,
             name,
+            phantom: PhantomData,
         }
     }
 }
 
-impl<P: Clone + 'static, Phantom> AnyProps for VProps<P, Phantom> {
+impl<P: Clone + 'static, F: ComponentFunction<Phantom, Props = P>, Phantom> AnyProps
+    for VProps<P, F, Phantom>
+{
     fn memoize(&self, other: &dyn Any) -> bool {
         match other.downcast_ref::<P>() {
             Some(other) => (self.memo)(&self.props, other),
@@ -96,6 +100,7 @@ impl<P: Clone + 'static, Phantom> AnyProps for VProps<P, Phantom> {
             memo: self.memo,
             props: self.props.clone(),
             name: self.name,
+            phantom: PhantomData,
         })
     }
 }

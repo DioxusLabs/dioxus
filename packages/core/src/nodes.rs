@@ -503,7 +503,6 @@ impl Default for DynamicNode {
     }
 }
 
-#[derive(Clone)]
 /// An instance of a child component
 pub struct VComponent {
     /// The name of this component
