@@ -52,6 +52,10 @@ async fn main() -> anyhow::Result<()> {
             .create()
             .map_err(|e| anyhow!("🚫 Creating new project failed: {}", e)),
 
+        Init(opts) => opts
+            .init()
+            .map_err(|e| anyhow!("🚫 Initialising a new project failed: {}", e)),
+
         Config(opts) => opts
             .config()
             .map_err(|e| anyhow!("🚫 Configuring new project failed: {}", e)),

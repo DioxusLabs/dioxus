@@ -6,6 +6,7 @@ pub mod check;
 pub mod clean;
 pub mod config;
 pub mod create;
+pub mod init;
 pub mod plugin;
 pub mod serve;
 pub mod translate;
@@ -56,8 +57,11 @@ pub enum Commands {
     /// Build, watch & serve the Rust WASM app and all of its assets.
     Serve(serve::Serve),
 
-    /// Init a new project for Dioxus.
+    /// Create a new project for Dioxus.
     Create(create::Create),
+
+    /// Init a new project for Dioxus
+    Init(init::Init),
 
     /// Clean output artifacts.
     Clean(clean::Clean),
@@ -94,6 +98,7 @@ impl Display for Commands {
             Commands::Translate(_) => write!(f, "translate"),
             Commands::Serve(_) => write!(f, "serve"),
             Commands::Create(_) => write!(f, "create"),
+            Commands::Init(_) => write!(f, "init"),
             Commands::Clean(_) => write!(f, "clean"),
             Commands::Config(_) => write!(f, "config"),
             Commands::Version(_) => write!(f, "version"),
