@@ -5,7 +5,7 @@ use crate::{
 use crate::{arena::ElementId, Element, Event};
 use crate::{
     innerlude::{ElementRef, EventHandler, MountId},
-    properties::ComponentFn,
+    properties::ComponentFunction,
 };
 use crate::{Properties, VirtualDom};
 use core::panic;
@@ -533,7 +533,11 @@ impl VComponent {
     /// fn(Props) -> Element;
     /// async fn(Scope<Props<'_>>) -> Element;
     /// ```
-    pub fn new<P, M>(component: impl ComponentFn<P, M>, props: P, fn_name: &'static str) -> Self
+    pub fn new<P, M>(
+        component: impl ComponentFunction<P, M>,
+        props: P,
+        fn_name: &'static str,
+    ) -> Self
     where
         // The properties must be valid until the next bump frame
         P: Properties + 'static,

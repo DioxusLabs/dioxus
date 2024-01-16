@@ -16,7 +16,7 @@ pub struct LaunchBuilder<Props: Clone + 'static, Platform: PlatformBuilder<Props
 // Default platform builder
 impl<Props: Clone + 'static> LaunchBuilder<Props> {
     /// Create a new builder for your application. This will create a launch configuration for the current platform based on the features enabled on the `dioxus` crate.
-    pub fn new<M>(component: impl ComponentFn<Props, M>) -> Self
+    pub fn new<M>(component: impl ComponentFunction<Props, M>) -> Self
     where
         Props: Default,
     {
@@ -97,7 +97,7 @@ type CurrentPlatform = dioxus_web::WebPlatform;
 type CurrentPlatform = ();
 
 /// Launch your application without any additional configuration. See [`LaunchBuilder`] for more options.
-pub fn launch<Props, Marker>(component: impl ComponentFn<Props, Marker>)
+pub fn launch<Props, Marker>(component: impl ComponentFunction<Props, Marker>)
 where
     Props: Default + Clone + 'static,
 {
@@ -106,7 +106,7 @@ where
 
 #[cfg(feature = "web")]
 /// Launch your web application without any additional configuration. See [`LaunchBuilder`] for more options.
-pub fn launch_web<Props, Marker>(component: impl ComponentFn<Props, Marker>)
+pub fn launch_web<Props, Marker>(component: impl ComponentFunction<Props, Marker>)
 where
     Props: Default + Clone + 'static,
 {
@@ -115,7 +115,7 @@ where
 
 #[cfg(feature = "desktop")]
 /// Launch your desktop application without any additional configuration. See [`LaunchBuilder`] for more options.
-pub fn launch_desktop<Props, Marker>(component: impl ComponentFn<Props, Marker>)
+pub fn launch_desktop<Props, Marker>(component: impl ComponentFunction<Props, Marker>)
 where
     Props: Default + Clone + 'static,
 {

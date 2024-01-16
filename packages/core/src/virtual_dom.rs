@@ -11,7 +11,7 @@ use crate::{
     },
     nodes::RenderReturn,
     nodes::{Template, TemplateId},
-    properties::ComponentFn,
+    properties::ComponentFunction,
     runtime::{Runtime, RuntimeGuard},
     scopes::ScopeId,
     AttributeValue, BoxedContext, Element, Event, Mutations,
@@ -269,7 +269,7 @@ impl VirtualDom {
     /// let mutations = dom.rebuild();
     /// ```
     pub fn new_with_props<P: Clone + 'static, M>(
-        root: impl ComponentFn<P, M>,
+        root: impl ComponentFunction<P, M>,
         root_props: P,
     ) -> Self {
         let (tx, rx) = futures_channel::mpsc::unbounded();

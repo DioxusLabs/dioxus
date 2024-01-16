@@ -54,7 +54,7 @@ impl EmptyBuilder {
 
 /// This utility function launches the builder method so rsx! and html! macros can use the typed-builder pattern
 /// to initialize a component's props.
-pub fn fc_to_builder<P, M>(_: impl ComponentFn<P, M>) -> <P as Properties>::Builder
+pub fn fc_to_builder<P, M>(_: impl ComponentFunction<P, M>) -> <P as Properties>::Builder
 where
     P: Properties,
 {
@@ -62,20 +62,23 @@ where
 }
 
 /// Any component that implements the `ComponentFn` trait can be used as a component.
-pub trait ComponentFn<Props, Marker> {
+pub trait ComponentFunction<Props, Marker> {
+    type Props;
     /// Convert the component to a function that takes props and returns an element.
     fn as_component(self: Rc<Self>) -> Component<Props>;
 }
 
 /// Accept pre-formed component render functions as components
-impl<P> ComponentFn<P, ()> for Component<P> {
+impl<P> ComponentFunction<P, ()> for Component<P> {
+    type Props = P;
     fn as_component(self: Rc<Self>) -> Component<P> {
         self.as_ref().clone()
     }
 }
 
 /// Accept any callbacks that take props
-impl<F: Fn(P) -> Element + 'static, P> ComponentFn<P, ()> for F {
+impl<F: Fn(P) -> Element + 'static, P> ComponentFunction<P, ()> for F {
+    type Props = P;
     fn as_component(self: Rc<Self>) -> Component<P> {
         self
     }
@@ -83,7 +86,8 @@ impl<F: Fn(P) -> Element + 'static, P> ComponentFn<P, ()> for F {
 
 /// Accept any callbacks that take no props
 pub struct EmptyMarker;
-impl<F: Fn() -> Element + 'static> ComponentFn<(), EmptyMarker> for F {
+impl<F: Fn() -> Element + 'static> ComponentFunction<(), EmptyMarker> for F {
+    type Props = ();
     fn as_component(self: Rc<Self>) -> Rc<dyn Fn(()) -> Element> {
         Rc::new(move |_| self())
     }
@@ -98,7 +102,8 @@ fn it_works_maybe() {
         todo!()
     }
 
-    let callable: Rc<dyn ComponentFn<(), ()>> = Rc::new(test) as Rc<dyn ComponentFn<_, _>>;
-    let callable2: Rc<dyn ComponentFn<(), EmptyMarker>> =
-        Rc::new(test2) as Rc<dyn ComponentFn<_, _>>;
+    let callable: Rc<dyn ComponentFunction<(), ()>> =
+        Rc::new(test) as Rc<dyn ComponentFunction<_, _>>;
+    let callable2: Rc<dyn ComponentFunction<(), EmptyMarker>> =
+        Rc::new(test2) as Rc<dyn ComponentFunction<_, _>>;
 }

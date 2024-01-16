@@ -1,6 +1,6 @@
 use std::any::Any;
 
-use crate::{properties::ComponentFn, Component, VirtualDom};
+use crate::{properties::ComponentFunction, Component, VirtualDom};
 
 /// A boxed object that can be injected into a component's context.
 pub struct BoxedContext(Box<dyn ClonableAny>);
@@ -52,12 +52,12 @@ pub struct CrossPlatformConfig<Props: Clone + 'static> {
 impl<Props: Clone + 'static> CrossPlatformConfig<Props> {
     /// Create a new cross-platform config.
     pub fn new<M>(
-        component: impl ComponentFn<Props, M>,
+        component: impl ComponentFunction<Props, M>,
         props: Props,
         root_contexts: Vec<BoxedContext>,
     ) -> Self {
         Self {
-            component: ComponentFn::as_component(std::rc::Rc::new(component)),
+            component: ComponentFunction::as_component(std::rc::Rc::new(component)),
             props,
             root_contexts,
         }
