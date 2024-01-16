@@ -4,9 +4,6 @@
 //! This example shows how to encapsulate state in dioxus components with the reducer pattern.
 //! This pattern is very useful when a single component can handle many types of input that can
 //! be represented by an enum.
-//!
-//! Currently we don't have a reducer pattern hook. If you'd like to add it,
-//! feel free to make a PR.
 
 use dioxus::prelude::*;
 
@@ -15,7 +12,7 @@ fn main() {
 }
 
 fn app() -> Element {
-    let state = use_signal(PlayerState::new);
+    let state = use_signal(|| PlayerState { is_playing: false });
 
     rsx!(
         div {
@@ -38,9 +35,6 @@ struct PlayerState {
 }
 
 impl PlayerState {
-    fn new() -> Self {
-        Self { is_playing: false }
-    }
     fn reduce(&mut self, action: PlayerAction) {
         match action {
             PlayerAction::Pause => self.is_playing = false,

@@ -225,16 +225,11 @@ impl ScopeContext {
         .expect("Runtime to exist")
     }
 
-    /// Pushes the future onto the poll queue to be polled after the component renders.
-    pub fn push_future(&self, fut: impl Future<Output = ()> + 'static) -> Task {
+    /// Spawns the future but does not return the [`TaskId`]
+    pub fn spawn(&self, fut: impl Future<Output = ()> + 'static) -> Task {
         let id = with_runtime(|rt| rt.spawn(self.id, fut)).expect("Runtime to exist");
         self.spawned_tasks.borrow_mut().insert(id);
         id
-    }
-
-    /// Spawns the future but does not return the [`TaskId`]
-    pub fn spawn(&self, fut: impl Future<Output = ()> + 'static) {
-        self.push_future(fut);
     }
 
     /// Spawn a future that Dioxus won't clean up when this component is unmounted
@@ -369,7 +364,7 @@ impl ScopeId {
 
     /// Pushes the future onto the poll queue to be polled after the component renders.
     pub fn push_future(self, fut: impl Future<Output = ()> + 'static) -> Option<Task> {
-        with_scope(self, |cx| cx.push_future(fut))
+        with_scope(self, |cx| cx.spawn(fut))
     }
 
     /// Spawns the future but does not return the [`TaskId`]

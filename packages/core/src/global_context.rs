@@ -62,14 +62,9 @@ pub fn suspend() -> Option<Element> {
     None
 }
 
-/// Pushes the future onto the poll queue to be polled after the component renders.
-pub fn push_future(fut: impl Future<Output = ()> + 'static) -> Option<Task> {
-    with_current_scope(|cx| cx.push_future(fut))
-}
-
 /// Spawns the future but does not return the [`TaskId`]
-pub fn spawn(fut: impl Future<Output = ()> + 'static) {
-    with_current_scope(|cx| cx.spawn(fut));
+pub fn spawn(fut: impl Future<Output = ()> + 'static) -> Task {
+    with_current_scope(|cx| cx.spawn(fut)).expect("to be in a dioxus runtime")
 }
 
 /// Spawn a future that Dioxus won't clean up when this component is unmounted

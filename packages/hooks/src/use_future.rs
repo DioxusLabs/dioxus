@@ -1,7 +1,11 @@
 #![allow(missing_docs)]
-use dioxus_core::{ScopeState, Task};
+use dioxus_core::{
+    prelude::{spawn, use_hook},
+    ScopeState, Task,
+};
 use dioxus_signals::{use_effect, use_signal, Signal};
-use std::{any::Any, cell::Cell, future::Future, rc::Rc, sync::Arc};
+use futures_util::{future, pin_mut, FutureExt};
+use std::{any::Any, cell::Cell, future::Future, pin::Pin, rc::Rc, sync::Arc, task::Poll};
 
 /// A future that resolves to a value.
 ///
@@ -21,22 +25,43 @@ where
     T: 'static,
     F: Future<Output = T> + 'static,
 {
-    let task = use_signal(|| None);
+    let value = use_signal(|| None);
+    let state = use_signal(|| UseFutureState::Pending);
 
-    use_effect(|| {
-        // task.set();
+    let task = use_signal(|| {
+        // Create the user's task
+        let fut = future();
+
+        // Spawn a wrapper task that polls the innner future and watch its dependencies
+        let task = spawn(async move {
+            // move the future here and pin it so we can ppoll it
+            let mut fut = fut;
+            pin_mut!(fut);
+
+            let res = future::poll_fn(|cx| {
+                // Set the effect stack properly
+
+                // Poll the inner future
+                let ready = fut.poll_unpin(cx);
+
+                // add any dependencies to the effect stack
+
+                ready
+            })
+            .await;
+
+            // Set the value
+            value.set(Some(res));
+        });
+
+        Some(task)
     });
-    //
 
-    UseFuture {
-        value: todo!(),
-        task,
-        state: todo!(),
-    }
+    UseFuture { task, value, state }
 }
 
 pub struct UseFuture<T: 'static> {
-    value: Signal<T>,
+    value: Signal<Option<T>>,
     task: Signal<Option<Task>>,
     state: Signal<UseFutureState<T>>,
 }

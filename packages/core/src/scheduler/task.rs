@@ -1,7 +1,7 @@
 use futures_util::task::ArcWake;
 
 use super::SchedulerMsg;
-use crate::innerlude::{push_future, remove_future, Runtime};
+use crate::innerlude::{remove_future, spawn, Runtime};
 use crate::ScopeId;
 use std::cell::RefCell;
 use std::future::Future;
@@ -28,7 +28,7 @@ impl Task {
     /// Spawning a future onto the root scope will cause it to be dropped when the root component is dropped - which
     /// will only occur when the VirtualDom itself has been dropped.
     pub fn new(task: impl Future<Output = ()> + 'static) -> Self {
-        push_future(task).expect("to be in a dioxus runtime")
+        spawn(task)
     }
 
     /// Drop the task immediately.

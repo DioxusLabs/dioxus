@@ -87,9 +87,9 @@ pub mod prelude {
     pub use crate::innerlude::{
         consume_context, consume_context_from_scope, current_scope_id, fc_to_builder, generation,
         has_context, needs_update, parent_scope, provide_context, provide_root_context,
-        push_future, remove_future, schedule_update, schedule_update_any, spawn, spawn_forever,
-        suspend, try_consume_context, use_error_boundary, use_hook, AnyValue, Attribute, Component,
-        Element, ErrorBoundary, Event, EventHandler, Fragment, HasAttributes, IntoAttributeValue,
+        remove_future, schedule_update, schedule_update_any, spawn, spawn_forever, suspend,
+        try_consume_context, use_error_boundary, use_hook, AnyValue, Attribute, Component, Element,
+        ErrorBoundary, Event, EventHandler, Fragment, HasAttributes, IntoAttributeValue,
         IntoDynNode, Properties, Runtime, RuntimeGuard, ScopeId, ScopeState, Task, Template,
         TemplateAttribute, TemplateNode, Throw, VNode, VNodeInner, VirtualDom,
     };
