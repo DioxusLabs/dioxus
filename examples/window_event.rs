@@ -2,13 +2,15 @@ use dioxus::prelude::*;
 use dioxus_desktop::{window, Config, WindowBuilder};
 
 fn main() {
-    Config::new()
-        .with_window(
-            WindowBuilder::new()
-                .with_title("Borderless Window")
-                .with_decorations(false),
+    LaunchBuilder::new(app)
+        .cfg(
+            Config::new().with_window(
+                WindowBuilder::new()
+                    .with_title("Borderless Window")
+                    .with_decorations(false),
+            ),
         )
-        .launch(app)
+        .launch()
 }
 
 fn app() -> Element {
@@ -17,11 +19,16 @@ fn app() -> Element {
     let mut decorations = use_signal(|| false);
 
     rsx!(
-        link { href:"https://unpkg.com/tailwindcss@^2/dist/tailwind.min.css", rel:"stylesheet" }
-        header { class: "text-gray-400 bg-gray-900 body-font", onmousedown: move |_| window().drag(),
+        link {
+            href: "https://unpkg.com/tailwindcss@^2/dist/tailwind.min.css",
+            rel: "stylesheet"
+        }
+        header {
+            class: "text-gray-400 bg-gray-900 body-font",
+            onmousedown: move |_| window().drag(),
             div { class: "container mx-auto flex flex-wrap p-5 flex-col md:flex-row items-center",
                 a { class: "flex title-font font-medium items-center text-white mb-4 md:mb-0",
-                    span { class: "ml-3 text-xl", "Dioxus"}
+                    span { class: "ml-3 text-xl", "Dioxus" }
                 }
                 nav { class: "md:ml-auto flex flex-wrap items-center text-base justify-center" }
                 button {
@@ -49,10 +56,8 @@ fn app() -> Element {
             }
         }
         br {}
-        div {
-            class: "container mx-auto",
-            div {
-                class: "grid grid-cols-5",
+        div { class: "container mx-auto",
+            div { class: "grid grid-cols-5",
                 div {
                     button {
                         class: "inline-flex items-center text-white bg-green-500 border-0 py-1 px-3 hover:bg-green-700 rounded",

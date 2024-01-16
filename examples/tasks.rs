@@ -6,7 +6,7 @@ use dioxus::prelude::*;
 use std::time::Duration;
 
 fn main() {
-    dioxus_desktop::launch(app);
+    launch(app);
 }
 
 fn app() -> Element {

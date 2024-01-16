@@ -13,15 +13,15 @@ use dioxus::prelude::*;
 use dioxus_desktop::Config;
 
 fn main() {
-    Config::new()
-        .with_prerendered({
+    LaunchBuilder::new(app)
+        .cfg(Config::new().with_prerendered({
             // We build the dom a first time, then pre-render it to HTML
             let pre_rendered_dom = VirtualDom::prebuilt(app);
 
             // We then launch the app with the pre-rendered HTML
             dioxus_ssr::pre_render(&pre_rendered_dom)
-        })
-        .launch(app);
+        }))
+        .launch();
 }
 
 fn app() -> Element {

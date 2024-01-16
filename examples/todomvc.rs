@@ -4,7 +4,7 @@ use dioxus_elements::input_data::keyboard_types::Key;
 use std::collections::HashMap;
 
 fn main() {
-    dioxus_desktop::launch(app);
+    launch(app);
 }
 
 #[derive(PartialEq, Eq, Clone, Copy)]

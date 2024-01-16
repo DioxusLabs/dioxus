@@ -9,7 +9,7 @@ fn main() {
         .with_module_level("dioxus", log::LevelFilter::Trace)
         .init()
         .unwrap();
-    dioxus_desktop::launch(App);
+    launch(App);
 }
 
 #[component]

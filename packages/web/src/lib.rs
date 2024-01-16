@@ -60,7 +60,7 @@ use std::rc::Rc;
 pub use crate::cfg::Config;
 #[cfg(feature = "file_engine")]
 pub use crate::file_engine::WebFileEngineExt;
-use dioxus_core::{Element, VirtualDom};
+use dioxus_core::{ComponentFunction, CrossPlatformConfig, VirtualDom};
 use futures_util::{
     future::{select, Either},
     pin_mut, FutureExt, StreamExt,
@@ -72,7 +72,9 @@ mod dom;
 mod eval;
 mod event;
 mod mutations;
+mod platform;
 pub use event::*;
+pub use platform::*;
 #[cfg(feature = "file_engine")]
 mod file_engine;
 #[cfg(all(feature = "hot_reload", debug_assertions))]
@@ -84,89 +86,6 @@ mod rehydrate;
 // todo: only schedule non-immediate renders through ric/raf
 // mod ric_raf;
 // mod rehydrate;
-
-/// Launch the VirtualDOM given a root component and a configuration.
-///
-/// This function expects the root component to not have root props. To launch the root component with root props, use
-/// `launch_with_props` instead.
-///
-/// This method will block the thread with `spawn_local` from wasm_bindgen_futures.
-///
-/// If you need to run the VirtualDOM in its own thread, use `run_with_props` instead and await the future.
-///
-/// # Example
-///
-/// ```rust, ignore
-/// fn main() {
-///     dioxus_web::launch(App);
-/// }
-///
-/// static App: Component = |cx| {
-///     render!(div {"hello world"})
-/// }
-/// ```
-pub fn launch(root_component: fn() -> Element) {
-    launch_with_props(
-        |root_component| root_component(),
-        root_component,
-        Config::default(),
-    );
-}
-
-/// Launch your app and run the event loop, with configuration.
-///
-/// This function will start your web app on the main web thread.
-///
-/// You can configure the WebView window with a configuration closure
-///
-/// ```rust, ignore
-/// use dioxus::prelude::*;
-///
-/// fn main() {
-///     dioxus_web::launch_with_props(App, Config::new().pre_render(true));
-/// }
-///
-/// fn app() -> Element {
-///     rsx!{
-///         h1 {"hello world!"}
-///     })
-/// }
-/// ```
-pub fn launch_cfg(root: fn(()) -> Element, config: Config) {
-    launch_with_props(root, (), config)
-}
-
-/// Launches the VirtualDOM from the specified component function and props.
-///
-/// This method will block the thread with `spawn_local`
-///
-/// # Example
-///
-/// ```rust, ignore
-/// fn main() {
-///     dioxus_web::launch_with_props(
-///         App,
-///         RootProps { name: String::from("joe") },
-///         Config::new()
-///     );
-/// }
-///
-/// #[derive(ParitalEq, Props)]
-/// struct RootProps {
-///     name: String
-/// }
-///
-/// static App: Component<RootProps> = |cx| {
-///     render!(div {"hello {cx.props.name}"})
-/// }
-/// ```
-pub fn launch_with_props<T: Clone + 'static>(
-    root_component: fn(T) -> Element,
-    root_properties: T,
-    config: Config,
-) {
-    wasm_bindgen_futures::spawn_local(run_with_props(root_component, root_properties, config));
-}
 
 /// Runs the app as a future that can be scheduled around the main thread.
 ///
@@ -180,14 +99,17 @@ pub fn launch_with_props<T: Clone + 'static>(
 ///     wasm_bindgen_futures::spawn_local(app_fut);
 /// }
 /// ```
-pub async fn run_with_props<T: Clone + 'static>(
-    root: fn(T) -> Element,
-    root_props: T,
-    cfg: Config,
+pub async fn run_with_props<
+    Component: ComponentFunction<Phantom, Props = Props>,
+    Props: Clone + 'static,
+    Phantom: 'static,
+>(
+    dioxus_config: CrossPlatformConfig<Component, Props, Phantom>,
+    web_config: Config,
 ) {
     tracing::info!("Starting up");
 
-    let mut dom = VirtualDom::new_with_props(root, root_props);
+    let mut dom = dioxus_config.build_vdom();
 
     #[cfg(feature = "eval")]
     {
@@ -198,7 +120,7 @@ pub async fn run_with_props<T: Clone + 'static>(
     }
 
     #[cfg(feature = "panic_hook")]
-    if cfg.default_panic_hook {
+    if web_config.default_panic_hook {
         console_error_panic_hook::set_once();
     }
 
@@ -212,7 +134,7 @@ pub async fn run_with_props<T: Clone + 'static>(
     #[cfg(not(feature = "hydrate"))]
     let should_hydrate = false;
 
-    let mut websys_dom = dom::WebsysDom::new(cfg, tx);
+    let mut websys_dom = dom::WebsysDom::new(web_config, tx);
 
     tracing::info!("rebuilding app");
 

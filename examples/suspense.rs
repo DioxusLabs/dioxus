@@ -17,19 +17,21 @@ use dioxus::prelude::*;
 use dioxus_desktop::{Config, LogicalSize, WindowBuilder};
 
 fn main() {
-    Config::new()
-        .with_window(
-            WindowBuilder::new()
-                .with_title("Doggo Fetcher")
-                .with_inner_size(LogicalSize::new(600.0, 800.0)),
+    LaunchBuilder::new(app)
+        .cfg(
+            Config::new().with_window(
+                WindowBuilder::new()
+                    .with_title("Doggo Fetcher")
+                    .with_inner_size(LogicalSize::new(600.0, 800.0)),
+            ),
         )
-        .launch(app)
+        .launch()
 }
 
 fn app() -> Element {
     rsx! {
         div {
-            h1 {"Dogs are very important"}
+            h1 { "Dogs are very important" }
             p {
                 "The dog or domestic dog (Canis familiaris[4][5] or Canis lupus familiaris[5])"
                 "is a domesticated descendant of the wolf which is characterized by an upturning tail."
@@ -39,7 +41,7 @@ fn app() -> Element {
             }
 
             h3 { "Illustrious Dog Photo" }
-            Doggo { }
+            Doggo {}
         }
     }
 }
@@ -63,17 +65,8 @@ fn Doggo() -> Element {
 
     match fut.value().read().as_ref() {
         Some(Ok(resp)) => rsx! {
-            button {
-                onclick: move |_| fut.restart(),
-                "Click to fetch another doggo"
-            }
-            div {
-                img {
-                    max_width: "500px",
-                    max_height: "500px",
-                    src: "{resp.message}",
-                }
-            }
+            button { onclick: move |_| fut.restart(), "Click to fetch another doggo" }
+            div { img { max_width: "500px", max_height: "500px", src: "{resp.message}" } }
         },
         Some(Err(_)) => rsx! { div { "loading dogs failed" } },
         None => rsx! { div { "loading dogs..." } },

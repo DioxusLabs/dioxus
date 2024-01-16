@@ -38,5 +38,5 @@ fn Nav() -> Element {
 }
 
 fn main() {
-    dioxus_desktop::launch(|| render!(Router::<Route> {}));
+    launch(|| render!(Router::<Route> {}));
 }

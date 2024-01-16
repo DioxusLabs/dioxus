@@ -13,6 +13,7 @@ mod fragment;
 mod global_context;
 mod mutations;
 mod nodes;
+mod platform;
 mod properties;
 mod runtime;
 mod scheduler;
@@ -30,6 +31,7 @@ pub(crate) mod innerlude {
     pub use crate::global_context::*;
     pub use crate::mutations::*;
     pub use crate::nodes::*;
+    pub use crate::platform::*;
     pub use crate::properties::*;
     pub use crate::runtime::{Runtime, RuntimeGuard};
     pub use crate::scheduler::*;
@@ -73,11 +75,11 @@ pub(crate) mod innerlude {
 
 pub use crate::innerlude::{
     fc_to_builder, generation, schedule_update, schedule_update_any, use_hook, vdom_is_rendering,
-    AnyValue, Attribute, AttributeValue, CapturedError, Component, ComponentFunction, DynamicNode,
-    Element, ElementId, Event, Fragment, HasAttributes, IntoDynNode, Mutation, Mutations,
-    NoOpMutations, Properties, RenderReturn, ScopeId, ScopeState, Task, Template,
-    TemplateAttribute, TemplateNode, VComponent, VNode, VNodeInner, VPlaceholder, VText,
-    VirtualDom, WriteMutations,
+    AnyValue, Attribute, AttributeValue, BoxedContext, CapturedError, Component, ComponentFunction,
+    CrossPlatformConfig, DynamicNode, Element, ElementId, Event, Fragment, HasAttributes,
+    IntoDynNode, Mutation, Mutations, NoOpMutations, PlatformBuilder, Properties, RenderReturn,
+    ScopeId, ScopeState, Task, Template, TemplateAttribute, TemplateNode, VComponent, VNode,
+    VNodeInner, VPlaceholder, VText, VirtualDom, WriteMutations,
 };
 
 /// The purpose of this module is to alleviate imports of many common types

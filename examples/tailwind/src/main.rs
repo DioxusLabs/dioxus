@@ -6,7 +6,7 @@ const _STYLE: &str = manganis::mg!(file("./public/tailwind.css"));
 
 fn main() {
     #[cfg(not(target_arch = "wasm32"))]
-    dioxus_desktop::launch(app);
+    launch(app);
     #[cfg(target_arch = "wasm32")]
     dioxus_web::launch(app);
 }

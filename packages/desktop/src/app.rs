@@ -10,7 +10,7 @@ use crate::{
     webview::WebviewInstance,
 };
 use crossbeam_channel::Receiver;
-use dioxus_core::{Component, ElementId, VirtualDom};
+use dioxus_core::{ComponentFunction, CrossPlatformConfig, ElementId};
 use dioxus_html::{
     native_bind::NativeFileEngine, FileEngine, HasFileData, HasFormData, HtmlEvent,
     PlatformEventData,
@@ -18,6 +18,7 @@ use dioxus_html::{
 use std::{
     cell::{Cell, RefCell},
     collections::HashMap,
+    marker::PhantomData,
     rc::Rc,
     sync::Arc,
 };
@@ -28,14 +29,17 @@ use tao::{
 };
 
 /// The single top-level object that manages all the running windows, assets, shortcuts, etc
-pub(crate) struct App<P> {
+pub(crate) struct App<
+    Component: ComponentFunction<Phantom, Props = Props>,
+    Props: Clone + 'static,
+    Phantom: 'static,
+> {
     // move the props into a cell so we can pop it out later to create the first window
     // iOS panics if we create a window before the event loop is started, so we toss them into a cell
-    pub(crate) props: Cell<Option<P>>,
+    pub(crate) dioxus_config: Cell<Option<CrossPlatformConfig<Component, Props, Phantom>>>,
     pub(crate) cfg: Cell<Option<Config>>,
 
     // Stuff we need mutable access to
-    pub(crate) root: Component<P>,
     pub(crate) control_flow: ControlFlow,
     pub(crate) is_visible_before_start: bool,
     pub(crate) window_behavior: WindowCloseBehaviour,
@@ -45,6 +49,8 @@ pub(crate) struct App<P> {
     ///
     /// This includes stuff like the event handlers, shortcuts, etc as well as ways to modify *other* windows
     pub(crate) shared: Rc<SharedContext>,
+
+    phantom: PhantomData<Phantom>,
 }
 
 /// A bundle of state shared between all the windows, providing a way for us to communicate with running webview.
@@ -59,17 +65,24 @@ pub struct SharedContext {
     pub(crate) target: EventLoopWindowTarget<UserWindowEvent>,
 }
 
-impl<P: 'static + Clone> App<P> {
-    pub fn new(cfg: Config, props: P, root: Component<P>) -> (EventLoop<UserWindowEvent>, Self) {
+impl<
+        Component: ComponentFunction<Phantom, Props = Props>,
+        Props: Clone + 'static,
+        Phantom: 'static,
+    > App<Component, Props, Phantom>
+{
+    pub fn new(
+        cfg: Config,
+        dioxus_config: CrossPlatformConfig<Component, Props, Phantom>,
+    ) -> (EventLoop<UserWindowEvent>, Self) {
         let event_loop = EventLoopBuilder::<UserWindowEvent>::with_user_event().build();
 
         let app = Self {
-            root,
             window_behavior: cfg.last_window_close_behaviour,
             is_visible_before_start: true,
             webviews: HashMap::new(),
             control_flow: ControlFlow::Wait,
-            props: Cell::new(Some(props)),
+            dioxus_config: Cell::new(Some(dioxus_config)),
             cfg: Cell::new(Some(cfg)),
             shared: Rc::new(SharedContext {
                 event_handlers: WindowEventHandlers::default(),
@@ -79,6 +92,7 @@ impl<P: 'static + Clone> App<P> {
                 proxy: event_loop.create_proxy(),
                 target: event_loop.clone(),
             }),
+            phantom: PhantomData,
         };
 
         // Set the event converter
@@ -164,16 +178,12 @@ impl<P: 'static + Clone> App<P> {
     }
 
     pub fn handle_start_cause_init(&mut self) {
-        let props = self.props.take().unwrap();
+        let dioxus_config = self.dioxus_config.take().unwrap();
         let cfg = self.cfg.take().unwrap();
 
         self.is_visible_before_start = cfg.window.window.visible;
 
-        let webview = WebviewInstance::new(
-            cfg,
-            VirtualDom::new_with_props(self.root, props),
-            self.shared.clone(),
-        );
+        let webview = WebviewInstance::new(cfg, dioxus_config.build_vdom(), self.shared.clone());
 
         let id = webview.desktop_context.window.id();
         self.webviews.insert(id, webview);

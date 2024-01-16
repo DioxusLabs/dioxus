@@ -12,9 +12,9 @@ use dioxus::prelude::*;
 use dioxus_desktop::{Config, WindowBuilder};
 
 fn main() {
-    Config::new()
-        .with_window(WindowBuilder::new().with_resizable(true))
-        .launch(app)
+    LaunchBuilder::new(app)
+        .cfg(Config::new().with_window(WindowBuilder::new().with_resizable(true)))
+        .launch()
 }
 
 const _STYLE: &str = manganis::mg!(file("./examples/assets/fileexplorer.css"));

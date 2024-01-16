@@ -227,7 +227,7 @@ impl VirtualDom {
     ///
     /// Note: the VirtualDom is not progressed, you must either "run_with_deadline" or use "rebuild" to progress it.
     pub fn new(app: fn() -> Element) -> Self {
-        Self::new_with_props(|app| app(), app)
+        Self::new_with_props(app, ())
     }
 
     /// Create a new virtualdom and build it immediately
@@ -267,7 +267,14 @@ impl VirtualDom {
     /// let mut dom = VirtualDom::new_with_props(Example, SomeProps { name: "jane" });
     /// let mutations = dom.rebuild();
     /// ```
-    pub fn new_with_props<P: Clone + 'static>(root: fn(P) -> Element, root_props: P) -> Self {
+    pub fn new_with_props<
+        F: crate::ComponentFunction<Phantom, Props = P>,
+        P: Clone + 'static,
+        Phantom: 'static,
+    >(
+        root: F,
+        root_props: P,
+    ) -> Self {
         let (tx, rx) = futures_channel::mpsc::unbounded();
 
         let mut dom = Self {
@@ -328,11 +335,10 @@ impl VirtualDom {
     /// Build the virtualdom with a global context inserted into the base scope
     ///
     /// This method is useful for when you want to provide a context in your app without knowing its type
-    pub fn with_boxed_root_context(self, context: BoxedContext) -> Self {
+    pub fn insert_boxed_root_context(&mut self, context: BoxedContext) {
         self.base_scope()
             .context()
             .provide_any_context(context.into_inner());
-        self
     }
 
     /// Manually mark a scope as requiring a re-render

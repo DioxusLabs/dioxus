@@ -15,7 +15,7 @@ fn main() {
             .with_inner_size(LogicalSize::new(300.0, 500.0)),
     );
 
-    dioxus_desktop::launch_cfg(app, config);
+    LaunchBuilder::new(app).cfg(config);
 }
 
 fn app() -> Element {
@@ -61,9 +61,7 @@ fn app() -> Element {
         style { {include_str!("./assets/calculator.css")} }
         div { id: "wrapper",
             div { class: "app",
-                div { class: "calculator",
-                    tabindex: "0",
-                    onkeydown: handle_key_down_event,
+                div { class: "calculator", tabindex: "0", onkeydown: handle_key_down_event,
                     div { class: "calculator-display", "{val}" }
                     div { class: "calculator-keypad",
                         div { class: "input-keys",
@@ -72,7 +70,7 @@ fn app() -> Element {
                                     class: "calculator-key key-clear",
                                     onclick: move |_| {
                                         val.set(String::new());
-                                        if !val.cloned().is_empty(){
+                                        if !val.cloned().is_empty() {
                                             val.set("0".into());
                                         }
                                     },
@@ -93,16 +91,22 @@ fn app() -> Element {
                                 button {
                                     class: "calculator-key key-percent",
                                     onclick: move |_| {
-                                        val.set(
-                                            format!("{}", calc_val(val.cloned().as_str()) / 100.0)
-                                        );
+                                        val.set(format!("{}", calc_val(val.cloned().as_str()) / 100.0));
                                     },
                                     "%"
                                 }
                             }
                             div { class: "digit-keys",
-                                button { class: "calculator-key key-0", onclick: move |_| input_digit(0), "0" }
-                                button { class: "calculator-key key-dot", onclick: move |_| val.write().push('.'), "●" }
+                                button {
+                                    class: "calculator-key key-0",
+                                    onclick: move |_| input_digit(0),
+                                    "0"
+                                }
+                                button {
+                                    class: "calculator-key key-dot",
+                                    onclick: move |_| val.write().push('.'),
+                                    "●"
+                                }
                                 for k in 1..10 {
                                     button {
                                         class: "calculator-key {k}",
@@ -114,10 +118,26 @@ fn app() -> Element {
                             }
                         }
                         div { class: "operator-keys",
-                            button { class: "calculator-key key-divide", onclick: move |_| input_operator("/"), "÷" }
-                            button { class: "calculator-key key-multiply", onclick: move |_| input_operator("*"), "×" }
-                            button { class: "calculator-key key-subtract", onclick: move |_| input_operator("-"), "−" }
-                            button { class: "calculator-key key-add", onclick: move |_| input_operator("+"), "+" }
+                            button {
+                                class: "calculator-key key-divide",
+                                onclick: move |_| input_operator("/"),
+                                "÷"
+                            }
+                            button {
+                                class: "calculator-key key-multiply",
+                                onclick: move |_| input_operator("*"),
+                                "×"
+                            }
+                            button {
+                                class: "calculator-key key-subtract",
+                                onclick: move |_| input_operator("-"),
+                                "−"
+                            }
+                            button {
+                                class: "calculator-key key-add",
+                                onclick: move |_| input_operator("+"),
+                                "+"
+                            }
                             button {
                                 class: "calculator-key key-equals",
                                 onclick: move |_| val.set(format!("{}", calc_val(val.cloned().as_str()))),

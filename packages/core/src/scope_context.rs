@@ -309,12 +309,11 @@ impl ScopeContext {
 impl Drop for ScopeContext {
     fn drop(&mut self) {
         // Drop all spawned tasks
-        with_runtime(|rt| {
+        _ = with_runtime(|rt| {
             for id in self.spawned_tasks.borrow().iter() {
                 rt.remove_task(*id);
             }
         })
-        .expect("Runtime to exist")
     }
 }
 

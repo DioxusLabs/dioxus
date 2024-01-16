@@ -5,13 +5,11 @@ use dioxus::prelude::*;
 use dioxus_desktop::Config;
 
 fn main() {
-    dioxus_desktop::launch_cfg(
-        app,
+    LaunchBuilder::new(app).cfg(
         Config::new().with_custom_head("<style>body { background-color: red; }</style>".into()),
     );
 
-    dioxus_desktop::launch_cfg(
-        app,
+    LaunchBuilder::new(app).cfg(
         Config::new().with_custom_index(
             r#"
 <!DOCTYPE html>
@@ -33,8 +31,6 @@ fn main() {
 
 fn app() -> Element {
     rsx! {
-        div {
-            h1 {"hello world!"}
-        }
+        div { h1 { "hello world!" } }
     }
 }

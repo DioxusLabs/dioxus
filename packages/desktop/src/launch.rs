@@ -6,96 +6,19 @@ use crate::{
 use dioxus_core::*;
 use tao::event::{Event, StartCause, WindowEvent};
 
-/// Launch the WebView and run the event loop.
-///
-/// This function will start a multithreaded Tokio runtime as well the WebView event loop.
-///
-/// ```rust, no_run
-/// use dioxus::prelude::*;
-///
-/// fn main() {
-///     dioxus_desktop::launch(app);
-/// }
-///
-/// fn app() -> Element {
-///     rsx!{
-///         h1 {"hello world!"}
-///     })
-/// }
-/// ```
-pub fn launch(app: fn() -> Element) {
-    launch_with_props(|root| root(), app, Config::default())
-}
-
-/// Launch the WebView and run the event loop, with configuration.
-///
-/// This function will start a multithreaded Tokio runtime as well the WebView event loop.
-///
-/// You can configure the WebView window with a configuration closure
-///
-/// ```rust, no_run
-/// use dioxus::prelude::*;
-/// use dioxus_desktop::*;
-///
-/// fn main() {
-///     dioxus_desktop::launch_cfg(app, Config::default().with_window(WindowBuilder::new().with_title("My App")));
-/// }
-///
-/// fn app() -> Element {
-///     rsx!{
-///         h1 {"hello world!"}
-///     })
-/// }
-/// ```
-pub fn launch_cfg(app: fn() -> Element, config_builder: Config) {
-    launch_with_props(|props| props(), app, config_builder)
-}
-
-/// Launch the WebView and run the event loop, with configuration and root props.
-///
-/// If the [`tokio`] feature is enabled, this will also startup and block a tokio runtime using the unconstrained task.
-/// This function will start a multithreaded Tokio runtime as well the WebView event loop. This will block the current thread.
-///
-/// You can configure the WebView window with a configuration closure
-///
-/// ```rust, no_run
-/// use dioxus::prelude::*;
-/// use dioxus_desktop::Config;
-///
-/// fn main() {
-///     dioxus_desktop::launch_with_props(app, AppProps { name: "asd" }, Config::default());
-/// }
-///
-/// struct AppProps {
-///     name: &'static str
-/// }
-///
-/// fn app(cx: Scope<AppProps>) -> Element {
-///     rsx!{
-///         h1 {"hello {cx.props.name}!"}
-///     })
-/// }
-/// ```
-pub fn launch_with_props<P: 'static + Clone>(root: Component<P>, props: P, cfg: Config) {
-    #[cfg(feature = "tokio")]
-    tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .unwrap()
-        .block_on(tokio::task::unconstrained(async move {
-            launch_with_props_blocking(root, props, cfg);
-        }));
-
-    #[cfg(not(feature = "tokio"))]
-    launch_with_props_blocking(root, props, cfg);
-}
-
 /// Launch the WebView and run the event loop, with configuration and root props.
 ///
 /// This will block the main thread, and *must* be spawned on the main thread. This function does not assume any runtime
 /// and is equivalent to calling launch_with_props with the tokio feature disabled.
-pub fn launch_with_props_blocking<P: 'static + Clone>(root: Component<P>, props: P, cfg: Config) {
-    let (event_loop, mut app) = App::new(cfg, props, root);
+pub fn launch_with_props_blocking<
+    Component: ComponentFunction<Phantom, Props = Props>,
+    Props: Clone + 'static,
+    Phantom: 'static,
+>(
+    dioxus_cfg: CrossPlatformConfig<Component, Props, Phantom>,
+    desktop_config: Config,
+) {
+    let (event_loop, mut app) = App::new(desktop_config, dioxus_cfg);
 
     event_loop.run(move |window_event, _, control_flow| {
         app.tick(&window_event);
@@ -129,4 +52,28 @@ pub fn launch_with_props_blocking<P: 'static + Clone>(root: Component<P>, props:
 
         *control_flow = app.control_flow;
     })
+}
+
+/// The desktop renderer platform
+pub struct DesktopPlatform;
+
+impl<Props: Clone + 'static> PlatformBuilder<Props> for DesktopPlatform {
+    type Config = Config;
+
+    fn launch<Component: ComponentFunction<Phantom, Props = Props>, Phantom: 'static>(
+        config: dioxus_core::CrossPlatformConfig<Component, Props, Phantom>,
+        platform_config: Self::Config,
+    ) {
+        #[cfg(feature = "tokio")]
+        tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(tokio::task::unconstrained(async move {
+                launch_with_props_blocking(config, platform_config)
+            }));
+
+        #[cfg(not(feature = "tokio"))]
+        launch_with_props_blocking(config, platform_config)
+    }
 }

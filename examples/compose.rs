@@ -6,7 +6,7 @@ use dioxus::prelude::*;
 use futures_util::StreamExt;
 
 fn main() {
-    dioxus_desktop::launch(app);
+    launch(app);
 }
 
 fn app() -> Element {

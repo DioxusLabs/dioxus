@@ -79,5 +79,5 @@ fn app() -> Element {
 }
 
 fn main() {
-    dioxus_desktop::launch(app);
+    launch(app);
 }

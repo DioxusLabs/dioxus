@@ -6,8 +6,6 @@ pub use dioxus_core;
 
 #[cfg(feature = "launch")]
 mod launch;
-#[cfg(feature = "launch")]
-pub use launch::*;
 
 #[cfg(feature = "hooks")]
 pub use dioxus_hooks as hooks;
@@ -30,6 +28,9 @@ pub use dioxus_rsx as rsx;
 pub use dioxus_core_macro as core_macro;
 
 pub mod prelude {
+    #[cfg(feature = "launch")]
+    pub use crate::launch::*;
+
     #[cfg(feature = "hooks")]
     pub use crate::hooks::*;
 

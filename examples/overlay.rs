@@ -2,7 +2,7 @@ use dioxus::prelude::*;
 use dioxus_desktop::{tao::dpi::PhysicalPosition, LogicalSize, WindowBuilder};
 
 fn main() {
-    dioxus_desktop::launch_cfg(app, make_config());
+    LaunchBuilder::new(app).cfg(make_config());
 }
 
 fn app() -> Element {

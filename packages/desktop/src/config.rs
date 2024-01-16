@@ -71,20 +71,6 @@ impl Config {
         }
     }
 
-    /// Launch a Dioxus app using the given component and config
-    ///
-    /// See the [`crate::launch::launch`] function for more details.
-    pub fn launch(self, app: fn() -> Element) {
-        self.launch_with_props(|props| props(), app)
-    }
-
-    /// Launch a Dioxus app using the given component, config, and props
-    ///
-    /// See the [`crate::launch::launch_with_props`] function for more details.
-    pub fn launch_with_props<P: 'static + Clone>(self, root: Component<P>, props: P) {
-        crate::launch::launch_with_props(root, props, self)
-    }
-
     /// Set whether the default menu bar should be enabled.
     ///
     /// > Note: `enable` is `true` by default. To disable the default menu bar pass `false`.

@@ -49,8 +49,7 @@ pub fn main() -> Result<()> {
 
     // Right now we're going through dioxus-desktop but we'd like to go through dioxus-mobile
     // That will seed the index.html with some fixes that prevent the page from scrolling/zooming etc
-    dioxus_desktop::launch_cfg(
-        app,
+    LaunchBuilder::new(app).cfg(
         // Note that we have to disable the viewport goofiness of the browser.
         // Dioxus_mobile should do this for us
         Config::default().with_custom_index(include_str!("index.html").to_string()),
@@ -66,10 +65,15 @@ fn app() -> Element {
 
     render! {
         div {
-            h1 { "Hello, Mobile"}
-            div { margin_left: "auto", margin_right: "auto", width: "200px", padding: "10px", border: "1px solid black",
+            h1 { "Hello, Mobile" }
+            div {
+                margin_left: "auto",
+                margin_right: "auto",
+                width: "200px",
+                padding: "10px",
+                border: "1px solid black",
                 button {
-                    onclick: move|_| {
+                    onclick: move |_| {
                         println!("Clicked!");
                         items.push(items.len());
                         cx.needs_update_any(ScopeId::ROOT);

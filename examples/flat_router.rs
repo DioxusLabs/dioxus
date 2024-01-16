@@ -5,17 +5,17 @@ use dioxus_router::prelude::*;
 fn main() {
     env_logger::init();
 
-    Config::new()
-        .with_window(
+    LaunchBuilder::new(|| {
+        render! { Router::<Route> {} }
+    })
+    .cfg(
+        Config::new().with_window(
             WindowBuilder::new()
                 .with_inner_size(LogicalSize::new(600, 1000))
                 .with_resizable(false),
-        )
-        .launch(|| {
-            render! {
-                Router::<Route> {}
-            }
-        });
+        ),
+    )
+    .launch()
 }
 
 #[derive(Routable, Clone)]
@@ -36,18 +36,24 @@ enum Route {
 fn Footer() -> Element {
     render! {
         div {
-            Outlet::<Route> { }
+            Outlet::<Route> {}
 
-            p {
-                "----"
-            }
+            p { "----" }
 
             nav {
                 ul {
-                    li { Link { to: Route::Home {}, "Home" } }
-                    li { Link { to: Route::Games {}, "Games" } }
-                    li { Link { to: Route::Play {}, "Play" } }
-                    li { Link { to: Route::Settings {}, "Settings" } }
+                    li {
+                        Link { to: Route::Home {}, "Home" }
+                    }
+                    li {
+                        Link { to: Route::Games {}, "Games" }
+                    }
+                    li {
+                        Link { to: Route::Play {}, "Play" }
+                    }
+                    li {
+                        Link { to: Route::Settings {}, "Settings" }
+                    }
                 }
             }
         }

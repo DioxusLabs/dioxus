@@ -4,8 +4,7 @@ use std::rc::Rc;
 use dioxus::{html::geometry::euclid::Rect, prelude::*};
 
 fn main() {
-    dioxus_desktop::launch_cfg(
-        app,
+    LaunchBuilder::new(app).cfg(
         dioxus_desktop::Config::default().with_custom_head(
             r#"
 <style type="text/css">
@@ -48,9 +47,6 @@ fn app() -> Element {
             "This element is {dimensions():?}"
         }
 
-        button {
-            onclick: read_dims,
-            "Read dimensions"
-        }
+        button { onclick: read_dims, "Read dimensions" }
     )
 }

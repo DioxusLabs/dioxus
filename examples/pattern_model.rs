@@ -32,7 +32,7 @@ fn main() {
             .with_inner_size(LogicalSize::new(320.0, 530.0)),
     );
 
-    dioxus_desktop::launch_cfg(app, cfg);
+    LaunchBuilder::new(app).cfg(cfg);
 }
 
 const STYLE: &str = include_str!("./assets/calculator.css");
