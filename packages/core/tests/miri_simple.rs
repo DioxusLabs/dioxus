@@ -42,7 +42,7 @@ fn contexts_drop() {
     }
 
     fn ChildComp() -> Element {
-        let el = consume_context::<String>().unwrap();
+        let el = consume_context::<String>();
 
         rsx! { div { "hello {el}" } }
     }
@@ -77,7 +77,7 @@ fn root_props_drop() {
     struct RootProps(String);
 
     let mut dom = VirtualDom::new_with_props(
-        |cx| rsx!( div { "{cx.0}" } ),
+        |cx: RootProps| rsx!( div { "{cx.0}" } ),
         RootProps("asdasd".to_string()),
     );
 

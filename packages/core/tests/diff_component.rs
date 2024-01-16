@@ -12,7 +12,7 @@ fn component_swap() {
 
         render_phase += 1;
 
-        match *render_phase() {
+        match render_phase() {
             0 => rsx! {
                 nav_bar {}
                 dash_board {}

@@ -144,8 +144,8 @@ fn supports_async() {
     use tokio::time::sleep;
 
     fn app() -> Element {
-        let colors = use_signal(|| vec!["green", "blue", "red"]);
-        let padding = use_signal(|| 10);
+        let mut colors = use_signal(|| vec!["green", "blue", "red"]);
+        let mut padding = use_signal(|| 10);
 
         use_hook(|| {
             spawn(async move {
@@ -171,7 +171,7 @@ fn supports_async() {
             })
         });
 
-        let colors = colors();
+        let colors = colors.read();
         let big = colors[0];
         let mid = colors[1];
         let small = colors[2];

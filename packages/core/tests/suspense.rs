@@ -31,7 +31,7 @@ fn app() -> Element {
 fn suspended_child() -> Element {
     let mut val = use_signal(|| 0);
 
-    if *val() < 3 {
+    if val() < 3 {
         spawn(async move {
             val += 1;
         });

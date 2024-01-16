@@ -45,7 +45,7 @@ fn events_generate() {
     fn app() -> Element {
         let mut count = use_signal(|| 0);
 
-        match *count() {
+        match count() {
             0 => rsx! {
                 div { onclick: move |_| count += 1,
                     div { "nested" }

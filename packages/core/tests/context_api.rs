@@ -14,7 +14,7 @@ fn state_shares() {
     }
 
     fn child_2() -> Element {
-        let value = consume_context::<i32>().unwrap();
+        let value = consume_context::<i32>();
         rsx!("Value is {value}")
     }
 
