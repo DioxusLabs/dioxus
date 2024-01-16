@@ -29,7 +29,7 @@ impl Create {
 pub fn post_create(path: &PathBuf) -> Result<()> {
     // first run cargo fmt
     let mut cmd = Command::new("cargo");
-    let cmd = cmd.arg("fmt").current_dir(&path);
+    let cmd = cmd.arg("fmt").current_dir(path);
     let output = cmd.output().expect("failed to execute process");
     if !output.status.success() {
         log::error!("cargo fmt failed");
