@@ -18,7 +18,7 @@ impl<R> Clone for OutletContext<R> {
 
 pub(crate) fn use_outlet_context<R: 'static>() -> OutletContext<R> {
     use_hook(|| {
-        consume_context().unwrap_or(OutletContext::<R> {
+        try_consume_context().unwrap_or(OutletContext::<R> {
             current_level: 1,
             _marker: std::marker::PhantomData,
         })

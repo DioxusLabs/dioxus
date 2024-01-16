@@ -33,7 +33,7 @@ use tao::platform::ios::WindowExtIOS;
 ///
 /// This function will panic if it is called outside of the context of a Dioxus App.
 pub fn window() -> DesktopContext {
-    dioxus_core::prelude::consume_context().unwrap()
+    dioxus_core::prelude::consume_context()
 }
 
 /// A handle to the [`DesktopService`] that can be passed around.

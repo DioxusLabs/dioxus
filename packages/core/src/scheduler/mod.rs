@@ -1,5 +1,4 @@
 use crate::ScopeId;
-use slab::Slab;
 
 mod task;
 mod wait;

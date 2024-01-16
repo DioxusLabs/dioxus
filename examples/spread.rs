@@ -1,4 +1,4 @@
-use dioxus::{core::NoOpMutations, prelude::*};
+use dioxus::{dioxus_core::NoOpMutations, prelude::*};
 
 fn main() {
     let mut dom = VirtualDom::new(app);

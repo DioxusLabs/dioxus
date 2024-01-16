@@ -35,7 +35,7 @@ type EvalCreator = Rc<dyn Fn(&str) -> Result<UseEval, EvalError>>;
 /// has access to most, if not all of your application data.**
 #[must_use]
 pub fn eval_provider() -> EvalCreator {
-    let eval_provider = consume_context::<Rc<dyn EvalProvider>>().expect("evaluator not provided");
+    let eval_provider = consume_context::<Rc<dyn EvalProvider>>();
 
     Rc::new(move |script: &str| {
         eval_provider
@@ -45,8 +45,7 @@ pub fn eval_provider() -> EvalCreator {
 }
 
 pub fn eval(script: &str) -> Result<UseEval, EvalError> {
-    let eval_provider = dioxus_core::prelude::consume_context::<Rc<dyn EvalProvider>>()
-        .expect("evaluator not provided");
+    let eval_provider = dioxus_core::prelude::consume_context::<Rc<dyn EvalProvider>>();
 
     eval_provider
         .new_evaluator(script.to_string())

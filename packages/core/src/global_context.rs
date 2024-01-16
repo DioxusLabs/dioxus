@@ -19,8 +19,15 @@ pub fn vdom_is_rendering() -> bool {
 }
 
 /// Consume context from the current scope
-pub fn consume_context<T: 'static + Clone>() -> Option<T> {
+pub fn try_consume_context<T: 'static + Clone>() -> Option<T> {
     with_current_scope(|cx| cx.consume_context::<T>()).flatten()
+}
+
+/// Consume context from the current scope
+pub fn consume_context<T: 'static + Clone>() -> T {
+    with_current_scope(|cx| cx.consume_context::<T>())
+        .flatten()
+        .unwrap_or_else(|| panic!("Could not find context {}", std::any::type_name::<T>(),))
 }
 
 /// Consume context from the current scope

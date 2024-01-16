@@ -3,29 +3,17 @@ use dioxus::prelude::*;
 use dioxus_router::prelude::*;
 
 fn main() {
-    dioxus_desktop::launch(App);
+    dioxus_desktop::launch(app);
 }
 
-#[derive(Routable, Clone)]
-#[rustfmt::skip]
-enum Route {
-    #[route("/")]
-    ClientList {},
-    #[route("/new")]
-    ClientAdd {},
-    #[route("/settings")]
-    Settings {},
-}
+/// A type alias that reprsents a shared context between components
+///
+/// Normally we'd wrap the Context in a newtype, but we only have one Signal<Vec<Client>> in this app
+type Clients = Signal<Vec<Client>>;
 
-#[derive(Clone, Debug, Default)]
-pub struct Client {
-    pub first_name: String,
-    pub last_name: String,
-    pub description: String,
-}
+fn app() -> Element {
+    use_context_provider::<Clients>(|| Signal::new(vec![]));
 
-#[component]
-fn App() -> Element {
     render! {
         link {
             rel: "stylesheet",
@@ -48,8 +36,30 @@ fn App() -> Element {
     }
 }
 
+#[derive(Routable, Clone)]
+#[rustfmt::skip]
+enum Route {
+    #[route("/")]
+    ClientList {},
+
+    #[route("/new")]
+    ClientAdd {},
+
+    #[route("/settings")]
+    Settings {},
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct Client {
+    pub first_name: String,
+    pub last_name: String,
+    pub description: String,
+}
+
 #[component]
 fn ClientList() -> Element {
+    let clients = use_context::<Clients>();
+
     rsx! {
         h2 { "List of Clients" }
         Link { to: Route::ClientAdd {}, class: "pure-button pure-button-primary", "Add Client" }
@@ -69,21 +79,18 @@ fn ClientAdd() -> Element {
     let last_name = use_signal(String::new);
     let description = use_signal(String::new);
 
+    let submit_client = move |_: FormEvent| {
+        consume_context::<Clients>().write().push(Client {
+            first_name: first_name.to_string(),
+            last_name: last_name.to_string(),
+            description: description.to_string(),
+        });
+        dioxus_router::router().push(Route::ClientList {});
+    };
+
     rsx! {
         h2 { "Add new Client" }
-
-        form {
-            class: "pure-form pure-form-aligned",
-            onsubmit: move |_| {
-                let mut clients = clients.write();
-                clients
-                    .push(Client {
-                        first_name: first_name.to_string(),
-                        last_name: last_name.to_string(),
-                        description: description.to_string(),
-                    });
-                dioxus_router::router().push(Route::ClientList {});
-            },
+        form { class: "pure-form pure-form-aligned", onsubmit: submit_client,
 
             fieldset {
                 div { class: "pure-control-group",
@@ -131,14 +138,12 @@ fn ClientAdd() -> Element {
 
 #[component]
 fn Settings() -> Element {
-    let clients = use_shared_state::<ClientContext>().unwrap();
-
     rsx! {
         h2 { "Settings" }
 
         button {
             class: "pure-button pure-button-primary red",
-            onclick: move |_| clients.write().clear(),
+            onclick: move |_| consume_context::<Clients>().write().clear(),
             "Remove all Clients"
         }
 

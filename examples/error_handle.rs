@@ -1,4 +1,4 @@
-use dioxus::{core::CapturedError, prelude::*};
+use dioxus::{dioxus_core::CapturedError, prelude::*};
 
 fn main() {
     dioxus_desktop::launch(app);

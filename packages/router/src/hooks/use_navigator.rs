@@ -1,4 +1,4 @@
-use dioxus_lib::prelude::{consume_context, use_hook};
+use dioxus_lib::prelude::{consume_context, try_consume_context, use_hook};
 
 use crate::prelude::{Navigator, RouterContext};
 
@@ -51,7 +51,7 @@ use crate::prelude::{Navigator, RouterContext};
 #[must_use]
 pub fn use_navigator() -> Navigator {
     use_hook(|| {
-        let router = consume_context::<RouterContext>()
+        let router = try_consume_context::<RouterContext>()
             .expect("Must be called in a descendant of a Router component");
 
         Navigator(router)

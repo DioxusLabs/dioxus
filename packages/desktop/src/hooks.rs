@@ -14,7 +14,7 @@ use wry::RequestAsyncResponder;
 
 /// Get an imperative handle to the current window
 pub fn use_window() -> DesktopContext {
-    use_hook(|| consume_context::<DesktopContext>()).unwrap()
+    use_hook(|| consume_context::<DesktopContext>())
 }
 
 /// Get a closure that executes any JavaScript in the WebView context.

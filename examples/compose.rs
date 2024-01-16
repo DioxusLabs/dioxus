@@ -1,8 +1,9 @@
 //! This example shows how to create a popup window and send data back to the parent window.
 
+use std::rc::Rc;
+
 use dioxus::prelude::*;
 use futures_util::StreamExt;
-use tokio::sync::mpsc::UnboundedSender;
 
 fn main() {
     dioxus_desktop::launch(app);
@@ -12,15 +13,16 @@ fn app() -> Element {
     let emails_sent = use_signal(|| Vec::new() as Vec<String>);
 
     // Wait for responses to the compose channel, and then push them to the emails_sent signal.
-    let tx = use_coroutine(|mut rx: UnboundedReceiver<String>| async move {
+    let handle = use_coroutine(|mut rx: UnboundedReceiver<String>| async move {
         while let Some(message) = rx.next().await {
             emails_sent.write().push(message);
         }
     });
 
     let open_compose_window = move |evt: MouseEvent| {
+        let tx = handle.tx();
         dioxus_desktop::window().new_window(
-            VirtualDom::new_with_props(compose, tx.clone()),
+            VirtualDom::new_with_props(compose, Rc::new(move |s| tx.unbounded_send(s))),
             Default::default(),
         );
     };
@@ -39,7 +41,7 @@ fn app() -> Element {
     }
 }
 
-fn compose(tx: UnboundedSender<String>) -> Element {
+fn compose(send: Rc<dyn Fn(String)>) -> Element {
     let user_input = use_signal(String::new);
 
     rsx! {
@@ -48,7 +50,7 @@ fn compose(tx: UnboundedSender<String>) -> Element {
 
             button {
                 onclick: move |_| {
-                    tx.send(user_input.get().clone());
+                    send(user_input.get().clone());
                     dioxus_desktop::window().close();
                 },
                 "Click to send"

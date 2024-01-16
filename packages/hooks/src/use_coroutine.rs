@@ -96,7 +96,7 @@ where
 ///
 /// See the docs for [`use_coroutine`] for more details.
 #[must_use]
-pub fn use_coroutine_handle<M: 'static>() -> Option<Coroutine<M>> {
+pub fn use_coroutine_handle<M: 'static>() -> Coroutine<M> {
     use_hook(|| consume_context::<Coroutine<M>>())
 }
 
@@ -116,6 +116,10 @@ impl<T> Coroutine<T> {
     /// Send a message to the coroutine
     pub fn send(&self, msg: T) {
         let _ = self.tx.read().as_ref().unwrap().unbounded_send(msg);
+    }
+
+    pub fn tx(&self) -> UnboundedSender<T> {
+        self.tx.read().as_ref().unwrap().clone()
     }
 
     /// Restart this coroutine

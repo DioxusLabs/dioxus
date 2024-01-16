@@ -1,5 +1,5 @@
 use crate::{
-    global_context::{consume_context, current_scope_id},
+    global_context::{current_scope_id, try_consume_context},
     innerlude::provide_context,
     use_hook, Element, IntoDynNode, Properties, ScopeId, Template, TemplateAttribute, TemplateNode,
     VNode,
@@ -202,7 +202,7 @@ pub trait Throw<S = ()>: Sized {
 }
 
 fn throw_error<T>(e: impl Debug + 'static) -> Option<T> {
-    if let Some(cx) = consume_context::<ErrorBoundary>() {
+    if let Some(cx) = try_consume_context::<ErrorBoundary>() {
         match current_scope_id() {
             Some(id) => cx.insert_error(id, Box::new(e), Backtrace::capture()),
             None => {
