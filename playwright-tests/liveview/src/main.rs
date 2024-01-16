@@ -20,7 +20,7 @@ fn app() -> Element {
         }
         input { value: "hello input" }
         div { class: "style-div", color: "red", "colored text" }
-    })
+    }
 }
 
 #[tokio::main]

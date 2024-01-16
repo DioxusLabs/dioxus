@@ -14,7 +14,7 @@ fn main() {
 fn app() -> Element {
     let mut state = use_signal(|| PlayerState { is_playing: false });
 
-    rsx!(
+    render!(
         div {
             h1 {"Select an option"}
             h3 { "The radio is... ", {state.read().is_playing()}, "!" }

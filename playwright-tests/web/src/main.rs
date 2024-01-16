@@ -6,8 +6,6 @@ fn app() -> Element {
     let mut num = use_signal(|| 0);
     let eval_result = use_signal(String::new);
 
-    let eval_provider = dioxus_html::prelude::use_eval(cx);
-
     rsx! {
         div {
             "hello axum! {num}"
@@ -25,27 +23,26 @@ fn app() -> Element {
         button {
             class: "eval-button",
             onclick: move |_| {
-                let eval = eval_provider(
+                let eval = eval(
                         r#"
                             window.document.title = 'Hello from Dioxus Eval!';
                             dioxus.send("returned eval value");
                         "#,
                     )
                     .unwrap();
-                let setter = eval_result.setter();
                 async move {
                     let result = eval.recv().await;
                     if let Ok(serde_json::Value::String(string)) = result {
-                        setter(string);
+                        eval_result.set(string);
                     }
                 }
             },
             "Eval"
         }
         div { class: "eval-result", "{eval_result}" }
-    })
+    }
 }
 
 fn main() {
-    dioxus_web::launch(app);
+    launch_web(app);
 }

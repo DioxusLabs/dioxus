@@ -38,7 +38,7 @@ fn app() -> Element {
         }
     };
 
-    rsx!(
+    render!(
         div {
             width: "50%",
             height: "50%",

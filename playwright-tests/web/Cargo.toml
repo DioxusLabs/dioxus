@@ -7,7 +7,5 @@ license = "MIT OR Apache-2.0"
 publish = false
 
 [dependencies]
-dioxus = { path = "../../packages/dioxus" }
-dioxus-web = { path = "../../packages/web" }
-dioxus-html = { path = "../../packages/html" }
+dioxus = { path = "../../packages/dioxus", features = ["web"]}
 serde_json = "1.0.96"

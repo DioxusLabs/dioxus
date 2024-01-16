@@ -10,18 +10,14 @@ fn makes_tree() {
     fn app() -> Element {
         rsx! {
             div {
-                div {
-                    h1 {}
-                }
-                div {
-                    h2 {}
-                }
+                div { h1 {} }
+                div { h2 {} }
             }
-        })
+        }
     }
 
     let mut dom = VirtualDom::new(app);
-    let muts = dom.rebuild();
+    let muts = dom.rebuild_to_vec();
 
     dbg!(muts.edits);
 }
@@ -31,12 +27,8 @@ fn rehydrates() {
     fn app() -> Element {
         rsx! {
             div {
-                div {
-                    h1 { "h1" }
-                }
-                div {
-                    h2 { "h2" }
-                }
+                div { h1 { "h1" } }
+                div { h2 { "h2" } }
                 button {
                     onclick: move |_| {
                         println!("clicked");
@@ -45,7 +37,7 @@ fn rehydrates() {
                 }
                 {false.then(|| rsx!{ "hello" })}
             }
-        })
+        }
     }
 
     let mut dom = VirtualDom::new(app);

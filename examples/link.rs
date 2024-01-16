@@ -7,7 +7,7 @@ fn main() {
 
 #[component]
 fn App() -> Element {
-    rsx! (
+    render! (
         div {
             p { a { href: "http://dioxuslabs.com/", "Default link - links outside of your app" } }
             p {

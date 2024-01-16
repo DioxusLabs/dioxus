@@ -6,7 +6,7 @@ fn main() {
 }
 
 fn app() -> Element {
-    rsx! {
+    render! {
         div {
             width: "100%",
             height: "100%",

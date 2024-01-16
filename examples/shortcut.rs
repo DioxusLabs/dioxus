@@ -10,5 +10,5 @@ fn app() -> Element {
 
     _ = use_global_shortcut("ctrl+s", move || toggled.toggle());
 
-    rsx!("toggle: {toggled}")
+    render!("toggle: {toggled}")
 }

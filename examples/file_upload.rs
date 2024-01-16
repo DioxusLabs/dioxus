@@ -30,7 +30,7 @@ fn App() -> Element {
         }
     };
 
-    rsx! {
+    render! {
         label {
             input {
                 r#type: "checkbox",

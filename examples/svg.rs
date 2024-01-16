@@ -8,7 +8,7 @@ fn main() {
 }
 
 fn app() -> Element {
-    rsx! {
+    render! {
         div { user_select: "none", webkit_user_select: "none", margin_left: "10%", margin_right: "10%",
             h1 { "Click die to generate a new value" }
             div { cursor: "pointer", height: "100%", width: "100%", Dice {} }
@@ -33,7 +33,7 @@ fn Dice() -> Element {
     let mut value = use_signal(|| 5);
     let active_dots = use_selector(move || &DOTS_FOR_VALUE[(value() - 1) as usize]);
 
-    rsx! {
+    render! {
         svg {
             view_box: "-1000 -1000 2000 2000",
             prevent_default: "onclick",

@@ -24,7 +24,7 @@ pub fn LogOut(cx: Scope<ClientProps>) -> Element {
                 Some(log_out_url_result) => match log_out_url_result {
                     Some(uri) => match uri {
                         Ok(uri) => {
-                            rsx! {
+                            render! {
                                 Link {
                                     onclick: move |_| {
                                         {
@@ -40,13 +40,11 @@ pub fn LogOut(cx: Scope<ClientProps>) -> Element {
                             }
                         }
                         Err(error) => {
-                            rsx! {
-                                div { "Failed to load disconnection url: {error:?}" }
-                            }
+                            render! { div { "Failed to load disconnection url: {error:?}" } }
                         }
                     },
                     None => {
-                        rsx! { div { "Loading... Please wait" } }
+                        render! { div { "Loading... Please wait" } }
                     }
                 },
                 None => {
@@ -61,15 +59,15 @@ pub fn LogOut(cx: Scope<ClientProps>) -> Element {
                         })
                     };
                     logout_url_task();
-                    rsx! { div{"Loading log out url... Please wait"}}
+                    render! { div { "Loading log out url... Please wait" } }
                 }
             },
             None => {
-                rsx! {{}}
+                render! {{}}
             }
         },
         None => {
-            rsx! {{}}
+            render! {{}}
         }
     })
 }
@@ -115,14 +113,14 @@ pub fn RefreshToken(cx: Scope<ClientProps>) -> Element {
                     })
                 };
                 exchange_refresh_token_spawn();
-                rsx! { div { "Refreshing session, please wait" } }
+                render! { div { "Refreshing session, please wait" } }
             }
             None => {
-                rsx! { div { "Id token expired and no refresh token found" } }
+                render! { div { "Id token expired and no refresh token found" } }
             }
         },
         None => {
-            rsx! {{}}
+            render! {{}}
         }
     })
 }
@@ -137,21 +135,21 @@ pub fn LoadClient() -> Element {
                 *fermi_client.write() = ClientState {
                     oidc_client: Some(ClientProps::new(client_id.clone(), client.clone())),
                 };
-                rsx! {
+                render! {
                     div { "Client successfully loaded" }
                     Outlet::<Route> {}
                 }
             }
             Err(error) => {
                 log::info! {"Failed to load client: {:?}", error};
-                rsx! {
+                render! {
                     div { "Failed to load client: {error:?}" }
                     Outlet::<Route> {}
                 }
             }
         },
         None => {
-            rsx! {
+            render! {
                 div {
                     div { "Loading client, please wait" }
                     Outlet::<Route> {}
@@ -182,7 +180,7 @@ pub fn AuthHeader() -> Element {
                                 auth_request.nonce.clone(),
                             ) {
                                 Ok(email) => {
-                                    rsx! {
+                                    render! {
                                         div {
                                             div { {email} }
                                             LogOut { client_id: client_props.client_id, client: client_props.client }
@@ -195,9 +193,9 @@ pub fn AuthHeader() -> Element {
                                     // Id token failed to be decoded because it expired, we refresh it
                                     openidconnect::ClaimsVerificationError::Expired(_message) => {
                                         log::info!("Token expired");
-                                        rsx! {
+                                        render! {
                                             div {
-                                                RefreshToken {client_id: client_props.client_id, client: client_props.client}
+                                                RefreshToken { client_id: client_props.client_id, client: client_props.client }
                                                 Outlet::<Route> {}
                                             }
                                         }
@@ -205,7 +203,7 @@ pub fn AuthHeader() -> Element {
                                     // Other issue with token decoding
                                     _ => {
                                         log::info!("Other issue with token");
-                                        rsx! {
+                                        render! {
                                             div {
                                                 div { "{error}" }
                                                 Outlet::<Route> {}
@@ -217,7 +215,7 @@ pub fn AuthHeader() -> Element {
                         }
                         // User is not logged in
                         None => {
-                            rsx! {
+                            render! {
                                 div {
                                     Link { to: auth_request.authorize_url.clone(), "Log in" }
                                     Outlet::<Route> {}
@@ -234,17 +232,17 @@ pub fn AuthHeader() -> Element {
                             auth_request: Some(auth_request),
                         }),
                     );
-                    rsx! { div { "Loading nonce" } }
+                    render! { div { "Loading nonce" } }
                 }
             }
         }
         // Client is not initialized yet, we need it for everything
         (None, _, _) => {
-            rsx! { LoadClient {} }
+            render! { LoadClient {} }
         }
         // We need everything loaded before doing anything
         (_client, _auth_request, _auth_token) => {
-            rsx! {{}}
+            render! {{}}
         }
     })
 }

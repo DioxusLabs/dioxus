@@ -1,7 +1,7 @@
-//! A tour of the rsx! macro
+//! A tour of the render! macro
 //! ------------------------
 //!
-//! This example serves as an informal quick reference of all the things that the rsx! macro can do.
+//! This example serves as an informal quick reference of all the things that the render! macro can do.
 //!
 //! A full in-depth reference guide is available at: https://www.notion.so/rsx-macro-basics-ef6e367dec124f4784e736d91b0d0b19
 //!
@@ -55,7 +55,7 @@ fn main() {
 //     let formatting_tuple = ("a", "b");
 //     let lazy_fmt = format_args!("lazily formatted text");
 //     let asd = 123;
-//     rsx! {
+//     render! {
 //         div {
 //             // Elements
 //             div {}
@@ -95,10 +95,10 @@ fn main() {
 //             }
 
 //             // Expressions can be used in element position too:
-//             {rsx!(p { "More templating!" })},
+//             {render!(p { "More templating!" })},
 
 //             // Iterators
-//             {(0..10).map(|i| rsx!(li { "{i}" }))},
+//             {(0..10).map(|i| render!(li { "{i}" }))},
 
 //             // Iterators within expressions
 //             {
@@ -106,19 +106,19 @@ fn main() {
 //                 // Iterators *should* have keys when you can provide them.
 //                 // Keys make your app run faster. Make sure your keys are stable, unique, and predictable.
 //                 // Using an "ID" associated with your data is a good idea.
-//                 data.into_iter().map(|(k, v)| rsx!(li { key: "{k}", "{v}" }))
+//                 data.into_iter().map(|(k, v)| render!(li { key: "{k}", "{v}" }))
 //             }
 
 //             // Matching
 //             match true {
-//                 true => rsx!( h1 {"Top text"}),
-//                 false => rsx!( h1 {"Bottom text"})
+//                 true => render!( h1 {"Top text"}),
+//                 false => render!( h1 {"Bottom text"})
 //             }
 
 //             // Conditional rendering
 //             // Dioxus conditional rendering is based around None/Some. We have no special syntax for conditionals.
-//             // You can convert a bool condition to rsx! with .then and .or
-//             {true.then(|| rsx!(div {}))},
+//             // You can convert a bool condition to render! with .then and .or
+//             {true.then(|| render!(div {}))},
 
 //             // Alternatively, you can use the "if" syntax - but both branches must be resolve to Element
 //             if false {
@@ -130,7 +130,7 @@ fn main() {
 //             // Using optionals for diverging branches
 //             // Note that since this is wrapped in curlies, it's interpreted as an expression
 //             {if true {
-//                 Some(rsx!(h1 {"Top text"}))
+//                 Some(render!(h1 {"Top text"}))
 //             } else {
 //                 None
 //             }}
@@ -172,7 +172,7 @@ fn main() {
 //             // Can pass in props directly as an expression
 //             {
 //                 let props = TallerProps {a: "hello", children: None };
-//                 rsx!(Taller { ..props })
+//                 render!(Taller { ..props })
 //             }
 
 //             // Spreading can also be overridden manually
@@ -225,7 +225,7 @@ fn main() {
 // }
 
 // fn helper<'a>(cx: &'a ScopeState, text: &'a str) -> Element {
-//     rsx! {
+//     render! {
 //         p { "{text}" }
 //     }
 // }
@@ -235,7 +235,7 @@ fn main() {
 // // something like Clippy.
 // #[component(no_case_check)]
 // fn lowercase_helper() -> Element {
-//     rsx! {
+//     render! {
 //         "asd"
 //     }
 // }
@@ -254,18 +254,18 @@ fn main() {
 //     // something like Clippy.
 //     #[component(no_case_check)]
 //     pub fn lowercase_component() -> Element {
-//         rsx! { "look ma, no uppercase" }
+//         render! { "look ma, no uppercase" }
 //     }
 // }
 
 // /// Documention for this component is visible within the rsx macro
 // #[component]
 // pub fn Taller(
-//     /// Fields are documented and accessible in rsx!
+//     /// Fields are documented and accessible in render!
 //     a: &'static str,
 //     children: Element,
 // ) -> Element {
-//     rsx! { {&children} }
+//     render! { {&children} }
 // }
 
 // #[derive(Props, PartialEq, Eq)]
@@ -285,7 +285,7 @@ fn main() {
 
 // #[component]
 // fn WithInline(cx: Scope<'a>, text: &'a str) -> Element {
-//     rsx! {
+//     render! {
 //         p { "{text}" }
 //     }
 // }
@@ -295,7 +295,7 @@ fn main() {
 // where
 //     T: Display,
 // {
-//     rsx! {
+//     render! {
 //         p { "{text}" }
 //     }
 // }

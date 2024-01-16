@@ -35,7 +35,7 @@ const FIELDS: &[(&str, &str)] = &[
 ];
 
 fn app() -> Element {
-    rsx! {
+    render! {
         div { margin_left: "30px",
             {select_example()},
             div {
@@ -137,7 +137,7 @@ fn app() -> Element {
 }
 
 fn select_example() -> Element {
-    rsx! {
+    render! {
         div {
             select {
                 id: "selection",

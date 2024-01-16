@@ -60,11 +60,7 @@ fn app(cx: Scope<AppProps>) -> Element {
 
     rsx! {
         h1 { "hello axum! {count}" }
-        button {
-            class: "increment-button",
-            onclick: move |_| count += 1,
-            "Increment"
-        }
+        button { class: "increment-button", onclick: move |_| count += 1, "Increment" }
         button {
             class: "server-button",
             onclick: move |_| {
@@ -80,7 +76,7 @@ fn app(cx: Scope<AppProps>) -> Element {
             "Run a server function!"
         }
         "Server said: {text}"
-    })
+    }
 }
 
 #[server(PostServerData)]

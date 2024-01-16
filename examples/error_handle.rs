@@ -5,9 +5,9 @@ fn main() {
 }
 
 fn app() -> Element {
-    rsx! {
+    render! {
         ErrorBoundary {
-            handle_error: |error: CapturedError| rsx! {"Found error {error}"},
+            handle_error: |error: CapturedError| render! {"Found error {error}"},
             DemoC { x: 1 }
         }
     }

@@ -18,7 +18,7 @@ fn app() -> Element {
     let mut always_on_top = use_signal(|| false);
     let mut decorations = use_signal(|| false);
 
-    rsx!(
+    render!(
         link {
             href: "https://unpkg.com/tailwindcss@^2/dist/tailwind.min.css",
             rel: "stylesheet"

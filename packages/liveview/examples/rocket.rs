@@ -57,7 +57,7 @@ fn ws(ws: WebSocket, pool: &State<LiveViewPool>) -> Channel<'static> {
                 .await;
             Ok(())
         })
-    }
+    })
 }
 
 #[tokio::main]

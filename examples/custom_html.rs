@@ -30,7 +30,7 @@ fn main() {
 }
 
 fn app() -> Element {
-    rsx! {
+    render! {
         div { h1 { "hello world!" } }
     }
 }

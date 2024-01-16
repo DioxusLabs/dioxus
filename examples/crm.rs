@@ -60,7 +60,7 @@ pub struct Client {
 fn ClientList() -> Element {
     let mut clients = use_context::<Clients>();
 
-    rsx! {
+    render! {
         h2 { "List of Clients" }
         Link { to: Route::ClientAdd {}, class: "pure-button pure-button-primary", "Add Client" }
         Link { to: Route::Settings {}, class: "pure-button", "Settings" }
@@ -88,7 +88,7 @@ fn ClientAdd() -> Element {
         dioxus_router::router().push(Route::ClientList {});
     };
 
-    rsx! {
+    render! {
         h2 { "Add new Client" }
         form { class: "pure-form pure-form-aligned", onsubmit: submit_client,
 
@@ -138,7 +138,7 @@ fn ClientAdd() -> Element {
 
 #[component]
 fn Settings() -> Element {
-    rsx! {
+    render! {
         h2 { "Settings" }
 
         button {

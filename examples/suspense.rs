@@ -2,7 +2,7 @@
 
 //! Suspense in Dioxus
 //!
-//! Currently, `rsx!` does not accept futures as values. To achieve the functionality
+//! Currently, `render!` does not accept futures as values. To achieve the functionality
 //! of suspense, we need to make a new component that performs its own suspense
 //! handling.
 //!
@@ -29,7 +29,7 @@ fn main() {
 }
 
 fn app() -> Element {
-    rsx! {
+    render! {
         div {
             h1 { "Dogs are very important" }
             p {
@@ -64,11 +64,11 @@ fn Doggo() -> Element {
     });
 
     match fut.value().read().as_ref() {
-        Some(Ok(resp)) => rsx! {
+        Some(Ok(resp)) => render! {
             button { onclick: move |_| fut.restart(), "Click to fetch another doggo" }
             div { img { max_width: "500px", max_height: "500px", src: "{resp.message}" } }
         },
-        Some(Err(_)) => rsx! { div { "loading dogs failed" } },
-        None => rsx! { div { "loading dogs..." } },
+        Some(Err(_)) => render! { div { "loading dogs failed" } },
+        None => render! { div { "loading dogs..." } },
     }
 }

@@ -7,7 +7,7 @@ fn main() {
 fn app() -> Element {
     let mut level = use_signal(|| 1.0);
 
-    rsx! {
+    render! {
         input {
             r#type: "number",
             value: "{level}",

@@ -11,7 +11,7 @@ fn main() {
 }
 
 fn app() -> Element {
-    rsx! {
+    render! {
         div {
             onclick: move |_| println!("clicked! top"),
             "- div"

@@ -7,7 +7,7 @@ fn main() {
 fn app() -> Element {
     let mut header_element = use_signal(|| None);
 
-    rsx! {
+    render! {
         div {
             h1 {
                 onmounted: move |cx| header_element.set(Some(cx.inner().clone())),

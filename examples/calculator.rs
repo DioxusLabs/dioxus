@@ -57,7 +57,7 @@ fn app() -> Element {
         _ => {}
     };
 
-    rsx! {
+    render! {
         style { {include_str!("./assets/calculator.css")} }
         div { id: "wrapper",
             div { class: "app",

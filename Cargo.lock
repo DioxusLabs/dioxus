@@ -2806,8 +2806,6 @@ name = "dioxus-playwright-web-test"
 version = "0.0.1"
 dependencies = [
  "dioxus",
- "dioxus-html",
- "dioxus-web",
  "serde_json",
 ]
 
@@ -2919,8 +2917,6 @@ name = "dioxus-tailwind"
 version = "0.0.0"
 dependencies = [
  "dioxus",
- "dioxus-desktop",
- "dioxus-web",
  "manganis",
 ]
 

@@ -5,7 +5,7 @@ fn main() {
 }
 
 fn app() -> Element {
-    rsx! {
+    render! {
         div {
             p {
                 "This should show an image:"

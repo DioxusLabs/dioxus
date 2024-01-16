@@ -52,7 +52,7 @@ fn app() -> Element {
         events.push_back(event);
     };
 
-    rsx! {
+    render! {
         div { style: "{CONTAINER_STYLE}",
             div {
                 style: "{RECT_STYLE}",

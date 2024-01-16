@@ -1,7 +1,7 @@
 use dioxus::prelude::*;
 
 fn app() -> Element {
-    rsx! {
+    render! {
         svg {
             width: "200",
             height: "250",

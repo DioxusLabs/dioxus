@@ -19,7 +19,7 @@ fn app() -> Element {
         }
     });
 
-    rsx! {
+    render! {
         div {
             h1 { "Current count: {count}" }
             button {
