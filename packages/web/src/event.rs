@@ -426,6 +426,10 @@ impl HasFormData for WebFormData {
                     }
                 }
             }
+        } else if let Some(select) = self.element.dyn_ref::<web_sys::HtmlSelectElement>() {
+            // try to fill in select element values
+            let options = get_select_data(select);
+            values.insert("options".to_string(), FormValue::VecText(options));
         }
 
         values
