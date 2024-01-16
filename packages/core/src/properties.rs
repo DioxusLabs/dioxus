@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::{any::TypeId, rc::Rc};
 
 use crate::innerlude::*;
 
@@ -62,23 +62,25 @@ where
 }
 
 /// Any component that implements the `ComponentFn` trait can be used as a component.
-pub trait ComponentFunction<Props, Marker> {
-    type Props;
+pub trait ComponentFunction<Props, Marker = ()>: 'static {
+    /// Get the type id of the component.
+    fn id(&self) -> TypeId {
+        TypeId::of::<Self>()
+    }
+
     /// Convert the component to a function that takes props and returns an element.
     fn as_component(self: Rc<Self>) -> Component<Props>;
 }
 
 /// Accept pre-formed component render functions as components
-impl<P> ComponentFunction<P, ()> for Component<P> {
-    type Props = P;
+impl<P: 'static> ComponentFunction<P> for Component<P> {
     fn as_component(self: Rc<Self>) -> Component<P> {
         self.as_ref().clone()
     }
 }
 
 /// Accept any callbacks that take props
-impl<F: Fn(P) -> Element + 'static, P> ComponentFunction<P, ()> for F {
-    type Props = P;
+impl<F: Fn(P) -> Element + 'static, P> ComponentFunction<P> for F {
     fn as_component(self: Rc<Self>) -> Component<P> {
         self
     }
@@ -87,7 +89,6 @@ impl<F: Fn(P) -> Element + 'static, P> ComponentFunction<P, ()> for F {
 /// Accept any callbacks that take no props
 pub struct EmptyMarker;
 impl<F: Fn() -> Element + 'static> ComponentFunction<(), EmptyMarker> for F {
-    type Props = ();
     fn as_component(self: Rc<Self>) -> Rc<dyn Fn(()) -> Element> {
         Rc::new(move |_| self())
     }

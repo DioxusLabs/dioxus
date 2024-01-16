@@ -605,18 +605,19 @@ impl RouteEnum {
 
     fn component_impl(&self) -> TokenStream2 {
         let name = &self.name;
+        let props = quote! { ::std::rc::Rc<::std::cell::Cell<::dioxus_router::prelude::RouterConfig<#name>>> };
 
         quote! {
-            impl dioxus_core::ComponentFunction<#name> for #name {
-                type Props = ::std::rc::Rc<::std::cell::Cell<::dioxus_router::prelude::RouterConfig<#name>>>;
-
-                fn call(&self, props: Self::Props) -> dioxus_core::Element {
-                    let initial_route = self.clone();
-                    rsx! {
-                        ::dioxus_router::prelude::Router::<#name> {
-                            config: move || props.take().initial_route(initial_route)
+            impl dioxus_core::ComponentFunction<#props> for #name {
+                fn as_component(self: ::std::rc::Rc<Self>) -> Component<#props> {
+                    ::std::rc::Rc::new(move |props| {
+                        let initial_route = self.as_ref().clone();
+                        rsx! {
+                            ::dioxus_router::prelude::Router::<#name> {
+                                config: move || props.take().initial_route(initial_route)
+                            }
                         }
-                    }
+                    })
                 }
             }
         }

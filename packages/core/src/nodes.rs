@@ -9,6 +9,7 @@ use crate::{
 };
 use crate::{Properties, VirtualDom};
 use core::panic;
+use std::ops::Deref;
 use std::rc::Rc;
 use std::vec;
 use std::{
@@ -16,7 +17,6 @@ use std::{
     cell::Cell,
     fmt::{Arguments, Debug},
 };
-use std::{ffi::c_void, ops::Deref};
 
 pub type TemplateId = &'static str;
 
@@ -513,7 +513,7 @@ pub struct VComponent {
     /// The function pointer of the component, known at compile time
     ///
     /// It is possible that components get folded at compile time, so these shouldn't be really used as a key
-    pub(crate) render_fn: *const c_void,
+    pub(crate) render_fn: TypeId,
 
     pub(crate) props: BoxedAnyProps,
 }
@@ -542,8 +542,9 @@ impl VComponent {
         // The properties must be valid until the next bump frame
         P: Properties + 'static,
     {
-        let component = Rc::new(component).as_component();
-        let render_fn = component.as_ref() as *const _ as *const c_void;
+        let component = Rc::new(component);
+        let render_fn = component.id();
+        let component = component.as_component();
         let vcomp = VProps::new(component, <P as Properties>::memoize, props, fn_name);
 
         VComponent {
