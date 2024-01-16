@@ -73,20 +73,6 @@ impl<
     }
 }
 
-// #[cfg(feature = "router")]
-// impl<R: Routable> LaunchBuilder<crate::router::FullstackRouterConfig<R>>
-// where
-//     <R as std::str::FromStr>::Err: std::fmt::Display,
-//     R: Clone + serde::Serialize + serde::de::DeserializeOwned + Send + Sync + 'static,
-// {
-//     /// Create a new launch builder for the given router.
-//     pub fn router() -> Self {
-//         let component = crate::router::RouteWithCfg::<R>;
-//         let props = crate::router::FullstackRouterConfig::default();
-//         Self::new_with_props(component, props)
-//     }
-// }
-
 #[cfg(feature = "desktop")]
 type CurrentPlatform = dioxus_desktop::DesktopPlatform;
 #[cfg(feature = "web")]

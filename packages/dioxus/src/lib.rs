@@ -57,3 +57,18 @@ pub mod prelude {
 
     pub use dioxus_core;
 }
+
+#[cfg(feature = "web")]
+pub use dioxus_web as web;
+
+#[cfg(feature = "router")]
+pub use dioxus_router as router;
+
+#[cfg(feature = "fullstack")]
+pub use dioxus_fullstack as fullstack;
+
+#[cfg(feature = "desktop")]
+pub use dioxus_desktop as desktop;
+
+#[cfg(feature = "tui")]
+pub use dioxus_tui as tui;
