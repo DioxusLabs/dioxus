@@ -27,10 +27,7 @@ pub fn try_consume_context<T: 'static + Clone>() -> Option<T> {
 pub fn consume_context<T: 'static + Clone>() -> T {
     with_current_scope(|cx| cx.consume_context::<T>())
         .flatten()
-        .expect(&format!(
-            "Could not find context {}",
-            std::any::type_name::<T>(),
-        ))
+        .unwrap_or_else(|| panic!("Could not find context {}", std::any::type_name::<T>()))
 }
 
 /// Consume context from the current scope

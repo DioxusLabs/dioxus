@@ -5,7 +5,6 @@ fn main() {
     launch_desktop(Route::Home {});
 }
 
-// ANCHOR: router
 #[derive(Routable, Clone)]
 #[rustfmt::skip]
 enum Route {
@@ -30,7 +29,6 @@ enum Route {
         route: Vec<String>,
     },
 }
-// ANCHOR_END: router
 
 #[component]
 fn NavBar() -> Element {

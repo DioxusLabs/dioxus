@@ -10,7 +10,6 @@ use std::fmt::Display;
 use dioxus::prelude::*;
 use dioxus_router::prelude::*;
 
-// ANCHOR: route
 #[derive(Routable, Clone)]
 #[rustfmt::skip]
 enum Route {
@@ -65,22 +64,22 @@ impl FromQuery for ManualBlogQuerySegments {
 #[component]
 fn BlogPost(query_params: ManualBlogQuerySegments) -> Element {
     rsx! {
-        div{"This is your blogpost with a query segment:"}
-        div{ "{query_params:?}" }
+        div { "This is your blogpost with a query segment:" }
+        div { "{query_params:?}" }
     }
 }
 
 #[component]
 fn AutomaticBlogPost(name: String, surname: String) -> Element {
     rsx! {
-        div{"This is your blogpost with a query segment:"}
-        div{ "name={name}&surname={surname}" }
+        div { "This is your blogpost with a query segment:" }
+        div { "name={name}&surname={surname}" }
     }
 }
 
 #[component]
 fn App() -> Element {
-    rsx! { Router::<Route>{} }
+    rsx! { Router::<Route> {} }
 }
 
 fn main() {
