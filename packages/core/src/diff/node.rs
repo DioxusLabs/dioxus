@@ -498,8 +498,8 @@ impl VNode {
                     self.diff_vcomponent(
                         mount_id,
                         idx,
-                        old_component,
                         new_component,
+                        old_component,
                         scope_id,
                         parent,
                         dom,
