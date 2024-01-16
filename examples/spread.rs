@@ -1,8 +1,7 @@
-use dioxus::{dioxus_core::NoOpMutations, prelude::*};
+use dioxus::prelude::*;
 
 fn main() {
-    let mut dom = VirtualDom::new(app);
-    let _ = dom.rebuild(&mut NoOpMutations);
+    let mut dom = VirtualDom::prebuilt(app);
     let html = dioxus_ssr::render(&dom);
 
     println!("{}", html);

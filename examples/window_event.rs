@@ -34,8 +34,8 @@ fn app() -> Element {
                     class: "inline-flex items-center bg-gray-800 border-0 py-1 px-3 focus:outline-none hover:bg-gray-700 rounded text-base mt-4 md:mt-0",
                     onmousedown: |evt| evt.stop_propagation(),
                     onclick: move |_| {
-                        window().set_fullscreen(!*fullscreen());
-                        window().set_resizable(*fullscreen());
+                        window().set_fullscreen(!fullscreen());
+                        window().set_resizable(fullscreen());
                         fullscreen.toggle();
                     },
                     "Fullscreen"
@@ -58,7 +58,7 @@ fn app() -> Element {
                         class: "inline-flex items-center text-white bg-green-500 border-0 py-1 px-3 hover:bg-green-700 rounded",
                         onmousedown: |evt| evt.stop_propagation(),
                         onclick: move |_| {
-                            window().set_always_on_top(!*always_on_top());
+                            window().set_always_on_top(!always_on_top());
                             always_on_top.toggle();
                         },
                         "Always On Top"
@@ -69,7 +69,7 @@ fn app() -> Element {
                         class: "inline-flex items-center text-white bg-blue-500 border-0 py-1 px-3 hover:bg-green-700 rounded",
                         onmousedown: |evt| evt.stop_propagation(),
                         onclick: move |_| {
-                            window().set_decorations(!*decorations());
+                            window().set_decorations(!decorations());
                             decorations.toggle();
                         },
                         "Set Decorations"

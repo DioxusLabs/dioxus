@@ -19,7 +19,7 @@ fn app() -> Element {
 
     let local_state = use_signal(|| 0);
     let computed = use_selector_with_dependencies((local_state.get(),), move |(local_state,)| {
-        local_state * 2 + signal.value()
+        local_state * 2 + signal.cloned()
     });
     println!("Running app");
 

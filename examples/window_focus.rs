@@ -28,7 +28,7 @@ fn app() -> Element {
             display: "flex",
             flex_direction: "column",
             align_items: "center",
-            if *focused() {
+            if focused() {
                 "This window is focused!"
             } else {
                 "This window is not focused!"

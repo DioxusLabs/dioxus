@@ -11,7 +11,7 @@ fn app() -> Element {
         div {
             button { onclick: move |_| disabled.toggle(),
                 "click to "
-                if *disabled() { "enable" } else { "disable" }
+                if disabled() { "enable" } else { "disable" }
                 " the lower button"
             }
 

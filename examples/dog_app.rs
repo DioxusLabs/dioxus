@@ -33,7 +33,9 @@ fn app() -> Element {
         Some(resp) => rsx! {
             h1 { "Select a dog breed!" }
             div { height: "500px", display: "flex",
-                ul { flex: "50%", {breed_list} }
+                ul { flex: "50%", {breed_list.value().cloned().unwrap_or_else(|| rsx! {
+                    "loading breeds..."
+                })} }
                 div { flex: "50%", BreedPic { breed } }
             }
         },

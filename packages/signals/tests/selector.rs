@@ -29,7 +29,7 @@ fn memos_rerun() {
                 selector(move || {
                     counter.borrow_mut().effect += 1;
                     println!("Signal: {:?}", signal);
-                    signal.value()
+                    signal.cloned()
                 })
             });
             assert_eq!(memo.value(), 0);

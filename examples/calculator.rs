@@ -22,7 +22,7 @@ fn app() -> Element {
     let val = use_signal(|| String::from("0"));
 
     let input_digit = move |num: u8| {
-        if *val() == "0" {
+        if val.cloned() == "0" {
             val.set(String::new());
         }
 
@@ -94,7 +94,7 @@ fn app() -> Element {
                                     class: "calculator-key key-percent",
                                     onclick: move |_| {
                                         val.set(
-                                            format!("{}", calc_val(val().as_str()) / 100.0)
+                                            format!("{}", calc_val(val.cloned().as_str()) / 100.0)
                                         );
                                     },
                                     "%"

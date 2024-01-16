@@ -31,7 +31,7 @@ fn Dice() -> Element {
     ];
 
     let value = use_signal(|| 5);
-    let active_dots = use_selector(move || &DOTS_FOR_VALUE[(*value() - 1) as usize]);
+    let active_dots = use_selector(move || &DOTS_FOR_VALUE[(value() - 1) as usize]);
 
     rsx! {
         svg {

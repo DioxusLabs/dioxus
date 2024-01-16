@@ -330,7 +330,7 @@ impl<T: Clone + 'static> Signal<T> {
     /// Get the current value of the signal. This will subscribe the current scope to the signal.
     /// If the signal has been dropped, this will panic.
     #[track_caller]
-    pub fn value(&self) -> T {
+    pub fn cloned(&self) -> T {
         self.read().clone()
     }
 }
@@ -338,7 +338,7 @@ impl<T: Clone + 'static> Signal<T> {
 impl Signal<bool> {
     /// Invert the boolean value of the signal. This will trigger an update on all subscribers.
     pub fn toggle(&self) {
-        self.set(!self.value());
+        self.set(!self.cloned());
     }
 }
 
@@ -348,8 +348,8 @@ impl<T: 'static> PartialEq for Signal<T> {
     }
 }
 
-impl<T> Deref for Signal<T> {
-    type Target = dyn Fn() -> GenerationalRef<T>;
+impl<T: Copy> Deref for Signal<T> {
+    type Target = dyn Fn() -> T;
 
     fn deref(&self) -> &Self::Target {
         // https://github.com/dtolnay/case-studies/tree/master/callable-types
@@ -357,7 +357,10 @@ impl<T> Deref for Signal<T> {
         // First we create a closure that captures something with the Same in memory layout as Self (MaybeUninit<Self>).
         let uninit_callable = MaybeUninit::<Self>::uninit();
         // Then move that value into the closure. We assume that the closure now has a in memory layout of Self.
-        let uninit_closure = move || Self::read(unsafe { &*uninit_callable.as_ptr() });
+        let uninit_closure = move || {
+            let res = Self::read(unsafe { &*uninit_callable.as_ptr() });
+            res.clone()
+        };
 
         // Check that the size of the closure is the same as the size of Self in case the compiler changed the layout of the closure.
         let size_of_closure = std::mem::size_of_val(&uninit_closure);
@@ -483,8 +486,8 @@ impl<T: 'static> PartialEq for ReadOnlySignal<T> {
     }
 }
 
-impl<T> Deref for ReadOnlySignal<T> {
-    type Target = dyn Fn() -> GenerationalRef<T>;
+impl<T: Copy> Deref for ReadOnlySignal<T> {
+    type Target = dyn Fn() -> T;
 
     fn deref(&self) -> &Self::Target {
         // https://github.com/dtolnay/case-studies/tree/master/callable-types
@@ -492,7 +495,7 @@ impl<T> Deref for ReadOnlySignal<T> {
         // First we create a closure that captures something with the Same in memory layout as Self (MaybeUninit<Self>).
         let uninit_callable = MaybeUninit::<Self>::uninit();
         // Then move that value into the closure. We assume that the closure now has a in memory layout of Self.
-        let uninit_closure = move || Self::read(unsafe { &*uninit_callable.as_ptr() });
+        let uninit_closure = move || Self::read(unsafe { &*uninit_callable.as_ptr() }).clone();
 
         // Check that the size of the closure is the same as the size of Self in case the compiler changed the layout of the closure.
         let size_of_closure = std::mem::size_of_val(&uninit_closure);

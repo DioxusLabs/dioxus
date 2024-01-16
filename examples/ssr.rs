@@ -2,12 +2,11 @@
 //!
 //! This example shows how we can render the Dioxus Virtualdom using SSR.
 
-use dioxus::{core::NoOpMutations, prelude::*};
+use dioxus::prelude::*;
 
 fn main() {
     // We can render VirtualDoms
-    let mut vdom = VirtualDom::new(app);
-    let _ = vdom.rebuild(&mut NoOpMutations);
+    let mut vdom = VirtualDom::prebuilt(app);
     println!("{}", dioxus_ssr::render(&vdom));
 
     // Or we can render rsx! calls themselves

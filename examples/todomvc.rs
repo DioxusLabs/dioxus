@@ -26,12 +26,13 @@ pub fn app() -> Element {
     let filter = use_signal(|| FilterState::All);
 
     let active_todo_count =
-        use_selector(move || todos().values().filter(|item| !item.checked).count());
+        use_selector(move || todos.read().values().filter(|item| !item.checked).count());
 
     let filtered_todos = use_selector(move || {
-        let mut filtered_todos = todos()
+        let mut filtered_todos = todos
+            .read()
             .iter()
-            .filter(|(_, item)| match *filter() {
+            .filter(|(_, item)| match filter() {
                 FilterState::All => true,
                 FilterState::Active => !item.checked,
                 FilterState::Completed => item.checked,
@@ -49,7 +50,7 @@ pub fn app() -> Element {
             style { {include_str!("./assets/todomvc.css")} }
             TodoHeader { todos }
             section { class: "main",
-                if !todos().is_empty() {
+                if !todos.read().is_empty() {
                     input {
                         id: "toggle-all",
                         class: "toggle-all",
@@ -69,7 +70,7 @@ pub fn app() -> Element {
                         TodoEntry { key: "{id}", id, todos }
                     }
                 }
-                if !todos().is_empty() {
+                if !todos.read().is_empty() {
                     ListFooter { active_todo_count, todos, filter }
                 }
             }
@@ -84,8 +85,8 @@ pub fn TodoHeader(todos: Signal<HashMap<u32, TodoItem>>) -> Element {
     let mut todo_id = use_signal(|| 0);
 
     let onkeydown = move |evt: KeyboardEvent| {
-        if evt.key() == Key::Enter && !draft().is_empty() {
-            let id = *todo_id();
+        if evt.key() == Key::Enter && !draft.read().is_empty() {
+            let id = todo_id();
             let todo = TodoItem {
                 id,
                 checked: false,
@@ -115,11 +116,11 @@ pub fn TodoHeader(todos: Signal<HashMap<u32, TodoItem>>) -> Element {
 #[component]
 pub fn TodoEntry(todos: Signal<HashMap<u32, TodoItem>>, id: u32) -> Element {
     let is_editing = use_signal(|| false);
-    let checked = use_selector(move || todos().get(&id).unwrap().checked);
-    let contents = use_selector(move || todos().get(&id).unwrap().contents.clone());
+    let checked = use_selector(move || todos.read().get(&id).unwrap().checked);
+    let contents = use_selector(move || todos.read().get(&id).unwrap().contents.clone());
 
     rsx! {
-        li { class: if *checked() { "completed" }, class: if *is_editing() { "editing"},
+        li { class: if checked() { "completed" }, class: if is_editing() { "editing"},
             div { class: "view",
                 input {
                     class: "toggle",
@@ -140,7 +141,7 @@ pub fn TodoEntry(todos: Signal<HashMap<u32, TodoItem>>, id: u32) -> Element {
                     prevent_default: "onclick"
                 }
             }
-            if *is_editing() {
+            if is_editing() {
                 input {
                     class: "edit",
                     value: "{contents}",
@@ -165,7 +166,7 @@ pub fn ListFooter(
     active_todo_count: ReadOnlySignal<usize>,
     filter: Signal<FilterState>,
 ) -> Element {
-    let show_clear_completed = use_selector(move || todos().values().any(|todo| todo.checked));
+    let show_clear_completed = use_selector(move || todos.read().values().any(|todo| todo.checked));
 
     rsx! {
         footer { class: "footer",
@@ -188,7 +189,7 @@ pub fn ListFooter(
                     li {
                         a {
                             href: url,
-                            class: if *filter() == state { "selected" },
+                            class: if filter() == state { "selected" },
                             onclick: move |_| filter.set(state),
                             prevent_default: "onclick",
                             {state_text}
