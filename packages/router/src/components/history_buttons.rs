@@ -1,4 +1,5 @@
-use dioxus::prelude::*;
+use dioxus_lib::prelude::*;
+
 use tracing::error;
 
 use crate::utils::use_router_internal::use_router_internal;
@@ -76,12 +77,7 @@ pub fn GoBackButton(
     let disabled = !router.can_go_back();
 
     render! {
-        button {
-            disabled: "{disabled}",
-            prevent_default: "onclick",
-            onclick: move |_| router.go_back(),
-            {children}
-        }
+        button { disabled: "{disabled}", prevent_default: "onclick", onclick: move |_| router.go_back(), {children} }
     }
 }
 
@@ -151,11 +147,6 @@ pub fn GoForwardButton(
     let disabled = !router.can_go_forward();
 
     render! {
-        button {
-            disabled: "{disabled}",
-            prevent_default: "onclick",
-            onclick: move |_| router.go_forward(),
-            {children}
-        }
+        button { disabled: "{disabled}", prevent_default: "onclick", onclick: move |_| router.go_forward(), {children} }
     }
 }

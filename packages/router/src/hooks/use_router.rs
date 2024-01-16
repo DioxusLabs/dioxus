@@ -9,5 +9,5 @@ pub fn use_router() -> RouterContext {
 
 /// Aquire the router without subscribing to updates.
 pub fn router() -> RouterContext {
-    dioxus::core::prelude::consume_context().unwrap()
+    dioxus_lib::prelude::consume_context().unwrap()
 }

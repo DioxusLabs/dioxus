@@ -1,4 +1,4 @@
-use dioxus::core::{ElementId, Mutation::*};
+use dioxus::dioxus_core::{ElementId, Mutation::*};
 use dioxus::prelude::*;
 
 /// As we clean up old templates, the ID for the node should cycle

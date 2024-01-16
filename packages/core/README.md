@@ -34,7 +34,7 @@ The `dioxus` crate exports the `rsx` macro which transforms a helpful, simpler s
 First, start with your app:
 
 ```rust
-# use dioxus::core::Mutations;
+# use dioxus::dioxus_core::Mutations;
 use dioxus::prelude::*;
 
 // First, declare a root component

@@ -691,7 +691,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                     _phantom: (#( #phantom_generics ),*),
                 }
 
-                impl #impl_generics ::dioxus::prelude::Properties for #name #ty_generics
+                impl #impl_generics dioxus_core::prelude::Properties for #name #ty_generics
                 #b_generics_where_extras_predicates
                 {
                     type Builder = #builder_name #generics_with_empty;
@@ -826,20 +826,20 @@ Finally, call `.build()` to create the instance of `{name}`.
 
             Ok(quote! {
                 #[allow(dead_code, non_camel_case_types, missing_docs)]
-                impl #impl_generics ::dioxus::prelude::HasAttributes for #builder_name < #( #ty_generics ),* > #where_clause {
+                impl #impl_generics dioxus_core::prelude::HasAttributes for #builder_name < #( #ty_generics ),* > #where_clause {
                     fn push_attribute(
                         mut self,
                         name: &'static str,
                         ns: Option<&'static str>,
-                        attr: impl ::dioxus::prelude::IntoAttributeValue,
+                        attr: impl dioxus_core::prelude::IntoAttributeValue,
                         volatile: bool
                     ) -> Self {
                         let ( #(#descructuring,)* ) = self.fields;
                         self.#field_name.push(
-                            ::dioxus::core::Attribute::new(
+                            dioxus_core::Attribute::new(
                                 name,
                                 {
-                                    use ::dioxus::prelude::IntoAttributeValue;
+                                    use dioxus_core::prelude::IntoAttributeValue;
                                     attr.into_value()
                                 },
                                 ns,

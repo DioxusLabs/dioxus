@@ -325,6 +325,14 @@ impl VirtualDom {
         self
     }
 
+    /// Build the virtualdom with a global context inserted into the base scope
+    ///
+    /// This method is useful for when you want to provide a context in your app without knowing its type
+    pub fn with_boxed_root_context(self, context: Box<dyn Any>) -> Self {
+        self.base_scope().context().provide_any_context(context);
+        self
+    }
+
     /// Manually mark a scope as requiring a re-render
     ///
     /// Whenever the Runtime "works", it will re-render this scope

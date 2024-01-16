@@ -1,6 +1,6 @@
 //! Do we create fragments properly across complex boundaries?
 
-use dioxus::core::Mutation::*;
+use dioxus::dioxus_core::Mutation::*;
 use dioxus::prelude::*;
 use dioxus_core::ElementId;
 

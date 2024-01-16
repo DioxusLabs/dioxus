@@ -2347,13 +2347,19 @@ name = "dioxus"
 version = "0.4.3"
 dependencies = [
  "criterion 0.3.6",
+ "dioxus-config-macro",
  "dioxus-core",
  "dioxus-core-macro",
+ "dioxus-desktop",
+ "dioxus-fullstack",
  "dioxus-hooks",
  "dioxus-hot-reload",
  "dioxus-html",
+ "dioxus-liveview",
+ "dioxus-router",
  "dioxus-rsx",
  "dioxus-signals",
+ "dioxus-web",
  "env_logger",
  "futures-util",
  "rand 0.8.5",
@@ -2464,6 +2470,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "dioxus-config-macro"
+version = "0.4.3"
+dependencies = [
+ "proc-macro2",
+ "quote",
+]
+
+[[package]]
 name = "dioxus-core"
 version = "0.4.3"
 dependencies = [
@@ -2513,7 +2527,6 @@ dependencies = [
  "async-trait",
  "core-foundation",
  "crossbeam-channel",
- "dioxus",
  "dioxus-cli-config",
  "dioxus-core",
  "dioxus-core-macro",
@@ -2594,7 +2607,7 @@ dependencies = [
  "base64 0.21.7",
  "bytes",
  "ciborium",
- "dioxus",
+ "dioxus-core",
  "dioxus-desktop",
  "dioxus-hot-reload",
  "dioxus-router",
@@ -2704,12 +2717,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "dioxus-lib"
+version = "0.4.3"
+dependencies = [
+ "dioxus-config-macro",
+ "dioxus-core",
+ "dioxus-core-macro",
+ "dioxus-hooks",
+ "dioxus-html",
+ "dioxus-rsx",
+ "dioxus-signals",
+]
+
+[[package]]
 name = "dioxus-liveview"
 version = "0.4.3"
 dependencies = [
  "async-trait",
  "axum 0.6.20",
- "dioxus",
  "dioxus-core",
  "dioxus-hot-reload",
  "dioxus-html",
@@ -2806,6 +2831,7 @@ dependencies = [
  "dioxus",
  "dioxus-cli-config",
  "dioxus-desktop",
+ "dioxus-lib",
  "dioxus-liveview",
  "dioxus-router",
  "dioxus-router-macro",

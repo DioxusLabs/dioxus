@@ -2,10 +2,12 @@
 resolver = "2"
 members = [
     "packages/dioxus",
+    "packages/dioxus-lib",
     "packages/core",
     "packages/cli",
     "packages/cli-config",
     "packages/core-macro",
+    "packages/config-macro",
     "packages/router-macro",
     "packages/extension",
     "packages/router",
@@ -57,8 +59,10 @@ version = "0.4.3"
 # dependencies that are shared across packages
 [workspace.dependencies]
 dioxus = { path = "packages/dioxus", version = "0.4.0" }
+dioxus-lib = { path = "packages/dioxus-lib", version = "0.4.0" }
 dioxus-core = { path = "packages/core", version = "0.4.2" }
-dioxus-core-macro = { path = "packages/core-macro", version = "0.4.0"  }
+dioxus-core-macro = { path = "packages/core-macro", version = "0.4.0" }
+dioxus-config-macro = { path = "packages/config-macro", version = "0.4.0" }
 dioxus-router = { path = "packages/router", version = "0.4.1"  }
 dioxus-router-macro = { path = "packages/router-macro", version = "0.4.1" }
 dioxus-html = { path = "packages/html", default-features = false, version = "0.4.0"  }

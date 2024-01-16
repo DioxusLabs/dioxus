@@ -1,4 +1,4 @@
-use dioxus::core::{ElementId, Mutation::*};
+use dioxus::dioxus_core::{ElementId, Mutation::*};
 use dioxus::prelude::*;
 use pretty_assertions::assert_eq;
 

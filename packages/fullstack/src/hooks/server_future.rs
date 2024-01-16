@@ -1,4 +1,4 @@
-use dioxus::prelude::*;
+use dioxus_core::prelude::*;
 use serde::{de::DeserializeOwned, Serialize};
 use std::any::Any;
 use std::cell::Cell;

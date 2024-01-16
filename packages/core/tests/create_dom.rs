@@ -5,7 +5,7 @@
 //! This methods all use "rebuild_to_vec" which completely bypasses the scheduler.
 //! Hard rebuild_to_vecs don't consume any events from the event queue.
 
-use dioxus::core::Mutation::*;
+use dioxus::dioxus_core::Mutation::*;
 use dioxus::prelude::*;
 use dioxus_core::ElementId;
 

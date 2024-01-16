@@ -4,7 +4,7 @@
 //!
 //! It does not validated that component lifecycles work properly. This is done in another test file.
 
-use dioxus::core::{ElementId, Mutation::*};
+use dioxus::dioxus_core::{ElementId, Mutation::*};
 use dioxus::prelude::*;
 
 /// Should result in moves, but not removals or additions

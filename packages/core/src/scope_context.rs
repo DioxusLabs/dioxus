@@ -147,6 +147,23 @@ impl ScopeContext {
         }
     }
 
+    /// Inject a Box<dyn Any> into the context of this scope
+    pub(crate) fn provide_any_context(&self, mut value: Box<dyn Any>) {
+        let mut contexts = self.shared_contexts.borrow_mut();
+
+        // If the context exists, swap it out for the new value
+        for ctx in contexts.iter_mut() {
+            // Swap the ptr directly
+            if ctx.as_ref().type_id() == value.as_ref().type_id() {
+                std::mem::swap(ctx, &mut value);
+                return;
+            }
+        }
+
+        // Else, just push it
+        contexts.push(value);
+    }
+
     /// Expose state to children further down the [`crate::VirtualDom`] Tree. Requires `Clone` on the context to allow getting values down the tree.
     ///
     /// This is a "fundamental" operation and should only be called during initialization of a hook.

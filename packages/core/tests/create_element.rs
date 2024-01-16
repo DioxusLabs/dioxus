@@ -1,4 +1,4 @@
-// use dioxus::core::Mutation::*;
+// use dioxus::dioxus_core::Mutation::*;
 use dioxus::prelude::*;
 
 #[test]

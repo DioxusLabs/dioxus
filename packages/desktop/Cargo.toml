@@ -81,7 +81,6 @@ features = ["tokio_runtime", "hot-reload"]
 [dev-dependencies]
 dioxus-core-macro = { workspace = true }
 dioxus-hooks = { workspace = true }
-dioxus = { workspace = true }
 exitcode = "1.1.2"
 scraper = "0.16.0"
 

@@ -129,7 +129,7 @@ impl ToTokens for ElementAttrNamed {
                     let value = quote! { #value };
 
                     quote! {
-                        ::dioxus::core::Attribute::new(
+                        dioxus_core::Attribute::new(
                             #attribute,
                             #value,
                             #ns,

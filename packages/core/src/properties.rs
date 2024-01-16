@@ -113,8 +113,10 @@ where
 ///
 /// > Note: If you get an error about the `ComponentFunction` trait not being implemented: make sure your props implements the `Properties` trait or if you would like to declare your props inline, make sure you use the #[component] macro on your function.
 pub trait ComponentFunction<P> {
+    /// The props type for this component.
     type Props: 'static;
 
+    /// Run the component function with the given props.
     fn call(&self, props: Self::Props) -> Element;
 }
 

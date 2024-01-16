@@ -1,7 +1,7 @@
 //! # Routable
 
 #![allow(non_snake_case)]
-use dioxus::prelude::*;
+use dioxus_lib::prelude::*;
 
 use std::iter::FlatMap;
 use std::slice::Iter;

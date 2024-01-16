@@ -10,7 +10,7 @@ homepage = "https://dioxuslabs.com"
 keywords = ["dom", "ui", "gui", "react", "wasm"]
 
 [dependencies]
-dioxus = { workspace = true }
+dioxus-lib = { workspace = true }
 dioxus-router-macro = { workspace = true }
 gloo = { version = "0.8.0", optional = true }
 tracing = { workspace = true }

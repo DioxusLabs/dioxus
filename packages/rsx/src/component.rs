@@ -101,7 +101,7 @@ impl ToTokens for Component {
         let fn_name = self.fn_name();
 
         tokens.append_all(quote! {
-            ::dioxus::core::DynamicNode::Component(::dioxus::core::VComponent::new(
+            dioxus_core::DynamicNode::Component(dioxus_core::VComponent::new(
                 #name #prop_gen_args,
                 #builder,
                 #fn_name

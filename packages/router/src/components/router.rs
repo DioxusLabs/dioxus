@@ -1,4 +1,5 @@
-use dioxus::prelude::*;
+use dioxus_lib::prelude::*;
+
 use std::{cell::RefCell, str::FromStr};
 
 use crate::{prelude::Outlet, routable::Routable, router_cfg::RouterConfig};
@@ -142,9 +143,7 @@ where
     //     _marker: std::marker::PhantomData,
     // });
 
-    render! {
-        Outlet::<R> {}
-    }
+    render! { Outlet::<R> {} }
 }
 
 #[cfg(feature = "serde")]
@@ -169,7 +168,5 @@ where
         _marker: std::marker::PhantomData,
     });
 
-    render! {
-        Outlet::<R> {}
-    }
+    render! { Outlet::<R> {} }
 }

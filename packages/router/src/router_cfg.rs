@@ -3,7 +3,7 @@ use std::sync::Arc;
 use crate::contexts::router::RoutingCallback;
 use crate::history::HistoryProvider;
 use crate::routable::Routable;
-use dioxus::prelude::*;
+use dioxus_lib::prelude::*;
 
 use crate::prelude::*;
 

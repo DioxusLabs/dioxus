@@ -73,10 +73,11 @@ pub(crate) mod innerlude {
 
 pub use crate::innerlude::{
     fc_to_builder, generation, schedule_update, schedule_update_any, use_hook, vdom_is_rendering,
-    AnyValue, Attribute, AttributeValue, CapturedError, Component, DynamicNode, Element, ElementId,
-    Event, Fragment, HasAttributes, IntoDynNode, Mutation, Mutations, NoOpMutations, Properties,
-    RenderReturn, ScopeId, ScopeState, Task, Template, TemplateAttribute, TemplateNode, VComponent,
-    VNode, VNodeInner, VPlaceholder, VText, VirtualDom, WriteMutations,
+    AnyValue, Attribute, AttributeValue, CapturedError, Component, ComponentFunction, DynamicNode,
+    Element, ElementId, Event, Fragment, HasAttributes, IntoDynNode, Mutation, Mutations,
+    NoOpMutations, Properties, RenderReturn, ScopeId, ScopeState, Task, Template,
+    TemplateAttribute, TemplateNode, VComponent, VNode, VNodeInner, VPlaceholder, VText,
+    VirtualDom, WriteMutations,
 };
 
 /// The purpose of this module is to alleviate imports of many common types

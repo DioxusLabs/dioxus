@@ -11,9 +11,6 @@ where
 {
     use dioxus_router::prelude::RouterConfig;
 
-    #[cfg(feature = "ssr")]
-    let context = crate::prelude::server_context();
-
     let cfg = props;
     render! {
         dioxus_router::prelude::Router::<R> {
@@ -23,8 +20,9 @@ where
                     .history({
                         #[cfg(feature = "ssr")]
                         let history = dioxus_router::prelude::MemoryHistory::with_initial_path(
-                            context
-                                .request_parts().unwrap()
+                            crate::prelude::server_context()
+                                .request_parts()
+                                .unwrap()
                                 .uri
                                 .to_string()
                                 .parse()
@@ -44,7 +42,7 @@ where
                         );
                         history
                     })
-            },
+            }
         }
     }
 }

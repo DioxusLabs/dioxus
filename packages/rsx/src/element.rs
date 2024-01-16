@@ -280,7 +280,7 @@ impl ToTokens for Element {
         });
 
         tokens.append_all(quote! {
-            ::dioxus::core::Element::new(
+            dioxus_core::Element::new(
                 #name,
                 vec![ #(#listeners),* ],
                 vec![ #(#attr),* ],

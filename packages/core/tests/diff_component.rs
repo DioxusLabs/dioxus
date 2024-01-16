@@ -1,4 +1,4 @@
-use dioxus::core::{ElementId, Mutation::*};
+use dioxus::dioxus_core::{ElementId, Mutation::*};
 use dioxus::prelude::*;
 
 /// When returning sets of components, we do a light diff of the contents to preserve some react-like functionality

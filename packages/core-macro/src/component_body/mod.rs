@@ -185,7 +185,7 @@ impl Parse for ComponentBody {
     fn parse(input: ParseStream) -> Result<Self> {
         let item_fn: ItemFn = input.parse()?;
 
-        let element_type_path = "::dioxus::core::Element";
+        let element_type_path = "dioxus_core::Element";
 
         if item_fn.sig.output == ReturnType::Default {
             return Err(Error::new(

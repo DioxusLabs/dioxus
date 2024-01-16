@@ -1,4 +1,4 @@
-use dioxus::core::{ElementId, Mutation};
+use dioxus::dioxus_core::{ElementId, Mutation};
 use dioxus::prelude::*;
 
 fn basic_syntax_is_a_template() -> Element {

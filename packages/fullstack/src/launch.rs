@@ -1,7 +1,7 @@
 //! Launch helper macros for fullstack apps
 #![allow(unused)]
 use crate::prelude::*;
-use dioxus::prelude::*;
+use dioxus_core::prelude::*;
 #[cfg(feature = "router")]
 use dioxus_router::prelude::*;
 

@@ -1,4 +1,4 @@
-use dioxus::core::RenderReturn;
+use dioxus::dioxus_core::RenderReturn;
 use dioxus::prelude::*;
 use dioxus_tui::DioxusElementToNodeId;
 use dioxus_tui::Query;

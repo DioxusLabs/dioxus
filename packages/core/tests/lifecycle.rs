@@ -2,7 +2,7 @@
 #![allow(non_snake_case)]
 
 //! Tests for the lifecycle of components.
-use dioxus::core::{ElementId, Mutation::*};
+use dioxus::dioxus_core::{ElementId, Mutation::*};
 use dioxus::prelude::*;
 use dioxus_html::SerializedHtmlEventConverter;
 use std::rc::Rc;

@@ -1,4 +1,4 @@
-use dioxus::prelude::{consume_context, use_hook};
+use dioxus_lib::prelude::{consume_context, use_hook};
 
 use crate::prelude::{Navigator, RouterContext};
 

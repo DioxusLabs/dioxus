@@ -2,7 +2,7 @@
 //!
 //! This tests to ensure we clean it up
 
-use dioxus::core::{ElementId, Mutation::*};
+use dioxus::dioxus_core::{ElementId, Mutation::*};
 use dioxus::prelude::*;
 
 #[test]

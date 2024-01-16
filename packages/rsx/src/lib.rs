@@ -85,7 +85,7 @@ impl CallBody {
         };
 
         quote! {
-            ::dioxus::core::LazyNodes::new( move | __cx: &::dioxus::core::ScopeState| -> ::dioxus::core::VNode {
+            dioxus_core::LazyNodes::new( move | __cx: &dioxus_core::ScopeState| -> dioxus_core::VNode {
                 #body
             })
         }
@@ -119,7 +119,7 @@ impl ToTokens for CallBody {
         };
 
         out_tokens.append_all(quote! {
-            ::dioxus::core::LazyNodes::new( move | __cx: &::dioxus::core::ScopeState| -> ::dioxus::core::VNode {
+            dioxus_core::LazyNodes::new( move | __cx: &dioxus_core::ScopeState| -> dioxus_core::VNode {
                 #body
             })
         })
@@ -246,14 +246,14 @@ impl<'a> ToTokens for TemplateRenderer<'a> {
         let attr_paths = context.attr_paths.iter().map(|it| quote!(&[#(#it),*]));
 
         out_tokens.append_all(quote! {
-            static TEMPLATE: ::dioxus::core::Template = ::dioxus::core::Template {
+            static TEMPLATE: dioxus_core::Template = dioxus_core::Template {
                 name: #name,
                 roots: &[ #roots ],
                 node_paths: &[ #(#node_paths),* ],
                 attr_paths: &[ #(#attr_paths),* ],
             };
 
-            ::dioxus::core::VNode::new(
+            dioxus_core::VNode::new(
                 #key_tokens,
                 TEMPLATE,
                 Box::new([ #( #node_printer),* ]),
@@ -491,7 +491,7 @@ impl<'a> DynamicContext<'a> {
                             }
                         };
                         quote! {
-                            ::dioxus::core::TemplateAttribute::Static {
+                            dioxus_core::TemplateAttribute::Static {
                                 name: #name,
                                 namespace: #ns,
                                 value: #value,
@@ -515,7 +515,7 @@ impl<'a> DynamicContext<'a> {
                             let ct = self.dynamic_attributes.len();
                             self.dynamic_attributes.push(vec![attr]);
                             self.attr_paths.push(self.current_path.clone());
-                            quote! { ::dioxus::core::TemplateAttribute::Dynamic { id: #ct }, }
+                            quote! { dioxus_core::TemplateAttribute::Dynamic { id: #ct }, }
                         }
                     }
                 });
@@ -536,7 +536,7 @@ impl<'a> DynamicContext<'a> {
                 let el_name = el_name.tag_name();
 
                 quote! {
-                    ::dioxus::core::TemplateNode::Element {
+                    dioxus_core::TemplateNode::Element {
                         tag: #el_name,
                         namespace: #ns,
                         attrs: &[ #attrs ],
@@ -547,7 +547,7 @@ impl<'a> DynamicContext<'a> {
 
             BodyNode::Text(text) if text.is_static() => {
                 let text = text.to_static().unwrap();
-                quote! { ::dioxus::core::TemplateNode::Text{ text: #text } }
+                quote! { dioxus_core::TemplateNode::Text{ text: #text } }
             }
 
             BodyNode::RawExpr(_)
@@ -561,9 +561,9 @@ impl<'a> DynamicContext<'a> {
 
                 match root {
                     BodyNode::Text(_) => {
-                        quote! { ::dioxus::core::TemplateNode::DynamicText { id: #ct } }
+                        quote! { dioxus_core::TemplateNode::DynamicText { id: #ct } }
                     }
-                    _ => quote! { ::dioxus::core::TemplateNode::Dynamic { id: #ct } },
+                    _ => quote! { dioxus_core::TemplateNode::Dynamic { id: #ct } },
                 }
             }
         }

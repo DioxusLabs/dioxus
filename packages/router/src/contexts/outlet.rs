@@ -1,4 +1,4 @@
-use dioxus::prelude::*;
+use dioxus_lib::prelude::*;
 
 use crate::{routable::Routable, utils::use_router_internal::use_router_internal};
 

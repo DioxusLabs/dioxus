@@ -4,7 +4,8 @@ use std::any::Any;
 use std::fmt::Debug;
 use std::rc::Rc;
 
-use dioxus::prelude::*;
+use dioxus_lib::prelude::*;
+
 use tracing::error;
 
 use crate::navigation::NavigationTarget;

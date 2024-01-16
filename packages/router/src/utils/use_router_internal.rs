@@ -1,4 +1,4 @@
-use dioxus::prelude::ScopeId;
+use dioxus_lib::prelude::ScopeId;
 
 use crate::prelude::*;
 

@@ -6,7 +6,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use dioxus::prelude::*;
+use dioxus_lib::prelude::*;
 
 use crate::{
     navigation::NavigationTarget,
