@@ -35,7 +35,7 @@ fn app() -> Element {
 
 type SthElse<T> = Option<T>;
 
-#[derive(Props, PartialEq)]
+#[derive(Props, PartialEq, Clone)]
 struct ButtonProps {
     a: String,
 
@@ -51,14 +51,14 @@ struct ButtonProps {
     e: SthElse<String>,
 }
 
-fn Button(cx: Scope<ButtonProps>) -> Element {
+fn Button(props: ButtonProps) -> Element {
     rsx! {
         button {
-            "{cx.props.a} | "
-            "{cx.props.b:?} | "
-            "{cx.props.c:?} | "
-            "{cx.props.d:?} | "
-            "{cx.props.e:?}"
+            "{props.a} | "
+            "{props.b:?} | "
+            "{props.c:?} | "
+            "{props.d:?} | "
+            "{props.e:?}"
         }
     }
 }

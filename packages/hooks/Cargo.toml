@@ -15,6 +15,7 @@ nightly-features = []
 
 [dependencies]
 dioxus-core = { workspace = true }
+dioxus-signals = { workspace = true }
 futures-channel = { workspace = true }
 tracing = { workspace = true }
 thiserror = { workspace = true }

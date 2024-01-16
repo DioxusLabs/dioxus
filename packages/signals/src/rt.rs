@@ -158,7 +158,7 @@ impl<T: 'static> CopyValue<T> {
     }
 
     /// Set the value. If the value has been dropped, this will panic.
-    pub fn set(&mut self, value: T) {
+    pub fn set(&self, value: T) {
         *self.write() = value;
     }
 

@@ -31,6 +31,7 @@ fn Component(props: Props) -> Element {
 struct Props {
     #[props(extends = GlobalAttributes)]
     attributes: Vec<Attribute>,
+
     extra_data: String,
     extra_data2: String,
 }

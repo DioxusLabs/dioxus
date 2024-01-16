@@ -10,7 +10,7 @@ fn main() {
         .launch(app)
 }
 
-fn app(_props: ()) -> Element {
+fn app() -> Element {
     rsx!(
         div {
             h1 { "drag a file here and check your console" }

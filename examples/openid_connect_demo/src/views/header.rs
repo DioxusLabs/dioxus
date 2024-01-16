@@ -129,7 +129,7 @@ pub fn RefreshToken(cx: Scope<ClientProps>) -> Element {
 
 #[component]
 pub fn LoadClient() -> Element {
-    let init_client_future = use_future(|_| async move { init_oidc_client().await });
+    let init_client_future = use_future(|| async move { init_oidc_client().await });
     let fermi_client: &UseAtomRef<ClientState> = use_atom_ref(&FERMI_CLIENT);
     cx.render(match init_client_future.value() {
         Some(client_props) => match client_props {

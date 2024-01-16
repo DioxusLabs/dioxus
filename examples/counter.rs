@@ -9,7 +9,7 @@ fn main() {
 
 fn app() -> Element {
     let counters = use_signal(|| vec![0, 0, 0]);
-    let sum = use_selector(move || counters.read().iter().copied().sum() as usize);
+    let sum = use_selector(move || counters.read().iter().copied().sum::<usize>());
 
     render! {
         div {

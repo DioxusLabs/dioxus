@@ -24,12 +24,8 @@ pub struct Client {
     pub description: String,
 }
 
-type ClientContext = Vec<Client>;
-
 #[component]
 fn App() -> Element {
-    use_shared_state_provider::<ClientContext>(Default::default);
-
     render! {
         link {
             rel: "stylesheet",
@@ -54,8 +50,6 @@ fn App() -> Element {
 
 #[component]
 fn ClientList() -> Element {
-    let clients = use_shared_state::<ClientContext>().unwrap();
-
     rsx! {
         h2 { "List of Clients" }
         Link { to: Route::ClientAdd {}, class: "pure-button pure-button-primary", "Add Client" }
@@ -71,7 +65,6 @@ fn ClientList() -> Element {
 
 #[component]
 fn ClientAdd() -> Element {
-    let clients = use_shared_state::<ClientContext>().unwrap();
     let first_name = use_signal(String::new);
     let last_name = use_signal(String::new);
     let description = use_signal(String::new);

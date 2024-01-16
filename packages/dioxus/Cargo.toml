@@ -29,7 +29,7 @@ dioxus-liveview = { workspace = true, optional = true }
 dioxus-hot-reload = { workspace = true, optional = true }
 
 [features]
-default = ["macro", "html", "hot-reload", "signals", "launch"]
+default = ["macro", "html", "hot-reload", "signals", "hooks", "launch"]
 signals = ["dioxus-signals"]
 macro = ["dioxus-core-macro", "dioxus-rsx"]
 html = ["dioxus-html"]

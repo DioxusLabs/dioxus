@@ -10,7 +10,7 @@ fn main() {
 fn app() -> Element {
     let count = use_signal(|| 10);
 
-    use_future(|_| async move {
+    use_future(|| async move {
         let mut stream = some_stream();
 
         while let Some(second) = stream.next().await {
