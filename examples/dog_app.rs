@@ -29,17 +29,16 @@ fn app() -> Element {
         }
     });
 
-    match breed_list.value().read().as_ref() {
-        Some(resp) => rsx! {
-            h1 { "Select a dog breed!" }
-            div { height: "500px", display: "flex",
-                ul { flex: "50%", {breed_list.value().cloned().unwrap_or_else(|| rsx! {
-                    "loading breeds..."
-                })} }
-                div { flex: "50%", BreedPic { breed } }
-            }
-        },
-        _ => rsx! { "loading breeds..." },
+    let Some(breed_list) = breed_list.value().cloned() else {
+        return rsx! { "loading breeds..." };
+    };
+
+    rsx! {
+        h1 { "Select a dog breed!" }
+        div { height: "500px", display: "flex",
+            ul { flex: "50%", {breed_list} }
+            div { flex: "50%", BreedPic { breed } }
+        }
     }
 }
 
