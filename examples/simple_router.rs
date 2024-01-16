@@ -54,7 +54,7 @@ fn Nav() -> Element {
 }
 
 fn main() {
-    launch(Route::Blog {
+    launch_desktop(Route::Blog {
         id: "hello".to_string(),
     });
 }

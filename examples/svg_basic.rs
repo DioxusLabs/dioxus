@@ -79,5 +79,5 @@ fn app() -> Element {
 }
 
 fn main() {
-    launch(app);
+    launch_desktop(app);
 }

@@ -9,7 +9,7 @@ fn main() {
         .with_module_level("dioxus", log::LevelFilter::Trace)
         .init()
         .unwrap();
-    launch(Route::Home {});
+    launch_desktop(Route::Home {});
 }
 
 #[derive(Routable, Clone)]

@@ -4,7 +4,7 @@ use dioxus::prelude::*;
 use rand::{thread_rng, Rng};
 
 fn main() {
-    launch(app);
+    launch_desktop(app);
 }
 
 fn app() -> Element {

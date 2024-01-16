@@ -2,7 +2,7 @@ use dioxus::prelude::*;
 use dioxus_router::prelude::*;
 
 fn main() {
-    launch(Route::Home {});
+    launch_desktop(Route::Home {});
 }
 
 // ANCHOR: router

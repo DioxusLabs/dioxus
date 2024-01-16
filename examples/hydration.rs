@@ -21,7 +21,7 @@ fn main() {
             // We then launch the app with the pre-rendered HTML
             dioxus_ssr::pre_render(&pre_rendered_dom)
         }))
-        .launch();
+        .launch_desktop();
 }
 
 fn app() -> Element {

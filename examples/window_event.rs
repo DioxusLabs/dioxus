@@ -10,7 +10,7 @@ fn main() {
                     .with_decorations(false),
             ),
         )
-        .launch()
+        .launch_desktop()
 }
 
 fn app() -> Element {

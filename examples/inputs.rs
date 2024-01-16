@@ -5,7 +5,7 @@
 use dioxus::prelude::*;
 
 fn main() {
-    launch(app);
+    launch_desktop(app);
 }
 
 const FIELDS: &[(&str, &str)] = &[

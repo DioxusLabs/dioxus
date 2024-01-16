@@ -2,7 +2,7 @@ use dioxus::prelude::*;
 use dioxus_desktop::{use_asset_handler, wry::http::Response};
 
 fn main() {
-    launch(app);
+    launch_desktop(app);
 }
 
 fn app() -> Element {

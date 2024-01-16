@@ -2,7 +2,7 @@ use dioxus::prelude::*;
 use dioxus_router::prelude::*;
 
 fn main() {
-    launch(App);
+    launch_desktop(App);
 }
 
 #[component]

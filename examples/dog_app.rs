@@ -2,7 +2,7 @@ use dioxus::prelude::*;
 use std::collections::HashMap;
 
 fn main() {
-    launch(app);
+    launch_desktop(app);
 }
 
 fn app() -> Element {

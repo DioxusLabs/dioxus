@@ -13,7 +13,7 @@ fn main() {
                     .with_resizable(false),
             ),
         )
-        .launch()
+        .launch_desktop()
 }
 
 #[derive(Routable, Clone)]

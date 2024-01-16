@@ -4,7 +4,7 @@ use dioxus::prelude::*;
 use tokio::time::sleep;
 
 fn main() {
-    launch(App);
+    launch_desktop(App);
 }
 
 fn App() -> Element {

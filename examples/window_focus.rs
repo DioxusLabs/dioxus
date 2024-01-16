@@ -7,7 +7,7 @@ use dioxus_desktop::{Config, WindowCloseBehaviour};
 fn main() {
     LaunchBuilder::new(app)
         .cfg(Config::new().with_close_behaviour(WindowCloseBehaviour::CloseWindow))
-        .launch()
+        .launch_desktop()
 }
 
 fn app() -> Element {

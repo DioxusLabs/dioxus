@@ -4,7 +4,7 @@ use futures_util::{future, stream, Stream, StreamExt};
 use std::time::Duration;
 
 fn main() {
-    launch(app);
+    launch_desktop(app);
 }
 
 fn app() -> Element {

@@ -2,7 +2,7 @@ use dioxus::prelude::*;
 use dioxus_signals::use_signal;
 
 fn main() {
-    launch(app);
+    launch_desktop(app);
 }
 
 fn app() -> Element {

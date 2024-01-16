@@ -1,7 +1,7 @@
 use dioxus::{events::*, html::MouseEvent, prelude::*};
 
 fn main() {
-    launch(app);
+    launch_desktop(app);
 }
 
 #[derive(Debug)]

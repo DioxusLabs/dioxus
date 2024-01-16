@@ -7,7 +7,7 @@ fn main() {
             println!("{e:?}");
             true
         }))
-        .launch()
+        .launch_desktop()
 }
 
 fn app() -> Element {

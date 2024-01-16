@@ -3,7 +3,7 @@ use dioxus::prelude::*;
 use dioxus_router::prelude::*;
 
 fn main() {
-    launch(app);
+    launch_desktop(app);
 }
 
 /// A type alias that reprsents a shared context between components
