@@ -40,12 +40,12 @@ launch = ["dioxus-config-macro"]
 router = ["dioxus-router"]
 
 # Platforms
-fullstack = ["dioxus-fullstack"]
-desktop = ["dioxus-desktop", "dioxus-fullstack?/desktop"]
-web = ["dioxus-web", "dioxus-fullstack?/web"]
-ssr = ["dioxus-fullstack?/ssr"]
-liveview = ["dioxus-desktop"]
-# tui = ["dioxus-tui"]
+fullstack = ["dioxus-fullstack", "dioxus-config-macro/fullstack"]
+desktop = ["dioxus-desktop", "dioxus-fullstack?/desktop", "dioxus-config-macro/desktop"]
+web = ["dioxus-web", "dioxus-fullstack?/web", "dioxus-config-macro/web"]
+ssr = ["dioxus-fullstack?/ssr", "dioxus-config-macro/ssr"]
+liveview = ["dioxus-desktop", "dioxus-config-macro/liveview"]
+# tui = ["dioxus-tui", "dioxus-config-macro/tui"]
 
 [dev-dependencies]
 futures-util = { workspace = true }
