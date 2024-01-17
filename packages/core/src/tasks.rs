@@ -112,11 +112,21 @@ impl Runtime {
         self.current_task.set(None);
     }
 
+    /// Take a queued task from the scheduler
+    pub(crate) fn take_queued_task(&self) -> Option<Task> {
+        self.queued_tasks.borrow_mut().pop_front()
+    }
+
     /// Drop the future with the given TaskId
     ///
     /// This does not abort the task, so you'll want to wrap it in an abort handle if that's important to you
     pub(crate) fn remove_task(&self, id: Task) -> Option<LocalTask> {
-        self.tasks.borrow_mut().try_remove(id.0)
+        let task = self.tasks.borrow_mut().try_remove(id.0);
+
+        // Remove the task from the queued tasks so we don't poll a different task with the same id
+        self.queued_tasks.borrow_mut().retain(|t| *t != id);
+
+        task
     }
 
     /// Get the currently running task

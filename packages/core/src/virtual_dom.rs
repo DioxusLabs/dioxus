@@ -19,12 +19,7 @@ use crate::{
 use futures_util::{pin_mut, StreamExt};
 use rustc_hash::{FxHashMap, FxHashSet};
 use slab::Slab;
-use std::{
-    any::Any,
-    collections::{BTreeSet, VecDeque},
-    future::Future,
-    rc::Rc,
-};
+use std::{any::Any, collections::BTreeSet, future::Future, rc::Rc};
 
 /// A virtual node system that progresses user events and diffs UI trees.
 ///
@@ -189,7 +184,6 @@ pub struct VirtualDom {
     pub(crate) scopes: Slab<ScopeState>,
 
     pub(crate) dirty_scopes: BTreeSet<DirtyScope>,
-    pub(crate) dirty_tasks: VecDeque<Task>,
 
     // Maps a template path to a map of byte indexes to templates
     pub(crate) templates: FxHashMap<TemplateId, FxHashMap<usize, Template>>,
@@ -284,7 +278,6 @@ impl VirtualDom {
             runtime: Runtime::new(tx),
             scopes: Default::default(),
             dirty_scopes: Default::default(),
-            dirty_tasks: Default::default(),
             templates: Default::default(),
             queued_templates: Default::default(),
             elements: Default::default(),
@@ -420,7 +413,7 @@ impl VirtualDom {
 
                     if !has_dirty_scopes {
                         // If we have no dirty scopes, then we should poll any tasks that have been notified
-                        while let Some(task) = self.dirty_tasks.pop_front() {
+                        while let Some(task) = self.runtime.take_queued_task() {
                             self.handle_task_wakeup(task);
                         }
                     }
@@ -626,7 +619,7 @@ impl VirtualDom {
 
     /// Queue a task to be polled after all dirty scopes have been rendered
     fn queue_task_wakeup(&mut self, id: Task) {
-        self.dirty_tasks.push_back(id);
+        self.runtime.queued_tasks.borrow_mut().push_back(id);
     }
 
     /// Handle notifications by tasks inside the scheduler

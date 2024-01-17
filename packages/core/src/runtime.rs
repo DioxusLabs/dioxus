@@ -6,6 +6,7 @@ use crate::{
 };
 use std::{
     cell::{Cell, Ref, RefCell},
+    collections::VecDeque,
     rc::Rc,
 };
 
@@ -28,6 +29,9 @@ pub struct Runtime {
     /// Tasks created with cx.spawn
     pub(crate) tasks: RefCell<slab::Slab<LocalTask>>,
 
+    /// Queued tasks that are waiting to be polled
+    pub(crate) queued_tasks: Rc<RefCell<VecDeque<Task>>>,
+
     pub(crate) sender: futures_channel::mpsc::UnboundedSender<SchedulerMsg>,
 }
 
@@ -40,6 +44,7 @@ impl Runtime {
             scope_stack: Default::default(),
             current_task: Default::default(),
             tasks: Default::default(),
+            queued_tasks: Rc::new(RefCell::new(VecDeque::new())),
         })
     }
 
