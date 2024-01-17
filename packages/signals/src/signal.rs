@@ -473,7 +473,7 @@ impl<T: Copy, S: Storage<SignalData<T>> + 'static> Deref for Signal<T, S> {
         // First we create a closure that captures something with the Same in memory layout as Self (MaybeUninit<Self>).
         let uninit_callable = MaybeUninit::<Self>::uninit();
         // Then move that value into the closure. We assume that the closure now has a in memory layout of Self.
-        let uninit_closure = move || Self::read(unsafe { &*uninit_callable.as_ptr() }).clone();
+        let uninit_closure = move || *Self::read(unsafe { &*uninit_callable.as_ptr() });
 
         // Check that the size of the closure is the same as the size of Self in case the compiler changed the layout of the closure.
         let size_of_closure = std::mem::size_of_val(&uninit_closure);
@@ -510,7 +510,7 @@ impl<T: 'static, S: Storage<SignalData<T>>> Drop for SignalSubscriberDrop<T, S> 
 /// A mutable reference to a signal's value.
 ///
 /// T is the current type of the write
-/// B is the dynamicly checked type of the write (RefMut)
+/// B is the dynamically checked type of the write (RefMut)
 /// S is the storage type of the signal
 /// I is the type of the original signal
 pub struct Write<T: 'static, B: MappableMut<T>, S: Storage<SignalData<I>>, I: 'static = T> {
@@ -640,7 +640,7 @@ impl<T: Copy, S: Storage<SignalData<T>> + 'static> Deref for ReadOnlySignal<T, S
         // First we create a closure that captures something with the Same in memory layout as Self (MaybeUninit<Self>).
         let uninit_callable = MaybeUninit::<Self>::uninit();
         // Then move that value into the closure. We assume that the closure now has a in memory layout of Self.
-        let uninit_closure = move || Self::read(unsafe { &*uninit_callable.as_ptr() }).clone();
+        let uninit_closure = move || *Self::read(unsafe { &*uninit_callable.as_ptr() });
 
         // Check that the size of the closure is the same as the size of Self in case the compiler changed the layout of the closure.
         let size_of_closure = std::mem::size_of_val(&uninit_closure);
