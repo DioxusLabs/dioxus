@@ -367,50 +367,52 @@ impl VirtualDom {
     ) {
         let _runtime = RuntimeGuard::new(self.runtime.clone());
 
-        /*
-        ------------------------
-        The algorithm works by walking through the list of dynamic attributes, checking their paths, and breaking when
-        we find the target path.
-
-        With the target path, we try and move up to the parent until there is no parent.
-        Due to how bubbling works, we call the listeners before walking to the parent.
-
-        If we wanted to do capturing, then we would accumulate all the listeners and call them in reverse order.
-        ----------------------
-
-        For a visual demonstration, here we present a tree on the left and whether or not a listener is collected on the
-        right.
-
-        |           <-- yes (is ascendant)
-        | | |       <-- no  (is not direct ascendant)
-        | |         <-- yes (is ascendant)
-        | | | | |   <--- target element, break early, don't check other listeners
-        | | |       <-- no, broke early
-        |           <-- no, broke early
-        */
-        let Some(Some(parent_path)) = self.elements.get(element.0).copied() else {
-            return;
-        };
-
-        // We will clone this later. The data itself is wrapped in RC to be used in callbacks if required
-        let uievent = Event::new(data, bubbles);
-
-        // Use the simple non-bubbling algorithm if the event doesn't bubble
-        if !bubbles {
-            return self.handle_non_bubbling_event(parent_path, name, uievent);
+        if let Some(Some(parent_path)) = self.elements.get(element.0).copied() {
+            if bubbles {
+                self.handle_bubbling_event(Some(parent_path), name, Event::new(data, bubbles));
+            } else {
+                self.handle_non_bubbling_event(parent_path, name, Event::new(data, bubbles));
+            }
         }
+    }
 
-        let mut parent_node = Some(parent_path);
+    /*
+    ------------------------
+    The algorithm works by walking through the list of dynamic attributes, checking their paths, and breaking when
+    we find the target path.
 
+    With the target path, we try and move up to the parent until there is no parent.
+    Due to how bubbling works, we call the listeners before walking to the parent.
+
+    If we wanted to do capturing, then we would accumulate all the listeners and call them in reverse order.
+    ----------------------
+
+    For a visual demonstration, here we present a tree on the left and whether or not a listener is collected on the
+    right.
+
+    |           <-- yes (is ascendant)
+    | | |       <-- no  (is not direct ascendant)
+    | |         <-- yes (is ascendant)
+    | | | | |   <--- target element, break early, don't check other listeners
+    | | |       <-- no, broke early
+    |           <-- no, broke early
+    */
+    fn handle_bubbling_event(
+        &mut self,
+        mut parent: Option<ElementRef>,
+        name: &str,
+        uievent: Event<dyn Any>,
+    ) {
         // If the event bubbles, we traverse through the tree until we find the target element.
         // Loop through each dynamic attribute (in a depth first order) in this template before moving up to the template's parent.
-        while let Some(path) = parent_node {
+        while let Some(path) = parent {
             let mut listeners = vec![];
 
             let el_ref = &self.mounts[path.mount.0].node;
             let node_template = el_ref.template.get();
             let target_path = path.path;
 
+            // Accumulate listeners into the listener list bottom to top
             for (idx, attrs) in el_ref.dynamic_attrs.iter().enumerate() {
                 let this_path = node_template.attr_paths[idx];
 
@@ -446,7 +448,7 @@ impl VirtualDom {
             }
 
             let mount = el_ref.mount.get().as_usize();
-            parent_node = mount.and_then(|id| self.mounts.get(id).and_then(|el| el.parent));
+            parent = mount.and_then(|id| self.mounts.get(id).and_then(|el| el.parent));
         }
     }
 

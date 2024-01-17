@@ -16,20 +16,14 @@ use std::{
 /// This struct exists to provide a common interface for all scopes without relying on generics.
 pub(crate) struct ScopeContext {
     pub(crate) name: &'static str,
-
     pub(crate) id: ScopeId,
     pub(crate) parent_id: Option<ScopeId>,
-
     pub(crate) height: u32,
     pub(crate) render_count: Cell<usize>,
-
     pub(crate) suspended: Cell<bool>,
-
     pub(crate) shared_contexts: RefCell<Vec<Box<dyn Any>>>,
-
     pub(crate) hooks: RefCell<Vec<Box<dyn Any>>>,
     pub(crate) hook_index: Cell<usize>,
-
     pub(crate) spawned_tasks: RefCell<FxHashSet<Task>>,
 }
 

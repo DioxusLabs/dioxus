@@ -33,9 +33,7 @@ impl ScopeId {
 pub struct ScopeState {
     pub(crate) runtime: Rc<Runtime>,
     pub(crate) context_id: ScopeId,
-
     pub(crate) last_rendered_node: Option<RenderReturn>,
-
     pub(crate) props: BoxedAnyProps,
 }
 
