@@ -565,6 +565,21 @@ impl VirtualDom {
         }
     }
 
+    /// Rebuild the virtualdom without handling any of the mutations
+    ///
+    /// This is useful for testing purposes and in cases where you render the output of the virtualdom without
+    /// handling any of its mutations.
+    pub fn rebuild_in_place(&mut self) {
+        self.rebuild(&mut NoOpMutations);
+    }
+
+    /// [`VirtualDom::rebuild`] to a vector of mutations for testing purposes
+    pub fn rebuild_to_vec(&mut self) -> Mutations {
+        let mut mutations = Mutations::default();
+        self.rebuild(&mut mutations);
+        mutations
+    }
+
     /// Performs a *full* rebuild of the virtual dom, returning every edit required to generate the actual dom from scratch.
     ///
     /// The mutations item expects the RealDom's stack to be the root of the application.
@@ -594,21 +609,6 @@ impl VirtualDom {
         let m = self.create_scope(to, ScopeId::ROOT, new_nodes, None);
 
         to.append_children(ElementId(0), m);
-    }
-
-    /// Rebuild the virtualdom without handling any of the mutations
-    ///
-    /// This is useful for testing purposes and in cases where you render the output of the virtualdom without
-    /// handling any of its mutations.
-    pub fn rebuild_in_place(&mut self) {
-        self.rebuild(&mut NoOpMutations);
-    }
-
-    /// [`VirtualDom::rebuild`] to a vector of mutations for testing purposes
-    pub fn rebuild_to_vec(&mut self) -> Mutations {
-        let mut mutations = Mutations::default();
-        self.rebuild(&mut mutations);
-        mutations
     }
 
     /// Render whatever the VirtualDom has ready as fast as possible without requiring an executor to progress
@@ -685,17 +685,12 @@ impl VirtualDom {
                 }
             }
 
-            // Poll the suspense leaves in the meantime
-            let mut work = self.wait_for_work();
+            // Wait until the deadline is ready or we have work if there's no work ready
+            let work = self.wait_for_work();
+            pin_mut!(work);
 
-            // safety: this is okay since we don't touch the original future
-            let pinned = unsafe { std::pin::Pin::new_unchecked(&mut work) };
-
-            // If the deadline is exceded (left) then we should return the mutations we have
             use futures_util::future::{select, Either};
-            if let Either::Left((_, _)) = select(&mut deadline, pinned).await {
-                // release the borrowed
-                drop(work);
+            if let Either::Left((_, _)) = select(&mut deadline, &mut work).await {
                 return;
             }
         }

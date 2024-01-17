@@ -1,14 +1,13 @@
-use std::cell::{Cell, Ref, RefCell};
-
-use slab::Slab;
-
 use crate::{
     innerlude::{LocalTask, SchedulerMsg},
     scope_context::ScopeContext,
     scopes::ScopeId,
     Task,
 };
-use std::rc::Rc;
+use std::{
+    cell::{Cell, Ref, RefCell},
+    rc::Rc,
+};
 
 thread_local! {
     static RUNTIMES: RefCell<Vec<Rc<Runtime>>> = RefCell::new(vec![]);
@@ -27,19 +26,19 @@ pub struct Runtime {
     pub(crate) rendering: Cell<bool>,
 
     /// Tasks created with cx.spawn
-    pub(crate) tasks: RefCell<Slab<LocalTask>>,
+    pub(crate) tasks: RefCell<slab::Slab<LocalTask>>,
 
     pub(crate) sender: futures_channel::mpsc::UnboundedSender<SchedulerMsg>,
 }
 
 impl Runtime {
-    pub(crate) fn new(tx: futures_channel::mpsc::UnboundedSender<SchedulerMsg>) -> Rc<Self> {
+    pub(crate) fn new(sender: futures_channel::mpsc::UnboundedSender<SchedulerMsg>) -> Rc<Self> {
         Rc::new(Self {
+            sender,
+            rendering: Cell::new(true),
             scope_contexts: Default::default(),
             scope_stack: Default::default(),
             current_task: Default::default(),
-            rendering: Cell::new(true),
-            sender: tx,
             tasks: Default::default(),
         })
     }
@@ -59,7 +58,9 @@ impl Runtime {
     }
 
     pub(crate) fn remove_context(&self, id: ScopeId) {
-        self.scope_contexts.borrow_mut()[id.0] = None;
+        if let Some(_scope) = self.scope_contexts.borrow_mut()[id.0].take() {
+            // todo: some cleanup work
+        }
     }
 
     /// Get the current scope id
@@ -88,12 +89,12 @@ impl Runtime {
     }
 
     /// Pushes a new scope onto the stack
-    pub(crate) fn push_runtime(runtime: Rc<Runtime>) {
+    pub(crate) fn push(runtime: Rc<Runtime>) {
         RUNTIMES.with(|stack| stack.borrow_mut().push(runtime));
     }
 
     /// Pops a scope off the stack
-    pub(crate) fn pop_runtime() {
+    pub(crate) fn pop() {
         RUNTIMES.with(|stack| stack.borrow_mut().pop());
     }
 
@@ -165,13 +166,13 @@ pub struct RuntimeGuard(());
 impl RuntimeGuard {
     /// Create a new runtime guard that sets the current Dioxus runtime. The runtime will be reset when the guard is dropped
     pub fn new(runtime: Rc<Runtime>) -> Self {
-        Runtime::push_runtime(runtime);
+        Runtime::push(runtime);
         Self(())
     }
 }
 
 impl Drop for RuntimeGuard {
     fn drop(&mut self) {
-        Runtime::pop_runtime();
+        Runtime::pop();
     }
 }
