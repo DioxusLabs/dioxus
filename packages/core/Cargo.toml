@@ -10,24 +10,14 @@ homepage = "https://dioxuslabs.com"
 keywords = ["dom", "ui", "gui", "react"]
 
 [dependencies]
-# faster hashmaps
 rustc-hash = { workspace = true }
-
-# Used in diffing
 longest-increasing-subsequence = "0.1.0"
-
 futures-util = { workspace = true, default-features = false, features = [
     "alloc",
 ] }
-
 slab = { workspace = true }
-
 futures-channel = { workspace = true }
-
-smallbox = "0.8.1"
 tracing = { workspace = true }
-
-# Serialize the Edits for use in Webview/Liveview instances
 serde = { version = "1", features = ["derive"], optional = true }
 
 [dev-dependencies]
