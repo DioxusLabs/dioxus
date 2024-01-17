@@ -10,7 +10,7 @@ use std::{
 };
 
 macro_rules! read_impls {
-    ($ty:ident, $bound:path) => {
+    ($ty:ident, $bound:path, $vec_bound:path) => {
         impl<T: Default + 'static, S: $bound> Default for $ty<T, S> {
             #[track_caller]
             fn default() -> Self {
@@ -45,6 +45,20 @@ macro_rules! read_impls {
             #[track_caller]
             fn eq(&self, other: &T) -> bool {
                 self.with(|v| *v == *other)
+            }
+        }
+
+        impl<T: 'static, S: $vec_bound> $ty<Vec<T>, S> {
+            /// Returns the length of the inner vector.
+            #[track_caller]
+            pub fn len(&self) -> usize {
+                self.with(|v| v.len())
+            }
+
+            /// Returns true if the inner vector is empty.
+            #[track_caller]
+            pub fn is_empty(&self) -> bool {
+                self.with(|v| v.is_empty())
             }
         }
     };
@@ -180,7 +194,7 @@ macro_rules! write_impls {
     };
 }
 
-read_impls!(CopyValue, Storage<T>);
+read_impls!(CopyValue, Storage<T>, Storage<Vec<T>>);
 
 impl<T: 'static, S: Storage<Vec<T>>> CopyValue<Vec<T>, S> {
     /// Read a value from the inner vector.
@@ -245,7 +259,7 @@ impl<T: 'static, S: Storage<Option<T>>> CopyValue<Option<T>, S> {
     }
 }
 
-read_impls!(Signal, Storage<SignalData<T>>);
+read_impls!(Signal, Storage<SignalData<T>>, Storage<SignalData<Vec<T>>>);
 
 impl<T: 'static, S: Storage<SignalData<Vec<T>>>> Signal<Vec<T>, S> {
     /// Read a value from the inner vector.
@@ -323,7 +337,11 @@ impl<T: 'static, S: Storage<SignalData<Option<T>>>> Signal<Option<T>, S> {
     }
 }
 
-read_impls!(ReadOnlySignal, Storage<SignalData<T>>);
+read_impls!(
+    ReadOnlySignal,
+    Storage<SignalData<T>>,
+    Storage<SignalData<Vec<T>>>
+);
 
 /// An iterator over the values of a `CopyValue<Vec<T>>`.
 pub struct CopyValueIterator<T: 'static, S: Storage<Vec<T>>> {

@@ -19,7 +19,12 @@ use crate::{
 use futures_util::{pin_mut, StreamExt};
 use rustc_hash::{FxHashMap, FxHashSet};
 use slab::Slab;
-use std::{any::Any, collections::BTreeSet, future::Future, rc::Rc};
+use std::{
+    any::Any,
+    collections::{BTreeSet, VecDeque},
+    future::Future,
+    rc::Rc,
+};
 
 /// A virtual node system that progresses user events and diffs UI trees.
 ///
@@ -184,6 +189,7 @@ pub struct VirtualDom {
     pub(crate) scopes: Slab<ScopeState>,
 
     pub(crate) dirty_scopes: BTreeSet<DirtyScope>,
+    pub(crate) dirty_tasks: VecDeque<Task>,
 
     // Maps a template path to a map of byte indexes to templates
     pub(crate) templates: FxHashMap<TemplateId, FxHashMap<usize, Template>>,
@@ -227,7 +233,7 @@ impl VirtualDom {
     ///
     /// Note: the VirtualDom is not progressed, you must either "run_with_deadline" or use "rebuild" to progress it.
     pub fn new(app: fn() -> Element) -> Self {
-        Self::new_with_props(move || app(), ())
+        Self::new_with_props(app, ())
     }
 
     /// Create a new virtualdom and build it immediately
@@ -278,6 +284,7 @@ impl VirtualDom {
             runtime: Runtime::new(tx),
             scopes: Default::default(),
             dirty_scopes: Default::default(),
+            dirty_tasks: Default::default(),
             templates: Default::default(),
             queued_templates: Default::default(),
             elements: Default::default(),
@@ -399,9 +406,8 @@ impl VirtualDom {
             if let Some(msg) = some_msg.take() {
                 match msg {
                     SchedulerMsg::Immediate(id) => self.mark_dirty(id),
-                    SchedulerMsg::TaskNotified(task) => self.handle_task_wakeup(task),
+                    SchedulerMsg::TaskNotified(task) => self.queue_task_wakeup(task),
                 }
-                continue;
             }
 
             // If they're not ready, then we should wait for them to be ready
@@ -409,8 +415,18 @@ impl VirtualDom {
                 Ok(Some(val)) => some_msg = Some(val),
                 Ok(None) => return,
                 Err(_) => {
+                    // Now that we have collected all queued work, we should check if we have any dirty scopes. If there are not, then we can poll any queued futures
+                    let has_dirty_scopes = !self.dirty_scopes.is_empty();
+
+                    if !has_dirty_scopes {
+                        // If we have no dirty scopes, then we should poll any tasks that have been notified
+                        while let Some(task) = self.dirty_tasks.pop_front() {
+                            self.handle_task_wakeup(task);
+                        }
+                    }
+
                     // If we have any dirty scopes, or finished fiber trees then we should exit
-                    if !self.dirty_scopes.is_empty() || !self.suspended_scopes.is_empty() {
+                    if has_dirty_scopes || !self.suspended_scopes.is_empty() {
                         return;
                     }
 
@@ -425,7 +441,7 @@ impl VirtualDom {
         while let Ok(Some(msg)) = self.rx.try_next() {
             match msg {
                 SchedulerMsg::Immediate(id) => self.mark_dirty(id),
-                SchedulerMsg::TaskNotified(task) => self.handle_task_wakeup(task),
+                SchedulerMsg::TaskNotified(task) => self.queue_task_wakeup(task),
             }
         }
     }
@@ -606,6 +622,11 @@ impl VirtualDom {
         for template in self.queued_templates.drain(..) {
             to.register_template(template);
         }
+    }
+
+    /// Queue a task to be polled after all dirty scopes have been rendered
+    fn queue_task_wakeup(&mut self, id: Task) {
+        self.dirty_tasks.push_back(id);
     }
 
     /// Handle notifications by tasks inside the scheduler

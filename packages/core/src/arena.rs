@@ -68,12 +68,18 @@ impl VirtualDom {
     //
     // Note: This will not remove any ids from the arena
     pub(crate) fn drop_scope(&mut self, id: ScopeId) {
-        self.dirty_scopes.remove(&DirtyScope {
-            height: self.scopes[id.0].context().height,
-            id,
-        });
+        let (height, spawned_tasks) = {
+            let scope = self.scopes.remove(id.0);
+            let context = scope.context();
+            let spawned_tasks = context.spawned_tasks.borrow();
+            let spawned_tasks: Vec<_> = spawned_tasks.iter().copied().collect();
+            (context.height, spawned_tasks)
+        };
 
-        self.scopes.remove(id.0);
+        self.dirty_scopes.remove(&DirtyScope { height, id });
+        for task in spawned_tasks {
+            self.runtime.remove_task(task);
+        }
     }
 }
 
