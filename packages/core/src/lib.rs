@@ -78,8 +78,8 @@ pub use crate::innerlude::{
     AnyValue, Attribute, AttributeValue, BoxedContext, CapturedError, Component, ComponentFunction,
     CrossPlatformConfig, DynamicNode, Element, ElementId, Event, Fragment, HasAttributes,
     IntoDynNode, Mutation, Mutations, NoOpMutations, PlatformBuilder, Properties, RenderReturn,
-    ScopeId, ScopeState, Task, Template, TemplateAttribute, TemplateNode, VComponent, VNode,
-    VNodeInner, VPlaceholder, VText, VirtualDom, WriteMutations,
+    Runtime, ScopeId, ScopeState, Task, Template, TemplateAttribute, TemplateNode, VComponent,
+    VNode, VNodeInner, VPlaceholder, VText, VirtualDom, WriteMutations,
 };
 
 /// The purpose of this module is to alleviate imports of many common types

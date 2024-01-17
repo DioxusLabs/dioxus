@@ -1,4 +1,4 @@
-use crate::{global_context::current_scope_id, runtime::with_runtime, ScopeId};
+use crate::{global_context::current_scope_id, Runtime, ScopeId};
 use std::{
     cell::{Cell, RefCell},
     rc::Rc,
@@ -211,13 +211,9 @@ impl<T> EventHandler<T> {
     /// This borrows the event using a RefCell. Recursively calling a listener will cause a panic.
     pub fn call(&self, event: T) {
         if let Some(callback) = self.callback.borrow_mut().as_mut() {
-            with_runtime(|rt| {
-                rt.scope_stack.borrow_mut().push(self.origin);
-            });
+            Runtime::with(|rt| rt.scope_stack.borrow_mut().push(self.origin));
             callback(event);
-            with_runtime(|rt| {
-                rt.scope_stack.borrow_mut().pop();
-            });
+            Runtime::with(|rt| rt.scope_stack.borrow_mut().pop());
         }
     }
 

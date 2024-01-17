@@ -14,48 +14,6 @@ thread_local! {
     static RUNTIMES: RefCell<Vec<Rc<Runtime>>> = RefCell::new(vec![]);
 }
 
-/// Pushes a new scope onto the stack
-pub(crate) fn push_runtime(runtime: Rc<Runtime>) {
-    RUNTIMES.with(|stack| stack.borrow_mut().push(runtime));
-}
-
-/// Pops a scope off the stack
-pub(crate) fn pop_runtime() {
-    RUNTIMES.with(|stack| stack.borrow_mut().pop());
-}
-
-/// Runs a function with the current runtime
-pub(crate) fn with_runtime<F, R>(f: F) -> Option<R>
-where
-    F: FnOnce(&Runtime) -> R,
-{
-    RUNTIMES.with(|stack| {
-        let stack = stack.borrow();
-        stack.last().map(|r| f(r))
-    })
-}
-
-/// Runs a function with the current scope
-pub(crate) fn with_current_scope<F, R>(f: F) -> Option<R>
-where
-    F: FnOnce(&ScopeContext) -> R,
-{
-    with_runtime(|runtime| {
-        runtime
-            .current_scope_id()
-            .and_then(|scope| runtime.get_context(scope).map(|sc| f(&sc)))
-    })
-    .flatten()
-}
-
-/// Runs a function with the current scope
-pub(crate) fn with_scope<F, R>(scope: ScopeId, f: F) -> Option<R>
-where
-    F: FnOnce(&ScopeContext) -> R,
-{
-    with_runtime(|runtime| runtime.get_context(scope).map(|sc| f(&sc))).flatten()
-}
-
 /// A global runtime that is shared across all scopes that provides the async runtime and context API
 pub struct Runtime {
     pub(crate) scope_contexts: RefCell<Vec<Option<ScopeContext>>>,
@@ -112,7 +70,7 @@ impl Runtime {
     /// Call this function with the current scope set to the given scope
     ///
     /// Useful in a limited number of scenarios, not public.
-    pub(crate) fn with_scope<O>(&self, id: ScopeId, f: impl FnOnce() -> O) -> O {
+    pub fn on_scope<O>(&self, id: ScopeId, f: impl FnOnce() -> O) -> O {
         self.scope_stack.borrow_mut().push(id);
         let o = f();
         self.scope_stack.borrow_mut().pop();
@@ -127,6 +85,47 @@ impl Runtime {
             contexts.get(id.0).and_then(|f| f.as_ref())
         })
         .ok()
+    }
+
+    /// Pushes a new scope onto the stack
+    pub(crate) fn push_runtime(runtime: Rc<Runtime>) {
+        RUNTIMES.with(|stack| stack.borrow_mut().push(runtime));
+    }
+
+    /// Pops a scope off the stack
+    pub(crate) fn pop_runtime() {
+        RUNTIMES.with(|stack| stack.borrow_mut().pop());
+    }
+
+    /// Runs a function with the current runtime
+    pub(crate) fn with<F, R>(f: F) -> Option<R>
+    where
+        F: FnOnce(&Runtime) -> R,
+    {
+        RUNTIMES.with(|stack| {
+            let stack = stack.borrow();
+            stack.last().map(|r| f(r))
+        })
+    }
+
+    /// Runs a function with the current scope
+    pub(crate) fn with_current_scope<F, R>(f: F) -> Option<R>
+    where
+        F: FnOnce(&ScopeContext) -> R,
+    {
+        Self::with(|rt| {
+            rt.current_scope_id()
+                .and_then(|scope| rt.get_context(scope).map(|sc| f(&sc)))
+        })
+        .flatten()
+    }
+
+    /// Runs a function with the current scope
+    pub(crate) fn with_scope<F, R>(scope: ScopeId, f: F) -> Option<R>
+    where
+        F: FnOnce(&ScopeContext) -> R,
+    {
+        Self::with(|rt| rt.get_context(scope).map(|sc| f(&sc))).flatten()
     }
 }
 
@@ -166,24 +165,13 @@ pub struct RuntimeGuard(());
 impl RuntimeGuard {
     /// Create a new runtime guard that sets the current Dioxus runtime. The runtime will be reset when the guard is dropped
     pub fn new(runtime: Rc<Runtime>) -> Self {
-        push_runtime(runtime);
+        Runtime::push_runtime(runtime);
         Self(())
-    }
-
-    /// Run a function with a given runtime and scope in context
-    pub fn with<O>(runtime: Rc<Runtime>, scope: Option<ScopeId>, f: impl FnOnce() -> O) -> O {
-        let guard = Self::new(runtime.clone());
-        let o = match scope {
-            Some(scope) => Runtime::with_scope(&runtime, scope, f),
-            None => f(),
-        };
-        drop(guard);
-        o
     }
 }
 
 impl Drop for RuntimeGuard {
     fn drop(&mut self) {
-        pop_runtime();
+        Runtime::pop_runtime();
     }
 }

@@ -1,8 +1,4 @@
-use crate::{
-    innerlude::SchedulerMsg,
-    runtime::{with_runtime, with_scope},
-    Element, ScopeId, Task,
-};
+use crate::{innerlude::SchedulerMsg, Element, Runtime, ScopeId, Task};
 use rustc_hash::FxHashSet;
 use std::{
     any::Any,
@@ -53,7 +49,7 @@ impl ScopeContext {
     }
 
     fn sender(&self) -> futures_channel::mpsc::UnboundedSender<SchedulerMsg> {
-        with_runtime(|rt| rt.sender.clone()).unwrap()
+        Runtime::with(|rt| rt.sender.clone()).unwrap()
     }
 
     /// Mark this scope as dirty, and schedule a render for it.
@@ -107,7 +103,7 @@ impl ScopeContext {
         }
 
         let mut search_parent = self.parent_id;
-        let cur_runtime = with_runtime(|runtime: &crate::runtime::Runtime| {
+        let cur_runtime = Runtime::with(|runtime| {
             while let Some(parent_id) = search_parent {
                 let parent = runtime.get_context(parent_id).unwrap();
                 tracing::trace!(
@@ -210,7 +206,7 @@ impl ScopeContext {
     /// Note that you should be checking if the context existed before trying to provide a new one. Providing a context
     /// when a context already exists will swap the context out for the new one, which may not be what you want.
     pub fn provide_root_context<T: 'static + Clone>(&self, context: T) -> T {
-        with_runtime(|runtime| {
+        Runtime::with(|runtime| {
             runtime
                 .get_context(ScopeId::ROOT)
                 .unwrap()
@@ -221,7 +217,7 @@ impl ScopeContext {
 
     /// Spawns the future but does not return the [`TaskId`]
     pub fn spawn(&self, fut: impl Future<Output = ()> + 'static) -> Task {
-        let id = with_runtime(|rt| rt.spawn(self.id, fut)).expect("Runtime to exist");
+        let id = Runtime::with(|rt| rt.spawn(self.id, fut)).expect("Runtime to exist");
         self.spawned_tasks.borrow_mut().insert(id);
         id
     }
@@ -231,14 +227,14 @@ impl ScopeContext {
     /// This is good for tasks that need to be run after the component has been dropped.
     pub fn spawn_forever(&self, fut: impl Future<Output = ()> + 'static) -> Task {
         // The root scope will never be unmounted so we can just add the task at the top of the app
-        with_runtime(|rt| rt.spawn(ScopeId::ROOT, fut)).expect("Runtime to exist")
+        Runtime::with(|rt| rt.spawn(ScopeId::ROOT, fut)).expect("Runtime to exist")
     }
 
     /// Informs the scheduler that this task is no longer needed and should be removed.
     ///
     /// This drops the task immediately.
     pub fn remove_future(&self, id: Task) {
-        with_runtime(|rt| rt.remove_task(id)).expect("Runtime to exist");
+        Runtime::with(|rt| rt.remove_task(id)).expect("Runtime to exist");
     }
 
     /// Mark this component as suspended and then return None
@@ -303,7 +299,7 @@ impl ScopeContext {
 impl Drop for ScopeContext {
     fn drop(&mut self) {
         // Drop all spawned tasks
-        _ = with_runtime(|rt| {
+        _ = Runtime::with(|rt| {
             for id in self.spawned_tasks.borrow().iter() {
                 rt.remove_task(*id);
             }
@@ -314,23 +310,23 @@ impl Drop for ScopeContext {
 impl ScopeId {
     /// Get the current scope id
     pub fn current_scope_id(self) -> Option<ScopeId> {
-        with_runtime(|rt| rt.current_scope_id()).flatten()
+        Runtime::with(|rt| rt.current_scope_id()).flatten()
     }
 
     #[doc(hidden)]
     /// Check if the virtual dom is currently inside of the body of a component
     pub fn vdom_is_rendering(self) -> bool {
-        with_runtime(|rt| rt.rendering.get()).unwrap_or_default()
+        Runtime::with(|rt| rt.rendering.get()).unwrap_or_default()
     }
 
     /// Consume context from the current scope
     pub fn consume_context<T: 'static + Clone>(self) -> Option<T> {
-        with_scope(self, |cx| cx.consume_context::<T>()).flatten()
+        Runtime::with_scope(self, |cx| cx.consume_context::<T>()).flatten()
     }
 
     /// Consume context from the current scope
     pub fn consume_context_from_scope<T: 'static + Clone>(self, scope_id: ScopeId) -> Option<T> {
-        with_runtime(|rt| {
+        Runtime::with(|rt| {
             rt.get_context(scope_id)
                 .and_then(|cx| cx.consume_context::<T>())
         })
@@ -339,17 +335,18 @@ impl ScopeId {
 
     /// Check if the current scope has a context
     pub fn has_context<T: 'static + Clone>(self) -> Option<T> {
-        with_scope(self, |cx| cx.has_context::<T>()).flatten()
+        Runtime::with_scope(self, |cx| cx.has_context::<T>()).flatten()
     }
 
     /// Provide context to the current scope
     pub fn provide_context<T: 'static + Clone>(self, value: T) -> T {
-        with_scope(self, |cx| cx.provide_context(value)).expect("to be in a dioxus runtime")
+        Runtime::with_scope(self, |cx| cx.provide_context(value))
+            .expect("to be in a dioxus runtime")
     }
 
     /// Suspends the current component
     pub fn suspend(self) -> Option<Element> {
-        with_scope(self, |cx| {
+        Runtime::with_scope(self, |cx| {
             cx.suspend();
         });
         None
@@ -357,40 +354,40 @@ impl ScopeId {
 
     /// Pushes the future onto the poll queue to be polled after the component renders.
     pub fn push_future(self, fut: impl Future<Output = ()> + 'static) -> Option<Task> {
-        with_scope(self, |cx| cx.spawn(fut))
+        Runtime::with_scope(self, |cx| cx.spawn(fut))
     }
 
     /// Spawns the future but does not return the [`TaskId`]
     pub fn spawn(self, fut: impl Future<Output = ()> + 'static) {
-        with_scope(self, |cx| cx.spawn(fut));
+        Runtime::with_scope(self, |cx| cx.spawn(fut));
     }
 
     /// Get the current render since the inception of this component
     ///
     /// This can be used as a helpful diagnostic when debugging hooks/renders, etc
     pub fn generation(self) -> Option<usize> {
-        with_scope(self, |cx| Some(cx.generation())).expect("to be in a dioxus runtime")
+        Runtime::with_scope(self, |cx| Some(cx.generation())).expect("to be in a dioxus runtime")
     }
 
     /// Get the parent of the current scope if it exists
     pub fn parent_scope(self) -> Option<ScopeId> {
-        with_scope(self, |cx| cx.parent_id()).flatten()
+        Runtime::with_scope(self, |cx| cx.parent_id()).flatten()
     }
 
     /// Mark the current scope as dirty, causing it to re-render
     pub fn needs_update(self) {
-        with_scope(self, |cx| cx.needs_update());
+        Runtime::with_scope(self, |cx| cx.needs_update());
     }
 
     /// Create a subscription that schedules a future render for the reference component. Unlike [`Self::needs_update`], this function will work outside of the dioxus runtime.
     ///
     /// ## Notice: you should prefer using [`dioxus_core::schedule_update_any`] and [`Self::scope_id`]
     pub fn schedule_update(&self) -> Arc<dyn Fn() + Send + Sync + 'static> {
-        with_scope(*self, |cx| cx.schedule_update()).expect("to be in a dioxus runtime")
+        Runtime::with_scope(*self, |cx| cx.schedule_update()).expect("to be in a dioxus runtime")
     }
 
     /// Get the height of the current scope
     pub fn height(self) -> u32 {
-        with_scope(self, |cx| cx.height()).expect("to be in a dioxus runtime")
+        Runtime::with_scope(self, |cx| cx.height()).expect("to be in a dioxus runtime")
     }
 }
