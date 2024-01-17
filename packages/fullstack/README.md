@@ -53,7 +53,7 @@ fn main() {
                     // Automatically handles server side rendering, hot reloading intigration, and hosting server functions
                     serve_dioxus_application(
                         "",
-                        ServeConfigBuilder::new(app, ()),
+                        ServerConfig::new(app, ()),
                     )
                 )
                 .run(([127, 0, 0, 1], 8080))

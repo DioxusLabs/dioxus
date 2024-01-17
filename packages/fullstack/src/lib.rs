@@ -7,9 +7,6 @@ pub use once_cell;
 
 mod html_storage;
 
-#[cfg(feature = "router")]
-pub mod router;
-
 #[cfg(feature = "ssr")]
 mod adapters;
 #[cfg(feature = "ssr")]
@@ -39,7 +36,6 @@ pub mod prelude {
     use crate::hooks;
     #[cfg(not(feature = "ssr"))]
     pub use crate::html_storage::deserialize::get_root_props_from_document;
-    pub use crate::launch::LaunchBuilder;
     #[cfg(feature = "ssr")]
     pub use crate::layer::{Layer, Service};
     #[cfg(all(feature = "ssr", feature = "router"))]

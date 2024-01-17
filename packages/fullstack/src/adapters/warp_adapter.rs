@@ -3,7 +3,7 @@
 //! # Example
 //! ```rust
 //! #![allow(non_snake_case)]
-//! use dioxus::prelude::*;
+//! use dioxus_lib::prelude::*;
 //! use dioxus_fullstack::prelude::*;
 //!
 //! fn main() {
@@ -14,7 +14,7 @@
 //!         tokio::runtime::Runtime::new()
 //!             .unwrap()
 //!             .block_on(async move {
-//!                 let routes = serve_dioxus_application("", ServeConfigBuilder::new(app, ()));
+//!                 let routes = serve_dioxus_application("", ServerConfig::new(app, ()));
 //!                 warp::serve(routes).run(([127, 0, 0, 1], 8080)).await;
 //!             });
 //!     }
@@ -166,12 +166,12 @@ pub fn register_server_fns(server_fn_route: &'static str) -> BoxedFilter<(impl R
 /// # Example
 /// ```rust
 /// #![allow(non_snake_case)]
-/// use dioxus::prelude::*;
+/// use dioxus_lib::prelude::*;
 /// use dioxus_fullstack::prelude::*;
 ///
 /// #[tokio::main]
 /// async fn main() {
-///     let routes = serve_dioxus_application("", ServeConfigBuilder::new(app, ()));
+///     let routes = serve_dioxus_application("", ServerConfig::new(app, ()));
 ///     warp::serve(routes).run(([127, 0, 0, 1], 8080)).await;
 /// }
 ///

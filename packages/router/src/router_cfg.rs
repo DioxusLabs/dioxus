@@ -46,6 +46,43 @@ where
     }
 }
 
+macro_rules! default_history {
+    ($initial_route:ident) => {
+        {
+            // If we are on wasm32 and the web feature is enabled, use the web history.
+            #[cfg(all(target_arch = "wasm32", feature = "web"))]
+            return Box::<AnyHistoryProviderImplWrapper::<WebHistory::<R>>>::default();
+            // If we are using dioxus fullstack and the ssr feature is enabled, use the memory history with the initial path set to the current path in fullstack
+            #[cfg(all(feature = "fullstack", feature = "ssr"))]
+            return dioxus_router::prelude::MemoryHistory::with_initial_path(
+                dioxus_fullstack::prelude::server_context()
+                    .request_parts()
+                    .unwrap()
+                    .uri
+                    .to_string()
+                    .parse()
+                    .unwrap_or_else(|err| {
+                        tracing::error!("Failed to parse uri: {}", err);
+                        "/"
+                            .parse()
+                            .unwrap_or_else(|err| {
+                                panic!("Failed to parse uri: {}", err);
+                            })
+                    }),
+            );
+            // If we are not on wasm32 and the liveview feature is enabled, use the liveview history.
+            #[cfg(all(feature = "liveview"))]
+            return Box::new(AnyHistoryProviderImplWrapper::new(LiveviewHistory::new($initial_route)));
+            // Otherwise use the memory history.
+            #[cfg(all(
+                not(all(target_arch = "wasm32", feature = "web")),
+                not(all(feature = "liveview", not(target_arch = "wasm32"))),
+            ))]
+            Box::new(AnyHistoryProviderImplWrapper::new(MemoryHistory::with_initial_path($initial_route)))
+        }
+    };
+}
+
 #[cfg(feature = "serde")]
 impl<R: Routable + Clone> RouterConfig<R>
 where
@@ -53,18 +90,13 @@ where
     R: serde::Serialize + serde::de::DeserializeOwned,
 {
     pub(crate) fn get_history(self) -> Box<dyn HistoryProvider<R>> {
-        self.history.unwrap_or_else(|| {
-            #[cfg(all(not(feature = "liveview"), target_arch = "wasm32", feature = "web"))]
-            let history = Box::<WebHistory<R>>::default();
-            #[cfg(all(
-                not(feature = "liveview"),
-                any(not(target_arch = "wasm32"), not(feature = "web"))
-            ))]
-            let history = Box::<MemoryHistory<R>>::default();
-            #[cfg(feature = "liveview")]
-            let history = Box::<LiveviewHistory<R>>::default();
-            history
-        })
+        #[allow(unused)]
+            let initial_route = self.initial_route.clone().unwrap_or("/".parse().unwrap_or_else(|err|
+                panic!("index route does not exist:\n{}\n use MemoryHistory::with_initial_path or RouterConfig::initial_route to set a custom path", err)
+            ));
+        self.history
+            .take()
+            .unwrap_or_else(|| default_history!(initial_route))
     }
 }
 
@@ -89,25 +121,13 @@ where
     <R as std::str::FromStr>::Err: std::fmt::Display,
 {
     pub(crate) fn take_history(&mut self) -> Box<dyn AnyHistoryProvider> {
-        self.history.take().unwrap_or_else(|| {
-            #[allow(unused)]
+        #[allow(unused)]
             let initial_route = self.initial_route.clone().unwrap_or("/".parse().unwrap_or_else(|err|
                 panic!("index route does not exist:\n{}\n use MemoryHistory::with_initial_path or RouterConfig::initial_route to set a custom path", err)
             ));
-            // If we are on wasm32 and the web feature is enabled, use the web history.
-            #[cfg(all(target_arch = "wasm32", feature = "web"))]
-            let history = Box::<AnyHistoryProviderImplWrapper::<WebHistory::<R>>>::default();
-            // If we are not on wasm32 and the liveview feature is enabled, use the liveview history.
-            #[cfg(all(feature = "liveview", not(target_arch = "wasm32")))]
-            let history = Box::new(AnyHistoryProviderImplWrapper::new(LiveviewHistory::new(initial_route)));
-            // If neither of the above are true, use the memory history.
-            #[cfg(all(
-                not(all(target_arch = "wasm32", feature = "web")),
-                not(all(feature = "liveview", not(target_arch = "wasm32"))),
-            ))]
-            let history = Box::new(AnyHistoryProviderImplWrapper::new(MemoryHistory::with_initial_path(initial_route)));
-            history
-        })
+        self.history
+            .take()
+            .unwrap_or_else(|| default_history!(initial_route))
     }
 }
 

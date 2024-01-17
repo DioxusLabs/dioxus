@@ -26,6 +26,7 @@ js-sys = { version = "0.3.63", optional = true }
 gloo-utils = { version = "0.1.6", optional = true }
 dioxus-liveview = { workspace = true, optional = true }
 dioxus-ssr = { workspace = true, optional = true }
+dioxus-fullstack = { workspace = true, optional = true }
 tokio = { workspace = true, features = ["full"], optional = true }
 dioxus-cli-config.workspace = true
 
@@ -36,6 +37,7 @@ liveview = ["dioxus-liveview", "tokio", "dep:serde", "serde_json"]
 wasm_test = []
 serde = ["dep:serde", "gloo-utils?/serde"]
 web = ["gloo", "web-sys", "wasm-bindgen", "gloo-utils", "js-sys"]
+fullstack = ["dioxus-fullstack"]
 
 [dev-dependencies]
 axum = { version = "0.6.1", features = ["ws"] }

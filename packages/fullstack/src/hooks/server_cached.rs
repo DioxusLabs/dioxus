@@ -8,7 +8,7 @@ use serde::{de::DeserializeOwned, Serialize};
 ///
 /// # Example
 /// ```rust
-/// use dioxus::prelude::*;
+/// use dioxus_lib::prelude::*;
 /// use dioxus_fullstack::prelude::*;
 ///
 /// fn app() -> Element {

@@ -1,19 +1,23 @@
 //! Launch helper macros for fullstack apps
 #![allow(unused)]
 use crate::prelude::*;
-use dioxus_core::prelude::*;
-#[cfg(feature = "router")]
-use dioxus_router::prelude::*;
+use dioxus_lib::prelude::*;
 
-/// A builder for a fullstack app.
-pub struct LaunchBuilder<Props: Clone> {
-    component: Component<Props>,
-    #[cfg(not(feature = "ssr"))]
-    props: Props,
+/// The desktop renderer platform
+pub struct FullstackPlatform;
+
+impl<Props: Clone + 'static> dioxus_core::PlatformBuilder<Props> for FullstackPlatform {
+    type Config = Config;
+
+    fn launch(config: dioxus_core::CrossPlatformConfig<Props>, platform_config: Self::Config) {}
+}
+
+/// Settings for a fullstack app.
+pub struct Config {
     #[cfg(feature = "ssr")]
     server_fn_route: &'static str,
     #[cfg(feature = "ssr")]
-    server_cfg: ServeConfigBuilder<Props>,
+    server_cfg: ServeConfigBuilder,
     #[cfg(feature = "ssr")]
     addr: std::net::SocketAddr,
     #[cfg(feature = "web")]
@@ -22,37 +26,28 @@ pub struct LaunchBuilder<Props: Clone> {
     desktop_cfg: dioxus_desktop::Config,
 }
 
-impl<Props: Clone + serde::Serialize + serde::de::DeserializeOwned + Send + Sync + 'static>
-    LaunchBuilder<Props>
-{
-    /// Create a new builder for a fullstack app.
-    pub fn new(component: Component<Props>) -> Self
-    where
-        Props: Default,
-    {
-        Self::new_with_props(component, Default::default())
-    }
-
-    /// Create a new builder for a fullstack app with props.
-    pub fn new_with_props(component: Component<Props>, props: Props) -> Self
-    where
-        Props: Default,
-    {
+#[allow(clippy::derivable_impls)]
+impl Default for Config {
+    fn default() -> Self {
         Self {
-            component,
-            #[cfg(not(feature = "ssr"))]
-            props,
             #[cfg(feature = "ssr")]
             server_fn_route: "",
             #[cfg(feature = "ssr")]
             addr: std::net::SocketAddr::from(([127, 0, 0, 1], 8080)),
             #[cfg(feature = "ssr")]
-            server_cfg: ServeConfigBuilder::new(component, props),
+            server_cfg: ServeConfigBuilder::new(),
             #[cfg(feature = "web")]
             web_cfg: dioxus_web::Config::default(),
             #[cfg(feature = "desktop")]
             desktop_cfg: dioxus_desktop::Config::default(),
         }
+    }
+}
+
+impl Config {
+    /// Create a new config for a fullstack app.
+    pub fn new() -> Self {
+        Self::default()
     }
 
     /// Set the address to serve the app on.
@@ -82,7 +77,7 @@ impl<Props: Clone + serde::Serialize + serde::de::DeserializeOwned + Send + Sync
 
     /// Set the server config.
     #[cfg(feature = "ssr")]
-    pub fn server_cfg(self, server_cfg: ServeConfigBuilder<Props>) -> Self {
+    pub fn server_cfg(self, server_cfg: ServeConfigBuilder) -> Self {
         Self { server_cfg, ..self }
     }
 
@@ -208,19 +203,5 @@ impl<Props: Clone + serde::Serialize + serde::de::DeserializeOwned + Send + Sync
                 .serve(router)
                 .await;
         }
-    }
-}
-
-#[cfg(feature = "router")]
-impl<R: Routable> LaunchBuilder<crate::router::FullstackRouterConfig<R>>
-where
-    <R as std::str::FromStr>::Err: std::fmt::Display,
-    R: Clone + serde::Serialize + serde::de::DeserializeOwned + Send + Sync + 'static,
-{
-    /// Create a new launch builder for the given router.
-    pub fn router() -> Self {
-        let component = crate::router::RouteWithCfg::<R>;
-        let props = crate::router::FullstackRouterConfig::default();
-        Self::new_with_props(component, props)
     }
 }

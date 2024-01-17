@@ -1,19 +1,19 @@
 //! A shared pool of renderers for efficient server side rendering.
 
-use std::sync::Arc;
-
+use crate::render::dioxus_core::NoOpMutations;
 use crate::server_context::SERVER_CONTEXT;
-use dioxus::prelude::VirtualDom;
+use dioxus_lib::prelude::VirtualDom;
 use dioxus_ssr::{
     incremental::{IncrementalRendererConfig, RenderFreshness, WrapBody},
     Renderer,
 };
 use serde::Serialize;
+use std::sync::Arc;
 use std::sync::RwLock;
 use tokio::task::spawn_blocking;
 
 use crate::prelude::*;
-use dioxus::prelude::*;
+use dioxus_lib::prelude::*;
 
 enum SsrRendererPool {
     Renderer(RwLock<Vec<Renderer>>),
@@ -45,15 +45,17 @@ impl SsrRendererPool {
                         .expect("couldn't spawn runtime")
                         .block_on(async move {
                             let mut vdom = VirtualDom::new_with_props(component, props);
-                            // Make sure the evaluator is initialized
-                            dioxus_ssr::eval::init_eval(vdom.base_scope());
+                            vdom.in_runtime(|| {
+                                // Make sure the evaluator is initialized
+                                dioxus_ssr::eval::init_eval();
+                            });
                             let mut to = WriteBuffer { buffer: Vec::new() };
                             // before polling the future, we need to set the context
                             let prev_context =
                                 SERVER_CONTEXT.with(|ctx| ctx.replace(server_context));
                             // poll the future, which may call server_context()
                             tracing::info!("Rebuilding vdom");
-                            let _ = vdom.rebuild();
+                            let _ = vdom.rebuild(&mut NoOpMutations);
                             vdom.wait_for_suspense().await;
                             tracing::info!("Suspense resolved");
                             // after polling the future, we need to restore the context
@@ -119,7 +121,7 @@ impl SsrRendererPool {
                                                 .with(|ctx| ctx.replace(Box::new(server_context)));
                                             // poll the future, which may call server_context()
                                             tracing::info!("Rebuilding vdom");
-                                            let _ = vdom.rebuild();
+                                            let _ = vdom.rebuild(&mut NoOpMutations);
                                             vdom.wait_for_suspense().await;
                                             tracing::info!("Suspense resolved");
                                             // after polling the future, we need to restore the context
@@ -195,16 +197,18 @@ impl SSRState {
         route: String,
         cfg: &'a ServeConfig<P>,
         server_context: &'a DioxusServerContext,
+        app: Component<P>,
+        props: P,
     ) -> impl std::future::Future<
         Output = Result<RenderResponse, dioxus_ssr::incremental::IncrementalRendererError>,
     > + Send
            + 'a {
         async move {
-            let ServeConfig { app, props, .. } = cfg;
+            let ServeConfig { .. } = cfg;
 
             let (freshness, html) = self
                 .renderers
-                .render_to(cfg, route, *app, props.clone(), server_context)
+                .render_to(cfg, route, app, props, server_context)
                 .await?;
 
             Ok(RenderResponse { html, freshness })
@@ -213,7 +217,9 @@ impl SSRState {
 }
 
 struct FullstackRenderer<P: Clone + Send + Sync + 'static> {
-    cfg: ServeConfig<P>,
+    component: Component<P>,
+    props: P,
+    cfg: ServeConfig,
     server_context: DioxusServerContext,
 }
 
@@ -336,28 +342,6 @@ fn incremental_pre_renderer(
     let mut renderer = cfg.clone().build();
     renderer.renderer_mut().pre_render = true;
     renderer
-}
-
-#[cfg(all(feature = "ssr", feature = "router"))]
-/// Pre-caches all static routes
-pub async fn pre_cache_static_routes_with_props<Rt>(
-    cfg: &crate::prelude::ServeConfig<crate::router::FullstackRouterConfig<Rt>>,
-) -> Result<(), dioxus_ssr::incremental::IncrementalRendererError>
-where
-    Rt: dioxus_router::prelude::Routable + Send + Sync + Serialize,
-    <Rt as std::str::FromStr>::Err: std::fmt::Display,
-{
-    let wrapper = FullstackRenderer {
-        cfg: cfg.clone(),
-        server_context: Default::default(),
-    };
-    let mut renderer = incremental_pre_renderer(
-        cfg.incremental
-            .as_ref()
-            .expect("incremental renderer config must be set to pre-cache static routes"),
-    );
-
-    dioxus_router::incremental::pre_cache_static_routes::<Rt, _>(&mut renderer, &wrapper).await
 }
 
 struct WriteBuffer {

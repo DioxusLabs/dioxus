@@ -16,9 +16,9 @@ use serde::{Deserialize, Serialize};
 #[tokio::main]
 async fn main() {
     pre_cache_static_routes_with_props(
-        &ServeConfigBuilder::new_with_router(dioxus_fullstack::router::FullstackRouterConfig::<
-            Route,
-        >::default())
+        &ServerConfig::new_with_router(
+            dioxus_fullstack::router::FullstackRouterConfig::<Route>::default(),
+        )
         .assets_path("docs")
         .incremental(IncrementalRendererConfig::default().static_dir("docs"))
         .build(),

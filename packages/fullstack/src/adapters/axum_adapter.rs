@@ -3,7 +3,7 @@
 //! # Example
 //! ```rust
 //! #![allow(non_snake_case)]
-//! use dioxus::prelude::*;
+//! use dioxus_lib::prelude::*;
 //! use dioxus_fullstack::prelude::*;
 //!
 //! fn main() {
@@ -20,7 +20,7 @@
 //!                     .serve(
 //!                         axum::Router::new()
 //!                             // Server side render the application, serve static assets, and register server functions
-//!                             .serve_dioxus_application("", ServeConfigBuilder::new(app, ()))
+//!                             .serve_dioxus_application("", ServerConfig::new(app, ()))
 //!                             .into_make_service(),
 //!                     )
 //!                     .await
@@ -78,7 +78,7 @@ pub trait DioxusRouterExt<S> {
     ///
     /// # Example
     /// ```rust
-    /// use dioxus::prelude::*;
+    /// use dioxus_lib::prelude::*;
     /// use dioxus_fullstack::prelude::*;
     ///
     /// #[tokio::main]
@@ -115,7 +115,7 @@ pub trait DioxusRouterExt<S> {
     ///
     /// # Example
     /// ```rust
-    /// use dioxus::prelude::*;
+    /// use dioxus_lib::prelude::*;
     /// use dioxus_fullstack::prelude::*;
     ///
     /// #[tokio::main]
@@ -163,7 +163,7 @@ pub trait DioxusRouterExt<S> {
     /// # Example
     /// ```rust
     /// #![allow(non_snake_case)]
-    /// use dioxus::prelude::*;
+    /// use dioxus_lib::prelude::*;
     /// use dioxus_fullstack::prelude::*;
     ///
     /// #[tokio::main]
@@ -173,7 +173,7 @@ pub trait DioxusRouterExt<S> {
     ///         .serve(
     ///             axum::Router::new()
     ///                 // Server side render the application, serve static assets, and register server functions
-    ///                 .serve_static_assets(ServeConfigBuilder::new(app, ()))
+    ///                 .serve_static_assets("dist")
     ///                 // Server render the application
     ///                 // ...
     ///                 .into_make_service(),
@@ -194,7 +194,7 @@ pub trait DioxusRouterExt<S> {
     /// # Example
     /// ```rust
     /// #![allow(non_snake_case)]
-    /// use dioxus::prelude::*;
+    /// use dioxus_lib::prelude::*;
     /// use dioxus_fullstack::prelude::*;
     ///
     /// #[tokio::main]
@@ -204,7 +204,7 @@ pub trait DioxusRouterExt<S> {
     ///         .serve(
     ///             axum::Router::new()
     ///                 // Server side render the application, serve static assets, and register server functions
-    ///                 .serve_dioxus_application("", ServeConfigBuilder::new(app, ()))
+    ///                 .serve_dioxus_application("", ServerConfig::new(app, ()))
     ///                 .into_make_service(),
     ///         )
     ///         .await
@@ -376,7 +376,7 @@ fn apply_request_parts_to_response<B>(
 /// use std::sync::{Arc, Mutex};
 ///
 /// use axum::routing::get;
-/// use dioxus::prelude::*;
+/// use dioxus_lib::prelude::*;
 /// use dioxus_fullstack::{axum_adapter::render_handler_with_context, prelude::*};
 ///
 /// fn app() -> Element {
@@ -387,7 +387,7 @@ fn apply_request_parts_to_response<B>(
 ///
 /// #[tokio::main]
 /// async fn main() {
-///     let cfg = ServeConfigBuilder::new(app, ())
+///     let cfg = ServerConfig::new(app, ())
 ///         .assets_path("dist")
 ///         .build();
 ///     let ssr_state = SSRState::new(&cfg);

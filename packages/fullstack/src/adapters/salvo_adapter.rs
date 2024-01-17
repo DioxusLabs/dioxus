@@ -3,7 +3,7 @@
 //! # Example
 //! ```rust
 //! #![allow(non_snake_case)]
-//! use dioxus::prelude::*;
+//! use dioxus_lib::prelude::*;
 //! use dioxus_fullstack::prelude::*;
 //!
 //! fn main() {
@@ -16,7 +16,7 @@
 //!             .unwrap()
 //!             .block_on(async move {
 //!                 let router =
-//!                     Router::new().serve_dioxus_application("", ServeConfigBuilder::new(app, ()));
+//!                     Router::new().serve_dioxus_application("", ServerConfig::new(app, ()));
 //!                 Server::new(TcpListener::bind("127.0.0.1:8080"))
 //!                     .serve(router)
 //!                     .await;
@@ -186,14 +186,14 @@ pub trait DioxusRouterExt {
     /// # Example
     /// ```rust
     /// #![allow(non_snake_case)]
-    /// use dioxus::prelude::*;
+    /// use dioxus_lib::prelude::*;
     /// use dioxus_fullstack::prelude::*;
     /// use salvo::prelude::*;
     /// use std::{net::TcpListener, sync::Arc};
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let router = Router::new().serve_dioxus_application("", ServeConfigBuilder::new(app, ()));
+    ///     let router = Router::new().serve_dioxus_application("", ServerConfig::new(app, ()));
     ///     Server::new(TcpListener::bind("127.0.0.1:8080"))
     ///         .serve(router)
     ///         .await;

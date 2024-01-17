@@ -1,4 +1,4 @@
-use dioxus_core::prelude::*;
+use dioxus_lib::prelude::*;
 use serde::{de::DeserializeOwned, Serialize};
 use std::any::Any;
 use std::cell::Cell;
@@ -70,10 +70,10 @@ where
 
     //     // Cancel the current future
     //     if let Some(current) = state.task.take() {
-    //         cx.remove_future(current);
+    //         remove_future(current);
     //     }
 
-    //     state.task.set(Some(cx.push_future(async move {
+    //     state.task.set(Some(push_future(async move {
     //         let data;
     //         #[cfg(feature = "ssr")]
     //         {
@@ -115,36 +115,36 @@ pub struct UseServerFuture<T> {
 }
 
 impl<T> UseServerFuture<T> {
-    // /// Restart the future with new dependencies.
-    // ///
-    // /// Will not cancel the previous future, but will ignore any values that it
-    // /// generates.
-    // pub fn restart(&self) {
-    //     self.needs_regen.set(true);
-    //     (self.update)();
-    // }
+    /// Restart the future with new dependencies.
+    ///
+    /// Will not cancel the previous future, but will ignore any values that it
+    /// generates.
+    pub fn restart(&self) {
+        self.needs_regen.set(true);
+        (self.update)();
+    }
 
-    // /// Forcefully cancel a future
-    // pub fn cancel(&self) {
-    //     if let Some(task) = self.task.take() {
-    //         cx.remove_future(task);
-    //     }
-    // }
+    /// Forcefully cancel a future
+    pub fn cancel(&self) {
+        if let Some(task) = self.task.take() {
+            remove_future(task);
+        }
+    }
 
-    // /// Return any value, even old values if the future has not yet resolved.
-    // ///
-    // /// If the future has never completed, the returned value will be `None`.
-    // pub fn value(&self) -> Ref<'_, T> {
-    //     Ref::map(self.value.borrow(), |v| v.as_deref().unwrap())
-    // }
+    /// Return any value, even old values if the future has not yet resolved.
+    ///
+    /// If the future has never completed, the returned value will be `None`.
+    pub fn value(&self) -> Ref<'_, T> {
+        Ref::map(self.value.borrow(), |v| v.as_deref().unwrap())
+    }
 
-    // /// Get the ID of the future in Dioxus' internal scheduler
-    // pub fn task(&self) -> Option<Task> {
-    //     self.task.get()
-    // }
+    /// Get the ID of the future in Dioxus' internal scheduler
+    pub fn task(&self) -> Option<Task> {
+        self.task.get()
+    }
 
-    // /// Get the current state of the future.
-    // pub fn reloading(&self) -> bool {
-    //     self.task.get().is_some()
-    // }
+    /// Get the current state of the future.
+    pub fn reloading(&self) -> bool {
+        self.task.get().is_some()
+    }
 }

@@ -25,7 +25,7 @@ tower-http = { version = "0.4.0", optional = true, features = ["fs", "compressio
 salvo = { version = "0.63.0", optional = true, features = ["serve-static", "websocket", "compression"] }
 http-body-util = { version = "0.1.0-rc.2", optional = true }
 
-dioxus-core = { workspace = true }
+dioxus-lib = { workspace = true }
 
 # Dioxus + SSR
 dioxus-ssr = { workspace = true, optional = true }
@@ -37,9 +37,6 @@ dioxus-web = { workspace = true, features = ["hydrate"], optional = true }
 
 # Desktop Integration
 dioxus-desktop = { workspace = true, optional = true }
-
-# Router Integration
-dioxus-router = { workspace = true, optional = true }
 
 tracing = { workspace = true }
 tracing-futures = { workspace = true, optional = true }
@@ -70,13 +67,12 @@ web-sys = { version = "0.3.61", features = ["Window", "Document", "Element", "Ht
 
 [features]
 default = ["hot-reload"]
-router = ["dioxus-router"]
 hot-reload = ["serde_json", "futures-util"]
 web = ["dioxus-web"]
 desktop = ["dioxus-desktop"]
 warp = ["dep:warp", "ssr"]
 axum = ["dep:axum", "tower-http", "ssr"]
 salvo = ["dep:salvo", "ssr", "http-body-util"]
-ssr = ["server_fn/ssr", "dioxus_server_macro/ssr", "tokio", "tokio-util", "tokio-stream", "dioxus-ssr", "tower", "hyper", "http", "dioxus-router?/ssr", "tower-layer", "anymap", "tracing-futures", "pin-project", "thiserror"]
+ssr = ["server_fn/ssr", "dioxus_server_macro/ssr", "tokio", "tokio-util", "tokio-stream", "dioxus-ssr", "tower", "hyper", "http", "tower-layer", "anymap", "tracing-futures", "pin-project", "thiserror"]
 default-tls = ["server_fn/default-tls"]
 rustls = ["server_fn/rustls"]
