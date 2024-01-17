@@ -520,7 +520,7 @@ pub struct VComponent {
 
 impl VComponent {
     /// Create a new [`VComponent`] variant
-    pub fn new<P, M>(
+    pub fn new<P, M: 'static>(
         component: impl ComponentFunction<P, M>,
         props: P,
         fn_name: &'static str,
@@ -528,9 +528,7 @@ impl VComponent {
     where
         P: Properties + 'static,
     {
-        let component = Rc::new(component);
         let render_fn = component.id();
-        let component = component.as_component();
         let props = new_any_props(component, <P as Properties>::memoize, props, fn_name);
 
         VComponent {

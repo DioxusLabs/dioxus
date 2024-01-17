@@ -3,7 +3,6 @@
 //! This module provides the primary mechanics to create a hook-based, concurrent VDOM for Rust.
 
 use crate::{
-    any_props::new_any_props,
     arena::ElementId,
     innerlude::{
         DirtyScope, ElementRef, ErrorBoundary, NoOpMutations, SchedulerMsg, ScopeState, VNodeMount,
@@ -11,10 +10,10 @@ use crate::{
     },
     nodes::RenderReturn,
     nodes::{Template, TemplateId},
-    properties::ComponentFunction,
+    properties::RootProps,
     runtime::{Runtime, RuntimeGuard},
     scopes::ScopeId,
-    AttributeValue, BoxedContext, Element, Event, Mutations, Task,
+    AttributeValue, BoxedContext, ComponentFunction, Element, Event, Mutations, Task, VComponent,
 };
 use futures_util::{pin_mut, StreamExt};
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -230,13 +229,6 @@ impl VirtualDom {
         Self::new_with_props(app, ())
     }
 
-    /// Create a new virtualdom and build it immediately
-    pub fn prebuilt(app: fn() -> Element) -> Self {
-        let mut dom = Self::new(app);
-        dom.rebuild_in_place();
-        dom
-    }
-
     /// Create a new VirtualDom with the given properties for the root component.
     ///
     /// # Description
@@ -271,6 +263,53 @@ impl VirtualDom {
         root: impl ComponentFunction<P, M>,
         root_props: P,
     ) -> Self {
+        let vcomponent = VComponent::new(
+            move |props: RootProps<P>| root.rebuild(props.0),
+            RootProps(root_props),
+            "root",
+        );
+
+        Self::new_with_component(vcomponent)
+    }
+
+    /// Create a new virtualdom and build it immediately
+    pub fn prebuilt(app: fn() -> Element) -> Self {
+        let mut dom = Self::new(app);
+        dom.rebuild_in_place();
+        dom
+    }
+
+    /// Create a new VirtualDom with the given properties for the root component.
+    ///
+    /// # Description
+    ///
+    /// Later, the props can be updated by calling "update" with a new set of props, causing a set of re-renders.
+    ///
+    /// This is useful when a component tree can be driven by external state (IE SSR) but it would be too expensive
+    /// to toss out the entire tree.
+    ///
+    ///
+    /// # Example
+    /// ```rust, ignore
+    /// #[derive(PartialEq, Props)]
+    /// struct SomeProps {
+    ///     name: &'static str
+    /// }
+    ///
+    /// fn Example(cx: SomeProps) -> Element  {
+    ///     rsx!{ div{ "hello {cx.name}" } })
+    /// }
+    ///
+    /// let dom = VirtualDom::new(Example);
+    /// ```
+    ///
+    /// Note: the VirtualDom is not progressed on creation. You must either "run_with_deadline" or use "rebuild" to progress it.
+    ///
+    /// ```rust, ignore
+    /// let mut dom = VirtualDom::new_from_root(VComponent::new(Example, SomeProps { name: "jane" }, "Example"));
+    /// let mutations = dom.rebuild();
+    /// ```
+    pub fn new_with_component(root: VComponent) -> Self {
         let (tx, rx) = futures_channel::mpsc::unbounded();
 
         let mut dom = Self {
@@ -285,10 +324,7 @@ impl VirtualDom {
             suspended_scopes: Default::default(),
         };
 
-        let root = dom.new_scope(
-            new_any_props(Rc::new(root).as_component(), |_, _| true, root_props, "app"),
-            "app",
-        );
+        let root = dom.new_scope(root.props, "app");
 
         // Unlike react, we provide a default error boundary that just renders the error as a string
         root.context()

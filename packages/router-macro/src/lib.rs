@@ -609,15 +609,13 @@ impl RouteEnum {
 
         quote! {
             impl dioxus_core::ComponentFunction<#props> for #name {
-                fn as_component(self: ::std::rc::Rc<Self>) -> Component<#props> {
-                    ::std::rc::Rc::new(move |props| {
-                        let initial_route = self.as_ref().clone();
-                        rsx! {
-                            ::dioxus_router::prelude::Router::<#name> {
-                                config: move || props.take().initial_route(initial_route)
-                            }
+                fn rebuild(&self, props: #props) -> dioxus_core::Element {
+                    let initial_route = self.clone();
+                    rsx! {
+                        ::dioxus_router::prelude::Router::<#name> {
+                            config: move || props.take().initial_route(initial_route)
                         }
-                    })
+                    }
                 }
             }
         }

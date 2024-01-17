@@ -18,7 +18,6 @@ use dioxus_html::{
 use std::{
     cell::{Cell, RefCell},
     collections::HashMap,
-    marker::PhantomData,
     rc::Rc,
     sync::Arc,
 };
@@ -29,10 +28,10 @@ use tao::{
 };
 
 /// The single top-level object that manages all the running windows, assets, shortcuts, etc
-pub(crate) struct App<Props: Clone + 'static> {
+pub(crate) struct App {
     // move the props into a cell so we can pop it out later to create the first window
     // iOS panics if we create a window before the event loop is started, so we toss them into a cell
-    pub(crate) dioxus_config: Cell<Option<CrossPlatformConfig<Props>>>,
+    pub(crate) dioxus_config: Cell<Option<CrossPlatformConfig>>,
     pub(crate) cfg: Cell<Option<Config>>,
 
     // Stuff we need mutable access to
@@ -59,10 +58,10 @@ pub struct SharedContext {
     pub(crate) target: EventLoopWindowTarget<UserWindowEvent>,
 }
 
-impl<Props: Clone + 'static> App<Props> {
+impl App {
     pub fn new(
         cfg: Config,
-        dioxus_config: CrossPlatformConfig<Props>,
+        dioxus_config: CrossPlatformConfig,
     ) -> (EventLoop<UserWindowEvent>, Self) {
         let event_loop = EventLoopBuilder::<UserWindowEvent>::with_user_event().build();
 

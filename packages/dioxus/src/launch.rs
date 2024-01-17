@@ -7,19 +7,17 @@ use dioxus_core::prelude::*;
 use dioxus_core::{BoxedContext, CrossPlatformConfig, PlatformBuilder};
 
 /// A builder for a fullstack app.
-pub struct LaunchBuilder<Props: Clone + 'static, Platform: PlatformBuilder<Props> = CurrentPlatform>
-{
-    cross_platform_config: CrossPlatformConfig<Props>,
-    platform_config: Option<<Platform as PlatformBuilder<Props>>::Config>,
+pub struct LaunchBuilder<Platform: PlatformBuilder = CurrentPlatform> {
+    cross_platform_config: CrossPlatformConfig,
+    platform_config: Option<<Platform as PlatformBuilder>::Config>,
 }
 
 // Default platform builder
-impl<Props: Clone + 'static> LaunchBuilder<Props> {
+impl LaunchBuilder {
     /// Create a new builder for your application. This will create a launch configuration for the current platform based on the features enabled on the `dioxus` crate.
-    pub fn new<M>(component: impl ComponentFunction<Props, M>) -> Self
-    where
-        Props: Default,
-    {
+    pub fn new<Props: Clone + Default + 'static, M: 'static>(
+        component: impl ComponentFunction<Props, M>,
+    ) -> Self {
         Self {
             cross_platform_config: CrossPlatformConfig::new(
                 component,
@@ -29,28 +27,29 @@ impl<Props: Clone + 'static> LaunchBuilder<Props> {
             platform_config: None,
         }
     }
+
+    /// Create a new builder for your application with some root props. This will create a launch configuration for the current platform based on the features enabled on the `dioxus` crate.
+    pub fn new_with_props<Props: Clone + 'static, M: 'static>(
+        component: impl ComponentFunction<Props, M>,
+        props: Props,
+    ) -> Self {
+        Self {
+            cross_platform_config: CrossPlatformConfig::new(component, props, Default::default()),
+            platform_config: None,
+        }
+    }
 }
 
-impl<Props: Clone + 'static, Platform: PlatformBuilder<Props>> LaunchBuilder<Props, Platform> {
-    /// Pass some props to your application.
-    pub fn props(mut self, props: Props) -> Self {
-        self.cross_platform_config.props = props;
-        self
-    }
-
+impl<Platform: PlatformBuilder> LaunchBuilder<Platform> {
     /// Inject state into the root component's context.
     pub fn context(mut self, state: impl Any + Clone + 'static) -> Self {
         self.cross_platform_config
-            .root_contexts
-            .push(BoxedContext::new(state));
+            .push_context(BoxedContext::new(state));
         self
     }
 
     /// Provide a platform-specific config to the builder.
-    pub fn cfg(
-        mut self,
-        config: impl Into<Option<<Platform as PlatformBuilder<Props>>::Config>>,
-    ) -> Self {
+    pub fn cfg(mut self, config: impl Into<Option<<Platform as PlatformBuilder>::Config>>) -> Self {
         if let Some(config) = config.into() {
             self.platform_config = Some(config);
         }
@@ -68,7 +67,7 @@ impl<Props: Clone + 'static, Platform: PlatformBuilder<Props>> LaunchBuilder<Pro
 }
 
 #[cfg(feature = "web")]
-impl<Props: Clone + 'static> LaunchBuilder<Props, dioxus_web::WebPlatform> {
+impl LaunchBuilder<dioxus_web::WebPlatform> {
     /// Launch your web application.
     pub fn launch_web(self) {
         dioxus_web::WebPlatform::launch(
@@ -79,7 +78,7 @@ impl<Props: Clone + 'static> LaunchBuilder<Props, dioxus_web::WebPlatform> {
 }
 
 #[cfg(feature = "desktop")]
-impl<Props: Clone + 'static> LaunchBuilder<Props, dioxus_desktop::DesktopPlatform> {
+impl LaunchBuilder<dioxus_desktop::DesktopPlatform> {
     /// Launch your desktop application.
     pub fn launch_desktop(self) {
         dioxus_desktop::DesktopPlatform::launch(
@@ -97,7 +96,7 @@ type CurrentPlatform = dioxus_web::WebPlatform;
 type CurrentPlatform = ();
 
 /// Launch your application without any additional configuration. See [`LaunchBuilder`] for more options.
-pub fn launch<Props, Marker>(component: impl ComponentFunction<Props, Marker>)
+pub fn launch<Props, Marker: 'static>(component: impl ComponentFunction<Props, Marker>)
 where
     Props: Default + Clone + 'static,
 {
@@ -106,7 +105,7 @@ where
 
 #[cfg(feature = "web")]
 /// Launch your web application without any additional configuration. See [`LaunchBuilder`] for more options.
-pub fn launch_web<Props, Marker>(component: impl ComponentFunction<Props, Marker>)
+pub fn launch_web<Props, Marker: 'static>(component: impl ComponentFunction<Props, Marker>)
 where
     Props: Default + Clone + 'static,
 {
@@ -115,7 +114,7 @@ where
 
 #[cfg(feature = "desktop")]
 /// Launch your desktop application without any additional configuration. See [`LaunchBuilder`] for more options.
-pub fn launch_desktop<Props, Marker>(component: impl ComponentFunction<Props, Marker>)
+pub fn launch_desktop<Props, Marker: 'static>(component: impl ComponentFunction<Props, Marker>)
 where
     Props: Default + Clone + 'static,
 {

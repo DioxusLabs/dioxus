@@ -1,4 +1,4 @@
-use std::{any::TypeId, rc::Rc};
+use std::any::TypeId;
 
 use crate::innerlude::*;
 
@@ -45,6 +45,31 @@ impl Properties for () {
     }
 }
 
+/// Root properties never need to be memoized, so we can use a dummy implementation.
+pub(crate) struct RootProps<P>(pub P);
+
+impl<P> Clone for RootProps<P>
+where
+    P: Clone,
+{
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
+
+impl<P> Properties for RootProps<P>
+where
+    P: Clone + 'static,
+{
+    type Builder = P;
+    fn builder() -> Self::Builder {
+        todo!()
+    }
+    fn memoize(&self, _other: &Self) -> bool {
+        true
+    }
+}
+
 // We allow components to use the () generic parameter if they have no props. This impl enables the "build" method
 // that the macros use to anonymously complete prop construction.
 pub struct EmptyBuilder;
@@ -62,35 +87,35 @@ where
 }
 
 /// Any component that implements the `ComponentFn` trait can be used as a component.
-pub trait ComponentFunction<Props, Marker = ()>: 'static {
+pub trait ComponentFunction<Props, Marker = ()>: Clone + 'static {
     /// Get the type id of the component.
     fn id(&self) -> TypeId {
         TypeId::of::<Self>()
     }
 
     /// Convert the component to a function that takes props and returns an element.
-    fn as_component(self: Rc<Self>) -> Component<Props>;
+    fn rebuild(&self, props: Props) -> Element;
 }
 
 /// Accept pre-formed component render functions as components
 impl<P: 'static> ComponentFunction<P> for Component<P> {
-    fn as_component(self: Rc<Self>) -> Component<P> {
-        self.as_ref().clone()
+    fn rebuild(&self, props: P) -> Element {
+        (self)(props)
     }
 }
 
 /// Accept any callbacks that take props
-impl<F: Fn(P) -> Element + 'static, P> ComponentFunction<P> for F {
-    fn as_component(self: Rc<Self>) -> Component<P> {
-        self
+impl<F: Fn(P) -> Element + Clone + 'static, P> ComponentFunction<P> for F {
+    fn rebuild(&self, props: P) -> Element {
+        self(props)
     }
 }
 
 /// Accept any callbacks that take no props
 pub struct EmptyMarker;
-impl<F: Fn() -> Element + 'static> ComponentFunction<(), EmptyMarker> for F {
-    fn as_component(self: Rc<Self>) -> Rc<dyn Fn(()) -> Element> {
-        Rc::new(move |_| self())
+impl<F: Fn() -> Element + Clone + 'static> ComponentFunction<(), EmptyMarker> for F {
+    fn rebuild(&self, _: ()) -> Element {
+        self()
     }
 }
 

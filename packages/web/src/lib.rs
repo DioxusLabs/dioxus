@@ -99,10 +99,7 @@ mod rehydrate;
 ///     wasm_bindgen_futures::spawn_local(app_fut);
 /// }
 /// ```
-pub async fn run_with_props<Props: Clone + 'static>(
-    dioxus_config: CrossPlatformConfig<Props>,
-    web_config: Config,
-) {
+pub async fn run_with_props(dioxus_config: CrossPlatformConfig, web_config: Config) {
     tracing::info!("Starting up");
 
     let mut dom = dioxus_config.build_vdom();

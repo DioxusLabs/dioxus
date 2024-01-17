@@ -1,7 +1,7 @@
-use crate::{nodes::RenderReturn, Component};
+use crate::{nodes::RenderReturn, ComponentFunction};
 use std::{any::Any, panic::AssertUnwindSafe};
 
-pub type BoxedAnyProps = Box<dyn AnyProps>;
+pub(crate) type BoxedAnyProps = Box<dyn AnyProps>;
 
 /// A trait that essentially allows VComponentProps to be used generically
 pub(crate) trait AnyProps {
@@ -12,8 +12,8 @@ pub(crate) trait AnyProps {
 }
 
 /// Create a new boxed props object.
-pub fn new_any_props<P: 'static + Clone>(
-    render_fn: Component<P>,
+pub(crate) fn new_any_props<F: ComponentFunction<P, M>, P: Clone + 'static, M: 'static>(
+    render_fn: F,
     memo: fn(&P, &P) -> bool,
     props: P,
     name: &'static str,
@@ -23,17 +23,21 @@ pub fn new_any_props<P: 'static + Clone>(
         memo,
         props,
         name,
+        phantom: std::marker::PhantomData,
     })
 }
 
-struct VProps<P> {
-    render_fn: Component<P>,
+struct VProps<F: ComponentFunction<P, M>, P, M> {
+    render_fn: F,
     memo: fn(&P, &P) -> bool,
     props: P,
     name: &'static str,
+    phantom: std::marker::PhantomData<M>,
 }
 
-impl<P: Clone + 'static> AnyProps for VProps<P> {
+impl<F: ComponentFunction<P, M> + Clone, P: Clone + 'static, M: 'static> AnyProps
+    for VProps<F, P, M>
+{
     fn memoize(&self, other: &dyn Any) -> bool {
         match other.downcast_ref::<P>() {
             Some(other) => (self.memo)(&self.props, other),
@@ -47,7 +51,7 @@ impl<P: Clone + 'static> AnyProps for VProps<P> {
 
     fn render(&self) -> RenderReturn {
         let res = std::panic::catch_unwind(AssertUnwindSafe(move || {
-            (self.render_fn)(self.props.clone())
+            self.render_fn.rebuild(self.props.clone())
         }));
 
         match res {
@@ -67,6 +71,7 @@ impl<P: Clone + 'static> AnyProps for VProps<P> {
             memo: self.memo,
             props: self.props.clone(),
             name: self.name,
+            phantom: std::marker::PhantomData,
         })
     }
 }

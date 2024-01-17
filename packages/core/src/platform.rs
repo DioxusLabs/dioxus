@@ -1,6 +1,9 @@
 use std::any::Any;
 
-use crate::{properties::ComponentFunction, Component, VirtualDom};
+use crate::{
+    properties::{ComponentFunction, RootProps},
+    VComponent, VirtualDom,
+};
 
 /// A boxed object that can be injected into a component's context.
 pub struct BoxedContext(Box<dyn ClonableAny>);
@@ -40,32 +43,38 @@ impl<T: Any + Clone> ClonableAny for T {
 }
 
 /// The platform-independent part of the config needed to launch an application.
-pub struct CrossPlatformConfig<Props: Clone + 'static> {
+pub struct CrossPlatformConfig {
     /// The root component function.
-    pub component: Component<Props>,
-    /// The props for the root component.
-    pub props: Props,
+    component: VComponent,
     /// The contexts to provide to the root component.
-    pub root_contexts: Vec<BoxedContext>,
+    root_contexts: Vec<BoxedContext>,
 }
 
-impl<Props: Clone + 'static> CrossPlatformConfig<Props> {
+impl CrossPlatformConfig {
     /// Create a new cross-platform config.
-    pub fn new<M>(
+    pub fn new<Props: Clone + 'static, M: 'static>(
         component: impl ComponentFunction<Props, M>,
         props: Props,
         root_contexts: Vec<BoxedContext>,
     ) -> Self {
         Self {
-            component: ComponentFunction::as_component(std::rc::Rc::new(component)),
-            props,
+            component: VComponent::new(
+                move |props: RootProps<Props>| component.rebuild(props.0),
+                RootProps(props),
+                "root",
+            ),
             root_contexts,
         }
     }
 
+    /// Push a new context into the root component's context.
+    pub fn push_context<T: Any + Clone + 'static>(&mut self, context: T) {
+        self.root_contexts.push(BoxedContext::new(context));
+    }
+
     /// Build a virtual dom from the config.
     pub fn build_vdom(self) -> VirtualDom {
-        let mut vdom = VirtualDom::new_with_props(self.component, self.props);
+        let mut vdom = VirtualDom::new_with_component(self.component);
 
         for context in self.root_contexts {
             vdom.insert_boxed_root_context(context);
@@ -76,18 +85,18 @@ impl<Props: Clone + 'static> CrossPlatformConfig<Props> {
 }
 
 /// A builder to launch a specific platform.
-pub trait PlatformBuilder<Props: Clone + 'static> {
+pub trait PlatformBuilder {
     /// The platform-specific config needed to launch an application.
     type Config: Default;
 
     /// Launch the app.
-    fn launch(config: CrossPlatformConfig<Props>, platform_config: Self::Config);
+    fn launch(config: CrossPlatformConfig, platform_config: Self::Config);
 }
 
-impl<Props: Clone + 'static> PlatformBuilder<Props> for () {
+impl PlatformBuilder for () {
     type Config = ();
 
-    fn launch(_: CrossPlatformConfig<Props>, _: Self::Config) {
+    fn launch(_: CrossPlatformConfig, _: Self::Config) {
         panic!("No platform is currently enabled. Please enable a platform feature for the dioxus crate.");
     }
 }
