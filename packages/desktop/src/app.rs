@@ -10,6 +10,7 @@ use crate::{
     webview::WebviewInstance,
 };
 use crossbeam_channel::Receiver;
+use dioxus_core::AnyProps;
 use dioxus_core::{CrossPlatformConfig, ElementId};
 use dioxus_html::{
     native_bind::NativeFileEngine, FileEngine, HasFileData, HasFormData, HtmlEvent,
@@ -28,10 +29,10 @@ use tao::{
 };
 
 /// The single top-level object that manages all the running windows, assets, shortcuts, etc
-pub(crate) struct App {
+pub(crate) struct App<P: AnyProps> {
     // move the props into a cell so we can pop it out later to create the first window
     // iOS panics if we create a window before the event loop is started, so we toss them into a cell
-    pub(crate) dioxus_config: Cell<Option<CrossPlatformConfig>>,
+    pub(crate) dioxus_config: Cell<Option<CrossPlatformConfig<P>>>,
     pub(crate) cfg: Cell<Option<Config>>,
 
     // Stuff we need mutable access to
@@ -58,10 +59,10 @@ pub struct SharedContext {
     pub(crate) target: EventLoopWindowTarget<UserWindowEvent>,
 }
 
-impl App {
+impl<P: AnyProps> App<P> {
     pub fn new(
         cfg: Config,
-        dioxus_config: CrossPlatformConfig,
+        dioxus_config: CrossPlatformConfig<P>,
     ) -> (EventLoop<UserWindowEvent>, Self) {
         let event_loop = EventLoopBuilder::<UserWindowEvent>::with_user_event().build();
 

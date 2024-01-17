@@ -529,7 +529,12 @@ impl VComponent {
         P: Properties + 'static,
     {
         let render_fn = component.id();
-        let props = new_any_props(component, <P as Properties>::memoize, props, fn_name);
+        let props = Box::new(new_any_props(
+            component,
+            <P as Properties>::memoize,
+            props,
+            fn_name,
+        ));
 
         VComponent {
             name: fn_name,

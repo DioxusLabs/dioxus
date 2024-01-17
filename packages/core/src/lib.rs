@@ -23,6 +23,7 @@ mod tasks;
 mod virtual_dom;
 
 pub(crate) mod innerlude {
+    pub use crate::any_props::*;
     pub use crate::arena::*;
     pub use crate::dirty_scope::*;
     pub use crate::error_boundary::*;
@@ -75,11 +76,11 @@ pub(crate) mod innerlude {
 
 pub use crate::innerlude::{
     fc_to_builder, generation, schedule_update, schedule_update_any, use_hook, vdom_is_rendering,
-    AnyValue, Attribute, AttributeValue, BoxedContext, CapturedError, Component, ComponentFunction,
-    CrossPlatformConfig, DynamicNode, Element, ElementId, Event, Fragment, HasAttributes,
-    IntoDynNode, Mutation, Mutations, NoOpMutations, PlatformBuilder, Properties, RenderReturn,
-    Runtime, ScopeId, ScopeState, Task, Template, TemplateAttribute, TemplateNode, VComponent,
-    VNode, VNodeInner, VPlaceholder, VText, VirtualDom, WriteMutations,
+    AnyProps, AnyValue, Attribute, AttributeValue, BoxedContext, CapturedError, Component,
+    ComponentFunction, CrossPlatformConfig, DynamicNode, Element, ElementId, Event, Fragment,
+    HasAttributes, IntoDynNode, Mutation, Mutations, NoOpMutations, PlatformBuilder, Properties,
+    RenderReturn, Runtime, ScopeId, ScopeState, Task, Template, TemplateAttribute, TemplateNode,
+    VComponent, VNode, VNodeInner, VPlaceholder, VProps, VText, VirtualDom, WriteMutations,
 };
 
 /// The purpose of this module is to alleviate imports of many common types

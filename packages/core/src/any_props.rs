@@ -3,8 +3,8 @@ use std::{any::Any, panic::AssertUnwindSafe};
 
 pub(crate) type BoxedAnyProps = Box<dyn AnyProps>;
 
-/// A trait that essentially allows VComponentProps to be used generically
-pub(crate) trait AnyProps {
+/// A trait for a component that can be rendered.
+pub trait AnyProps: 'static {
     fn render(&self) -> RenderReturn;
     fn memoize(&self, other: &dyn Any) -> bool;
     fn props(&self) -> &dyn Any;
@@ -17,17 +17,18 @@ pub(crate) fn new_any_props<F: ComponentFunction<P, M>, P: Clone + 'static, M: '
     memo: fn(&P, &P) -> bool,
     props: P,
     name: &'static str,
-) -> Box<dyn AnyProps> {
-    Box::new(VProps {
+) -> VProps<F, P, M> {
+    VProps {
         render_fn,
         memo,
         props,
         name,
         phantom: std::marker::PhantomData,
-    })
+    }
 }
 
-struct VProps<F: ComponentFunction<P, M>, P, M> {
+/// A component along with the props the component uses to render.
+pub struct VProps<F: ComponentFunction<P, M>, P, M> {
     render_fn: F,
     memo: fn(&P, &P) -> bool,
     props: P,

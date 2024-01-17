@@ -3,6 +3,7 @@
 //! This module provides the primary mechanics to create a hook-based, concurrent VDOM for Rust.
 
 use crate::{
+    any_props::{new_any_props, AnyProps},
     arena::ElementId,
     innerlude::{
         DirtyScope, ElementRef, ErrorBoundary, NoOpMutations, SchedulerMsg, ScopeState, VNodeMount,
@@ -10,10 +11,9 @@ use crate::{
     },
     nodes::RenderReturn,
     nodes::{Template, TemplateId},
-    properties::RootProps,
     runtime::{Runtime, RuntimeGuard},
     scopes::ScopeId,
-    AttributeValue, BoxedContext, ComponentFunction, Element, Event, Mutations, Task, VComponent,
+    AttributeValue, BoxedContext, ComponentFunction, Element, Event, Mutations, Task,
 };
 use futures_util::{pin_mut, StreamExt};
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -259,17 +259,11 @@ impl VirtualDom {
     /// let mut dom = VirtualDom::new_with_props(Example, SomeProps { name: "jane" });
     /// let mutations = dom.rebuild();
     /// ```
-    pub fn new_with_props<P: Clone + 'static, M>(
+    pub fn new_with_props<P: Clone + 'static, M: 'static>(
         root: impl ComponentFunction<P, M>,
         root_props: P,
     ) -> Self {
-        let vcomponent = VComponent::new(
-            move |props: RootProps<P>| root.rebuild(props.0),
-            RootProps(root_props),
-            "root",
-        );
-
-        Self::new_with_component(vcomponent)
+        Self::new_with_component(new_any_props(root, |_, _| true, root_props, "root"))
     }
 
     /// Create a new virtualdom and build it immediately
@@ -309,7 +303,7 @@ impl VirtualDom {
     /// let mut dom = VirtualDom::new_from_root(VComponent::new(Example, SomeProps { name: "jane" }, "Example"));
     /// let mutations = dom.rebuild();
     /// ```
-    pub fn new_with_component(root: VComponent) -> Self {
+    pub fn new_with_component(root: impl AnyProps + 'static) -> Self {
         let (tx, rx) = futures_channel::mpsc::unbounded();
 
         let mut dom = Self {
@@ -324,7 +318,7 @@ impl VirtualDom {
             suspended_scopes: Default::default(),
         };
 
-        let root = dom.new_scope(root.props, "app");
+        let root = dom.new_scope(Box::new(root), "app");
 
         // Unlike react, we provide a default error boundary that just renders the error as a string
         root.context()

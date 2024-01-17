@@ -3,21 +3,22 @@
 use std::any::Any;
 
 use crate::prelude::*;
-use dioxus_core::prelude::*;
+use dioxus_core::VProps;
+use dioxus_core::{prelude::*, AnyProps};
 use dioxus_core::{BoxedContext, CrossPlatformConfig, PlatformBuilder};
 
 /// A builder for a fullstack app.
-pub struct LaunchBuilder<Platform: PlatformBuilder = CurrentPlatform> {
-    cross_platform_config: CrossPlatformConfig,
-    platform_config: Option<<Platform as PlatformBuilder>::Config>,
+pub struct LaunchBuilder<P: AnyProps, Platform: PlatformBuilder<P> = CurrentPlatform> {
+    cross_platform_config: CrossPlatformConfig<P>,
+    platform_config: Option<<Platform as PlatformBuilder<P>>::Config>,
 }
 
 // Default platform builder
-impl LaunchBuilder {
+impl<F: ComponentFunction<Props, M>, Props: Clone + Default + 'static, M: 'static>
+    LaunchBuilder<VProps<F, Props, M>>
+{
     /// Create a new builder for your application. This will create a launch configuration for the current platform based on the features enabled on the `dioxus` crate.
-    pub fn new<Props: Clone + Default + 'static, M: 'static>(
-        component: impl ComponentFunction<Props, M>,
-    ) -> Self {
+    pub fn new(component: F) -> Self {
         Self {
             cross_platform_config: CrossPlatformConfig::new(
                 component,
@@ -29,10 +30,7 @@ impl LaunchBuilder {
     }
 
     /// Create a new builder for your application with some root props. This will create a launch configuration for the current platform based on the features enabled on the `dioxus` crate.
-    pub fn new_with_props<Props: Clone + 'static, M: 'static>(
-        component: impl ComponentFunction<Props, M>,
-        props: Props,
-    ) -> Self {
+    pub fn new_with_props(component: F, props: Props) -> Self {
         Self {
             cross_platform_config: CrossPlatformConfig::new(component, props, Default::default()),
             platform_config: None,
@@ -40,7 +38,7 @@ impl LaunchBuilder {
     }
 }
 
-impl<Platform: PlatformBuilder> LaunchBuilder<Platform> {
+impl<P: AnyProps, Platform: PlatformBuilder<P>> LaunchBuilder<P, Platform> {
     /// Inject state into the root component's context.
     pub fn context(mut self, state: impl Any + Clone + 'static) -> Self {
         self.cross_platform_config
@@ -49,7 +47,10 @@ impl<Platform: PlatformBuilder> LaunchBuilder<Platform> {
     }
 
     /// Provide a platform-specific config to the builder.
-    pub fn cfg(mut self, config: impl Into<Option<<Platform as PlatformBuilder>::Config>>) -> Self {
+    pub fn cfg(
+        mut self,
+        config: impl Into<Option<<Platform as PlatformBuilder<P>>::Config>>,
+    ) -> Self {
         if let Some(config) = config.into() {
             self.platform_config = Some(config);
         }
@@ -67,7 +68,7 @@ impl<Platform: PlatformBuilder> LaunchBuilder<Platform> {
 }
 
 #[cfg(feature = "web")]
-impl LaunchBuilder<dioxus_web::WebPlatform> {
+impl<P: AnyProps> LaunchBuilder<P, dioxus_web::WebPlatform> {
     /// Launch your web application.
     pub fn launch_web(self) {
         dioxus_web::WebPlatform::launch(
@@ -78,7 +79,7 @@ impl LaunchBuilder<dioxus_web::WebPlatform> {
 }
 
 #[cfg(feature = "desktop")]
-impl LaunchBuilder<dioxus_desktop::DesktopPlatform> {
+impl<P: AnyProps> LaunchBuilder<P, dioxus_desktop::DesktopPlatform> {
     /// Launch your desktop application.
     pub fn launch_desktop(self) {
         dioxus_desktop::DesktopPlatform::launch(

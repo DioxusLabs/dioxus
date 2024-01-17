@@ -1,8 +1,9 @@
 use std::any::Any;
 
 use crate::{
-    properties::{ComponentFunction, RootProps},
-    VComponent, VirtualDom,
+    any_props::{new_any_props, AnyProps, VProps},
+    properties::ComponentFunction,
+    VirtualDom,
 };
 
 /// A boxed object that can be injected into a component's context.
@@ -43,30 +44,26 @@ impl<T: Any + Clone> ClonableAny for T {
 }
 
 /// The platform-independent part of the config needed to launch an application.
-pub struct CrossPlatformConfig {
+pub struct CrossPlatformConfig<P: AnyProps> {
     /// The root component function.
-    component: VComponent,
+    component: P,
     /// The contexts to provide to the root component.
     root_contexts: Vec<BoxedContext>,
 }
 
-impl CrossPlatformConfig {
+impl<F: ComponentFunction<Props, M>, Props: Clone + 'static, M: 'static>
+    CrossPlatformConfig<VProps<F, Props, M>>
+{
     /// Create a new cross-platform config.
-    pub fn new<Props: Clone + 'static, M: 'static>(
-        component: impl ComponentFunction<Props, M>,
-        props: Props,
-        root_contexts: Vec<BoxedContext>,
-    ) -> Self {
-        Self {
-            component: VComponent::new(
-                move |props: RootProps<Props>| component.rebuild(props.0),
-                RootProps(props),
-                "root",
-            ),
+    pub fn new(component: F, props: Props, root_contexts: Vec<BoxedContext>) -> Self {
+        CrossPlatformConfig {
+            component: new_any_props(component, |_, _| true, props, "root"),
             root_contexts,
         }
     }
+}
 
+impl<P: AnyProps> CrossPlatformConfig<P> {
     /// Push a new context into the root component's context.
     pub fn push_context<T: Any + Clone + 'static>(&mut self, context: T) {
         self.root_contexts.push(BoxedContext::new(context));
@@ -85,18 +82,18 @@ impl CrossPlatformConfig {
 }
 
 /// A builder to launch a specific platform.
-pub trait PlatformBuilder {
+pub trait PlatformBuilder<P: AnyProps> {
     /// The platform-specific config needed to launch an application.
     type Config: Default;
 
     /// Launch the app.
-    fn launch(config: CrossPlatformConfig, platform_config: Self::Config);
+    fn launch(config: CrossPlatformConfig<P>, platform_config: Self::Config);
 }
 
-impl PlatformBuilder for () {
+impl<P: AnyProps> PlatformBuilder<P> for () {
     type Config = ();
 
-    fn launch(_: CrossPlatformConfig, _: Self::Config) {
+    fn launch(_: CrossPlatformConfig<P>, _: Self::Config) {
         panic!("No platform is currently enabled. Please enable a platform feature for the dioxus crate.");
     }
 }

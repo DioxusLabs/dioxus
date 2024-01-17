@@ -10,7 +10,10 @@ use tao::event::{Event, StartCause, WindowEvent};
 ///
 /// This will block the main thread, and *must* be spawned on the main thread. This function does not assume any runtime
 /// and is equivalent to calling launch_with_props with the tokio feature disabled.
-pub fn launch_with_props_blocking(dioxus_cfg: CrossPlatformConfig, desktop_config: Config) {
+pub fn launch_with_props_blocking<P: AnyProps>(
+    dioxus_cfg: CrossPlatformConfig<P>,
+    desktop_config: Config,
+) {
     let (event_loop, mut app) = App::new(desktop_config, dioxus_cfg);
 
     event_loop.run(move |window_event, _, control_flow| {
@@ -50,10 +53,10 @@ pub fn launch_with_props_blocking(dioxus_cfg: CrossPlatformConfig, desktop_confi
 /// The desktop renderer platform
 pub struct DesktopPlatform;
 
-impl PlatformBuilder for DesktopPlatform {
+impl<P: AnyProps> PlatformBuilder<P> for DesktopPlatform {
     type Config = Config;
 
-    fn launch(config: dioxus_core::CrossPlatformConfig, platform_config: Self::Config) {
+    fn launch(config: dioxus_core::CrossPlatformConfig<P>, platform_config: Self::Config) {
         #[cfg(feature = "tokio")]
         tokio::runtime::Builder::new_multi_thread()
             .enable_all()

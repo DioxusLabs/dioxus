@@ -1,12 +1,14 @@
 //! Launch helper macros for fullstack apps
 #![allow(unused)]
 use crate::prelude::*;
-use dioxus_lib::prelude::*;
+use dioxus_lib::prelude::{dioxus_core::AnyProps, *};
 
 /// The desktop renderer platform
 pub struct FullstackPlatform;
 
-impl<Props: Clone + 'static> dioxus_core::PlatformBuilder<Props> for FullstackPlatform {
+impl<Props: AnyProps + Send + Sync + 'static> dioxus_core::PlatformBuilder<Props>
+    for FullstackPlatform
+{
     type Config = Config;
 
     fn launch(config: dioxus_core::CrossPlatformConfig<Props>, platform_config: Self::Config) {}
