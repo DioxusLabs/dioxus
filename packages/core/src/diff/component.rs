@@ -88,7 +88,7 @@ impl VNode {
         }
 
         // First, move over the props from the old to the new, dropping old props in the process
-        dom.scopes[scope_id.0].props = new.props.clone();
+        dom.scopes[scope_id.0].props = new.props.duplicate();
 
         // Now run the component and diff it
         let new = dom.run_scope(scope_id);
@@ -129,7 +129,7 @@ impl VNode {
     ) -> usize {
         // Load up a ScopeId for this vcomponent. If it's already mounted, then we can just use that
         let scope = dom
-            .new_scope(component.props.clone(), component.name)
+            .new_scope(component.props.duplicate(), component.name)
             .context()
             .id;
 

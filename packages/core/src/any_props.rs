@@ -1,41 +1,14 @@
 use crate::{nodes::RenderReturn, Component};
-use std::{any::Any, ops::Deref, panic::AssertUnwindSafe};
+use std::{any::Any, panic::AssertUnwindSafe};
 
-/// A boxed version of AnyProps that can be cloned
-pub(crate) struct BoxedAnyProps {
-    inner: Box<dyn AnyProps>,
-}
-
-impl BoxedAnyProps {
-    pub fn new(inner: impl AnyProps + 'static) -> Self {
-        Self {
-            inner: Box::new(inner),
-        }
-    }
-}
-
-impl Deref for BoxedAnyProps {
-    type Target = dyn AnyProps;
-
-    fn deref(&self) -> &Self::Target {
-        &*self.inner
-    }
-}
-
-impl Clone for BoxedAnyProps {
-    fn clone(&self) -> Self {
-        Self {
-            inner: self.inner.duplicate(),
-        }
-    }
-}
+pub type BoxedAnyProps = Box<dyn AnyProps>;
 
 /// A trait that essentially allows VComponentProps to be used generically
 pub(crate) trait AnyProps {
     fn render(&self) -> RenderReturn;
     fn memoize(&self, other: &dyn Any) -> bool;
     fn props(&self) -> &dyn Any;
-    fn duplicate(&self) -> Box<dyn AnyProps>;
+    fn duplicate(&self) -> BoxedAnyProps;
 }
 
 pub(crate) struct VProps<P: 'static> {
@@ -75,7 +48,6 @@ impl<P: Clone + 'static> AnyProps for VProps<P> {
 
     fn render(&self) -> RenderReturn {
         let res = std::panic::catch_unwind(AssertUnwindSafe(move || {
-            // Call the render function directly
             (self.render_fn)(self.props.clone())
         }));
 
@@ -90,7 +62,7 @@ impl<P: Clone + 'static> AnyProps for VProps<P> {
         }
     }
 
-    fn duplicate(&self) -> Box<dyn AnyProps> {
+    fn duplicate(&self) -> BoxedAnyProps {
         Box::new(Self {
             render_fn: self.render_fn.clone(),
             memo: self.memo,

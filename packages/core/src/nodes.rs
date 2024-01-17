@@ -549,7 +549,7 @@ impl VComponent {
 
         VComponent {
             name: fn_name,
-            props: BoxedAnyProps::new(vcomp),
+            props: Box::new(vcomp),
             render_fn,
         }
     }

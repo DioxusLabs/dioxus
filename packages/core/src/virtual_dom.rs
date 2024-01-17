@@ -3,7 +3,7 @@
 //! This module provides the primary mechanics to create a hook-based, concurrent VDOM for Rust.
 
 use crate::{
-    any_props::{BoxedAnyProps, VProps},
+    any_props::VProps,
     arena::ElementId,
     innerlude::{
         DirtyScope, ElementRef, ErrorBoundary, NoOpMutations, SchedulerMsg, ScopeState, VNodeMount,
@@ -287,7 +287,7 @@ impl VirtualDom {
         };
 
         let root = dom.new_scope(
-            BoxedAnyProps::new(VProps::new(
+            Box::new(VProps::new(
                 Rc::new(root).as_component(),
                 |_, _| true,
                 root_props,
