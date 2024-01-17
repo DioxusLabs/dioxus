@@ -3,7 +3,7 @@
 #![allow(non_snake_case)]
 
 use crate::fs_cache::ValidCachedPath;
-use dioxus_core::{Element, VirtualDom};
+use dioxus_core::{AnyProps, CrossPlatformConfig, VirtualDom};
 use rustc_hash::FxHasher;
 use std::{
     future::Future,
@@ -69,18 +69,17 @@ impl IncrementalRenderer {
         self.invalidate_after.is_some()
     }
 
-    async fn render_and_cache<'a, P: Clone + 'static, R: WrapBody + Send + Sync>(
+    async fn render_and_cache<'a, P: AnyProps + 'static, R: WrapBody + Send + Sync>(
         &'a mut self,
         route: String,
-        comp: fn(P) -> Element,
-        props: P,
+        dioxus_config: CrossPlatformConfig<P>,
         output: &'a mut (impl AsyncWrite + Unpin + Send),
         rebuild_with: impl FnOnce(&mut VirtualDom) -> Pin<Box<dyn Future<Output = ()> + '_>>,
         renderer: &'a R,
     ) -> Result<RenderFreshness, IncrementalRendererError> {
         let mut html_buffer = WriteBuffer { buffer: Vec::new() };
         {
-            let mut vdom = VirtualDom::new_with_props(comp, props);
+            let mut vdom = dioxus_config.build_vdom();
             vdom.in_runtime(crate::eval::init_eval);
             rebuild_with(&mut vdom).await;
 
@@ -168,11 +167,10 @@ impl IncrementalRenderer {
     }
 
     /// Render a route or get it from cache.
-    pub async fn render<P: Clone + 'static, R: WrapBody + Send + Sync>(
+    pub async fn render<P: AnyProps, R: WrapBody + Send + Sync>(
         &mut self,
         route: String,
-        component: fn(P) -> Element,
-        props: P,
+        dioxus_config: CrossPlatformConfig<P>,
         output: &mut (impl AsyncWrite + Unpin + std::marker::Send),
         rebuild_with: impl FnOnce(&mut VirtualDom) -> Pin<Box<dyn Future<Output = ()> + '_>>,
         renderer: &R,
@@ -183,7 +181,7 @@ impl IncrementalRenderer {
         } else {
             // if not, create it
             let freshness = self
-                .render_and_cache(route, component, props, output, rebuild_with, renderer)
+                .render_and_cache(route, dioxus_config, output, rebuild_with, renderer)
                 .await?;
             tracing::trace!("cache miss");
             Ok(freshness)

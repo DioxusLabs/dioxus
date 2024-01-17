@@ -7,7 +7,7 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 
 #[proc_macro]
-pub fn server(input: TokenStream) -> TokenStream {
+pub fn server_only(input: TokenStream) -> TokenStream {
     if cfg!(any(feature = "ssr", feature = "liveview")) {
         let input = TokenStream2::from(input);
         quote! {

@@ -63,6 +63,7 @@ use axum::{
     routing::{get, post},
     Router,
 };
+use dioxus_lib::prelude::dioxus_core::{AnyProps, CrossPlatformConfig};
 use server_fn::{Encoding, ServerFunctionRegistry};
 use std::sync::Arc;
 use std::sync::RwLock;
@@ -215,10 +216,11 @@ pub trait DioxusRouterExt<S> {
     ///     todo!()
     /// }
     /// ```
-    fn serve_dioxus_application<P: Clone + serde::Serialize + Send + Sync + 'static>(
+    fn serve_dioxus_application<P: AnyProps + Clone + Send + Sync + 'static>(
         self,
         server_fn_route: &'static str,
-        cfg: impl Into<ServeConfig<P>>,
+        cfg: impl Into<ServeConfig>,
+        dioxus_config: CrossPlatformConfig<P>,
     ) -> Self;
 }
 
@@ -313,10 +315,11 @@ where
         self
     }
 
-    fn serve_dioxus_application<P: Clone + serde::Serialize + Send + Sync + 'static>(
+    fn serve_dioxus_application<P: AnyProps + Clone + Send + Sync + 'static>(
         self,
         server_fn_route: &'static str,
-        cfg: impl Into<ServeConfig<P>>,
+        cfg: impl Into<ServeConfig>,
+        dioxus_config: CrossPlatformConfig<P>,
     ) -> Self {
         let cfg = cfg.into();
         let ssr_state = SSRState::new(&cfg);
@@ -325,7 +328,7 @@ where
         self.serve_static_assets(cfg.assets_path)
             .connect_hot_reload()
             .register_server_fns(server_fn_route)
-            .fallback(get(render_handler).with_state((cfg, ssr_state)))
+            .fallback(get(render_handler).with_state((cfg, dioxus_config, ssr_state)))
     }
 
     fn connect_hot_reload(self) -> Self {
@@ -416,10 +419,15 @@ fn apply_request_parts_to_response<B>(
 /// }
 /// ```
 pub async fn render_handler_with_context<
-    P: Clone + serde::Serialize + Send + Sync + 'static,
+    P: AnyProps + Clone + Send + Sync + 'static,
     F: FnMut(&mut DioxusServerContext),
 >(
-    State((mut inject_context, cfg, ssr_state)): State<(F, ServeConfig<P>, SSRState)>,
+    State((mut inject_context, cfg, ssr_state, dioxus_config)): State<(
+        F,
+        ServeConfig,
+        SSRState,
+        CrossPlatformConfig<P>,
+    )>,
     request: Request<Body>,
 ) -> impl IntoResponse {
     let (parts, _) = request.into_parts();
@@ -428,7 +436,10 @@ pub async fn render_handler_with_context<
     let mut server_context = DioxusServerContext::new(parts.clone());
     inject_context(&mut server_context);
 
-    match ssr_state.render(url, &cfg, &server_context).await {
+    match ssr_state
+        .render(url, &cfg, dioxus_config, &server_context)
+        .await
+    {
         Ok(rendered) => {
             let crate::render::RenderResponse { html, freshness } = rendered;
             let mut response = axum::response::Html::from(html).into_response();
@@ -445,11 +456,15 @@ pub async fn render_handler_with_context<
 }
 
 /// SSR renderer handler for Axum
-pub async fn render_handler<P: Clone + serde::Serialize + Send + Sync + 'static>(
-    State((cfg, ssr_state)): State<(ServeConfig<P>, SSRState)>,
+pub async fn render_handler<P: AnyProps + Clone + Send + Sync + 'static>(
+    State((cfg, dioxus_config, ssr_state)): State<(ServeConfig, CrossPlatformConfig<P>, SSRState)>,
     request: Request<Body>,
 ) -> impl IntoResponse {
-    render_handler_with_context(State((|_: &mut _| (), cfg, ssr_state)), request).await
+    render_handler_with_context(
+        State((|_: &mut _| (), cfg, ssr_state, dioxus_config)),
+        request,
+    )
+    .await
 }
 
 fn report_err<E: std::fmt::Display>(e: E) -> Response<BoxBody> {

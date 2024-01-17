@@ -7,27 +7,17 @@
 
 #![allow(non_snake_case, unused)]
 use dioxus::prelude::*;
-use dioxus_fullstack::{
-    launch::{self, LaunchBuilder},
-    prelude::*,
-};
 use serde::{Deserialize, Serialize};
 
-#[derive(Props, PartialEq, Debug, Default, Serialize, Deserialize, Clone)]
-struct AppProps {
-    count: i32,
-}
-
-fn app(cx: Scope<AppProps>) -> Element {
-    let state =
-        use_server_future((), |()| async move { get_server_data().await.unwrap() })?.value();
+fn app() -> Element {
+    // let state = use_server_future(|| async move { get_server_data().await.unwrap() })?;
+    // let state = state.value();
 
     let mut count = use_signal(|| 0);
     let text = use_signal(|| "...".to_string());
-    let eval = use_eval(cx);
 
     rsx! {
-        div { "Server state: {state}" }
+        // div { "Server state: {state}" }
         h1 { "High-Five counter: {count}" }
         button { onclick: move |_| count += 1, "Up high!" }
         button { onclick: move |_| count -= 1, "Down low!" }
@@ -50,9 +40,7 @@ fn app(cx: Scope<AppProps>) -> Element {
 
 #[server]
 async fn post_server_data(data: String) -> Result<(), ServerFnError> {
-    let axum::extract::Host(host): axum::extract::Host = extract().await?;
     println!("Server received: {}", data);
-    println!("{:?}", host);
 
     Ok(())
 }
@@ -68,5 +56,5 @@ fn main() {
     #[cfg(feature = "ssr")]
     tracing_subscriber::fmt::init();
 
-    LaunchBuilder::new_with_props(app, AppProps { count: 0 }).launch()
+    launch(app);
 }

@@ -1,5 +1,6 @@
 //! A shared pool of renderers for efficient server side rendering.
-
+use crate::render::dioxus_core::AnyProps;
+use crate::render::dioxus_core::CrossPlatformConfig;
 use crate::render::dioxus_core::NoOpMutations;
 use crate::server_context::SERVER_CONTEXT;
 use dioxus_lib::prelude::VirtualDom;
@@ -21,15 +22,15 @@ enum SsrRendererPool {
 }
 
 impl SsrRendererPool {
-    async fn render_to<P: Clone + Serialize + Send + Sync + 'static>(
+    async fn render_to<P: AnyProps + Clone + Send + Sync + 'static>(
         &self,
-        cfg: &ServeConfig<P>,
+        cfg: &ServeConfig,
         route: String,
-        component: Component<P>,
-        props: P,
+        dioxus_config: CrossPlatformConfig<P>,
         server_context: &DioxusServerContext,
     ) -> Result<(RenderFreshness, String), dioxus_ssr::incremental::IncrementalRendererError> {
         let wrapper = FullstackRenderer {
+            serialized_props: None,
             cfg: cfg.clone(),
             server_context: server_context.clone(),
         };
@@ -44,7 +45,7 @@ impl SsrRendererPool {
                     tokio::runtime::Runtime::new()
                         .expect("couldn't spawn runtime")
                         .block_on(async move {
-                            let mut vdom = VirtualDom::new_with_props(component, props);
+                            let mut vdom = dioxus_config.build_vdom();
                             vdom.in_runtime(|| {
                                 // Make sure the evaluator is initialized
                                 dioxus_ssr::eval::init_eval();
@@ -111,8 +112,7 @@ impl SsrRendererPool {
                             match renderer
                                 .render(
                                     route,
-                                    component,
-                                    props,
+                                    dioxus_config,
                                     &mut *to,
                                     |vdom| {
                                         Box::pin(async move {
@@ -169,7 +169,7 @@ pub struct SSRState {
 
 impl SSRState {
     /// Create a new [`SSRState`].
-    pub fn new<P: Clone>(cfg: &ServeConfig<P>) -> Self {
+    pub fn new(cfg: &ServeConfig) -> Self {
         if cfg.incremental.is_some() {
             return Self {
                 renderers: Arc::new(SsrRendererPool::Incremental(RwLock::new(vec![
@@ -192,13 +192,12 @@ impl SSRState {
     }
 
     /// Render the application to HTML.
-    pub fn render<'a, P: 'static + Clone + serde::Serialize + Send + Sync>(
+    pub fn render<'a, P: AnyProps + Clone + Send + Sync>(
         &'a self,
         route: String,
-        cfg: &'a ServeConfig<P>,
+        cfg: &'a ServeConfig,
+        dioxus_config: CrossPlatformConfig<P>,
         server_context: &'a DioxusServerContext,
-        app: Component<P>,
-        props: P,
     ) -> impl std::future::Future<
         Output = Result<RenderResponse, dioxus_ssr::incremental::IncrementalRendererError>,
     > + Send
@@ -208,7 +207,7 @@ impl SSRState {
 
             let (freshness, html) = self
                 .renderers
-                .render_to(cfg, route, app, props, server_context)
+                .render_to(cfg, route, dioxus_config, server_context)
                 .await?;
 
             Ok(RenderResponse { html, freshness })
@@ -216,16 +215,13 @@ impl SSRState {
     }
 }
 
-struct FullstackRenderer<P: Clone + Send + Sync + 'static> {
-    component: Component<P>,
-    props: P,
+struct FullstackRenderer {
+    serialized_props: Option<String>,
     cfg: ServeConfig,
     server_context: DioxusServerContext,
 }
 
-impl<P: Clone + Serialize + Send + Sync + 'static> dioxus_ssr::incremental::WrapBody
-    for FullstackRenderer<P>
-{
+impl dioxus_ssr::incremental::WrapBody for FullstackRenderer {
     fn render_before_body<R: std::io::Write>(
         &self,
         to: &mut R,
@@ -242,9 +238,10 @@ impl<P: Clone + Serialize + Send + Sync + 'static> dioxus_ssr::incremental::Wrap
         to: &mut R,
     ) -> Result<(), dioxus_ssr::incremental::IncrementalRendererError> {
         // serialize the props
-        crate::html_storage::serialize::encode_props_in_element(&self.cfg.props, to).map_err(
-            |err| dioxus_ssr::incremental::IncrementalRendererError::Other(Box::new(err)),
-        )?;
+        // TODO: restore props serialization
+        // crate::html_storage::serialize::encode_props_in_element(&self.cfg.props, to).map_err(
+        //     |err| dioxus_ssr::incremental::IncrementalRendererError::Other(Box::new(err)),
+        // )?;
         // serialize the server state
         crate::html_storage::serialize::encode_in_element(
             &*self.server_context.html_data().map_err(|_| {

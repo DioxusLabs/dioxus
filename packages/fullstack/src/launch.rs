@@ -1,17 +1,34 @@
 //! Launch helper macros for fullstack apps
 #![allow(unused)]
 use crate::prelude::*;
-use dioxus_lib::prelude::{dioxus_core::AnyProps, *};
+use dioxus_lib::prelude::{
+    dioxus_core::{AnyProps, CrossPlatformConfig},
+    *,
+};
 
 /// The desktop renderer platform
 pub struct FullstackPlatform;
 
-impl<Props: AnyProps + Send + Sync + 'static> dioxus_core::PlatformBuilder<Props>
+impl<Props: AnyProps + Clone + Send + Sync + 'static> dioxus_core::PlatformBuilder<Props>
     for FullstackPlatform
 {
     type Config = Config;
 
-    fn launch(config: dioxus_core::CrossPlatformConfig<Props>, platform_config: Self::Config) {}
+    fn launch(config: dioxus_core::CrossPlatformConfig<Props>, platform_config: Self::Config) {
+        #[cfg(feature = "ssr")]
+        tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(async move {
+                platform_config.launch_server(config).await;
+            });
+        #[cfg(not(feature = "ssr"))]
+        {
+            #[cfg(feature = "web")]
+            platform_config.launch_web(config);
+            #[cfg(feature = "desktop")]
+            platform_config.launch_desktop(config);
+        }
+    }
 }
 
 /// Settings for a fullstack app.
@@ -99,31 +116,33 @@ impl Config {
     }
 
     /// Launch the app.
-    pub fn launch(self) {
+    pub fn launch<P: AnyProps + Clone + Send + Sync>(self, dioxus_config: CrossPlatformConfig<P>) {
         #[cfg(feature = "ssr")]
         tokio::runtime::Runtime::new()
             .unwrap()
             .block_on(async move {
-                self.launch_server().await;
+                self.launch_server(dioxus_config).await;
             });
         #[cfg(not(feature = "ssr"))]
         {
             #[cfg(feature = "web")]
-            self.launch_web();
+            self.launch_web(dioxus_config);
             #[cfg(feature = "desktop")]
-            self.launch_desktop();
+            self.launch_desktop(dioxus_config);
         }
     }
 
     #[cfg(feature = "web")]
     /// Launch the web application
-    pub fn launch_web(self) {
+    pub fn launch_web<P: AnyProps>(self, dioxus_config: CrossPlatformConfig<P>) {
+        use dioxus_lib::prelude::dioxus_core::{CrossPlatformConfig, PlatformBuilder};
+
         #[cfg(not(feature = "ssr"))]
         {
             let cfg = self.web_cfg.hydrate(true);
-            dioxus_web::launch_with_props(
-                self.component,
-                get_root_props_from_document().unwrap(),
+            dioxus_web::WebPlatform::launch(
+                // TODO: this should pull the props from the document
+                dioxus_config,
                 cfg,
             );
         }
@@ -131,14 +150,17 @@ impl Config {
 
     #[cfg(feature = "desktop")]
     /// Launch the web application
-    pub fn launch_desktop(self) {
+    pub fn launch_desktop<P: AnyProps>(self, dioxus_config: CrossPlatformConfig<P>) {
         let cfg = self.desktop_cfg;
         dioxus_desktop::launch_with_props(self.component, self.props, cfg);
     }
 
     #[cfg(feature = "ssr")]
     /// Launch a server application
-    pub async fn launch_server(self) {
+    pub async fn launch_server<P: AnyProps + Send + Sync + Clone>(
+        self,
+        dioxus_config: CrossPlatformConfig<P>,
+    ) {
         let addr = self.addr;
         println!("Listening on {}", addr);
         let cfg = self.server_cfg.build();
@@ -155,7 +177,7 @@ impl Config {
             let router = router
                 .serve_static_assets(cfg.assets_path)
                 .connect_hot_reload()
-                .fallback(get(render_handler).with_state((cfg, ssr_state)));
+                .fallback(get(render_handler).with_state((cfg, dioxus_config, ssr_state)));
             let router = router
                 .layer(
                     ServiceBuilder::new()

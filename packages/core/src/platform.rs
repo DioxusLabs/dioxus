@@ -1,7 +1,7 @@
 use std::any::Any;
 
 use crate::{
-    any_props::{new_any_props, AnyProps, VProps},
+    any_props::{AnyProps, VProps},
     properties::ComponentFunction,
     VirtualDom,
 };
@@ -44,38 +44,37 @@ impl<T: Any + Clone> ClonableAny for T {
 }
 
 /// The platform-independent part of the config needed to launch an application.
+#[derive(Clone)]
 pub struct CrossPlatformConfig<P: AnyProps> {
     /// The root component function.
-    component: P,
-    /// The contexts to provide to the root component.
-    root_contexts: Vec<BoxedContext>,
+    props: P,
+    // /// The contexts to provide to the root component.
+    // root_contexts: Vec<BoxedContext>,
 }
 
-impl<F: ComponentFunction<Props, M>, Props: Clone + 'static, M: 'static>
-    CrossPlatformConfig<VProps<F, Props, M>>
-{
-    /// Create a new cross-platform config.
-    pub fn new(component: F, props: Props, root_contexts: Vec<BoxedContext>) -> Self {
-        CrossPlatformConfig {
-            component: new_any_props(component, |_, _| true, props, "root"),
-            root_contexts,
-        }
-    }
-}
+impl<P: AnyProps> CrossPlatformConfig<P> {}
 
 impl<P: AnyProps> CrossPlatformConfig<P> {
-    /// Push a new context into the root component's context.
-    pub fn push_context<T: Any + Clone + 'static>(&mut self, context: T) {
-        self.root_contexts.push(BoxedContext::new(context));
+    /// Create a new cross-platform config.
+    pub fn new(props: P) -> Self {
+        CrossPlatformConfig {
+            props,
+            // root_contexts,
+        }
     }
+
+    // /// Push a new context into the root component's context.
+    // pub fn push_context<T: Any + Clone + 'static>(&mut self, context: T) {
+    //     self.root_contexts.push(BoxedContext::new(context));
+    // }
 
     /// Build a virtual dom from the config.
     pub fn build_vdom(self) -> VirtualDom {
-        let mut vdom = VirtualDom::new_with_component(self.component);
+        let mut vdom = VirtualDom::new_with_component(self.props);
 
-        for context in self.root_contexts {
-            vdom.insert_boxed_root_context(context);
-        }
+        // for context in self.root_contexts {
+        //     vdom.insert_boxed_root_context(context);
+        // }
 
         vdom
     }

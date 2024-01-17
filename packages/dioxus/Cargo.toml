@@ -25,6 +25,8 @@ dioxus-fullstack = { workspace = true, optional = true }
 dioxus-liveview = { workspace = true, optional = true }
 # dioxus-tui = { workspace = true, optional = true }
 
+serde = { version = "1.0.136", optional = true }
+
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 dioxus-hot-reload = { workspace = true, optional = true }
 
@@ -40,11 +42,14 @@ launch = ["dioxus-config-macro"]
 router = ["dioxus-router"]
 
 # Platforms
-fullstack = ["dioxus-fullstack", "dioxus-config-macro/fullstack"]
+fullstack = ["dioxus-fullstack", "dioxus-config-macro/fullstack", "serde"]
 desktop = ["dioxus-desktop", "dioxus-fullstack?/desktop", "dioxus-config-macro/desktop"]
 web = ["dioxus-web", "dioxus-fullstack?/web", "dioxus-config-macro/web"]
 ssr = ["dioxus-fullstack?/ssr", "dioxus-config-macro/ssr"]
 liveview = ["dioxus-desktop", "dioxus-config-macro/liveview"]
+axum = ["dioxus-fullstack?/axum"]
+salvo = ["dioxus-fullstack?/salvo"]
+warp = ["dioxus-fullstack?/warp"]
 # tui = ["dioxus-tui", "dioxus-config-macro/tui"]
 
 [dev-dependencies]

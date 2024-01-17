@@ -787,7 +787,6 @@ name = "axum-hello-world"
 version = "0.1.0"
 dependencies = [
  "dioxus",
- "dioxus-fullstack",
  "reqwest",
  "serde",
  "simple_logger",
@@ -2363,6 +2362,7 @@ dependencies = [
  "env_logger",
  "futures-util",
  "rand 0.8.5",
+ "serde",
  "thiserror",
  "tokio",
  "tracing",

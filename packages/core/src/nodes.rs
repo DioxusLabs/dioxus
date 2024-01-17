@@ -1,7 +1,4 @@
-use crate::{
-    any_props::{new_any_props, BoxedAnyProps},
-    innerlude::ScopeState,
-};
+use crate::{any_props::BoxedAnyProps, innerlude::ScopeState, VProps};
 use crate::{arena::ElementId, Element, Event};
 use crate::{
     innerlude::{ElementRef, EventHandler, MountId},
@@ -529,7 +526,7 @@ impl VComponent {
         P: Properties + 'static,
     {
         let render_fn = component.id();
-        let props = Box::new(new_any_props(
+        let props = Box::new(VProps::new(
             component,
             <P as Properties>::memoize,
             props,

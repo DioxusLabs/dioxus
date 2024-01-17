@@ -60,7 +60,7 @@ use std::rc::Rc;
 pub use crate::cfg::Config;
 #[cfg(feature = "file_engine")]
 pub use crate::file_engine::WebFileEngineExt;
-use dioxus_core::CrossPlatformConfig;
+use dioxus_core::{AnyProps, CrossPlatformConfig};
 use futures_util::{
     future::{select, Either},
     pin_mut, FutureExt, StreamExt,
@@ -99,7 +99,10 @@ mod rehydrate;
 ///     wasm_bindgen_futures::spawn_local(app_fut);
 /// }
 /// ```
-pub async fn run_with_props(dioxus_config: CrossPlatformConfig, web_config: Config) {
+pub async fn run_with_props<P: AnyProps>(
+    dioxus_config: CrossPlatformConfig<P>,
+    web_config: Config,
+) {
     tracing::info!("Starting up");
 
     let mut dom = dioxus_config.build_vdom();
@@ -123,7 +126,7 @@ pub async fn run_with_props(dioxus_config: CrossPlatformConfig, web_config: Conf
     let (tx, mut rx) = futures_channel::mpsc::unbounded();
 
     #[cfg(feature = "hydrate")]
-    let should_hydrate = cfg.hydrate;
+    let should_hydrate = web_config.hydrate;
     #[cfg(not(feature = "hydrate"))]
     let should_hydrate = false;
 

@@ -5,26 +5,14 @@ pub(crate) type BoxedAnyProps = Box<dyn AnyProps>;
 
 /// A trait for a component that can be rendered.
 pub trait AnyProps: 'static {
+    /// Render the component with the internal props.
     fn render(&self) -> RenderReturn;
+    /// Check if the props are the same as the type erased props of another component.
     fn memoize(&self, other: &dyn Any) -> bool;
+    /// Get the props as a type erased `dyn Any`.
     fn props(&self) -> &dyn Any;
+    /// Duplicate this component into a new boxed component.
     fn duplicate(&self) -> BoxedAnyProps;
-}
-
-/// Create a new boxed props object.
-pub(crate) fn new_any_props<F: ComponentFunction<P, M>, P: Clone + 'static, M: 'static>(
-    render_fn: F,
-    memo: fn(&P, &P) -> bool,
-    props: P,
-    name: &'static str,
-) -> VProps<F, P, M> {
-    VProps {
-        render_fn,
-        memo,
-        props,
-        name,
-        phantom: std::marker::PhantomData,
-    }
 }
 
 /// A component along with the props the component uses to render.
@@ -34,6 +22,41 @@ pub struct VProps<F: ComponentFunction<P, M>, P, M> {
     props: P,
     name: &'static str,
     phantom: std::marker::PhantomData<M>,
+}
+
+impl<F: ComponentFunction<P, M>, P: Clone, M> Clone for VProps<F, P, M> {
+    fn clone(&self) -> Self {
+        Self {
+            render_fn: self.render_fn.clone(),
+            memo: self.memo,
+            props: self.props.clone(),
+            name: self.name,
+            phantom: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<F: ComponentFunction<P, M> + Clone, P: Clone + 'static, M: 'static> VProps<F, P, M> {
+    /// Create a [`VProps`] object.
+    pub fn new(
+        render_fn: F,
+        memo: fn(&P, &P) -> bool,
+        props: P,
+        name: &'static str,
+    ) -> VProps<F, P, M> {
+        VProps {
+            render_fn,
+            memo,
+            props,
+            name,
+            phantom: std::marker::PhantomData,
+        }
+    }
+
+    /// Get the current props of the VProps object
+    pub fn props(&self) -> &P {
+        &self.props
+    }
 }
 
 impl<F: ComponentFunction<P, M> + Clone, P: Clone + 'static, M: 'static> AnyProps
