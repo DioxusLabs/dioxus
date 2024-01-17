@@ -69,9 +69,9 @@ pub struct Runtime {
     pub(crate) rendering: Cell<bool>,
 
     /// Tasks created with cx.spawn
-    pub tasks: RefCell<Slab<LocalTask>>,
+    pub(crate) tasks: RefCell<Slab<LocalTask>>,
 
-    pub sender: futures_channel::mpsc::UnboundedSender<SchedulerMsg>,
+    pub(crate) sender: futures_channel::mpsc::UnboundedSender<SchedulerMsg>,
 }
 
 impl Runtime {

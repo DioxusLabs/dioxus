@@ -16,10 +16,10 @@ mod nodes;
 mod platform;
 mod properties;
 mod runtime;
-mod scheduler;
 mod scope_arena;
 mod scope_context;
 mod scopes;
+mod tasks;
 mod virtual_dom;
 
 pub(crate) mod innerlude {
@@ -34,8 +34,8 @@ pub(crate) mod innerlude {
     pub use crate::platform::*;
     pub use crate::properties::*;
     pub use crate::runtime::{Runtime, RuntimeGuard};
-    pub use crate::scheduler::*;
     pub use crate::scopes::*;
+    pub use crate::tasks::*;
     pub use crate::virtual_dom::*;
 
     /// An [`Element`] is a possibly-none [`VNode`] created by calling `render` on [`Scope`] or [`ScopeState`].

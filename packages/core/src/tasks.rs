@@ -1,8 +1,6 @@
-use futures_util::task::ArcWake;
-
-use super::SchedulerMsg;
 use crate::innerlude::{remove_future, spawn, Runtime};
 use crate::ScopeId;
+use futures_util::task::ArcWake;
 use std::cell::RefCell;
 use std::future::Future;
 use std::pin::Pin;
@@ -11,8 +9,7 @@ use std::task::Waker;
 
 /// A task's unique identifier.
 ///
-/// `TaskId` is a `usize` that is unique across the entire VirtualDOM and across time. TaskIDs will never be reused
-/// once a Task has been completed.
+/// `Task` is a unique identifier for a task that has been spawned onto the runtime. It can be used to cancel the task
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Task(pub(crate) usize);
@@ -37,14 +34,6 @@ impl Task {
     pub fn stop(self) {
         remove_future(self);
     }
-}
-
-/// the task itself is the waker
-pub(crate) struct LocalTask {
-    pub scope: ScopeId,
-    pub parent: Option<Task>,
-    pub task: RefCell<Pin<Box<dyn Future<Output = ()> + 'static>>>,
-    pub waker: Waker,
 }
 
 impl Runtime {
@@ -86,6 +75,43 @@ impl Runtime {
         task_id
     }
 
+    pub(crate) fn handle_task_wakeup(&self, id: Task) {
+        let mut tasks = self.tasks.borrow_mut();
+
+        let task = match tasks.get(id.0) {
+            Some(task) => task,
+            // The task was removed from the scheduler, so we can just ignore it
+            None => return,
+        };
+
+        use std::task::Context;
+
+        let mut cx = Context::from_waker(&task.waker);
+
+        // update the scope stack
+        self.scope_stack.borrow_mut().push(task.scope);
+        self.rendering.set(false);
+        self.current_task.set(Some(id));
+
+        // If the task completes...
+        if task.task.borrow_mut().as_mut().poll(&mut cx).is_ready() {
+            // Remove it from the scope so we dont try to double drop it when the scope dropes
+            self.get_context(task.scope)
+                .unwrap()
+                .spawned_tasks
+                .borrow_mut()
+                .remove(&id);
+
+            // Remove it from the scheduler
+            tasks.try_remove(id.0);
+        }
+
+        // Remove the scope from the stack
+        self.scope_stack.borrow_mut().pop();
+        self.rendering.set(true);
+        self.current_task.set(None);
+    }
+
     /// Drop the future with the given TaskId
     ///
     /// This does not abort the task, so you'll want to wrap it in an abort handle if that's important to you
@@ -97,9 +123,34 @@ impl Runtime {
     pub fn current_task(&self) -> Option<Task> {
         self.current_task.get()
     }
+
+    /// Get the parent task of the given task, if it exists
+    pub fn parent_task(&self, task: Task) -> Option<Task> {
+        self.tasks.borrow().get(task.0)?.parent
+    }
 }
 
-pub struct LocalTaskHandle {
+/// the task itself is the waker
+pub(crate) struct LocalTask {
+    scope: ScopeId,
+    parent: Option<Task>,
+    task: RefCell<Pin<Box<dyn Future<Output = ()> + 'static>>>,
+    waker: Waker,
+}
+
+/// The type of message that can be sent to the scheduler.
+///
+/// These messages control how the scheduler will process updates to the UI.
+#[derive(Debug)]
+pub(crate) enum SchedulerMsg {
+    /// Immediate updates from Components that mark them as dirty
+    Immediate(ScopeId),
+
+    /// A task has woken and needs to be progressed
+    TaskNotified(Task),
+}
+
+struct LocalTaskHandle {
     id: Task,
     tx: futures_channel::mpsc::UnboundedSender<SchedulerMsg>,
 }

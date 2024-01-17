@@ -1,5 +1,5 @@
 use crate::{
-    any_props::{BoxedAnyProps, VProps},
+    any_props::{new_any_props, BoxedAnyProps},
     innerlude::ScopeState,
 };
 use crate::{arena::ElementId, Element, Event};
@@ -520,36 +520,22 @@ pub struct VComponent {
 
 impl VComponent {
     /// Create a new [`VComponent`] variant
-    ///
-    ///
-    /// The given component can be any of four signatures. Remember that an [`Element`] is really a [`Result<VNode>`].
-    ///
-    /// ```rust, ignore
-    /// // Without explicit props
-    /// fn() -> Element;
-    /// async fn(Scope<'_>) -> Element;
-    ///
-    /// // With explicit props
-    /// fn(Props) -> Element;
-    /// async fn(Scope<Props<'_>>) -> Element;
-    /// ```
     pub fn new<P, M>(
         component: impl ComponentFunction<P, M>,
         props: P,
         fn_name: &'static str,
     ) -> Self
     where
-        // The properties must be valid until the next bump frame
         P: Properties + 'static,
     {
         let component = Rc::new(component);
         let render_fn = component.id();
         let component = component.as_component();
-        let vcomp = VProps::new(component, <P as Properties>::memoize, props, fn_name);
+        let props = new_any_props(component, <P as Properties>::memoize, props, fn_name);
 
         VComponent {
             name: fn_name,
-            props: Box::new(vcomp),
+            props,
             render_fn,
         }
     }

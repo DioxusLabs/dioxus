@@ -11,27 +11,26 @@ pub(crate) trait AnyProps {
     fn duplicate(&self) -> BoxedAnyProps;
 }
 
-pub(crate) struct VProps<P: 'static> {
-    pub render_fn: Component<P>,
-    pub memo: fn(&P, &P) -> bool,
-    pub props: P,
-    pub name: &'static str,
+/// Create a new boxed props object.
+pub fn new_any_props<P: 'static + Clone>(
+    render_fn: Component<P>,
+    memo: fn(&P, &P) -> bool,
+    props: P,
+    name: &'static str,
+) -> Box<dyn AnyProps> {
+    Box::new(VProps {
+        render_fn,
+        memo,
+        props,
+        name,
+    })
 }
 
-impl<P: 'static> VProps<P> {
-    pub(crate) fn new(
-        render_fn: Component<P>,
-        memo: fn(&P, &P) -> bool,
-        props: P,
-        name: &'static str,
-    ) -> Self {
-        Self {
-            render_fn,
-            memo,
-            props,
-            name,
-        }
-    }
+struct VProps<P> {
+    render_fn: Component<P>,
+    memo: fn(&P, &P) -> bool,
+    props: P,
+    name: &'static str,
 }
 
 impl<P: Clone + 'static> AnyProps for VProps<P> {

@@ -27,6 +27,15 @@ pub struct Event<T: 'static + ?Sized> {
     pub(crate) propagates: Rc<Cell<bool>>,
 }
 
+impl<T: ?Sized + 'static> Event<T> {
+    pub(crate) fn new(data: Rc<T>, bubbles: bool) -> Self {
+        Self {
+            data,
+            propagates: Rc::new(Cell::new(bubbles)),
+        }
+    }
+}
+
 impl<T> Event<T> {
     /// Map the event data to a new type
     ///

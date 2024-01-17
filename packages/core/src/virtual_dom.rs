@@ -3,7 +3,7 @@
 //! This module provides the primary mechanics to create a hook-based, concurrent VDOM for Rust.
 
 use crate::{
-    any_props::VProps,
+    any_props::new_any_props,
     arena::ElementId,
     innerlude::{
         DirtyScope, ElementRef, ErrorBoundary, NoOpMutations, SchedulerMsg, ScopeState, VNodeMount,
@@ -14,12 +14,12 @@ use crate::{
     properties::ComponentFunction,
     runtime::{Runtime, RuntimeGuard},
     scopes::ScopeId,
-    AttributeValue, BoxedContext, Element, Event, Mutations,
+    AttributeValue, BoxedContext, Element, Event, Mutations, Task,
 };
 use futures_util::{pin_mut, StreamExt};
 use rustc_hash::{FxHashMap, FxHashSet};
 use slab::Slab;
-use std::{any::Any, cell::Cell, collections::BTreeSet, future::Future, rc::Rc};
+use std::{any::Any, collections::BTreeSet, future::Future, rc::Rc};
 
 /// A virtual node system that progresses user events and diffs UI trees.
 ///
@@ -287,12 +287,7 @@ impl VirtualDom {
         };
 
         let root = dom.new_scope(
-            Box::new(VProps::new(
-                Rc::new(root).as_component(),
-                |_, _| true,
-                root_props,
-                "root",
-            )),
+            new_any_props(Rc::new(root).as_component(), |_, _| true, root_props, "app"),
             "app",
         );
 
@@ -363,7 +358,6 @@ impl VirtualDom {
     /// It is up to the listeners themselves to mark nodes as dirty.
     ///
     /// If you have multiple events, you can call this method multiple times before calling "render_with_deadline"
-
     pub fn handle_event(
         &mut self,
         name: &str,
@@ -394,87 +388,86 @@ impl VirtualDom {
         | | |       <-- no, broke early
         |           <-- no, broke early
         */
-        let parent_path = match self.elements.get(element.0) {
-            Some(Some(el)) => *el,
-            _ => return,
+        let Some(Some(parent_path)) = self.elements.get(element.0).copied() else {
+            return;
         };
-        let mut parent_node = Some(parent_path);
 
         // We will clone this later. The data itself is wrapped in RC to be used in callbacks if required
-        let uievent = Event {
-            propagates: Rc::new(Cell::new(bubbles)),
-            data,
-        };
+        let uievent = Event::new(data, bubbles);
+
+        // Use the simple non-bubbling algorithm if the event doesn't bubble
+        if !bubbles {
+            return self.handle_non_bubbling_event(parent_path, name, uievent);
+        }
+
+        let mut parent_node = Some(parent_path);
 
         // If the event bubbles, we traverse through the tree until we find the target element.
-        if bubbles {
-            // Loop through each dynamic attribute (in a depth first order) in this template before moving up to the template's parent.
-            while let Some(path) = parent_node {
-                let mut listeners = vec![];
+        // Loop through each dynamic attribute (in a depth first order) in this template before moving up to the template's parent.
+        while let Some(path) = parent_node {
+            let mut listeners = vec![];
 
-                let el_ref = &self.mounts[path.mount.0].node;
-                let node_template = el_ref.template.get();
-                let target_path = path.path;
+            let el_ref = &self.mounts[path.mount.0].node;
+            let node_template = el_ref.template.get();
+            let target_path = path.path;
 
-                for (idx, attrs) in el_ref.dynamic_attrs.iter().enumerate() {
-                    let this_path = node_template.attr_paths[idx];
+            for (idx, attrs) in el_ref.dynamic_attrs.iter().enumerate() {
+                let this_path = node_template.attr_paths[idx];
 
-                    for attr in attrs.iter() {
-                        // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
-                        if attr.name.trim_start_matches("on") == name
-                            && target_path.is_decendant(&this_path)
-                        {
-                            listeners.push(&attr.value);
+                for attr in attrs.iter() {
+                    // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
+                    if attr.name.trim_start_matches("on") == name
+                        && target_path.is_decendant(&this_path)
+                    {
+                        listeners.push(&attr.value);
 
-                            // Break if this is the exact target element.
-                            // This means we won't call two listeners with the same name on the same element. This should be
-                            // documented, or be rejected from the rsx! macro outright
-                            if target_path == this_path {
-                                break;
-                            }
+                        // Break if this is the exact target element.
+                        // This means we won't call two listeners with the same name on the same element. This should be
+                        // documented, or be rejected from the rsx! macro outright
+                        if target_path == this_path {
+                            break;
                         }
                     }
                 }
+            }
 
-                // Now that we've accumulated all the parent attributes for the target element, call them in reverse order
-                // We check the bubble state between each call to see if the event has been stopped from bubbling
-                for listener in listeners.into_iter().rev() {
-                    if let AttributeValue::Listener(listener) = listener {
+            // Now that we've accumulated all the parent attributes for the target element, call them in reverse order
+            // We check the bubble state between each call to see if the event has been stopped from bubbling
+            for listener in listeners.into_iter().rev() {
+                if let AttributeValue::Listener(listener) = listener {
+                    self.runtime.rendering.set(false);
+                    listener.call(uievent.clone());
+                    self.runtime.rendering.set(true);
+
+                    if !uievent.propagates.get() {
+                        return;
+                    }
+                }
+            }
+
+            let mount = el_ref.mount.get().as_usize();
+            parent_node = mount.and_then(|id| self.mounts.get(id).and_then(|el| el.parent));
+        }
+    }
+
+    /// Call an event listener in the simplest way possible without bubbling upwards
+    fn handle_non_bubbling_event(&mut self, node: ElementRef, name: &str, uievent: Event<dyn Any>) {
+        let el_ref = &self.mounts[node.mount.0].node;
+        let node_template = el_ref.template.get();
+        let target_path = node.path;
+
+        for (idx, attr) in el_ref.dynamic_attrs.iter().enumerate() {
+            let this_path = node_template.attr_paths[idx];
+
+            for attr in attr.iter() {
+                // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
+                // Only call the listener if this is the exact target element.
+                if attr.name.trim_start_matches("on") == name && target_path == this_path {
+                    if let AttributeValue::Listener(listener) = &attr.value {
                         self.runtime.rendering.set(false);
                         listener.call(uievent.clone());
                         self.runtime.rendering.set(true);
-
-                        if !uievent.propagates.get() {
-                            return;
-                        }
-                    }
-                }
-
-                let mount = el_ref.mount.get().as_usize();
-                parent_node = mount.and_then(|id| self.mounts.get(id).and_then(|el| el.parent));
-            }
-        } else {
-            // Otherwise, we just call the listener on the target element
-            if let Some(path) = parent_node {
-                let el_ref = &self.mounts[path.mount.0].node;
-                let node_template = el_ref.template.get();
-                let target_path = path.path;
-
-                for (idx, attr) in el_ref.dynamic_attrs.iter().enumerate() {
-                    let this_path = node_template.attr_paths[idx];
-
-                    for attr in attr.iter() {
-                        // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
-                        // Only call the listener if this is the exact target element.
-                        if attr.name.trim_start_matches("on") == name && target_path == this_path {
-                            if let AttributeValue::Listener(listener) = &attr.value {
-                                self.runtime.rendering.set(false);
-                                listener.call(uievent.clone());
-                                self.runtime.rendering.set(true);
-
-                                break;
-                            }
-                        }
+                        break;
                     }
                 }
             }
@@ -501,27 +494,26 @@ impl VirtualDom {
         let mut some_msg = None;
 
         loop {
-            match some_msg.take() {
-                // If a bunch of messages are ready in a sequence, try to pop them off synchronously
-                Some(msg) => match msg {
+            // If a bunch of messages are ready in a sequence, try to pop them off synchronously
+            if let Some(msg) = some_msg.take() {
+                match msg {
                     SchedulerMsg::Immediate(id) => self.mark_dirty(id),
                     SchedulerMsg::TaskNotified(task) => self.handle_task_wakeup(task),
-                },
+                }
+                continue;
+            }
 
-                // If they're not ready, then we should wait for them to be ready
-                None => {
-                    match self.rx.try_next() {
-                        Ok(Some(val)) => some_msg = Some(val),
-                        Ok(None) => return,
-                        Err(_) => {
-                            // If we have any dirty scopes, or finished fiber trees then we should exit
-                            if !self.dirty_scopes.is_empty() || !self.suspended_scopes.is_empty() {
-                                return;
-                            }
-
-                            some_msg = self.rx.next().await
-                        }
+            // If they're not ready, then we should wait for them to be ready
+            match self.rx.try_next() {
+                Ok(Some(val)) => some_msg = Some(val),
+                Ok(None) => return,
+                Err(_) => {
+                    // If we have any dirty scopes, or finished fiber trees then we should exit
+                    if !self.dirty_scopes.is_empty() || !self.suspended_scopes.is_empty() {
+                        return;
                     }
+
+                    some_msg = self.rx.next().await
                 }
             }
         }
@@ -535,6 +527,15 @@ impl VirtualDom {
                 SchedulerMsg::TaskNotified(task) => self.handle_task_wakeup(task),
             }
         }
+    }
+
+    /// Handle notifications by tasks inside the scheduler
+    ///
+    /// This is precise, meaning we won't poll every task, just tasks that have woken up as notified to use by the
+    /// queue
+    fn handle_task_wakeup(&mut self, id: Task) {
+        let _runtime = RuntimeGuard::new(self.runtime.clone());
+        self.runtime.handle_task_wakeup(id);
     }
 
     /// Replace a template at runtime. This will re-render all components that use this template.
