@@ -181,7 +181,6 @@ use std::{any::Any, collections::BTreeSet, future::Future, rc::Rc};
 /// }
 /// ```
 pub struct VirtualDom {
-    // TODO: I don't think we need the box here anymore?
     pub(crate) scopes: Slab<ScopeState>,
 
     pub(crate) dirty_scopes: BTreeSet<DirtyScope>,
@@ -203,7 +202,7 @@ pub struct VirtualDom {
     // Currently suspended scopes
     pub(crate) suspended_scopes: FxHashSet<ScopeId>,
 
-    pub(crate) rx: futures_channel::mpsc::UnboundedReceiver<SchedulerMsg>,
+    rx: futures_channel::mpsc::UnboundedReceiver<SchedulerMsg>,
 }
 
 impl VirtualDom {
@@ -376,106 +375,6 @@ impl VirtualDom {
         }
     }
 
-    /*
-    ------------------------
-    The algorithm works by walking through the list of dynamic attributes, checking their paths, and breaking when
-    we find the target path.
-
-    With the target path, we try and move up to the parent until there is no parent.
-    Due to how bubbling works, we call the listeners before walking to the parent.
-
-    If we wanted to do capturing, then we would accumulate all the listeners and call them in reverse order.
-    ----------------------
-
-    For a visual demonstration, here we present a tree on the left and whether or not a listener is collected on the
-    right.
-
-    |           <-- yes (is ascendant)
-    | | |       <-- no  (is not direct ascendant)
-    | |         <-- yes (is ascendant)
-    | | | | |   <--- target element, break early, don't check other listeners
-    | | |       <-- no, broke early
-    |           <-- no, broke early
-    */
-    fn handle_bubbling_event(
-        &mut self,
-        mut parent: Option<ElementRef>,
-        name: &str,
-        uievent: Event<dyn Any>,
-    ) {
-        // If the event bubbles, we traverse through the tree until we find the target element.
-        // Loop through each dynamic attribute (in a depth first order) in this template before moving up to the template's parent.
-        while let Some(path) = parent {
-            let mut listeners = vec![];
-
-            let el_ref = &self.mounts[path.mount.0].node;
-            let node_template = el_ref.template.get();
-            let target_path = path.path;
-
-            // Accumulate listeners into the listener list bottom to top
-            for (idx, attrs) in el_ref.dynamic_attrs.iter().enumerate() {
-                let this_path = node_template.attr_paths[idx];
-
-                for attr in attrs.iter() {
-                    // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
-                    if attr.name.trim_start_matches("on") == name
-                        && target_path.is_decendant(&this_path)
-                    {
-                        listeners.push(&attr.value);
-
-                        // Break if this is the exact target element.
-                        // This means we won't call two listeners with the same name on the same element. This should be
-                        // documented, or be rejected from the rsx! macro outright
-                        if target_path == this_path {
-                            break;
-                        }
-                    }
-                }
-            }
-
-            // Now that we've accumulated all the parent attributes for the target element, call them in reverse order
-            // We check the bubble state between each call to see if the event has been stopped from bubbling
-            for listener in listeners.into_iter().rev() {
-                if let AttributeValue::Listener(listener) = listener {
-                    self.runtime.rendering.set(false);
-                    listener.call(uievent.clone());
-                    self.runtime.rendering.set(true);
-
-                    if !uievent.propagates.get() {
-                        return;
-                    }
-                }
-            }
-
-            let mount = el_ref.mount.get().as_usize();
-            parent = mount.and_then(|id| self.mounts.get(id).and_then(|el| el.parent));
-        }
-    }
-
-    /// Call an event listener in the simplest way possible without bubbling upwards
-    fn handle_non_bubbling_event(&mut self, node: ElementRef, name: &str, uievent: Event<dyn Any>) {
-        let el_ref = &self.mounts[node.mount.0].node;
-        let node_template = el_ref.template.get();
-        let target_path = node.path;
-
-        for (idx, attr) in el_ref.dynamic_attrs.iter().enumerate() {
-            let this_path = node_template.attr_paths[idx];
-
-            for attr in attr.iter() {
-                // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
-                // Only call the listener if this is the exact target element.
-                if attr.name.trim_start_matches("on") == name && target_path == this_path {
-                    if let AttributeValue::Listener(listener) = &attr.value {
-                        self.runtime.rendering.set(false);
-                        listener.call(uievent.clone());
-                        self.runtime.rendering.set(true);
-                        break;
-                    }
-                }
-            }
-        }
-    }
-
     /// Wait for the scheduler to have any work.
     ///
     /// This method polls the internal future queue, waiting for suspense nodes, tasks, or other work. This completes when
@@ -529,15 +428,6 @@ impl VirtualDom {
                 SchedulerMsg::TaskNotified(task) => self.handle_task_wakeup(task),
             }
         }
-    }
-
-    /// Handle notifications by tasks inside the scheduler
-    ///
-    /// This is precise, meaning we won't poll every task, just tasks that have woken up as notified to use by the
-    /// queue
-    fn handle_task_wakeup(&mut self, id: Task) {
-        let _runtime = RuntimeGuard::new(self.runtime.clone());
-        self.runtime.handle_task_wakeup(id);
     }
 
     /// Replace a template at runtime. This will re-render all components that use this template.
@@ -712,9 +602,118 @@ impl VirtualDom {
     }
 
     /// Flush any queued template changes
-    pub fn flush_templates(&mut self, to: &mut impl WriteMutations) {
+    fn flush_templates(&mut self, to: &mut impl WriteMutations) {
         for template in self.queued_templates.drain(..) {
             to.register_template(template);
+        }
+    }
+
+    /// Handle notifications by tasks inside the scheduler
+    ///
+    /// This is precise, meaning we won't poll every task, just tasks that have woken up as notified to use by the
+    /// queue
+    fn handle_task_wakeup(&mut self, id: Task) {
+        let _runtime = RuntimeGuard::new(self.runtime.clone());
+        self.runtime.handle_task_wakeup(id);
+    }
+
+    /*
+    ------------------------
+    The algorithm works by walking through the list of dynamic attributes, checking their paths, and breaking when
+    we find the target path.
+
+    With the target path, we try and move up to the parent until there is no parent.
+    Due to how bubbling works, we call the listeners before walking to the parent.
+
+    If we wanted to do capturing, then we would accumulate all the listeners and call them in reverse order.
+    ----------------------
+
+    For a visual demonstration, here we present a tree on the left and whether or not a listener is collected on the
+    right.
+
+    |           <-- yes (is ascendant)
+    | | |       <-- no  (is not direct ascendant)
+    | |         <-- yes (is ascendant)
+    | | | | |   <--- target element, break early, don't check other listeners
+    | | |       <-- no, broke early
+    |           <-- no, broke early
+    */
+    fn handle_bubbling_event(
+        &mut self,
+        mut parent: Option<ElementRef>,
+        name: &str,
+        uievent: Event<dyn Any>,
+    ) {
+        // If the event bubbles, we traverse through the tree until we find the target element.
+        // Loop through each dynamic attribute (in a depth first order) in this template before moving up to the template's parent.
+        while let Some(path) = parent {
+            let mut listeners = vec![];
+
+            let el_ref = &self.mounts[path.mount.0].node;
+            let node_template = el_ref.template.get();
+            let target_path = path.path;
+
+            // Accumulate listeners into the listener list bottom to top
+            for (idx, attrs) in el_ref.dynamic_attrs.iter().enumerate() {
+                let this_path = node_template.attr_paths[idx];
+
+                for attr in attrs.iter() {
+                    // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
+                    if attr.name.trim_start_matches("on") == name
+                        && target_path.is_decendant(&this_path)
+                    {
+                        listeners.push(&attr.value);
+
+                        // Break if this is the exact target element.
+                        // This means we won't call two listeners with the same name on the same element. This should be
+                        // documented, or be rejected from the rsx! macro outright
+                        if target_path == this_path {
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // Now that we've accumulated all the parent attributes for the target element, call them in reverse order
+            // We check the bubble state between each call to see if the event has been stopped from bubbling
+            for listener in listeners.into_iter().rev() {
+                if let AttributeValue::Listener(listener) = listener {
+                    self.runtime.rendering.set(false);
+                    listener.call(uievent.clone());
+                    self.runtime.rendering.set(true);
+
+                    if !uievent.propagates.get() {
+                        return;
+                    }
+                }
+            }
+
+            let mount = el_ref.mount.get().as_usize();
+            parent = mount.and_then(|id| self.mounts.get(id).and_then(|el| el.parent));
+        }
+    }
+
+    /// Call an event listener in the simplest way possible without bubbling upwards
+    fn handle_non_bubbling_event(&mut self, node: ElementRef, name: &str, uievent: Event<dyn Any>) {
+        let el_ref = &self.mounts[node.mount.0].node;
+        let node_template = el_ref.template.get();
+        let target_path = node.path;
+
+        for (idx, attr) in el_ref.dynamic_attrs.iter().enumerate() {
+            let this_path = node_template.attr_paths[idx];
+
+            for attr in attr.iter() {
+                // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
+                // Only call the listener if this is the exact target element.
+                if attr.name.trim_start_matches("on") == name && target_path == this_path {
+                    if let AttributeValue::Listener(listener) = &attr.value {
+                        self.runtime.rendering.set(false);
+                        listener.call(uievent.clone());
+                        self.runtime.rendering.set(true);
+                        break;
+                    }
+                }
+            }
         }
     }
 }

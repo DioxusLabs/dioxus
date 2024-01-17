@@ -44,10 +44,6 @@ impl Drop for ScopeState {
 }
 
 impl ScopeState {
-    pub(crate) fn context(&self) -> Ref<'_, ScopeContext> {
-        self.runtime.get_context(self.context_id).unwrap()
-    }
-
     /// Get a handle to the currently active head node arena for this Scope
     ///
     /// This is useful for traversing the tree outside of the VirtualDom, such as in a custom renderer or in SSR.
@@ -65,5 +61,9 @@ impl ScopeState {
     /// Returns [`None`] if the tree has not been built yet.
     pub fn try_root_node(&self) -> Option<&RenderReturn> {
         self.last_rendered_node.as_ref()
+    }
+
+    pub(crate) fn context(&self) -> Ref<'_, ScopeContext> {
+        self.runtime.get_context(self.context_id).unwrap()
     }
 }
