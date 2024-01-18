@@ -443,7 +443,7 @@ fn prettier_build(cmd: subprocess::Exec) -> anyhow::Result<Vec<Diagnostic>> {
             .unwrap()
             .tick_chars("/|\\- "),
     );
-    pb.set_message("💼 Waiting to start build the project...");
+    pb.set_message("💼 Waiting to start building the project...");
 
     let stdout = cmd.detached().stream_stdout()?;
     let reader = std::io::BufReader::new(stdout);
