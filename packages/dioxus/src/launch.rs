@@ -31,7 +31,7 @@ impl LaunchBuilder {
     /// Inject state into the root component's context that is created on the thread that the app is launched on.
     pub fn context_provider(mut self, state: impl Fn() -> Box<dyn Any> + Send + Sync + 'static) -> Self {
         self.contexts
-            .push(Box::new(state) as Box<dyn Fn() -> Box<dyn Any> + Send>);
+            .push(Box::new(state) as Box<dyn Fn() -> Box<dyn Any> + Send + Sync>);
         self
     }
 
