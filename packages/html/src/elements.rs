@@ -1750,12 +1750,16 @@ builder_constructors! {
     /// Build a
     /// [`<annotation>`](https://w3c.github.io/mathml-core/#dfn-annotation)
     /// element.
-    annotation "http://www.w3.org/1998/Math/MathML" {};
+    annotation "http://www.w3.org/1998/Math/MathML" {
+            encoding: String DEFAULT,
+    };
 
     /// Build a
     /// [`<annotation-xml>`](https://w3c.github.io/mathml-core/#dfn-annotation-xml)
     /// element.
-    annotation_xml ["annotation-xml", "http://www.w3.org/1998/Math/MathML"] {};
+    annotationXml ["annotation-xml", "http://www.w3.org/1998/Math/MathML"] {
+            encoding: String DEFAULT,
+    };
 
     /// Build a
     /// [`<merror>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/merror)
@@ -1933,7 +1937,7 @@ builder_constructors! {
     /// Build a
     /// [`<semantics>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/semantics)
     /// element.
-    symantics "http://www.w3.org/1998/Math/MathML" {
+    semantics "http://www.w3.org/1998/Math/MathML" {
         encoding: String DEFAULT,
     };
 }
