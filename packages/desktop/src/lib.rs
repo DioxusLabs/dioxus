@@ -9,7 +9,6 @@ mod config;
 mod desktop_context;
 mod edits;
 mod element;
-mod escape;
 mod eval;
 mod events;
 mod file_upload;
