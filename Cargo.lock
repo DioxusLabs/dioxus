@@ -2571,7 +2571,6 @@ dependencies = [
  "env_logger",
  "futures-util",
  "http-range",
- "im-rc",
  "log",
  "manganis",
  "num-format",

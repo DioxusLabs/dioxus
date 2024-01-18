@@ -54,7 +54,17 @@ fn Nav() -> Element {
 }
 
 fn main() {
-    launch_desktop(Route::Blog {
-        id: "hello".to_string(),
+    launch_desktop(|| {
+        let cfg = || {
+            RouterConfig::default().initial_route(Route::Blog {
+                id: "hello".to_string(),
+            })
+        };
+
+        rsx! {
+            Router::<Route> {
+                config: cfg
+            }
+        }
     });
 }

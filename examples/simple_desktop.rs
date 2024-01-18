@@ -9,7 +9,11 @@ fn main() {
         .with_module_level("dioxus", log::LevelFilter::Trace)
         .init()
         .unwrap();
-    launch_desktop(Route::Home {});
+    launch_desktop(|| {
+        rsx! {
+            Router::<Route> {}
+        }
+    });
 }
 
 #[derive(Routable, Clone)]
