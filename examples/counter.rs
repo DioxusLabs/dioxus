@@ -9,7 +9,7 @@ fn main() {
 
 fn app() -> Element {
     let mut counters = use_signal(|| vec![0, 0, 0]);
-    let mut sum = use_selector(move || counters.read().iter().copied().sum::<usize>());
+    let sum = use_selector(move || counters.read().iter().copied().sum::<i32>());
 
     rsx! {
         div {
@@ -29,14 +29,14 @@ fn app() -> Element {
 }
 
 #[component]
-fn Child(i: usize, counters: Signal<Vec<usize>>) -> Element {
+fn Child(i: usize, counters: Signal<Vec<i32>>) -> Element {
     rsx! {
         li {
             button { onclick: move |_| counters.write()[i] -= 1, "-1" }
             input {
                 value: "{counters.read()[i]}",
                 oninput: move |e| {
-                    if let Ok(value) = e.value().parse::<usize>() {
+                    if let Ok(value) = e.value().parse::<i32>() {
                         counters.write()[i] = value;
                     }
                 }

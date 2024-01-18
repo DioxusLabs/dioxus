@@ -67,19 +67,7 @@ impl LaunchBuilder {
         self
     }
 
-    #[allow(clippy::unit_arg)]
-    /// Launch the app.
-    pub fn launch(self) {
-        current_platform::launch(
-            self.cross_platform_config,
-            Default::default(),
-            self.platform_config.unwrap_or_default(),
-        );
-    }
-}
-
-#[cfg(feature = "web")]
-impl LaunchBuilder {
+    #[cfg(feature = "web")]
     /// Launch your web application.
     pub fn launch_web(self) {
         dioxus_web::launch::launch(
@@ -88,11 +76,9 @@ impl LaunchBuilder {
             Default::default(),
         );
     }
-}
 
-#[cfg(feature = "desktop")]
-impl LaunchBuilder {
     /// Launch your desktop application.
+    #[cfg(feature = "desktop")]
     pub fn launch_desktop(self) {
         dioxus_desktop::launch::launch(
             self.cross_platform_config,
@@ -100,16 +86,24 @@ impl LaunchBuilder {
             Default::default(),
         );
     }
-}
 
-#[cfg(feature = "fullstack")]
-impl LaunchBuilder {
     /// Launch your fullstack application.
+    #[cfg(feature = "fullstack")]
     pub fn launch_fullstack(self) {
         dioxus_fullstack::launch::launch(
             self.cross_platform_config,
             Default::default(),
             Default::default(),
+        );
+    }
+
+    #[allow(clippy::unit_arg)]
+    /// Launch the app.
+    pub fn launch(self) {
+        current_platform::launch(
+            self.cross_platform_config,
+            Default::default(),
+            self.platform_config.unwrap_or_default(),
         );
     }
 }
