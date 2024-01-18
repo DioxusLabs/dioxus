@@ -2,7 +2,11 @@ use dioxus::prelude::*;
 use dioxus_router::prelude::*;
 
 fn main() {
-    launch_desktop(|| rsx! {Router::<Route> {}});
+    launch_desktop(|| {
+        rsx! {
+            Router::<Route> {}
+        }
+    });
 }
 
 #[derive(Routable, Clone, Debug, PartialEq)]

@@ -54,5 +54,5 @@ fn Nav() -> Element {
 }
 
 fn main() {
-    launch_desktop(|| rsx! {Router::<Route> {}});
+    launch_desktop(|| rsx! { Router::<Route> {} });
 }

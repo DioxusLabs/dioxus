@@ -136,7 +136,6 @@ log = "0.4.14"
 num-format = "0.4.0"
 separator = "0.4.1"
 serde = { version = "1.0.136", features = ["derive"] }
-im-rc = "15.0.0"
 anyhow = "1.0.53"
 serde_json = "1.0.79"
 rand = { version = "0.8.4", features = ["small_rng"] }

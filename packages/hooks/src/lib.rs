@@ -67,12 +67,6 @@ pub use use_coroutine::*;
 mod use_future;
 pub use use_future::*;
 
-// mod use_effect;
-// pub use use_effect::*;
-
-// mod use_memo;
-// pub use use_memo::*;
-
 // mod use_on_create;
 // pub use use_on_create::*;
 

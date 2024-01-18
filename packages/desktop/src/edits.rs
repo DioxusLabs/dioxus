@@ -1,4 +1,4 @@
-use std::{sync::Arc, sync::Mutex};
+use std::{cell::RefCell, rc::Rc, sync::Arc, sync::Mutex};
 
 use std::fmt::{Debug, Formatter};
 
@@ -6,8 +6,8 @@ use std::fmt::{Debug, Formatter};
 /// It will hold onto the requests until the interpreter is ready to handle them and hold onto any pending edits until a new request is made.
 #[derive(Default, Clone)]
 pub(crate) struct EditQueue {
-    queue: Arc<Mutex<Vec<Vec<u8>>>>,
-    responder: Arc<Mutex<Option<wry::RequestAsyncResponder>>>,
+    queue: Rc<RefCell<Vec<Vec<u8>>>>,
+    responder: Rc<RefCell<Option<wry::RequestAsyncResponder>>>,
 }
 
 impl Debug for EditQueue {
@@ -15,7 +15,7 @@ impl Debug for EditQueue {
         f.debug_struct("EditQueue")
             .field("queue", &self.queue)
             .field("responder", {
-                &self.responder.lock().unwrap().as_ref().map(|_| ())
+                &self.responder.borrow().as_ref().map(|_| ())
             })
             .finish()
     }
@@ -23,149 +23,20 @@ impl Debug for EditQueue {
 
 impl EditQueue {
     pub fn handle_request(&self, responder: wry::RequestAsyncResponder) {
-        let mut queue = self.queue.lock().unwrap();
+        let mut queue = self.queue.borrow_mut();
         if let Some(bytes) = queue.pop() {
             responder.respond(wry::http::Response::new(bytes));
         } else {
-            *self.responder.lock().unwrap() = Some(responder);
+            *self.responder.borrow_mut() = Some(responder);
         }
     }
 
     pub fn add_edits(&self, edits: Vec<u8>) {
-        let mut responder = self.responder.lock().unwrap();
+        let mut responder = self.responder.borrow_mut();
         if let Some(responder) = responder.take() {
             responder.respond(wry::http::Response::new(edits));
         } else {
-            self.queue.lock().unwrap().push(edits);
+            self.queue.borrow_mut().push(edits);
         }
     }
 }
-
-// pub(crate) fn apply_edits(
-//     mutations: Mutations,
-//     channel: &mut Channel,
-//     templates: &mut FxHashMap<String, u16>,
-//     max_template_count: &AtomicU16,
-// ) -> Option<Vec<u8>> {
-//     if mutations.templates.is_empty() && mutations.edits.is_empty() {
-//         return None;
-//     }
-
-//     for template in mutations.templates {
-//         add_template(&template, channel, templates, max_template_count);
-//     }
-
-//     use dioxus_core::Mutation::*;
-//     for edit in mutations.edits {
-//         match edit {
-//             AppendChildren { id, m } => channel.append_children(id.0 as u32, m as u16),
-//             AssignId { path, id } => channel.assign_id(path, id.0 as u32),
-//             CreatePlaceholder { id } => channel.create_placeholder(id.0 as u32),
-//             CreateTextNode { value, id } => channel.create_text_node(value, id.0 as u32),
-//             HydrateText { path, value, id } => channel.hydrate_text(path, value, id.0 as u32),
-//             LoadTemplate { name, index, id } => {
-//                 if let Some(tmpl_id) = templates.get(name) {
-//                     channel.load_template(*tmpl_id, index as u16, id.0 as u32)
-//                 }
-//             }
-//             ReplaceWith { id, m } => channel.replace_with(id.0 as u32, m as u16),
-//             ReplacePlaceholder { path, m } => channel.replace_placeholder(path, m as u16),
-//             InsertAfter { id, m } => channel.insert_after(id.0 as u32, m as u16),
-//             InsertBefore { id, m } => channel.insert_before(id.0 as u32, m as u16),
-//             SetAttribute {
-//                 name,
-//                 value,
-//                 id,
-//                 ns,
-//             } => match value {
-//                 AttributeValue::Text(txt) => {
-//                     channel.set_attribute(id.0 as u32, name, txt, ns.unwrap_or_default())
-//                 }
-//                 AttributeValue::Float(f) => {
-//                     channel.set_attribute(id.0 as u32, name, &f.to_string(), ns.unwrap_or_default())
-//                 }
-//                 AttributeValue::Int(n) => {
-//                     channel.set_attribute(id.0 as u32, name, &n.to_string(), ns.unwrap_or_default())
-//                 }
-//                 AttributeValue::Bool(b) => channel.set_attribute(
-//                     id.0 as u32,
-//                     name,
-//                     if b { "true" } else { "false" },
-//                     ns.unwrap_or_default(),
-//                 ),
-//                 AttributeValue::None => {
-//                     channel.remove_attribute(id.0 as u32, name, ns.unwrap_or_default())
-//                 }
-//                 _ => unreachable!(),
-//             },
-//             SetText { value, id } => channel.set_text(id.0 as u32, value),
-//             NewEventListener { name, id, .. } => {
-//                 channel.new_event_listener(name, id.0 as u32, event_bubbles(name) as u8)
-//             }
-//             RemoveEventListener { name, id } => {
-//                 channel.remove_event_listener(name, id.0 as u32, event_bubbles(name) as u8)
-//             }
-//             Remove { id } => channel.remove(id.0 as u32),
-//             PushRoot { id } => channel.push_root(id.0 as u32),
-//         }
-//     }
-
-//     let bytes: Vec<_> = channel.export_memory().collect();
-//     channel.reset();
-//     Some(bytes)
-// }
-
-// pub fn add_template(
-//     template: &Template,
-//     channel: &mut Channel,
-//     templates: &mut FxHashMap<String, u16>,
-//     max_template_count: &AtomicU16,
-// ) {
-//     let current_max_template_count = max_template_count.load(Ordering::Relaxed);
-//     for root in template.roots.iter() {
-//         create_template_node(channel, root);
-//         templates.insert(template.name.to_owned(), current_max_template_count);
-//     }
-//     channel.add_templates(current_max_template_count, template.roots.len() as u16);
-
-//     max_template_count.fetch_add(1, Ordering::Relaxed);
-// }
-
-// pub fn create_template_node(channel: &mut Channel, node: &'static TemplateNode) {
-//     use TemplateNode::*;
-//     match node {
-//         Element {
-//             tag,
-//             namespace,
-//             attrs,
-//             children,
-//             ..
-//         } => {
-//             // Push the current node onto the stack
-//             match namespace {
-//                 Some(ns) => channel.create_element_ns(tag, ns),
-//                 None => channel.create_element(tag),
-//             }
-//             // Set attributes on the current node
-//             for attr in *attrs {
-//                 if let TemplateAttribute::Static {
-//                     name,
-//                     value,
-//                     namespace,
-//                 } = attr
-//                 {
-//                     channel.set_top_attribute(name, value, namespace.unwrap_or_default())
-//                 }
-//             }
-//             // Add each child to the stack
-//             for child in *children {
-//                 create_template_node(channel, child);
-//             }
-//             // Add all children to the parent
-//             channel.append_children_to_top(children.len() as u16);
-//         }
-//         Text { text } => channel.create_raw_text(text),
-//         DynamicText { .. } => channel.create_raw_text("p"),
-//         Dynamic { .. } => channel.add_placeholder(),
-//     }
-// }

@@ -30,7 +30,7 @@ wry = { version = "0.35.0", default-features = false, features = [
     "protocol",
     "file-drop",
 ] }
-futures-channel = { workspace = true }
+futures-channel.workspace = true
 tokio = { workspace = true, features = [
     "sync",
     "rt-multi-thread",
@@ -81,8 +81,8 @@ features = ["tokio_runtime", "hot-reload"]
 [dev-dependencies]
 dioxus-core-macro = { workspace = true }
 dioxus-hooks = { workspace = true }
+dioxus-signals = { workspace = true }
 exitcode = "1.1.2"
-scraper = "0.16.0"
 
 [build-dependencies]
 dioxus-interpreter-js = { workspace = true, features = ["binary-protocol"] }

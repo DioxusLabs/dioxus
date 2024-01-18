@@ -33,8 +33,6 @@ fn app() -> Element {
     }
 }
 
-type SthElse<T> = Option<T>;
-
 #[derive(Props, PartialEq, Clone)]
 struct ButtonProps {
     a: String,
@@ -50,6 +48,8 @@ struct ButtonProps {
     #[props(optional)]
     e: SthElse<String>,
 }
+
+type SthElse<T> = Option<T>;
 
 fn Button(props: ButtonProps) -> Element {
     rsx! {

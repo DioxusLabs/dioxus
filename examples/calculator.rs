@@ -12,10 +12,10 @@ fn main() {
     let config = Config::new().with_window(
         WindowBuilder::default()
             .with_title("Calculator")
-            .with_inner_size(LogicalSize::new(300.0, 500.0)),
+            .with_inner_size(LogicalSize::new(300.0, 525.0)),
     );
 
-    LaunchBuilder::new(app).cfg(config);
+    LaunchBuilder::new(app).cfg(config).launch();
 }
 
 fn app() -> Element {
