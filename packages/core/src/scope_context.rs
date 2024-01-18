@@ -269,8 +269,8 @@ impl ScopeContext {
             .get(cur_hook)
             .and_then(|inn| {
                 self.hook_index.set(cur_hook + 1);
-                let raw_ref: & dyn Any = inn.as_ref();
-                raw_ref.downcast_ref    ::<State>().cloned()
+                let raw_ref: &dyn Any = inn.as_ref();
+                raw_ref.downcast_ref::<State>().cloned()
             })
             .expect(
                 r#"
