@@ -1744,4 +1744,196 @@ builder_constructors! {
     r#use ["use", "http://www.w3.org/2000/svg"] {
         href: String DEFAULT,
     };
+
+    // MathML elements
+
+    /// Build a
+    /// [`<annotation>`](https://w3c.github.io/mathml-core/#dfn-annotation)
+    /// element.
+    annotation "http://www.w3.org/1998/Math/MathML" {};
+
+    /// Build a
+    /// [`<annotation-xml>`](https://w3c.github.io/mathml-core/#dfn-annotation-xml)
+    /// element.
+    annotation_xml ["annotation-xml", "http://www.w3.org/1998/Math/MathML"] {};
+
+    /// Build a
+    /// [`<merror>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/merror)
+    /// element.
+    merror "http://www.w3.org/1998/Math/MathML" {};
+
+    /// Build a
+    /// [`<math>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/math)
+    /// element.
+    math "http://www.w3.org/1998/Math/MathML" {
+    // rust name of the attribute | unit (this is currently ignored, you can use String as a default) | the HTML attribute name (this can be DEFAULT for a stringified name or a custom string like "display2")
+        display: String DEFAULT,
+    };
+
+    /// Build a
+    /// [`<mfrac>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/mfrac)
+    /// element.
+    mfrac "http://www.w3.org/1998/Math/MathML" {
+        linethickness: usize DEFAULT,
+    };
+
+    /// Build a
+    /// [`<mi>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/mi)
+    /// element.
+    mi "http://www.w3.org/1998/Math/MathML" {
+        mathvariant: String DEFAULT,
+    };
+
+    /// Build a
+    /// [`<mmultiscripts>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/mmultiscripts)
+    /// element.
+    mmultiscripts "http://www.w3.org/1998/math/mathml" {};
+
+    /// Build a
+    /// [`<mn>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/mn)
+    /// element.
+    mn "http://www.w3.org/1998/Math/MathML" {};
+
+    /// Build a
+    /// [`<mo>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/mo)
+    /// element.
+    mo "http://www.w3.org/1998/Math/MathML" {
+        fence: Bool DEFAULT,
+        largeop: Bool DEFAULT,
+        lspace: usize DEFAULT,
+        maxsize: usize DEFAULT,
+        minsize: usize DEFAULT,
+        movablelimits: Bool DEFAULT,
+        rspace: usize DEFAULT,
+        separator: Bool DEFAULT,
+        stretchy: Bool DEFAULT,
+        symmetric: Bool DEFAULT,
+    };
+
+    /// Build a
+    /// [`<mover>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/mover)
+    /// element.
+    mover "http://www.w3.org/1998/Math/MathML" {
+        accent: Bool DEFAULT,
+    };
+
+    /// Build a
+    /// [`<mpadded>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/mpadded)
+    /// element.
+    mpadded "http://www.w3.org/1998/Math/MathML" {
+        depth: usize DEFAULT,
+        height: usize DEFAULT,
+        lspace: usize DEFAULT,
+        voffset: usize DEFAULT,
+        width: usize DEFAULT,
+    };
+
+    /// Build a
+    /// [`<mphantom>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/mphantom)
+    /// element.
+    mphantom "http://www.w3.org/1998/Math/MathML" {};
+
+    /// Build a
+    /// [`<mprescripts>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/mprescripts)
+    /// element.
+    mprescripts "http://www.w3.org/1998/Math/MathML" {};
+
+    /// Build a
+    /// [`<mroot>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/mroot)
+    /// element.
+    mroot "http://www.w3.org/1998/Math/MathML" {};
+
+    /// Build a
+    /// [`<mrow>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/mrow)
+    /// element.
+    mrow "http://www.w3.org/1998/Math/MathML" {
+
+    };
+
+    /// Build a
+    /// [`<ms>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/ms)
+    /// element.
+    ms "http://www.w3.org/1998/Math/MathML" {
+        lquote: String DEFAULT,
+        rquote: String DEFAULT,
+    };
+
+    /// Build a
+    /// [`<mspace>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/mspace)
+    /// element.
+    mspace "http://www.w3.org/1998/Math/MathML" {
+        depth: usize DEFAULT,
+        height: usize DEFAULT,
+        width: usize DEFAULT,
+    };
+
+    /// Build a
+    /// [`<msqrt>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/msqrt)
+    /// element.
+    msqrt "http://www.w3.org/1998/Math/MathML" {};
+
+    /// Build a
+    /// [`<mstyle>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/mstyle)
+    /// element.
+    mstyle "http://www.w3.org/1998/Math/MathML" {};
+
+    /// Build a
+    /// [`<msub>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/msub)
+    /// element.
+    msub "http://www.w3.org/1998/Math/MathML" {};
+
+    /// Build a
+    /// [`<msubsup>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/msubsup)
+    /// element.
+    msubsup "http://www.w3.org/1998/Math/MathML" {};
+
+    /// Build a
+    /// [`<msup>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/msup)
+    /// element.
+    msup "http://www.w3.org/1998/Math/MathML" {};
+
+    /// Build a
+    /// [`<mtable>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/mtable)
+    /// element.
+    mtable "http://www.w3.org/1998/Math/MathML" {};
+
+    /// Build a
+    /// [`<mtd>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/mtd)
+    /// element.
+    mtd "http://www.w3.org/1998/Math/MathML" {
+        columnspan: usize DEFAULT,
+        rowspan: usize DEFAULT,
+    };
+
+    /// Build a
+    /// [`<mtext>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/mtext)
+    /// element.
+    mtext "http://www.w3.org/1998/Math/MathML" {};
+
+    /// Build a
+    /// [`<mtr>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/mtr)
+    /// element.
+    mtr "http://www.w3.org/1998/Math/MathML" {};
+
+    /// Build a
+    /// [`<munder>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/munder)
+    /// element.
+    munder "http://www.w3.org/1998/Math/MathML" {
+        accentunder: Bool DEFAULT,
+    };
+
+    /// Build a
+    /// [`<munderover>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/munderover)
+    /// element.
+    munderover "http://www.w3.org/1998/Math/MathML" {
+        accent: Bool DEFAULT,
+        accentunder: Bool DEFAULT,
+    };
+
+    /// Build a
+    /// [`<semantics>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/semantics)
+    /// element.
+    symantics "http://www.w3.org/1998/Math/MathML" {
+        encoding: String DEFAULT,
+    };
 }
