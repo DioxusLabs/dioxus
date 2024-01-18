@@ -1770,7 +1770,6 @@ builder_constructors! {
     /// [`<math>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/math)
     /// element.
     math "http://www.w3.org/1998/Math/MathML" {
-    // rust name of the attribute | unit (this is currently ignored, you can use String as a default) | the HTML attribute name (this can be DEFAULT for a stringified name or a custom string like "display2")
         display: String DEFAULT,
     };
 
