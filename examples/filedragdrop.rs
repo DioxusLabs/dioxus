@@ -2,12 +2,12 @@ use dioxus::prelude::*;
 use dioxus_desktop::Config;
 
 fn main() {
-    LaunchBuilder::new(app)
+    LaunchBuilder::desktop()
         .cfg(Config::new().with_file_drop_handler(|_w, e| {
             println!("{e:?}");
             true
         }))
-        .launch_desktop()
+        .launch(app)
 }
 
 fn app() -> Element {

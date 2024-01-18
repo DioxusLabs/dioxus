@@ -321,7 +321,7 @@ pub mod binary_protocol {
             }
             node.setAttribute('data-dioxus-id', `\${id}`);
             const event_name = $event$;
-    
+
             // if this is a mounted listener, we send the event immediately
             if (event_name === "mounted") {
                 window.ipc.postMessage(

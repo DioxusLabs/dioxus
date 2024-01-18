@@ -2,7 +2,7 @@ use dioxus::prelude::*;
 use dioxus_desktop::{window, Config, WindowBuilder};
 
 fn main() {
-    LaunchBuilder::new(app)
+    LaunchBuilder::desktop()
         .cfg(
             Config::new().with_window(
                 WindowBuilder::new()
@@ -10,7 +10,7 @@ fn main() {
                     .with_decorations(false),
             ),
         )
-        .launch_desktop()
+        .launch(app)
 }
 
 fn app() -> Element {

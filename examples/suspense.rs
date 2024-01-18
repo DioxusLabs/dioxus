@@ -17,7 +17,7 @@ use dioxus::prelude::*;
 use dioxus_desktop::{Config, LogicalSize, WindowBuilder};
 
 fn main() {
-    LaunchBuilder::new(app)
+    LaunchBuilder::desktop()
         .cfg(
             Config::new().with_window(
                 WindowBuilder::new()
@@ -25,7 +25,7 @@ fn main() {
                     .with_inner_size(LogicalSize::new(600.0, 800.0)),
             ),
         )
-        .launch_desktop()
+        .launch(app)
 }
 
 fn app() -> Element {

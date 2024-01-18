@@ -5,13 +5,16 @@ use dioxus::prelude::*;
 use dioxus_desktop::Config;
 
 fn main() {
-    LaunchBuilder::new(app).cfg(
-        Config::new().with_custom_head("<style>body { background-color: red; }</style>".into()),
-    );
+    LaunchBuilder::new()
+        .cfg(
+            Config::new().with_custom_head("<style>body { background-color: red; }</style>".into()),
+        )
+        .launch(app);
 
-    LaunchBuilder::new(app).cfg(
-        Config::new().with_custom_index(
-            r#"
+    LaunchBuilder::new()
+        .cfg(
+            Config::new().with_custom_index(
+                r#"
 <!DOCTYPE html>
 <html>
   <head>
@@ -24,9 +27,10 @@ fn main() {
   </body>
 </html>
         "#
-            .into(),
-        ),
-    );
+                .into(),
+            ),
+        )
+        .launch(app);
 }
 
 fn app() -> Element {

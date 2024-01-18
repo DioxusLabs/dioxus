@@ -20,6 +20,7 @@ dioxus-rsx = { workspace = true, optional = true }
 dioxus-signals = { workspace = true, optional = true }
 dioxus-router = { workspace = true, optional = true }
 dioxus-web = { workspace = true, optional = true }
+dioxus-mobile = { workspace = true, optional = true }
 dioxus-desktop = { workspace = true, optional = true }
 dioxus-fullstack = { workspace = true, optional = true }
 dioxus-liveview = { workspace = true, optional = true }
@@ -44,6 +45,7 @@ router = ["dioxus-router"]
 # Platforms
 fullstack = ["dioxus-fullstack", "dioxus-config-macro/fullstack", "serde"]
 desktop = ["dioxus-desktop", "dioxus-fullstack?/desktop", "dioxus-config-macro/desktop"]
+mobile = ["dioxus-mobile", "dioxus-fullstack?/desktop", "dioxus-config-macro/desktop"] # todo: use the mobile versions of these
 web = ["dioxus-web", "dioxus-fullstack?/web", "dioxus-config-macro/web"]
 ssr = ["dioxus-fullstack?/ssr", "dioxus-config-macro/ssr"]
 liveview = ["dioxus-desktop", "dioxus-config-macro/liveview"]

@@ -1,35 +1,96 @@
 //! Launch helper macros for fullstack apps
+
 #![allow(unused)]
 use std::any::Any;
 
 use crate::prelude::*;
+use dioxus_core::AnyProps;
 use dioxus_core::VProps;
-use dioxus_core::{ AnyProps};
 
 /// A builder for a fullstack app.
-pub struct LaunchBuilder {
-    cross_platform_config: fn() -> Element,
-    #[cfg(feature = "fullstack")]
-    contexts: Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync>>,
-    #[cfg(not(feature = "fullstack"))]
-    contexts: Vec<Box<dyn Fn() -> Box<dyn Any>>>,
-    platform_config: Option<current_platform::Config>,
+pub struct LaunchBuilder<Cfg = ()> {
+    launch_fn: LaunchFn<Cfg>,
+    contexts: ContextList,
+    platform_config: Option<Cfg>,
 }
 
-// Fullstack platform builder
+pub type LaunchFn<Cfg> = fn(fn() -> Element, ContextList, Cfg);
+
+#[cfg(feature = "fullstack")]
+type ContextList = Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync>>;
+#[cfg(not(feature = "fullstack"))]
+type ContextList = Vec<Box<dyn Fn() -> Box<dyn Any>>>;
+
 impl LaunchBuilder {
     /// Create a new builder for your application. This will create a launch configuration for the current platform based on the features enabled on the `dioxus` crate.
-    pub fn new(component: fn() -> Element) -> Self {
-        Self {
-            cross_platform_config: component,
+    pub fn new() -> LaunchBuilder<current_platform::Config> {
+        LaunchBuilder {
+            launch_fn: current_platform::launch,
             contexts: Vec::new(),
             platform_config: None,
         }
     }
 
+    /// Launch your web application.
+    #[cfg(feature = "web")]
+    pub fn web() -> LaunchBuilder<dioxus_web::Config> {
+        LaunchBuilder {
+            launch_fn: dioxus_web::launch::launch,
+            contexts: Vec::new(),
+            platform_config: None,
+        }
+    }
+
+    /// Launch your desktop application.
+    #[cfg(feature = "desktop")]
+    pub fn desktop() -> LaunchBuilder<dioxus_desktop::Config> {
+        LaunchBuilder {
+            launch_fn: dioxus_desktop::launch::launch,
+            contexts: Vec::new(),
+            platform_config: None,
+        }
+    }
+
+    /// Launch your fullstack application.
+    #[cfg(feature = "fullstack")]
+    pub fn fullstack() -> LaunchBuilder<dioxus_fullstack::Config> {
+        LaunchBuilder {
+            launch_fn: dioxus_fullstack::launch::launch,
+            contexts: Vec::new(),
+            platform_config: None,
+        }
+    }
+
+    /// Launch your fullstack application.
+    #[cfg(feature = "mobile")]
+    pub fn mobile() -> LaunchBuilder<dioxus_mobile::Config> {
+        LaunchBuilder {
+            launch_fn: dioxus_mobile::launch::launch,
+            contexts: Vec::new(),
+            platform_config: None,
+        }
+    }
+
+    /// Provide a custom launch function for your application.
+    ///
+    /// Useful for third party renderers to tap into the launch builder API without having to reimplement it.
+    pub fn custom<Cfg>(launch_fn: LaunchFn<Cfg>) -> LaunchBuilder<Cfg> {
+        LaunchBuilder {
+            launch_fn,
+            contexts: Vec::new(),
+            platform_config: None,
+        }
+    }
+}
+
+// Fullstack platform builder
+impl<Cfg: Default> LaunchBuilder<Cfg> {
     #[cfg(feature = "fullstack")]
     /// Inject state into the root component's context that is created on the thread that the app is launched on.
-    pub fn context_provider(mut self, state: impl Fn() -> Box<dyn Any> + Send + Sync + 'static) -> Self {
+    pub fn context_provider(
+        mut self,
+        state: impl Fn() -> Box<dyn Any> + Send + Sync + 'static,
+    ) -> Self {
         self.contexts
             .push(Box::new(state) as Box<dyn Fn() -> Box<dyn Any> + Send + Sync>);
         self
@@ -60,51 +121,17 @@ impl LaunchBuilder {
     }
 
     /// Provide a platform-specific config to the builder.
-    pub fn cfg(mut self, config: impl Into<Option<current_platform::Config>>) -> Self {
+    pub fn cfg(mut self, config: impl Into<Option<Cfg>>) -> Self {
         if let Some(config) = config.into() {
             self.platform_config = Some(config);
         }
         self
     }
 
-    #[cfg(feature = "web")]
-    /// Launch your web application.
-    pub fn launch_web(self) {
-        dioxus_web::launch::launch(
-            self.cross_platform_config,
-            Default::default(),
-            Default::default(),
-        );
-    }
-
-    /// Launch your desktop application.
-    #[cfg(feature = "desktop")]
-    pub fn launch_desktop(self) {
-        dioxus_desktop::launch::launch(
-            self.cross_platform_config,
-            Default::default(),
-            Default::default(),
-        );
-    }
-
-    /// Launch your fullstack application.
-    #[cfg(feature = "fullstack")]
-    pub fn launch_fullstack(self) {
-        dioxus_fullstack::launch::launch(
-            self.cross_platform_config,
-            Default::default(),
-            Default::default(),
-        );
-    }
-
     #[allow(clippy::unit_arg)]
     /// Launch the app.
-    pub fn launch(self) {
-        current_platform::launch(
-            self.cross_platform_config,
-            Default::default(),
-            self.platform_config.unwrap_or_default(),
-        );
+    pub fn launch(self, app: fn() -> Element) {
+        (self.launch_fn)(app, self.contexts, self.platform_config.unwrap_or_default());
     }
 }
 
@@ -120,31 +147,31 @@ mod current_platform {
     #[cfg(not(any(feature = "desktop", feature = "web", feature = "fullstack")))]
     pub fn launch(
         root: fn() -> dioxus_core::Element,
-        contexts: Vec<Box<dyn Fn() -> Box<dyn std::any::Any> + Send + Sync>>,
+        contexts: super::ContextList,
         platform_config: Config,
     ) {
     }
 }
 
 /// Launch your application without any additional configuration. See [`LaunchBuilder`] for more options.
-pub fn launch(component: fn() -> Element) {
-    LaunchBuilder::new(component).launch()
+pub fn launch(app: fn() -> Element) {
+    LaunchBuilder::new().launch(app)
 }
 
 #[cfg(all(feature = "web", not(feature = "fullstack")))]
 /// Launch your web application without any additional configuration. See [`LaunchBuilder`] for more options.
-pub fn launch_web(component: fn() -> Element) {
-    LaunchBuilder::new(component).launch_web()
+pub fn launch_web(app: fn() -> Element) {
+    LaunchBuilder::web().launch(app)
 }
 
 #[cfg(all(feature = "desktop", not(feature = "fullstack")))]
 /// Launch your desktop application without any additional configuration. See [`LaunchBuilder`] for more options.
-pub fn launch_desktop(component: fn() -> Element) {
-    LaunchBuilder::new(component).launch_desktop()
+pub fn launch_desktop(app: fn() -> Element) {
+    LaunchBuilder::desktop().launch(app)
 }
 
 #[cfg(feature = "fullstack")]
 /// Launch your fullstack application without any additional configuration. See [`LaunchBuilder`] for more options.
-pub fn launch_fullstack(component: fn() -> Element) {
-    LaunchBuilder::new(component).launch_fullstack()
+pub fn launch_fullstack(app: fn() -> Element) {
+    LaunchBuilder::fullstack().launch(app)
 }

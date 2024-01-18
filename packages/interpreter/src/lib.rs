@@ -7,6 +7,7 @@ pub static COMMON_JS: &str = include_str!("./common.js");
 
 #[cfg(feature = "sledgehammer")]
 mod sledgehammer_bindings;
+
 #[cfg(feature = "sledgehammer")]
 pub use sledgehammer_bindings::*;
 

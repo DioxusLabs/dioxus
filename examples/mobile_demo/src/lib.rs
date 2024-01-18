@@ -49,7 +49,7 @@ pub fn main() -> Result<()> {
 
     // Right now we're going through dioxus-desktop but we'd like to go through dioxus-mobile
     // That will seed the index.html with some fixes that prevent the page from scrolling/zooming etc
-    LaunchBuilder::new(app).cfg(
+    LaunchBuilder::new().cfg(
         // Note that we have to disable the viewport goofiness of the browser.
         // Dioxus_mobile should do this for us
         Config::default().with_custom_index(include_str!("index.html").to_string()),

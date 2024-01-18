@@ -45,13 +45,13 @@ members = [
     "examples/tailwind",
     "examples/PWA-example",
     "examples/query_segments_demo",
-    "examples/openid_connect_demo",
+    # "examples/openid_connect_demo",
     # Playwright tests
     "playwright-tests/liveview",
     "playwright-tests/web",
     "playwright-tests/fullstack",
 ]
-exclude = ["examples/mobile_demo"]
+exclude = ["examples/mobile_demo", "packages/fermi", "examples/openid_connect_demo",]
 
 [workspace.package]
 version = "0.4.3"
@@ -124,6 +124,9 @@ keywords = ["dom", "ui", "gui", "react", "wasm"]
 rust-version = "1.60.0"
 publish = false
 
+[dependencies]
+manganis = { workspace = true, optional = true}
+
 [dev-dependencies]
 dioxus = { workspace = true, features = ["desktop"] }
 dioxus-desktop = { workspace = true, features = ["transparent"] }
@@ -144,7 +147,10 @@ reqwest = { version = "0.11.9", features = ["json"] }
 env_logger = "0.10.0"
 simple_logger = "4.0.0"
 thiserror = { workspace = true }
-manganis = { workspace = true }
 tracing-subscriber = "0.3.17"
 http-range = "0.1.5"
+
+[features]
+default = []
+collect-assets = ["manganis"]
 
