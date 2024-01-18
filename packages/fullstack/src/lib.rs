@@ -11,11 +11,12 @@ mod html_storage;
 mod adapters;
 #[cfg(feature = "ssr")]
 pub use adapters::*;
+mod config;
 mod hooks;
 #[cfg(all(debug_assertions, feature = "hot-reload", feature = "ssr"))]
 mod hot_reload;
-mod launch;
-pub use launch::*;
+pub mod launch;
+pub use config::*;
 #[cfg(feature = "ssr")]
 mod layer;
 #[cfg(feature = "ssr")]

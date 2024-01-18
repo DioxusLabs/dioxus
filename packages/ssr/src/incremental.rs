@@ -170,7 +170,7 @@ impl IncrementalRenderer {
     pub async fn render<R: WrapBody + Send + Sync>(
         &mut self,
         route: String,
-        virtual_dom: VirtualDom,
+        virtual_dom_factory: impl FnOnce() -> VirtualDom,
         output: &mut (impl AsyncWrite + Unpin + std::marker::Send),
         rebuild_with: impl FnOnce(&mut VirtualDom) -> Pin<Box<dyn Future<Output = ()> + '_>>,
         renderer: &R,
@@ -181,7 +181,7 @@ impl IncrementalRenderer {
         } else {
             // if not, create it
             let freshness = self
-                .render_and_cache(route, virtual_dom, output, rebuild_with, renderer)
+                .render_and_cache(route, virtual_dom_factory(), output, rebuild_with, renderer)
                 .await?;
             tracing::trace!("cache miss");
             Ok(freshness)

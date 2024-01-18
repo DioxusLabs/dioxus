@@ -1,6 +1,5 @@
 //! A shared pool of renderers for efficient server side rendering.
 use crate::render::dioxus_core::AnyProps;
-use crate::render::dioxus_core::CrossPlatformConfig;
 use crate::render::dioxus_core::NoOpMutations;
 use crate::server_context::SERVER_CONTEXT;
 use dioxus_lib::prelude::VirtualDom;
@@ -22,11 +21,11 @@ enum SsrRendererPool {
 }
 
 impl SsrRendererPool {
-    async fn render_to<P: AnyProps + Clone + Send + Sync + 'static>(
+    async fn render_to(
         &self,
         cfg: &ServeConfig,
         route: String,
-        dioxus_config: CrossPlatformConfig<P>,
+        virtual_dom_factory: impl FnOnce() -> VirtualDom + Send + Sync + 'static,
         server_context: &DioxusServerContext,
     ) -> Result<(RenderFreshness, String), dioxus_ssr::incremental::IncrementalRendererError> {
         let wrapper = FullstackRenderer {
@@ -45,7 +44,7 @@ impl SsrRendererPool {
                     tokio::runtime::Runtime::new()
                         .expect("couldn't spawn runtime")
                         .block_on(async move {
-                            let mut vdom = dioxus_config.build_vdom();
+                            let mut vdom = virtual_dom_factory();
                             vdom.in_runtime(|| {
                                 // Make sure the evaluator is initialized
                                 dioxus_ssr::eval::init_eval();
@@ -112,7 +111,7 @@ impl SsrRendererPool {
                             match renderer
                                 .render(
                                     route,
-                                    dioxus_config,
+                                    virtual_dom_factory,
                                     &mut *to,
                                     |vdom| {
                                         Box::pin(async move {
@@ -192,11 +191,11 @@ impl SSRState {
     }
 
     /// Render the application to HTML.
-    pub fn render<'a, P: AnyProps + Clone + Send + Sync>(
+    pub fn render<'a>(
         &'a self,
         route: String,
         cfg: &'a ServeConfig,
-        dioxus_config: CrossPlatformConfig<P>,
+        virtual_dom_factory: impl FnOnce() -> VirtualDom + Send + Sync + 'static,
         server_context: &'a DioxusServerContext,
     ) -> impl std::future::Future<
         Output = Result<RenderResponse, dioxus_ssr::incremental::IncrementalRendererError>,
@@ -207,7 +206,7 @@ impl SSRState {
 
             let (freshness, html) = self
                 .renderers
-                .render_to(cfg, route, dioxus_config, server_context)
+                .render_to(cfg, route, virtual_dom_factory, server_context)
                 .await?;
 
             Ok(RenderResponse { html, freshness })
