@@ -3,8 +3,6 @@ use dioxus_desktop::{tao::dpi::LogicalSize, Config, WindowBuilder};
 use dioxus_router::prelude::*;
 
 fn main() {
-    env_logger::init();
-
     LaunchBuilder::desktop()
         .cfg(
             Config::new().with_window(

@@ -2485,26 +2485,20 @@ dependencies = [
 name = "dioxus-examples"
 version = "0.4.3"
 dependencies = [
- "anyhow",
  "dioxus",
  "dioxus-desktop",
  "dioxus-router",
  "dioxus-signals",
  "dioxus-ssr",
- "env_logger",
  "futures-util",
  "http-range",
- "log",
  "manganis",
- "num-format",
  "rand 0.8.5",
  "reqwest",
  "separator",
  "serde",
  "serde_json",
- "thiserror",
  "tokio",
- "tracing-subscriber",
 ]
 
 [[package]]
@@ -6345,16 +6339,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.48",
-]
-
-[[package]]
-name = "num-format"
-version = "0.4.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a652d9771a63711fd3c3deb670acfbe5c30a4072e664d7a3bf5a9e1056ac72c3"
-dependencies = [
- "arrayvec",
- "itoa 1.0.10",
 ]
 
 [[package]]

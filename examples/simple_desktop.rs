@@ -71,19 +71,19 @@ fn NavBar() -> Element {
 
 #[component]
 fn Home() -> Element {
-    log::debug!("rendering home {:?}", current_scope_id());
+    println!("rendering home {:?}", current_scope_id());
     rsx! { h1 { "Home" } }
 }
 
 #[component]
 fn BlogList() -> Element {
-    log::debug!("rendering blog list {:?}", current_scope_id());
+    println!("rendering blog list {:?}", current_scope_id());
     rsx! { div { "Blog List" } }
 }
 
 #[component]
 fn BlogPost(post: String) -> Element {
-    log::debug!("rendering blog post {}", post);
+    println!("rendering blog post {}", post);
 
     rsx! {
         div {
