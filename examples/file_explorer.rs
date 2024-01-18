@@ -17,6 +17,10 @@ fn main() {
         .launch(app)
 }
 
+#[cfg(not(feature = "collect-assets"))]
+const _STYLE: &str = include_str!("../examples/assets/fileexplorer.css");
+
+#[cfg(feature = "collect-assets")]
 const _STYLE: &str = manganis::mg!(file("./examples/assets/fileexplorer.css"));
 
 fn app() -> Element {
@@ -31,6 +35,7 @@ fn app() -> Element {
                 span { }
                 i { class: "material-icons", onclick: move |_| files.write().go_up(), "logout" }
             }
+            style { "{_STYLE}" }
             main {
                 {files.read().path_names.iter().enumerate().map(|(dir_id, path)| {
                     let path_end = path.split('/').last().unwrap_or(path.as_str());
