@@ -28,6 +28,22 @@ impl LaunchBuilder {
     }
 
     #[cfg(feature = "fullstack")]
+    /// Inject state into the root component's context that is created on the thread that the app is launched on.
+    pub fn context_provider(mut self, state: impl Fn() -> Box<dyn Any> + Send + 'static) -> Self {
+        self.contexts
+            .push(Box::new(state) as Box<dyn Fn() -> Box<dyn Any> + Send>);
+        self
+    }
+
+    #[cfg(not(feature = "fullstack"))]
+    /// Inject state into the root component's context that is created on the thread that the app is launched on.
+    pub fn context_provider(mut self, state: impl Fn() -> Box<dyn Any> + 'static) -> Self {
+        self.contexts
+            .push(Box::new(state) as Box<dyn Fn() -> Box<dyn Any>>);
+        self
+    }
+
+    #[cfg(feature = "fullstack")]
     /// Inject state into the root component's context.
     pub fn context(mut self, state: impl Any + Clone + Send + 'static) -> Self {
         self.contexts
