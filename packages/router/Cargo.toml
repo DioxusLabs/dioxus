@@ -28,10 +28,10 @@ dioxus-liveview = { workspace = true, optional = true }
 dioxus-ssr = { workspace = true, optional = true }
 dioxus-fullstack = { workspace = true, optional = true }
 tokio = { workspace = true, features = ["full"], optional = true }
-dioxus-cli-config.workspace = true
+dioxus-cli-config = { workspace = true }
 
 [features]
-default = ["web"]
+default = []
 ssr = ["dioxus-ssr", "tokio"]
 liveview = ["dioxus-liveview", "tokio", "dep:serde", "serde_json"]
 wasm_test = []

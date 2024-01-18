@@ -43,12 +43,12 @@ launch = ["dioxus-config-macro"]
 router = ["dioxus-router"]
 
 # Platforms
-fullstack = ["dioxus-fullstack", "dioxus-config-macro/fullstack", "serde"]
+fullstack = ["dioxus-fullstack", "dioxus-config-macro/fullstack", "serde", "dioxus-router?/fullstack"]
 desktop = ["dioxus-desktop", "dioxus-fullstack?/desktop", "dioxus-config-macro/desktop"]
 mobile = ["dioxus-mobile", "dioxus-fullstack?/desktop", "dioxus-config-macro/desktop"] # todo: use the mobile versions of these
-web = ["dioxus-web", "dioxus-fullstack?/web", "dioxus-config-macro/web"]
-ssr = ["dioxus-fullstack?/ssr", "dioxus-config-macro/ssr"]
-liveview = ["dioxus-desktop", "dioxus-config-macro/liveview"]
+web = ["dioxus-web", "dioxus-fullstack?/web", "dioxus-config-macro/web", "dioxus-router?/web"]
+ssr = ["dioxus-fullstack?/ssr", "dioxus-config-macro/ssr", "dioxus-router?/ssr"]
+liveview = ["dioxus-liveview", "dioxus-config-macro/liveview", "dioxus-router?/liveview"]
 axum = ["dioxus-fullstack?/axum"]
 salvo = ["dioxus-fullstack?/salvo"]
 warp = ["dioxus-fullstack?/warp"]

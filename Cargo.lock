@@ -2502,7 +2502,6 @@ dependencies = [
  "separator",
  "serde",
  "serde_json",
- "simple_logger",
  "thiserror",
  "tokio",
  "tracing-subscriber",

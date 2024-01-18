@@ -4,11 +4,6 @@ use dioxus::prelude::*;
 use dioxus_router::prelude::*;
 
 fn main() {
-    simple_logger::SimpleLogger::new()
-        .with_level(log::LevelFilter::Debug)
-        .with_module_level("dioxus", log::LevelFilter::Trace)
-        .init()
-        .unwrap();
     launch_desktop(|| {
         rsx! {
             Router::<Route> {}
