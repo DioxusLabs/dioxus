@@ -5,7 +5,7 @@ use dioxus_router::prelude::*;
 fn main() {
     env_logger::init();
 
-    LaunchBuilder::new(Route::Home {})
+    LaunchBuilder::new(|| rsx! {Router::<Route> {}})
         .cfg(
             Config::new().with_window(
                 WindowBuilder::new()

@@ -54,7 +54,5 @@ fn Nav() -> Element {
 }
 
 fn main() {
-    launch_desktop(Route::Blog {
-        id: "hello".to_string(),
-    });
+    launch_desktop(|| rsx! {Router::<Route> {}});
 }
