@@ -4,13 +4,13 @@ use std::any::Any;
 
 use crate::prelude::*;
 use dioxus_core::VProps;
-use dioxus_core::{prelude::*, AnyProps};
+use dioxus_core::{ AnyProps};
 
 /// A builder for a fullstack app.
 pub struct LaunchBuilder {
     cross_platform_config: fn() -> Element,
     #[cfg(feature = "fullstack")]
-    contexts: Vec<Box<dyn Fn() -> Box<dyn Any> + Send>>,
+    contexts: Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync>>,
     #[cfg(not(feature = "fullstack"))]
     contexts: Vec<Box<dyn Fn() -> Box<dyn Any>>>,
     platform_config: Option<current_platform::Config>,
@@ -29,7 +29,7 @@ impl LaunchBuilder {
 
     #[cfg(feature = "fullstack")]
     /// Inject state into the root component's context that is created on the thread that the app is launched on.
-    pub fn context_provider(mut self, state: impl Fn() -> Box<dyn Any> + Send + 'static) -> Self {
+    pub fn context_provider(mut self, state: impl Fn() -> Box<dyn Any> + Send + Sync + 'static) -> Self {
         self.contexts
             .push(Box::new(state) as Box<dyn Fn() -> Box<dyn Any> + Send>);
         self
@@ -45,7 +45,7 @@ impl LaunchBuilder {
 
     #[cfg(feature = "fullstack")]
     /// Inject state into the root component's context.
-    pub fn context(mut self, state: impl Any + Clone + Send + 'static) -> Self {
+    pub fn context(mut self, state: impl Any + Clone + Send + Sync + 'static) -> Self {
         self.contexts
             .push(Box::new(move || Box::new(state.clone())));
         self
@@ -116,11 +116,11 @@ mod current_platform {
     #[cfg(all(feature = "web", not(any(feature = "desktop", feature = "fullstack"))))]
     pub use dioxus_web::launch::*;
     #[cfg(not(any(feature = "desktop", feature = "web", feature = "fullstack")))]
-    type Config = ();
+    pub type Config = ();
     #[cfg(not(any(feature = "desktop", feature = "web", feature = "fullstack")))]
     pub fn launch(
-        root: fn() -> Element,
-        contexts: Vec<Box<dyn CloneAny + Send + Sync>>,
+        root: fn() -> dioxus_core::Element,
+        contexts: Vec<Box<dyn Fn() -> Box<dyn std::any::Any> + Send + Sync>>,
         platform_config: Config,
     ) {
     }
