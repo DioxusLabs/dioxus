@@ -60,7 +60,7 @@ pub fn launch_virtual_dom(virtual_dom: VirtualDom, desktop_config: Config) {
         }));
 
     #[cfg(not(feature = "tokio"))]
-    launch_virtual_dom_blocking(config, desktop_config)
+    launch_virtual_dom_blocking(virtual_dom, desktop_config)
 }
 
 /// Launches the WebView and runs the event loop, with configuration and root props.
@@ -75,5 +75,5 @@ pub fn launch(
         virtual_dom.insert_any_root_context(context());
     }
 
-    launch_virtual_dom(virtual_dom, desktop_config)
+    launch_virtual_dom(virtual_dom, platform_config)
 }
