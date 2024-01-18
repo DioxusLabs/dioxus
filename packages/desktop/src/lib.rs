@@ -26,9 +26,8 @@ mod webview;
 #[cfg(any(target_os = "ios", target_os = "android"))]
 mod mobile_shortcut;
 
-// The main entrypoint for this crate
-pub use launch::*;
-mod launch;
+/// The main entrypoint for this crate
+pub mod launch;
 
 // Reexport tao and wry, might want to re-export other important things
 pub use tao;

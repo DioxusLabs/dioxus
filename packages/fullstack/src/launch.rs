@@ -6,15 +6,16 @@ use dioxus_lib::prelude::{
     *,
 };
 
-/// The desktop renderer platform
-pub struct FullstackPlatform;
+pub mod launch {
+    use dioxus_lib::prelude::{dioxus_core::BoxedContext, Element, VirtualDom};
 
-impl<Props: AnyProps + Clone + Send + Sync + 'static> dioxus_core::PlatformBuilder<Props>
-    for FullstackPlatform
-{
-    type Config = Config;
+    pub type Config = crate::Config;
 
-    fn launch(config: dioxus_core::CrossPlatformConfig<Props>, platform_config: Self::Config) {
+    pub fn launch(
+        root: fn() -> Element,
+        contexts: Vec<Box<dyn Fn() -> Box<dyn Any> + Send>>,
+        platform_config: Config,
+    ) {
         #[cfg(feature = "ssr")]
         tokio::runtime::Runtime::new()
             .unwrap()
@@ -24,9 +25,9 @@ impl<Props: AnyProps + Clone + Send + Sync + 'static> dioxus_core::PlatformBuild
         #[cfg(not(feature = "ssr"))]
         {
             #[cfg(feature = "web")]
-            platform_config.launch_web(config);
+            platform_config.launch_web(dom);
             #[cfg(feature = "desktop")]
-            platform_config.launch_desktop(config);
+            platform_config.launch_desktop(dom);
         }
     }
 }

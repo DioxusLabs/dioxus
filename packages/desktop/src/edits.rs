@@ -1,15 +1,6 @@
-use dioxus_core::{AttributeValue, Template, TemplateAttribute, TemplateNode};
-use dioxus_html::event_bubbles;
-use dioxus_interpreter_js::binary_protocol::Channel;
-use rustc_hash::FxHashMap;
-use std::{
-    sync::atomic::AtomicU16,
-    sync::Arc,
-    sync::{atomic::Ordering, Mutex},
-};
+use std::{sync::Arc, sync::Mutex};
 
 use std::fmt::{Debug, Formatter};
-use wry::RequestAsyncResponder;
 
 /// This handles communication between the requests that the webview makes and the interpreter. The interpreter constantly makes long running requests to the webview to get any edits that should be made to the DOM almost like server side events.
 /// It will hold onto the requests until the interpreter is ready to handle them and hold onto any pending edits until a new request is made.

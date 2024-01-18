@@ -12,11 +12,9 @@ use dioxus_core::{
     prelude::{current_scope_id, ScopeId},
     use_hook, VirtualDom,
 };
-use dioxus_interpreter_js::binary_protocol::Channel;
 use dioxus_interpreter_js::MutationState;
-use rustc_hash::FxHashMap;
 use slab::Slab;
-use std::{cell::RefCell, fmt::Debug, rc::Rc, rc::Weak, sync::atomic::AtomicU16};
+use std::{cell::RefCell, fmt::Debug, rc::Rc, rc::Weak};
 use tao::{
     event::Event,
     event_loop::EventLoopWindowTarget,

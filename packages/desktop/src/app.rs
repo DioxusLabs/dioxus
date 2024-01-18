@@ -10,8 +10,8 @@ use crate::{
     webview::WebviewInstance,
 };
 use crossbeam_channel::Receiver;
-use dioxus_core::AnyProps;
-use dioxus_core::{CrossPlatformConfig, ElementId};
+use dioxus_core::ElementId;
+use dioxus_core::VirtualDom;
 use dioxus_html::{
     native_bind::NativeFileEngine, FileEngine, HasFileData, HasFormData, HtmlEvent,
     PlatformEventData,
@@ -29,10 +29,10 @@ use tao::{
 };
 
 /// The single top-level object that manages all the running windows, assets, shortcuts, etc
-pub(crate) struct App<P: AnyProps> {
+pub(crate) struct App {
     // move the props into a cell so we can pop it out later to create the first window
     // iOS panics if we create a window before the event loop is started, so we toss them into a cell
-    pub(crate) dioxus_config: Cell<Option<CrossPlatformConfig<P>>>,
+    pub(crate) unmounted_dom: Cell<Option<VirtualDom>>,
     pub(crate) cfg: Cell<Option<Config>>,
 
     // Stuff we need mutable access to
@@ -59,11 +59,8 @@ pub struct SharedContext {
     pub(crate) target: EventLoopWindowTarget<UserWindowEvent>,
 }
 
-impl<P: AnyProps> App<P> {
-    pub fn new(
-        cfg: Config,
-        dioxus_config: CrossPlatformConfig<P>,
-    ) -> (EventLoop<UserWindowEvent>, Self) {
+impl App {
+    pub fn new(cfg: Config, virtual_dom: VirtualDom) -> (EventLoop<UserWindowEvent>, Self) {
         let event_loop = EventLoopBuilder::<UserWindowEvent>::with_user_event().build();
 
         let app = Self {
@@ -71,7 +68,7 @@ impl<P: AnyProps> App<P> {
             is_visible_before_start: true,
             webviews: HashMap::new(),
             control_flow: ControlFlow::Wait,
-            dioxus_config: Cell::new(Some(dioxus_config)),
+            unmounted_dom: Cell::new(Some(virtual_dom)),
             cfg: Cell::new(Some(cfg)),
             shared: Rc::new(SharedContext {
                 event_handlers: WindowEventHandlers::default(),
@@ -166,12 +163,12 @@ impl<P: AnyProps> App<P> {
     }
 
     pub fn handle_start_cause_init(&mut self) {
-        let dioxus_config = self.dioxus_config.take().unwrap();
+        let virtual_dom = self.unmounted_dom.take().unwrap();
         let cfg = self.cfg.take().unwrap();
 
         self.is_visible_before_start = cfg.window.window.visible;
 
-        let webview = WebviewInstance::new(cfg, dioxus_config.build_vdom(), self.shared.clone());
+        let webview = WebviewInstance::new(cfg, virtual_dom, self.shared.clone());
 
         let id = webview.desktop_context.window.id();
         self.webviews.insert(id, webview);

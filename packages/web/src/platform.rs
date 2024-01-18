@@ -1,16 +1,21 @@
-use dioxus_core::*;
+pub mod launch {
+    use std::any::Any;
 
-use crate::Config;
+    use dioxus_core::prelude::*;
 
-/// The web renderer platform
-pub struct WebPlatform;
+    pub type Config = crate::Config;
 
-impl<P: AnyProps> PlatformBuilder<P> for WebPlatform {
-    type Config = Config;
-
-    fn launch(config: CrossPlatformConfig<P>, platform_config: Self::Config) {
+    pub fn launch(
+        root: fn() -> Element,
+        contexts: Vec<Box<dyn Fn() -> Box<dyn Any> + Send>>,
+        platform_config: Config,
+    ) {
         wasm_bindgen_futures::spawn_local(async move {
-            crate::run_with_props(config, platform_config).await;
+            let mut vdom = VirtualDom::new(root);
+            for context in contexts {
+                vdom.insert_any_root_context(context());
+            }
+            crate::run(vdom, platform_config).await;
         });
     }
 }

@@ -1,7 +1,6 @@
 use std::borrow::Cow;
 use std::path::PathBuf;
 
-use dioxus_core::prelude::{Component, Element};
 use tao::window::{Icon, WindowBuilder, WindowId};
 use wry::{
     http::{Request as HttpRequest, Response as HttpResponse},

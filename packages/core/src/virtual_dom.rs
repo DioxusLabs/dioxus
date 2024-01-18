@@ -13,7 +13,7 @@ use crate::{
     nodes::{Template, TemplateId},
     runtime::{Runtime, RuntimeGuard},
     scopes::ScopeId,
-    AttributeValue, BoxedContext, ComponentFunction, Element, Event, Mutations, Task, VProps,
+    AttributeValue, ComponentFunction, Element, Event, Mutations, Task, VProps,
 };
 use futures_util::{pin_mut, StreamExt};
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -361,10 +361,8 @@ impl VirtualDom {
     /// Build the virtualdom with a global context inserted into the base scope
     ///
     /// This method is useful for when you want to provide a context in your app without knowing its type
-    pub fn insert_boxed_root_context(&mut self, context: BoxedContext) {
-        self.base_scope()
-            .context()
-            .provide_any_context(context.into_inner());
+    pub fn insert_any_root_context(&mut self, context: Box<dyn Any>) {
+        self.base_scope().context().provide_any_context(context);
     }
 
     /// Manually mark a scope as requiring a re-render

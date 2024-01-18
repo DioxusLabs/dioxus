@@ -60,7 +60,7 @@ use std::rc::Rc;
 pub use crate::cfg::Config;
 #[cfg(feature = "file_engine")]
 pub use crate::file_engine::WebFileEngineExt;
-use dioxus_core::{AnyProps, CrossPlatformConfig};
+use dioxus_core::VirtualDom;
 use futures_util::{
     future::{select, Either},
     pin_mut, FutureExt, StreamExt,
@@ -99,13 +99,10 @@ mod rehydrate;
 ///     wasm_bindgen_futures::spawn_local(app_fut);
 /// }
 /// ```
-pub async fn run_with_props<P: AnyProps>(
-    dioxus_config: CrossPlatformConfig<P>,
-    web_config: Config,
-) {
+pub async fn run(virtual_dom: VirtualDom, web_config: Config) {
     tracing::info!("Starting up");
 
-    let mut dom = dioxus_config.build_vdom();
+    let mut dom = virtual_dom;
 
     #[cfg(feature = "eval")]
     {

@@ -1,20 +1,18 @@
+pub use crate::Config;
 use crate::{
     app::App,
     ipc::{EventData, IpcMethod, UserWindowEvent},
-    Config,
 };
 use dioxus_core::*;
+use std::any::Any;
 use tao::event::{Event, StartCause, WindowEvent};
 
 /// Launch the WebView and run the event loop, with configuration and root props.
 ///
 /// This will block the main thread, and *must* be spawned on the main thread. This function does not assume any runtime
 /// and is equivalent to calling launch_with_props with the tokio feature disabled.
-pub fn launch_with_props_blocking<P: AnyProps>(
-    dioxus_cfg: CrossPlatformConfig<P>,
-    desktop_config: Config,
-) {
-    let (event_loop, mut app) = App::new(desktop_config, dioxus_cfg);
+pub fn launch_with_props_blocking(virtual_dom: VirtualDom, desktop_config: Config) {
+    let (event_loop, mut app) = App::new(desktop_config, virtual_dom);
 
     event_loop.run(move |window_event, _, control_flow| {
         app.tick(&window_event);
@@ -50,23 +48,27 @@ pub fn launch_with_props_blocking<P: AnyProps>(
     })
 }
 
-/// The desktop renderer platform
-pub struct DesktopPlatform;
+/// Launches the WebView and runs the event loop, with configuration and root props.
+pub fn launch(
+    root: fn() -> Element,
+    contexts: Vec<Box<dyn Fn() -> Box<dyn Any> + Send>>,
+    platform_config: Config,
+) {
+    let mut virtual_dom = VirtualDom::new(root);
 
-impl<P: AnyProps> PlatformBuilder<P> for DesktopPlatform {
-    type Config = Config;
-
-    fn launch(config: dioxus_core::CrossPlatformConfig<P>, platform_config: Self::Config) {
-        #[cfg(feature = "tokio")]
-        tokio::runtime::Builder::new_multi_thread()
-            .enable_all()
-            .build()
-            .unwrap()
-            .block_on(tokio::task::unconstrained(async move {
-                launch_with_props_blocking(config, platform_config)
-            }));
-
-        #[cfg(not(feature = "tokio"))]
-        launch_with_props_blocking(config, platform_config)
+    for context in contexts {
+        virtual_dom.insert_any_root_context(context());
     }
+
+    #[cfg(feature = "tokio")]
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .unwrap()
+        .block_on(tokio::task::unconstrained(async move {
+            launch_with_props_blocking(virtual_dom, platform_config)
+        }));
+
+    #[cfg(not(feature = "tokio"))]
+    launch_with_props_blocking(config, platform_config)
 }
