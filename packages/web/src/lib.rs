@@ -71,10 +71,9 @@ mod dom;
 #[cfg(feature = "eval")]
 mod eval;
 mod event;
+pub mod launch;
 mod mutations;
-mod platform;
 pub use event::*;
-pub use platform::*;
 #[cfg(feature = "file_engine")]
 mod file_engine;
 #[cfg(all(feature = "hot_reload", debug_assertions))]
