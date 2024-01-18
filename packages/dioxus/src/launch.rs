@@ -7,55 +7,38 @@ use dioxus_core::VProps;
 use dioxus_core::{prelude::*, AnyProps};
 use dioxus_core::{BoxedContext, CrossPlatformConfig, PlatformBuilder};
 
+#[cfg(feature = "fullstack")]
+macro_rules! impl_launch_builder {
+    ($($inner:item)*) => {
+        impl<F, Props: Clone + Send + Sync + 'static, M: Send + Sync + 'static>
+            LaunchBuilder<VProps<F, Props, M>>
+            where F: ComponentFunction<Props, M> + Send + Sync + 'static
+        {
+            $($inner)*
+        }
+    };
+}
+
+#[cfg(not(feature = "fullstack"))]
+macro_rules! impl_launch_builder {
+    ($($inner:item)*) => {
+        impl<F, Props: Clone +  'static, M: 'static>
+            LaunchBuilder<VProps<F, Props, M>>
+            where F: ComponentFunction<Props, M> + 'static
+        {
+            $($inner)*
+        }
+    };
+}
+
 /// A builder for a fullstack app.
 pub struct LaunchBuilder<P: AnyProps, Platform: PlatformBuilder<P> = CurrentPlatform> {
     cross_platform_config: CrossPlatformConfig<P>,
     platform_config: Option<<Platform as PlatformBuilder<P>>::Config>,
 }
 
-#[cfg(feature = "fullstack")]
 // Fullstack platform builder
-impl<
-        F: ComponentFunction<Props, M> + Send + Sync,
-        Props: Clone + Send + Sync + 'static,
-        M: Send + Sync + 'static,
-    > LaunchBuilder<VProps<F, Props, M>>
-{
-    /// Create a new builder for your application. This will create a launch configuration for the current platform based on the features enabled on the `dioxus` crate.
-    pub fn new(component: F) -> Self
-    where
-        Props: Default,
-    {
-        Self {
-            cross_platform_config: CrossPlatformConfig::new(VProps::new(
-                component,
-                |_, _| true,
-                Default::default(),
-                "root",
-            )),
-            platform_config: None,
-        }
-    }
-
-    /// Create a new builder for your application with some root props. This will create a launch configuration for the current platform based on the features enabled on the `dioxus` crate.
-    pub fn new_with_props(component: F, props: Props) -> Self {
-        Self {
-            cross_platform_config: CrossPlatformConfig::new(VProps::new(
-                component,
-                |_, _| true,
-                props,
-                "root",
-            )),
-            platform_config: None,
-        }
-    }
-}
-
-#[cfg(not(feature = "fullstack"))]
-// Default platform builder
-impl<F: ComponentFunction<Props, M>, Props: Clone + 'static, M: 'static>
-    LaunchBuilder<VProps<F, Props, M>>
-{
+impl_launch_builder! {
     /// Create a new builder for your application. This will create a launch configuration for the current platform based on the features enabled on the `dioxus` crate.
     pub fn new(component: F) -> Self
     where
