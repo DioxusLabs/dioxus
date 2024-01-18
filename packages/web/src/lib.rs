@@ -121,10 +121,7 @@ pub async fn run(virtual_dom: VirtualDom, web_config: Config) {
 
     let (tx, mut rx) = futures_channel::mpsc::unbounded();
 
-    #[cfg(feature = "hydrate")]
     let should_hydrate = web_config.hydrate;
-    #[cfg(not(feature = "hydrate"))]
-    let should_hydrate = false;
 
     let mut websys_dom = dom::WebsysDom::new(web_config, tx);
 
@@ -133,13 +130,8 @@ pub async fn run(virtual_dom: VirtualDom, web_config: Config) {
     if should_hydrate {
         #[cfg(feature = "hydrate")]
         {
-            // todo: we need to split rebuild and initialize into two phases
-            // it's a waste to produce edits just to get the vdom loaded
+            dom.rebuild(&mut crate::rehydrate::OnlyWriteTemplates(&mut websys_dom));
 
-            {
-                dom.rebuild(&mut websys_dom);
-                websys_dom.flush_edits();
-            }
             if let Err(err) = websys_dom.rehydrate(&dom) {
                 tracing::error!("Rehydration failed. {:?}", err);
                 tracing::error!("Rebuild DOM into element from scratch");

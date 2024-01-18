@@ -1,6 +1,9 @@
 use crate::dom::WebsysDom;
+use dioxus_core::prelude::*;
 use dioxus_core::AttributeValue;
+use dioxus_core::WriteMutations;
 use dioxus_core::{DynamicNode, ElementId, ScopeState, TemplateNode, VNode, VirtualDom};
+use dioxus_interpreter_js::save_template;
 
 #[derive(Debug)]
 pub enum RehydrationError {
@@ -148,4 +151,62 @@ impl WebsysDom {
         }
         Ok(())
     }
+}
+
+/// During rehydration, we don't want to actually write anything to the DOM, but we do need to store any templates that were created. This struct is used to only write templates to the DOM.
+pub(crate) struct OnlyWriteTemplates<'a>(pub &'a mut WebsysDom);
+
+impl WriteMutations for OnlyWriteTemplates<'_> {
+    fn register_template(&mut self, template: Template) {
+        let mut roots = vec![];
+
+        for root in template.roots {
+            roots.push(self.0.create_template_node(root))
+        }
+
+        self.0
+            .templates
+            .insert(template.name.to_owned(), self.0.max_template_id);
+        save_template(roots, self.0.max_template_id);
+        self.0.max_template_id += 1
+    }
+
+    fn append_children(&mut self, _: ElementId, _: usize) {}
+
+    fn assign_node_id(&mut self, _: &'static [u8], _: ElementId) {}
+
+    fn create_placeholder(&mut self, _: ElementId) {}
+
+    fn create_text_node(&mut self, _: &str, _: ElementId) {}
+
+    fn hydrate_text_node(&mut self, _: &'static [u8], _: &str, _: ElementId) {}
+
+    fn load_template(&mut self, _: &'static str, _: usize, _: ElementId) {}
+
+    fn replace_node_with(&mut self, _: ElementId, _: usize) {}
+
+    fn replace_placeholder_with_nodes(&mut self, _: &'static [u8], _: usize) {}
+
+    fn insert_nodes_after(&mut self, _: ElementId, _: usize) {}
+
+    fn insert_nodes_before(&mut self, _: ElementId, _: usize) {}
+
+    fn set_attribute(
+        &mut self,
+        _: &'static str,
+        _: Option<&'static str>,
+        _: &AttributeValue,
+        _: ElementId,
+    ) {
+    }
+
+    fn set_node_text(&mut self, _: &str, _: ElementId) {}
+
+    fn create_event_listener(&mut self, _: &'static str, _: ElementId) {}
+
+    fn remove_event_listener(&mut self, _: &'static str, _: ElementId) {}
+
+    fn remove_node(&mut self, _: ElementId) {}
+
+    fn push_root(&mut self, _: ElementId) {}
 }

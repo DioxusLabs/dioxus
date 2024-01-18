@@ -111,7 +111,7 @@ impl Config {
         #[cfg(not(feature = "ssr"))]
         {
             let cfg = self.web_cfg.hydrate(true);
-            dioxus_web::run(
+            dioxus_web::launch::launch_virtual_dom(
                 // TODO: this should pull the props from the document
                 build_virtual_dom(),
                 cfg,

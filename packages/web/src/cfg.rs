@@ -8,7 +8,6 @@
 /// dioxus_web::launch(App, Config::new().hydrate(true).root_name("myroot"))
 /// ```
 pub struct Config {
-    #[cfg(feature = "hydrate")]
     pub(crate) hydrate: bool,
     pub(crate) rootname: String,
     pub(crate) default_panic_hook: bool,
@@ -17,7 +16,6 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            #[cfg(feature = "hydrate")]
             hydrate: false,
             rootname: "main".to_string(),
             default_panic_hook: true,

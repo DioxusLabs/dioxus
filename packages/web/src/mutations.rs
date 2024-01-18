@@ -12,7 +12,7 @@ use wasm_bindgen::JsCast;
 use wasm_bindgen::JsValue;
 
 impl WebsysDom {
-    fn create_template_node(&self, v: &TemplateNode) -> web_sys::Node {
+    pub(crate) fn create_template_node(&self, v: &TemplateNode) -> web_sys::Node {
         use TemplateNode::*;
         match v {
             Element {
