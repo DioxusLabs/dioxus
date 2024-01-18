@@ -15,7 +15,7 @@ pub fn navigator() -> Navigator {
 }
 
 /// A view into the navigation state of a router.
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct Navigator(pub(crate) RouterContext);
 
 impl Navigator {

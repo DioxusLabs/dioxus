@@ -75,15 +75,5 @@ pub fn launch(
         virtual_dom.insert_any_root_context(context());
     }
 
-    #[cfg(feature = "tokio")]
-    tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .unwrap()
-        .block_on(tokio::task::unconstrained(async move {
-            launch_with_props_blocking(virtual_dom, platform_config)
-        }));
-
-    #[cfg(not(feature = "tokio"))]
-    launch_with_props_blocking(virtual_dom, platform_config)
+    launch_virtual_dom(virtual_dom, desktop_config)
 }

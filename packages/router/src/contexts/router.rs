@@ -25,19 +25,13 @@ pub(crate) type RoutingCallback<R> =
 pub(crate) type AnyRoutingCallback =
     Arc<dyn Fn(RouterContext) -> Option<NavigationTarget<Rc<dyn Any>>>>;
 
-struct MutableRouterState {
+struct RouterContextInner {
     /// The current prefix.
     prefix: Option<String>,
 
     history: Box<dyn AnyHistoryProvider>,
 
     unresolved_error: Option<ExternalNavigationFailure>,
-}
-
-/// A collection of router data that manages all routing functionality.
-#[derive(Clone)]
-pub struct RouterContext {
-    state: Rc<RefCell<MutableRouterState>>,
 
     subscribers: Arc<RwLock<HashSet<ScopeId>>>,
     subscriber_update: Arc<dyn Fn(ScopeId)>,
@@ -46,6 +40,35 @@ pub struct RouterContext {
     failure_external_navigation: fn() -> Element,
 
     any_route_to_string: fn(&dyn Any) -> String,
+}
+
+impl RouterContextInner {
+    fn update_subscribers(&self) {
+        let update = &self.subscriber_update;
+        for &id in self.subscribers.read().unwrap().iter() {
+            update(id);
+        }
+    }
+
+    fn external(&mut self, external: String) -> Option<ExternalNavigationFailure> {
+        match self.history.external(external.clone()) {
+            true => None,
+            false => {
+                let failure = ExternalNavigationFailure(external);
+                self.unresolved_error = Some(failure.clone());
+
+                self.update_subscribers();
+
+                Some(failure)
+            }
+        }
+    }
+}
+
+/// A collection of router data that manages all routing functionality.
+#[derive(Clone, Copy)]
+pub struct RouterContext {
+    inner: CopyValue<RouterContextInner>,
 }
 
 impl RouterContext {
@@ -57,17 +80,13 @@ impl RouterContext {
         R: Clone,
         <R as std::str::FromStr>::Err: std::fmt::Display,
     {
-        let state = Rc::new(RefCell::new(MutableRouterState {
-            prefix: Default::default(),
-            history: cfg.take_history(),
-            unresolved_error: None,
-        }));
-
         let subscriber_update = mark_dirty.clone();
         let subscribers = Arc::new(RwLock::new(HashSet::new()));
 
-        let myself = Self {
-            state,
+        let mut myself = RouterContextInner {
+            prefix: Default::default(),
+            history: cfg.take_history(),
+            unresolved_error: None,
             subscribers: subscribers.clone(),
             subscriber_update,
 
@@ -106,32 +125,32 @@ impl RouterContext {
 
         // set the updater
         {
-            let mut state = myself.state.borrow_mut();
-            state.history.updater(Arc::new(move || {
+            myself.history.updater(Arc::new(move || {
                 for &id in subscribers.read().unwrap().iter() {
                     (mark_dirty)(id);
                 }
             }));
         }
 
-        myself
+        Self {
+            inner: CopyValue::new_in_scope(myself, ScopeId::ROOT),
+        }
     }
 
     pub(crate) fn route_from_str(&self, route: &str) -> Result<Rc<dyn Any>, String> {
-        let state = self.state.borrow();
-        state.history.parse_route(route)
+        self.inner.read().history.parse_route(route)
     }
 
     /// Check whether there is a previous page to navigate back to.
     #[must_use]
     pub fn can_go_back(&self) -> bool {
-        self.state.borrow().history.can_go_back()
+        self.inner.read().history.can_go_back()
     }
 
     /// Check whether there is a future page to navigate forward to.
     #[must_use]
     pub fn can_go_forward(&self) -> bool {
-        self.state.borrow().history.can_go_forward()
+        self.inner.read().history.can_go_forward()
     }
 
     /// Go back to the previous location.
@@ -139,7 +158,7 @@ impl RouterContext {
     /// Will fail silently if there is no previous location to go to.
     pub fn go_back(&self) {
         {
-            self.state.borrow_mut().history.go_back();
+            self.inner.write().history.go_back();
         }
 
         self.change_route();
@@ -150,7 +169,7 @@ impl RouterContext {
     /// Will fail silently if there is no next location to go to.
     pub fn go_forward(&self) {
         {
-            self.state.borrow_mut().history.go_forward();
+            self.inner.write().history.go_forward();
         }
 
         self.change_route();
@@ -160,12 +179,12 @@ impl RouterContext {
         &self,
         target: NavigationTarget<Rc<dyn Any>>,
     ) -> Option<ExternalNavigationFailure> {
-        match target {
-            NavigationTarget::Internal(p) => {
-                let mut state = self.state_mut();
-                state.history.push(p)
+        {
+            let mut write = self.inner.write();
+            match target {
+                NavigationTarget::Internal(p) => write.history.push(p),
+                NavigationTarget::External(e) => return write.external(e),
             }
-            NavigationTarget::External(e) => return self.external(e),
         }
 
         self.change_route()
@@ -176,12 +195,12 @@ impl RouterContext {
     /// The previous location will be available to go back to.
     pub fn push(&self, target: impl Into<IntoRoutable>) -> Option<ExternalNavigationFailure> {
         let target = self.resolve_into_routable(target.into());
-        match target {
-            NavigationTarget::Internal(p) => {
-                let mut state = self.state_mut();
-                state.history.push(p)
+        {
+            let mut write = self.inner.write();
+            match target {
+                NavigationTarget::Internal(p) => write.history.push(p),
+                NavigationTarget::External(e) => return write.external(e),
             }
-            NavigationTarget::External(e) => return self.external(e),
         }
 
         self.change_route()
@@ -194,10 +213,10 @@ impl RouterContext {
         let target = self.resolve_into_routable(target.into());
 
         {
-            let mut state = self.state_mut();
+            let mut state = self.inner.write();
             match target {
                 NavigationTarget::Internal(p) => state.history.replace(p),
-                NavigationTarget::External(e) => return self.external(e),
+                NavigationTarget::External(e) => return state.external(e),
             }
         }
 
@@ -206,8 +225,8 @@ impl RouterContext {
 
     /// The route that is currently active.
     pub fn current<R: Routable>(&self) -> R {
-        self.state
-            .borrow()
+        self.inner
+            .read()
             .history
             .current_route()
             .downcast::<R>()
@@ -218,11 +237,11 @@ impl RouterContext {
 
     /// The route that is currently active.
     pub fn current_route_string(&self) -> String {
-        self.any_route_to_string(&*self.state.borrow().history.current_route())
+        self.any_route_to_string(&*self.inner.read().history.current_route())
     }
 
     pub(crate) fn any_route_to_string(&self, route: &dyn Any) -> String {
-        (self.any_route_to_string)(route)
+        (self.inner.read().any_route_to_string)(route)
     }
 
     pub(crate) fn resolve_into_routable(
@@ -243,72 +262,51 @@ impl RouterContext {
 
     /// The prefix that is currently active.
     pub fn prefix(&self) -> Option<String> {
-        self.state.borrow().prefix.clone()
-    }
-
-    fn external(&self, external: String) -> Option<ExternalNavigationFailure> {
-        let mut state = self.state_mut();
-        match state.history.external(external.clone()) {
-            true => None,
-            false => {
-                let failure = ExternalNavigationFailure(external);
-                state.unresolved_error = Some(failure.clone());
-
-                self.update_subscribers();
-
-                Some(failure)
-            }
-        }
-    }
-
-    fn state_mut(&self) -> RefMut<MutableRouterState> {
-        self.state.borrow_mut()
+        self.inner.read().prefix.clone()
     }
 
     /// Manually subscribe to the current route
     pub fn subscribe(&self, id: ScopeId) {
-        self.subscribers.write().unwrap().insert(id);
+        self.inner.read().subscribers.write().unwrap().insert(id);
     }
 
     /// Manually unsubscribe from the current route
     pub fn unsubscribe(&self, id: ScopeId) {
-        self.subscribers.write().unwrap().remove(&id);
-    }
-
-    fn update_subscribers(&self) {
-        for &id in self.subscribers.read().unwrap().iter() {
-            (self.subscriber_update)(id);
-        }
+        self.inner.read().subscribers.write().unwrap().remove(&id);
     }
 
     /// Clear any unresolved errors
     pub fn clear_error(&self) {
-        self.state.borrow_mut().unresolved_error = None;
+        let mut write_inner = self.inner.write();
+        write_inner.unresolved_error = None;
 
-        self.update_subscribers();
+        write_inner.update_subscribers();
     }
 
     pub(crate) fn render_error(&self) -> Element {
-        self.state
-            .borrow()
+        let inner_read = self.inner.write();
+        inner_read
             .unresolved_error
             .as_ref()
-            .and_then(|_| (self.failure_external_navigation)())
+            .and_then(|_| (inner_read.failure_external_navigation)())
     }
 
     fn change_route(&self) -> Option<ExternalNavigationFailure> {
-        if let Some(callback) = &self.routing_callback {
+        let self_read = self.inner.read();
+        if let Some(callback) = &self_read.routing_callback {
             let myself = self.clone();
+            let callback = callback.clone();
+            drop(self_read);
             if let Some(new) = callback(myself) {
-                let mut state = self.state_mut();
+                let mut self_write = self.inner.write();
                 match new {
-                    NavigationTarget::Internal(p) => state.history.replace(p),
-                    NavigationTarget::External(e) => return self.external(e),
+                    NavigationTarget::Internal(p) => self_write.history.replace(p),
+                    NavigationTarget::External(e) => return self_write.external(e),
                 }
             }
         }
 
-        self.update_subscribers();
+        self.inner.read().update_subscribers();
 
         None
     }
