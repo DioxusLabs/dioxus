@@ -100,3 +100,13 @@ pub fn use_on_destroy<D: FnOnce() + 'static>(destroy: D) {
 pub fn use_on_drop<D: FnOnce() + 'static>(ondrop: D) {
     use_on_destroy(ondrop);
 }
+
+pub fn use_hook_with_cleanup<T: Clone + 'static>(
+    hook: impl FnOnce() -> T,
+    cleanup: impl FnOnce(T) + 'static,
+) -> T {
+    let value = use_hook(|| hook());
+    let _value = value.clone();
+    use_on_destroy(move || cleanup(_value));
+    value
+}

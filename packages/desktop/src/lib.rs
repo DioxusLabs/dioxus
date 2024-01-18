@@ -10,6 +10,7 @@ mod desktop_context;
 mod edits;
 mod element;
 mod eval;
+mod event_handlers;
 mod events;
 mod file_upload;
 mod hooks;
@@ -38,11 +39,8 @@ pub use wry;
 // Public exports
 pub use assets::AssetRequest;
 pub use config::{Config, WindowCloseBehaviour};
-pub use desktop_context::{
-    window, DesktopContext, DesktopService, WryEventHandler, WryEventHandlerId,
-};
+pub use desktop_context::{window, DesktopContext, DesktopService};
+pub use event_handlers::WryEventHandler;
 pub use hooks::{use_asset_handler, use_global_shortcut, use_window, use_wry_event_handler};
-pub use shortcut::{ShortcutHandle, ShortcutId, ShortcutRegistryError};
+pub use shortcut::{ShortcutHandle, ShortcutRegistryError};
 pub use wry::RequestAsyncResponder;
-
-pub use hooks::*;

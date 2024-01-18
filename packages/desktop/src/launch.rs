@@ -70,5 +70,5 @@ pub fn launch(
         }));
 
     #[cfg(not(feature = "tokio"))]
-    launch_with_props_blocking(config, platform_config)
+    launch_with_props_blocking(virtual_dom, platform_config)
 }

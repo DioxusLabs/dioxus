@@ -13,18 +13,27 @@ keywords = ["dom", "ui", "gui", "react", "wasm"]
 [dependencies]
 wasm-bindgen = { workspace = true, optional = true }
 js-sys = { version = "0.3.56", optional = true }
-web-sys = { version = "0.3.56", optional = true, features = ["Element", "Node"] }
+web-sys = { version = "0.3.56", optional = true, features = [
+    "Element",
+    "Node",
+] }
 sledgehammer_bindgen = { version = "0.3.1", default-features = false, optional = true }
 sledgehammer_utils = { version = "0.2", optional = true }
 serde = { version = "1.0", features = ["derive"], optional = true }
 
-dioxus-core = { workspace = true , optional = true }
-dioxus-html = { workspace = true , optional = true }
+dioxus-core = { workspace = true, optional = true }
+dioxus-html = { workspace = true, optional = true }
 
 [features]
 default = []
 serialize = ["serde"]
 sledgehammer = ["sledgehammer_bindgen", "sledgehammer_utils"]
-web = ["sledgehammer", "wasm-bindgen", "js-sys", "web-sys", "sledgehammer_bindgen/web"]
-binary-protocol = ["sledgehammer", "wasm-bindgen", "dioxus-core", "dioxus-html"]
+web = [
+    "sledgehammer",
+    "wasm-bindgen",
+    "js-sys",
+    "web-sys",
+    "sledgehammer_bindgen/web",
+]
+binary-protocol = ["sledgehammer", "dioxus-core", "dioxus-html"]
 minimal_bindings = []

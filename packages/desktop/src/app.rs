@@ -1,7 +1,7 @@
 use crate::{
     config::{Config, WindowCloseBehaviour},
-    desktop_context::WindowEventHandlers,
     element::DesktopElement,
+    event_handlers::WindowEventHandlers,
     file_upload::FileDialogRequest,
     ipc::IpcMessage,
     ipc::{EventData, UserWindowEvent},

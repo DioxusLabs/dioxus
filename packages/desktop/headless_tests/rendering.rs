@@ -1,5 +1,10 @@
 use dioxus::prelude::*;
+use dioxus_core::Element;
 use dioxus_desktop::DesktopContext;
+
+fn main() {
+    check_app_exits(check_html_renders);
+}
 
 pub(crate) fn check_app_exits(app: Component) {
     use dioxus_desktop::Config;
@@ -22,28 +27,20 @@ pub(crate) fn check_app_exits(app: Component) {
     should_panic.store(false, std::sync::atomic::Ordering::SeqCst);
 }
 
-fn main() {
-    check_app_exits(check_html_renders);
-}
-
 fn use_inner_html(d: &'static str) -> Option<String> {
-    let eval_provider = use_eval(cx);
-
     let value: Signal<Option<String>> = use_signal(|| None);
-    use_effect((), |_| {
-        to_owned![value, eval_provider];
-        async move {
-            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-            let html = eval_provider(&format!(
-                r#"let element = document.getElementById('{}');
+    use_effect(|| async move {
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        window().eval();
+        let html = eval_provider(&format!(
+            r#"let element = document.getElementById('{}');
                     return element.innerHTML"#,
-                id
-            ))
-            .unwrap();
-            if let Ok(serde_json::Value::String(html)) = html.await {
-                println!("html: {}", html);
-                value.set(Some(html));
-            }
+            id
+        ))
+        .unwrap();
+        if let Ok(serde_json::Value::String(html)) = html.await {
+            println!("html: {}", html);
+            value.set(Some(html));
         }
     });
     value.read().clone()
@@ -58,10 +55,13 @@ fn check_html_renders() -> Element {
 
     if let Some(raw_html) = inner_html {
         println!("{}", raw_html);
-        let fragment = scraper::Html::parse_fragment(&raw_html);
-        println!("fragment: {}", fragment.html());
-        let expected = scraper::Html::parse_fragment(EXPECTED_HTML);
-        println!("expected: {}", expected.html());
+        let fragment = &raw_html;
+        let expected = EXPECTED_HTML;
+        // let fragment = scraper::Html::parse_fragment(&raw_html);
+        // println!("fragment: {}", fragment.html());
+        // let expected = scraper::Html::parse_fragment(EXPECTED_HTML);
+        // println!("expected: {}", expected.html());
+        assert_eq!(raw_html, EXPECTED_HTML);
         if fragment == expected {
             println!("html matches");
             desktop_context.close();
