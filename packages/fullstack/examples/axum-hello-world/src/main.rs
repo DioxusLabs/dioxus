@@ -1,8 +1,7 @@
 //! Run with:
 //!
 //! ```sh
-//! dx build --features web --release
-//! cargo run --features ssr --release
+//! dx serve --platform fullstack
 //! ```
 
 #![allow(non_snake_case, unused)]
@@ -10,14 +9,10 @@ use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 
 fn app() -> Element {
-    // let state = use_server_future(|| async move { get_server_data().await.unwrap() })?;
-    // let state = state.value();
-
     let mut count = use_signal(|| 0);
     let text = use_signal(|| "...".to_string());
 
     rsx! {
-        // div { "Server state: {state}" }
         h1 { "High-Five counter: {count}" }
         button { onclick: move |_| count += 1, "Up high!" }
         button { onclick: move |_| count -= 1, "Down low!" }

@@ -52,6 +52,7 @@ use crate::{
 };
 
 use crate::server_fn_service;
+use dioxus_lib::prelude::VirtualDom;
 use server_fn::{Encoding, Payload, ServerFunctionRegistry};
 use std::error::Error;
 use std::sync::Arc;
@@ -179,68 +180,85 @@ pub fn register_server_fns(server_fn_route: &'static str) -> BoxedFilter<(impl R
 ///     todo!()
 /// }
 /// ```
-pub fn serve_dioxus_application<P: Clone + serde::Serialize + Send + Sync + 'static>(
+pub fn serve_dioxus_application(
     server_fn_route: &'static str,
-    cfg: impl Into<ServeConfig<P>>,
+    cfg: impl Into<ServeConfig>,
+    virtual_dom_factory: impl Fn() -> VirtualDom + Send + Sync + 'static,
 ) -> BoxedFilter<(impl Reply,)> {
     let cfg = cfg.into();
     // Serve the dist folder and the index.html file
     let serve_dir = warp::fs::dir(cfg.assets_path);
 
+    let virtual_dom_factory =
+        Arc::new(virtual_dom_factory) as Arc<dyn Fn() -> VirtualDom + Send + Sync + 'static>;
+
     connect_hot_reload()
         // First register the server functions
         .or(register_server_fns(server_fn_route))
         // Then the index route
-        .or(path::end().and(render_ssr(cfg.clone())))
+        .or(path::end().and(render_ssr(cfg.clone(), {
+            let virtual_dom_factory = virtual_dom_factory.clone();
+            move || virtual_dom_factory()
+        })))
         // Then the static assets
         .or(serve_dir)
         // Then all other routes
-        .or(render_ssr(cfg))
+        .or(render_ssr(cfg, move || virtual_dom_factory()))
         .boxed()
 }
 
 /// Server render the application.
-pub fn render_ssr<P: Clone + serde::Serialize + Send + Sync + 'static>(
-    cfg: ServeConfig<P>,
+pub fn render_ssr(
+    cfg: ServeConfig,
+    virtual_dom_factory: impl Fn() -> VirtualDom + Send + Sync + 'static,
 ) -> impl Filter<Extract = (impl Reply,), Error = warp::Rejection> + Clone {
     warp::get()
         .and(request_parts())
-        .and(with_ssr_state(&cfg))
-        .then(move |parts: http::request::Parts, renderer: SSRState| {
-            let route = parts.uri.path().to_string();
-            let parts = Arc::new(RwLock::new(parts));
-            let cfg = cfg.clone();
-            async move {
-                let server_context = DioxusServerContext::new(parts);
+        .and(with_ssr_state(&cfg, virtual_dom_factory))
+        .then(
+            move |parts: http::request::Parts,
+                  (renderer, virtual_dom_factory): (
+                SSRState,
+                Arc<dyn Fn() -> VirtualDom + Send + Sync + 'static>,
+            )| {
+                let route = parts.uri.path().to_string();
+                let parts = Arc::new(RwLock::new(parts));
+                let cfg = cfg.clone();
+                async move {
+                    let server_context = DioxusServerContext::new(parts);
 
-                match renderer.render(route, &cfg, &server_context).await {
-                    Ok(rendered) => {
-                        let crate::render::RenderResponse { html, freshness } = rendered;
+                    match renderer
+                        .render(route, &cfg, move || virtual_dom_factory(), &server_context)
+                        .await
+                    {
+                        Ok(rendered) => {
+                            let crate::render::RenderResponse { html, freshness } = rendered;
 
-                        let mut res = Response::builder()
-                            .header("Content-Type", "text/html")
-                            .body(html)
-                            .unwrap();
+                            let mut res = Response::builder()
+                                .header("Content-Type", "text/html")
+                                .body(html)
+                                .unwrap();
 
-                        let headers_mut = res.headers_mut();
-                        let headers = server_context.response_parts().unwrap().headers.clone();
-                        for (key, value) in headers.iter() {
-                            headers_mut.insert(key, value.clone());
+                            let headers_mut = res.headers_mut();
+                            let headers = server_context.response_parts().unwrap().headers.clone();
+                            for (key, value) in headers.iter() {
+                                headers_mut.insert(key, value.clone());
+                            }
+                            freshness.write(headers_mut);
+
+                            res
                         }
-                        freshness.write(headers_mut);
-
-                        res
-                    }
-                    Err(err) => {
-                        tracing::error!("Failed to render ssr: {}", err);
-                        Response::builder()
-                            .status(500)
-                            .body("Failed to render ssr".into())
-                            .unwrap()
+                        Err(err) => {
+                            tracing::error!("Failed to render ssr: {}", err);
+                            Response::builder()
+                                .status(500)
+                                .body("Failed to render ssr".into())
+                                .unwrap()
+                        }
                     }
                 }
-            }
-        })
+            },
+        )
 }
 
 /// An extractor for the request parts (used in [DioxusServerContext]). This will extract the method, uri, query, and headers from the request.
@@ -273,11 +291,20 @@ pub fn request_parts(
         })
 }
 
-fn with_ssr_state<P: Clone + serde::Serialize + Send + Sync + 'static>(
-    cfg: &ServeConfig<P>,
-) -> impl Filter<Extract = (SSRState,), Error = std::convert::Infallible> + Clone {
+fn with_ssr_state(
+    cfg: &ServeConfig,
+    virtual_dom_factory: impl Fn() -> VirtualDom + Send + Sync + 'static,
+) -> impl Filter<
+    Extract = ((
+        SSRState,
+        Arc<dyn Fn() -> VirtualDom + Send + Sync + 'static>,
+    ),),
+    Error = std::convert::Infallible,
+> + Clone {
     let renderer = SSRState::new(cfg);
-    warp::any().map(move || renderer.clone())
+    let virtual_dom_factory =
+        Arc::new(virtual_dom_factory) as Arc<dyn Fn() -> VirtualDom + Send + Sync + 'static>;
+    warp::any().map(move || (renderer.clone(), virtual_dom_factory.clone()))
 }
 
 #[derive(Debug)]

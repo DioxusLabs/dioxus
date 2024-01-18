@@ -1,8 +1,7 @@
 //! Run with:
 //!
 //! ```sh
-//! dx build --features web --release
-//! cargo run --features ssr --release
+//! dx serve --platform fullstack
 //! ```
 
 use dioxus::prelude::*;

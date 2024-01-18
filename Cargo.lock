@@ -10966,16 +10966,11 @@ name = "warp-hello-world"
 version = "0.1.0"
 dependencies = [
  "dioxus",
- "dioxus-fullstack",
- "dioxus-web",
- "execute",
  "reqwest",
  "serde",
- "simple_logger",
  "tracing",
  "tracing-subscriber",
  "tracing-wasm",
- "warp",
 ]
 
 [[package]]

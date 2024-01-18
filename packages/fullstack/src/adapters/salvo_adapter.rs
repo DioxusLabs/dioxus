@@ -49,6 +49,7 @@
 //! }
 //! ```
 
+use dioxus_lib::prelude::*;
 use http_body_util::{BodyExt, Limited};
 use hyper::body::Body as HyperBody;
 use hyper::StatusCode;
@@ -201,10 +202,11 @@ pub trait DioxusRouterExt {
     ///
     /// fn app() -> Element {todo!()}
     /// ```
-    fn serve_dioxus_application<P: Clone + serde::Serialize + Send + Sync + 'static>(
+    fn serve_dioxus_application(
         self,
         server_fn_path: &'static str,
-        cfg: impl Into<ServeConfig<P>>,
+        cfg: impl Into<ServeConfig>,
+        virtual_dom_factory: impl Fn() -> VirtualDom + Send + Sync + 'static,
     ) -> Self;
 }
 
@@ -281,10 +283,11 @@ impl DioxusRouterExt for Router {
         self
     }
 
-    fn serve_dioxus_application<P: Clone + serde::Serialize + Send + Sync + 'static>(
+    fn serve_dioxus_application(
         self,
         server_fn_path: &'static str,
-        cfg: impl Into<ServeConfig<P>>,
+        cfg: impl Into<ServeConfig>,
+        virtual_dom_factory: impl Fn() -> VirtualDom + Send + Sync + 'static,
     ) -> Self {
         let cfg = cfg.into();
 
@@ -376,19 +379,26 @@ async fn convert_response(response: HyperResponse, res: &mut Response) {
 }
 
 /// A handler that renders a Dioxus application to HTML using server-side rendering.
-pub struct SSRHandler<P: Clone> {
-    cfg: ServeConfig<P>,
+pub struct SSRHandler {
+    config: ServeConfig,
+    virtual_dom: Box<dyn Fn() -> VirtualDom + Send + Sync>,
 }
 
-impl<P: Clone> SSRHandler<P> {
+impl SSRHandler {
     /// Creates a new SSR handler with the given configuration.
-    pub fn new(cfg: ServeConfig<P>) -> Self {
-        Self { cfg }
+    pub fn new(
+        config: ServeConfig,
+        virtual_dom: impl Fn() -> VirtualDom + Send + Sync + 'static,
+    ) -> Self {
+        Self {
+            config,
+            virtual_dom: Box::new(virtual_dom),
+        }
     }
 }
 
 #[async_trait]
-impl<P: Clone + serde::Serialize + Send + Sync + 'static> Handler for SSRHandler<P> {
+impl Handler for SSRHandler {
     async fn handle(
         &self,
         req: &mut Request,

@@ -170,15 +170,19 @@ impl Config {
             let router = {
                 // Serve the dist folder and the index.html file
                 let serve_dir = warp::fs::dir(cfg.assets_path);
+                let build_virtual_dom = Arc::new(build_virtual_dom);
 
                 router
                     .or(connect_hot_reload())
                     // Then the index route
-                    .or(warp::path::end().and(render_ssr(cfg.clone())))
+                    .or(warp::path::end().and(render_ssr(cfg.clone(), {
+                        let build_virtual_dom = build_virtual_dom.clone();
+                        move || build_virtual_dom()
+                    })))
                     // Then the static assets
                     .or(serve_dir)
                     // Then all other routes
-                    .or(render_ssr(cfg))
+                    .or(render_ssr(cfg, move || build_virtual_dom()))
             };
             warp::serve(router.boxed().with(warp::filters::compression::gzip()))
                 .run(addr)
