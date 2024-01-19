@@ -116,23 +116,22 @@ pub fn use_signal_sync<T: Send + Sync + 'static>(f: impl FnOnce() -> T) -> Signa
     })
 }
 
-#[derive(Clone)]
 struct Unsubscriber {
     scope: ScopeId,
     subscribers: UnsubscriberArray,
 }
 
-type UnsubscriberArray = Rc<RefCell<Vec<Rc<RefCell<Vec<ScopeId>>>>>>;
+type UnsubscriberArray = Vec<Rc<RefCell<Vec<ScopeId>>>>;
 
 impl Drop for Unsubscriber {
     fn drop(&mut self) {
-        for subscribers in self.subscribers.borrow().iter() {
+        for subscribers in &self.subscribers {
             subscribers.borrow_mut().retain(|s| *s != self.scope);
         }
     }
 }
 
-fn current_unsubscriber() -> Unsubscriber {
+fn current_unsubscriber() -> Rc<RefCell<Unsubscriber>> {
     match has_context() {
         Some(rt) => rt,
         None => {
@@ -140,7 +139,7 @@ fn current_unsubscriber() -> Unsubscriber {
                 scope: current_scope_id().expect("in a virtual dom"),
                 subscribers: Default::default(),
             };
-            provide_context(owner)
+            provide_context(Rc::new(RefCell::new(owner)))
         }
     }
 }
@@ -308,7 +307,7 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
                     let mut subscribers = inner.subscribers.write();
                     subscribers.subscribers.push(current_scope_id);
                     let unsubscriber = current_unsubscriber();
-                    subscribers.subscribers.push(unsubscriber.scope);
+                    subscribers.subscribers.push(unsubscriber.borrow().scope);
                 }
             }
         }
