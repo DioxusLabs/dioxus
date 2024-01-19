@@ -1,4 +1,4 @@
-use crate::MappedSignal;
+use crate::{GlobalSignal, MappedSignal};
 use std::{
     cell::RefCell,
     marker::PhantomData,
@@ -220,6 +220,11 @@ impl<T: 'static> Signal<T> {
     pub fn new_in_scope(value: T, owner: ScopeId) -> Self {
         Self::new_maybe_sync_in_scope(value, owner)
     }
+
+    /// Creates a new global Signal that can be used in a global static.
+    pub const fn global(constructor: fn() -> T) -> GlobalSignal<T> {
+        GlobalSignal::new(constructor)
+    }
 }
 
 impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
@@ -389,7 +394,8 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
 
     /// Set the value of the signal without triggering an update on subscribers.
     ///
-    /// todo: we should make it so setting while rendering doesn't trigger an update s
+    // todo: we should make it so setting while rendering doesn't trigger an update s
+    #[track_caller]
     pub fn set_untracked(&self, value: T) {
         let mut inner = self.inner.write();
         inner.value = value;
@@ -512,7 +518,12 @@ impl<T: 'static, S: Storage<SignalData<T>>> Drop for SignalSubscriberDrop<T, S> 
 /// B is the dynamically checked type of the write (RefMut)
 /// S is the storage type of the signal
 /// I is the type of the original signal
-pub struct Write<T: 'static, B: MappableMut<T>, S: Storage<SignalData<I>>, I: 'static = T> {
+pub struct Write<
+    T: 'static,
+    B: MappableMut<T>,
+    S: Storage<SignalData<I>> = UnsyncStorage,
+    I: 'static = T,
+> {
     write: B,
     signal: SignalSubscriberDrop<I, S>,
     phantom: std::marker::PhantomData<T>,

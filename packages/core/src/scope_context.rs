@@ -390,4 +390,9 @@ impl ScopeId {
     pub fn height(self) -> u32 {
         Runtime::with_scope(self, |cx| cx.height()).expect("to be in a dioxus runtime")
     }
+
+    /// Run a closure inside of scope's runtime
+    pub fn in_runtime<T>(self, f: impl FnOnce() -> T) -> T {
+        Runtime::with_scope(self, |_| f()).expect("to be in a dioxus runtime")
+    }
 }

@@ -1,54 +1,57 @@
 use crate::rt::CopyValue;
 use crate::signal::{ReadOnlySignal, Signal, Write};
-use crate::SignalData;
-use generational_box::Mappable;
+use crate::{GlobalSignal, SignalData};
+use generational_box::{GenerationalRef, Mappable};
 use generational_box::{MappableMut, Storage};
 
+use std::cell::Ref;
 use std::{
     fmt::{Debug, Display},
     ops::{Add, Div, Mul, Sub},
 };
 
 macro_rules! read_impls {
-    ($ty:ident, $bound:path, $vec_bound:path) => {
-        impl<T: Default + 'static, S: $bound> Default for $ty<T, S> {
-            #[track_caller]
-            fn default() -> Self {
-                Self::new_maybe_sync(Default::default())
+    ($ty:ident $(, $bound_ty:ident : $bound:path, $vec_bound_ty:ident : $vec_bound:path)?) => {
+        $(
+            impl<T: Default + 'static, $bound_ty: $bound> Default for $ty<T, $bound_ty> {
+                #[track_caller]
+                fn default() -> Self {
+                    Self::new_maybe_sync(Default::default())
+                }
             }
-        }
+        )?
 
-        impl<T, S: $bound> std::clone::Clone for $ty<T, S> {
+        impl<T $(,$bound_ty: $bound)?> std::clone::Clone for $ty<T $(, $bound_ty)?> {
             #[track_caller]
             fn clone(&self) -> Self {
                 *self
             }
         }
 
-        impl<T, S: $bound> Copy for $ty<T, S> {}
+        impl<T $(,$bound_ty: $bound)?> Copy for $ty<T $(, $bound_ty)?> {}
 
-        impl<T: Display + 'static, S: $bound> Display for $ty<T, S> {
+        impl<T: Display + 'static $(,$bound_ty: $bound)?> Display for $ty<T $(, $bound_ty)?> {
             #[track_caller]
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 self.with(|v| Display::fmt(v, f))
             }
         }
 
-        impl<T: Debug + 'static, S: $bound> Debug for $ty<T, S> {
+        impl<T: Debug + 'static $(,$bound_ty: $bound)?> Debug for $ty<T $(, $bound_ty)?> {
             #[track_caller]
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 self.with(|v| Debug::fmt(v, f))
             }
         }
 
-        impl<T: PartialEq + 'static, S: $bound> PartialEq<T> for $ty<T, S> {
+        impl<T: PartialEq + 'static $(,$bound_ty: $bound)?> PartialEq<T> for $ty<T $(, $bound_ty)?> {
             #[track_caller]
             fn eq(&self, other: &T) -> bool {
                 self.with(|v| *v == *other)
             }
         }
 
-        impl<T: 'static, S: $vec_bound> $ty<Vec<T>, S> {
+        impl<T: 'static $(,$vec_bound_ty: $vec_bound)?> $ty<Vec<T>, $($vec_bound_ty)?> {
             /// Returns the length of the inner vector.
             #[track_caller]
             pub fn len(&self) -> usize {
@@ -130,7 +133,13 @@ macro_rules! write_impls {
             }
         }
 
-        impl<T: 'static, S: $vec_bound> $ty<Vec<T>, S> {
+        write_vec_impls!($ty, S: $vec_bound);
+    };
+}
+
+macro_rules! write_vec_impls {
+    ($ty:ident $(, $vec_bound_ty:ident: $vec_bound:path)?) => {
+        impl<T: 'static $(, $vec_bound_ty: $vec_bound)?> $ty<Vec<T> $(, $vec_bound_ty)?> {
             /// Pushes a new value to the end of the vector.
             #[track_caller]
             pub fn push(&mut self, value: T) {
@@ -194,7 +203,7 @@ macro_rules! write_impls {
     };
 }
 
-read_impls!(CopyValue, Storage<T>, Storage<Vec<T>>);
+read_impls!(CopyValue, S: Storage<T>, S: Storage<Vec<T>>);
 
 impl<T: 'static, S: Storage<Vec<T>>> CopyValue<Vec<T>, S> {
     /// Read a value from the inner vector.
@@ -259,7 +268,7 @@ impl<T: 'static, S: Storage<Option<T>>> CopyValue<Option<T>, S> {
     }
 }
 
-read_impls!(Signal, Storage<SignalData<T>>, Storage<SignalData<Vec<T>>>);
+read_impls!(Signal, S: Storage<SignalData<T>>, S: Storage<SignalData<Vec<T>>>);
 
 impl<T: 'static, S: Storage<SignalData<Vec<T>>>> Signal<Vec<T>, S> {
     /// Read a value from the inner vector.
@@ -339,9 +348,71 @@ impl<T: 'static, S: Storage<SignalData<Option<T>>>> Signal<Option<T>, S> {
 
 read_impls!(
     ReadOnlySignal,
-    Storage<SignalData<T>>,
-    Storage<SignalData<Vec<T>>>
+    S: Storage<SignalData<T>>,
+    S: Storage<SignalData<Vec<T>>>
 );
+
+read_impls!(GlobalSignal);
+
+impl<T: 'static> GlobalSignal<Vec<T>> {
+    /// Read a value from the inner vector.
+    pub fn get(&'static self, index: usize) -> Option<GenerationalRef<T, Ref<'static, T>>> {
+        GenerationalRef::<Vec<T>, Ref<'static, Vec<T>>>::try_map(self.read(), move |v| v.get(index))
+    }
+}
+
+impl<T: 'static> GlobalSignal<Option<T>> {
+    /// Unwraps the inner value and clones it.
+    pub fn unwrap(&'static self) -> T
+    where
+        T: Clone,
+    {
+        self.with(|v| v.clone()).unwrap()
+    }
+
+    /// Attempts to read the inner value of the Option.
+    pub fn as_ref(&'static self) -> Option<GenerationalRef<T, Ref<'static, T>>> {
+        GenerationalRef::<Option<T>, Ref<'static, Option<T>>>::try_map(self.read(), |v| v.as_ref())
+    }
+}
+
+write_vec_impls!(GlobalSignal);
+
+impl<T: 'static> GlobalSignal<Option<T>> {
+    /// Takes the value out of the Option.
+    pub fn take(&self) -> Option<T> {
+        self.with_mut(|v| v.take())
+    }
+
+    /// Replace the value in the Option.
+    pub fn replace(&self, value: T) -> Option<T> {
+        self.with_mut(|v| v.replace(value))
+    }
+
+    /// Gets the value out of the Option, or inserts the given value if the Option is empty.
+    pub fn get_or_insert(&self, default: T) -> GenerationalRef<T, Ref<'static, T>> {
+        self.get_or_insert_with(|| default)
+    }
+
+    /// Gets the value out of the Option, or inserts the value returned by the given function if the Option is empty.
+    pub fn get_or_insert_with(
+        &self,
+        default: impl FnOnce() -> T,
+    ) -> GenerationalRef<T, Ref<'static, T>> {
+        let borrow = self.read();
+        if borrow.is_none() {
+            drop(borrow);
+            self.with_mut(|v| *v = Some(default()));
+            GenerationalRef::<Option<T>, Ref<'static, Option<T>>>::map(self.read(), |v| {
+                v.as_ref().unwrap()
+            })
+        } else {
+            GenerationalRef::<Option<T>, Ref<'static, Option<T>>>::map(borrow, |v| {
+                v.as_ref().unwrap()
+            })
+        }
+    }
+}
 
 /// An iterator over the values of a `CopyValue<Vec<T>>`.
 pub struct CopyValueIterator<T: 'static, S: Storage<Vec<T>>> {
