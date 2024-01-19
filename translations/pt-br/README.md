@@ -167,7 +167,7 @@ Para mais informações sobre quais funções estão atualmente disponíveis e p
 
 Quer adentrar e ajudar a construir o futuro do frontend em Rust? Há um vasto número de lugares em que você pode contribuir e fazer uma grande diferença:
 
-- [TUI renderer](https://github.com/dioxusLabs/rink)
+- [TUI renderer](https://github.com/dioxusLabs/plasmo)
 - [Ferramentas CLI](https://github.com/dioxusLabs/cli)
 - [Documentação e Exemplos de Projeto](https://github.com/dioxusLabs/docsite)
 - LiveView e Servidor Web

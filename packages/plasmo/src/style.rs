@@ -329,7 +329,7 @@ fn to_rgb(c: Color) -> [u8; 3] {
                 let l = (idx - 232) / 24;
                 [l; 3]
             }
-            // rink will never generate these colors, but they might be on the screen from another program
+            // plasmo will never generate these colors, but they might be on the screen from another program
             _ => [0, 0, 0],
         },
         Color::Reset => [0, 0, 0],
