@@ -37,24 +37,36 @@ pub struct UiEvent {
     pub data: PlatformEventData,
 }
 
+//fn get_document(elem: &web_sys::Element) ->
+
 impl WebsysDom {
     pub fn new(cfg: Config, event_channel: mpsc::UnboundedSender<UiEvent>) -> Self {
-        // eventually, we just want to let the interpreter do all the work of decoding events into our event type
-        // a match here in order to avoid some error during runtime browser test
-        let document = load_document();
-        let root = match document.get_element_by_id(&cfg.rootname) {
-            Some(root) => root,
-            None => {
-                web_sys::console::error_1(
-                    &format!(
-                        "element '#{}' not found. mounting to the body.",
-                        cfg.rootname
-                    )
-                    .into(),
-                );
-                document.create_element("body").ok().unwrap()
+        let (document, root) = match cfg.root {
+            crate::cfg::ConfigRoot::RootName(rootname) => {
+                // eventually, we just want to let the interpreter do all the work of decoding events into our event type
+                // a match here in order to avoid some error during runtime browser test
+                let document = load_document();
+                let root = match document.get_element_by_id(&rootname) {
+                    Some(root) => root,
+                    None => {
+                        web_sys::console::error_1(
+                            &format!("element '#{}' not found. mounting to the body.", rootname)
+                                .into(),
+                        );
+                        document.create_element("body").ok().unwrap()
+                    }
+                };
+                (document, root)
+            }
+            crate::cfg::ConfigRoot::RootElement(root) => {
+                let document = match root.owner_document() {
+                    Some(document) => document,
+                    None => load_document(),
+                };
+                (document, root)
             }
         };
+
         let interpreter = Channel::default();
 
         let handler: Closure<dyn FnMut(&Event)> = Closure::wrap(Box::new({
