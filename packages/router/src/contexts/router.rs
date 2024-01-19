@@ -1,4 +1,3 @@
-use std::cell::{RefCell, RefMut};
 use std::{
     any::Any,
     collections::HashSet,
@@ -17,7 +16,7 @@ use crate::{
 
 /// An error that can occur when navigating.
 #[derive(Debug, Clone)]
-pub struct ExternalNavigationFailure(String);
+pub struct ExternalNavigationFailure(pub String);
 
 /// A function the router will call after every routing update.
 pub(crate) type RoutingCallback<R> =

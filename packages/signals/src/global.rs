@@ -13,7 +13,7 @@ use dioxus_core::{
 };
 use generational_box::{GenerationalRef, GenerationalRefMut};
 
-use crate::{selector, MappedSignal, ReadOnlySignal, Signal, Write};
+use crate::{MappedSignal, ReadOnlySignal, Signal, Write};
 
 /// A signal that can be accessed from anywhere in the application and created in a static
 pub struct GlobalSignal<T> {
