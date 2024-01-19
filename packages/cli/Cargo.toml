@@ -88,7 +88,7 @@ interprocess-docfix = { version = "1.2.2" }
 gitignore = "1.0.8"
 
 [features]
-default = ["plugin"]
+default = []
 plugin = ["mlua"]
 
 [[bin]]

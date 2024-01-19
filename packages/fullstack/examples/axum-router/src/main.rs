@@ -9,7 +9,7 @@ use dioxus_fullstack::prelude::*;
 use dioxus_router::prelude::*;
 
 fn main() {
-    let config = LaunchBuilder::<FullstackRouterConfig<Route>>::router();
+    let config = LaunchBuilder::fullstack();
     #[cfg(feature = "ssr")]
     config
         .incremental(
@@ -19,7 +19,12 @@ fn main() {
         .launch();
 
     #[cfg(not(feature = "ssr"))]
-    config.launch();
+    config.launch(|| {
+        rsx! {
+            Router::<Route> {
+            }
+        }
+    });
 }
 
 #[derive(Clone, Routable, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -36,9 +41,9 @@ fn Blog(id: i32) -> Element {
         Link { to: Route::Home {}, "Go to counter" }
         table {
             tbody {
-                for _ in 0..*id {
+                for _ in 0..id {
                     tr {
-                        for _ in 0..*id {
+                        for _ in 0..id {
                             td { "hello world!" }
                         }
                     }
@@ -56,7 +61,7 @@ fn Home() -> Element {
     rsx! {
         Link {
             to: Route::Blog {
-                id: *count.get()
+                id: count()
             },
             "Go to blog"
         }

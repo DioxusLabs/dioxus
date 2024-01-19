@@ -1,7 +1,7 @@
 [package]
 name = "dioxus-interpreter-js"
 version = { workspace = true }
-edition = "2018"
+edition = "2021"
 authors = ["Jonathan Kelley"]
 description = "JS Intepreter for Dioxus - a concurrent renderer-agnostic Virtual DOM for interactive user experiences"
 license = "MIT OR Apache-2.0"
@@ -28,7 +28,7 @@ dioxus-html = { workspace = true, optional = true }
 default = []
 serialize = ["serde"]
 sledgehammer = ["sledgehammer_bindgen", "sledgehammer_utils"]
-web = [
+webonly = [
     "sledgehammer",
     "wasm-bindgen",
     "js-sys",

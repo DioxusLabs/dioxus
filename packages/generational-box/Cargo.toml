@@ -2,7 +2,7 @@
 name = "generational-box"
 authors = ["Evan Almloff"]
 version = "0.4.3"
-edition = "2018"
+edition = "2021"
 description = "A box backed by a generational runtime"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"

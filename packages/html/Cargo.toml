@@ -2,7 +2,7 @@
 name = "dioxus-html"
 version = { workspace = true }
 authors = ["Jonathan Kelley"]
-edition = "2018"
+edition = "2021"
 description = "HTML Element pack for Dioxus - a concurrent renderer-agnostic Virtual DOM for interactive user experiences"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"

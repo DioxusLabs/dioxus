@@ -16,10 +16,10 @@ pub struct LaunchBuilder<Cfg = ()> {
 
 pub type LaunchFn<Cfg> = fn(fn() -> Element, ContextList, Cfg);
 
-#[cfg(feature = "fullstack")]
+// #[cfg(feature = "fullstack")]
 type ContextList = Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync>>;
-#[cfg(not(feature = "fullstack"))]
-type ContextList = Vec<Box<dyn Fn() -> Box<dyn Any>>>;
+// #[cfg(not(feature = "fullstack"))]
+// type ContextList = Vec<Box<dyn Fn() -> Box<dyn Any>>>;
 
 impl LaunchBuilder {
     /// Create a new builder for your application. This will create a launch configuration for the current platform based on the features enabled on the `dioxus` crate.

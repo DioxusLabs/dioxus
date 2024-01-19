@@ -66,7 +66,7 @@ pub fn launch_virtual_dom(virtual_dom: VirtualDom, desktop_config: Config) {
 /// Launches the WebView and runs the event loop, with configuration and root props.
 pub fn launch(
     root: fn() -> Element,
-    contexts: Vec<Box<dyn Fn() -> Box<dyn Any>>>,
+    contexts: Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync>>,
     platform_config: Config,
 ) {
     let mut virtual_dom = VirtualDom::new(root);

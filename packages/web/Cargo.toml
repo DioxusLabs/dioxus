@@ -2,7 +2,7 @@
 name = "dioxus-web"
 version = { workspace = true }
 authors = ["Jonathan Kelley"]
-edition = "2018"
+edition = "2021"
 description = "Web renderer for Dioxus using websys"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
@@ -14,7 +14,7 @@ dioxus-core = { workspace = true, features = ["serialize"] }
 dioxus-html = { workspace = true, features = ["wasm-bind"] }
 dioxus-interpreter-js = { workspace = true, features = [
     "minimal_bindings",
-    "web",
+    "webonly",
 ] }
 
 js-sys = "0.3.56"

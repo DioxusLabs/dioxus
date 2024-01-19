@@ -83,5 +83,5 @@ fn App() -> Element {
 }
 
 fn main() {
-    dioxus_web::launch(App);
+    launch(App);
 }

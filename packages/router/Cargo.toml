@@ -2,7 +2,7 @@
 name = "dioxus-router"
 authors = ["Jonathan Kelley", "Evan Almloff"]
 version = { workspace = true }
-edition = "2018"
+edition = "2021"
 description = "Cross-platform router for Dioxus apps"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"

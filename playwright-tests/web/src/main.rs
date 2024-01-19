@@ -4,7 +4,7 @@ use dioxus::prelude::*;
 
 fn app() -> Element {
     let mut num = use_signal(|| 0);
-    let eval_result = use_signal(String::new);
+    let mut eval_result = use_signal(String::new);
 
     rsx! {
         div {
@@ -22,19 +22,18 @@ fn app() -> Element {
         div { class: "style-div", color: "red", "colored text" }
         button {
             class: "eval-button",
-            onclick: move |_| {
-                let eval = eval(
+            onclick: move |_| async move {
+                let mut eval = eval(
                         r#"
                             window.document.title = 'Hello from Dioxus Eval!';
                             dioxus.send("returned eval value");
                         "#,
                     )
                     .unwrap();
-                async move {
-                    let result = eval.recv().await;
-                    if let Ok(serde_json::Value::String(string)) = result {
-                        eval_result.set(string);
-                    }
+
+                let result = eval.recv().await;
+                if let Ok(serde_json::Value::String(string)) = result {
+                    eval_result.set(string);
                 }
             },
             "Eval"
@@ -44,5 +43,5 @@ fn app() -> Element {
 }
 
 fn main() {
-    launch_web(app);
+    launch(app);
 }

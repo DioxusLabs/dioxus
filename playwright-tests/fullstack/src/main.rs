@@ -54,23 +54,20 @@ struct AppProps {
 }
 
 #[allow(unused)]
-fn app(cx: Scope<AppProps>) -> Element {
-    let mut count = use_signal(|| cx.props.count);
-    let text = use_signal(|| "...".to_string());
+fn app(props: AppProps) -> Element {
+    let mut count = use_signal(|| props.count);
+    let mut text = use_signal(|| "...".to_string());
 
     rsx! {
         h1 { "hello axum! {count}" }
         button { class: "increment-button", onclick: move |_| count += 1, "Increment" }
         button {
             class: "server-button",
-            onclick: move |_| {
-                to_owned![text];
-                async move {
-                    if let Ok(data) = get_server_data().await {
-                        println!("Client received: {}", data);
-                        text.set(data.clone());
-                        post_server_data(data).await.unwrap();
-                    }
+            onclick: move |_| async move {
+                if let Ok(data) = get_server_data().await {
+                    println!("Client received: {}", data);
+                    text.set(data.clone());
+                    post_server_data(data).await.unwrap();
                 }
             },
             "Run a server function!"

@@ -2,7 +2,7 @@
 name = "dioxus-desktop"
 version = { workspace = true }
 authors = ["Jonathan Kelley"]
-edition = "2018"
+edition = "2021"
 description = "WebView renderer for Dioxus"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
@@ -83,8 +83,8 @@ dioxus = { workspace = true, features = ["launch", "desktop"]}
 exitcode = "1.1.2"
 
 [build-dependencies]
-dioxus-interpreter-js = { workspace = true, features = ["binary-protocol"] }
-minify-js = "0.5.6"
+# dioxus-interpreter-js = { workspace = true, features = ["binary-protocol"] }
+# minify-js = "0.5.6"
 
 # These tests need to be run on the main thread, so they cannot use rust's test harness.
 [[test]]

@@ -2,7 +2,7 @@
 name = "dioxus-hooks"
 version = { workspace = true }
 authors = ["Jonathan Kelley"]
-edition = "2018"
+edition = "2021"
 description = "Basic useful hooks for Dioxus."
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"

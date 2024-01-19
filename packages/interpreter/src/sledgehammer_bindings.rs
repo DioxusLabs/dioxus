@@ -1,14 +1,14 @@
-#[cfg(feature = "web")]
+#[cfg(feature = "webonly")]
 use js_sys::Function;
-#[cfg(feature = "web")]
+#[cfg(feature = "webonly")]
 use sledgehammer_bindgen::bindgen;
-#[cfg(feature = "web")]
+#[cfg(feature = "webonly")]
 use web_sys::Node;
 
-#[cfg(feature = "web")]
+#[cfg(feature = "webonly")]
 pub const SLEDGEHAMMER_JS: &str = GENERATED_JS;
 
-#[cfg(feature = "web")]
+#[cfg(feature = "webonly")]
 #[bindgen(module)]
 mod js {
     const JS_FILE: &str = "./src/common.js";
