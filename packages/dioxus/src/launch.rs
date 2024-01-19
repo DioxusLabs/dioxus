@@ -8,22 +8,27 @@ use dioxus_core::AnyProps;
 use dioxus_core::VProps;
 
 /// A builder for a fullstack app.
-pub struct LaunchBuilder<Cfg = ()> {
-    launch_fn: LaunchFn<Cfg>,
-    contexts: ContextList,
+pub struct LaunchBuilder<Cfg = (), ContextFn: ?Sized = ValidContext> {
+    launch_fn: LaunchFn<Cfg, ContextFn>,
+    contexts: Vec<Box<ContextFn>>,
     platform_config: Option<Cfg>,
 }
 
-pub type LaunchFn<Cfg> = fn(fn() -> Element, ContextList, Cfg);
+pub type LaunchFn<Cfg, Context> = fn(fn() -> Element, Vec<Box<Context>>, Cfg);
 
-// #[cfg(feature = "fullstack")]
-type ContextList = Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync>>;
-// #[cfg(not(feature = "fullstack"))]
-// type ContextList = Vec<Box<dyn Fn() -> Box<dyn Any>>>;
+#[cfg(feature = "fullstack")]
+type ValidContext = SendContext;
+
+#[cfg(not(feature = "fullstack"))]
+type ValidContext = UnsendContext;
+
+type SendContext = dyn Fn() -> Box<dyn Any> + Send + Sync + 'static;
+
+type UnsendContext = dyn Fn() -> Box<dyn Any> + 'static;
 
 impl LaunchBuilder {
     /// Create a new builder for your application. This will create a launch configuration for the current platform based on the features enabled on the `dioxus` crate.
-    pub fn new() -> LaunchBuilder<current_platform::Config> {
+    pub fn new() -> LaunchBuilder<current_platform::Config, ValidContext> {
         LaunchBuilder {
             launch_fn: current_platform::launch,
             contexts: Vec::new(),
@@ -33,7 +38,7 @@ impl LaunchBuilder {
 
     /// Launch your web application.
     #[cfg(feature = "web")]
-    pub fn web() -> LaunchBuilder<dioxus_web::Config> {
+    pub fn web() -> LaunchBuilder<dioxus_web::Config, UnsendContext> {
         LaunchBuilder {
             launch_fn: dioxus_web::launch::launch,
             contexts: Vec::new(),
@@ -43,7 +48,7 @@ impl LaunchBuilder {
 
     /// Launch your desktop application.
     #[cfg(feature = "desktop")]
-    pub fn desktop() -> LaunchBuilder<dioxus_desktop::Config> {
+    pub fn desktop() -> LaunchBuilder<dioxus_desktop::Config, UnsendContext> {
         LaunchBuilder {
             launch_fn: dioxus_desktop::launch::launch,
             contexts: Vec::new(),
@@ -53,7 +58,7 @@ impl LaunchBuilder {
 
     /// Launch your fullstack application.
     #[cfg(feature = "fullstack")]
-    pub fn fullstack() -> LaunchBuilder<dioxus_fullstack::Config> {
+    pub fn fullstack() -> LaunchBuilder<dioxus_fullstack::Config, SendContext> {
         LaunchBuilder {
             launch_fn: dioxus_fullstack::launch::launch,
             contexts: Vec::new(),
@@ -74,47 +79,35 @@ impl LaunchBuilder {
     /// Provide a custom launch function for your application.
     ///
     /// Useful for third party renderers to tap into the launch builder API without having to reimplement it.
-    pub fn custom<Cfg>(launch_fn: LaunchFn<Cfg>) -> LaunchBuilder<Cfg> {
+    pub fn custom<Cfg, List>(launch_fn: LaunchFn<Cfg, List>) -> LaunchBuilder<Cfg, List> {
         LaunchBuilder {
             launch_fn,
-            contexts: Vec::new(),
+            contexts: vec![],
             platform_config: None,
         }
     }
 }
 
 // Fullstack platform builder
-impl<Cfg: Default> LaunchBuilder<Cfg> {
-    #[cfg(feature = "fullstack")]
+impl<Cfg: Default> LaunchBuilder<Cfg, ValidContext> {
     /// Inject state into the root component's context that is created on the thread that the app is launched on.
     pub fn with_context_provider(
         mut self,
-        state: impl Fn() -> Box<dyn Any> + Send + Sync + 'static,
-    ) -> Self {
-        self.contexts
-            .push(Box::new(state) as Box<dyn Fn() -> Box<dyn Any> + Send + Sync>);
-        self
-    }
 
-    #[cfg(not(feature = "fullstack"))]
-    /// Inject state into the root component's context that is created on the thread that the app is launched on.
-    pub fn with_context_provider(mut self, state: impl Fn() -> Box<dyn Any> + 'static) -> Self {
-        self.contexts
-            .push(Box::new(state) as Box<dyn Fn() -> Box<dyn Any>>);
+        #[cfg(feature = "fullstack")] state: impl Fn() -> Box<dyn Any> + Send + Sync + 'static,
+        #[cfg(not(feature = "fullstack"))] state: impl Fn() -> Box<dyn Any> + 'static,
+    ) -> Self {
+        self.contexts.push(Box::new(state) as Box<ValidContext>);
         self
     }
 
     #[cfg(feature = "fullstack")]
     /// Inject state into the root component's context.
-    pub fn with_context(mut self, state: impl Any + Clone + Send + Sync + 'static) -> Self {
-        self.contexts
-            .push(Box::new(move || Box::new(state.clone())));
-        self
-    }
-
-    #[cfg(not(feature = "fullstack"))]
-    /// Inject state into the root component's context.
-    pub fn with_context(mut self, state: impl Any + Clone + 'static) -> Self {
+    pub fn with_context(
+        mut self,
+        #[cfg(feature = "fullstack")] state: impl Any + Clone + Send + Sync + 'static,
+        #[cfg(not(feature = "fullstack"))] state: impl Any + Clone + 'static,
+    ) -> Self {
         self.contexts
             .push(Box::new(move || Box::new(state.clone())));
         self

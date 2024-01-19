@@ -9,7 +9,7 @@ use std::any::Any;
 /// For a builder API, see `LaunchBuilder` defined in the `dioxus` crate.
 pub fn launch(
     root: fn() -> Element,
-    contexts: Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync>>,
+    contexts: Vec<Box<dyn Fn() -> Box<dyn Any>>>,
     platform_config: Config,
 ) {
     let mut vdom = VirtualDom::new(root);

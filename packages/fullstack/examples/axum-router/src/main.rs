@@ -21,8 +21,7 @@ fn main() {
     #[cfg(not(feature = "ssr"))]
     config.launch(|| {
         rsx! {
-            Router::<Route> {
-            }
+            Router::<Route> {}
         }
     });
 }
@@ -31,6 +30,7 @@ fn main() {
 enum Route {
     #[route("/")]
     Home {},
+
     #[route("/blog/:id")]
     Blog { id: i32 },
 }
