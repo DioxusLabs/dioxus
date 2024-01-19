@@ -1,3 +1,7 @@
+use dioxus_core::prelude::{
+    provide_root_context, try_consume_context, IntoAttributeValue, ScopeId,
+};
+use generational_box::{GenerationalRef, GenerationalRefMut};
 use std::{
     any::Any,
     cell::{Ref, RefCell, RefMut},
@@ -6,12 +10,6 @@ use std::{
     ops::Deref,
     rc::Rc,
 };
-
-use dioxus_core::{
-    prelude::{provide_context, provide_root_context, try_consume_context, IntoAttributeValue},
-    ScopeId,
-};
-use generational_box::{GenerationalRef, GenerationalRefMut};
 
 use crate::{MappedSignal, ReadOnlySignal, Signal, Write};
 
@@ -50,12 +48,7 @@ impl<T: 'static> GlobalSignal<T> {
         let read = context.signal.borrow();
 
         match read.get(&key) {
-            Some(signal) => {
-                let signal = signal.downcast_ref::<Signal<T>>().unwrap();
-                dbg!(signal.id());
-
-                *signal
-            }
+            Some(signal) => signal.downcast_ref::<Signal<T>>().unwrap().clone(),
             None => {
                 drop(read);
 
