@@ -175,7 +175,7 @@ fn create_random_template(name: &'static str) -> (Template, Vec<DynamicNodeType>
     )
 }
 
-fn create_random_dynamic_node(, depth: usize) -> DynamicNode {
+fn create_random_dynamic_node(depth: usize) -> DynamicNode {
     let range = if depth > 3 { 1 } else { 3 };
     match rand::random::<u8>() % range {
         0 => DynamicNode::Placeholder(Default::default()),

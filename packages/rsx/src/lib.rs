@@ -662,9 +662,8 @@ fn create_template() {
 #[cfg(feature = "hot_reload")]
 #[test]
 fn diff_template() {
-    use dioxus_core::Scope;
     #[allow(unused, non_snake_case)]
-    fn Comp(_: Scope) -> dioxus_core::Element {
+    fn Comp() -> dioxus_core::Element {
         None
     }
 

@@ -33,14 +33,15 @@ fn key_down() {
     dioxus_tui::launch_cfg(app, dioxus_tui::Config::new().with_headless());
 
     fn app() -> Element {
-        let render_count = use_signal(|| 0);
-        let tui_ctx: TuiContext = cx.consume_context().unwrap();
-        let render_count_handle = render_count.clone();
-        cx.spawn(async move {
+        let mut render_count = use_signal(|| 0);
+        let mut render_count_handle = render_count.clone();
+        let tui_ctx: TuiContext = consume_context();
+
+        spawn(async move {
             PollN::new(3).await;
-            render_count_handle.modify(|x| *x + 1);
+            render_count_handle.with_mut(|x| *x + 1);
         });
-        if *render_count.get() > 2 {
+        if render_count() > 2 {
             panic!("Event was not received");
         }
         // focus the element
@@ -74,14 +75,14 @@ fn mouse_down() {
     dioxus_tui::launch_cfg(app, dioxus_tui::Config::new().with_headless());
 
     fn app() -> Element {
-        let render_count = use_signal(|| 0);
-        let tui_ctx: TuiContext = cx.consume_context().unwrap();
-        let render_count_handle = render_count.clone();
-        cx.spawn(async move {
+        let mut render_count = use_signal(|| 0);
+        let tui_ctx: TuiContext = consume_context();
+        let mut render_count_handle = render_count.clone();
+        spawn(async move {
             PollN::new(2).await;
-            render_count_handle.modify(|x| *x + 1);
+            render_count_handle.with_mut(|x| *x + 1);
         });
-        if *render_count.get() > 2 {
+        if render_count() > 2 {
             panic!("Event was not received");
         }
         tui_ctx.inject_event(Event::Mouse(MouseEvent {
@@ -110,14 +111,14 @@ fn mouse_up() {
     dioxus_tui::launch_cfg(app, dioxus_tui::Config::new().with_headless());
 
     fn app() -> Element {
-        let render_count = use_signal(|| 0);
-        let tui_ctx: TuiContext = cx.consume_context().unwrap();
-        let render_count_handle = render_count.clone();
-        cx.spawn(async move {
+        let mut render_count = use_signal(|| 0);
+        let tui_ctx: TuiContext = consume_context();
+        let mut render_count_handle = render_count.clone();
+        spawn(async move {
             PollN::new(3).await;
-            render_count_handle.modify(|x| *x + 1);
+            render_count_handle.with_mut(|x| *x + 1);
         });
-        if *render_count.get() > 2 {
+        if render_count() > 2 {
             panic!("Event was not received");
         }
         tui_ctx.inject_event(Event::Mouse(MouseEvent {
@@ -149,14 +150,14 @@ fn mouse_enter() {
     dioxus_tui::launch_cfg(app, dioxus_tui::Config::new().with_headless());
 
     fn app() -> Element {
-        let render_count = use_signal(|| 0);
-        let tui_ctx: TuiContext = cx.consume_context().unwrap();
-        let render_count_handle = render_count.clone();
-        cx.spawn(async move {
+        let mut render_count = use_signal(|| 0);
+        let mut render_count_handle = render_count.clone();
+        let tui_ctx: TuiContext = consume_context();
+        spawn(async move {
             PollN::new(3).await;
-            render_count_handle.modify(|x| *x + 1);
+            render_count_handle.with_mut(|x| *x + 1);
         });
-        if *render_count.get() > 2 {
+        if render_count() > 2 {
             panic!("Event was not received");
         }
         tui_ctx.inject_event(Event::Mouse(MouseEvent {
@@ -188,14 +189,14 @@ fn mouse_exit() {
     dioxus_tui::launch_cfg(app, dioxus_tui::Config::new().with_headless());
 
     fn app() -> Element {
-        let render_count = use_signal(|| 0);
-        let tui_ctx: TuiContext = cx.consume_context().unwrap();
-        let render_count_handle = render_count.clone();
-        cx.spawn(async move {
+        let mut render_count = use_signal(|| 0);
+        let tui_ctx: TuiContext = consume_context();
+        let mut render_count_handle = render_count.clone();
+        spawn(async move {
             PollN::new(3).await;
-            render_count_handle.modify(|x| *x + 1);
+            render_count_handle.with_mut(|x| *x + 1);
         });
-        if *render_count.get() > 2 {
+        if render_count() > 2 {
             panic!("Event was not received");
         }
         tui_ctx.inject_event(Event::Mouse(MouseEvent {
@@ -227,14 +228,14 @@ fn mouse_move() {
     dioxus_tui::launch_cfg(app, dioxus_tui::Config::new().with_headless());
 
     fn app() -> Element {
-        let render_count = use_signal(|| 0);
-        let tui_ctx: TuiContext = cx.consume_context().unwrap();
-        let render_count_handle = render_count.clone();
-        cx.spawn(async move {
+        let mut render_count = use_signal(|| 0);
+        let tui_ctx: TuiContext = consume_context();
+        let mut render_count_handle = render_count.clone();
+        spawn(async move {
             PollN::new(3).await;
-            render_count_handle.modify(|x| *x + 1);
+            render_count_handle.with_mut(|x| *x + 1);
         });
-        if *render_count.get() > 2 {
+        if render_count() > 2 {
             panic!("Event was not received");
         }
         tui_ctx.inject_event(Event::Mouse(MouseEvent {
@@ -266,14 +267,14 @@ fn wheel() {
     dioxus_tui::launch_cfg(app, dioxus_tui::Config::new().with_headless());
 
     fn app() -> Element {
-        let render_count = use_signal(|| 0);
-        let tui_ctx: TuiContext = cx.consume_context().unwrap();
-        let render_count_handle = render_count.clone();
-        cx.spawn(async move {
+        let mut render_count = use_signal(|| 0);
+        let tui_ctx: TuiContext = consume_context();
+        let mut render_count_handle = render_count.clone();
+        spawn(async move {
             PollN::new(3).await;
-            render_count_handle.modify(|x| *x + 1);
+            render_count_handle.with_mut(|x| *x + 1);
         });
-        if *render_count.get() > 2 {
+        if render_count() > 2 {
             panic!("Event was not received");
         }
         tui_ctx.inject_event(Event::Mouse(MouseEvent {
@@ -306,14 +307,14 @@ fn click() {
     dioxus_tui::launch_cfg(app, dioxus_tui::Config::new().with_headless());
 
     fn app() -> Element {
-        let render_count = use_signal(|| 0);
-        let tui_ctx: TuiContext = cx.consume_context().unwrap();
-        let render_count_handle = render_count.clone();
-        cx.spawn(async move {
+        let mut render_count = use_signal(|| 0);
+        let tui_ctx: TuiContext = consume_context();
+        let mut render_count_handle = render_count.clone();
+        spawn(async move {
             PollN::new(3).await;
-            render_count_handle.modify(|x| *x + 1);
+            render_count_handle.with_mut(|x| *x + 1);
         });
-        if *render_count.get() > 2 {
+        if render_count() > 2 {
             panic!("Event was not received");
         }
         tui_ctx.inject_event(Event::Mouse(MouseEvent {
@@ -345,14 +346,14 @@ fn context_menu() {
     dioxus_tui::launch_cfg(app, dioxus_tui::Config::new().with_headless());
 
     fn app() -> Element {
-        let render_count = use_signal(|| 0);
-        let tui_ctx: TuiContext = cx.consume_context().unwrap();
-        let render_count_handle = render_count.clone();
-        cx.spawn(async move {
+        let mut render_count = use_signal(|| 0);
+        let tui_ctx: TuiContext = consume_context();
+        let mut render_count_handle = render_count.clone();
+        spawn(async move {
             PollN::new(3).await;
-            render_count_handle.modify(|x| *x + 1);
+            render_count_handle.with_mut(|x| *x + 1);
         });
-        if *render_count.get() > 2 {
+        if render_count() > 2 {
             panic!("Event was not received");
         }
         tui_ctx.inject_event(Event::Mouse(MouseEvent {

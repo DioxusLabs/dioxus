@@ -12,12 +12,20 @@ where
             phantom: std::marker::PhantomData,
         },
     );
-    let _ = vdom.rebuild();
+    vdom.rebuild_in_place();
     return dioxus_ssr::render(&vdom);
 
     #[derive(Props)]
     struct AppProps<R: Routable> {
         phantom: std::marker::PhantomData<R>,
+    }
+
+    impl<R: Routable> Clone for AppProps<R> {
+        fn clone(&self) -> Self {
+            Self {
+                phantom: std::marker::PhantomData,
+            }
+        }
     }
 
     impl<R: Routable> PartialEq for AppProps<R> {
@@ -26,8 +34,7 @@ where
         }
     }
 
-    #[component]
-    fn App<R: Routable>(cx: Scope<AppProps<R>>) -> Element
+    fn App<R: Routable>(props: AppProps<R>) -> Element
     where
         <R as FromStr>::Err: std::fmt::Display,
     {
@@ -51,7 +58,7 @@ fn href_internal() {
     }
 
     #[component]
-    fn Test(_cx: Scope) -> Element {
+    fn Test() -> Element {
         todo!()
     }
 
@@ -89,7 +96,7 @@ fn href_external() {
     }
 
     #[component]
-    fn Test(_cx: Scope) -> Element {
+    fn Test() -> Element {
         todo!()
     }
 
@@ -127,7 +134,7 @@ fn with_class() {
     }
 
     #[component]
-    fn Test(_cx: Scope) -> Element {
+    fn Test() -> Element {
         todo!()
     }
 
@@ -168,7 +175,7 @@ fn with_active_class_active() {
         rsx! {
             Link {
                 to: Route::Root {},
-                active_class: "active_class",
+                active_class: "active_class".to_string(),
                 class: "test_class",
                 "Link"
             }
@@ -199,7 +206,7 @@ fn with_active_class_inactive() {
     }
 
     #[component]
-    fn Test(_cx: Scope) -> Element {
+    fn Test() -> Element {
         todo!()
     }
 
@@ -208,7 +215,7 @@ fn with_active_class_inactive() {
         rsx! {
             Link {
                 to: Route::Test {},
-                active_class: "active_class",
+                active_class: "active_class".to_string(),
                 class: "test_class",
                 "Link"
             }
@@ -239,7 +246,7 @@ fn with_id() {
     }
 
     #[component]
-    fn Test(_cx: Scope) -> Element {
+    fn Test() -> Element {
         todo!()
     }
 
@@ -278,7 +285,7 @@ fn with_new_tab() {
     }
 
     #[component]
-    fn Test(_cx: Scope) -> Element {
+    fn Test() -> Element {
         todo!()
     }
 
@@ -349,7 +356,7 @@ fn with_rel() {
     }
 
     #[component]
-    fn Test(_cx: Scope) -> Element {
+    fn Test() -> Element {
         todo!()
     }
 
@@ -358,7 +365,7 @@ fn with_rel() {
         rsx! {
             Link {
                 to: Route::Test {},
-                rel: "test_rel",
+                rel: "test_rel".to_string(),
                 "Link"
             }
         }

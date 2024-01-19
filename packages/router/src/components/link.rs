@@ -83,15 +83,19 @@ impl From<&Url> for IntoRoutable {
 pub struct LinkProps {
     /// A class to apply to the generate HTML anchor tag if the `target` route is active.
     pub active_class: Option<String>,
+
     /// The children to render within the generated HTML anchor tag.
     pub children: Element,
+
     /// When [`true`], the `target` route will be opened in a new tab.
     ///
     /// This does not change whether the [`Link`] is active or not.
     #[props(default)]
     pub new_tab: bool,
+
     /// The onclick event handler.
     pub onclick: Option<EventHandler<MouseEvent>>,
+
     #[props(default)]
     /// Whether the default behavior should be executed if an `onclick` handler is provided.
     ///
@@ -100,13 +104,16 @@ pub struct LinkProps {
     ///    will be executed after the links regular functionality.
     /// 3. If `onclick_only` is [`true`], only the provided `onclick` handler will be executed.
     pub onclick_only: bool,
+
     /// The rel attribute for the generated HTML anchor tag.
     ///
     /// For external `a`s, this defaults to `noopener noreferrer`.
     pub rel: Option<String>,
+
     /// The navigation target. Roughly equivalent to the href attribute of an HTML anchor tag.
     #[props(into)]
     pub to: IntoRoutable,
+
     #[props(extends = GlobalAttributes)]
     attributes: Vec<Attribute>,
 }

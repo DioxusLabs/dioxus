@@ -27,3 +27,9 @@ pub fn launch_virtual_dom(vdom: VirtualDom, platform_config: Config) {
         crate::run(vdom, platform_config).await;
     });
 }
+
+///
+pub fn launch_cfg(root: fn() -> Element, platform_config: Config) {
+    let mut vdom = VirtualDom::new(root);
+    launch_virtual_dom(vdom, platform_config);
+}
