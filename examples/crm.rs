@@ -1,35 +1,40 @@
 //! Tiny CRM: A port of the Yew CRM example to Dioxus.
 use dioxus::prelude::*;
+use dioxus_desktop::{LogicalSize, WindowBuilder};
 use dioxus_router::prelude::*;
 
 fn main() {
-    launch(app);
+    LaunchBuilder::new()
+        .with_cfg(desktop!(
+            dioxus_desktop::Config::default()
+                .with_window(WindowBuilder::new().with_inner_size(LogicalSize::new(800, 600)))
+        ))
+        .launch(|| {
+            rsx! {
+                link {
+                    rel: "stylesheet",
+                    href: "https://unpkg.com/purecss@2.0.6/build/pure-min.css",
+                    integrity: "sha384-Uu6IeWbM+gzNVXJcM9XV3SohHtmWE+3VGi496jvgX1jyvDTXfdK+rfZc8C1Aehk5",
+                    crossorigin: "anonymous"
+                }
+                style { {r#" .red { background-color: rgb(202, 60, 60) !important; } "#} }
+                body {
+                    padding: "20px",
+                    h1 { "Dioxus CRM Example" }
+                    Router::<Route> {}
+                }
+            }
+    });
 }
 
 /// We only have one list of clients for the whole app, so we can use a global signal.
 static CLIENTS: GlobalSignal<Vec<Client>> = Signal::global(|| Vec::new());
 
-fn app() -> Element {
-    rsx! {
-        link {
-            rel: "stylesheet",
-            href: "https://unpkg.com/purecss@2.0.6/build/pure-min.css",
-            integrity: "sha384-Uu6IeWbM+gzNVXJcM9XV3SohHtmWE+3VGi496jvgX1jyvDTXfdK+rfZc8C1Aehk5",
-            crossorigin: "anonymous"
-        }
-
-        style {
-            "
-            .red {{
-                background-color: rgb(202, 60, 60) !important;
-            }}
-        "
-        }
-
-        h1 { "Dioxus CRM Example" }
-
-        Router::<Route> {}
-    }
+#[derive(Clone, Debug, Default)]
+pub struct Client {
+    pub first_name: String,
+    pub last_name: String,
+    pub description: String,
 }
 
 #[derive(Routable, Clone)]
@@ -44,24 +49,13 @@ enum Route {
     Settings {},
 }
 
-#[derive(Clone, Debug, Default)]
-pub struct Client {
-    pub first_name: String,
-    pub last_name: String,
-    pub description: String,
-}
-
 #[component]
 fn ClientList() -> Element {
-    let clients = use_hook(|| CLIENTS.signal());
-
-    println!("Clients: {:?}", clients.read());
-
     rsx! {
         h2 { "List of Clients" }
         Link { to: Route::ClientAdd {}, class: "pure-button pure-button-primary", "Add Client" }
         Link { to: Route::Settings {}, class: "pure-button", "Settings" }
-        for client in clients.read().iter() {
+        for client in CLIENTS.read().iter() {
             div { class: "client", style: "margin-bottom: 50px",
                 p { "Name: {client.first_name} {client.last_name}" }
                 p { "Description: {client.description}" }
@@ -84,8 +78,6 @@ fn ClientAdd() -> Element {
             description: description(),
         });
 
-        println!("Added client: {:?}", CLIENTS.read());
-
         // And then navigate back to the client list
         dioxus_router::router().push(Route::ClientList {});
     };
@@ -102,7 +94,10 @@ fn ClientAdd() -> Element {
                         placeholder: "First Name…",
                         required: "",
                         value: "{first_name}",
-                        oninput: move |e| first_name.set(e.value())
+                        oninput: move |e| first_name.set(e.value()),
+
+                        // when the form mounts, focus the first name input
+                        onmounted: move |e| {e.inner().set_focus(true);},
                     }
                 }
 
