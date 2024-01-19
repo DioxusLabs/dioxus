@@ -2,8 +2,8 @@ use dioxus_core::prelude::*;
 use generational_box::Storage;
 
 use crate::dependency::Dependency;
-use crate::{get_effect_ref, signal::SignalData, CopyValue, Effect, ReadOnlySignal, Signal};
-use crate::{use_signal, EffectInner, EFFECT_STACK};
+use crate::use_signal;
+use crate::{signal::SignalData, ReadOnlySignal, Signal};
 
 /// Creates a new unsync Selector. The selector will be run immediately and whenever any signal it reads changes.
 ///
@@ -50,7 +50,7 @@ pub fn use_selector<R: PartialEq>(f: impl FnMut() -> R + 'static) -> ReadOnlySig
 pub fn use_maybe_sync_selector<R: PartialEq, S: Storage<SignalData<R>>>(
     f: impl FnMut() -> R + 'static,
 ) -> ReadOnlySignal<R, S> {
-    use_hook(|| maybe_sync_selector(f))
+    use_hook(|| Signal::maybe_sync_selector(f))
 }
 
 /// Creates a new unsync Selector with some local dependencies. The selector will be run immediately and whenever any signal it reads or any dependencies it tracks changes
@@ -112,7 +112,7 @@ where
 {
     let mut dependencies_signal = use_signal(|| dependencies.out());
     let selector = use_hook(|| {
-        maybe_sync_selector(move || {
+        Signal::maybe_sync_selector(move || {
             let deref = &*dependencies_signal.read();
             f(deref.clone())
         })
@@ -122,62 +122,4 @@ where
         dependencies_signal.set(dependencies.out());
     }
     selector
-}
-
-/// Creates a new unsync Selector. The selector will be run immediately and whenever any signal it reads changes.
-///
-/// Selectors can be used to efficiently compute derived data from signals.
-#[track_caller]
-pub fn selector<R: PartialEq>(f: impl FnMut() -> R + 'static) -> ReadOnlySignal<R> {
-    maybe_sync_selector(f)
-}
-
-/// Creates a new Selector that may be Sync + Send. The selector will be run immediately and whenever any signal it reads changes.
-///
-/// Selectors can be used to efficiently compute derived data from signals.
-#[track_caller]
-pub fn maybe_sync_selector<R: PartialEq, S: Storage<SignalData<R>>>(
-    mut f: impl FnMut() -> R + 'static,
-) -> ReadOnlySignal<R, S> {
-    let mut state = Signal::<R, S> {
-        inner: CopyValue::invalid(),
-    };
-    let effect = Effect {
-        source: current_scope_id().expect("in a virtual dom"),
-        inner: CopyValue::invalid(),
-    };
-
-    {
-        EFFECT_STACK.with(|stack| stack.effects.write().push(effect));
-    }
-    state.inner.value.set(SignalData {
-        subscribers: Default::default(),
-        update_any: schedule_update_any(),
-        value: f(),
-        effect_ref: get_effect_ref(),
-    });
-    {
-        EFFECT_STACK.with(|stack| stack.effects.write().pop());
-    }
-
-    let invalid_id = effect.id();
-    tracing::trace!("Creating effect: {:?}", invalid_id);
-    effect.inner.value.set(EffectInner {
-        callback: Box::new(move || {
-            let value = f();
-            let changed = {
-                let old = state.inner.read();
-                value != old.value
-            };
-            if changed {
-                state.set(value)
-            }
-        }),
-        id: invalid_id,
-    });
-    {
-        EFFECT_STACK.with(|stack| stack.effect_mapping.write().insert(invalid_id, effect));
-    }
-
-    ReadOnlySignal::new_maybe_sync(state)
 }

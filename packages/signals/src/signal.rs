@@ -1,4 +1,4 @@
-use crate::{GlobalSelector, GlobalSignal, MappedSignal};
+use crate::{Effect, EffectInner, GlobalSelector, GlobalSignal, MappedSignal};
 use std::{
     cell::RefCell,
     marker::PhantomData,
@@ -225,13 +225,73 @@ impl<T: 'static> Signal<T> {
     pub const fn global(constructor: fn() -> T) -> GlobalSignal<T> {
         GlobalSignal::new(constructor)
     }
+}
 
+impl<T: PartialEq + 'static> Signal<T> {
     /// Creates a new global Signal that can be used in a global static.
     pub const fn global_selector(constructor: fn() -> T) -> GlobalSelector<T>
     where
         T: PartialEq,
     {
         GlobalSelector::new(constructor)
+    }
+
+    /// Creates a new unsync Selector. The selector will be run immediately and whenever any signal it reads changes.
+    ///
+    /// Selectors can be used to efficiently compute derived data from signals.
+    #[track_caller]
+    pub fn selector(f: impl FnMut() -> T + 'static) -> ReadOnlySignal<T> {
+        Self::maybe_sync_selector(f)
+    }
+
+    /// Creates a new Selector that may be Sync + Send. The selector will be run immediately and whenever any signal it reads changes.
+    ///
+    /// Selectors can be used to efficiently compute derived data from signals.
+    #[track_caller]
+    pub fn maybe_sync_selector<S: Storage<SignalData<T>>>(
+        mut f: impl FnMut() -> T + 'static,
+    ) -> ReadOnlySignal<T, S> {
+        let mut state = Signal::<T, S> {
+            inner: CopyValue::invalid(),
+        };
+        let effect = Effect {
+            source: current_scope_id().expect("in a virtual dom"),
+            inner: CopyValue::invalid(),
+        };
+
+        {
+            EFFECT_STACK.with(|stack| stack.effects.write().push(effect));
+        }
+        state.inner.value.set(SignalData {
+            subscribers: Default::default(),
+            update_any: schedule_update_any(),
+            value: f(),
+            effect_ref: get_effect_ref(),
+        });
+        {
+            EFFECT_STACK.with(|stack| stack.effects.write().pop());
+        }
+
+        let invalid_id = effect.id();
+        tracing::trace!("Creating effect: {:?}", invalid_id);
+        effect.inner.value.set(EffectInner {
+            callback: Box::new(move || {
+                let value = f();
+                let changed = {
+                    let old = state.inner.read();
+                    value != old.value
+                };
+                if changed {
+                    state.set(value)
+                }
+            }),
+            id: invalid_id,
+        });
+        {
+            EFFECT_STACK.with(|stack| stack.effect_mapping.write().insert(invalid_id, effect));
+        }
+
+        ReadOnlySignal::new_maybe_sync(state)
     }
 }
 
