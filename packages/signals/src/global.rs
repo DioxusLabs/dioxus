@@ -43,7 +43,8 @@ impl<T: 'static> GlobalSignal<T> {
         GlobalSignal { initializer }
     }
 
-    fn inner_signal(&self) -> Signal<T> {
+    /// Get the signal that backs this global.
+    pub fn signal(&self) -> Signal<T> {
         let key = self as *const _ as *const ();
 
         let context = get_global_context();
@@ -68,14 +69,14 @@ impl<T: 'static> GlobalSignal<T> {
     /// If the signal has been dropped, this will panic.
     #[track_caller]
     pub fn read(&self) -> GenerationalRef<T, Ref<'static, T>> {
-        self.inner_signal().read()
+        self.signal().read()
     }
 
     /// Get the current value of the signal. **Unlike read, this will not subscribe the current scope to the signal which can cause parts of your UI to not update.**
     ///
     /// If the signal has been dropped, this will panic.
     pub fn peek(&self) -> GenerationalRef<T, Ref<'static, T>> {
-        self.inner_signal().peek()
+        self.signal().peek()
     }
 
     /// Get a mutable reference to the signal's value.
@@ -83,33 +84,33 @@ impl<T: 'static> GlobalSignal<T> {
     /// If the signal has been dropped, this will panic.
     #[track_caller]
     pub fn write(&self) -> Write<T, GenerationalRefMut<T, RefMut<'static, T>>> {
-        self.inner_signal().write()
+        self.signal().write()
     }
 
     /// Set the value of the signal. This will trigger an update on all subscribers.
     #[track_caller]
     pub fn set(&self, value: T) {
-        self.inner_signal().set(value);
+        self.signal().set(value);
     }
 
     /// Set the value of the signal without triggering an update on subscribers.
     #[track_caller]
     pub fn set_untracked(&self, value: T) {
-        self.inner_signal().set_untracked(value);
+        self.signal().set_untracked(value);
     }
 
     /// Run a closure with a reference to the signal's value.
     /// If the signal has been dropped, this will panic.
     #[track_caller]
     pub fn with<O>(&self, f: impl FnOnce(&T) -> O) -> O {
-        self.inner_signal().with(f)
+        self.signal().with(f)
     }
 
     /// Run a closure with a mutable reference to the signal's value.
     /// If the signal has been dropped, this will panic.
     #[track_caller]
     pub fn with_mut<O>(&self, f: impl FnOnce(&mut T) -> O) -> O {
-        self.inner_signal().with_mut(f)
+        self.signal().with_mut(f)
     }
 
     /// Map the signal to a new type.
@@ -117,12 +118,12 @@ impl<T: 'static> GlobalSignal<T> {
         &self,
         f: impl Fn(&T) -> &O + 'static,
     ) -> MappedSignal<GenerationalRef<O, Ref<'static, O>>> {
-        MappedSignal::new(self.inner_signal(), f)
+        MappedSignal::new(self.signal(), f)
     }
 
     /// Get the generational id of the signal.
     pub fn id(&self) -> generational_box::GenerationalBoxId {
-        self.inner_signal().id()
+        self.signal().id()
     }
 }
 
@@ -131,7 +132,7 @@ where
     T: Clone + IntoAttributeValue,
 {
     fn into_value(self) -> dioxus_core::AttributeValue {
-        self.inner_signal().into_value()
+        self.signal().into_value()
     }
 }
 
