@@ -1,4 +1,4 @@
-use crate::{GlobalSignal, MappedSignal};
+use crate::{GlobalSelector, GlobalSignal, MappedSignal};
 use std::{
     cell::RefCell,
     marker::PhantomData,
@@ -224,6 +224,14 @@ impl<T: 'static> Signal<T> {
     /// Creates a new global Signal that can be used in a global static.
     pub const fn global(constructor: fn() -> T) -> GlobalSignal<T> {
         GlobalSignal::new(constructor)
+    }
+
+    /// Creates a new global Signal that can be used in a global static.
+    pub const fn global_selector(constructor: fn() -> T) -> GlobalSelector<T>
+    where
+        T: PartialEq,
+    {
+        GlobalSelector::new(constructor)
     }
 }
 
@@ -625,6 +633,20 @@ impl<T: 'static, S: Storage<SignalData<T>>> ReadOnlySignal<T, S> {
     #[track_caller]
     pub fn with<O>(&self, f: impl FnOnce(&T) -> O) -> O {
         self.inner.with(f)
+    }
+
+    /// Get the id of the signal.
+    pub fn id(&self) -> generational_box::GenerationalBoxId {
+        self.inner.id()
+    }
+}
+
+impl<T> IntoAttributeValue for ReadOnlySignal<T>
+where
+    T: Clone + IntoAttributeValue,
+{
+    fn into_value(self) -> dioxus_core::AttributeValue {
+        self.with(|f| f.clone().into_value())
     }
 }
 

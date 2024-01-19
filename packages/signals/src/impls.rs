@@ -1,6 +1,6 @@
 use crate::rt::CopyValue;
 use crate::signal::{ReadOnlySignal, Signal, Write};
-use crate::{GlobalSignal, SignalData};
+use crate::{GlobalSelector, GlobalSignal, SignalData};
 use generational_box::{GenerationalRef, Mappable};
 use generational_box::{MappableMut, Storage};
 
@@ -11,7 +11,7 @@ use std::{
 };
 
 macro_rules! read_impls {
-    ($ty:ident $(, $bound_ty:ident : $bound:path, $vec_bound_ty:ident : $vec_bound:path)?) => {
+    ($ty:ident $(: $extra_bounds:path)? $(, $bound_ty:ident : $bound:path, $vec_bound_ty:ident : $vec_bound:path)?) => {
         $(
             impl<T: Default + 'static, $bound_ty: $bound> Default for $ty<T, $bound_ty> {
                 #[track_caller]
@@ -21,37 +21,37 @@ macro_rules! read_impls {
             }
         )?
 
-        impl<T $(,$bound_ty: $bound)?> std::clone::Clone for $ty<T $(, $bound_ty)?> {
+        impl<T $(: $extra_bounds)? $(,$bound_ty: $bound)?> std::clone::Clone for $ty<T $(, $bound_ty)?> {
             #[track_caller]
             fn clone(&self) -> Self {
                 *self
             }
         }
 
-        impl<T $(,$bound_ty: $bound)?> Copy for $ty<T $(, $bound_ty)?> {}
+        impl<T $(: $extra_bounds)? $(,$bound_ty: $bound)?> Copy for $ty<T $(, $bound_ty)?> {}
 
-        impl<T: Display + 'static $(,$bound_ty: $bound)?> Display for $ty<T $(, $bound_ty)?> {
+        impl<T: $($extra_bounds + )? Display + 'static $(,$bound_ty: $bound)?> Display for $ty<T $(, $bound_ty)?> {
             #[track_caller]
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 self.with(|v| Display::fmt(v, f))
             }
         }
 
-        impl<T: Debug + 'static $(,$bound_ty: $bound)?> Debug for $ty<T $(, $bound_ty)?> {
+        impl<T: $($extra_bounds + )? Debug + 'static $(,$bound_ty: $bound)?> Debug for $ty<T $(, $bound_ty)?> {
             #[track_caller]
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 self.with(|v| Debug::fmt(v, f))
             }
         }
 
-        impl<T: PartialEq + 'static $(,$bound_ty: $bound)?> PartialEq<T> for $ty<T $(, $bound_ty)?> {
+        impl<T: $($extra_bounds + )? PartialEq + 'static $(,$bound_ty: $bound)?> PartialEq<T> for $ty<T $(, $bound_ty)?> {
             #[track_caller]
             fn eq(&self, other: &T) -> bool {
                 self.with(|v| *v == *other)
             }
         }
 
-        impl<T: 'static $(,$vec_bound_ty: $vec_bound)?> $ty<Vec<T>, $($vec_bound_ty)?> {
+        impl<T: $($extra_bounds + )? 'static $(,$vec_bound_ty: $vec_bound)?> $ty<Vec<T>, $($vec_bound_ty)?> {
             /// Returns the length of the inner vector.
             #[track_caller]
             pub fn len(&self) -> usize {
@@ -411,6 +411,30 @@ impl<T: 'static> GlobalSignal<Option<T>> {
                 v.as_ref().unwrap()
             })
         }
+    }
+}
+
+read_impls!(GlobalSelector: PartialEq);
+
+impl<T: PartialEq + 'static> GlobalSelector<Vec<T>> {
+    /// Read a value from the inner vector.
+    pub fn get(&'static self, index: usize) -> Option<GenerationalRef<T, Ref<'static, T>>> {
+        GenerationalRef::<Vec<T>, Ref<'static, Vec<T>>>::try_map(self.read(), move |v| v.get(index))
+    }
+}
+
+impl<T: PartialEq + 'static> GlobalSelector<Option<T>> {
+    /// Unwraps the inner value and clones it.
+    pub fn unwrap(&'static self) -> T
+    where
+        T: Clone,
+    {
+        self.with(|v| v.clone()).unwrap()
+    }
+
+    /// Attempts to read the inner value of the Option.
+    pub fn as_ref(&'static self) -> Option<GenerationalRef<T, Ref<'static, T>>> {
+        GenerationalRef::<Option<T>, Ref<'static, Option<T>>>::try_map(self.read(), |v| v.as_ref())
     }
 }
 
