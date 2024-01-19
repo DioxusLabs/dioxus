@@ -9,24 +9,26 @@ use dioxus::prelude::*;
 use dioxus_desktop::{Config, LogicalSize, WindowBuilder};
 
 fn main() {
-    let config = Config::new().with_window(
-        WindowBuilder::default()
-            .with_title("Calculator")
-            .with_inner_size(LogicalSize::new(300.0, 525.0)),
-    );
-
-    LaunchBuilder::desktop().with_cfg(config).launch(app);
+    LaunchBuilder::desktop()
+        .with_cfg(
+            Config::new().with_window(
+                WindowBuilder::default()
+                    .with_title("Calculator")
+                    .with_inner_size(LogicalSize::new(300.0, 525.0)),
+            ),
+        )
+        .launch(app);
 }
 
 fn app() -> Element {
     let mut val = use_signal(|| String::from("0"));
 
-    let mut input_digit = move |num: u8| {
-        if val.cloned() == "0" {
+    let mut input_digit = move |num: String| {
+        if val() == "0" {
             val.set(String::new());
         }
 
-        val.write().push_str(num.to_string().as_str());
+        val.write().push_str(num.as_str());
     };
 
     let mut input_operator = move |key: &str| val.write().push_str(key);
@@ -42,16 +44,7 @@ fn app() -> Element {
             "-" => input_operator("-"),
             "/" => input_operator("/"),
             "*" => input_operator("*"),
-            "0" => input_digit(0),
-            "1" => input_digit(1),
-            "2" => input_digit(2),
-            "3" => input_digit(3),
-            "4" => input_digit(4),
-            "5" => input_digit(5),
-            "6" => input_digit(6),
-            "7" => input_digit(7),
-            "8" => input_digit(8),
-            "9" => input_digit(9),
+            "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" => input_digit(character),
             _ => {}
         },
         _ => {}
@@ -99,7 +92,7 @@ fn app() -> Element {
                             div { class: "digit-keys",
                                 button {
                                     class: "calculator-key key-0",
-                                    onclick: move |_| input_digit(0),
+                                    onclick: move |_| input_digit(0.to_string()),
                                     "0"
                                 }
                                 button {
@@ -111,7 +104,7 @@ fn app() -> Element {
                                     button {
                                         class: "calculator-key {k}",
                                         name: "key-{k}",
-                                        onclick: move |_| input_digit(k),
+                                        onclick: move |_| input_digit(k.to_string()),
                                         "{k}"
                                     }
                                 }

@@ -6,19 +6,27 @@
 
 mod rt;
 pub use rt::*;
+
 mod effect;
 pub use effect::*;
-mod impls;
+
 mod selector;
 pub use selector::*;
+
 pub(crate) mod signal;
 pub use signal::*;
+
 mod dependency;
 pub use dependency::*;
+
 mod map;
-pub use generational_box::{Storage, SyncStorage, UnsyncStorage};
 pub use map::*;
+
 mod comparer;
 pub use comparer::*;
+
 mod global;
 pub use global::*;
+
+mod impls;
+pub use generational_box::{Storage, SyncStorage, UnsyncStorage};

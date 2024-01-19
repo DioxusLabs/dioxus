@@ -3,17 +3,13 @@ use dioxus::prelude::*;
 use dioxus_router::prelude::*;
 
 fn main() {
-    launch_desktop(app);
+    launch(app);
 }
 
-/// A type alias that reprsents a shared context between components
-///
-/// Normally we'd wrap the Context in a newtype, but we only have one Signal<Vec<Client>> in this app
-type Clients = Signal<Vec<Client>>;
+/// We only have one list of clients for the whole app, so we can use a global signal.
+static CLIENTS: GlobalSignal<Vec<Client>> = Signal::global(|| Vec::new());
 
 fn app() -> Element {
-    use_context_provider::<Clients>(|| Signal::new(vec![]));
-
     rsx! {
         link {
             rel: "stylesheet",
@@ -37,7 +33,6 @@ fn app() -> Element {
 }
 
 #[derive(Routable, Clone)]
-#[rustfmt::skip]
 enum Route {
     #[route("/")]
     ClientList {},
@@ -58,7 +53,9 @@ pub struct Client {
 
 #[component]
 fn ClientList() -> Element {
-    let mut clients = use_context::<Clients>();
+    let clients = use_hook(|| CLIENTS.signal());
+
+    println!("Clients: {:?}", clients.read());
 
     rsx! {
         h2 { "List of Clients" }
@@ -80,21 +77,25 @@ fn ClientAdd() -> Element {
     let mut description = use_signal(String::new);
 
     let submit_client = move |_: FormEvent| {
-        consume_context::<Clients>().write().push(Client {
-            first_name: first_name.to_string(),
-            last_name: last_name.to_string(),
-            description: description.to_string(),
+        // Write the client
+        CLIENTS.write().push(Client {
+            first_name: first_name(),
+            last_name: last_name(),
+            description: description(),
         });
+
+        println!("Added client: {:?}", CLIENTS.read());
+
+        // And then navigate back to the client list
         dioxus_router::router().push(Route::ClientList {});
     };
 
     rsx! {
         h2 { "Add new Client" }
         form { class: "pure-form pure-form-aligned", onsubmit: submit_client,
-
             fieldset {
                 div { class: "pure-control-group",
-                    label { "for": "first_name", "First Name" }
+                    label { r#for: "first_name", "First Name" }
                     input {
                         id: "first_name",
                         r#type: "text",
@@ -140,13 +141,14 @@ fn ClientAdd() -> Element {
 fn Settings() -> Element {
     rsx! {
         h2 { "Settings" }
-
         button {
             class: "pure-button pure-button-primary red",
-            onclick: move |_| consume_context::<Clients>().write().clear(),
+            onclick: move |_| {
+                CLIENTS.write().clear();
+                dioxus_router::router().push(Route::ClientList {});
+            },
             "Remove all Clients"
         }
-
         Link { to: Route::ClientList {}, class: "pure-button", "Go back" }
     }
 }

@@ -8,7 +8,7 @@ use std::{
 };
 
 use dioxus_core::{
-    prelude::{provide_context, try_consume_context, IntoAttributeValue},
+    prelude::{provide_context, provide_root_context, try_consume_context, IntoAttributeValue},
     ScopeId,
 };
 use generational_box::{GenerationalRef, GenerationalRefMut};
@@ -32,7 +32,7 @@ fn get_global_context() -> GlobalSignalContext {
             let context = GlobalSignalContext {
                 signal: Rc::new(RefCell::new(HashMap::new())),
             };
-            provide_context(context)
+            provide_root_context(context).unwrap()
         }
     }
 }
@@ -46,19 +46,27 @@ impl<T: 'static> GlobalSignal<T> {
     /// Get the signal that backs this global.
     pub fn signal(&self) -> Signal<T> {
         let key = self as *const _ as *const ();
-
         let context = get_global_context();
-
         let read = context.signal.borrow();
 
         match read.get(&key) {
-            Some(signal) => *signal.downcast_ref::<Signal<T>>().unwrap(),
+            Some(signal) => {
+                let signal = signal.downcast_ref::<Signal<T>>().unwrap();
+                dbg!(signal.id());
+
+                *signal
+            }
             None => {
                 drop(read);
+
                 // Constructors are always run in the root scope
+                // The signal also exists in the root scope
                 let value = ScopeId::ROOT.in_runtime(self.initializer);
-                let signal = Signal::new(value);
-                context.signal.borrow_mut().insert(key, Box::new(signal));
+                let signal = Signal::new_in_scope(value, ScopeId::ROOT);
+
+                let entry = context.signal.borrow_mut().insert(key, Box::new(signal));
+                debug_assert!(entry.is_none(), "Global signal already exists");
+
                 signal
             }
         }
