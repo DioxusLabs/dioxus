@@ -15,7 +15,7 @@ fn main() {
             .with_inner_size(LogicalSize::new(300.0, 525.0)),
     );
 
-    LaunchBuilder::desktop().cfg(config).launch(app);
+    LaunchBuilder::desktop().with_cfg(config).launch(app);
 }
 
 fn app() -> Element {

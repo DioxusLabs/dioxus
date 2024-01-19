@@ -4,7 +4,7 @@ use std::rc::Rc;
 use dioxus::{html::geometry::euclid::Rect, prelude::*};
 
 fn main() {
-    LaunchBuilder::new().cfg(
+    LaunchBuilder::new().with_cfg(
         dioxus_desktop::Config::default().with_custom_head(
             r#"
 <style type="text/css">

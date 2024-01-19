@@ -4,18 +4,14 @@ use dioxus_router::prelude::*;
 
 fn main() {
     LaunchBuilder::desktop()
-        .cfg(
+        .with_cfg(
             Config::new().with_window(
                 WindowBuilder::new()
                     .with_inner_size(LogicalSize::new(600, 1000))
                     .with_resizable(false),
             ),
         )
-        .launch(|| {
-            rsx! {
-                Router::<Route> {}
-            }
-        })
+        .launch(|| rsx! { Router::<Route> {} })
 }
 
 #[derive(Routable, Clone)]

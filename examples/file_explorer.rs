@@ -13,7 +13,7 @@ use dioxus_desktop::{Config, WindowBuilder};
 
 fn main() {
     LaunchBuilder::new()
-        .cfg(Config::new().with_window(WindowBuilder::new().with_resizable(true)))
+        .with_cfg(Config::new().with_window(WindowBuilder::new().with_resizable(true)))
         .launch(app)
 }
 

@@ -87,7 +87,7 @@ impl LaunchBuilder {
 impl<Cfg: Default> LaunchBuilder<Cfg> {
     #[cfg(feature = "fullstack")]
     /// Inject state into the root component's context that is created on the thread that the app is launched on.
-    pub fn context_provider(
+    pub fn with_context_provider(
         mut self,
         state: impl Fn() -> Box<dyn Any> + Send + Sync + 'static,
     ) -> Self {
@@ -98,7 +98,7 @@ impl<Cfg: Default> LaunchBuilder<Cfg> {
 
     #[cfg(not(feature = "fullstack"))]
     /// Inject state into the root component's context that is created on the thread that the app is launched on.
-    pub fn context_provider(mut self, state: impl Fn() -> Box<dyn Any> + 'static) -> Self {
+    pub fn with_context_provider(mut self, state: impl Fn() -> Box<dyn Any> + 'static) -> Self {
         self.contexts
             .push(Box::new(state) as Box<dyn Fn() -> Box<dyn Any>>);
         self
@@ -106,7 +106,7 @@ impl<Cfg: Default> LaunchBuilder<Cfg> {
 
     #[cfg(feature = "fullstack")]
     /// Inject state into the root component's context.
-    pub fn context(mut self, state: impl Any + Clone + Send + Sync + 'static) -> Self {
+    pub fn with_context(mut self, state: impl Any + Clone + Send + Sync + 'static) -> Self {
         self.contexts
             .push(Box::new(move || Box::new(state.clone())));
         self
@@ -114,14 +114,14 @@ impl<Cfg: Default> LaunchBuilder<Cfg> {
 
     #[cfg(not(feature = "fullstack"))]
     /// Inject state into the root component's context.
-    pub fn context(mut self, state: impl Any + Clone + 'static) -> Self {
+    pub fn with_context(mut self, state: impl Any + Clone + 'static) -> Self {
         self.contexts
             .push(Box::new(move || Box::new(state.clone())));
         self
     }
 
     /// Provide a platform-specific config to the builder.
-    pub fn cfg(mut self, config: impl Into<Option<Cfg>>) -> Self {
+    pub fn with_cfg(mut self, config: impl Into<Option<Cfg>>) -> Self {
         if let Some(config) = config.into() {
             self.platform_config = Some(config);
         }

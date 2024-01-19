@@ -58,17 +58,16 @@ async-trait = "0.1.71"
 bytes = "1.4.0"
 tower = { version = "0.4.13", features = ["util"], optional = true }
 tower-layer = { version = "0.3.2", optional = true }
+web-sys = { version = "0.3.61", optional = true, features = ["Window", "Document", "Element", "HtmlDocument", "Storage", "console"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 dioxus-hot-reload = { workspace = true }
 
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-web-sys = { version = "0.3.61", features = ["Window", "Document", "Element", "HtmlDocument", "Storage", "console"] }
 
 [features]
 default = ["hot-reload"]
 hot-reload = ["serde_json", "futures-util"]
-web = ["dioxus-web"]
+web = ["dioxus-web", "web-sys"]
 desktop = ["dioxus-desktop"]
 warp = ["dep:warp", "ssr"]
 axum = ["dep:axum", "tower-http", "ssr"]

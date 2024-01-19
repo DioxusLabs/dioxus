@@ -30,7 +30,7 @@ wry = { version = "0.35.0", default-features = false, features = [
     "protocol",
     "file-drop",
 ] }
-futures-channel.workspace = true
+futures-channel = { workspace = true }
 tokio = { workspace = true, features = [
     "sync",
     "rt-multi-thread",
@@ -79,9 +79,7 @@ default-features = false
 features = ["tokio_runtime", "hot-reload"]
 
 [dev-dependencies]
-dioxus-core-macro = { workspace = true }
-dioxus-hooks = { workspace = true }
-dioxus-signals = { workspace = true }
+dioxus = { workspace = true, features = ["launch", "desktop"]}
 exitcode = "1.1.2"
 
 [build-dependencies]

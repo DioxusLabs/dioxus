@@ -21,7 +21,6 @@ log = "0.4.14"
 fern = { version = "0.6.0", features = ["colored"] }
 serde = { version = "1.0.136", features = ["derive"] }
 serde_json = "1.0.79"
-toml = "0.5.8"
 fs_extra = "1.2.0"
 cargo_toml = "0.16.0"
 futures = "0.3.21"
@@ -89,7 +88,7 @@ interprocess-docfix = { version = "1.2.2" }
 gitignore = "1.0.8"
 
 [features]
-default = []
+default = ["plugin"]
 plugin = ["mlua"]
 
 [[bin]]

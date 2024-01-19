@@ -7,15 +7,19 @@ use std::sync::Arc;
 /// Settings for a fullstack app.
 pub struct Config {
     #[cfg(feature = "ssr")]
-    server_fn_route: &'static str,
+    pub(crate) server_fn_route: &'static str,
+
     #[cfg(feature = "ssr")]
-    server_cfg: ServeConfigBuilder,
+    pub(crate) server_cfg: ServeConfigBuilder,
+
     #[cfg(feature = "ssr")]
-    addr: std::net::SocketAddr,
+    pub(crate) addr: std::net::SocketAddr,
+
     #[cfg(feature = "web")]
-    web_cfg: dioxus_web::Config,
+    pub(crate) web_cfg: dioxus_web::Config,
+
     #[cfg(feature = "desktop")]
-    desktop_cfg: dioxus_desktop::Config,
+    pub(crate) desktop_cfg: dioxus_desktop::Config,
 }
 
 #[allow(clippy::derivable_impls)]
@@ -86,44 +90,6 @@ impl Config {
             desktop_cfg,
             ..self
         }
-    }
-
-    /// Launch the app.
-    pub fn launch(self, build_virtual_dom: impl Fn() -> VirtualDom + Send + Sync + 'static) {
-        #[cfg(feature = "ssr")]
-        tokio::runtime::Runtime::new()
-            .unwrap()
-            .block_on(async move {
-                self.launch_server(build_virtual_dom).await;
-            });
-        #[cfg(not(feature = "ssr"))]
-        {
-            #[cfg(feature = "web")]
-            self.launch_web(build_virtual_dom);
-            #[cfg(feature = "desktop")]
-            self.launch_desktop(build_virtual_dom);
-        }
-    }
-
-    #[cfg(feature = "web")]
-    /// Launch the web application
-    pub fn launch_web(self, build_virtual_dom: impl Fn() -> VirtualDom + Send + Sync + 'static) {
-        #[cfg(not(feature = "ssr"))]
-        {
-            let cfg = self.web_cfg.hydrate(true);
-            dioxus_web::launch::launch_virtual_dom(
-                // TODO: this should pull the props from the document
-                build_virtual_dom(),
-                cfg,
-            );
-        }
-    }
-
-    #[cfg(feature = "desktop")]
-    /// Launch the web application
-    pub fn launch_desktop<P: AnyProps>(self, build_virtual_dom: impl Fn() -> VirtualDom + 'static) {
-        let cfg = self.desktop_cfg;
-        dioxus_desktop::launch::launch_with_props_blocking(self.component, self.props, cfg);
     }
 
     #[cfg(feature = "ssr")]

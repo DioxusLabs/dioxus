@@ -3,7 +3,7 @@ use dioxus_desktop::{window, Config, WindowBuilder};
 
 fn main() {
     LaunchBuilder::desktop()
-        .cfg(
+        .with_cfg(
             Config::new().with_window(
                 WindowBuilder::new()
                     .with_title("Borderless Window")

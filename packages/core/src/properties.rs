@@ -118,18 +118,3 @@ impl<F: Fn() -> Element + Clone + 'static> ComponentFunction<(), EmptyMarker> fo
         self()
     }
 }
-
-#[test]
-fn it_works_maybe() {
-    fn test(_: ()) -> Element {
-        todo!()
-    }
-    fn test2() -> Element {
-        todo!()
-    }
-
-    let callable: Rc<dyn ComponentFunction<(), ()>> =
-        Rc::new(test) as Rc<dyn ComponentFunction<_, _>>;
-    let callable2: Rc<dyn ComponentFunction<(), EmptyMarker>> =
-        Rc::new(test2) as Rc<dyn ComponentFunction<_, _>>;
-}

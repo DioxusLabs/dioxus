@@ -18,7 +18,7 @@ use dioxus_desktop::{Config, LogicalSize, WindowBuilder};
 
 fn main() {
     LaunchBuilder::desktop()
-        .cfg(
+        .with_cfg(
             Config::new().with_window(
                 WindowBuilder::new()
                     .with_title("Doggo Fetcher")

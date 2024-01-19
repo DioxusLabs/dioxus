@@ -3,7 +3,7 @@ use dioxus_desktop::Config;
 
 fn main() {
     LaunchBuilder::desktop()
-        .cfg(Config::new().with_file_drop_handler(|_w, e| {
+        .with_cfg(Config::new().with_file_drop_handler(|_w, e| {
             println!("{e:?}");
             true
         }))

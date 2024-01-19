@@ -20,17 +20,27 @@ pub fn launch(
         }
         vdom
     };
+
     #[cfg(feature = "ssr")]
     tokio::runtime::Runtime::new()
         .unwrap()
         .block_on(async move {
             platform_config.launch_server(virtual_dom_factory).await;
         });
+
     #[cfg(not(feature = "ssr"))]
     {
         #[cfg(feature = "web")]
-        platform_config.launch_web(virtual_dom_factory);
+        {
+            // TODO: this should pull the props from the document
+            let cfg = platform_config.web_cfg.hydrate(true);
+            dioxus_web::launch::launch_virtual_dom(virtual_dom_factory(), cfg);
+        }
+
         #[cfg(feature = "desktop")]
-        platform_config.launch_desktop(virtual_dom_factory);
+        {
+            let cfg = platform_config.desktop_cfg;
+            dioxus_desktop::launch::launch_virtual_dom(virtual_dom_factory(), cfg)
+        }
     }
 }

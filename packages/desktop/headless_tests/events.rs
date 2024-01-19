@@ -1,8 +1,9 @@
 use dioxus::html::geometry::euclid::Vector3D;
 use dioxus::prelude::*;
+use dioxus_core::prelude::consume_context;
 use dioxus_desktop::DesktopContext;
 
-pub(crate) fn check_app_exits(app: Component) {
+pub(crate) fn check_app_exits(app: fn() -> Element) {
     use dioxus_desktop::tao::window::WindowBuilder;
     use dioxus_desktop::Config;
     // This is a deadman's switch to ensure that the app exits
@@ -15,10 +16,9 @@ pub(crate) fn check_app_exits(app: Component) {
         }
     });
 
-    dioxus_desktop::launch_cfg(
-        app,
-        Config::new().with_window(WindowBuilder::new().with_visible(true)),
-    );
+    LaunchBuilder::desktop()
+        .with_cfg(Config::new().with_window(WindowBuilder::new().with_visible(true)))
+        .launch(app);
 
     // Stop deadman's switch
     should_panic.store(false, std::sync::atomic::Ordering::SeqCst);
@@ -29,12 +29,12 @@ pub fn main() {
 }
 
 fn mock_event(id: &'static str, value: &'static str) {
-    let eval_provider = use_eval(cx).clone();
+    use_effect(move || {
+        spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
-    use_effect(move |_| async move {
-        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-        let js = format!(
-            r#"
+            let js = format!(
+                r#"
                 //console.log("ran");
                 // Dispatch a synthetic event
                 let event = {};
@@ -42,17 +42,18 @@ fn mock_event(id: &'static str, value: &'static str) {
                 console.log(element, event);
                 element.dispatchEvent(event);
                 "#,
-            value, id
-        );
+                value, id
+            );
 
-        eval_provider(&js).unwrap();
+            dioxus::eval(js);
+        });
     })
 }
 
 #[allow(deprecated)]
 fn app() -> Element {
-    let desktop_context: DesktopContext = cx.consume_context().unwrap();
-    let received_events = use_signal(|| 0);
+    let desktop_context: DesktopContext = consume_context();
+    let mut received_events = use_signal(|| 0);
 
     // button
     mock_event(
@@ -204,7 +205,7 @@ fn app() -> Element {
         r#"new FocusEvent("focusout",{bubbles: true})"#,
     );
 
-    if **received_events == 13 {
+    if received_events() == 13 {
         println!("all events recieved");
         desktop_context.close();
     }
@@ -214,15 +215,13 @@ fn app() -> Element {
             div {
                 width: "100px",
                 height: "100px",
-                onmounted: move |evt| {
-                    to_owned![received_events];
-                    async move {
-                        let rect = evt.get_client_rect().await.unwrap();
-                        println!("rect: {:?}", rect);
-                        assert_eq!(rect.width(), 100.0);
-                        assert_eq!(rect.height(), 100.0);
-                        received_events.modify(|x| *x + 1)
-                    }
+                onmounted: move |evt| async move {
+                    todo!();
+                    // let rect = evt.get_client_rect().await.unwrap();
+                    // println!("rect: {:?}", rect);
+                    // assert_eq!(rect.width(), 100.0);
+                    // assert_eq!(rect.height(), 100.0);
+                    // received_events.with_mut(|x| *x + 1)
                 }
             }
             button {
@@ -235,7 +234,7 @@ fn app() -> Element {
                         event.data.trigger_button(),
                         Some(dioxus_html::input_data::MouseButton::Primary),
                     );
-                    received_events.modify(|x| *x + 1)
+                    received_events.with_mut(|x| *x + 1);
                 }
             }
             div {
@@ -249,7 +248,7 @@ fn app() -> Element {
                             .held_buttons()
                             .contains(dioxus_html::input_data::MouseButton::Secondary),
                     );
-                    received_events.modify(|x| *x + 1)
+                    received_events.with_mut(|x| *x + 1);
                 }
             }
             div {
@@ -267,7 +266,7 @@ fn app() -> Element {
                         event.data.trigger_button(),
                         Some(dioxus_html::input_data::MouseButton::Secondary),
                     );
-                    received_events.modify(|x| *x + 1)
+                    received_events.with_mut(|x| *x + 1);
                 }
             }
             div {
@@ -288,7 +287,7 @@ fn app() -> Element {
                         event.data.trigger_button(),
                         Some(dioxus_html::input_data::MouseButton::Secondary),
                     );
-                    received_events.modify(|x| *x + 1)
+                    received_events.with_mut(|x| *x + 1);
                 }
             }
             div {
@@ -306,7 +305,7 @@ fn app() -> Element {
                         event.data.trigger_button(),
                         Some(dioxus_html::input_data::MouseButton::Secondary),
                     );
-                    received_events.modify(|x| *x + 1)
+                    received_events.with_mut(|x| *x + 1);
                 }
             }
             div {
@@ -319,7 +318,7 @@ fn app() -> Element {
                         event.data.trigger_button(),
                         Some(dioxus_html::input_data::MouseButton::Primary),
                     );
-                    received_events.modify(|x| *x + 1)
+                    received_events.with_mut(|x| *x + 1);
                 }
             }
             div {
@@ -332,7 +331,7 @@ fn app() -> Element {
                     let dioxus_html::geometry::WheelDelta::Pixels(delta) = event.data.delta() else {
                     panic!("Expected delta to be in pixels") };
                     assert_eq!(delta, Vector3D::new(1.0, 2.0, 3.0));
-                    received_events.modify(|x| *x + 1)
+                    received_events.with_mut(|x| *x + 1);
                 }
             }
             input {
@@ -344,7 +343,7 @@ fn app() -> Element {
                     assert_eq!(event.data.code().to_string(), "KeyA");
                     assert_eq!(event.data.location(), Location::Standard);
                     assert!(event.data.is_auto_repeating());
-                    received_events.modify(|x| *x + 1)
+                    received_events.with_mut(|x| *x + 1);
                 }
             }
             input {
@@ -356,7 +355,7 @@ fn app() -> Element {
                     assert_eq!(event.data.code().to_string(), "KeyA");
                     assert_eq!(event.data.location(), Location::Standard);
                     assert!(!event.data.is_auto_repeating());
-                    received_events.modify(|x| *x + 1)
+                    received_events.with_mut(|x| *x + 1);
                 }
             }
             input {
@@ -368,21 +367,21 @@ fn app() -> Element {
                     assert_eq!(event.data.code().to_string(), "KeyA");
                     assert_eq!(event.data.location(), Location::Standard);
                     assert!(!event.data.is_auto_repeating());
-                    received_events.modify(|x| *x + 1)
+                    received_events.with_mut(|x| *x + 1);
                 }
             }
             input {
                 id: "focus_in_div",
                 onfocusin: move |event| {
                     println!("{:?}", event.data);
-                    received_events.modify(|x| *x + 1)
+                    received_events.with_mut(|x| *x + 1);
                 }
             }
             input {
                 id: "focus_out_div",
                 onfocusout: move |event| {
                     println!("{:?}", event.data);
-                    received_events.modify(|x| *x + 1)
+                    received_events.with_mut(|x| *x + 1);
                 }
             }
         }

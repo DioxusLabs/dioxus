@@ -32,7 +32,7 @@ fn main() {
             .with_inner_size(LogicalSize::new(320.0, 530.0)),
     );
 
-    LaunchBuilder::new().cfg(cfg).launch(app);
+    LaunchBuilder::new().with_cfg(cfg).launch(app);
 }
 
 const STYLE: &str = include_str!("./assets/calculator.css");

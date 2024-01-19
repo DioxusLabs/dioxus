@@ -76,3 +76,13 @@ pub use dioxus_desktop as desktop;
 
 #[cfg(feature = "tui")]
 pub use dioxus_tui as tui;
+
+/// Try to evaluate javascript in the target window
+///
+/// For the browser, this is the window object
+/// For desktop/mobile, this is the webview object
+///
+/// For native, it will try and use the platform's JS engine if available
+pub async fn eval(src: String) -> std::result::Result<String, Box<dyn std::error::Error>> {
+    todo!()
+}

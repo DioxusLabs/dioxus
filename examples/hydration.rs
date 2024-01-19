@@ -14,7 +14,7 @@ use dioxus_desktop::Config;
 
 fn main() {
     LaunchBuilder::desktop()
-        .cfg(Config::new().with_prerendered({
+        .with_cfg(Config::new().with_prerendered({
             // We build the dom a first time, then pre-render it to HTML
             let pre_rendered_dom = VirtualDom::prebuilt(app);
 
