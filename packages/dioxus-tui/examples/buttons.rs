@@ -5,19 +5,13 @@ fn main() {
     dioxus_tui::launch(app);
 }
 
-#[derive(PartialEq, Props)]
-struct ButtonProps {
-    color_offset: u32,
-    layer: u16,
-}
+#[component]
+fn Button(color_offset: u32, layer: u16) -> Element {
+    let mut toggle = use_signal(|| false);
+    let mut hovered = use_signal(|| false);
 
-#[allow(non_snake_case)]
-fn Button(cx: Scope<ButtonProps>) -> Element {
-    let toggle = use_signal(|| false);
-    let hovered = use_signal(|| false);
-
-    let hue = cx.props.color_offset % 255;
-    let saturation = if *toggle.get() { 50 } else { 25 } + if *hovered.get() { 50 } else { 25 };
+    let hue = color_offset % 255;
+    let saturation = if toggle() { 50 } else { 25 } + if hovered() { 50 } else { 25 };
     let brightness = saturation / 2;
     let color = format!("hsl({hue}, {saturation}, {brightness})");
 
@@ -26,26 +20,20 @@ fn Button(cx: Scope<ButtonProps>) -> Element {
             width: "100%",
             height: "100%",
             background_color: "{color}",
-            tabindex: "{cx.props.layer}",
+            tabindex: "{layer}",
             onkeydown: move |e| {
                 if let Code::Space = e.inner().code() {
-                    toggle.modify(|f| !f);
+                    toggle.toggle();
                 }
             },
-            onclick: move |_| {
-                toggle.modify(|f| !f);
-            },
-            onmouseenter: move |_| {
-                hovered.set(true);
-            },
-            onmouseleave: move |_|{
-                hovered.set(false);
-            },
+            onclick: move |_| toggle.toggle(),
+            onmouseenter: move |_| hovered.set(true),
+            onmouseleave: move |_| hovered.set(false),
             justify_content: "center",
             align_items: "center",
             display: "flex",
             flex_direction: "column",
-            p{ "tabindex: {cx.props.layer}" }
+            p { "tabindex: {layer}" }
         }
     }
 }

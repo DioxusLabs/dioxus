@@ -12,9 +12,7 @@ fn app() -> Element {
 
     rsx! {
         button {
-            onclick: move |_| {
-                state.set(0);
-            },
+            onclick: move |_| state.set(0),
             "reset"
         }
         for _ in 0..10000 {
@@ -26,5 +24,5 @@ fn app() -> Element {
 }
 
 fn main() {
-    launch(app);
+    dioxus_desktop::launch::launch(app, Default::default(), Default::default());
 }

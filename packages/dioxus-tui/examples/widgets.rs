@@ -6,19 +6,18 @@ fn main() {
 }
 
 fn app() -> Element {
-    let bg_green = use_signal(|| false);
+    let mut bg_green = use_signal(|| false);
+    let color = if bg_green() { "green" } else { "red" };
 
-    let color = if *bg_green.get() { "green" } else { "red" };
     rsx! {
-        div{
+        div {
             width: "100%",
             background_color: "{color}",
             flex_direction: "column",
             align_items: "center",
             justify_content: "center",
-
             input {
-                oninput: |data| if &data.value()== "good"{
+                oninput: move |data| if data.value() == "good" {
                     bg_green.set(true);
                 } else{
                     bg_green.set(false);
@@ -30,9 +29,9 @@ fn app() -> Element {
                 checked: "true",
             }
             input {
-                oninput: |data| if &data.value()== "hello world"{
+                oninput: move |data| if &data.value() == "hello world"{
                     bg_green.set(true);
-                } else{
+                } else {
                     bg_green.set(false);
                 },
                 width: "50%",
@@ -40,7 +39,7 @@ fn app() -> Element {
                 maxlength: "11",
             }
             input {
-                oninput: |data| {
+                oninput: move |data| {
                     if (data.value().parse::<f32>().unwrap() - 40.0).abs() < 5.0 {
                         bg_green.set(true);
                     } else{
@@ -54,10 +53,10 @@ fn app() -> Element {
                 max: "80",
             }
             input {
-                oninput: |data| {
-                    if data.value()== "10"{
+                oninput: move |data| {
+                    if data.value() == "10"{
                         bg_green.set(true);
-                    } else{
+                    } else {
                         bg_green.set(false);
                     }
                 },
@@ -67,8 +66,8 @@ fn app() -> Element {
                 maxlength: "4",
             }
             input {
-                oninput: |data| {
-                    if data.value()== "hello world"{
+                oninput: move |data| {
+                    if data.value() == "hello world"{
                         bg_green.set(true);
                     } else{
                         bg_green.set(false);
@@ -80,9 +79,7 @@ fn app() -> Element {
                 maxlength: "11",
             }
             input {
-                oninput: |_| {
-                    bg_green.set(true)
-                },
+                oninput: move |_| { bg_green.set(true) },
                 r#type: "button",
                 value: "green",
                 width: "50%",

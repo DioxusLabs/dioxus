@@ -27,10 +27,11 @@ enum Event {
 const MAX_EVENTS: usize = 8;
 
 fn app() -> Element {
-    let events = use_signal(Vec::new);
+    let mut events = use_signal(Vec::new);
 
     let events_lock = events.read();
     let first_index = events_lock.len().saturating_sub(MAX_EVENTS);
+
     let events_rendered = events_lock[first_index..].iter().map(|event| {
         // TUI panics if text overflows (https://github.com/DioxusLabs/dioxus/issues/371)
         // temporary hack: just trim the strings (and make sure viewport is big enough)
@@ -40,9 +41,7 @@ fn app() -> Element {
         rsx!( p { "{trimmed}" } )
     });
 
-    let log_event = move |event: Event| {
-        events.write().push(event);
-    };
+    let mut log_event = move |event: Event| events.write().push(event);
 
     rsx! {
         div { width: "100%", height: "100%", flex_direction: "column",

@@ -5,14 +5,14 @@ fn main() {
 }
 
 fn app() -> Element {
-    let alpha = use_signal(|| 100);
+    let mut alpha = use_signal(|| 100);
 
     rsx! {
         div {
             width: "100%",
             height: "100%",
             flex_direction: "column",
-            onwheel: move |evt| alpha.set((**alpha + evt.inner().delta().strip_units().y as i64).clamp(0, 100)),
+            onwheel: move |evt| alpha.set((alpha() + evt.inner().delta().strip_units().y as i64).clamp(0, 100)),
 
             p {
                 background_color: "black",

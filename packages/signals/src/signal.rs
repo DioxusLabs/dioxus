@@ -194,6 +194,9 @@ pub struct Signal<T: 'static, S: Storage<SignalData<T>> = UnsyncStorage> {
     pub(crate) inner: CopyValue<SignalData<T>, S>,
 }
 
+/// A signal that can safely shared between threads.
+pub type SyncSignal<T> = Signal<T, SyncStorage>;
+
 #[cfg(feature = "serde")]
 impl<T: serde::Serialize + 'static> serde::Serialize for Signal<T> {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {

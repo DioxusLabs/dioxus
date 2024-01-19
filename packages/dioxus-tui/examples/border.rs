@@ -5,7 +5,7 @@ fn main() {
 }
 
 fn app() -> Element {
-    let radius = use_signal(|| 0);
+    let mut radius = use_signal(|| 0);
 
     rsx! {
         div {
@@ -14,7 +14,7 @@ fn app() -> Element {
             justify_content: "center",
             align_items: "center",
             background_color: "hsl(248, 53%, 58%)",
-            onwheel: move |w| radius.modify(|r| (r + w.delta().strip_units().y as i8).abs()),
+            onwheel: move |w| radius.with_mut(|r| *r = (*r + w.delta().strip_units().y as i8).abs()),
 
             border_style: "solid none solid double",
             border_width: "thick",

@@ -44,7 +44,11 @@ async fn main() {
 
 #[cfg(not(feature = "liveview"))]
 fn main() {
-    launch(Route::Home {})
+    launch(|| {
+        rsx! {
+            Router::<Route> {}
+        }
+    })
 }
 
 #[component]
@@ -66,8 +70,8 @@ fn Route1(user_id: usize, dynamic: usize, query: String, extra: String) -> Eleme
         }
         Link {
             to: Route::Route1 {
-                user_id: *user_id,
-                dynamic: *dynamic,
+                user_id,
+                dynamic,
                 query: String::new(),
                 extra: extra.clone() + ".",
             },
@@ -87,7 +91,7 @@ fn Route1(user_id: usize, dynamic: usize, query: String, extra: String) -> Eleme
 fn Route2(user_id: usize) -> Element {
     rsx! {
         pre { "Route2{{\n\tuser_id:{user_id}\n}}" }
-        {(0..*user_id).map(|i| rsx!{ p { "{i}" } })},
+        {(0..user_id).map(|i| rsx!{ p { "{i}" } })},
         p { "Footer" }
         Link {
             to: Route::Route3 {
@@ -100,8 +104,9 @@ fn Route2(user_id: usize) -> Element {
 
 #[component]
 fn Route3(dynamic: String) -> Element {
+    let mut current_route_str = use_signal(String::new);
+
     let current_route = use_route()?;
-    let current_route_str = use_signal(String::new);
     let parsed = Route::from_str(&current_route_str.read());
 
     let site_map = Route::SITE_MAP

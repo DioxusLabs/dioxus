@@ -79,7 +79,7 @@ default-features = false
 features = ["tokio_runtime", "hot-reload"]
 
 [dev-dependencies]
-dioxus = { workspace = true, features = ["launch", "desktop"]}
+dioxus = { workspace = true }
 exitcode = "1.1.2"
 
 [build-dependencies]

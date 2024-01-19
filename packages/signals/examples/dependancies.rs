@@ -1,37 +1,29 @@
-#![allow(non_snake_case)]
-
 use dioxus::prelude::*;
-use dioxus_signals::*;
 
 fn main() {
-    dioxus_desktop::launch(app);
+    // dioxus_desktop::launch(app);
 }
 
 fn app() -> Element {
-    let signal = use_signal(|| 0);
+    let mut signal = use_signal(|| 0);
 
     use_future(|| async move {
         loop {
             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-            *signal.write() += 1;
+            signal += 1;
         }
     });
 
-    let local_state = use_signal(|| 0);
-    let computed = use_selector_with_dependencies((local_state.get(),), move |(local_state,)| {
+    let mut local_state = use_signal(|| 0);
+
+    let computed = use_selector_with_dependencies((&local_state(),), move |(local_state,)| {
         local_state * 2 + signal.cloned()
     });
+
     println!("Running app");
 
     rsx! {
-        button {
-            onclick: move |_| {
-                local_state.set(local_state.get() + 1);
-            },
-            "Add one"
-        }
-        div {
-            "{computed}"
-        }
+        button { onclick: move |_| local_state.set(local_state() + 1), "Add one" }
+        div { "{computed}" }
     }
 }

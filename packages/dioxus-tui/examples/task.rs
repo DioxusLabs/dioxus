@@ -5,17 +5,13 @@ fn main() {
 }
 
 fn app() -> Element {
-    let count = use_signal(|| 0);
+    let mut count = use_signal(|| 0);
 
-    use_future(move |_| {
-        let count = count.to_owned();
-        let update = cx.schedule_update();
-        async move {
-            loop {
-                count.with_mut(|f| *f += 1);
-                tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
-                update();
-            }
+    use_future(move || async move {
+        loop {
+            count += 1;
+            tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
+            schedule_update();
         }
     });
 

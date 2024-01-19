@@ -53,5 +53,5 @@ fn main() {
         .set_inner_html(&pre);
 
     // now rehydrate
-    dioxus_web::launch_with_props(app, (), Config::new().hydrate(true));
+    dioxus_web::launch::launch(app, vec![], Config::new().hydrate(true));
 }

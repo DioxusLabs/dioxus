@@ -9,25 +9,27 @@ fn main() {
 }
 
 fn app() -> Element {
-    let hue = use_signal(|| 0.0);
-    let brightness = use_signal(|| 0.0);
-    let tui_query: Query = cx.consume_context().unwrap();
-    let mapping: DioxusElementToNodeId = cx.consume_context().unwrap();
+    let mut hue = use_signal(|| 0.0);
+    let mut brightness = use_signal(|| 0.0);
+    let tui_query: Query = consume_context();
+    let mapping: DioxusElementToNodeId = consume_context();
+
     // disable templates so that every node has an id and can be queried
     rsx! {
         div {
             width: "100%",
             background_color: "hsl({hue}, 70%, {brightness}%)",
             onmousemove: move |evt| {
-                if let RenderReturn::Ready(node) = cx.root_node() {
-                    if let Some(id) = node.root_ids.borrow().first().cloned() {
-                        let node = tui_query.get(mapping.get_node_id(id).unwrap());
-                        let Size { width, height } = node.size().unwrap();
-                        let pos = evt.inner().element_coordinates();
-                        hue.set((pos.x as f32 / width as f32) * 255.0);
-                        brightness.set((pos.y as f32 / height as f32) * 100.0);
-                    }
-                }
+                todo!()
+                // if let RenderReturn::Ready(node) = root_node() {
+                //     if let Some(id) = node.root_ids.borrow().first().cloned() {
+                //         let node = tui_query.get(mapping.get_node_id(id).unwrap());
+                //         let Size { width, height } = node.size().unwrap();
+                //         let pos = evt.inner().element_coordinates();
+                //         hue.set((pos.x as f32 / width as f32) * 255.0);
+                //         brightness.set((pos.y as f32 / height as f32) * 100.0);
+                //     }
+                // }
             },
             "hsl({hue}, 70%, {brightness}%)"
         }

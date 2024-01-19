@@ -5,13 +5,13 @@ use dioxus::prelude::*;
 use dioxus_desktop::Config;
 
 fn main() {
-    LaunchBuilder::new()
+    LaunchBuilder::desktop()
         .with_cfg(
             Config::new().with_custom_head("<style>body { background-color: red; }</style>".into()),
         )
         .launch(app);
 
-    LaunchBuilder::new()
+    LaunchBuilder::desktop()
         .with_cfg(
             Config::new().with_custom_index(
                 r#"

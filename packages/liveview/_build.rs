@@ -12,10 +12,10 @@ fn main() {
               async function read_files() {
                 const files = target.files;
                 const file_contents = {};
-      
+
                 for (let i = 0; i < files.length; i++) {
                   const file = files[i];
-      
+
                   file_contents[file.name] = Array.from(
                     new Uint8Array(await file.arrayBuffer())
                   );
@@ -24,7 +24,7 @@ fn main() {
                   files: file_contents,
                 };
                 contents.files = file_engine;
-      
+
                 if (realId === null) {
                   return;
                 }

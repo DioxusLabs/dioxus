@@ -68,7 +68,7 @@ impl LaunchBuilder {
 
     /// Launch your fullstack application.
     #[cfg(feature = "mobile")]
-    pub fn mobile() -> LaunchBuilder<dioxus_mobile::Config> {
+    pub fn mobile() -> LaunchBuilder<dioxus_mobile::Config, UnsendContext> {
         LaunchBuilder {
             launch_fn: dioxus_mobile::launch::launch,
             contexts: Vec::new(),
@@ -89,30 +89,40 @@ impl LaunchBuilder {
 }
 
 // Fullstack platform builder
-impl<Cfg: Default> LaunchBuilder<Cfg, ValidContext> {
+impl<Cfg> LaunchBuilder<Cfg, UnsendContext> {
     /// Inject state into the root component's context that is created on the thread that the app is launched on.
-    pub fn with_context_provider(
-        mut self,
-
-        #[cfg(feature = "fullstack")] state: impl Fn() -> Box<dyn Any> + Send + Sync + 'static,
-        #[cfg(not(feature = "fullstack"))] state: impl Fn() -> Box<dyn Any> + 'static,
-    ) -> Self {
-        self.contexts.push(Box::new(state) as Box<ValidContext>);
+    pub fn with_context_provider(mut self, state: impl Fn() -> Box<dyn Any> + 'static) -> Self {
+        self.contexts.push(Box::new(state) as Box<UnsendContext>);
         self
     }
 
-    #[cfg(feature = "fullstack")]
     /// Inject state into the root component's context.
-    pub fn with_context(
-        mut self,
-        #[cfg(feature = "fullstack")] state: impl Any + Clone + Send + Sync + 'static,
-        #[cfg(not(feature = "fullstack"))] state: impl Any + Clone + 'static,
-    ) -> Self {
+    pub fn with_context(mut self, state: impl Any + Clone + 'static) -> Self {
         self.contexts
             .push(Box::new(move || Box::new(state.clone())));
         self
     }
+}
 
+impl<Cfg> LaunchBuilder<Cfg, SendContext> {
+    /// Inject state into the root component's context that is created on the thread that the app is launched on.
+    pub fn with_context_provider(
+        mut self,
+        state: impl Fn() -> Box<dyn Any> + Send + Sync + 'static,
+    ) -> Self {
+        self.contexts.push(Box::new(state) as Box<SendContext>);
+        self
+    }
+
+    /// Inject state into the root component's context.
+    pub fn with_context(mut self, state: impl Any + Clone + Send + Sync + 'static) -> Self {
+        self.contexts
+            .push(Box::new(move || Box::new(state.clone())));
+        self
+    }
+}
+
+impl<Cfg: Default, ContextFn: ?Sized> LaunchBuilder<Cfg, ContextFn> {
     /// Provide a platform-specific config to the builder.
     pub fn with_cfg(mut self, config: impl Into<Option<Cfg>>) -> Self {
         if let Some(config) = config.into() {
@@ -121,10 +131,9 @@ impl<Cfg: Default> LaunchBuilder<Cfg, ValidContext> {
         self
     }
 
-    #[allow(clippy::unit_arg)]
-    /// Launch the app.
+    /// Launch your application.
     pub fn launch(self, app: fn() -> Element) {
-        (self.launch_fn)(app, self.contexts, self.platform_config.unwrap_or_default());
+        (self.launch_fn)(app, self.contexts, self.platform_config.unwrap_or_default())
     }
 }
 
@@ -151,13 +160,13 @@ pub fn launch(app: fn() -> Element) {
     LaunchBuilder::new().launch(app)
 }
 
-#[cfg(all(feature = "web", not(feature = "fullstack")))]
+#[cfg(all(feature = "web"))]
 /// Launch your web application without any additional configuration. See [`LaunchBuilder`] for more options.
 pub fn launch_web(app: fn() -> Element) {
     LaunchBuilder::web().launch(app)
 }
 
-#[cfg(all(feature = "desktop", not(feature = "fullstack")))]
+#[cfg(all(feature = "desktop"))]
 /// Launch your desktop application without any additional configuration. See [`LaunchBuilder`] for more options.
 pub fn launch_desktop(app: fn() -> Element) {
     LaunchBuilder::desktop().launch(app)

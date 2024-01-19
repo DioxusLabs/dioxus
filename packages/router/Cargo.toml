@@ -41,8 +41,8 @@ fullstack = ["dioxus-fullstack"]
 
 [dev-dependencies]
 axum = { version = "0.6.1", features = ["ws"] }
-dioxus = { path = "../dioxus" }
-dioxus-liveview = { workspace = true, features = ["axum"] }
+dioxus = { workspace = true }
+# dioxus-liveview = { workspace = true, features = ["axum"] }
 dioxus-ssr = { path = "../ssr" }
 criterion = { version = "0.5", features = ["async_tokio", "html_reports"] }
 
@@ -55,12 +55,12 @@ name = "incremental"
 required-features = ["ssr"]
 harness = false
 
-[target.'cfg(not(target_family = "wasm"))'.dev-dependencies]
-dioxus-desktop = { path = "../desktop" }
+# [target.'cfg(not(target_family = "wasm"))'.dev-dependencies]
+# dioxus-desktop = { path = "../desktop" }
 
 [target.'cfg(target_family = "wasm")'.dev-dependencies]
 console_error_panic_hook = "0.1.7"
 dioxus-router = { path = ".", features = ["web"] }
-dioxus-web = { workspace = true }
+# dioxus-web = { workspace = true }
 gloo = "0.8.0"
 wasm-bindgen-test = "0.3.33"

@@ -5,7 +5,7 @@ use dioxus_desktop::use_wry_event_handler;
 use dioxus_desktop::{Config, WindowCloseBehaviour};
 
 fn main() {
-    LaunchBuilder::new()
+    LaunchBuilder::desktop()
         .with_cfg(Config::new().with_close_behaviour(WindowCloseBehaviour::CloseWindow))
         .launch(app)
 }

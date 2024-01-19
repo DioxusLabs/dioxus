@@ -5,28 +5,22 @@ use dioxus_tui::{Config, TuiContext};
 fn main() {
     for size in 1..=20usize {
         for _ in 0..10 {
-            dioxus_tui::launch_cfg_with_props(app, size, Config::default().with_headless())
+            todo!()
+            // dioxus_tui::launch_cfg(app, vec![size], Config::default().with_headless())
         }
     }
 }
 
-#[derive(Props, PartialEq)]
-struct BoxProps {
-    x: usize,
-    y: usize,
-    hue: f32,
-    alpha: f32,
-}
-#[allow(non_snake_case)]
-fn Box(cx: Scope<BoxProps>) -> Element {
+#[component]
+fn Box(x: usize, y: usize, hue: f32, alpha: f32) -> Element {
     let count = use_signal(|| 0);
 
-    let x = cx.props.x * 2;
-    let y = cx.props.y * 2;
-    let hue = cx.props.hue;
-    let display_hue = cx.props.hue as u32 / 10;
-    let count = count.get();
-    let alpha = cx.props.alpha + (count % 100) as f32;
+    let x = x * 2;
+    let y = y * 2;
+    let hue = hue;
+    let display_hue = hue as u32 / 10;
+
+    let alpha = alpha + (count() % 100) as f32;
 
     rsx! {
         div {
@@ -41,22 +35,19 @@ fn Box(cx: Scope<BoxProps>) -> Element {
     }
 }
 
-#[derive(Props, PartialEq)]
-struct GridProps {
-    size: usize,
-}
-#[allow(non_snake_case)]
-fn Grid(cx: Scope<GridProps>) -> Element {
-    let size = cx.props.size;
-    let count = use_signal(|| 0);
-    let counts = use_signal(|| vec![0; size * size]);
+#[component]
+fn Grid(size: usize) -> Element {
+    let size = size;
+    let mut count = use_signal(|| 0);
+    let mut counts = use_signal(|| vec![0; size * size]);
 
-    let ctx: TuiContext = cx.consume_context().unwrap();
-    if *count.get() + 1 >= (size * size) {
+    let ctx: TuiContext = consume_context();
+
+    if count() + 1 >= (size * size) {
         ctx.quit();
     } else {
         counts.with_mut(|c| {
-            let i = *count.current();
+            let i = count();
             c[i] += 1;
             c[i] %= 360;
         });
@@ -97,14 +88,12 @@ fn Grid(cx: Scope<GridProps>) -> Element {
     }
 }
 
-fn app(cx: Scope<usize>) -> Element {
+fn app(props: usize) -> Element {
     rsx! {
         div{
             width: "100%",
             height: "100%",
-            Grid{
-                size: *cx.props,
-            }
+            Grid{ size: props }
         }
     }
 }

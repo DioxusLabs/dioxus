@@ -57,8 +57,9 @@ salvo = { version = "0.63.0", features = ["affix", "websocket"] }
 rocket = "0.5.0"
 rocket_ws = "0.1.0"
 tower = "0.4.13"
+dioxus = { workspace = true }
 
-# [build-dependencies]
+[build-dependencies]
 # dioxus-interpreter-js = { workspace = true, features = ["binary-protocol"] }
 # minify-js = "0.5.6"
 

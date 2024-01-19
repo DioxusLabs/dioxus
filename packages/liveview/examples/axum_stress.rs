@@ -2,14 +2,11 @@ use axum::{extract::ws::WebSocketUpgrade, response::Html, routing::get, Router};
 use dioxus::prelude::*;
 
 fn app() -> Element {
-    let state = use_signal(|| 0);
-    use_future(|| {
-        to_owned![state];
-        async move {
-            loop {
-                state += 1;
-                tokio::time::sleep(std::time::Duration::from_millis(1)).await;
-            }
+    let mut state = use_signal(|| 0);
+    use_future(move || async move {
+        loop {
+            state += 1;
+            tokio::time::sleep(std::time::Duration::from_millis(1)).await;
         }
     });
 

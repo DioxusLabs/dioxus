@@ -227,5 +227,5 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 // wait 1 second
                 tokio::time::sleep(std::time::Duration::from_secs(1)).await;
             }
-        }
+        })
 }
