@@ -140,7 +140,7 @@ mod current_platform {
     #[cfg(not(any(feature = "desktop", feature = "web", feature = "fullstack")))]
     pub fn launch(
         root: fn() -> dioxus_core::Element,
-        contexts: super::ContextList,
+        contexts: Vec<Box<super::ValidContext>>,
         platform_config: Config,
     ) {
     }
