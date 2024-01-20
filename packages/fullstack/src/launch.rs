@@ -1,6 +1,5 @@
 //! This module contains the `launch` function, which is the main entry point for dioxus fullstack
 
-use core::panic;
 use std::any::Any;
 
 use dioxus_lib::prelude::{Element, VirtualDom};

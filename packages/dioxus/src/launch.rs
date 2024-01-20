@@ -138,6 +138,7 @@ impl<Cfg: Default + 'static, ContextFn: ?Sized> LaunchBuilder<Cfg, ContextFn> {
             .platform_config
             .and_then(|c| c.downcast().ok())
             .unwrap_or_default();
+
         (self.launch_fn)(app, self.contexts, *cfg)
     }
 }
@@ -145,12 +146,16 @@ impl<Cfg: Default + 'static, ContextFn: ?Sized> LaunchBuilder<Cfg, ContextFn> {
 mod current_platform {
     #[cfg(all(feature = "desktop", not(feature = "fullstack")))]
     pub use dioxus_desktop::launch::*;
+
     #[cfg(feature = "fullstack")]
     pub use dioxus_fullstack::launch::*;
+
     #[cfg(all(feature = "web", not(any(feature = "desktop", feature = "fullstack"))))]
     pub use dioxus_web::launch::*;
+
     #[cfg(not(any(feature = "desktop", feature = "web", feature = "fullstack")))]
     pub type Config = ();
+
     #[cfg(not(any(feature = "desktop", feature = "web", feature = "fullstack")))]
     pub fn launch(
         root: fn() -> dioxus_core::Element,

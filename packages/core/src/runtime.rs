@@ -27,7 +27,7 @@ pub struct Runtime {
     pub(crate) rendering: Cell<bool>,
 
     /// Tasks created with cx.spawn
-    pub(crate) tasks: RefCell<slab::Slab<LocalTask>>,
+    pub(crate) tasks: RefCell<slab::Slab<Rc<LocalTask>>>,
 
     /// Queued tasks that are waiting to be polled
     pub(crate) queued_tasks: Rc<RefCell<VecDeque<Task>>>,

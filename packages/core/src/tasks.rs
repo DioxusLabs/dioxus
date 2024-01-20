@@ -1,11 +1,11 @@
 use crate::innerlude::{remove_future, spawn, Runtime};
 use crate::ScopeId;
 use futures_util::task::ArcWake;
-use std::cell::RefCell;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::Waker;
+use std::{cell::RefCell, rc::Rc};
 
 /// A task's unique identifier.
 ///
@@ -47,20 +47,31 @@ impl Runtime {
     /// Spawning a future onto the root scope will cause it to be dropped when the root component is dropped - which
     /// will only occur when the VirtualDom itself has been dropped.
     pub fn spawn(&self, scope: ScopeId, task: impl Future<Output = ()> + 'static) -> Task {
-        let mut tasks = self.tasks.borrow_mut();
+        // Insert the task, temporarily holding a borrow on the tasks map
+        let (task, task_id) = {
+            let mut tasks = self.tasks.borrow_mut();
 
-        let entry = tasks.vacant_entry();
-        let task_id = Task(entry.key());
+            let entry = tasks.vacant_entry();
+            let task_id = Task(entry.key());
 
-        let task = LocalTask {
-            parent: self.current_task(),
-            task: RefCell::new(Box::pin(task)),
-            scope,
-            waker: futures_util::task::waker(Arc::new(LocalTaskHandle {
-                id: task_id,
-                tx: self.sender.clone(),
-            })),
+            let task = Rc::new(LocalTask {
+                parent: self.current_task(),
+                task: RefCell::new(Box::pin(task)),
+                scope,
+                waker: futures_util::task::waker(Arc::new(LocalTaskHandle {
+                    id: task_id,
+                    tx: self.sender.clone(),
+                })),
+            });
+
+            entry.insert(task.clone());
+
+            (task, task_id)
         };
+
+        // Get a borrow on the task, holding no borrows on the tasks map
+        debug_assert!(self.tasks.try_borrow_mut().is_ok());
+        debug_assert!(task.task.try_borrow_mut().is_ok());
 
         let mut cx = std::task::Context::from_waker(&task.waker);
 
@@ -70,23 +81,18 @@ impl Runtime {
                 .expect("Scheduler should exist");
         }
 
-        entry.insert(task);
-
         task_id
     }
 
     pub(crate) fn handle_task_wakeup(&self, id: Task) {
-        let mut tasks = self.tasks.borrow_mut();
+        let task = self.tasks.borrow().get(id.0).cloned();
 
-        let task = match tasks.get(id.0) {
-            Some(task) => task,
-            // The task was removed from the scheduler, so we can just ignore it
-            None => return,
+        // The task was removed from the scheduler, so we can just ignore it
+        let Some(task) = task else {
+            return;
         };
 
-        use std::task::Context;
-
-        let mut cx = Context::from_waker(&task.waker);
+        let mut cx = std::task::Context::from_waker(&task.waker);
 
         // update the scope stack
         self.scope_stack.borrow_mut().push(task.scope);
@@ -103,7 +109,7 @@ impl Runtime {
                 .remove(&id);
 
             // Remove it from the scheduler
-            tasks.try_remove(id.0);
+            self.tasks.borrow_mut().try_remove(id.0);
         }
 
         // Remove the scope from the stack
@@ -120,7 +126,7 @@ impl Runtime {
     /// Drop the future with the given TaskId
     ///
     /// This does not abort the task, so you'll want to wrap it in an abort handle if that's important to you
-    pub(crate) fn remove_task(&self, id: Task) -> Option<LocalTask> {
+    pub(crate) fn remove_task(&self, id: Task) -> Option<Rc<LocalTask>> {
         let task = self.tasks.borrow_mut().try_remove(id.0);
 
         // Remove the task from the queued tasks so we don't poll a different task with the same id
