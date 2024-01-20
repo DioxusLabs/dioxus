@@ -1,5 +1,9 @@
 use dioxus::prelude::*;
 
+fn main() {
+    launch(app);
+}
+
 fn app() -> Element {
     rsx! {
         svg {
@@ -71,13 +75,9 @@ fn app() -> Element {
             path {
                 d: "M9.00001 9C9 62 103.5 124 103.5 178",
                 stroke: "#3CC4DC",
-                "stroke-linecap": "square",
-                "stroke-width": "square",
+                stroke_linecap: "square",
+                stroke_width: "5",
             }
         }
     }
-}
-
-fn main() {
-    launch_desktop(app);
 }

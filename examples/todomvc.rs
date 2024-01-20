@@ -4,24 +4,26 @@ use dioxus_elements::input_data::keyboard_types::Key;
 use std::collections::HashMap;
 
 fn main() {
-    launch_desktop(app);
+    launch(app);
 }
 
 #[derive(PartialEq, Eq, Clone, Copy)]
-pub enum FilterState {
+enum FilterState {
     All,
     Active,
     Completed,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub struct TodoItem {
-    pub id: u32,
-    pub checked: bool,
-    pub contents: String,
+#[derive(Debug, PartialEq, Eq)]
+struct TodoItem {
+    id: u32,
+    checked: bool,
+    contents: String,
 }
 
-pub fn app() -> Element {
+const STYLE: &str = include_str!("./assets/todomvc.css");
+
+fn app() -> Element {
     let mut todos = use_signal(|| HashMap::<u32, TodoItem>::new());
     let mut filter = use_signal(|| FilterState::All);
 
@@ -45,9 +47,16 @@ pub fn app() -> Element {
         filtered_todos
     });
 
+    let mut toggle_all = move |_| {
+        let check = active_todo_count() != 0;
+        for (_, item) in todos.write().iter_mut() {
+            item.checked = check;
+        }
+    };
+
     rsx! {
         section { class: "todoapp",
-            style { {include_str!("./assets/todomvc.css")} }
+            style { {STYLE} }
             TodoHeader { todos }
             section { class: "main",
                 if !todos.read().is_empty() {
@@ -55,18 +64,13 @@ pub fn app() -> Element {
                         id: "toggle-all",
                         class: "toggle-all",
                         r#type: "checkbox",
-                        onchange: move |_| {
-                            let check = active_todo_count() != 0;
-                            for (_, item) in todos.write().iter_mut() {
-                                item.checked = check;
-                            }
-                        },
+                        onchange: toggle_all,
                         checked: active_todo_count() == 0,
                     }
                     label { r#for: "toggle-all" }
                 }
                 ul { class: "todo-list",
-                    for id in filtered_todos.read().iter().copied() {
+                    for id in filtered_todos() {
                         TodoEntry { key: "{id}", id, todos }
                     }
                 }
@@ -80,7 +84,7 @@ pub fn app() -> Element {
 }
 
 #[component]
-pub fn TodoHeader(mut todos: Signal<HashMap<u32, TodoItem>>) -> Element {
+fn TodoHeader(mut todos: Signal<HashMap<u32, TodoItem>>) -> Element {
     let mut draft = use_signal(|| "".to_string());
     let mut todo_id = use_signal(|| 0);
 
@@ -114,7 +118,7 @@ pub fn TodoHeader(mut todos: Signal<HashMap<u32, TodoItem>>) -> Element {
 }
 
 #[component]
-pub fn TodoEntry(mut todos: Signal<HashMap<u32, TodoItem>>, id: u32) -> Element {
+fn TodoEntry(mut todos: Signal<HashMap<u32, TodoItem>>, id: u32) -> Element {
     let mut is_editing = use_signal(|| false);
     let checked = use_selector(move || todos.read().get(&id).unwrap().checked);
     let contents = use_selector(move || todos.read().get(&id).unwrap().contents.clone());
@@ -161,7 +165,7 @@ pub fn TodoEntry(mut todos: Signal<HashMap<u32, TodoItem>>, id: u32) -> Element 
 }
 
 #[component]
-pub fn ListFooter(
+fn ListFooter(
     mut todos: Signal<HashMap<u32, TodoItem>>,
     active_todo_count: ReadOnlySignal<usize>,
     mut filter: Signal<FilterState>,
@@ -208,7 +212,7 @@ pub fn ListFooter(
     }
 }
 
-pub fn PageFooter() -> Element {
+fn PageFooter() -> Element {
     rsx! {
         footer { class: "info",
             p { "Double-click to edit a todo" }

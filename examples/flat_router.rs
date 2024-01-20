@@ -3,15 +3,11 @@ use dioxus::prelude::*;
 use dioxus::router::prelude::*;
 
 fn main() {
-    LaunchBuilder::desktop()
-        .with_cfg(
-            Config::new().with_window(
-                WindowBuilder::new()
-                    .with_inner_size(LogicalSize::new(600, 1000))
-                    .with_resizable(false),
-            ),
-        )
-        .launch(|| rsx! { Router::<Route> {} })
+    launch(|| {
+        rsx! {
+            Router::<Route> {}
+        }
+    })
 }
 
 #[derive(Routable, Clone)]
@@ -20,10 +16,13 @@ enum Route {
     #[layout(Footer)]
         #[route("/")]
         Home {},
+
         #[route("/games")]
         Games {},
+
         #[route("/play")]
         Play {},
+
         #[route("/settings")]
         Settings {},
 }
@@ -31,27 +30,14 @@ enum Route {
 #[component]
 fn Footer() -> Element {
     rsx! {
-        div {
-            Outlet::<Route> {}
-
-            p { "----" }
-
-            nav {
-                ul {
-                    li {
-                        Link { to: Route::Home {}, "Home" }
-                    }
-                    li {
-                        Link { to: Route::Games {}, "Games" }
-                    }
-                    li {
-                        Link { to: Route::Play {}, "Play" }
-                    }
-                    li {
-                        Link { to: Route::Settings {}, "Settings" }
-                    }
-                }
-            }
+        Outlet::<Route> {}
+        p { "----" }
+        nav {
+            style { {STYLE} }
+            Link { to: Route::Home {}, class: "nav-btn", "Home" }
+            Link { to: Route::Games {}, class: "nav-btn", "Games" }
+            Link { to: Route::Play {}, class: "nav-btn", "Play" }
+            Link { to: Route::Settings {}, class: "nav-btn", "Settings" }
         }
     }
 }
@@ -75,3 +61,14 @@ fn Play() -> Element {
 fn Settings() -> Element {
     rsx!("Settings")
 }
+
+const STYLE: &str = r#"
+    nav {
+        display: flex;
+        justify-content: space-around;
+    }
+    .nav-btn {
+        text-decoration: none;
+        color: black;
+    }
+"#;

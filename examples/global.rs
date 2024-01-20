@@ -8,7 +8,7 @@ static COUNT: GlobalSignal<i32> = Signal::global(|| 0);
 static DOUBLED_COUNT: GlobalSelector<i32> = Signal::global_selector(|| COUNT() * 2);
 
 fn main() {
-    launch_desktop(app);
+    launch(app);
 }
 
 fn app() -> Element {

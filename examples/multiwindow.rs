@@ -5,21 +5,18 @@ fn main() {
 }
 
 fn app() -> Element {
+    let onclick = move |_| {
+        let dom = VirtualDom::new(popup);
+        dioxus::desktop::window().new_window(dom, Default::default());
+    };
+
     rsx! {
-        div {
-            button {
-                onclick: move |_| {
-                    let dom = VirtualDom::new(popup);
-                    dioxus::desktop::window().new_window(dom, Default::default());
-                },
-                "New Window"
-            }
-        }
+        button { onclick, "New Window" }
     }
 }
 
 fn popup() -> Element {
     rsx! {
-        div { "This is a popup!" }
+        div { "This is a popup window!" }
     }
 }

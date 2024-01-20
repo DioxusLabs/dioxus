@@ -3,20 +3,20 @@ This example is a simple iOS-style calculator. This particular example can run a
 This calculator version uses React-style state management. All state is held as individual use_states.
 */
 
-use dioxus::desktop::{Config, LogicalSize, WindowBuilder};
 use dioxus::events::*;
 use dioxus::html::input_data::keyboard_types::Key;
 use dioxus::prelude::*;
 
 fn main() {
-    LaunchBuilder::desktop()
-        .with_cfg(
+    LaunchBuilder::new()
+        .with_cfg(desktop!({
+            use dioxus::desktop::{Config, LogicalSize, WindowBuilder};
             Config::new().with_window(
                 WindowBuilder::default()
                     .with_title("Calculator")
                     .with_inner_size(LogicalSize::new(300.0, 525.0)),
-            ),
-        )
+            )
+        }))
         .launch(app);
 }
 

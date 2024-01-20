@@ -42,9 +42,7 @@ fn app() -> Element {
                 // handling inputs on divs will catch all input events below
                 // so the value of our input event will be either huey, dewey, louie, or true/false (because of the checkboxe)
                 // be mindful in grouping inputs together, as they will all be handled by the same event handler
-                oninput: move |evt| {
-                    println!("{evt:?}");
-                },
+                oninput: move |evt| println!("{evt:?}"),
                 div {
                     input {
                         id: "huey",

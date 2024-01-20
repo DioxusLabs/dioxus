@@ -7,7 +7,7 @@ static ASSET_PATH: &str = "examples/assets/logo.png";
 static ASSET_PATH: &str = manganis::mg!(image("examples/assets/logo.png").format(ImageType::Avif));
 
 fn main() {
-    launch_desktop(app);
+    launch(app);
 }
 
 fn app() -> Element {

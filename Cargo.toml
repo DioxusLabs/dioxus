@@ -49,7 +49,7 @@ members = [
     "playwright-tests/web",
     "playwright-tests/fullstack",
 ]
-exclude = ["examples/mobile_demo", "packages/fermi", "examples/openid_connect_demo",]
+exclude = ["examples/mobile_demo", "examples/openid_connect_demo",]
 
 [workspace.package]
 version = "0.4.3"

@@ -19,17 +19,18 @@ fn app() -> Element {
     }
 }
 
-fn spreadable_component(props: Props) -> Element {
-    rsx! {
-        audio { ..props.attributes, "1: {props.extra_data}\n2: {props.extra_data2}" }
-    }
-}
-
 #[derive(Props, PartialEq, Clone)]
 struct Props {
     #[props(extends = GlobalAttributes)]
     attributes: Vec<Attribute>,
 
     extra_data: String,
+
     extra_data2: String,
+}
+
+fn spreadable_component(props: Props) -> Element {
+    rsx! {
+        audio { ..props.attributes, "1: {props.extra_data}\n2: {props.extra_data2}" }
+    }
 }

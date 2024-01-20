@@ -726,7 +726,7 @@ impl<T: 'static, S: Storage<SignalData<T>>> PartialEq for ReadOnlySignal<T, S> {
     }
 }
 
-impl<T: Copy, S: Storage<SignalData<T>> + 'static> Deref for ReadOnlySignal<T, S> {
+impl<T: Clone, S: Storage<SignalData<T>> + 'static> Deref for ReadOnlySignal<T, S> {
     type Target = dyn Fn() -> T;
 
     fn deref(&self) -> &Self::Target {
@@ -735,7 +735,7 @@ impl<T: Copy, S: Storage<SignalData<T>> + 'static> Deref for ReadOnlySignal<T, S
         // First we create a closure that captures something with the Same in memory layout as Self (MaybeUninit<Self>).
         let uninit_callable = MaybeUninit::<Self>::uninit();
         // Then move that value into the closure. We assume that the closure now has a in memory layout of Self.
-        let uninit_closure = move || *Self::read(unsafe { &*uninit_callable.as_ptr() });
+        let uninit_closure = move || Self::read(unsafe { &*uninit_callable.as_ptr() }).clone();
 
         // Check that the size of the closure is the same as the size of Self in case the compiler changed the layout of the closure.
         let size_of_closure = std::mem::size_of_val(&uninit_closure);

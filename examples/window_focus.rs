@@ -11,7 +11,7 @@ fn main() {
 }
 
 fn app() -> Element {
-    let mut focused = use_signal(|| false);
+    let mut focused = use_signal(|| true);
 
     use_wry_event_handler(move |event, _| match event {
         WryEvent::WindowEvent {
