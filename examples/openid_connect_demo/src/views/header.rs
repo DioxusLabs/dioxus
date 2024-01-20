@@ -9,7 +9,7 @@ use crate::{
     FERMI_AUTH_REQUEST, FERMI_AUTH_TOKEN, FERMI_CLIENT,
 };
 use dioxus::prelude::*;
-use dioxus_router::prelude::{Link, Outlet};
+use dioxus::router::prelude::{Link, Outlet};
 use fermi::*;
 use openidconnect::{url::Url, OAuth2TokenResponse, TokenResponse};
 

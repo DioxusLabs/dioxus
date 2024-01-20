@@ -11,11 +11,11 @@ pub fn server_only(input: TokenStream) -> TokenStream {
     if cfg!(any(feature = "ssr", feature = "liveview")) {
         let input = TokenStream2::from(input);
         quote! {
-            Some(#input)
+            #input
         }
     } else {
         quote! {
-            None
+            ()
         }
     }
     .into()
@@ -26,11 +26,11 @@ pub fn client(input: TokenStream) -> TokenStream {
     if cfg!(any(feature = "desktop", feature = "web", feature = "tui")) {
         let input = TokenStream2::from(input);
         quote! {
-            Some(#input)
+            #input
         }
     } else {
         quote! {
-            None
+            ()
         }
     }
     .into()
@@ -41,11 +41,11 @@ pub fn web(input: TokenStream) -> TokenStream {
     if cfg!(feature = "web") {
         let input = TokenStream2::from(input);
         quote! {
-            Some(#input)
+            #input
         }
     } else {
         quote! {
-            None
+            ()
         }
     }
     .into()
@@ -56,11 +56,11 @@ pub fn desktop(input: TokenStream) -> TokenStream {
     if cfg!(feature = "desktop") {
         let input = TokenStream2::from(input);
         quote! {
-            Some(#input)
+            #input
         }
     } else {
         quote! {
-            None
+            ()
         }
     }
     .into()
@@ -71,11 +71,11 @@ pub fn fullstack(input: TokenStream) -> TokenStream {
     if cfg!(feature = "web") {
         let input = TokenStream2::from(input);
         quote! {
-            Some(#input)
+            #input
         }
     } else {
         quote! {
-            None
+            ()
         }
     }
     .into()
@@ -86,11 +86,11 @@ pub fn ssr(input: TokenStream) -> TokenStream {
     if cfg!(feature = "ssr") {
         let input = TokenStream2::from(input);
         quote! {
-            Some(#input)
+            #input
         }
     } else {
         quote! {
-            None
+            ()
         }
     }
     .into()
@@ -101,11 +101,11 @@ pub fn liveview(input: TokenStream) -> TokenStream {
     if cfg!(feature = "liveview") {
         let input = TokenStream2::from(input);
         quote! {
-            Some(#input)
+            #input
         }
     } else {
         quote! {
-            None
+            ()
         }
     }
     .into()
@@ -116,11 +116,11 @@ pub fn tui(input: TokenStream) -> TokenStream {
     if cfg!(feature = "tui") {
         let input = TokenStream2::from(input);
         quote! {
-            Some(#input)
+            #input
         }
     } else {
         quote! {
-            None
+            ()
         }
     }
     .into()

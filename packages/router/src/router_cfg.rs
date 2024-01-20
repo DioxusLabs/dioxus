@@ -51,7 +51,7 @@ macro_rules! default_history {
         {
             // If we are on wasm32 and the web feature is enabled, use the web history.
             #[cfg(all(target_arch = "wasm32", feature = "web"))]
-            return Box::<AnyHistoryProviderImplWrapper::<WebHistory::<R>>>::default();
+            return Box::new(AnyHistoryProviderImplWrapper::new(WebHistory::<R>::default()));
             // If we are using dioxus fullstack and the ssr feature is enabled, use the memory history with the initial path set to the current path in fullstack
             #[cfg(all(feature = "fullstack", feature = "ssr"))]
             return dioxus_router::prelude::MemoryHistory::with_initial_path(

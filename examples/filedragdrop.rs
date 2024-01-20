@@ -1,5 +1,5 @@
+use dioxus::desktop::Config;
 use dioxus::prelude::*;
-use dioxus_desktop::Config;
 
 fn main() {
     LaunchBuilder::desktop()

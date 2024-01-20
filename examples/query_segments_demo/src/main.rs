@@ -8,7 +8,7 @@
 use std::fmt::Display;
 
 use dioxus::prelude::*;
-use dioxus_router::prelude::*;
+use dioxus::router::prelude::*;
 
 #[derive(Routable, Clone)]
 #[rustfmt::skip]
@@ -40,7 +40,7 @@ impl Display for ManualBlogQuerySegments {
     }
 }
 
-/// The query segment is anything that implements <https://docs.rs/dioxus-router/latest/dioxus_router/routable/trait.FromQuery.html>. You can implement that trait for a struct if you want to parse multiple query parameters.
+/// The query segment is anything that implements <https://docs.rs/dioxus-router/latest/dioxus::router/routable/trait.FromQuery.html>. You can implement that trait for a struct if you want to parse multiple query parameters.
 impl FromQuery for ManualBlogQuerySegments {
     fn from_query(query: &str) -> Self {
         let mut name = None;

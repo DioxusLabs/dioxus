@@ -60,6 +60,9 @@ pub mod prelude {
 
     #[cfg(feature = "fullstack")]
     pub use dioxus_fullstack::prelude::*;
+
+    #[cfg(feature = "router")]
+    pub use dioxus_router;
 }
 
 #[cfg(feature = "web")]

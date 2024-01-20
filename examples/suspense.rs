@@ -13,8 +13,8 @@
 //! We can achieve the majority of suspense functionality by composing "suspenseful"
 //! primitives in our own custom components.
 
+use dioxus::desktop::{Config, LogicalSize, WindowBuilder};
 use dioxus::prelude::*;
-use dioxus_desktop::{Config, LogicalSize, WindowBuilder};
 
 fn main() {
     LaunchBuilder::desktop()

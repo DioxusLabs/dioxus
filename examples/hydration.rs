@@ -9,8 +9,8 @@
 //! In this example, we pre-render the page to HTML and then pass it into the desktop configuration. This serves as a
 //! proof-of-concept for the hydration feature, but you'll probably only want to use hydration for the web.
 
+use dioxus::desktop::Config;
 use dioxus::prelude::*;
-use dioxus_desktop::Config;
 
 fn main() {
     LaunchBuilder::desktop()

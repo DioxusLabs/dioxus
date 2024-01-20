@@ -1,8 +1,8 @@
 //! This example shows how to use a custom index.html and custom <HEAD> extensions
 //! to add things like stylesheets, scripts, and third-party JS libraries.
 
+use dioxus::desktop::Config;
 use dioxus::prelude::*;
-use dioxus_desktop::Config;
 
 fn main() {
     LaunchBuilder::desktop()

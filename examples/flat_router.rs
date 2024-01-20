@@ -1,6 +1,6 @@
+use dioxus::desktop::{tao::dpi::LogicalSize, Config, WindowBuilder};
 use dioxus::prelude::*;
-use dioxus_desktop::{tao::dpi::LogicalSize, Config, WindowBuilder};
-use dioxus_router::prelude::*;
+use dioxus::router::prelude::*;
 
 fn main() {
     LaunchBuilder::desktop()

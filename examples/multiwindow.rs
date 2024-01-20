@@ -10,7 +10,7 @@ fn app() -> Element {
             button {
                 onclick: move |_| {
                     let dom = VirtualDom::new(popup);
-                    dioxus_desktop::window().new_window(dom, Default::default());
+                    dioxus::desktop::window().new_window(dom, Default::default());
                 },
                 "New Window"
             }

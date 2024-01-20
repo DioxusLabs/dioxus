@@ -1,6 +1,6 @@
 use anyhow::Result;
+use dioxus::desktop::Config;
 use dioxus::prelude::*;
-use dioxus_desktop::Config;
 #[cfg(target_os = "android")]
 use wry::android_binding;
 

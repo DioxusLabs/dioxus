@@ -1,5 +1,5 @@
+use dioxus::desktop::use_global_shortcut;
 use dioxus::prelude::*;
-use dioxus_desktop::use_global_shortcut;
 
 fn main() {
     launch_desktop(app);

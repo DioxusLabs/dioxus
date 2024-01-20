@@ -1,5 +1,5 @@
 use dioxus::prelude::*;
-use dioxus_router::prelude::*;
+use dioxus::router::prelude::*;
 use std::str::FromStr;
 
 #[cfg(feature = "liveview")]

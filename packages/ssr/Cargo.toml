@@ -33,5 +33,5 @@ fs_extra = "1.2.0"
 dioxus-signals = { workspace = true }
 
 [features]
-default = ["incremental"]
+default = []
 incremental = ["dep:tokio"]

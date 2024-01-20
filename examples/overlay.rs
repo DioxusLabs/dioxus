@@ -1,5 +1,5 @@
+use dioxus::desktop::{tao::dpi::PhysicalPosition, LogicalSize, WindowBuilder};
 use dioxus::prelude::*;
-use dioxus_desktop::{tao::dpi::PhysicalPosition, LogicalSize, WindowBuilder};
 
 fn main() {
     LaunchBuilder::desktop().with_cfg(make_config());
@@ -17,7 +17,7 @@ fn app() -> Element {
                 width: "100%",
                 height: "10px",
                 background_color: "black",
-                onmousedown: move |_| dioxus_desktop::window().drag(),
+                onmousedown: move |_| dioxus::desktop::window().drag(),
             }
 
             "This is an overlay!"
@@ -25,8 +25,8 @@ fn app() -> Element {
     }
 }
 
-fn make_config() -> dioxus_desktop::Config {
-    dioxus_desktop::Config::default()
+fn make_config() -> dioxus::desktop::Config {
+    dioxus::desktop::Config::default()
         .with_window(make_window())
         .with_custom_head(
             r#"

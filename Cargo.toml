@@ -128,22 +128,25 @@ reqwest = { version = "0.11.9", features = ["json"], optional = true}
 http-range = {version = "0.1.5", optional = true }
 
 [dev-dependencies]
-dioxus = { workspace = true, features = ["desktop"] }
-dioxus-desktop = { workspace = true, features = ["transparent"] }
+dioxus = { workspace = true, features = ["router"]}
 dioxus-ssr = { workspace = true }
-dioxus-router = { workspace = true }
-dioxus-signals = { workspace = true }
 futures-util = "0.3.21"
 separator = "0.4.1"
 serde = { version = "1.0.136", features = ["derive"] }
 serde_json = "1.0.79"
 rand = { version = "0.8.4", features = ["small_rng"] }
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+getrandom = { version = "0.2.12", features = ["js"] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 tokio = { version = "1.16.1", features = ["full"] }
 
 # To make most examples faster to compile, we split out assets and http-related stuff
 # This trims off like 270 dependencies, leading to a significant speedup in compilation time
 [features]
-default = []
+default = ["dioxus/desktop"]
+web = ["dioxus/web"]
 collect-assets = ["manganis"]
 http = ["reqwest", "http-range"]
 

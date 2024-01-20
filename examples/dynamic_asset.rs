@@ -1,5 +1,5 @@
+use dioxus::desktop::{use_asset_handler, wry::http::Response};
 use dioxus::prelude::*;
-use dioxus_desktop::{use_asset_handler, wry::http::Response};
 
 fn main() {
     launch_desktop(app);

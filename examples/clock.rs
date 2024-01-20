@@ -1,5 +1,4 @@
 use dioxus::prelude::*;
-use dioxus_signals::use_signal;
 
 fn main() {
     launch_desktop(app);

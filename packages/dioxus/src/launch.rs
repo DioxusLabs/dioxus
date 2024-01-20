@@ -8,10 +8,11 @@ use dioxus_core::AnyProps;
 use dioxus_core::VProps;
 
 /// A builder for a fullstack app.
-pub struct LaunchBuilder<Cfg = (), ContextFn: ?Sized = ValidContext> {
+pub struct LaunchBuilder<Cfg: 'static = (), ContextFn: ?Sized = ValidContext> {
     launch_fn: LaunchFn<Cfg, ContextFn>,
     contexts: Vec<Box<ContextFn>>,
-    platform_config: Option<Cfg>,
+
+    platform_config: Option<Box<dyn Any>>,
 }
 
 pub type LaunchFn<Cfg, Context> = fn(fn() -> Element, Vec<Box<Context>>, Cfg);
@@ -122,18 +123,22 @@ impl<Cfg> LaunchBuilder<Cfg, SendContext> {
     }
 }
 
-impl<Cfg: Default, ContextFn: ?Sized> LaunchBuilder<Cfg, ContextFn> {
+impl<Cfg: Default + 'static, ContextFn: ?Sized> LaunchBuilder<Cfg, ContextFn> {
     /// Provide a platform-specific config to the builder.
-    pub fn with_cfg(mut self, config: impl Into<Option<Cfg>>) -> Self {
+    pub fn with_cfg<CG: 'static>(mut self, config: impl Into<Option<CG>>) -> Self {
         if let Some(config) = config.into() {
-            self.platform_config = Some(config);
+            self.platform_config = Some(Box::new(config));
         }
         self
     }
 
     /// Launch your application.
     pub fn launch(self, app: fn() -> Element) {
-        (self.launch_fn)(app, self.contexts, self.platform_config.unwrap_or_default())
+        let cfg: Box<Cfg> = self
+            .platform_config
+            .and_then(|c| c.downcast().ok())
+            .unwrap_or_default();
+        (self.launch_fn)(app, self.contexts, *cfg)
     }
 }
 

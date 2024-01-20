@@ -2527,11 +2527,9 @@ name = "dioxus-examples"
 version = "0.4.3"
 dependencies = [
  "dioxus",
- "dioxus-desktop",
- "dioxus-router",
- "dioxus-signals",
  "dioxus-ssr",
  "futures-util",
+ "getrandom 0.2.12",
  "http-range",
  "manganis",
  "rand 0.8.5",
@@ -3826,8 +3824,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "190092ea657667030ac6a35e305e62fc4dd69fd98ac98631e5d3a2b1575a12b5"
 dependencies = [
  "cfg-if",
+ "js-sys",
  "libc",
  "wasi 0.11.0+wasi-snapshot-preview1",
+ "wasm-bindgen",
 ]
 
 [[package]]

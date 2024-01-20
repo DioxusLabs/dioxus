@@ -1,8 +1,8 @@
+use dioxus::desktop::tao::event::Event as WryEvent;
+use dioxus::desktop::tao::event::WindowEvent;
+use dioxus::desktop::use_wry_event_handler;
+use dioxus::desktop::{Config, WindowCloseBehaviour};
 use dioxus::prelude::*;
-use dioxus_desktop::tao::event::Event as WryEvent;
-use dioxus_desktop::tao::event::WindowEvent;
-use dioxus_desktop::use_wry_event_handler;
-use dioxus_desktop::{Config, WindowCloseBehaviour};
 
 fn main() {
     LaunchBuilder::desktop()

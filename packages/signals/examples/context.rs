@@ -4,7 +4,7 @@ use dioxus::prelude::*;
 use dioxus_signals::Signal;
 
 fn main() {
-    // dioxus_desktop::launch(app);
+    // dioxus::desktop::launch(app);
 }
 
 // Because signal is never read in this component, this component will not rerun when the signal changes

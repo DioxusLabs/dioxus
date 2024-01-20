@@ -14,7 +14,7 @@ pub(crate) mod views;
 use oidc::{AuthRequestState, AuthTokenState};
 use router::Route;
 
-use dioxus_router::prelude::*;
+use dioxus::router::prelude::*;
 
 use crate::{
     constants::{DIOXUS_FRONT_AUTH_REQUEST, DIOXUS_FRONT_AUTH_TOKEN},

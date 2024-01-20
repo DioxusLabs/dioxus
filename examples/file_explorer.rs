@@ -8,8 +8,8 @@
 //! It also uses `use_ref` to maintain a model, rather than `use_state`. That way,
 //! we dont need to clutter our code with `read` commands.
 
+use dioxus::desktop::{Config, WindowBuilder};
 use dioxus::prelude::*;
-use dioxus_desktop::{Config, WindowBuilder};
 
 fn main() {
     LaunchBuilder::desktop()

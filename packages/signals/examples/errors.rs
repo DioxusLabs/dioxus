@@ -1,7 +1,7 @@
 use dioxus::prelude::*;
 
 fn main() {
-    // dioxus_desktop::launch(app);
+    // dioxus::desktop::launch(app);
 }
 
 #[derive(Clone, Copy)]

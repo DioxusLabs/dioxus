@@ -24,5 +24,5 @@ fn app() -> Element {
 }
 
 fn main() {
-    dioxus_desktop::launch::launch(app, Default::default(), Default::default());
+    dioxus::desktop::launch::launch(app, Default::default(), Default::default());
 }

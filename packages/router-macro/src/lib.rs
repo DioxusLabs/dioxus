@@ -587,8 +587,8 @@ impl RouteEnum {
         }
 
         quote! {
-            impl ::dioxus_router::routable::Routable for #name where Self: Clone {
-                const SITE_MAP: &'static [::dioxus_router::routable::SiteMapSegment] = &[
+            impl dioxus_router::routable::Routable for #name where Self: Clone {
+                const SITE_MAP: &'static [dioxus_router::routable::SiteMapSegment] = &[
                     #(#site_map,)*
                 ];
 
@@ -605,14 +605,14 @@ impl RouteEnum {
 
     fn component_impl(&self) -> TokenStream2 {
         let name = &self.name;
-        let props = quote! { ::std::rc::Rc<::std::cell::Cell<::dioxus_router::prelude::RouterConfig<#name>>> };
+        let props = quote! { ::std::rc::Rc<::std::cell::Cell<dioxus_router::prelude::RouterConfig<#name>>> };
 
         quote! {
             impl dioxus_core::ComponentFunction<#props> for #name {
                 fn rebuild(&self, props: #props) -> dioxus_core::Element {
                     let initial_route = self.clone();
                     rsx! {
-                        ::dioxus_router::prelude::Router::<#name> {
+                        dioxus_router::prelude::Router::<#name> {
                             config: move || props.take().initial_route(initial_route)
                         }
                     }

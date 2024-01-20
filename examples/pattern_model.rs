@@ -17,12 +17,12 @@
 //! the RefCell will panic and crash. You can use `try_get_mut` or `.modify` to avoid this problem, or just not hold two
 //! RefMuts at the same time.
 
+use dioxus::desktop::tao::dpi::LogicalSize;
+use dioxus::desktop::{Config, WindowBuilder};
 use dioxus::events::*;
 use dioxus::html::input_data::keyboard_types::Key;
 use dioxus::html::MouseEvent;
 use dioxus::prelude::*;
-use dioxus_desktop::tao::dpi::LogicalSize;
-use dioxus_desktop::{Config, WindowBuilder};
 
 fn main() {
     let cfg = Config::new().with_window(

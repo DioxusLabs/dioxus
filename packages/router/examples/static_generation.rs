@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use dioxus::prelude::*;
-use dioxus_router::prelude::*;
+use dioxus::router::prelude::*;
 
 use dioxus_ssr::incremental::{DefaultRenderer, IncrementalRendererConfig};
 
@@ -29,7 +29,7 @@ async fn main() {
     );
 
     // This function is available if you enable the ssr feature
-    // on the dioxus_router crate.
+    // on the dioxus::router crate.
     pre_cache_static_routes::<Route, _>(
         &mut renderer,
         &DefaultRenderer {

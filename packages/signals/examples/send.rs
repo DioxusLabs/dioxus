@@ -2,7 +2,7 @@ use dioxus::prelude::*;
 use dioxus_signals::*;
 
 fn main() {
-    // dioxus_desktop::launch(App);
+    // dioxus::desktop::launch(App);
 }
 
 #[component]

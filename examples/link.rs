@@ -1,5 +1,5 @@
 use dioxus::prelude::*;
-use dioxus_router::prelude::*;
+use dioxus::router::prelude::*;
 
 fn main() {
     launch_desktop(App);

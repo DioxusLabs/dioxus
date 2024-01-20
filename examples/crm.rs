@@ -1,13 +1,15 @@
 //! Tiny CRM: A port of the Yew CRM example to Dioxus.
 use dioxus::prelude::*;
-use dioxus_desktop::{LogicalSize, WindowBuilder};
-use dioxus_router::prelude::*;
+use dioxus::router::prelude::*;
 
 fn main() {
     LaunchBuilder::new()
-        .with_cfg(desktop!(
-            dioxus_desktop::Config::default()
-                .with_window(WindowBuilder::new().with_inner_size(LogicalSize::new(800, 600)))
+    .with_cfg(desktop!(
+            {
+                use dioxus::desktop::{LogicalSize, WindowBuilder};
+                dioxus::desktop::Config::default()
+                    .with_window(WindowBuilder::new().with_inner_size(LogicalSize::new(800, 600)))
+            }
         ))
         .launch(|| {
             rsx! {
@@ -79,7 +81,7 @@ fn ClientAdd() -> Element {
         });
 
         // And then navigate back to the client list
-        dioxus_router::router().push(Route::ClientList {});
+        dioxus::router::router().push(Route::ClientList {});
     };
 
     rsx! {
@@ -140,7 +142,7 @@ fn Settings() -> Element {
             class: "pure-button pure-button-primary red",
             onclick: move |_| {
                 CLIENTS.write().clear();
-                dioxus_router::router().push(Route::ClientList {});
+                dioxus::router::router().push(Route::ClientList {});
             },
             "Remove all Clients"
         }
