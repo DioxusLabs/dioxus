@@ -4,13 +4,11 @@ use dioxus::router::prelude::*;
 
 fn main() {
     LaunchBuilder::new()
-    .with_cfg(desktop!(
-            {
-                use dioxus::desktop::{LogicalSize, WindowBuilder};
-                dioxus::desktop::Config::default()
-                    .with_window(WindowBuilder::new().with_inner_size(LogicalSize::new(800, 600)))
-            }
-        ))
+        .with_cfg(desktop!({
+            use dioxus::desktop::{LogicalSize, WindowBuilder};
+            dioxus::desktop::Config::default()
+                .with_window(WindowBuilder::new().with_inner_size(LogicalSize::new(800, 600)))
+        }))
         .launch(|| {
             rsx! {
                 link {
@@ -20,23 +18,19 @@ fn main() {
                     crossorigin: "anonymous"
                 }
                 style { {r#" .red { background-color: rgb(202, 60, 60) !important; } "#} }
-                body {
-                    padding: "20px",
-                    h1 { "Dioxus CRM Example" }
-                    Router::<Route> {}
-                }
+                h1 { "Dioxus CRM Example" }
+                Router::<Route> {}
             }
-    });
+        });
 }
 
 /// We only have one list of clients for the whole app, so we can use a global signal.
 static CLIENTS: GlobalSignal<Vec<Client>> = Signal::global(|| Vec::new());
 
-#[derive(Clone, Debug, Default)]
-pub struct Client {
-    pub first_name: String,
-    pub last_name: String,
-    pub description: String,
+struct Client {
+    first_name: String,
+    last_name: String,
+    description: String,
 }
 
 #[derive(Routable, Clone)]
