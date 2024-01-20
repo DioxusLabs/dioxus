@@ -2528,6 +2528,7 @@ version = "0.4.3"
 dependencies = [
  "dioxus",
  "dioxus-ssr",
+ "form_urlencoded",
  "futures-util",
  "getrandom 0.2.12",
  "http-range",
@@ -7467,16 +7468,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f6d64c71eb498fe9eae14ce4ec935c555749aef511cca85b5568910d6e48001"
 dependencies = [
  "bytemuck",
-]
-
-[[package]]
-name = "query_segments_demo"
-version = "0.1.0"
-dependencies = [
- "dioxus",
- "dioxus-router",
- "dioxus-web",
- "form_urlencoded",
 ]
 
 [[package]]

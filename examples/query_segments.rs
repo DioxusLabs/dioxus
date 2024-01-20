@@ -1,14 +1,12 @@
-#![allow(unused)]
 //! Example: Url query segments usage
 //! ------------------------------------
 //!
 //! This example shows how to access and use multiple query segments present in an url on the web.
 //!
 //! Run `dx serve` and navigate to `http://localhost:8080/blog?name=John&surname=Doe`
-use std::fmt::Display;
-
 use dioxus::prelude::*;
 use dioxus::router::prelude::*;
+use std::fmt::Display;
 
 #[derive(Routable, Clone)]
 #[rustfmt::skip]
@@ -19,6 +17,7 @@ enum Route {
         // You must include query segments in child variants
         query_params: ManualBlogQuerySegments,
     },
+
     // segments that follow the ?:field&:other_field syntax are query segments that follow the standard url query syntax
     #[route("/autoblog?:name&:surname")]
     AutomaticBlogPost {
