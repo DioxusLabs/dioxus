@@ -696,12 +696,13 @@ impl AttributeValue {
     /// The callback must be confined to the lifetime of the ScopeState
     pub fn listener<T: 'static>(mut callback: impl FnMut(Event<T>) + 'static) -> AttributeValue {
         AttributeValue::Listener(EventHandler::new(move |event: Event<dyn Any>| {
-            if let Ok(data) = event.data.downcast::<T>() {
-                callback(Event {
-                    propagates: event.propagates,
-                    data,
-                });
-            }
+            let data = event.data.downcast::<T>().unwrap();
+            // if let Ok(data) = event.data.downcast::<T>() {
+            callback(Event {
+                propagates: event.propagates,
+                data,
+            });
+            // }
         }))
     }
 
