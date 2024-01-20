@@ -297,8 +297,11 @@ impl VNode {
                 dom.reclaim(id)
             }
             Fragment(nodes) => {
-                for node in nodes {
-                    node.remove_node(dom, to, replace_with, gen_muts)
+                for node in &nodes[..nodes.len() - 1] {
+                    node.remove_node(dom, to, None, gen_muts)
+                }
+                if let Some(last_node) = nodes.last() {
+                    last_node.remove_node(dom, to, replace_with, gen_muts)
                 }
             }
         };

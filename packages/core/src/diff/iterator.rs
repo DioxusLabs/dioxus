@@ -284,8 +284,8 @@ impl VirtualDom {
         // create the new children afresh.
         if shared_keys.is_empty() {
             if !old.is_empty() {
-                self.remove_nodes(to, &old[1..], None);
-                old[0].replace(new, parent, self, to);
+                let m = self.create_children(to, new, parent);
+                self.remove_nodes(to, old, Some(m));
             } else {
                 // I think this is wrong - why are we appending?
                 // only valid of the if there are no trailing elements

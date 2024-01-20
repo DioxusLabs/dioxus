@@ -347,11 +347,11 @@ fn no_common_keys() {
     assert_eq!(
         dom.render_immediate_to_vec().santize().edits,
         [
+            LoadTemplate { name: "template", index: 0, id: ElementId(4) },
+            LoadTemplate { name: "template", index: 0, id: ElementId(5) },
+            LoadTemplate { name: "template", index: 0, id: ElementId(6) },
             Remove { id: ElementId(3) },
             Remove { id: ElementId(2) },
-            LoadTemplate { name: "template", index: 0, id: ElementId(2) },
-            LoadTemplate { name: "template", index: 0, id: ElementId(3) },
-            LoadTemplate { name: "template", index: 0, id: ElementId(4) },
             ReplaceWith { id: ElementId(1), m: 3 }
         ]
     );
