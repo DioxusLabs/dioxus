@@ -7,7 +7,7 @@ fn main() {
 
 fn app() -> Element {
     let mut breed = use_signal(|| "deerhound".to_string());
-    let mut breed_list = use_future(|| async move {
+    let breed_list = use_resource(|| async move {
         let list = reqwest::get("https://dog.ceo/api/breeds/list/all")
             .await
             .unwrap()
@@ -44,7 +44,7 @@ fn app() -> Element {
 
 #[component]
 fn BreedPic(breed: Signal<String>) -> Element {
-    let fut = use_future(|| async move {
+    let fut = use_resource(|| async move {
         reqwest::get(format!("https://dog.ceo/api/breed/{breed}/images/random"))
             .await
             .unwrap()

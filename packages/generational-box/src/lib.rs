@@ -244,6 +244,7 @@ impl<T: 'static, S: Storage<T>> GenerationalBox<T, S> {
         );
 
         if result.is_ok() {
+            #[cfg(any(debug_assertions, feature = "debug_ownership"))]
             self.raw
                 .0
                 .borrow
@@ -280,7 +281,10 @@ impl<T: 'static, S: Storage<T>> GenerationalBox<T, S> {
         );
 
         if result.is_ok() {
-            *self.raw.0.borrow.borrowed_mut_at.write() = Some(std::panic::Location::caller());
+            #[cfg(any(debug_assertions, feature = "debug_ownership"))]
+            {
+                *self.raw.0.borrow.borrowed_mut_at.write() = Some(std::panic::Location::caller());
+            }
         }
 
         result
@@ -419,6 +423,7 @@ struct MemoryLocationBorrowInfo {
     pub(crate) borrowed_mut_at: parking_lot::RwLock<Option<&'static std::panic::Location<'static>>>,
 }
 
+#[cfg(any(debug_assertions, feature = "debug_ownership"))]
 impl MemoryLocationBorrowInfo {
     fn borrow_mut_error(&self) -> BorrowMutError {
         if let Some(borrowed_mut_at) = self.borrowed_mut_at.read().as_ref() {

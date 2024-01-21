@@ -54,10 +54,14 @@ impl<T: 'static> Storage<T> for UnsyncStorage {
         #[cfg(any(debug_assertions, feature = "debug_ownership"))]
         at: crate::GenerationalRefBorrowInfo,
     ) -> Result<Self::Ref, crate::error::BorrowError> {
-        let borrow = self
-            .0
-            .try_borrow()
-            .map_err(|_| at.borrowed_from.borrow_error())?;
+        let borrow = self.0.try_borrow();
+
+        #[cfg(any(debug_assertions, feature = "debug_ownership"))]
+        let borrow = borrow.map_err(|_| at.borrowed_from.borrow_error())?;
+
+        #[cfg(not(any(debug_assertions, feature = "debug_ownership")))]
+        let borrow = borrow.unwrap();
+
         Ref::filter_map(borrow, |any| any.as_ref()?.downcast_ref())
             .map_err(|_| {
                 crate::error::BorrowError::Dropped(crate::error::ValueDroppedError {
@@ -81,10 +85,14 @@ impl<T: 'static> Storage<T> for UnsyncStorage {
         #[cfg(any(debug_assertions, feature = "debug_ownership"))]
         at: crate::GenerationalRefMutBorrowInfo,
     ) -> Result<Self::Mut, crate::error::BorrowMutError> {
-        let borrow = self
-            .0
-            .try_borrow_mut()
-            .map_err(|_| at.borrowed_from.borrow_mut_error())?;
+        let borrow = self.0.try_borrow_mut();
+
+        #[cfg(any(debug_assertions, feature = "debug_ownership"))]
+        let borrow = borrow.map_err(|_| at.borrowed_from.borrow_mut_error())?;
+
+        #[cfg(not(any(debug_assertions, feature = "debug_ownership")))]
+        let borrow = borrow.unwrap();
+
         RefMut::filter_map(borrow, |any| any.as_mut()?.downcast_mut())
             .map_err(|_| {
                 crate::error::BorrowMutError::Dropped(crate::error::ValueDroppedError {

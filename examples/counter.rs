@@ -29,7 +29,7 @@ fn app() -> Element {
 }
 
 #[component]
-fn Child(i: usize, counters: Signal<Vec<i32>>) -> Element {
+fn Child(counters: Signal<Vec<i32>>, i: usize) -> Element {
     rsx! {
         li {
             button { onclick: move |_| counters.write()[i] -= 1, "-1" }

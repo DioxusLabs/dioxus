@@ -36,21 +36,21 @@ struct Client {
 #[derive(Routable, Clone)]
 enum Route {
     #[route("/")]
-    ClientList {},
+    ClientList,
 
     #[route("/new")]
-    ClientAdd {},
+    ClientAdd,
 
     #[route("/settings")]
-    Settings {},
+    Settings,
 }
 
 #[component]
 fn ClientList() -> Element {
     rsx! {
         h2 { "List of Clients" }
-        Link { to: Route::ClientAdd {}, class: "pure-button pure-button-primary", "Add Client" }
-        Link { to: Route::Settings {}, class: "pure-button", "Settings" }
+        Link { to: Route::ClientAdd, class: "pure-button pure-button-primary", "Add Client" }
+        Link { to: Route::Settings, class: "pure-button", "Settings" }
         for client in CLIENTS.read().iter() {
             div { class: "client", style: "margin-bottom: 50px",
                 p { "Name: {client.first_name} {client.last_name}" }
@@ -75,7 +75,7 @@ fn ClientAdd() -> Element {
         });
 
         // And then navigate back to the client list
-        dioxus::router::router().push(Route::ClientList {});
+        dioxus::router::router().push(Route::ClientList);
     };
 
     rsx! {
@@ -121,7 +121,7 @@ fn ClientAdd() -> Element {
 
                 div { class: "pure-controls",
                     button { r#type: "submit", class: "pure-button pure-button-primary", "Save" }
-                    Link { to: Route::ClientList {}, class: "pure-button pure-button-primary red", "Cancel" }
+                    Link { to: Route::ClientList, class: "pure-button pure-button-primary red", "Cancel" }
                 }
             }
         }
@@ -136,10 +136,10 @@ fn Settings() -> Element {
             class: "pure-button pure-button-primary red",
             onclick: move |_| {
                 CLIENTS.write().clear();
-                dioxus::router::router().push(Route::ClientList {});
+                dioxus::router::router().push(Route::ClientList);
             },
             "Remove all Clients"
         }
-        Link { to: Route::ClientList {}, class: "pure-button", "Go back" }
+        Link { to: Route::ClientList, class: "pure-button", "Go back" }
     }
 }

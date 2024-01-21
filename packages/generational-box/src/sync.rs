@@ -89,10 +89,15 @@ impl<T: Sync + Send + 'static> Storage<T> for SyncStorage {
         #[cfg(any(debug_assertions, feature = "debug_ownership"))]
         at: crate::GenerationalRefBorrowInfo,
     ) -> Result<Self::Ref, error::BorrowError> {
-        let read = self
-            .0
-            .try_read()
-            .ok_or_else(|| at.borrowed_from.borrow_error())?;
+        let read = self.0.try_read();
+        // .ok_or_else(|| at.borrowed_from.borrow_error())?;
+
+        #[cfg(any(debug_assertions, feature = "debug_ownership"))]
+        let read = read.ok_or_else(|| at.borrowed_from.borrow_error())?;
+
+        #[cfg(not(any(debug_assertions, feature = "debug_ownership")))]
+        let read = read.unwrap();
+
         RwLockReadGuard::try_map(read, |any| any.as_ref()?.downcast_ref())
             .map_err(|_| {
                 error::BorrowError::Dropped(ValueDroppedError {
@@ -116,10 +121,14 @@ impl<T: Sync + Send + 'static> Storage<T> for SyncStorage {
         #[cfg(any(debug_assertions, feature = "debug_ownership"))]
         at: crate::GenerationalRefMutBorrowInfo,
     ) -> Result<Self::Mut, error::BorrowMutError> {
-        let write = self
-            .0
-            .try_write()
-            .ok_or_else(|| at.borrowed_from.borrow_mut_error())?;
+        let write = self.0.try_write();
+
+        #[cfg(any(debug_assertions, feature = "debug_ownership"))]
+        let write = write.ok_or_else(|| at.borrowed_from.borrow_mut_error())?;
+
+        #[cfg(not(any(debug_assertions, feature = "debug_ownership")))]
+        let write = write.unwrap();
+
         RwLockWriteGuard::try_map(write, |any| any.as_mut()?.downcast_mut())
             .map_err(|_| {
                 error::BorrowMutError::Dropped(ValueDroppedError {

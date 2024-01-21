@@ -15,14 +15,18 @@ use std::{any::Any, cell::Cell, future::Future, pin::Pin, rc::Rc, sync::Arc, tas
 /// This is commonly used for components that cannot be rendered until some
 /// asynchronous operation has completed.
 ///
+/// Whenever the hooks dependencies change, the future will be re-evaluated.
+/// If a future is pending when the dependencies change, the previous future
+/// will be canceled before the new one is started.
 ///
-pub fn use_future<T, F>(mut future: impl FnMut() -> F) -> UseFuture<T>
+/// - dependencies: a tuple of references to values that are PartialEq + Clone
+pub fn use_resource<T, F>(future: impl Fn() -> F) -> UseResource<T>
 where
     T: 'static,
     F: Future<Output = T> + 'static,
 {
     let mut value = use_signal(|| None);
-    let mut state = use_signal(|| UseFutureState::Pending);
+    let mut state = use_signal(|| UseResourceState::Pending);
 
     let task = use_signal(|| {
         // Create the user's task
@@ -53,16 +57,16 @@ where
         Some(task)
     });
 
-    UseFuture { task, value, state }
+    UseResource { task, value, state }
 }
 
-pub struct UseFuture<T: 'static> {
+pub struct UseResource<T: 'static> {
     value: Signal<Option<T>>,
     task: Signal<Option<Task>>,
-    state: Signal<UseFutureState<T>>,
+    state: Signal<UseResourceState<T>>,
 }
 
-impl<T> UseFuture<T> {
+impl<T> UseResource<T> {
     /// Restart the future with new dependencies.
     ///
     /// Will not cancel the previous future, but will ignore any values that it
@@ -98,25 +102,25 @@ impl<T> UseFuture<T> {
     }
 
     /// Get the current state of the future.
-    pub fn state(&self) -> UseFutureState<T> {
+    pub fn state(&self) -> UseResourceState<T> {
         todo!()
         // match (&self.task.get(), &self.value()) {
         //     // If we have a task and an existing value, we're reloading
-        //     (Some(_), Some(val)) => UseFutureState::Reloading(val),
+        //     (Some(_), Some(val)) => UseResourceState::Reloading(val),
 
         //     // no task, but value - we're done
-        //     (None, Some(val)) => UseFutureState::Complete(val),
+        //     (None, Some(val)) => UseResourceState::Complete(val),
 
         //     // no task, no value - something's wrong? return pending
-        //     (None, None) => UseFutureState::Pending,
+        //     (None, None) => UseResourceState::Pending,
 
         //     // Task, no value - we're still pending
-        //     (Some(_), None) => UseFutureState::Pending,
+        //     (Some(_), None) => UseResourceState::Pending,
         // }
     }
 }
 
-pub enum UseFutureState<T: 'static> {
+pub enum UseResourceState<T: 'static> {
     Pending,
     Complete(Signal<T>),
     Regenerating(Signal<T>), // the old value
