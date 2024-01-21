@@ -1,7 +1,7 @@
 use crate::{assets::*, edits::EditQueue};
 use std::path::{Path, PathBuf};
 use wry::{
-    http::{status::StatusCode, Request, Response, Uri},
+    http::{status::StatusCode, Request, Response},
     RequestAsyncResponder, Result,
 };
 
@@ -100,7 +100,7 @@ pub(super) fn index_request(
 /// - If that doesn't match, tries a user provided asset handler
 /// - If that doesn't match, tries to serve a file from the filesystem
 pub(super) fn desktop_handler(
-    mut request: Request<Vec<u8>>,
+    request: Request<Vec<u8>>,
     asset_handlers: AssetHandlerRegistry,
     edit_queue: &EditQueue,
     responder: RequestAsyncResponder,
@@ -118,11 +118,11 @@ pub(super) fn desktop_handler(
             .as_ref(),
     );
 
-    let Some(name) = path.parent() else {
-        return tracing::error!("Asset request has no root {path:?}");
-    };
+    if path.parent().is_none() {
+        return tracing::error!("Asset request has no parent {path:?}");
+    }
 
-    if let Some(name) = name.to_str() {
+    if let Some(name) = path.iter().next().unwrap().to_str() {
         if asset_handlers.has_handler(name) {
             return asset_handlers.handle_request(name, request, responder);
         }
