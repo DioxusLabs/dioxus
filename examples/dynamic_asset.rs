@@ -7,10 +7,8 @@ fn main() {
 
 fn app() -> Element {
     use_asset_handler("logos", |request, response| {
-        // Note that the "logos" prefix is stripped from the URI
-        //
-        // However, the asset is absolute to its "virtual folder" - meaning it starts with a leading slash
-        if request.uri().path() != "/logo.png" {
+        // We get the original path - make sure you handle that!
+        if request.uri().path() != "/logos/logo.png" {
             return;
         }
 
