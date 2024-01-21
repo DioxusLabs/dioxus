@@ -160,6 +160,10 @@ impl<'b> VirtualDom {
                                             self.diff_attribute(left, right, mounted_id)
                                         }
                                     }
+
+                                    // consume both
+                                    left_iter.next();
+                                    right_iter.next();
                                 }
                                 (Some(_), None) => {
                                     let left = left_iter.next().unwrap();
