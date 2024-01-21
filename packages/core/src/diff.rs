@@ -145,25 +145,29 @@ impl<'b> VirtualDom {
                                 (Some(left), Some(right)) => {
                                     // check which name is greater
                                     match left.name.cmp(right.name) {
-                                        std::cmp::Ordering::Less => self.remove_attribute(
-                                            left.name,
-                                            left.namespace,
-                                            mounted_id,
-                                        ),
-                                        std::cmp::Ordering::Greater => self.write_attribute(
-                                            right_template,
-                                            right,
-                                            idx,
-                                            mounted_id,
-                                        ),
+                                        std::cmp::Ordering::Less => {
+                                            self.remove_attribute(
+                                                left.name,
+                                                left.namespace,
+                                                mounted_id,
+                                            );
+                                            left_iter.next();
+                                        }
+                                        std::cmp::Ordering::Greater => {
+                                            self.write_attribute(
+                                                right_template,
+                                                right,
+                                                idx,
+                                                mounted_id,
+                                            );
+                                            right_iter.next();
+                                        }
                                         std::cmp::Ordering::Equal => {
-                                            self.diff_attribute(left, right, mounted_id)
+                                            self.diff_attribute(left, right, mounted_id);
+                                            left_iter.next();
+                                            right_iter.next();
                                         }
                                     }
-
-                                    // consume both
-                                    left_iter.next();
-                                    right_iter.next();
                                 }
                                 (Some(_), None) => {
                                     let left = left_iter.next().unwrap();

@@ -88,21 +88,32 @@ fn attribute_diff() {
     fn app(cx: Scope) -> Element {
         let gen = cx.generation();
 
-        let attrs = cx.bump().alloc(match gen % 2 {
-            0 => vec![Attribute::new(
-                "attr1",
+        // attributes have to be sorted by name
+        let attrs = match gen % 5 {
+            0 => cx.bump().alloc([Attribute::new(
+                "a",
                 AttributeValue::Text("hello"),
                 None,
                 false,
-            )],
-            1 => vec![
-                Attribute::new("attr1", AttributeValue::Text("hello"), None, false),
-                Attribute::new("attr2", AttributeValue::Float(1.0), None, false),
-                Attribute::new("attr3", AttributeValue::Int(1), None, false),
-                Attribute::new("attr4", AttributeValue::Bool(true), None, false),
-            ],
+            )]) as &[Attribute],
+            1 => cx.bump().alloc([
+                Attribute::new("a", AttributeValue::Text("hello"), None, false),
+                Attribute::new("b", AttributeValue::Text("hello"), None, false),
+                Attribute::new("c", AttributeValue::Text("hello"), None, false),
+            ]) as &[Attribute],
+            2 => cx.bump().alloc([
+                Attribute::new("c", AttributeValue::Text("hello"), None, false),
+                Attribute::new("d", AttributeValue::Text("hello"), None, false),
+                Attribute::new("e", AttributeValue::Text("hello"), None, false),
+            ]) as &[Attribute],
+            3 => cx.bump().alloc([Attribute::new(
+                "d",
+                AttributeValue::Text("world"),
+                None,
+                false,
+            )]) as &[Attribute],
             _ => unreachable!(),
-        });
+        };
 
         cx.render(rsx!(
             div {
@@ -120,22 +131,16 @@ fn attribute_diff() {
         vdom.render_immediate().santize().edits,
         [
             SetAttribute {
-                name: "attr2",
-                value: (&AttributeValue::Float(1.0)).into(),
-                id: ElementId(1),
-                ns: None
+                name: "b",
+                value: (&AttributeValue::Text("hello",)).into(),
+                id: ElementId(1,),
+                ns: None,
             },
             SetAttribute {
-                name: "attr3",
-                value: (&AttributeValue::Int(1)).into(),
-                id: ElementId(1),
-                ns: None
-            },
-            SetAttribute {
-                name: "attr4",
-                value: (&AttributeValue::Bool(true)).into(),
-                id: ElementId(1),
-                ns: None
+                name: "c",
+                value: (&AttributeValue::Text("hello",)).into(),
+                id: ElementId(1,),
+                ns: None,
             },
         ]
     );
@@ -145,22 +150,28 @@ fn attribute_diff() {
         vdom.render_immediate().santize().edits,
         [
             SetAttribute {
-                name: "attr2",
+                name: "a",
                 value: (&AttributeValue::None).into(),
-                id: ElementId(1),
-                ns: None
+                id: ElementId(1,),
+                ns: None,
             },
             SetAttribute {
-                name: "attr3",
+                name: "b",
                 value: (&AttributeValue::None).into(),
-                id: ElementId(1),
-                ns: None
+                id: ElementId(1,),
+                ns: None,
             },
             SetAttribute {
-                name: "attr4",
-                value: (&AttributeValue::None).into(),
-                id: ElementId(1),
-                ns: None
+                name: "d",
+                value: (&AttributeValue::Text("hello",)).into(),
+                id: ElementId(1,),
+                ns: None,
+            },
+            SetAttribute {
+                name: "e",
+                value: (&AttributeValue::Text("hello",)).into(),
+                id: ElementId(1,),
+                ns: None,
             },
         ]
     );
@@ -170,22 +181,22 @@ fn attribute_diff() {
         vdom.render_immediate().santize().edits,
         [
             SetAttribute {
-                name: "attr2",
-                value: (&AttributeValue::Float(1.0)).into(),
-                id: ElementId(1),
-                ns: None
+                name: "c",
+                value: (&AttributeValue::None).into(),
+                id: ElementId(1,),
+                ns: None,
             },
             SetAttribute {
-                name: "attr3",
-                value: (&AttributeValue::Int(1)).into(),
-                id: ElementId(1),
-                ns: None
+                name: "d",
+                value: (&AttributeValue::Text("world",)).into(),
+                id: ElementId(1,),
+                ns: None,
             },
             SetAttribute {
-                name: "attr4",
-                value: (&AttributeValue::Bool(true)).into(),
-                id: ElementId(1),
-                ns: None
+                name: "e",
+                value: (&AttributeValue::None).into(),
+                id: ElementId(1,),
+                ns: None,
             },
         ]
     );
