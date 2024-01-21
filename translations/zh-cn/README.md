@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="../header.svg">
+  <img src="../../notes/header.svg">
 </p>
 
 <div align="center">
@@ -66,17 +66,17 @@ fn app(cx: Scope) -> Element {
 }
 ```
 
-Dioxus 可用于生成 网页前端、桌面应用、静态网站、移动端应用、TUI程序、等多类平台应用。
+Dioxus 可用于生成 网页前端、桌面应用、静态网站、移动端应用、TUI程序、 liveview程序等多类平台应用，Dioxus完全与渲染器无关，可以作用于任何渲染平台。
 
 如果你能够熟悉使用 React 框架，那 Dioxus 对你来说将非常简单。
 
 ## 独特的特性:
-- 桌面程序完全基于本地环境运行（并非 Electron 的封装）
+- 只需不到10行代码就能原生运行桌面程序（并非 Electron 的封装）
 - 符合人体工程学的设计以及拥有强大的状态管理
 - 全面的内联文档 - 包含所有 HTML 元素、监听器 和 事件 指南。
-- 极快的运行效率和极高的内存效率
-- 智能项目热更新和高效的项目迭代
-- 一流的异步支持🔥
+- 极快的运行效率🔥🔥和极高的内存效率
+- 智能项目热重载以便快速迭代
+- 使用协程和Suspense来进行一流的异步支持
 - 更多内容请查看 [版本发布信息](https://dioxuslabs.com/blog/introducing-dioxus/).
 
 ## 已支持的平台
@@ -89,7 +89,7 @@ Dioxus 可用于生成 网页前端、桌面应用、静态网站、移动端应
           <li>使用 WebAssembly 直接对 DOM 进行渲染</li>
           <li>为 SSR 提供预渲染或作为客户端使用</li>
           <li>简单的 "Hello World" 仅仅 65kb, 媲美 React 框架</li>
-          <li>CLI 提供热更新支持，方便项目快速迭代</li>
+          <li>内置开发服务和热重载支持，方便项目快速迭代</li>
         </ul>
       </td>
     </tr>
@@ -98,7 +98,7 @@ Dioxus 可用于生成 网页前端、桌面应用、静态网站、移动端应
       <td>
         <ul>
           <li>使用 Webview 进行渲染 或 使用 WGPU 和 Skia（试验性的）</li>
-          <li>无多余配置，使用 `cargo build` 即可快速构建</li>
+          <li>无多余配置，简单的使用 `cargo build` 即可快速构建</li>
           <li>对原生系统的全面支持</li>
           <li>支持 Macos、Linux、Windows 等系统，极小的二进制文件</li>
         </ul>
@@ -118,9 +118,9 @@ Dioxus 可用于生成 网页前端、桌面应用、静态网站、移动端应
       <td><em>Liveview</em></td>
       <td>
         <ul>
-          <li>使用服务器渲染组件与应用程序</li>
+          <li>完全使用服务器渲染应用程序或单个组件</li>
           <li>与受欢迎的后端框架进行融合（Axum、Wrap）</li>
-          <li>及低的延迟</li>
+          <li>及低的延迟,可以同时支持10000个以上的终端程序</li>
         </ul>
       </td>
     </tr>
@@ -130,22 +130,22 @@ Dioxus 可用于生成 网页前端、桌面应用、静态网站、移动端应
         <ul>
           <li>在终端程序中渲染，类似于： <a href="https://github.com/vadimdemedes/ink"> ink.js</a></li>
           <li>支持 CSS 相关模型（类似于浏览器内的）</li>
-          <li>Built-in widgets like text input, buttons, and focus system</li>
+          <li>内置类似文字输入，按钮和焦点系统的小组件</li>
         </ul>
       </td>
     </tr>
   </table>
 </div>
 
-## Why Dioxus?
+## 为什么选择Dioxus?
 
 目前有非常多的应用开发选择，为什么偏偏要选择 Dioxus 呢？
 
-首先，Dioxus将开发者的经验放在首位。这反映在 Dioxus 特有的各种功能上。
+首先，Dioxus将开发者的体验放在首位。这体现在 Dioxus 特有的各种功能上。
 
 - 自动格式化 RSX 格式代码，并拥有 VSCode 插件作为支持。
 - 热加载基于 RSX 代码解析器，同时支持桌面程序和网页程序。
-- 强调文档的重要性，我们对所有 HTML 元素都提供文档支持。
+- 强调文档的重要性--我们的指南是完整的，并且我们对所有 HTML 元素都提供文档支持。
 
 Dioxus 也是一个可扩展化的平台。
 
@@ -160,7 +160,7 @@ Dioxus 那么优秀，但什么时候它不适合我呢？
 
 ## 贡献代码
 - 在我们的 [问题追踪](https://github.com/dioxuslabs/dioxus/issues) 中汇报你遇到的问题。
-- 加入我们的 Discord 与我们交流。
+- [加入](https://discord.gg/XgGxMSkvUM)我们的 Discord 与我们交流。
 
 
 <a href="https://github.com/dioxuslabs/dioxus/graphs/contributors">
