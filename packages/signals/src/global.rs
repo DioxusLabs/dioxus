@@ -201,17 +201,17 @@ impl<T: Clone + 'static> Deref for GlobalSignal<T> {
 }
 
 /// A signal that can be accessed from anywhere in the application and created in a static
-pub struct GlobalSelector<T: 'static> {
+pub struct GlobalMemo<T: 'static> {
     selector: fn() -> T,
 }
 
-impl<T: PartialEq + 'static> GlobalSelector<T> {
+impl<T: PartialEq + 'static> GlobalMemo<T> {
     /// Create a new global signal
-    pub const fn new(selector: fn() -> T) -> GlobalSelector<T>
+    pub const fn new(selector: fn() -> T) -> GlobalMemo<T>
     where
         T: PartialEq,
     {
-        GlobalSelector { selector }
+        GlobalMemo { selector }
     }
 
     /// Get the signal that backs this global.
@@ -266,7 +266,7 @@ impl<T: PartialEq + 'static> GlobalSelector<T> {
     }
 }
 
-impl<T: PartialEq + 'static> IntoAttributeValue for GlobalSelector<T>
+impl<T: PartialEq + 'static> IntoAttributeValue for GlobalMemo<T>
 where
     T: Clone + IntoAttributeValue,
 {
@@ -275,7 +275,7 @@ where
     }
 }
 
-impl<T: PartialEq + Clone + 'static> GlobalSelector<T> {
+impl<T: PartialEq + Clone + 'static> GlobalMemo<T> {
     /// Get the current value of the signal. This will subscribe the current scope to the signal.
     /// If the signal has been dropped, this will panic.
     #[track_caller]
@@ -284,7 +284,7 @@ impl<T: PartialEq + Clone + 'static> GlobalSelector<T> {
     }
 }
 
-impl<T: PartialEq + 'static> PartialEq for GlobalSelector<T> {
+impl<T: PartialEq + 'static> PartialEq for GlobalMemo<T> {
     fn eq(&self, other: &Self) -> bool {
         std::ptr::eq(self, other)
     }
@@ -293,7 +293,7 @@ impl<T: PartialEq + 'static> PartialEq for GlobalSelector<T> {
 /// Allow calling a signal with signal() syntax
 ///
 /// Currently only limited to copy types, though could probably specialize for string/arc/rc
-impl<T: PartialEq + Clone + 'static> Deref for GlobalSelector<T> {
+impl<T: PartialEq + Clone + 'static> Deref for GlobalMemo<T> {
     type Target = dyn Fn() -> T;
 
     fn deref(&self) -> &Self::Target {

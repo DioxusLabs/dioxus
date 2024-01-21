@@ -16,7 +16,7 @@ fn app() -> Element {
 
     let mut local_state = use_signal(|| 0);
 
-    let computed = use_selector_with_dependencies((&local_state(),), move |(local_state,)| {
+    let computed = use_memo_with_dependencies((&local_state(),), move |(local_state,)| {
         local_state * 2 + signal.cloned()
     });
 

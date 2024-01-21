@@ -97,7 +97,7 @@ fn Child() -> Element {
 
 In addition to local subscriptions in components, `dioxus-signals` provides a way to derive data with local subscriptions.
 
-The use_selector hook will only rerun when any signals inside the hook change:
+The use_memo hook will only rerun when any signals inside the hook change:
 
 ```rust
 use dioxus::prelude::*;
@@ -106,7 +106,7 @@ use dioxus_signals::*;
 #[component]
 fn App() -> Element {
     let signal = use_signal(|| 0);
-    let doubled = use_selector(|| signal * 2);
+    let doubled = use_memo(|| signal * 2);
 
     rsx! {
         button {

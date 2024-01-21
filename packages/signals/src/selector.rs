@@ -15,7 +15,7 @@ use crate::{signal::SignalData, ReadOnlySignal, Signal};
 ///
 /// fn App() -> Element {
 ///     let mut count = use_signal(|| 0);
-///     let double = use_selector(move || count * 2);
+///     let double = use_memo(move || count * 2);
 ///     count += 1;
 ///     assert_eq!(double.value(), count * 2);
 ///
@@ -24,8 +24,8 @@ use crate::{signal::SignalData, ReadOnlySignal, Signal};
 /// ```
 #[track_caller]
 #[must_use = "Consider using `use_effect` to rerun a callback when dependencies change"]
-pub fn use_selector<R: PartialEq>(f: impl FnMut() -> R + 'static) -> ReadOnlySignal<R> {
-    use_maybe_sync_selector(f)
+pub fn use_memo<R: PartialEq>(f: impl FnMut() -> R + 'static) -> ReadOnlySignal<R> {
+    use_maybe_sync_memo(f)
 }
 
 /// Creates a new Selector that may be sync. The selector will be run immediately and whenever any signal it reads changes.
@@ -38,19 +38,19 @@ pub fn use_selector<R: PartialEq>(f: impl FnMut() -> R + 'static) -> ReadOnlySig
 ///
 /// fn App(cx: Scope) -> Element {
 ///     let mut count = use_signal(cx, || 0);
-///     let double = use_selector(cx, move || count * 2);
+///     let double = use_memo(cx, move || count * 2);
 ///     count += 1;
 ///     assert_eq!(double.value(), count * 2);
-///  
+///
 ///     render! { "{double}" }
 /// }
 /// ```
 #[track_caller]
 #[must_use = "Consider using `use_effect` to rerun a callback when dependencies change"]
-pub fn use_maybe_sync_selector<R: PartialEq, S: Storage<SignalData<R>>>(
+pub fn use_maybe_sync_memo<R: PartialEq, S: Storage<SignalData<R>>>(
     f: impl FnMut() -> R + 'static,
 ) -> ReadOnlySignal<R, S> {
-    use_hook(|| Signal::maybe_sync_selector(f))
+    use_hook(|| Signal::maybe_sync_memo(f))
 }
 
 /// Creates a new unsync Selector with some local dependencies. The selector will be run immediately and whenever any signal it reads or any dependencies it tracks changes
@@ -63,15 +63,15 @@ pub fn use_maybe_sync_selector<R: PartialEq, S: Storage<SignalData<R>>>(
 ///
 /// fn App(cx: Scope) -> Element {
 ///     let mut local_state = use_state(cx, || 0);
-///     let double = use_selector_with_dependencies(cx, (local_state.get(),), move |(local_state,)| local_state * 2);
+///     let double = use_memo_with_dependencies(cx, (local_state.get(),), move |(local_state,)| local_state * 2);
 ///     local_state.set(1);
-///  
+///
 ///     render! { "{double}" }
 /// }
 /// ```
 #[track_caller]
 #[must_use = "Consider using `use_effect` to rerun a callback when dependencies change"]
-pub fn use_selector_with_dependencies<R: PartialEq, D: Dependency>(
+pub fn use_memo_with_dependencies<R: PartialEq, D: Dependency>(
     dependencies: D,
     f: impl FnMut(D::Out) -> R + 'static,
 ) -> ReadOnlySignal<R>
@@ -91,9 +91,9 @@ where
 ///
 /// fn App(cx: Scope) -> Element {
 ///     let mut local_state = use_state(cx, || 0);
-///     let double = use_selector_with_dependencies(cx, (local_state.get(),), move |(local_state,)| local_state * 2);
+///     let double = use_memo_with_dependencies(cx, (local_state.get(),), move |(local_state,)| local_state * 2);
 ///     local_state.set(1);
-///  
+///
 ///     render! { "{double}" }
 /// }
 /// ```
@@ -112,7 +112,7 @@ where
 {
     let mut dependencies_signal = use_signal(|| dependencies.out());
     let selector = use_hook(|| {
-        Signal::maybe_sync_selector(move || {
+        Signal::maybe_sync_memo(move || {
             let deref = &*dependencies_signal.read();
             f(deref.clone())
         })

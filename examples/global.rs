@@ -4,12 +4,12 @@
 
 use dioxus::prelude::*;
 
-static COUNT: GlobalSignal<i32> = Signal::global(|| 0);
-static DOUBLED_COUNT: GlobalSelector<i32> = Signal::global_selector(|| COUNT() * 2);
-
 fn main() {
     launch(app);
 }
+
+static COUNT: GlobalSignal<i32> = Signal::global(|| 0);
+static DOUBLED_COUNT: GlobalMemo<i32> = Signal::global_memo(|| COUNT() * 2);
 
 fn app() -> Element {
     rsx! {

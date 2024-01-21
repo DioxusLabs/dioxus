@@ -25,7 +25,7 @@ const RECT_STYLE: &str = r#"
 "#;
 
 fn app() -> Element {
-    let mut events = use_signal(|| std::collections::VecDeque::new() as VecDeque<Rc<dyn Debug>>);
+    let mut events = use_signal(|| VecDeque::new() as VecDeque<Rc<dyn Debug>>);
 
     let mut log_event = move |event: Rc<dyn Debug>| {
         let mut events = events.write();

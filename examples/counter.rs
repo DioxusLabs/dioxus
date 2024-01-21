@@ -9,7 +9,7 @@ fn main() {
 
 fn app() -> Element {
     let mut counters = use_signal(|| vec![0, 0, 0]);
-    let sum = use_selector(move || counters.read().iter().copied().sum::<i32>());
+    let sum = use_memo(move || counters.read().iter().copied().sum::<i32>());
 
     rsx! {
         div {

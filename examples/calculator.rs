@@ -27,7 +27,6 @@ fn app() -> Element {
         if val() == "0" {
             val.set(String::new());
         }
-
         val.write().push_str(num.as_str());
     };
 
@@ -35,15 +34,12 @@ fn app() -> Element {
 
     let mut handle_key_down_event = move |evt: KeyboardEvent| match evt.key() {
         Key::Backspace => {
-            if !val.cloned().is_empty() {
+            if !val().is_empty() {
                 val.write().pop();
             }
         }
         Key::Character(character) => match character.as_str() {
-            "+" => input_operator("+"),
-            "-" => input_operator("-"),
-            "/" => input_operator("/"),
-            "*" => input_operator("*"),
+            "+" | "-" | "/" | "*" => input_operator(&character),
             "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" => input_digit(character),
             _ => {}
         },
@@ -72,20 +68,18 @@ fn app() -> Element {
                                 button {
                                     class: "calculator-key key-sign",
                                     onclick: move |_| {
-                                        let temp = calc_val(val.cloned().as_str());
-                                        if temp > 0.0 {
-                                            val.set(format!("-{temp}"));
+                                        let new_val = calc_val(val.cloned().as_str());
+                                        if new_val > 0.0 {
+                                            val.set(format!("-{new_val}"));
                                         } else {
-                                            val.set(format!("{}", temp.abs()));
+                                            val.set(format!("{}", new_val.abs()));
                                         }
                                     },
                                     "±"
                                 }
                                 button {
                                     class: "calculator-key key-percent",
-                                    onclick: move |_| {
-                                        val.set(format!("{}", calc_val(val.cloned().as_str()) / 100.0));
-                                    },
+                                    onclick: move |_| val.set(format!("{}", calc_val(val.cloned().as_str()) / 100.0)),
                                     "%"
                                 }
                             }
@@ -111,25 +105,12 @@ fn app() -> Element {
                             }
                         }
                         div { class: "operator-keys",
-                            button {
-                                class: "calculator-key key-divide",
-                                onclick: move |_| input_operator("/"),
-                                "÷"
-                            }
-                            button {
-                                class: "calculator-key key-multiply",
-                                onclick: move |_| input_operator("*"),
-                                "×"
-                            }
-                            button {
-                                class: "calculator-key key-subtract",
-                                onclick: move |_| input_operator("-"),
-                                "−"
-                            }
-                            button {
-                                class: "calculator-key key-add",
-                                onclick: move |_| input_operator("+"),
-                                "+"
+                            for (key, class) in [("/", "key-divide"), ("*", "key-multiply"), ("-", "key-subtract"), ("+", "key-add")] {
+                                button {
+                                    class: "calculator-key {class}",
+                                    onclick: move |_| input_operator(key),
+                                    "{key}"
+                                }
                             }
                             button {
                                 class: "calculator-key key-equals",

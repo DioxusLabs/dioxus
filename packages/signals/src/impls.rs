@@ -1,6 +1,6 @@
 use crate::rt::CopyValue;
 use crate::signal::{ReadOnlySignal, Signal, Write};
-use crate::{GlobalSelector, GlobalSignal, SignalData};
+use crate::{GlobalMemo, GlobalSignal, SignalData};
 use generational_box::{GenerationalRef, Mappable};
 use generational_box::{MappableMut, Storage};
 
@@ -414,16 +414,16 @@ impl<T: 'static> GlobalSignal<Option<T>> {
     }
 }
 
-read_impls!(GlobalSelector: PartialEq);
+read_impls!(GlobalMemo: PartialEq);
 
-impl<T: PartialEq + 'static> GlobalSelector<Vec<T>> {
+impl<T: PartialEq + 'static> GlobalMemo<Vec<T>> {
     /// Read a value from the inner vector.
     pub fn get(&'static self, index: usize) -> Option<GenerationalRef<T, Ref<'static, T>>> {
         GenerationalRef::<Vec<T>, Ref<'static, Vec<T>>>::try_map(self.read(), move |v| v.get(index))
     }
 }
 
-impl<T: PartialEq + 'static> GlobalSelector<Option<T>> {
+impl<T: PartialEq + 'static> GlobalMemo<Option<T>> {
     /// Unwraps the inner value and clones it.
     pub fn unwrap(&'static self) -> T
     where

@@ -1,4 +1,4 @@
-use crate::{Effect, EffectInner, GlobalSelector, GlobalSignal, MappedSignal};
+use crate::{Effect, EffectInner, GlobalMemo, GlobalSignal, MappedSignal};
 use std::{
     cell::RefCell,
     marker::PhantomData,
@@ -232,11 +232,11 @@ impl<T: 'static> Signal<T> {
 
 impl<T: PartialEq + 'static> Signal<T> {
     /// Creates a new global Signal that can be used in a global static.
-    pub const fn global_selector(constructor: fn() -> T) -> GlobalSelector<T>
+    pub const fn global_memo(constructor: fn() -> T) -> GlobalMemo<T>
     where
         T: PartialEq,
     {
-        GlobalSelector::new(constructor)
+        GlobalMemo::new(constructor)
     }
 
     /// Creates a new unsync Selector. The selector will be run immediately and whenever any signal it reads changes.
@@ -244,14 +244,14 @@ impl<T: PartialEq + 'static> Signal<T> {
     /// Selectors can be used to efficiently compute derived data from signals.
     #[track_caller]
     pub fn selector(f: impl FnMut() -> T + 'static) -> ReadOnlySignal<T> {
-        Self::maybe_sync_selector(f)
+        Self::maybe_sync_memo(f)
     }
 
     /// Creates a new Selector that may be Sync + Send. The selector will be run immediately and whenever any signal it reads changes.
     ///
     /// Selectors can be used to efficiently compute derived data from signals.
     #[track_caller]
-    pub fn maybe_sync_selector<S: Storage<SignalData<T>>>(
+    pub fn maybe_sync_memo<S: Storage<SignalData<T>>>(
         mut f: impl FnMut() -> T + 'static,
     ) -> ReadOnlySignal<T, S> {
         let mut state = Signal::<T, S> {

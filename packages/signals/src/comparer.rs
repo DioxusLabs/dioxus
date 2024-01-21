@@ -15,7 +15,7 @@ pub struct Comparer<R: 'static, S: Storage<SignalData<bool>> = UnsyncStorage> {
 impl<R: Eq + Hash> Comparer<R> {
     /// Creates a new Comparer which efficiently tracks when a value changes to check if it is equal to a set of values.
     ///
-    /// Generally, you shouldn't need to use this hook. Instead you can use [`crate::use_selector`]. If you have many values that you need to compare to a single value, this hook will change updates from O(n) to O(1) where n is the number of values you are comparing to.
+    /// Generally, you shouldn't need to use this hook. Instead you can use [`crate::use_memo`]. If you have many values that you need to compare to a single value, this hook will change updates from O(n) to O(1) where n is the number of values you are comparing to.
     pub fn new(mut f: impl FnMut() -> R + 'static) -> Comparer<R> {
         let subscribers: CopyValue<FxHashMap<R, Signal<bool>>> =
             CopyValue::new(FxHashMap::default());
@@ -47,7 +47,7 @@ impl<R: Eq + Hash> Comparer<R> {
 impl<R: Eq + Hash, S: Storage<SignalData<bool>>> Comparer<R, S> {
     /// Creates a new Comparer that may be `Sync + Send` which efficiently tracks when a value changes to check if it is equal to a set of values.
     ///
-    /// Generally, you shouldn't need to use this hook. Instead you can use [`crate::use_selector`]. If you have many values that you need to compare to a single value, this hook will change updates from O(n) to O(1) where n is the number of values you are comparing to.
+    /// Generally, you shouldn't need to use this hook. Instead you can use [`crate::use_memo`]. If you have many values that you need to compare to a single value, this hook will change updates from O(n) to O(1) where n is the number of values you are comparing to.
     pub fn new_maybe_sync(mut f: impl FnMut() -> R + 'static) -> Comparer<R> {
         let subscribers: CopyValue<FxHashMap<R, Signal<bool>>> =
             CopyValue::new(FxHashMap::default());
@@ -102,7 +102,7 @@ impl<R, S: Storage<SignalData<bool>>> Copy for Comparer<R, S> {}
 
 /// Creates a new Comparer which efficiently tracks when a value changes to check if it is equal to a set of values.
 ///
-/// Generally, you shouldn't need to use this hook. Instead you can use [`crate::use_selector`]. If you have many values that you need to compare to a single value, this hook will change updates from O(n) to O(1) where n is the number of values you are comparing to.
+/// Generally, you shouldn't need to use this hook. Instead you can use [`crate::use_memo`]. If you have many values that you need to compare to a single value, this hook will change updates from O(n) to O(1) where n is the number of values you are comparing to.
 ///
 /// ```rust
 /// use dioxus::prelude::*;

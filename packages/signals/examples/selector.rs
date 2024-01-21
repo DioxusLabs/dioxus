@@ -8,7 +8,7 @@ fn main() {
 #[component]
 fn App() -> Element {
     let mut signal = use_signal(|| 0);
-    let doubled = use_selector(move || signal * 2);
+    let doubled = use_memo(move || signal * 2);
 
     rsx! {
         button {

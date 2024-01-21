@@ -28,9 +28,9 @@ fn app() -> Element {
     let mut filter = use_signal(|| FilterState::All);
 
     let active_todo_count =
-        use_selector(move || todos.read().values().filter(|item| !item.checked).count());
+        use_memo(move || todos.read().values().filter(|item| !item.checked).count());
 
-    let filtered_todos = use_selector(move || {
+    let filtered_todos = use_memo(move || {
         let mut filtered_todos = todos
             .read()
             .iter()
@@ -120,8 +120,8 @@ fn TodoHeader(mut todos: Signal<HashMap<u32, TodoItem>>) -> Element {
 #[component]
 fn TodoEntry(mut todos: Signal<HashMap<u32, TodoItem>>, id: u32) -> Element {
     let mut is_editing = use_signal(|| false);
-    let checked = use_selector(move || todos.read().get(&id).unwrap().checked);
-    let contents = use_selector(move || todos.read().get(&id).unwrap().contents.clone());
+    let checked = use_memo(move || todos.read().get(&id).unwrap().checked);
+    let contents = use_memo(move || todos.read().get(&id).unwrap().contents.clone());
 
     rsx! {
         li { class: if checked() { "completed" }, class: if is_editing() { "editing" },
@@ -170,7 +170,7 @@ fn ListFooter(
     active_todo_count: ReadOnlySignal<usize>,
     mut filter: Signal<FilterState>,
 ) -> Element {
-    let show_clear_completed = use_selector(move || todos.read().values().any(|todo| todo.checked));
+    let show_clear_completed = use_memo(move || todos.read().values().any(|todo| todo.checked));
 
     rsx! {
         footer { class: "footer",
