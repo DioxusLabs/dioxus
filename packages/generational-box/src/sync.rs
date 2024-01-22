@@ -90,13 +90,14 @@ impl<T: Sync + Send + 'static> Storage<T> for SyncStorage {
         at: crate::GenerationalRefBorrowInfo,
     ) -> Result<Self::Ref, error::BorrowError> {
         let read = self.0.try_read();
-        // .ok_or_else(|| at.borrowed_from.borrow_error())?;
 
         #[cfg(any(debug_assertions, feature = "debug_ownership"))]
         let read = read.ok_or_else(|| at.borrowed_from.borrow_error())?;
 
         #[cfg(not(any(debug_assertions, feature = "debug_ownership")))]
-        let read = read.unwrap();
+        let read = read.ok_or_else(|| {
+            error::BorrowError::AlreadyBorrowedMut(error::AlreadyBorrowedMutError {})
+        })?;
 
         RwLockReadGuard::try_map(read, |any| any.as_ref()?.downcast_ref())
             .map_err(|_| {
@@ -127,7 +128,9 @@ impl<T: Sync + Send + 'static> Storage<T> for SyncStorage {
         let write = write.ok_or_else(|| at.borrowed_from.borrow_mut_error())?;
 
         #[cfg(not(any(debug_assertions, feature = "debug_ownership")))]
-        let write = write.unwrap();
+        let write = write.ok_or_else(|| {
+            error::BorrowMutError::AlreadyBorrowed(error::AlreadyBorrowedError {})
+        })?;
 
         RwLockWriteGuard::try_map(write, |any| any.as_mut()?.downcast_mut())
             .map_err(|_| {
