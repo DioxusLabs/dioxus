@@ -116,3 +116,28 @@ fn diffing_drops_old() {
 
     _ = dom.render_immediate_to_vec();
 }
+
+#[test]
+fn hooks_drop_before_contexts() {
+    fn app() -> Element {
+        provide_context(123i32);
+        use_hook(|| {
+            #[derive(Clone)]
+            struct ReadsContextOnDrop;
+
+            impl Drop for ReadsContextOnDrop {
+                fn drop(&mut self) {
+                    let _ = consume_context::<i32>();
+                }
+            }
+        });
+
+        rsx! { div {} }
+    }
+
+    let mut dom = VirtualDom::new(app);
+
+    dom.rebuild(&mut dioxus_core::NoOpMutations);
+    dom.mark_dirty(ScopeId::ROOT);
+    _ = dom.render_immediate_to_vec();
+}

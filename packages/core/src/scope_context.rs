@@ -17,9 +17,13 @@ pub(crate) struct ScopeContext {
     pub(crate) height: u32,
     pub(crate) render_count: Cell<usize>,
     pub(crate) suspended: Cell<bool>,
-    pub(crate) shared_contexts: RefCell<Vec<Box<dyn Any>>>,
+
+    // Note: the order of the hook and context fields is important. The hooks field must be dropped before the contexts field in case a hook drop implementation tries to access a context.
     pub(crate) hooks: RefCell<Vec<Box<dyn Any>>>,
     pub(crate) hook_index: Cell<usize>,
+
+    pub(crate) shared_contexts: RefCell<Vec<Box<dyn Any>>>,
+
     pub(crate) spawned_tasks: RefCell<FxHashSet<Task>>,
 }
 
@@ -69,7 +73,7 @@ impl ScopeContext {
 
     /// Schedule an update for any component given its [`ScopeId`].
     ///
-    /// A component's [`ScopeId`] can be obtained from `use_hook` or the [`ScopeState::scope_id`] method.
+    /// A component's [`ScopeId`] can be obtained from `use_hook` or the [`current_scope_id`] method.
     ///
     /// This method should be used when you want to schedule an update for a component
     pub fn schedule_update_any(&self) -> Arc<dyn Fn(ScopeId) + Send + Sync> {
