@@ -86,7 +86,7 @@ impl IfmtInput {
                         match single_dynamic {
                             Some(current_string) => {
                                 single_dynamic =
-                                    Some(quote!(#current_string + &segment.to_string()));
+                                    Some(quote!(#current_string + &#segment.to_string()));
                             }
                             None => {
                                 single_dynamic = Some(quote!(#segment.to_string()));
