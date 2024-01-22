@@ -94,9 +94,13 @@ impl Runtime {
     ///
     /// Useful in a limited number of scenarios
     pub fn on_scope<O>(&self, id: ScopeId, f: impl FnOnce() -> O) -> O {
-        self.scope_stack.borrow_mut().push(id);
+        {
+            self.scope_stack.borrow_mut().push(id);
+        }
         let o = f();
-        self.scope_stack.borrow_mut().pop();
+        {
+            self.scope_stack.borrow_mut().pop();
+        }
         o
     }
 
