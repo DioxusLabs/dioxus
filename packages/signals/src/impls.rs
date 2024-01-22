@@ -1,8 +1,8 @@
 use crate::rt::CopyValue;
 use crate::signal::{ReadOnlySignal, Signal, Write};
 use crate::{GlobalMemo, GlobalSignal, SignalData};
-use generational_box::{GenerationalRef, Mappable};
-use generational_box::{MappableMut, Storage};
+use generational_box::Storage;
+use generational_box::{GenerationalRef, UnsyncStorage};
 
 use std::cell::Ref;
 use std::{
@@ -208,8 +208,8 @@ read_impls!(CopyValue, S: Storage<T>, S: Storage<Vec<T>>);
 impl<T: 'static, S: Storage<Vec<T>>> CopyValue<Vec<T>, S> {
     /// Read a value from the inner vector.
     #[track_caller]
-    pub fn get(&self, index: usize) -> Option<<S::Ref as Mappable<Vec<T>>>::Mapped<T>> {
-        S::Ref::try_map(self.read(), move |v| v.get(index))
+    pub fn get(&self, index: usize) -> Option<S::Ref<T>> {
+        S::try_map(self.read(), move |v| v.get(index))
     }
 }
 
@@ -225,8 +225,8 @@ impl<T: 'static, S: Storage<Option<T>>> CopyValue<Option<T>, S> {
 
     /// Attempts to read the inner value of the Option.
     #[track_caller]
-    pub fn as_ref(&self) -> Option<<S::Ref as Mappable<Option<T>>>::Mapped<T>> {
-        S::Ref::try_map(self.read(), |v| v.as_ref())
+    pub fn as_ref(&self) -> Option<S::Ref<T>> {
+        S::try_map(self.read(), |v| v.as_ref())
     }
 }
 
@@ -247,23 +247,20 @@ impl<T: 'static, S: Storage<Option<T>>> CopyValue<Option<T>, S> {
 
     /// Gets the value out of the Option, or inserts the given value if the Option is empty.
     #[track_caller]
-    pub fn get_or_insert(&self, default: T) -> <S::Ref as Mappable<Option<T>>>::Mapped<T> {
+    pub fn get_or_insert(&self, default: T) -> S::Ref<T> {
         self.get_or_insert_with(|| default)
     }
 
     /// Gets the value out of the Option, or inserts the value returned by the given function if the Option is empty.
     #[track_caller]
-    pub fn get_or_insert_with(
-        &self,
-        default: impl FnOnce() -> T,
-    ) -> <S::Ref as Mappable<Option<T>>>::Mapped<T> {
+    pub fn get_or_insert_with(&self, default: impl FnOnce() -> T) -> S::Ref<T> {
         let borrow = self.read();
         if borrow.is_none() {
             drop(borrow);
             self.with_mut(|v| *v = Some(default()));
-            S::Ref::map(self.read(), |v| v.as_ref().unwrap())
+            S::map(self.read(), |v| v.as_ref().unwrap())
         } else {
-            S::Ref::map(borrow, |v| v.as_ref().unwrap())
+            S::map(borrow, |v| v.as_ref().unwrap())
         }
     }
 }
@@ -272,15 +269,8 @@ read_impls!(Signal, S: Storage<SignalData<T>>, S: Storage<SignalData<Vec<T>>>);
 
 impl<T: 'static, S: Storage<SignalData<Vec<T>>>> Signal<Vec<T>, S> {
     /// Read a value from the inner vector.
-    pub fn get(
-        &self,
-        index: usize,
-    ) -> Option<
-        <<<S as Storage<SignalData<Vec<T>>>>::Ref as Mappable<SignalData<Vec<T>>>>::Mapped<Vec<T>> as Mappable<
-            Vec<T>,
-        >>::Mapped<T>,
-    >{
-        <<S as Storage<SignalData<Vec<T>>>>::Ref as Mappable<SignalData<Vec<T>>>>::Mapped::<Vec<T>>::try_map(self.read(), move |v| v.get(index))
+    pub fn get(&self, index: usize) -> Option<S::Ref<T>> {
+        S::try_map(self.read(), move |v| v.get(index))
     }
 }
 
@@ -294,16 +284,8 @@ impl<T: 'static, S: Storage<SignalData<Option<T>>>> Signal<Option<T>, S> {
     }
 
     /// Attempts to read the inner value of the Option.
-    pub fn as_ref(
-        &self,
-    ) -> Option<
-        <<<S as Storage<SignalData<Option<T>>>>::Ref as Mappable<SignalData<Option<T>>>>::Mapped<
-            Option<T>,
-        > as Mappable<Option<T>>>::Mapped<T>,
-    > {
-        <<S as Storage<SignalData<Option<T>>>>::Ref as Mappable<SignalData<Option<T>>>>::Mapped::<
-            Option<T>,
-        >::try_map(self.read(), |v| v.as_ref())
+    pub fn as_ref(&self) -> Option<S::Ref<T>> {
+        S::try_map(self.read(), |v| v.as_ref())
     }
 }
 
@@ -321,27 +303,19 @@ impl<T: 'static, S: Storage<SignalData<Option<T>>>> Signal<Option<T>, S> {
     }
 
     /// Gets the value out of the Option, or inserts the given value if the Option is empty.
-    pub fn get_or_insert(&mut self, default: T) -> <<S::Ref as Mappable<SignalData<Option<T>>>>::Mapped<Option<T>> as Mappable<Option<T>>>::Mapped<T>{
+    pub fn get_or_insert(&mut self, default: T) -> S::Ref<T> {
         self.get_or_insert_with(|| default)
     }
 
     /// Gets the value out of the Option, or inserts the value returned by the given function if the Option is empty.
-    pub fn get_or_insert_with(
-        &mut self,
-        default: impl FnOnce() -> T,
-    ) -><<S::Ref as Mappable<SignalData<Option<T>>>>::Mapped<Option<T>> as Mappable<Option<T>>>::Mapped<T>{
+    pub fn get_or_insert_with(&mut self, default: impl FnOnce() -> T) -> S::Ref<T> {
         let borrow = self.read();
         if borrow.is_none() {
             drop(borrow);
             self.with_mut(|v| *v = Some(default()));
-            <S::Ref as Mappable<SignalData<Option<T>>>>::Mapped::<Option<T>>::map(
-                self.read(),
-                |v| v.as_ref().unwrap(),
-            )
+            S::map(self.read(), |v| v.as_ref().unwrap())
         } else {
-            <S::Ref as Mappable<SignalData<Option<T>>>>::Mapped::<Option<T>>::map(borrow, |v| {
-                v.as_ref().unwrap()
-            })
+            S::map(borrow, |v| v.as_ref().unwrap())
         }
     }
 }
@@ -356,8 +330,8 @@ read_impls!(GlobalSignal);
 
 impl<T: 'static> GlobalSignal<Vec<T>> {
     /// Read a value from the inner vector.
-    pub fn get(&'static self, index: usize) -> Option<GenerationalRef<T, Ref<'static, T>>> {
-        GenerationalRef::<Vec<T>, Ref<'static, Vec<T>>>::try_map(self.read(), move |v| v.get(index))
+    pub fn get(&'static self, index: usize) -> Option<GenerationalRef<Ref<'static, T>>> {
+        <UnsyncStorage as Storage>::try_map(self.read(), move |v| v.get(index))
     }
 }
 
@@ -371,8 +345,8 @@ impl<T: 'static> GlobalSignal<Option<T>> {
     }
 
     /// Attempts to read the inner value of the Option.
-    pub fn as_ref(&'static self) -> Option<GenerationalRef<T, Ref<'static, T>>> {
-        GenerationalRef::<Option<T>, Ref<'static, Option<T>>>::try_map(self.read(), |v| v.as_ref())
+    pub fn as_ref(&'static self) -> Option<GenerationalRef<Ref<'static, T>>> {
+        <UnsyncStorage as Storage>::try_map(self.read(), |v| v.as_ref())
     }
 }
 
@@ -390,7 +364,7 @@ impl<T: 'static> GlobalSignal<Option<T>> {
     }
 
     /// Gets the value out of the Option, or inserts the given value if the Option is empty.
-    pub fn get_or_insert(&self, default: T) -> GenerationalRef<T, Ref<'static, T>> {
+    pub fn get_or_insert(&self, default: T) -> GenerationalRef<Ref<'static, T>> {
         self.get_or_insert_with(|| default)
     }
 
@@ -398,18 +372,14 @@ impl<T: 'static> GlobalSignal<Option<T>> {
     pub fn get_or_insert_with(
         &self,
         default: impl FnOnce() -> T,
-    ) -> GenerationalRef<T, Ref<'static, T>> {
+    ) -> GenerationalRef<Ref<'static, T>> {
         let borrow = self.read();
         if borrow.is_none() {
             drop(borrow);
             self.with_mut(|v| *v = Some(default()));
-            GenerationalRef::<Option<T>, Ref<'static, Option<T>>>::map(self.read(), |v| {
-                v.as_ref().unwrap()
-            })
+            <UnsyncStorage as Storage>::map(self.read(), |v| v.as_ref().unwrap())
         } else {
-            GenerationalRef::<Option<T>, Ref<'static, Option<T>>>::map(borrow, |v| {
-                v.as_ref().unwrap()
-            })
+            <UnsyncStorage as Storage>::map(borrow, |v| v.as_ref().unwrap())
         }
     }
 }
@@ -418,8 +388,8 @@ read_impls!(GlobalMemo: PartialEq);
 
 impl<T: PartialEq + 'static> GlobalMemo<Vec<T>> {
     /// Read a value from the inner vector.
-    pub fn get(&'static self, index: usize) -> Option<GenerationalRef<T, Ref<'static, T>>> {
-        GenerationalRef::<Vec<T>, Ref<'static, Vec<T>>>::try_map(self.read(), move |v| v.get(index))
+    pub fn get(&'static self, index: usize) -> Option<GenerationalRef<Ref<'static, T>>> {
+        <UnsyncStorage as Storage>::try_map(self.read(), move |v| v.get(index))
     }
 }
 
@@ -433,8 +403,8 @@ impl<T: PartialEq + 'static> GlobalMemo<Option<T>> {
     }
 
     /// Attempts to read the inner value of the Option.
-    pub fn as_ref(&'static self) -> Option<GenerationalRef<T, Ref<'static, T>>> {
-        GenerationalRef::<Option<T>, Ref<'static, Option<T>>>::try_map(self.read(), |v| v.as_ref())
+    pub fn as_ref(&'static self) -> Option<GenerationalRef<Ref<'static, T>>> {
+        <UnsyncStorage as Storage>::try_map(self.read(), |v| v.as_ref())
     }
 }
 
@@ -445,7 +415,7 @@ pub struct CopyValueIterator<T: 'static, S: Storage<Vec<T>>> {
 }
 
 impl<T, S: Storage<Vec<T>>> Iterator for CopyValueIterator<T, S> {
-    type Item = <S::Ref as Mappable<Vec<T>>>::Mapped<T>;
+    type Item = S::Ref<T>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let index = self.index;
@@ -457,7 +427,7 @@ impl<T, S: Storage<Vec<T>>> Iterator for CopyValueIterator<T, S> {
 impl<T: 'static, S: Storage<Vec<T>>> IntoIterator for CopyValue<Vec<T>, S> {
     type IntoIter = CopyValueIterator<T, S>;
 
-    type Item = <S::Ref as Mappable<Vec<T>>>::Mapped<T>;
+    type Item = S::Ref<T>;
 
     fn into_iter(self) -> Self::IntoIter {
         CopyValueIterator {
@@ -469,17 +439,15 @@ impl<T: 'static, S: Storage<Vec<T>>> IntoIterator for CopyValue<Vec<T>, S> {
 
 impl<T: 'static, S: Storage<Vec<T>>> CopyValue<Vec<T>, S> {
     /// Write to an element in the inner vector.
-    pub fn get_mut(&self, index: usize) -> Option<<S::Mut as MappableMut<Vec<T>>>::Mapped<T>> {
-        S::Mut::try_map(self.write(), |v: &mut Vec<T>| v.get_mut(index))
+    pub fn get_mut(&self, index: usize) -> Option<S::Mut<T>> {
+        S::try_map_mut(self.write(), |v: &mut Vec<T>| v.get_mut(index))
     }
 }
 
 impl<T: 'static, S: Storage<Option<T>>> CopyValue<Option<T>, S> {
     /// Deref the inner value mutably.
-    pub fn as_mut(
-        &self,
-    ) -> Option<<<S as Storage<Option<T>>>::Mut as MappableMut<Option<T>>>::Mapped<T>> {
-        S::Mut::try_map(self.write(), |v: &mut Option<T>| v.as_mut())
+    pub fn as_mut(&self) -> Option<S::Mut<T>> {
+        S::try_map_mut(self.write(), |v: &mut Option<T>| v.as_mut())
     }
 }
 
@@ -490,9 +458,7 @@ pub struct SignalIterator<T: 'static, S: Storage<SignalData<Vec<T>>>> {
 }
 
 impl<T, S: Storage<SignalData<Vec<T>>>> Iterator for SignalIterator<T, S> {
-    type Item = <<<S as Storage<SignalData<Vec<T>>>>::Ref as Mappable<SignalData<Vec<T>>>>::Mapped<
-        Vec<T>,
-    > as Mappable<Vec<T>>>::Mapped<T>;
+    type Item = S::Ref<T>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let index = self.index;
@@ -504,9 +470,7 @@ impl<T, S: Storage<SignalData<Vec<T>>>> Iterator for SignalIterator<T, S> {
 impl<T: 'static, S: Storage<SignalData<Vec<T>>>> IntoIterator for Signal<Vec<T>, S> {
     type IntoIter = SignalIterator<T, S>;
 
-    type Item = <<<S as Storage<SignalData<Vec<T>>>>::Ref as Mappable<SignalData<Vec<T>>>>::Mapped<
-        Vec<T>,
-    > as Mappable<Vec<T>>>::Mapped<T>;
+    type Item = S::Ref<T>;
 
     fn into_iter(self) -> Self::IntoIter {
         SignalIterator {
@@ -516,33 +480,16 @@ impl<T: 'static, S: Storage<SignalData<Vec<T>>>> IntoIterator for Signal<Vec<T>,
     }
 }
 
-impl<T: 'static, S: Storage<SignalData<Vec<T>>>> Signal<Vec<T>, S>
-where
-    <<S as Storage<SignalData<std::vec::Vec<T>>>>::Mut as MappableMut<
-        SignalData<std::vec::Vec<T>>,
-    >>::Mapped<std::vec::Vec<T>>: MappableMut<std::vec::Vec<T>>,
-{
+impl<T: 'static, S: Storage<SignalData<Vec<T>>>> Signal<Vec<T>, S> {
     /// Returns a reference to an element or `None` if out of bounds.
-    pub fn get_mut(
-        &mut self,
-        index: usize,
-    ) -> Option<
-        Write<
-            T,
-            <<<S as Storage<SignalData<Vec<T>>>>::Mut as MappableMut<SignalData<Vec<T>>>>::Mapped<
-                Vec<T>,
-            > as MappableMut<Vec<T>>>::Mapped<T>,
-            S,
-            Vec<T>,
-        >,
-    > {
+    pub fn get_mut(&mut self, index: usize) -> Option<Write<T, S, Vec<T>>> {
         Write::filter_map(self.write(), |v| v.get_mut(index))
     }
 }
 
 impl<T: 'static, S: Storage<SignalData<Option<T>>>> Signal<Option<T>, S> {
     /// Returns a reference to an element or `None` if out of bounds.
-    pub fn as_mut(&mut self) -> Option<Write<T, <<<S as Storage<SignalData<Option<T>>>>::Mut as MappableMut<SignalData<Option<T>>>>::Mapped<Option<T>> as MappableMut<Option<T>>>::Mapped<T>, S, Option<T>>>{
+    pub fn as_mut(&mut self) -> Option<Write<T, S, Option<T>>> {
         Write::filter_map(self.write(), |v| v.as_mut())
     }
 }

@@ -1,7 +1,7 @@
 use crate::{
     error,
     references::{GenerationalRef, GenerationalRefMut},
-    AnyStorage, Mappable, MappableMut, MemoryLocation, MemoryLocationInner, Storage,
+    AnyStorage, GenerationalRefMutBorrowInfo, MemoryLocation, MemoryLocationInner, Storage,
 };
 use std::cell::{Ref, RefCell, RefMut};
 
@@ -14,39 +14,9 @@ impl Default for UnsyncStorage {
     }
 }
 
-impl<T: ?Sized> Mappable<T> for Ref<'static, T> {
-    type Mapped<U: ?Sized + 'static> = Ref<'static, U>;
-
-    fn map<U: ?Sized + 'static>(_self: Self, f: impl FnOnce(&T) -> &U) -> Self::Mapped<U> {
-        Ref::map(_self, f)
-    }
-
-    fn try_map<U: ?Sized + 'static>(
-        _self: Self,
-        f: impl FnOnce(&T) -> Option<&U>,
-    ) -> Option<Self::Mapped<U>> {
-        Ref::filter_map(_self, f).ok()
-    }
-}
-
-impl<T: ?Sized> MappableMut<T> for RefMut<'static, T> {
-    type Mapped<U: ?Sized + 'static> = RefMut<'static, U>;
-
-    fn map<U: ?Sized + 'static>(_self: Self, f: impl FnOnce(&mut T) -> &mut U) -> Self::Mapped<U> {
-        RefMut::map(_self, f)
-    }
-
-    fn try_map<U: ?Sized + 'static>(
-        _self: Self,
-        f: impl FnOnce(&mut T) -> Option<&mut U>,
-    ) -> Option<Self::Mapped<U>> {
-        RefMut::filter_map(_self, f).ok()
-    }
-}
-
 impl<T: 'static> Storage<T> for UnsyncStorage {
-    type Ref = GenerationalRef<T, Ref<'static, T>>;
-    type Mut = GenerationalRefMut<T, RefMut<'static, T>>;
+    type Ref<R: ?Sized + 'static> = GenerationalRef<Ref<'static, R>>;
+    type Mut<W: ?Sized + 'static> = GenerationalRefMut<RefMut<'static, W>>;
 
     fn try_read(
         &'static self,
@@ -54,7 +24,7 @@ impl<T: 'static> Storage<T> for UnsyncStorage {
         created_at: &'static std::panic::Location<'static>,
         #[cfg(any(debug_assertions, feature = "debug_ownership"))]
         at: crate::GenerationalRefBorrowInfo,
-    ) -> Result<Self::Ref, error::BorrowError> {
+    ) -> Result<Self::Ref<T>, error::BorrowError> {
         let borrow = self.0.try_borrow();
 
         #[cfg(any(debug_assertions, feature = "debug_ownership"))]
@@ -87,7 +57,7 @@ impl<T: 'static> Storage<T> for UnsyncStorage {
         created_at: &'static std::panic::Location<'static>,
         #[cfg(any(debug_assertions, feature = "debug_ownership"))]
         at: crate::GenerationalRefMutBorrowInfo,
-    ) -> Result<Self::Mut, error::BorrowMutError> {
+    ) -> Result<Self::Mut<T>, error::BorrowMutError> {
         let borrow = self.0.try_borrow_mut();
 
         #[cfg(any(debug_assertions, feature = "debug_ownership"))]
@@ -115,6 +85,44 @@ impl<T: 'static> Storage<T> for UnsyncStorage {
 
     fn set(&self, value: T) {
         *self.0.borrow_mut() = Some(Box::new(value));
+    }
+
+    fn try_map<I, U: ?Sized + 'static>(
+        _self: Self::Ref<I>,
+        f: impl FnOnce(&I) -> Option<&U>,
+    ) -> Option<Self::Ref<U>> {
+        let GenerationalRef {
+            inner,
+            #[cfg(any(debug_assertions, feature = "debug_borrows"))]
+            borrow,
+            ..
+        } = _self;
+        Ref::filter_map(inner, f).ok().map(|inner| GenerationalRef {
+            inner,
+            #[cfg(any(debug_assertions, feature = "debug_borrows"))]
+            borrow,
+        })
+    }
+
+    fn try_map_mut<I, U: ?Sized + 'static>(
+        mut_ref: Self::Mut<I>,
+        f: impl FnOnce(&mut I) -> Option<&mut U>,
+    ) -> Option<Self::Mut<U>> {
+        let GenerationalRefMut {
+            inner,
+            #[cfg(any(debug_assertions, feature = "debug_borrows"))]
+            borrow,
+            ..
+        } = mut_ref;
+        RefMut::filter_map(inner, f)
+            .ok()
+            .map(|inner| GenerationalRefMut {
+                inner,
+                #[cfg(any(debug_assertions, feature = "debug_borrows"))]
+                borrow: GenerationalRefMutBorrowInfo {
+                    borrowed_from: borrow.borrowed_from,
+                },
+            })
     }
 }
 

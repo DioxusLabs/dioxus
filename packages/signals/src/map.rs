@@ -2,7 +2,6 @@ use crate::CopyValue;
 use crate::Signal;
 use crate::SignalData;
 use dioxus_core::ScopeId;
-use generational_box::Mappable;
 use generational_box::Storage;
 use std::fmt::Debug;
 use std::fmt::Display;
@@ -18,19 +17,10 @@ impl MappedSignal<()> {
     pub fn new<T, S: Storage<SignalData<T>>, U: ?Sized>(
         signal: Signal<T, S>,
         mapping: impl Fn(&T) -> &U + 'static,
-    ) -> MappedSignal<
-        <<<S as generational_box::Storage<SignalData<T>>>::Ref as Mappable<SignalData<T>>>::Mapped<
-            T,
-        > as generational_box::Mappable<T>>::Mapped<U>,
-    > {
+    ) -> MappedSignal<S::Ref<U>> {
         MappedSignal {
             origin_scope: signal.origin_scope(),
-            mapping: CopyValue::new(Box::new(move || {
-                <<<S as Storage<SignalData<T>>>::Ref as Mappable<SignalData<T>>>::Mapped<T>>::map(
-                    signal.read(),
-                    &mapping,
-                )
-            })),
+            mapping: CopyValue::new(Box::new(move || S::map(signal.read(), &mapping))),
         }
     }
 }

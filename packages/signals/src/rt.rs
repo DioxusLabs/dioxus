@@ -142,19 +142,19 @@ impl<T: 'static, S: Storage<T>> CopyValue<T, S> {
 
     /// Try to read the value. If the value has been dropped, this will return None.
     #[track_caller]
-    pub fn try_read(&self) -> Result<S::Ref, generational_box::BorrowError> {
+    pub fn try_read(&self) -> Result<S::Ref<T>, generational_box::BorrowError> {
         self.value.try_read()
     }
 
     /// Read the value. If the value has been dropped, this will panic.
     #[track_caller]
-    pub fn read(&self) -> S::Ref {
+    pub fn read(&self) -> S::Ref<T> {
         self.value.read()
     }
 
     /// Try to write the value. If the value has been dropped, this will return None.
     #[track_caller]
-    pub fn try_write(&mut self) -> Result<S::Mut, generational_box::BorrowMutError> {
+    pub fn try_write(&mut self) -> Result<S::Mut<T>, generational_box::BorrowMutError> {
         self.value.try_write()
     }
 
@@ -162,13 +162,13 @@ impl<T: 'static, S: Storage<T>> CopyValue<T, S> {
     ///
     /// Note: This is completely safe because the value is stored in a generational box. The lifetime that normally is passed to the returned reference is only used as a hint to user to prevent runtime overlapping borrow panics.
     #[track_caller]
-    pub fn write_unchecked(&self) -> S::Mut {
+    pub fn write_unchecked(&self) -> S::Mut<T> {
         self.value.write()
     }
 
     /// Write the value. If the value has been dropped, this will panic.
     #[track_caller]
-    pub fn write(&self) -> S::Mut {
+    pub fn write(&self) -> S::Mut<T> {
         self.value.write()
     }
 

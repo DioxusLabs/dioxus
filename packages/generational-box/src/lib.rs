@@ -226,7 +226,7 @@ impl<T: 'static, S: Storage<T>> GenerationalBox<T, S> {
 
     /// Try to read the value. Returns None if the value is no longer valid.
     #[track_caller]
-    pub fn try_read(&self) -> Result<S::Ref, BorrowError> {
+    pub fn try_read(&self) -> Result<S::Ref<T>, BorrowError> {
         if !self.validate() {
             return Err(BorrowError::Dropped(ValueDroppedError {
                 #[cfg(any(debug_assertions, feature = "debug_borrows"))]
@@ -258,13 +258,13 @@ impl<T: 'static, S: Storage<T>> GenerationalBox<T, S> {
 
     /// Read the value. Panics if the value is no longer valid.
     #[track_caller]
-    pub fn read(&self) -> S::Ref {
+    pub fn read(&self) -> S::Ref<T> {
         self.try_read().unwrap()
     }
 
     /// Try to write the value. Returns None if the value is no longer valid.
     #[track_caller]
-    pub fn try_write(&self) -> Result<S::Mut, BorrowMutError> {
+    pub fn try_write(&self) -> Result<S::Mut<T>, BorrowMutError> {
         if !self.validate() {
             return Err(BorrowMutError::Dropped(ValueDroppedError {
                 #[cfg(any(debug_assertions, feature = "debug_borrows"))]
@@ -292,7 +292,7 @@ impl<T: 'static, S: Storage<T>> GenerationalBox<T, S> {
 
     /// Write the value. Panics if the value is no longer valid.
     #[track_caller]
-    pub fn write(&self) -> S::Mut {
+    pub fn write(&self) -> S::Mut<T> {
         self.try_write().unwrap()
     }
 
@@ -325,42 +325,37 @@ impl<T, S> Clone for GenerationalBox<T, S> {
     }
 }
 
-/// A trait for types that can be mapped.
-pub trait Mappable<T: ?Sized>: Deref<Target = T> {
-    /// The type after the mapping.
-    type Mapped<U: ?Sized + 'static>: Mappable<U> + Deref<Target = U>;
-
-    /// Map the value.
-    fn map<U: ?Sized + 'static>(_self: Self, f: impl FnOnce(&T) -> &U) -> Self::Mapped<U>;
-
-    /// Try to map the value.
-    fn try_map<U: ?Sized + 'static>(
-        _self: Self,
-        f: impl FnOnce(&T) -> Option<&U>,
-    ) -> Option<Self::Mapped<U>>;
-}
-
-/// A trait for types that can be mapped mutably.
-pub trait MappableMut<T: ?Sized>: DerefMut<Target = T> {
-    /// The type after the mapping.
-    type Mapped<U: ?Sized + 'static>: MappableMut<U> + DerefMut<Target = U>;
-
-    /// Map the value.
-    fn map<U: ?Sized + 'static>(_self: Self, f: impl FnOnce(&mut T) -> &mut U) -> Self::Mapped<U>;
-
-    /// Try to map the value.
-    fn try_map<U: ?Sized + 'static>(
-        _self: Self,
-        f: impl FnOnce(&mut T) -> Option<&mut U>,
-    ) -> Option<Self::Mapped<U>>;
-}
-
 /// A trait for a storage backing type. (RefCell, RwLock, etc.)
-pub trait Storage<Data>: AnyStorage + 'static {
+pub trait Storage<Data = ()>: AnyStorage + 'static {
     /// The reference this storage type returns.
-    type Ref: Mappable<Data> + Deref<Target = Data>;
+    type Ref<T: ?Sized + 'static>: Deref<Target = T>;
     /// The mutable reference this storage type returns.
-    type Mut: MappableMut<Data> + DerefMut<Target = Data>;
+    type Mut<T: ?Sized + 'static>: DerefMut<Target = T>;
+
+    /// Try to map the mutable ref.
+    fn try_map_mut<T, U: ?Sized + 'static>(
+        mut_ref: Self::Mut<T>,
+        f: impl FnOnce(&mut T) -> Option<&mut U>,
+    ) -> Option<Self::Mut<U>>;
+
+    /// Map the mutable ref.
+    fn map_mut<T, U: ?Sized + 'static>(
+        mut_ref: Self::Mut<T>,
+        f: impl FnOnce(&mut T) -> &mut U,
+    ) -> Self::Mut<U> {
+        Self::try_map_mut(mut_ref, |v| Some(f(v))).unwrap()
+    }
+
+    /// Try to map the ref.
+    fn try_map<T, U: ?Sized + 'static>(
+        ref_: Self::Ref<T>,
+        f: impl FnOnce(&T) -> Option<&U>,
+    ) -> Option<Self::Ref<U>>;
+
+    /// Map the ref.
+    fn map<T, U: ?Sized + 'static>(ref_: Self::Ref<T>, f: impl FnOnce(&T) -> &U) -> Self::Ref<U> {
+        Self::try_map(ref_, |v| Some(f(v))).unwrap()
+    }
 
     /// Try to read the value. Returns None if the value is no longer valid.
     fn try_read(
@@ -368,7 +363,7 @@ pub trait Storage<Data>: AnyStorage + 'static {
         #[cfg(any(debug_assertions, feature = "debug_ownership"))]
         created_at: &'static std::panic::Location<'static>,
         #[cfg(any(debug_assertions, feature = "debug_ownership"))] at: GenerationalRefBorrowInfo,
-    ) -> Result<Self::Ref, BorrowError>;
+    ) -> Result<Self::Ref<Data>, BorrowError>;
 
     /// Try to write the value. Returns None if the value is no longer valid.
     fn try_write(
@@ -376,7 +371,7 @@ pub trait Storage<Data>: AnyStorage + 'static {
         #[cfg(any(debug_assertions, feature = "debug_ownership"))]
         created_at: &'static std::panic::Location<'static>,
         #[cfg(any(debug_assertions, feature = "debug_ownership"))] at: GenerationalRefMutBorrowInfo,
-    ) -> Result<Self::Mut, BorrowMutError>;
+    ) -> Result<Self::Mut<Data>, BorrowMutError>;
 
     /// Set the value
     fn set(&'static self, value: Data);

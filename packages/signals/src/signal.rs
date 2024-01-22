@@ -15,9 +15,7 @@ use dioxus_core::{
     },
     ScopeId,
 };
-use generational_box::{
-    GenerationalBoxId, Mappable, MappableMut, Storage, SyncStorage, UnsyncStorage,
-};
+use generational_box::{GenerationalBoxId, Storage, SyncStorage, UnsyncStorage};
 use parking_lot::RwLock;
 
 use crate::{get_effect_ref, CopyValue, EffectStackRef, EFFECT_STACK};
@@ -358,9 +356,7 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
     ///
     /// If the signal has been dropped, this will panic.
     #[track_caller]
-    pub fn read(
-        &self,
-    ) -> <<S as Storage<SignalData<T>>>::Ref as Mappable<SignalData<T>>>::Mapped<T> {
+    pub fn read(&self) -> S::Ref<T> {
         let inner = self.inner.read();
         if let Some(effect) = EFFECT_STACK.with(|stack| stack.current()) {
             let subscribers = inner.subscribers.read();
@@ -387,27 +383,22 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
                 }
             }
         }
-        S::Ref::map(inner, |v| &v.value)
+        S::map(inner, |v| &v.value)
     }
 
     /// Get the current value of the signal. **Unlike read, this will not subscribe the current scope to the signal which can cause parts of your UI to not update.**
     ///
     /// If the signal has been dropped, this will panic.
-    pub fn peek(
-        &self,
-    ) -> <<S as Storage<SignalData<T>>>::Ref as Mappable<SignalData<T>>>::Mapped<T> {
+    pub fn peek(&self) -> S::Ref<T> {
         let inner = self.inner.read();
-        S::Ref::map(inner, |v| &v.value)
+        S::map(inner, |v| &v.value)
     }
 
     /// Get a mutable reference to the signal's value.
     ///
     /// If the signal has been dropped, this will panic.
     #[track_caller]
-    pub fn write<'a>(
-        &'a mut self,
-    ) -> Write<T, <<S as Storage<SignalData<T>>>::Mut as MappableMut<SignalData<T>>>::Mapped<T>, S>
-    {
+    pub fn write<'a>(&'a mut self) -> Write<T, S> {
         self.write_unchecked()
     }
 
@@ -415,12 +406,9 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
     ///
     /// This is public since it's useful in many scenarios, but we generally recommend mutation through [`Self::write`] instead.
     #[track_caller]
-    pub fn write_unchecked(
-        &self,
-    ) -> Write<T, <<S as Storage<SignalData<T>>>::Mut as MappableMut<SignalData<T>>>::Mapped<T>, S>
-    {
+    pub fn write_unchecked(&self) -> Write<T, S> {
         let inner = self.inner.write();
-        let borrow = S::Mut::map(inner, |v| &mut v.value);
+        let borrow = S::map_mut(inner, |v| &mut v.value);
         Write {
             write: borrow,
             signal: SignalSubscriberDrop { signal: *self },
@@ -489,14 +477,7 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
     }
 
     /// Map the signal to a new type.
-    pub fn map<O>(
-        self,
-        f: impl Fn(&T) -> &O + 'static,
-    ) -> MappedSignal<
-        <<<S as generational_box::Storage<SignalData<T>>>::Ref as generational_box::Mappable<
-            SignalData<T>,
-        >>::Mapped<T> as generational_box::Mappable<T>>::Mapped<O>,
-    > {
+    pub fn map<O>(self, f: impl Fn(&T) -> &O + 'static) -> MappedSignal<S::Ref<O>> {
         MappedSignal::new(self, f)
     }
 
@@ -589,23 +570,18 @@ impl<T: 'static, S: Storage<SignalData<T>>> Drop for SignalSubscriberDrop<T, S> 
 /// B is the dynamically checked type of the write (RefMut)
 /// S is the storage type of the signal
 /// I is the type of the original signal
-pub struct Write<
-    T: 'static,
-    B: MappableMut<T>,
-    S: Storage<SignalData<I>> = UnsyncStorage,
-    I: 'static = T,
-> {
-    write: B,
+pub struct Write<T: 'static, S: Storage<SignalData<I>> = UnsyncStorage, I: 'static = T> {
+    write: S::Mut<T>,
     signal: SignalSubscriberDrop<I, S>,
     phantom: std::marker::PhantomData<T>,
 }
 
-impl<T: 'static, B: MappableMut<T>, S: Storage<SignalData<I>>, I: 'static> Write<T, B, S, I> {
+impl<T: 'static, S: Storage<SignalData<I>>, I: 'static> Write<T, S, I> {
     /// Map the mutable reference to the signal's value to a new type.
-    pub fn map<O>(myself: Self, f: impl FnOnce(&mut T) -> &mut O) -> Write<O, B::Mapped<O>, S, I> {
+    pub fn map<O>(myself: Self, f: impl FnOnce(&mut T) -> &mut O) -> Write<O, S, I> {
         let Self { write, signal, .. } = myself;
         Write {
-            write: B::map(write, f),
+            write: S::map_mut(write, f),
             signal,
             phantom: std::marker::PhantomData,
         }
@@ -615,9 +591,9 @@ impl<T: 'static, B: MappableMut<T>, S: Storage<SignalData<I>>, I: 'static> Write
     pub fn filter_map<O>(
         myself: Self,
         f: impl FnOnce(&mut T) -> Option<&mut O>,
-    ) -> Option<Write<O, B::Mapped<O>, S, I>> {
+    ) -> Option<Write<O, S, I>> {
         let Self { write, signal, .. } = myself;
-        let write = B::try_map(write, f);
+        let write = S::try_map_mut(write, f);
         write.map(|write| Write {
             write,
             signal,
@@ -626,9 +602,7 @@ impl<T: 'static, B: MappableMut<T>, S: Storage<SignalData<I>>, I: 'static> Write
     }
 }
 
-impl<T: 'static, B: MappableMut<T>, S: Storage<SignalData<I>>, I: 'static> Deref
-    for Write<T, B, S, I>
-{
+impl<T: 'static, S: Storage<SignalData<I>>, I: 'static> Deref for Write<T, S, I> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -636,7 +610,7 @@ impl<T: 'static, B: MappableMut<T>, S: Storage<SignalData<I>>, I: 'static> Deref
     }
 }
 
-impl<T, B: MappableMut<T>, S: Storage<SignalData<I>>, I> DerefMut for Write<T, B, S, I> {
+impl<T, S: Storage<SignalData<I>>, I> DerefMut for Write<T, S, I> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.write
     }
@@ -677,18 +651,14 @@ impl<T: 'static, S: Storage<SignalData<T>>> ReadOnlySignal<T, S> {
     ///
     /// If the signal has been dropped, this will panic.
     #[track_caller]
-    pub fn read(
-        &self,
-    ) -> <<S as Storage<SignalData<T>>>::Ref as Mappable<SignalData<T>>>::Mapped<T> {
+    pub fn read(&self) -> S::Ref<T> {
         self.inner.read()
     }
 
     /// Get the current value of the signal. **Unlike read, this will not subscribe the current scope to the signal which can cause parts of your UI to not update.**
     ///
     /// If the signal has been dropped, this will panic.
-    pub fn peek(
-        &self,
-    ) -> <<S as Storage<SignalData<T>>>::Ref as Mappable<SignalData<T>>>::Mapped<T> {
+    pub fn peek(&self) -> S::Ref<T> {
         self.inner.peek()
     }
 

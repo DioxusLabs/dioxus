@@ -1,10 +1,10 @@
 use dioxus_core::prelude::{
     provide_root_context, try_consume_context, IntoAttributeValue, ScopeId,
 };
-use generational_box::{GenerationalRef, GenerationalRefMut};
+use generational_box::GenerationalRef;
 use std::{
     any::Any,
-    cell::{Ref, RefCell, RefMut},
+    cell::{Ref, RefCell},
     collections::HashMap,
     mem::MaybeUninit,
     ops::Deref,
@@ -48,7 +48,7 @@ impl<T: 'static> GlobalSignal<T> {
         let read = context.signal.borrow();
 
         match read.get(&key) {
-            Some(signal) => signal.downcast_ref::<Signal<T>>().unwrap().clone(),
+            Some(signal) => *signal.downcast_ref::<Signal<T>>().unwrap(),
             None => {
                 drop(read);
 
@@ -74,14 +74,14 @@ impl<T: 'static> GlobalSignal<T> {
     ///
     /// If the signal has been dropped, this will panic.
     #[track_caller]
-    pub fn read(&self) -> GenerationalRef<T, Ref<'static, T>> {
+    pub fn read(&self) -> GenerationalRef<Ref<'static, T>> {
         self.signal().read()
     }
 
     /// Get the current value of the signal. **Unlike read, this will not subscribe the current scope to the signal which can cause parts of your UI to not update.**
     ///
     /// If the signal has been dropped, this will panic.
-    pub fn peek(&self) -> GenerationalRef<T, Ref<'static, T>> {
+    pub fn peek(&self) -> GenerationalRef<Ref<'static, T>> {
         self.signal().peek()
     }
 
@@ -89,7 +89,7 @@ impl<T: 'static> GlobalSignal<T> {
     ///
     /// If the signal has been dropped, this will panic.
     #[track_caller]
-    pub fn write(&self) -> Write<T, GenerationalRefMut<T, RefMut<'static, T>>> {
+    pub fn write(&self) -> Write<T> {
         self.signal().write()
     }
 
@@ -123,7 +123,7 @@ impl<T: 'static> GlobalSignal<T> {
     pub fn map<O>(
         &self,
         f: impl Fn(&T) -> &O + 'static,
-    ) -> MappedSignal<GenerationalRef<O, Ref<'static, O>>> {
+    ) -> MappedSignal<GenerationalRef<Ref<'static, O>>> {
         MappedSignal::new(self.signal(), f)
     }
 
@@ -242,14 +242,14 @@ impl<T: PartialEq + 'static> GlobalMemo<T> {
     ///
     /// If the signal has been dropped, this will panic.
     #[track_caller]
-    pub fn read(&self) -> GenerationalRef<T, Ref<'static, T>> {
+    pub fn read(&self) -> GenerationalRef<Ref<'static, T>> {
         self.signal().read()
     }
 
     /// Get the current value of the signal. **Unlike read, this will not subscribe the current scope to the signal which can cause parts of your UI to not update.**
     ///
     /// If the signal has been dropped, this will panic.
-    pub fn peek(&self) -> GenerationalRef<T, Ref<'static, T>> {
+    pub fn peek(&self) -> GenerationalRef<Ref<'static, T>> {
         self.signal().peek()
     }
 
