@@ -170,13 +170,13 @@ pub fn launch(app: fn() -> Element) {
     LaunchBuilder::new().launch(app)
 }
 
-#[cfg(all(feature = "web"))]
+#[cfg(feature = "web")]
 /// Launch your web application without any additional configuration. See [`LaunchBuilder`] for more options.
 pub fn launch_web(app: fn() -> Element) {
     LaunchBuilder::web().launch(app)
 }
 
-#[cfg(all(feature = "desktop"))]
+#[cfg(feature = "desktop")]
 /// Launch your desktop application without any additional configuration. See [`LaunchBuilder`] for more options.
 pub fn launch_desktop(app: fn() -> Element) {
     LaunchBuilder::desktop().launch(app)

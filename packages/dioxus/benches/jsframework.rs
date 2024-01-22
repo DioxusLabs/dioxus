@@ -19,6 +19,7 @@
 
 use criterion::{criterion_group, criterion_main, Criterion};
 use dioxus::prelude::*;
+use dioxus_core::NoOpMutations;
 use rand::prelude::*;
 
 criterion_group!(mbenches, create_rows);
@@ -30,8 +31,7 @@ fn create_rows(c: &mut Criterion) {
         let _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
 
         b.iter(|| {
-            let g = dom.rebuild(&mut ());
-            assert!(g.edits.len() > 1);
+            dom.rebuild(&mut NoOpMutations);
         })
     });
 }
