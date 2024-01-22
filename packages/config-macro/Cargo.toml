@@ -20,6 +20,7 @@ quote = "1.0"
 default = []
 fullstack = []
 desktop = []
+mobile = []
 web = []
 ssr = []
 liveview = []

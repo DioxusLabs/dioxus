@@ -20,6 +20,9 @@ pub struct Config {
 
     #[cfg(feature = "desktop")]
     pub(crate) desktop_cfg: dioxus_desktop::Config,
+
+    #[cfg(feature = "mobile")]
+    pub(crate) mobile_cfg: dioxus_mobile::Config,
 }
 
 #[allow(clippy::derivable_impls)]
@@ -36,6 +39,8 @@ impl Default for Config {
             web_cfg: dioxus_web::Config::default(),
             #[cfg(feature = "desktop")]
             desktop_cfg: dioxus_desktop::Config::default(),
+            #[cfg(feature = "mobile")]
+            mobile_cfg: dioxus_mobile::Config::default(),
         }
     }
 }
@@ -92,6 +97,12 @@ impl Config {
         }
     }
 
+    /// Set the mobile config.
+    #[cfg(feature = "mobile")]
+    pub fn mobile_cfg(self, mobile_cfg: dioxus_mobile::Config) -> Self {
+        Self { mobile_cfg, ..self }
+    }
+
     #[cfg(feature = "ssr")]
     /// Launch a server application
     pub async fn launch_server(
@@ -110,7 +121,7 @@ impl Config {
 
             let ssr_state = SSRState::new(&cfg);
             let router = axum::Router::new().register_server_fns(server_fn_route);
-            #[cfg(not(feature = "desktop"))]
+            #[cfg(not(any(feature = "desktop", feature = "mobile")))]
             let router = router
                 .serve_static_assets(cfg.assets_path)
                 .connect_hot_reload()
@@ -132,7 +143,7 @@ impl Config {
             use warp::Filter;
             // First register the server functions
             let router = register_server_fns(server_fn_route);
-            #[cfg(not(feature = "desktop"))]
+            #[cfg(not(any(feature = "desktop", feature = "mobile")))]
             let router = {
                 // Serve the dist folder and the index.html file
                 let serve_dir = warp::fs::dir(cfg.assets_path);
@@ -159,7 +170,7 @@ impl Config {
             use crate::adapters::salvo_adapter::{DioxusRouterExt, SSRHandler};
             use salvo::conn::Listener;
             let router = salvo::Router::new().register_server_fns(server_fn_route);
-            #[cfg(not(feature = "desktop"))]
+            #[cfg(not(any(feature = "desktop", feature = "mobile")))]
             let router = router
                 .serve_static_assets(cfg.assets_path)
                 .connect_hot_reload()

@@ -153,10 +153,26 @@ mod current_platform {
     #[cfg(all(feature = "web", not(any(feature = "desktop", feature = "fullstack"))))]
     pub use dioxus_web::launch::*;
 
-    #[cfg(not(any(feature = "desktop", feature = "web", feature = "fullstack")))]
+    #[cfg(all(
+        feature = "tui",
+        not(any(feature = "web", feature = "desktop", feature = "fullstack"))
+    ))]
+    pub use dioxus_tui::launch::*;
+
+    #[cfg(not(any(
+        feature = "desktop",
+        feature = "web",
+        feature = "tui",
+        feature = "fullstack"
+    )))]
     pub type Config = ();
 
-    #[cfg(not(any(feature = "desktop", feature = "web", feature = "fullstack")))]
+    #[cfg(not(any(
+        feature = "desktop",
+        feature = "web",
+        feature = "tui",
+        feature = "fullstack"
+    )))]
     pub fn launch(
         root: fn() -> dioxus_core::Element,
         contexts: Vec<Box<super::ValidContext>>,

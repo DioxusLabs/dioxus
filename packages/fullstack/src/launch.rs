@@ -41,5 +41,11 @@ pub fn launch(
             let cfg = platform_config.desktop_cfg;
             dioxus_desktop::launch::launch_virtual_dom(virtual_dom_factory(), cfg)
         }
+
+        #[cfg(feature = "mobile")]
+        {
+            let cfg = platform_config.mobile_cfg;
+            dioxus_mobile::launch::launch_virtual_dom(virtual_dom_factory(), cfg)
+        }
     }
 }

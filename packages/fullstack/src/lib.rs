@@ -71,3 +71,6 @@ compile_error!("The `ssr` feature (enabled by `warp`, `axum`, or `salvo`) and `w
 
 #[cfg(all(feature = "ssr", feature = "desktop", not(doc)))]
 compile_error!("The `ssr` feature (enabled by `warp`, `axum`, or `salvo`) and `desktop` feature are overlapping. Please choose one or the other.");
+
+#[cfg(all(feature = "ssr", feature = "mobile", not(doc)))]
+compile_error!("The `ssr` feature (enabled by `warp`, `axum`, or `salvo`) and `mobile` feature are overlapping. Please choose one or the other.");

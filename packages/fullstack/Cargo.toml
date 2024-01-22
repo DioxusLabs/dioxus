@@ -39,6 +39,9 @@ dioxus-web = { workspace = true, features = ["hydrate"], optional = true }
 # Desktop Integration
 dioxus-desktop = { workspace = true, optional = true }
 
+# Mobile Integration
+dioxus-mobile = { workspace = true, optional = true }
+
 tracing = { workspace = true }
 tracing-futures = { workspace = true, optional = true }
 once_cell = "1.17.1"
@@ -70,6 +73,7 @@ default = ["hot-reload"]
 hot-reload = ["serde_json", "futures-util"]
 web = ["dioxus-web", "web-sys"]
 desktop = ["dioxus-desktop"]
+mobile = ["dioxus-mobile"]
 warp = ["dep:warp", "ssr"]
 axum = ["dep:axum", "tower-http", "ssr"]
 salvo = ["dep:salvo", "ssr", "http-body-util"]
