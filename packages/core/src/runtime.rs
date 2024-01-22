@@ -62,10 +62,27 @@ impl Runtime {
         contexts[id.0] = Some(context);
     }
 
-    pub(crate) fn remove_context(&self, id: ScopeId) {
-        if let Some(_scope) = self.scope_contexts.borrow_mut()[id.0].take() {
-            // todo: some cleanup work
+    pub(crate) fn remove_context(self: &Rc<Self>, id: ScopeId) {
+        {
+            let borrow = self.scope_contexts.borrow();
+            if let Some(scope) = &borrow[id.0] {
+                let _runtime_guard = RuntimeGuard::new(self.clone());
+                // Manually drop tasks, hooks, and contexts inside of the runtime
+                self.on_scope(id, || {
+                    // Drop all spawned tasks
+                    for id in scope.spawned_tasks.take() {
+                        self.remove_task(id);
+                    }
+
+                    // Drop all hooks
+                    scope.hooks.take();
+
+                    // Drop all contexts
+                    scope.shared_contexts.take();
+                });
+            }
         }
+        self.scope_contexts.borrow_mut()[id.0].take();
     }
 
     /// Get the current scope id
@@ -75,7 +92,7 @@ impl Runtime {
 
     /// Call this function with the current scope set to the given scope
     ///
-    /// Useful in a limited number of scenarios, not public.
+    /// Useful in a limited number of scenarios
     pub fn on_scope<O>(&self, id: ScopeId, f: impl FnOnce() -> O) -> O {
         self.scope_stack.borrow_mut().push(id);
         let o = f();

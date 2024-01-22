@@ -41,6 +41,7 @@ fn contexts_drop() {
         }
     }
 
+    #[allow(non_snake_case)]
     fn ChildComp() -> Element {
         let el = consume_context::<String>();
 

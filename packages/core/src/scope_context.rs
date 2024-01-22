@@ -300,17 +300,6 @@ impl ScopeContext {
     }
 }
 
-impl Drop for ScopeContext {
-    fn drop(&mut self) {
-        // Drop all spawned tasks
-        _ = Runtime::with(|rt| {
-            for id in self.spawned_tasks.borrow().iter() {
-                rt.remove_task(*id);
-            }
-        })
-    }
-}
-
 impl ScopeId {
     /// Get the current scope id
     pub fn current_scope_id(self) -> Option<ScopeId> {
