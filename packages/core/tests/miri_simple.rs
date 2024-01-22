@@ -127,9 +127,11 @@ fn hooks_drop_before_contexts() {
 
             impl Drop for ReadsContextOnDrop {
                 fn drop(&mut self) {
-                    let _ = consume_context::<i32>();
+                    assert_eq!(123, consume_context::<i32>());
                 }
             }
+
+            ReadsContextOnDrop
         });
 
         rsx! { div {} }
