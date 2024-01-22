@@ -1,5 +1,5 @@
 use dioxus::prelude::*;
-use dioxus_liveview::adapters::warp_adapter::warp_socket;
+use dioxus_liveview::warp_adapter::warp_socket;
 use dioxus_liveview::LiveViewPool;
 use std::net::SocketAddr;
 use warp::ws::Ws;

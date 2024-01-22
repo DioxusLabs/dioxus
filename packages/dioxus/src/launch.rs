@@ -17,10 +17,10 @@ pub struct LaunchBuilder<Cfg: 'static = (), ContextFn: ?Sized = ValidContext> {
 
 pub type LaunchFn<Cfg, Context> = fn(fn() -> Element, Vec<Box<Context>>, Cfg);
 
-#[cfg(feature = "fullstack")]
+#[cfg(any(feature = "fullstack", feature = "liveview"))]
 type ValidContext = SendContext;
 
-#[cfg(not(feature = "fullstack"))]
+#[cfg(not(any(feature = "fullstack", feature = "liveview")))]
 type ValidContext = UnsendContext;
 
 type SendContext = dyn Fn() -> Box<dyn Any> + Send + Sync + 'static;
@@ -154,12 +154,24 @@ mod current_platform {
     pub use dioxus_web::launch::*;
 
     #[cfg(all(
-        feature = "tui",
+        feature = "liveview",
         not(any(feature = "web", feature = "desktop", feature = "fullstack"))
+    ))]
+    pub use dioxus_liveview::launch::*;
+
+    #[cfg(all(
+        feature = "tui",
+        not(any(
+            feature = "liveview",
+            feature = "web",
+            feature = "desktop",
+            feature = "fullstack"
+        ))
     ))]
     pub use dioxus_tui::launch::*;
 
     #[cfg(not(any(
+        feature = "liveview",
         feature = "desktop",
         feature = "web",
         feature = "tui",
@@ -168,6 +180,7 @@ mod current_platform {
     pub type Config = ();
 
     #[cfg(not(any(
+        feature = "liveview",
         feature = "desktop",
         feature = "web",
         feature = "tui",
@@ -176,7 +189,7 @@ mod current_platform {
     pub fn launch(
         root: fn() -> dioxus_core::Element,
         contexts: Vec<Box<super::ValidContext>>,
-        platform_config: Config,
+        platform_config: (),
     ) {
     }
 }

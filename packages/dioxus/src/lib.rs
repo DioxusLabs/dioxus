@@ -22,9 +22,6 @@ pub mod events {
 pub use dioxus_html as html;
 
 #[cfg(feature = "macro")]
-pub use dioxus_rsx as rsx;
-
-#[cfg(feature = "macro")]
 pub use dioxus_core_macro as core_macro;
 
 pub mod prelude {

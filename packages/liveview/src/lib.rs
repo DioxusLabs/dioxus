@@ -2,29 +2,7 @@
 #![doc(html_logo_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
 
-pub mod adapters {
-    #[cfg(feature = "warp")]
-    pub mod warp_adapter;
-    #[cfg(feature = "warp")]
-    pub use warp_adapter::*;
-
-    #[cfg(feature = "axum")]
-    pub mod axum_adapter;
-    #[cfg(feature = "axum")]
-    pub use axum_adapter::*;
-
-    #[cfg(feature = "salvo")]
-    pub mod salvo_adapter;
-
-    #[cfg(feature = "salvo")]
-    pub use salvo_adapter::*;
-
-    #[cfg(feature = "rocket")]
-    pub mod rocket_adapter;
-    #[cfg(feature = "rocket")]
-    pub use rocket_adapter::*;
-}
-
+mod adapters;
 #[allow(unused_imports)]
 pub use adapters::*;
 
@@ -33,8 +11,11 @@ pub mod pool;
 mod query;
 use futures_util::{SinkExt, StreamExt};
 pub use pool::*;
+mod config;
 mod eval;
 mod events;
+pub use config::*;
+pub mod launch;
 
 pub trait WebsocketTx: SinkExt<String, Error = LiveViewError> {}
 impl<T> WebsocketTx for T where T: SinkExt<String, Error = LiveViewError> {}

@@ -72,7 +72,7 @@ macro_rules! default_history {
             );
             // If we are not on wasm32 and the liveview feature is enabled, use the liveview history.
             #[cfg(all(feature = "liveview"))]
-            return Box::new(AnyHistoryProviderImplWrapper::new(LiveviewHistory::new($initial_route)));
+            return Box::new(AnyHistoryProviderImplWrapper::new(LiveviewHistory::new_with_initial_path($initial_route)));
             // Otherwise use the memory history.
             #[cfg(all(
                 not(all(target_arch = "wasm32", feature = "web")),

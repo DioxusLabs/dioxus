@@ -21,5 +21,5 @@ fn transform_rx(message: Result<Message, warp::Error>) -> Result<Vec<u8>, LiveVi
 }
 
 async fn transform_tx(message: Vec<u8>) -> Result<Message, warp::Error> {
-    Ok(Message::text(String::from_utf8_lossy(&message).to_string()))
+    Ok(Message::binary(message))
 }

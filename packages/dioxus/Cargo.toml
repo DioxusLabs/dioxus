@@ -16,7 +16,6 @@ dioxus-html = { workspace = true, optional = true }
 dioxus-core-macro = { workspace = true, optional = true }
 dioxus-config-macro = { workspace = true, optional = true }
 dioxus-hooks = { workspace = true, optional = true }
-dioxus-rsx = { workspace = true, optional = true }
 dioxus-signals = { workspace = true, optional = true }
 dioxus-router = { workspace = true, optional = true }
 dioxus-web = { workspace = true, optional = true }
@@ -35,7 +34,7 @@ dioxus-hot-reload = { workspace = true, optional = true }
 [features]
 default = ["macro", "html", "hot-reload", "signals", "hooks", "launch"]
 signals = ["dioxus-signals"]
-macro = ["dioxus-core-macro", "dioxus-rsx"]
+macro = ["dioxus-core-macro"]
 html = ["dioxus-html"]
 hooks = ["dioxus-hooks"]
 hot-reload = ["dioxus-hot-reload"]
@@ -51,9 +50,10 @@ web = ["dioxus-web", "dioxus-fullstack?/web", "dioxus-config-macro/web", "dioxus
 server = ["dioxus-fullstack?/ssr", "dioxus-config-macro/ssr", "dioxus-router?/ssr"]
 ssr = ["dioxus-ssr"]
 liveview = ["dioxus-liveview", "dioxus-config-macro/liveview", "dioxus-router?/liveview"]
-axum = ["dioxus-fullstack?/axum"]
-salvo = ["dioxus-fullstack?/salvo"]
-warp = ["dioxus-fullstack?/warp"]
+axum = ["dioxus-fullstack?/axum", "dioxus-liveview?/axum"]
+salvo = ["dioxus-fullstack?/salvo", "dioxus-liveview?/salvo"]
+warp = ["dioxus-fullstack?/warp", "dioxus-liveview?/warp"]
+rocket = ["dioxus-liveview?/rocket"]
 tui = ["dioxus-tui", "dioxus-config-macro/tui"]
 
 [dev-dependencies]

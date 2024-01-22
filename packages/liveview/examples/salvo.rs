@@ -36,7 +36,7 @@ async fn main() {
 }
 
 #[handler]
-fn index(_depot: &mut Depot, res: &mut Response) {
+fn index(res: &mut Response) {
     let addr: SocketAddr = ([127, 0, 0, 1], 3030).into();
     res.render(Text::Html(format!(
         r#"
