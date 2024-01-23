@@ -2,7 +2,6 @@
 #![warn(missing_docs)]
 
 use parking_lot::Mutex;
-use std::sync::atomic::AtomicU32;
 use std::{
     fmt::Debug,
     marker::PhantomData,
@@ -61,7 +60,7 @@ impl<T: 'static, S: AnyStorage> Debug for GenerationalBox<T, S> {
             self.generation
         ))?;
         #[cfg(not(any(debug_assertions, feature = "check_generation")))]
-        f.write_fmt(format_args!("{:?}", self.raw.0.data.as_ptr()))?;
+        f.write_fmt(format_args!("{:?}", self.raw.0.data.data_ptr()))?;
         Ok(())
     }
 }
@@ -183,7 +182,7 @@ impl<T: 'static, S: Storage<T>> GenerationalBox<T, S> {
         }
         #[cfg(not(any(debug_assertions, feature = "check_generation")))]
         {
-            self.raw.data.as_ptr() == other.raw.data.as_ptr()
+            self.raw.0.data.data_ptr() == other.raw.0.data.data_ptr()
         }
     }
 }
@@ -313,7 +312,7 @@ struct MemoryLocationInner<S = UnsyncStorage> {
     data: S,
 
     #[cfg(any(debug_assertions, feature = "check_generation"))]
-    generation: AtomicU32,
+    generation: std::sync::atomic::AtomicU32,
 
     #[cfg(any(debug_assertions, feature = "debug_borrows"))]
     borrow: MemoryLocationBorrowInfo,
