@@ -57,7 +57,7 @@ impl Drop for GenerationalRefBorrowInfo {
         self.borrowed_from
             .borrowed_at
             .write()
-            .retain(|location| std::ptr::eq(*location, self.borrowed_at as *const _));
+            .retain(|location| !std::ptr::eq(*location, self.borrowed_at as *const _));
     }
 }
 
