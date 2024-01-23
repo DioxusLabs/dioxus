@@ -762,7 +762,11 @@ impl VirtualDom {
 
 impl Drop for VirtualDom {
     fn drop(&mut self) {
-        // Simply drop this scope which drops all of its children
-        self.drop_scope(ScopeId::ROOT);
+        // Drop all scopes in order of height
+        let mut scopes = self.scopes.drain().collect::<Vec<_>>();
+        scopes.sort_by_key(|scope| scope.context().height);
+        for scope in scopes.into_iter().rev() {
+            drop(scope);
+        }
     }
 }

@@ -64,7 +64,7 @@ impl VirtualDom {
         self.elements.try_remove(el.0).map(|_| ())
     }
 
-    // Drop a scope and all its children
+    // Drop a scope without dropping its children
     //
     // Note: This will not remove any ids from the arena
     pub(crate) fn drop_scope(&mut self, id: ScopeId) {
