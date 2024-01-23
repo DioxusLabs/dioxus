@@ -140,7 +140,7 @@ impl Effect {
         });
         tracing::trace!("Created effect: {:?}", myself);
 
-        myself.try_run();
+        get_effect_ref().rerun_effect(myself.inner.id());
 
         myself
     }
