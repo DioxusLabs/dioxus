@@ -22,8 +22,8 @@ pub use dependency::*;
 mod map;
 pub use map::*;
 
-// mod comparer;
-// pub use comparer::*;
+mod comparer;
+pub use comparer::*;
 
 mod global;
 pub use global::*;

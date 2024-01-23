@@ -68,7 +68,7 @@ impl<T: 'static, S: AnyStorage> Debug for GenerationalBox<T, S> {
 
 impl<T: 'static, S: Storage<T>> GenerationalBox<T, S> {
     #[inline(always)]
-    pub fn validate(&self) -> bool {
+    pub(crate) fn validate(&self) -> bool {
         #[cfg(any(debug_assertions, feature = "check_generation"))]
         {
             self.raw
