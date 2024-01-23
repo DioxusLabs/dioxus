@@ -6,13 +6,8 @@ use crate::{
 use std::cell::{Ref, RefCell, RefMut};
 
 /// A unsync storage. This is the default storage type.
+#[derive(Default)]
 pub struct UnsyncStorage(RefCell<Option<Box<dyn std::any::Any>>>);
-
-impl Default for UnsyncStorage {
-    fn default() -> Self {
-        Self(RefCell::new(None))
-    }
-}
 
 impl<T: 'static> Storage<T> for UnsyncStorage {
     type Ref<R: ?Sized + 'static> = GenerationalRef<Ref<'static, R>>;
@@ -20,8 +15,7 @@ impl<T: 'static> Storage<T> for UnsyncStorage {
 
     fn try_read(
         &'static self,
-        #[cfg(any(debug_assertions, feature = "debug_ownership"))]
-        created_at: &'static std::panic::Location<'static>,
+
         #[cfg(any(debug_assertions, feature = "debug_ownership"))]
         at: crate::GenerationalRefBorrowInfo,
     ) -> Result<Self::Ref<T>, error::BorrowError> {
@@ -39,7 +33,7 @@ impl<T: 'static> Storage<T> for UnsyncStorage {
             .map_err(|_| {
                 error::BorrowError::Dropped(error::ValueDroppedError {
                     #[cfg(any(debug_assertions, feature = "debug_ownership"))]
-                    created_at,
+                    created_at: at.created_at,
                 })
             })
             .map(|guard| {
@@ -53,8 +47,6 @@ impl<T: 'static> Storage<T> for UnsyncStorage {
 
     fn try_write(
         &'static self,
-        #[cfg(any(debug_assertions, feature = "debug_ownership"))]
-        created_at: &'static std::panic::Location<'static>,
         #[cfg(any(debug_assertions, feature = "debug_ownership"))]
         at: crate::GenerationalRefMutBorrowInfo,
     ) -> Result<Self::Mut<T>, error::BorrowMutError> {
@@ -71,7 +63,7 @@ impl<T: 'static> Storage<T> for UnsyncStorage {
             .map_err(|_| {
                 error::BorrowMutError::Dropped(error::ValueDroppedError {
                     #[cfg(any(debug_assertions, feature = "debug_ownership"))]
-                    created_at,
+                    created_at: at.created_at,
                 })
             })
             .map(|guard| {
@@ -121,6 +113,7 @@ impl<T: 'static> Storage<T> for UnsyncStorage {
                 #[cfg(any(debug_assertions, feature = "debug_borrows"))]
                 borrow: GenerationalRefMutBorrowInfo {
                     borrowed_from: borrow.borrowed_from,
+                    created_at: borrow.created_at,
                 },
             })
     }

@@ -48,6 +48,7 @@ impl<T: ?Sized + 'static, R: Deref<Target = T>> Deref for GenerationalRef<R> {
 pub struct GenerationalRefBorrowInfo {
     pub(crate) borrowed_at: &'static std::panic::Location<'static>,
     pub(crate) borrowed_from: &'static crate::MemoryLocationBorrowInfo,
+    pub(crate) created_at: &'static std::panic::Location<'static>,
 }
 
 #[cfg(any(debug_assertions, feature = "debug_borrows"))]
@@ -100,6 +101,7 @@ impl<T: ?Sized + 'static, W: DerefMut<Target = T>> DerefMut for GenerationalRefM
 pub struct GenerationalRefMutBorrowInfo {
     /// The location where the borrow occurred.
     pub(crate) borrowed_from: &'static crate::MemoryLocationBorrowInfo,
+    pub(crate) created_at: &'static std::panic::Location<'static>,
 }
 
 #[cfg(any(debug_assertions, feature = "debug_borrows"))]

@@ -14,10 +14,14 @@ pub struct MappedSignal<U: 'static + ?Sized> {
 
 impl MappedSignal<()> {
     /// Create a new mapped signal.
-    pub fn new<T, S: Storage<SignalData<T>>, U: ?Sized>(
+    pub fn new<T, S, U>(
         signal: Signal<T, S>,
         mapping: impl Fn(&T) -> &U + 'static,
-    ) -> MappedSignal<S::Ref<U>> {
+    ) -> MappedSignal<S::Ref<U>>
+    where
+        S: Storage<SignalData<T>>,
+        U: ?Sized,
+    {
         MappedSignal {
             origin_scope: signal.origin_scope(),
             mapping: CopyValue::new(Box::new(move || S::map(signal.read(), &mapping))),

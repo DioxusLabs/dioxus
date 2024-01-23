@@ -56,8 +56,6 @@ impl<T: Sync + Send + 'static> Storage<T> for SyncStorage {
     fn try_read(
         &'static self,
         #[cfg(any(debug_assertions, feature = "debug_ownership"))]
-        created_at: &'static std::panic::Location<'static>,
-        #[cfg(any(debug_assertions, feature = "debug_ownership"))]
         at: crate::GenerationalRefBorrowInfo,
     ) -> Result<Self::Ref<T>, error::BorrowError> {
         let read = self.0.try_read();
@@ -74,7 +72,7 @@ impl<T: Sync + Send + 'static> Storage<T> for SyncStorage {
             .map_err(|_| {
                 error::BorrowError::Dropped(ValueDroppedError {
                     #[cfg(any(debug_assertions, feature = "debug_ownership"))]
-                    created_at,
+                    created_at: at.created_at,
                 })
             })
             .map(|guard| {
@@ -88,8 +86,6 @@ impl<T: Sync + Send + 'static> Storage<T> for SyncStorage {
 
     fn try_write(
         &'static self,
-        #[cfg(any(debug_assertions, feature = "debug_ownership"))]
-        created_at: &'static std::panic::Location<'static>,
         #[cfg(any(debug_assertions, feature = "debug_ownership"))]
         at: crate::GenerationalRefMutBorrowInfo,
     ) -> Result<Self::Mut<T>, error::BorrowMutError> {
@@ -107,7 +103,7 @@ impl<T: Sync + Send + 'static> Storage<T> for SyncStorage {
             .map_err(|_| {
                 error::BorrowMutError::Dropped(ValueDroppedError {
                     #[cfg(any(debug_assertions, feature = "debug_ownership"))]
-                    created_at,
+                    created_at: at.created_at,
                 })
             })
             .map(|guard| {
@@ -141,6 +137,7 @@ impl<T: Sync + Send + 'static> Storage<T> for SyncStorage {
                 borrow: GenerationalRefBorrowInfo {
                     borrowed_at: borrow.borrowed_at,
                     borrowed_from: borrow.borrowed_from,
+                    created_at: borrow.created_at,
                 },
             })
     }
@@ -162,6 +159,7 @@ impl<T: Sync + Send + 'static> Storage<T> for SyncStorage {
                 #[cfg(any(debug_assertions, feature = "debug_borrows"))]
                 borrow: GenerationalRefMutBorrowInfo {
                     borrowed_from: borrow.borrowed_from,
+                    created_at: borrow.created_at,
                 },
             })
     }
