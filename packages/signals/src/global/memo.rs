@@ -51,7 +51,7 @@ impl<T: PartialEq + 'static> GlobalMemo<T> {
     }
 }
 
-impl<T: PartialEq + 'static> Readable<T> for GlobalMemo<T> {
+impl<T: PartialEq + 'static> crate::ReadableRef for GlobalMemo<T> {
     type Ref<R: ?Sized + 'static> = generational_box::GenerationalRef<std::cell::Ref<'static, R>>;
 
     fn map_ref<I, U: ?Sized, F: FnOnce(&I) -> &U>(ref_: Self::Ref<I>, f: F) -> Self::Ref<U> {
@@ -64,7 +64,9 @@ impl<T: PartialEq + 'static> Readable<T> for GlobalMemo<T> {
     ) -> Option<Self::Ref<U>> {
         <UnsyncStorage as AnyStorage>::try_map(ref_, f)
     }
+}
 
+impl<T: PartialEq + 'static> Readable<T> for GlobalMemo<T> {
     #[track_caller]
     fn read(&self) -> Self::Ref<T> {
         self.signal().read()

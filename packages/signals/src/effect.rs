@@ -1,3 +1,4 @@
+use crate::write::*;
 use core::{self, fmt::Debug};
 use dioxus_core::prelude::*;
 use futures_channel::mpsc::UnboundedSender;
@@ -92,7 +93,7 @@ pub(crate) struct EffectInner {
 
 impl EffectInner {
     pub(crate) fn new(callback: Box<dyn FnMut()>) -> CopyValue<Self> {
-        let copy = CopyValue::invalid();
+        let mut copy = CopyValue::invalid();
         let inner = EffectInner {
             callback: Box::new(callback),
             id: copy.id(),

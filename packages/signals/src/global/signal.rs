@@ -1,5 +1,7 @@
 use crate::read::Readable;
 use crate::write::Writable;
+use crate::WritableRef;
+use crate::Write;
 use dioxus_core::prelude::{IntoAttributeValue, ScopeId};
 use generational_box::{AnyStorage, GenerationalRef, UnsyncStorage};
 use std::{cell::Ref, mem::MaybeUninit, ops::Deref};
@@ -68,7 +70,7 @@ impl<T: 'static> GlobalSignal<T> {
     }
 }
 
-impl<T: 'static> Readable<T> for GlobalSignal<T> {
+impl<T: 'static> crate::ReadableRef for GlobalSignal<T> {
     type Ref<R: ?Sized + 'static> = generational_box::GenerationalRef<std::cell::Ref<'static, R>>;
 
     fn map_ref<I, U: ?Sized, F: FnOnce(&I) -> &U>(ref_: Self::Ref<I>, f: F) -> Self::Ref<U> {
@@ -81,7 +83,9 @@ impl<T: 'static> Readable<T> for GlobalSignal<T> {
     ) -> Option<Self::Ref<U>> {
         <UnsyncStorage as AnyStorage>::try_map(ref_, f)
     }
+}
 
+impl<T: 'static> Readable<T> for GlobalSignal<T> {
     #[track_caller]
     fn read(&self) -> Self::Ref<T> {
         self.signal().read()
@@ -90,6 +94,31 @@ impl<T: 'static> Readable<T> for GlobalSignal<T> {
     #[track_caller]
     fn peek(&self) -> Self::Ref<T> {
         self.signal().peek()
+    }
+}
+
+impl<T: 'static> WritableRef for GlobalSignal<T> {
+    type Mut<R: ?Sized + 'static> = Write<R, UnsyncStorage>;
+
+    fn map_mut<I, U: ?Sized + 'static, F: FnOnce(&mut I) -> &mut U>(
+        ref_: Self::Mut<I>,
+        f: F,
+    ) -> Self::Mut<U> {
+        Write::map(ref_, f)
+    }
+
+    fn try_map_mut<I: 'static, U: ?Sized + 'static, F: FnOnce(&mut I) -> Option<&mut U>>(
+        ref_: Self::Mut<I>,
+        f: F,
+    ) -> Option<Self::Mut<U>> {
+        Write::filter_map(ref_, f)
+    }
+}
+
+impl<T: 'static> Writable<T> for GlobalSignal<T> {
+    #[track_caller]
+    fn try_write(&self) -> Result<Self::Mut<T>, generational_box::BorrowMutError> {
+        self.signal().try_write()
     }
 }
 

@@ -10,6 +10,10 @@ use dioxus_core::ScopeId;
 use generational_box::{GenerationalBox, Owner, Storage};
 
 use crate::Effect;
+use crate::Readable;
+use crate::ReadableRef;
+use crate::Writable;
+use crate::WritableRef;
 
 fn current_owner<S: Storage<T>, T>() -> Rc<Owner<S>> {
     match Effect::current() {
@@ -140,62 +144,62 @@ impl<T: 'static, S: Storage<T>> CopyValue<T, S> {
         self.origin_scope
     }
 
-    /// Try to read the value. If the value has been dropped, this will return None.
-    #[track_caller]
-    pub fn try_read(&self) -> Result<S::Ref<T>, generational_box::BorrowError> {
-        self.value.try_read()
-    }
-
-    /// Read the value. If the value has been dropped, this will panic.
-    #[track_caller]
-    pub fn read(&self) -> S::Ref<T> {
-        self.value.read()
-    }
-
-    /// Try to write the value. If the value has been dropped, this will return None.
-    #[track_caller]
-    pub fn try_write(&mut self) -> Result<S::Mut<T>, generational_box::BorrowMutError> {
-        self.value.try_write()
-    }
-
-    /// Write the value without any lifetime hints. If the value has been dropped, this will panic.
-    ///
-    /// Note: This is completely safe because the value is stored in a generational box. The lifetime that normally is passed to the returned reference is only used as a hint to user to prevent runtime overlapping borrow panics.
-    #[track_caller]
-    pub fn write(&self) -> S::Mut<T> {
-        self.value.write()
-    }
-
-    /// Set the value. If the value has been dropped, this will panic.
-    #[track_caller]
-    pub fn set(&self, value: T) {
-        self.value.set(value);
-    }
-
-    /// Run a function with a reference to the value. If the value has been dropped, this will panic.
-    #[track_caller]
-    pub fn with<O>(&self, f: impl FnOnce(&T) -> O) -> O {
-        let write = self.read();
-        f(&*write)
-    }
-
-    /// Run a function with a mutable reference to the value. If the value has been dropped, this will panic.
-    #[track_caller]
-    pub fn with_mut<O>(&self, f: impl FnOnce(&mut T) -> O) -> O {
-        let mut write = self.write();
-        f(&mut *write)
-    }
-
     /// Get the generational id of the value.
     pub fn id(&self) -> GenerationalBoxId {
         self.value.id()
     }
 }
 
-impl<T: Clone + 'static, S: Storage<T>> CopyValue<T, S> {
-    /// Get the value. If the value has been dropped, this will panic.
-    pub fn value(&self) -> T {
-        self.read().clone()
+impl<T: 'static, S: Storage<T>> ReadableRef for CopyValue<T, S> {
+    type Ref<R: ?Sized + 'static> = S::Ref<R>;
+
+    fn map_ref<I, U: ?Sized, F: FnOnce(&I) -> &U>(ref_: Self::Ref<I>, f: F) -> Self::Ref<U> {
+        S::map(ref_, f)
+    }
+
+    fn try_map_ref<I, U: ?Sized, F: FnOnce(&I) -> Option<&U>>(
+        ref_: Self::Ref<I>,
+        f: F,
+    ) -> Option<Self::Ref<U>> {
+        S::try_map(ref_, f)
+    }
+}
+
+impl<T: 'static, S: Storage<T>> Readable<T> for CopyValue<T, S> {
+    fn read(&self) -> Self::Ref<T> {
+        self.value.read()
+    }
+
+    fn peek(&self) -> Self::Ref<T> {
+        self.value.read()
+    }
+}
+
+impl<T: 'static, S: Storage<T>> WritableRef for CopyValue<T, S> {
+    type Mut<R: ?Sized + 'static> = S::Mut<R>;
+
+    fn map_mut<I, U: ?Sized, F: FnOnce(&mut I) -> &mut U>(
+        mut_: Self::Mut<I>,
+        f: F,
+    ) -> Self::Mut<U> {
+        S::map_mut(mut_, f)
+    }
+
+    fn try_map_mut<I, U: ?Sized, F: FnOnce(&mut I) -> Option<&mut U>>(
+        mut_: Self::Mut<I>,
+        f: F,
+    ) -> Option<Self::Mut<U>> {
+        S::try_map_mut(mut_, f)
+    }
+}
+
+impl<T: 'static, S: Storage<T>> Writable<T> for CopyValue<T, S> {
+    fn try_write(&self) -> Result<Self::Mut<T>, generational_box::BorrowMutError> {
+        self.value.try_write()
+    }
+
+    fn write(&self) -> Self::Mut<T> {
+        self.value.write()
     }
 }
 

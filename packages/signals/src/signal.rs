@@ -1,6 +1,6 @@
 use crate::{
     read::Readable, write::Writable, Effect, EffectInner, GlobalMemo, GlobalSignal, MappedSignal,
-    ReadOnlySignal,
+    ReadOnlySignal, ReadableRef, WritableRef,
 };
 use std::{
     any::Any,
@@ -397,7 +397,7 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
     }
 }
 
-impl<T, S: Storage<SignalData<T>>> Readable<T> for Signal<T, S> {
+impl<T, S: Storage<SignalData<T>>> ReadableRef for Signal<T, S> {
     type Ref<R: ?Sized + 'static> = S::Ref<R>;
 
     fn map_ref<I, U: ?Sized, F: FnOnce(&I) -> &U>(ref_: Self::Ref<I>, f: F) -> Self::Ref<U> {
@@ -410,7 +410,9 @@ impl<T, S: Storage<SignalData<T>>> Readable<T> for Signal<T, S> {
     ) -> Option<Self::Ref<U>> {
         S::try_map(ref_, f)
     }
+}
 
+impl<T, S: Storage<SignalData<T>>> Readable<T> for Signal<T, S> {
     /// Get the current value of the signal. This will subscribe the current scope to the signal.  If you would like to read the signal without subscribing to it, you can use [`Self::peek`] instead.
     ///
     /// If the signal has been dropped, this will panic.
@@ -454,7 +456,7 @@ impl<T, S: Storage<SignalData<T>>> Readable<T> for Signal<T, S> {
     }
 }
 
-impl<T: 'static, S: Storage<SignalData<T>>> Writable<T> for Signal<T, S> {
+impl<T: 'static, S: Storage<SignalData<T>>> WritableRef for Signal<T, S> {
     type Mut<R: ?Sized + 'static> = Write<R, S>;
 
     fn map_mut<I, U: ?Sized + 'static, F: FnOnce(&mut I) -> &mut U>(
@@ -470,18 +472,18 @@ impl<T: 'static, S: Storage<SignalData<T>>> Writable<T> for Signal<T, S> {
     ) -> Option<Self::Mut<U>> {
         Write::filter_map(ref_, f)
     }
+}
 
-    /// Get a mutable reference to the signal's value.
-    ///
-    /// If the signal has been dropped, this will panic.
+impl<T: 'static, S: Storage<SignalData<T>>> Writable<T> for Signal<T, S> {
     #[track_caller]
-    fn write(&self) -> Self::Mut<T> {
-        let inner = self.inner.write();
-        let borrow = S::map_mut(inner, |v| &mut v.value);
-        Write {
-            write: borrow,
-            drop_signal: Box::new(SignalSubscriberDrop { signal: *self }),
-        }
+    fn try_write(&self) -> Result<Self::Mut<T>, generational_box::BorrowMutError> {
+        self.inner.try_write().map(|inner| {
+            let borrow = S::map_mut(inner, |v| &mut v.value);
+            Write {
+                write: borrow,
+                drop_signal: Box::new(SignalSubscriberDrop { signal: *self }),
+            }
+        })
     }
 }
 

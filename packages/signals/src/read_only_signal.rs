@@ -1,4 +1,4 @@
-use crate::{read::Readable, Signal, SignalData};
+use crate::{read::Readable, ReadableRef, Signal, SignalData};
 use std::{mem::MaybeUninit, ops::Deref};
 
 use dioxus_core::{prelude::IntoAttributeValue, ScopeId};
@@ -41,7 +41,7 @@ impl<T: 'static, S: Storage<SignalData<T>>> ReadOnlySignal<T, S> {
     }
 }
 
-impl<T, S: Storage<SignalData<T>>> Readable<T> for ReadOnlySignal<T, S> {
+impl<T, S: Storage<SignalData<T>>> ReadableRef for ReadOnlySignal<T, S> {
     type Ref<R: ?Sized + 'static> = S::Ref<R>;
 
     fn map_ref<I, U: ?Sized, F: FnOnce(&I) -> &U>(ref_: Self::Ref<I>, f: F) -> Self::Ref<U> {
@@ -54,7 +54,9 @@ impl<T, S: Storage<SignalData<T>>> Readable<T> for ReadOnlySignal<T, S> {
     ) -> Option<Self::Ref<U>> {
         S::try_map(ref_, f)
     }
+}
 
+impl<T, S: Storage<SignalData<T>>> Readable<T> for ReadOnlySignal<T, S> {
     /// Get the current value of the signal. This will subscribe the current scope to the signal.  If you would like to read the signal without subscribing to it, you can use [`Self::peek`] instead.
     ///
     /// If the signal has been dropped, this will panic.
