@@ -1,7 +1,7 @@
 use crate::{
     error,
     references::{GenerationalRef, GenerationalRefMut},
-    AnyStorage, GenerationalRefMutBorrowInfo, MemoryLocation, MemoryLocationInner, Storage,
+    AnyStorage, MemoryLocation, MemoryLocationInner, Storage,
 };
 use std::cell::{Ref, RefCell, RefMut};
 
@@ -111,7 +111,7 @@ impl<T: 'static> Storage<T> for UnsyncStorage {
             .map(|inner| GenerationalRefMut {
                 inner,
                 #[cfg(any(debug_assertions, feature = "debug_borrows"))]
-                borrow: GenerationalRefMutBorrowInfo {
+                borrow: crate::GenerationalRefMutBorrowInfo {
                     borrowed_from: borrow.borrowed_from,
                     created_at: borrow.created_at,
                 },

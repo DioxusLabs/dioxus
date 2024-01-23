@@ -6,8 +6,7 @@ use std::sync::{Arc, OnceLock};
 use crate::{
     error::{self, ValueDroppedError},
     references::{GenerationalRef, GenerationalRefMut},
-    AnyStorage, GenerationalRefBorrowInfo, GenerationalRefMutBorrowInfo, MemoryLocation,
-    MemoryLocationInner, Storage,
+    AnyStorage, MemoryLocation, MemoryLocationInner, Storage,
 };
 
 /// A thread safe storage. This is slower than the unsync storage, but allows you to share the value between threads.
@@ -134,7 +133,7 @@ impl<T: Sync + Send + 'static> Storage<T> for SyncStorage {
             .map(|inner| GenerationalRef {
                 inner,
                 #[cfg(any(debug_assertions, feature = "debug_borrows"))]
-                borrow: GenerationalRefBorrowInfo {
+                borrow: crate::GenerationalRefBorrowInfo {
                     borrowed_at: borrow.borrowed_at,
                     borrowed_from: borrow.borrowed_from,
                     created_at: borrow.created_at,
@@ -157,7 +156,7 @@ impl<T: Sync + Send + 'static> Storage<T> for SyncStorage {
             .map(|inner| GenerationalRefMut {
                 inner,
                 #[cfg(any(debug_assertions, feature = "debug_borrows"))]
-                borrow: GenerationalRefMutBorrowInfo {
+                borrow: crate::GenerationalRefMutBorrowInfo {
                     borrowed_from: borrow.borrowed_from,
                     created_at: borrow.created_at,
                 },
