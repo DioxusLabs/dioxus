@@ -198,36 +198,6 @@ impl<T, S> Clone for GenerationalBox<T, S> {
 
 /// A trait for a storage backing type. (RefCell, RwLock, etc.)
 pub trait Storage<Data = ()>: AnyStorage + 'static {
-    /// The reference this storage type returns.
-    type Ref<T: ?Sized + 'static>: Deref<Target = T>;
-    /// The mutable reference this storage type returns.
-    type Mut<T: ?Sized + 'static>: DerefMut<Target = T>;
-
-    /// Try to map the mutable ref.
-    fn try_map_mut<T, U: ?Sized + 'static>(
-        mut_ref: Self::Mut<T>,
-        f: impl FnOnce(&mut T) -> Option<&mut U>,
-    ) -> Option<Self::Mut<U>>;
-
-    /// Map the mutable ref.
-    fn map_mut<T, U: ?Sized + 'static>(
-        mut_ref: Self::Mut<T>,
-        f: impl FnOnce(&mut T) -> &mut U,
-    ) -> Self::Mut<U> {
-        Self::try_map_mut(mut_ref, |v| Some(f(v))).unwrap()
-    }
-
-    /// Try to map the ref.
-    fn try_map<T, U: ?Sized + 'static>(
-        ref_: Self::Ref<T>,
-        f: impl FnOnce(&T) -> Option<&U>,
-    ) -> Option<Self::Ref<U>>;
-
-    /// Map the ref.
-    fn map<T, U: ?Sized + 'static>(ref_: Self::Ref<T>, f: impl FnOnce(&T) -> &U) -> Self::Ref<U> {
-        Self::try_map(ref_, |v| Some(f(v))).unwrap()
-    }
-
     /// Try to read the value. Returns None if the value is no longer valid.
     fn try_read(
         &'static self,
@@ -246,6 +216,36 @@ pub trait Storage<Data = ()>: AnyStorage + 'static {
 
 /// A trait for any storage backing type.
 pub trait AnyStorage: Default {
+    /// The reference this storage type returns.
+    type Ref<T: ?Sized + 'static>: Deref<Target = T>;
+    /// The mutable reference this storage type returns.
+    type Mut<T: ?Sized + 'static>: DerefMut<Target = T>;
+
+    /// Try to map the mutable ref.
+    fn try_map_mut<T: ?Sized, U: ?Sized + 'static>(
+        mut_ref: Self::Mut<T>,
+        f: impl FnOnce(&mut T) -> Option<&mut U>,
+    ) -> Option<Self::Mut<U>>;
+
+    /// Map the mutable ref.
+    fn map_mut<T: ?Sized, U: ?Sized + 'static>(
+        mut_ref: Self::Mut<T>,
+        f: impl FnOnce(&mut T) -> &mut U,
+    ) -> Self::Mut<U> {
+        Self::try_map_mut(mut_ref, |v| Some(f(v))).unwrap()
+    }
+
+    /// Try to map the ref.
+    fn try_map<T, U: ?Sized + 'static>(
+        ref_: Self::Ref<T>,
+        f: impl FnOnce(&T) -> Option<&U>,
+    ) -> Option<Self::Ref<U>>;
+
+    /// Map the ref.
+    fn map<T, U: ?Sized + 'static>(ref_: Self::Ref<T>, f: impl FnOnce(&T) -> &U) -> Self::Ref<U> {
+        Self::try_map(ref_, |v| Some(f(v))).unwrap()
+    }
+
     /// Get the data pointer. No guarantees are made about the data pointer. It should only be used for debugging.
     fn data_ptr(&self) -> *const ();
 

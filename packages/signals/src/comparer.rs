@@ -1,3 +1,4 @@
+use crate::write::Writable;
 use std::hash::Hash;
 
 use dioxus_core::prelude::*;
@@ -27,14 +28,14 @@ impl<R: Eq + Hash> Comparer<R> {
 
             if let Some(previous) = previous.take() {
                 if let Some(value) = subscribers.get(&previous) {
-                    *value.write_unchecked() = false;
+                    *value.write() = false;
                 }
             }
 
             let current = f();
 
             if let Some(value) = subscribers.get(&current) {
-                *value.write_unchecked() = true;
+                *value.write() = true;
             }
 
             *previous = Some(current);
@@ -59,14 +60,14 @@ impl<R: Eq + Hash, S: Storage<SignalData<bool>>> Comparer<R, S> {
 
             if let Some(previous) = previous.take() {
                 if let Some(value) = subscribers.get(&previous) {
-                    *value.write_unchecked() = false;
+                    *value.write() = false;
                 }
             }
 
             let current = f();
 
             if let Some(value) = subscribers.get(&current) {
-                *value.write_unchecked() = true;
+                *value.write() = true;
             }
 
             *previous = Some(current);

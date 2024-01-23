@@ -1,7 +1,9 @@
+use crate::read::Readable;
 use crate::rt::CopyValue;
-use crate::signal::{ReadOnlySignal, Signal, Write};
-use crate::{GlobalMemo, GlobalSignal, SignalData};
-use generational_box::Storage;
+use crate::signal::{Signal, Write};
+use crate::write::Writable;
+use crate::{GlobalMemo, GlobalSignal, ReadOnlySignal, SignalData};
+use generational_box::{AnyStorage, Storage};
 use generational_box::{GenerationalRef, UnsyncStorage};
 
 use std::cell::Ref;
@@ -331,7 +333,7 @@ read_impls!(GlobalSignal);
 impl<T: 'static> GlobalSignal<Vec<T>> {
     /// Read a value from the inner vector.
     pub fn get(&'static self, index: usize) -> Option<GenerationalRef<Ref<'static, T>>> {
-        <UnsyncStorage as Storage>::try_map(self.read(), move |v| v.get(index))
+        <UnsyncStorage as AnyStorage>::try_map(self.read(), move |v| v.get(index))
     }
 }
 
@@ -346,7 +348,7 @@ impl<T: 'static> GlobalSignal<Option<T>> {
 
     /// Attempts to read the inner value of the Option.
     pub fn as_ref(&'static self) -> Option<GenerationalRef<Ref<'static, T>>> {
-        <UnsyncStorage as Storage>::try_map(self.read(), |v| v.as_ref())
+        <UnsyncStorage as AnyStorage>::try_map(self.read(), |v| v.as_ref())
     }
 }
 
@@ -377,9 +379,9 @@ impl<T: 'static> GlobalSignal<Option<T>> {
         if borrow.is_none() {
             drop(borrow);
             self.with_mut(|v| *v = Some(default()));
-            <UnsyncStorage as Storage>::map(self.read(), |v| v.as_ref().unwrap())
+            <UnsyncStorage as AnyStorage>::map(self.read(), |v| v.as_ref().unwrap())
         } else {
-            <UnsyncStorage as Storage>::map(borrow, |v| v.as_ref().unwrap())
+            <UnsyncStorage as AnyStorage>::map(borrow, |v| v.as_ref().unwrap())
         }
     }
 }
@@ -389,7 +391,7 @@ read_impls!(GlobalMemo: PartialEq);
 impl<T: PartialEq + 'static> GlobalMemo<Vec<T>> {
     /// Read a value from the inner vector.
     pub fn get(&'static self, index: usize) -> Option<GenerationalRef<Ref<'static, T>>> {
-        <UnsyncStorage as Storage>::try_map(self.read(), move |v| v.get(index))
+        <UnsyncStorage as AnyStorage>::try_map(self.read(), move |v| v.get(index))
     }
 }
 
@@ -404,7 +406,7 @@ impl<T: PartialEq + 'static> GlobalMemo<Option<T>> {
 
     /// Attempts to read the inner value of the Option.
     pub fn as_ref(&'static self) -> Option<GenerationalRef<Ref<'static, T>>> {
-        <UnsyncStorage as Storage>::try_map(self.read(), |v| v.as_ref())
+        <UnsyncStorage as AnyStorage>::try_map(self.read(), |v| v.as_ref())
     }
 }
 
@@ -482,14 +484,14 @@ impl<T: 'static, S: Storage<SignalData<Vec<T>>>> IntoIterator for Signal<Vec<T>,
 
 impl<T: 'static, S: Storage<SignalData<Vec<T>>>> Signal<Vec<T>, S> {
     /// Returns a reference to an element or `None` if out of bounds.
-    pub fn get_mut(&mut self, index: usize) -> Option<Write<T, S, Vec<T>>> {
+    pub fn get_mut(&mut self, index: usize) -> Option<Write<T, S>> {
         Write::filter_map(self.write(), |v| v.get_mut(index))
     }
 }
 
 impl<T: 'static, S: Storage<SignalData<Option<T>>>> Signal<Option<T>, S> {
     /// Returns a reference to an element or `None` if out of bounds.
-    pub fn as_mut(&mut self) -> Option<Write<T, S, Option<T>>> {
+    pub fn as_mut(&mut self) -> Option<Write<T, S>> {
         Write::filter_map(self.write(), |v| v.as_mut())
     }
 }

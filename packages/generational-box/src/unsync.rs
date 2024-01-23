@@ -10,9 +10,6 @@ use std::cell::{Ref, RefCell, RefMut};
 pub struct UnsyncStorage(RefCell<Option<Box<dyn std::any::Any>>>);
 
 impl<T: 'static> Storage<T> for UnsyncStorage {
-    type Ref<R: ?Sized + 'static> = GenerationalRef<Ref<'static, R>>;
-    type Mut<W: ?Sized + 'static> = GenerationalRefMut<RefMut<'static, W>>;
-
     fn try_read(
         &'static self,
 
@@ -78,6 +75,15 @@ impl<T: 'static> Storage<T> for UnsyncStorage {
     fn set(&self, value: T) {
         *self.0.borrow_mut() = Some(Box::new(value));
     }
+}
+
+thread_local! {
+    static UNSYNC_RUNTIME: RefCell<Vec<MemoryLocation<UnsyncStorage>>> = RefCell::new(Vec::new());
+}
+
+impl AnyStorage for UnsyncStorage {
+    type Ref<R: ?Sized + 'static> = GenerationalRef<Ref<'static, R>>;
+    type Mut<W: ?Sized + 'static> = GenerationalRefMut<RefMut<'static, W>>;
 
     fn try_map<I, U: ?Sized + 'static>(
         _self: Self::Ref<I>,
@@ -96,7 +102,7 @@ impl<T: 'static> Storage<T> for UnsyncStorage {
         })
     }
 
-    fn try_map_mut<I, U: ?Sized + 'static>(
+    fn try_map_mut<I: ?Sized, U: ?Sized + 'static>(
         mut_ref: Self::Mut<I>,
         f: impl FnOnce(&mut I) -> Option<&mut U>,
     ) -> Option<Self::Mut<U>> {
@@ -117,13 +123,7 @@ impl<T: 'static> Storage<T> for UnsyncStorage {
                 },
             })
     }
-}
 
-thread_local! {
-    static UNSYNC_RUNTIME: RefCell<Vec<MemoryLocation<UnsyncStorage>>> = RefCell::new(Vec::new());
-}
-
-impl AnyStorage for UnsyncStorage {
     fn data_ptr(&self) -> *const () {
         self.0.as_ptr() as *const ()
     }

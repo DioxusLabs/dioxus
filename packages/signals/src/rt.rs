@@ -162,12 +162,6 @@ impl<T: 'static, S: Storage<T>> CopyValue<T, S> {
     ///
     /// Note: This is completely safe because the value is stored in a generational box. The lifetime that normally is passed to the returned reference is only used as a hint to user to prevent runtime overlapping borrow panics.
     #[track_caller]
-    pub fn write_unchecked(&self) -> S::Mut<T> {
-        self.value.write()
-    }
-
-    /// Write the value. If the value has been dropped, this will panic.
-    #[track_caller]
     pub fn write(&self) -> S::Mut<T> {
         self.value.write()
     }

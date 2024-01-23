@@ -20,6 +20,54 @@ fn sync_runtime() -> &'static Arc<Mutex<Vec<MemoryLocation<SyncStorage>>>> {
 }
 
 impl AnyStorage for SyncStorage {
+    type Ref<R: ?Sized + 'static> = GenerationalRef<MappedRwLockReadGuard<'static, R>>;
+    type Mut<W: ?Sized + 'static> = GenerationalRefMut<MappedRwLockWriteGuard<'static, W>>;
+
+    fn try_map<I, U: ?Sized + 'static>(
+        ref_: Self::Ref<I>,
+        f: impl FnOnce(&I) -> Option<&U>,
+    ) -> Option<Self::Ref<U>> {
+        let GenerationalRef {
+            inner,
+            #[cfg(any(debug_assertions, feature = "debug_borrows"))]
+            borrow,
+            ..
+        } = ref_;
+        MappedRwLockReadGuard::try_map(inner, f)
+            .ok()
+            .map(|inner| GenerationalRef {
+                inner,
+                #[cfg(any(debug_assertions, feature = "debug_borrows"))]
+                borrow: crate::GenerationalRefBorrowInfo {
+                    borrowed_at: borrow.borrowed_at,
+                    borrowed_from: borrow.borrowed_from,
+                    created_at: borrow.created_at,
+                },
+            })
+    }
+
+    fn try_map_mut<I: ?Sized, U: ?Sized + 'static>(
+        mut_ref: Self::Mut<I>,
+        f: impl FnOnce(&mut I) -> Option<&mut U>,
+    ) -> Option<Self::Mut<U>> {
+        let GenerationalRefMut {
+            inner,
+            #[cfg(any(debug_assertions, feature = "debug_borrows"))]
+            borrow,
+            ..
+        } = mut_ref;
+        MappedRwLockWriteGuard::try_map(inner, f)
+            .ok()
+            .map(|inner| GenerationalRefMut {
+                inner,
+                #[cfg(any(debug_assertions, feature = "debug_borrows"))]
+                borrow: crate::GenerationalRefMutBorrowInfo {
+                    borrowed_from: borrow.borrowed_from,
+                    created_at: borrow.created_at,
+                },
+            })
+    }
+
     fn data_ptr(&self) -> *const () {
         self.0.data_ptr() as *const ()
     }
@@ -49,9 +97,6 @@ impl AnyStorage for SyncStorage {
 }
 
 impl<T: Sync + Send + 'static> Storage<T> for SyncStorage {
-    type Ref<R: ?Sized + 'static> = GenerationalRef<MappedRwLockReadGuard<'static, R>>;
-    type Mut<W: ?Sized + 'static> = GenerationalRefMut<MappedRwLockWriteGuard<'static, W>>;
-
     fn try_read(
         &'static self,
         #[cfg(any(debug_assertions, feature = "debug_ownership"))]
@@ -116,50 +161,5 @@ impl<T: Sync + Send + 'static> Storage<T> for SyncStorage {
 
     fn set(&self, value: T) {
         *self.0.write() = Some(Box::new(value));
-    }
-
-    fn try_map<I, U: ?Sized + 'static>(
-        ref_: Self::Ref<I>,
-        f: impl FnOnce(&I) -> Option<&U>,
-    ) -> Option<Self::Ref<U>> {
-        let GenerationalRef {
-            inner,
-            #[cfg(any(debug_assertions, feature = "debug_borrows"))]
-            borrow,
-            ..
-        } = ref_;
-        MappedRwLockReadGuard::try_map(inner, f)
-            .ok()
-            .map(|inner| GenerationalRef {
-                inner,
-                #[cfg(any(debug_assertions, feature = "debug_borrows"))]
-                borrow: crate::GenerationalRefBorrowInfo {
-                    borrowed_at: borrow.borrowed_at,
-                    borrowed_from: borrow.borrowed_from,
-                    created_at: borrow.created_at,
-                },
-            })
-    }
-
-    fn try_map_mut<I, U: ?Sized + 'static>(
-        mut_ref: Self::Mut<I>,
-        f: impl FnOnce(&mut I) -> Option<&mut U>,
-    ) -> Option<Self::Mut<U>> {
-        let GenerationalRefMut {
-            inner,
-            #[cfg(any(debug_assertions, feature = "debug_borrows"))]
-            borrow,
-            ..
-        } = mut_ref;
-        MappedRwLockWriteGuard::try_map(inner, f)
-            .ok()
-            .map(|inner| GenerationalRefMut {
-                inner,
-                #[cfg(any(debug_assertions, feature = "debug_borrows"))]
-                borrow: crate::GenerationalRefMutBorrowInfo {
-                    borrowed_from: borrow.borrowed_from,
-                    created_at: borrow.created_at,
-                },
-            })
     }
 }
