@@ -228,6 +228,7 @@ impl<T: 'static> Signal<T> {
     }
 
     /// Creates a new global Signal that can be used in a global static.
+    #[track_caller]
     pub const fn global(constructor: fn() -> T) -> GlobalSignal<T> {
         GlobalSignal::new(constructor)
     }
@@ -235,6 +236,7 @@ impl<T: 'static> Signal<T> {
 
 impl<T: PartialEq + 'static> Signal<T> {
     /// Creates a new global Signal that can be used in a global static.
+    #[track_caller]
     pub const fn global_memo(constructor: fn() -> T) -> GlobalMemo<T>
     where
         T: PartialEq,

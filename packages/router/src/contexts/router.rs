@@ -293,7 +293,7 @@ impl RouterContext {
     fn change_route(&self) -> Option<ExternalNavigationFailure> {
         let self_read = self.inner.read();
         if let Some(callback) = &self_read.routing_callback {
-            let myself = self.clone();
+            let myself = *self;
             let callback = callback.clone();
             drop(self_read);
             if let Some(new) = callback(myself) {

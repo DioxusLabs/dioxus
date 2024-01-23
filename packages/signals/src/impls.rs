@@ -1,13 +1,12 @@
 use crate::read::Readable;
 use crate::read::ReadableVecExt;
 use crate::rt::CopyValue;
-use crate::signal::{Signal, Write};
+use crate::signal::Signal;
 use crate::write::Writable;
 use crate::{GlobalMemo, GlobalSignal, ReadOnlySignal, ReadableValueIterator, SignalData};
+use generational_box::UnsyncStorage;
 use generational_box::{AnyStorage, Storage};
-use generational_box::{GenerationalRef, UnsyncStorage};
 
-use std::cell::Ref;
 use std::{
     fmt::{Debug, Display},
     ops::{Add, Div, Mul, Sub},
@@ -141,25 +140,6 @@ macro_rules! write_impls {
 read_impls!(CopyValue, S: Storage<T>, S: Storage<Vec<T>>);
 write_impls!(CopyValue, Storage<T>, Storage<Vec<T>>);
 
-read_impls!(Signal, S: Storage<SignalData<T>>, S: Storage<SignalData<Vec<T>>>);
-write_impls!(Signal, Storage<SignalData<T>>, Storage<SignalData<Vec<T>>>);
-
-read_impls!(
-    ReadOnlySignal,
-    S: Storage<SignalData<T>>,
-    S: Storage<SignalData<Vec<T>>>
-);
-
-read_impls!(GlobalSignal);
-read_impls!(GlobalMemo: PartialEq);
-
-impl<T: PartialEq + 'static> GlobalMemo<Vec<T>> {
-    /// Read a value from the inner vector.
-    pub fn get(&'static self, index: usize) -> Option<GenerationalRef<Ref<'static, T>>> {
-        <UnsyncStorage as AnyStorage>::try_map(self.read(), move |v| v.get(index))
-    }
-}
-
 impl<T: 'static, S: Storage<Vec<T>>> IntoIterator for CopyValue<Vec<T>, S> {
     type IntoIter = ReadableValueIterator<T, Self>;
 
@@ -170,12 +150,8 @@ impl<T: 'static, S: Storage<Vec<T>>> IntoIterator for CopyValue<Vec<T>, S> {
     }
 }
 
-impl<T: 'static, S: Storage<Option<T>>> CopyValue<Option<T>, S> {
-    /// Deref the inner value mutably.
-    pub fn as_mut(&self) -> Option<S::Mut<T>> {
-        S::try_map_mut(self.write(), |v: &mut Option<T>| v.as_mut())
-    }
-}
+read_impls!(Signal, S: Storage<SignalData<T>>, S: Storage<SignalData<Vec<T>>>);
+write_impls!(Signal, Storage<SignalData<T>>, Storage<SignalData<Vec<T>>>);
 
 impl<T: 'static, S: Storage<SignalData<Vec<T>>>> IntoIterator for Signal<Vec<T>, S> {
     type IntoIter = ReadableValueIterator<T, Self>;
@@ -187,9 +163,42 @@ impl<T: 'static, S: Storage<SignalData<Vec<T>>>> IntoIterator for Signal<Vec<T>,
     }
 }
 
-impl<T: 'static, S: Storage<SignalData<Option<T>>>> Signal<Option<T>, S> {
-    /// Returns a reference to an element or `None` if out of bounds.
-    pub fn as_mut(&mut self) -> Option<Write<T, S>> {
-        Write::filter_map(self.write(), |v| v.as_mut())
+read_impls!(
+    ReadOnlySignal,
+    S: Storage<SignalData<T>>,
+    S: Storage<SignalData<Vec<T>>>
+);
+
+impl<T: 'static, S: Storage<SignalData<Vec<T>>>> IntoIterator for ReadOnlySignal<Vec<T>, S> {
+    type IntoIter = ReadableValueIterator<T, Self>;
+
+    type Item = S::Ref<T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+
+read_impls!(GlobalSignal);
+
+impl<T: 'static> IntoIterator for GlobalSignal<Vec<T>> {
+    type IntoIter = ReadableValueIterator<T, Self>;
+
+    type Item = <UnsyncStorage as AnyStorage>::Ref<T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+
+read_impls!(GlobalMemo: PartialEq);
+
+impl<T: PartialEq + 'static> IntoIterator for GlobalMemo<Vec<T>> {
+    type IntoIter = ReadableValueIterator<T, Self>;
+
+    type Item = <UnsyncStorage as AnyStorage>::Ref<T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
     }
 }
