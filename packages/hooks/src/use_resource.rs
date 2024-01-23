@@ -3,7 +3,7 @@ use dioxus_core::{
     prelude::{spawn, use_hook},
     ScopeState, Task,
 };
-use dioxus_signals::{use_effect, use_signal, Effect, Signal};
+use dioxus_signals::*;
 use futures_util::{future, pin_mut, FutureExt};
 use std::{any::Any, cell::Cell, future::Future, pin::Pin, rc::Rc, sync::Arc, task::Poll};
 

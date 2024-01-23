@@ -1,6 +1,6 @@
 use dioxus_core::prelude::{consume_context, provide_context, spawn, use_hook};
 use dioxus_core::Task;
-use dioxus_signals::{CopyValue, Signal};
+use dioxus_signals::*;
 pub use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use std::future::Future;
 
@@ -71,7 +71,7 @@ where
     G: FnOnce(UnboundedReceiver<M>) -> F,
     F: Future<Output = ()> + 'static,
 {
-    let coroutine = use_hook(|| {
+    let mut coroutine = use_hook(|| {
         provide_context(Coroutine {
             needs_regen: Signal::new(true),
             tx: CopyValue::new(None),
@@ -81,12 +81,12 @@ where
 
     // We do this here so we can capture data with FnOnce
     // this might not be the best API
-    if *coroutine.needs_regen.read() {
+    if *coroutine.needs_regen.peek() {
         let (tx, rx) = futures_channel::mpsc::unbounded();
         let task = spawn(init(rx));
         coroutine.tx.set(Some(tx));
         coroutine.task.set(Some(task));
-        coroutine.needs_regen.set_untracked(false);
+        coroutine.needs_regen.set(false);
     }
 
     coroutine
