@@ -33,6 +33,7 @@ impl std::fmt::Debug for KeyboardData {
             .field("modifiers", &self.modifiers())
             .field("location", &self.location())
             .field("is_auto_repeating", &self.is_auto_repeating())
+            .field("is_composing", &self.is_composing())
             .finish()
     }
 }
@@ -44,6 +45,7 @@ impl PartialEq for KeyboardData {
             && self.modifiers() == other.modifiers()
             && self.location() == other.location()
             && self.is_auto_repeating() == other.is_auto_repeating()
+            && self.is_composing() == other.is_composing()
     }
 }
 
@@ -75,6 +77,11 @@ impl KeyboardData {
         self.inner.is_auto_repeating()
     }
 
+    /// Indicates whether the key is fired within a composition session.
+    pub fn is_composing(&self) -> bool {
+        self.inner.is_composing()
+    }
+
     /// Downcast this KeyboardData to a concrete type.
     pub fn downcast<T: 'static>(&self) -> Option<&T> {
         self.inner.as_any().downcast_ref::<T>()
@@ -92,6 +99,7 @@ impl ModifiersInteraction for KeyboardData {
 #[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Clone)]
 pub struct SerializedKeyboardData {
     char_code: u32,
+    is_composing: bool,
     key: String,
     key_code: KeyCode,
     #[serde(deserialize_with = "resilient_deserialize_code")]
@@ -114,9 +122,11 @@ impl SerializedKeyboardData {
         location: Location,
         is_auto_repeating: bool,
         modifiers: Modifiers,
+        is_composing: bool,
     ) -> Self {
         Self {
             char_code: key.legacy_charcode(),
+            is_composing,
             key: key.to_string(),
             key_code: KeyCode::from_raw_code(
                 std::convert::TryInto::try_into(key.legacy_keycode())
@@ -144,6 +154,7 @@ impl From<&KeyboardData> for SerializedKeyboardData {
             data.location(),
             data.is_auto_repeating(),
             data.modifiers(),
+            data.is_composing(),
         )
     }
 }
@@ -164,6 +175,10 @@ impl HasKeyboardData for SerializedKeyboardData {
 
     fn is_auto_repeating(&self) -> bool {
         self.repeat
+    }
+
+    fn is_composing(&self) -> bool {
+        self.is_composing
     }
 
     fn as_any(&self) -> &dyn std::any::Any {
@@ -235,6 +250,9 @@ pub trait HasKeyboardData: ModifiersInteraction + std::any::Any {
 
     /// `true` iff the key is being held down such that it is automatically repeating.
     fn is_auto_repeating(&self) -> bool;
+
+    /// Indicates whether the key is fired within a composition session.
+    fn is_composing(&self) -> bool;
 
     /// return self as Any
     fn as_any(&self) -> &dyn std::any::Any;
