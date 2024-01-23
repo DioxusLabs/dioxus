@@ -11,9 +11,7 @@ use generational_box::{GenerationalBox, Owner, Storage};
 
 use crate::Effect;
 use crate::Readable;
-use crate::ReadableRef;
 use crate::Writable;
-use crate::WritableRef;
 
 fn current_owner<S: Storage<T>, T>() -> Rc<Owner<S>> {
     match Effect::current() {
@@ -150,7 +148,7 @@ impl<T: 'static, S: Storage<T>> CopyValue<T, S> {
     }
 }
 
-impl<T: 'static, S: Storage<T>> ReadableRef for CopyValue<T, S> {
+impl<T: 'static, S: Storage<T>> Readable<T> for CopyValue<T, S> {
     type Ref<R: ?Sized + 'static> = S::Ref<R>;
 
     fn map_ref<I, U: ?Sized, F: FnOnce(&I) -> &U>(ref_: Self::Ref<I>, f: F) -> Self::Ref<U> {
@@ -163,9 +161,7 @@ impl<T: 'static, S: Storage<T>> ReadableRef for CopyValue<T, S> {
     ) -> Option<Self::Ref<U>> {
         S::try_map(ref_, f)
     }
-}
 
-impl<T: 'static, S: Storage<T>> Readable<T> for CopyValue<T, S> {
     fn read(&self) -> Self::Ref<T> {
         self.value.read()
     }
@@ -175,7 +171,7 @@ impl<T: 'static, S: Storage<T>> Readable<T> for CopyValue<T, S> {
     }
 }
 
-impl<T: 'static, S: Storage<T>> WritableRef for CopyValue<T, S> {
+impl<T: 'static, S: Storage<T>> Writable<T> for CopyValue<T, S> {
     type Mut<R: ?Sized + 'static> = S::Mut<R>;
 
     fn map_mut<I, U: ?Sized, F: FnOnce(&mut I) -> &mut U>(
@@ -191,9 +187,7 @@ impl<T: 'static, S: Storage<T>> WritableRef for CopyValue<T, S> {
     ) -> Option<Self::Mut<U>> {
         S::try_map_mut(mut_, f)
     }
-}
 
-impl<T: 'static, S: Storage<T>> Writable<T> for CopyValue<T, S> {
     fn try_write(&self) -> Result<Self::Mut<T>, generational_box::BorrowMutError> {
         self.value.try_write()
     }

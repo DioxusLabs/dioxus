@@ -2,26 +2,21 @@ use std::ops::DerefMut;
 
 use crate::read::Readable;
 
-/// A trait for utilities around a mutable reference
-pub trait WritableRef {
+/// A trait for states that can be read from like [`crate::Signal`], or [`crate::GlobalSignal`]. You may choose to accept this trait as a parameter instead of the concrete type to allow for more flexibility in your API. For example, instead of creating two functions, one that accepts a [`crate::Signal`] and one that accepts a [`crate::GlobalSignal`], you can create one function that accepts a [`Writable`] type.
+pub trait Writable<T: 'static>: Readable<T> {
     /// The type of the reference.
     type Mut<R: ?Sized + 'static>: DerefMut<Target = R>;
 
     /// Map the reference to a new type.
-    fn map_mut<I, U: ?Sized + 'static, F: FnOnce(&mut I) -> &mut U>(
-        ref_: Self::Mut<I>,
-        f: F,
-    ) -> Self::Mut<U>;
+    fn map_mut<I, U: ?Sized, F: FnOnce(&mut I) -> &mut U>(ref_: Self::Mut<I>, f: F)
+        -> Self::Mut<U>;
 
     /// Try to map the reference to a new type.
-    fn try_map_mut<I, U: ?Sized + 'static, F: FnOnce(&mut I) -> Option<&mut U>>(
+    fn try_map_mut<I, U: ?Sized, F: FnOnce(&mut I) -> Option<&mut U>>(
         ref_: Self::Mut<I>,
         f: F,
     ) -> Option<Self::Mut<U>>;
-}
 
-/// A trait for states that can be read from like [`crate::Signal`], or [`crate::GlobalSignal`]. You may choose to accept this trait as a parameter instead of the concrete type to allow for more flexibility in your API. For example, instead of creating two functions, one that accepts a [`crate::Signal`] and one that accepts a [`crate::GlobalSignal`], you can create one function that accepts a [`Writable`] type.
-pub trait Writable<T: 'static>: WritableRef + Readable<T> {
     /// Get a mutable reference to the value. If the value has been dropped, this will panic.
     #[track_caller]
     fn write(&self) -> Self::Mut<T> {

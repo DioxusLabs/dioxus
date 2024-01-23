@@ -1,25 +1,19 @@
 use std::ops::Deref;
 
-/// A trait for utilities around a mutable reference
-pub trait ReadableRef {
+/// A trait for states that can be read from like [`crate::Signal`], [`crate::GlobalSignal`], or [`crate::ReadOnlySignal`]. You may choose to accept this trait as a parameter instead of the concrete type to allow for more flexibility in your API. For example, instead of creating two functions, one that accepts a [`crate::Signal`] and one that accepts a [`crate::GlobalSignal`], you can create one function that accepts a [`Readable`] type.
+pub trait Readable<T: 'static = ()> {
     /// The type of the reference.
     type Ref<R: ?Sized + 'static>: Deref<Target = R>;
 
     /// Map the reference to a new type.
-    fn map_ref<I, U: ?Sized + 'static, F: FnOnce(&I) -> &U>(
-        ref_: Self::Ref<I>,
-        f: F,
-    ) -> Self::Ref<U>;
+    fn map_ref<I, U: ?Sized, F: FnOnce(&I) -> &U>(ref_: Self::Ref<I>, f: F) -> Self::Ref<U>;
 
     /// Try to map the reference to a new type.
-    fn try_map_ref<I, U: ?Sized + 'static, F: FnOnce(&I) -> Option<&U>>(
+    fn try_map_ref<I, U: ?Sized, F: FnOnce(&I) -> Option<&U>>(
         ref_: Self::Ref<I>,
         f: F,
     ) -> Option<Self::Ref<U>>;
-}
 
-/// A trait for states that can be read from like [`crate::Signal`], [`crate::GlobalSignal`], or [`crate::ReadOnlySignal`]. You may choose to accept this trait as a parameter instead of the concrete type to allow for more flexibility in your API. For example, instead of creating two functions, one that accepts a [`crate::Signal`] and one that accepts a [`crate::GlobalSignal`], you can create one function that accepts a [`Readable`] type.
-pub trait Readable<T: 'static>: ReadableRef {
     /// Get the current value of the state. If this is a signal, this will subscribe the current scope to the signal. If the value has been dropped, this will panic.
     fn read(&self) -> Self::Ref<T>;
 
