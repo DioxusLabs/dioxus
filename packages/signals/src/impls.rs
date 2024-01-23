@@ -52,20 +52,6 @@ macro_rules! read_impls {
                 self.with(|v| *v == *other)
             }
         }
-
-        impl<T: $($extra_bounds + )? 'static $(,$vec_bound_ty: $vec_bound)?> $ty<Vec<T>, $($vec_bound_ty)?> {
-            /// Returns the length of the inner vector.
-            #[track_caller]
-            pub fn len(&self) -> usize {
-                self.with(|v| v.len())
-            }
-
-            /// Returns true if the inner vector is empty.
-            #[track_caller]
-            pub fn is_empty(&self) -> bool {
-                self.with(|v| v.is_empty())
-            }
-        }
     };
 }
 
