@@ -25,7 +25,6 @@ use crate::{signal::SignalData, ReadOnlySignal, Signal};
 /// }
 /// ```
 #[track_caller]
-#[must_use = "Consider using `use_effect` to rerun a callback when dependencies change"]
 pub fn use_memo<R: PartialEq>(f: impl FnMut() -> R + 'static) -> ReadOnlySignal<R> {
     use_maybe_sync_memo(f)
 }
@@ -48,7 +47,6 @@ pub fn use_memo<R: PartialEq>(f: impl FnMut() -> R + 'static) -> ReadOnlySignal<
 /// }
 /// ```
 #[track_caller]
-#[must_use = "Consider using `use_effect` to rerun a callback when dependencies change"]
 pub fn use_maybe_sync_memo<R: PartialEq, S: Storage<SignalData<R>>>(
     f: impl FnMut() -> R + 'static,
 ) -> ReadOnlySignal<R, S> {
@@ -72,7 +70,6 @@ pub fn use_maybe_sync_memo<R: PartialEq, S: Storage<SignalData<R>>>(
 /// }
 /// ```
 #[track_caller]
-#[must_use = "Consider using `use_effect` to rerun a callback when dependencies change"]
 pub fn use_memo_with_dependencies<R: PartialEq, D: Dependency>(
     dependencies: D,
     f: impl FnMut(D::Out) -> R + 'static,
@@ -100,7 +97,6 @@ where
 /// }
 /// ```
 #[track_caller]
-#[must_use = "Consider using `use_effect` to rerun a callback when dependencies change"]
 pub fn use_maybe_sync_selector_with_dependencies<
     R: PartialEq,
     D: Dependency,

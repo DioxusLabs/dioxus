@@ -10,8 +10,8 @@ pub use rt::*;
 mod effect;
 pub use effect::*;
 
-mod selector;
-pub use selector::*;
+mod memo;
+pub use memo::*;
 
 pub(crate) mod signal;
 pub use signal::*;
