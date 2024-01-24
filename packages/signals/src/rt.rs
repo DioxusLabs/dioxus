@@ -195,6 +195,10 @@ impl<T: 'static, S: Storage<T>> Writable<T> for CopyValue<T, S> {
     fn write(&self) -> Self::Mut<T> {
         self.value.write()
     }
+
+    fn set(&mut self, value: T) {
+        self.value.set(value);
+    }
 }
 
 impl<T: 'static, S: Storage<T>> PartialEq for CopyValue<T, S> {
