@@ -91,8 +91,9 @@ pub mod prelude {
         remove_future, schedule_update, schedule_update_any, spawn, spawn_forever, suspend,
         try_consume_context, use_drop, use_error_boundary, use_hook, use_hook_with_cleanup,
         AnyValue, Attribute, Component, ComponentFunction, Element, ErrorBoundary, Event,
-        EventHandler, Fragment, HasAttributes, IntoAttributeValue, IntoDynNode, Properties,
-        Runtime, RuntimeGuard, ScopeId, ScopeState, Task, Template, TemplateAttribute,
-        TemplateNode, Throw, VNode, VNodeInner, VirtualDom,
+        EventHandler, Fragment, HasAttributes, IntoAttributeValue, IntoDynNode,
+        OptionStringFromMarker, Properties, Runtime, RuntimeGuard, ScopeId, ScopeState, SuperFrom,
+        SuperInto, Task, Template, TemplateAttribute, TemplateNode, Throw, VNode, VNodeInner,
+        VirtualDom,
     };
 }

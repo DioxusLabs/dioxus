@@ -1,7 +1,3 @@
-//! Example: README.md showcase
-//!
-//! The example from the README.md.
-
 use dioxus::prelude::*;
 
 fn main() {
@@ -12,8 +8,20 @@ fn app() -> Element {
     let mut count = use_signal(|| 0);
 
     rsx! {
-        h1 { "High-Five counter: {count}" }
+        Child { count: "High-Five counter: {count}" }
+        Child { count: "count" }
         button { onclick: move |_| count += 1, "Up high!" }
         button { onclick: move |_| count -= 1, "Down low!" }
+    }
+}
+
+#[derive(Props, Clone, PartialEq)]
+struct ChildProps {
+    count: Option<String>,
+}
+
+fn Child(props: ChildProps) -> Element {
+    rsx! {
+        h1 { "{props.count.unwrap_or_default()}" }
     }
 }

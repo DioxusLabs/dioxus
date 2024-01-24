@@ -3,8 +3,8 @@
 //! However, it has been adopted to fit the Dioxus Props builder pattern.
 //!
 //! For Dioxus, we make a few changes:
-//! - [ ] Automatically implement Into<Option> on the setters (IE the strip setter option)
-//! - [ ] Automatically implement a default of none for optional fields (those explicitly wrapped with Option<T>)
+//! - [x] Automatically implement Into<Option> on the setters (IE the strip setter option)
+//! - [x] Automatically implement a default of none for optional fields (those explicitly wrapped with Option<T>)
 
 use proc_macro2::TokenStream;
 
@@ -956,6 +956,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                 index_after_lifetime_in_generics,
                 syn::GenericArgument::Type(ty_generics_tuple.into()),
             );
+
             let (impl_generics, _, where_clause) = generics.split_for_impl();
             let doc = match field.builder_attr.doc {
                 Some(ref doc) => quote!(#[doc = #doc]),
@@ -963,11 +964,15 @@ Finally, call `.build()` to create the instance of `{name}`.
             };
 
             let arg_type = field_type;
+            // If the field is auto_into, we need to add a generic parameter to the builder for specialization
+            let mut marker = None;
             let (arg_type, arg_expr) =
                 if field.builder_attr.auto_into || field.builder_attr.strip_option {
+                    let marker_ident = syn::Ident::new("__Marker", proc_macro2::Span::call_site());
+                    marker = Some(marker_ident.clone());
                     (
-                        quote!(impl ::core::convert::Into<#arg_type>),
-                        quote!(#field_name.into()),
+                        quote!(impl dioxus_core::prelude::SuperInto<#arg_type, #marker_ident>),
+                        quote!(#field_name.super_into()),
                     )
                 } else if field.builder_attr.from_displayable {
                     (
@@ -998,7 +1003,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                 impl #impl_generics #builder_name < #( #ty_generics ),* > #where_clause {
                     #doc
                     #[allow(clippy::type_complexity)]
-                    pub fn #field_name (self, #field_name: #arg_type) -> #builder_name < #( #target_generics ),* > {
+                    pub fn #field_name < #marker > (self, #field_name: #arg_type) -> #builder_name < #( #target_generics ),* > {
                         let #field_name = (#arg_expr,);
                         let ( #(#descructuring,)* ) = self.fields;
                         #builder_name {
@@ -1018,7 +1023,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                         note = #repeated_fields_error_message
                     )]
                     #[allow(clippy::type_complexity)]
-                    pub fn #field_name (self, _: #repeated_fields_error_type_name) -> #builder_name < #( #target_generics ),* > {
+                    pub fn #field_name< #marker > (self, _: #repeated_fields_error_type_name) -> #builder_name < #( #target_generics ),* > {
                         self
                     }
                 }

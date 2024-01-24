@@ -1,4 +1,4 @@
-use std::any::TypeId;
+use std::{any::TypeId, fmt::Arguments};
 
 use crate::innerlude::*;
 
@@ -117,4 +117,75 @@ impl<F: Fn() -> Element + Clone + 'static> ComponentFunction<(), EmptyMarker> fo
     fn rebuild(&self, _: ()) -> Element {
         self()
     }
+}
+
+/// A enhanced version of the `Into` trait that allows with more flexibility.
+pub trait SuperInto<O, M = ()> {
+    /// Convert from a type to another type.
+    fn super_into(self) -> O;
+}
+
+impl<T, O, M> SuperInto<O, M> for T
+where
+    O: SuperFrom<T, M>,
+{
+    fn super_into(self) -> O {
+        O::super_from(self)
+    }
+}
+
+/// A enhanced version of the `From` trait that allows with more flexibility.
+pub trait SuperFrom<T, M = ()> {
+    /// Convert from a type to another type.
+    fn super_from(_: T) -> Self;
+}
+
+// first implement for all types that are that implement the From trait
+impl<T, O> SuperFrom<T, ()> for O
+where
+    O: From<T>,
+{
+    fn super_from(input: T) -> Self {
+        Self::from(input)
+    }
+}
+
+#[doc(hidden)]
+pub struct OptionStringFromMarker;
+
+impl<'a> SuperFrom<&'a str, OptionStringFromMarker> for Option<String> {
+    fn super_from(input: &'a str) -> Self {
+        Some(String::from(input))
+    }
+}
+
+#[doc(hidden)]
+pub struct OptionArgumentsFromMarker;
+
+impl<'a> SuperFrom<Arguments<'a>, OptionArgumentsFromMarker> for Option<String> {
+    fn super_from(input: Arguments<'a>) -> Self {
+        Some(input.to_string())
+    }
+}
+
+#[test]
+#[allow(unused)]
+fn from_props_compiles() {
+    // T -> T works
+    let option: i32 = 0i32.super_into();
+    let option: i32 = 0.super_into(); // Note we don't need type hints on all inputs
+    let option: i128 = 0.super_into();
+    let option: &'static str = "hello world".super_into();
+
+    // // T -> From<T> works
+    let option: i64 = 0i32.super_into();
+    let option: String = "hello world".super_into();
+
+    // T -> Option works
+    let option: Option<i32> = 0i32.super_into();
+    let option: Option<i32> = 0.super_into();
+    let option: Option<i128> = 0.super_into();
+    fn takes_option_string<M>(_: impl SuperInto<Option<String>, M>) {}
+    takes_option_string("hello world");
+    takes_option_string("hello world".to_string());
 }
