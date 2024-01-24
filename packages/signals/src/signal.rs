@@ -261,9 +261,6 @@ impl<T: PartialEq + 'static> Signal<T> {
     pub fn maybe_sync_memo<S: Storage<SignalData<T>>>(
         mut f: impl FnMut() -> T + 'static,
     ) -> ReadOnlySignal<T, S> {
-        let mut state = Signal::<T, S> {
-            inner: CopyValue::invalid(),
-        };
         let effect = Effect {
             source: current_scope_id().expect("in a virtual dom"),
             inner: CopyValue::invalid(),
@@ -272,12 +269,7 @@ impl<T: PartialEq + 'static> Signal<T> {
         {
             EFFECT_STACK.with(|stack| stack.effects.write().push(effect));
         }
-        state.inner.value.set(SignalData {
-            subscribers: Default::default(),
-            update_any: schedule_update_any(),
-            value: f(),
-            effect_ref: get_effect_ref(),
-        });
+        let mut state: Signal<T, S> = Signal::new_maybe_sync(f());
         {
             EFFECT_STACK.with(|stack| stack.effects.write().pop());
         }
