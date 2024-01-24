@@ -972,7 +972,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                     marker = Some(marker_ident.clone());
                     (
                         quote!(impl dioxus_core::prelude::SuperInto<#arg_type, #marker_ident>),
-                        quote!(#field_name.super_into()),
+                        quote!(dioxus_core::prelude::SuperInto::super_into(#field_name)),
                     )
                 } else if field.builder_attr.from_displayable {
                     (
