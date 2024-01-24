@@ -1,9 +1,8 @@
 use crate::read::Readable;
-use crate::read::ReadableVecExt;
 use crate::rt::CopyValue;
 use crate::signal::Signal;
 use crate::write::Writable;
-use crate::{GlobalMemo, GlobalSignal, ReadOnlySignal, ReadableValueIterator, SignalData};
+use crate::{GlobalMemo, GlobalSignal, ReadOnlySignal, SignalData};
 use generational_box::Storage;
 
 use std::{
@@ -124,16 +123,6 @@ impl<T: 'static, S: Storage<T>> Clone for CopyValue<T, S> {
 
 impl<T: 'static, S: Storage<T>> Copy for CopyValue<T, S> {}
 
-impl<T: 'static, S: Storage<Vec<T>>> IntoIterator for CopyValue<Vec<T>, S> {
-    type IntoIter = ReadableValueIterator<T, Self>;
-
-    type Item = S::Ref<T>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.iter()
-    }
-}
-
 read_impls!(Signal, S: Storage<SignalData<T>>, S: Storage<SignalData<Vec<T>>>);
 write_impls!(Signal, Storage<SignalData<T>>, Storage<SignalData<Vec<T>>>);
 
@@ -144,16 +133,6 @@ impl<T: 'static, S: Storage<SignalData<T>>> Clone for Signal<T, S> {
 }
 
 impl<T: 'static, S: Storage<SignalData<T>>> Copy for Signal<T, S> {}
-
-impl<T: 'static, S: Storage<SignalData<Vec<T>>>> IntoIterator for Signal<Vec<T>, S> {
-    type IntoIter = ReadableValueIterator<T, Self>;
-
-    type Item = S::Ref<T>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.iter()
-    }
-}
 
 read_impls!(
     ReadOnlySignal,
@@ -168,16 +147,6 @@ impl<T: 'static, S: Storage<SignalData<T>>> Clone for ReadOnlySignal<T, S> {
 }
 
 impl<T: 'static, S: Storage<SignalData<T>>> Copy for ReadOnlySignal<T, S> {}
-
-impl<T: 'static, S: Storage<SignalData<Vec<T>>>> IntoIterator for ReadOnlySignal<Vec<T>, S> {
-    type IntoIter = ReadableValueIterator<T, Self>;
-
-    type Item = S::Ref<T>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.iter()
-    }
-}
 
 read_impls!(GlobalSignal);
 

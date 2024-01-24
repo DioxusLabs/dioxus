@@ -175,7 +175,7 @@ pub trait WritableVecExt<T: 'static>: Writable<Vec<T>> {
 
     /// Gets an iterator over the values of the vector.
     #[track_caller]
-    fn iter(&self) -> WritableValueIterator<T, Self>
+    fn iter_mut(&self) -> WritableValueIterator<T, Self>
     where
         Self: Sized + Clone,
     {

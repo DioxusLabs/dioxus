@@ -51,7 +51,7 @@ fn ClientList() -> Element {
         h2 { "List of Clients" }
         Link { to: Route::ClientAdd, class: "pure-button pure-button-primary", "Add Client" }
         Link { to: Route::Settings, class: "pure-button", "Settings" }
-        for client in CLIENTS.read().iter() {
+        for client in CLIENTS.iter() {
             div { class: "client", style: "margin-bottom: 50px",
                 p { "Name: {client.first_name} {client.last_name}" }
                 p { "Description: {client.description}" }

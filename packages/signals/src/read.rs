@@ -85,26 +85,26 @@ pub trait ReadableVecExt<T: 'static>: Readable<Vec<T>> {
 
     /// Get an iterator over the values of the inner vector.
     #[track_caller]
-    fn iter(&self) -> ReadableValueIterator<T, Self>
+    fn iter(&self) -> ReadableValueIterator<'_, T, Self>
     where
-        Self: Sized + Clone,
+        Self: Sized,
     {
         ReadableValueIterator {
             index: 0,
-            value: self.clone(),
+            value: self,
             phantom: std::marker::PhantomData,
         }
     }
 }
 
 /// An iterator over the values of a `Readable<Vec<T>>`.
-pub struct ReadableValueIterator<T, R> {
+pub struct ReadableValueIterator<'a, T, R> {
     index: usize,
-    value: R,
+    value: &'a R,
     phantom: std::marker::PhantomData<T>,
 }
 
-impl<T: 'static, R: Readable<Vec<T>>> Iterator for ReadableValueIterator<T, R> {
+impl<'a, T: 'static, R: Readable<Vec<T>>> Iterator for ReadableValueIterator<'a, T, R> {
     type Item = R::Ref<T>;
 
     fn next(&mut self) -> Option<Self::Item> {
