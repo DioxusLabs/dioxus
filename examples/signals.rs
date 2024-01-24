@@ -10,16 +10,27 @@ fn app() -> Element {
     let mut count = use_signal(|| 0);
     let mut saved_values = use_signal(|| vec![0.to_string()]);
 
-    // Signals can be used in async functions without an explicit clone since they're 'static and Copy
-    // Signals are backed by a runtime that is designed to deeply integrate with Dioxus apps
+    // use_memo will recompute the value of the signal whenever the captured signals change
+    let doubled_count = use_memo(move || count() * 2);
+
+    // use_effect will subscribe to any changes in the signal values it captures
+    // effects will always run after first mount and then whenever the signal values change
+    use_effect(move || println!("Count changed to {}", count()));
+
+    // use_future will spawn an infinitely running future that can be started and stopped
     use_future(|| async move {
         loop {
             if running() {
                 count += 1;
             }
-
             tokio::time::sleep(Duration::from_millis(400)).await;
         }
+    });
+
+    // use_resource will spawn a future that resolves to a value - essentially an async memo
+    let slow_count = use_resource(move || async move {
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        count() * 2
     });
 
     rsx! {
