@@ -179,6 +179,7 @@ impl InnerInputState {
                         k.location(),
                         is_repeating,
                         k.modifiers(),
+                        k.is_composing(),
                     );
                 }
 
@@ -779,6 +780,7 @@ fn translate_key_event(event: crossterm::event::KeyEvent) -> Option<EventData> {
         Location::Standard,
         false,
         modifiers,
+        false,
     )))
 }
 
