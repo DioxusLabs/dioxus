@@ -4,8 +4,7 @@ use crate::rt::CopyValue;
 use crate::signal::Signal;
 use crate::write::Writable;
 use crate::{GlobalMemo, GlobalSignal, ReadOnlySignal, ReadableValueIterator, SignalData};
-use generational_box::UnsyncStorage;
-use generational_box::{AnyStorage, Storage};
+use generational_box::Storage;
 
 use std::{
     fmt::{Debug, Display},
@@ -22,15 +21,6 @@ macro_rules! read_impls {
                 }
             }
         )?
-
-        impl<T $(: $extra_bounds)? $(,$bound_ty: $bound)?> std::clone::Clone for $ty<T $(, $bound_ty)?> {
-            #[track_caller]
-            fn clone(&self) -> Self {
-                *self
-            }
-        }
-
-        impl<T $(: $extra_bounds)? $(,$bound_ty: $bound)?> Copy for $ty<T $(, $bound_ty)?> {}
 
         impl<T: $($extra_bounds + )? Display + 'static $(,$bound_ty: $bound)?> Display for $ty<T $(, $bound_ty)?> {
             #[track_caller]
@@ -126,6 +116,14 @@ macro_rules! write_impls {
 read_impls!(CopyValue, S: Storage<T>, S: Storage<Vec<T>>);
 write_impls!(CopyValue, Storage<T>, Storage<Vec<T>>);
 
+impl<T: 'static, S: Storage<T>> Clone for CopyValue<T, S> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<T: 'static, S: Storage<T>> Copy for CopyValue<T, S> {}
+
 impl<T: 'static, S: Storage<Vec<T>>> IntoIterator for CopyValue<Vec<T>, S> {
     type IntoIter = ReadableValueIterator<T, Self>;
 
@@ -138,6 +136,14 @@ impl<T: 'static, S: Storage<Vec<T>>> IntoIterator for CopyValue<Vec<T>, S> {
 
 read_impls!(Signal, S: Storage<SignalData<T>>, S: Storage<SignalData<Vec<T>>>);
 write_impls!(Signal, Storage<SignalData<T>>, Storage<SignalData<Vec<T>>>);
+
+impl<T: 'static, S: Storage<SignalData<T>>> Clone for Signal<T, S> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<T: 'static, S: Storage<SignalData<T>>> Copy for Signal<T, S> {}
 
 impl<T: 'static, S: Storage<SignalData<Vec<T>>>> IntoIterator for Signal<Vec<T>, S> {
     type IntoIter = ReadableValueIterator<T, Self>;
@@ -155,6 +161,14 @@ read_impls!(
     S: Storage<SignalData<Vec<T>>>
 );
 
+impl<T: 'static, S: Storage<SignalData<T>>> Clone for ReadOnlySignal<T, S> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<T: 'static, S: Storage<SignalData<T>>> Copy for ReadOnlySignal<T, S> {}
+
 impl<T: 'static, S: Storage<SignalData<Vec<T>>>> IntoIterator for ReadOnlySignal<Vec<T>, S> {
     type IntoIter = ReadableValueIterator<T, Self>;
 
@@ -167,24 +181,4 @@ impl<T: 'static, S: Storage<SignalData<Vec<T>>>> IntoIterator for ReadOnlySignal
 
 read_impls!(GlobalSignal);
 
-impl<T: 'static> IntoIterator for GlobalSignal<Vec<T>> {
-    type IntoIter = ReadableValueIterator<T, Self>;
-
-    type Item = <UnsyncStorage as AnyStorage>::Ref<T>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.iter()
-    }
-}
-
 read_impls!(GlobalMemo: PartialEq);
-
-impl<T: PartialEq + 'static> IntoIterator for GlobalMemo<Vec<T>> {
-    type IntoIter = ReadableValueIterator<T, Self>;
-
-    type Item = <UnsyncStorage as AnyStorage>::Ref<T>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.iter()
-    }
-}
