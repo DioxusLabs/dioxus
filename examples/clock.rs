@@ -14,6 +14,10 @@ fn app() -> Element {
         }
     });
 
+    use_effect(move || {
+        println!("High-Five counter: {}", count());
+    });
+
     rsx! {
         div { "High-Five counter: {count}" }
     }

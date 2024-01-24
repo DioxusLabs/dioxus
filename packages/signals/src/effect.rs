@@ -98,7 +98,7 @@ impl EffectInner {
             callback: Box::new(callback),
             id: copy.id(),
         };
-        copy.set(inner);
+        copy.set_inner(inner);
         copy
     }
 }

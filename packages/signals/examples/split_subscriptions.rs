@@ -87,7 +87,7 @@ fn ReadsManySignals() -> Element {
             },
             "Increase First Item"
         }
-        for signal in data.many_signals {
+        for signal in data.many_signals.iter() {
             Child { count: *signal }
         }
     }

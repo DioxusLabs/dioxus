@@ -146,6 +146,11 @@ impl<T: 'static, S: Storage<T>> CopyValue<T, S> {
     pub fn id(&self) -> GenerationalBoxId {
         self.value.id()
     }
+
+    /// Set the inner value directory without going `Write`
+    pub fn set_inner(&self, value: T) {
+        self.value.set(value);
+    }
 }
 
 impl<T: 'static, S: Storage<T>> Readable<T> for CopyValue<T, S> {
