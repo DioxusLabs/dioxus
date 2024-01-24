@@ -199,18 +199,20 @@ pub struct Signal<T: 'static, S: Storage<SignalData<T>> = UnsyncStorage> {
 pub type SyncSignal<T> = Signal<T, SyncStorage>;
 
 #[cfg(feature = "serde")]
-impl<T: serde::Serialize + 'static, S: Storage<SignalData<T>>> serde::Serialize for Signal<T, S> {
+impl<T: serde::Serialize + 'static, Store: Storage<SignalData<T>>> serde::Serialize
+    for Signal<T, Store>
+{
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         self.read().serialize(serializer)
     }
 }
 
 #[cfg(feature = "serde")]
-impl<'de, T: serde::Deserialize<'de> + 'static, S: Storage<SignalData<T>>> serde::Deserialize<'de>
-    for Signal<T, S>
+impl<'de, T: serde::Deserialize<'de> + 'static, Store: Storage<SignalData<T>>>
+    serde::Deserialize<'de> for Signal<T, Store>
 {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        Ok(Self::new(T::deserialize(deserializer)?))
+        Ok(Self::new_maybe_sync(T::deserialize(deserializer)?))
     }
 }
 

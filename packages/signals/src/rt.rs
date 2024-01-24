@@ -50,7 +50,7 @@ pub struct CopyValue<T: 'static, S: Storage<T> = UnsyncStorage> {
 }
 
 #[cfg(feature = "serde")]
-impl<T: 'static> serde::Serialize for CopyValue<T>
+impl<T: 'static, Store: Storage<T>> serde::Serialize for CopyValue<T, Store>
 where
     T: serde::Serialize,
 {
@@ -60,14 +60,14 @@ where
 }
 
 #[cfg(feature = "serde")]
-impl<'de, T: 'static> serde::Deserialize<'de> for CopyValue<T>
+impl<'de, T: 'static, Store: Storage<T>> serde::Deserialize<'de> for CopyValue<T, Store>
 where
     T: serde::Deserialize<'de>,
 {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let value = T::deserialize(deserializer)?;
 
-        Ok(Self::new(value))
+        Ok(Self::new_maybe_sync(value))
     }
 }
 
