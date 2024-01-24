@@ -13,7 +13,7 @@ use crate::prelude::*;
 pub(crate) fn use_router_internal() -> Option<RouterContext> {
     let router = use_hook(consume_context::<RouterContext>);
     let id = current_scope_id().expect("use_router_internal called outside of a component");
-    use_on_destroy({
+    use_drop({
         to_owned![router];
         move || {
             router.unsubscribe(id);

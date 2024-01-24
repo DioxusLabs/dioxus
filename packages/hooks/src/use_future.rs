@@ -7,21 +7,14 @@ use dioxus_signals::*;
 use futures_util::{future, pin_mut, FutureExt};
 use std::{any::Any, cell::Cell, future::Future, pin::Pin, rc::Rc, sync::Arc, task::Poll};
 
-/// A future that resolves to a value.
+/// A hook that allows you to spawn a future
 ///
-/// This runs the future only once - though the future may be regenerated
-/// through the [`UseFuture::restart`] method.
-///
-/// This is commonly used for components that cannot be rendered until some
-/// asynchronous operation has completed.
-///
-///
-pub fn use_future<T, F>(mut future: impl FnMut() -> F) -> UseFuture<T>
+/// Does not regenerate the future when dependencies change. If you're looking for a future that does, check out
+/// `use_resource` instead.
+pub fn use_future<F>(mut future: impl FnMut() -> F) -> UseFuture
 where
-    T: 'static,
-    F: Future<Output = T> + 'static,
+    F: Future + 'static,
 {
-    let mut value = use_signal(|| None);
     let mut state = use_signal(|| UseFutureState::Pending);
 
     let task = use_signal(|| {
@@ -47,22 +40,21 @@ where
             .await;
 
             // Set the value
-            value.set(Some(res));
+            // value.set(Some(res));
         });
 
         Some(task)
     });
 
-    UseFuture { task, value, state }
+    UseFuture { task, state }
 }
 
-pub struct UseFuture<T: 'static> {
-    value: Signal<Option<T>>,
+pub struct UseFuture {
     task: Signal<Option<Task>>,
-    state: Signal<UseFutureState<T>>,
+    state: Signal<UseFutureState>,
 }
 
-impl<T> UseFuture<T> {
+impl UseFuture {
     /// Restart the future with new dependencies.
     ///
     /// Will not cancel the previous future, but will ignore any values that it
@@ -79,18 +71,6 @@ impl<T> UseFuture<T> {
         // }
     }
 
-    // Manually set the value in the future slot without starting the future over
-    pub fn set(&mut self, new_value: T) {
-        self.value.set(Some(new_value));
-    }
-
-    /// Return any value, even old values if the future has not yet resolved.
-    ///
-    /// If the future has never completed, the returned value will be `None`.
-    pub fn value(&self) -> Signal<Option<T>> {
-        self.value
-    }
-
     /// Get the ID of the future in Dioxus' internal scheduler
     pub fn task(&self) -> Option<Task> {
         todo!()
@@ -98,7 +78,7 @@ impl<T> UseFuture<T> {
     }
 
     /// Get the current state of the future.
-    pub fn state(&self) -> UseFutureState<T> {
+    pub fn state(&self) -> UseFutureState {
         todo!()
         // match (&self.task.get(), &self.value()) {
         //     // If we have a task and an existing value, we're reloading
@@ -116,8 +96,8 @@ impl<T> UseFuture<T> {
     }
 }
 
-pub enum UseFutureState<T: 'static> {
+pub enum UseFutureState {
     Pending,
-    Complete(Signal<T>),
-    Regenerating(Signal<T>), // the old value
+    Complete,
+    Regenerating, // the old value
 }

@@ -5,7 +5,7 @@ fn main() {
 }
 
 fn app() -> Element {
-    let future = use_future(|| async move {
+    let future = use_resource(|| async move {
         let mut eval = eval(
             r#"
                 dioxus.send("Hi from JS!");

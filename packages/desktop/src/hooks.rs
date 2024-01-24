@@ -5,10 +5,10 @@ use crate::{
     ShortcutHandle, ShortcutRegistryError, WryEventHandler,
 };
 use dioxus_core::{
-    prelude::{consume_context, current_scope_id},
+    prelude::{consume_context, current_scope_id, use_hook_with_cleanup},
     use_hook,
 };
-use dioxus_hooks::use_hook_with_cleanup;
+
 use tao::{event::Event, event_loop::EventLoopWindowTarget};
 use wry::RequestAsyncResponder;
 
