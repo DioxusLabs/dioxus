@@ -7,13 +7,13 @@ use crate::{
     arena::ElementId,
     innerlude::{
         DirtyScope, ElementRef, ErrorBoundary, NoOpMutations, SchedulerMsg, ScopeState, VNodeMount,
-        WriteMutations,
+        VProps, WriteMutations,
     },
     nodes::RenderReturn,
     nodes::{Template, TemplateId},
     runtime::{Runtime, RuntimeGuard},
     scopes::ScopeId,
-    AttributeValue, ComponentFunction, Element, Event, Mutations, Task, VProps,
+    AttributeValue, ComponentFunction, Element, Event, Mutations, Task,
 };
 use futures_util::{pin_mut, StreamExt};
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -303,7 +303,7 @@ impl VirtualDom {
     /// let mut dom = VirtualDom::new_from_root(VComponent::new(Example, SomeProps { name: "jane" }, "Example"));
     /// let mutations = dom.rebuild();
     /// ```
-    pub fn new_with_component(root: impl AnyProps + 'static) -> Self {
+    pub(crate) fn new_with_component(root: impl AnyProps + 'static) -> Self {
         let (tx, rx) = futures_channel::mpsc::unbounded();
 
         let mut dom = Self {

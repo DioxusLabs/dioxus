@@ -4,7 +4,7 @@ use std::{any::Any, panic::AssertUnwindSafe};
 pub(crate) type BoxedAnyProps = Box<dyn AnyProps>;
 
 /// A trait for a component that can be rendered.
-pub trait AnyProps: 'static {
+pub(crate) trait AnyProps: 'static {
     /// Render the component with the internal props.
     fn render(&self) -> RenderReturn;
     /// Check if the props are the same as the type erased props of another component.
@@ -16,7 +16,7 @@ pub trait AnyProps: 'static {
 }
 
 /// A component along with the props the component uses to render.
-pub struct VProps<F: ComponentFunction<P, M>, P, M> {
+pub(crate) struct VProps<F: ComponentFunction<P, M>, P, M> {
     render_fn: F,
     memo: fn(&P, &P) -> bool,
     props: P,
@@ -51,11 +51,6 @@ impl<F: ComponentFunction<P, M> + Clone, P: Clone + 'static, M: 'static> VProps<
             name,
             phantom: std::marker::PhantomData,
         }
-    }
-
-    /// Get the current props of the VProps object
-    pub fn props(&self) -> &P {
-        &self.props
     }
 }
 

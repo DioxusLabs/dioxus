@@ -1,4 +1,5 @@
-use crate::{any_props::BoxedAnyProps, innerlude::ScopeState, VProps};
+use crate::innerlude::VProps;
+use crate::{any_props::BoxedAnyProps, innerlude::ScopeState};
 use crate::{arena::ElementId, Element, Event};
 use crate::{
     innerlude::{ElementRef, EventHandler, MountId},
