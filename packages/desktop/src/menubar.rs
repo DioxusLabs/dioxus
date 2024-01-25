@@ -64,7 +64,7 @@ mod impl_ {
                 ])
                 .unwrap();
 
-            let edit_menu = Submenu::new("Window", true);
+            let edit_menu = Submenu::new("Edit", true);
             edit_menu
                 .append_items(&[
                     &PredefinedMenuItem::undo(None),
