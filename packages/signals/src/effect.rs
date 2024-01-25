@@ -126,10 +126,12 @@ impl Effect {
     /// Create a new effect. The effect will be run immediately and whenever any signal it reads changes.
     ///
     /// The signal will be owned by the current component and will be dropped when the component is dropped.
-    pub fn new(callback: impl FnMut() + 'static) -> Self {
+    pub fn new(mut callback: impl FnMut() + 'static) -> Self {
+        let source = current_scope_id().expect("in a virtual dom");
         let myself = Self {
-            source: current_scope_id().expect("in a virtual dom"),
-            inner: EffectInner::new(Box::new(callback)),
+            source,
+            #[allow(clippy::redundant_closure)]
+            inner: EffectInner::new(Box::new(move || source.in_runtime(|| callback()))),
         };
 
         EFFECT_STACK.with(|stack| {

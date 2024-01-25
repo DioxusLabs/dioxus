@@ -231,7 +231,7 @@ impl ScopeContext {
     /// This is good for tasks that need to be run after the component has been dropped.
     pub fn spawn_forever(&self, fut: impl Future<Output = ()> + 'static) -> Task {
         // The root scope will never be unmounted so we can just add the task at the top of the app
-        Runtime::with(|rt| rt.spawn(ScopeId::ROOT, fut)).expect("Runtime to exist")
+        Runtime::with(|rt| rt.spawn(self.id, fut)).expect("Runtime to exist")
     }
 
     /// Informs the scheduler that this task is no longer needed and should be removed.
@@ -386,6 +386,8 @@ impl ScopeId {
 
     /// Run a closure inside of scope's runtime
     pub fn in_runtime<T>(self, f: impl FnOnce() -> T) -> T {
-        Runtime::with_scope(self, |_| f()).expect("to be in a dioxus runtime")
+        Runtime::current()
+            .expect("to be in a dioxus runtime")
+            .on_scope(self, f)
     }
 }
