@@ -91,7 +91,28 @@ impl WebviewInstance {
             }
         };
 
-        let mut webview = WebViewBuilder::new(&window)
+        #[cfg(any(
+            target_os = "windows",
+            target_os = "macos",
+            target_os = "ios",
+            target_os = "android"
+        ))]
+        let mut webview = WebViewBuilder::new(&window);
+
+        #[cfg(not(any(
+            target_os = "windows",
+            target_os = "macos",
+            target_os = "ios",
+            target_os = "android"
+        )))]
+        let mut webview = {
+            use tao::platform::unix::WindowExtUnix;
+            use wry::WebViewBuilderExtUnix;
+            let vbox = window.default_vbox().unwrap();
+            WebViewBuilder::new_gtk(vbox)
+        };
+
+        webview = webview
             .with_transparent(cfg.window.window.transparent)
             .with_url("dioxus://index.html/")
             .unwrap()
