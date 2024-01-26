@@ -119,7 +119,7 @@ fn fuzz() {
             }
             #[cfg(any(debug_assertions, feature = "check_generation"))]
             for key in invalid_keys.iter() {
-                assert!(key.try_read().is_ok());
+                assert!(key.try_read().is_err());
             }
             maybe_owner_scope(valid_keys, invalid_keys, path);
             invalid_keys.push(valid_keys.pop().unwrap());
