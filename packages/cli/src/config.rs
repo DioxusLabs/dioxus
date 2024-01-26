@@ -605,11 +605,11 @@ impl PluginConfig {
 pub struct PluginConfigInfo {
     pub version: semver::Version,
     pub path: PathBuf,
-    #[serde(default = "default_plugin_config")]
-    pub config: toml::Value,
+    // #[serde(default = "default_plugin_config")]
+    // pub config: toml::Value,
     pub priority: Option<usize>,
 }
 
-fn default_plugin_config() -> toml::Value {
-    toml::Value::Table(Table::new())
-}
+// fn default_plugin_config() -> toml::Value {
+//     toml::Value::Table(Table::new())
+// }

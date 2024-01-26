@@ -6,16 +6,16 @@ macro_rules! export_plugin {
 
 interface definitions {
   use types.{platform, plugin-info, command-event, runtime-event, response-event};
-  use toml.{toml, toml-value};
+  // use toml.{toml, toml-value};
 
-  /// Returns the plugin's default configuration as a TOML value. 
-  /// The host application merges this with its `Dioxus.toml`.
-  get-default-config: func() -> toml;
+  // /// Returns the plugin's default configuration as a TOML value. 
+  // /// The host application merges this with its `Dioxus.toml`.
+  // get-default-config: func() -> toml;
 
-  /// Applies the resolved configuration value for this plugin from the main configuration file. 
-  /// Plugins should validate the passed config and store relevant values as these could be changed from the default. 
-  /// Return an Error if the config is invalid.
-  apply-config: func(config: toml) -> result;
+  // /// Applies the resolved configuration value for this plugin from the main configuration file. 
+  // /// Plugins should validate the passed config and store relevant values as these could be changed from the default. 
+  // /// Return an Error if the config is invalid.
+  // apply-config: func(config: toml) -> result;
   
   /// Performs one-time initialization when the plugin is first loaded. 
   /// Return an Error to fail registration.
@@ -50,56 +50,59 @@ interface definitions {
   /// check-update: func() -> result<option<string>>
 }
 
-interface toml {
-  /// The handle for a `TomlValue`
-  resource toml {
-    /// Creates a value in table and returns the handle
-    constructor(value: toml-value);
-    /// Clones value from table
-    get: func() -> toml-value;
-    /// Sets value in table
-    set: func(value: toml-value);
-    /// Clones the handle, not the value
-    clone: func() -> toml;
-  }
 
-  variant toml-value {
-    %string(string),
-    integer(s64),
-    float(float64),
-    boolean(bool),
-    datetime(datetime),
-    %array(array),
-    %table(table),
-  }
+/// Redacted for now
+/// See issue: https://github.com/bytecodealliance/wit-bindgen/issues/817
+// interface toml {
+//   /// The handle for a `TomlValue`
+//   resource toml {
+//     /// Creates a value in table and returns the handle
+//     constructor(value: toml-value);
+//     /// Clones value from table
+//     get: func() -> toml-value;
+//     /// Sets value in table
+//     set: func(value: toml-value);
+//     /// Clones the handle, not the value
+//     clone: func() -> toml;
+//   }
 
-  record datetime {
-    date: option<date>,
-    time: option<time>,
-    offset: option<offset>,
-  }
+//   variant toml-value {
+//     %string(string),
+//     integer(s64),
+//     float(float64),
+//     boolean(bool),
+//     datetime(datetime),
+//     %array(array),
+//     %table(table),
+//   }
 
-  record date {
-    year: u16,
-    month: u8,
-    day: u8,
-  }
+//   record datetime {
+//     date: option<date>,
+//     time: option<time>,
+//     offset: option<offset>,
+//   }
 
-  record time {
-    hour: u8,
-    minute: u8, 
-    second: u8,
-    nanosecond: u32,
-  }
+//   record date {
+//     year: u16,
+//     month: u8,
+//     day: u8,
+//   }
 
-  variant offset {
-    z,
-    custom(tuple<s8,u8>),
-  }
+//   record time {
+//     hour: u8,
+//     minute: u8, 
+//     second: u8,
+//     nanosecond: u32,
+//   }
 
-  type array = list<toml>;
-  type table = list<tuple<string, toml>>;
-}
+//   variant offset {
+//     z,
+//     custom(tuple<s8,u8>),
+//   }
+
+//   type array = list<toml>;
+//   type table = list<tuple<string, toml>>;
+// }
 
 interface types {
   enum platform {
@@ -182,7 +185,7 @@ interface imports {
 
 world plugin-world {
   import imports;
-  import toml;
+  // import toml;
   export definitions;
 }
 ",

@@ -2,34 +2,12 @@ use dioxus_cli_plugin::*;
 use exports::plugins::main::definitions::Guest;
 use plugins::main::{
     imports::log,
-    toml::Toml,
     types::{CommandEvent, PluginInfo, ResponseEvent, RuntimeEvent},
 };
 
-use crate::plugins::main::toml::TomlValue;
 struct Plugin;
 
 impl Guest for Plugin {
-    fn get_default_config() -> Toml {
-        let values = vec![(
-            "Test".into(),
-            Toml::new(TomlValue::String("THIS A TEST".into())),
-        )];
-
-        let table = TomlValue::Table(values);
-
-        let toml = Toml::new(TomlValue::Integer(100));
-        let toml2 = toml.clone();
-        drop(toml2);
-        let value = toml.get();
-        log(&format!("{value:?}"));
-        toml
-    }
-
-    fn apply_config(_config: Toml) -> Result<(), ()> {
-        Ok(())
-    }
-
     fn register() -> Result<(), ()> {
         Ok(())
     }

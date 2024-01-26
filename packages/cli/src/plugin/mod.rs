@@ -1,5 +1,6 @@
 use crate::lock::DioxusLock;
 use crate::plugin::convert::Convert;
+// use crate::plugin::convert::Convert;
 use crate::plugin::interface::{PluginRuntimeState, PluginWorld};
 use crate::server::WsMessage;
 use crate::{DioxusConfig, PluginConfigInfo};
@@ -13,8 +14,8 @@ use wasmtime::{Config, Engine, Store};
 use wasmtime_wasi::preview2::{self, DirPerms, FilePerms, Table, WasiCtxBuilder};
 use wasmtime_wasi::Dir;
 
-use self::convert::ConvertWithState;
-use self::interface::plugins::main::toml::Toml;
+// use self::convert::ConvertWithState;
+// use self::interface::plugins::main::toml::Toml;
 use self::interface::plugins::main::types::{
     CommandEvent, PluginInfo, ResponseEvent, RuntimeEvent,
 };
@@ -323,7 +324,7 @@ pub async fn load_plugin(
         PluginRuntimeState {
             table,
             ctx,
-            tomls: Slab::new(),
+            // tomls: Slab::new(),
             map: std::collections::HashMap::new(),
         },
     );
@@ -368,30 +369,30 @@ impl AsMut<PluginRuntimeState> for CliPlugin {
 }
 
 impl CliPlugin {
-    pub async fn get_default_config(&mut self) -> wasmtime::Result<toml::Value> {
-        let default_config = self
-            .bindings
-            .plugins_main_definitions()
-            .call_get_default_config(&mut self.store)
-            .await?;
-        let t = self
-            .store
-            .data_mut()
-            .get_toml(default_config)
-            .convert_with_state(self.store.data_mut())
-            .await;
-        Ok(t)
-    }
+    // pub async fn get_default_config(&mut self) -> wasmtime::Result<toml::Value> {
+    //     let default_config = self
+    //         .bindings
+    //         .plugins_main_definitions()
+    //         .call_get_default_config(&mut self.store)
+    //         .await?;
+    //     let t = self
+    //         .store
+    //         .data_mut()
+    //         .get_toml(default_config)
+    //         .convert_with_state(self.store.data_mut())
+    //         .await;
+    //     Ok(t)
+    // }
 
-    pub async fn apply_config(
-        &mut self,
-        config: Resource<Toml>,
-    ) -> wasmtime::Result<Result<(), ()>> {
-        self.bindings
-            .plugins_main_definitions()
-            .call_apply_config(&mut self.store, config)
-            .await
-    }
+    // pub async fn apply_config(
+    //     &mut self,
+    //     config: Resource<Toml>,
+    // ) -> wasmtime::Result<Result<(), ()>> {
+    //     self.bindings
+    //         .plugins_main_definitions()
+    //         .call_apply_config(&mut self.store, config)
+    //         .await
+    // }
 
     pub async fn register(&mut self) -> wasmtime::Result<Result<(), ()>> {
         self.bindings
@@ -446,28 +447,28 @@ impl CliPlugin {
             .await
     }
 
-    pub fn clone_handle(&mut self, handle: &Resource<Toml>) -> Resource<Toml> {
-        self.store.data_mut().clone_handle(handle)
-    }
+    // pub fn clone_handle(&mut self, handle: &Resource<Toml>) -> Resource<Toml> {
+    //     self.store.data_mut().clone_handle(handle)
+    // }
 
-    pub async fn get(&mut self, value: Resource<Toml>) -> toml::Value {
-        self.store
-            .data_mut()
-            .get_toml(value)
-            .convert_with_state(self.store.data_mut())
-            .await
-    }
+    // pub async fn get(&mut self, value: Resource<Toml>) -> toml::Value {
+    //     self.store
+    //         .data_mut()
+    //         .get_toml(value)
+    //         .convert_with_state(self.store.data_mut())
+    //         .await
+    // }
 
-    pub async fn insert_toml(&mut self, value: toml::Value) -> Resource<Toml> {
-        let value = value.convert_with_state(self.store.data_mut()).await;
-        self.store.data_mut().new_toml(value)
-    }
+    // pub async fn insert_toml(&mut self, value: toml::Value) -> Resource<Toml> {
+    //     let value = value.convert_with_state(self.store.data_mut()).await;
+    //     self.store.data_mut().new_toml(value)
+    // }
 
-    pub async fn set(&mut self, handle: Resource<Toml>, value: toml::Value) {
-        // Should probably check if there is a Toml in the store
-        // that is the same as the one we are putting in, currently will just add it to the
-        // table
-        let value = value.convert_with_state(self.store.data_mut()).await;
-        self.store.data_mut().set_toml(handle, value);
-    }
+    // pub async fn set(&mut self, handle: Resource<Toml>, value: toml::Value) {
+    //     // Should probably check if there is a Toml in the store
+    //     // that is the same as the one we are putting in, currently will just add it to the
+    //     // table
+    //     let value = value.convert_with_state(self.store.data_mut()).await;
+    //     self.store.data_mut().set_toml(handle, value);
+    // }
 }

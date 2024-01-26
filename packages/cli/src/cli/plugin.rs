@@ -1,12 +1,15 @@
+use std::path::PathBuf;
 use std::str::FromStr;
 
-use super::*;
+// use super::*;
 use crate::lock::DioxusLock;
 use crate::plugin::load_plugin;
 use crate::plugin::PLUGINS_CONFIG;
 use crate::DioxusConfig;
 use crate::PluginConfigInfo;
 use clap::Parser;
+use clap::Subcommand;
+use serde::Deserialize;
 
 #[derive(Parser, Debug, Clone, PartialEq, Deserialize)]
 pub enum PluginAdd {
@@ -43,7 +46,7 @@ pub enum Plugin {
 }
 
 impl Plugin {
-    pub async fn plugin(self, dx_config: &DioxusConfig) -> Result<()> {
+    pub async fn plugin(self, dx_config: &DioxusConfig) -> super::Result<()> {
         match self {
             // Plugin::Update { ignore_error } => todo!(),
             Plugin::List => {
@@ -69,15 +72,17 @@ impl Plugin {
                     // Add the plugin to the lock file
                     dioxus_lock.add_plugin(&mut plugin).await?;
 
-                    let res = plugin.get_default_config().await;
-                    let Ok(config) = res else {
-                        log::warn!(
-                            "Couldn't get default config from plugin: {} : {}",
-                            plugin.metadata.name,
-                            res.unwrap_err()
-                        );
-                        return Ok(());
-                    };
+                    // Redacted for now
+                    // See issue: https://github.com/bytecodealliance/wit-bindgen/issues/817
+                    // let res = plugin.get_default_config().await;
+                    // let Ok(config) = res else {
+                    //     log::warn!(
+                    //         "Couldn't get default config from plugin: {} : {}",
+                    //         plugin.metadata.name,
+                    //         res.unwrap_err()
+                    //     );
+                    //     return Ok(());
+                    // };
 
                     let Ok(version) = semver::Version::from_str(&plugin.metadata.version) else {
                         log::warn!(
@@ -91,7 +96,7 @@ impl Plugin {
                     let new_config = PluginConfigInfo {
                         version,
                         path,
-                        config,
+                        // config,
                         priority,
                     };
 

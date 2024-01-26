@@ -4,7 +4,6 @@ use dioxus_cli_plugin::*;
 use exports::plugins::main::definitions::Guest;
 use plugins::main::{
     imports::{get_project_info, log},
-    toml::{Toml, TomlValue},
     types::{CommandEvent, PluginInfo, ResponseEvent, RuntimeEvent},
 };
 
@@ -55,12 +54,6 @@ fn minify_css() -> Result<ResponseEvent, ()> {
 }
 
 impl Guest for CSSMinifer {
-    fn get_default_config() -> Toml {
-        Toml::new(TomlValue::Integer(0))
-    }
-    fn apply_config(_config: Toml) -> Result<(), ()> {
-        Ok(())
-    }
     fn register() -> Result<(), ()> {
         if !get_project_info().has_output_directory {
             log("No output directory detected, minifier won't find anything!");

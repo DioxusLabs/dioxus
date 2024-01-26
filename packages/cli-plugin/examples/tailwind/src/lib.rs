@@ -4,7 +4,7 @@ use dioxus_cli_plugin::*;
 use exports::plugins::main::definitions::Guest;
 use plugins::main::{
     imports::{get_data, log, set_data, watched_paths},
-    toml::{Toml, TomlValue},
+    // toml::{Toml, TomlValue},
     types::{CommandEvent, PluginInfo, ResponseEvent, RuntimeEvent},
 };
 use railwind::parse_to_string;
@@ -130,33 +130,6 @@ fn gen_tailwind() -> Result<ResponseEvent, ()> {
 }
 
 impl Guest for Plugin {
-    fn apply_config(config: Toml) -> Result<(), ()> {
-        let value = config.get();
-        let TomlValue::Table(table) = value else {
-            return Err(());
-        };
-
-        let Some((_, naive_check)) = table.into_iter().find(|f| &f.0 == "naive_check") else {
-            return Err(());
-        };
-
-        let check_value = naive_check.get();
-        let TomlValue::Boolean(naive_check) = check_value else {
-            return Err(());
-        };
-
-        set_data("naive_check", &[naive_check as u8]);
-
-        Ok(())
-    }
-
-    fn get_default_config() -> Toml {
-        let val = Toml::new(TomlValue::Boolean(false));
-        let table_vec = vec![("naive_check".into(), val)];
-        let table = Toml::new(TomlValue::Table(table_vec));
-        table
-    }
-
     fn on_watched_paths_change(
         _paths: std::vec::Vec<std::string::String>,
     ) -> Result<ResponseEvent, ()> {

@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use plugins::main::imports::Host as ImportHost;
-use plugins::main::toml::{Host as TomlHost, *};
+// use plugins::main::toml::{Host as TomlHost, *};
 use plugins::main::types::Host as TypeHost;
 use std::collections::HashMap;
 use wasmtime::component::*;
@@ -13,89 +13,91 @@ use super::PLUGINS_CONFIG;
 pub struct PluginRuntimeState {
     pub table: Table,
     pub ctx: WasiCtx,
-    pub tomls: slab::Slab<TomlValue>,
+    // pub tomls: slab::Slab<TomlValue>,
     pub map: HashMap<String, Vec<u8>>,
 }
 
-impl PluginRuntimeState {
-    pub fn get_toml(&self, value: Resource<Toml>) -> TomlValue {
-        self.tomls
-            .get(value.rep() as usize)
-            .expect("Resource gaurantees existence")
-            .clone()
-    }
+/// Redacted for now
+/// See issue: https://github.com/bytecodealliance/wit-bindgen/issues/817
+// impl PluginRuntimeState {
+//     pub fn get_toml(&self, value: Resource<Toml>) -> TomlValue {
+//         self.tomls
+//             .get(value.rep() as usize)
+//             .expect("Resource gaurantees existence")
+//             .clone()
+//     }
 
-    pub fn set_toml(&mut self, key: Resource<Toml>, value: TomlValue) {
-        *self
-            .tomls
-            .get_mut(key.rep() as usize)
-            .expect("Resource gaurantees existence") = value;
-    }
+//     pub fn set_toml(&mut self, key: Resource<Toml>, value: TomlValue) {
+//         *self
+//             .tomls
+//             .get_mut(key.rep() as usize)
+//             .expect("Resource gaurantees existence") = value;
+//     }
 
-    pub fn insert_toml(&mut self, value: TomlValue) -> usize {
-        self.tomls.insert(value)
-    }
+//     pub fn insert_toml(&mut self, value: TomlValue) -> usize {
+//         self.tomls.insert(value)
+//     }
 
-    pub fn new_toml(&mut self, value: TomlValue) -> Resource<Toml> {
-        Resource::new_own(self.insert_toml(value) as u32)
-    }
+//     pub fn new_toml(&mut self, value: TomlValue) -> Resource<Toml> {
+//         Resource::new_own(self.insert_toml(value) as u32)
+//     }
 
-    pub fn clone_handle(&mut self, handle: &Resource<Toml>) -> Resource<Toml> {
-        let new_toml = self.get_toml(Resource::new_own(handle.rep()));
-        self.new_toml(new_toml)
-    }
-}
+//     pub fn clone_handle(&mut self, handle: &Resource<Toml>) -> Resource<Toml> {
+//         let new_toml = self.get_toml(Resource::new_own(handle.rep()));
+//         self.new_toml(new_toml)
+//     }
+// }
 
-impl Clone for TomlValue {
-    fn clone(&self) -> Self {
-        match self {
-            TomlValue::String(string) => TomlValue::String(string.clone()),
-            TomlValue::Integer(num) => TomlValue::Integer(*num),
-            TomlValue::Float(float) => TomlValue::Float(*float),
-            TomlValue::Boolean(b) => TomlValue::Boolean(*b),
-            TomlValue::Datetime(d) => TomlValue::Datetime(*d),
-            TomlValue::Array(array) => {
-                TomlValue::Array(array.iter().map(|f| Resource::new_own(f.rep())).collect())
-            }
-            TomlValue::Table(table) => TomlValue::Table(
-                table
-                    .iter()
-                    .map(|(key, val)| (key.clone(), Resource::new_own(val.rep())))
-                    .collect(),
-            ),
-        }
-    }
-}
+// impl Clone for TomlValue {
+//     fn clone(&self) -> Self {
+//         match self {
+//             TomlValue::String(string) => TomlValue::String(string.clone()),
+//             TomlValue::Integer(num) => TomlValue::Integer(*num),
+//             TomlValue::Float(float) => TomlValue::Float(*float),
+//             TomlValue::Boolean(b) => TomlValue::Boolean(*b),
+//             TomlValue::Datetime(d) => TomlValue::Datetime(*d),
+//             TomlValue::Array(array) => {
+//                 TomlValue::Array(array.iter().map(|f| Resource::new_own(f.rep())).collect())
+//             }
+//             TomlValue::Table(table) => TomlValue::Table(
+//                 table
+//                     .iter()
+//                     .map(|(key, val)| (key.clone(), Resource::new_own(val.rep())))
+//                     .collect(),
+//             ),
+//         }
+//     }
+// }
 
-#[async_trait]
-impl HostToml for PluginRuntimeState {
-    async fn new(&mut self, value: TomlValue) -> wasmtime::Result<Resource<Toml>> {
-        Ok(self.new_toml(value))
-    }
-    async fn get(&mut self, value: Resource<Toml>) -> wasmtime::Result<TomlValue> {
-        Ok(self.get_toml(value)) // We can unwrap because [`Resource`] makes sure the key is always valid
-    }
-    async fn set(&mut self, key: Resource<Toml>, value: TomlValue) -> wasmtime::Result<()> {
-        self.set_toml(key, value);
-        Ok(())
-    }
-    async fn clone(&mut self, key: Resource<Toml>) -> wasmtime::Result<Resource<Toml>> {
-        Ok(self.clone_handle(&key))
-    }
+// #[async_trait]
+// impl HostToml for PluginRuntimeState {
+//     async fn new(&mut self, value: TomlValue) -> wasmtime::Result<Resource<Toml>> {
+//         Ok(self.new_toml(value))
+//     }
+//     async fn get(&mut self, value: Resource<Toml>) -> wasmtime::Result<TomlValue> {
+//         Ok(self.get_toml(value)) // We can unwrap because [`Resource`] makes sure the key is always valid
+//     }
+//     async fn set(&mut self, key: Resource<Toml>, value: TomlValue) -> wasmtime::Result<()> {
+//         self.set_toml(key, value);
+//         Ok(())
+//     }
+//     async fn clone(&mut self, key: Resource<Toml>) -> wasmtime::Result<Resource<Toml>> {
+//         Ok(self.clone_handle(&key))
+//     }
 
-    fn drop(&mut self, toml: Resource<Toml>) -> wasmtime::Result<()> {
-        // Probably don't need this how it's being used atm but good to check
-        if self.tomls.contains(toml.rep() as usize) {
-            self.tomls.remove(toml.rep() as usize);
-        } else {
-            log::warn!("Tried to drop a dropped resource!");
-        }
-        Ok(())
-    }
-}
+//     fn drop(&mut self, toml: Resource<Toml>) -> wasmtime::Result<()> {
+//         // Probably don't need this how it's being used atm but good to check
+//         if self.tomls.contains(toml.rep() as usize) {
+//             self.tomls.remove(toml.rep() as usize);
+//         } else {
+//             log::warn!("Tried to drop a dropped resource!");
+//         }
+//         Ok(())
+//     }
+// }
 
-#[async_trait]
-impl TomlHost for PluginRuntimeState {}
+// #[async_trait]
+// impl TomlHost for PluginRuntimeState {}
 
 #[async_trait]
 impl TypeHost for PluginRuntimeState {}
