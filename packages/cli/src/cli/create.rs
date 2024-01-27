@@ -1,22 +1,67 @@
+use std::process::exit;
+
 use super::*;
 use cargo_generate::{GenerateArgs, TemplatePath};
+
+static DEFAULT_TEMPLATE: &str = "gh:dioxuslabs/dioxus-template";
 
 #[derive(Clone, Debug, Default, Deserialize, Parser)]
 #[clap(name = "create")]
 pub struct Create {
     /// Template path
-    #[clap(default_value = "gh:dioxuslabs/dioxus-template", long)]
+    #[clap(default_value = DEFAULT_TEMPLATE, short, long)]
     template: String,
+    /// Project name (required when `--yes` is used)
+    #[clap(short, long)]
+    name: Option<String>,
+    /// Pass `<option>=<value>` for the used template
+    ///
+    /// Options for the default template:
+    /// - platform: target platform [default: desktop]
+    ///   * desktop
+    ///   * web
+    ///   * TUI
+    ///   * Liveview
+    ///   * Fullstack
+    ///   Note: this option is required
+    /// - backend: which backend framework to use [default: Axum]
+    ///   * Axum:  use Axum
+    ///   * Warp:  use Warp
+    ///   * Salvo: use Salvo
+    ///   Note: only used when platform is equal to: Fullstack, Liveview
+    /// - router: Whether to use dioxus router or not [default: true]
+    ///   * true:  use Dioxus router
+    ///   * false: don't use Dioxus router
+    /// - styling: CSS creation method [default: Vanilla]
+    ///   * Vanilla:  regular CSS
+    ///   * Tailwind: Tailwind CSS
+    ///   Note: only used when platform is one of: web, desktop, Fullstack
+    #[clap(short, long, verbatim_doc_comment)]
+    option: Vec<String>,
+    /// Skip user interaction by using the default values for the used template.
+    /// Default values can be overriden with `--option`
+    #[clap(default_value = "false", short, long)]
+    yes: bool,
 }
 
 impl Create {
     pub fn create(self) -> Result<()> {
-        let args = GenerateArgs {
+        let mut args = GenerateArgs {
             template_path: TemplatePath {
                 auto_path: Some(self.template),
                 ..Default::default()
             },
             ..Default::default()
+        };
+        if self.yes {
+            args.silent = true;
+            args.define = self.option;
+            args.name = self.name.or_else(|| {
+                log::error!("You have to provide the project's name with `--name` when using `--yes` option.");
+                exit(1); // Do we have a list of exit codes for `dx`?
+                // CLI commands shouldn't say "thread 'main' panicked" if we know why it panicked.
+                // panic!("You have to provide the project's name when using `--yes` option.")
+            });
         };
 
         let path = cargo_generate::generate(args)?;
