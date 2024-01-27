@@ -1,5 +1,5 @@
 use crate::{read::Readable, Signal, SignalData};
-use std::{mem::MaybeUninit, ops::Deref};
+use std::ops::Deref;
 
 use dioxus_core::{prelude::IntoAttributeValue, ScopeId};
 use generational_box::{Storage, UnsyncStorage};
@@ -12,26 +12,6 @@ pub struct ReadOnlySignal<T: 'static, S: Storage<SignalData<T>> = UnsyncStorage>
 impl<T: 'static, S: Storage<SignalData<T>>> From<Signal<T, S>> for ReadOnlySignal<T, S> {
     fn from(inner: Signal<T, S>) -> Self {
         Self { inner }
-    }
-}
-
-#[cfg(feature = "serde")]
-impl<T: serde::Serialize + 'static, Store: Storage<SignalData<T>>> serde::Serialize
-    for ReadOnlySignal<T, Store>
-{
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        self.read().serialize(serializer)
-    }
-}
-
-#[cfg(feature = "serde")]
-impl<'de, T: serde::Deserialize<'de> + 'static, Store: Storage<SignalData<T>>>
-    serde::Deserialize<'de> for ReadOnlySignal<T, Store>
-{
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        Ok(Self::new_maybe_sync(Signal::new_maybe_sync(
-            T::deserialize(deserializer)?,
-        )))
     }
 }
 
@@ -88,6 +68,26 @@ impl<T, S: Storage<SignalData<T>>> Readable<T> for ReadOnlySignal<T, S> {
     /// If the signal has been dropped, this will panic.
     fn peek(&self) -> S::Ref<T> {
         self.inner.peek()
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<T: serde::Serialize + 'static, Store: Storage<SignalData<T>>> serde::Serialize
+    for ReadOnlySignal<T, Store>
+{
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.read().serialize(serializer)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de, T: serde::Deserialize<'de> + 'static, Store: Storage<SignalData<T>>>
+    serde::Deserialize<'de> for ReadOnlySignal<T, Store>
+{
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Ok(Self::new_maybe_sync(Signal::new_maybe_sync(
+            T::deserialize(deserializer)?,
+        )))
     }
 }
 
