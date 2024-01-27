@@ -21,7 +21,6 @@ log = "0.4.14"
 fern = { version = "0.6.0", features = ["colored"] }
 serde = { version = "1.0.136", features = ["derive"] }
 serde_json = "1.0.79"
-toml = "0.5.8"
 fs_extra = "1.2.0"
 cargo_toml = "0.16.0"
 futures = "0.3.21"
@@ -56,7 +55,6 @@ flate2 = "1.0.22"
 tar = "0.4.38"
 zip = "0.6.2"
 tower = "0.4.12"
-syn = { version = "2.0", features = ["full", "extra-traits"] }
 lazy_static = "1.4.0"
 
 # plugin packages
@@ -74,7 +72,6 @@ toml_edit = "0.19.11"
 
 # bundling
 tauri-bundler = { version = "=1.4.*", features = ["native-tls-vendored"] }
-tauri-utils = "=1.5.*"
 
 manganis-cli-support = { workspace = true, features = ["webp", "html"] }
 
