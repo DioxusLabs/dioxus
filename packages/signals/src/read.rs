@@ -1,4 +1,4 @@
-use std::ops::Deref;
+use std::{mem::MaybeUninit, ops::Deref};
 
 /// A trait for states that can be read from like [`crate::Signal`], [`crate::GlobalSignal`], or [`crate::ReadOnlySignal`]. You may choose to accept this trait as a parameter instead of the concrete type to allow for more flexibility in your API. For example, instead of creating two functions, one that accepts a [`crate::Signal`] and one that accepts a [`crate::GlobalSignal`], you can create one function that accepts a [`Readable`] type.
 pub trait Readable<T: 'static = ()> {
@@ -48,6 +48,40 @@ pub trait Readable<T: 'static = ()> {
         T: std::ops::Index<I>,
     {
         Self::map_ref(self.read(), |v| v.index(index))
+    }
+
+    #[doc(hidden)]
+    fn deref_impl<'a>(&self) -> &'a dyn Fn() -> T
+    where
+        Self: Sized + 'a,
+        T: Clone,
+    {
+        // https://github.com/dtolnay/case-studies/tree/master/callable-types
+
+        // First we create a closure that captures something with the Same in memory layout as Self (MaybeUninit<Self>).
+        let uninit_callable = MaybeUninit::<Self>::uninit();
+        // Then move that value into the closure. We assume that the closure now has a in memory layout of Self.
+        let uninit_closure = move || Self::read(unsafe { &*uninit_callable.as_ptr() }).clone();
+
+        // Check that the size of the closure is the same as the size of Self in case the compiler changed the layout of the closure.
+        let size_of_closure = std::mem::size_of_val(&uninit_closure);
+        assert_eq!(size_of_closure, std::mem::size_of::<Self>());
+
+        // Then cast the lifetime of the closure to the lifetime of &self.
+        fn cast_lifetime<'a, T>(_a: &T, b: &'a T) -> &'a T {
+            b
+        }
+        let reference_to_closure = cast_lifetime(
+            {
+                // The real closure that we will never use.
+                &uninit_closure
+            },
+            // We transmute self into a reference to the closure. This is safe because we know that the closure has the same memory layout as Self so &Closure == &Self.
+            unsafe { std::mem::transmute(self) },
+        );
+
+        // Cast the closure to a trait object.
+        reference_to_closure as &_
     }
 }
 

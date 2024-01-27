@@ -1,6 +1,6 @@
 #![allow(missing_docs)]
 use dioxus_core::{
-    prelude::{spawn, use_hook},
+    prelude::{spawn, use_drop, use_hook},
     ScopeState, Task,
 };
 use dioxus_signals::*;
@@ -44,6 +44,12 @@ where
         });
 
         Some(task)
+    });
+
+    use_drop(move || {
+        if let Some(task) = task.take() {
+            task.stop();
+        }
     });
 
     UseFuture { task, state }

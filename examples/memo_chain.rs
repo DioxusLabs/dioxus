@@ -37,6 +37,8 @@ fn Child(
 
     println!("rendering child: {}", depth());
 
+    // These memos don't get re-computed when early returns happen
+    // In dioxus futures spawned with use_future won't progress if they don't get hit during rendering
     let state = use_memo(move || state() + 1);
     let item = use_memo(move || items()[dbg!(depth()) - 1]);
     let depth = use_memo(move || depth() - 1);
