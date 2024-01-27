@@ -1,7 +1,7 @@
 use dioxus_cli_plugin::*;
 use exports::plugins::main::definitions::Guest;
 use plugins::main::{
-    imports::log,
+    imports::{get_config, get_data, log, set_config},
     types::{CommandEvent, PluginInfo, ResponseEvent, RuntimeEvent},
 };
 
@@ -9,6 +9,8 @@ struct Plugin;
 
 impl Guest for Plugin {
     fn register() -> Result<(), ()> {
+        set_config("test", "false");
+        log("Registered Tailwind!");
         Ok(())
     }
 
@@ -24,6 +26,11 @@ impl Guest for Plugin {
     }
 
     fn before_runtime_event(_event: RuntimeEvent) -> Result<ResponseEvent, ()> {
+        let Some(data) = get_config("test") else {
+            log("Error ahhhhhh!");
+            return Err(());
+        };
+        log(&data);
         Ok(ResponseEvent::None)
     }
 

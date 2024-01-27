@@ -3,7 +3,7 @@ use std::{fs::File, io::Write, path::PathBuf};
 use dioxus_cli_plugin::*;
 use exports::plugins::main::definitions::Guest;
 use plugins::main::{
-    imports::{get_data, log, set_data, watched_paths},
+    imports::{get_config, get_data, log, set_config, watched_paths},
     // toml::{Toml, TomlValue},
     types::{CommandEvent, PluginInfo, ResponseEvent, RuntimeEvent},
 };
@@ -67,9 +67,15 @@ fn parse_and_save_css(paths: Vec<PathBuf>) -> Result<ResponseEvent, ()> {
     let rsx_regex = Regex::new(r#"class:\s*(?:\"([^\"]+)\"|\'([^\']+)\')"#).unwrap();
 
     // Matches on anything in quotes, useful for components that piece together classes at runtime
-    let naive_regex = Regex::new(r#"([\"'])(?:\\\1|.)*?\1"#).unwrap();
+    let naive_regex = Regex::new(r#"[^"\\]*(?:\\.[^"\\]*)*"#).unwrap();
 
-    let classes: Vec<_> = if get_data("naive_check").unwrap() == vec![1] {
+    let naive = match get_config("naive_check") {
+        Some(st) if &st == "true" => true,
+        Some(st) if &st == "false" => false,
+        _ => return Err(()),
+    };
+
+    let classes: Vec<_> = if !naive {
         paths
             .iter()
             .flat_map(|f| get_classes_regex(f, &rsx_regex))
@@ -99,7 +105,7 @@ fn parse_and_save_css(paths: Vec<PathBuf>) -> Result<ResponseEvent, ()> {
         &mut warnings,
     );
 
-    let tailwind_output = "assets/tailwind.css";
+    let tailwind_output = "dist/tailwind.css";
     let mut file = File::create(tailwind_output).map_err(std::mem::drop)?;
     let written = file.write(parsed.as_bytes()).map_err(std::mem::drop)?;
 
@@ -137,9 +143,8 @@ impl Guest for Plugin {
     }
 
     fn register() -> Result<(), ()> {
-        set_data("naive_check", &[0]);
+        set_config("naive_check", "false");
         log("Registered Tailwind Plugin Successfully!");
-
         Ok(())
     }
 

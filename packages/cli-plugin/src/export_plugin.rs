@@ -177,6 +177,12 @@ interface imports {
 
   /// Grab data from map, returns none if key not in map
   get-data: func(key: string) -> option<list<u8>>;
+  
+  /// Set data in a map, is saved between sessions in the dioxus.toml file
+  set-config: func(key: string, config: string);
+
+  /// Grab config from map, returns none if key not in map
+  get-config: func(key: string) -> option<string>;
 
   /// Sends the input string to whatever logger is currently being used
   log: func(info: string);
