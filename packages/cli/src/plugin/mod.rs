@@ -5,8 +5,9 @@ use crate::plugin::interface::{PluginRuntimeState, PluginWorld};
 use crate::server::WsMessage;
 use crate::{DioxusConfig, PluginConfigInfo};
 
-use slab::Slab;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 use tokio::sync::broadcast::Sender;
 use tokio::sync::Mutex;
 use wasmtime::component::*;
@@ -202,7 +203,7 @@ pub async fn plugins_watched_paths_changed(
 async fn load_plugins(
     config: &DioxusConfig,
     crate_dir: &PathBuf,
-    dioxus_lock: &DioxusLock,
+    dioxus_lock: &mut DioxusLock,
 ) -> wasmtime::Result<Vec<CliPlugin>> {
     let mut sorted_plugins: Vec<&PluginConfigInfo> = config.plugins.plugins.values().collect();
     // Have some leeway to have some plugins execute before the default priority plugins
@@ -210,7 +211,14 @@ async fn load_plugins(
     let mut plugins = Vec::with_capacity(sorted_plugins.len());
 
     for plugin in sorted_plugins.into_iter() {
-        let plugin = load_plugin(&plugin.path, config, crate_dir, dioxus_lock).await?;
+        let plugin = load_plugin(
+            &plugin.path,
+            config,
+            plugin.priority,
+            crate_dir,
+            dioxus_lock,
+        )
+        .await?;
         plugins.push(plugin);
     }
 
@@ -222,8 +230,8 @@ async fn load_plugins(
 }
 
 pub async fn init_plugins(config: &DioxusConfig, crate_dir: &PathBuf) -> crate::Result<()> {
-    let dioxus_lock = DioxusLock::load()?;
-    let plugins = load_plugins(config, crate_dir, &dioxus_lock).await?;
+    let mut dioxus_lock = DioxusLock::load()?;
+    let plugins = load_plugins(config, crate_dir, &mut dioxus_lock).await?;
     *PLUGINS.lock().await = plugins;
     *PLUGINS_CONFIG.lock().await = config.clone();
     Ok(())
@@ -264,8 +272,9 @@ pub async fn save_plugin_config(bin: PathBuf) -> crate::Result<()> {
 pub async fn load_plugin(
     path: impl AsRef<Path>,
     config: &DioxusConfig,
+    priority: Option<usize>,
     crate_dir: &PathBuf,
-    dioxus_lock: &DioxusLock,
+    dioxus_lock: &mut DioxusLock,
 ) -> crate::Result<CliPlugin> {
     let path = path.as_ref();
     let component = Component::from_file(&ENGINE, path)?;
@@ -325,6 +334,10 @@ pub async fn load_plugin(
             table,
             ctx,
             // tomls: Slab::new(),
+            metadata: PluginInfo {
+                name: "".into(),
+                version: "".into(),
+            },
             map: std::collections::HashMap::new(),
         },
     );
@@ -337,15 +350,35 @@ pub async fn load_plugin(
         .call_metadata(&mut store)
         .await?;
 
-    // TODO find a way to get name before it's loaded?
-    if let Some(existing) = dioxus_lock.plugins.get(&metadata.name) {
-        store.data_mut().map = existing
-            .map
-            .clone()
-            .into_iter()
-            .map(|(a, b)| (a, b.0))
-            .collect();
+    if let Some(existing) = dioxus_lock.plugins.remove(&metadata.name) {
+        store.data_mut().map = existing.map.into_iter().map(|(a, b)| (a, b.0)).collect();
     }
+
+    let Ok(version) = semver::Version::from_str(&metadata.version) else {
+        log::warn!(
+            "Couldn't parse version from plugin: {} >> {}",
+            metadata.name,
+            metadata.version
+        );
+        return Err(crate::Error::CustomError(
+            "couldn't parse plugin version".into(),
+        ));
+    };
+
+    let config = &mut PLUGINS_CONFIG.lock().await.plugins.plugins;
+    if let None = config.get(&metadata.name) {
+        config.insert(
+            metadata.name.clone(),
+            PluginConfigInfo {
+                version,
+                path: path.to_path_buf(),
+                config: HashMap::new(),
+                priority,
+            },
+        );
+    }
+
+    store.data_mut().metadata = metadata.clone();
 
     Ok(CliPlugin {
         bindings,

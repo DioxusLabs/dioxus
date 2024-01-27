@@ -1,12 +1,10 @@
 use std::path::PathBuf;
-use std::str::FromStr;
 
 // use super::*;
 use crate::lock::DioxusLock;
 use crate::plugin::load_plugin;
 use crate::plugin::PLUGINS_CONFIG;
 use crate::DioxusConfig;
-use crate::PluginConfigInfo;
 use clap::Parser;
 use clap::Subcommand;
 use serde::Deserialize;
@@ -67,41 +65,12 @@ impl Plugin {
                     let mut dioxus_lock = DioxusLock::load()?;
                     let crate_dir = crate::crate_root()?;
                     let mut plugin =
-                        load_plugin(&path, dx_config, &crate_dir, &dioxus_lock).await?;
+                        load_plugin(&path, dx_config, priority, &crate_dir, &mut dioxus_lock)
+                            .await?;
 
                     // Add the plugin to the lock file
                     dioxus_lock.add_plugin(&mut plugin).await?;
 
-                    // Redacted for now
-                    // See issue: https://github.com/bytecodealliance/wit-bindgen/issues/817
-                    // let res = plugin.get_default_config().await;
-                    // let Ok(config) = res else {
-                    //     log::warn!(
-                    //         "Couldn't get default config from plugin: {} : {}",
-                    //         plugin.metadata.name,
-                    //         res.unwrap_err()
-                    //     );
-                    //     return Ok(());
-                    // };
-
-                    let Ok(version) = semver::Version::from_str(&plugin.metadata.version) else {
-                        log::warn!(
-                            "Couldn't parse version from plugin: {} >> {}",
-                            plugin.metadata.name,
-                            plugin.metadata.version
-                        );
-                        return Ok(());
-                    };
-
-                    let new_config = PluginConfigInfo {
-                        version,
-                        path,
-                        // config,
-                        priority,
-                    };
-
-                    let plugins = &mut PLUGINS_CONFIG.lock().await.plugins;
-                    plugins.set_plugin_info(plugin.metadata.name.clone(), new_config);
                     log::info!("✔️  Successfully added {}", plugin.metadata.name);
                 }
             },

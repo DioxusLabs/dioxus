@@ -1,9 +1,7 @@
 use super::interface::PluginRuntimeState;
 use async_trait::async_trait;
-use ext_toml::value::Table;
 use ext_toml::Value;
 use toml as ext_toml;
-use wasmtime::component::Resource;
 // Could these converts be simplified with bytemuck POD perhaps?
 
 #[async_trait]

@@ -4,7 +4,6 @@ use std::{
     collections::HashMap,
     path::{Path, PathBuf},
 };
-use toml::value::Table;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DioxusConfig {
@@ -607,6 +606,7 @@ pub struct PluginConfigInfo {
     pub path: PathBuf,
     // #[serde(default = "default_plugin_config")]
     // pub config: toml::Value,
+    pub config: HashMap<String, String>,
     pub priority: Option<usize>,
 }
 

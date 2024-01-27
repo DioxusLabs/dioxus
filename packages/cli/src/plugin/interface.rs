@@ -6,13 +6,14 @@ use std::collections::HashMap;
 use wasmtime::component::*;
 use wasmtime_wasi::preview2::{Table, WasiCtx, WasiView};
 
-use self::plugins::main::types::{Platform, ProjectInfo};
+use self::plugins::main::types::{Platform, PluginInfo, ProjectInfo};
 
 use super::PLUGINS_CONFIG;
 
 pub struct PluginRuntimeState {
     pub table: Table,
     pub ctx: WasiCtx,
+    pub metadata: PluginInfo,
     // pub tomls: slab::Slab<TomlValue>,
     pub map: HashMap<String, Vec<u8>>,
 }
@@ -170,8 +171,27 @@ impl ImportHost for PluginRuntimeState {
         Ok(self.map.get(&key).cloned())
     }
 
+    async fn set_config(&mut self, key: String, config: String) -> wasmtime::Result<()> {
+        let mut lock = PLUGINS_CONFIG.lock().await;
+        let Some(entry) = lock.plugins.plugins.get_mut(&self.metadata.name) else {
+            log::warn!("Plugin not initalized correctly! {}", self.metadata.name);
+            return Ok(());
+        };
+        entry.config.insert(key, config);
+        Ok(())
+    }
+
+    async fn get_config(&mut self, key: String) -> wasmtime::Result<Option<String>> {
+        let config = PLUGINS_CONFIG.lock().await;
+        let Some(entry) = config.plugins.plugins.get(&self.metadata.name) else {
+            log::warn!("Plugin not initalized correctly! {}", self.metadata.name);
+            return Ok(None);
+        };
+        Ok(entry.config.get(&key).cloned())
+    }
+
     async fn log(&mut self, info: String) -> wasmtime::Result<()> {
-        println!("{info}");
+        log::info!("{info}");
         Ok(())
     }
 }
