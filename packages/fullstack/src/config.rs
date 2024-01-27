@@ -1,7 +1,7 @@
 //! Launch helper macros for fullstack apps
 #![allow(unused)]
 use crate::prelude::*;
-use dioxus_lib::prelude::{dioxus_core::AnyProps, *};
+use dioxus_lib::prelude::*;
 use std::sync::Arc;
 
 /// Settings for a fullstack app.
