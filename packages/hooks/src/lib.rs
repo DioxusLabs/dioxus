@@ -55,6 +55,9 @@ macro_rules! to_owned {
     };
 }
 
+mod use_callback;
+pub use use_callback::*;
+
 mod use_on_destroy;
 pub use use_on_destroy::*;
 

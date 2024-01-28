@@ -2,7 +2,7 @@ use crate::write::*;
 use core::{self, fmt::Debug};
 use dioxus_core::prelude::*;
 use futures_channel::mpsc::UnboundedSender;
-use futures_util::StreamExt;
+use futures_util::{future::Either, pin_mut, StreamExt};
 use generational_box::GenerationalBoxId;
 use parking_lot::RwLock;
 use rustc_hash::FxHashMap;
@@ -52,14 +52,38 @@ pub(crate) fn get_effect_ref() -> EffectStackRef {
         None => {
             let (sender, mut receiver) = futures_channel::mpsc::unbounded();
             spawn_forever(async move {
-                while let Some(id) = receiver.next().await {
+                let mut queued_memos = Vec::new();
+
+                loop {
+                    // Wait for a flush
+                    // This gives a chance for effects to be updated in place and memos to compute their values
+                    let flush_await = flush_sync();
+                    pin_mut!(flush_await);
+
+                    loop {
+                        let res =
+                            futures_util::future::select(&mut flush_await, receiver.next()).await;
+
+                        match res {
+                            Either::Right((_queued, _)) => {
+                                if let Some(task) = _queued {
+                                    queued_memos.push(task);
+                                }
+                                continue;
+                            }
+                            Either::Left(_flushed) => break,
+                        }
+                    }
+
                     EFFECT_STACK.with(|stack| {
-                        let effect_mapping = stack.effect_mapping.read();
-                        if let Some(mut effect) = effect_mapping.get(&id).copied() {
-                            tracing::trace!("Rerunning effect: {:?}", id);
-                            effect.try_run();
-                        } else {
-                            tracing::trace!("Effect not found: {:?}", id);
+                        for id in queued_memos.drain(..) {
+                            let effect_mapping = stack.effect_mapping.read();
+                            if let Some(mut effect) = effect_mapping.get(&id).copied() {
+                                tracing::trace!("Rerunning effect: {:?}", id);
+                                effect.try_run();
+                            } else {
+                                tracing::trace!("Effect not found: {:?}", id);
+                            }
                         }
                     });
                 }

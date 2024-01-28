@@ -1,62 +1,67 @@
 #![allow(missing_docs)]
 use dioxus_core::{
-    prelude::{spawn, use_drop, use_hook},
+    prelude::{spawn, use_before_render, use_drop, use_hook},
     ScopeState, Task,
 };
 use dioxus_signals::*;
+use dioxus_signals::{Readable, Writable};
 use futures_util::{future, pin_mut, FutureExt};
 use std::{any::Any, cell::Cell, future::Future, pin::Pin, rc::Rc, sync::Arc, task::Poll};
 
+use crate::use_callback;
+
 /// A hook that allows you to spawn a future
 ///
-/// Does not regenerate the future when dependencies change. If you're looking for a future that does, check out
-/// `use_resource` instead.
+/// Does not regenerate the future when dependencies change.
 pub fn use_future<F>(mut future: impl FnMut() -> F) -> UseFuture
 where
     F: Future + 'static,
 {
-    let mut state = use_signal(|| UseFutureState::Pending);
+    let state = use_signal(|| UseFutureState::Pending);
 
-    let task = use_signal(|| {
-        // Create the user's task
+    // Create the task inside a copyvalue so we can reset it in-place later
+    let task = use_hook(|| {
         let fut = future();
-
-        // Spawn a wrapper task that polls the innner future and watch its dependencies
-        let task = spawn(async move {
-            // move the future here and pin it so we can poll it
-            let fut = fut;
-            pin_mut!(fut);
-
-            let res = future::poll_fn(|cx| {
-                // Set the effect stack properly
-
-                // Poll the inner future
-                let ready = fut.poll_unpin(cx);
-
-                // add any dependencies to the effect stack that we need to watch when restarting the future
-
-                ready
-            })
-            .await;
-
-            // Set the value
-            // value.set(Some(res));
-        });
-
-        Some(task)
+        CopyValue::new(spawn(async move {
+            fut.await;
+        }))
     });
 
-    use_drop(move || {
-        if let Some(task) = task.take() {
-            task.stop();
-        }
+    /*
+    Early returns in dioxus have consequences for use_memo, use_resource, and use_future, etc
+    We *don't* want futures to be running if the component early returns. It's a rather weird behavior to have
+    use_memo running in the background even if the component isn't hitting those hooks anymore.
+
+    React solves this by simply not having early returns interleave with hooks.
+    However, since dioxus allows early returns (since we use them for suspense), we need to solve this problem.
+
+
+     */
+    // Track if this *current* render is the same
+    let gen = use_hook(|| CopyValue::new((0, 0)));
+
+    // Early returns will pause this task, effectively
+    use_before_render(move || {
+        gen.write().0 += 1;
+        task.peek().set_active(false);
     });
+
+    // However when we actually run this component, we want to resume the task
+    task.peek().set_active(true);
+    gen.write().1 += 1;
+
+    // if the gens are different, we need to wake the task
+    if gen().0 != gen().1 {
+        task.peek().wake();
+    }
+
+    use_drop(move || task.peek().stop());
 
     UseFuture { task, state }
 }
 
 pub struct UseFuture {
-    task: Signal<Option<Task>>,
+    task: CopyValue<Task>,
     state: Signal<UseFutureState>,
 }
 

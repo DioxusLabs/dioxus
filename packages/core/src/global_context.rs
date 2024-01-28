@@ -71,7 +71,7 @@ pub fn spawn_forever(fut: impl Future<Output = ()> + 'static) -> Option<Task> {
 ///
 /// This drops the task immediately.
 pub fn remove_future(id: Task) {
-    Runtime::with_current_scope(|cx| cx.remove_future(id));
+    Runtime::with(|rt| rt.remove_task(id)).expect("Runtime to exist");
 }
 
 /// Store a value between renders. The foundational hook for all other hooks.
@@ -93,7 +93,6 @@ pub fn remove_future(id: Task) {
 pub fn use_hook<State: Clone + 'static>(initializer: impl FnOnce() -> State) -> State {
     Runtime::with_current_scope(|cx| cx.use_hook(initializer)).expect("to be in a dioxus runtime")
 }
-
 
 /// Get the current render since the inception of this component
 ///
@@ -216,7 +215,6 @@ pub fn use_drop<D: FnOnce() + 'static>(destroy: D) {
         ondestroy: Some(destroy),
     });
 }
-
 
 /// Push a function to be run before the next render
 /// This is a hook and will always run, so you can't unschedule it

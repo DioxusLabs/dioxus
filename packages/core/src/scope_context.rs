@@ -234,13 +234,6 @@ impl Scope {
         Runtime::with(|rt| rt.spawn(self.id, fut)).expect("Runtime to exist")
     }
 
-    /// Informs the scheduler that this task is no longer needed and should be removed.
-    ///
-    /// This drops the task immediately.
-    pub fn remove_future(&self, id: Task) {
-        Runtime::with(|rt| rt.remove_task(id)).expect("Runtime to exist");
-    }
-
     /// Mark this component as suspended and then return None
     pub fn suspend(&self) -> Option<Element> {
         self.suspended.set(true);

@@ -45,12 +45,19 @@ impl Task {
         Runtime::with(|rt| !rt.tasks.borrow()[self.0].active.get()).unwrap_or_default()
     }
 
+    pub fn wake(&self) {
+        Runtime::with(|rt| _ = rt.sender.unbounded_send(SchedulerMsg::TaskNotified(*self)));
+    }
+
+    pub fn set_active(&self, active: bool) {
+        Runtime::with(|rt| rt.tasks.borrow()[self.0].active.set(active));
+    }
+
     /// Resume the task.
     pub fn resume(&self) {
         Runtime::with(|rt| {
             // set the active flag, and then ping the scheduler to ensure the task gets queued
-            rt.tasks.borrow()[self.0].active.set(true);
-            _ = rt.sender.unbounded_send(SchedulerMsg::TaskNotified(*self));
+            let was_active = rt.tasks.borrow()[self.0].active.replace(true);
         });
     }
 }
