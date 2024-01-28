@@ -6,7 +6,7 @@ use crate::{
     LiveViewError,
 };
 use dioxus_core::prelude::*;
-use dioxus_html::{EventData, HtmlEvent, PlatformEventData};
+use dioxus_html::{select, EventData, HtmlEvent, PlatformEventData};
 use dioxus_interpreter_js::MutationState;
 use futures_util::{pin_mut, SinkExt, StreamExt};
 use serde::Serialize;
@@ -227,11 +227,14 @@ pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), Li
             }
         }
 
-        vdom.render_with_deadline(
-            tokio::time::sleep(Duration::from_millis(10)),
-            &mut mutations,
-        )
-        .await;
+        // wait for suspense to resolve in a 10ms window
+        tokio::select! {
+            _ = tokio::time::sleep(Duration::from_millis(10)) => {}
+            _ = vdom.wait_for_suspense() => {}
+        }
+
+        // render the vdom
+        vdom.render_immediate(&mut mutations);
 
         if let Some(edits) = take_edits(&mut mutations) {
             ws.send(edits).await?;

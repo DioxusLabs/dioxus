@@ -14,11 +14,13 @@ rustc-hash = { workspace = true }
 longest-increasing-subsequence = "0.1.0"
 futures-util = { workspace = true, default-features = false, features = [
     "alloc",
+    "std",
 ] }
 slab = { workspace = true }
 futures-channel = { workspace = true }
 tracing = { workspace = true }
 serde = { version = "1", features = ["derive"], optional = true }
+
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full"] }

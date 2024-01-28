@@ -10,7 +10,7 @@ use std::{
 /// A component's state separate from its props.
 ///
 /// This struct exists to provide a common interface for all scopes without relying on generics.
-pub(crate) struct ScopeContext {
+pub(crate) struct Scope {
     pub(crate) name: &'static str,
     pub(crate) id: ScopeId,
     pub(crate) parent_id: Option<ScopeId>,
@@ -21,13 +21,12 @@ pub(crate) struct ScopeContext {
     // Note: the order of the hook and context fields is important. The hooks field must be dropped before the contexts field in case a hook drop implementation tries to access a context.
     pub(crate) hooks: RefCell<Vec<Box<dyn Any>>>,
     pub(crate) hook_index: Cell<usize>,
-
     pub(crate) shared_contexts: RefCell<Vec<Box<dyn Any>>>,
-
     pub(crate) spawned_tasks: RefCell<FxHashSet<Task>>,
+    pub(crate) before_render: RefCell<Vec<Box<dyn FnMut()>>>,
 }
 
-impl ScopeContext {
+impl Scope {
     pub(crate) fn new(
         name: &'static str,
         id: ScopeId,
@@ -45,6 +44,7 @@ impl ScopeContext {
             spawned_tasks: RefCell::new(FxHashSet::default()),
             hooks: RefCell::new(vec![]),
             hook_index: Cell::new(0),
+            before_render: RefCell::new(vec![]),
         }
     }
 
@@ -109,7 +109,7 @@ impl ScopeContext {
         let mut search_parent = self.parent_id;
         let cur_runtime = Runtime::with(|runtime| {
             while let Some(parent_id) = search_parent {
-                let parent = runtime.get_context(parent_id).unwrap();
+                let parent = runtime.get_state(parent_id).unwrap();
                 tracing::trace!(
                     "looking for context {} ({:?}) in {}",
                     std::any::type_name::<T>(),
@@ -212,7 +212,7 @@ impl ScopeContext {
     pub fn provide_root_context<T: 'static + Clone>(&self, context: T) -> T {
         Runtime::with(|runtime| {
             runtime
-                .get_context(ScopeId::ROOT)
+                .get_state(ScopeId::ROOT)
                 .unwrap()
                 .provide_context(context)
         })
@@ -256,9 +256,10 @@ impl ScopeContext {
     /// # Example
     ///
     /// ```
+    /// # use dioxus::prelude::*;
     /// // prints a greeting on the initial render
     /// pub fn use_hello_world() {
-    ///     cx.use_hook(|| println!("Hello, world!"));
+    ///     use_hook(|| println!("Hello, world!"));
     /// }
     /// ```
     pub fn use_hook<State: Clone + 'static>(&self, initializer: impl FnOnce() -> State) -> State {
@@ -285,6 +286,10 @@ impl ScopeContext {
                 Functions prefixed with "use" should never be called conditionally.
                 "#,
             )
+    }
+
+    pub fn push_before_render(&self, f: impl FnMut() + 'static) {
+        self.before_render.borrow_mut().push(Box::new(f));
     }
 
     /// Get the current render since the inception of this component
@@ -320,7 +325,7 @@ impl ScopeId {
     /// Consume context from the current scope
     pub fn consume_context_from_scope<T: 'static + Clone>(self, scope_id: ScopeId) -> Option<T> {
         Runtime::with(|rt| {
-            rt.get_context(scope_id)
+            rt.get_state(scope_id)
                 .and_then(|cx| cx.consume_context::<T>())
         })
         .flatten()

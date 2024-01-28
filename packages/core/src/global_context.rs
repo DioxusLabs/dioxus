@@ -1,8 +1,6 @@
-use std::sync::Arc;
-
-use futures_util::Future;
-
 use crate::{runtime::Runtime, Element, ScopeId, Task};
+use futures_util::{future::poll_fn, Future};
+use std::sync::Arc;
 
 /// Get the current scope id
 pub fn current_scope_id() -> Option<ScopeId> {
@@ -30,7 +28,7 @@ pub fn consume_context<T: 'static + Clone>() -> T {
 /// Consume context from the current scope
 pub fn consume_context_from_scope<T: 'static + Clone>(scope_id: ScopeId) -> Option<T> {
     Runtime::with(|rt| {
-        rt.get_context(scope_id)
+        rt.get_state(scope_id)
             .and_then(|cx| cx.consume_context::<T>())
     })
     .flatten()
@@ -53,9 +51,7 @@ pub fn provide_root_context<T: 'static + Clone>(value: T) -> Option<T> {
 
 /// Suspends the current component
 pub fn suspend() -> Option<Element> {
-    Runtime::with_current_scope(|cx| {
-        cx.suspend();
-    });
+    Runtime::with_current_scope(|cx| cx.suspend());
     None
 }
 
@@ -87,7 +83,7 @@ pub fn remove_future(id: Task) {
 /// # Example
 ///
 /// ```
-/// use dioxus_core::ScopeState;
+/// use dioxus_core::use_hook;
 ///
 /// // prints a greeting on the initial render
 /// pub fn use_hello_world() {
@@ -96,6 +92,47 @@ pub fn remove_future(id: Task) {
 /// ```
 pub fn use_hook<State: Clone + 'static>(initializer: impl FnOnce() -> State) -> State {
     Runtime::with_current_scope(|cx| cx.use_hook(initializer)).expect("to be in a dioxus runtime")
+}
+
+/// Push a function to be run before the next render
+/// This is a hook and will always run, so you can't unschedule it
+/// Will run for every progression of suspense, though this might change in the future
+pub fn use_before_render(f: impl FnMut() + 'static) {
+    Runtime::with_current_scope(|cx| cx.push_before_render(f));
+}
+
+/// Wait for the virtualdom to finish its sync work before proceeding
+///
+/// This is useful if you've just triggered an update and want to wait for it to finish before proceeding with valid
+/// DOM nodes.
+pub async fn flush_sync() {
+    let mut polled = false;
+
+    let _task =
+        FlushKey(Runtime::with(|rt| rt.add_to_flush_table()).expect("to be in a dioxus runtime"));
+
+    // Poll without giving the waker to anyone
+    // The runtime will manually wake this task up when it's ready
+    poll_fn(|_| {
+        if !polled {
+            polled = true;
+            futures_util::task::Poll::Pending
+        } else {
+            futures_util::task::Poll::Ready(())
+        }
+    })
+    .await;
+
+    // If the the future got polled, then we don't need to prevent it from being dropped
+    // This would all be solved with generational indicies on tasks
+    std::mem::forget(_task);
+
+    struct FlushKey(Task);
+    impl Drop for FlushKey {
+        fn drop(&mut self) {
+            Runtime::with(|rt| rt.flush_table.borrow_mut().remove(&self.0));
+        }
+    }
 }
 
 /// Get the current render since the inception of this component
@@ -138,7 +175,7 @@ pub fn schedule_update_any() -> Arc<dyn Fn(ScopeId) + Send + Sync> {
 /// (created with [`use_effect`](crate::use_effect)).
 ///
 /// Example:
-/// ```rust
+/// ```rust, ignore
 /// use dioxus::prelude::*;
 ///
 /// fn app() -> Element {
@@ -176,7 +213,7 @@ pub fn schedule_update_any() -> Arc<dyn Fn(ScopeId) + Send + Sync> {
 ///         }
 ///     });
 ///
-///     use_on_destroy({
+///     use_drop({
 ///         to_owned![original_scroll_position];
 ///         /// restore scroll to the top of the page
 ///         move || {

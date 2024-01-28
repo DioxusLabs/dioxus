@@ -65,7 +65,7 @@ struct BoxProps {
     alpha: f32,
 }
 #[allow(non_snake_case)]
-fn Box(cx: Scope<BoxProps>) -> Element {
+fn Box(cx: ScopeState<BoxProps>) -> Element {
     let count = use_signal(|| 0);
 
     let x = cx.props.x * 2;
@@ -94,7 +94,7 @@ struct GridProps {
     update_count: usize,
 }
 #[allow(non_snake_case)]
-fn Grid(cx: Scope<GridProps>) -> Element {
+fn Grid(cx: ScopeState<GridProps>) -> Element {
     let size = cx.props.size;
     let count = use_signal(|| 0);
     let counts = use_signal(|| vec![0; size * size]);
@@ -151,7 +151,7 @@ fn Grid(cx: Scope<GridProps>) -> Element {
     }
 }
 
-fn app(cx: Scope<GridProps>) -> Element {
+fn app(cx: ScopeState<GridProps>) -> Element {
     rsx! {
         div{
             width: "100%",

@@ -151,7 +151,7 @@ where
 
 #[cfg(feature = "serde")]
 /// A component that renders the current route.
-pub fn Router<R: Routable + Clone>(cx: Scope<RouterProps<R>>) -> Element
+pub fn Router<R: Routable + Clone>(cx: ScopeState<RouterProps<R>>) -> Element
 where
     <R as FromStr>::Err: std::fmt::Display,
     R: serde::Serialize + serde::de::DeserializeOwned,

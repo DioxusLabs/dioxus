@@ -70,7 +70,7 @@ impl VirtualDom {
     pub(crate) fn drop_scope(&mut self, id: ScopeId) {
         let height = {
             let scope = self.scopes.remove(id.0);
-            let context = scope.context();
+            let context = scope.state();
             context.height
         };
 

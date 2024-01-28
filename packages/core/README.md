@@ -41,7 +41,7 @@ use dioxus::prelude::*;
 fn app() -> Element {
     rsx!{
         div { "hello world" }
-    })
+    }
 }
 
 fn main() {
@@ -49,13 +49,8 @@ fn main() {
     let mut dom = VirtualDom::new(app);
 
     // The initial render of the dom will generate a stream of edits for the real dom to apply
-    let mutations = dom.rebuild();
-
-    // Somehow, you can apply these edits to the real dom
-    apply_edits_to_real_dom(mutations);
+    let mutations = dom.rebuild_to_vec();
 }
-
-# fn apply_edits_to_real_dom(mutations: Mutations) {}
 ```
 
 
@@ -68,9 +63,6 @@ We can then wait for any asynchronous components or pending futures using the `w
 # async fn wait(mut dom: VirtualDom) {
 // Wait for the dom to be marked dirty internally
 dom.wait_for_work().await;
-
-// Or wait for a deadline and then collect edits
-let mutations = dom.render_with_deadline(tokio::time::sleep(Duration::from_millis(16)));
 # }
 ```
 

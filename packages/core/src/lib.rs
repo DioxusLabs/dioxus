@@ -59,6 +59,7 @@ pub(crate) mod innerlude {
     ///     example()
     /// )
     /// ```
+    ///
     /// ## React-Style
     /// ```rust, ignore
     /// fn Example(cx: Props) -> Element {
@@ -86,14 +87,14 @@ pub use crate::innerlude::{
 /// This includes types like [`Scope`], [`Element`], and [`Component`].
 pub mod prelude {
     pub use crate::innerlude::{
-        consume_context, consume_context_from_scope, current_scope_id, fc_to_builder, generation,
-        has_context, needs_update, parent_scope, provide_context, provide_root_context,
+        consume_context, consume_context_from_scope, current_scope_id, fc_to_builder, flush_sync,
+        generation, has_context, needs_update, parent_scope, provide_context, provide_root_context,
         remove_future, schedule_update, schedule_update_any, spawn, spawn_forever, suspend,
-        try_consume_context, use_drop, use_error_boundary, use_hook, use_hook_with_cleanup,
-        AnyValue, Attribute, Component, ComponentFunction, Element, ErrorBoundary, Event,
-        EventHandler, Fragment, HasAttributes, IntoAttributeValue, IntoDynNode,
-        OptionStringFromMarker, Properties, Runtime, RuntimeGuard, ScopeId, ScopeState, SuperFrom,
-        SuperInto, Task, Template, TemplateAttribute, TemplateNode, Throw, VNode, VNodeInner,
-        VirtualDom,
+        try_consume_context, use_before_render, use_drop, use_error_boundary, use_hook,
+        use_hook_with_cleanup, AnyValue, Attribute, Component, ComponentFunction, Element,
+        ErrorBoundary, Event, EventHandler, Fragment, HasAttributes, IntoAttributeValue,
+        IntoDynNode, OptionStringFromMarker, Properties, Runtime, RuntimeGuard, ScopeId,
+        ScopeState, SuperFrom, SuperInto, Task, Template, TemplateAttribute, TemplateNode, Throw,
+        VNode, VNodeInner, VirtualDom,
     };
 }

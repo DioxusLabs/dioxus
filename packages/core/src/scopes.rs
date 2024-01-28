@@ -1,5 +1,5 @@
 use crate::{
-    any_props::BoxedAnyProps, nodes::RenderReturn, runtime::Runtime, scope_context::ScopeContext,
+    any_props::BoxedAnyProps, nodes::RenderReturn, runtime::Runtime, scope_context::Scope,
 };
 use std::{cell::Ref, fmt::Debug, rc::Rc};
 
@@ -39,7 +39,7 @@ pub struct ScopeState {
 
 impl Drop for ScopeState {
     fn drop(&mut self) {
-        self.runtime.remove_context(self.context_id);
+        self.runtime.remove_scope(self.context_id);
     }
 }
 
@@ -63,7 +63,7 @@ impl ScopeState {
         self.last_rendered_node.as_ref()
     }
 
-    pub(crate) fn context(&self) -> Ref<'_, ScopeContext> {
-        self.runtime.get_context(self.context_id).unwrap()
+    pub(crate) fn state(&self) -> Ref<'_, Scope> {
+        self.runtime.get_state(self.context_id).unwrap()
     }
 }

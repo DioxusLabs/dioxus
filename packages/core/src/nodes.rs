@@ -105,7 +105,7 @@ pub struct VNodeInner {
     /// The inner list *must* be in the format [static named attributes, remaining dynamically named attributes].
     ///
     /// For example:
-    /// ```rust
+    /// ```rust, ignore
     /// div {
     ///     class: "{class}",
     ///     ..attrs,
@@ -116,7 +116,7 @@ pub struct VNodeInner {
     /// ```
     ///
     /// Would be represented as:
-    /// ```rust
+    /// ```rust, ignore
     /// [
     ///     [class, every attribute in attrs sorted by name], // Slot 0 in the template
     ///     [color], // Slot 1 in the template

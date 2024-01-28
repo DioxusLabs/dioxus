@@ -82,7 +82,7 @@ impl VNode {
             tracing::trace!(
                 "Memoized props for component {:#?} ({})",
                 scope_id,
-                old_scope.context().name
+                old_scope.state().name
             );
             return;
         }
@@ -94,7 +94,7 @@ impl VNode {
         let new = dom.run_scope(scope_id);
         dom.diff_scope(to, scope_id, new);
 
-        let height = dom.runtime.get_context(scope_id).unwrap().height;
+        let height = dom.runtime.get_state(scope_id).unwrap().height;
         dom.dirty_scopes.remove(&DirtyScope {
             height,
             id: scope_id,
@@ -130,7 +130,7 @@ impl VNode {
         // Load up a ScopeId for this vcomponent. If it's already mounted, then we can just use that
         let scope = dom
             .new_scope(component.props.duplicate(), component.name)
-            .context()
+            .state()
             .id;
 
         // Store the scope id for the next render

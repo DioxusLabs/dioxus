@@ -1,10 +1,10 @@
 use crate::innerlude::{remove_future, spawn, Runtime};
 use crate::ScopeId;
 use futures_util::task::ArcWake;
-use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::Waker;
+use std::{cell::Cell, future::Future};
 use std::{cell::RefCell, rc::Rc};
 
 /// A task's unique identifier.
@@ -34,6 +34,25 @@ impl Task {
     pub fn stop(self) {
         remove_future(self);
     }
+
+    /// Pause the task.
+    pub fn pause(&self) {
+        Runtime::with(|rt| rt.tasks.borrow()[self.0].active.set(false));
+    }
+
+    /// Check if the task is paused.
+    pub fn paused(&self) -> bool {
+        Runtime::with(|rt| !rt.tasks.borrow()[self.0].active.get()).unwrap_or_default()
+    }
+
+    /// Resume the task.
+    pub fn resume(&self) {
+        Runtime::with(|rt| {
+            // set the active flag, and then ping the scheduler to ensure the task gets queued
+            rt.tasks.borrow()[self.0].active.set(true);
+            _ = rt.sender.unbounded_send(SchedulerMsg::TaskNotified(*self));
+        });
+    }
 }
 
 impl Runtime {
@@ -55,9 +74,10 @@ impl Runtime {
             let task_id = Task(entry.key());
 
             let task = Rc::new(LocalTask {
+                scope,
+                active: Cell::new(true),
                 parent: self.current_task(),
                 task: RefCell::new(Box::pin(task)),
-                scope,
                 waker: futures_util::task::waker(Arc::new(LocalTaskHandle {
                     id: task_id,
                     tx: self.sender.clone(),
@@ -73,24 +93,44 @@ impl Runtime {
         debug_assert!(self.tasks.try_borrow_mut().is_ok());
         debug_assert!(task.task.try_borrow_mut().is_ok());
 
-        let mut cx = std::task::Context::from_waker(&task.waker);
-
-        if !task.task.borrow_mut().as_mut().poll(&mut cx).is_ready() {
-            self.sender
-                .unbounded_send(SchedulerMsg::TaskNotified(task_id))
-                .expect("Scheduler should exist");
-        }
+        self.sender
+            .unbounded_send(SchedulerMsg::TaskNotified(task_id))
+            .expect("Scheduler should exist");
 
         task_id
     }
 
+    /// Get the currently running task
+    pub fn current_task(&self) -> Option<Task> {
+        self.current_task.get()
+    }
+
+    /// Get the parent task of the given task, if it exists
+    pub fn parent_task(&self, task: Task) -> Option<Task> {
+        self.tasks.borrow().get(task.0)?.parent
+    }
+
+    /// Add this task to the queue of tasks that will manually get poked when the scheduler is flushed
+    pub(crate) fn add_to_flush_table(&self) -> Task {
+        let value = self.current_task().unwrap();
+        self.flush_table.borrow_mut().insert(value);
+        value
+    }
+
     pub(crate) fn handle_task_wakeup(&self, id: Task) {
+        debug_assert!(Runtime::current().is_some(), "Must be in a dioxus runtime");
+
         let task = self.tasks.borrow().get(id.0).cloned();
 
         // The task was removed from the scheduler, so we can just ignore it
         let Some(task) = task else {
             return;
         };
+
+        // If a task woke up but is paused, we can just ignore it
+        if !task.active.get() {
+            return;
+        }
 
         let mut cx = std::task::Context::from_waker(&task.waker);
 
@@ -99,10 +139,9 @@ impl Runtime {
         self.rendering.set(false);
         self.current_task.set(Some(id));
 
-        // If the task completes...
         if task.task.borrow_mut().as_mut().poll(&mut cx).is_ready() {
             // Remove it from the scope so we dont try to double drop it when the scope dropes
-            self.get_context(task.scope)
+            self.get_state(task.scope)
                 .unwrap()
                 .spawned_tasks
                 .borrow_mut()
@@ -118,31 +157,11 @@ impl Runtime {
         self.current_task.set(None);
     }
 
-    /// Take a queued task from the scheduler
-    pub(crate) fn take_queued_task(&self) -> Option<Task> {
-        self.queued_tasks.borrow_mut().pop_front()
-    }
-
     /// Drop the future with the given TaskId
     ///
     /// This does not abort the task, so you'll want to wrap it in an abort handle if that's important to you
     pub(crate) fn remove_task(&self, id: Task) -> Option<Rc<LocalTask>> {
-        let task = self.tasks.borrow_mut().try_remove(id.0);
-
-        // Remove the task from the queued tasks so we don't poll a different task with the same id
-        self.queued_tasks.borrow_mut().retain(|t| *t != id);
-
-        task
-    }
-
-    /// Get the currently running task
-    pub fn current_task(&self) -> Option<Task> {
-        self.current_task.get()
-    }
-
-    /// Get the parent task of the given task, if it exists
-    pub fn parent_task(&self, task: Task) -> Option<Task> {
-        self.tasks.borrow().get(task.0)?.parent
+        self.tasks.borrow_mut().try_remove(id.0)
     }
 }
 
@@ -152,6 +171,7 @@ pub(crate) struct LocalTask {
     parent: Option<Task>,
     task: RefCell<Pin<Box<dyn Future<Output = ()> + 'static>>>,
     waker: Waker,
+    active: Cell<bool>,
 }
 
 /// The type of message that can be sent to the scheduler.
@@ -173,8 +193,7 @@ struct LocalTaskHandle {
 
 impl ArcWake for LocalTaskHandle {
     fn wake_by_ref(arc_self: &Arc<Self>) {
-        // This can fail if the scheduler has been dropped while the application is shutting down
-        let _ = arc_self
+        _ = arc_self
             .tx
             .unbounded_send(SchedulerMsg::TaskNotified(arc_self.id));
     }
