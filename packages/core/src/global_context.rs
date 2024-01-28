@@ -94,46 +94,6 @@ pub fn use_hook<State: Clone + 'static>(initializer: impl FnOnce() -> State) -> 
     Runtime::with_current_scope(|cx| cx.use_hook(initializer)).expect("to be in a dioxus runtime")
 }
 
-/// Push a function to be run before the next render
-/// This is a hook and will always run, so you can't unschedule it
-/// Will run for every progression of suspense, though this might change in the future
-pub fn use_before_render(f: impl FnMut() + 'static) {
-    Runtime::with_current_scope(|cx| cx.push_before_render(f));
-}
-
-/// Wait for the virtualdom to finish its sync work before proceeding
-///
-/// This is useful if you've just triggered an update and want to wait for it to finish before proceeding with valid
-/// DOM nodes.
-pub async fn flush_sync() {
-    let mut polled = false;
-
-    let _task =
-        FlushKey(Runtime::with(|rt| rt.add_to_flush_table()).expect("to be in a dioxus runtime"));
-
-    // Poll without giving the waker to anyone
-    // The runtime will manually wake this task up when it's ready
-    poll_fn(|_| {
-        if !polled {
-            polled = true;
-            futures_util::task::Poll::Pending
-        } else {
-            futures_util::task::Poll::Ready(())
-        }
-    })
-    .await;
-
-    // If the the future got polled, then we don't need to prevent it from being dropped
-    // This would all be solved with generational indicies on tasks
-    std::mem::forget(_task);
-
-    struct FlushKey(Task);
-    impl Drop for FlushKey {
-        fn drop(&mut self) {
-            Runtime::with(|rt| rt.flush_table.borrow_mut().remove(&self.0));
-        }
-    }
-}
 
 /// Get the current render since the inception of this component
 ///
@@ -255,6 +215,48 @@ pub fn use_drop<D: FnOnce() + 'static>(destroy: D) {
     use_hook(|| LifeCycle {
         ondestroy: Some(destroy),
     });
+}
+
+
+/// Push a function to be run before the next render
+/// This is a hook and will always run, so you can't unschedule it
+/// Will run for every progression of suspense, though this might change in the future
+pub fn use_before_render(f: impl FnMut() + 'static) {
+    Runtime::with_current_scope(|cx| cx.push_before_render(f));
+}
+
+/// Wait for the virtualdom to finish its sync work before proceeding
+///
+/// This is useful if you've just triggered an update and want to wait for it to finish before proceeding with valid
+/// DOM nodes.
+pub async fn flush_sync() {
+    let mut polled = false;
+
+    let _task =
+        FlushKey(Runtime::with(|rt| rt.add_to_flush_table()).expect("to be in a dioxus runtime"));
+
+    // Poll without giving the waker to anyone
+    // The runtime will manually wake this task up when it's ready
+    poll_fn(|_| {
+        if !polled {
+            polled = true;
+            futures_util::task::Poll::Pending
+        } else {
+            futures_util::task::Poll::Ready(())
+        }
+    })
+    .await;
+
+    // If the the future got polled, then we don't need to prevent it from being dropped
+    // This would all be solved with generational indicies on tasks
+    std::mem::forget(_task);
+
+    struct FlushKey(Task);
+    impl Drop for FlushKey {
+        fn drop(&mut self) {
+            Runtime::with(|rt| rt.flush_table.borrow_mut().remove(&self.0));
+        }
+    }
 }
 
 pub fn use_hook_with_cleanup<T: Clone + 'static>(
