@@ -32,8 +32,9 @@ async fn setup_file_watcher<F: Fn() -> Result<BuildResult> + Send + 'static>(
         let config = watcher_config.clone();
         if let Ok(e) = info {
             match e.kind {
-                notify::EventKind::Create(_) | notify::EventKind::Remove(_) | notify::EventKind::Modify(_) => {
-
+                notify::EventKind::Create(_)
+                | notify::EventKind::Remove(_)
+                | notify::EventKind::Modify(_) => {
                     if chrono::Local::now().timestamp() > last_update_time {
                         let mut needs_full_rebuild;
                         if let Some(hot_reload) = &hot_reload {
@@ -121,12 +122,12 @@ async fn setup_file_watcher<F: Fn() -> Result<BuildResult> + Send + 'static>(
                                 Err(e) => {
                                     last_update_time = chrono::Local::now().timestamp();
                                     log::error!("{:?}", e);
-                                },
+                                }
                             }
                         }
                     }
-                },
-                _ => {},
+                }
+                _ => {}
             }
         }
     })
