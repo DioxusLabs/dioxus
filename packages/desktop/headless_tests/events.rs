@@ -154,7 +154,7 @@ fn app(cx: Scope) -> Element {
         ctrlKey: false,
         metaKey: false,
         shiftKey: false,
-        isComposing: false,
+        isComposing: true,
         which: 65,
         bubbles: true,
         })"#,
@@ -356,6 +356,7 @@ fn app(cx: Scope) -> Element {
                     assert_eq!(event.data.code().to_string(), "KeyA");
                     assert_eq!(event.data.location(), Location::Standard);
                     assert!(event.data.is_auto_repeating());
+                    assert!(event.data.is_composing());
                     received_events.modify(|x| *x + 1)
                 }
             }
@@ -368,6 +369,7 @@ fn app(cx: Scope) -> Element {
                     assert_eq!(event.data.code().to_string(), "KeyA");
                     assert_eq!(event.data.location(), Location::Standard);
                     assert!(!event.data.is_auto_repeating());
+                    assert!(!event.data.is_composing());
                     received_events.modify(|x| *x + 1)
                 }
             }
@@ -380,6 +382,7 @@ fn app(cx: Scope) -> Element {
                     assert_eq!(event.data.code().to_string(), "KeyA");
                     assert_eq!(event.data.location(), Location::Standard);
                     assert!(!event.data.is_auto_repeating());
+                    assert!(!event.data.is_composing());
                     received_events.modify(|x| *x + 1)
                 }
             }

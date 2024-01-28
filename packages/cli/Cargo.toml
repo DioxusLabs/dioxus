@@ -24,7 +24,7 @@ serde_json = "1.0.79"
 toml = "0.8.8"
 fs_extra = "1.2.0"
 cargo_toml = "0.18.0"
-futures = "0.3.21"
+futures-util.workspace = true
 notify = { version = "5.0.0-pre.16", features = ["serde"] }
 html_parser  = { workspace = true }
 cargo_metadata = "0.18.1"
@@ -56,7 +56,6 @@ flate2 = "1.0.22"
 tar = "0.4.38"
 zip = "0.6.2"
 tower = "0.4.12"
-syn = { version = "2.0", features = ["full", "extra-traits"] }
 lazy_static = "1.4.0"
 
 # plugin packages
@@ -74,7 +73,6 @@ toml_edit = "0.21.0"
 
 # bundling
 tauri-bundler = { version = "=1.4.*", features = ["native-tls-vendored"] }
-tauri-utils = "=1.5.*"
 
 manganis-cli-support = { workspace = true, features = ["webp", "html"] }
 

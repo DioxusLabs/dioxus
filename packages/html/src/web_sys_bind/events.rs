@@ -78,6 +78,10 @@ impl HasKeyboardData for KeyboardEvent {
         self.repeat()
     }
 
+    fn is_composing(&self) -> bool {
+        self.is_composing()
+    }
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
