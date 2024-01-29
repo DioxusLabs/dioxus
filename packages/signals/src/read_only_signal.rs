@@ -39,6 +39,19 @@ impl<T: 'static, S: Storage<SignalData<T>>> ReadOnlySignal<T, S> {
     pub fn id(&self) -> generational_box::GenerationalBoxId {
         self.inner.id()
     }
+
+    #[doc(hidden)]
+    /// This should only be used by the `rsx!` macro.
+    pub fn __set(&mut self, value: T) {
+        use crate::write::Writable;
+        self.inner.set(value);
+    }
+
+    #[doc(hidden)]
+    /// This should only be used by the `rsx!` macro.
+    pub fn __take(&self) -> T {
+        self.inner.take()
+    }
 }
 
 impl<T, S: Storage<SignalData<T>>> Readable<T> for ReadOnlySignal<T, S> {

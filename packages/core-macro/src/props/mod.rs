@@ -584,7 +584,7 @@ mod struct_info {
         }
 
         fn memoize_impl(&self) -> Result<TokenStream, Error> {
-            // First check if there are any Signal fields, if there are not, we can just use the partialEq impl
+            // First check if there are any ReadOnlySignal fields, if there are not, we can just use the partialEq impl
             let has_signal_fields = self.has_signal_fields();
 
             if has_signal_fields {
@@ -647,7 +647,7 @@ mod struct_info {
                             (&old_value).compare(&&new_value)
                         };
                         if !field_eq {
-                            (#signal_fields).set(new.#signal_fields.take());
+                            (#signal_fields).__set(new.#signal_fields.__take());
                         }
                         // Move the old value back
                         self.#signal_fields = #signal_fields;
@@ -1564,9 +1564,9 @@ fn looks_like_signal_type(ty: &Type) -> bool {
                 segments: Punctuated::from_iter(path_segments_without_generics),
             };
 
-            path_without_generics == parse_quote!(dioxus_core::prelude::Signal)
-                || path_without_generics == parse_quote!(prelude::Signal)
-                || path_without_generics == parse_quote!(Signal)
+            path_without_generics == parse_quote!(dioxus_core::prelude::ReadOnlySignal)
+                || path_without_generics == parse_quote!(prelude::ReadOnlySignal)
+                || path_without_generics == parse_quote!(ReadOnlySignal)
         }
         _ => false,
     }
