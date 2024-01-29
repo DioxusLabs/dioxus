@@ -58,6 +58,9 @@ impl Task {
         Runtime::with(|rt| {
             // set the active flag, and then ping the scheduler to ensure the task gets queued
             let was_active = rt.tasks.borrow()[self.0].active.replace(true);
+            if !was_active {
+                _ = rt.sender.unbounded_send(SchedulerMsg::TaskNotified(*self));
+            }
         });
     }
 }

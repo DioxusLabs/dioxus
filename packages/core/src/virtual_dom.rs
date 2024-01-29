@@ -422,6 +422,12 @@ impl VirtualDom {
         // Ping tasks waiting on the flush table - they're waiting for sync stuff to be done before progressing
         self.clear_flush_table();
 
+        // And then poll the futures
+        self.poll_tasks().await;
+    }
+
+    /// Poll futures without progressing any futures from the flush table
+    async fn poll_tasks(&mut self) {
         loop {
             // Process all events - Scopes are marked dirty, etc
             self.process_events();
@@ -542,6 +548,7 @@ impl VirtualDom {
         self.flush_templates(to);
 
         // Process any events that might be pending in the queue
+        // Signals marked with .write() need a chance to be handled by the effect driver
         self.process_events();
 
         // Next, diff any dirty scopes
@@ -573,19 +580,18 @@ impl VirtualDom {
     ///
     /// The mutations will be thrown out, so it's best to use this method for things like SSR that have async content
     ///
-    /// Tasks waiting to be flushed are *cleared* here *without running them*
-    /// This behavior is subject to change, but configured this way so use_future/use_memo/use_future won't react on the server
+    /// We don't call "flush_sync" here since there's no sync work to be done. Futures will be progressed like usual,
+    /// however any futures wating on flush_sync will remain pending
     pub async fn wait_for_suspense(&mut self) {
         loop {
             if self.suspended_scopes.is_empty() {
-                return;
+                break;
             }
 
-            // not sure if we should be doing this?
-            self.runtime.flush_table.borrow_mut().clear();
+            // Wait for a work to be ready (IE new suspense leaves to pop up)
+            self.poll_tasks().await;
 
-            self.wait_for_work().await;
-
+            // Render whatever work needs to be rendered, unlocking new futures and suspense leaves
             self.render_immediate(&mut NoOpMutations);
         }
     }

@@ -17,6 +17,17 @@ fn app() -> Element {
     // effects will always run after first mount and then whenever the signal values change
     use_effect(move || println!("Count changed to {}", count()));
 
+    // We can do early returns and conditional rendering which will pause all futures that haven't been polled
+    if count() > 30 {
+        return rsx! {
+            h1 { "Count is too high!" }
+            button {
+                onclick: move |_| count.set(0),
+                "Press to reset"
+            }
+        };
+    }
+
     // use_future will spawn an infinitely running future that can be started and stopped
     use_future(|| async move {
         loop {
